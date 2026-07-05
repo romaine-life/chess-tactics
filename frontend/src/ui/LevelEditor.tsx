@@ -21,6 +21,15 @@ import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
+import {
+  levelEditorHrefWithRouteState,
+  isLevelEditorRoutePath,
+  levelEditorRouteBrushKind,
+  readLevelEditorRouteState,
+  type LevelEditorBrushKind,
+  type LevelEditorLayerKey,
+} from './levelEditorRoute';
+import { APP_NAVIGATION_EVENT, navigateApp } from './navigation';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell } from './boardCode';
@@ -858,8 +867,8 @@ function FenceConnections({
 // The editor's palette layers. Roads and rivers share one "Paths" layer (both are linear
 // connection features); the brush kind under it decides road vs river. Fence is its own EDGE
 // layer (you paint the boundary between two tiles). The layer picker is a dropdown.
-type LayerKey = 'board' | 'tile' | 'generate' | 'paths' | 'fence' | 'unit' | 'doodad' | 'prop' | 'cover' | 'zone' | 'rules' | 'status';
-type BrushKind = 'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence' | 'zone';
+type LayerKey = LevelEditorLayerKey;
+type BrushKind = LevelEditorBrushKind;
 const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }> = [
   { id: 'board', label: 'Board' },
   { id: 'tile', label: 'Tile' },
@@ -883,6 +892,10 @@ const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'board' || layer === 'status' || layer === 'rules' || layer === 'generate') return 'tile';
   return layer;
 };
+const brushKindForRouteState = (layer: LayerKey, kind: BrushKind | undefined): BrushKind => {
+  const routedKind = levelEditorRouteBrushKind(layer, kind);
+  return routedKind ?? brushKindForInitialLayer(layer);
+};
 type FactionControl = 'cpu' | 'player';
 const factionControlOptions = (campaign: boolean): Array<{ value: FactionControl; label: string }> => [
   { value: 'cpu', label: 'CPU' },
@@ -898,30 +911,26 @@ const STATUS_LOG_LIMIT = 24;
 
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
-  // The Studio routes here with ?from=studio (show a "back to catalog" link) and optionally
-  // ?kind=tile|unit|doodad|cover&brush=<id> to pre-arm the brush you clicked in the catalog. A general
-  // ?layer=<id> deep-link opens straight on any panel (rules, status, zone, …) — validated
+  // The Studio routes here with ?from=studio (show a "back to catalog" link), ?kind=<brush-kind>,
+  // and optionally ?brush=<id> to pre-arm the brush you clicked in the catalog. A general
+  // ?layer=<id> deep-link opens straight on any panel (rules, status, zone, ...) — validated
   // against the real layer list, ignoring unknown/disabled ids. Read once at mount; reached from
   // the main menu these are all absent and we open on the first layer.
   const studioArm = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
-    const kindParam = params.get('kind');
-    const kind: 'tile' | 'unit' | 'doodad' | 'cover' | undefined =
-      kindParam === 'unit' || kindParam === 'doodad' || kindParam === 'tile' || kindParam === 'cover' ? kindParam : undefined;
-    const layerParam = params.get('layer');
-    const layer: LayerKey | undefined = LEVEL_EDITOR_LAYER_OPTIONS.some(
-      (option) => option.id === layerParam && !isLayerOptionDisabled(option.id),
-    ) ? (layerParam as LayerKey) : undefined;
+    const routeState = readLevelEditorRouteState(window.location.search);
+    const layer = routeState.layer && !isLayerOptionDisabled(routeState.layer) ? routeState.layer : undefined;
     return {
       fromStudio: params.get('from') === 'studio',
-      kind,
+      kind: routeState.brushKind,
       layer,
-      brush: params.get('brush') ?? undefined,
+      brush: routeState.brush,
     };
   }, []);
   const cameFromStudio = studioArm.fromStudio;
   // An explicit ?layer= wins over ?kind= (which is really brush-arming), then the default.
-  const initialLayer: LayerKey = studioArm.layer ?? studioArm.kind ?? defaultLevelEditorLayer();
+  const initialLayer: LayerKey = studioArm.layer ?? defaultLevelEditorLayer();
+  const initialBrushKind = brushKindForRouteState(initialLayer, studioArm.kind);
   // The campaign path deep-links here with ?campaignId&levelId (&returnTo): which level to
   // edit, and where "Back" returns after a save. Read once at mount; absent ⇒ a standalone
   // (board-link / blank) board with no campaign target.
@@ -978,7 +987,7 @@ export function LevelEditor(): ReactElement {
   const [scatterWiggle, setScatterWiggle] = useState(0.5);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const [brushKind, setBrushKind] = useState<BrushKind>(brushKindForInitialLayer(initialLayer));
+  const [brushKind, setBrushKind] = useState<BrushKind>(initialBrushKind);
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((initialBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(initialBoard?.doodads ?? {});
@@ -1092,6 +1101,40 @@ export function LevelEditor(): ReactElement {
   const [me, setMe] = useState<AuthUser | null>(null);
   const [boardLinkDraft, setBoardLinkDraft] = useState('');
   const { ask, dialog: confirmDialog } = useConfirm();
+  const didMountRouteSync = useRef(false);
+
+  useEffect(() => {
+    if (!didMountRouteSync.current) {
+      didMountRouteSync.current = true;
+      return;
+    }
+    if (!isLevelEditorRoutePath(window.location.pathname)) return;
+    const nextHref = levelEditorHrefWithRouteState(window.location.href, {
+      layer,
+      brushKind: levelEditorRouteBrushKind(layer, brushKind),
+      brush: null,
+    });
+    navigateApp(nextHref, { replace: true, scroll: false });
+  }, [brushKind, layer]);
+
+  useEffect(() => {
+    const syncFromRoute = (): void => {
+      if (!isLevelEditorRoutePath(window.location.pathname)) return;
+      const routeState = readLevelEditorRouteState(window.location.search);
+      const nextLayer = routeState.layer ?? defaultLevelEditorLayer();
+      if (isLayerOptionDisabled(nextLayer)) return;
+      setEventsOpen(false);
+      setLayer(nextLayer);
+      setTool(toolForLayer(nextLayer));
+      setBrushKind(brushKindForRouteState(nextLayer, routeState.brushKind));
+    };
+    window.addEventListener('popstate', syncFromRoute);
+    window.addEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
+    return () => {
+      window.removeEventListener('popstate', syncFromRoute);
+      window.removeEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
+    };
+  }, []);
 
   // DEV-only preview of the in-game confirm dialog, so its look can be judged live without the
   // admin + official-target gating that guards the real Publish flow. Stripped from prod builds
