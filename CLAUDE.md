@@ -45,8 +45,18 @@ screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 
 ### Reaching a specific UI state
 
+The app is ours and the routes are inspectable. When the owner asks how to see
+or verify an owned app surface, build the direct URL from the route contract
+instead of giving only click-by-click instructions. Click paths are fine as
+extra context, but they are not a substitute for the link.
+
 The Studio encodes its state in the URL, so deep-link instead of clicking:
-- `mode=catalog|lab`
+- `mode=catalog|lab|viewer`
+- `cat=<category>` (for example `gym`, `gamelab`, `assets`, `props`)
+- `vk=<viewer-kind>` for Viewer surfaces (for example `gym`, `gamelab`,
+  `nineslice`)
+- selected item params such as `gymlvl=<levelId>`, `glvl=<levelId>`,
+  `kit=<asset>`, `frame=<frame>`, `prop=<propId>`
 - `lab=board|tile|unit` (Lab component view)
 - `view=board`, `family=<id>`, `collection=<id>`, `asset=<id>`, `unit=<id>`, `seed=<n>`
 - `/unit-studio` is an alias for the Studio with the Units shelf preselected.
