@@ -14,8 +14,7 @@ import { LevelInfoCompact, levelObjectiveLine } from './LevelInfoCompact';
 import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
-import { AmbienceBackground } from './AmbienceBackground';
-import { SceneBackdrop } from './SceneBackdrop';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 
 const CE_ICONS = {
@@ -549,12 +548,10 @@ export function CampaignEditor() {
   return (
     <div className="ce-screen app-shell-bar-pad" data-testid="campaign-editor">
       {confirmDialog}
-      {/* Same art-directed backdrop + synced rain as the main menu (SceneBackdrop paints the
-          animated menu scene; AmbienceBackground adds the shared rain). Mostly overlapped by
-          the editor panels, but it keeps the feel consistent with the rest of the app in the
-          gaps. */}
-      <SceneBackdrop />
-      <AmbienceBackground />
+      {/* Same shared backdrop as the main menu: the one continuous HomepageBackdrop (animated
+          menu scene + synced rain). Mostly overlapped by the editor panels, but it keeps the
+          feel consistent with the rest of the app in the gaps. */}
+      <HomepageBackdrop />
       {/* Title bar lives in the app shell; the editor paints its live save-state +
           shortcuts into it via portals (workspace state stays in this component). */}
       <TitleBarSlot region="center">

@@ -12,6 +12,8 @@ import { UnitPortrait, loadCrops, STORAGE_KEY, type Piece as PortraitPiece, type
 import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { useConfirm } from './shared/ConfirmDialog';
 import { RestartGlyph, NewGlyph } from './shared/actionGlyphs';
+import { SkirmishClockControl } from './SkirmishClockControl';
+import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -409,6 +411,15 @@ export function SkirmishHud({
               </div>
               <p className="skirmish-grid-hint">Keys work any time during the match.</p>
             </div>
+            {/* Battle clock for a random skirmish. Free-play only — a campaign level and a
+                netplay match carry their own time control, so the picker is hidden there
+                (same gate as the "New skirmish" button it feeds). */}
+            {canStartNewSkirmish && !net ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Battle clock</span>
+                <SkirmishClockControl timedHint="Applies on your next New skirmish." />
+              </div>
+            ) : null}
             <div className="skirmish-view-group">
               {/* Battle lifecycle: restart THIS scenario (↻) or start a fresh one (＋). Both are
                   icon-only — the group heading names them and the marks are self-evident, so no
@@ -435,7 +446,7 @@ export function SkirmishHud({
                     className="app-header-button skirmish-lifecycle-button"
                     data-testid="new-skirmish"
                     aria-label="New skirmish"
-                    onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff })}
+                    onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff, timeControl: loadSkirmishClockPref() })}
                   >
                     <NewGlyph className="skirmish-lifecycle-icon" />
                   </button>

@@ -9,6 +9,7 @@ import {
   launchTrainRun, listTrainRuns, getTrainRun, cancelTrainRun,
   type TrainRunSummary, type TrainRunDoc,
 } from '../net/trainRuns';
+import { shipAiWeights } from '../net/aiWeights';
 
 const shortId = (id: string): string => id.slice(0, 8);
 const fmtTime = (iso: string): string => { try { return new Date(iso).toLocaleTimeString(); } catch { return iso; } };
@@ -30,6 +31,8 @@ export function ClusterRuns({ level, levelId, onAdopt }: {
   const [detail, setDetail] = useState<TrainRunDoc | null>(null);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [shipMsg, setShipMsg] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try { setRuns(await listTrainRuns()); setError(null); }
@@ -74,6 +77,23 @@ export function ClusterRuns({ level, levelId, onAdopt }: {
     try { await cancelTrainRun(id); if (openId === id) setOpenId(null); await refresh(); }
     catch (e) { setError(String((e as Error).message || e)); }
   }, [openId, refresh]);
+
+  // Whether this account may ship-to-everyone (admin). Gates the global publish button.
+  useEffect(() => {
+    let live = true;
+    void fetch('/api/auth/me', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (live && d) setIsAdmin(!!d.is_admin); })
+      .catch(() => { /* signed out / offline */ });
+    return () => { live = false; };
+  }, []);
+
+  const ship = useCallback(async (vec: number[]) => {
+    if (!levelId) return;
+    setShipMsg(null);
+    try { await shipAiWeights(levelId, vec); setShipMsg('✓ shipped to every player on this level'); }
+    catch (e) { setShipMsg(String((e as Error).message || e)); }
+  }, [levelId]);
 
   const champTheta = detail?.body?.champion?.step != null && detail.body.champion.step >= 0
     ? detail.body.champion.theta : null;
@@ -131,8 +151,20 @@ export function ClusterRuns({ level, levelId, onAdopt }: {
                     title={canAdopt ? '' : 'no improvement found to adopt'}
                     onClick={() => champTheta && onAdopt(champTheta)}
                   >
-                    Adopt champion for this level
+                    Adopt champion (just me)
                   </button>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      className="tileset-view-action"
+                      disabled={!canAdopt}
+                      title={canAdopt ? 'Publish to every player on this level' : 'no improvement found to ship'}
+                      onClick={() => champTheta && void ship(champTheta)}
+                    >
+                      Ship to everyone (admin)
+                    </button>
+                  ) : null}
+                  {shipMsg ? <p className="cluster-run-line">{shipMsg}</p> : null}
                 </>
               ) : (
                 <p className="cluster-run-line">tuning on the cluster… (this panel polls the result)</p>
