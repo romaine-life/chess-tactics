@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-d3d2cb80a2f4a4aba8353f55b059c5b82081fcee506d39cf2d9399d58812729a"
+  tag: "app-6fef011f7ca3a3339006200cc78a8b6c78dec6e33bd183c91a560b80b0ea2762"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add title bar control primitives"
-  prNumber: "422"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/422"
-  commit: "643d3b4"
+  prTitle: "Allow ground cover on any tile"
+  prNumber: "423"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/423"
+  commit: "5bfa66d"
 
 name: chess-tactics
 namespace: chess-tactics
