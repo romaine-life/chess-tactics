@@ -312,17 +312,20 @@ describe('P6 — authored victory conditions (ADR-0064)', () => {
     expect(validatePlayability(fixedLevel(() => {})).ok).toBe(true); // no victory → preset
   });
 
-  it('rejects per faction: a set that leaves an on-board faction unable to win or lose', () => {
-    // Only "player loses": the player has no way to win, and — the same gap — the enemy has no way
-    // to lose (a win for one side is a loss for the other in the 2-player game). Reported per side.
+  it('flags each on-board faction that cannot win — once per gap, not once per seat', () => {
+    // Only "player loses" ⇒ the only reachable winner is the enemy, so the PLAYER can't win. The
+    // same missing rule used to also read "enemy has no way to lose"; win-reachability reports it once.
     const onlyLose = fixedLevel((l) => { l.victory = [{ name: 'Wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] }]; });
-    expect(codes(onlyLose)).toEqual(['P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE']);
-    // Only "player wins": the player has no way to lose, and the enemy no way to win.
+    expect(codes(onlyLose)).toEqual(['P6_VICTORY_NO_WIN']);
+    expect(messages(onlyLose)[0]).toContain('Player side');
+    // Only "player wins" ⇒ the only reachable winner is the player, so the ENEMY can't win (which is
+    // the player's missing way to LOSE) — one message, naming the enemy.
     const onlyWin = fixedLevel((l) => { l.victory = [{ name: 'Enemy routed', if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] }]; });
-    expect(codes(onlyWin)).toEqual(['P6_VICTORY_NO_LOSE', 'P6_VICTORY_NO_WIN']);
-    // Empty set: every on-board faction flags both.
+    expect(codes(onlyWin)).toEqual(['P6_VICTORY_NO_WIN']);
+    expect(messages(onlyWin)[0]).toContain('Enemy side');
+    // Empty set: no faction can win → one message per on-board faction.
     const neither = fixedLevel((l) => { l.victory = []; });
-    expect(codes(neither)).toEqual(['P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE', 'P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE']);
+    expect(codes(neither)).toEqual(['P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_WIN']);
   });
 });
 
