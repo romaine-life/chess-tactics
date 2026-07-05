@@ -6,11 +6,9 @@ import { MODE_NAME } from '../core/objectives';
 import { loadWorkspace, loadOfficialCampaigns } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, isUnauthorized, type AuthUser } from '../net/auth';
 import { LevelThumbnail } from '../render/LevelThumbnail';
-import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
-import { levelToEditorBoard } from '../core/levelBoard';
-import { ViewPane } from './shared/ViewPane';
+import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { injectStressLevels } from '../campaign/stressFixture';
-import { LevelInfoCompact, levelObjectiveLine } from './LevelInfoCompact';
+import { levelObjectiveLine } from './LevelInfoCompact';
 import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
@@ -285,10 +283,6 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   // /campaign or /skirmish visit this session — then there's real content at mount and
   // nothing holds; otherwise hold the fade until the officials merge settles.
   const [loaded, setLoaded] = useState(() => useCampaigns.getState().campaigns.length > 0);
-  const [levelView, setLevelView] = useState<'board' | 'info'>('board');
-  // Pan/zoom for the SELECTED-level live viewer (the list rows stay flat baked thumbnails).
-  const [viewZoom, setViewZoom] = useState(0.5);
-  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const currentWorkspace = useMemo(() => ({ campaigns, levels }), [campaigns, levels]);
   // Two tier-scoped dirty signals: a private "Save" and an official "Publish" are
   // independent acts, each with its own last-saved signature.
@@ -366,13 +360,6 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [dirty]);
-
-  // Re-frame the live viewer whenever the selected level changes, so each board opens centred
-  // at the default zoom instead of inheriting the previous level's pan/zoom.
-  useEffect(() => {
-    setViewZoom(0.5);
-    setViewPan({ x: 0, y: 0 });
-  }, [selectedLevelId]);
 
   // Private "Save": frictionless, writes only the user slice (officials never enter it).
   const saveUserNow = async () => {
@@ -497,10 +484,6 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   const ownCount = campaigns.filter((c) => c.origin !== 'official').length;
   const orderedLevels = camp ? camp.levels.slice().sort((a, b) => a.ordinal - b.ordinal) : [];
   const levelDoc = selectedLevelId ? levels[selectedLevelId] : null;
-  // The SELECTED level's LIVE board, derived the SAME way the list thumbnails and the Level
-  // Editor derive theirs (prefers boardCode, falls back to layers) — so what the viewer shows,
-  // a row's baked thumbnail, and the editor all agree.
-  const viewerBoard = useMemo(() => (levelDoc ? levelToEditorBoard(levelDoc) : null), [levelDoc]);
   const levelRef = !isUnassignedSelected && camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
   const selectedLevelIndex = orderedLevels.findIndex((r) => r.levelId === selectedLevelId);
   const selectedUnassignedLevelIndex = unassignedLevels.findIndex((level) => level.id === selectedLevelId);
@@ -642,8 +625,9 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
             </div>
           </aside>
 
-          {/* ── CONTENT: the selected campaign — one column: pinned live preview over a
-              scrolling stack of SettingsSection groups (Campaign · Levels · Actions). ── */}
+          {/* ── CONTENT: the selected campaign — a single scrolling stack of SettingsSection
+              groups (Campaign · Levels · Actions), now the full column height. The live level
+              preview used to pin above this scroll; it's its own column now (see below). ── */}
           <main className={embedded ? 'menu-dest-col menu-dest-action ce-editor-main' : 'settings-frame settings-main-frame ce-editor-main'}>
             <h2 className="sr-only">{isUnassignedSelected ? 'Unassigned Levels' : camp?.name ?? 'Editor'}</h2>
             <div className="ce-editor-body">
@@ -747,83 +731,46 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                   )}
                 </div>
               </KitScroll>
-
-              {/* Pinned live preview (grid row 1, above the scroll): the data-backed board/info
-                  viewer + the selected level's verbs. Reuses the .ce-preview-* chrome — the one
-                  editor surface the settings pattern has no analogue for. */}
-              <aside className="ce-preview-col" aria-label="Selected level">
-                <div className="ce-selected-head">
-                  <h2>{selectedLevelTitle}</h2>
-                  {levelDoc ? (
-                    <div className="ce-force-readout" aria-label="Level forces">
-                      <span className="ce-force ce-force-ally"><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{allyCount}</strong></span>
-                      <span className="ce-force ce-force-enemy"><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{enemyCount}</strong></span>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="ce-preview-frame">
-                  {levelDoc ? (
-                    <div className="ce-level-view-toggle" role="tablist" aria-label="Preview mode">
-                      <button type="button" role="tab" aria-selected={levelView === 'board'} className={levelView === 'board' ? 'is-active' : ''} onClick={() => setLevelView('board')}>Board</button>
-                      <button type="button" role="tab" aria-selected={levelView === 'info'} className={levelView === 'info' ? 'is-active' : ''} onClick={() => setLevelView('info')}>Info</button>
-                    </div>
-                  ) : null}
-                  {levelDoc && levelView === 'info' ? (
-                    <LevelInfoCompact level={levelDoc} />
-                  ) : levelDoc && viewerBoard ? (
-                    // The SELECTED viewer is a LIVE board (pan/zoom) rendered through the SAME read-only
-                    // renderer the editor uses, inside the shared ViewPane. Static frame (no animation
-                    // clock here): a preview shouldn't run a per-frame loop while the editor is open.
-                    <div className="ce-level-viewer">
-                      <ViewPane
-                        kind="board"
-                        ariaLabel={`${levelDoc.name} board`}
-                        zoom={viewZoom}
-                        pan={viewPan}
-                        minZoom={0.2}
-                        maxZoom={2}
-                        onZoomChange={setViewZoom}
-                        onPanChange={setViewPan}
-                      >
-                        <div className="tileset-view-board-content is-board">
-                          <StudioReadOnlyBoard board={viewerBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel={`${levelDoc.name} board`} />
-                        </div>
-                      </ViewPane>
-                    </div>
-                  ) : (
-                    <div className="level-preview-empty" aria-label="No level preview"><span>Select a level.</span></div>
-                  )}
-                </div>
-                {levelDoc && (levelRef || isUnassignedSelected) ? (
-                  <div className={`ce-preview-actions ${isUnassignedSelected ? 'has-assign' : ''}`.trim()}>
-                    <NavButton className="ce-link-button" to={editHref}><span>Edit Board</span></NavButton>
-                    <NavButton className="ce-link-button ce-link-button-ghost" to={playHref}><span>Test Play</span></NavButton>
-                    {isUnassignedSelected ? (
-                      <label className="ce-assign-field">
-                        <span className="sr-only">Assign to campaign</span>
-                        <select
-                          value=""
-                          disabled={editableCampaignsForLevel.length === 0}
-                          title={editableCampaignsForLevel.length === 0 ? 'No editable campaign matches this level tier' : 'Assign selected level to campaign'}
-                          onChange={(event) => {
-                            const campaignId = event.currentTarget.value;
-                            if (campaignId) assignSelectedUnassignedLevel(campaignId);
-                          }}
-                        >
-                          <option value="">{editableCampaignsForLevel.length === 0 ? 'No eligible campaigns' : 'Assign to campaign'}</option>
-                          {editableCampaignsForLevel.map((campaign) => (
-                            <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="ce-empty ce-empty-large">Select a level.</p>
-                )}
-              </aside>
             </div>
-      </main>
+          </main>
+
+          {/* ── PREVIEW COLUMN (col 4, top-right) — the shared LevelPreviewColumn (same one the
+              play-side Campaign screen uses). Lifted OUT of the main scroll into its OWN column;
+              renders ONLY when a level is selected, so nothing shows until you click a level. The
+              editor's verbs (Edit Board / Test Play, plus the unassigned Assign picker) ride in as
+              its actions slot. ── */}
+          {levelDoc ? (
+            <LevelPreviewColumn
+              level={levelDoc}
+              title={selectedLevelTitle}
+              embedded={embedded}
+              actions={(levelRef || isUnassignedSelected) ? (
+                <div className={`ce-preview-actions ${isUnassignedSelected ? 'has-assign' : ''}`.trim()}>
+                  <NavButton className="ce-link-button" to={editHref}><span>Edit Board</span></NavButton>
+                  <NavButton className="ce-link-button ce-link-button-ghost" to={playHref}><span>Test Play</span></NavButton>
+                  {isUnassignedSelected ? (
+                    <label className="ce-assign-field">
+                      <span className="sr-only">Assign to campaign</span>
+                      <select
+                        value=""
+                        disabled={editableCampaignsForLevel.length === 0}
+                        title={editableCampaignsForLevel.length === 0 ? 'No editable campaign matches this level tier' : 'Assign selected level to campaign'}
+                        onChange={(event) => {
+                          const campaignId = event.currentTarget.value;
+                          if (campaignId) assignSelectedUnassignedLevel(campaignId);
+                        }}
+                      >
+                        <option value="">{editableCampaignsForLevel.length === 0 ? 'No eligible campaigns' : 'Assign to campaign'}</option>
+                        {editableCampaignsForLevel.map((campaign) => (
+                          <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
+            />
+          ) : null}
     </>
   );
 

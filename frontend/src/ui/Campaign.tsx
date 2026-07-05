@@ -15,6 +15,7 @@ import {
 import { MODE_NAME } from '../core/objectives';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { LevelThumbnail } from '../render/LevelThumbnail';
+import { LevelPreviewColumn } from './LevelPreviewColumn';
 import type { Campaign as CampaignDoc } from '../core/level';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
@@ -63,8 +64,10 @@ function CampaignTab({ campaign, active, index }: { campaign: CampaignDoc; activ
   );
 }
 
-// The selected campaign's levels, in play order, with progress and a Play link.
-function LevelSelect({ campaign, progress, embedded }: { campaign: CampaignDoc; progress: CampaignProgress; embedded?: boolean }): ReactElement {
+// The selected campaign's levels, in play order, with progress and a Play link. A row is also a
+// selector: clicking its body previews the level in the 4th column (the Play button stays a direct
+// one-click play). Mirrors the Editor's level list (ADR-0059 — same interaction, both screens).
+function LevelSelect({ campaign, progress, embedded, selectedLevelId, onSelectLevel }: { campaign: CampaignDoc; progress: CampaignProgress; embedded?: boolean; selectedLevelId: string | null; onSelectLevel: (levelId: string) => void }): ReactElement {
   const levelDocs = useCampaigns((s) => s.levels);
   const refs = orderedLevels(campaign);
 
@@ -96,7 +99,15 @@ function LevelSelect({ campaign, progress, embedded }: { campaign: CampaignDoc; 
               const status = completed ? ' · Cleared' : unlocked ? '' : ' · Locked';
               const playHref = `/play?campaignId=${encodeURIComponent(campaign.id)}&levelId=${encodeURIComponent(ref.levelId)}`;
               return (
-                <section className={`settings-row ${unlocked ? '' : 'is-disabled'}`.trim()} key={ref.levelId}>
+                <section
+                  className={`settings-row campaign-level-row ${unlocked ? '' : 'is-disabled'} ${ref.levelId === selectedLevelId ? 'is-selected' : ''}`.trim()}
+                  key={ref.levelId}
+                  role="button"
+                  tabIndex={0}
+                  aria-current={ref.levelId === selectedLevelId ? 'true' : undefined}
+                  onClick={() => onSelectLevel(ref.levelId)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectLevel(ref.levelId); } }}
+                >
                   {/* Leading board preview — the same baked thumbnail the Campaign Editor's
                       level list uses, so a level looks identical wherever it's shown. Locked
                       levels still show their board (dimmed) as a peek at what's ahead. */}
@@ -112,7 +123,7 @@ function LevelSelect({ campaign, progress, embedded }: { campaign: CampaignDoc; 
                   <div className="settings-row-value">
                     <Stars count={prog?.stars ?? 0} />
                   </div>
-                  <div className="settings-row-control">
+                  <div className="settings-row-control" onClick={(e) => e.stopPropagation()}>
                     {unlocked
                       ? (
                         <NavButton className="app-header-button app-header-button-active" to={playHref} aria-label={`Play ${level?.name ?? `level ${index + 1}`}`}>
@@ -138,6 +149,9 @@ export function Campaign({ embedded = false }: { embedded?: boolean } = {}): Rea
   const [selectedId, setSelectedId] = useState<string>(() => campaignIdFromPath(window.location.pathname));
   const [progress, setProgress] = useState<CampaignProgress>(readProgress);
   const campaigns = useCampaigns((s) => s.campaigns);
+  const levelDocs = useCampaigns((s) => s.levels);
+  // Which level is previewed in the 4th column (null → no preview column, mirroring the Editor).
+  const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
 
   useEffect(() => {
     if (embedded) return; // the persistent menu shell (MainMenu) owns .main-menu-active + the backdrop
@@ -206,8 +220,22 @@ export function Campaign({ embedded = false }: { embedded?: boolean } = {}): Rea
   const officialCampaigns = campaigns.filter((c) => c.origin === 'official');
   const myCampaigns = campaigns.filter((c) => c.origin !== 'official');
 
-  // The two campaign columns — the campaign list (a tab column) + the selected campaign's level
-  // select (an action column). Shared by the standalone route AND the embedded-in-shell render.
+  // A row click previews the level in the 4th column; the previewed level may not belong to a
+  // newly-picked campaign, so reset when the active campaign changes.
+  useEffect(() => { setSelectedLevelId(null); }, [activeId]);
+  const activeRefs = activeCampaign ? orderedLevels(activeCampaign) : [];
+  const selectedLevel = selectedLevelId ? levelDocs[selectedLevelId] ?? null : null;
+  const selectedIndex = activeRefs.findIndex((r) => r.levelId === selectedLevelId);
+  const selectedTitle = selectedLevel ? (selectedIndex >= 0 ? `Level ${selectedIndex + 1}: ${selectedLevel.name}` : selectedLevel.name) : '';
+  const selectedUnlocked = selectedIndex >= 0 && isLevelUnlocked(activeRefs, selectedIndex, progress);
+  const selectedCompleted = Boolean(selectedLevelId && progress[selectedLevelId]?.completed);
+  const selectedPlayHref = activeCampaign && selectedLevelId
+    ? `/play?campaignId=${encodeURIComponent(activeCampaign.id)}&levelId=${encodeURIComponent(selectedLevelId)}`
+    : '/play';
+
+  // The campaign columns — the campaign list (a tab column) + the selected campaign's level
+  // select (an action column) + the previewed level (a preview column, only when a level is
+  // clicked). Shared by the standalone route AND the embedded-in-shell render.
   const inner = (
     <>
       <aside className={embedded ? 'menu-dest-col menu-dest-tabs' : 'settings-frame settings-rail-frame'} aria-label="Campaigns">
@@ -232,7 +260,30 @@ export function Campaign({ embedded = false }: { embedded?: boolean } = {}): Rea
         )}
       </aside>
 
-      {activeCampaign && <LevelSelect campaign={activeCampaign} progress={progress} embedded={embedded} />}
+      {activeCampaign && (
+        <LevelSelect
+          campaign={activeCampaign}
+          progress={progress}
+          embedded={embedded}
+          selectedLevelId={selectedLevelId}
+          onSelectLevel={setSelectedLevelId}
+        />
+      )}
+
+      {selectedLevel ? (
+        <LevelPreviewColumn
+          level={selectedLevel}
+          title={selectedTitle}
+          embedded={embedded}
+          actions={
+            <div className="ce-preview-actions is-single">
+              {selectedUnlocked
+                ? <NavButton className="ce-link-button" to={selectedPlayHref}><span>{selectedCompleted ? 'Replay' : 'Play'}</span></NavButton>
+                : <button type="button" className="ce-link-button" disabled><span>Locked</span></button>}
+            </div>
+          }
+        />
+      ) : null}
     </>
   );
 

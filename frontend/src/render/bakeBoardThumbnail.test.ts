@@ -4,8 +4,17 @@ import {
   boardDrawOps,
   uniqueDrawSrcs,
   boardBounds,
+  largestSolidRect,
 } from './bakeBoardThumbnail';
 import type { EditorBoard } from '../ui/boardCode';
+
+// Coverage (opaque fraction) of a rect under an opacity predicate — the property object-fit:cover
+// relies on: a crop that's ~fully opaque cannot show a transparent corner as sky.
+function coverage(isOpaque: (x: number, y: number) => boolean, r: { x: number; y: number; w: number; h: number }): number {
+  let opaque = 0;
+  for (let y = r.y; y < r.y + r.h; y += 1) for (let x = r.x; x < r.x + r.w; x += 1) if (isOpaque(x, y)) opaque += 1;
+  return opaque / (r.w * r.h);
+}
 
 // PURE logic only — no <canvas> (jsdom has none): content-hash stability, image-src dedup, and
 // the bounds/scale math. The actual rasterisation (drawImage/toBlob) is browser-only and not
@@ -182,5 +191,53 @@ describe('boardBounds — dimension / scale math', () => {
     const bounds = boardBounds(board);
     expect(Number.isInteger(bounds.width)).toBe(true);
     expect(Number.isInteger(bounds.height)).toBe(true);
+  });
+});
+
+describe('largestSolidRect — the solid crop that fills a box without sky', () => {
+  const W = 200;
+  const H = 160;
+  // A board-shaped alpha: a solid isometric DIAMOND (rhombus) plus a sparse column of "headroom"
+  // pixels above it (grass tufts / unit-heads poking into the transparent band above the back row).
+  const cx = 100;
+  const cy = 95; // diamond centre sits below the image middle — the headroom lives up top
+  const A = 90;
+  const B = 55;
+  const diamond = (x: number, y: number): boolean => Math.abs(x - cx) / A + Math.abs(y - cy) / B <= 1;
+  const withHeadroom = (x: number, y: number): boolean =>
+    diamond(x, y) || (y >= 4 && y <= 22 && x >= 96 && x <= 104); // thin sparse tuft column up top
+
+  it('returns a FULLY solid rect (so cover can never show a transparent corner)', () => {
+    const rect = largestSolidRect(withHeadroom, W, H)!;
+    expect(rect).not.toBeNull();
+    // Every pixel opaque — the guarantee that lets object-fit:cover fill a box with board and never
+    // expose a transparent corner (cov defaults to 1). A partial crop is what left the empty wedges.
+    expect(coverage(withHeadroom, rect)).toBe(1);
+  });
+
+  it('excludes the sparse headroom above the diamond', () => {
+    const rect = largestSolidRect(withHeadroom, W, H)!;
+    // The solid crop starts at/below the diamond's top vertex — never up in the tuft band (y≤22).
+    expect(rect.y).toBeGreaterThanOrEqual(cy - B);
+  });
+
+  it('is a substantial view, not a sliver', () => {
+    const rect = largestSolidRect(withHeadroom, W, H)!;
+    // The largest solid rect inscribed in a rhombus is ~A×B; assert it's a real central view (a
+    // healthy fraction of that), not the degenerate sliver the fallback would replace.
+    expect(rect.w).toBeGreaterThan(A * 0.6);
+    expect(rect.h).toBeGreaterThan(B * 0.6);
+    expect(rect.w * rect.h).toBeGreaterThan(0.25 * A * B);
+  });
+
+  it('a fully-solid rectangle comes back fully solid', () => {
+    const solid = (x: number, y: number): boolean => x >= 20 && x < 180 && y >= 20 && y < 140;
+    const rect = largestSolidRect(solid, W, H)!;
+    expect(coverage(solid, rect)).toBe(1);
+    expect(rect.w * rect.h).toBeGreaterThan(0.9 * (160 * 120));
+  });
+
+  it('returns null when nothing is painted', () => {
+    expect(largestSolidRect(() => false, W, H)).toBeNull();
   });
 });

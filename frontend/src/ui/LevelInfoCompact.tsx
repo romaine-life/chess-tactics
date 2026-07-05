@@ -6,6 +6,7 @@
 import { type ReactElement } from 'react';
 import type { Level, Roster as PieceRoster, ZoneType } from '../core/level';
 import { MODE_NAME, objectiveSummary } from '../core/objectives';
+import { formatClockSeconds } from '../core/clock';
 import type { PieceType } from '../core/types';
 
 const PIECE_ORDER: PieceType[] = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn', 'rock', 'random-rock'];
@@ -108,6 +109,15 @@ export function LevelInfoCompact({ level }: { level: Level }): ReactElement {
       <section className="ce-li-zones-row">
         <span className="ce-li-title">Rules</span>
         <span className="ce-li-zones">{levelObjectiveLine(level)}{'  ·  '}{level.difficulty}</span>
+      </section>
+
+      <section className="ce-li-zones-row">
+        <span className="ce-li-title">Time</span>
+        <span className="ce-li-zones">
+          {level.timeControl
+            ? `${formatClockSeconds(level.timeControl.initialSeconds)}${level.timeControl.incrementSeconds ? ` +${level.timeControl.incrementSeconds}s / move` : ''}`
+            : 'Untimed'}
+        </span>
       </section>
 
       {level.placement === 'random' ? (

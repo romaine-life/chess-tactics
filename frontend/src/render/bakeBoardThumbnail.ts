@@ -361,14 +361,14 @@ function canvasToBlob(canvas: Canvas2D): Promise<Blob> {
  * fractionally resampled here. `scale` should be an INTEGER (1 for the displayed size, 2 for
  * the HiDPI variant) — non-integer scales are clamped to ≥1 but pass through for flexibility.
  */
-export async function bakeBoardThumbnail(board: EditorBoard, opts?: { scale?: number }): Promise<Blob> {
-  const scale = Math.max(1, opts?.scale ?? 1);
+// Render the board's draw ops onto a fresh canvas at native px × `scale`, awaiting every sprite
+// decode so nothing paints half-loaded. Shared by the Blob bake and the painted-bounds scan.
+async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ canvas: Canvas2D; bounds: BakeBounds } | null> {
   const bounds = boardBounds(board);
   const ops = boardDrawOps(board);
-
   const canvas = createCanvas(Math.max(1, Math.round(bounds.width * scale)), Math.max(1, Math.round(bounds.height * scale)));
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-  if (!ctx) throw new Error('bakeBoardThumbnail: 2D context unavailable');
+  if (!ctx) return null;
   // Pixel art: nearest-neighbour at every step (the native bake is itself unscaled, but ops can
   // be drawn at integer `scale`, and unit sprites are `contain`-fit).
   ctx.imageSmoothingEnabled = false;
@@ -381,8 +381,7 @@ export async function bakeBoardThumbnail(board: EditorBoard, opts?: { scale?: nu
       try {
         images.set(src, await loadImage(src));
       } catch {
-        // A missing sprite must not abort the whole bake — skip it (the live board would show a
-        // broken <img>, but a thumbnail is better off omitting it).
+        // A missing sprite must not abort the whole render — skip it.
       }
     }),
   );
@@ -410,8 +409,124 @@ export async function bakeBoardThumbnail(board: EditorBoard, opts?: { scale?: nu
       ctx.drawImage(img, (op.dx - bounds.minX) * scale, (op.dy - bounds.minY) * scale, op.dw * scale, op.dh * scale);
     }
   }
+  return { canvas, bounds };
+}
 
-  return canvasToBlob(canvas);
+export async function bakeBoardThumbnail(board: EditorBoard, opts?: { scale?: number }): Promise<Blob> {
+  const scale = Math.max(1, opts?.scale ?? 1);
+  const rendered = await renderBoardCanvas(board, scale);
+  if (!rendered) throw new Error('bakeBoardThumbnail: 2D context unavailable');
+  return canvasToBlob(rendered.canvas);
+}
+
+/**
+ * The largest axis-aligned rectangle of (near-)SOLID pixels, grown outward from the opaque
+ * centroid — the board's dense tile mass, excluding the transparent "headroom" above the back row
+ * (where only sparse grass tufts / unit-heads poke up) and the empty diamond corners. Cropping a
+ * board to THIS and cover-fitting it fills a box with solid board and can never show a transparent
+ * corner as sky — which is the whole point (a diamond can't reach a rectangle's corners, so any
+ * bounding-box fit leaves sky there; a solid-rectangle fit cannot).
+ *
+ * Pure + deterministic (an opacity predicate + a size), so it's unit-tested. Uses a summed-area
+ * table for O(1) coverage queries; each edge grows while its next strip is ≥ `cov` opaque. `cov`
+ * defaults to 1 — a strip must be FULLY opaque to be absorbed, so the rect is strictly solid and
+ * no corner can be transparent (cov < 1 left transparent corners that read as an empty buffer).
+ * Falls back to the full painted bbox if the solid core comes out degenerate (e.g. a board with a
+ * central hole). Returns null only when nothing is painted.
+ */
+export function largestSolidRect(
+  isOpaque: (x: number, y: number) => boolean,
+  W: number,
+  H: number,
+  cov = 1,
+): { x: number; y: number; w: number; h: number } | null {
+  if (W <= 0 || H <= 0) return null;
+  const stride = W + 1;
+  const sat = new Uint32Array(stride * (H + 1)); // summed-area table of opacity
+  let minX = W;
+  let minY = H;
+  let maxX = -1;
+  let maxY = -1;
+  let sumX = 0;
+  let sumY = 0;
+  let count = 0;
+  for (let y = 0; y < H; y += 1) {
+    let run = 0; // opaque pixels in this row so far
+    const row = (y + 1) * stride;
+    const prev = y * stride;
+    for (let x = 0; x < W; x += 1) {
+      if (isOpaque(x, y)) {
+        run += 1;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        sumX += x;
+        sumY += y;
+        count += 1;
+      }
+      sat[row + x + 1] = sat[prev + x + 1] + run;
+    }
+  }
+  if (count === 0) return null;
+  const rectSum = (x0: number, y0: number, x1: number, y1: number): number =>
+    sat[(y1 + 1) * stride + (x1 + 1)] - sat[y0 * stride + (x1 + 1)] - sat[(y1 + 1) * stride + x0] + sat[y0 * stride + x0];
+  let x0 = Math.max(minX, Math.min(maxX, Math.round(sumX / count)));
+  let x1 = x0;
+  let y0 = Math.max(minY, Math.min(maxY, Math.round(sumY / count)));
+  let y1 = y0;
+  let grew = true;
+  while (grew) {
+    grew = false;
+    if (y0 > minY && rectSum(x0, y0 - 1, x1, y0 - 1) >= cov * (x1 - x0 + 1)) { y0 -= 1; grew = true; }
+    if (y1 < maxY && rectSum(x0, y1 + 1, x1, y1 + 1) >= cov * (x1 - x0 + 1)) { y1 += 1; grew = true; }
+    if (x0 > minX && rectSum(x0 - 1, y0, x0 - 1, y1) >= cov * (y1 - y0 + 1)) { x0 -= 1; grew = true; }
+    if (x1 < maxX && rectSum(x1 + 1, y0, x1 + 1, y1) >= cov * (y1 - y0 + 1)) { x1 += 1; grew = true; }
+  }
+  const w = x1 - x0 + 1;
+  const h = y1 - y0 + 1;
+  const bboxW = maxX - minX + 1;
+  const bboxH = maxY - minY + 1;
+  // A degenerate solid core (thin sliver) → show the whole painted board rather than a strip.
+  if (w * h < 0.1 * bboxW * bboxH) return { x: minX, y: minY, w: bboxW, h: bboxH };
+  return { x: x0, y: y0, w, h };
+}
+
+/**
+ * Bake the board's dense SOLID region to a PNG object URL (+ its pixel size). Drop it into a box
+ * with `object-fit: cover` (a plain raster the browser scales — NO projection / pan / zoom fit to
+ * get wrong) and it fills the box edge-to-edge, clipping the overflow, exactly how the game board
+ * (skirmish) fills its view. Cropping to `largestSolidRect` (not the alpha bbox) is what makes the
+ * fill total: the bbox is a diamond whose transparent corners + sparse top would show as sky at
+ * the box corners; the solid rectangle has no transparent pixel to show.
+ *
+ * The caller MUST `URL.revokeObjectURL(url)` when it replaces the image or unmounts. `scale`
+ * (integer ≥ 1, default 2) sets the raster resolution so an upscaled crop stays crisp. Returns
+ * null if there's no 2D context or nothing is painted (empty board).
+ */
+export async function bakeBoardPaintedImage(
+  board: EditorBoard,
+  opts?: { scale?: number },
+): Promise<{ url: string; width: number; height: number } | null> {
+  const scale = Math.max(1, Math.round(opts?.scale ?? 2));
+  const rendered = await renderBoardCanvas(board, scale);
+  if (!rendered) return null;
+  const { canvas } = rendered;
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  if (!ctx) return null;
+  const W = canvas.width;
+  const H = canvas.height;
+  if (!W || !H) return null;
+  const data = ctx.getImageData(0, 0, W, H).data;
+  const rect = largestSolidRect((x, y) => data[(y * W + x) * 4 + 3] > 8, W, H); // alpha > 8 = painted
+  if (!rect) return null;
+  const crop = createCanvas(rect.w, rect.h);
+  const cctx = crop.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  if (!cctx) return null;
+  cctx.imageSmoothingEnabled = false;
+  cctx.drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+  const blob = await canvasToBlob(crop);
+  return { url: URL.createObjectURL(blob), width: rect.w, height: rect.h };
 }
 
 // Re-export the geometry constants for the display layer (so the placeholder + <img> box use
