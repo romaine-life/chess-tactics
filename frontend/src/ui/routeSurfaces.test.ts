@@ -47,12 +47,11 @@ describe('route screen key (ADR-0051 exit-dissolve grouping)', () => {
     expect(routeScreenKey('/')).toBe(routeScreenKey('/main-menu'));
   });
 
-  it('keeps /settings, /campaign, AND /editor in the persistent menu shell (same key as home)', () => {
-    // Settings, the Campaign picker, and the Editor all render INSIDE the persistent menu shell —
-    // MainMenu fills its second column — so they share the 'menu' screen key with '/'. React keeps
-    // the one MainMenu instance mounted across every home↔destination hop, so the button column never
-    // dissolves/remounts (the whole point of the shell).
-    for (const p of ['/settings', '/settings/audio', '/campaign', '/campaign/official-1', '/editor', '/campaigns-next']) {
+  it('keeps Settings / Campaign / Editor / Solo Skirmish in the persistent menu shell (same key as home)', () => {
+    // These destinations all render INSIDE the persistent menu shell — MainMenu fills its second
+    // column — so they share the 'menu' screen key with '/'. React keeps the one MainMenu instance
+    // mounted across every home↔destination hop, so the button column never dissolves/remounts.
+    for (const p of ['/settings', '/settings/audio', '/campaign', '/campaign/official-1', '/editor', '/campaigns-next', '/skirmish']) {
       expect(routeScreenKey(p)).toBe(routeScreenKey('/'));
       expect(routeScreenKey(p)).toBe('menu');
     }
@@ -61,6 +60,7 @@ describe('route screen key (ADR-0051 exit-dissolve grouping)', () => {
   it('separates distinct screens so cross-screen hops dissolve', () => {
     // Leaving the shell to a heavy full screen still dissolves. The nested Level Editor (/editor/level)
     // is a distinct component from the Editor (/editor, now in the shell), so drilling in dissolves.
+    // The Solo Skirmish PICKER (/skirmish) is in the shell, but the live board (/play) is its own screen.
     expect(routeScreenKey('/editor')).not.toBe(routeScreenKey('/editor/level'));
     expect(routeScreenKey('/settings')).not.toBe(routeScreenKey('/level-editor'));
     expect(routeScreenKey('/')).not.toBe(routeScreenKey('/lobbies'));

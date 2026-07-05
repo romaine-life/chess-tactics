@@ -65,10 +65,10 @@ export function routeScreenKey(pathname: string): string {
   // legacy /edit·/level-editor) is its own heavy full screen and keeps its own key.
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return 'level-editor';
   if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return 'studio';
-  // Each remaining explicit renderRoute entry is its own screen…
+  // Each remaining explicit renderRoute entry is its own screen… (/skirmish is NOT here: the Solo
+  // Skirmish PICKER is a shell dest now, falling through to 'menu'; only the live board /play is here.)
   if (
     path === '/play' ||
-    path === '/skirmish' ||
     path === '/portrait-editor' ||
     path === '/party'
   ) {
