@@ -902,6 +902,30 @@ h1 {
   display: var(--profile-bar-frame, block);
 }
 
+/* Kit section divider — a 1-D horizontal separator (the `panel-divider` bar asset, ADR-0063).
+   Drop <div class="kit-divider"></div> between content sections inside any kit-framed panel to
+   split it into stacked rows; use as many as you like. It is a branch rail carrying an AUTHORED
+   THREE-WAY TEE atom (`corner-t`, hand-drawn to match the frame's gold corner but symmetric with
+   no corner flair) at each end, mirrored — so the divider tees into the side rail exactly as a
+   frame corner reads, just branched. (Distinct from the decorative settings `section-divider-frame`
+   — an inline rule.)
+
+   The ONE thing a host must supply is --frame-w: the panel's frame width in px (its border-width,
+   or the padding a ::before frame insets its content by). The divider bleeds out by exactly that,
+   so the three-way tees land on the side rail no matter how thick the frame is. Slice `0 24 0 24`
+   = the cap width (barCapWidth('panel-divider') = the tee atom width). The bar is the tee's own
+   height (24px) so it renders 1:1 — no downscale, crisp — and the element height matches it. */
+.kit-divider {
+  height: 24px;
+  border: 0 solid transparent;
+  border-width: 0 24px;
+  border-image: url("/assets/ui/kit/panel-divider.png") 0 24 0 24 fill / 0 24px;
+  image-rendering: pixelated;
+  margin: var(--kit-divider-gap, 6px) calc(-1 * var(--frame-w, 16px));
+  align-self: stretch;
+  flex: none;
+}
+
 /* Element 03 - hybrid (render-accuracy + text rule, docs/ui-art-direction.md):
    art-crop the painterly lion crest from main-menu-aspirational.png; clean SVG cog/rook
    silhouettes; all copy + counts are live DOM text. Two stacked bars matching the concept. */

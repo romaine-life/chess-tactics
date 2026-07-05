@@ -222,6 +222,77 @@ function buildFrameParts(baseCorner, bracketCorner, edge, fill, cfg, W, H, flipS
   corner(bracketCorner, cfg.bracketScale, cfg.brackets);
   return o;
 }
+// ── Rail-junction family + the section divider ("bar") ────────────────────────────
+// The frame's `corner` atom IS the full junction treatment (steel rail turning + notch +
+// gold bracket) for ONE concave angle. Higher-order junctions are just that atom MIRRORED
+// into each concave angle they contain, sharing the through-rails — so a 3-way tee and a
+// 4-way cross are DERIVED from the corner atom and match the frame corners by construction
+// (same rail, same notch, same gold; no forged/hand-painted junction atom to drift). It is
+// ADR-0012's one-corner-mirrored, generalized from a box (4 convex corners) to interior
+// junctions:  corner = 2-way (exists) · tee = 3-way (2 concave angles) · cross = 4-way (4).
+const JX_OVER = 3; // the 2px shared-rail region where two mirrored corners coincide
+
+// Left tee (├): the side rail runs straight down; the branch leaves to the RIGHT. The upper
+// concave angle is a bottom-left corner (flipV), the lower a top-left corner (as-is); their
+// horizontal rails coincide as the single branch, their left rails as the through side-rail.
+export function composeTee(corner) {
+  const CW = corner.width, CH = corner.height;
+  const o = np(CW, 2 * CH - JX_OVER);
+  comp(o, flipV(corner), 0, 0);           // upper angle — gold opens up-right
+  comp(o, corner, 0, CH - JX_OVER);        // lower angle — gold opens down-right
+  return o;
+}
+// 4-way cross (+): a frame corner in every quadrant, all four sharing the crossed rails.
+export function composeCross(corner) {
+  const CW = corner.width, CH = corner.height;
+  const W = 2 * CW - JX_OVER, H = 2 * CH - JX_OVER;
+  const o = np(W, H);
+  comp(o, flipH(flipV(corner)), 0, 0);     // NW quadrant
+  comp(o, flipV(corner), W - CW, 0);        // NE quadrant
+  comp(o, flipH(corner), 0, H - CH);        // SW quadrant
+  comp(o, corner, W - CW, H - CH);          // SE quadrant
+  return o;
+}
+
+// The section divider: a horizontal branch rail carrying a full THREE-WAY CORNER (composeTee)
+// at each end, so it tees into the panel's side rail exactly as a frame corner reads — just
+// branched. Sliced with a horizontal 1-D border-image (`0 capW 0 capW fill`, the 90°-rotate
+// of the scrollbar's vertical 1-D slice); capW = tee width = corner width = barCapWidth().
+export function buildBar(edgeAtom, cornerAtom, W) {
+  const tee = composeTee(cornerAtom);
+  const cap = tee.width;                        // = corner width
+  const branchY = cornerAtom.height - JX_OVER;  // the shared branch-rail band (matches the tee)
+  const o = np(W, tee.height);
+  tile(o, edgeAtom, 0, branchY, W, branchY + edgeAtom.height); // branch rail, full width
+  comp(o, tee, 0, 0);                            // left tee (├)
+  comp(o, flipH(tee), W - cap, 0);                // right tee (┤)
+  return o;
+}
+
+// The branch row of an AUTHORED tee atom = the centre of its widest opaque run (the horizontal
+// branch arm is wider than the vertical spine), so the steel rail can be seated on it.
+function teeBranchRow(tee) {
+  const { width: w, height: h, data } = tee;
+  let mw = 0; const rowW = new Array(h).fill(0);
+  for (let y = 0; y < h; y++) { let a = -1, b = -1; for (let x = 0; x < w; x++) if (data[(y * w + x) * 4 + 3] > 40) { if (a < 0) a = x; b = x; } rowW[y] = a < 0 ? 0 : b - a + 1; if (rowW[y] > mw) mw = rowW[y]; }
+  let sum = 0, n = 0; for (let y = 0; y < h; y++) if (rowW[y] >= mw - 1) { sum += y; n++; }
+  return n ? Math.round(sum / n) : Math.floor(h / 2);
+}
+
+// The section divider using an AUTHORED tee atom (corner-t.png) as the cap, instead of the
+// composeTee derivation. The tee is used AS DRAWN — mirrored for the right cap — and the steel
+// branch rail (edge atom) is tiled full-width, centred on the tee's own branch row so the rail
+// runs through the junction. Height = the tee's height, so the consumer renders it 1:1 (crisp).
+export function buildBarFromTee(edgeAtom, teeAtom, W) {
+  const cap = teeAtom.width, H = teeAtom.height;
+  const o = np(W, H);
+  const railY = Math.round(teeBranchRow(teeAtom) - edgeAtom.height / 2);
+  tile(o, edgeAtom, 0, railY, W, railY + edgeAtom.height); // branch rail, full width, on the branch
+  comp(o, teeAtom, 0, 0);                                   // left cap (spine on the left rail)
+  comp(o, flipH(teeAtom), W - cap, 0);                      // right cap (mirrored)
+  return o;
+}
+
 // Carve navy bleed outside the rail back to transparent: flood from the canvas
 // edges across dark navy, stopping at the brighter rail (which encloses the
 // interior, so interior navy is untouched). Ported from generate-row.
@@ -309,6 +380,11 @@ function maxFrameScaleForAsset(assetId) {
   return Math.max(1, Math.min(4, rec.frame.w / corner.width, rec.frame.h / corner.height));
 }
 export function normalizeConfigForAsset(assetId, c) {
+  // `bar` (divider) and `junction` (tee/cross) assets are composed straight from atoms with no
+  // per-corner/pipe geometry, so they skip the frame normalizer entirely (it would load offsets
+  // and a corner-scale they don't have).
+  const kind = REGISTRY[assetId]?.kind;
+  if (kind === 'bar' || kind === 'junction') return { asset: assetId };
   const cfg = normalizeConfig({ ...c, asset: assetId });
   cfg.frameScale = Math.min(cfg.frameScale, maxFrameScaleForAsset(assetId));
   return cfg;
@@ -332,6 +408,9 @@ export function saveTheme(theme, shape) {
 // full normalizer so a theme file is always the canonical shape.
 function normalizeShape(shape) { return pickShape(normalizeConfig({ ...shape, asset: '_theme' })); }
 export function loadConfig(assetId) {
+  // Composed-from-atoms assets carry no tunable config; their pixels are fully determined.
+  const kind = REGISTRY[assetId]?.kind;
+  if (kind === 'bar' || kind === 'junction') return { asset: assetId };
   const raw = JSON.parse(readFileSync(`${CONFIG_DIR}${assetId}.json`, 'utf8'));
   const theme = themeOf(assetId);
   // Themed assets: shaping ONLY from the theme file, boxes ONLY from the asset file
@@ -347,9 +426,51 @@ export function loadConfig(assetId) {
 // buildAsset (which writes) and the bake parity test (which compares the result
 // against the committed PNGs), so the writer and the test can never disagree about
 // what a config bakes to. Returns { variants:[{out, png, inspect, inspectPng}], warns, note }.
+// Bake a `bar` (divider) asset: the horizontal-rail primitive (buildBar), one output per
+// variant with its optional palette swap. Bars carry no corner/pipe geometry, so this is a
+// self-contained path that never touches the frame normalizer or the corner atom.
+function bakeBar(assetId, rec) {
+  const edge = loadAtom(rec.atoms.edge);
+  const { w } = rec.frame;                   // width; height is fixed by the tee's own height
+  // Prefer an AUTHORED tee atom (used as drawn) over deriving one from the corner (composeTee).
+  const teeAtom = rec.atoms.tee ? loadAtom(rec.atoms.tee) : null;
+  const corner = teeAtom ? null : loadAtom(rec.atoms.corner);
+  const variants = rec.variants.map((v) => {
+    const e = v.swap ? swapPalette(edge, v.swap) : edge;
+    if (teeAtom) {
+      const t = v.swap ? swapPalette(teeAtom, v.swap) : teeAtom;
+      return { out: v.out, png: buildBarFromTee(e, t, w), inspect: null, inspectPng: null };
+    }
+    const c = v.swap ? swapPalette(corner, v.swap) : corner;
+    return { out: v.out, png: buildBar(e, c, w), inspect: null, inspectPng: null };
+  });
+  const cap = teeAtom ? teeAtom.width : corner.width;
+  return { variants, warns: [], note: `bar · ${teeAtom ? 'authored tee' : 'derived corner'} · cap ${cap}px` };
+}
+// A `junction` asset bakes a single derived rail-junction PNG — tee (3-way) or cross (4-way) —
+// from the frame's corner atom (composeTee / composeCross), keyed by its `sides` string.
+function bakeJunction(assetId, rec) {
+  const corner = loadAtom(rec.atoms.corner);
+  const compose = rec.sides === 'NSEW' ? composeCross : composeTee;
+  const variants = rec.variants.map((v) => {
+    const c = v.swap ? swapPalette(corner, v.swap) : corner;
+    return { out: v.out, png: compose(c), inspect: null, inspectPng: null };
+  });
+  return { variants, warns: [], note: `junction ${rec.sides} · derived from corner` };
+}
+// Cap-slice width (px) a `bar` asset's horizontal border-image uses — the full-corner tee
+// width = corner width. One number the consumer CSS and the editor read so they can't disagree.
+export function barCapWidth(assetId) {
+  const rec = REGISTRY[assetId];
+  if (!rec || rec.kind !== 'bar') return 0;
+  return loadAtom(rec.atoms.tee || rec.atoms.corner).width;
+}
+
 export function bakeAsset(assetId, cfgRaw) {
   const rec = REGISTRY[assetId];
   if (!rec) throw new Error(`nine-slice-kit: unknown asset "${assetId}" (known: ${Object.keys(REGISTRY).join(', ')})`);
+  if (rec.kind === 'bar') return bakeBar(assetId, rec);
+  if (rec.kind === 'junction') return bakeJunction(assetId, rec);
   const cfg = normalizeConfigForAsset(assetId, cfgRaw);
   const { base, bracket } = splitCorner(loadAtom(rec.atoms.corner));
   const edge = loadAtom(rec.atoms.edge), fill = loadAtom(rec.atoms.fill);

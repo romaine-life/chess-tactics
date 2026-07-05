@@ -1,10 +1,10 @@
 {
-  "generated": "2026-07-04",
+  "generated": "2026-07-05",
   "gate": "verify-kit-asset.mjs --glyph (transparency hygiene: magenta despill + edge bleed; anti-aliasing allowed)",
   "summary": {
     "pass": 47,
     "total": 47,
-    "frames": 12
+    "frames": 15
   },
   "groups": [
     {
@@ -615,6 +615,24 @@
       "url": "/assets/ui/kit/divider.png",
       "w": 10,
       "h": 12
+    },
+    {
+      "name": "panel-divider",
+      "url": "/assets/ui/kit/panel-divider.png",
+      "w": 64,
+      "h": 24
+    },
+    {
+      "name": "tee",
+      "url": "/assets/ui/kit/tee.png",
+      "w": 24,
+      "h": 45
+    },
+    {
+      "name": "cross",
+      "url": "/assets/ui/kit/cross.png",
+      "w": 45,
+      "h": 45
     }
   ]
 }
