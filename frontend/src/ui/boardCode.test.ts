@@ -48,4 +48,29 @@ describe('boardCode round-trip', () => {
     expect(encodeBoard(emptyBoard({ factionDirections: {} }))).toBe(encodeBoard(emptyBoard()));
     expect(decodeBoard(encodeBoard(emptyBoard()))!.factionDirections).toEqual({});
   });
+
+  it('round-trips generated-region units and their rerun settings', () => {
+    const generatedRegions: EditorBoard['generatedRegions'] = [{
+      id: 'region-1',
+      name: 'North pond',
+      cells: ['1,1', '2,1', '1,2'],
+      buffer: 12,
+      wiggle: 0.35,
+      sections: [
+        {
+          terrain: 'water',
+          share: 70,
+          locked: true,
+          covers: [{ type: 'water', knobs: { amount: 0.8, amountRandom: 0.1, density: 0.5, densityRandom: 0.2 } }],
+        },
+        { terrain: 'sand', share: 30, covers: [] },
+      ],
+    }];
+    expect(decodeBoard(encodeBoard(emptyBoard({ generatedRegions })))!.generatedRegions).toEqual(generatedRegions);
+  });
+
+  it('encodes a generated-region-free board byte-identically to a code that predates region units', () => {
+    expect(encodeBoard(emptyBoard({ generatedRegions: [] }))).toBe(encodeBoard(emptyBoard()));
+    expect(decodeBoard(encodeBoard(emptyBoard()))!.generatedRegions).toEqual([]);
+  });
 });
