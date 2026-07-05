@@ -11506,8 +11506,12 @@ button.tileset-relationship-cell {
      --app-header-h is sized so this inset fits (content + rule + 2×inset). */
   --titlebar-rule-h: 14px;
   --ds-titlebar-inset: var(--ds-space-2);
+  /* Trailing/leading inline padding, published as a var so the account cluster can pull its
+     own trailing edge in to match (see .header-account-cluster). Tightened at the
+     landscape-phone breakpoint, where the cluster's pull-in follows automatically. */
+  --titlebar-pad-inline: var(--ds-space-6);
   border: 0;
-  padding: var(--ds-titlebar-inset) var(--ds-space-6) calc(var(--ds-titlebar-inset) + var(--titlebar-rule-h));
+  padding: var(--ds-titlebar-inset) var(--titlebar-pad-inline) calc(var(--ds-titlebar-inset) + var(--titlebar-rule-h));
   background:
     url("/assets/ui/titlebar/joint-diamond-forged.png") center bottom / auto 26px no-repeat,
     url("/assets/ui/titlebar/band-forged.png") left bottom / auto var(--titlebar-rule-h) repeat-x,
@@ -11686,10 +11690,21 @@ button.tileset-relationship-cell {
    account button, framed identically so the pair reads as one matched unit
    (Material-3 "few trailing items"; the avatar opens the account menu below). */
 .header-account-cluster {
+  /* ONE spacing source for the cluster's two edges: the inter-button gap AND the gap that
+     frames the whole cluster against the bar. Both read this so they can never drift apart. */
+  --cluster-gap: 10px;
   align-items: center;
   display: flex;
-  gap: 10px;
+  gap: var(--cluster-gap);
   justify-content: flex-end;
+  /* The bar reserves --titlebar-pad-inline of trailing padding, but the cluster's LEADING gap
+     (the forged wall -> first button) is only --cluster-gap. That left-tight / right-loose
+     split reads as an off-centre cluster. Pull the trailing edge in by the difference so the
+     gap after the last button equals --cluster-gap too — the buttons sit symmetrically framed
+     between the wall and the bar edge. Reads the bar's OWN padding var (inherited), so it stays
+     exact when the landscape-phone breakpoint tightens that padding. Applies on every bar (the
+     cluster is invariant), so the trailing gap is a consistent --cluster-gap app-wide. */
+  margin-inline-end: calc(var(--cluster-gap) - var(--titlebar-pad-inline, var(--ds-space-6)));
 }
 
 /* The wall (component: HeaderAccountCluster) — a vertical forged-iron rule that LOCKS the
@@ -13493,7 +13508,7 @@ button.tileset-relationship-cell {
   /* Title bar: drop the desktop UI-Scale zoom and tighten padding so the brand + account
      cluster sit comfortably in the shorter bar. */
   .app-shell-titlebar.app-titlebar--ui-scaled { zoom: 1; }
-  .app-shell-titlebar.settings-header-frame { padding-block: 6px; padding-inline: 12px; }
+  .app-shell-titlebar.settings-header-frame { padding-block: 6px; --titlebar-pad-inline: 12px; padding-inline: var(--titlebar-pad-inline); }
 
   /* Skirmish: keep the board + HUD side-by-side. The 860px block stacks them, which
      forces an awkward vertical page-scroll on a short landscape screen; the base 2-column
