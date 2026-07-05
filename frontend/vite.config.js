@@ -288,6 +288,14 @@ function prodBackend(port) {
   const pidFile = join(tmpdir(), `chess-dev-backend-${createHash('md5').update(backendDir).digest('hex').slice(0, 8)}.pid`);
   let child = null;
   let stopping = false;
+  // Backend is REQUIRED: a frontend must never serve without a working backend. A child that
+  // exits within STARTUP_GRACE_MS never became healthy; after MAX_FAST_CRASHES such failures in
+  // a row we bring vite down too (process.exit) instead of relaunching forever. A crash AFTER a
+  // healthy run resets the counter, so genuine transient restarts stay resilient. The only
+  // sanctioned frontend-only mode is DEV_NO_BACKEND=1 (this plugin isn't registered then).
+  const STARTUP_GRACE_MS = 3000;
+  const MAX_FAST_CRASHES = 3;
+  let fastCrashes = 0;
   const killStale = () => {
     try {
       if (!existsSync(pidFile)) return;
@@ -303,6 +311,7 @@ function prodBackend(port) {
       const log = server.config.logger;
       killStale();
       const start = () => {
+        const launchedAt = Date.now();
         child = spawn(process.execPath, ['server.js'], {
           cwd: backendDir,
           env: {
@@ -325,7 +334,18 @@ function prodBackend(port) {
         child.on('exit', (code) => {
           child = null;
           if (stopping) return;
-          log.warn(`[backend] exited (code ${code}) — relaunching in 1s`);
+          const ranFor = Date.now() - launchedAt;
+          if (ranFor < STARTUP_GRACE_MS) {
+            fastCrashes += 1;
+            if (fastCrashes >= MAX_FAST_CRASHES) {
+              log.error(`[backend] failed to start ${MAX_FAST_CRASHES}× in a row (last exit code ${code}, ran ${ranFor}ms). The dev server requires a working backend — shutting vite down. Fix it (e.g. \`cd backend && npm ci\`, ensure the DB/az login is reachable) or run frontend-only with DEV_NO_BACKEND=1.`);
+              process.exit(1);
+            }
+            log.warn(`[backend] exited (code ${code}) after ${ranFor}ms — relaunching (fast-crash ${fastCrashes}/${MAX_FAST_CRASHES})`);
+          } else {
+            fastCrashes = 0; // ran healthily for a while → a later crash is transient, stay resilient
+            log.warn(`[backend] exited (code ${code}) — relaunching in 1s`);
+          }
           setTimeout(start, 1000);
         });
       };

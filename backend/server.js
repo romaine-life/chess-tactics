@@ -58,6 +58,10 @@ app.use('/api/train-runs', express.json({ limit: '10mb' }));
 // ceiling. Mount a larger parser first, same as lab-runs; the global parser below
 // then sees the body as already read and skips it.
 app.use('/api/opening-books', express.json({ limit: '4mb' }));
+// Official-campaigns holds the ENTIRE official workspace (every campaign + all their level
+// docs, each carrying a full per-cell terrain array + boardCode), so it grows well past the
+// 256kb ceiling. Mount a larger parser first, same as lab-runs; the global parser below skips it.
+app.use('/api/official-campaigns', express.json({ limit: '10mb' }));
 app.use(express.json({ limit: '256kb' }));
 
 // ---------------------------------------------------------------------------
@@ -1995,8 +1999,8 @@ function validateWorkspaceVictory(victory, key) {
 // Board floor dropped to 1×1 (ADR-0050): the old 4×4 clamp was an arbitrary guardrail with
 // no technical basis, and tiny boards are legitimate for several modes. Mirrors the frontend
 // BOARD_COLS / BOARD_ROWS consts in core/level.ts.
-const WORKSPACE_BOARD_COLS = { min: 1, max: 16 };
-const WORKSPACE_BOARD_ROWS = { min: 1, max: 20 };
+const WORKSPACE_BOARD_COLS = { min: 1, max: 48 };
+const WORKSPACE_BOARD_ROWS = { min: 1, max: 48 };
 
 function isFiniteInteger(value) {
   return Number.isInteger(value) && Number.isFinite(value);
