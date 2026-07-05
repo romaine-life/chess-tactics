@@ -22,6 +22,10 @@ function rel(path) {
   return relative(root, path).replaceAll('\\', '/');
 }
 
+// The sole owner of the homepage backdrop (menu scene + synced rain). Every other screen
+// renders <HomepageBackdrop/>; only this file wires the scene node + rain canvases.
+const BACKDROP_OWNER = 'src/ui/HomepageBackdrop.tsx';
+
 function checkFile(path) {
   const file = rel(path);
   const source = readFileSync(path, 'utf8');
@@ -33,17 +37,41 @@ function checkFile(path) {
     errors.push(`${file}: import ArtRouteChrome/LightArtRouteShell instead of useScreenEntrance directly.`);
   }
 
-  const importsAmbience = /import\s+\{\s*AmbienceBackground\s*\}\s+from\s+['"][^'"]*AmbienceBackground['"]/.test(source);
+  // Single-owner rule (ADR-0064): the homepage backdrop is ONE continuous instance shared by
+  // every homepage-family surface, so it can never re-mount/re-adjust on navigation. Screens
+  // render <HomepageBackdrop/> — never a bespoke <AmbienceBackground/> rain (folded into it)
+  // nor the standalone <SceneBackdrop/> component (a per-screen scene re-crops on every hop).
+  // Importing SCENE_ANIMS/buildSceneBackdropNode as data is fine — only a rival RENDERER is banned.
+  const importsAmbience =
+    /from\s+['"][^'"]*AmbienceBackground['"]/.test(source) || /<AmbienceBackground[\s/>]/.test(source);
+  if (importsAmbience && file !== BACKDROP_OWNER) {
+    errors.push(`${file}: render <HomepageBackdrop/> — AmbienceBackground was folded into it (single-owner backdrop, ADR-0064).`);
+  }
+
+  // The standalone <SceneBackdrop> React component is a STUDIO INSPECTOR render only (SceneAnimLab
+  // overlays region boxes on a calibration scene). Navigation screens must never render it — they
+  // use HomepageBackdrop. Importing the component anywhere else is the re-mount/re-crop drift.
+  const SCENE_COMPONENT_ALLOWED = new Set([BACKDROP_OWNER, 'src/ui/SceneAnimLab.tsx']);
+  const importsSceneComponent =
+    /import\s+\{[^}]*\bSceneBackdrop\b[^}]*\}\s+from\s+['"][^'"]*SceneBackdrop['"]/.test(source);
+  if (importsSceneComponent && !SCENE_COMPONENT_ALLOWED.has(file)) {
+    errors.push(`${file}: render <HomepageBackdrop/> — the SceneBackdrop component is for the studio inspector only (single-owner backdrop, ADR-0064).`);
+  }
+
+  // A homepage-backdrop route enrolls its chrome through ArtRouteChrome/LightArtRouteShell, so the
+  // entrance fade touches the CHROME ROOT only and the continuous backdrop never re-fades
+  // (ADR-0046 §B/G, ADR-0049).
+  const importsBackdrop = /import\s+\{\s*HomepageBackdrop\s*\}\s+from\s+['"][^'"]*HomepageBackdrop['"]/.test(source);
   const importsArtChrome = /from\s+['"][^'"]*ArtRouteChrome['"]/.test(source);
   const importsLightArtShell = /from\s+['"][^'"]*LightArtRouteShell['"]/.test(source);
   if (
-    importsAmbience &&
-    file !== 'src/ui/AmbienceBackground.tsx' &&
+    importsBackdrop &&
+    file !== BACKDROP_OWNER &&
     file !== 'src/ui/shell/LightArtRouteShell.tsx' &&
     !importsArtChrome &&
     !importsLightArtShell
   ) {
-    errors.push(`${file}: AmbienceBackground routes must render chrome through ArtRouteChrome or LightArtRouteShell.`);
+    errors.push(`${file}: HomepageBackdrop routes must render chrome through ArtRouteChrome or LightArtRouteShell.`);
   }
 }
 

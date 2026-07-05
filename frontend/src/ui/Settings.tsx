@@ -3,10 +3,10 @@ import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } 
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath, readValidatedReturnTo } from './navigation';
 import { KitScroll } from './KitScroll';
 import { NavButton } from './shared/NavButton';
+import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
-import { AmbienceBackground } from './AmbienceBackground';
-import { SceneBackdrop } from './SceneBackdrop';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
@@ -21,7 +21,6 @@ const ASSET_BASE = '/assets/ui/settings';
 const PANEL_FADE_MS = 350;
 
 type SettingsTab = 'general' | 'audio' | 'gameplay' | 'creator-tools';
-type ButtonTone = 'neutral' | 'primary' | 'danger';
 
 interface LocalSettings {
   uiScale: number;
@@ -178,93 +177,8 @@ function applyUiScale(scale: number): void {
   document.documentElement.style.setProperty('--settings-ui-scale', `${scale / 100}`);
 }
 
-function SettingsButton({
-  children,
-  tone = 'neutral',
-  onClick,
-  href,
-  className = '',
-  ariaLabel,
-  external = false,
-}: {
-  children: ReactNode;
-  tone?: ButtonTone;
-  onClick?: () => void;
-  href?: string;
-  className?: string;
-  ariaLabel?: string;
-  external?: boolean;
-}): ReactElement {
-  const classes = `settings-chrome-button settings-chrome-button-${tone} ${className}`.trim();
-  if (href && external) {
-    // External destinations still open a new tab — via a button, not an anchor
-    // (ADR-0052): no hover URL leaks into the game shell; noopener guards the opener.
-    return (
-      <button type="button" className={classes} aria-label={ariaLabel} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
-        <span>{children}</span>
-      </button>
-    );
-  }
-  if (href) {
-    // Internal routes are game controls — a NavButton, not a hyperlink (ADR-0052).
-    return (
-      <NavButton className={classes} to={href} aria-label={ariaLabel}>
-        <span>{children}</span>
-      </NavButton>
-    );
-  }
-  return (
-    <button type="button" className={classes} onClick={onClick} aria-label={ariaLabel}>
-      <span>{children}</span>
-    </button>
-  );
-}
-
-function SettingsRow({
-  title,
-  eyebrow,
-  description,
-  value,
-  tall = false,
-  children,
-}: {
-  title: string;
-  eyebrow?: string;
-  description?: string;
-  value?: ReactNode;
-  tall?: boolean;
-  children?: ReactNode;
-}): ReactElement {
-  return (
-    <section className={`settings-row ${tall ? 'settings-row-tall' : ''}`}>
-      <div className="settings-row-copy">
-        {eyebrow ? <span className="settings-row-eyebrow">{eyebrow}</span> : null}
-        <h4>{title}</h4>
-        {description ? <p>{description}</p> : null}
-      </div>
-      {value ? <div className="settings-row-value">{value}</div> : null}
-      {children ? <div className="settings-row-control">{children}</div> : null}
-    </section>
-  );
-}
-
-// A labeled cluster of rows. Purely organizational: a small uppercase eyebrow
-// (h3, between the tab's h2 and each row's h4) plus its grouped rows, so a long
-// settings list reads as scannable sections instead of one undifferentiated stack.
-function SettingsSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}): ReactElement {
-  return (
-    <section className="settings-section">
-      <h3 className="settings-section-title">{title}</h3>
-      <div className="settings-section-rows">{children}</div>
-    </section>
-  );
-}
+// SettingsButton / SettingsRow / SettingsSection moved to ./shared/SettingsControls so the
+// Editor (/editor) composes the SAME primitives instead of a bespoke parallel (ADR-0059).
 
 function Slider({
   value,
@@ -295,7 +209,7 @@ function Slider({
   );
 }
 
-export function Settings(): ReactElement {
+export function Settings({ embedded = false }: { embedded?: boolean } = {}): ReactElement {
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => tabFromPath(window.location.pathname));
   const [showTracks, setShowTracks] = useState<boolean>(() => isTracksView(window.location.pathname));
   // The INCOMING/target panel (switches immediately on a tab change). `previous` holds the
@@ -741,52 +655,41 @@ export function Settings(): ReactElement {
     </>
   );
 
-  return (
-    <section className="settings-art-route" aria-label="Settings" data-testid="settings">
-      {/* Return to where the user opened Settings from. It rides the trailing actions slot
-          with the account/settings cluster (the app's nav home) — the same title-bar spot
-          the Level Editor's back uses — so every return control is in one consistent place;
-          the brand lockup stays a fixed leading anchor. Shown only when the URL carries a
-          valid origin; on a direct open the brand lockup is the way home. */}
-      <TitleBarSlot region="actions">
-        {returnTo ? (
-          <NavButton className="app-header-button" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</NavButton>
-        ) : null}
-      </TitleBarSlot>
-      {/* Same art-directed backdrop (animated menu scene) + synced rain as the main menu,
-          behind the frames. */}
-      <SceneBackdrop />
-      <AmbienceBackground />
-      <div className="settings-screen app-shell-bar-pad">
-        <ArtRouteChrome className="settings-shell">
-          <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
-            {tabs.map((tab, index) => (
-              <NavButton
-                key={tab.id}
-                to={withReturnTo(TAB_PATHS[tab.id])}
-                className={`settings-tab ${tab.id === activeTab ? 'is-active' : ''}`}
-                // Position down the rail — drives the shared stone-continuity slice
-                // (--tab-index, see .settings-tab in style.css) so the tabs read as one sheet.
-                style={{ ['--tab-index' as string]: index }}
-                aria-current={tab.id === activeTab ? 'page' : undefined}
-                onClick={() => setConfirmingReset(false)}
-              >
-                <span className="settings-tab-icon" aria-hidden="true">
-                  <img src={asset(tab.icon)} alt="" />
-                </span>
-                <span>
-                  <strong>{tab.label}</strong>
-                </span>
-              </NavButton>
-            ))}
-          </aside>
+  // The two settings columns — sections (a tab column) + content (an action column). Shared by the
+  // standalone route AND the embedded-in-shell render, so both stay identical.
+  const inner = (
+    <>
+      <aside
+        className={embedded ? 'menu-dest-col menu-dest-tabs' : 'settings-frame settings-rail-frame'}
+        aria-label="Settings sections"
+      >
+        {tabs.map((tab, index) => (
+          <NavButton
+            key={tab.id}
+            to={withReturnTo(TAB_PATHS[tab.id])}
+            className={`settings-tab main-menu-mode-tab ${tab.id === activeTab ? 'is-active' : ''}`.trim()}
+            // Position down the rail — drives the shared stone-continuity slice
+            // (--tab-index, see .settings-tab in style.css) so the tabs read as one sheet (ADR-0063).
+            style={{ ['--tab-index' as string]: index }}
+            aria-current={tab.id === activeTab ? 'page' : undefined}
+            onClick={() => setConfirmingReset(false)}
+          >
+            <span className="settings-tab-icon" aria-hidden="true">
+              <img src={asset(tab.icon)} alt="" />
+            </span>
+            <span>
+              <strong>{tab.label}</strong>
+            </span>
+          </NavButton>
+        ))}
+      </aside>
 
-          <main className="settings-frame settings-main-frame">
-            {/* Screen + section are already shown by the brand lockup and the active
-                nav button; a visible panel heading just duplicated them. Keep an
-                accessible heading for screen-reader structure. */}
-            <h2 className="sr-only">{active.label}</h2>
-            {display.tracks ? (
+      <main className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}>
+        {/* Screen + section are already shown by the brand lockup and the active
+            nav button; a visible panel heading just duplicated them. Keep an
+            accessible heading for screen-reader structure. */}
+        <h2 className="sr-only">{active.label}</h2>
+        {display.tracks ? (
               <div className="settings-tracks-bar">
                 <div className="settings-tracks-bar-col">
                   <div className="settings-tracks-bar-actions">
@@ -827,7 +730,29 @@ export function Settings(): ReactElement {
                 </div>
               </div>
             </KitScroll>
-          </main>
+      </main>
+    </>
+  );
+
+  // Embedded in the persistent menu shell (MainMenu's second column): render just the two columns.
+  // The shell owns the backdrop, screen wrapper, and zoom-safe placement. A standalone open still
+  // renders the full art-route (direct /settings loads outside the shell keep working).
+  if (embedded) return inner;
+
+  return (
+    <section className="settings-art-route" aria-label="Settings" data-testid="settings">
+      {/* Return control rides the title-bar actions slot (the app's nav home); shown only when the
+          URL carries a valid origin. On a direct open the brand lockup is the way home. */}
+      <TitleBarSlot region="actions">
+        {returnTo ? (
+          <NavButton className="app-header-button" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</NavButton>
+        ) : null}
+      </TitleBarSlot>
+      {/* One continuous homepage backdrop (scene + synced rain), shared across the menu family (ADR-0064). */}
+      <HomepageBackdrop />
+      <div className="settings-screen app-shell-bar-pad">
+        <ArtRouteChrome className="settings-shell">
+          {inner}
         </ArtRouteChrome>
       </div>
     </section>

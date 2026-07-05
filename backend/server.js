@@ -1945,6 +1945,53 @@ const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // Playable-only piece types for a random-placement roster (no rocks) — mirrors the
 // frontend `isPlayablePieceType` gate on `Level.roster` (core/level.ts + core/pieces.ts).
 const WORKSPACE_ROSTER_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
+// ADR-0064 victory-condition kinds — mirror of core/level.ts VictoryCondition.
+const WORKSPACE_CONDITION_KINDS = new Set(['eliminate', 'reach', 'turnLimit']);
+
+/** Structural check for one ADR-0064 victory condition. Returns an error string or null. Shape/enum
+ * only, mirroring the frontend's conditionErrors (core/level.ts). */
+function validateWorkspaceCondition(c, label) {
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return `${label} must be a condition object`;
+  if (!WORKSPACE_CONDITION_KINDS.has(c.kind)) return `${label}.kind is invalid`;
+  if (c.kind === 'eliminate') {
+    if (c.side !== 'player' && c.side !== 'enemy') return `${label}.side is invalid`;
+    if (c.filter !== undefined) {
+      if (!c.filter || typeof c.filter !== 'object' || Array.isArray(c.filter)) return `${label}.filter is invalid`;
+      if (c.filter.type !== undefined && !WORKSPACE_ROSTER_PIECES.has(c.filter.type)) return `${label}.filter.type is invalid`;
+    }
+  } else if (c.kind === 'reach') {
+    if (c.side !== 'player' && c.side !== 'enemy') return `${label}.side is invalid`;
+  } else if (c.kind === 'turnLimit') {
+    if (!isFiniteInteger(c.turns) || c.turns < 1) return `${label}.turns is invalid`;
+  }
+  return null;
+}
+
+/** Structural check for an authored `Level.victory` (ADR-0064) — an ORDERED array of if-then rules.
+ * An empty list is legal shape here (the editor's validatePlayability P6 gates unwinnable/unlosable
+ * sets); this only checks each rule has a conditions array + a valid `then`, and every condition is
+ * well-formed. Returns an error string or null. */
+function validateWorkspaceVictory(victory, key) {
+  if (!Array.isArray(victory)) return `levels.${key}.victory is invalid`;
+  for (let i = 0; i < victory.length; i += 1) {
+    const rule = victory[i];
+    const label = `levels.${key}.victory[${i}]`;
+    if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return `${label} must be a rule object`;
+    if (!Array.isArray(rule.if)) return `${label}.if is invalid`;
+    for (let j = 0; j < rule.if.length; j += 1) {
+      const err = validateWorkspaceCondition(rule.if[j], `${label}.if[${j}]`);
+      if (err) return err;
+    }
+    if (!Array.isArray(rule.do)) return `${label}.do is invalid`;
+    for (let j = 0; j < rule.do.length; j += 1) {
+      const a = rule.do[j];
+      if (!a || typeof a !== 'object' || Array.isArray(a)) return `${label}.do[${j}] must be an action object`;
+      if (a.kind !== 'win' && a.kind !== 'lose') return `${label}.do[${j}].kind is invalid`;
+      if (a.side !== 'player' && a.side !== 'enemy') return `${label}.do[${j}].side is invalid`;
+    }
+  }
+  return null;
+}
 // Board floor dropped to 1×1 (ADR-0050): the old 4×4 clamp was an arbitrary guardrail with
 // no technical basis, and tiny boards are legitimate for several modes. Mirrors the frontend
 // BOARD_COLS / BOARD_ROWS consts in core/level.ts.
@@ -1995,6 +2042,13 @@ function validateWorkspaceLevel(level, key) {
       || !isFiniteInteger(tc.incrementSeconds) || tc.incrementSeconds < 0) {
       return `levels.${key}.timeControl is invalid`;
     }
+  }
+  // ADR-0064 authored victory — optional, structural mirror of the frontend's validateLevel
+  // (shape/enum only; the win/lose-non-empty gate stays editor-side, like P1–P6). Absent ⇒ the
+  // objective preset defines win/lose; legacy bodies omit it and stay valid.
+  if (level.victory !== undefined) {
+    const victoryErr = validateWorkspaceVictory(level.victory, key);
+    if (victoryErr) return victoryErr;
   }
   if (level.roster !== undefined) {
     if (!level.roster || typeof level.roster !== 'object' || Array.isArray(level.roster)) {

@@ -1,9 +1,9 @@
-// The standalone Level Editor (/level-editor, /edit). Split out of TilePreview.tsx so
+// The standalone Level Editor (/editor/level; legacy aliases /level-editor, /edit). Split out of TilePreview.tsx so
 // it ships its own small lazy chunk instead of dragging the entire design Studio:
 // the heavy library studios + manifests live in TilePreview.tsx and are never
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactElement, type ReactNode } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { DoodadSprite } from '../render/BoardDoodad';
@@ -23,7 +23,7 @@ import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, type EditorBoard, type FeatureCell } from './boardCode';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
-import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import {
   hasDirectionSprite,
   productionUnitAssets,
@@ -43,7 +43,10 @@ import {
 import { featureThumbSrc, fenceThumbSrc, tileTopSrc } from '../art/tileset';
 import { resolveFeatureOverlays, resolveFenceOverlays, roadEdgeKey, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, DEFAULT_FENCE_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial } from '../core/featureAutotile';
 import { type TileFamilyId } from '../core/tileSockets';
-import { generateSocketBoard } from '../core/tileBoardGenerator';
+import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
+import { scatterTerrainDetailed } from '../core/terrainScatter';
+import { createRng } from '../core/rng';
+import { SliderRow } from './dressing/SliderRow';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import { UNIT_PALETTES, type UnitPalette } from '../core/pieces';
@@ -51,13 +54,14 @@ import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { OBJECTIVE_LABEL } from '../core/objectives';
+import { VictoryConditionsEditor, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { publishMap } from '../net/maps';
 import { HttpError } from '../net/http';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type ZoneType } from '../core/level';
-import { MODE_NAME, DEFAULT_SURVIVE_TURNS } from '../core/objectives';
+import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type VictoryRules, type ZoneType } from '../core/level';
+import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
@@ -102,6 +106,8 @@ function StudioEditableBoard({
   propBrush,
   overlay,
   hidden,
+  regionCells,
+  onRegionStart,
 }: {
   cols: number;
   rows: number;
@@ -126,7 +132,7 @@ function StudioEditableBoard({
   resolveUnit: (id: string) => UnitAsset | undefined;
   resolveDoodad: (id: string) => DoodadAsset | undefined;
   resolveProp: (id: string) => PropDef | undefined;
-  tool: 'select' | 'brush' | 'erase' | 'move';
+  tool: 'select' | 'brush' | 'erase' | 'move' | 'region';
   selectedCell: { x: number; y: number } | null;
   boardZoom: number;
   boardPan: { x: number; y: number };
@@ -143,6 +149,10 @@ function StudioEditableBoard({
   overlay?: ReactNode;
   /** Per-layer visibility — a true value hides that layer's elements on the board. */
   hidden?: { tile: boolean; unit: boolean; doodad: boolean };
+  /** Cells currently selected ("x,y" keys) — drawn as a tinted diamond overlay. */
+  regionCells?: Set<string>;
+  /** Region tool: click a tile to select its whole connected same-terrain patch. */
+  onRegionStart?: (x: number, y: number) => void;
 }): ReactElement {
   const paintingRef = useRef(false);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
@@ -155,6 +165,7 @@ function StudioEditableBoard({
   const applyTool = (x: number, y: number) => {
     if (tool === 'brush') onPaint(x, y);
     else if (tool === 'erase') onErase(x, y);
+    else if (tool === 'region') onRegionStart?.(x, y);
     else if (tool === 'move') { /* handled via drag in the pointer handlers below */ }
     else onSelect(x, y);
   };
@@ -228,6 +239,9 @@ function StudioEditableBoard({
                 seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
                 which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
             {placedZones[key] ? <span className={`le-zone-cell le-zone-${LE_ZONE_TINT[placedZones[key]] ?? 'goal'}`} aria-hidden="true" /> : null}
+            {/* Selected-patch highlight — a tinted diamond seated exactly like the zone tint, so
+                the author sees which cells a Generate will fill. */}
+            {regionCells?.has(key) ? <span className="le-region-cell" aria-hidden="true" /> : null}
             {/* Fence edge hint: highlight the diamond side under the cursor so you see where the rail
                 lands before clicking. The SVG is seated exactly like the hit diamond (surface-top). */}
             {fenceHere ? (
@@ -251,6 +265,11 @@ function StudioEditableBoard({
                 if (tool === 'move') {
                   // Pick up a unit to drag — only if one sits here; empty cells aren't grabbable.
                   if (placedUnits[`${x},${y}`]) { setMovingFrom({ x, y }); setHoverCell({ x, y }); }
+                  return;
+                }
+                if (tool === 'region') {
+                  // Select region: a click grabs the whole connected same-terrain patch (no drag).
+                  onRegionStart?.(x, y);
                   return;
                 }
                 if (tool !== 'select') paintingRef.current = true;
@@ -418,6 +437,103 @@ const leFamilyAssets = studioFamilies.reduce((acc, family) => {
 }, {} as Record<TileFamilyId, readonly StudioAsset[]>);
 const leAllTiles = studioFamilies.flatMap((family) => family.assets);
 const leFamilyOfTile = (id: string): StudioFamily | undefined => studioFamilies.find((family) => family.assets.some((asset) => asset.id === id));
+// The terrain families the Generate (scatter) panel offers as toggles, in display order.
+const LE_SCATTER_FAMILIES: ReadonlyArray<{ id: TileFamilyId; label: string }> = [
+  { id: 'grass', label: 'Grass' },
+  { id: 'stone', label: 'Stone' },
+  { id: 'water', label: 'Water' },
+  { id: 'dirt', label: 'Dirt' },
+  { id: 'pebble', label: 'Pebble' },
+  { id: 'sand', label: 'Sand' },
+];
+// One row of the Generate panel's terrain-region list. Duplicate terrains are allowed; `locked`
+// pins a row so the linked sliders don't rebalance it. `cover` holds this region's ground-cover
+// fill-in knobs (Coverage + Density, each a default plus a randomness amount, all 0..1); `expanded`
+// is UI state for whether the cover knobs are showing.
+type CoverKnobs = { amount: number; amountRandom: number; density: number; densityRandom: number };
+const DEFAULT_COVER: CoverKnobs = { amount: 0.6, amountRandom: 0.3, density: 0.4, densityRandom: 0.3 };
+// A region carries a LIST of cover entries (add/remove, like the region list itself), each a cover
+// SET (decoupled from terrain) plus its own scatter knobs. `expanded` is UI state. Per cell the
+// first listed entry whose Coverage roll hits wins, so several entries read as a MIX across the region.
+type CoverEntry = { id: number; type: TileFamilyId; expanded: boolean; knobs: CoverKnobs };
+type ScatterRow = { id: number; terrain: TileFamilyId; share: number; locked: boolean; covers: CoverEntry[] };
+// The three ground-cover sets that have art, offered on every region regardless of its terrain.
+const LE_COVER_TYPES: ReadonlyArray<{ id: TileFamilyId; label: string }> = [
+  { id: 'grass', label: 'Grass tufts' },
+  { id: 'water', label: 'Reeds' },
+  { id: 'sand', label: 'Sand' },
+];
+// A terrain's own cover set (grass tufts / water reeds / sand), or null — the default cover a region
+// picks up when it uses that terrain (the author can then change it to anything).
+const defaultCoverType = (terrain: TileFamilyId): TileFamilyId | null => (groundCoverSet(terrain) ? terrain : null);
+// Spatially-coherent value noise in [0,1] (bilinear over a hashed lattice) — drives cover patchiness
+// so the "randomness" knobs vary coverage/density across areas instead of per-cell static.
+function coverNoise(x: number, y: number, seed: number): number {
+  const hash = (ix: number, iy: number): number => {
+    let h = (Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 1442695041)) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  const f = 0.28; // ~3.5-cell features
+  const fx = x * f;
+  const fy = y * f;
+  const x0 = Math.floor(fx);
+  const y0 = Math.floor(fy);
+  const tx = fx - x0;
+  const ty = fy - y0;
+  const smooth = (t: number): number => t * t * (3 - 2 * t);
+  const a = hash(x0, y0);
+  const b = hash(x0 + 1, y0);
+  const c = hash(x0, y0 + 1);
+  const d = hash(x0 + 1, y0 + 1);
+  const top = a + (b - a) * smooth(tx);
+  const bot = c + (d - c) * smooth(tx);
+  return top + (bot - top) * smooth(ty);
+}
+// Proportional (normalized) redistribution: scale the UNLOCKED rows so all rows sum to `total`
+// (locked rows fixed). Integer shares; rounding drift is absorbed by the largest unlocked row so
+// the sum is always exact.
+function normalizeToTotal(rows: ScatterRow[], total: number): ScatterRow[] {
+  const lockedSum = rows.filter((r) => r.locked).reduce((a, r) => a + r.share, 0);
+  const unlocked = rows.map((r, i) => ({ r, i })).filter(({ r }) => !r.locked);
+  const next = rows.map((r) => ({ ...r }));
+  if (unlocked.length === 0) return next;
+  const pool = Math.max(0, total - lockedSum);
+  const curSum = unlocked.reduce((a, { r }) => a + r.share, 0);
+  unlocked.forEach(({ r, i }) => {
+    next[i].share = curSum > 0 ? Math.max(0, Math.round((r.share / curSum) * pool)) : Math.round(pool / unlocked.length);
+  });
+  const drift = total - next.reduce((a, r) => a + r.share, 0);
+  if (drift !== 0) {
+    const tgt = unlocked.map(({ i }) => i).sort((a, b) => next[b].share - next[a].share)[0];
+    if (tgt !== undefined) next[tgt].share = Math.max(0, next[tgt].share + drift);
+  }
+  return next;
+}
+// Drag row `id` to `value`, keeping the sum at `total` (100 − buffer) by proportionally
+// rebalancing the other UNLOCKED rows — the classic linked-slider behaviour.
+function rebalanceShares(rows: ScatterRow[], id: number, value: number, buffer: number): ScatterRow[] {
+  const total = 100 - buffer;
+  const idx = rows.findIndex((r) => r.id === id);
+  if (idx < 0) return rows;
+  const lockedSum = rows.filter((r, i) => i !== idx && r.locked).reduce((a, r) => a + r.share, 0);
+  const newShare = Math.max(0, Math.min(Math.round(value), Math.max(0, total - lockedSum)));
+  const next = rows.map((r) => ({ ...r }));
+  next[idx].share = newShare;
+  const unlocked = next.map((r, i) => ({ r, i })).filter(({ r, i }) => i !== idx && !r.locked);
+  if (unlocked.length === 0) return next;
+  const pool = Math.max(0, total - newShare - lockedSum);
+  const curSum = unlocked.reduce((a, { r }) => a + r.share, 0);
+  unlocked.forEach(({ r, i }) => {
+    next[i].share = curSum > 0 ? Math.max(0, Math.round((r.share / curSum) * pool)) : Math.round(pool / unlocked.length);
+  });
+  const drift = total - next.reduce((a, r) => a + r.share, 0);
+  if (drift !== 0) {
+    const tgt = unlocked.map(({ i }) => i).sort((a, b) => next[b].share - next[a].share)[0];
+    if (tgt !== undefined) next[tgt].share = Math.max(0, next[tgt].share + drift);
+  }
+  return next;
+}
 const leSeedBoard = (): Record<string, string> => {
   const cells: Record<string, string> = {};
   for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile.id;
@@ -473,7 +589,7 @@ const MODE_DESCRIPTION: Record<ObjectiveType, string> = {
 // signature and for the just-saved / just-loaded baseline, so a freshly hydrated level reads clean
 // and a mode/name change (not just a board paint) marks it dirty.
 const levelSignature = (level: Level): string =>
-  JSON.stringify([level.name, level.boardCode ?? '', level.objective, level.placement ?? 'fixed', level.surviveTurns ?? '', level.roster ?? {}, level.timeControl ?? '']);
+  JSON.stringify([level.name, level.boardCode ?? '', level.objective, level.placement ?? 'fixed', level.surviveTurns ?? '', level.roster ?? {}, level.timeControl ?? '', level.victory ?? '']);
 // The undo/redo history signature of an editor board (boardCode is deterministic + lossless, so two
 // boards encode identically iff equal); plus a deep clone + the history-stack depth cap.
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
@@ -560,11 +676,12 @@ function FeatureConnections({
 // The editor's palette layers. Roads and rivers share one "Paths" layer (both are linear
 // connection features); the brush kind under it decides road vs river. Fence is its own EDGE
 // layer (you paint the boundary between two tiles). The layer picker is a dropdown.
-type LayerKey = 'board' | 'tile' | 'paths' | 'fence' | 'unit' | 'doodad' | 'prop' | 'cover' | 'zone' | 'rules' | 'status';
+type LayerKey = 'board' | 'tile' | 'generate' | 'paths' | 'fence' | 'unit' | 'doodad' | 'prop' | 'cover' | 'zone' | 'rules' | 'status';
 type BrushKind = 'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence' | 'zone';
 const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }> = [
   { id: 'board', label: 'Board' },
   { id: 'tile', label: 'Tile' },
+  { id: 'generate', label: 'Generate' },
   { id: 'paths', label: 'Paths' },
   { id: 'fence', label: 'Fence' },
   { id: 'unit', label: 'Unit' },
@@ -578,10 +695,10 @@ const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }>
 const isLayerOptionDisabled = (_layer: LayerKey): boolean => false;
 const defaultLevelEditorLayer = (): LayerKey => LEVEL_EDITOR_LAYER_OPTIONS.find((option) => !isLayerOptionDisabled(option.id))?.id ?? LEVEL_EDITOR_LAYER_OPTIONS[0].id;
 // `rules` (a mode/placement panel) and `board`/`status` are non-painting layers → select tool.
-const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (layer === 'board' || layer === 'status' || layer === 'rules') ? 'select' : 'brush';
+const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (layer === 'board' || layer === 'status' || layer === 'rules' || layer === 'generate') ? 'select' : 'brush';
 const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'paths') return 'road';
-  if (layer === 'board' || layer === 'status' || layer === 'rules') return 'tile';
+  if (layer === 'board' || layer === 'status' || layer === 'rules' || layer === 'generate') return 'tile';
   return layer;
 };
 type FactionControl = 'cpu' | 'player';
@@ -654,9 +771,20 @@ export function LevelEditor(): ReactElement {
   const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() =>
     (initialBoard?.playerFaction && (UNIT_PALETTES as readonly string[]).includes(initialBoard.playerFaction)) ? initialBoard.playerFaction as UnitPalette : null,
   );
-  const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move'>(toolForLayer(initialLayer));
+  const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move' | 'region'>(toolForLayer(initialLayer));
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
+  // Marquee region selection — the scope a Generate fills. "x,y" cell keys; empty ⇒ whole board.
+  const [regionSelection, setRegionSelection] = useState<Set<string>>(() => new Set());
+  // Terrain-scatter (Generate) controls: which families may appear, patch size, clumpiness, seed.
+  const [scatterSections, setScatterSections] = useState<ScatterRow[]>(() => [
+    { id: 0, terrain: 'grass', share: 60, locked: false, covers: [{ id: 1, type: 'grass', expanded: false, knobs: { ...DEFAULT_COVER } }] },
+    { id: 1, terrain: 'stone', share: 40, locked: false, covers: [] },
+  ]);
+  const scatterIdRef = useRef(2);
+  const coverIdRef = useRef(100);
+  const [scatterBuffer, setScatterBuffer] = useState(0);
+  const [scatterWiggle, setScatterWiggle] = useState(0.5);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [brushKind, setBrushKind] = useState<BrushKind>(brushKindForInitialLayer(initialLayer));
@@ -669,6 +797,9 @@ export function LevelEditor(): ReactElement {
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
   // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
   const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(initialBoard?.cover ?? {});
+  // Per-cell cover-set overrides (decoupling cover from terrain — e.g. grass tufts on stone). A cell
+  // absent here uses its own tile terrain's cover.
+  const [boardCoverTypes, setBoardCoverTypes] = useState<Record<string, TileFamilyId>>(initialBoard?.coverTypes ?? {});
   const [coverBrushDensity, setCoverBrushDensity] = useState<GroundCoverDensity>('sparse');
   const [coverSeed, setCoverSeed] = useState(1234);
   // Roads and rivers are LINEAR features (ribbons you draw), not per-cell terrain materials:
@@ -725,6 +856,22 @@ export function LevelEditor(): ReactElement {
   );
   const [clockInitialSeconds, setClockInitialSeconds] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
   const [clockIncrementSeconds, setClockIncrementSeconds] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
+  // Victory conditions (ADR-0064): `victory` is the working win/lose lists — always the truth for
+  // this level's outcome, edited in the RULES panel. Seeded from the objective preset for a level
+  // that never customized them; a level stores `victory` only when the lists diverge from that
+  // preset (see victoryForSave), which keeps preset levels' bodies clean and out of the dirty check.
+  const [victory, setVictory] = useState<VictoryRules>(
+    localDraft?.victory ?? initialCampaignLevel?.victory ?? victoryRulesForObjective(objective, { surviveTurns }),
+  );
+  // The victory-events editor opens as a full-size overlay over the board — the narrow control
+  // panel can't give rule authoring room to breathe. The panel stays put; a button opens this.
+  const [eventsOpen, setEventsOpen] = useState(false);
+  // The template the overlay's "Set template" button applies (a dropdown choice, not the old
+  // row of buttons). Seeded from the current objective.
+  const [templateChoice, setTemplateChoice] = useState<ObjectiveType>(objective);
+  // The events overlay's tab: victory rules (win/lose events) vs other events (spawn/gate/phase —
+  // future, empty for now). The Template control only appears on the victory-rules tab.
+  const [eventsTab, setEventsTab] = useState<'victory' | 'other'>('victory');
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
@@ -823,6 +970,7 @@ export function LevelEditor(): ReactElement {
       setBoardDoodads(board.doodads);
       setBoardProps(board.props);
       setBoardCover(board.cover);
+    setBoardCoverTypes(board.coverTypes ?? {});
       setBoardFeatures(board.features);
       setFeatureCuts(board.featureCuts);
       setFeatureExits(board.featureExits);
@@ -839,6 +987,7 @@ export function LevelEditor(): ReactElement {
       setClockEnabled(level.timeControl !== undefined);
       setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
       setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
+      setVictory(level.victory ?? victoryRulesForObjective(level.objective, { surviveTurns: level.surviveTurns ?? DEFAULT_SURVIVE_TURNS }));
       setEditingId(level.id);
       setLevelName(level.name);
       // Defer the clean-baseline capture to the effect below: it reads the SETTLED signature, so a
@@ -854,8 +1003,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the board link
   // and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, features: boardFeatures, fences: boardFences, featureCuts, featureExits, zones: boardZones }),
-    [boardCols, boardRows, playerFaction, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardFeatures, boardFences, featureCuts, featureExits, boardZones],
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, featureCuts, featureExits, zones: boardZones }),
+    [boardCols, boardRows, playerFaction, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, featureCuts, featureExits, boardZones],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -867,6 +1016,7 @@ export function LevelEditor(): ReactElement {
     setBoardDoodads(board.doodads);
     setBoardProps(board.props);
     setBoardCover(board.cover);
+    setBoardCoverTypes(board.coverTypes ?? {});
     setBoardFeatures(board.features);
     setBoardFences(board.fences ?? {});
     setFeatureCuts(board.featureCuts);
@@ -1073,7 +1223,7 @@ export function LevelEditor(): ReactElement {
       }
       return;
     }
-    if (brushKind === 'cover') { delete next.cover[key]; commitEditorBoard(next); return; }
+    if (brushKind === 'cover') { delete next.cover[key]; if (next.coverTypes) delete next.coverTypes[key]; commitEditorBoard(next); return; }
     if (brushKind === 'zone') { if (next.zones) delete next.zones[key]; commitEditorBoard(next); return; }
     delete next.cells[key];
     commitEditorBoard(next);
@@ -1095,7 +1245,7 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, fences: {}, featureCuts: {}, featureExits: {}, zones: {} }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, featureCuts: {}, featureExits: {}, zones: {} }, null);
   };
   const clearActiveLayer = (): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -1103,7 +1253,7 @@ export function LevelEditor(): ReactElement {
     else if (brushKind === 'unit') next.units = {};
     else if (brushKind === 'doodad') next.doodads = {};
     else if (brushKind === 'prop') next.props = {};
-    else if (brushKind === 'cover') next.cover = {};
+    else if (brushKind === 'cover') { next.cover = {}; next.coverTypes = {}; }
     else if (brushKind === 'zone') next.zones = {};
     else if (brushKind === 'fence') next.fences = {};
     else if (featureKind) {
@@ -1140,17 +1290,159 @@ export function LevelEditor(): ReactElement {
     next.cells = Object.fromEntries(generated.cells.map((cell) => [`${cell.x},${cell.y}`, cell.asset?.id ?? leDefaultTile.id]));
     commitEditorBoard(next, null);
   };
+  // "Select region" = click an already-drawn clump. From the clicked cell, flood-fill every
+  // orthogonally-connected cell of the SAME terrain family (empty matches empty), so one click
+  // grabs exactly that patch and "knows how big it is". There is no rectangle marquee — to scope a
+  // rectangle, paint the tiles first, then click the patch. Bounded to the board; cheap for a
+  // hand-authored board.
+  const regionSelectPatch = (x: number, y: number): void => {
+    const familyAt = (cx: number, cy: number): string => {
+      const id = boardCells[`${cx},${cy}`];
+      return id ? (leFamilyOfTile(id)?.id ?? '?') : '';
+    };
+    const target = familyAt(x, y);
+    const found = new Set<string>();
+    const stack: Array<[number, number]> = [[x, y]];
+    while (stack.length > 0) {
+      const [cx, cy] = stack.pop()!;
+      if (cx < 0 || cy < 0 || cx >= boardCols || cy >= boardRows) continue;
+      const key = `${cx},${cy}`;
+      if (found.has(key) || familyAt(cx, cy) !== target) continue;
+      found.add(key);
+      stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+    }
+    setRegionSelection(found);
+  };
+  const clearRegion = (): void => { setRegionSelection(new Set()); };
+  // How many cells a share applies to right now: the marquee selection if any, else the whole board.
+  const scopeCells = regionSelection.size > 0 ? regionSelection.size : boardCols * boardRows;
+  const setSectionShare = (id: number, value: number): void => setScatterSections((prev) => rebalanceShares(prev, id, value, scatterBuffer));
+  const setSectionTerrain = (id: number, terrain: TileFamilyId): void => setScatterSections((prev) => prev.map((s) => (s.id === id ? { ...s, terrain } : s)));
+  const toggleSectionLock = (id: number): void => setScatterSections((prev) => prev.map((s) => (s.id === id ? { ...s, locked: !s.locked } : s)));
+  const addSection = (): void => setScatterSections((prev) => {
+    const total = 100 - scatterBuffer;
+    const share = prev.length > 0 ? Math.max(1, Math.round(total / (prev.length + 1))) : total;
+    const used = new Set(prev.map((s) => s.terrain));
+    const terrain = LE_SCATTER_FAMILIES.find((f) => !used.has(f.id))?.id ?? 'grass';
+    const id = (scatterIdRef.current += 1);
+    const dct = defaultCoverType(terrain);
+    const covers = dct ? [{ id: (coverIdRef.current += 1), type: dct, expanded: false, knobs: { ...DEFAULT_COVER } }] : [];
+    return [...normalizeToTotal(prev, Math.max(0, total - share)), { id, terrain, share, locked: false, covers }];
+  });
+  const removeSection = (id: number): void =>
+    setScatterSections((prev) => (prev.length <= 1 ? prev : normalizeToTotal(prev.filter((s) => s.id !== id), 100 - scatterBuffer)));
+  const setScatterBufferBalanced = (value: number): void => {
+    const buffer = Math.max(0, Math.min(60, Math.round(value)));
+    setScatterBuffer(buffer);
+    setScatterSections((prev) => normalizeToTotal(prev, 100 - buffer));
+  };
+  const addCover = (sectionId: number): void =>
+    setScatterSections((prev) => prev.map((s) => {
+      if (s.id !== sectionId) return s;
+      const used = new Set(s.covers.map((c) => c.type));
+      const type = LE_COVER_TYPES.find((c) => !used.has(c.id))?.id ?? LE_COVER_TYPES[0].id;
+      return { ...s, covers: [...s.covers, { id: (coverIdRef.current += 1), type, expanded: true, knobs: { ...DEFAULT_COVER } }] };
+    }));
+  const toggleCoverEntryExpand = (sectionId: number, coverId: number): void =>
+    setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, expanded: !c.expanded } : c)) } : s)));
+  const removeCover = (sectionId: number, coverId: number): void =>
+    setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.filter((c) => c.id !== coverId) } : s)));
+  const setCoverType = (sectionId: number, coverId: number, type: TileFamilyId): void =>
+    setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, type } : c)) } : s)));
+  const setCoverKnob = (sectionId: number, coverId: number, knob: keyof CoverKnobs, value: number): void =>
+    setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, knobs: { ...c.knobs, [knob]: Math.max(0, Math.min(1, value)) } } : c)) } : s)));
+  // Fill the selected region (or the whole board when nothing is selected) by dividing the area
+  // among the terrain regions by share, then autotile through the socket solver — the same solve
+  // path Randomize uses. A region-scoped generate leaves every out-of-region cell untouched.
+  const generateScatter = (): void => {
+    const sections = scatterSections.map((s) => ({ terrain: s.terrain, share: s.share }));
+    if (sections.length === 0) return;
+    const seed = Date.now() >>> 0; // a fresh layout each press; the committed board is the artifact
+    const cols = boardCols;
+    const rows = boardRows;
+    const baseMap: (TileFamilyId | undefined)[] = Array.from({ length: cols * rows }, (_, i) => {
+      const id = boardCells[`${i % cols},${(i / cols) | 0}`];
+      return id ? (leFamilyOfTile(id)?.id as TileFamilyId | undefined) : undefined;
+    });
+    const region = regionSelection.size > 0
+      ? new Set(
+          [...regionSelection]
+            .map((key) => { const [x, y] = key.split(',').map(Number); return y * cols + x; })
+            .filter((i) => i >= 0 && i < cols * rows),
+        )
+      : undefined;
+    const { terrain: terrainMap, sectionOf } = scatterTerrainDetailed({
+      columns: cols,
+      rows,
+      sections,
+      randomnessBuffer: scatterBuffer,
+      wiggle: scatterWiggle,
+      seed,
+      region,
+      baseMap,
+    });
+    const solved = solveSocketBoard({ assets: leTileAssets, terrainMap, seed, columns: cols, rows, familyAssets: leFamilyAssets });
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    // Each generated cell also gets its region's ground cover rolled in. A region holds a LIST of
+    // cover entries (each a set decoupled from terrain, with its own Coverage/Density knobs that
+    // blend a default with a value-noise field scaled by their randomness knob). Per cell the first
+    // listed entry whose Coverage roll hits wins, so several entries read as a MIX across the region.
+    // The chosen set is stored per cell so it renders regardless of terrain.
+    if (!next.coverTypes) next.coverTypes = {};
+    const coverRng = createRng((seed ^ 0x9e3779b9) >>> 0);
+    const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
+    for (const cell of solved.cells) {
+      const idx = cell.y * cols + cell.x;
+      if (region && !region.has(idx)) continue; // scoped: only rewrite region cells
+      const key = `${cell.x},${cell.y}`;
+      next.cells[key] = cell.asset?.id ?? leDefaultTile.id;
+      const s = sectionOf[idx];
+      const covers = s >= 0 ? scatterSections[s].covers : [];
+      let placed = false;
+      for (const c of covers) {
+        const coverage = clamp01(c.knobs.amount + (coverNoise(cell.x, cell.y, (seed ^ c.id) >>> 0) - 0.5) * 2 * c.knobs.amountRandom);
+        if (coverRng.next() >= coverage) continue;
+        const filledChance = clamp01(c.knobs.density + (coverNoise(cell.x, cell.y, (seed ^ 0x2545f491 ^ c.id) >>> 0) - 0.5) * 2 * c.knobs.densityRandom);
+        next.cover[key] = coverRng.next() < filledChance ? 'filled' : 'sparse';
+        next.coverTypes[key] = c.type;
+        placed = true;
+        break;
+      }
+      if (!placed) { delete next.cover[key]; delete next.coverTypes[key]; }
+    }
+    commitEditorBoard(next, null);
+  };
   // The ADR-0050 mode fields the RULES panel authors, packaged for editorBoardToLevel. Only the
   // toggle + its config live here (objective is always written); placement/roster/surviveTurns are
   // sent WHEN they diverge from the schema default, so a fixed capture-all board serializes without
   // them (back-compat) — but the roster/survive values are always carried when their mode is active.
+  // The factions offered in each condition's "IF <faction>" dropdown — one per side, labelled by the
+  // board's assigned palette (ADR-0064). Maps to the engine's player/enemy side; true multi-faction
+  // (two distinct enemies) is future work.
+  const victoryFactions = useMemo((): FactionOption[] => {
+    const label = (p: string): string =>
+      (({ 'navy-blue': 'Navy', crimson: 'Crimson', golden: 'Golden', emerald: 'Emerald' }) as Record<string, string>)[p] ?? p;
+    const enemyPalette = Object.values(boardUnits).map((u) => u.faction).find((f) => f && f !== playerFaction);
+    return [
+      { side: 'player', label: playerFaction ? label(playerFaction) : 'You (Player)' },
+      { side: 'enemy', label: enemyPalette ? label(enemyPalette) : 'Enemy' },
+    ];
+  }, [playerFaction, boardUnits]);
+  // A level stores `victory` only when the lists DIVERGE from the objective preset — else the
+  // preset drives it (keeps preset bodies clean + out of the dirty check, and preserves
+  // capture-king's runtime kingSide direction-awareness for an untouched King Assault). ADR-0064.
+  const victoryForSave = useMemo(
+    () => (rulesEqual(victory, victoryRulesForObjective(objective, { surviveTurns })) ? undefined : victory),
+    [victory, objective, surviveTurns],
+  );
   const modeMeta = useMemo(() => ({
     objective,
     placement: placement === 'random' ? ('random' as const) : undefined,
     roster: placement === 'random' ? roster : undefined,
     surviveTurns: objective === 'survive' ? surviveTurns : undefined,
     timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
-  }), [objective, placement, roster, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds]);
+    victory: victoryForSave,
+  }), [objective, placement, roster, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave]);
   // The live candidate Level — the exact document a Save would persist — recomputed from the board
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
@@ -1193,8 +1485,9 @@ export function LevelEditor(): ReactElement {
       surviveTurns,
       roster,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
+      victory: victoryForSave,
     });
-  }, [currentEditorBoard, dirty, draftKey, levelName, objective, placement, roster, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds]);
+  }, [currentEditorBoard, dirty, draftKey, levelName, objective, placement, roster, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave]);
 
   const targetLevelId = editingId ?? routeParams.levelId;
   const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
@@ -1312,10 +1605,10 @@ export function LevelEditor(): ReactElement {
     }
   };
 
-  // Export the whole board as a /level-editor?board=<code> link (round-trips via boardCode.ts).
+  // Export the whole board as a /editor/level?board=<code> link (round-trips via boardCode.ts).
   const copyBoardLink = (): void => {
     const code = encodeBoard(currentEditorBoard);
-    void navigator.clipboard?.writeText(`${window.location.origin}/level-editor?board=${code}`);
+    void navigator.clipboard?.writeText(`${window.location.origin}/editor/level?board=${code}`);
     reportStatus('Copied board link.', 'success');
   };
   // Publish this map to the server and copy a public /play?map=<id> link. Unlike the board-code
@@ -1351,7 +1644,7 @@ export function LevelEditor(): ReactElement {
     setTool('select');
     const input = boardLinkDraft.trim();
     if (!input) {
-      reportStatus('Paste a board link first.', 'warning', 'Open Board, paste a /level-editor?board=... link or raw board code, then press Load board link.');
+      reportStatus('Paste a board link first.', 'warning', 'Open Board, paste a /editor/level?board=... link or raw board code, then press Load board link.');
       return;
     }
     const decoded = decodeBoardLinkInput(input);
@@ -1377,6 +1670,7 @@ export function LevelEditor(): ReactElement {
   };
   const selectLayer = (nextLayer: LayerKey): void => {
     if (isLayerOptionDisabled(nextLayer)) return;
+    setEventsOpen(false); // the events overlay belongs to the rules layer; close it on any switch
     setLayer(nextLayer);
     setTool(toolForLayer(nextLayer));
     if (nextLayer === 'paths') {
@@ -1384,7 +1678,7 @@ export function LevelEditor(): ReactElement {
       setBrushKind((kind) => (kind === 'road' || kind === 'river' ? kind : 'road'));
       return;
     }
-    if (nextLayer !== 'board' && nextLayer !== 'status' && nextLayer !== 'rules') setBrushKind(nextLayer);
+    if (nextLayer !== 'board' && nextLayer !== 'status' && nextLayer !== 'rules' && nextLayer !== 'generate') setBrushKind(nextLayer);
   };
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
   // Roster stepper: bump one side's count of one piece type, clamped to >= 0. A 0 count is dropped
@@ -1524,12 +1818,14 @@ export function LevelEditor(): ReactElement {
     for (const [key, density] of Object.entries(boardCover)) {
       const [x, y] = key.split(',').map(Number);
       const tileId = boardCells[key];
-      const terrain = tileId ? (leFamilyOfTile(tileId)?.id as TileFamilyId | undefined) : undefined;
-      if (!terrain || !groundCoverSet(terrain)) continue;
-      list.push({ x, y, terrain, groundCover: { density, tufts: rollGroundCover(terrain, x, y, coverSeed, density) } });
+      const tileTerrain = tileId ? (leFamilyOfTile(tileId)?.id as TileFamilyId | undefined) : undefined;
+      // Cover set: the per-cell override if present (cover decoupled from terrain), else the tile's own terrain.
+      const coverType = boardCoverTypes[key] ?? tileTerrain;
+      if (!coverType || !groundCoverSet(coverType)) continue;
+      list.push({ x, y, terrain: coverType, groundCover: { density, tufts: rollGroundCover(coverType, x, y, coverSeed, density) } });
     }
     return list;
-  }, [boardCover, boardCells, coverSeed]);
+  }, [boardCover, boardCoverTypes, boardCells, coverSeed]);
   const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedZone = selectedCell ? boardZones[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const toggleFeatureCut = (edge: string): void => {
@@ -1544,8 +1840,6 @@ export function LevelEditor(): ReactElement {
     else next.featureExits[edge] = true;
     commitEditorBoard(next);
   };
-  const screenStyle = { '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")` } as CSSProperties;
-
   // Tier of the level under edit drives the Save verb (INV6): an official (`off-`) level
   // PUBLISHES to all players; a private/unassigned level just SAVES. A level only resolves a
   // tier once a target id is known (campaign path); a fresh standalone board saves as private.
@@ -1610,7 +1904,15 @@ export function LevelEditor(): ReactElement {
   }, [playability.ok, currentEditorBoard, objective]);
 
   return (
-    <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle} ready={editorReady}>
+    // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
+    // (menu scene + synced rain), not the battlefield world. The backdrop is a SIBLING of the
+    // faded editor chrome (not a child) so it stays continuous across navigation and never
+    // re-fades on entrance (ADR-0046 §G) — the same shape CampaignEditor uses. The editor's own
+    // ::before battlefield is dropped (.level-editor-screen::before) so the shared scene shows
+    // through the transparent chrome; /play keeps that battlefield (its game world).
+    <div className="level-editor-root">
+      <HomepageBackdrop />
+      <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" ready={editorReady}>
         {confirmDialog}
         {/* The title bar carries NO editor status (no level name, no save-state chip) — the
             owner removed the center cluster: that's ambient chrome noise while editing, and
@@ -1662,10 +1964,53 @@ export function LevelEditor(): ReactElement {
                   onEraseEdge={eraseFenceEdge}
                   propBrush={brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
                   overlay={<GroundCoverLayer cells={coverCells} />}
+                  regionCells={regionSelection}
+                  onRegionStart={regionSelectPatch}
                 />
               </div>
             </ViewPane>
           </div>
+          {eventsOpen ? (
+            <div className="le-events-overlay" role="dialog" aria-label="Level events editor">
+              <div className="le-events-head">
+                <h2>Events</h2>
+                <button type="button" className="le-seg-btn" onClick={() => setEventsOpen(false)}>Done</button>
+              </div>
+              <div className="le-seg le-seg-wrap le-events-tabs">
+                <button type="button" className={`le-seg-btn ${eventsTab === 'victory' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('victory')}>Victory rules</button>
+                <button type="button" className={`le-seg-btn ${eventsTab === 'other' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('other')}>Other events</button>
+              </div>
+              {eventsTab === 'victory' ? (
+                <VictoryConditionsEditor
+                  value={victory}
+                  factions={victoryFactions}
+                  onChange={setVictory}
+                  templates={(
+                    <div className="le-events-templates">
+                      <h3 className="le-victory-head">Template</h3>
+                      <p className="le-board-note">Set a template to REPLACE the victory rules with a full set (each faction gets a way to win and lose). Then edit.</p>
+                      <div className="le-template-apply">
+                        <select className="le-layer-select" aria-label="Victory template" title={MODE_DESCRIPTION[templateChoice]}
+                          value={templateChoice} onChange={(e) => setTemplateChoice(e.target.value as ObjectiveType)}>
+                          {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
+                        </select>
+                        <button type="button" className="le-seg-btn" onClick={() => {
+                          const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
+                          setObjective(templateChoice);
+                          setVictory(victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) }));
+                        }}>Set template</button>
+                      </div>
+                      <p className="le-board-note">Events run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
+                    </div>
+                  )}
+                />
+              ) : (
+                <div className="le-events-placeholder">
+                  <p className="le-board-note">Other event types — spawn reinforcements, open a gate, advance a phase — will live here. There are none yet; today every event is a victory rule.</p>
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
 
       <aside className="skirmish-hud" aria-label="Editor controls">
@@ -1833,7 +2178,7 @@ export function LevelEditor(): ReactElement {
             <div className="le-board-actions">
               <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
-              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board — the recipient can edit AND live-test it.">Copy Link</button>
+              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board — the recipient can edit AND live-test it.">Copy Link</button>
               <button type="button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
             </div>
             <input
@@ -1845,7 +2190,7 @@ export function LevelEditor(): ReactElement {
               placeholder="Paste board link"
               aria-label="Board link"
             />
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /level-editor?board=... link and replace this editor board with it.">Load board link</button>
+            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /editor/level?board=... link and replace this editor board with it.">Load board link</button>
           </section>
           <section className="skirmish-card le-level-settings">
             <h2>Level Settings</h2>
@@ -1882,22 +2227,87 @@ export function LevelEditor(): ReactElement {
             </div>
           </section>
           </>
-        ) : layer === 'rules' ? (<>
-          <section className="skirmish-card">
-            <h2>Mode</h2>
-            {/* The win-rule mode picker (ADR-0050). One control, kit segmented buttons; labels are
-                the owner-facing MODE_NAME, not the stored objective ids. */}
-            <div className="le-seg le-seg-wrap">
-              {OBJECTIVE_TYPES.map((mode) => (
-                <button
-                  type="button"
-                  key={mode}
-                  className={`le-seg-btn ${objective === mode ? 'active' : ''}`.trim()}
-                  onClick={() => setObjective(mode)}
-                >{MODE_NAME[mode]}</button>
+        ) : layer === 'generate' ? (<>
+          <section className="skirmish-card le-generate">
+            <h2>Generate terrain</h2>
+            <p className="le-board-note">Carve a selection — or the whole board — into terrain regions. Add regions and dial each one's share (they rebalance to 100 − buffer); each becomes one contiguous area. Then Generate.</p>
+            <div className="le-gen-scope">
+              <button
+                type="button"
+                className={`le-seg-btn ${tool === 'region' ? 'active' : ''}`.trim()}
+                onClick={() => setTool(tool === 'region' ? 'select' : 'region')}
+                title="Click an already-drawn clump to select its whole same-terrain patch. Click this button again to stop."
+              >{tool === 'region' ? 'Selecting…' : 'Select region'}</button>
+              <span className="le-gen-scope-label">{regionSelection.size > 0 ? `Selection · ${regionSelection.size} cells` : 'Whole board'}</span>
+              {regionSelection.size > 0 ? <button type="button" className="le-seg-btn" onClick={clearRegion} title="Clear the selection — Generate will cover the whole board.">Clear</button> : null}
+            </div>
+            {tool === 'region' ? <p className="le-board-note">Click a drawn clump to select its whole same-terrain patch. Generate fills the selection; everything outside it stays put.</p> : null}
+            <div className="le-gen-regions" role="group" aria-label="Terrain regions">
+              {scatterSections.map((sec) => (
+                <div className="le-gen-region-group" key={sec.id}>
+                  <div className="le-gen-region">
+                    <select
+                      className="le-gen-region-terrain"
+                      value={sec.terrain}
+                      onChange={(event) => setSectionTerrain(sec.id, event.target.value as TileFamilyId)}
+                      aria-label="Region terrain"
+                    >
+                      {LE_SCATTER_FAMILIES.map((family) => <option key={family.id} value={family.id}>{family.label}</option>)}
+                    </select>
+                    <input
+                      type="range"
+                      className="le-gen-region-slider"
+                      min={0}
+                      max={100 - scatterBuffer}
+                      step={1}
+                      value={sec.share}
+                      disabled={sec.locked}
+                      onChange={(event) => setSectionShare(sec.id, Number(event.target.value))}
+                      aria-label={`${sec.terrain} share`}
+                    />
+                    <span className="le-gen-region-val">{sec.share}% · {Math.round((sec.share / 100) * scopeCells)}</span>
+                    <button type="button" className={`le-gen-icon ${sec.locked ? 'active' : ''}`.trim()} onClick={() => toggleSectionLock(sec.id)} aria-pressed={sec.locked} title={sec.locked ? 'Unlock — let this region rebalance' : 'Lock — keep this region fixed while others move'}>{sec.locked ? '🔒' : '🔓'}</button>
+                    <button type="button" className="le-gen-icon" onClick={() => removeSection(sec.id)} disabled={scatterSections.length <= 1} title="Remove this region">×</button>
+                  </div>
+                  <div className="le-gen-cover">
+                    {sec.covers.map((c) => (
+                      <div className="le-gen-cover-entry" key={c.id}>
+                        <div className="le-gen-cover-head">
+                          <button type="button" className="le-gen-cover-caret-btn" onClick={() => toggleCoverEntryExpand(sec.id, c.id)} aria-expanded={c.expanded} aria-label={c.expanded ? 'Collapse cover settings' : 'Expand cover settings'}>
+                            <span className="le-gen-cover-caret" aria-hidden="true">{c.expanded ? '▾' : '▸'}</span>
+                          </button>
+                          <select className="le-gen-region-terrain" value={c.type} onChange={(event) => setCoverType(sec.id, c.id, event.target.value as TileFamilyId)} aria-label="Cover set">
+                            {LE_COVER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                          </select>
+                          <button type="button" className="le-gen-icon" onClick={() => removeCover(sec.id, c.id)} title="Remove this cover">×</button>
+                        </div>
+                        {c.expanded ? (
+                          <div className="le-gen-cover-knobs">
+                            <SliderRow label={`Coverage · ${Math.round(c.knobs.amount * 100)}%`} value={c.knobs.amount} set={(v) => setCoverKnob(sec.id, c.id, 'amount', v)} min={0} max={1} step={0.05} nudge={0.05} dflt={0.6} />
+                            <SliderRow label={`Coverage random · ${Math.round(c.knobs.amountRandom * 100)}%`} value={c.knobs.amountRandom} set={(v) => setCoverKnob(sec.id, c.id, 'amountRandom', v)} min={0} max={1} step={0.05} nudge={0.05} dflt={0.3} />
+                            <SliderRow label={`Density · ${Math.round(c.knobs.density * 100)}% filled`} value={c.knobs.density} set={(v) => setCoverKnob(sec.id, c.id, 'density', v)} min={0} max={1} step={0.05} nudge={0.05} dflt={0.4} />
+                            <SliderRow label={`Density random · ${Math.round(c.knobs.densityRandom * 100)}%`} value={c.knobs.densityRandom} set={(v) => setCoverKnob(sec.id, c.id, 'densityRandom', v)} min={0} max={1} step={0.05} nudge={0.05} dflt={0.3} />
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                    <button type="button" className="le-gen-cover-add" onClick={() => addCover(sec.id)} title="Add a cover set to this region.">+ Add cover</button>
+                  </div>
+                </div>
               ))}
             </div>
-            <p className="le-board-note">{MODE_DESCRIPTION[objective]}</p>
+            <button type="button" className="le-seg-btn le-gen-add" onClick={addSection} title="Add another terrain region and rebalance the shares.">+ Add terrain region</button>
+            <SliderRow label={`Randomness buffer · ${scatterBuffer}%`} value={scatterBuffer} set={setScatterBufferBalanced} min={0} max={60} step={1} nudge={1} dflt={0} />
+            <SliderRow label="Edge roughness" value={scatterWiggle} set={setScatterWiggle} min={0} max={1} step={0.05} nudge={0.05} dflt={0.5} />
+            <button type="button" className="le-seg-btn le-gen-run" style={{ width: '100%', marginTop: 8 }} onClick={generateScatter} title="Roll a fresh layout into the selection (or the whole board) and autotile it.">Generate</button>
+          </section>
+        </>) : layer === 'rules' ? (<>
+          <section className="skirmish-card">
+            <h2>Victory events</h2>
+            {/* ADR-0064: the rule authoring lives in a full-size overlay over the board (this panel is
+                too narrow) — see the .le-events-overlay below. This card is just the entry point. */}
+            <p className="le-board-note">How this level is won and lost, as <b>IF … THEN</b> events. {victory.length} event{victory.length === 1 ? '' : 's'} set — templates and editing open over the board.</p>
+            <button type="button" className="le-seg-btn le-events-open" onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
           </section>
 
           <section className="skirmish-card">
@@ -1971,24 +2381,6 @@ export function LevelEditor(): ReactElement {
                 : 'Untimed — the player can think as long as they like.'}
             </p>
           </section>
-
-          {objective === 'survive' ? (
-            <section className="skirmish-card">
-              <h2>Survive turns</h2>
-              <div className="le-ctrlrow">
-                <span className="le-ctrllabel">Turns to outlast</span>
-                <Stepper
-                  value={surviveTurns}
-                  suffix=""
-                  decreaseLabel="Fewer turns to survive"
-                  increaseLabel="More turns to survive"
-                  onDecrease={() => setSurviveTurns((n) => Math.max(1, n - 1))}
-                  onIncrease={() => setSurviveTurns((n) => n + 1)}
-                />
-              </div>
-              <p className="le-board-note">The player wins by lasting this many of their own turns.</p>
-            </section>
-          ) : null}
 
           {placement === 'random' ? (
             (['player', 'enemy'] as const).map((side) => (
@@ -2357,6 +2749,7 @@ export function LevelEditor(): ReactElement {
         ) : null}
         </KitScroll>
       </aside>
-    </ArtRouteChrome>
+      </ArtRouteChrome>
+    </div>
   );
 }

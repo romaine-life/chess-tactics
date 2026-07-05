@@ -4,8 +4,7 @@ import { useCampaigns } from '../campaign/store';
 import type { Level } from '../core/level';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { NavButton } from './shared/NavButton';
-import { AmbienceBackground } from './AmbienceBackground';
-import { SceneBackdrop } from './SceneBackdrop';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { SkirmishClockControl } from './SkirmishClockControl';
@@ -19,9 +18,9 @@ type SkirmishTab = 'random' | 'levels';
 // Time controls write straight to the shared preference (SkirmishClockControl), and Start
 // enters the board with ?random=1 — which always rolls a fresh battle on that clock
 // (ui/Skirmish reads the preference).
-function RandomSkirmishPanel(): ReactElement {
+function RandomSkirmishPanel({ embedded }: { embedded?: boolean }): ReactElement {
   return (
-    <main className="settings-frame settings-main-frame">
+    <main className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}>
       <div className="settings-panel-content">
         <section className="settings-section skirmish-setup-section">
           <h3 className="settings-section-title">Random Skirmish</h3>
@@ -46,9 +45,9 @@ function RandomSkirmishPanel(): ReactElement {
 
 // The "Levels" section: the uncategorized standalone levels (boards saved in the editor
 // that no campaign references), shown as the same level rows the Campaign screen uses.
-function SkirmishLevelsPanel({ levels, loading }: { levels: Level[]; loading: boolean }): ReactElement {
+function SkirmishLevelsPanel({ levels, loading, embedded }: { levels: Level[]; loading: boolean; embedded?: boolean }): ReactElement {
   return (
-    <main className="settings-frame settings-main-frame">
+    <main className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}>
       <div className="settings-panel-content">
         <section className="settings-section">
           <h3 className="settings-section-title">Uncategorized Levels</h3>
@@ -65,7 +64,7 @@ function SkirmishLevelsPanel({ levels, loading }: { levels: Level[]; loading: bo
                   <p>Save a board in the Level Editor and it appears here.</p>
                 </div>
                 <div className="settings-row-control">
-                  <NavButton className="app-header-button" to="/level-editor">Open Editor</NavButton>
+                  <NavButton className="app-header-button" to="/editor/level">Open Editor</NavButton>
                 </div>
               </section>
             ) : null}
@@ -103,7 +102,7 @@ function SkirmishLevelsPanel({ levels, loading }: { levels: Level[]; loading: bo
 // The Skirmish hub: a settings-twin of the main menu (like Campaign). The rail switches
 // between "Random Skirmish" (roll a fresh board, choose the clock) and "Levels" (pick a
 // standalone board). Click the brand lockup to go home.
-export function SkirmishMapPickerRoute(): ReactElement {
+export function SkirmishMapPickerRoute({ embedded = false }: { embedded?: boolean } = {}): ReactElement {
   const campaigns = useCampaigns((s) => s.campaigns);
   const levels = useCampaigns((s) => s.levels);
   const skirmishLevels = useMemo(() => skirmishMapLevels(campaigns, levels), [campaigns, levels]);
@@ -112,10 +111,11 @@ export function SkirmishMapPickerRoute(): ReactElement {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (embedded) return; // the persistent menu shell (MainMenu) owns .main-menu-active + the backdrop
     const shell = document.querySelector('.shell');
     shell?.classList.add('main-menu-active');
     return () => shell?.classList.remove('main-menu-active');
-  }, []);
+  }, [embedded]);
 
   useEffect(() => {
     let active = true;
@@ -131,6 +131,42 @@ export function SkirmishMapPickerRoute(): ReactElement {
     { id: 'levels', label: 'Levels', icon: 'level-editor' },
   ];
 
+  // The two skirmish columns — the Random/Levels rail (a tab column) + the chosen panel (an action
+  // column). Shared by the standalone route AND the embedded-in-shell render. The rail tabs are
+  // internal STATE (setTab), not routes, so the skirmish sub-nav lives inside the one instance.
+  const inner = (
+    <>
+      <aside className={embedded ? 'menu-dest-col menu-dest-tabs' : 'settings-frame settings-rail-frame'} aria-label="Skirmish">
+        {TABS.map((t, index) => (
+          <button
+            key={t.id}
+            type="button"
+            className={`settings-tab main-menu-mode-tab ${t.id === tab ? 'is-active' : ''}`.trim()}
+            // ADR-0063: each tab samples its own vertical slice of the rail's continuous
+            // stone sheet via --tab-index (see .settings-tab in style.css), so the texture
+            // reads as one sheet, not a per-tab restart. Guarded by settingsRailContinuity.test.
+            style={{ ['--tab-index' as string]: index }}
+            aria-current={t.id === tab ? 'page' : undefined}
+            onClick={() => setTab(t.id)}
+          >
+            <span className="settings-tab-icon" aria-hidden="true">
+              <img src={`${ICONS}/${t.icon}.png`} alt="" />
+            </span>
+            <span><strong>{t.label}</strong></span>
+          </button>
+        ))}
+      </aside>
+
+      {tab === 'random'
+        ? <RandomSkirmishPanel embedded={embedded} />
+        : <SkirmishLevelsPanel levels={skirmishLevels} loading={loading} embedded={embedded} />}
+    </>
+  );
+
+  // Embedded in the persistent menu shell (MainMenu's second column): render just the two columns.
+  // The shell owns the backdrop, screen wrapper, cold-reveal gates, and zoom-safe placement.
+  if (embedded) return inner;
+
   return (
     // The cold-load reveal director only runs on the home menu, so declare both reveal
     // gates up front (like Campaign) to render fully revealed rather than stuck at opacity 0.
@@ -140,34 +176,10 @@ export function SkirmishMapPickerRoute(): ReactElement {
       data-reveal-bg=""
       data-reveal-buttons=""
     >
-      <SceneBackdrop />
-      <AmbienceBackground />
+      <HomepageBackdrop />
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell" ready={contentReady}>
-          <aside className="settings-frame settings-rail-frame" aria-label="Skirmish">
-            {TABS.map((t, index) => (
-              <button
-                key={t.id}
-                type="button"
-                className={`settings-tab main-menu-mode-tab ${t.id === tab ? 'is-active' : ''}`.trim()}
-                // ADR-0063: each tab samples its own vertical slice of the rail's continuous
-                // stone sheet via --tab-index (see .settings-tab in style.css), so the texture
-                // reads as one sheet, not a per-tab restart. Guarded by settingsRailContinuity.test.
-                style={{ ['--tab-index' as string]: index }}
-                aria-current={t.id === tab ? 'page' : undefined}
-                onClick={() => setTab(t.id)}
-              >
-                <span className="settings-tab-icon" aria-hidden="true">
-                  <img src={`${ICONS}/${t.icon}.png`} alt="" />
-                </span>
-                <span><strong>{t.label}</strong></span>
-              </button>
-            ))}
-          </aside>
-
-          {tab === 'random'
-            ? <RandomSkirmishPanel />
-            : <SkirmishLevelsPanel levels={skirmishLevels} loading={loading} />}
+          {inner}
         </ArtRouteChrome>
       </div>
     </div>

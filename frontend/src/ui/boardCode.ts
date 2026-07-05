@@ -1,5 +1,5 @@
 // A compact, URL-safe encoding of a level-editor board, so a board can be shared/inspected
-// via `/level-editor?board=<code>`. Round-trips the editor's in-memory layers (tiles, units,
+// via `/editor/level?board=<code>`. Round-trips the editor's in-memory layers (tiles, units,
 // doodads, cover, and linear features — roads + rivers). Used both to LOAD a board on mount
 // and to EXPORT the current one.
 //
@@ -20,6 +20,7 @@
 import type { GroundCoverDensity } from '../core/groundCover';
 import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial, FenceMaterial } from '../core/featureAutotile';
 import type { ZoneType } from '../core/level';
+import type { TileFamilyId } from '../core/tileSockets';
 
 /**
  * One painted autotiling feature cell (road or river): which linear feature it carries and its
@@ -41,6 +42,10 @@ export interface EditorBoard {
   /** Multi-cell props (trees/houses), keyed by ANCHOR cell "x,y" -> {propId} (mirrors doodads). */
   props: Record<string, { propId: string }>;
   cover: Record<string, GroundCoverDensity>;
+  /** Per-cell cover-set OVERRIDE (cell "x,y" -> cover family), decoupling ground cover from the
+   * tile's terrain (e.g. grass tufts on a stone region). A cell absent here falls back to its own
+   * tile terrain (the classic behaviour). Optional + back-compat (like `zones`). */
+  coverTypes?: Record<string, TileFamilyId>;
   features: Record<string, FeatureCell>;
   /** Edge fences, keyed by the shared-edge key (roadEdgeKey "x,y|x,y") -> fence material.
    * Edge-based (a wall between two tiles), not per-cell — mirrors featureCuts/featureExits.
@@ -95,6 +100,9 @@ export function encodeBoard(b: EditorBoard): string {
   // prop-free board encodes byte-identically to a pre-props board.
   if (b.props && nonEmpty(b.props)) wire.p = Object.fromEntries(Object.entries(b.props).map(([k, v]) => [k, v.propId]));
   if (nonEmpty(b.cover)) wire.v = b.cover;
+  // Cover-set overrides ride a separate channel, emitted only when non-empty so a board that never
+  // decouples cover from terrain encodes byte-identically to a pre-override code.
+  if (b.coverTypes && nonEmpty(b.coverTypes)) wire.ct = b.coverTypes;
   // Split the autotiling ribbon features by kind so each map's values are bare materials
   // (rd=roads, rv=rivers). Fences ride separately in `fe` (edge-keyed), below.
   const rd: Record<string, RoadMaterial> = {};
@@ -148,6 +156,7 @@ export function decodeBoard(code: string): EditorBoard | null {
     return {
       cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, cells, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
+      coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
       features,
       fences,
       featureCuts,
@@ -160,7 +169,7 @@ export function decodeBoard(code: string): EditorBoard | null {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-/** Accept either a full `/level-editor?board=...` URL, a query string, or the raw board code. */
+/** Accept either a full `/editor/level?board=...` URL, a query string, or the raw board code. */
 export function decodeBoardLinkInput(input: string): EditorBoard | null {
   const trimmed = input.trim();
   if (!trimmed) return null;

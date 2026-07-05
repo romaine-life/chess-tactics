@@ -9,14 +9,15 @@
 import type { Level, Roster, ZoneType } from './level';
 import type { PieceType } from './types';
 import { PLAYABLE_PIECE_TYPES, isPlayablePieceType } from './pieces';
-import { MODE_NAME } from './objectives';
+import { MODE_NAME, ruleOutcome } from './objectives';
 import { isPassableTerrain } from './terrain';
 import { propCells, propDef } from './props';
 
 export interface PlayabilityViolation {
   /** Stable machine id (P1_SIDE_EMPTY, P2_KING_ASSAULT_KINGS, P2_RIVAL_KINGS_KINGS,
    * P3_UNITS_NOT_EMPTY, P3_NO_SPAWN_ZONE, P3_ZONE_CAPACITY, P3_ZONES_OVERLAP,
-   * P4_SURVIVE_TURNS, P5_TIME_CONTROL). The editor keys on messages; tests key on these. */
+   * P4_SURVIVE_TURNS, P5_TIME_CONTROL, P6_VICTORY_NO_WIN,
+   * P7_EVENT_NAME_EMPTY, P7_EVENT_NAME_DUP). The editor keys on messages; tests key on these. */
   code: string;
   /** Plain language for the editor's violation list — no jargon, sides named
    * "Player side" / "Enemy side", modes named by their display names. */
@@ -205,6 +206,49 @@ export function validatePlayability(level: Level): PlayabilityResult {
       violations.push({
         code: 'P5_TIME_CONTROL',
         message: 'The battle clock needs a starting time of at least one second and a non-negative increment.',
+      });
+    }
+  }
+
+  // P6 — authored victory (ADR-0064): when a level overrides the preset with its own event rules,
+  // EVERY faction with units on the board must have a path to WINNING. That single check also
+  // guarantees a path to losing — a faction loses whenever another faction wins, and with two-plus
+  // factions each able to win, everyone can also lose — so a separate "can it lose?" check is pure
+  // redundancy that only double-reported the same missing rule from both seats. This generalizes:
+  // the win-reachability gate is unchanged as factions grow (it's the lose side that a binary
+  // player↔enemy flip couldn't express). `winners` is the outcomes the rules can actually declare
+  // (ruleOutcome; win(side) ⇒ that side, lose(side) ⇒ the other). Structural SHAPE is validateLevel's
+  // job; this is the gameplay gate. Assumes a structurally valid level.
+  if (level.victory !== undefined) {
+    const winners = new Set(level.victory.map(ruleOutcome).filter((w): w is CombatSide => w === 'player' || w === 'enemy'));
+    for (const side of SIDES) {
+      if (pieceCount(level, side) < 1) continue; // not an on-board faction
+      if (!winners.has(side)) {
+        violations.push({ code: 'P6_VICTORY_NO_WIN', message: `${SIDE_NAME[side]} has no way to win — add a rule whose outcome is ${SIDE_NAME[side]} winning.` });
+      }
+    }
+  }
+
+  // P7 — authored victory names (ADR-0064): the editor is a MASTER-DETAIL list keyed on each event's
+  // name, and the result screen shows the fired rule's name, so every event needs a non-empty name
+  // and no two may collide. The editor assigns unique defaults; this gates a hand-cleared field or a
+  // rename into a duplicate. Preset rules are always name-clean, so only authored victory is checked.
+  if (level.victory !== undefined) {
+    const names = level.victory.map((rule) => (rule.name ?? '').trim());
+    if (names.some((name) => name === '')) {
+      violations.push({ code: 'P7_EVENT_NAME_EMPTY', message: 'Every victory event needs a name.' });
+    }
+    const seen = new Set<string>();
+    const dupes: string[] = [];
+    for (const name of names) {
+      if (!name) continue;
+      if (seen.has(name) && !dupes.includes(name)) dupes.push(name);
+      seen.add(name);
+    }
+    if (dupes.length > 0) {
+      violations.push({
+        code: 'P7_EVENT_NAME_DUP',
+        message: `Victory event names must be unique — rename the duplicate ${dupes.map((name) => `"${name}"`).join(', ')}.`,
       });
     }
   }

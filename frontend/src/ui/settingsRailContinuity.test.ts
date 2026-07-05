@@ -41,8 +41,8 @@ describe('settings-rail stone continuity is index-driven (ADR-0063)', () => {
 
     // The known rails — a stand-in that guarantees the scan actually found files (a broken glob
     // would otherwise let this test pass vacuously). SkirmishMapPicker is the Skirmish hub's rail
-    // (Random Skirmish / Levels).
-    expect(renderers.sort()).toEqual(['Campaign.tsx', 'MainMenu.tsx', 'Settings.tsx', 'SkirmishMapPicker.tsx']);
+    // (Random Skirmish / Levels); CampaignEditor is the Editor's campaigns rail (ADR-0065).
+    expect(renderers.sort()).toEqual(['Campaign.tsx', 'CampaignEditor.tsx', 'MainMenu.tsx', 'Settings.tsx', 'SkirmishMapPicker.tsx']);
 
     for (const f of renderers) {
       const src = readFileSync(new URL(f, import.meta.url), 'utf8');

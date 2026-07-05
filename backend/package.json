@@ -1,6 +1,6 @@
 {
   "name": "chess-tactics-backend",
-  "version": "0.1.15",
+  "version": "0.1.19",
   "private": true,
   "description": "Static server for Chess Tactics.",
   "main": "server.js",

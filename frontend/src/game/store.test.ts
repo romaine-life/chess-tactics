@@ -24,6 +24,9 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
+  // The store is a module singleton shared across tests; a test that sets an authored victory
+  // override (ADR-0064) must not leak it into the next test's preset eval. Reset the victory state.
+  useSkirmish.setState({ victoryOverride: null, resultDetail: null });
 });
 
 function playFirstMove(seed: number) {
@@ -129,7 +132,7 @@ describe('skirmish store', () => {
     const s = useSkirmish.getState();
     const saved = {
       game: s.game, seed: s.seed, tick: s.tick, log: s.log, objective: s.objective,
-      objectiveCtx: s.objectiveCtx, turnsElapsed: s.turnsElapsed, levelId: 'lvl-9', clock: s.clock,
+      objectiveCtx: s.objectiveCtx, victoryOverride: s.victoryOverride, turnsElapsed: s.turnsElapsed, levelId: 'lvl-9', clock: s.clock,
     };
     // Simulate a reload wiping the singleton to a different, unrelated game.
     vi.clearAllTimers();
@@ -155,7 +158,7 @@ describe('skirmish store', () => {
     const s = useSkirmish.getState();
     const saved = {
       game: s.game, seed: s.seed, tick: s.tick, log: s.log, objective: s.objective,
-      objectiveCtx: s.objectiveCtx, turnsElapsed: s.turnsElapsed, levelId: s.levelId, clock: s.clock,
+      objectiveCtx: s.objectiveCtx, victoryOverride: s.victoryOverride, turnsElapsed: s.turnsElapsed, levelId: s.levelId, clock: s.clock,
     };
     vi.clearAllTimers(); // a page reload kills the pending reply — the soft-lock this guards
     useSkirmish.getState().resumeMatch(saved);
@@ -300,6 +303,36 @@ describe('skirmish store: rival-kings + direction-aware capture-king copy', () =
   });
 });
 
+describe('skirmish store: authored victory names the fired rule (ADR-0064)', () => {
+  it('an authored win reads by its rule name, not the mode label — in the log and resultDetail', () => {
+    // AUTHORED to win by capturing the enemy KING while the enemy still fields a pawn — so the core
+    // last-side-standing rule (a full wipe) does NOT fire, and the authored rule is what decides.
+    // The result must read by the authored rule name ("Storm the keep"), not an objective preset.
+    const game: GameState = {
+      size: { cols: 8, rows: 8 },
+      pieces: [piece('pr', 'player', 'rook', 0, 0), piece('ek', 'enemy', 'king', 0, 5), piece('ep', 'enemy', 'pawn', 7, 7)],
+      turn: 'player',
+      winner: null,
+    };
+    useSkirmish.setState({
+      game,
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'capture-all',
+      objectiveCtx: {},
+      victoryOverride: [{ name: 'Storm the keep', if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], do: [{ kind: 'win', side: 'player' }] }],
+      resultDetail: null,
+      selectedId: 'pr',
+      focusedId: 'pr',
+      log: [],
+    });
+    useSkirmish.getState().tryMoveTo(0, 5); // rook takes the enemy King (the pawn survives)
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('player');
+    expect(s.log[0]).toBe('Victory — Storm the keep.');
+    expect(s.resultDetail).toBe('Storm the keep');
+  });
+});
+
 describe('skirmish store: survive + reach objectives', () => {
   it('survive: wins once the required rounds elapse (after the enemy reply)', () => {
     useSkirmish.setState({
@@ -320,7 +353,28 @@ describe('skirmish store: survive + reach objectives', () => {
     expect(useSkirmish.getState().game.winner).toBe('player');
   });
 
-  it('reach: wins the instant a player piece steps onto a target cell', () => {
+  it('reach: a PAWN stepping onto a target cell wins instantly (even as it promotes there)', () => {
+    useSkirmish.setState({
+      // Pawn one step from the target (0,0) is the enemy back rank, so it promotes on arrival —
+      // reach still fires because lastMove records the pre-promotion type (ADR-0064).
+      game: { size: { cols: 8, rows: 8 }, pieces: [piece('pp', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 7, 7)], turn: 'player', winner: null },
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'reach',
+      objectiveCtx: { reachCells: [{ x: 0, y: 0 }] },
+      turnsElapsed: 0,
+      seed: 1,
+      tick: 0,
+      selectedId: 'pp',
+      focusedId: 'pp',
+      log: [],
+    });
+    useSkirmish.getState().tryMoveTo(0, 0); // pawn steps onto the target
+    const { game } = useSkirmish.getState();
+    expect(game.winner).toBe('player');
+    expect(game.turn).toBe('done');
+  });
+
+  it('reach: a NON-pawn on a target cell does NOT win (reach is pawn-only)', () => {
     useSkirmish.setState({
       game: { size: { cols: 8, rows: 8 }, pieces: [piece('pr', 'player', 'rook', 0, 3), piece('ek', 'enemy', 'king', 7, 7)], turn: 'player', winner: null },
       env: { terrain: undefined, lastMove: undefined },
@@ -333,10 +387,8 @@ describe('skirmish store: survive + reach objectives', () => {
       focusedId: 'pr',
       log: [],
     });
-    useSkirmish.getState().tryMoveTo(0, 0); // rook slides up the file onto the target
-    const { game } = useSkirmish.getState();
-    expect(game.winner).toBe('player');
-    expect(game.turn).toBe('done');
+    useSkirmish.getState().tryMoveTo(0, 0); // rook slides onto the target — no longer a win
+    expect(useSkirmish.getState().game.winner).toBeNull();
   });
 });
 

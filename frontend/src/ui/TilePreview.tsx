@@ -32,6 +32,7 @@ import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
 import { GymCatalog, GymViewer } from './Gym';
 import { PAGE_ENTRIES } from './pagesCatalog';
+import { SliderRow } from './dressing/SliderRow';
 import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
 import { SfxLibraryStudio, SfxViewer } from './SfxLibraryStudio';
 import { PortraitLab } from './PortraitEditor';
@@ -398,6 +399,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedSfxName, setSelectedSfxName] = useState<string | undefined>(undefined);
   const [pageSearch, setPageSearch] = useState('');
   const [selectedPageName, setSelectedPageName] = useState<string | undefined>(initialRoute.selectedPageName);
+  // Viewer-wide zoom — a meta-control (in the shared Viewer header) that scales the WHOLE preview.
+  // 1 = full size (roam it with the panel scrollbars); the dressing-room (iframe) viewers consume it.
+  const [viewerZoom, setViewerZoom] = useState(1);
   const [gameLabSearch, setGameLabSearch] = useState('');
   const [selectedGameLabLevelId, setSelectedGameLabLevelId] = useState<string | undefined>(initialRoute.selectedGameLabLevelId);
   const [gymSearch, setGymSearch] = useState('');
@@ -668,7 +672,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Every catalog card (tile/unit/doodad, paintbrush + inspect) now opens the standalone
   // Level Editor with that asset pre-armed as the brush — the in-studio board lab is retired.
   const openInLevelEditor = (kind: 'tile' | 'unit' | 'doodad', id: string): void => {
-    navigateApp(`/level-editor?from=studio&kind=${kind}&brush=${encodeURIComponent(id)}`);
+    navigateApp(`/editor/level?from=studio&kind=${kind}&brush=${encodeURIComponent(id)}`);
   };
 
   const viewSubtitle =
@@ -1264,7 +1268,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <div>
               <h3 style={{ margin: '0 0 6px', color: '#eaf3ff' }}>Edge fences</h3>
               <p style={{ margin: '0 0 12px', color: '#9fb6d6', fontSize: 13, lineHeight: 1.5 }}>A low rail that sits on the boundary between two tiles and blocks a piece from crossing that edge — both tiles stay walkable, and knights hop it. Paint them on tile edges in the Level Editor.</p>
-              <button type="button" className="tileset-view-action" onClick={() => navigateApp('/level-editor?from=studio&layer=fence')}>Paint fences in the editor</button>
+              <button type="button" className="tileset-view-action" onClick={() => navigateApp('/editor/level?from=studio&layer=fence')}>Paint fences in the editor</button>
             </div>
           </div>
         </div>
@@ -1272,7 +1276,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: (
         <>
           <p className="tileset-catalog-note" style={{ color: '#9fb6d6', fontSize: 12, lineHeight: 1.5 }}>Fences live on tile edges and block crossing. Paint them in the Level Editor&rsquo;s Fence layer.</p>
-          <button type="button" className="tileset-view-action" onClick={() => navigateApp('/level-editor?from=studio&layer=fence')}>Paint fences in the editor</button>
+          <button type="button" className="tileset-view-action" onClick={() => navigateApp('/editor/level?from=studio&layer=fence')}>Paint fences in the editor</button>
         </>
       ),
     },
@@ -1414,7 +1418,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <button type="button" className={`studio-mode-icon${studioMode === 'catalog' ? ' is-active' : ''}`} aria-pressed={studioMode === 'catalog'} onClick={openCatalogMode} aria-label="Catalog" title="Catalog — browse the catalogs.">
         <img src="/assets/ui/kit/icons/studio-catalog.png" alt="" />
       </button>
-      <button type="button" className="studio-mode-icon" onClick={() => navigateApp('/level-editor?from=studio')} aria-label="Lab" title="Lab — open the Level Editor to paint tiles and units and set the board size.">
+      <button type="button" className="studio-mode-icon" onClick={() => navigateApp('/editor/level?from=studio')} aria-label="Lab" title="Lab — open the Level Editor to paint tiles and units and set the board size.">
         <img src="/assets/ui/kit/icons/studio-lab.png" alt="" />
       </button>
       <button type="button" className={`studio-mode-icon${studioMode === 'viewer' ? ' is-active' : ''}`} aria-pressed={studioMode === 'viewer'} onClick={() => setStudioMode('viewer')} aria-label="Viewer" title="Viewer — view one finished asset or artwork.">
@@ -1435,9 +1439,25 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     <button type="button" className="app-header-button studio-scene-back" onClick={backToSceneMap}
       aria-label="Back to the animated scene" title="Back to the animated scene map">‹ Scene</button>
   ) : null;
-  // Viewer labs render their controls through a `header` slot — now just the preview-kind
-  // select; the workspace switcher moved out of the rail and onto the title bar (above).
-  const studioViewerHeader = viewerKindSelect;
+  // Viewer labs render their controls through a `header` slot: the preview-kind select plus the
+  // viewer-wide Zoom meta-control. Zoom scales the WHOLE preview (100% = full size; scroll the panel
+  // to roam it) — it rides the header so it shows for every Viewer kind; the dressing-room (iframe)
+  // viewers consume it today. The workspace switcher moved out of the rail onto the title bar (above).
+  const studioViewerHeader = (
+    <>
+      {viewerKindSelect}
+      <SliderRow
+        label={<>Zoom · {Math.round(viewerZoom * 100)}%{viewerZoom === 1 ? ' · full size' : ''}</>}
+        value={viewerZoom}
+        set={setViewerZoom}
+        min={0.25}
+        max={2}
+        step={0.05}
+        nudge={0.05}
+        dflt={1}
+      />
+    </>
+  );
 
   return (
     <main className="tileset-studio-page app-shell-bar-pad">
@@ -1493,7 +1513,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                     : viewerKind === 'slider'
                       ? <SliderViewer name={selectedSliderName} header={studioViewerHeader} />
                       : viewerKind === 'page'
-                        ? <PagesViewer name={selectedPageName} header={studioViewerHeader} />
+                        ? <PagesViewer name={selectedPageName} header={studioViewerHeader} zoom={viewerZoom} />
                         : viewerKind === 'gamelab'
                         ? <GameLabViewer levelId={selectedGameLabLevelId} header={studioViewerHeader} />
                         : viewerKind === 'gym'
