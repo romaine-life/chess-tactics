@@ -502,6 +502,7 @@ export function SkirmishBoard() {
   const showEnemyMoves = useSkirmishView((s) => s.showEnemyMoves);
   const showPlayerAttacks = useSkirmishView((s) => s.showPlayerAttacks);
   const showPlayerMoves = useSkirmishView((s) => s.showPlayerMoves);
+  const showPromotionZones = useSkirmishView((s) => s.showPromotionZones);
   const boardZoom = useSkirmishView((s) => s.zoom);
   const boardPan = useSkirmishView((s) => s.pan);
   const setZoom = useSkirmishView((s) => s.setZoom);
@@ -510,6 +511,7 @@ export function SkirmishBoard() {
   const env = useSkirmish((s) => s.env);
   const selectedId = useSkirmish((s) => s.selectedId);
   const focusedId = useSkirmish((s) => s.focusedId);
+  const pendingPromotion = useSkirmish((s) => s.pendingPromotion);
   const seed = useSkirmish((s) => s.seed);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
@@ -568,10 +570,10 @@ export function SkirmishBoard() {
     }
   }, [drag, dropHoverKey]);
   const selectedMoves = useMemo(() => {
-    if (game.turn !== localSide || game.winner) return [];
+    if (pendingPromotion || game.turn !== localSide || game.winner) return [];
     const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === localSide);
     return piece ? legalMoves(piece, game.pieces, game.size, env) : [];
-  }, [env, game.pieces, game.size, game.turn, game.winner, selectedId, localSide]);
+  }, [env, game.pieces, game.size, game.turn, game.winner, pendingPromotion, selectedId, localSide]);
   const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
   // Edge fences resolve from the authored board code (each shared edge → its upper-left cell's
   // E/S rail). Keyed "x,y" to match resolveFenceOverlays; empty for a generated/fence-free board.
@@ -646,6 +648,10 @@ export function SkirmishBoard() {
     () => armyLayer(showPlayerMoves, (p) => legalMoves(p, game.pieces, game.size, env), 'player'),
     [env, game.pieces, game.size, showPlayerMoves],
   );
+  const promotionZoneSet = useMemo(
+    () => new Set((showPromotionZones ? game.promotionZones ?? [] : []).map((cell) => `${cell.x},${cell.y}`)),
+    [game.promotionZones, showPromotionZones],
+  );
 
   // Premoves: while the opponent is thinking (game.turn === 'enemy'), the board stays
   // live — the player can queue a chain that fires one-per-turn as control returns. The
@@ -703,6 +709,7 @@ export function SkirmishBoard() {
 
   const handleTile = (x: number, y: number) => {
     // Opponent's turn: clicks build the premove chain instead of being ignored.
+    if (pendingPromotion) return;
     if (premoveMode) {
       const key = `${x},${y}`;
       // A legal target for the selected piece → queue the step.
@@ -752,7 +759,7 @@ export function SkirmishBoard() {
     if (dragRef.current) return;
     // Don't let a press start a drag before the board is even visible (cold load = opacity:0
     // but still hit-testable) — you'd be dragging a piece you can't see.
-    if (game.winner || !boardReady) return;
+    if (pendingPromotion || game.winner || !boardReady) return;
     // On your turn a drag MOVES; on the opponent's turn (premoveMode: single-player only) it
     // queues a PREMOVE instead. Either way only your own pieces initiate — empty/opponent
     // cells fall through to onClick. localSide is 'player' whenever premoveMode is on (!net).
@@ -886,6 +893,7 @@ export function SkirmishBoard() {
             const key = `${cell.x},${cell.y}`;
             const state = [
               playerMoveSet.has(key) ? 'is-player-move' : '',
+              promotionZoneSet.has(key) ? 'is-promotion-zone' : '',
               enemyMoveSet.has(key) ? 'is-enemy-move' : '',
               playerAttackSet.has(key) ? 'is-player-attack' : '',
               moveSet.has(key) || dragTargetSet.has(key) ? 'is-move' : '',

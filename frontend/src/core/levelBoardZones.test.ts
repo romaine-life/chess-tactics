@@ -23,6 +23,30 @@ describe('levelBoard — zone projection into layers.zones', () => {
     expect(byType.objective.tiles).toEqual([[2, 3]]);
   });
 
+  it('preserves authored zone entries without merging same-type or empty zones', () => {
+    const level = editorBoardToLevel(
+      board({
+        zoneEntries: [
+          { id: 'zone-1', type: 'pawn-promotion', tiles: ['0,0'] },
+          { id: 'zone-2', type: 'pawn-promotion', tiles: ['1,0'] },
+          { id: 'zone-3', type: 'objective', tiles: [] },
+        ],
+      }),
+      { id: 'promo', name: 'Promotion Zones' },
+    );
+    expect(level.layers.zones).toEqual([
+      { id: 'zone-1', type: 'pawn-promotion', tiles: [[0, 0]] },
+      { id: 'zone-2', type: 'pawn-promotion', tiles: [[1, 0]] },
+      { id: 'zone-3', type: 'objective', tiles: [] },
+    ]);
+    const reopened = levelToEditorBoard(level);
+    expect(reopened.zoneEntries).toEqual([
+      { id: 'zone-1', type: 'pawn-promotion', tiles: ['0,0'] },
+      { id: 'zone-2', type: 'pawn-promotion', tiles: ['1,0'] },
+      { id: 'zone-3', type: 'objective', tiles: [] },
+    ]);
+  });
+
   it('emits stable ids so re-serializing the same board never churns them', () => {
     const b = board({ zones: { '3,3': 'objective' } });
     const a = editorBoardToLevel(b, { id: 'l', name: 'A' });

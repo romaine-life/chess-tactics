@@ -22,8 +22,8 @@ export const CAMPAIGN_FORMAT_VERSION = 1;
 export const BOARD_COLS = { min: 1, max: 48 } as const;
 export const BOARD_ROWS = { min: 1, max: 48 } as const;
 
-export type ZoneType = 'player-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock';
-export const ZONE_TYPES = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock'] as const satisfies readonly ZoneType[];
+export type ZoneType = 'player-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock' | 'pawn-promotion';
+export const ZONE_TYPES = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'] as const satisfies readonly ZoneType[];
 
 // The win-rule MODE ids (ADR-0050). Stored ids stay the legacy objective ids deliberately —
 // they exist in the live DB, and `capture-all` ≡ Last Man

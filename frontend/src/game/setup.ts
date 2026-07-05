@@ -168,6 +168,22 @@ export function createFromLevel(level: Level, seed: number): GameState {
     }
   }
 
+  const promotionZones = (() => {
+    const cells: Array<{ x: number; y: number }> = [];
+    const seen = new Set<string>();
+    for (const zone of level.layers.zones) {
+      if (zone.type !== 'pawn-promotion') continue;
+      for (const [x, y] of zone.tiles) {
+        const key = `${x},${y}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (x < 0 || x >= level.board.cols || y < 0 || y >= level.board.rows) continue;
+        cells.push({ x, y });
+      }
+    }
+    return cells;
+  })();
+
   return {
     size: { cols: level.board.cols, rows: level.board.rows },
     pieces,
@@ -179,6 +195,7 @@ export function createFromLevel(level: Level, seed: number): GameState {
     // The render channel: the board draws the tall prop sprite from this list, while the
     // colliders above do the blocking. Defaults to [] so a prop-free level stays prop-free.
     props,
+    promotionZones: promotionZones.length ? promotionZones : undefined,
     turn: 'player',
     winner: null,
   };

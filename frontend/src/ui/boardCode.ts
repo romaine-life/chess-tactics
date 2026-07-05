@@ -7,22 +7,22 @@
 //   f?:fillTileId, t?:{cell:tileId}, h?:[cell], u?:{cell:[unitId,dir,faction]},
 //   d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fe?:{edgeKey:fenceMaterial},
-//   rc?:[edgeKey], rx?:[edgeKey], z?:{cell:zoneType}, gr?:generatedRegionUnits }. `f` fills
-// every cell, then `t` overrides — so a "mostly one tile" board stays tiny; `h` punches intentional
-// holes back out of that fill. The autotiling ribbon features split per kind on the wire (rd=roads,
-// rv=rivers) and merge into one `features` map on decode. FENCES are edge-based, not per-cell:
-// `fe` maps a shared-edge key (roadEdgeKey "x,y|x,y") to a fence material — same edge keying as
-// `rc` (severed edges) and `rx` (forced outward exits). `z` is the gameplay-zone channel
-// (ADR-0050): each painted cell -> its zone type. `gr` stores editor-only generated-region units:
-// saved cell selections plus the Generate panel settings needed to rerun them. base64url of the
-// JSON (no padding, +/ -> -_).
+//   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell]]], z?:{cell:zoneType},
+//   gr?:generatedRegionUnits }. `f` fills every cell, then `t` overrides — so a "mostly one tile"
+// board stays tiny; `h` punches intentional holes back out of that fill. The autotiling ribbon
+// features split per kind on the wire (rd=roads, rv=rivers) and merge into one `features` map on
+// decode. FENCES are edge-based, not per-cell: `fe` maps a shared-edge key (roadEdgeKey "x,y|x,y")
+// to a fence material — same edge keying as `rc` (severed edges) and `rx` (forced outward exits).
+// `zn` is the authored gameplay-zone list; `z` is the legacy collapsed view (cell -> type) kept
+// for old links/clients. `gr` stores editor-only generated-region units: saved cell selections
+// plus the Generate panel settings needed to rerun them. base64url of the JSON (no padding, +/ -> -_).
 //
 // FORWARD/BACK-COMPAT: `z`/`p`/`fe` are emitted only when non-empty, so a board without them
 // encodes byte-identically to a code that predates them, and an OLD code decodes them to empty.
 
 import type { GroundCoverDensity } from '../core/groundCover';
 import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial, FenceMaterial } from '../core/featureAutotile';
-import type { ZoneType } from '../core/level';
+import { ZONE_TYPES, type ZoneType } from '../core/level';
 import type { TileFamilyId } from '../core/tileSockets';
 import { UNIT_FACINGS, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
 import type { UnitFacing } from '../core/types';
@@ -34,6 +34,12 @@ import type { UnitFacing } from '../core/types';
 export interface FeatureCell {
   kind: FeatureKind;
   material: FeatureMaterial;
+}
+
+export interface EditorZoneEntry {
+  id: string;
+  type: ZoneType;
+  tiles: string[];
 }
 
 export type BoardFactionDirections = Partial<Record<UnitPalette, UnitFacing>>;
@@ -88,11 +94,11 @@ export interface EditorBoard {
   fences?: Record<string, FenceMaterial>;
   featureCuts: Record<string, true>;
   featureExits: Record<string, true>;
-  /** Gameplay zones (ADR-0050), keyed by cell "x,y" -> zone type. The editor paints
-   * player-spawn / enemy-spawn / objective; the full ZoneType set is stored so the channel
-   * stays lossless if the schema's other zone types (enemy-threat, falling-rock) are painted.
-   * Optional + back-compat (like `props` before it): a pre-zones board literal simply omits it,
-   * and `decodeBoard` always returns it populated (empty for an old code). */
+  /** Authored gameplay zone entries. Empty entries are allowed so the editor's zone dropdown can
+   * preserve an author's chosen N even before any cells are painted. */
+  zoneEntries?: EditorZoneEntry[];
+  /** Legacy collapsed gameplay zones, keyed by cell "x,y" -> zone type. Kept as a compatibility
+   * view for old board codes and renderer overlays; entries are the source of truth when present. */
   zones?: Record<string, ZoneType>;
   /** Editor-only generated-region units: saved selections + Generate panel settings. */
   generatedRegions?: BoardGeneratedRegion[];
@@ -106,6 +112,70 @@ const validFacings = new Set<string>(UNIT_FACINGS);
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 const clampNumber = (value: unknown, fallback: number, min: number, max: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+const validZoneTypes = new Set<string>(ZONE_TYPES);
+
+function cellParts(key: string): [number, number] | null {
+  const [xs, ys] = key.split(',');
+  const x = Number(xs), y = Number(ys);
+  return Number.isInteger(x) && Number.isInteger(y) ? [x, y] : null;
+}
+
+function inBoardKey(key: string, cols: number, rows: number): boolean {
+  const p = cellParts(key);
+  return !!p && p[0] >= 0 && p[0] < cols && p[1] >= 0 && p[1] < rows;
+}
+
+function sortCellKeys(keys: string[]): string[] {
+  return [...keys].sort((a, b) => {
+    const pa = cellParts(a) ?? [0, 0];
+    const pb = cellParts(b) ?? [0, 0];
+    return pa[1] - pb[1] || pa[0] - pb[0];
+  });
+}
+
+function normalizeZoneEntries(entries: readonly EditorZoneEntry[] | undefined, cols: number, rows: number): EditorZoneEntry[] {
+  const out: EditorZoneEntry[] = [];
+  for (const [index, entry] of (entries ?? []).entries()) {
+    if (!entry || typeof entry.id !== 'string' || !validZoneTypes.has(entry.type) || !Array.isArray(entry.tiles)) continue;
+    const seen = new Set<string>();
+    const tiles: string[] = [];
+    for (const rawKey of entry.tiles) {
+      const key = String(rawKey);
+      if (seen.has(key) || !inBoardKey(key, cols, rows)) continue;
+      seen.add(key);
+      tiles.push(key);
+    }
+    out.push({ id: entry.id.trim() || `zone-${index + 1}`, type: entry.type, tiles: sortCellKeys(tiles) });
+  }
+  return out;
+}
+
+export function zoneCellMapFromEntries(entries: readonly EditorZoneEntry[] | undefined): Record<string, ZoneType> {
+  const zones: Record<string, ZoneType> = {};
+  for (const entry of entries ?? []) {
+    if (!entry || !validZoneTypes.has(entry.type)) continue;
+    for (const key of entry.tiles) zones[key] = entry.type;
+  }
+  return zones;
+}
+
+export function zoneEntriesFromCellMap(channel: Record<string, ZoneType> | undefined, cols: number, rows: number): EditorZoneEntry[] {
+  if (!channel) return [];
+  const byType = new Map<ZoneType, string[]>();
+  for (const [key, type] of Object.entries(channel)) {
+    if (!validZoneTypes.has(type) || !inBoardKey(key, cols, rows)) continue;
+    const list = byType.get(type) ?? [];
+    list.push(key);
+    byType.set(type, list);
+  }
+  const entries: EditorZoneEntry[] = [];
+  for (const type of ZONE_TYPES) {
+    const tiles = byType.get(type);
+    if (!tiles?.length) continue;
+    entries.push({ id: `z-${type}`, type, tiles: sortCellKeys(tiles) });
+  }
+  return entries;
+}
 
 function cleanFactionDirections(value: unknown): BoardFactionDirections {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -258,9 +328,13 @@ export function encodeBoard(b: EditorBoard): string {
   if (b.fences && nonEmpty(b.fences)) wire.fe = b.fences;
   if (nonEmpty(b.featureCuts)) wire.rc = Object.keys(b.featureCuts);
   if (nonEmpty(b.featureExits)) wire.rx = Object.keys(b.featureExits);
-  // Zones ride as a bare {cell:zoneType} map — emitted only when non-empty so a zone-free board
-  // is byte-identical to a pre-zones code (same discipline as `p`/props).
-  if (b.zones && nonEmpty(b.zones)) wire.z = b.zones;
+  // Zones ride primarily as entries so same-type zones and empty authored zones survive a reopen.
+  // A collapsed `z` map is also emitted when cells exist so older code can still render/consume
+  // a best-effort zone overlay. Zone-free boards still omit both keys.
+  const zoneEntries = normalizeZoneEntries(b.zoneEntries ?? zoneEntriesFromCellMap(b.zones, b.cols, b.rows), b.cols, b.rows);
+  const zones = zoneCellMapFromEntries(zoneEntries);
+  if (zoneEntries.length) wire.zn = zoneEntries.map((z) => [z.id, z.type, z.tiles]);
+  if (nonEmpty(zones)) wire.z = zones;
   const gr = encodeGeneratedRegions(b.generatedRegions, b.cols, b.rows);
   if (gr.length) wire.gr = gr;
   return enc(JSON.stringify(wire));
@@ -294,9 +368,28 @@ export function decodeBoard(code: string): EditorBoard | null {
     // Fences: edge-key -> material (an OLD code without `fe` yields an empty map — back-compat).
     const fences: Record<string, FenceMaterial> = {};
     if (w.fe) for (const [k, m] of Object.entries(w.fe as Record<string, FenceMaterial>)) fences[k] = m;
-    // Zones: an OLD code has no `z`, so this defaults to an empty map — the back-compat contract.
-    const zones: EditorBoard['zones'] = {};
-    if (w.z) for (const [k, type] of Object.entries(w.z as Record<string, ZoneType>)) zones[k] = type;
+    // Zones: `zn` carries authored entries; old codes only have `z`, which is grouped back into
+    // one entry per type so the editor still opens them in the new dropdown model.
+    let zoneEntries: EditorZoneEntry[] = [];
+    if (Array.isArray(w.zn)) {
+      zoneEntries = normalizeZoneEntries(
+        (w.zn as Array<[unknown, unknown, unknown]>).map(([id, type, tiles]) => ({
+          id: String(id ?? ''),
+          type: type as ZoneType,
+          tiles: Array.isArray(tiles) ? tiles.map(String) : [],
+        })),
+        cols,
+        rows,
+      );
+    }
+    const legacyZones: EditorBoard['zones'] = {};
+    if (w.z) {
+      for (const [k, type] of Object.entries(w.z as Record<string, ZoneType>)) {
+        if (validZoneTypes.has(type) && inBoardKey(k, cols, rows)) legacyZones[k] = type;
+      }
+    }
+    if (!zoneEntries.length && nonEmpty(legacyZones)) zoneEntries = zoneEntriesFromCellMap(legacyZones, cols, rows);
+    const zones = zoneCellMapFromEntries(zoneEntries);
     const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows);
     return {
       cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, units, doodads, props,
@@ -306,6 +399,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       fences,
       featureCuts,
       featureExits,
+      zoneEntries,
       zones,
       generatedRegions,
     };

@@ -122,6 +122,18 @@ describe('createSkirmish', () => {
   });
 });
 
+describe('createFromLevel — pawn promotion zones', () => {
+  it('copies authored pawn-promotion zone cells into the live game state', () => {
+    const level = createBlankLevel('promo', 'Promotion', 8, 8);
+    level.layers.zones = [
+      { id: 'promo-a', type: 'pawn-promotion', tiles: [[4, 0], [5, 0]] },
+      { id: 'objective', type: 'objective', tiles: [[1, 1]] },
+    ];
+    const game = createSkirmish({ seed: 1, level });
+    expect(game.promotionZones).toEqual([{ x: 4, y: 0 }, { x: 5, y: 0 }]);
+  });
+});
+
 // ADR-0050 random placement: a level with placement 'random' deals its roster onto
 // seeded-random free cells of the pooled spawn zones instead of reading layers.units.
 describe('createFromLevel — random placement', () => {

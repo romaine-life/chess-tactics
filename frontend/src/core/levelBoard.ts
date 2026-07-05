@@ -10,12 +10,12 @@
 //    `boardCode` so the next open is exact, and projecting terrain/units into `layers` so
 //    the game (which reads `layers`, not `boardCode`) plays the authored board.
 
-import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, TimeControl, VictoryRules, Zone, ZoneType } from './level';
+import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, TimeControl, VictoryRules, Zone } from './level';
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
 import type { PlacedProp } from './props';
 import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { TileFamilyId } from './tileSockets';
-import { decodeBoard, encodeBoard, type EditorBoard } from '../ui/boardCode';
+import { decodeBoard, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type EditorBoard, type EditorZoneEntry } from '../ui/boardCode';
 import { parseEdgeKey, isOrthogonalPair, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
 import { studioFamilies } from '../ui/studioBoard';
 import { UNIT_PALETTES } from './pieces';
@@ -58,50 +58,56 @@ const isFaction = (faction: string | null | undefined): faction is Faction =>
 const sideForFaction = (faction: string, playerFaction: string | null | undefined): Side =>
   playerFaction && faction === playerFaction ? 'player' : 'enemy';
 
-// A zone id is derived deterministically from its type (`z-<type>`), so the same painted
-// board always projects the same ids — a resave never churns them, and equality of two saves
-// stays a pure function of what was painted. The editor collapses all cells of one zone type
-// into ONE Zone entry (playability pools per-type anyway, so a single zone per type suffices).
-const zoneId = (type: ZoneType): string => `z-${type}`;
-
 /**
- * Project the editor's per-cell `zones` channel (cell "x,y" -> zone type) into the schema's
- * `layers.zones` (one Zone per type, each with its pooled [x,y] tile list, in-bounds only).
- * Tiles are emitted in row-major order for a stable, diff-friendly serialization.
+ * Project the editor's authored zone entries into `layers.zones`. Empty entries are preserved
+ * because the editor's zone dropdown is explicitly controlled by the author; in-bounds tiles are
+ * emitted in row-major order for stable, diff-friendly saves.
  */
 function zonesToLayers(
-  channel: Record<string, ZoneType> | undefined,
+  entries: readonly EditorZoneEntry[] | undefined,
   cols: number,
   rows: number,
 ): Zone[] {
-  if (!channel) return [];
-  const byType = new Map<ZoneType, Array<[number, number]>>();
-  for (let y = 0; y < rows; y += 1) {
-    for (let x = 0; x < cols; x += 1) {
-      const type = channel[`${x},${y}`];
-      if (!type) continue;
-      const list = byType.get(type) ?? [];
-      list.push([x, y]);
-      byType.set(type, list);
+  return (entries ?? []).map((entry, index) => {
+    const tiles: Array<[number, number]> = [];
+    const seen = new Set<string>();
+    for (const key of entry.tiles) {
+      const [x, y] = key.split(',').map(Number);
+      if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || x >= cols || y < 0 || y >= rows) continue;
+      const stableKey = `${x},${y}`;
+      if (seen.has(stableKey)) continue;
+      seen.add(stableKey);
+      tiles.push([x, y]);
     }
-  }
-  const zones: Zone[] = [];
-  for (const [type, tiles] of byType) zones.push({ id: zoneId(type), type, tiles });
-  return zones;
+    tiles.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    return { id: entry.id.trim() || `zone-${index + 1}`, type: entry.type, tiles };
+  });
 }
 
-/** Rebuild the editor's per-cell zones channel from a Level's `layers.zones` (used only on the
- * layers-derive fallback for legacy levels; the boardCode path carries the channel losslessly).
- * Out-of-bounds tiles are dropped like units/props. */
-function zonesFromLayers(zones: Zone[] | undefined, cols: number, rows: number): Record<string, ZoneType> {
-  const channel: Record<string, ZoneType> = {};
+/** Rebuild the editor's zone entries from `layers.zones` (used on legacy/no-boardCode paths, and
+ * as a fallback for older board codes that only carried the collapsed `z` map). */
+function zoneEntriesFromLayers(zones: Zone[] | undefined, cols: number, rows: number): EditorZoneEntry[] {
+  const entries: EditorZoneEntry[] = [];
+  let index = 0;
   for (const zone of zones ?? []) {
+    const tiles: string[] = [];
+    const seen = new Set<string>();
     for (const [x, y] of zone.tiles) {
       if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
-      channel[`${x},${y}`] = zone.type;
+      const key = `${x},${y}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tiles.push(key);
     }
+    tiles.sort((a, b) => {
+      const [ax, ay] = a.split(',').map(Number);
+      const [bx, by] = b.split(',').map(Number);
+      return ay - by || ax - bx;
+    });
+    index += 1;
+    entries.push({ id: zone.id.trim() || `zone-${index}`, type: zone.type, tiles });
   }
-  return channel;
+  return entries;
 }
 
 // Resolve a Studio tile id to its family (so its terrain material is known). Exported so the
@@ -191,7 +197,12 @@ export function unitsForGamePieces(pieces: readonly Piece[]): EditorBoard['units
 export function levelToEditorBoard(level: Level): EditorBoard {
   if (level.boardCode) {
     const decoded = decodeBoard(level.boardCode);
-    if (decoded) return decoded;
+    if (decoded) {
+      const zoneEntries = decoded.zoneEntries?.length
+        ? decoded.zoneEntries
+        : zoneEntriesFromLayers(level.layers.zones, decoded.cols, decoded.rows);
+      return { ...decoded, zoneEntries, zones: zoneCellMapFromEntries(zoneEntries) };
+    }
   }
 
   const cols = clamp(level.board.cols, BOARD_COLS.min, BOARD_COLS.max);
@@ -241,9 +252,10 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     props[`${p.x},${p.y}`] = { propId: p.propId };
   }
 
-  // Legacy fallback: rebuild the zones channel from layers.zones (the boardCode path above already
-  // carried it losslessly). Out-of-bounds tiles are dropped like units/props.
-  const zones = zonesFromLayers(level.layers.zones, cols, rows);
+  // Legacy fallback: rebuild authored zones from layers.zones. Out-of-bounds tiles are dropped
+  // like units/props, but empty zone entries are preserved.
+  const zoneEntries = zoneEntriesFromLayers(level.layers.zones, cols, rows);
+  const zones = zoneCellMapFromEntries(zoneEntries);
   // Legacy fallback (no boardCode): layers.fences carries edge keys only — re-seed the editor's
   // edge→material map at the default material (the boardCode path above already round-tripped both).
   const fences: EditorBoard['fences'] = {};
@@ -265,6 +277,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     fences,
     featureCuts: {},
     featureExits: {},
+    zoneEntries,
     zones,
   };
 }
@@ -338,9 +351,10 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     props.push({ x, y, propId: placement.propId });
   }
 
-  // Project the painted zones channel into real `layers.zones` — spawn pools (random placement)
-  // and reach targets read these directly. Clamped to the (possibly resized) bounds like units.
-  const zones = zonesToLayers(board.zones, cols, rows);
+  // Project authored zones into real `layers.zones` — spawn pools, reach targets and promotion
+  // zones read these directly. Legacy boards without entries are grouped by their collapsed map.
+  const zoneEntries = board.zoneEntries ?? zoneEntriesFromCellMap(board.zones, cols, rows);
+  const zones = zonesToLayers(zoneEntries, cols, rows);
 
   // Fences ride BOTH channels: layers.fences (edge keys — the durable wall list the GAME reads for
   // collision) AND boardCode `fe` (edge→material, for the editor + rail rendering, via encodeBoard).

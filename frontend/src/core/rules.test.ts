@@ -310,21 +310,29 @@ describe('applyMove', () => {
     expect(has(nextMoves, 6, 3)).toBe(true);
     expect(has(nextMoves, 6, 2)).toBe(false);
   });
-  it('promotes a pawn reaching the far rank', () => {
+  it('does not promote a pawn on the far rank without an authored promotion zone', () => {
     const pawn = P('player', 'pawn', 4, 1);
     const foe = P('enemy', 'queen', 7, 0);
     const state = { size: SIZE, pieces: [pawn, foe], turn: 'player' as const, winner: null };
     const res = applyMove(state, pawn.id, { x: 4, y: 0 });
-    expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('queen');
-    expect(res.events.some((e) => e.kind === 'promoted')).toBe(true);
+    expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('pawn');
+    expect(res.events.some((e) => e.kind === 'promoted')).toBe(false);
   });
-  it('promotes a pawn reaching its authored forward edge', () => {
+  it('defaults a pawn promotion zone to queen when no promotion choice is supplied', () => {
+    const pawn = P('player', 'pawn', 4, 1);
+    const foe = P('enemy', 'queen', 7, 0);
+    const state: GameState = { size: SIZE, pieces: [pawn, foe], turn: 'player', winner: null, promotionZones: [{ x: 4, y: 0 }] };
+    const res = applyMove(state, pawn.id, { x: 4, y: 0 });
+    expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('queen');
+    expect(res.events).toContainEqual({ kind: 'promoted', pieceId: pawn.id, to: 'queen' });
+  });
+  it('promotes a pawn to the requested chess piece on an authored promotion zone', () => {
     const pawn = P('player', 'pawn', 6, 4, { startX: 6, startY: 4, pawnForward: 'east' });
     const foe = P('enemy', 'queen', 7, 0);
-    const state = { size: SIZE, pieces: [pawn, foe], turn: 'player' as const, winner: null };
-    const res = applyMove(state, pawn.id, { x: 7, y: 4 });
-    expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('queen');
-    expect(res.events.some((e) => e.kind === 'promoted')).toBe(true);
+    const state: GameState = { size: SIZE, pieces: [pawn, foe], turn: 'player', winner: null, promotionZones: [{ x: 7, y: 4 }] };
+    const res = applyMove(state, pawn.id, { x: 7, y: 4 }, { promotion: 'knight' });
+    expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('knight');
+    expect(res.events).toContainEqual({ kind: 'promoted', pieceId: pawn.id, to: 'knight' });
   });
   it('removes the side pawn captured en passant', () => {
     const pawn = P('player', 'pawn', 4, 3);

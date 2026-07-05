@@ -7,6 +7,8 @@ import type { PlacedProp } from './props';
 export type Side = 'player' | 'enemy' | 'neutral';
 
 export type PieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king' | 'rock' | 'random-rock';
+export type PromotionPieceType = 'queen' | 'rook' | 'bishop' | 'knight';
+export const PROMOTION_PIECE_TYPES = ['queen', 'rook', 'bishop', 'knight'] as const satisfies readonly PromotionPieceType[];
 
 export type UnitFacing = 'north' | 'north-east' | 'east' | 'south-east' | 'south' | 'south-west' | 'west' | 'north-west';
 
@@ -139,6 +141,11 @@ export interface GameState {
    * list is the RENDER channel the board reads to draw the tall prop sprite (see SkirmishBoard).
    */
   props?: PlacedProp[];
+  /**
+   * Authored pawn-promotion cells. A pawn promotes only after landing on one of these
+   * cells; a level/free skirmish with none disables promotion entirely.
+   */
+  promotionZones?: Vec[];
   turn: Turn;
   winner: Winner;
   /** Last displaced move, used for immediate pawn en passant eligibility. */

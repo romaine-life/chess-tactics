@@ -46,10 +46,23 @@ describe('boardCode — zones wire key (z)', () => {
   });
 
   it('preserves a non-editor zone type (enemy-threat) so the channel stays lossless', () => {
-    // The editor only paints three zone types, but the channel stores the full ZoneType set — a
-    // hand-authored code carrying enemy-threat must survive a round-trip, not get dropped.
+    // The channel stores the full ZoneType set, so a hand-authored code carrying enemy-threat
+    // must survive a round-trip, not get dropped.
     const board = base({ zones: { '1,0': 'enemy-threat', '2,0': 'falling-rock' } });
     const decoded = decodeBoard(encodeBoard(board))!;
     expect(decoded.zones).toEqual(board.zones);
+  });
+
+  it('round-trips authored zone entries without merging same-type or empty zones', () => {
+    const board = base({
+      zoneEntries: [
+        { id: 'zone-1', type: 'pawn-promotion', tiles: ['0,0'] },
+        { id: 'zone-2', type: 'pawn-promotion', tiles: ['1,0'] },
+        { id: 'zone-3', type: 'objective', tiles: [] },
+      ],
+    });
+    const decoded = decodeBoard(encodeBoard(board))!;
+    expect(decoded.zoneEntries).toEqual(board.zoneEntries);
+    expect(decoded.zones).toEqual({ '0,0': 'pawn-promotion', '1,0': 'pawn-promotion' });
   });
 });

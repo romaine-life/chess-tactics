@@ -4109,6 +4109,13 @@ h1 {
   opacity: 1;
 }
 
+.skirmish-board-cell-hit.is-promotion-zone::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 236, 150, .40), transparent 62%),
+    rgba(246, 198, 80, .26);
+  opacity: 1;
+}
+
 .skirmish-board-cell-hit.is-threat::before {
   background: rgba(255, 105, 64, .38);
   opacity: 1;
@@ -4871,6 +4878,38 @@ h1 {
   min-width: 56px;
 }
 
+.skirmish-promotion-card {
+  display: grid;
+  gap: var(--ds-inline);
+}
+
+.skirmish-promotion-options {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.skirmish-promotion-option.app-header-button {
+  flex-direction: column;
+  gap: 4px;
+  height: auto;
+  min-height: 72px;
+  min-width: 0;
+  padding: 6px 4px;
+}
+
+.skirmish-promotion-option img {
+  height: 36px;
+  image-rendering: pixelated;
+  object-fit: contain;
+  width: 46px;
+}
+
+.skirmish-promotion-option span {
+  font-size: var(--ds-text-xs);
+  line-height: 1;
+}
+
 /* ============================================================
    LEVEL EDITOR — Skirmish-sibling rail helpers.
    The /edit shell reuses the real .skirmish-screen / .skirmish-war-room /
@@ -5023,8 +5062,9 @@ h1 {
 }
 .le-faction-select:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
 .le-faction-select option {
-  background: #0a1f2e;
-  color: #cfe6f1;
+  background: #f3f7fb;
+  color: #142536;
+  text-shadow: none;
   text-transform: none;
 }
 .le-direction-popover { min-width: 0; position: relative; width: 100%; }
@@ -5093,11 +5133,35 @@ h1 {
   outline-offset: 2px;
 }
 .le-layer-select option {
-  background: #0a1f2e;
-  color: #cfe6f1;
+  background: #f3f7fb;
+  color: #142536;
+  text-shadow: none;
   text-transform: none;
 }
-.le-layer-select option:disabled { color: rgba(207, 230, 241, .4); }
+.le-faction-select option:checked,
+.le-layer-select option:checked {
+  background: #8fbdeb;
+  color: #082033;
+}
+.le-layer-select option:disabled { color: rgba(20, 37, 54, .45); }
+.le-zone-select-controls {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
+  min-width: 0;
+}
+.le-zone-stepper-button.settings-chrome-button {
+  height: 34px;
+  min-height: 34px;
+  min-width: 34px;
+  padding: 0;
+  width: 34px;
+}
+.le-zone-stepper-button:disabled {
+  cursor: default;
+  opacity: .42;
+}
 /* The board-link field wears the kit `field-input` 9-slice (its own navy well is the frame's
    fill slice), never a hand-rolled border (ADR-0032/0034) — the same input chrome the Codex
    editor uses. Single-line control: horizontal inset on the role token, vertical centring from
@@ -5160,6 +5224,9 @@ h1 {
 .le-zone-player { --le-zone-accent: 90, 200, 255; }
 .le-zone-enemy { --le-zone-accent: 235, 96, 96; }
 .le-zone-goal { --le-zone-accent: 245, 200, 90; }
+.le-zone-threat { --le-zone-accent: 236, 95, 194; }
+.le-zone-rock { --le-zone-accent: 166, 178, 190; }
+.le-zone-promotion { --le-zone-accent: 255, 226, 118; }
 
 /* The on-board zone overlay: a translucent tinted diamond. It COPIES the selection ring's
    seating exactly — top: --iso-tile-surface-top + the diamond clip-path — so it sits on the

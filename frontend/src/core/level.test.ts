@@ -158,7 +158,10 @@ describe('level schema', () => {
 
   it('zones: well-formed entries pass; bad id/type/tiles shapes fail', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
-    lvl.layers.zones = [{ id: 'z1', type: 'player-spawn', tiles: [[0, 7], [1, 7]] }];
+    lvl.layers.zones = [
+      { id: 'z1', type: 'player-spawn', tiles: [[0, 7], [1, 7]] },
+      { id: 'promo', type: 'pawn-promotion', tiles: [[4, 0]] },
+    ];
     expect(validateLevel(lvl).ok).toBe(true);
 
     const withZones = (zones: unknown) => {
