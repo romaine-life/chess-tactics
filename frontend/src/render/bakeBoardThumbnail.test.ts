@@ -72,9 +72,30 @@ describe('boardContentHash — stability + sensitivity', () => {
     expect(boardContentHash(before)).not.toBe(boardContentHash(after));
   });
 
+  it('changes when a ground-cover type override changes', () => {
+    const before: EditorBoard = { ...blank(), cells: { '0,0': 'stone-surf-0' }, cover: { '0,0': 'filled' } };
+    const after: EditorBoard = {
+      ...blank(),
+      cells: { '0,0': 'stone-surf-0' },
+      cover: { '0,0': 'filled' },
+      coverTypes: { '0,0': 'grass' },
+    };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(after));
+  });
+
   it('changes when an edge fence is added', () => {
     const before = blank();
     const after: EditorBoard = { ...blank(), fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' } };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(after));
+  });
+
+  it('changes when a forced feature exit is added', () => {
+    const before: EditorBoard = { ...blank(), features: { '1,1': { kind: 'road', material: 'cobble' } } };
+    const after: EditorBoard = {
+      ...blank(),
+      features: { '1,1': { kind: 'road', material: 'cobble' } },
+      featureExits: { [roadEdgeKey(1, 1, 2, 1)]: true },
+    };
     expect(boardContentHash(before)).not.toBe(boardContentHash(after));
   });
 
