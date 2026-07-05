@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-11c0d9f1490c0160997418d1f6ee9e071350dcea19e85d7d684a50ee73f35f57"
+  tag: "app-e800e59b11b41b954571a958b96910f965dafa10daf924e425870c49b630d195"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Victory conditions: authorable win/lose event rules (ADR-0064)"
-  prNumber: "381"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/381"
-  commit: "8b288f2"
+  prTitle: "Victory conditions follow-ups: named result copy, name gate, win-reachability (ADR-0064)"
+  prNumber: "383"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/383"
+  commit: "98b05e3"
 
 name: chess-tactics
 namespace: chess-tactics
