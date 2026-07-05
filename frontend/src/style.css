@@ -7073,13 +7073,16 @@ body { font-size: 17px; }
 }
 /* The board viewport stops at the panel's hand-tuned FILL box (--ns-fill-panel, generated from
    config/nine-slice/panel.json — the eye-tuned "where a backing surface stops" line), not the raw
-   footprint: the frame ornament may bleed outside it. The board is a baked image dropped in with
+   footprint: the frame ornament may bleed outside it. The var is in the SPRITE'S native px (the
+   nine-slice editor's Boxes canvas tunes against the 72×72 asset, 24px border cells); this frame
+   draws those cells at a 12px border, so consumption scales by 12/24 — an eye-tuned line lands on
+   screen exactly where it was drawn in the editor. The board is a baked image dropped in with
    object-fit:cover (below) so it covers this box and clips the overflow; the frame ::after (above)
    overlays the board's outer band. The box carries the level's world (night-sky) backdrop so the
    diamond's cropped corners read as sky, never a transparency checkerboard (ADR-0067 / ADR-0032). */
 .ce-level-viewer {
   position: absolute;
-  inset: var(--ns-fill-panel, 0px);
+  inset: calc(var(--ns-fill-panel, 0px) * 12 / 24);
   overflow: hidden;
   background: var(--skirmish-world-bg, linear-gradient(180deg, #071017, #02070c));
 }
