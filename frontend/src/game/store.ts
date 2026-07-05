@@ -4,16 +4,15 @@
 
 import { create } from 'zustand';
 import type { GameEvent, GameState, Move, Piece, Side, Winner } from '../core/types';
-import { applyMove, enemyMove, gameEnv, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
-import { searchEnemyMove } from '../core/ai';
+import { applyMove, gameEnv, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { adoptedWeightsFor } from './adoptedWeights';
 import { premoveTargets, type PremoveStep } from './premoves';
+import { requestEnemyReply } from './aiWorkerClient';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType, TimeControl } from '../core/level';
 import { DEFAULT_TIME_CONTROL } from '../core/clock';
 import { terrainAt } from '../core/terrain';
 import { ARRIVAL_BAKED, playArrival, playTerrain } from '../sfx';
-import { createRng, type Rng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 import { persistMatch, type PersistedMatch } from './matchPersistence';
 import { loadShippedAiWeights } from '../net/aiWeights';
@@ -210,32 +209,10 @@ export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: Gam
   return { game: { ...game, winner: t.winner, turn: 'done' }, stuck: true, checkmate: t.checkmate };
 }
 
-/** How an enemy decision is made: same call shape as the core's `enemyMove`. */
-type EnemyPolicy = (game: GameState, rng: Rng, env: MoveEnv) => { pieceId: string; move: Move } | null;
-
-/** Enemy decision policies (dev A/B lever: `?ai=greedy` on the skirmish route). */
+/** Enemy decision policies (dev A/B lever: `?ai=greedy` on the skirmish route). The live reply
+ *  is resolved OFF the main thread — see game/enemyReply (the pure resolver) and
+ *  game/aiWorkerClient (the worker client), so a deep search never freezes the board. */
 export type AiMode = 'search' | 'greedy';
-
-// Think budget for the live search enemy. Bounded by NODES, not wall clock: the
-// reply runs synchronously inside the staged "enemy thinks" beat, and a node cap
-// keeps it deterministic (a frozen clock in tests can't make it run to full depth)
-// while still bounding real-play latency — ~40k nodes lands well under the 520ms
-// reply beat on skirmish-sized boards (see aibench). maxDepth caps the ceiling.
-const LIVE_SEARCH = { maxDepth: 6, maxNodes: 40_000 };
-
-/** Resolve the enemy half-turn(s) deterministically until it's the player's move again. */
-function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv, pick: EnemyPolicy): { game: GameState; tick: number; events: GameEvent[] } {
-  const events: GameEvent[] = [];
-  while (game.turn === 'enemy' && !game.winner) {
-    const move = pick(game, createRng(seed + tick), env);
-    tick += 1;
-    if (!move) { game = { ...game, turn: 'player' }; break; }
-    const res = applyMove(game, move.pieceId, move.move);
-    game = res.state;
-    events.push(...res.events);
-  }
-  return { game, tick, events };
-}
 
 /** The player's battle clock (per-level time control; the enemy is untimed). */
 export interface ClockState {
@@ -403,73 +380,83 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       const cur = get();
       // Bail if a new game reset the turn, or it somehow already resolved.
       if (cur.game.turn !== 'enemy' || cur.game.winner) return;
-      // The search enemy needs the objective framing so it plays the MODE (hunt
-      // the King, rush the survive clock, garrison the reach zone) — that's the
-      // whole point of the rung-1 AI. The greedy policy ignores it.
-      // The live opponent uses this level's ADOPTED weights when the Training Gym
-      // has validated + adopted a champion for it (else the shipped defaults). Read
-      // once per reply so a fresh adoption takes effect on the very next enemy turn.
-      const liveWeights = adoptedWeightsFor(cur.levelId);
-      const pick: EnemyPolicy = cur.aiMode === 'greedy'
-        ? enemyMove
-        : (g, rng, env) => searchEnemyMove(g, rng, env, {
-            objective: cur.objective,
-            ctx: cur.objectiveCtx ?? {},
-            turnsElapsed: cur.turnsElapsed ?? 0,
-          }, { ...LIVE_SEARCH, weights: liveWeights });
-      const enemyRes = resolveEnemy(cur.game, cur.seed, cur.tick, envFor(cur.game), pick);
-      const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
-      // With no manual End Turn, a player handed the turn with no legal move would
-      // soft-lock — resolve that as a loss (you can't pass in chess).
-      const afterEnv = envFor(enemyRes.game);
-      const stuckRes = resolveIfPlayerStuck(enemyRes.game, afterEnv);
-      let game = stuckRes.game;
-      if (stuckRes.stuck) msgs.push(stuckRes.checkmate
-        ? 'Checkmate — your King is trapped. Defeat.'
-        : 'Stalemate — no legal moves remain. The skirmish is a draw.');
-      else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
-      // A full player→enemy round just elapsed: advance the survive clock, then
-      // re-check the objective — survive reached, or a player wipe = defeat.
-      const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
-      if (!game.winner) {
-        const winner = evaluateObjective(game, cur.objective, { ...(cur.objectiveCtx ?? {}), turnsElapsed });
-        if (winner) {
-          game = { ...game, winner, turn: 'done' };
-          msgs.push(objectiveOutcomeCopy(cur.objective, winner, cur.objectiveCtx?.kingSide));
-        }
-      }
-      // Turn returns to the player: keep the piece they were working with selected so
-      // the board reads continuously, only falling back to their first piece if the
-      // enemy captured it (or nothing was selected — e.g. resumed match).
-      const keep = livingSelected(game, cur.selectedId, 'player') ?? firstPlayerId(game);
-      set({
-        game,
-        env: envFor(game),
-        tick: enemyRes.tick,
-        turnsElapsed,
-        selectedId: keep,
-        focusedId: keep,
-        log: [...msgs.reverse(), ...cur.log].slice(0, 12),
-      });
-      // Footsteps for the enemy half-turn: one per piece that moved, spread out so a
-      // multi-move reply reads as a sequence, not one muddy stack. Terrain is static,
-      // so the pre-reply env indexes the same board the pieces landed on.
-      enemyRes.events
-        .filter((e): e is Extract<GameEvent, { kind: 'moved' }> => e.kind === 'moved')
-        .forEach((e, i) => playLandingSfx(cur.env, e.to.x, e.to.y, LANDING_SFX_DELAY + i * ENEMY_LANDING_STAGGER));
-      // The turn is back with the player — their clock resumes (no-op when untimed
-      // or the reply decided the game).
-      startClock();
-      // Persist the settled post-reply position now (a reload here resumes it; the queued
-      // premove is ephemeral and intentionally not saved).
-      persistMatch(get());
-      // A queued premove fires after a visible beat rather than in this same frame, so the
-      // player sees the enemy's move land with their queued arrow still on the board before
-      // it executes. drainPremove re-checks validity when it fires — a manual move made
-      // during the beat (which flips the turn) makes it drop the chain instead.
-      if (get().premoves.length > 0 && !get().game.winner) {
-        setTimeout(() => drainPremove(), PREMOVE_FIRE_DELAY);
-      }
+      // Resolve the reply OFF the main thread (game/aiWorker) so the board stays live —
+      // animation AND premove input — for the whole think. The search is node-bounded and
+      // deterministic, so the worker returns the identical move to an inline resolve; only
+      // WHERE it computes changes. The live opponent uses this level's ADOPTED weights when the
+      // Training Gym has adopted a champion for it (else the shipped defaults), resolved here on
+      // the main thread and passed into the worker; the search needs the objective framing so it
+      // plays the MODE (hunt the King, rush the survive clock, garrison the reach zone).
+      requestEnemyReply(
+        {
+          game: cur.game,
+          seed: cur.seed,
+          tick: cur.tick,
+          aiMode: cur.aiMode,
+          objective: cur.objective,
+          ctx: cur.objectiveCtx ?? {},
+          turnsElapsed: cur.turnsElapsed ?? 0,
+          weights: adoptedWeightsFor(cur.levelId),
+        },
+        (enemyRes) => {
+          // The worker computed while the board was live; make sure nothing replaced the board
+          // meanwhile (a new game / a resume) before applying its move. Queuing a premove only
+          // touches the `premoves` slice, so a live board still satisfies game === cur.game.
+          if (get().game !== cur.game) return;
+          const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
+          // With no manual End Turn, a player handed the turn with no legal move would
+          // soft-lock — resolve that as a loss (you can't pass in chess).
+          const afterEnv = envFor(enemyRes.game);
+          const stuckRes = resolveIfPlayerStuck(enemyRes.game, afterEnv);
+          let game = stuckRes.game;
+          if (stuckRes.stuck) msgs.push(stuckRes.checkmate
+            ? 'Checkmate — your King is trapped. Defeat.'
+            : 'Stalemate — no legal moves remain. The skirmish is a draw.');
+          else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
+          // A full player→enemy round just elapsed: advance the survive clock, then re-check the
+          // objective — survive reached, or a player wipe = defeat.
+          const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
+          if (!game.winner) {
+            const winner = evaluateObjective(game, cur.objective, { ...(cur.objectiveCtx ?? {}), turnsElapsed });
+            if (winner) {
+              game = { ...game, winner, turn: 'done' };
+              msgs.push(objectiveOutcomeCopy(cur.objective, winner, cur.objectiveCtx?.kingSide));
+            }
+          }
+          // Turn returns to the player: keep the piece they were working with selected so the
+          // board reads continuously, only falling back to their first piece if the enemy
+          // captured it (or nothing was selected — e.g. a resumed match).
+          const keep = livingSelected(game, cur.selectedId, 'player') ?? firstPlayerId(game);
+          set({
+            game,
+            env: envFor(game),
+            tick: enemyRes.tick,
+            turnsElapsed,
+            selectedId: keep,
+            focusedId: keep,
+            log: [...msgs.reverse(), ...cur.log].slice(0, 12),
+          });
+          // Footsteps for the enemy half-turn: one per piece that moved, spread out so a
+          // multi-move reply reads as a sequence, not one muddy stack. Terrain is static, so the
+          // pre-reply env indexes the same board the pieces landed on.
+          enemyRes.events
+            .filter((e): e is Extract<GameEvent, { kind: 'moved' }> => e.kind === 'moved')
+            .forEach((e, i) => playLandingSfx(cur.env, e.to.x, e.to.y, LANDING_SFX_DELAY + i * ENEMY_LANDING_STAGGER));
+          // The turn is back with the player — their clock resumes (no-op when untimed or the
+          // reply decided the game).
+          startClock();
+          // Persist the settled post-reply position now (a reload here resumes it; the queued
+          // premove is ephemeral and intentionally not saved).
+          persistMatch(get());
+          // A queued premove fires after a visible beat rather than in this same frame, so the
+          // player sees the enemy's move land with their queued arrow still on the board before
+          // it executes. drainPremove re-checks validity when it fires — a manual move made
+          // during the beat (which flips the turn) makes it drop the chain instead.
+          if (get().premoves.length > 0 && !get().game.winner) {
+            setTimeout(() => drainPremove(), PREMOVE_FIRE_DELAY);
+          }
+        },
+      );
     }, ENEMY_REPLY_DELAY);
   };
 
