@@ -4900,6 +4900,25 @@ h1 {
 /* Save when blocked by a playability violation: clickable (it explains why) but dimmed like a
    disabled control, matching the retired title-bar Save's is-disabled look. */
 .le-seg-btn.is-blocked { opacity: .45; }
+
+/* Live-test Play in the always-visible Actions dock: a full-width primary button so it reads as
+   the editor's "test this board now" verb, distinct from the Undo/Redo icons above it. */
+.le-actions-dock .le-play-board {
+  border-image-source: url("/assets/ui/kit/button-primary.png");
+  margin-top: var(--ds-inline, 8px);
+  width: 100%;
+}
+.le-actions-dock .le-play-board:disabled { opacity: .45; }
+
+/* Test-play "‹ Back to editor": a persistent, non-blocking return to the editor board that
+   launched the test (only present when the match carries a valid ?returnTo). Fixed corner chip
+   — the skirmish title bar has no actions slot — clear of the centered board and side HUD. */
+.skirmish-return-editor {
+  bottom: 24px;
+  left: 24px;
+  position: fixed;
+  z-index: 40;
+}
 /* Pinned Actions dock in the rail — only the universal per-edit verbs (Undo/Redo), as
    COMPACT icon-only squares (owner: icons, not letters — the labels ride aria-label +
    title). Glyphs come from the editor icon set (.le-ico/.ic-*), same treatment as the
