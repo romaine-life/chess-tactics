@@ -17,9 +17,11 @@ import { InfoTip } from './shared/InfoTip';
 import { SliderRow } from './dressing/SliderRow';
 import { createFromLevel } from '../game/setup';
 import { PARAM_LABELS, encodeWeights, decodeWeights } from '../game/tuning';
+import { replayStates, type GameRecord } from '../game/selfplay';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
 import { stateAtPosition, type BookPosition, type OpeningBookSettings } from '../game/openingBook';
 import type { GymRequest, GymResponse } from '../lab/gymWorker';
+import type { StepProgress } from '../lab/gymStep';
 import type { ValState } from '../lab/validate';
 import { setAdoptedWeights, readAdoptedVector } from '../game/adoptedWeights';
 import { ClusterRuns } from './ClusterRuns';
@@ -44,10 +46,28 @@ const GYM_CSS = `
 .gym-controls input,.gym-controls select { background:#0c1116; color:#e7ebf0; border:1px solid #3a4657; border-radius:4px; padding:5px 8px; font-size:13px; }
 .gym-run-row { display:flex; gap:8px; align-items:center; margin:10px 0; }
 .gym-run-row .play { background:#46d6b8; color:#06231d; border-color:#46d6b8; font-weight:700; }
+.gym-run-row .play.is-pause { background:#e0685f; color:#2a1113; border-color:#e0685f; }
+.gym-run-row .play.is-resume { background:#e0b24a; color:#241904; border-color:#e0b24a; }
+.gym-error { color:#f0a49d; font-size:12px; margin:4px 0 8px; }
+.gym-step-progress { display:flex; flex-direction:column; gap:4px; margin:4px 0 8px; }
+.gym-step-progress .bar { height:6px; border-radius:3px; background:#0c1116; border:1px solid #29323f; overflow:hidden; }
+.gym-step-progress .bar i { display:block; height:100%; background:#46d6b8; }
+.gym-step-progress .label { color:#93a0b0; font:12px ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+.gym-live-games-wrap { max-height:170px; overflow:auto; border:1px solid #29323f; border-radius:6px; background:#0b1016; margin:6px 0 10px; }
+.gym-live-games { width:100%; border-collapse:collapse; font:11px ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+.gym-live-games th { position:sticky; top:0; background:#161d26; color:#93a0b0; text-align:left; font-weight:600; padding:5px 7px; border-bottom:1px solid #29323f; }
+.gym-live-games td { padding:4px 7px; border-bottom:1px solid #141b23; color:#c6d0dc; }
+.gym-live-games tr.is-current td { background:#122019; }
+.gym-live-games .win { color:#5ad19a; } .gym-live-games .draw { color:#e0b24a; } .gym-live-games .loss { color:#e0685f; }
+.gym-live-games-empty { text-align:center; color:#5c6875 !important; padding:12px 8px !important; }
 .gym-latest-games-wrap { max-height:190px; overflow:auto; border:1px solid #29323f; border-radius:6px; background:#0b1016; margin-bottom:10px; }
 .gym-latest-games { width:100%; border-collapse:collapse; font:11px ui-monospace,monospace; font-variant-numeric:tabular-nums; }
 .gym-latest-games th { position:sticky; top:0; background:#161d26; color:#93a0b0; text-align:left; font-weight:600; padding:5px 7px; border-bottom:1px solid #29323f; }
 .gym-latest-games td { padding:4px 7px; border-bottom:1px solid #141b23; color:#c6d0dc; }
+.gym-latest-games tr { cursor:pointer; }
+.gym-latest-games tr.is-sel td { background:#212b37; color:#e7ebf0; }
+.gym-latest-games tr:hover td { background:#1a222c; }
+.gym-latest-games tr:focus-visible { outline:2px solid #46d6b8; outline-offset:-2px; }
 .gym-latest-games .win { color:#5ad19a; } .gym-latest-games .draw { color:#e0b24a; } .gym-latest-games .loss { color:#e0685f; }
 .gym-estab { display:flex; align-items:center; gap:8px; margin:4px 0 10px; }
 .gym-meter { flex:1; height:6px; border-radius:3px; background:#0c1116; border:1px solid #29323f; overflow:hidden; }
@@ -120,6 +140,38 @@ const GYM_CSS = `
 .gym-log tr.is-champ td { background:#122019; }
 .gym-log tr.is-champ td:first-child { color:#e0b24a; }
 .gym-log-empty { text-align:center !important; color:#5c6875; padding:18px !important; }
+.gym-run-detail { flex:1 1 auto; min-height:0; display:flex; }
+.gym-run-detail > * { min-width:0; }
+.gym-run-detail.has-replay { display:grid; grid-template-columns:minmax(260px,.82fr) minmax(340px,1.18fr); gap:10px; }
+.gym-replay-stage { min-height:0; display:flex; flex-direction:column; border:1px solid #29323f; border-radius:8px; overflow:hidden; background:#0b1016; }
+.gym-replay-head { flex:0 0 auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 10px; border-bottom:1px solid #29323f; color:#93a0b0; font-size:12px; }
+.gym-replay-title { flex:1 1 230px; min-width:160px; display:flex; align-items:baseline; gap:8px; overflow:hidden; }
+.gym-replay-head h3 { flex:0 0 auto; margin:0; color:#e7ebf0; }
+.gym-replay-head .outcome.win { color:#5ad19a; } .gym-replay-head .outcome.draw { color:#e0b24a; } .gym-replay-head .outcome.loss { color:#e0685f; }
+.gym-replay-controls { flex:0 0 auto; display:grid; grid-template-columns:auto minmax(80px,1fr) auto auto; gap:8px; align-items:center; padding:8px 10px; border-bottom:1px solid #141b23; }
+.gym-replay-controls button { border:1px solid #3a4657; background:#161d26; color:#c6d0dc; border-radius:5px; padding:4px 8px; font-size:12px; cursor:pointer; }
+.gym-replay-controls button:disabled { opacity:.45; cursor:default; }
+.gym-replay-controls input { min-width:0; }
+.gym-replay-controls.is-inline { flex:1 1 240px; min-width:210px; border-bottom:0; padding:0; }
+.gym-replay-ply { font:12px ui-monospace,monospace; color:#93a0b0; white-space:nowrap; }
+.gym-replay-move { min-width:0; color:#c6d0dc; font:11px ui-monospace,monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gym-replay-board { flex:1 1 auto; min-height:260px; display:grid; grid-template-rows:minmax(0,1fr); border-top:1px solid #141b23; }
+.gym-run.is-replay-focus { gap:0; }
+.gym-replay-focus-view { flex:1 1 auto; min-height:0; display:grid; grid-template-rows:minmax(0,1fr); }
+.gym-replay-stage.is-focused { flex:1 1 auto; }
+.gym-replay-stage.is-focused .gym-replay-head { padding:8px 12px; }
+.gym-replay-stage.is-focused .gym-replay-board { min-height:0; }
+.gym-replay-stage.is-focused .gym-replay-controls { grid-template-columns:auto minmax(160px,1fr) auto auto; }
+.gym-replay-stage.is-focused .gym-replay-controls.is-inline { flex-basis:420px; min-width:260px; }
+.gym-replay-stage.is-focused .gym-replay-title { flex-basis:320px; }
+.gym-replay-stage.is-focused .gym-replay-focus-btn { margin-left:0; }
+.gym-replay-focus-btn { margin-left:auto; min-width:34px; border:1px solid #3a4657; background:#161d26; color:#c6d0dc; border-radius:5px; padding:4px 8px; font-size:12px; cursor:pointer; }
+.gym-replay-focus-btn:hover { border-color:#46d6b8; color:#8ff0dc; }
+@media (max-width:980px) {
+  .gym-run-detail.has-replay { grid-template-columns:1fr; grid-template-rows:minmax(180px,.45fr) minmax(300px,1fr); }
+  .gym-replay-controls { grid-template-columns:auto minmax(80px,1fr) auto; }
+  .gym-replay-ply { grid-column:1 / -1; }
+}
 /* Book-management block in the rail. */
 .gym-bookmgr { display:flex; flex-direction:column; gap:8px; margin-bottom:6px; padding-bottom:10px; border-bottom:1px solid #29323f; }
 .gym-bookmgr select { background:#0c1116; color:#e7ebf0; border:1px solid #3a4657; border-radius:4px; padding:6px 8px; font-size:13px; }
@@ -223,6 +275,13 @@ function movesLabel(moves: BookPosition['moves']): string {
   return moves.map((m) => `${pieceLabel(m.pieceId)} (${m.from.x},${m.from.y})->(${m.move.x},${m.move.y})`).join(', ');
 }
 
+function gameMoveLabel(record: GameRecord, index: number): string {
+  const m = record.moves[index];
+  if (!m) return 'Book position';
+  const capture = m.move.capture ? ` x${m.move.capture}` : '';
+  return `${index + 1}. ${pieceLabel(m.pieceId)} (${m.from.x},${m.from.y})->(${m.move.x},${m.move.y})${capture}`;
+}
+
 /** The gym bench for one level: opening-book management + inspection (Stage 1) and
  * retained-session SPSA training over the active book (Stage 2). Each book keeps its
  * own training session, so switching books restores champion + curve exactly. */
@@ -240,6 +299,9 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [mode, setMode] = useState<'book' | 'train' | 'cluster'>('book');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedLatestGameIndex, setSelectedLatestGameIndex] = useState(0);
+  const [latestReplayPly, setLatestReplayPly] = useState(0);
+  const [replayFocus, setReplayFocus] = useState(false);
   // Depth 4 by default — depth 2 is a toy (the owner knows it). Honestly slower, but
   // the games are real enough to actually separate two weight sets.
   const [depth, setDepth] = useState(4);
@@ -250,6 +312,10 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [gymError, setGymError] = useState<string | null>(null);
+  const [stepProgress, setStepProgress] = useState<StepProgress | null>(null);
+  const [stepProgressGames, setStepProgressGames] = useState<StepProgress[]>([]);
+  const [stepPaused, setStepPaused] = useState(false);
   // SPRT validation of the champion vs the shipped reference. `val` streams in
   // game-by-game from the worker; `validating` gates the button while it runs.
   const [val, setVal] = useState<ValState | null>(null);
@@ -261,6 +327,7 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   const runStartRef = useRef({ ms: 0, step: 0 });  // when/where the current run began
   const workerRef = useRef<Worker | null>(null);
   const playingRef = useRef(false);
+  const resumePlayingRef = useRef(false);
   // The auto-run loop calls the LATEST stepOnce through this ref, so the worker's
   // long-lived onmessage never fires a stale (ready=false) closure.
   const stepOnceRef = useRef<() => void>(() => {});
@@ -290,11 +357,17 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   // Race-guard: a load result is ignored if the level changed before it resolved.
   useEffect(() => {
     playingRef.current = false; setPlaying(false);
+    setGymError(null);
+    setStepProgress(null);
+    setStepProgressGames([]);
+    setStepPaused(false);
     const empty = emptyBlob();
     blobRef.current = empty;
     setBlob(empty);
     setActiveId(undefined);
     setSelectedIndex(0);
+    setSelectedLatestGameIndex(0);
+    setLatestReplayPly(0);
     setMode('book');
     if (!levelId) { setLoadingBooks(false); setAdoptedVec(null); return undefined; }
     // Reflect the local cache immediately (the live AI's synchronous source); the
@@ -332,6 +405,10 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   useEffect(() => {
     if (!level) { setReady(false); return undefined; }
     playingRef.current = false; setPlaying(false); setReady(false); setGenerating(false); setBusy(false);
+    setGymError(null);
+    setStepProgress(null);
+    setStepProgressGames([]);
+    setStepPaused(false);
     setVal(null); setValidating(false);
     const worker = new Worker(new URL('../lab/gymWorker.ts', import.meta.url), { type: 'module' });
     workerRef.current = worker;
@@ -340,6 +417,10 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
       if (msg.type === 'ready') {
         setReady(true);
       } else if (msg.type === 'book') {
+        setGymError(null);
+        setStepProgress(null);
+        setStepProgressGames([]);
+        setStepPaused(false);
         setGenerating(false);
         // Store the freshly generated positions on the active book (session unchanged
         // — regenerating positions doesn't reset training unless the user makes a new
@@ -348,7 +429,16 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
         const cur = blobRef.current.books.find((b) => b.id === id);
         if (cur) commit(updateBook(blobRef.current, { ...cur, positions: msg.positions }));
         setSelectedIndex(0);
+      } else if (msg.type === 'progress') {
+        setRunMs(performance.now() - runStartRef.current.ms);
+        setGymError(null);
+        setStepProgress(msg.progress);
+        setStepProgressGames((games) => [...games, msg.progress]);
       } else if (msg.type === 'point') {
+        setRunMs(performance.now() - runStartRef.current.ms);
+        setGymError(null);
+        setStepProgress(null);
+        setStepPaused(false);
         setBusy(false);
         // Write the updated session back onto the active book and persist.
         const id = activeIdRef.current;
@@ -361,6 +451,10 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
         setVal(msg.state);
         if (msg.state.done) setValidating(false);
       } else {
+        setRunMs(performance.now() - runStartRef.current.ms);
+        setGymError(msg.message);
+        setStepProgress(null);
+        setStepPaused(false);
         setBusy(false); setGenerating(false); playingRef.current = false; setPlaying(false); setValidating(false);
       }
     };
@@ -393,6 +487,11 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
     commit(next);
     setActiveId(book.id);
     setSelectedIndex(0);
+    setSelectedLatestGameIndex(0);
+    setLatestReplayPly(0);
+    setStepProgress(null);
+    setStepProgressGames([]);
+    setStepPaused(false);
     setMode('book');
   }, [activeBook, commit]);
 
@@ -403,16 +502,35 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
     commit(next);
     setActiveId(next.books[0]?.id);
     setSelectedIndex(0);
+    setSelectedLatestGameIndex(0);
+    setLatestReplayPly(0);
+    setStepProgress(null);
+    setStepProgressGames([]);
+    setStepPaused(false);
   }, [activeId, commit]);
 
   const onSelectBook = useCallback((id: number) => {
     playingRef.current = false; setPlaying(false);
     setActiveId(id);
     setSelectedIndex(0);
+    setSelectedLatestGameIndex(0);
+    setLatestReplayPly(0);
+    setStepProgress(null);
+    setStepProgressGames([]);
+    setStepPaused(false);
+  }, []);
+
+  const selectLatestGame = useCallback((index: number) => {
+    setSelectedLatestGameIndex(index);
+    setLatestReplayPly(0);
   }, []);
 
   const generate = useCallback(() => {
     if (!workerRef.current || !ready || !activeBook) return;
+    setGymError(null);
+    setStepProgress(null);
+    setStepProgressGames([]);
+    setStepPaused(false);
     setGenerating(true);
     workerRef.current.postMessage({ type: 'generate', settings: activeBook.settings } as GymRequest);
   }, [ready, activeBook]);
@@ -423,19 +541,51 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
     const worker = workerRef.current;
     const id = activeIdRef.current;
     const cur = blobRef.current.books.find((b) => b.id === id);
+    if (busy || stepPaused) return;
     if (!worker || !ready || !cur || cur.positions.length === 0) { playingRef.current = false; setPlaying(false); return; }
+    if (!playingRef.current) {
+      runStartRef.current = { ms: performance.now(), step: cur.session.traj.length };
+      setRunMs(0);
+    }
+    setGymError(null);
+    setStepProgress(null);
+    setStepProgressGames([]);
+    setStepPaused(false);
+    resumePlayingRef.current = false;
     setBusy(true);
     worker.postMessage({ type: 'step', book: cur.positions, session: cur.session } as GymRequest);
-  }, [ready]);
+  }, [busy, ready, stepPaused]);
   stepOnceRef.current = stepOnce;
 
   const togglePlay = useCallback(() => {
-    if (playingRef.current) { playingRef.current = false; setPlaying(false); return; }
+    const worker = workerRef.current;
+    if (stepPaused) {
+      setGymError(null);
+      setStepPaused(false);
+      playingRef.current = resumePlayingRef.current;
+      setPlaying(resumePlayingRef.current);
+      worker?.postMessage({ type: 'resume' } as GymRequest);
+      return;
+    }
+    if (busy) {
+      resumePlayingRef.current = playingRef.current;
+      playingRef.current = false;
+      setPlaying(false);
+      setStepPaused(true);
+      worker?.postMessage({ type: 'pause' } as GymRequest);
+      return;
+    }
+    if (playingRef.current) { playingRef.current = false; setPlaying(false); resumePlayingRef.current = false; return; }
     const cur = blobRef.current.books.find((b) => b.id === activeIdRef.current);
     runStartRef.current = { ms: performance.now(), step: cur?.session.traj.length ?? 0 };
     setRunMs(0);
+    setGymError(null);
+    setStepProgress(null);
+    setStepProgressGames([]);
+    setStepPaused(false);
+    resumePlayingRef.current = false;
     playingRef.current = true; setPlaying(true); stepOnce();
-  }, [stepOnce]);
+  }, [busy, stepOnce, stepPaused]);
 
   // --- SPRT validation & adopt -----------------------------------------------
   // Kick off a streaming SPRT test of the champion vs the shipped reference over the
@@ -446,12 +596,18 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
     const worker = workerRef.current;
     const cur = blobRef.current.books.find((b) => b.id === activeIdRef.current);
     if (!worker || !ready || !cur || cur.positions.length === 0) return;
+    if (busy || stepPaused) return;
     if (cur.session.champion.step < 0) return; // no real improvement to test yet
     playingRef.current = false; setPlaying(false);
+    setGymError(null);
+    setStepProgress(null);
+    setStepProgressGames([]);
+    setStepPaused(false);
+    resumePlayingRef.current = false;
     setVal(null); setValidating(true);
     const candidate = decodeWeights(cur.session.champion.theta);
     worker.postMessage({ type: 'validate', candidate, book: cur.positions } as GymRequest);
-  }, [ready]);
+  }, [busy, ready, stepPaused]);
 
   // Adopt the champion for this level's LIVE enemy AI: write the winning vector to the
   // local cache (the live AI's synchronous source) AND the account blob (durable,
@@ -493,6 +649,85 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
     if (game.record.winner === 'draw') return 'draw';
     return game.record.winner === game.candidateSide ? 'win' : 'loss';
   };
+  useEffect(() => {
+    setSelectedLatestGameIndex(0);
+    setLatestReplayPly(0);
+  }, [activeId, session?.k]);
+  useEffect(() => {
+    setSelectedLatestGameIndex((index) => (latestStepGames.length ? Math.min(index, latestStepGames.length - 1) : 0));
+  }, [latestStepGames.length]);
+  const selectedLatestGame = latestStepGames.length
+    ? latestStepGames[Math.min(selectedLatestGameIndex, latestStepGames.length - 1)]
+    : undefined;
+  const selectedLatestOutcome = selectedLatestGame ? gameOutcome(selectedLatestGame) : undefined;
+  const latestReplayStates = useMemo(
+    () => (level && selectedLatestGame ? replayStates(level, selectedLatestGame.record, selectedLatestGame.openingMoves) : null),
+    [level, selectedLatestGame],
+  );
+  const latestReplayMax = latestReplayStates ? latestReplayStates.length - 1 : 0;
+  const clampedLatestReplayPly = Math.max(0, Math.min(latestReplayPly, latestReplayMax));
+  const latestReplayBoard = useMemo(() => {
+    if (!level || !latestReplayStates) return null;
+    const state = latestReplayStates[clampedLatestReplayPly];
+    if (!state) return null;
+    return { ...levelToEditorBoard(level), units: unitsForGamePieces(state.pieces) };
+  }, [level, latestReplayStates, clampedLatestReplayPly]);
+  const toggleReplayFocus = useCallback(() => {
+    if (!replayFocus) setViewZoom((zoom) => Math.max(zoom, 1));
+    setReplayFocus((focus) => !focus);
+  }, [replayFocus]);
+  useEffect(() => {
+    if (mode !== 'train' || !selectedLatestGame) setReplayFocus(false);
+  }, [mode, selectedLatestGame]);
+  const latestReplayMoveLabel = selectedLatestGame
+    ? clampedLatestReplayPly === 0
+      ? `Book position after ${selectedLatestGame.openingMoves.length} opening plies`
+      : gameMoveLabel(selectedLatestGame.record, clampedLatestReplayPly - 1)
+    : '';
+  const latestReplayMoveTitle = selectedLatestGame
+    ? clampedLatestReplayPly === 0
+      ? `${selectedLatestGame.openingMoves.length} opening plies applied`
+      : latestReplayMoveLabel
+    : '';
+  const replayPanel: ReactElement | null = selectedLatestGame && latestReplayStates && latestReplayBoard ? (
+    <div className={`gym-replay-stage ${replayFocus ? 'is-focused' : ''}`} aria-label="Latest step game replay">
+      <div className="gym-replay-head">
+        <div className="gym-replay-title">
+          <h3>Inspect game</h3>
+          <span className="gym-replay-move" title={latestReplayMoveTitle}>{latestReplayMoveLabel}</span>
+        </div>
+        <span className={`outcome ${selectedLatestOutcome ?? ''}`}>{selectedLatestOutcome}</span>
+        <span>step <b className="gym-num">{Math.max(0, (session?.k ?? 1) - 1)}</b></span>
+        <span>{selectedLatestGame.probe === 'plus' ? 'theta+' : 'theta-'}</span>
+        <span>pos <b className="gym-num">#{selectedLatestGame.bookIndex + 1}</b></span>
+        <span>seed <b className="gym-num">{selectedLatestGame.seed}</b></span>
+        <div className="gym-replay-controls is-inline">
+          <button type="button" onClick={() => setLatestReplayPly(Math.max(0, clampedLatestReplayPly - 1))} disabled={clampedLatestReplayPly === 0}>Prev</button>
+          <input type="range" min={0} max={latestReplayMax} value={clampedLatestReplayPly} onChange={(e) => setLatestReplayPly(Number(e.target.value))} aria-label="Replay ply" />
+          <button type="button" onClick={() => setLatestReplayPly(Math.min(latestReplayMax, clampedLatestReplayPly + 1))} disabled={clampedLatestReplayPly >= latestReplayMax}>Next</button>
+          <span className="gym-replay-ply">Ply {clampedLatestReplayPly}/{latestReplayMax}</span>
+        </div>
+        <button
+          type="button"
+          className="gym-replay-focus-btn"
+          onClick={toggleReplayFocus}
+          aria-pressed={replayFocus}
+          aria-label={replayFocus ? 'Restore replay layout' : 'Focus replay board'}
+          title={replayFocus ? 'Restore replay layout' : 'Focus replay board'}
+        >
+          {replayFocus ? 'X' : 'Focus'}
+        </button>
+      </div>
+      <div className="gym-replay-board">
+        <ViewPane kind="board" ariaLabel="Latest step game replay board" zoom={viewZoom} pan={viewPan} minZoom={0.3} maxZoom={2} onZoomChange={setViewZoom} onPanChange={setViewPan}>
+          <div className="tileset-view-board-content is-board">
+            <StudioReadOnlyBoard board={latestReplayBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel="Latest step game replay board" />
+          </div>
+        </ViewPane>
+      </div>
+    </div>
+  ) : null;
+  const replayFocusActive = replayFocus && replayPanel !== null;
 
   // SPRT view derivation: map the live LLR onto the [lower, upper] bar (0 => reject
   // edge, 1 => accept edge, .5 => the zero line). The fill grows from center toward
@@ -504,15 +739,24 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   const markerPct = llrFrac * 100;
   const verdict = vr?.verdict ?? 'continue';
 
-  // Live run telemetry: tick elapsed while playing (frozen when paused); pace is
-  // steps-this-run / elapsed. Cumulative game outcomes come from the whole trajectory.
+  // Live run telemetry: tick elapsed while playing or while a single manual step is
+  // computing. Cumulative game outcomes come from the whole trajectory.
   useEffect(() => {
-    if (!playing) return undefined;
+    if ((!playing && !busy) || stepPaused) return undefined;
     const id = setInterval(() => setRunMs(performance.now() - runStartRef.current.ms), 250);
     return () => clearInterval(id);
-  }, [playing]);
+  }, [playing, busy, stepPaused]);
   const runSteps = Math.max(0, traj.length - runStartRef.current.step);
-  const pace = playing && runMs > 400 ? runSteps / (runMs / 1000) : 0;
+  const pace = (playing || busy) && !stepPaused && runMs > 400 ? runSteps / (runMs / 1000) : 0;
+  const stepProgressPct = stepProgress && stepProgress.gamesTotal > 0
+    ? Math.max(0, Math.min(100, (stepProgress.gamesDone / stepProgress.gamesTotal) * 100))
+    : 0;
+  const stepProgressLabel = stepProgress
+    ? `${stepProgress.phase} game ${stepProgress.phaseGamesDone}/${stepProgress.phaseGamesTotal} · ${stepProgress.gamesDone}/${stepProgress.gamesTotal} total`
+    : '';
+  const liveStepGames = useMemo(() => [...stepProgressGames].reverse(), [stepProgressGames]);
+  const runButtonLabel = stepPaused ? (resumePlayingRef.current ? '▶ resume run' : '▶ resume') : playing || busy ? '⏸ pause' : '▶ run';
+  const runButtonClass = `play ${stepPaused ? 'is-resume' : playing || busy ? 'is-pause' : ''}`.trim();
   const totals = useMemo(() => {
     let games = 0, wins = 0, draws = 0, losses = 0;
     for (const p of traj) { games += p.games ?? 0; wins += p.wins ?? 0; draws += p.draws ?? 0; losses += p.losses ?? 0; }
@@ -553,7 +797,7 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
     ctx.beginPath(); ctx.arc(X(n - 1), Y(scores[n - 1]), 3.5, 0, 7); ctx.fillStyle = '#46d6b8'; ctx.fill();
     const ci = traj.findIndex((p) => p.step === champion.step);
     if (ci >= 0) { ctx.beginPath(); ctx.arc(X(ci), Y(scores[ci]), 4.5, 0, 7); ctx.strokeStyle = '#e0b24a'; ctx.lineWidth = 2; ctx.stroke(); }
-  }, [traj, champion]);
+  }, [traj, champion, replayFocusActive]);
 
   // Board at the inspected position (the SELECTED book position, both modes).
   const selectedPos = activeBook?.positions[Math.min(selectedIndex, posCount - 1)];
@@ -572,7 +816,7 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
           <p className="gym-hint">Pick a level from the Gym catalog to train the AI on it.</p>
         ) : (
           <>
-            <div className="gym-head">
+            {!replayFocusActive ? <div className="gym-head">
               <nav className="gym-modebar" aria-label="Gym mode">
                 <button type="button" className={`gym-book-mode ${mode === 'book' ? 'active' : ''}`} onClick={() => setMode('book')} aria-pressed={mode === 'book'}>Opening book</button>
                 <div className={`gym-training-mode ${mode === 'train' || mode === 'cluster' ? 'is-active' : ''}`} role="group" aria-label="Training location">
@@ -608,7 +852,7 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
               ) : (
                 <h3 style={{ margin: '4px 0 8px' }}>Cluster training — headless tuning on the D8als_v7 pool</h3>
               )}
-            </div>
+            </div> : null}
 
             {mode === 'cluster' && level ? (
               <ClusterRuns level={level} levelId={levelId} onAdopt={adoptVector} />
@@ -647,13 +891,18 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                 </div>
               </>
             ) : mode === 'train' ? (
-              <div className="gym-run">
+              <div className={`gym-run ${replayFocusActive ? 'is-replay-focus' : ''}`.trim()}>
+                {replayFocusActive ? (
+                  <div className="gym-replay-focus-view">{replayPanel}</div>
+                ) : (
+                  <>
                 <div className="gym-run-head">
-                  <span className={`gym-run-state ${playing || busy ? 'live' : ''}`}>{playing ? '▶ training' : busy ? '▶ stepping' : '⏸ paused'}</span>
+                  <span className={`gym-run-state ${playing || busy ? 'live' : ''}`}>{stepPaused ? '⏸ paused mid-step' : playing ? '▶ training' : busy ? '▶ stepping' : '⏸ paused'}</span>
                   <span>step <b className="gym-num">{session?.k ?? 0}</b></span>
                   <span><b className="gym-num">{pace > 0 ? pace.toFixed(1) : '—'}</b>/s</span>
                   <span><b className="gym-num">{fmtElapsed(runMs)}</b> elapsed</span>
                   <span><b className="gym-num">{totals.games}</b> games</span>
+                  {stepProgress ? <span><b className="gym-num">{stepProgress.gamesDone}/{stepProgress.gamesTotal}</b> step games</span> : null}
                   <span className="gym-run-score" style={{ color: scoreColor(lastScore) }}>{lastScore.toFixed(3)}</span>
                 </div>
 
@@ -704,25 +953,30 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                   <span className="gym-hint">draw rate <b className="gym-num" style={{ color: totals.drawRate > 0.8 ? '#e0b24a' : '#c6d0dc' }}>{totals.games ? `${(totals.drawRate * 100).toFixed(0)}%` : '—'}</b></span>
                   {totals.games > 0 && totals.drawRate > 0.8 ? <span className="gym-hint">— mostly draws, so little signal to climb</span> : null}
                 </div>
-                <div className="gym-log-wrap">
-                  <table className="gym-log">
-                    <thead><tr><th>step</th><th>score</th><th>y⁺</th><th>y⁻</th><th>W-D-L</th><th>c</th><th>a</th></tr></thead>
-                    <tbody>
-                      {trajDesc.map((p) => (
-                        <tr key={p.step} className={p.step === champion.step ? 'is-champ' : ''}>
-                          <td>{p.step}</td>
-                          <td style={{ color: scoreColor(p.score) }}>{p.score.toFixed(3)}</td>
-                          <td>{p.yPlus.toFixed(2)}</td>
-                          <td>{p.yMinus.toFixed(2)}</td>
-                          <td>{`${p.wins ?? 0}-${p.draws ?? 0}-${p.losses ?? 0}`}</td>
-                          <td className="dim">{p.c.toFixed(3)}</td>
-                          <td className="dim">{p.a.toFixed(3)}</td>
-                        </tr>
-                      ))}
-                      {traj.length === 0 ? <tr><td colSpan={7} className="gym-log-empty">Hit ▶ run — each step&apos;s numbers stream in here, newest on top.</td></tr> : null}
-                    </tbody>
-                  </table>
+                <div className={`gym-run-detail ${replayPanel ? 'has-replay' : ''}`}>
+                  <div className="gym-log-wrap">
+                    <table className="gym-log">
+                      <thead><tr><th>step</th><th>score</th><th>y⁺</th><th>y⁻</th><th>W-D-L</th><th>c</th><th>a</th></tr></thead>
+                      <tbody>
+                        {trajDesc.map((p) => (
+                          <tr key={p.step} className={p.step === champion.step ? 'is-champ' : ''}>
+                            <td>{p.step}</td>
+                            <td style={{ color: scoreColor(p.score) }}>{p.score.toFixed(3)}</td>
+                            <td>{p.yPlus.toFixed(2)}</td>
+                            <td>{p.yMinus.toFixed(2)}</td>
+                            <td>{`${p.wins ?? 0}-${p.draws ?? 0}-${p.losses ?? 0}`}</td>
+                            <td className="dim">{p.c.toFixed(3)}</td>
+                            <td className="dim">{p.a.toFixed(3)}</td>
+                          </tr>
+                        ))}
+                        {traj.length === 0 ? <tr><td colSpan={7} className="gym-log-empty">Hit ▶ run — each step&apos;s numbers stream in here, newest on top.</td></tr> : null}
+                      </tbody>
+                    </table>
+                  </div>
+                  {replayPanel}
                 </div>
+                  </>
+                )}
               </div>
             ) : null}
           </>
@@ -788,13 +1042,44 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                 </label>
 
                 <div className="gym-run-row">
-                  <button type="button" className="play" onClick={togglePlay} disabled={!canTrain}>{playing ? '⏸ pause' : '▶ run'}</button>
-                  <button type="button" onClick={stepOnce} disabled={!canTrain || busy || playing}>⏭ step</button>
+                  <button type="button" className={runButtonClass} onClick={togglePlay} disabled={(!canTrain && !stepPaused) || generating || validating}>{runButtonLabel}</button>
+                  <button type="button" onClick={stepOnce} disabled={!canTrain || busy || playing || stepPaused}>⏭ step</button>
                 </div>
                 {!ready ? <p className="gym-hint">Preparing…</p>
                   : !activeBook ? <p className="gym-hint">No active book.</p>
                   : activeBook.positions.length === 0 ? <p className="gym-hint">This book has no positions — generate them in step 1 first.</p>
+                  : stepPaused && stepProgress ? <p className="gym-hint">Paused after {stepProgress.gamesDone}/{stepProgress.gamesTotal} games. Resume to finish this step; no point is committed until all games finish.</p>
                   : busy && !playing ? <p className="gym-hint">Playing this step's games…</p> : null}
+                {stepProgress ? (
+                  <div className="gym-step-progress" aria-label="Training step progress">
+                    <span className="bar"><i style={{ width: `${stepProgressPct}%` }} /></span>
+                    <span className="label">{stepProgressLabel}</span>
+                  </div>
+                ) : null}
+                {busy || stepProgressGames.length ? (
+                  <div className="gym-live-games-wrap" aria-label="Completed games in this step" aria-live="polite">
+                    <table className="gym-live-games">
+                      <thead><tr><th>#</th><th>phase</th><th>pos</th><th>A side</th><th>result</th><th>plies</th></tr></thead>
+                      <tbody>
+                        {liveStepGames.length ? liveStepGames.map((progress, i) => (
+                          <tr
+                            key={`${progress.gamesDone}-${progress.phase}-${progress.game.bookIndex}-${progress.game.candidateSide}-${progress.game.seed}`}
+                            className={i === 0 ? 'is-current' : ''}
+                            title={`seed ${progress.game.seed}, winner ${progress.game.record.winner}, ${progress.game.record.turnsElapsed} rounds`}
+                          >
+                            <td>{progress.gamesDone}</td>
+                            <td>{progress.phase}</td>
+                            <td>#{progress.game.bookIndex + 1}</td>
+                            <td>{progress.game.candidateSide}</td>
+                            <td className={progress.outcome}>{progress.outcome}</td>
+                            <td>{progress.game.record.plies}</td>
+                          </tr>
+                        )) : <tr><td colSpan={6} className="gym-live-games-empty">First game in progress</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+                {gymError ? <p className="gym-error">Training worker failed: {gymError}</p> : null}
 
                 <h3>Champion</h3>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }} className="gym-num">
@@ -815,7 +1100,21 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                         {latestStepGames.map((game, i) => {
                           const outcome = gameOutcome(game);
                           return (
-                            <tr key={`${game.probe}-${game.bookIndex}-${game.candidateSide}-${game.seed}-${i}`} title={`seed ${game.seed}, winner ${game.record.winner}, ${game.record.turnsElapsed} rounds`}>
+                            <tr
+                              key={`${game.probe}-${game.bookIndex}-${game.candidateSide}-${game.seed}-${i}`}
+                              className={i === selectedLatestGameIndex ? 'is-sel' : ''}
+                              title={`seed ${game.seed}, winner ${game.record.winner}, ${game.record.turnsElapsed} rounds`}
+                              role="button"
+                              tabIndex={0}
+                              aria-selected={i === selectedLatestGameIndex}
+                              onClick={() => selectLatestGame(i)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  selectLatestGame(i);
+                                }
+                              }}
+                            >
                               <td>{game.probe === 'plus' ? 'theta+' : 'theta-'}</td>
                               <td>#{game.bookIndex + 1}</td>
                               <td>{game.candidateSide}</td>
@@ -833,7 +1132,7 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
 
                 <h3>Validate <span className="gym-hint">(SPRT vs shipped)</span></h3>
                 <button type="button" className="gym-val-btn" onClick={validateChampion}
-                  disabled={!canTrain || !hasChampion || validating || playing}>
+                  disabled={!canTrain || !hasChampion || validating || playing || busy || stepPaused}>
                   {validating ? 'Validating…' : 'Validate champion vs shipped'}
                 </button>
                 {!hasChampion ? <p className="gym-hint">Train until a step beats the shipped weights — then validate that champion.</p>

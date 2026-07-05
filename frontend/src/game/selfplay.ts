@@ -188,11 +188,15 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
 
 /**
  * Reconstruct the board state after each recorded move by replaying through the
- * real applyMove — the replay viewer's data source. Index 0 is the starting
- * position; index i is the board after moves[i-1].
+ * real applyMove — the replay viewer's data source. Opening moves fast-forward
+ * first, so index 0 is the game position where recorded decisions began; index i
+ * is the board after record.moves[i-1].
  */
-export function replayStates(level: Level, record: GameRecord): GameState[] {
+export function replayStates(level: Level, record: GameRecord, openingMoves: readonly RecordedMove[] = []): GameState[] {
   let game = createFromLevel(level, record.seed);
+  for (const m of openingMoves) {
+    game = applyMove(game, m.pieceId, m.move).state;
+  }
   const states: GameState[] = [game];
   for (const m of record.moves) {
     game = applyMove(game, m.pieceId, m.move).state;
