@@ -46,9 +46,11 @@ const ORPHANS = new Set((usage as { orphans: string[] }).orphans);
 // Editable frames, derived from the SINGLE registry (config/nine-slice-registry.json)
 // — every composed output (incl. -active variants) maps back to its editable asset
 // id. A frame NOT in here is whole-PNG: migration debt, not a supported state.
-const REG_ASSETS = (nineSliceRegistry as { assets: Record<string, { label: string; variants: { out: string; swap?: string }[] }> }).assets;
+const REG_ASSETS = (nineSliceRegistry as { assets: Record<string, { label: string; kind?: string; variants: { out: string; swap?: string }[] }> }).assets;
 const EDITOR_ASSET: Record<string, string> = {};
-for (const [id, a] of Object.entries(REG_ASSETS)) for (const v of a.variants) EDITOR_ASSET[v.out.replace(/\.png$/, '')] = id;
+// `bar` (divider) and `junction` (tee/cross) assets aren't editable in the 4-corner 9-slice
+// editor (composed from atoms, no per-corner DOF), so they get no "✎ Edit" link here.
+for (const [id, a] of Object.entries(REG_ASSETS)) if (a.kind !== 'bar' && a.kind !== 'junction') for (const v of a.variants) EDITOR_ASSET[v.out.replace(/\.png$/, '')] = id;
 const GROUP_LABEL: Record<string, string> = { settings: 'Settings', game: 'Skirmish', shields: 'Campaign' };
 
 function Card({ name, url, sub, gate, selected, onSelect }: { name: string; url: string; sub: string; gate?: 'pass' | 'fail'; selected: boolean; onSelect: (name: string) => void }): ReactElement {
@@ -153,7 +155,7 @@ function findAsset(name: string): Found | null {
 // `header` slot) above a read-only Details readout (provenance/gate). Assets are
 // inspected, not manipulated, so this is the Viewer destination, not the board
 // Lab. It renders [main][aside] straight into the shell to match every other mode.
-export function AssetLab({ name, header, onEditFrame }: { name: string; header?: ReactNode; onEditFrame?: (editorAssetId: string) => void }): ReactElement {
+export function AssetLab({ name, header, onEditFrame, onOpenDivider }: { name: string; header?: ReactNode; onEditFrame?: (editorAssetId: string) => void; onOpenDivider?: () => void }): ReactElement {
   const found = name ? findAsset(name) : null;
   const item = found?.item;
   const prov = item && forged(item.name) ? PROV.assets[item.name] : null;
@@ -191,6 +193,14 @@ export function AssetLab({ name, header, onEditFrame }: { name: string; header?:
                 onClick={() => onEditFrame(EDITOR_ASSET[item.name])}
                 style={{ display: 'block', width: '100%', padding: '9px 12px', textAlign: 'center', background: '#1d5f9e', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}
               >✎ Edit in 9-slice editor</button>
+            ) : item && item.name === 'panel-divider' && onOpenDivider ? (
+              // A divider is a junction, not a box — it only reads assembled. Its interactive,
+              // inspectable home is the divider Viewer (DividerLab), not this read-only card (ADR-0063).
+              <button
+                type="button"
+                onClick={onOpenDivider}
+                style={{ display: 'block', width: '100%', padding: '9px 12px', textAlign: 'center', background: '#6b4f1d', color: '#fff2c4', border: '1px solid #d5a34a', borderRadius: 4, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}
+              >◫ Open divider viewer</button>
             ) : found?.kind === 'frame' ? (
               // A frame that isn't atom-built is migration debt, surfaced as such —
               // not silently treated as an acceptable alternative.

@@ -20,6 +20,7 @@ import {
 } from '../core/tileSockets';
 import { CatalogGrid, CatalogControls, CatalogFilters, type CatalogType, type CatalogFilterDim } from './studio/Catalog';
 import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } from './design/AssetLibraryStudio';
+import { DividerLab } from './DividerViewer';
 import { ArtworkLibraryStudio, ArtworkLab, ARTWORK_GROUPS } from './design/ArtworkLibraryStudio';
 import { CroppedView, loadCrops, type Piece as PortraitPiece } from './PortraitEditor';
 import { PORTRAIT_METHODS, PORTRAIT_PIECES, portraitMasterSrc, type PortraitMethod } from './portraitCandidates';
@@ -89,7 +90,7 @@ type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 't
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
 // 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
 // in full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscene' | 'doodadcomp' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx' | 'gamelab' | 'gym';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'divider' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscene' | 'doodadcomp' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx' | 'gamelab' | 'gym';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -271,7 +272,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedRegionId: regionParam || undefined,
     selectedCompositionName: comp || undefined,
     viewerKind: isNineSliceAlias ? 'nineslice' : isPropLabAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodadcomp' : isArtworkCompareAlias ? 'artworkcompare'
-      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'propseat' || vk === 'tilecompare' || vk === 'surfacetiles' || vk === 'sceneanim' || vk === 'animscene' || vk === 'doodadcomp' || vk === 'artworkcompare' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' || vk === 'gamelab' || vk === 'gym' ? vk : undefined,
+      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'divider' || vk === 'propseat' || vk === 'tilecompare' || vk === 'surfacetiles' || vk === 'sceneanim' || vk === 'animscene' || vk === 'doodadcomp' || vk === 'artworkcompare' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' || vk === 'gamelab' || vk === 'gym' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -1486,6 +1487,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         ) : studioMode === 'viewer' ? (
           viewerKind === 'portrait'
             ? <PortraitLab header={studioViewerHeader} />
+            : viewerKind === 'divider'
+            ? <DividerLab header={studioViewerHeader} />
             : viewerKind === 'nineslice'
             ? <NineSliceLab assetId={selectedFrameName} onAssetId={setSelectedFrameName} header={studioViewerHeader} />
             : viewerKind === 'propseat'
@@ -1522,7 +1525,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                           ? <TileSidesViewer name={selectedTileSideId} header={studioViewerHeader} />
                           : viewerKind === 'sfx'
                             ? <SfxViewer header={studioViewerHeader} />
-                            : <AssetLab name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} />
+                            : <AssetLab name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} onOpenDivider={() => openViewer('divider')} />
         ) : null}
       </section>
     </main>

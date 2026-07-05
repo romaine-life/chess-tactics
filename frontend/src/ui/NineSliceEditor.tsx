@@ -45,9 +45,15 @@ type Asset = { id: string; label: string; corner: string; edge: string; fill: st
 // Derived from the SINGLE registry (shared with the Node bake + the catalog). Every
 // atom-built frame appears here automatically — adding one is a registry edit, not a
 // code change in three files.
-type RegAsset = { label: string; theme?: string; atoms: { corner: string; edge: string; fill: string }; frame: Frame; carve?: boolean; flipSides?: boolean; variants: { out: string }[] };
+// `bar` (divider) assets declare only `edge`; corner/fill are optional so the registry JSON
+// (which now holds a bar) still satisfies this type. Bars are filtered out before ASSETS reads
+// corner/fill, so the frame path only ever sees the full atom set.
+type RegAsset = { label: string; theme?: string; kind?: string; sides?: string; atoms: { corner?: string; edge?: string; fill?: string }; frame: Frame; carve?: boolean; flipSides?: boolean; variants: { out: string }[] };
 const REGISTRY = (nineSliceRegistry as { assets: Record<string, RegAsset> }).assets;
-const ASSETS: Asset[] = Object.entries(REGISTRY).map(([id, a]) => ({
+// `bar` (divider) and `junction` (tee/cross) assets are composed straight from atoms with no
+// per-corner geometry, so this 3×3 corner editor can't calibrate them — their pixels are fully
+// determined by construction. Excluded here (a frame needs the full corner/edge/fill triple).
+const ASSETS: Asset[] = Object.entries(REGISTRY).filter(([, a]) => a.kind !== 'bar' && a.kind !== 'junction').map(([id, a]) => ({
   id,
   label: a.label,
   corner: `/assets/ui/kit/atoms/${a.atoms.corner}.png`,
