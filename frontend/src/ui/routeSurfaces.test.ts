@@ -47,11 +47,11 @@ describe('route screen key (ADR-0051 exit-dissolve grouping)', () => {
     expect(routeScreenKey('/')).toBe(routeScreenKey('/main-menu'));
   });
 
-  it('keeps Settings / Campaign / Editor / Solo Skirmish in the persistent menu shell (same key as home)', () => {
-    // These destinations all render INSIDE the persistent menu shell — MainMenu fills its second
-    // column — so they share the 'menu' screen key with '/'. React keeps the one MainMenu instance
-    // mounted across every home↔destination hop, so the button column never dissolves/remounts.
-    for (const p of ['/settings', '/settings/audio', '/campaign', '/campaign/official-1', '/editor', '/campaigns-next', '/skirmish']) {
+  it('keeps every menu tab (Settings / Campaign / Editor / Solo Skirmish / Lobbies) in the shell', () => {
+    // ALL five menu-tab destinations render INSIDE the persistent menu shell — MainMenu fills its
+    // second column — so they share the 'menu' screen key with '/'. React keeps the one MainMenu
+    // instance mounted across every home↔destination hop, so the button column never dissolves.
+    for (const p of ['/settings', '/settings/audio', '/campaign', '/campaign/official-1', '/editor', '/campaigns-next', '/skirmish', '/lobbies', '/lobbies/abc']) {
       expect(routeScreenKey(p)).toBe(routeScreenKey('/'));
       expect(routeScreenKey(p)).toBe('menu');
     }
@@ -63,7 +63,7 @@ describe('route screen key (ADR-0051 exit-dissolve grouping)', () => {
     // The Solo Skirmish PICKER (/skirmish) is in the shell, but the live board (/play) is its own screen.
     expect(routeScreenKey('/editor')).not.toBe(routeScreenKey('/editor/level'));
     expect(routeScreenKey('/settings')).not.toBe(routeScreenKey('/level-editor'));
-    expect(routeScreenKey('/')).not.toBe(routeScreenKey('/lobbies'));
+    expect(routeScreenKey('/')).not.toBe(routeScreenKey('/play'));
     expect(routeScreenKey('/skirmish')).not.toBe(routeScreenKey('/play'));
   });
 
