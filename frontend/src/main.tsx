@@ -71,7 +71,7 @@ if (root) {
     .catch(() => { /* prop seats are decorative tuning — baseline always renders */ });
 }
 
-// Fold this browser's campaign progress together with the signed-in account's, so clears/stars
-// follow you across devices (and a guest's local progress merges up on first sign-in). Fail-soft:
+// Fold this browser's campaign progress together with the signed-in account's, so clears follow
+// you across devices (and a guest's local progress merges up on first sign-in). Fail-soft:
 // signed out / offline is a no-op, and it never blocks the render above.
 void initProgressSync();

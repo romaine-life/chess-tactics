@@ -193,13 +193,6 @@
       "method": "image-generator (verified)",
       "gate": "pass"
     },
-    "star": {
-      "group": "settings",
-      "forged": "2026-06-27",
-      "tries": 2,
-      "method": "image-generator (verified)",
-      "gate": "pass"
-    },
     "sign-out": {
       "group": "settings",
       "forged": "2026-06-28",

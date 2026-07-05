@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { NavButton } from './shared/NavButton';
@@ -20,7 +20,6 @@ import type { Campaign as CampaignDoc } from '../core/level';
 import { FittedTabLabel } from './shared/FittedTabLabel';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
-const STAR_ICON = '/assets/ui/kit/icons/star.png';
 // Temp carved icon for campaign tiles until a dedicated 'campaign' carving is forged.
 const CAMPAIGN_ICON = `${ICONS}/campaign-editor.png`;
 
@@ -29,18 +28,6 @@ const CAMPAIGN_ICON = `${ICONS}/campaign-editor.png`;
 // active section.
 function campaignIdFromPath(pathname: string): string {
   return normalizeRoutePath(pathname).match(/^\/campaign\/(.+)$/)?.[1] ?? '';
-}
-
-const starsRowStyle: CSSProperties = { display: 'inline-flex', gap: 4, alignItems: 'center' };
-
-function Stars({ count }: { count: number }): ReactElement {
-  return (
-    <span style={starsRowStyle} aria-label={`${count} of 3 stars`}>
-      {[0, 1, 2].map((i) => (
-        <img key={i} src={STAR_ICON} alt="" aria-hidden="true" style={{ width: 18, height: 18, opacity: i < count ? 1 : 0.22 }} />
-      ))}
-    </span>
-  );
 }
 
 // A campaign rendered as a settings-style rail tab — the same baked-skin chrome the
@@ -97,7 +84,14 @@ function LevelSelect({ campaign, progress, embedded, selectedLevelId, onSelectLe
               const goalLine = level
                 ? levelObjectiveLine(level)
                 : ref.objective ? MODE_NAME[ref.objective] : 'Battle';
-              const status = completed ? ' · Cleared' : unlocked ? '' : ' · Locked';
+              const status = completed
+                ? (
+                  <span className="campaign-level-status is-cleared">
+                    <span className="campaign-level-status-check" aria-hidden="true" />
+                    Cleared
+                  </span>
+                )
+                : unlocked ? null : <span className="campaign-level-status is-locked">Locked</span>;
               const playHref = `/play?campaignId=${encodeURIComponent(campaign.id)}&levelId=${encodeURIComponent(ref.levelId)}`;
               return (
                 <section
@@ -119,16 +113,16 @@ function LevelSelect({ campaign, progress, embedded, selectedLevelId, onSelectLe
                   </span>
                   <div className="settings-row-copy">
                     <h4>{index + 1}. {level?.name ?? `Level ${index + 1}`}</h4>
-                    <p>{goalLine}{status}</p>
-                  </div>
-                  <div className="settings-row-value">
-                    <Stars count={prog?.stars ?? 0} />
+                    <div className="campaign-level-meta">
+                      <p className="campaign-level-goal">{goalLine}</p>
+                      {status}
+                    </div>
                   </div>
                   <div className="settings-row-control" onClick={(e) => e.stopPropagation()}>
                     {unlocked
                       ? (
                         <NavButton className="app-header-button app-header-button-active" to={playHref} aria-label={`Play ${level?.name ?? `level ${index + 1}`}`}>
-                          {completed ? 'Replay' : 'Play'}
+                          Play
                         </NavButton>
                       )
                       : <button type="button" className="app-header-button" disabled>Locked</button>}
@@ -229,7 +223,6 @@ export function Campaign({ embedded = false }: { embedded?: boolean } = {}): Rea
   const selectedIndex = activeRefs.findIndex((r) => r.levelId === selectedLevelId);
   const selectedTitle = selectedLevel ? (selectedIndex >= 0 ? `Level ${selectedIndex + 1}: ${selectedLevel.name}` : selectedLevel.name) : '';
   const selectedUnlocked = selectedIndex >= 0 && isLevelUnlocked(activeRefs, selectedIndex, progress);
-  const selectedCompleted = Boolean(selectedLevelId && progress[selectedLevelId]?.completed);
   const selectedPlayHref = activeCampaign && selectedLevelId
     ? `/play?campaignId=${encodeURIComponent(activeCampaign.id)}&levelId=${encodeURIComponent(selectedLevelId)}`
     : '/play';
@@ -279,7 +272,7 @@ export function Campaign({ embedded = false }: { embedded?: boolean } = {}): Rea
           actions={
             <div className="ce-preview-actions is-single">
               {selectedUnlocked
-                ? <NavButton className="ce-link-button" to={selectedPlayHref}><span>{selectedCompleted ? 'Replay' : 'Play'}</span></NavButton>
+                ? <NavButton className="ce-link-button" to={selectedPlayHref}><span>Play</span></NavButton>
                 : <button type="button" className="ce-link-button" disabled><span>Locked</span></button>}
             </div>
           }

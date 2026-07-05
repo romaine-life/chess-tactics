@@ -13,7 +13,6 @@ interface DemoLevelSpec {
   objective: ObjectiveType;
   difficulty: string;
   terrain: 'river' | 'fort' | 'highland' | 'road' | 'islands' | 'ruins';
-  stars: number;
   completed?: boolean;
   notes: string;
 }
@@ -159,12 +158,12 @@ const campaignSpecs: Array<{
     difficulty: 'normal',
     favorite: true,
     levels: [
-      { id: 'demo-valoria-break-line', name: 'Break the Line', objective: 'rival-kings', difficulty: 'normal', terrain: 'road', stars: 3, completed: true, notes: 'Punch through the central road before the enemy can consolidate.' },
-      { id: 'demo-valoria-river-crossing', name: 'River Crossing', objective: 'capture-all', difficulty: 'normal', terrain: 'river', stars: 2, completed: true, notes: 'Cross the river and clear the island. Watch enemy range over the bridges.' },
-      { id: 'demo-valoria-hold-bridge', name: 'Hold the Bridge', objective: 'survive', difficulty: 'hard', terrain: 'river', stars: 3, completed: true, notes: 'Survive the assault until reinforcements arrive.' },
-      { id: 'demo-valoria-fortress-gate', name: 'Fortress Gate', objective: 'rival-kings', difficulty: 'hard', terrain: 'fort', stars: 1, completed: true, notes: 'Enemy pieces begin from elevated stone ground.' },
-      { id: 'demo-valoria-high-ground', name: 'High Ground', objective: 'reach', difficulty: 'normal', terrain: 'highland', stars: 2, notes: 'Take the ridge without losing the king.' },
-      { id: 'demo-valoria-pinned', name: 'Pinned', objective: 'capture-all', difficulty: 'normal', terrain: 'ruins', stars: 0, notes: 'A compact tactical puzzle with blocked lines and tempo traps.' },
+      { id: 'demo-valoria-break-line', name: 'Break the Line', objective: 'rival-kings', difficulty: 'normal', terrain: 'road', completed: true, notes: 'Punch through the central road before the enemy can consolidate.' },
+      { id: 'demo-valoria-river-crossing', name: 'River Crossing', objective: 'capture-all', difficulty: 'normal', terrain: 'river', completed: true, notes: 'Cross the river and clear the island. Watch enemy range over the bridges.' },
+      { id: 'demo-valoria-hold-bridge', name: 'Hold the Bridge', objective: 'survive', difficulty: 'hard', terrain: 'river', completed: true, notes: 'Survive the assault until reinforcements arrive.' },
+      { id: 'demo-valoria-fortress-gate', name: 'Fortress Gate', objective: 'rival-kings', difficulty: 'hard', terrain: 'fort', completed: true, notes: 'Enemy pieces begin from elevated stone ground.' },
+      { id: 'demo-valoria-high-ground', name: 'High Ground', objective: 'reach', difficulty: 'normal', terrain: 'highland', notes: 'Take the ridge without losing the king.' },
+      { id: 'demo-valoria-pinned', name: 'Pinned', objective: 'capture-all', difficulty: 'normal', terrain: 'ruins', notes: 'A compact tactical puzzle with blocked lines and tempo traps.' },
     ],
   },
   {
@@ -172,10 +171,10 @@ const campaignSpecs: Array<{
     name: 'Iron Marshes',
     difficulty: 'hard',
     levels: [
-      { id: 'demo-marshes-sunken-road', name: 'Sunken Road', objective: 'reach', difficulty: 'normal', terrain: 'road', stars: 3, completed: true, notes: 'Escort the king across a narrow wetland causeway.' },
-      { id: 'demo-marshes-blackwater', name: 'Blackwater', objective: 'survive', difficulty: 'hard', terrain: 'islands', stars: 2, completed: true, notes: 'Hold scattered islands while enemy bishops control the crossings.' },
-      { id: 'demo-marshes-iron-ford', name: 'Iron Ford', objective: 'capture-all', difficulty: 'hard', terrain: 'river', stars: 1, notes: 'A contested ford with short tactical lanes.' },
-      { id: 'demo-marshes-broken-causeway', name: 'Broken Causeway', objective: 'rival-kings', difficulty: 'hard', terrain: 'islands', stars: 0, notes: 'Find a route through the fractured crossing.' },
+      { id: 'demo-marshes-sunken-road', name: 'Sunken Road', objective: 'reach', difficulty: 'normal', terrain: 'road', completed: true, notes: 'Escort the king across a narrow wetland causeway.' },
+      { id: 'demo-marshes-blackwater', name: 'Blackwater', objective: 'survive', difficulty: 'hard', terrain: 'islands', completed: true, notes: 'Hold scattered islands while enemy bishops control the crossings.' },
+      { id: 'demo-marshes-iron-ford', name: 'Iron Ford', objective: 'capture-all', difficulty: 'hard', terrain: 'river', notes: 'A contested ford with short tactical lanes.' },
+      { id: 'demo-marshes-broken-causeway', name: 'Broken Causeway', objective: 'rival-kings', difficulty: 'hard', terrain: 'islands', notes: 'Find a route through the fractured crossing.' },
     ],
   },
   {
@@ -183,9 +182,9 @@ const campaignSpecs: Array<{
     name: 'Silver Coast',
     difficulty: 'easy',
     levels: [
-      { id: 'demo-coast-landing', name: 'Landing Party', objective: 'capture-all', difficulty: 'easy', terrain: 'islands', stars: 3, completed: true, notes: 'A gentle introduction to island movement.' },
-      { id: 'demo-coast-lighthouse', name: 'Lighthouse', objective: 'reach', difficulty: 'normal', terrain: 'highland', stars: 2, completed: true, notes: 'Reach the lighthouse ridge before the enemy blocks the path.' },
-      { id: 'demo-coast-tidewatch', name: 'Tidewatch', objective: 'survive', difficulty: 'normal', terrain: 'river', stars: 0, notes: 'Survive while enemy pieces attack from both banks.' },
+      { id: 'demo-coast-landing', name: 'Landing Party', objective: 'capture-all', difficulty: 'easy', terrain: 'islands', completed: true, notes: 'A gentle introduction to island movement.' },
+      { id: 'demo-coast-lighthouse', name: 'Lighthouse', objective: 'reach', difficulty: 'normal', terrain: 'highland', completed: true, notes: 'Reach the lighthouse ridge before the enemy blocks the path.' },
+      { id: 'demo-coast-tidewatch', name: 'Tidewatch', objective: 'survive', difficulty: 'normal', terrain: 'river', notes: 'Survive while enemy pieces attack from both banks.' },
     ],
   },
   {
@@ -193,7 +192,7 @@ const campaignSpecs: Array<{
     name: 'Frostgate',
     difficulty: 'hard',
     levels: [
-      { id: 'demo-frostgate-first-snow', name: 'First Snow', objective: 'rival-kings', difficulty: 'hard', terrain: 'fort', stars: 0, notes: 'A locked northern campaign preview.' },
+      { id: 'demo-frostgate-first-snow', name: 'First Snow', objective: 'rival-kings', difficulty: 'hard', terrain: 'fort', notes: 'A locked northern campaign preview.' },
     ],
   },
   {
@@ -201,11 +200,11 @@ const campaignSpecs: Array<{
     name: 'Ember Reach',
     difficulty: 'hard',
     levels: [
-      { id: 'demo-ember-ash-road', name: 'Ash Road', objective: 'capture-all', difficulty: 'hard', terrain: 'road', stars: 0, notes: 'Enemy rooks hold long lines over burned ground.' },
+      { id: 'demo-ember-ash-road', name: 'Ash Road', objective: 'capture-all', difficulty: 'hard', terrain: 'road', notes: 'Enemy rooks hold long lines over burned ground.' },
     ],
   },
   { id: 'demo-shadow-realm', name: 'Shadow Realm', difficulty: 'hard', locked: true, unlockRequirement: 'Clear Crown of Valoria', levels: [] },
-  { id: 'demo-gilded-spires', name: 'Gilded Spires', difficulty: 'hard', locked: true, unlockRequirement: 'Earn 12 stars', levels: [] },
+  { id: 'demo-gilded-spires', name: 'Gilded Spires', difficulty: 'hard', locked: true, unlockRequirement: 'Complete Silver Coast', levels: [] },
   { id: 'demo-broken-crown', name: 'Broken Crown', difficulty: 'hard', locked: true, unlockRequirement: 'Complete Iron Marshes', levels: [] },
 ];
 
@@ -218,14 +217,13 @@ export function createDemoWorkspace(): { campaigns: Campaign[]; levels: Record<s
         levelId: levelSpec.id,
         ordinal: index,
         objective: levelSpec.objective,
-        stars: levelSpec.stars,
         completed: levelSpec.completed,
       };
     });
     if (campaignSpec.id === DEMO_SELECTED_CAMPAIGN_ID) {
       const pawnCompass = createPawnCompassLevel();
       levels[pawnCompass.id] = pawnCompass;
-      refs.push({ levelId: pawnCompass.id, ordinal: refs.length, objective: pawnCompass.objective, stars: 0, completed: undefined });
+      refs.push({ levelId: pawnCompass.id, ordinal: refs.length, objective: pawnCompass.objective, completed: undefined });
     }
     return {
       formatVersion: CAMPAIGN_FORMAT_VERSION,

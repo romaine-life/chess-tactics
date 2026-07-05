@@ -78,16 +78,13 @@ describe('campaign store', () => {
     expect(lvl.notes).toBe('Hold until dawn.');
   });
 
-  it('tracks favorites and level stars as real state', () => {
+  it('tracks favorites as real state', () => {
     useCampaigns.getState().newCampaign();
     const campaignId = useCampaigns.getState().selectedCampaignId!;
     useCampaigns.getState().toggleCampaignFavorite(campaignId);
     useCampaigns.getState().addLevel();
-    const levelId = useCampaigns.getState().selectedLevelId!;
-    useCampaigns.getState().setLevelStars(levelId, 2);
     const campaign = useCampaigns.getState().campaigns[0];
     expect(campaign.favorite).toBe(true);
-    expect(campaign.levels[0]).toMatchObject({ stars: 2, completed: true });
   });
 
   it('duplicates campaigns with copied level documents and new ids', () => {
@@ -96,14 +93,12 @@ describe('campaign store', () => {
     const originalCampaignId = useCampaigns.getState().selectedCampaignId!;
     const originalLevelId = useCampaigns.getState().selectedLevelId!;
     useCampaigns.getState().setLevelNotes(originalLevelId, 'Original note');
-    useCampaigns.getState().setLevelStars(originalLevelId, 3);
     useCampaigns.getState().duplicateCampaign(originalCampaignId);
     const state = useCampaigns.getState();
     expect(state.campaigns).toHaveLength(2);
     const duplicate = state.campaigns[1];
     expect(duplicate.id).not.toBe(originalCampaignId);
     expect(duplicate.levels[0].levelId).not.toBe(originalLevelId);
-    expect(duplicate.levels[0].stars).toBeUndefined();
     expect(duplicate.levels[0].completed).toBeUndefined();
     expect(state.levels[duplicate.levels[0].levelId].notes).toBe('Original note');
   });

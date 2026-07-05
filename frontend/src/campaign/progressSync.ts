@@ -1,14 +1,14 @@
 // Account-scoped campaign progress: fold this browser's localStorage progress together with the
-// signed-in account's stored progress, so clears/stars follow you across devices. Progress is
-// MONOTONIC (you only ever gain a cleared level or a higher star), so the merge is a conflict-free
-// union — no reconciliation policy needed. localStorage stays the immediate/offline source of truth
+// signed-in account's stored progress, so clears follow you across devices. Progress is
+// MONOTONIC (you only ever gain a cleared level), so the merge is a conflict-free union
+// — no reconciliation policy needed. localStorage stays the immediate/offline source of truth
 // (campaign/progress.ts); this layer syncs it to the account on load and writes wins through after.
 // Fail-soft: signed out or offline ⇒ everything stays local-only and play is never blocked.
 
 import { CAMPAIGN_PROGRESS_EVENT, readProgress, writeProgress, type CampaignProgress } from './progress';
 import { getAccountProgress, putAccountProgress } from '../net/accountProgress';
 
-/** Conflict-free union of two progress maps: per level, cleared if either says so, best star wins. */
+/** Conflict-free union of two progress maps: per level, cleared if either says so. */
 export function mergeProgress(a: CampaignProgress, b: CampaignProgress): CampaignProgress {
   const out: CampaignProgress = {};
   for (const src of [a, b]) {
@@ -17,7 +17,6 @@ export function mergeProgress(a: CampaignProgress, b: CampaignProgress): Campaig
       const prev = out[levelId];
       out[levelId] = {
         completed: Boolean(prev?.completed) || Boolean(p.completed),
-        stars: Math.max(prev?.stars ?? 0, p.stars ?? 0),
       };
     }
   }

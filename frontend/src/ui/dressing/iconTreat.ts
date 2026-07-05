@@ -2,8 +2,8 @@
 // stone-on-stone glyphs measure ~1.0–1.25:1 (WCAG non-text floor is 3:1), so these raise separation
 // WITHOUT a glow (ADR-0006/0027) and WITHOUT a fabricated CSS surface (ADR-0032). 'limestone' and
 // 'bevel' are pure CSS over the shipped PNGs; 'bronze' is a LOOK preview only (shipping warm-metal
-// icons means RE-FORGING the PNGs, ADR-0011/0025, not a sepia filter) — hence the star. Shared by
-// the Main Menu and Settings tuners (same .settings-tab component).
+// icons means RE-FORGING the PNGs, ADR-0011/0025, not a sepia filter) — hence the asterisk.
+// Shared by the Main Menu and Settings tuners (same .settings-tab component).
 export type IconTreat = 'off' | 'limestone' | 'bronze' | 'bevel';
 
 export const ICON_TREATS: { id: IconTreat; label: string }[] = [

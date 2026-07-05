@@ -190,7 +190,6 @@ export interface CampaignLevelRef {
   levelId: string;
   ordinal: number;
   objective?: ObjectiveType;
-  stars?: number;
   completed?: boolean;
 }
 

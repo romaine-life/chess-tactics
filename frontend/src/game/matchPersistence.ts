@@ -5,7 +5,7 @@
 // both tear down the in-memory store. That store is a module singleton: it survives
 // route changes but NOT a reload. This is the disk copy that bridges the reload.
 //
-// Campaign PROGRESS (cleared levels + stars) already persists separately (see
+// Campaign PROGRESS (cleared levels) already persists separately (see
 // campaign/progress); this is the mid-battle BOARD itself — the exact position,
 // clock, and log needed to drop the player back where they were.
 //

@@ -19,7 +19,7 @@ import { KitScroll } from './KitScroll';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 
 const CE_ICONS = {
-  star: '/assets/ui/kit/icons/star.png',
+  favorite: '/assets/ui/kit/icons/brand-shield.png',
   'chevron-up': '/assets/ui/kit/icons/chevron-up.png',
   'chevron-down': '/assets/ui/kit/icons/chevron-down.png',
   delete: '/assets/ui/kit/icons/delete.png',
@@ -89,17 +89,9 @@ function IconButton({
   );
 }
 
-function Stars({ count = 0 }: { count?: number }): ReactElement {
-  return (
-    <span className="ce-stars" aria-label={`${count} stars`}>
-      {[0, 1, 2].map((i) => <img key={i} className={`ce-star ${i < count ? 'is-filled' : ''}`.trim()} src={CE_ICONS.star} alt="" aria-hidden="true" />)}
-    </span>
-  );
-}
-
 // A campaign as a settings-style rail tab — the same carved chrome the main menu's mode
 // tabs and the play-side Campaign screen use (ADR-0059), extended to a icon | name | trail
-// grid so the favorite star / padlock sits at the tab's end. Kept as a
+// grid so the favorite control / padlock sits at the tab's end. Kept as a
 // role=button div (not a <button>) because the favorite is a nested interactive control:
 // selection + keyboard activation mirror the original row exactly.
 function CampaignRailTab({
@@ -161,7 +153,7 @@ function CampaignRailTab({
           aria-label={campaign.favorite ? `Unfavorite ${campaign.name}` : `Favorite ${campaign.name}`}
           onClick={onFavorite}
         >
-          <img className="ce-star" src={CE_ICONS.star} alt="" aria-hidden="true" />
+          <CeIcon icon="favorite" />
         </button>
       ) : null}
     </div>
@@ -256,7 +248,6 @@ function LevelRow({
       <div className="settings-row-copy ce-editor-level-copy">
         <div className="ce-editor-level-heading">
           <h4>{index + 1}. {level?.name ?? levelRef.levelId}</h4>
-          <Stars count={levelRef.stars ?? 0} />
         </div>
         <p>{goalLine}</p>
       </div>
