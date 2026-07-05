@@ -288,6 +288,22 @@ function prodBackend(port) {
   const pidFile = join(tmpdir(), `chess-dev-backend-${createHash('md5').update(backendDir).digest('hex').slice(0, 8)}.pid`);
   let child = null;
   let stopping = false;
+  // A fresh worktree ships with NO backend/node_modules, so `node server.js` throws
+  // `Cannot find module 'express'` and the exit handler below relaunches it every 1s
+  // FOREVER — the recurring fresh-worktree papercut. `vite` is meant to bootstrap the
+  // WHOLE app ("vite ALONE is full prod from dev"), so bring the backend's deps up before
+  // the first launch: `npm ci` when there's a lockfile, else `npm install`. Runs at most
+  // once per worktree (the sentinel check short-circuits after) and only on a dev server
+  // (apply:'serve'), so it never touches a production build.
+  const ensureBackendDeps = (log) => {
+    // Check a SENTINEL module, not just the node_modules dir: a Ctrl-C'd / half-populated
+    // install leaves the dir present but express missing, which would still crash-loop.
+    if (existsSync(join(backendDir, 'node_modules', 'express'))) return;
+    const cmd = existsSync(join(backendDir, 'package-lock.json')) ? 'npm ci' : 'npm install';
+    log.info(`[backend] installing dependencies (${cmd}) — first run in this worktree, one moment…`);
+    execSync(cmd, { cwd: backendDir, stdio: 'inherit' });
+    log.info('[backend] dependencies installed.');
+  };
   const killStale = () => {
     try {
       if (!existsSync(pidFile)) return;
@@ -302,7 +318,56 @@ function prodBackend(port) {
     configureServer(server) {
       const log = server.config.logger;
       killStale();
+
+      // The backend is a HARD dependency of the dev server, never an optional extra: the
+      // frontend needs it for auth, campaigns, lobbies — everything under /api. If it can't
+      // come up we take the WHOLE dev server DOWN with a loud, unmissable message instead of
+      // serving a frontend that silently 500s on every /api call. Nobody — human or agent —
+      // should be able to skate past a dead backend without noticing. The ONLY sanctioned way
+      // to run without it is the explicit DEV_NO_BACKEND=1 opt-in, which never reaches here.
+      const stop = () => { stopping = true; if (child) { child.kill(); child = null; } try { unlinkSync(pidFile); } catch { /* */ } };
+      const fatal = (why) => {
+        const bar = '━'.repeat(74);
+        log.error(`\n${bar}`);
+        log.error('  ✖  BACKEND FAILED TO START — taking the dev server down with it.');
+        log.error('');
+        log.error(`     ${why}`);
+        log.error('');
+        log.error('     The backend is NOT optional — the frontend talks to it for auth,');
+        log.error('     campaigns, lobbies, everything under /api. Running the UI without it');
+        log.error('     just hides the real failure. Fix the backend, then re-run `npm run dev`.');
+        log.error('     (Deliberately want the mock stack? Opt in explicitly: DEV_NO_BACKEND=1.)');
+        log.error(`${bar}\n`);
+        stop();
+        process.exit(1);
+      };
+
+      // Bootstrap deps before the first spawn. A failed install is fatal, not a warning —
+      // otherwise the spawn below would just crash-loop on a missing module forever.
+      try {
+        ensureBackendDeps(log);
+      } catch (e) {
+        fatal(`Could not install backend dependencies (${e.message}). Try \`npm ci\` in ${backendDir} by hand.`);
+      }
+
+      // "Ready" = the backend logged that it's listening. Until we've seen that for a given
+      // launch, an exit means it couldn't start at all (missing module, bad code, DB auth
+      // reject, port already taken). Tolerate a couple of fast retries, then give up LOUDLY
+      // rather than relaunch into the void every second. A backend that ran fine and only
+      // later crashed is treated as transient and relaunched. A boot that neither succeeds
+      // nor exits (a hang) trips the watchdog — also a failure to start.
+      const READY_RE = /listening on/i;
+      const MAX_BOOT_FAILS = 3;
+      const BOOT_TIMEOUT_MS = 60_000;
+      let bootFails = 0;
+
       const start = () => {
+        let ready = false;
+        const watchdog = setTimeout(() => {
+          if (!ready && child) fatal(`Backend never became ready within ${BOOT_TIMEOUT_MS / 1000}s (still starting, or hung).`);
+        }, BOOT_TIMEOUT_MS);
+        if (watchdog.unref) watchdog.unref();
+
         child = spawn(process.execPath, ['server.js'], {
           cwd: backendDir,
           env: {
@@ -320,16 +385,30 @@ function prodBackend(port) {
         });
         try { writeFileSync(pidFile, String(child.pid)); } catch { /* best effort */ }
         log.info(`[backend] launching on :${port}`);
-        child.stdout.on('data', (d) => log.info(`[backend] ${String(d).replace(/\s+$/, '')}`));
+        child.stdout.on('data', (d) => {
+          const s = String(d);
+          if (!ready && READY_RE.test(s)) { ready = true; bootFails = 0; clearTimeout(watchdog); }
+          log.info(`[backend] ${s.replace(/\s+$/, '')}`);
+        });
         child.stderr.on('data', (d) => log.warn(`[backend] ${String(d).replace(/\s+$/, '')}`));
         child.on('exit', (code) => {
           child = null;
+          clearTimeout(watchdog);
           if (stopping) return;
-          log.warn(`[backend] exited (code ${code}) — relaunching in 1s`);
+          if (!ready) {
+            // Died before it ever served a request — it could not start.
+            bootFails += 1;
+            if (bootFails >= MAX_BOOT_FAILS) {
+              fatal(`Backend exited (code ${code}) before it was ready, ${bootFails}× in a row.`);
+              return;
+            }
+            log.warn(`[backend] exited (code ${code}) before ready — retry ${bootFails}/${MAX_BOOT_FAILS} in 1s`);
+          } else {
+            log.warn(`[backend] exited (code ${code}) after running — relaunching in 1s`);
+          }
           setTimeout(start, 1000);
         });
       };
-      const stop = () => { stopping = true; if (child) { child.kill(); child = null; } try { unlinkSync(pidFile); } catch { /* */ } };
       start();
       server.httpServer?.once('close', stop);
       process.once('exit', stop);
