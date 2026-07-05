@@ -190,24 +190,29 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(featureOp!.z).toBeLessThan(tileOp!.z + 1); // within the same cell band
   });
 
-  it('draws edge fences in the foreground band above same-cell units and structures', () => {
+  it('draws edge fences above the owner unit and below the near unit/front-half draw order', () => {
     const board: EditorBoard = {
       ...blank(3, 3),
       cells: { '1,1': TILE },
       fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' },
-      units: { '1,1': UNIT },
+      units: { '1,1': UNIT, '2,1': UNIT },
       doodads: { '1,1': { doodadId: 'boulder' } },
     };
     const ops = boardDrawOps(board);
     const fence = ops.find((op) => op.src === '/assets/tiles/feature/fence-wood-2.png');
-    const unit = ops.find((op) => op.contain);
+    const ownerUnit = ops.find((op) => op.contain && op.z === 1 + 1 + 20000);
+    const nearUnit = ops.find((op) => op.contain && op.z === 2 + 1 + 20000);
     const doodadFront = ops.find((op) => op.src === '/assets/doodads/boulder/front.png');
     expect(fence).toBeDefined();
-    expect(unit).toBeDefined();
+    expect(ownerUnit).toBeDefined();
+    expect(nearUnit).toBeDefined();
     expect(doodadFront).toBeDefined();
     expect(fence!.z).toBe(fenceOverlayZIndex({ x: 1, y: 1 }));
-    expect(fence!.z).toBeGreaterThan(unit!.z);
-    expect(fence!.z).toBeGreaterThan(doodadFront!.z);
+    expect(fence!.z).toBeGreaterThan(ownerUnit!.z);
+    expect(fence!.z).toBe(nearUnit!.z);
+    expect(fence!.z).toBe(doodadFront!.z);
+    expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(nearUnit!));
+    expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(doodadFront!));
   });
 });
 
