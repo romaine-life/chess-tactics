@@ -336,7 +336,8 @@ export function App(): ReactElement {
 
 function renderRoute(path: string): ReactElement {
   if (path === '/play') return <Skirmish />;
-  if (path === '/skirmish') return <SkirmishMapPickerRoute />;
+  // /skirmish (the Solo Skirmish picker) now renders INSIDE the persistent menu shell — it falls
+  // through to the MainMenu default below, sharing the 'menu' key so the button column stays mounted.
   if (path === '/tileset-studio') return <TilesetStudio />;
   // /unit-studio is a deep-link into the one Studio with the Units shelf
   // preselected — not a separate surface. Keeps old links working while the

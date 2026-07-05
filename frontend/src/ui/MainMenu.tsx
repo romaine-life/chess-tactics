@@ -5,10 +5,11 @@ import { Settings } from './Settings';
 import { Campaign } from './Campaign';
 import { NavButton } from './shared/NavButton';
 
-// The Editor is heavy (authoring workspace) and code-split out of the menu bundle — lazy-loaded only
-// when its destination opens, inside a LOCAL Suspense so the fallback shows in the destination column
-// (not the whole menu). Settings/Campaign are light enough to import directly.
+// The Editor and Solo Skirmish picker are heavier / code-split out of the menu bundle — lazy-loaded
+// only when their destination opens, inside a LOCAL Suspense so the fallback shows in the destination
+// column (not the whole menu). Settings/Campaign are light enough to import directly.
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
+const SkirmishMapPickerRoute = lazy(() => import('./SkirmishMapPicker').then((m) => ({ default: m.SkirmishMapPickerRoute })));
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
 
@@ -94,9 +95,9 @@ function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?:
 // Which menu destinations render INSIDE the persistent shell (their own columns beside the pinned
 // button column) vs. navigate away to a full screen. Menu-family destinations (Settings, Campaign)
 // live in the shell; heavy gameplay/editor surfaces (Skirmish, Level Editor) take the whole screen.
-type ShellDest = 'settings' | 'campaign' | 'editor';
-const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', campaign: '/campaign', editor: '/editor' };
-const DEST_LABEL: Record<ShellDest, string> = { settings: 'Settings', campaign: 'Campaign', editor: 'Editor' };
+type ShellDest = 'settings' | 'campaign' | 'editor' | 'skirmish';
+const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', campaign: '/campaign', editor: '/editor', skirmish: '/skirmish' };
+const DEST_LABEL: Record<ShellDest, string> = { settings: 'Settings', campaign: 'Campaign', editor: 'Editor', skirmish: 'Solo skirmish' };
 // How long the destination panel fades in/out. Matches --ds-duration-fade (the ONE shared fade
 // speed, ADR-0046) — same as the Settings panel crossfade + the screen entrance.
 const DEST_FADE_MS = 350;
@@ -106,6 +107,8 @@ function shellDest(path: string): ShellDest | null {
   // The Editor is a settings-twin now (ADR-0065): canonical /editor + legacy /campaigns-next·/campaigns.
   // The NESTED level editor (/editor/level) is a separate heavy full screen — NOT a shell dest.
   if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return 'editor';
+  // Solo Skirmish is the map/mode PICKER (a settings-twin); the live board (/play) is full-screen.
+  if (path === '/skirmish') return 'skirmish';
   return null;
 }
 
@@ -198,7 +201,8 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
             <div className={`menu-dest ${leaving ? 'is-leaving' : ''}`.trim()} key={renderedDest} aria-label={DEST_LABEL[renderedDest]}>
               {renderedDest === 'settings' ? <Settings embedded />
                 : renderedDest === 'campaign' ? <Campaign embedded />
-                : <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><CampaignEditor embedded /></Suspense>}
+                : renderedDest === 'editor' ? <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><CampaignEditor embedded /></Suspense>
+                : <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><SkirmishMapPickerRoute embedded /></Suspense>}
             </div>
           ) : null}
         </ArtRouteChrome>
