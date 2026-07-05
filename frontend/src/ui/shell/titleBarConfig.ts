@@ -53,7 +53,7 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
     return { screenName: 'Party', signInReturnTo: '/party' };
   }
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
-    return { screenName: 'Level Editor', barClass: 'le-topbar', centerSlot: true, actionsSlot: true };
+    return { screenName: 'Level Editor', barClass: 'le-topbar', actionsSlot: true };
   }
   if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') {
     // The Editor is a settings-twin now: a ‹ Back control in the trailing actions slot

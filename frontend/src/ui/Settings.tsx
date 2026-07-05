@@ -10,6 +10,7 @@ import { Toggle } from './shared/Toggle';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { TitleBarSlot } from './shell/TitleBarSlot';
+import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
@@ -744,7 +745,9 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
           URL carries a valid origin. On a direct open the brand lockup is the way home. */}
       <TitleBarSlot region="actions">
         {returnTo ? (
-          <NavButton className="app-header-button" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</NavButton>
+          <TitleBarActions aria-label="Settings navigation">
+            <TitleBarButton variant="return" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</TitleBarButton>
+          </TitleBarActions>
         ) : null}
       </TitleBarSlot>
       {/* One continuous homepage backdrop (scene + synced rain), shared across the menu family (ADR-0064). */}

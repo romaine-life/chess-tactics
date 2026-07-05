@@ -51,6 +51,7 @@ import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
 import { navigateApp } from './navigation';
 import { TitleBarSlot } from './shell/TitleBarSlot';
+import { TitleBarActions, TitleBarButton, TitleBarIconButton } from './shell/TitleBarControls';
 import {
   activeUnitFamilies,
   familyLabels,
@@ -1496,30 +1497,23 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // alchemist's flask (Lab), a hand lens (Viewer) — made by scripts/forge-studio-switcher-icons.mjs
   // (codex img-gen → 64×64 kit canvas). Catalog & Viewer toggle in place; Lab hops to the Level Editor.
   const studioModeNav = (
-    <nav className="studio-mode-nav" aria-label="Studio workspace">
-      <button type="button" className={`studio-mode-icon${studioMode === 'catalog' ? ' is-active' : ''}`} aria-pressed={studioMode === 'catalog'} onClick={openCatalogMode} aria-label="Catalog" title="Catalog — browse the catalogs.">
-        <img src="/assets/ui/kit/icons/studio-catalog.png" alt="" />
-      </button>
-      <button type="button" className="studio-mode-icon" onClick={() => navigateApp('/editor/level?from=studio')} aria-label="Lab" title="Lab — open the Level Editor to paint tiles and units and set the board size.">
-        <img src="/assets/ui/kit/icons/studio-lab.png" alt="" />
-      </button>
-      <button type="button" className={`studio-mode-icon${studioMode === 'viewer' ? ' is-active' : ''}`} aria-pressed={studioMode === 'viewer'} onClick={() => setStudioMode('viewer')} aria-label="Viewer" title="Viewer — view one finished asset or artwork.">
-        <img src="/assets/ui/kit/icons/studio-viewer.png" alt="" />
-      </button>
-    </nav>
+    <>
+      <TitleBarIconButton active={studioMode === 'catalog'} aria-pressed={studioMode === 'catalog'} onClick={openCatalogMode} label="Catalog" title="Catalog — browse the catalogs." iconSrc="/assets/ui/kit/icons/studio-catalog.png" />
+      <TitleBarIconButton to="/editor/level?from=studio" label="Lab" title="Lab — open the Level Editor to paint tiles and units and set the board size." iconSrc="/assets/ui/kit/icons/studio-lab.png" />
+      <TitleBarIconButton active={studioMode === 'viewer'} aria-pressed={studioMode === 'viewer'} onClick={() => setStudioMode('viewer')} label="Viewer" title="Viewer — view one finished asset or artwork." iconSrc="/assets/ui/kit/icons/studio-viewer.png" />
+    </>
   );
   // "‹ Scene" back: from the per-waterfall inspector (the 'sceneanim' Viewer) return to the
   // Animated Scenes picker for THAT region's scene. Lives in the title-bar actions slot beside the
-  // studio's own workspace nav, styled like the shared "‹ Back" (app-header-button) so it reads as
-  // the same affordance. It's an in-app state flip (the studio owns its own URL), not a ?returnTo.
+  // studio's own workspace nav. The title-bar control primitive owns its frame and spacing; this is
+  // an in-app state flip (the studio owns its own URL), not a ?returnTo.
   const backToSceneMap = (): void => {
     const scene = SCENE_ANIM_SCENES.find((s) => s.regionIds.includes(selectedRegionId)) ?? SCENE_ANIM_SCENES[0];
     setSelectedSceneId(scene.id);
     openViewer('animscene');
   };
   const sceneBackNav = studioMode === 'viewer' && viewerKind === 'sceneanim' ? (
-    <button type="button" className="app-header-button studio-scene-back" onClick={backToSceneMap}
-      aria-label="Back to the animated scene" title="Back to the animated scene map">‹ Scene</button>
+    <TitleBarButton onClick={backToSceneMap} aria-label="Back to the animated scene" title="Back to the animated scene map">‹ Scene</TitleBarButton>
   ) : null;
   // Viewer labs render their controls through a `header` slot: the preview-kind select plus the
   // viewer-wide Zoom meta-control. Zoom scales the WHOLE preview (100% = full size; scroll the panel
@@ -1543,7 +1537,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
 
   return (
     <main className="tileset-studio-page app-shell-bar-pad">
-      <TitleBarSlot region="actions"><div className="studio-topbar-actions">{sceneBackNav}{studioModeNav}</div></TitleBarSlot>
+      <TitleBarSlot region="actions"><TitleBarActions aria-label="Studio workspace">{sceneBackNav}{studioModeNav}</TitleBarActions></TitleBarSlot>
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''} ${category === 'artwork' ? 'is-artwork' : ''}`} aria-label="Tileset browser">
         {studioMode === 'catalog' ? (
         <>
