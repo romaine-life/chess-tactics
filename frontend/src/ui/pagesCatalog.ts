@@ -17,7 +17,7 @@ export const PAGE_ENTRIES: PageEntry[] = [
   { name: 'main-menu', label: 'Main Menu', route: '/', status: 'functional', blurb: 'The "Wet Stone & Cold Iron" home screen — tune button + icon sizing live.', thumb: '/assets/ui/pages/main-menu.webp' },
   { name: 'settings', label: 'Settings', route: '/settings', status: 'functional', blurb: 'The settings screen — the live dressing room: assign a surface to each region.', thumb: '/assets/ui/pages/settings.webp' },
   { name: 'skirmish', label: 'Skirmish', route: '/play', status: 'stub', blurb: 'A live skirmish match screen.', thumb: '/assets/ui/pages/skirmish.webp' },
-  { name: 'campaign-editor', label: 'Campaign Editor', route: '/campaigns-next', status: 'functional', blurb: 'The campaign authoring screen — tune the action buttons (size, frame, fill) live.', thumb: '/assets/ui/pages/campaign-editor.webp' },
-  { name: 'level-editor', label: 'Level Editor', route: '/edit', status: 'stub', blurb: 'The level / terrain editor.', thumb: '/assets/ui/pages/level-editor.webp' },
+  { name: 'campaign-editor', label: 'Editor', route: '/editor', status: 'functional', blurb: 'The campaign authoring screen — tune the action buttons (size, frame, fill) live.', thumb: '/assets/ui/pages/campaign-editor.webp' },
+  { name: 'level-editor', label: 'Level Editor', route: '/editor/level', status: 'stub', blurb: 'The level / terrain editor.', thumb: '/assets/ui/pages/level-editor.webp' },
   { name: 'lobbies', label: 'Lobbies', route: '/lobbies', status: 'stub', blurb: 'Multiplayer lobbies.', thumb: '/assets/ui/pages/lobbies.webp' },
 ];

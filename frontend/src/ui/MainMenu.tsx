@@ -17,7 +17,7 @@ const TITLE_SURFACE = '/assets/ui/surfaces/hybrid-wood-oak.png';
 
 const MODE_HREFS: Record<string, string> = {
   'solo-skirmish': '/skirmish',
-  'campaign-editor': '/campaigns-next',
+  'campaign-editor': '/editor',
   lobbies: '/lobbies',
   settings: '/settings',
 };
@@ -26,10 +26,10 @@ interface MenuTab { slug: string; label: string; href: string; iconSlug: string 
 
 // Product-menu relabels applied over MENU_MODES (which stays the untouched design-catalog
 // source of truth — its widget assets keep their 'campaign-editor'/'level-editor' names).
-// The campaign editor IS the app's single "Editor": level authoring is reached from inside
+// The Editor (/editor) IS the app's single "Editor": level authoring is reached from inside
 // it (Edit Board / + New Board), so the rail presents it simply as "Editor" and no longer
-// carries a separate top-level "Level Editor" tab. That route (/edit) still exists — it's
-// just no longer a front door, only reached by drilling into a level from the Editor.
+// carries a separate top-level "Level Editor" tab. The nested level editor (/editor/level)
+// still exists — it's just no longer a front door, only reached by drilling into a level.
 const MENU_TAB_LABELS: Record<string, string> = { 'campaign-editor': 'Editor' };
 const MENU_HIDDEN_SLUGS = new Set(['level-editor']);
 

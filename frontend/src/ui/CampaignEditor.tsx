@@ -16,6 +16,8 @@ import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { KitScroll } from './KitScroll';
+import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 
 const CE_ICONS = {
   star: '/assets/ui/kit/icons/star.png',
@@ -25,9 +27,15 @@ const CE_ICONS = {
   lock: '/assets/ui/kit/icons/lock.png',
 } as const;
 
+// The carved rail-tab icon, shared with the play-side Campaign screen (Campaign.tsx) so a
+// campaign looks identical whether you're picking one to play or one to edit.
+const CAMPAIGN_TAB_ICON = '/assets/ui/main-menu/icons-carved/campaign-editor.png';
+
 type CampaignCollection = 'campaign' | 'unassigned';
 
-const CAMPAIGN_EDITOR_RETURN_TO = '/campaigns-next';
+// The Editor is now a settings-twin at /editor (the nested board editor is /editor/level);
+// returns thread back here so Back/Save round-trips land on the Editor, not the old route.
+const CAMPAIGN_EDITOR_RETURN_TO = '/editor';
 
 function workspaceSignature(ws: { campaigns: Campaign[]; levels: Record<string, Level> }): string {
   return JSON.stringify(ws);
@@ -64,19 +72,6 @@ function validateWorkspaceImport(ws: Partial<{ campaigns: Campaign[]; levels: Re
   return null;
 }
 
-function AssetButton({
-  children,
-  className = '',
-  danger = false,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { danger?: boolean }): ReactElement {
-  return (
-    <button type="button" className={`ce-asset-button ${danger ? 'is-danger' : ''} ${className}`.trim()} {...props}>
-      <span>{children}</span>
-    </button>
-  );
-}
-
 function IconButton({
   children,
   danger = false,
@@ -103,17 +98,22 @@ function Stars({ count = 0 }: { count?: number }): ReactElement {
   );
 }
 
-function CampaignRow({
+// A campaign as a settings-style rail tab — the same carved chrome the main menu's mode
+// tabs and the play-side Campaign screen use (ADR-0059), extended to a icon | name | trail
+// grid so the favorite star / OFFICIAL tag / padlock sits at the tab's end. Kept as a
+// role=button div (not a <button>) because the favorite is a nested interactive control:
+// selection + keyboard activation mirror the original row exactly.
+function CampaignRailTab({
   campaign,
-  index,
   active,
+  index,
   isAdmin,
   onSelect,
   onFavorite,
 }: {
   campaign: Campaign;
-  index: number;
   active: boolean;
+  index: number;
   isAdmin: boolean;
   onSelect: () => void;
   onFavorite: (event: React.MouseEvent<HTMLButtonElement>) => void;
@@ -129,8 +129,13 @@ function CampaignRow({
     <div
       role="button"
       tabIndex={locked ? -1 : 0}
+      aria-current={active ? 'page' : undefined}
       aria-disabled={locked || undefined}
-      className={`ce-campaign-row ${active ? 'is-selected' : ''} ${locked ? 'is-locked' : ''}`.trim()}
+      // --tab-index drives the shared stone-continuity slice so the rail's stone reads as
+      // one sheet however many campaigns there are (counted continuously past the Unassigned
+      // tab), matching the menu / Settings / Campaign rails.
+      style={{ ['--tab-index' as string]: index }}
+      className={`settings-tab main-menu-mode-tab ce-campaign-tab ${active ? 'is-active' : ''} ${locked ? 'is-locked' : ''}`.trim()}
       onClick={selectCampaign}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -139,20 +144,23 @@ function CampaignRow({
         }
       }}
     >
-      <span className="ce-row-copy">
+      <span className="settings-tab-icon" aria-hidden="true">
+        <img src={CAMPAIGN_TAB_ICON} alt="" />
+      </span>
+      <span className="ce-campaign-tab-copy">
         <strong>{campaign.name}</strong>
         <small>{campaign.levels.length} levels</small>
       </span>
       {locked ? (
-        <span className="ce-row-lock" aria-label={`${campaign.name} locked`} role="img">
+        <span className="ce-tab-trail ce-row-lock" aria-label={`${campaign.name} locked`} role="img">
           <CeIcon icon="lock" />
         </span>
       ) : isOfficial ? (
-        <span className="ce-official-badge ce-row-official-tag" aria-label={`${campaign.name} is an official campaign`}>OFFICIAL</span>
+        <span className="ce-tab-trail ce-official-badge" aria-label={`${campaign.name} is an official campaign`}>OFFICIAL</span>
       ) : (
         <button
           type="button"
-          className={`ce-row-favorite ${campaign.favorite ? 'is-selected' : ''}`.trim()}
+          className={`ce-tab-trail ce-row-favorite ${campaign.favorite ? 'is-selected' : ''}`.trim()}
           aria-label={campaign.favorite ? `Unfavorite ${campaign.name}` : `Favorite ${campaign.name}`}
           onClick={onFavorite}
         >
@@ -163,13 +171,16 @@ function CampaignRow({
   );
 }
 
-function UnassignedCampaignRow({
+// The workspace's unassigned levels, presented as one more rail tab at the end of the list.
+function UnassignedRailTab({
   count,
   active,
+  index,
   onSelect,
 }: {
   count: number;
   active: boolean;
+  index: number;
   onSelect: () => void;
 }): ReactElement {
   const levelCount = `${count} level${count === 1 ? '' : 's'}`;
@@ -177,7 +188,9 @@ function UnassignedCampaignRow({
     <div
       role="button"
       tabIndex={0}
-      className={`ce-campaign-row ce-campaign-row-meta ${active ? 'is-selected' : ''}`.trim()}
+      aria-current={active ? 'page' : undefined}
+      style={{ ['--tab-index' as string]: index }}
+      className={`settings-tab main-menu-mode-tab ce-campaign-tab ce-campaign-tab-meta ${active ? 'is-active' : ''}`.trim()}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -186,7 +199,10 @@ function UnassignedCampaignRow({
         }
       }}
     >
-      <span className="ce-row-copy">
+      <span className="settings-tab-icon" aria-hidden="true">
+        <img src={CAMPAIGN_TAB_ICON} alt="" />
+      </span>
+      <span className="ce-campaign-tab-copy">
         <strong>Unassigned levels</strong>
         <small>{levelCount}</small>
       </span>
@@ -227,7 +243,8 @@ function LevelRow({
     <div
       role="button"
       tabIndex={0}
-      className={`ce-level-row ${active ? 'is-selected' : ''}`}
+      aria-current={active ? 'true' : undefined}
+      className={`settings-row ce-editor-level-row ${active ? 'is-selected' : ''}`.trim()}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -236,20 +253,20 @@ function LevelRow({
         }
       }}
     >
-      <span className="ce-level-thumb" aria-hidden="true">
-        {level ? <LevelThumbnail level={level} width={46} height={32} /> : <span className="ce-level-thumb-empty" />}
+      <span className="settings-row-thumb" aria-hidden="true">
+        {level ? <LevelThumbnail level={level} width={72} height={48} /> : <span className="settings-row-thumb-empty" />}
       </span>
-      <span className="ce-row-copy">
-        <strong>{index + 1}. {level?.name ?? levelRef.levelId}</strong>
-        <small>{goalLine}</small>
-      </span>
-      <Stars count={levelRef.stars ?? 0} />
+      <div className="settings-row-copy">
+        <h4>{index + 1}. {level?.name ?? levelRef.levelId}</h4>
+        <p>{goalLine}</p>
+      </div>
+      <div className="settings-row-value"><Stars count={levelRef.stars ?? 0} /></div>
       {readOnly ? null : (
-        <span className="ce-row-actions" aria-label="Level actions">
+        <div className="settings-row-control ce-row-actions" aria-label="Level actions">
           <IconButton onClick={onMoveUp} aria-label="Move level up"><CeIcon icon="chevron-up" /></IconButton>
           <IconButton onClick={onMoveDown} aria-label="Move level down"><CeIcon icon="chevron-down" /></IconButton>
           <IconButton danger onClick={onDelete} aria-label="Delete level"><CeIcon icon="delete" /></IconButton>
-        </span>
+        </div>
       )}
     </div>
   );
@@ -299,9 +316,11 @@ export function CampaignEditor() {
   };
 
   useEffect(() => {
+    // The Editor is a settings-twin now (like the play-side Campaign screen), so it takes
+    // the same shell host class — full-bleed menu layout over the shared scene backdrop.
     const shell = document.querySelector('.shell');
-    shell?.classList.add('campaign-editor-active');
-    return () => shell?.classList.remove('campaign-editor-active');
+    shell?.classList.add('main-menu-active');
+    return () => shell?.classList.remove('main-menu-active');
   }, []);
 
   useEffect(() => {
@@ -493,14 +512,14 @@ export function CampaignEditor() {
       : levelDoc.name
     : 'Selected Level';
   const editHrefForUnassigned = (levelId: string): string =>
-    `/edit?levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`;
+    `/editor/level?levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`;
   const editHref = levelDoc
     ? isUnassignedSelected
       ? editHrefForUnassigned(levelDoc.id)
       : camp
-        ? `/edit?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
-        : '/edit'
-    : '/edit';
+        ? `/editor/level?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
+        : '/editor/level'
+    : '/editor/level';
   const playHref = levelDoc
     ? isUnassignedSelected
       ? `/play?levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
@@ -546,260 +565,285 @@ export function CampaignEditor() {
   };
 
   return (
-    <div className="ce-screen app-shell-bar-pad" data-testid="campaign-editor">
+    // A settings-twin of the main menu / play-side Campaign screen: the reveal classes are
+    // declared up front (the cold-reveal director's opt-OUT gates otherwise hide the scene +
+    // buttons of any .main-menu-layer until data-reveal-* is present, #238).
+    <div
+      className="menu-layer main-menu-layer is-ready ce-editor-layer"
+      data-testid="campaign-editor"
+      data-reveal-bg=""
+      data-reveal-buttons=""
+    >
       {confirmDialog}
-      {/* Same shared backdrop as the main menu: the one continuous HomepageBackdrop (animated
-          menu scene + synced rain). Mostly overlapped by the editor panels, but it keeps the
-          feel consistent with the rest of the app in the gaps. */}
+      {/* Same shared backdrop as the main menu / play-side Campaign screen: the one continuous
+          HomepageBackdrop (animated menu scene + synced rain), behind the rail and content
+          frames — it keeps the feel consistent with the rest of the app in the gaps. */}
       <HomepageBackdrop />
-      {/* Title bar lives in the app shell; the editor paints its live save-state +
-          shortcuts into it via portals (workspace state stays in this component). */}
+      {/* ‹ Back to the menu — the trailing actions slot, the same title-bar spot Settings
+          uses; the brand lockup remains the fixed leading anchor. */}
+      <TitleBarSlot region="actions">
+        <NavButton className="app-header-button" data-testid="editor-back" to="/" title="Back to the menu">‹ Back</NavButton>
+      </TitleBarSlot>
+      {/* Live workspace save-state — the center slot. Save · Publish are workspace verbs and
+          live in the rail footer (below), not global chrome (matching Settings). */}
       <TitleBarSlot region="center">
-        <div className="ce-topbar-stats" aria-label="Campaign workspace stats">
+        <div className="ce-topbar-stats" aria-label="Workspace state">
           <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
         </div>
       </TitleBarSlot>
-      {/* Save · Publish moved OUT of the global title bar into the editor's own locked footer
-          (below), beside the other workspace actions — document verbs belong in the editor, not
-          global chrome. The bar keeps just brand + save-state + account cluster (matching Settings). */}
 
-      <ArtRouteChrome as="main" className="ce-layout" ready={loaded}>
-        <aside className="ce-panel ce-campaigns-panel" aria-label="Campaigns">
-          <div className="ce-panel-head">
-            <h2>Campaigns</h2>
-            <span>{ownCount} / 20</span>
-          </div>
-          <AssetButton
-            data-testid="new-campaign"
-            className="ce-new-campaign"
-            onClick={() => {
-              useCampaigns.getState().newCampaign();
-              setSelectedCollection('campaign');
-            }}
-          >
-            + New Campaign
-          </AssetButton>
-          {/* Workspace commits (Save · Publish) live here in the workspace panel — the same panel
-              that hosts New / Import and the "Sign in to save" hint — instead of the global title
-              bar. (Interim placement; the footer redesign is the owner's.) Save keeps its exact
-              gating: rendered always, disabled until there are unsaved changes. */}
-          <div className="ce-workspace-commit">
-            <AssetButton data-testid="save-workspace" disabled={!userDirty} onClick={() => void saveUserNow()}>Save</AssetButton>
-            {isAdmin && officialDirty ? (
-              <AssetButton data-testid="publish-officials" onClick={() => void publishOfficialNow()}>Publish to all players</AssetButton>
-            ) : null}
-          </div>
-          <input
-            ref={importInputRef}
-            className="ce-file-input"
-            type="file"
-            accept="application/json,.json"
-            onChange={(event) => {
-              void importCampaignFile(event.currentTarget.files?.[0]);
-              event.currentTarget.value = '';
-            }}
-          />
-          {status ? <div data-testid="workspace-status" className="ce-status">{status}</div> : null}
-          {me && !me.signed_in ? (
-            <button type="button" data-testid="campaign-sign-in" className="ce-sign-in" onClick={() => goSignIn()}>Sign in to save</button>
-          ) : null}
-          <div className="ce-campaign-list">
-            {campaigns.length === 0 ? <p className="ce-empty">No campaigns yet.</p> : null}
-            {campaigns.map((campaign, index) => (
-              <CampaignRow
-                key={campaign.id}
-                campaign={campaign}
-                index={index}
-                active={!isUnassignedSelected && campaign.id === selectedCampaignId}
-                isAdmin={isAdmin}
-                onSelect={() => selectCampaignCollection(campaign.id)}
-                onFavorite={(event) => {
-                  event.stopPropagation();
-                  useCampaigns.getState().toggleCampaignFavorite(campaign.id);
+      <div className="settings-screen main-menu-twin-screen ce-editor-screen app-shell-bar-pad">
+        <ArtRouteChrome className="settings-shell ce-editor-shell" ready={loaded}>
+
+          {/* ── RAIL: the campaigns navigator (fold 1 of the old 3-panel layout) ── */}
+          <aside className="settings-frame settings-rail-frame ce-editor-rail" aria-label="Campaigns">
+            <KitScroll className="ce-rail-scroll">
+              <div className="ce-rail-list">
+                <p className="campaign-rail-group">
+                  <span>Campaigns</span>
+                  <span className="ce-rail-count">{ownCount} / 20</span>
+                </p>
+                {campaigns.length === 0 ? <p className="ce-empty">No campaigns yet.</p> : null}
+                {campaigns.map((campaign, index) => (
+                  <CampaignRailTab
+                    key={campaign.id}
+                    campaign={campaign}
+                    index={index}
+                    active={!isUnassignedSelected && campaign.id === selectedCampaignId}
+                    isAdmin={isAdmin}
+                    onSelect={() => selectCampaignCollection(campaign.id)}
+                    onFavorite={(event) => {
+                      event.stopPropagation();
+                      useCampaigns.getState().toggleCampaignFavorite(campaign.id);
+                    }}
+                  />
+                ))}
+                <p className="campaign-rail-group">Workspace</p>
+                {/* Continue the stone slice past the campaign tabs so the rail stays one sheet. */}
+                <UnassignedRailTab
+                  count={unassignedLevels.length}
+                  index={campaigns.length}
+                  active={isUnassignedSelected}
+                  onSelect={selectUnassignedCollection}
+                />
+              </div>
+            </KitScroll>
+            {/* Pinned rail footer — the workspace verbs (whole-workspace / collection scope):
+                New · Import · Save · Publish · Sign-in · status. Save keeps its exact gating. */}
+            <div className="ce-rail-actions">
+              <SettingsButton
+                data-testid="new-campaign"
+                onClick={() => {
+                  useCampaigns.getState().newCampaign();
+                  setSelectedCollection('campaign');
+                }}
+              >+ New Campaign</SettingsButton>
+              <SettingsButton onClick={() => importInputRef.current?.click()}>Import</SettingsButton>
+              <SettingsButton tone="primary" data-testid="save-workspace" disabled={!userDirty} onClick={() => void saveUserNow()}>Save</SettingsButton>
+              {isAdmin && officialDirty ? (
+                <SettingsButton tone="primary" data-testid="publish-officials" onClick={() => void publishOfficialNow()}>Publish to all players</SettingsButton>
+              ) : null}
+              {me && !me.signed_in ? (
+                <SettingsButton data-testid="campaign-sign-in" onClick={() => goSignIn()}>Sign in to save</SettingsButton>
+              ) : null}
+              {status ? <p className="ce-status" data-testid="workspace-status">{status}</p> : null}
+              <input
+                ref={importInputRef}
+                className="ce-file-input"
+                type="file"
+                accept="application/json,.json"
+                onChange={(event) => {
+                  void importCampaignFile(event.currentTarget.files?.[0]);
+                  event.currentTarget.value = '';
                 }}
               />
-            ))}
-            <UnassignedCampaignRow
-              count={unassignedLevels.length}
-              active={isUnassignedSelected}
-              onSelect={selectUnassignedCollection}
-            />
-          </div>
-          <AssetButton className="ce-import-campaign" onClick={() => importInputRef.current?.click()}>
-            Import Campaign
-          </AssetButton>
-        </aside>
-
-        <section className="ce-panel ce-details-panel" aria-label="Campaign details and levels">
-          {isUnassignedSelected ? (
-            <>
-              <div className="ce-section-title">
-                <h2>Unassigned Levels</h2>
-                <span>{unassignedLevels.length}</span>
-              </div>
-              <div className="ce-levels-head">
-                <h2>Levels</h2>
-                <NavButton className="ce-link-button" to={`/edit?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`}><span>+ New Board</span></NavButton>
-              </div>
-              <div className="ce-level-list" data-testid="unassigned-levels">
-                {unassignedLevelRefs.length === 0 ? <p className="ce-empty">No unassigned levels.</p> : null}
-                {unassignedLevelRefs.map((ref, index) => (
-                  <LevelRow
-                    key={ref.levelId}
-                    levelRef={ref}
-                    level={levels[ref.levelId]}
-                    index={index}
-                    active={ref.levelId === selectedLevelId}
-                    readOnly
-                    onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
-                    onMoveUp={(event) => { event.stopPropagation(); }}
-                    onMoveDown={(event) => { event.stopPropagation(); }}
-                    onDelete={(event) => { event.stopPropagation(); }}
-                  />
-                ))}
-              </div>
-            </>
-          ) : camp ? (
-            <>
-              <div className="ce-section-title">
-                <h2>Campaign Details</h2>
-                {readOnly
-                  ? <span className="ce-official-badge">Official campaign — read-only</span>
-                  : campIsOfficial
-                    ? <span className="ce-official-badge">OFFICIAL</span>
-                    : null}
-              </div>
-              <div className="ce-campaign-summary">
-                <label className="ce-name-field">
-                  <span>Campaign Name</span>
-                  <input
-                    data-testid="campaign-name"
-                    value={camp.name}
-                    disabled={readOnly}
-                    onChange={(e) => useCampaigns.getState().renameCampaign(camp.id, e.target.value)}
-                  />
-                </label>
-                <dl className="ce-stat-rows">
-                  <div className="ce-stat-row"><dt>Chapters</dt><dd>{camp.chapters}</dd></div>
-                  <div className="ce-stat-row"><dt>Levels</dt><dd>{camp.levels.length}</dd></div>
-                  <div className="ce-stat-row"><dt>Difficulty</dt><dd>{camp.difficulty}</dd></div>
-                </dl>
-              </div>
-
-              <div className="ce-levels-head">
-                <h2>Levels</h2>
-                {readOnly ? null : <AssetButton data-testid="add-level" onClick={() => useCampaigns.getState().addLevel()}>+ Add Level</AssetButton>}
-              </div>
-              <div className="ce-level-list">
-                {orderedLevels.length === 0 ? <p className="ce-empty">No levels. Add one to begin.</p> : null}
-                {orderedLevels.map((ref, index) => (
-                  <LevelRow
-                    key={ref.levelId}
-                    levelRef={ref}
-                    level={levels[ref.levelId]}
-                    index={index}
-                    active={ref.levelId === selectedLevelId}
-                    readOnly={readOnly}
-                    onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
-                    onMoveUp={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, -1); }}
-                    onMoveDown={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, 1); }}
-                    onDelete={(event) => { event.stopPropagation(); if (levels[ref.levelId]) confirmDeleteLevel(levels[ref.levelId]); }}
-                  />
-                ))}
-              </div>
-            </>
-          ) : (
-            <p className="ce-empty ce-empty-large">Select or create a campaign.</p>
-          )}
-        </section>
-
-        <section className="ce-panel ce-level-panel" aria-label="Selected level">
-          <div className="ce-selected-head">
-            <h2>{selectedLevelTitle}</h2>
-            {levelDoc ? (
-              <div className="ce-force-readout" aria-label="Level forces">
-                <span className="ce-force ce-force-ally"><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{allyCount}</strong></span>
-                <span className="ce-force ce-force-enemy"><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{enemyCount}</strong></span>
-              </div>
-            ) : null}
-          </div>
-          <div className="ce-preview-frame">
-            {levelDoc ? (
-              <div className="ce-level-view-toggle" role="tablist" aria-label="Preview mode">
-                <button type="button" role="tab" aria-selected={levelView === 'board'} className={levelView === 'board' ? 'is-active' : ''} onClick={() => setLevelView('board')}>Board</button>
-                <button type="button" role="tab" aria-selected={levelView === 'info'} className={levelView === 'info' ? 'is-active' : ''} onClick={() => setLevelView('info')}>Info</button>
-              </div>
-            ) : null}
-            {levelDoc && levelView === 'info' ? (
-              <LevelInfoCompact level={levelDoc} />
-            ) : levelDoc && viewerBoard ? (
-              // The SELECTED viewer is a LIVE board (pan/zoom) rendered through the SAME read-only
-              // renderer the editor uses, inside the shared ViewPane. Static frame (no animation
-              // clock here): a preview shouldn't run a per-frame loop while the editor is open.
-              <div className="ce-level-viewer">
-                <ViewPane
-                  kind="board"
-                  ariaLabel={`${levelDoc.name} board`}
-                  zoom={viewZoom}
-                  pan={viewPan}
-                  minZoom={0.2}
-                  maxZoom={2}
-                  onZoomChange={setViewZoom}
-                  onPanChange={setViewPan}
-                >
-                  <div className="tileset-view-board-content is-board">
-                    <StudioReadOnlyBoard board={viewerBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel={`${levelDoc.name} board`} />
-                  </div>
-                </ViewPane>
-              </div>
-            ) : (
-              <div className="level-preview-empty" aria-label="No level preview"><span>Select a level.</span></div>
-            )}
-          </div>
-          {levelDoc && (levelRef || isUnassignedSelected) ? (
-            <div className={`ce-preview-actions ${isUnassignedSelected ? 'has-assign' : ''}`.trim()}>
-              <NavButton className="ce-link-button" to={editHref}><span>Edit Board</span></NavButton>
-              <NavButton className="ce-link-button ce-link-button-ghost" to={playHref}><span>Test Play</span></NavButton>
-              {isUnassignedSelected ? (
-                <label className="ce-assign-field">
-                  <span className="sr-only">Assign to campaign</span>
-                  <select
-                    value=""
-                    disabled={editableCampaignsForLevel.length === 0}
-                    title={editableCampaignsForLevel.length === 0 ? 'No editable campaign matches this level tier' : 'Assign selected level to campaign'}
-                    onChange={(event) => {
-                      const campaignId = event.currentTarget.value;
-                      if (campaignId) assignSelectedUnassignedLevel(campaignId);
-                    }}
-                  >
-                    <option value="">{editableCampaignsForLevel.length === 0 ? 'No eligible campaigns' : 'Assign to campaign'}</option>
-                    {editableCampaignsForLevel.map((campaign) => (
-                      <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
             </div>
-          ) : (
-            <p className="ce-empty ce-empty-large">Select a level.</p>
-          )}
-        </section>
-      </ArtRouteChrome>
+          </aside>
 
-      <ArtRouteChrome as="footer" className="ce-footer" ready={loaded}>
-        <AssetButton
-          disabled={!camp || camp.origin === 'official'}
-          onClick={() => {
-            if (!camp) return;
-            useCampaigns.getState().duplicateCampaign(camp.id);
-            setSelectedCollection('campaign');
-          }}
-        >
-          Duplicate
-        </AssetButton>
-        <AssetButton className="ce-footer-secondary" disabled={!campaigns.length} onClick={exportWorkspace}>Export</AssetButton>
-        <AssetButton danger disabled={!camp || readOnly} onClick={() => camp && confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
-      </ArtRouteChrome>
+          {/* ── CONTENT: the selected campaign — one column: pinned live preview over a
+              scrolling stack of SettingsSection groups (Campaign · Levels · Actions). ── */}
+          <main className="settings-frame settings-main-frame ce-editor-main">
+            <h2 className="sr-only">{isUnassignedSelected ? 'Unassigned Levels' : camp?.name ?? 'Editor'}</h2>
+            <div className="ce-editor-body">
+              <KitScroll className="settings-scroll ce-editor-scroll">
+                <div className="settings-panel-content">
+                  {isUnassignedSelected ? (
+                    <SettingsSection title="Unassigned Levels">
+                      <div className="ce-level-list" data-testid="unassigned-levels">
+                        {unassignedLevelRefs.length === 0 ? <p className="ce-empty">No unassigned levels.</p> : null}
+                        {unassignedLevelRefs.map((ref, index) => (
+                          <LevelRow
+                            key={ref.levelId}
+                            levelRef={ref}
+                            level={levels[ref.levelId]}
+                            index={index}
+                            active={ref.levelId === selectedLevelId}
+                            readOnly
+                            onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
+                            onMoveUp={(event) => { event.stopPropagation(); }}
+                            onMoveDown={(event) => { event.stopPropagation(); }}
+                            onDelete={(event) => { event.stopPropagation(); }}
+                          />
+                        ))}
+                      </div>
+                      <div className="ce-section-action">
+                        <SettingsButton href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`}>+ New Board</SettingsButton>
+                      </div>
+                    </SettingsSection>
+                  ) : camp ? (
+                    <>
+                      <SettingsSection title="Campaign">
+                        {campIsOfficial ? (
+                          <SettingsRow
+                            title="Official campaign"
+                            description={readOnly ? 'Read-only — published content. Sign in as an admin to edit.' : 'Editing the official, published campaign.'}
+                            value={<span className="ce-official-badge">OFFICIAL</span>}
+                          />
+                        ) : null}
+                        <SettingsRow title="Name" description="Shown to players in the campaign list.">
+                          <input
+                            className="ce-name-input"
+                            data-testid="campaign-name"
+                            value={camp.name}
+                            disabled={readOnly}
+                            aria-label="Campaign name"
+                            onChange={(e) => useCampaigns.getState().renameCampaign(camp.id, e.target.value)}
+                          />
+                        </SettingsRow>
+                        <SettingsRow title="Chapters" value={<span>{camp.chapters}</span>} />
+                        <SettingsRow title="Levels" value={<span>{camp.levels.length}</span>} />
+                        <SettingsRow title="Difficulty" value={<span>{camp.difficulty}</span>} />
+                      </SettingsSection>
+
+                      <SettingsSection title="Levels">
+                        <div className="ce-level-list">
+                          {orderedLevels.length === 0 ? <p className="ce-empty">No levels. Add one to begin.</p> : null}
+                          {orderedLevels.map((ref, index) => (
+                            <LevelRow
+                              key={ref.levelId}
+                              levelRef={ref}
+                              level={levels[ref.levelId]}
+                              index={index}
+                              active={ref.levelId === selectedLevelId}
+                              readOnly={readOnly}
+                              onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
+                              onMoveUp={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, -1); }}
+                              onMoveDown={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, 1); }}
+                              onDelete={(event) => { event.stopPropagation(); if (levels[ref.levelId]) confirmDeleteLevel(levels[ref.levelId]); }}
+                            />
+                          ))}
+                        </div>
+                        {readOnly ? null : (
+                          <div className="ce-section-action">
+                            <SettingsButton data-testid="add-level" onClick={() => useCampaigns.getState().addLevel()}>+ Add Level</SettingsButton>
+                          </div>
+                        )}
+                      </SettingsSection>
+
+                      <SettingsSection title="Campaign Actions">
+                        <SettingsRow title="Duplicate" description="Copy this campaign and its levels into a new private campaign.">
+                          <SettingsButton
+                            disabled={camp.origin === 'official'}
+                            onClick={() => {
+                              useCampaigns.getState().duplicateCampaign(camp.id);
+                              setSelectedCollection('campaign');
+                            }}
+                          >Duplicate</SettingsButton>
+                        </SettingsRow>
+                        <SettingsRow title="Export" description="Download the workspace (your campaigns + levels) as JSON.">
+                          <SettingsButton disabled={!campaigns.length} onClick={exportWorkspace}>Export</SettingsButton>
+                        </SettingsRow>
+                        <SettingsRow title="Delete campaign" description="Remove this campaign from the workspace on the next save.">
+                          <SettingsButton tone="danger" disabled={readOnly} onClick={() => confirmDeleteCampaign(camp)}>Delete</SettingsButton>
+                        </SettingsRow>
+                      </SettingsSection>
+                    </>
+                  ) : (
+                    <SettingsSection title="Editor">
+                      <SettingsRow title="No campaign selected" description="Select a campaign in the rail, or create one with + New Campaign." />
+                    </SettingsSection>
+                  )}
+                </div>
+              </KitScroll>
+
+              {/* Pinned live preview (grid row 1, above the scroll): the data-backed board/info
+                  viewer + the selected level's verbs. Reuses the .ce-preview-* chrome — the one
+                  editor surface the settings pattern has no analogue for. */}
+              <aside className="ce-preview-col" aria-label="Selected level">
+                <div className="ce-selected-head">
+                  <h2>{selectedLevelTitle}</h2>
+                  {levelDoc ? (
+                    <div className="ce-force-readout" aria-label="Level forces">
+                      <span className="ce-force ce-force-ally"><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{allyCount}</strong></span>
+                      <span className="ce-force ce-force-enemy"><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{enemyCount}</strong></span>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="ce-preview-frame">
+                  {levelDoc ? (
+                    <div className="ce-level-view-toggle" role="tablist" aria-label="Preview mode">
+                      <button type="button" role="tab" aria-selected={levelView === 'board'} className={levelView === 'board' ? 'is-active' : ''} onClick={() => setLevelView('board')}>Board</button>
+                      <button type="button" role="tab" aria-selected={levelView === 'info'} className={levelView === 'info' ? 'is-active' : ''} onClick={() => setLevelView('info')}>Info</button>
+                    </div>
+                  ) : null}
+                  {levelDoc && levelView === 'info' ? (
+                    <LevelInfoCompact level={levelDoc} />
+                  ) : levelDoc && viewerBoard ? (
+                    // The SELECTED viewer is a LIVE board (pan/zoom) rendered through the SAME read-only
+                    // renderer the editor uses, inside the shared ViewPane. Static frame (no animation
+                    // clock here): a preview shouldn't run a per-frame loop while the editor is open.
+                    <div className="ce-level-viewer">
+                      <ViewPane
+                        kind="board"
+                        ariaLabel={`${levelDoc.name} board`}
+                        zoom={viewZoom}
+                        pan={viewPan}
+                        minZoom={0.2}
+                        maxZoom={2}
+                        onZoomChange={setViewZoom}
+                        onPanChange={setViewPan}
+                      >
+                        <div className="tileset-view-board-content is-board">
+                          <StudioReadOnlyBoard board={viewerBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel={`${levelDoc.name} board`} />
+                        </div>
+                      </ViewPane>
+                    </div>
+                  ) : (
+                    <div className="level-preview-empty" aria-label="No level preview"><span>Select a level.</span></div>
+                  )}
+                </div>
+                {levelDoc && (levelRef || isUnassignedSelected) ? (
+                  <div className={`ce-preview-actions ${isUnassignedSelected ? 'has-assign' : ''}`.trim()}>
+                    <NavButton className="ce-link-button" to={editHref}><span>Edit Board</span></NavButton>
+                    <NavButton className="ce-link-button ce-link-button-ghost" to={playHref}><span>Test Play</span></NavButton>
+                    {isUnassignedSelected ? (
+                      <label className="ce-assign-field">
+                        <span className="sr-only">Assign to campaign</span>
+                        <select
+                          value=""
+                          disabled={editableCampaignsForLevel.length === 0}
+                          title={editableCampaignsForLevel.length === 0 ? 'No editable campaign matches this level tier' : 'Assign selected level to campaign'}
+                          onChange={(event) => {
+                            const campaignId = event.currentTarget.value;
+                            if (campaignId) assignSelectedUnassignedLevel(campaignId);
+                          }}
+                        >
+                          <option value="">{editableCampaignsForLevel.length === 0 ? 'No eligible campaigns' : 'Assign to campaign'}</option>
+                          {editableCampaignsForLevel.map((campaign) => (
+                            <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="ce-empty ce-empty-large">Select a level.</p>
+                )}
+              </aside>
+            </div>
+          </main>
+        </ArtRouteChrome>
+      </div>
     </div>
   );
 }

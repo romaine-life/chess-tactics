@@ -363,11 +363,12 @@ function renderRoute(path: string): ReactElement {
   if (path === '/scene-anim-lab') return <TilesetStudio initialCategory="sceneanim" />;
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
-  if (path === '/edit' || path === '/level-editor') return <LevelEditor />;
-  // /campaign (singular) is the play surface — pick a campaign; /campaigns-next is
-  // the authoring editor. Distinct paths, so order here doesn't matter.
+  if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return <LevelEditor />;
+  // /campaign (singular) is the play surface — pick a campaign; /editor is the authoring
+  // editor (the nested level editor is /editor/level). Distinct paths, so order here doesn't
+  // matter. Legacy /campaigns-next · /campaigns · /edit · /level-editor remain as aliases.
   if (path === '/campaign' || path.startsWith('/campaign/')) return <Campaign />;
-  if (path === '/campaigns-next' || path === '/campaigns') return <CampaignEditor />;
+  if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return <CampaignEditor />;
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;
   if (path === '/settings' || path.startsWith('/settings/')) return <Settings />;

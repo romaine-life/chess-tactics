@@ -14,7 +14,7 @@ export function DesignIndex() {
       </div>
       <p style={{ color: 'var(--ds-ink-3)', maxWidth: 560 }}>
         The component styleguide lives in the running surfaces (<a href="/play" style={link}>skirmish</a>,
-        {' '}<a href="/edit" style={link}>level editor</a>, <a href="/campaigns-next" style={link}>campaign editor</a>).
+        {' '}<a href="/editor/level" style={link}>level editor</a>, <a href="/editor" style={link}>editor</a>).
         The acceptance portfolio is persisted server-side (<code>/api/design-portfolios</code>).
       </p>
     </div>

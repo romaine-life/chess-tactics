@@ -320,7 +320,7 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
 
 // ===== Campaign Editor chrome tuner =====
 // The editor's chrome is built from kit 9-slice frames (border-image). This viewer auditions each
-// element group's size / frame / fill live on the real /campaigns-next page, one element at a time.
+// element group's size / frame / fill live on the real /editor page, one element at a time.
 
 // Kit frames an element can be forced to wear (public/assets/ui/kit/). 'shipped' leaves the element's
 // own frame — and its hover/selected/danger variants — untouched.
@@ -469,7 +469,7 @@ function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: Reac
   const patch = (next: Partial<CeGroupTune>): void =>
     setGroups((prev) => ({ ...prev, [g.id]: { ...prev[g.id], ...next } }));
 
-  // Inject the chrome-tuning CSS into the live /campaigns-next iframe (shared handshake).
+  // Inject the chrome-tuning CSS into the live /editor iframe (shared handshake).
   useInjectedStyle(iframeRef, 'ce-chrome-tuning', buildCeChromeCss(groups));
 
   const copyCss = async (): Promise<void> => {

@@ -1,4 +1,4 @@
-// Dev-only scroll/thumbnail perf harness for the Campaign Editor. `/campaigns-next?stress=<n>`
+// Dev-only scroll/thumbnail perf harness for the Editor. `/editor?stress=<n>`
 // injects a throwaway campaign of N generated levels into the in-memory store so the long,
 // windowed level list (baked thumbnails + content-visibility) can be measured under load.
 //
