@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyMove, chooseEnemyMove, forecastEnemyIntents, withForecast, pieceHp, legalMoves } from './rules';
+import { applyMove, chooseEnemyMove, forecastEnemyIntents, withForecast } from './rules';
 import type { GameState, Piece, PieceType, Side } from './types';
 
 function piece(id: string, side: Side, type: PieceType, x: number, y: number, extra: Partial<Piece> = {}): Piece {
@@ -9,13 +9,6 @@ function piece(id: string, side: Side, type: PieceType, x: number, y: number, ex
 function state(pieces: Piece[], over: Partial<GameState> = {}): GameState {
   return { size: { cols: 8, rows: 8 }, pieces, turn: 'player', winner: null, ...over };
 }
-
-describe('pieceHp', () => {
-  it('defaults to 1 when hp is unset', () => {
-    expect(pieceHp(piece('a', 'enemy', 'pawn', 0, 0))).toBe(1);
-    expect(pieceHp(piece('a', 'enemy', 'pawn', 0, 0, { hp: 3 }))).toBe(3);
-  });
-});
 
 describe('forecastEnemyIntents', () => {
   it('is deterministic — identical output across calls', () => {
@@ -34,7 +27,7 @@ describe('forecastEnemyIntents', () => {
     ]);
     const intents = forecastEnemyIntents(s);
     const queenIntent = intents.find((i) => i.pieceId === 'queen');
-    expect(queenIntent).toMatchObject({ kind: 'attack', targetId: 'victim', to: { x: 4, y: 6 }, damage: 1 });
+    expect(queenIntent).toMatchObject({ kind: 'attack', targetId: 'victim', to: { x: 4, y: 6 } });
   });
 
   it('prefers the higher-value capture', () => {
@@ -72,23 +65,8 @@ describe('forecastEnemyIntents', () => {
   });
 });
 
-describe('applyMove with hp', () => {
-  it('damages a multi-hp target without displacing the attacker (attack-in-place)', () => {
-    const s = state([
-      piece('queen', 'player', 'queen', 4, 4),
-      piece('tank', 'enemy', 'pawn', 4, 5, { hp: 2, maxHp: 2 }),
-    ]);
-    const { state: next, events } = applyMove(s, 'queen', { x: 4, y: 5, capture: 'tank' });
-    const queen = next.pieces.find((p) => p.id === 'queen')!;
-    const tank = next.pieces.find((p) => p.id === 'tank')!;
-    expect(queen).toMatchObject({ x: 4, y: 4 }); // did not move onto the square
-    expect(tank).toMatchObject({ alive: true, hp: 1 });
-    expect(events).toContainEqual({ kind: 'damaged', pieceId: 'tank', by: 'queen', amount: 1, hp: 1 });
-    expect(events.some((e) => e.kind === 'moved')).toBe(false);
-    expect(next.turn).toBe('enemy'); // turn still passes
-  });
-
-  it('kills a 1-hp target and displaces onto the square (classic capture)', () => {
+describe('applyMove capture', () => {
+  it('captures a target and displaces onto the square', () => {
     const s = state([
       piece('queen', 'player', 'queen', 4, 4),
       piece('foe', 'enemy', 'pawn', 4, 5),

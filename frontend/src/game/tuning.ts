@@ -14,7 +14,7 @@
 // same trajectory, so a gym run is deterministic (like the eight-queens engine).
 
 import type { Level } from '../core/level';
-import { playLevelGame } from './selfplay';
+import { playLevelGame, type GameRecord } from './selfplay';
 import { DEFAULT_EVAL_WEIGHTS, type EvalWeights, type SearchOptions } from '../core/ai';
 import { createRng } from '../core/rng';
 import type { PieceType } from '../core/types';
@@ -107,13 +107,44 @@ export interface MatchStats {
   wins: number;
   draws: number;
   losses: number;
+  records: MatchGameRecord[];
 }
 
-export function matchStats(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions): MatchStats {
+export interface MatchGameRecord {
+  bookIndex: number;
+  seed: number;
+  /** Which side config A played in this game. */
+  candidateSide: 'player' | 'enemy';
+  /** Opening plies that produced the book position before this recorded game began. */
+  openingMoves: BookPosition['moves'];
+  record: GameRecord;
+}
+
+export interface MatchGameProgress {
+  record: MatchGameRecord;
+  stats: Pick<MatchStats, 'games' | 'wins' | 'draws' | 'losses'>;
+}
+
+export interface MatchControl {
+  beforeGame?: () => void | Promise<void>;
+  afterGame?: () => void | Promise<void>;
+}
+
+export function matchStats(
+  level: Level,
+  a: EvalWeights,
+  b: EvalWeights,
+  book: readonly BookPosition[],
+  opts: MatchOptions,
+  retainRecords = true,
+  onGame?: (progress: MatchGameProgress) => void,
+): MatchStats {
   const searchA: SearchOptions = { ...opts.search, weights: a };
   const searchB: SearchOptions = { ...opts.search, weights: b };
   let wins = 0, draws = 0, losses = 0;
-  for (const pos of book) {
+  const records: MatchGameRecord[] = [];
+  for (let bookIndex = 0; bookIndex < book.length; bookIndex += 1) {
+    const pos = book[bookIndex];
     // Each game STARTS from this book position (the seeded opening plies), then A
     // and B play it out. Playing it both ways (A-as-player then A-as-enemy) cancels
     // side bias — so matchScore(w, w, book) === 0.5 for any book (swap symmetry).
@@ -122,17 +153,60 @@ export function matchStats(level: Level, a: EvalWeights, b: EvalWeights, book: r
     // A as player, B as enemy.
     const r1 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchA, enemy: searchB }, maxPlies: opts.maxPlies });
     if (r1.winner === 'player') wins += 1; else if (r1.winner === 'draw') draws += 1; else losses += 1;
+    const g1 = { bookIndex, seed, candidateSide: 'player' as const, openingMoves: opening, record: r1 };
+    if (retainRecords) records.push(g1);
+    onGame?.({ record: g1, stats: { games: wins + draws + losses, wins, draws, losses } });
     // Same position, sides swapped: A as enemy, B as player.
     const r2 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchB, enemy: searchA }, maxPlies: opts.maxPlies });
     if (r2.winner === 'enemy') wins += 1; else if (r2.winner === 'draw') draws += 1; else losses += 1;
+    const g2 = { bookIndex, seed, candidateSide: 'enemy' as const, openingMoves: opening, record: r2 };
+    if (retainRecords) records.push(g2);
+    onGame?.({ record: g2, stats: { games: wins + draws + losses, wins, draws, losses } });
   }
   const games = wins + draws + losses;
-  return { score: games ? (wins + 0.5 * draws) / games : 0.5, games, wins, draws, losses };
+  return { score: games ? (wins + 0.5 * draws) / games : 0.5, games, wins, draws, losses, records };
+}
+
+export async function matchStatsAsync(
+  level: Level,
+  a: EvalWeights,
+  b: EvalWeights,
+  book: readonly BookPosition[],
+  opts: MatchOptions,
+  retainRecords = true,
+  onGame?: (progress: MatchGameProgress) => void,
+  control?: MatchControl,
+): Promise<MatchStats> {
+  const searchA: SearchOptions = { ...opts.search, weights: a };
+  const searchB: SearchOptions = { ...opts.search, weights: b };
+  let wins = 0, draws = 0, losses = 0;
+  const records: MatchGameRecord[] = [];
+  for (let bookIndex = 0; bookIndex < book.length; bookIndex += 1) {
+    const pos = book[bookIndex];
+    const opening = pos.moves;
+    const seed = pos.seed;
+    await control?.beforeGame?.();
+    const r1 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchA, enemy: searchB }, maxPlies: opts.maxPlies });
+    if (r1.winner === 'player') wins += 1; else if (r1.winner === 'draw') draws += 1; else losses += 1;
+    const g1 = { bookIndex, seed, candidateSide: 'player' as const, openingMoves: opening, record: r1 };
+    if (retainRecords) records.push(g1);
+    onGame?.({ record: g1, stats: { games: wins + draws + losses, wins, draws, losses } });
+    await control?.afterGame?.();
+    await control?.beforeGame?.();
+    const r2 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchB, enemy: searchA }, maxPlies: opts.maxPlies });
+    if (r2.winner === 'enemy') wins += 1; else if (r2.winner === 'draw') draws += 1; else losses += 1;
+    const g2 = { bookIndex, seed, candidateSide: 'enemy' as const, openingMoves: opening, record: r2 };
+    if (retainRecords) records.push(g2);
+    onGame?.({ record: g2, stats: { games: wins + draws + losses, wins, draws, losses } });
+    await control?.afterGame?.();
+  }
+  const games = wins + draws + losses;
+  return { score: games ? (wins + 0.5 * draws) / games : 0.5, games, wins, draws, losses, records };
 }
 
 /** (wins + ½·draws)/games from A's perspective. matchScore(w, w, book) === 0.5. */
 export function matchScore(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions): number {
-  return matchStats(level, a, b, book, opts).score;
+  return matchStats(level, a, b, book, opts, false).score;
 }
 
 export interface SpsaHyperParams {
@@ -169,6 +243,17 @@ export interface StepResult {
   wins: number;
   draws: number;
   losses: number;
+  /** Full self-play records for the latest step only, tagged by probe and book position. */
+  latestGames: SpsaStepGameRecord[];
+}
+
+export interface SpsaStepGameRecord extends MatchGameRecord {
+  probe: 'plus' | 'minus';
+}
+
+export interface SpsaGameProgress extends MatchGameProgress {
+  record: SpsaStepGameRecord;
+  probe: 'plus' | 'minus';
 }
 
 /**
@@ -185,6 +270,7 @@ export function spsaStep(
   masterSeed: number,
   hp: SpsaHyperParams,
   match: MatchOptions,
+  onGame?: (progress: SpsaGameProgress) => void,
 ): StepResult {
   const rng = createRng(masterSeed + step * 7919 + 101);
   // Per-parameter scale so each weight is perturbed by a comparable FRACTION of its
@@ -197,8 +283,12 @@ export function spsaStep(
   const delta = theta.map(() => (rng.next() < 0.5 ? -1 : 1));
   const thetaPlus = clampVec(theta.map((v, i) => v + c * scale[i] * delta[i]));
   const thetaMinus = clampVec(theta.map((v, i) => v - c * scale[i] * delta[i]));
-  const sPlus = matchStats(level, decodeWeights(thetaPlus), reference, book, match);
-  const sMinus = matchStats(level, decodeWeights(thetaMinus), reference, book, match);
+  const sPlus = matchStats(level, decodeWeights(thetaPlus), reference, book, match, true, (progress) => {
+    onGame?.({ ...progress, probe: 'plus', record: { ...progress.record, probe: 'plus' } });
+  });
+  const sMinus = matchStats(level, decodeWeights(thetaMinus), reference, book, match, true, (progress) => {
+    onGame?.({ ...progress, probe: 'minus', record: { ...progress.record, probe: 'minus' } });
+  });
   const yPlus = sPlus.score;
   const yMinus = sMinus.score;
   // Gradient in the normalized space, mapped back per-axis by `scale`: a step toward
@@ -210,6 +300,51 @@ export function spsaStep(
     wins: sPlus.wins + sMinus.wins,
     draws: sPlus.draws + sMinus.draws,
     losses: sPlus.losses + sMinus.losses,
+    latestGames: [
+      ...sPlus.records.map((record) => ({ ...record, probe: 'plus' as const })),
+      ...sMinus.records.map((record) => ({ ...record, probe: 'minus' as const })),
+    ],
+  };
+}
+
+export async function spsaStepAsync(
+  level: Level,
+  theta: readonly number[],
+  reference: EvalWeights,
+  book: readonly BookPosition[],
+  step: number,
+  masterSeed: number,
+  hp: SpsaHyperParams,
+  match: MatchOptions,
+  onGame?: (progress: SpsaGameProgress) => void,
+  control?: MatchControl,
+): Promise<StepResult> {
+  const rng = createRng(masterSeed + step * 7919 + 101);
+  const scale = hp.cScale ?? deriveScales(reference);
+  const c = hp.c0 / Math.pow(step + 1, hp.gamma);
+  const a = hp.a0 / Math.pow(step + 1 + hp.bigA, hp.alpha);
+  const delta = theta.map(() => (rng.next() < 0.5 ? -1 : 1));
+  const thetaPlus = clampVec(theta.map((v, i) => v + c * scale[i] * delta[i]));
+  const thetaMinus = clampVec(theta.map((v, i) => v - c * scale[i] * delta[i]));
+  const sPlus = await matchStatsAsync(level, decodeWeights(thetaPlus), reference, book, match, true, (progress) => {
+    onGame?.({ ...progress, probe: 'plus', record: { ...progress.record, probe: 'plus' } });
+  }, control);
+  const sMinus = await matchStatsAsync(level, decodeWeights(thetaMinus), reference, book, match, true, (progress) => {
+    onGame?.({ ...progress, probe: 'minus', record: { ...progress.record, probe: 'minus' } });
+  }, control);
+  const yPlus = sPlus.score;
+  const yMinus = sMinus.score;
+  const thetaNew = clampVec(theta.map((v, i) => v + scale[i] * a * ((yPlus - yMinus) / (2 * c * delta[i]))));
+  return {
+    theta: thetaNew, yPlus, yMinus, c, a,
+    games: sPlus.games + sMinus.games,
+    wins: sPlus.wins + sMinus.wins,
+    draws: sPlus.draws + sMinus.draws,
+    losses: sPlus.losses + sMinus.losses,
+    latestGames: [
+      ...sPlus.records.map((record) => ({ ...record, probe: 'plus' as const })),
+      ...sMinus.records.map((record) => ({ ...record, probe: 'minus' as const })),
+    ],
   };
 }
 

@@ -3,7 +3,7 @@
 // book's retained session accumulate. Node env; the reducer is pure (no `self`).
 
 import { describe, it, expect } from 'vitest';
-import { advanceSession, type StepConfig } from './gymStep';
+import { advanceSession, type StepConfig, type StepProgress } from './gymStep';
 import { freshSession } from './openingBooks';
 import { generateOpeningBook } from '../game/openingBook';
 import { DEFAULT_HYPERPARAMS, matchScore, decodeWeights } from '../game/tuning';
@@ -39,6 +39,7 @@ describe('advanceSession', () => {
     expect(session.k).toBe(1);
     expect(session.traj).toHaveLength(1);
     expect(session.traj[0]).toEqual(point);
+    expect(session.latestStepGames).toHaveLength(point.games ?? 0);
     expect(point.step).toBe(0);
   });
 
@@ -83,6 +84,34 @@ describe('advanceSession', () => {
     const { session: s2 } = advanceSession(cfg(), s1, book());
     expect(s2.k).toBe(2);
     expect(s2.traj).toHaveLength(2);
-    expect(s2.traj[1].step).toBe(1);
+    expect(s2.traj[1]?.step).toBe(1);
+    expect(s2.latestStepGames).toHaveLength(s2.traj[1]?.games ?? 0);
+    expect(s2.latestStepGames).not.toBe(s1.latestStepGames);
+  });
+
+  it('reports per-game progress across probes and honest scoring', { timeout: 60_000 }, () => {
+    const b = book();
+    const progress: StepProgress[] = [];
+    advanceSession(cfg(), freshSession(), b, (p) => progress.push(p));
+    const totalGames = b.length * 6;
+    expect(progress).toHaveLength(totalGames);
+    expect(progress[0]).toMatchObject({
+      phase: 'theta+',
+      gamesDone: 1,
+      gamesTotal: totalGames,
+      phaseGamesDone: 1,
+      phaseGamesTotal: b.length * 2,
+      game: { bookIndex: 0, candidateSide: 'player' },
+    });
+    expect(['win', 'draw', 'loss']).toContain(progress[0].outcome);
+    expect(progress[0].game.record.plies).toBeGreaterThanOrEqual(0);
+    expect(progress[progress.length - 1]).toMatchObject({
+      phase: 'score',
+      gamesDone: totalGames,
+      gamesTotal: totalGames,
+      phaseGamesDone: b.length * 2,
+      phaseGamesTotal: b.length * 2,
+    });
+    expect(['win', 'draw', 'loss']).toContain(progress[progress.length - 1].outcome);
   });
 });

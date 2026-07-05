@@ -58,6 +58,10 @@ app.use('/api/train-runs', express.json({ limit: '10mb' }));
 // ceiling. Mount a larger parser first, same as lab-runs; the global parser below
 // then sees the body as already read and skips it.
 app.use('/api/opening-books', express.json({ limit: '4mb' }));
+// Official-campaigns holds the ENTIRE official workspace (every campaign + all their level
+// docs, each carrying a full per-cell terrain array + boardCode), so it grows well past the
+// 256kb ceiling. Mount a larger parser first, same as lab-runs; the global parser below skips it.
+app.use('/api/official-campaigns', express.json({ limit: '10mb' }));
 app.use(express.json({ limit: '256kb' }));
 
 // ---------------------------------------------------------------------------
@@ -84,6 +88,16 @@ const AAD_DB_TOKEN_SCOPE = 'https://ossrdbms-aad.database.windows.net/.default';
 // Fixed key so concurrent pods (a rolling update briefly runs two) serialize
 // schema migration via a Postgres session advisory lock.
 const MIGRATION_ADVISORY_LOCK_KEY = 4300193001;
+const SCHEMA_MIGRATION_MODES = new Set(['check', 'auto', 'off']);
+
+function schemaMigrationModeFromEnv(raw) {
+  const value = String(raw || 'check').trim().toLowerCase();
+  if (SCHEMA_MIGRATION_MODES.has(value)) return value;
+  console.warn(`invalid SCHEMA_MIGRATIONS="${raw}"; using read-only check mode`);
+  return 'check';
+}
+
+const schemaMigrationMode = schemaMigrationModeFromEnv(process.env.SCHEMA_MIGRATIONS);
 
 const MIGRATIONS = [
   {
@@ -298,7 +312,8 @@ const MIGRATIONS = [
 
 let pool = null;
 let dbReady = false;
-let migrationPromise = null;
+let schemaReadinessPromise = null;
+const REQUIRED_SCHEMA_MIGRATION_VERSIONS = MIGRATIONS.map((migration) => migration.version);
 
 function buildPool() {
   if (databaseUrl) {
@@ -373,22 +388,75 @@ async function runMigrations() {
   }
 }
 
-// Idempotent, self-healing readiness: migrations run once; a failed attempt is
-// retried on the next request rather than wedging persistence until a redeploy.
+class SchemaMigrationRequiredError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = 'SchemaMigrationRequiredError';
+    this.code = 'schema_migration_required';
+    this.details = details;
+  }
+}
+
+async function checkMigrations() {
+  const client = await pool.connect();
+  try {
+    const registry = await client.query("SELECT to_regclass('public.schema_migrations') AS table_name");
+    if (!registry.rows[0] || !registry.rows[0].table_name) {
+      throw new SchemaMigrationRequiredError('schema_migrations table is missing', {
+        missing_versions: REQUIRED_SCHEMA_MIGRATION_VERSIONS,
+      });
+    }
+    const { rows } = await client.query('SELECT version FROM schema_migrations');
+    const applied = new Set(rows.map((row) => row.version));
+    const missing = REQUIRED_SCHEMA_MIGRATION_VERSIONS.filter((version) => !applied.has(version));
+    if (missing.length) {
+      throw new SchemaMigrationRequiredError(`schema migrations missing versions: ${missing.join(', ')}`, {
+        missing_versions: missing,
+      });
+    }
+  } finally {
+    client.release();
+  }
+}
+
+async function prepareDbSchema() {
+  if (schemaMigrationMode === 'off') {
+    dbReady = true;
+    return;
+  }
+  if (schemaMigrationMode === 'auto') {
+    await runMigrations();
+    dbReady = true;
+    return;
+  }
+  await checkMigrations();
+  dbReady = true;
+}
+
+function schemaReadyMessage() {
+  if (schemaMigrationMode === 'auto') return 'schema migrations applied';
+  if (schemaMigrationMode === 'off') return 'schema migrations skipped';
+  return 'schema migrations verified';
+}
+
+// Idempotent, self-healing readiness: schema readiness runs once; a failed
+// attempt is retried on the next request rather than wedging persistence until a
+// redeploy. In local-default check mode this is read-only and never applies DDL.
 async function ensureDbReady() {
   if (!pool) throw new Error('database_not_configured');
   if (dbReady) return;
-  if (!migrationPromise) {
-    migrationPromise = runMigrations()
-      .then(() => { dbReady = true; })
-      .catch((error) => { migrationPromise = null; throw error; });
+  if (!schemaReadinessPromise) {
+    schemaReadinessPromise = prepareDbSchema()
+      .catch((error) => { schemaReadinessPromise = null; throw error; });
   }
-  await migrationPromise;
+  await schemaReadinessPromise;
 }
 
 function dbUnavailable(res, message, error, code) {
   console.error(`${message}:`, error);
-  res.status(503).json({ error: code });
+  const responseCode = error && error.code === 'schema_migration_required' ? error.code : code;
+  const details = responseCode === 'schema_migration_required' && error.details ? { details: error.details } : {};
+  res.status(503).json({ error: responseCode, ...details });
 }
 
 const LEVEL_ROLES = new Set(['player', 'enemy', 'terrain']);
@@ -1995,8 +2063,8 @@ function validateWorkspaceVictory(victory, key) {
 // Board floor dropped to 1×1 (ADR-0050): the old 4×4 clamp was an arbitrary guardrail with
 // no technical basis, and tiny boards are legitimate for several modes. Mirrors the frontend
 // BOARD_COLS / BOARD_ROWS consts in core/level.ts.
-const WORKSPACE_BOARD_COLS = { min: 1, max: 16 };
-const WORKSPACE_BOARD_ROWS = { min: 1, max: 20 };
+const WORKSPACE_BOARD_COLS = { min: 1, max: 48 };
+const WORKSPACE_BOARD_ROWS = { min: 1, max: 48 };
 
 function isFiniteInteger(value) {
   return Number.isInteger(value) && Number.isFinite(value);
@@ -2741,6 +2809,17 @@ function validatePropSeatsData(data) {
     for (const dim of ['w', 'h']) {
       if (Object.hasOwn(seat, dim) && !(Number.isInteger(seat[dim]) && seat[dim] >= 1)) return `seat "${id}" ${dim} must be a positive integer`;
     }
+    if (Object.hasOwn(seat, 'parts')) {
+      if (!Array.isArray(seat.parts) || seat.parts.length < 1) return `seat "${id}" parts must be a non-empty array`;
+      for (const [index, part] of seat.parts.entries()) {
+        if (!isObjectRecord(part)) return `seat "${id}" part ${index + 1} must be an object`;
+        if (!isObjectRecord(part.source) || (part.source.kind !== 'asset' && part.source.kind !== 'prop' && part.source.kind !== 'doodad') || typeof part.source.id !== 'string') {
+          return `seat "${id}" part ${index + 1} needs an asset/prop/doodad source`;
+        }
+        if (!Number.isFinite(part.anchorX) || !Number.isFinite(part.anchorY)) return `seat "${id}" part ${index + 1} needs numeric anchorX/anchorY`;
+        if (!(Number.isFinite(part.scale) && part.scale > 0)) return `seat "${id}" part ${index + 1} needs a positive scale`;
+      }
+    }
     if (Object.hasOwn(seat, 'base') && (typeof seat.base !== 'string' || !Object.hasOwn(data, seat.base))) {
       return `seat "${id}" base "${seat.base}" must reference an existing prop in the same document`;
     }
@@ -3213,15 +3292,16 @@ function startServer() {
 }
 
 // Configure the durable store, then start serving. The game (static + /play)
-// must stay up even if the database is unreachable, so a DB/migration failure is
-// logged and surfaced as 503 on the persistence endpoints — it never blocks
-// startup, and ensureDbReady() retries on the next request.
+// must stay up even if the database is unreachable or behind schema, so a
+// DB/schema-readiness failure is logged and surfaced as 503 on the persistence
+// endpoints — it never blocks startup, and ensureDbReady() retries on the next
+// request.
 pool = buildPool();
 if (pool) {
   pool.on('error', (error) => console.error('postgres pool error:', error));
   ensureDbReady()
-    .then(() => console.log(`postgres ready (mode=${databaseUrl ? 'connection-string' : 'workload-identity'}); schema migrations applied`))
-    .catch((error) => console.error('postgres init failed; persistence endpoints will return 503 until it recovers:', error))
+    .then(() => console.log(`postgres ready (mode=${databaseUrl ? 'connection-string' : 'workload-identity'}, schema=${schemaMigrationMode}); ${schemaReadyMessage()}`))
+    .catch((error) => console.error('postgres init failed; persistence endpoints will return 503 until it recovers or schema is prepared:', error))
     .finally(startServer);
 } else {
   console.warn('no database configured (set DATABASE_URL, or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_USER); persistence endpoints will return 503');

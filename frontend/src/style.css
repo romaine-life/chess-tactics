@@ -226,7 +226,6 @@
   --move: #65b8ff;
   --power: #ffbd58;
   --threat: #ff5f49;
-  --hp: #5dd64a;
   --good: #7bd0a4;
   --danger: #ffb09d;
 
@@ -900,6 +899,32 @@ h1 {
    `none` to preview the bar with no background (crest + name + actions floating). */
 .profile-bar::before {
   display: var(--profile-bar-frame, block);
+}
+
+/* Kit section divider — a 1-D horizontal separator (the `panel-divider` bar asset, ADR-0063).
+   Drop <div class="kit-divider"></div> between content sections inside any kit-framed panel to
+   split it into stacked rows; use as many as you like. It is a branch rail carrying an AUTHORED
+   THREE-WAY TEE atom (`corner-t`, hand-drawn to match the frame's gold corner but symmetric with
+   no corner flair) at each end, mirrored — so the divider tees into the side rail exactly as a
+   frame corner reads, just branched. (Distinct from the decorative settings `section-divider-frame`
+   — an inline rule.)
+
+   The ONE thing a host must supply is --frame-w: the panel's frame width in px (its border-width,
+   or the padding a ::before frame insets its content by). The divider bleeds out by exactly that,
+   so the three-way tees land on the side rail no matter how thick the frame is. Slice/width/height
+   track the baked asset: cap = barCapWidth('panel-divider') = round(tee 24px × junction-size), and
+   the bar's height = the (scaled) tee's own height, so the consumer renders it 1:1 (no downscale).
+   The tuned junction size + nudge live in config/nine-slice/panel-divider.json (scale 1.2, jy 1)
+   -> cap 29px, height 30px. Re-run apply-nine-slice + kit-manifest after changing them. */
+.kit-divider {
+  height: 30px;
+  border: 0 solid transparent;
+  border-width: 0 29px;
+  border-image: url("/assets/ui/kit/panel-divider.png") 0 29 0 29 fill / 0 29px;
+  image-rendering: pixelated;
+  margin: var(--kit-divider-gap, 6px) calc(-1 * var(--frame-w, 16px));
+  align-self: stretch;
+  flex: none;
 }
 
 /* Element 03 - hybrid (render-accuracy + text rule, docs/ui-art-direction.md):
@@ -3769,6 +3794,7 @@ h1 {
    slot) · account cluster. The extra track lets the icon nav sit before the always-present
    cluster (ADR-0042). */
 .app-shell-titlebar.studio-topbar {
+  column-gap: var(--titlebar-control-gap, 10px);
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
@@ -4099,6 +4125,55 @@ h1 {
   opacity: 1;
 }
 
+/* Premoves (queued while the opponent thinks). Cool indigo, distinct from the live-turn
+   cyan move highlight: -target = a square the selected piece could be premoved to, -premove
+   = a square already queued as a step in the chain. */
+.skirmish-board-cell-hit.is-premove-target::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(150, 182, 255, .34), transparent 62%),
+    rgba(108, 148, 255, .34);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-premove::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(158, 190, 255, .34), transparent 60%),
+    rgba(96, 132, 240, .26);
+  opacity: 1;
+}
+
+/* Premove ghosts — the planned move made visible. The BEFORE ghost is the real piece dimmed in
+   place (it has a premove queued); the AFTER ghost is a translucent copy sitting on the planned
+   square (the arrow's far end). Both are pointer-events:none (via .board-unit-seat) so the cell-hit
+   buttons under them own the clicks: the before square cancels the chain, the after square extends it. */
+.skirmish-board-unit.is-premove-origin {
+  opacity: .4;
+}
+
+.board-unit-seat.is-premove-ghost {
+  opacity: .55;
+}
+
+.board-unit-seat.is-premove-ghost img {
+  filter: drop-shadow(0 1px 5px rgba(96, 132, 240, .65));
+  /* Shrink toward the feet when a tile is split between multiple planned units, so they sit side
+     by side on the tile instead of overlapping (--ghost-scale is 1 for a lone ghost). */
+  transform: scale(var(--ghost-scale, 1));
+  transform-origin: center bottom;
+}
+
+/* The queued-chain arrows (placeholder art). Coordinates are board-space, so the stroke
+   scales with the board zoom transform. */
+.premove-arrow {
+  stroke: rgba(139, 174, 255, .85);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.premove-arrowhead-fill {
+  fill: rgba(139, 174, 255, .92);
+}
+
 .skirmish-board-cell-hit.is-selected::after,
 .skirmish-board-cell-hit.is-focused-piece::after,
 .skirmish-board-cell-hit:focus-visible::after,
@@ -4151,7 +4226,7 @@ h1 {
 
 /* THE single source of truth for seating a unit sprite on a tile — shared by the game
    board (.skirmish-board-unit) and the Studio editor so a unit sits identically in both.
-   Each board adds only its own chrome (move animation/HP, or selection/hit) around this;
+   Each board adds only its own chrome (move animation, or selection/hit) around this;
    the seat geometry lives nowhere else. Do not re-derive it per board. */
 .board-unit-seat {
   position: absolute;
@@ -4197,10 +4272,6 @@ h1 {
 .skirmish-board-unit.is-dragging {
   opacity: .3;
   transition: none;
-}
-
-.skirmish-board-unit.is-dragging .skirmish-board-hp {
-  opacity: 0;
 }
 
 /* The carried piece, in screen space (position: fixed), portaled to <body>. Its left/top track
@@ -4317,25 +4388,6 @@ h1 {
 
 .skirmish-board-unit.is-neutral span {
   background: #606872;
-}
-
-.skirmish-board-hp {
-  background: rgba(3, 8, 12, .9);
-  border: 1px solid rgba(235, 247, 255, .72);
-  display: block;
-  height: 5px;
-  left: 50%;
-  position: absolute;
-  top: 4px;
-  transform: translateX(-50%);
-  width: 30px;
-  z-index: 2;
-}
-
-.skirmish-board-hp b {
-  background: var(--skirmish-cyan);
-  display: block;
-  height: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4607,9 +4659,9 @@ h1 {
   padding: 0 var(--ds-gutter);
 }
 
-/* Icon-only battle-lifecycle buttons (Restart ↻ / New ＋): a square kit frame with the glyph
-   centered, no text or tooltip — the "Scenario" heading and the marks carry the meaning. The
-   glyph is stroked in currentColor, so it inherits the button ink and its hover/focus lift. */
+/* Icon-only battle-lifecycle buttons (Restart / New): a square kit frame with the glyph
+   centered. The glyph is stroked in currentColor, so it inherits the button ink and its
+   hover/focus lift. Back and Resign keep text labels because navigation/destruction should be explicit. */
 .skirmish-view-row .app-header-button.skirmish-lifecycle-button {
   inline-size: 46px;
   justify-content: center;
@@ -4626,6 +4678,25 @@ h1 {
    editor's Delete/Clear buttons). */
 .skirmish-view-row .app-header-button.skirmish-resign-button {
   border-image-source: url("/assets/ui/kit/button-danger.png");
+}
+
+/* Test Board CPU-delay floor (HUD Controls tab, test only): a typeable seconds field. */
+.skirmish-cpu-delay-field {
+  align-items: center;
+  color: var(--skirmish-muted);
+  display: flex;
+  font-size: var(--ds-text-xs);
+  gap: var(--ds-inline);
+}
+.skirmish-cpu-delay-field input {
+  background: rgba(8, 20, 30, .55);
+  border: 1px solid rgba(120, 170, 255, .35);
+  border-radius: 6px;
+  color: #eaf6ff;
+  font: inherit;
+  inline-size: 6ch;
+  padding: 5px 7px;
+  text-align: right;
 }
 
 /* New-skirmish battle-clock picker (HUD Controls tab): a caps label + a shared
@@ -4874,6 +4945,25 @@ h1 {
 /* Save when blocked by a playability violation: clickable (it explains why) but dimmed like a
    disabled control, matching the retired title-bar Save's is-disabled look. */
 .le-seg-btn.is-blocked { opacity: .45; }
+
+/* Live-test Play in the always-visible Actions dock: a full-width primary button so it reads as
+   the editor's "test this board now" verb, distinct from the Undo/Redo icons above it. */
+.le-actions-dock .le-play-board {
+  border-image-source: url("/assets/ui/kit/button-primary.png");
+  margin-top: var(--ds-inline, 8px);
+  width: 100%;
+}
+.le-actions-dock .le-play-board:disabled { opacity: .45; }
+
+/* Test-play "‹ Back to editor": a persistent, non-blocking return to the editor board that
+   launched the test (only present when the match carries a valid ?returnTo). Fixed corner chip
+   — the skirmish title bar has no actions slot — clear of the centered board and side HUD. */
+.skirmish-return-editor {
+  bottom: 24px;
+  left: 24px;
+  position: fixed;
+  z-index: 40;
+}
 /* Pinned Actions dock in the rail — only the universal per-edit verbs (Undo/Redo), as
    COMPACT icon-only squares (owner: icons, not letters — the labels ride aria-label +
    title). Glyphs come from the editor icon set (.le-ico/.ic-*), same treatment as the
@@ -7553,7 +7643,7 @@ body { font-size: 17px; }
 .studio-mode-nav {
   align-items: center;
   display: flex;
-  gap: 6px;
+  gap: var(--titlebar-control-gap, 10px);
 }
 
 /* The Studio's title-bar actions cluster: the "‹ Scene" back (shown in the waterfall
@@ -7562,7 +7652,7 @@ body { font-size: 17px; }
 .studio-topbar-actions {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--titlebar-control-gap, 10px);
 }
 .studio-scene-back {
   white-space: nowrap;
@@ -9914,6 +10004,18 @@ button.tileset-relationship-cell {
   top: 0;
 }
 
+.tileset-board-fence-overlay {
+  position: absolute;
+  width: 96px;
+  height: 180px;
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-equator)));
+  display: block;
+  image-rendering: pixelated;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* Animated tile TOP (water ripple). The motion is BAKED frames in a horizontal sheet
    (<tile>-top-anim.png, each frame the full 96x180 tile frame); this rule only advances
    the frame index via steps() — the same model as .gc-tuft below. Per-cell phase is a
@@ -10222,6 +10324,29 @@ button.tileset-relationship-cell {
 
 .tileset-card-action svg {
   display: block;
+}
+
+.tileset-studio-card.is-create {
+  border-style: dashed;
+  border-color: rgba(111, 210, 255, 0.42);
+  background: rgba(8, 24, 36, 0.58);
+}
+
+.tileset-studio-card.is-create:hover,
+.tileset-studio-card.is-create:focus-visible {
+  border-color: rgba(111, 210, 255, 0.82);
+  background: rgba(14, 42, 62, 0.72);
+}
+
+.tileset-create-glyph {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  color: #dff7ff;
+  background: #0e2536;
+  border: 1px solid rgba(111, 210, 255, 0.55);
+  border-radius: 999px;
 }
 
 /* Units category (chess pieces folded into the studio catalog). */
@@ -11374,8 +11499,13 @@ button.tileset-relationship-cell {
      --app-header-h is sized so this inset fits (content + rule + 2×inset). */
   --titlebar-rule-h: 14px;
   --ds-titlebar-inset: var(--ds-space-2);
+  --titlebar-control-gap: 10px;
+  /* Trailing/leading inline padding, published as a var so the account cluster can pull its
+     own trailing edge in to match (see .header-account-cluster). Tightened at the
+     landscape-phone breakpoint, where the cluster's pull-in follows automatically. */
+  --titlebar-pad-inline: var(--ds-space-6);
   border: 0;
-  padding: var(--ds-titlebar-inset) var(--ds-space-6) calc(var(--ds-titlebar-inset) + var(--titlebar-rule-h));
+  padding: var(--ds-titlebar-inset) var(--titlebar-pad-inline) calc(var(--ds-titlebar-inset) + var(--titlebar-rule-h));
   background:
     url("/assets/ui/titlebar/joint-diamond-forged.png") center bottom / auto 26px no-repeat,
     url("/assets/ui/titlebar/band-forged.png") left bottom / auto var(--titlebar-rule-h) repeat-x,
@@ -11554,10 +11684,21 @@ button.tileset-relationship-cell {
    account button, framed identically so the pair reads as one matched unit
    (Material-3 "few trailing items"; the avatar opens the account menu below). */
 .header-account-cluster {
+  /* ONE spacing source for the cluster's two edges: the inter-button gap AND the gap that
+     frames the whole cluster against the bar. Both read this so they can never drift apart. */
+  --cluster-gap: var(--titlebar-control-gap, 10px);
   align-items: center;
   display: flex;
-  gap: 10px;
+  gap: var(--cluster-gap);
   justify-content: flex-end;
+  /* The bar reserves --titlebar-pad-inline of trailing padding, but the cluster's LEADING gap
+     (the forged wall -> first button) is only --cluster-gap. That left-tight / right-loose
+     split reads as an off-centre cluster. Pull the trailing edge in by the difference so the
+     gap after the last button equals --cluster-gap too — the buttons sit symmetrically framed
+     between the wall and the bar edge. Reads the bar's OWN padding var (inherited), so it stays
+     exact when the landscape-phone breakpoint tightens that padding. Applies on every bar (the
+     cluster is invariant), so the trailing gap is a consistent --cluster-gap app-wide. */
+  margin-inline-end: calc(var(--cluster-gap) - var(--titlebar-pad-inline, var(--ds-space-6)));
 }
 
 /* The wall (component: HeaderAccountCluster) — a vertical forged-iron rule that LOCKS the
@@ -12111,6 +12252,7 @@ button.tileset-relationship-cell {
    Mirrors MM_LIVE.btnH (mmLive.test.ts derives btnH from THIS rule). Placed after the .settings-tab
    base so it overrides its padding. Re-tune in the dressing room (MainMenuViewer → Buttons). */
 .main-menu-mode-tab {
+  block-size: 61px;
   min-height: 61px;
   padding-top: 8.5px;
   padding-bottom: 8.5px;
@@ -12131,6 +12273,24 @@ button.tileset-relationship-cell {
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
   transform: translateX(16px); /* label nudge — baked from the Main Menu tuner, shared with Settings */
+}
+
+.settings-tab-label {
+  align-content: center;
+  block-size: var(--settings-tab-icon-slot);
+  inline-size: 100%;
+  justify-items: start;
+  max-inline-size: 100%;
+  overflow: hidden;
+}
+
+.settings-tab-label strong {
+  --settings-tab-label-min-font-size: 8px;
+  display: block;
+  inline-size: 100%;
+  max-block-size: 100%;
+  overflow: hidden;
+  text-wrap: balance;
 }
 
 .settings-tab:not(.is-active):hover {
@@ -12665,7 +12825,98 @@ button.tileset-relationship-cell {
 }
 
 /* A selectable level row (a role=button div over the shared .settings-row). */
-.ce-editor-level-row { cursor: pointer; }
+.ce-editor-level-row {
+  align-items: center;
+  block-size: 86px;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-areas: "thumb copy actions";
+  grid-template-columns: 78px minmax(0, 1fr) auto;
+  min-block-size: 86px;
+  overflow: hidden;
+  padding: 12px 18px;
+}
+
+.ce-editor-level-row + .ce-editor-level-row {
+  margin-top: 8px;
+  min-block-size: 86px;
+  padding: 12px 18px;
+}
+
+.ce-editor-level-row.is-read-only {
+  grid-template-areas: "thumb copy";
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
+.ce-editor-level-row .settings-row-thumb {
+  block-size: 54px;
+  border-width: 5px;
+  border-image-width: 5px;
+  grid-area: thumb;
+  inline-size: 78px;
+}
+
+.ce-editor-level-copy {
+  align-content: center;
+  gap: 4px;
+  grid-area: copy;
+}
+
+.ce-editor-level-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ce-editor-level-heading h4 {
+  flex: 1 1 auto;
+  font-size: var(--ds-text-md);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-editor-level-row p {
+  font-size: var(--ds-text-sm);
+  line-height: 1.1;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-editor-level-row .ce-stars {
+  flex: none;
+  gap: 1px;
+}
+
+.ce-editor-level-row .ce-star {
+  block-size: 12px;
+  inline-size: 12px;
+}
+
+.ce-editor-level-row .ce-row-actions {
+  gap: 4px;
+  grid-area: actions;
+  justify-content: end;
+}
+
+.ce-editor-level-row .ce-icon-button {
+  block-size: 32px;
+  border-width: 8px;
+  border-image-width: 8px;
+  inline-size: 32px;
+}
+
+.ce-editor-level-row .ce-icon-button .ce-icon-img {
+  max-block-size: 14px;
+  max-inline-size: 14px;
+}
+
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
 /* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */
@@ -13405,7 +13656,7 @@ button.tileset-relationship-cell {
   /* Title bar: drop the desktop UI-Scale zoom and tighten padding so the brand + account
      cluster sit comfortably in the shorter bar. */
   .app-shell-titlebar.app-titlebar--ui-scaled { zoom: 1; }
-  .app-shell-titlebar.settings-header-frame { padding-block: 6px; padding-inline: 12px; }
+  .app-shell-titlebar.settings-header-frame { padding-block: 6px; --titlebar-pad-inline: 12px; padding-inline: var(--titlebar-pad-inline); }
 
   /* Skirmish: keep the board + HUD side-by-side. The 860px block stacks them, which
      forces an awkward vertical page-scroll on a short landscape screen; the base 2-column

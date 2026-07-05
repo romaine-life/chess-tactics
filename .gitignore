@@ -22,3 +22,6 @@ npm-debug.log
 frontend/.codex-vite-*.log
 frontend/.chrome-campaign-proof/
 tmp-shots/
+
+# Advance Wars ROMs — copyrighted, never commit (see tools/aw-import)
+roms/

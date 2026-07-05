@@ -262,9 +262,9 @@ function officialCampaignsDevProxy() {
 // child is tied to vite's lifecycle — starts with the dev server, relaunches if it
 // crashes, and is killed when vite exits — so `vite` ALONE is "full prod from dev", and
 // a reboot is just re-running it. `apply:'serve'`, so this NEVER touches a production
-// build. Escape hatch: DEV_NO_BACKEND=1 runs the frontend ALONE against the mock stack — no
-// backend process, no DB (dev auth, bgm, official-campaigns fallback). DEV_OFFLINE=1 still works
-// as a legacy alias.
+// build. Owner-only escape hatch: DEV_NO_BACKEND=1 runs the frontend ALONE against the mock stack —
+// no backend process, no DB (dev auth, bgm, official-campaigns fallback). DEV_OFFLINE=1 still
+// works as a legacy alias. Agents must not use either flag to bypass a backend startup failure.
 // host/db/user are not secrets (see k8s deployment); override any via the env.
 // Ask the OS for a free port instead of hardcoding one, so multiple dev servers /
 // worktrees never fight over a fixed number (the crash-loop that happened when several

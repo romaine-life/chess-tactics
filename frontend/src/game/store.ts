@@ -3,16 +3,16 @@
 // new state out). The renderer and HUD subscribe to it; neither mutates state.
 
 import { create } from 'zustand';
-import type { GameEvent, GameState, Move, Side, Winner } from '../core/types';
-import { applyMove, enemyMove, gameEnv, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
-import { searchEnemyMove } from '../core/ai';
+import type { GameEvent, GameState, Move, Piece, Side, Winner } from '../core/types';
+import { applyMove, gameEnv, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { adoptedWeightsFor } from './adoptedWeights';
+import { premoveTargets, type PremoveStep } from './premoves';
+import { requestEnemyReply } from './aiWorkerClient';
 import { evaluateVictory, resolveVictory, kingSideOf, objectiveContextForLevel, objectiveSummary, victoryRulesForObjective, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType, TimeControl, VictoryRule, VictoryRules } from '../core/level';
 import { DEFAULT_TIME_CONTROL } from '../core/clock';
 import { terrainAt } from '../core/terrain';
 import { ARRIVAL_BAKED, playArrival, playTerrain } from '../sfx';
-import { createRng, type Rng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 import { persistMatch, type PersistedMatch } from './matchPersistence';
 import { loadShippedAiWeights } from '../net/aiWeights';
@@ -69,6 +69,13 @@ export function setNetResignSink(sink: NetResignSink | null): void { netResignSi
 // lands, the board settles for a beat, the enemy "thinks", then answers. This
 // delay stages that read-beat + thinking pause before the enemy reply resolves.
 const ENEMY_REPLY_DELAY = 520;
+
+// A queued premove does NOT fire the instant the enemy reply resolves — it waits this
+// beat first, so the player sees the enemy's move land AND their own queued arrow sitting
+// on the board before it executes. Without it, a fast reply makes the premove invisible:
+// the arrow and the move happen in the same frame. Roughly the enemy's move-glide, so the
+// premove reads as "the enemy moved, then I answered", not two moves at once.
+const PREMOVE_FIRE_DELAY = 460;
 
 // Landing-SFX timing. The move tween runs ~170ms (see SkirmishBoard); fire the
 // terrain footstep a beat into it so the sound lands as the piece *seats*, not as
@@ -217,32 +224,10 @@ export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: Gam
   return { game: { ...game, winner: t.winner, turn: 'done' }, stuck: true, checkmate: t.checkmate };
 }
 
-/** How an enemy decision is made: same call shape as the core's `enemyMove`. */
-type EnemyPolicy = (game: GameState, rng: Rng, env: MoveEnv) => { pieceId: string; move: Move } | null;
-
-/** Enemy decision policies (dev A/B lever: `?ai=greedy` on the skirmish route). */
+/** Enemy decision policies (dev A/B lever: `?ai=greedy` on the skirmish route). The live reply
+ *  is resolved OFF the main thread — see game/enemyReply (the pure resolver) and
+ *  game/aiWorkerClient (the worker client), so a deep search never freezes the board. */
 export type AiMode = 'search' | 'greedy';
-
-// Think budget for the live search enemy. Bounded by NODES, not wall clock: the
-// reply runs synchronously inside the staged "enemy thinks" beat, and a node cap
-// keeps it deterministic (a frozen clock in tests can't make it run to full depth)
-// while still bounding real-play latency — ~40k nodes lands well under the 520ms
-// reply beat on skirmish-sized boards (see aibench). maxDepth caps the ceiling.
-const LIVE_SEARCH = { maxDepth: 6, maxNodes: 40_000 };
-
-/** Resolve the enemy half-turn(s) deterministically until it's the player's move again. */
-function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv, pick: EnemyPolicy): { game: GameState; tick: number; events: GameEvent[] } {
-  const events: GameEvent[] = [];
-  while (game.turn === 'enemy' && !game.winner) {
-    const move = pick(game, createRng(seed + tick), env);
-    tick += 1;
-    if (!move) { game = { ...game, turn: 'player' }; break; }
-    const res = applyMove(game, move.pieceId, move.move);
-    game = res.state;
-    events.push(...res.events);
-  }
-  return { game, tick, events };
-}
 
 /** The player's battle clock (per-level time control; the enemy is untimed). */
 export interface ClockState {
@@ -309,6 +294,9 @@ export interface SkirmishState {
    *  ends only when the server's terminal result echoes back via `concludeNet`. No-op
    *  outside netplay or once the game is decided. */
   resign: () => void;
+  /** Concede the current single-player board immediately. Netplay uses `resign` above
+   *  because its terminal result must be sequenced by the lobby server. */
+  resignLocal: () => void;
   /** End a netplay match by a non-move terminal event (a resignation relayed by the
    *  server). Sets the winner directly and logs the outcome from this seat. Idempotent —
    *  a duplicate/redelivered lobby frame is ignored once the game is decided. */
@@ -320,6 +308,28 @@ export interface SkirmishState {
   focus: (id: string | null) => void;
   movesForSelected: () => Move[];
   tryMoveTo: (x: number, y: number) => void;
+  /** Moves queued while the opponent is thinking (premoves), fired one-per-turn as
+   *  control returns. Ephemeral — dropped on reload, never persisted. */
+  premoves: PremoveStep[];
+  /** Append a premove for `pieceId` → (x, y) to the chain, validated against the
+   *  provisional board (current board + the moves already queued). No-op on the
+   *  player's own live turn (a click there is a real move) or a decided game. */
+  queueMove: (pieceId: string, x: number, y: number) => void;
+  /** Drop the whole queued chain (bound to Escape). */
+  clearPremoves: () => void;
+  /** Test-board only: true while playing a `?mode=test` board, which surfaces the Test Board's
+   *  controls (the CPU-delay floor). False for real/campaign play. */
+  testMode: boolean;
+  /** Test-board only: a MINIMUM CPU think time (ms) floored onto ENEMY_REPLY_DELAY to widen the
+   *  premove window for testing. 0 = off, and forced to 0 outside test mode so real play is
+   *  untouched. The player's clock is already paused across the reply, so the extra wait costs
+   *  the tester nothing — a deliberate softball. */
+  testMinCpuDelayMs: number;
+  /** Enter/leave test-board mode. Leaving resets the CPU-delay floor so it can never leak into
+   *  real play. */
+  setTestMode: (on: boolean) => void;
+  /** Set the test-board CPU-delay floor (ms); no-op outside test mode. */
+  setTestMinCpuDelay: (ms: number) => void;
 }
 
 /**
@@ -407,75 +417,174 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   // of the player's click. The turn is already flipped to 'enemy' (which locks
   // player input) before this fires.
   const scheduleEnemyReply = () => {
+    // A Test Board can floor the CPU's think time (testMinCpuDelayMs) to widen the premove
+    // window; real/campaign play leaves it 0, so this is exactly ENEMY_REPLY_DELAY.
+    const delay = Math.max(ENEMY_REPLY_DELAY, get().testMinCpuDelayMs);
     setTimeout(() => {
       const cur = get();
       // Bail if a new game reset the turn, or it somehow already resolved.
       if (cur.game.turn !== 'enemy' || cur.game.winner) return;
-      // The search enemy needs the objective framing so it plays the MODE (hunt
-      // the King, rush the survive clock, garrison the reach zone) — that's the
-      // whole point of the rung-1 AI. The greedy policy ignores it.
-      // The live opponent uses this level's ADOPTED weights when the Training Gym
-      // has validated + adopted a champion for it (else the shipped defaults). Read
-      // once per reply so a fresh adoption takes effect on the very next enemy turn.
-      const liveWeights = adoptedWeightsFor(cur.levelId);
-      const pick: EnemyPolicy = cur.aiMode === 'greedy'
-        ? enemyMove
-        : (g, rng, env) => searchEnemyMove(g, rng, env, {
-            objective: cur.objective,
-            ctx: cur.objectiveCtx ?? {},
-            turnsElapsed: cur.turnsElapsed ?? 0,
-          }, { ...LIVE_SEARCH, weights: liveWeights });
-      const enemyRes = resolveEnemy(cur.game, cur.seed, cur.tick, envFor(cur.game), pick);
-      const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
-      // With no manual End Turn, a player handed the turn with no legal move would
-      // soft-lock — resolve that as a loss (you can't pass in chess).
-      const afterEnv = envFor(enemyRes.game);
-      const stuckRes = resolveIfPlayerStuck(enemyRes.game, afterEnv);
-      let game = stuckRes.game;
-      if (stuckRes.stuck) msgs.push(stuckRes.checkmate
-        ? 'Checkmate — your King is trapped. Defeat.'
-        : 'Stalemate — no legal moves remain. The skirmish is a draw.');
-      else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
-      // A full player→enemy round just elapsed: advance the survive clock, then
-      // re-check the objective — survive reached, or a player wipe = defeat.
-      const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
-      let resultDetail: string | null = null;
-      if (!game.winner) {
-        const ctx = { ...(cur.objectiveCtx ?? {}), turnsElapsed };
-        const { winner, rule } = resolveVictory(game, cur.victoryOverride ?? victoryRulesForObjective(cur.objective, ctx), ctx);
-        if (winner) {
-          game = { ...game, winner, turn: 'done' };
-          resultDetail = ruleResultDetail(rule);
-          msgs.push(cur.victoryOverride ? victoryOutcomeCopy(winner, rule) : objectiveOutcomeCopy(cur.objective, winner, cur.objectiveCtx?.kingSide));
-        }
+      // Resolve the reply OFF the main thread (game/aiWorker) so the board stays live —
+      // animation AND premove input — for the whole think. The search is node-bounded and
+      // deterministic, so the worker returns the identical move to an inline resolve; only
+      // WHERE it computes changes. The live opponent uses this level's ADOPTED weights when the
+      // Training Gym has adopted a champion for it (else the shipped defaults), resolved here on
+      // the main thread and passed into the worker; the search needs the objective framing so it
+      // plays the MODE (hunt the King, rush the survive clock, garrison the reach zone).
+      requestEnemyReply(
+        {
+          game: cur.game,
+          seed: cur.seed,
+          tick: cur.tick,
+          aiMode: cur.aiMode,
+          objective: cur.objective,
+          ctx: cur.objectiveCtx ?? {},
+          turnsElapsed: cur.turnsElapsed ?? 0,
+          weights: adoptedWeightsFor(cur.levelId),
+        },
+        (enemyRes) => {
+          // The worker computed while the board was live; make sure nothing replaced the board
+          // meanwhile (a new game / a resume) before applying its move. Queuing a premove only
+          // touches the `premoves` slice, so a live board still satisfies game === cur.game.
+          if (get().game !== cur.game) return;
+          const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
+          // With no manual End Turn, a player handed the turn with no legal move would
+          // soft-lock — resolve that as a loss (you can't pass in chess).
+          const afterEnv = envFor(enemyRes.game);
+          const stuckRes = resolveIfPlayerStuck(enemyRes.game, afterEnv);
+          let game = stuckRes.game;
+          if (stuckRes.stuck) msgs.push(stuckRes.checkmate
+            ? 'Checkmate — your King is trapped. Defeat.'
+            : 'Stalemate — no legal moves remain. The skirmish is a draw.');
+          else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
+          // A full player→enemy round just elapsed: advance the survive clock, then re-check the
+          // objective — survive reached, or a player wipe = defeat.
+          const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
+          let resultDetail: string | null = null;
+          if (!game.winner) {
+            const ctx = { ...(cur.objectiveCtx ?? {}), turnsElapsed };
+            const { winner, rule } = resolveVictory(game, cur.victoryOverride ?? victoryRulesForObjective(cur.objective, ctx), ctx);
+            if (winner) {
+              game = { ...game, winner, turn: 'done' };
+              resultDetail = ruleResultDetail(rule);
+              msgs.push(cur.victoryOverride ? victoryOutcomeCopy(winner, rule) : objectiveOutcomeCopy(cur.objective, winner, cur.objectiveCtx?.kingSide));
+            }
+          }
+          // Turn returns to the player: keep the piece they were working with selected so the
+          // board reads continuously, only falling back to their first piece if the enemy
+          // captured it (or nothing was selected — e.g. a resumed match).
+          const keep = livingSelected(game, cur.selectedId, 'player') ?? firstPlayerId(game);
+          set({
+            game,
+            env: envFor(game),
+            tick: enemyRes.tick,
+            turnsElapsed,
+            resultDetail,
+            selectedId: keep,
+            focusedId: keep,
+            log: [...msgs.reverse(), ...cur.log].slice(0, 12),
+          });
+          // Footsteps for the enemy half-turn: one per piece that moved, spread out so a
+          // multi-move reply reads as a sequence, not one muddy stack. Terrain is static, so the
+          // pre-reply env indexes the same board the pieces landed on.
+          enemyRes.events
+            .filter((e): e is Extract<GameEvent, { kind: 'moved' }> => e.kind === 'moved')
+            .forEach((e, i) => playLandingSfx(cur.env, e.to.x, e.to.y, LANDING_SFX_DELAY + i * ENEMY_LANDING_STAGGER));
+          // The turn is back with the player — their clock resumes (no-op when untimed or the
+          // reply decided the game).
+          startClock();
+          // Persist the settled post-reply position now (a reload here resumes it; the queued
+          // premove is ephemeral and intentionally not saved).
+          persistMatch(get());
+          // A queued premove fires after a visible beat rather than in this same frame, so the
+          // player sees the enemy's move land with their queued arrow still on the board before
+          // it executes. drainPremove re-checks validity when it fires — a manual move made
+          // during the beat (which flips the turn) makes it drop the chain instead.
+          if (get().premoves.length > 0 && !get().game.winner) {
+            setTimeout(() => drainPremove(), PREMOVE_FIRE_DELAY);
+          }
+        },
+      );
+    }, delay);
+  };
+
+  // Apply a legal player move and run the full post-move pipeline: bank the clock
+  // increment, apply, sound the footstep, evaluate the objective, detect checkmate/
+  // stalemate/check on the enemy now to move, commit, stage the enemy reply, persist.
+  // Shared by the live path (tryMoveTo) and the premove drain so an auto-fired premove
+  // is byte-for-byte the same move a click would have made.
+  const commitPlayerMove = (piece: Piece, mv: Move) => {
+    const s = get();
+    pauseClockWithIncrement();
+    const playerRes = applyMove(s.game, piece.id, mv);
+    let game = playerRes.state;
+    // Footstep: only when the piece actually relocates. The single 'moved'
+    // event's destination equals (mv.x, mv.y).
+    if (playerRes.events.some((e) => e.kind === 'moved')) {
+      playLandingSfx(s.env, mv.x, mv.y, LANDING_SFX_DELAY);
+    }
+    const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
+    // Objective win on the player's move: capturing the enemy King, routing the last
+    // enemy, or stepping onto a reach tile ends it immediately. (survive is decided a
+    // round later, after the enemy reply.)
+    let resultDetail: string | null = null;
+    if (!game.winner) {
+      const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 };
+      const { winner, rule } = resolveVictory(game, s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx), ctx);
+      if (winner) {
+        game = { ...game, winner, turn: 'done' };
+        resultDetail = ruleResultDetail(rule);
+        msgs.push(s.victoryOverride ? victoryOutcomeCopy(winner, rule) : objectiveOutcomeCopy(s.objective, winner, s.objectiveCtx?.kingSide));
       }
-      // Turn returns to the player: keep the piece they were working with selected so
-      // the board reads continuously, only falling back to their first piece if the
-      // enemy captured it (or nothing was selected — e.g. resumed match).
-      const keep = livingSelected(game, cur.selectedId, 'player') ?? firstPlayerId(game);
-      set({
-        game,
-        env: envFor(game),
-        tick: enemyRes.tick,
-        turnsElapsed,
-        resultDetail,
-        selectedId: keep,
-        focusedId: keep,
-        log: [...msgs.reverse(), ...cur.log].slice(0, 12),
-      });
-      // Footsteps for the enemy half-turn: one per piece that moved, spread out so a
-      // multi-move reply reads as a sequence, not one muddy stack. Terrain is static,
-      // so the pre-reply env indexes the same board the pieces landed on.
-      enemyRes.events
-        .filter((e): e is Extract<GameEvent, { kind: 'moved' }> => e.kind === 'moved')
-        .forEach((e, i) => playLandingSfx(cur.env, e.to.x, e.to.y, LANDING_SFX_DELAY + i * ENEMY_LANDING_STAGGER));
-      // The turn is back with the player — their clock resumes (no-op when untimed
-      // or the reply decided the game).
-      startClock();
-      // The board settled after the enemy answer (or the reply decided it): persist
-      // the new position, or drop the saved copy if the game just ended.
-      persistMatch(get());
-    }, ENEMY_REPLY_DELAY);
+    }
+    // Checkmate the player just delivered ends the game immediately; a non-terminal
+    // check is announced.
+    const enemyEnv = envFor(game);
+    if (!game.winner && game.turn === 'enemy') {
+      const term = terminalIfStuck(game, enemyEnv);
+      if (term) {
+        game = { ...game, winner: term.winner, turn: 'done' };
+        msgs.push(term.checkmate
+          ? 'Checkmate — the enemy King has no escape. Victory!'
+          : 'Stalemate — the enemy has no legal move. The skirmish is a draw.');
+      } else if (sideInCheck(game, 'enemy', enemyEnv)) {
+        msgs.push('Check!');
+      }
+    }
+    // Keep the moved piece selected (the mover always survives its own move) so its
+    // highlight carries through the enemy turn — input is gated by turn, so it shows no
+    // move-dots and isn't actionable, it just keeps the player's context visible.
+    set({
+      game,
+      env: enemyEnv,
+      resultDetail,
+      selectedId: piece.id,
+      focusedId: piece.id,
+      log: [...msgs.reverse(), ...s.log].slice(0, 12),
+    });
+    if (game.turn === 'enemy' && !game.winner) scheduleEnemyReply();
+    persistMatch(get());
+  };
+
+  // Drain one premove as control returns to the player. Returns true iff a premove was
+  // applied. The head is re-validated against the REAL board the enemy reply produced —
+  // if its piece was captured or the square is no longer reachable, the WHOLE chain is
+  // dropped (chess default: one illegal step kills the queue). A decided game clears the
+  // queue too. When a premove fires, its move re-stages the enemy reply, so the next
+  // reply's drain pops the next step and the chain plays out as a back-and-forth flurry.
+  const drainPremove = (): boolean => {
+    const s = get();
+    if (s.premoves.length === 0) return false;
+    if (s.game.turn !== 'player' || s.game.winner) { set({ premoves: [] }); return false; }
+    const [head, ...rest] = s.premoves;
+    const p = s.game.pieces.find((q) => q.id === head.pieceId && q.alive && q.side === 'player');
+    const mv = p ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === head.x && m.y === head.y) : undefined;
+    if (!p || !mv) { set({ premoves: [] }); return false; }
+    set({ premoves: rest });
+    commitPlayerMove(p, mv);
+    // A premove that ended the game leaves the rest of the chain moot — drop it.
+    if (get().game.winner) set({ premoves: [] });
+    return true;
   };
 
   // Apply ONE ordered move to a netplay board. Netplay is SERVER-SEQUENCED: the local
@@ -554,6 +663,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   aiMode: 'search',
   clock: null,
   net: null,
+  premoves: [],
+  testMode: false,
+  testMinCpuDelayMs: 0,
 
   newSkirmish: (opts) => {
     // A previous game's ticker must never outlive its game.
@@ -593,7 +705,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       : null;
     // An explicit opts.ai wins; otherwise keep the running mode (a HUD retry
     // preserves the A/B lever the route set on entry).
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail: null, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, net: null });
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail: null, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, net: null, premoves: [] });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
     startClock();
@@ -670,6 +782,22 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     if (netResignSink) netResignSink();
   },
 
+  resignLocal: () => {
+    const s = get();
+    if (s.net || s.game.winner || !s.started) return;
+    stopClockTicker();
+    set({
+      game: { ...s.game, winner: 'enemy', turn: 'done' },
+      selectedId: null,
+      focusedId: null,
+      premoves: [],
+      resultDetail: null,
+      clock: s.clock ? { ...s.clock, running: false } : null,
+      log: ['Defeat — you resigned.', ...s.log].slice(0, 12),
+    });
+    persistMatch(get()); // game decided → drops the saved copy
+  },
+
   concludeNet: (winner, reason) => {
     const s = get();
     if (!s.net || s.game.winner) return; // idempotent: already decided (or not netplay)
@@ -710,6 +838,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       selectedId,
       focusedId: selectedId,
       started: true,
+      // A queued premove is ephemeral thinking-time intent — a reload drops it, like
+      // navigating away mid-plan.
+      premoves: [],
       // Resume with the clock paused; startClock re-arms the deadline from the
       // banked remainder when it's the player's live turn. A reload isn't thinking
       // time, so the player keeps the time they had at their last move.
@@ -763,69 +894,41 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // dropped POST is a no-op the seat can retry, never a permanent desync). Clear the
     // selection for immediate "click registered" feedback; the echo sets the next one.
     if (s.net) { if (netMoveSink) netMoveSink(p.id, { x: mv.x, y: mv.y }); set({ selectedId: null, focusedId: null }); return; }
-    // ---- single-player path (unchanged) ----
-    // The move is legal and WILL apply — the player's clock stops here, banking the
-    // Fischer increment. It stays paused for the whole enemy reply.
-    pauseClockWithIncrement();
-    const playerRes = applyMove(s.game, p.id, mv);
-    let game = playerRes.state;
-    // Footstep: only when the piece actually relocates (applyMove emits a 'moved'
-    // event). An attack-in-place against an hp>1 target emits 'damaged' with no
-    // 'moved', so it must not sound a landing — this mirrors the enemy path. The
-    // single player 'moved' event's destination equals (x, y), so the args are right.
-    if (playerRes.events.some((e) => e.kind === 'moved')) {
-      playLandingSfx(s.env, x, y, LANDING_SFX_DELAY);
-    }
-    const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
-    // Objective win on the player's move: capturing the enemy King, routing the
-    // last enemy, or stepping a piece onto a reach tile ends the game immediately —
-    // what makes the displayed objective honest. (survive can only be decided once
-    // a round elapses, so it's checked after the enemy reply, not here.)
-    let resultDetail: string | null = null;
-    if (!game.winner) {
-      const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 };
-      const { winner, rule } = resolveVictory(game, s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx), ctx);
-      if (winner) {
-        game = { ...game, winner, turn: 'done' };
-        resultDetail = ruleResultDetail(rule);
-        msgs.push(s.victoryOverride ? victoryOutcomeCopy(winner, rule) : objectiveOutcomeCopy(s.objective, winner, s.objectiveCtx?.kingSide));
-      }
-    }
-    // Checkmate the player just delivered ends the game immediately: if the enemy
-    // (now to move) has no legal reply, that's checkmate (victory) when its King is
-    // in check, otherwise stalemate (a draw). A non-terminal check is announced.
-    const enemyEnv = envFor(game);
-    if (!game.winner && game.turn === 'enemy') {
-      const term = terminalIfStuck(game, enemyEnv);
-      if (term) {
-        game = { ...game, winner: term.winner, turn: 'done' };
-        msgs.push(term.checkmate
-          ? 'Checkmate — the enemy King has no escape. Victory!'
-          : 'Stalemate — the enemy has no legal move. The skirmish is a draw.');
-      } else if (sideInCheck(game, 'enemy', enemyEnv)) {
-        msgs.push('Check!');
-      }
-    }
-    // Beat 1: commit the player's move on its own so it animates and the board
-    // reads before the enemy answers. applyMove flips the turn to 'enemy', which
-    // also locks further player input until the reply resolves. Keep the moved piece
-    // selected (the mover always survives its own move) so its highlight carries
-    // through the enemy turn — input is gated by turn, so it shows no move-dots and
-    // isn't actionable, it just keeps the player's context visible.
-    set({
-      game,
-      env: enemyEnv,
-      resultDetail,
-      selectedId: p.id,
-      focusedId: p.id,
-      log: [...msgs.reverse(), ...s.log].slice(0, 12),
-    });
-    // Beats 2–3: a read beat, then the enemy "thinks" and answers.
-    if (game.turn === 'enemy' && !game.winner) scheduleEnemyReply();
-    // Persist the post-move position (turn now 'enemy', or 'done' if this move won).
-    // A reload here resumes mid enemy-turn and re-stages the reply (see resumeMatch),
-    // or — if the move ended the game — persistMatch drops the saved copy.
-    persistMatch(get());
+    // A deliberate manual move overrides any premove queued during the fire-beat — the
+    // player took the wheel, so drop the chain rather than firing it a beat later.
+    if (s.premoves.length) set({ premoves: [] });
+    // Single-player: the move's rhythm — it lands on its own so it animates and reads, then
+    // a beat, then the enemy answers — lives in commitPlayerMove, shared with the premove
+    // drain so an auto-fired premove is byte-for-byte the same move a click would make.
+    commitPlayerMove(p, mv);
+  },
+
+  queueMove: (pieceId, x, y) => {
+    const s = get();
+    // Premoves are single-player only — the local AI reply is what drains them, and a
+    // netplay match has no such local reply. They're also the OPPONENT-turn action: on the
+    // player's own live turn a click is a real move. Nothing queues onto a decided game.
+    if (s.net || s.game.turn === 'player' || s.game.winner) return;
+    // Validate against the PROVISIONAL board (current board + the moves already queued)
+    // so the chain builds on itself; the tip stays legal for the click that follows.
+    if (!premoveTargets(s.game, s.premoves, pieceId).some((m) => m.x === x && m.y === y)) return;
+    set({ premoves: [...s.premoves, { pieceId, x, y }] });
+  },
+
+  clearPremoves: () => {
+    if (get().premoves.length) set({ premoves: [] });
+  },
+
+  setTestMode: (on) => {
+    // Leaving test mode clears the CPU-delay floor so it can never affect real/campaign play.
+    set(on ? { testMode: true } : { testMode: false, testMinCpuDelayMs: 0 });
+  },
+
+  setTestMinCpuDelay: (ms) => {
+    if (!get().testMode) return; // test-board only — never floors real play
+    // Generous ceiling (10 min) so a tester can set whatever floor they like, while an absurd
+    // typo still can't hang the turn forever.
+    set({ testMinCpuDelayMs: Math.max(0, Math.min(600_000, Math.round(ms))) });
   },
   };
 });

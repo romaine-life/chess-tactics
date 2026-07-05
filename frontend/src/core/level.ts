@@ -19,8 +19,8 @@ export const CAMPAIGN_FORMAT_VERSION = 1;
 // Structural bounds only. The old 4×4 floor was an arbitrary guardrail with no technical
 // basis (ADR-0050); tiny boards (1×2) are legitimate for several modes. What actually makes
 // a board saveable is `validatePlayability` (core/playability.ts) — the editor's save gate.
-export const BOARD_COLS = { min: 1, max: 16 } as const;
-export const BOARD_ROWS = { min: 1, max: 20 } as const;
+export const BOARD_COLS = { min: 1, max: 48 } as const;
+export const BOARD_ROWS = { min: 1, max: 48 } as const;
 
 export type ZoneType = 'player-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock';
 export const ZONE_TYPES = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock'] as const satisfies readonly ZoneType[];

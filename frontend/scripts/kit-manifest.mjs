@@ -42,7 +42,7 @@ const groups = [
   items: listPng(`${KIT}${g.dir}`).map((f) => ({ name: f.replace('.png', ''), url: `${URLBASE}${g.dir}/${f}`, ...glyph(`${KIT}${g.dir}/${f}`) })),
 }));
 
-const frameNames = ['panel', 'row', 'button-neutral', 'button-primary', 'button-danger', 'mode-button', 'mode-button-active', 'field-input', 'field-select', 'icon-button', 'icon-button-active', 'toggle-track', 'toggle-knob', 'divider'];
+const frameNames = ['panel', 'row', 'button-neutral', 'button-primary', 'button-danger', 'mode-button', 'mode-button-active', 'field-input', 'field-select', 'icon-button', 'icon-button-active', 'toggle-track', 'toggle-knob', 'divider', 'panel-divider', 'tee', 'cross'];
 const frames = frameNames.filter((n) => existsSync(`${KIT}${n}.png`)).map((n) => ({ name: n, url: `${URLBASE}${n}.png`, ...dims(`${KIT}${n}.png`) }));
 
 const allGlyphs = groups.flatMap((g) => g.items);

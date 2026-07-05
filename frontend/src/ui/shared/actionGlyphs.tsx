@@ -25,3 +25,14 @@ export function NewGlyph({ className }: { className?: string }): ReactElement {
     </svg>
   );
 }
+
+/** Back arrow — leave the playtest and return to the editor/previous screen. */
+export function BackGlyph({ className }: { className?: string }): ReactElement {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 6 5 12l6 6" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}

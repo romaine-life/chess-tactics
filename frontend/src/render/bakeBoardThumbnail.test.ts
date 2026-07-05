@@ -6,6 +6,8 @@ import {
   boardBounds,
   largestSolidRect,
 } from './bakeBoardThumbnail';
+import { roadEdgeKey } from '../core/featureAutotile';
+import { fenceOverlayZIndex } from './fenceOverlayDepth';
 import type { EditorBoard } from '../ui/boardCode';
 
 // Coverage (opaque fraction) of a rect under an opacity predicate — the property object-fit:cover
@@ -67,6 +69,12 @@ describe('boardContentHash — stability + sensitivity', () => {
   it('changes when a feature (road) is added', () => {
     const before = blank();
     const after: EditorBoard = { ...blank(), features: { '1,1': { kind: 'road', material: 'cobble' } } };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(after));
+  });
+
+  it('changes when an edge fence is added', () => {
+    const before = blank();
+    const after: EditorBoard = { ...blank(), fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' } };
     expect(boardContentHash(before)).not.toBe(boardContentHash(after));
   });
 
@@ -159,6 +167,26 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(featureOp).toBeDefined();
     expect(featureOp!.z).toBeGreaterThan(tileOp!.z);
     expect(featureOp!.z).toBeLessThan(tileOp!.z + 1); // within the same cell band
+  });
+
+  it('draws edge fences in the foreground band above same-cell units and structures', () => {
+    const board: EditorBoard = {
+      ...blank(3, 3),
+      cells: { '1,1': TILE },
+      fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' },
+      units: { '1,1': UNIT },
+      doodads: { '1,1': { doodadId: 'boulder' } },
+    };
+    const ops = boardDrawOps(board);
+    const fence = ops.find((op) => op.src === '/assets/tiles/feature/fence-wood-2.png');
+    const unit = ops.find((op) => op.contain);
+    const doodadFront = ops.find((op) => op.src === '/assets/doodads/boulder/front.png');
+    expect(fence).toBeDefined();
+    expect(unit).toBeDefined();
+    expect(doodadFront).toBeDefined();
+    expect(fence!.z).toBe(fenceOverlayZIndex({ x: 1, y: 1 }));
+    expect(fence!.z).toBeGreaterThan(unit!.z);
+    expect(fence!.z).toBeGreaterThan(doodadFront!.z);
   });
 });
 

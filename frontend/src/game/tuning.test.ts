@@ -34,6 +34,10 @@ describe('matchStats (game outcomes surfaced for the run view)', () => {
     const s = matchStats(duel(), DEFAULT_EVAL_WEIGHTS, DEFAULT_EVAL_WEIGHTS, b, MATCH);
     expect(s.wins + s.draws + s.losses).toBe(s.games);
     expect(s.games).toBe(b.length * 2); // each position played both ways
+    expect(s.records).toHaveLength(s.games);
+    expect(s.records[0]).toMatchObject({ bookIndex: 0, seed: b[0].seed, candidateSide: 'player' });
+    expect(s.records[0].openingMoves).toEqual(b[0].moves);
+    expect(s.records[0].record.moves).toBeDefined();
     expect(s.score).toBeCloseTo((s.wins + 0.5 * s.draws) / s.games, 10);
   });
   it('A-vs-A is symmetric: wins === losses and score === 0.5', () => {
@@ -46,6 +50,9 @@ describe('matchStats (game outcomes surfaced for the run view)', () => {
     const r = spsaStep(duel(), theta, DEFAULT_EVAL_WEIGHTS, b, 0, 7, DEFAULT_HYPERPARAMS, MATCH);
     expect(r.wins + r.draws + r.losses).toBe(r.games);
     expect(r.games).toBe(b.length * 4); // θ⁺ and θ⁻, each both ways over the book
+    expect(r.latestGames).toHaveLength(r.games);
+    expect(r.latestGames.some((g) => g.probe === 'plus')).toBe(true);
+    expect(r.latestGames.some((g) => g.probe === 'minus')).toBe(true);
   });
 });
 

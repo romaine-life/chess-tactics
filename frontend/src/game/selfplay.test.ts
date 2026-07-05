@@ -91,6 +91,19 @@ describe('replayStates', () => {
       prev = living;
     }
   });
+
+  it('starts from the supplied opening position when replaying a book game', () => {
+    const level = duelLevel();
+    const openingMoves = [
+      { pieceId: 'player-queen-0', side: 'player', from: { x: 1, y: 6 }, move: { x: 1, y: 5 } },
+    ];
+    const record = playLevelGame(level, { seed: 7, search: FAST, maxPlies: 0, openingMoves });
+    const states = replayStates(level, record, openingMoves);
+    const queen = states[0].pieces.find((p) => p.id === 'player-queen-0');
+    expect(queen?.x).toBe(1);
+    expect(queen?.y).toBe(5);
+    expect(states.length).toBe(record.plies + 1);
+  });
 });
 
 describe('aggregateRecords', () => {

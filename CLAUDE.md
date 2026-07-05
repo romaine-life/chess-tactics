@@ -1,5 +1,13 @@
 # Working in this repo
 
+## Agent backend rule
+
+`DEV_NO_BACKEND=1` and `DEV_OFFLINE=1` are owner-only escape hatches. Agents must
+not set them, suggest them, or use them to keep working after the backend fails to
+start. If the Vite-spawned backend fails, fix the backend startup issue (for
+example install backend dependencies or address auth/DB access) or report the
+backend failure as the blocker.
+
 ## Taking screenshots (read this before trying to screenshot the app)
 
 **Do NOT use the in-editor preview/screenshot tool to capture images on this
@@ -37,14 +45,28 @@ screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 
 ### Reaching a specific UI state
 
+The app is ours and the routes are inspectable. When the owner asks how to see
+or verify an owned app surface, build the direct URL from the route contract
+instead of giving only click-by-click instructions. Click paths are fine as
+extra context, but they are not a substitute for the link.
+
 The Studio encodes its state in the URL, so deep-link instead of clicking:
-- `mode=catalog|lab`
+- `mode=catalog|lab|viewer`
+- `cat=<category>` (for example `gym`, `gamelab`, `assets`, `props`)
+- `vk=<viewer-kind>` for Viewer surfaces (for example `gym`, `gamelab`,
+  `nineslice`)
+- selected item params such as `gymlvl=<levelId>`, `glvl=<levelId>`,
+  `kit=<asset>`, `frame=<frame>`, `prop=<propId>`
 - `lab=board|tile|unit` (Lab component view)
 - `view=board`, `family=<id>`, `collection=<id>`, `asset=<id>`, `unit=<id>`, `seed=<n>`
 - `/unit-studio` is an alias for the Studio with the Units shelf preselected.
 
 ## Dev environment gotchas (git worktrees)
 
+- A fresh worktree's `backend/node_modules` is expected to be missing. That is
+  normal setup, not a surprising backend failure. Run `npm install` in
+  `backend/` once per worktree before expecting the Vite-spawned backend to
+  start. Do not use `DEV_NO_BACKEND=1` to skip this.
 - A worktree's `frontend/node_modules` may be **partial** (missing react /
   typescript / etc.). Run `npm install` in the worktree once, or typecheck with
   the main checkout's compiler:

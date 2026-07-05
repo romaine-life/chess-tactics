@@ -4,7 +4,10 @@
 // bookkeeping — is unit-testable in node (the worker shell touches `self`, which a
 // node test can't import). The worker is now a thin message wrapper around this.
 
-import { spsaStep, matchScore, decodeWeights, type MatchOptions, type SpsaHyperParams } from '../game/tuning';
+import {
+  spsaStep, spsaStepAsync, matchStats, matchStatsAsync, decodeWeights,
+  type MatchControl, type MatchGameRecord, type MatchOptions, type SpsaHyperParams, type StepResult,
+} from '../game/tuning';
 import type { BookPosition } from '../game/openingBook';
 import type { EvalWeights } from '../core/ai';
 import type { Level } from '../core/level';
@@ -18,6 +21,42 @@ export interface StepConfig {
   hp: SpsaHyperParams;
   match: MatchOptions;
   masterSeed: number;
+}
+
+export interface StepProgress {
+  phase: 'theta+' | 'theta-' | 'score';
+  gamesDone: number;
+  gamesTotal: number;
+  phaseGamesDone: number;
+  phaseGamesTotal: number;
+  game: MatchGameRecord;
+  outcome: 'win' | 'draw' | 'loss';
+}
+
+function outcomeFor(game: MatchGameRecord): StepProgress['outcome'] {
+  if (game.record.winner === 'draw') return 'draw';
+  return game.record.winner === game.candidateSide ? 'win' : 'loss';
+}
+
+function foldStep(session: GymSession, score: number, r: StepResult): { point: GymPoint; session: GymSession } {
+  const point: GymPoint = {
+    step: session.k, score, yPlus: r.yPlus, yMinus: r.yMinus, c: r.c, a: r.a, theta: r.theta.slice(),
+    games: r.games, wins: r.wins, draws: r.draws, losses: r.losses,
+  };
+
+  const improved = score > session.champion.score;
+  const champion = improved ? { step: session.k, score, theta: r.theta.slice() } : session.champion;
+  const established = improved ? 0 : session.established + 1;
+
+  const next: GymSession = {
+    k: session.k + 1,
+    theta: r.theta,
+    champion,
+    established,
+    traj: [...session.traj, point],
+    latestStepGames: r.latestGames,
+  };
+  return { point, session: next };
 }
 
 /** Run ONE SPSA step from `session` over `book` and return the appended point plus
@@ -35,26 +74,62 @@ export function advanceSession(
   cfg: StepConfig,
   session: GymSession,
   book: BookPosition[],
+  onProgress?: (progress: StepProgress) => void,
 ): { point: GymPoint; session: GymSession } {
-  const r = spsaStep(cfg.level, session.theta, cfg.reference, book, session.k, cfg.masterSeed, cfg.hp, cfg.match);
+  const gamesPerMatch = book.length * 2;
+  const gamesTotal = gamesPerMatch * 3;
+  let gamesDone = 0;
+  const report = (phase: StepProgress['phase'], phaseGamesDone: number, game: MatchGameRecord): void => {
+    gamesDone += 1;
+    onProgress?.({
+      phase,
+      gamesDone,
+      gamesTotal,
+      phaseGamesDone,
+      phaseGamesTotal: gamesPerMatch,
+      game,
+      outcome: outcomeFor(game),
+    });
+  };
+  const r = spsaStep(cfg.level, session.theta, cfg.reference, book, session.k, cfg.masterSeed, cfg.hp, cfg.match, (progress) => {
+    report(progress.probe === 'plus' ? 'theta+' : 'theta-', progress.stats.games, progress.record);
+  });
   // Honest score: play the stepped weights vs the shipped reference over the book and
   // use THAT strength as the point score and champion criterion.
-  const score = matchScore(cfg.level, decodeWeights(r.theta), cfg.reference, book, cfg.match);
-  const point: GymPoint = {
-    step: session.k, score, yPlus: r.yPlus, yMinus: r.yMinus, c: r.c, a: r.a, theta: r.theta.slice(),
-    games: r.games, wins: r.wins, draws: r.draws, losses: r.losses,
-  };
+  const scored = matchStats(cfg.level, decodeWeights(r.theta), cfg.reference, book, cfg.match, false, (progress) => {
+    report('score', progress.stats.games, progress.record);
+  });
+  const score = scored.score;
+  return foldStep(session, score, r);
+}
 
-  const improved = score > session.champion.score;
-  const champion = improved ? { step: session.k, score, theta: r.theta.slice() } : session.champion;
-  const established = improved ? 0 : session.established + 1;
-
-  const next: GymSession = {
-    k: session.k + 1,
-    theta: r.theta,
-    champion,
-    established,
-    traj: [...session.traj, point],
+export async function advanceSessionAsync(
+  cfg: StepConfig,
+  session: GymSession,
+  book: BookPosition[],
+  onProgress?: (progress: StepProgress) => void,
+  control?: MatchControl,
+): Promise<{ point: GymPoint; session: GymSession }> {
+  const gamesPerMatch = book.length * 2;
+  const gamesTotal = gamesPerMatch * 3;
+  let gamesDone = 0;
+  const report = (phase: StepProgress['phase'], phaseGamesDone: number, game: MatchGameRecord): void => {
+    gamesDone += 1;
+    onProgress?.({
+      phase,
+      gamesDone,
+      gamesTotal,
+      phaseGamesDone,
+      phaseGamesTotal: gamesPerMatch,
+      game,
+      outcome: outcomeFor(game),
+    });
   };
-  return { point, session: next };
+  const r = await spsaStepAsync(cfg.level, session.theta, cfg.reference, book, session.k, cfg.masterSeed, cfg.hp, cfg.match, (progress) => {
+    report(progress.probe === 'plus' ? 'theta+' : 'theta-', progress.stats.games, progress.record);
+  }, control);
+  const scored = await matchStatsAsync(cfg.level, decodeWeights(r.theta), cfg.reference, book, cfg.match, false, (progress) => {
+    report('score', progress.stats.games, progress.record);
+  }, control);
+  return foldStep(session, scored.score, r);
 }

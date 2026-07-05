@@ -9,6 +9,7 @@ import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { DoodadSprite } from '../render/BoardDoodad';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
+import { FenceOverlayLayer } from '../render/FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
@@ -19,8 +20,9 @@ import { TitleBarSlot } from './shell/TitleBarSlot';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
-import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
+import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, type EditorBoard, type FeatureCell } from './boardCode';
+import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { HomepageBackdrop } from './HomepageBackdrop';
@@ -234,7 +236,7 @@ function StudioEditableBoard({
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
-            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key], fence: fenceOverlayMap.get(key), animationFrame, hidden, x, y })}
+            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key], animationFrame, hidden, x, y })}
             {/* Zone tint: a translucent diamond seated on the tile EQUATOR — it reuses the exact
                 seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
                 which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
@@ -410,6 +412,7 @@ function StudioEditableBoard({
       onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
     >
       {overlay}
+      <FenceOverlayLayer overlays={fenceOverlayMap} />
       {overlaySprites}
     </TileGrid>
   );
@@ -755,6 +758,11 @@ export function LevelEditor(): ReactElement {
   // Optional `?board=<code>` deep-link: decode a whole board to start from (see boardCode.ts).
   // It takes precedence over a campaign level (it's the explicit "inspect this exact board").
   const loadedBoard = useMemo(() => readBoardParam(), []);
+  const urlTimeControl = useMemo(() => readTimeControlParams(new URLSearchParams(window.location.search)), []);
+  const urlObjective = useMemo(() => {
+    const raw = new URLSearchParams(window.location.search).get('obj');
+    return (OBJECTIVE_TYPES as readonly string[]).includes(raw ?? '') ? raw as ObjectiveType : undefined;
+  }, []);
   const draftKey = useMemo(() => levelEditorDraftKey({ levelId: routeParams.levelId, boardCode: routeParams.boardCode }), [routeParams.levelId, routeParams.boardCode]);
   const localDraft = useMemo(() => readLevelEditorDraft(draftKey), [draftKey]);
   const initialCampaignLevel = useMemo(
@@ -842,7 +850,7 @@ export function LevelEditor(): ReactElement {
   // The RULES panel state — the authored win-rule mode + the orthogonal placement axis (ADR-0050).
   // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
   // schema defaults so it reads exactly like a blank createBlankLevel.
-  const [objective, setObjective] = useState<ObjectiveType>(localDraft?.objective ?? initialCampaignLevel?.objective ?? 'capture-all');
+  const [objective, setObjective] = useState<ObjectiveType>(localDraft?.objective ?? initialCampaignLevel?.objective ?? urlObjective ?? 'capture-all');
   const [placement, setPlacement] = useState<'fixed' | 'random'>(localDraft?.placement ?? initialCampaignLevel?.placement ?? 'fixed');
   const [surviveTurns, setSurviveTurns] = useState<number>(localDraft?.surviveTurns ?? initialCampaignLevel?.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
   // Random-placement roster: per side, per playable piece type. An absent count reads as 0.
@@ -850,9 +858,9 @@ export function LevelEditor(): ReactElement {
   // The battle clock (ADR-0053) — off by default; when on, the level carries a TimeControl and the
   // skirmish runs the player's chess clock (the enemy is untimed). Seeded like the other RULES
   // fields: a restored draft (present ⇒ on, with its authored seconds) beats the campaign level.
-  const initialTimeControl = localDraft?.timeControl ?? initialCampaignLevel?.timeControl;
+  const initialTimeControl = localDraft?.timeControl ?? initialCampaignLevel?.timeControl ?? urlTimeControl;
   const [clockEnabled, setClockEnabled] = useState<boolean>(
-    localDraft ? localDraft.timeControl !== undefined : initialCampaignLevel?.timeControl !== undefined,
+    localDraft ? localDraft.timeControl !== undefined : initialCampaignLevel ? initialCampaignLevel.timeControl !== undefined : urlTimeControl !== undefined,
   );
   const [clockInitialSeconds, setClockInitialSeconds] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
   const [clockIncrementSeconds, setClockIncrementSeconds] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
@@ -1087,8 +1095,9 @@ export function LevelEditor(): ReactElement {
       if (hasDirectionSprite(unitBrushAsset, next)) { setUnitFacing(next); return; }
     }
   };
-  const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAsset(id);
-  const doodadBrushAsset = resolveDoodadAsset(doodadBrushId) ?? DOODAD_ASSETS[0];
+  const doodadAssets = currentDoodadAssets();
+  const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAssets.find((doodad) => doodad.id === id) ?? doodadAsset(id);
+  const doodadBrushAsset = resolveDoodadAsset(doodadBrushId) ?? doodadAssets[0] ?? DOODAD_ASSETS[0];
   // HARD terrain gate (mirrors the Studio): a doodad only lands on a tile of its home terrain.
   const doodadFitsTile = (doodad: DoodadAsset, tileId: string | undefined): boolean => {
     const terrain = tileId ? leFamilyOfTile(tileId)?.id : undefined;
@@ -1887,9 +1896,28 @@ export function LevelEditor(): ReactElement {
   // id: /play resolves the level from the store, so an unsaved board would test-play the stale
   // saved version. mode=test skips progress recording. See below (button title explains the state).
   const canTest = Boolean(targetLevelId) && playability.ok && !dirty && savedSig !== null;
-  const testHref = canTest
-    ? `/play?${routeParams.campaignId ? `campaignId=${encodeURIComponent(routeParams.campaignId)}&` : ''}levelId=${encodeURIComponent(targetLevelId as string)}&mode=test`
-    : undefined;
+  const testHref = canTest ? (() => {
+    const params = new URLSearchParams({ levelId: targetLevelId as string, mode: 'test' });
+    if (routeParams.campaignId) params.set('campaignId', routeParams.campaignId);
+    params.set('returnTo', `${window.location.pathname}${window.location.search}${window.location.hash}`);
+    return `/play?${params.toString()}`;
+  })() : undefined;
+  // "Play" a Test Board: play the CURRENT (possibly unsaved) board against the AI right now via
+  // the ephemeral ?board= link — the position rides the URL, so unlike Test it needs no saved
+  // level and is gated only on playability. mode=test keeps it non-persisted and surfaces the
+  // Test Board's CPU-delay control in the HUD. returnTo carries the SAME board back, so ending
+  // (or leaving) the test lands you in the editor on the identical position (encode/decode is
+  // lossless) — this is what makes a shared /level-editor?board=<code> link a live-test loop.
+  const playBoardHref = useMemo(() => {
+    if (!playability.ok) return undefined;
+    const code = encodeBoard(currentEditorBoard);
+    const timeControl = clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined;
+    const backParams = new URLSearchParams({ board: code, obj: objective });
+    appendTimeControlParams(backParams, timeControl);
+    const playParams = new URLSearchParams({ board: code, obj: objective, mode: 'test', returnTo: `/editor/level?${backParams.toString()}` });
+    appendTimeControlParams(playParams, timeControl);
+    return `/play?${playParams.toString()}`;
+  }, [playability.ok, currentEditorBoard, objective, clockEnabled, clockInitialSeconds, clockIncrementSeconds]);
 
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
@@ -2045,6 +2073,15 @@ export function LevelEditor(): ReactElement {
               title={redoStack.length ? 'Redo the last undone edit.' : 'Nothing to redo.'}
             ><span className="le-ico ic-redo" aria-hidden="true" /></button>
           </div>
+          {/* Live-test: play THIS board against the AI now, no save. Lives in the always-visible
+              Actions dock (not a layer-gated card) so a recipient of a shared /level-editor?board=…
+              link can test-play on sight; the test returns here (returnTo) so it's a loop, not a
+              one-way trip. Gated on playability, like Save/Test. */}
+          {playBoardHref ? (
+            <NavButton className="le-seg-btn le-play-board" data-testid="le-play-board" to={playBoardHref} title="Play this exact board against the AI now — no save (a Test Board; set a CPU-delay floor in the game's Controls tab). ‹ Back returns you here.">▶ Play test</NavButton>
+          ) : (
+            <button type="button" className="le-seg-btn le-play-board" disabled title="Add a player and an enemy piece (clear the playability issues in the Status layer) to live-test this board.">▶ Play test</button>
+          )}
         </section>
 
         <KitScroll className="le-hud-scroll">
@@ -2157,7 +2194,7 @@ export function LevelEditor(): ReactElement {
             <div className="le-board-actions">
               <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
-              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board.">Copy Link</button>
+              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board — the recipient can edit AND live-test it.">Copy Link</button>
               <button type="button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
             </div>
             <input
@@ -2498,7 +2535,7 @@ export function LevelEditor(): ReactElement {
           <section className="skirmish-card le-brush-panel">
             <h2>Doodads</h2>
               <div className="le-swatches">
-                {DOODAD_ASSETS.map((doodad) => (
+                {doodadAssets.map((doodad) => (
                   <button
                     type="button"
                     key={doodad.id}

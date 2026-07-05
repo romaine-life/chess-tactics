@@ -4,6 +4,7 @@ import { useSkirmishView } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PALETTE_FOR_SIDE, isPlayablePieceType, pieceSpritePath } from '../core/pieces';
 import type { Piece, PieceType, Side } from '../core/types';
+import type { TimeControl } from '../core/level';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 // One shared "unit portrait box" (master render + crop + the fill-frame) — the Selected-Unit
 // portrait AND the roster slots both render through it, so framing/fill/crop are defined once and
@@ -11,7 +12,8 @@ import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import { UnitPortrait, loadCrops, STORAGE_KEY, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
 import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { useConfirm } from './shared/ConfirmDialog';
-import { RestartGlyph, NewGlyph } from './shared/actionGlyphs';
+import { BackGlyph, RestartGlyph, NewGlyph } from './shared/actionGlyphs';
+import { NavButton } from './shared/NavButton';
 import { SkirmishClockControl } from './SkirmishClockControl';
 import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 
@@ -19,7 +21,7 @@ const TYPE_LABEL = PIECE_LABEL;
 
 const ROLE: Record<PieceType, string> = {
   pawn: 'Forward footman',
-  knight: 'L-shaped jumper',
+  knight: 'Mounted raider',
   bishop: 'Diagonal runner',
   rook: 'Orthogonal siege keep',
   queen: 'Promoted raider',
@@ -85,20 +87,6 @@ function fmtStat(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function hpText(piece: Piece | null): string {
-  if (!piece) return '--';
-  const hp = piece.hp ?? 1;
-  const maxHp = piece.maxHp ?? hp;
-  return `${hp} / ${maxHp}`;
-}
-
-function apText(piece: Piece | null): string {
-  if (!piece) return '--';
-  const ap = piece.ap ?? 1;
-  const maxAp = piece.maxAp ?? ap;
-  return `${ap} / ${maxAp}`;
-}
-
 function UnitBadge({ piece, large = false }: { piece: Piece | null; large?: boolean }) {
   const side = piece?.side ?? 'neutral';
   const label = piece ? MARK[piece.type] : '?';
@@ -120,19 +108,37 @@ function CountPip({ side, count }: { side: Side; count: number }) {
 }
 
 type SkirmishHudProps = {
-  /** Show the "New skirmish" (+) button — single-player free skirmish only. */
+  /** Show the (+) button — free skirmish or single-player test/attempt loops. */
   canStartNewSkirmish?: boolean;
   /** In-place restart of the CURRENT battle (campaign level or free skirmish). Non-null only
    *  in single-player; shown as the ↻ Restart button. Same action as the title-bar diamond. */
   onRestart?: (() => void) | null;
   /** Accessible name for the Restart button (e.g. "Restart level" / "Restart skirmish"). */
   restartLabel?: string;
+  /** Start a new attempt for the CURRENT scenario. Defaults to a fresh free skirmish. */
+  onNewSkirmish?: (() => void) | null;
+  /** Accessible name for the New button (e.g. "New attempt" / "New skirmish"). */
+  newSkirmishLabel?: string;
+  /** Show the battle-clock picker. Free skirmishes edit the saved pref; playtests edit this attempt. */
+  showClockControl?: boolean;
+  clockControlValue?: TimeControl | null;
+  onClockControlChange?: (value: TimeControl | null) => void;
+  /** Optional return target for editor/launched playtests. */
+  returnHref?: string | null;
+  returnLabel?: string;
 };
 
 export function SkirmishHud({
   canStartNewSkirmish = true,
   onRestart = null,
   restartLabel = 'Restart',
+  onNewSkirmish = null,
+  newSkirmishLabel = 'New skirmish',
+  showClockControl = true,
+  clockControlValue,
+  onClockControlChange,
+  returnHref = null,
+  returnLabel = 'Back',
 }: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
@@ -141,11 +147,21 @@ export function SkirmishHud({
   const net = useSkirmish((s) => s.net);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const resign = useSkirmish((s) => s.resign);
+  const resignLocal = useSkirmish((s) => s.resignLocal);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
+  const testMode = useSkirmish((s) => s.testMode);
+  const testMinCpuDelayMs = useSkirmish((s) => s.testMinCpuDelayMs);
+  const setTestMinCpuDelay = useSkirmish((s) => s.setTestMinCpuDelay);
+  // Free-text seconds for the Test Board CPU-delay floor: local so the field edits freely (clear
+  // it, type a decimal) without the store's clamped ms value fighting the caret; committed on
+  // change. Cleared when leaving test mode (the store zeroes the floor there too).
+  const [delaySecInput, setDelaySecInput] = useState(() => (testMinCpuDelayMs ? String(testMinCpuDelayMs / 1000) : ''));
+  useEffect(() => { if (!testMode) setDelaySecInput(''); }, [testMode]);
 
   // Resign is irreversible and hands the opponent the win — gate it behind a confirm
-  // (the kit-framed one, not window.confirm, so it stays in-world). See ConfirmDialog.
+  // (the kit-framed one, not window.confirm, so it stays in-world). Netplay relays it
+  // to the server; solo/test boards end locally as a defeat.
   const { ask, dialog } = useConfirm();
 
   const [tab, setTab] = useState<HudTab>('unit');
@@ -275,16 +291,6 @@ export function SkirmishHud({
               <div className="skirmish-selected-copy">
                 <strong data-testid="selected-name">{focused ? TYPE_LABEL[focused.type] : 'None'}</strong>
                 <span>{focused ? `${focused.side === 'enemy' ? 'Enemy' : focused.side === 'player' ? 'Blue' : 'Neutral'} - ${ROLE[focused.type]}` : 'Choose a unit on the board.'}</span>
-                <dl>
-                  <div>
-                    <dt>HP</dt>
-                    <dd><span>{hpText(focused)}</span></dd>
-                  </div>
-                  <div>
-                    <dt>AP</dt>
-                    <dd><span>{apText(focused)}</span></dd>
-                  </div>
-                </dl>
               </div>
             </div>
             {focused && (focused.side === 'player' || focused.side === 'enemy') && (
@@ -411,28 +417,67 @@ export function SkirmishHud({
               </div>
               <p className="skirmish-grid-hint">Keys work any time during the match.</p>
             </div>
-            {/* Battle clock for a random skirmish. Free-play only — a campaign level and a
-                netplay match carry their own time control, so the picker is hidden there
-                (same gate as the "New skirmish" button it feeds). */}
-            {canStartNewSkirmish && !net ? (
+            {/* Battle clock: free skirmishes edit the saved preference; editor/test boards edit
+                the next attempt directly so the + button uses exactly what's visible here. */}
+            {showClockControl && canStartNewSkirmish && !net ? (
               <div className="skirmish-view-group">
                 <span className="skirmish-eyebrow">Battle clock</span>
-                <SkirmishClockControl timedHint="Applies on your next New skirmish." />
+                <SkirmishClockControl
+                  timedHint={onClockControlChange ? 'Applies on your next New attempt.' : 'Applies on your next New skirmish.'}
+                  value={clockControlValue}
+                  onChange={onClockControlChange}
+                />
+              </div>
+            ) : null}
+            {/* Test Board only: floor the CPU's think time so there's room to build a premove chain.
+                The player's clock is already paused across the reply, so this is a free softball. */}
+            {testMode ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Min CPU delay (test board)</span>
+                <label className="skirmish-cpu-delay-field">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={delaySecInput}
+                    aria-label="Minimum CPU delay in seconds"
+                    onChange={(event) => {
+                      setDelaySecInput(event.target.value);
+                      const secs = parseFloat(event.target.value);
+                      setTestMinCpuDelay(Number.isFinite(secs) && secs > 0 ? secs * 1000 : 0);
+                    }}
+                  />
+                  <span>seconds</span>
+                </label>
+                <p className="skirmish-grid-hint">Type any floor for the CPU's think time — it widens the window to premove. Your clock is paused during it anyway.</p>
               </div>
             ) : null}
             <div className="skirmish-view-group">
-              {/* Battle lifecycle: restart THIS scenario (↻) or start a fresh one (＋). Both are
-                  icon-only — the group heading names them and the marks are self-evident, so no
-                  per-button tooltip. Netplay shows Resign here instead (a shared board can't be
-                  locally reset/reseeded without desyncing). */}
+              {/* Battle lifecycle: leave a test loop, restart THIS scenario (↻), start a fresh
+                  attempt (＋), or concede the current board. */}
               <span className="skirmish-eyebrow">Scenario</span>
               <div className="skirmish-view-row">
+                {returnHref && !net ? (
+                  <NavButton
+                    className="app-header-button skirmish-return-button"
+                    data-testid="skirmish-return-scenario"
+                    aria-label={returnLabel}
+                    title={returnLabel}
+                    to={returnHref}
+                  >
+                    <BackGlyph className="skirmish-lifecycle-icon" />
+                    <span>{returnLabel}</span>
+                  </NavButton>
+                ) : null}
                 {onRestart && !net ? (
                   <button
                     type="button"
                     className="app-header-button skirmish-lifecycle-button"
                     data-testid="restart-level"
                     aria-label={restartLabel}
+                    title={restartLabel}
                     onClick={onRestart}
                   >
                     <RestartGlyph className="skirmish-lifecycle-icon" />
@@ -445,28 +490,36 @@ export function SkirmishHud({
                     type="button"
                     className="app-header-button skirmish-lifecycle-button"
                     data-testid="new-skirmish"
-                    aria-label="New skirmish"
-                    onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff, timeControl: loadSkirmishClockPref() })}
+                    aria-label={newSkirmishLabel}
+                    title={newSkirmishLabel}
+                    onClick={onNewSkirmish ?? (() => newSkirmish({ seed: Date.now() & 0x7fffffff, timeControl: loadSkirmishClockPref() }))}
                   >
                     <NewGlyph className="skirmish-lifecycle-icon" />
                   </button>
                 ) : null}
-                {/* Concede a live multiplayer match (hands the opponent the win). Hidden
-                    once the game is decided and in single-player (there's no opponent to
-                    concede to — you'd just start a new skirmish). */}
-                {net && !game.winner ? (
+                {/* Concede the current battle. In netplay this relays through the lobby; in
+                    solo/test play it immediately ends the board as a defeat. */}
+                {!game.winner ? (
                   <button
                     type="button"
                     className="app-header-button skirmish-resign-button"
                     data-testid="resign"
                     onClick={async () => {
-                      const ok = await ask({
+                      const ok = await ask(net ? {
                         title: 'Resign the match?',
                         message: 'Your opponent is awarded the win. This can’t be undone.',
                         confirmLabel: 'Resign',
                         tone: 'danger',
+                      } : {
+                        title: 'Resign this board?',
+                        message: 'This ends the attempt as a defeat. You can restart or start a new attempt afterward.',
+                        confirmLabel: 'Resign',
+                        tone: 'danger',
                       });
-                      if (ok) resign();
+                      if (ok) {
+                        if (net) resign();
+                        else resignLocal();
+                      }
                     }}
                   >
                     Resign

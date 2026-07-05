@@ -17,6 +17,7 @@ import { levelObjectiveLine } from './LevelInfoCompact';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import type { Campaign as CampaignDoc } from '../core/level';
+import { FittedTabLabel } from './shared/FittedTabLabel';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
 const STAR_ICON = '/assets/ui/kit/icons/star.png';
@@ -59,7 +60,7 @@ function CampaignTab({ campaign, active, index }: { campaign: CampaignDoc; activ
       <span className="settings-tab-icon" aria-hidden="true">
         <img src={CAMPAIGN_ICON} alt="" />
       </span>
-      <span><strong>{campaign.name}</strong></span>
+      <FittedTabLabel>{campaign.name}</FittedTabLabel>
     </NavButton>
   );
 }

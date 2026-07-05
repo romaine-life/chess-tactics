@@ -3,23 +3,41 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { loadSkirmishClockPref, saveSkirmishClockPref } from '../game/skirmishClockPref';
+import type { TimeControl } from '../core/level';
 
-// The random-skirmish battle-clock picker: a Timed on/off toggle plus Start and Increment
-// steppers (the shared kit chrome the level editor uses). It reads and WRITES the saved
-// preference (game/skirmishClockPref) directly, so wherever it's shown — the pre-game
-// Skirmish hub or the in-match Controls tab — it edits one source of truth, and any "start
-// a fresh skirmish" path just reads that preference back. Free-play only; a level authors
-// its own clock.
-export function SkirmishClockControl({ timedHint }: { timedHint: string }): ReactElement {
-  const [pref] = useState(loadSkirmishClockPref);
+// The battle-clock picker: a Timed on/off toggle plus Start and Increment steppers (the shared
+// kit chrome the level editor uses). Uncontrolled mode edits the saved random-skirmish preference.
+// Controlled mode lets an editor/test-board scenario own the next-attempt timer without touching
+// that free-play preference.
+export function SkirmishClockControl({
+  timedHint,
+  value,
+  onChange,
+}: {
+  timedHint: string;
+  value?: TimeControl | null;
+  onChange?: (value: TimeControl | null) => void;
+}): ReactElement {
+  const controlled = onChange !== undefined;
+  const [pref] = useState(() => controlled ? value ?? null : loadSkirmishClockPref());
   const [enabled, setEnabled] = useState(pref !== null);
   const [initialSeconds, setInitialSeconds] = useState((pref ?? DEFAULT_TIME_CONTROL).initialSeconds);
   const [incrementSeconds, setIncrementSeconds] = useState((pref ?? DEFAULT_TIME_CONTROL).incrementSeconds);
 
-  // Persist on every change so a "New skirmish" / "Start" elsewhere reads the current pick.
   useEffect(() => {
-    saveSkirmishClockPref(enabled ? { initialSeconds, incrementSeconds } : null);
-  }, [enabled, initialSeconds, incrementSeconds]);
+    if (!controlled) return;
+    const next = value ?? null;
+    setEnabled(next !== null);
+    setInitialSeconds((next ?? DEFAULT_TIME_CONTROL).initialSeconds);
+    setIncrementSeconds((next ?? DEFAULT_TIME_CONTROL).incrementSeconds);
+  }, [controlled, value]);
+
+  // Persist/emit on every change so the matching "New" path reads the current pick.
+  useEffect(() => {
+    const next = enabled ? { initialSeconds, incrementSeconds } : null;
+    if (controlled) onChange?.(next);
+    else saveSkirmishClockPref(next);
+  }, [controlled, enabled, initialSeconds, incrementSeconds, onChange]);
 
   return (
     <>

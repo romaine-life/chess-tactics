@@ -4,7 +4,7 @@
 // (buildAsset) and the dev-Save endpoint, so this also pins editor↔bake parity.
 import { describe, it, expect } from 'vitest';
 // @ts-ignore — nine-slice-kit is an untyped .mjs build script (cf. main.tsx/bgm.js)
-import { bakeAsset, bakeLine, REGISTRY, LINE_DIR, loadConfig, normalizeConfig, assetsInTheme, diffCommitted } from '../../../scripts/nine-slice-kit.mjs';
+import { bakeAsset, bakeLine, REGISTRY, LINE_DIR, loadConfig, normalizeConfig, assetsInTheme, diffCommitted, barCapWidth } from '../../../scripts/nine-slice-kit.mjs';
 
 describe('theme family (ADR-0054: members share ONE shape, cannot drift)', () => {
   it('gold family members bake a byte-identical base frame', () => {
@@ -123,6 +123,52 @@ describe('nine-slice bake parity (committed PNG === fresh bake from config)', ()
         expect(d.sameSize, `${t.out}: size ${JSON.stringify(d.fresh)} vs committed ${JSON.stringify(d.committed)}`).toBe(true);
         expect(d.samePixels, `${t.out}: tone line frame drifted — re-bake (scripts/bake-line-frames.mjs)`).toBe(true);
       }
+    });
+  }
+});
+
+// A `bar` (divider) has no per-corner config to pin, so the byte-parity check above can't tell
+// a real three-way-tee cap from a broken one. This guards the CONSTRUCTED geometry: two tall end
+// stubs (the tee spines seating onto the frame's side rail), a rail spanning the whole width (the
+// separator itself), a see-through interior (a thin bar, not a filled box), a GOLD junction in each
+// cap (the authored three-way tee), and horizontal mirror symmetry — so a change to buildBarFromTee
+// or the edge/tee atom can't silently break the junction (ADR-0063).
+describe('divider bar geometry (ADR-0063: authored three-way tee cap + edge rail)', () => {
+  const bars = Object.keys(REGISTRY).filter((id) => REGISTRY[id].kind === 'bar');
+  it('has at least one bar asset registered', () => expect(bars.length).toBeGreaterThan(0));
+  for (const id of bars) {
+    it(`${id}: tall tee stubs, full-width rail, hollow interior, gold three-way tees, mirror-symmetric`, () => {
+      const png = bakeAsset(id, loadConfig(id)).variants[0].png; // bakes at the committed junction size
+      const { width: W, height: H } = png;
+      const cap = barCapWidth(id);
+      const op = (x: number, y: number) => png.data[(y * W + x) * 4 + 3] > 40;
+      const warm = (x: number, y: number) => { const i = (y * W + x) * 4; return png.data[i + 3] > 40 && png.data[i] > png.data[i + 2] + 15; };
+      // Longest contiguous opaque vertical run in a column — the authored spine tapers at its tips,
+      // so it spans MOST (not literally all) of the height; a tee stub is a near-full-height run.
+      const colRun = (x: number) => { let best = 0, run = 0; for (let y = 0; y < H; y++) { if (op(x, y)) { run++; if (run > best) best = run; } else run = 0; } return best; };
+      const rowFull = (y: number) => { for (let x = 0; x < W; x++) if (!op(x, y)) return false; return true; };
+      const anyColTall = (x0: number, x1: number) => { for (let x = x0; x < x1; x++) if (colRun(x) >= 0.7 * H) return true; return false; };
+      const countWarm = (x0: number, x1: number) => { let n = 0; for (let y = 0; y < H; y++) for (let x = x0; x < x1; x++) if (warm(x, y)) n++; return n; };
+      // Left + right tee stubs (a tall vertical spine inside each cap slice, seating on the side rail).
+      expect(anyColTall(0, cap), 'left tee stub missing (no tall vertical spine in the left cap)').toBe(true);
+      expect(anyColTall(W - cap, W), 'right tee stub missing (no tall vertical spine in the right cap)').toBe(true);
+      // The separator itself: at least one row is opaque across the ENTIRE width.
+      let fullRows = 0; for (let y = 0; y < H; y++) if (rowFull(y)) fullRows++;
+      expect(fullRows, 'no full-width rail row — the bar does not span the frame').toBeGreaterThan(0);
+      // Hollow interior: a top corner of the middle span (between the caps) is transparent, so the
+      // bar is a thin rail, not a filled box that would read as a solid band.
+      expect(op(Math.floor(W / 2), 0), 'interior is filled — a bar must be a thin rail, not a box').toBe(false);
+      // The three-way CORNER: each cap carries the gold bracket (warm pixels), and the interior
+      // between the caps does NOT (the gold only lives at the two junctions).
+      expect(countWarm(0, cap), 'left cap has no gold bracket — the three-way corner is missing').toBeGreaterThan(0);
+      expect(countWarm(W - cap, W), 'right cap has no gold bracket — the three-way corner is missing').toBeGreaterThan(0);
+      expect(countWarm(cap, W - cap), 'gold bled into the middle — the corner must stay at the junctions').toBe(0);
+      // Horizontal mirror symmetry: the two ends are mirror twins (left tee == right tee). This
+      // is the structural guarantee. (NOT vertical: the corner atom has a top-bottom bevel + notch,
+      // so the tee inherits a slight top-bottom character by design — that IS the corner treatment.)
+      let asymH = 0;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (op(x, y) !== op(W - 1 - x, y)) asymH++;
+      expect(asymH, 'bar is not horizontally mirror-symmetric (left tee ≠ right tee)').toBe(0);
     });
   }
 });

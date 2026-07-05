@@ -4,6 +4,7 @@ import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath, readValidatedRet
 import { KitScroll } from './KitScroll';
 import { NavButton } from './shared/NavButton';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
+import { FittedTabLabel } from './shared/FittedTabLabel';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { HomepageBackdrop } from './HomepageBackdrop';
@@ -677,9 +678,7 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
             <span className="settings-tab-icon" aria-hidden="true">
               <img src={asset(tab.icon)} alt="" />
             </span>
-            <span>
-              <strong>{tab.label}</strong>
-            </span>
+            <FittedTabLabel>{tab.label}</FittedTabLabel>
           </NavButton>
         ))}
       </aside>

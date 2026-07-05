@@ -4,10 +4,11 @@ import { DoodadSprite } from './BoardDoodad';
 import { PropSprite } from './BoardStructure';
 import { propDef, type PropDef } from '../core/props';
 import { GroundCoverLayer } from './GroundCoverLayer';
+import { FenceOverlayLayer } from './FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
 import { TileTopLayer } from './TileTopLayer';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
-import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
+import { featureFrameSrc } from '../art/tileset';
 import {
   MISSING_DIRECTION_SPRITE,
   hasDirectionSprite,
@@ -17,7 +18,7 @@ import {
   type UnitAsset,
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { resolveFeatureOverlays, resolveFenceOverlays, type ResolvedFeatureOverlay, type ResolvedFenceOverlay } from '../core/featureAutotile';
+import { resolveFeatureOverlays, resolveFenceOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
@@ -65,7 +66,6 @@ export function deriveFeatureOverlays(
 export function studioCellArt({
   tileAsset,
   feature,
-  fence,
   animationFrame,
   hidden,
   x = 0,
@@ -73,8 +73,6 @@ export function studioCellArt({
 }: {
   tileAsset: StudioAsset | undefined;
   feature: ResolvedFeatureOverlay | undefined;
-  /** Edge-fence rails this cell owns (its E/S sides), if any. */
-  fence?: ResolvedFenceOverlay | undefined;
   animationFrame: number;
   hidden?: BoardLayerVisibility;
   /** Board coords; only used to phase-stagger an animated top (water ripple). */
@@ -102,14 +100,6 @@ export function studioCellArt({
         <img
           className="tileset-feature-overlay"
           src={featureFrameSrc(feature.kind, feature.material, feature.mask)}
-          alt=""
-          draggable={false}
-        />
-      ) : null}
-      {fence ? (
-        <img
-          className="tileset-feature-overlay tileset-fence-overlay"
-          src={fenceFrameSrc(fence.material, fence.mask)}
           alt=""
           draggable={false}
         />
@@ -234,7 +224,7 @@ export function StudioReadOnlyBoard({
         x,
         y,
         className: `tileset-placement-cell ${tileAsset ? '' : 'is-empty'}`.trim(),
-        children: studioCellArt({ tileAsset, feature: featureOverlays[key], fence: fenceOverlays.get(key), animationFrame, x, y }),
+        children: studioCellArt({ tileAsset, feature: featureOverlays[key], animationFrame, x, y }),
       });
     }
   }
@@ -250,6 +240,7 @@ export function StudioReadOnlyBoard({
       boardZoom={boardZoom}
       boardPan={boardPan}
     >
+      <FenceOverlayLayer overlays={fenceOverlays} />
       <GroundCoverLayer cells={coverCells} />
       {sprites}
     </TileGrid>
