@@ -7,13 +7,15 @@
 //   f?:fillTileId, t?:{cell:tileId}, h?:[cell], u?:{cell:[unitId,dir,faction]},
 //   d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fe?:{edgeKey:fenceMaterial},
-//   rc?:[edgeKey], rx?:[edgeKey], z?:{cell:zoneType} }. `f` fills every
-// cell, then `t` overrides — so a "mostly one tile" board stays tiny; `h` punches intentional holes
-// back out of that fill. The autotiling ribbon features split per kind on the wire (rd=roads,
+//   rc?:[edgeKey], rx?:[edgeKey], z?:{cell:zoneType}, gr?:generatedRegionUnits }. `f` fills
+// every cell, then `t` overrides — so a "mostly one tile" board stays tiny; `h` punches intentional
+// holes back out of that fill. The autotiling ribbon features split per kind on the wire (rd=roads,
 // rv=rivers) and merge into one `features` map on decode. FENCES are edge-based, not per-cell:
 // `fe` maps a shared-edge key (roadEdgeKey "x,y|x,y") to a fence material — same edge keying as
 // `rc` (severed edges) and `rx` (forced outward exits). `z` is the gameplay-zone channel
-// (ADR-0050): each painted cell -> its zone type. base64url of the JSON (no padding, +/ -> -_).
+// (ADR-0050): each painted cell -> its zone type. `gr` stores editor-only generated-region units:
+// saved cell selections plus the Generate panel settings needed to rerun them. base64url of the
+// JSON (no padding, +/ -> -_).
 //
 // FORWARD/BACK-COMPAT: `z`/`p`/`fe` are emitted only when non-empty, so a board without them
 // encodes byte-identically to a code that predates them, and an OLD code decodes them to empty.
@@ -35,6 +37,31 @@ export interface FeatureCell {
 }
 
 export type BoardFactionDirections = Partial<Record<UnitPalette, UnitFacing>>;
+
+export type BoardGeneratedRegionCover = {
+  type: TileFamilyId;
+  knobs: { amount: number; amountRandom: number; density: number; densityRandom: number };
+};
+
+export type BoardGeneratedRegionSection = {
+  terrain: TileFamilyId;
+  share: number;
+  locked?: boolean;
+  covers?: BoardGeneratedRegionCover[];
+};
+
+export interface BoardGeneratedRegion {
+  id: string;
+  name: string;
+  /** Board cell keys ("x,y") that this generated-region unit owns. */
+  cells: string[];
+  /** Generate panel terrain rows captured for reruns. */
+  sections: BoardGeneratedRegionSection[];
+  /** Randomness buffer percentage, 0..60. */
+  buffer: number;
+  /** Edge roughness, 0..1. */
+  wiggle: number;
+}
 
 export interface EditorBoard {
   cols: number;
@@ -67,6 +94,8 @@ export interface EditorBoard {
    * Optional + back-compat (like `props` before it): a pre-zones board literal simply omits it,
    * and `decodeBoard` always returns it populated (empty for an old code). */
   zones?: Record<string, ZoneType>;
+  /** Editor-only generated-region units: saved selections + Generate panel settings. */
+  generatedRegions?: BoardGeneratedRegion[];
 }
 
 const enc = (s: string): string => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -74,6 +103,9 @@ const dec = (s: string): string => atob(s.replace(/-/g, '+').replace(/_/g, '/'))
 const nonEmpty = (o: object): boolean => Object.keys(o).length > 0;
 const validFactions = new Set<string>(UNIT_PALETTES);
 const validFacings = new Set<string>(UNIT_FACINGS);
+const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
+const clampNumber = (value: unknown, fallback: number, min: number, max: number): number =>
+  typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
 
 function cleanFactionDirections(value: unknown): BoardFactionDirections {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -92,6 +124,94 @@ function dominantTile(cells: Record<string, string>): string | undefined {
   let best: string | undefined, n = 0;
   for (const [id, c] of counts) if (c > n) { n = c; best = id; }
   return best;
+}
+
+function isInBoundsCellKey(key: string, cols: number, rows: number): boolean {
+  const [xRaw, yRaw] = key.split(',');
+  const x = Number(xRaw);
+  const y = Number(yRaw);
+  return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < cols && y < rows;
+}
+
+function encodeGeneratedRegions(regions: BoardGeneratedRegion[] | undefined, cols: number, rows: number): unknown[] {
+  if (!regions?.length) return [];
+  return regions
+    .map((region) => {
+      const cells = [...new Set(region.cells.filter((key) => isInBoundsCellKey(key, cols, rows)))];
+      if (!cells.length) return null;
+      return {
+        i: region.id,
+        n: region.name,
+        c: cells,
+        s: region.sections.map((section) => [
+          section.terrain,
+          section.share,
+          section.locked ? 1 : 0,
+          (section.covers ?? []).map((cover) => [
+            cover.type,
+            cover.knobs.amount,
+            cover.knobs.amountRandom,
+            cover.knobs.density,
+            cover.knobs.densityRandom,
+          ]),
+        ]),
+        b: region.buffer,
+        w: region.wiggle,
+      };
+    })
+    .filter(Boolean) as unknown[];
+}
+
+function decodeGeneratedRegions(value: unknown, cols: number, rows: number): BoardGeneratedRegion[] {
+  if (!Array.isArray(value)) return [];
+  const out: BoardGeneratedRegion[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const rec = raw as Record<string, unknown>;
+    const id = typeof rec.i === 'string' && rec.i.trim() ? rec.i : `region-${out.length + 1}`;
+    const name = typeof rec.n === 'string' && rec.n.trim() ? rec.n : `Region ${out.length + 1}`;
+    const cells = Array.isArray(rec.c)
+      ? [...new Set(rec.c.map(String).filter((key) => isInBoundsCellKey(key, cols, rows)))]
+      : [];
+    if (!cells.length) continue;
+    const sections: BoardGeneratedRegionSection[] = [];
+    if (Array.isArray(rec.s)) {
+      for (const rawSection of rec.s) {
+        if (!Array.isArray(rawSection)) continue;
+        const covers: BoardGeneratedRegionCover[] = [];
+        if (Array.isArray(rawSection[3])) {
+          for (const rawCover of rawSection[3]) {
+            if (!Array.isArray(rawCover)) continue;
+            covers.push({
+              type: String(rawCover[0]) as TileFamilyId,
+              knobs: {
+                amount: clampNumber(rawCover[1], 0.6, 0, 1),
+                amountRandom: clampNumber(rawCover[2], 0.3, 0, 1),
+                density: clampNumber(rawCover[3], 0.4, 0, 1),
+                densityRandom: clampNumber(rawCover[4], 0.3, 0, 1),
+              },
+            });
+          }
+        }
+        const section: BoardGeneratedRegionSection = {
+          terrain: String(rawSection[0]) as TileFamilyId,
+          share: Math.max(0, Math.min(100, Math.round(Number(rawSection[1]) || 0))),
+          covers,
+        };
+        if (rawSection[2] === 1 || rawSection[2] === true) section.locked = true;
+        sections.push(section);
+      }
+    }
+    out.push({
+      id,
+      name,
+      cells,
+      sections: sections.length ? sections : [{ terrain: 'grass' as TileFamilyId, share: 100, covers: [] }],
+      buffer: Math.round(clampNumber(rec.b, 0, 0, 60)),
+      wiggle: clamp01(clampNumber(rec.w, 0.5, 0, 1)),
+    });
+  }
+  return out;
 }
 
 export function encodeBoard(b: EditorBoard): string {
@@ -141,6 +261,8 @@ export function encodeBoard(b: EditorBoard): string {
   // Zones ride as a bare {cell:zoneType} map — emitted only when non-empty so a zone-free board
   // is byte-identical to a pre-zones code (same discipline as `p`/props).
   if (b.zones && nonEmpty(b.zones)) wire.z = b.zones;
+  const gr = encodeGeneratedRegions(b.generatedRegions, b.cols, b.rows);
+  if (gr.length) wire.gr = gr;
   return enc(JSON.stringify(wire));
 }
 
@@ -175,6 +297,7 @@ export function decodeBoard(code: string): EditorBoard | null {
     // Zones: an OLD code has no `z`, so this defaults to an empty map — the back-compat contract.
     const zones: EditorBoard['zones'] = {};
     if (w.z) for (const [k, type] of Object.entries(w.z as Record<string, ZoneType>)) zones[k] = type;
+    const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows);
     return {
       cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
@@ -184,6 +307,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       featureCuts,
       featureExits,
       zones,
+      generatedRegions,
     };
   } catch {
     return null;
