@@ -93,6 +93,13 @@ describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
     expect(reopened.rows).toBe(5);
   });
 
+  it('round-trips board-level faction default directions through boardCode', () => {
+    const board = filledBoard(4, 4);
+    board.factionDirections = { 'navy-blue': 'north-west', crimson: 'south-east' };
+    const level = editorBoardToLevel(board, { id: 'l11', name: 'Directions' });
+    expect(levelToEditorBoard(level).factionDirections).toEqual(board.factionDirections);
+  });
+
   it('derives navy as the player faction for legacy player/enemy levels', () => {
     const saved = editorBoardToLevel(filledBoard(4, 4), { id: 'l8', name: 'Legacy' });
     const legacy = {

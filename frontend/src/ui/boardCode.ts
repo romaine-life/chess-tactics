@@ -3,8 +3,9 @@
 // doodads, cover, and linear features — roads + rivers). Used both to LOAD a board on mount
 // and to EXPORT the current one.
 //
-// Wire shape (keys kept short): { c:cols, r:rows, pf?:playerFaction, f?:fillTileId, t?:{cell:tileId}, h?:[cell],
-//   u?:{cell:[unitId,dir,faction]}, d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
+// Wire shape (keys kept short): { c:cols, r:rows, pf?:playerFaction, fd?:{faction:defaultDir},
+//   f?:fillTileId, t?:{cell:tileId}, h?:[cell], u?:{cell:[unitId,dir,faction]},
+//   d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fe?:{edgeKey:fenceMaterial},
 //   rc?:[edgeKey], rx?:[edgeKey], z?:{cell:zoneType} }. `f` fills every
 // cell, then `t` overrides — so a "mostly one tile" board stays tiny; `h` punches intentional holes
@@ -21,6 +22,8 @@ import type { GroundCoverDensity } from '../core/groundCover';
 import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial, FenceMaterial } from '../core/featureAutotile';
 import type { ZoneType } from '../core/level';
 import type { TileFamilyId } from '../core/tileSockets';
+import { UNIT_FACINGS, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
+import type { UnitFacing } from '../core/types';
 
 /**
  * One painted autotiling feature cell (road or river): which linear feature it carries and its
@@ -31,11 +34,15 @@ export interface FeatureCell {
   material: FeatureMaterial;
 }
 
+export type BoardFactionDirections = Partial<Record<UnitPalette, UnitFacing>>;
+
 export interface EditorBoard {
   cols: number;
   rows: number;
   /** Palette faction the human player controls. Undefined/null means choose at play-load time. */
   playerFaction?: string | null;
+  /** Per-faction default facing used when the level editor places new units. */
+  factionDirections?: BoardFactionDirections;
   cells: Record<string, string>;
   units: Record<string, { unitId: string; direction: string; faction: string }>;
   doodads: Record<string, { doodadId: string }>;
@@ -65,6 +72,18 @@ export interface EditorBoard {
 const enc = (s: string): string => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const dec = (s: string): string => atob(s.replace(/-/g, '+').replace(/_/g, '/'));
 const nonEmpty = (o: object): boolean => Object.keys(o).length > 0;
+const validFactions = new Set<string>(UNIT_PALETTES);
+const validFacings = new Set<string>(UNIT_FACINGS);
+
+function cleanFactionDirections(value: unknown): BoardFactionDirections {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: BoardFactionDirections = {};
+  for (const [faction, direction] of Object.entries(value as Record<string, unknown>)) {
+    if (!validFactions.has(faction) || !validFacings.has(String(direction))) continue;
+    out[faction as UnitPalette] = direction as UnitFacing;
+  }
+  return out;
+}
 
 /** Pick the tile id covering the most cells, so it can be the cheap `f` fill base. */
 function dominantTile(cells: Record<string, string>): string | undefined {
@@ -91,6 +110,8 @@ export function encodeBoard(b: EditorBoard): string {
   }
   const wire: Record<string, unknown> = { c: b.cols, r: b.rows };
   if (b.playerFaction) wire.pf = b.playerFaction;
+  const fd = cleanFactionDirections(b.factionDirections);
+  if (nonEmpty(fd)) wire.fd = fd;
   if (fill) wire.f = fill;
   if (nonEmpty(t)) wire.t = t;
   if (h.length) wire.h = h;
@@ -135,6 +156,7 @@ export function decodeBoard(code: string): EditorBoard | null {
     if (Array.isArray(w.h)) for (const key of w.h) delete cells[String(key)];
     const units: EditorBoard['units'] = {};
     if (w.u) for (const [k, a] of Object.entries(w.u as Record<string, [string, string, string]>)) units[k] = { unitId: a[0], direction: a[1], faction: a[2] };
+    const factionDirections = cleanFactionDirections(w.fd);
     const doodads: EditorBoard['doodads'] = {};
     if (w.d) for (const [k, id] of Object.entries(w.d as Record<string, string>)) doodads[k] = { doodadId: id };
     const props: EditorBoard['props'] = {};
@@ -154,7 +176,7 @@ export function decodeBoard(code: string): EditorBoard | null {
     const zones: EditorBoard['zones'] = {};
     if (w.z) for (const [k, type] of Object.entries(w.z as Record<string, ZoneType>)) zones[k] = type;
     return {
-      cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, cells, units, doodads, props,
+      cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
       features,

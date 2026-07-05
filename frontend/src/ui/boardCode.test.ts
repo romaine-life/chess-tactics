@@ -36,4 +36,16 @@ describe('boardCode round-trip', () => {
     // an old code with no `fe` decodes fences to an empty map (back-compat contract).
     expect(decodeBoard(encodeBoard(emptyBoard()))!.fences).toEqual({});
   });
+
+  it('round-trips faction default directions', () => {
+    const board = emptyBoard({
+      factionDirections: { 'navy-blue': 'north', crimson: 'south-east' },
+    });
+    expect(decodeBoard(encodeBoard(board))!.factionDirections).toEqual(board.factionDirections);
+  });
+
+  it('encodes a direction-default-free board byte-identically to a code that predates faction directions', () => {
+    expect(encodeBoard(emptyBoard({ factionDirections: {} }))).toBe(encodeBoard(emptyBoard()));
+    expect(decodeBoard(encodeBoard(emptyBoard()))!.factionDirections).toEqual({});
+  });
 });
