@@ -622,6 +622,129 @@ describe('soft-lock guard (no manual End Turn)', () => {
   });
 });
 
+// Premoves: a chain queued while it's the opponent's turn, fired one-per-turn as control
+// returns. The head is re-validated against the REAL board the enemy reply produced —
+// legal → it fires and re-stages the reply (so the chain plays out); illegal → the WHOLE
+// chain is dropped (chess default). Driven by the same fake timers as the enemy reply.
+describe('skirmish store: premoves', () => {
+  // A clean capture-king board on the player's turn, with an empty premove queue — the
+  // queue leaks across tests otherwise (setState merges), so reset it explicitly. The
+  // enemy is pinned to the GREEDY policy (always grabs an available capture): these test
+  // premove MECHANICS against a deterministic reply, not the positional search AI, whose
+  // choices would make "does the enemy take the premoved piece?" scenario-dependent.
+  function loadBoard(pieces: Piece[], selectedId: string): void {
+    useSkirmish.setState({
+      game: { size: { cols: 8, rows: 8 }, pieces, turn: 'player', winner: null },
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'capture-king',
+      objectiveCtx: { kingSide: 'enemy' },
+      turnsElapsed: 0,
+      seed: 1,
+      tick: 0,
+      aiMode: 'greedy',
+      selectedId,
+      focusedId: selectedId,
+      log: [],
+      started: true,
+      clock: null,
+      premoves: [],
+      testMode: false,
+      testMinCpuDelayMs: 0,
+    });
+  }
+
+  it('queues only during the opponent turn, and only legal targets', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    // On the player's own live turn a click is a real move, not a premove.
+    useSkirmish.getState().queueMove('pr', 0, 5);
+    expect(useSkirmish.getState().premoves).toEqual([]);
+
+    useSkirmish.getState().tryMoveTo(1, 7); // safe king step → opponent's turn
+    expect(useSkirmish.getState().game.turn).toBe('enemy');
+    useSkirmish.getState().queueMove('pr', 1, 5); // a rook can't reach (1,5) in one move
+    expect(useSkirmish.getState().premoves).toEqual([]);
+    useSkirmish.getState().queueMove('pr', 0, 5); // legal along the file
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 0, y: 5 }]);
+  });
+
+  it('fires a queued premove the instant control returns to the player', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7);
+    useSkirmish.getState().queueMove('pr', 0, 5);
+
+    vi.runAllTimers(); // enemy reply → premove fires → enemy answers the premove
+    const s = useSkirmish.getState();
+    expect(s.game.pieces.find((p) => p.id === 'pr')).toMatchObject({ x: 0, y: 5 });
+    expect(s.premoves).toEqual([]);
+    expect(s.game.turn).toBe('player');
+  });
+
+  it('fires a stacked chain step-by-step across turns', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7);
+    useSkirmish.getState().queueMove('pr', 0, 5); // step 1
+    useSkirmish.getState().queueMove('pr', 3, 5); // step 2, built on the provisional board
+    expect(useSkirmish.getState().premoves).toHaveLength(2);
+
+    vi.runAllTimers();
+    const s = useSkirmish.getState();
+    expect(s.game.pieces.find((p) => p.id === 'pr')).toMatchObject({ x: 3, y: 5 }); // both steps ran
+    expect(s.premoves).toEqual([]);
+  });
+
+  it('drops the whole chain when the enemy reply captures the premoved piece', () => {
+    loadBoard([
+      piece('pk', 'player', 'king', 0, 7),
+      piece('pp', 'player', 'pawn', 4, 4),
+      piece('er', 'enemy', 'rook', 4, 0), // the only capture on the board: er takes pp up file 4
+      piece('ek', 'enemy', 'king', 7, 0),
+    ], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7); // safe king step → opponent's turn
+    useSkirmish.getState().queueMove('pp', 4, 3);
+    expect(useSkirmish.getState().premoves).toHaveLength(1);
+
+    vi.runAllTimers();
+    const s = useSkirmish.getState();
+    expect(s.game.pieces.find((p) => p.id === 'pp')?.alive).toBe(false); // captured by the reply
+    expect(s.premoves).toEqual([]); // chain dropped — the premove never fired
+    expect(s.game.turn).toBe('player');
+  });
+
+  it('clearPremoves drops the whole queued chain', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7);
+    useSkirmish.getState().queueMove('pr', 0, 5);
+    expect(useSkirmish.getState().premoves).toHaveLength(1);
+    useSkirmish.getState().clearPremoves();
+    expect(useSkirmish.getState().premoves).toEqual([]);
+  });
+
+  it('test board: a min CPU-delay floor holds the reply until the floor elapses', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().setTestMode(true);
+    useSkirmish.getState().setTestMinCpuDelay(3000); // floor well past the 520ms default
+    useSkirmish.getState().tryMoveTo(1, 7);
+    expect(useSkirmish.getState().game.turn).toBe('enemy');
+    vi.advanceTimersByTime(2999);
+    expect(useSkirmish.getState().game.turn).toBe('enemy'); // still thinking — floored to 3s
+    vi.advanceTimersByTime(2); // cross 3000ms
+    expect(useSkirmish.getState().game.turn).toBe('player'); // reply resolves once the floor elapses
+  });
+
+  it('the CPU-delay floor is test-only and clears on leaving test mode (real play never floored)', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('ek', 'enemy', 'king', 7, 7)], 'pr');
+    // Outside test mode the setter is a no-op — real/campaign play can never be floored.
+    useSkirmish.getState().setTestMinCpuDelay(3000);
+    expect(useSkirmish.getState().testMinCpuDelayMs).toBe(0);
+    // In test mode it takes; leaving test mode resets it so it can't leak into real play.
+    useSkirmish.getState().setTestMode(true);
+    useSkirmish.getState().setTestMinCpuDelay(3000);
+    expect(useSkirmish.getState().testMinCpuDelayMs).toBe(3000);
+    useSkirmish.getState().setTestMode(false);
+    expect(useSkirmish.getState().testMinCpuDelayMs).toBe(0);
+  });
+});
+
 describe('netplay resign', () => {
   const netMatch = (localSide: Side) =>
     useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide, level: createBlankLevel('net-1', 'Net'), seed: 7 });

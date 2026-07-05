@@ -1890,6 +1890,18 @@ export function LevelEditor(): ReactElement {
   const testHref = canTest
     ? `/play?${routeParams.campaignId ? `campaignId=${encodeURIComponent(routeParams.campaignId)}&` : ''}levelId=${encodeURIComponent(targetLevelId as string)}&mode=test`
     : undefined;
+  // "Play" a Test Board: play the CURRENT (possibly unsaved) board against the AI right now via
+  // the ephemeral ?board= link — the position rides the URL, so unlike Test it needs no saved
+  // level and is gated only on playability. mode=test keeps it non-persisted and surfaces the
+  // Test Board's CPU-delay control in the HUD. returnTo carries the SAME board back, so ending
+  // (or leaving) the test lands you in the editor on the identical position (encode/decode is
+  // lossless) — this is what makes a shared /level-editor?board=<code> link a live-test loop.
+  const playBoardHref = useMemo(() => {
+    if (!playability.ok) return undefined;
+    const code = encodeBoard(currentEditorBoard);
+    const back = encodeURIComponent(`/level-editor?board=${code}`);
+    return `/play?board=${code}&obj=${encodeURIComponent(objective)}&mode=test&returnTo=${back}`;
+  }, [playability.ok, currentEditorBoard, objective]);
 
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
@@ -2045,6 +2057,15 @@ export function LevelEditor(): ReactElement {
               title={redoStack.length ? 'Redo the last undone edit.' : 'Nothing to redo.'}
             ><span className="le-ico ic-redo" aria-hidden="true" /></button>
           </div>
+          {/* Live-test: play THIS board against the AI now, no save. Lives in the always-visible
+              Actions dock (not a layer-gated card) so a recipient of a shared /level-editor?board=…
+              link can test-play on sight; the test returns here (returnTo) so it's a loop, not a
+              one-way trip. Gated on playability, like Save/Test. */}
+          {playBoardHref ? (
+            <NavButton className="le-seg-btn le-play-board" data-testid="le-play-board" to={playBoardHref} title="Play this exact board against the AI now — no save (a Test Board; set a CPU-delay floor in the game's Controls tab). ‹ Back returns you here.">▶ Play test</NavButton>
+          ) : (
+            <button type="button" className="le-seg-btn le-play-board" disabled title="Add a player and an enemy piece (clear the playability issues in the Status layer) to live-test this board.">▶ Play test</button>
+          )}
         </section>
 
         <KitScroll className="le-hud-scroll">
@@ -2157,7 +2178,7 @@ export function LevelEditor(): ReactElement {
             <div className="le-board-actions">
               <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
-              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board.">Copy Link</button>
+              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board — the recipient can edit AND live-test it.">Copy Link</button>
               <button type="button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
             </div>
             <input

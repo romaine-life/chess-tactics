@@ -143,6 +143,14 @@ export function SkirmishHud({
   const resign = useSkirmish((s) => s.resign);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
+  const testMode = useSkirmish((s) => s.testMode);
+  const testMinCpuDelayMs = useSkirmish((s) => s.testMinCpuDelayMs);
+  const setTestMinCpuDelay = useSkirmish((s) => s.setTestMinCpuDelay);
+  // Free-text seconds for the Test Board CPU-delay floor: local so the field edits freely (clear
+  // it, type a decimal) without the store's clamped ms value fighting the caret; committed on
+  // change. Cleared when leaving test mode (the store zeroes the floor there too).
+  const [delaySecInput, setDelaySecInput] = useState(() => (testMinCpuDelayMs ? String(testMinCpuDelayMs / 1000) : ''));
+  useEffect(() => { if (!testMode) setDelaySecInput(''); }, [testMode]);
 
   // Resign is irreversible and hands the opponent the win — gate it behind a confirm
   // (the kit-framed one, not window.confirm, so it stays in-world). See ConfirmDialog.
@@ -418,6 +426,31 @@ export function SkirmishHud({
               <div className="skirmish-view-group">
                 <span className="skirmish-eyebrow">Battle clock</span>
                 <SkirmishClockControl timedHint="Applies on your next New skirmish." />
+              </div>
+            ) : null}
+            {/* Test Board only: floor the CPU's think time so there's room to build a premove chain.
+                The player's clock is already paused across the reply, so this is a free softball. */}
+            {testMode ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Min CPU delay (test board)</span>
+                <label className="skirmish-cpu-delay-field">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={delaySecInput}
+                    aria-label="Minimum CPU delay in seconds"
+                    onChange={(event) => {
+                      setDelaySecInput(event.target.value);
+                      const secs = parseFloat(event.target.value);
+                      setTestMinCpuDelay(Number.isFinite(secs) && secs > 0 ? secs * 1000 : 0);
+                    }}
+                  />
+                  <span>seconds</span>
+                </label>
+                <p className="skirmish-grid-hint">Type any floor for the CPU's think time — it widens the window to premove. Your clock is paused during it anyway.</p>
               </div>
             ) : null}
             <div className="skirmish-view-group">

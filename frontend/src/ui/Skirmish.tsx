@@ -25,7 +25,7 @@ import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
 import { livingPieces } from '../core/rules';
 import { computeStars, nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
-import { navigateApp } from './navigation';
+import { navigateApp, readValidatedReturnTo } from './navigation';
 
 const STAR_ICON = '/assets/ui/kit/icons/star.png';
 
@@ -58,6 +58,11 @@ export function Skirmish() {
   // The Skirmish hub's "Start" enters as `?random=1`: always roll a FRESH random battle on
   // the player's chosen clock, rather than resuming a prior in-progress skirmish.
   const routeRandom = routeParams.get('random') === '1';
+  // Where a test-play should return to (the editor board that launched it, via ?returnTo). Drives
+  // a "‹ Back to editor" in the title bar so a live board test is a LOOP — tweak, play, back —
+  // not a one-way trip to the skirmish. Null for a normal match (no returnTo), so nothing shows.
+  const returnHref = readValidatedReturnTo();
+  const returnIsEditor = !!returnHref && /^\/(level-editor|edit)(\?|$)/.test(returnHref);
   const [netError, setNetError] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   // Netplay has no campaign result flow, so a decided match shows its own result card.
@@ -218,6 +223,9 @@ export function Skirmish() {
     // restart a live battle. Turn disk persistence on for real play, off for the
     // editor's ephemeral Test Play and for one-off `?board=` link positions.
     setMatchPersistenceEnabled(!isTestPlay && !routeBoard && !routeMap);
+    // Test-board controls (the CPU-delay floor) are live only for ?mode=test; leaving test mode
+    // resets the floor so real/campaign play is never slowed.
+    useSkirmish.getState().setTestMode(isTestPlay);
 
     // Returning here from the menu (or any other screen) should resume, not
     // restart: the store is a singleton that already holds the live board. Only
@@ -510,6 +518,22 @@ export function Skirmish() {
             <RestartGlyph className="skirmish-retry-stud-glyph" />
           </button>
         </TitleBarSlot>
+      ) : null}
+
+      {/* Live-test loop: when a test-play carries ?returnTo (the editor board that launched it), a
+          persistent, non-blocking "‹ Back to editor" lets you jump back to tweak the position at
+          any point. The skirmish title bar has no actions slot (its grid is a fixed brand·status·
+          cluster), so — like the netplay return — this rides a fixed corner chip rather than the
+          bar. */}
+      {returnHref ? (
+        <NavButton
+          className="app-header-button app-header-button-active skirmish-return-editor"
+          data-testid="skirmish-return"
+          to={returnHref}
+          title="Return to the board editor with this position."
+        >
+          {returnIsEditor ? '‹ Back to editor' : '‹ Back'}
+        </NavButton>
       ) : null}
 
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">
