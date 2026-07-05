@@ -294,6 +294,9 @@ export interface SkirmishState {
    *  ends only when the server's terminal result echoes back via `concludeNet`. No-op
    *  outside netplay or once the game is decided. */
   resign: () => void;
+  /** Concede the current single-player board immediately. Netplay uses `resign` above
+   *  because its terminal result must be sequenced by the lobby server. */
+  resignLocal: () => void;
   /** End a netplay match by a non-move terminal event (a resignation relayed by the
    *  server). Sets the winner directly and logs the outcome from this seat. Idempotent —
    *  a duplicate/redelivered lobby frame is ignored once the game is decided. */
@@ -777,6 +780,22 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // game on both boards symmetrically (same single-apply discipline as moves).
     if (!s.net || s.game.winner) return;
     if (netResignSink) netResignSink();
+  },
+
+  resignLocal: () => {
+    const s = get();
+    if (s.net || s.game.winner || !s.started) return;
+    stopClockTicker();
+    set({
+      game: { ...s.game, winner: 'enemy', turn: 'done' },
+      selectedId: null,
+      focusedId: null,
+      premoves: [],
+      resultDetail: null,
+      clock: s.clock ? { ...s.clock, running: false } : null,
+      log: ['Defeat — you resigned.', ...s.log].slice(0, 12),
+    });
+    persistMatch(get()); // game decided → drops the saved copy
   },
 
   concludeNet: (winner, reason) => {

@@ -745,6 +745,28 @@ describe('skirmish store: premoves', () => {
   });
 });
 
+describe('local resign', () => {
+  it('ends a single-player board immediately as a defeat', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    useSkirmish.getState().resignLocal();
+
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('enemy');
+    expect(s.game.turn).toBe('done');
+    expect(s.selectedId).toBeNull();
+    expect(s.focusedId).toBeNull();
+    expect(s.clock?.running).toBe(false);
+    expect(s.log[0]).toMatch(/you resigned/i);
+  });
+
+  it('does not decide a netplay match locally', () => {
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'player', level: createBlankLevel('net-1', 'Net'), seed: 7 });
+    useSkirmish.getState().resignLocal();
+
+    expect(useSkirmish.getState().game.winner).toBeNull();
+  });
+});
+
 describe('netplay resign', () => {
   const netMatch = (localSide: Side) =>
     useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide, level: createBlankLevel('net-1', 'Net'), seed: 7 });

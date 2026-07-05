@@ -22,6 +22,7 @@ import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, type EditorBoard, type FeatureCell } from './boardCode';
+import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { HomepageBackdrop } from './HomepageBackdrop';
@@ -757,6 +758,11 @@ export function LevelEditor(): ReactElement {
   // Optional `?board=<code>` deep-link: decode a whole board to start from (see boardCode.ts).
   // It takes precedence over a campaign level (it's the explicit "inspect this exact board").
   const loadedBoard = useMemo(() => readBoardParam(), []);
+  const urlTimeControl = useMemo(() => readTimeControlParams(new URLSearchParams(window.location.search)), []);
+  const urlObjective = useMemo(() => {
+    const raw = new URLSearchParams(window.location.search).get('obj');
+    return (OBJECTIVE_TYPES as readonly string[]).includes(raw ?? '') ? raw as ObjectiveType : undefined;
+  }, []);
   const draftKey = useMemo(() => levelEditorDraftKey({ levelId: routeParams.levelId, boardCode: routeParams.boardCode }), [routeParams.levelId, routeParams.boardCode]);
   const localDraft = useMemo(() => readLevelEditorDraft(draftKey), [draftKey]);
   const initialCampaignLevel = useMemo(
@@ -844,7 +850,7 @@ export function LevelEditor(): ReactElement {
   // The RULES panel state — the authored win-rule mode + the orthogonal placement axis (ADR-0050).
   // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
   // schema defaults so it reads exactly like a blank createBlankLevel.
-  const [objective, setObjective] = useState<ObjectiveType>(localDraft?.objective ?? initialCampaignLevel?.objective ?? 'capture-all');
+  const [objective, setObjective] = useState<ObjectiveType>(localDraft?.objective ?? initialCampaignLevel?.objective ?? urlObjective ?? 'capture-all');
   const [placement, setPlacement] = useState<'fixed' | 'random'>(localDraft?.placement ?? initialCampaignLevel?.placement ?? 'fixed');
   const [surviveTurns, setSurviveTurns] = useState<number>(localDraft?.surviveTurns ?? initialCampaignLevel?.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
   // Random-placement roster: per side, per playable piece type. An absent count reads as 0.
@@ -852,9 +858,9 @@ export function LevelEditor(): ReactElement {
   // The battle clock (ADR-0053) — off by default; when on, the level carries a TimeControl and the
   // skirmish runs the player's chess clock (the enemy is untimed). Seeded like the other RULES
   // fields: a restored draft (present ⇒ on, with its authored seconds) beats the campaign level.
-  const initialTimeControl = localDraft?.timeControl ?? initialCampaignLevel?.timeControl;
+  const initialTimeControl = localDraft?.timeControl ?? initialCampaignLevel?.timeControl ?? urlTimeControl;
   const [clockEnabled, setClockEnabled] = useState<boolean>(
-    localDraft ? localDraft.timeControl !== undefined : initialCampaignLevel?.timeControl !== undefined,
+    localDraft ? localDraft.timeControl !== undefined : initialCampaignLevel ? initialCampaignLevel.timeControl !== undefined : urlTimeControl !== undefined,
   );
   const [clockInitialSeconds, setClockInitialSeconds] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
   const [clockIncrementSeconds, setClockIncrementSeconds] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
@@ -1890,9 +1896,12 @@ export function LevelEditor(): ReactElement {
   // id: /play resolves the level from the store, so an unsaved board would test-play the stale
   // saved version. mode=test skips progress recording. See below (button title explains the state).
   const canTest = Boolean(targetLevelId) && playability.ok && !dirty && savedSig !== null;
-  const testHref = canTest
-    ? `/play?${routeParams.campaignId ? `campaignId=${encodeURIComponent(routeParams.campaignId)}&` : ''}levelId=${encodeURIComponent(targetLevelId as string)}&mode=test`
-    : undefined;
+  const testHref = canTest ? (() => {
+    const params = new URLSearchParams({ levelId: targetLevelId as string, mode: 'test' });
+    if (routeParams.campaignId) params.set('campaignId', routeParams.campaignId);
+    params.set('returnTo', `${window.location.pathname}${window.location.search}${window.location.hash}`);
+    return `/play?${params.toString()}`;
+  })() : undefined;
   // "Play" a Test Board: play the CURRENT (possibly unsaved) board against the AI right now via
   // the ephemeral ?board= link — the position rides the URL, so unlike Test it needs no saved
   // level and is gated only on playability. mode=test keeps it non-persisted and surfaces the
@@ -1902,9 +1911,13 @@ export function LevelEditor(): ReactElement {
   const playBoardHref = useMemo(() => {
     if (!playability.ok) return undefined;
     const code = encodeBoard(currentEditorBoard);
-    const back = encodeURIComponent(`/level-editor?board=${code}`);
-    return `/play?board=${code}&obj=${encodeURIComponent(objective)}&mode=test&returnTo=${back}`;
-  }, [playability.ok, currentEditorBoard, objective]);
+    const timeControl = clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined;
+    const backParams = new URLSearchParams({ board: code, obj: objective });
+    appendTimeControlParams(backParams, timeControl);
+    const playParams = new URLSearchParams({ board: code, obj: objective, mode: 'test', returnTo: `/editor/level?${backParams.toString()}` });
+    appendTimeControlParams(playParams, timeControl);
+    return `/play?${playParams.toString()}`;
+  }, [playability.ok, currentEditorBoard, objective, clockEnabled, clockInitialSeconds, clockIncrementSeconds]);
 
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop

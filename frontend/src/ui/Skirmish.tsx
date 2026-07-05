@@ -8,13 +8,14 @@ import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
 import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 import { fetchLobby, postMove, resignLobby, leaveLobby, fetchMovesSince, subscribeLobbyChannel, type MoveEvent } from '../net/lobbies';
-import type { Level } from '../core/level';
+import type { Level, TimeControl } from '../core/level';
 import type { Side } from '../core/types';
 import { objectiveSummary } from '../core/objectives';
 import { formatClockMs } from '../core/clock';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { decodeBoard } from './boardCode';
+import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
 import { editorBoardToLevel } from '../core/levelBoard';
 import { fetchPublicMap } from '../net/maps';
 import { OBJECTIVE_TYPES, type ObjectiveType } from '../core/level';
@@ -50,6 +51,16 @@ export function Skirmish() {
   // (defaults to capture-all). Lets a crafted position be handed round as a URL.
   const routeBoard = routeParams.get('board');
   const routeObjective = routeParams.get('obj');
+  const routeTimeControl = useMemo(() => readTimeControlParams(routeParams), [routeParams]);
+  const [scenarioTimeControl, setScenarioTimeControl] = useState<TimeControl | null>(() => routeTimeControl ?? null);
+  const routeBoardLevel = useMemo(() => {
+    if (!routeBoard) return null;
+    const decoded = decodeBoard(routeBoard);
+    if (!decoded) return null;
+    const objective: ObjectiveType = (OBJECTIVE_TYPES as readonly string[]).includes(routeObjective ?? '')
+      ? (routeObjective as ObjectiveType) : 'capture-all';
+    return editorBoardToLevel(decoded, { id: 'board-link', name: 'Board Link', objective, timeControl: scenarioTimeControl ?? undefined });
+  }, [routeBoard, routeObjective, scenarioTimeControl]);
   // Multiplayer: `?lobby=<id>` enters a lobby's shared board as one of the two seats.
   const routeLobby = routeParams.get('lobby');
   // A shared USER map: `?map=<publicId>` fetches its public snapshot and plays it (no sign-in, no
@@ -61,8 +72,24 @@ export function Skirmish() {
   // Where a test-play should return to (the editor board that launched it, via ?returnTo). Drives
   // a "‹ Back to editor" in the title bar so a live board test is a LOOP — tweak, play, back —
   // not a one-way trip to the skirmish. Null for a normal match (no returnTo), so nothing shows.
-  const returnHref = readValidatedReturnTo();
-  const returnIsEditor = !!returnHref && /^\/(level-editor|edit)(\?|$)/.test(returnHref);
+  const launchedReturnHref = readValidatedReturnTo();
+  const boardReturnHref = useMemo(() => {
+    if (!routeBoard) return null;
+    const objective = (OBJECTIVE_TYPES as readonly string[]).includes(routeObjective ?? '')
+      ? routeObjective as ObjectiveType
+      : 'capture-all';
+    const params = new URLSearchParams({ board: routeBoard, obj: objective });
+    appendTimeControlParams(params, scenarioTimeControl ?? undefined);
+    return `/editor/level?${params.toString()}`;
+  }, [routeBoard, routeObjective, scenarioTimeControl]);
+  const levelReturnHref = useMemo(() => {
+    if (routeMode !== 'test' || !routeLevelId) return null;
+    const params = new URLSearchParams({ levelId: routeLevelId });
+    if (routeCampaignId) params.set('campaignId', routeCampaignId);
+    return `/editor/level?${params.toString()}`;
+  }, [routeCampaignId, routeLevelId, routeMode]);
+  const returnHref = routeBoard ? boardReturnHref : launchedReturnHref ?? levelReturnHref;
+  const returnIsEditor = !!returnHref && /^\/(editor\/level|level-editor|edit)(\?|$)/.test(returnHref);
   const [netError, setNetError] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   // Netplay has no campaign result flow, so a decided match shows its own result card.
@@ -101,6 +128,11 @@ export function Skirmish() {
   // once a second, not per tick.
   const clock = useSkirmish((s) => s.clock);
   const net = useSkirmish((s) => s.net);
+  const activeLevel = useMemo(() => {
+    if (routeBoardLevel) return routeBoardLevel;
+    if (routeLevel && routeMode === 'test') return { ...routeLevel, timeControl: scenarioTimeControl ?? undefined };
+    return routeLevel;
+  }, [routeBoardLevel, routeLevel, routeMode, scenarioTimeControl]);
   const objectiveGoal = objectiveSummary(objective, kingSide);
   // How the battle actually ended (ADR-0064) — the fired victory rule's name, when one decided the
   // game. Falls back to the static objective goal (checkmate / clock / draw, or an older save).
@@ -137,8 +169,17 @@ export function Skirmish() {
   // dismissal from the previous match doesn't suppress the next one's result.
   useEffect(() => { if (!game.winner) setNetResultDismissed(false); }, [game.winner]);
 
+  useEffect(() => {
+    if (routeBoard) {
+      setScenarioTimeControl(routeTimeControl ?? null);
+    } else if (routeLevel && routeMode === 'test') {
+      setScenarioTimeControl(routeLevel.timeControl ?? null);
+    }
+  }, [routeBoard, routeTimeControl, routeLevel, routeMode]);
+
   const replayLevel = () => {
-    if (!routeLevel) return;
+    const level = activeLevel;
+    if (!level) return;
     // Retry the SAME position: a fixed-placement level reuses the current seed so it rebuilds
     // byte-identical. The board art signature is then unchanged, so the deploy "arrival" drop
     // never re-arms (SkirmishBoard) — the pieces simply hop back to their starting seats, which
@@ -147,8 +188,8 @@ export function Skirmish() {
     // disappear, fall again." A random-placement level instead re-rolls: reshuffling the deal is
     // that mode's point (ADR-0050), and a fresh deal reads better as a new deploy than as pieces
     // sliding to random new homes.
-    const seed = routeLevel.placement === 'random' ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
-    newSkirmish({ seed, level: routeLevel });
+    const seed = level.placement === 'random' ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
+    newSkirmish({ seed, level });
   };
 
   // The title-bar ornament diamond doubles as a Retry control in single-player (see the
@@ -157,15 +198,20 @@ export function Skirmish() {
   // skirmish rebuilds byte-identically from its seed. Netplay never reaches here — the
   // stud is hidden there, since a local reset would desync the shared board.
   const retrySkirmish = () => {
-    if (routeLevel) { replayLevel(); return; }
+    if (activeLevel) { replayLevel(); return; }
     // A free skirmish rebuilds from its seed on the player's current clock preference, so
     // retrying keeps the same time control (or untimed) rather than resetting to the 5:00
     // default — matching what "New skirmish" and the hub's Start produce.
     newSkirmish({ seed: useSkirmish.getState().seed, timeControl: loadSkirmishClockPref() });
   };
+  const startNewScenario = () => {
+    if (activeLevel) { replayLevel(); return; }
+    newSkirmish({ seed: Date.now() & 0x7fffffff, timeControl: loadSkirmishClockPref() });
+  };
   // Show the Retry stud only once a single-player board is up (no netplay, no dead map link).
   const showRetryStud = boardSettled && !mapError && !routeLobby && !net;
-  const retryStudLabel = isCampaignPlay ? 'Retry level' : 'Retry skirmish';
+  const retryStudLabel = activeLevel ? (isCampaignPlay ? 'Retry level' : 'Retry board') : 'Retry skirmish';
+  const newScenarioLabel = activeLevel ? 'New attempt' : 'New skirmish';
 
   // The next level in this campaign after the one just cleared (null on the last level or
   // before the workspace hydrates) — powers the victory "Continue" button.
@@ -276,16 +322,10 @@ export function Skirmish() {
     // A `?board=<code>` link plays an authored position straight away — decode it into a
     // fixed-placement level and start fresh (ephemeral, never persisted; see the
     // persistence toggle above). Falls through to the normal flow if it can't decode.
-    if (routeBoard) {
-      const decoded = decodeBoard(routeBoard);
-      if (decoded) {
-        const objective: ObjectiveType = (OBJECTIVE_TYPES as readonly string[]).includes(routeObjective ?? '')
-          ? (routeObjective as ObjectiveType) : 'capture-all';
-        const level = editorBoardToLevel(decoded, { id: 'board-link', name: 'Board Link', objective });
-        if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level, ai });
-        setBoardSettled(true);
-        return;
-      }
+    if (routeBoardLevel) {
+      if (shouldStartFresh(routeBoardLevel.id)) newSkirmish({ seed: freshSeed(), level: routeBoardLevel, ai });
+      setBoardSettled(true);
+      return;
     }
 
     // A `?map=<publicId>` link plays a SHARED user map: fetch its public snapshot (no sign-in) and
@@ -335,7 +375,7 @@ export function Skirmish() {
       })
       .catch(() => { startOrResume(routeLevelId, null); setBoardSettled(true); });
     return () => { active = false; };
-  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeMap, routeObjective, routeCampaignId, routeLevel, routeLevelId, routeLobby, routeRandom]);
+  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby, routeRandom]);
 
   // Multiplayer entry: `/play?lobby=<id>` enters a lobby's shared board. Both clients
   // build the SAME (level, seed) game; each side's moves relay through the lobby channel
@@ -520,11 +560,10 @@ export function Skirmish() {
         </TitleBarSlot>
       ) : null}
 
-      {/* Live-test loop: when a test-play carries ?returnTo (the editor board that launched it), a
-          persistent, non-blocking "‹ Back to editor" lets you jump back to tweak the position at
-          any point. The skirmish title bar has no actions slot (its grid is a fixed brand·status·
-          cluster), so — like the netplay return — this rides a fixed corner chip rather than the
-          bar. */}
+      {/* Live-test loop: a persistent, non-blocking "‹ Back to editor" lets you jump back to tweak
+          the position at any point. It uses ?returnTo when present, and falls back to the editor
+          route for board-link / saved-level test URLs. The skirmish title bar has no actions slot,
+          so — like the netplay return — this rides a fixed corner chip rather than the bar. */}
       {returnHref ? (
         <NavButton
           className="app-header-button app-header-button-active skirmish-return-editor"
@@ -570,7 +609,14 @@ export function Skirmish() {
       <SkirmishHud
         canStartNewSkirmish={!isCampaignPlay}
         onRestart={showRetryStud ? retrySkirmish : null}
-        restartLabel={isCampaignPlay ? 'Restart level' : 'Restart skirmish'}
+        restartLabel={activeLevel ? (isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish'}
+        onNewSkirmish={startNewScenario}
+        newSkirmishLabel={newScenarioLabel}
+        showClockControl={!isCampaignPlay}
+        clockControlValue={activeLevel ? scenarioTimeControl : undefined}
+        onClockControlChange={activeLevel ? setScenarioTimeControl : undefined}
+        returnHref={returnHref}
+        returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
       />
 
       {isCampaignPlay && routeLevel && game.winner && (
