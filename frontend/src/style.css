@@ -3795,6 +3795,7 @@ h1 {
    slot) · account cluster. The extra track lets the icon nav sit before the always-present
    cluster (ADR-0042). */
 .app-shell-titlebar.studio-topbar {
+  column-gap: var(--titlebar-control-gap, 10px);
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
@@ -7711,7 +7712,7 @@ body { font-size: 17px; }
 .studio-mode-nav {
   align-items: center;
   display: flex;
-  gap: 6px;
+  gap: var(--titlebar-control-gap, 10px);
 }
 
 /* The Studio's title-bar actions cluster: the "‹ Scene" back (shown in the waterfall
@@ -7720,7 +7721,7 @@ body { font-size: 17px; }
 .studio-topbar-actions {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--titlebar-control-gap, 10px);
 }
 .studio-scene-back {
   white-space: nowrap;
@@ -11532,6 +11533,7 @@ button.tileset-relationship-cell {
      --app-header-h is sized so this inset fits (content + rule + 2×inset). */
   --titlebar-rule-h: 14px;
   --ds-titlebar-inset: var(--ds-space-2);
+  --titlebar-control-gap: 10px;
   /* Trailing/leading inline padding, published as a var so the account cluster can pull its
      own trailing edge in to match (see .header-account-cluster). Tightened at the
      landscape-phone breakpoint, where the cluster's pull-in follows automatically. */
@@ -11718,7 +11720,7 @@ button.tileset-relationship-cell {
 .header-account-cluster {
   /* ONE spacing source for the cluster's two edges: the inter-button gap AND the gap that
      frames the whole cluster against the bar. Both read this so they can never drift apart. */
-  --cluster-gap: 10px;
+  --cluster-gap: var(--titlebar-control-gap, 10px);
   align-items: center;
   display: flex;
   gap: var(--cluster-gap);
