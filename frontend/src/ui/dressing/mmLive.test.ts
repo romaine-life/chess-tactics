@@ -25,6 +25,7 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
   it('btnH: the menu-scoped .main-menu-mode-tab height', () => {
     // The menu runs shorter buttons than the .settings-tab base (88px), so btnH mirrors the
     // menu's own rule, not the shared base.
+    expect(firstBlock('.main-menu-mode-tab')).toContain(`block-size: ${MM_LIVE.btnH}px`);
     expect(firstBlock('.main-menu-mode-tab')).toContain(`min-height: ${MM_LIVE.btnH}px`);
   });
 

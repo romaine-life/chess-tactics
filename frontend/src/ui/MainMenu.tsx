@@ -5,6 +5,7 @@ import { Settings } from './Settings';
 import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
 import { NavButton } from './shared/NavButton';
+import { FittedTabLabel } from './shared/FittedTabLabel';
 
 // The Editor and Solo Skirmish picker are heavier / code-split out of the menu bundle — lazy-loaded
 // only when their destination opens, inside a LOCAL Suspense so the fallback shows in the destination
@@ -88,7 +89,7 @@ function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?:
       <span className="settings-tab-icon" aria-hidden="true">
         <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
       </span>
-      <span><strong>{tab.label}</strong></span>
+      <FittedTabLabel>{tab.label}</FittedTabLabel>
     </NavButton>
   );
 }

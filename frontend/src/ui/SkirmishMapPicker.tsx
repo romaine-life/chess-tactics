@@ -8,6 +8,7 @@ import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { SkirmishClockControl } from './SkirmishClockControl';
+import { FittedTabLabel } from './shared/FittedTabLabel';
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
@@ -152,7 +153,7 @@ export function SkirmishMapPickerRoute({ embedded = false }: { embedded?: boolea
             <span className="settings-tab-icon" aria-hidden="true">
               <img src={`${ICONS}/${t.icon}.png`} alt="" />
             </span>
-            <span><strong>{t.label}</strong></span>
+            <FittedTabLabel>{t.label}</FittedTabLabel>
           </button>
         ))}
       </aside>
