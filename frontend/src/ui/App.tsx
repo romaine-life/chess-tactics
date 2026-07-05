@@ -5,7 +5,6 @@ import { armBoardArtForNav, isBoardArtPending, subscribeBoardArt } from '../rend
 import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
-import { Settings } from './Settings';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
 import { TitleBarPortalContext } from './shell/TitleBarPortalContext';
@@ -370,9 +369,11 @@ function renderRoute(path: string): ReactElement {
   if (path === '/campaigns-next' || path === '/campaigns') return <CampaignEditor />;
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;
-  if (path === '/settings' || path.startsWith('/settings/')) return <Settings />;
+  // /settings now renders inside the persistent menu shell (MainMenu fills its second column with
+  // the Settings sections + content). It falls through to the MainMenu default below, which reads
+  // the path — keeping the button column mounted across the home↔settings hop (routeScreenKey 'menu').
   // /artwork-compare: alias into the Studio's Art Compare viewer (ADR-0058 supersedes
   // ADR-0005's standalone-route choice). It reads its own ?opts/l/r/lcss/rcss on mount.
   if (path === '/artwork-compare') return <TilesetStudio initialCategory="pages" />;
-  return <MainMenu />;
+  return <MainMenu path={path} />;
 }

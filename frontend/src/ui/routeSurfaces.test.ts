@@ -42,10 +42,20 @@ describe('route screen key (ADR-0051 exit-dissolve grouping)', () => {
     expect(routeScreenKey('/')).toBe(routeScreenKey('/main-menu'));
   });
 
+  it('keeps /settings in the persistent menu shell (same key as home, no dissolve)', () => {
+    // Settings renders INSIDE the persistent menu shell — MainMenu fills its second column — so it
+    // shares the 'menu' screen key with '/'. React keeps the one MainMenu instance mounted across the
+    // home↔settings hop, so the button column never dissolves/remounts (the whole point of the shell).
+    expect(routeScreenKey('/settings')).toBe(routeScreenKey('/'));
+    expect(routeScreenKey('/settings')).toBe('menu');
+    expect(routeScreenKey('/settings/audio')).toBe('menu');
+  });
+
   it('separates distinct screens so cross-screen hops dissolve', () => {
     expect(routeScreenKey('/')).not.toBe(routeScreenKey('/campaign'));
     expect(routeScreenKey('/campaign')).not.toBe(routeScreenKey('/campaigns-next'));
-    expect(routeScreenKey('/settings')).not.toBe(routeScreenKey('/'));
+    // Leaving the menu shell to a full screen (Campaign) still dissolves — different keys.
+    expect(routeScreenKey('/settings')).not.toBe(routeScreenKey('/campaign'));
     expect(routeScreenKey('/skirmish')).not.toBe(routeScreenKey('/play'));
   });
 

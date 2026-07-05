@@ -6,10 +6,12 @@
 // chrome, update BOTH style.css and this constant; the test names the exact rule.
 //
 // Sources in style.css (the first/desktop rule of each selector):
-//   btnH  → .settings-tab { min-height }
+//   btnH  → .main-menu-mode-tab { min-height } — the MENU tab's REAL border-box height (the menu runs
+//           shorter buttons than the .settings-tab base); mirrored so the tuner opens at the true size
 //   icon  → .settings-tab { --settings-tab-icon-size }
 //   railW → .settings-shell { grid-template-columns: <railW>px minmax(0, 1fr) }
 //   gap   → .settings-rail-frame { gap: clamp(…) } — representative mid value, in-bounds
-//   btnX/btnY → .settings-rail-frame { transform: translate(<btnX>px, <btnY>px) }
+//   btnX/btnY → .settings-rail-frame { transform: translate(<btnX>px, <btnY>px) }; |btnX| is ALSO the
+//           .settings-shell margin floor (max(<|btnX|>px, …)) — the zoom-safety coupling (ADR-0062)
 //   textX → .settings-tab > span:not(.settings-tab-icon) { transform: translateX(<textX>px) }
-export const MM_LIVE = { btnH: 56, railW: 487, gap: 11, icon: 64, textX: 37, btnX: -230, btnY: -21 } as const;
+export const MM_LIVE = { btnH: 61, railW: 322, gap: 11, icon: 64, textX: 16, btnX: -238, btnY: -21 } as const;

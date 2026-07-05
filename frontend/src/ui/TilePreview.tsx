@@ -32,6 +32,7 @@ import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
 import { GymCatalog, GymViewer } from './Gym';
 import { PAGE_ENTRIES } from './pagesCatalog';
+import { SliderRow } from './dressing/SliderRow';
 import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
 import { SfxLibraryStudio, SfxViewer } from './SfxLibraryStudio';
 import { PortraitLab } from './PortraitEditor';
@@ -398,6 +399,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedSfxName, setSelectedSfxName] = useState<string | undefined>(undefined);
   const [pageSearch, setPageSearch] = useState('');
   const [selectedPageName, setSelectedPageName] = useState<string | undefined>(initialRoute.selectedPageName);
+  // Viewer-wide zoom — a meta-control (in the shared Viewer header) that scales the WHOLE preview.
+  // 1 = full size (roam it with the panel scrollbars); the dressing-room (iframe) viewers consume it.
+  const [viewerZoom, setViewerZoom] = useState(1);
   const [gameLabSearch, setGameLabSearch] = useState('');
   const [selectedGameLabLevelId, setSelectedGameLabLevelId] = useState<string | undefined>(initialRoute.selectedGameLabLevelId);
   const [gymSearch, setGymSearch] = useState('');
@@ -1422,9 +1426,25 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       </button>
     </nav>
   );
-  // Viewer labs render their controls through a `header` slot — now just the preview-kind
-  // select; the workspace switcher moved out of the rail and onto the title bar (above).
-  const studioViewerHeader = viewerKindSelect;
+  // Viewer labs render their controls through a `header` slot: the preview-kind select plus the
+  // viewer-wide Zoom meta-control. Zoom scales the WHOLE preview (100% = full size; scroll the panel
+  // to roam it) — it rides the header so it shows for every Viewer kind; the dressing-room (iframe)
+  // viewers consume it today. The workspace switcher moved out of the rail onto the title bar (above).
+  const studioViewerHeader = (
+    <>
+      {viewerKindSelect}
+      <SliderRow
+        label={<>Zoom · {Math.round(viewerZoom * 100)}%{viewerZoom === 1 ? ' · full size' : ''}</>}
+        value={viewerZoom}
+        set={setViewerZoom}
+        min={0.25}
+        max={2}
+        step={0.05}
+        nudge={0.05}
+        dflt={1}
+      />
+    </>
+  );
 
   return (
     <main className="tileset-studio-page app-shell-bar-pad">
@@ -1480,7 +1500,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                     : viewerKind === 'slider'
                       ? <SliderViewer name={selectedSliderName} header={studioViewerHeader} />
                       : viewerKind === 'page'
-                        ? <PagesViewer name={selectedPageName} header={studioViewerHeader} />
+                        ? <PagesViewer name={selectedPageName} header={studioViewerHeader} zoom={viewerZoom} />
                         : viewerKind === 'gamelab'
                         ? <GameLabViewer levelId={selectedGameLabLevelId} header={studioViewerHeader} />
                         : viewerKind === 'gym'

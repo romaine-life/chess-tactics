@@ -58,7 +58,10 @@ export function routeScreenKey(pathname: string): string {
   if (path === '/campaign' || path.startsWith('/campaign/')) return 'campaign';
   if (path === '/campaigns-next' || path === '/campaigns') return 'campaign-editor';
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return 'lobbies';
-  if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
+  // /settings renders INSIDE the persistent menu shell (MainMenu) now — same 'menu' screen key as
+  // '/', so React keeps the one MainMenu instance mounted across the home↔settings hop and the
+  // main-menu button column never dissolves/remounts. MainMenu reads the path and fills its second
+  // column with the Settings sections + content. (Falls through to the 'menu' default below.)
   if (path === '/edit' || path === '/level-editor') return 'level-editor';
   if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return 'studio';
   // Each remaining explicit renderRoute entry is its own screen…

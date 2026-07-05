@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactElement } from 're
 import { AmbienceBackground } from './AmbienceBackground';
 import { SceneBackdrop } from './SceneBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { Settings } from './Settings';
 import { NavButton } from './shared/NavButton';
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
@@ -62,9 +63,9 @@ const SETTINGS_ICON = `${ICONS}/settings.png`;
 // Settings sidebar uses, so the menu and the rest of the app read as one family
 // (retires the bespoke stone slabs). A NavButton, not an anchor (ADR-0052): game
 // controls are buttons; the route is the address, not the affordance.
-function ModeTab({ tab }: { tab: MenuTab }): ReactElement {
+function ModeTab({ tab, active }: { tab: MenuTab; active?: boolean }): ReactElement {
   return (
-    <NavButton className="settings-tab main-menu-mode-tab" to={tab.href}>
+    <NavButton className={`settings-tab main-menu-mode-tab ${active ? 'is-active' : ''}`.trim()} to={tab.href} aria-current={active ? 'page' : undefined}>
       <span className="settings-tab-icon" aria-hidden="true">
         <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
       </span>
@@ -73,7 +74,21 @@ function ModeTab({ tab }: { tab: MenuTab }): ReactElement {
   );
 }
 
-export function MainMenu(): ReactElement {
+// Which menu destinations render INSIDE the persistent shell (their own second column) vs. navigate
+// away to a full screen. Menu-config destinations (Settings) live in the shell; gameplay/editor
+// destinations (Campaign, Skirmish, Editor) legitimately take the whole screen.
+function shellDest(path: string): 'settings' | null {
+  if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
+  return null;
+}
+
+export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
+  // The persistent menu shell. The button column (left) stays mounted across the home↔destination
+  // hop (routeScreenKey keeps '/' and '/settings' one 'menu' screen, so React never remounts this).
+  // A menu-config destination fills the shell's SECOND column with its own fixed-width columns; the
+  // home route leaves it empty. The rail's zoom-safe placement (ADR-0062) is untouched — the
+  // destination just occupies the previously-empty grid track to its right.
+  const dest = shellDest(path);
   // Cold-load reveal: the menu's layers fade in in a fixed order — background -> title
   // -> buttons (rain drifts in last on its own) — driven by the shared reveal director
   // (see shell/coldReveal). Here MainMenu just REPORTS readiness for the title's brand
@@ -135,11 +150,16 @@ export function MainMenu(): ReactElement {
           The rail is placed by the shared .settings-shell rule alone (ADR-0062) — no
           home-only position class — so its buttons line up pixel-for-pixel with the
           Settings/Campaign rails at every width. */}
-      <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
+      <div className={`settings-screen main-menu-twin-screen app-shell-bar-pad ${dest ? 'has-dest' : ''}`.trim()} data-dest={dest ?? undefined}>
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
-            {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
+            {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} active={tab.href === '/settings' ? dest === 'settings' : tab.href === path} />)}
           </aside>
+          {dest === 'settings' ? (
+            <div className="menu-dest" aria-label="Settings">
+              <Settings embedded />
+            </div>
+          ) : null}
         </ArtRouteChrome>
       </div>
     </div>

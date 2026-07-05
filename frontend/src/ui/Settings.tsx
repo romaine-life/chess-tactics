@@ -295,7 +295,7 @@ function Slider({
   );
 }
 
-export function Settings(): ReactElement {
+export function Settings({ embedded = false }: { embedded?: boolean } = {}): ReactElement {
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => tabFromPath(window.location.pathname));
   const [showTracks, setShowTracks] = useState<boolean>(() => isTracksView(window.location.pathname));
   // The INCOMING/target panel (switches immediately on a tab change). `previous` holds the
@@ -741,49 +741,38 @@ export function Settings(): ReactElement {
     </>
   );
 
-  return (
-    <section className="settings-art-route" aria-label="Settings" data-testid="settings">
-      {/* Return to where the user opened Settings from. It rides the trailing actions slot
-          with the account/settings cluster (the app's nav home) — the same title-bar spot
-          the Level Editor's back uses — so every return control is in one consistent place;
-          the brand lockup stays a fixed leading anchor. Shown only when the URL carries a
-          valid origin; on a direct open the brand lockup is the way home. */}
-      <TitleBarSlot region="actions">
-        {returnTo ? (
-          <NavButton className="app-header-button" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</NavButton>
-        ) : null}
-      </TitleBarSlot>
-      {/* Same art-directed backdrop (animated menu scene) + synced rain as the main menu,
-          behind the frames. */}
-      <SceneBackdrop />
-      <AmbienceBackground />
-      <div className="settings-screen app-shell-bar-pad">
-        <ArtRouteChrome className="settings-shell">
-          <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
-            {tabs.map((tab) => (
-              <NavButton
-                key={tab.id}
-                to={withReturnTo(TAB_PATHS[tab.id])}
-                className={`settings-tab ${tab.id === activeTab ? 'is-active' : ''}`}
-                aria-current={tab.id === activeTab ? 'page' : undefined}
-                onClick={() => setConfirmingReset(false)}
-              >
-                <span className="settings-tab-icon" aria-hidden="true">
-                  <img src={asset(tab.icon)} alt="" />
-                </span>
-                <span>
-                  <strong>{tab.label}</strong>
-                </span>
-              </NavButton>
-            ))}
-          </aside>
+  // The two settings columns — sections (a tab column) + content (an action column). Shared by the
+  // standalone route AND the embedded-in-shell render, so both stay identical.
+  const inner = (
+    <>
+      <aside
+        className={embedded ? 'menu-dest-col menu-dest-tabs' : 'settings-frame settings-rail-frame'}
+        aria-label="Settings sections"
+      >
+        {tabs.map((tab) => (
+          <NavButton
+            key={tab.id}
+            to={withReturnTo(TAB_PATHS[tab.id])}
+            className={`settings-tab main-menu-mode-tab ${tab.id === activeTab ? 'is-active' : ''}`.trim()}
+            aria-current={tab.id === activeTab ? 'page' : undefined}
+            onClick={() => setConfirmingReset(false)}
+          >
+            <span className="settings-tab-icon" aria-hidden="true">
+              <img src={asset(tab.icon)} alt="" />
+            </span>
+            <span>
+              <strong>{tab.label}</strong>
+            </span>
+          </NavButton>
+        ))}
+      </aside>
 
-          <main className="settings-frame settings-main-frame">
-            {/* Screen + section are already shown by the brand lockup and the active
-                nav button; a visible panel heading just duplicated them. Keep an
-                accessible heading for screen-reader structure. */}
-            <h2 className="sr-only">{active.label}</h2>
-            {display.tracks ? (
+      <main className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}>
+        {/* Screen + section are already shown by the brand lockup and the active
+            nav button; a visible panel heading just duplicated them. Keep an
+            accessible heading for screen-reader structure. */}
+        <h2 className="sr-only">{active.label}</h2>
+        {display.tracks ? (
               <div className="settings-tracks-bar">
                 <div className="settings-tracks-bar-col">
                   <div className="settings-tracks-bar-actions">
@@ -824,7 +813,30 @@ export function Settings(): ReactElement {
                 </div>
               </div>
             </KitScroll>
-          </main>
+      </main>
+    </>
+  );
+
+  // Embedded in the persistent menu shell (MainMenu's second column): render just the two columns.
+  // The shell owns the backdrop, screen wrapper, and zoom-safe placement. A standalone open still
+  // renders the full art-route (direct /settings loads outside the shell keep working).
+  if (embedded) return inner;
+
+  return (
+    <section className="settings-art-route" aria-label="Settings" data-testid="settings">
+      {/* Return control rides the title-bar actions slot (the app's nav home); shown only when the
+          URL carries a valid origin. On a direct open the brand lockup is the way home. */}
+      <TitleBarSlot region="actions">
+        {returnTo ? (
+          <NavButton className="app-header-button" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</NavButton>
+        ) : null}
+      </TitleBarSlot>
+      {/* Same art-directed backdrop (animated menu scene) + synced rain as the main menu. */}
+      <SceneBackdrop />
+      <AmbienceBackground />
+      <div className="settings-screen app-shell-bar-pad">
+        <ArtRouteChrome className="settings-shell">
+          {inner}
         </ArtRouteChrome>
       </div>
     </section>
