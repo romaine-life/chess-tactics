@@ -42,6 +42,7 @@ import { PropSeatLab, type StructureEditorDraft } from './PropSeatLab';
 import { PROP_DEFS, type PropDef, type PropKind } from '../core/props';
 import { TileCompareLab, COMPARE_TILES, COMPARE_TILE_FAMILIES, compareTileCap, type CompareTile } from './TileCompareLab';
 import { SurfaceTilesLab, SURFACE_TILE_FAMILIES, surfaceTileCap } from './SurfaceTilesLab';
+import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverCatalogAsset, type GroundCoverId } from './groundCoverCatalog';
 import { SceneAnimLab, SceneRegionPicker, SCENE_ANIM_REGIONS, SCENE_ANIM_SCENES, SceneRegionThumb, type SceneRegion, type SceneAnimScene } from './SceneAnimLab';
 import { ArtworkCompareLab } from './ArtworkCompareLab';
 import { currentDoodadAssets, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
@@ -84,7 +85,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'groundcover' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
@@ -138,6 +139,7 @@ interface TilesetStudioRouteState {
   selectedFrameName?: string;
   selectedPropName?: string;
   selectedTileCompareId?: string;
+  selectedGroundCoverId?: string;
   selectedSurfaceFamily?: string;
   selectedRegionId?: string;
   viewerKind?: ViewerKind;
@@ -191,7 +193,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'groundcover' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -244,6 +246,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const isArtworkCompareAlias = window.location.pathname === '/artwork-compare';
   const prop = params.get('prop') || (isPropLabAlias ? params.get('prop') : null);
   const tile = params.get('tile');
+  const cover = params.get('cover');
   const sfamily = params.get('sfamily');
   const regionParam = params.get('region');
   const frame = params.get('frame') || (isNineSliceAlias ? asset : null);
@@ -277,6 +280,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedFrameName: frame || undefined,
     selectedPropName: prop || undefined,
     selectedTileCompareId: tile || undefined,
+    selectedGroundCoverId: GROUND_COVER_ASSETS.some((asset) => asset.id === cover) ? cover ?? undefined : undefined,
     selectedSurfaceFamily: sfamily || undefined,
     selectedRegionId: regionParam || undefined,
     viewerKind: isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
@@ -312,6 +316,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     if (route.category === 'artwork' && route.selectedArtworkName) catalogParams.set('art', route.selectedArtworkName);
     if (route.category === 'glossary' && route.selectedGlossaryName) catalogParams.set('gloss', route.selectedGlossaryName);
     if (route.category === 'tilesides' && route.selectedTileSideId) catalogParams.set('side', route.selectedTileSideId);
+    if (route.category === 'groundcover' && route.selectedGroundCoverId) catalogParams.set('cover', route.selectedGroundCoverId);
     if (route.category === 'gamelab' && route.selectedGameLabLevelId) catalogParams.set('glvl', route.selectedGameLabLevelId);
     if (route.category === 'gym' && route.selectedGymLevelId) catalogParams.set('gymlvl', route.selectedGymLevelId);
     const catalogQuery = catalogParams.toString();
@@ -428,6 +433,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedPropName, setSelectedPropName] = useState(initialRoute.selectedPropName ?? PROP_DEFS[0].id);
   // Which pipeline tile the embedded Tile Pipeline compare (Viewer 'tilecompare' kind) shows.
   const [selectedTileCompareId, setSelectedTileCompareId] = useState(initialRoute.selectedTileCompareId ?? COMPARE_TILES[0].id);
+  const [selectedGroundCoverId, setSelectedGroundCoverId] = useState<GroundCoverId>(groundCoverAsset(initialRoute.selectedGroundCoverId).id);
   // Which family the embedded Tileset Surfaces inspector (Viewer 'surfacetiles' kind) opens on.
   const [selectedSurfaceFamily, setSelectedSurfaceFamily] = useState(initialRoute.selectedSurfaceFamily ?? SURFACE_TILE_FAMILIES[0]);
   // Which menu region the embedded Scene Animations inspector (Viewer 'sceneanim' kind) shows.
@@ -447,6 +453,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedDoodadTerrains, setSelectedDoodadTerrains] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
   const [selectedPropKinds, setSelectedPropKinds] = useState<PropKind[]>([...ALL_PROP_KINDS]);
   const [selectedCompareFamilies, setSelectedCompareFamilies] = useState<string[]>([...COMPARE_TILE_FAMILIES]);
+  const [selectedGroundCoverTerrains, setSelectedGroundCoverTerrains] = useState<GroundCoverId[]>(GROUND_COVER_ASSETS.map((asset) => asset.id));
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [zoom, setZoom] = useState(1);
   const [, setViewZoom] = useState(1);
@@ -560,6 +567,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.selectedArtworkName) setSelectedArtworkName(route.selectedArtworkName);
       if (route.selectedGlossaryName) setSelectedGlossaryName(route.selectedGlossaryName);
       if (route.selectedTileSideId) setSelectedTileSideId(route.selectedTileSideId);
+      if (route.selectedGroundCoverId) setSelectedGroundCoverId(groundCoverAsset(route.selectedGroundCoverId).id);
       if (route.selectedGameLabLevelId) setSelectedGameLabLevelId(route.selectedGameLabLevelId);
       if (route.selectedGymLevelId) setSelectedGymLevelId(route.selectedGymLevelId);
       if (route.selectedFrameName) setSelectedFrameName(route.selectedFrameName);
@@ -633,6 +641,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedFrameName,
       selectedPropName,
       selectedTileCompareId,
+      selectedGroundCoverId,
       selectedSurfaceFamily,
       selectedRegionId,
       viewerKind,
@@ -648,7 +657,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedTileSideId, selectedFrameName, selectedPropName, selectedTileCompareId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedTileSideId, selectedFrameName, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
   // the card you came from — not the top of the grid. The selection is already kept
@@ -681,9 +690,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     });
   };
 
-  // Every catalog card (tile/unit/doodad, paintbrush + inspect) now opens the standalone
+  // Every catalog card (tile/unit/doodad/cover, paintbrush + inspect) now opens the standalone
   // Level Editor with that asset pre-armed as the brush — the in-studio board lab is retired.
-  const openInLevelEditor = (kind: 'tile' | 'unit' | 'doodad', id: string): void => {
+  const openInLevelEditor = (kind: 'tile' | 'unit' | 'doodad' | 'cover', id: string): void => {
     navigateApp(`/editor/level?from=studio&kind=${kind}&brush=${encodeURIComponent(id)}`);
   };
 
@@ -917,6 +926,41 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     createLabel: 'New prop',
     selectedId: selectedPropName,
     note: 'Inspect a prop to tune how it sits on its tiles, then Save.',
+  };
+
+  // Ground Cover — board-placeable ambient cover sets (grass tufts, reeds, sand). Descriptor
+  // path keeps ADR-0029's Search + terrain filter + Zoom + View-Selected contract structural.
+  const groundCoverCatalogType: CatalogType<GroundCoverCatalogAsset> = {
+    id: 'groundcover',
+    label: 'Ground Cover',
+    assets: GROUND_COVER_ASSETS,
+    card: (cover) => ({ img: `${cover.set.basePath}/v${cover.set.variants[0]?.id ?? 0}.png`, title: cover.label, badge: cover.badge }),
+    cardMedia: (cover) => <GroundCoverPreview asset={cover} zoom={zoom} />,
+    sections: (visible) => [{ id: 'groundcover', label: 'Ground Cover', assets: [...visible] }],
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'cover, terrain...',
+      match: (cover, q) => [cover.label, cover.id, cover.terrainLabel, cover.badge, cover.notes].join(' ').toLowerCase().includes(q),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    filters: [
+      {
+        id: 'terrain',
+        label: 'Home Terrain',
+        options: GROUND_COVER_ASSETS.map((cover) => ({ id: cover.id, label: cover.terrainLabel, sub: cover.badge })),
+        memberOf: (cover) => [cover.id],
+        selected: selectedGroundCoverTerrains,
+        toggle: (id) => setSelectedGroundCoverTerrains((cur) => (cur.includes(id as GroundCoverId) ? cur.filter((x) => x !== id) : [...cur, id as GroundCoverId])),
+        selectAll: () => setSelectedGroundCoverTerrains(GROUND_COVER_ASSETS.map((cover) => cover.id)),
+        clear: () => setSelectedGroundCoverTerrains([]),
+      },
+    ],
+    onSelect: (cover) => setSelectedGroundCoverId(cover.id),
+    onView: (cover) => openInLevelEditor('cover', cover.id),
+    onArm: (cover) => openInLevelEditor('cover', cover.id),
+    selectedId: selectedGroundCoverId,
+    note: 'Ground cover paints density onto tiles; the chosen cover set is stored separately when it differs from the tile terrain.',
   };
 
   // Tile Pipeline — the 36 QA tiles (raw PixelLab vs snapped-to-grid). Read-only; Inspect
@@ -1157,6 +1201,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'props', label: 'Props', hint: 'Browse multi-cell props (trees/houses); Inspect one to tune how it sits on its tiles.',
       main: <CatalogGrid type={propsCatalogType} />,
       controls: <CatalogControls type={propsCatalogType} />,
+    },
+    {
+      id: 'groundcover', label: 'Ground Cover', hint: 'Browse ambient cover sets — grass tufts, shoreline reeds, and sand cover. Paint them in the Level Editor cover layer.',
+      main: <CatalogGrid type={groundCoverCatalogType} />,
+      controls: <CatalogControls type={groundCoverCatalogType} />,
     },
     {
       id: 'tilecompare', label: 'Tile Pipeline', hint: 'The QA tile set — Inspect one to compare the raw PixelLab tile against the snapped-to-grid result.',
