@@ -69,6 +69,16 @@ describe('boardCode round-trip', () => {
     expect(decodeBoard(encodeBoard(emptyBoard({ generatedRegions })))!.generatedRegions).toEqual(generatedRegions);
   });
 
+  it('round-trips cover type overrides for grass painted on non-grass tiles', () => {
+    const board = emptyBoard({
+      cells: { '0,0': 'stone-surf-0' },
+      cover: { '0,0': 'filled' },
+      coverTypes: { '0,0': 'grass' },
+    });
+
+    expect(decodeBoard(encodeBoard(board))!.coverTypes).toEqual(board.coverTypes);
+  });
+
   it('encodes a generated-region-free board byte-identically to a code that predates region units', () => {
     expect(encodeBoard(emptyBoard({ generatedRegions: [] }))).toBe(encodeBoard(emptyBoard()));
     expect(decodeBoard(encodeBoard(emptyBoard()))!.generatedRegions).toEqual([]);

@@ -1404,10 +1404,11 @@ export function LevelEditor(): ReactElement {
       return;
     }
     if (brushKind === 'cover') {
-      // Ground cover paints a density onto an existing tile. If the chosen cover set differs
-      // from the tile terrain, store the decoupled override in the existing coverTypes channel.
-      const terrain = boardCells[key] ? leFamilyOfTile(boardCells[key])?.id : undefined;
-      if (!terrain || !groundCoverSet(coverBrushType)) return;
+      // Ground cover paints the selected cover set onto any existing tile. If it differs from
+      // the tile terrain, store the decoupled override in the existing coverTypes channel.
+      const tileId = boardCells[key];
+      if (!tileId || !groundCoverSet(coverBrushType)) return;
+      const terrain = leFamilyOfTile(tileId)?.id;
       next.cover[key] = coverBrushDensity;
       if (coverBrushType === terrain) delete next.coverTypes?.[key];
       else next.coverTypes = { ...(next.coverTypes ?? {}), [key]: coverBrushType };
@@ -2896,7 +2897,7 @@ export function LevelEditor(): ReactElement {
               <button type="button" className={`le-seg-btn ${coverBrushDensity === 'sparse' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('sparse')}>Sparse</button>
               <button type="button" className={`le-seg-btn ${coverBrushDensity === 'filled' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('filled')}>Filled</button>
             </div>
-            <p className="le-board-note">Brush paints {coverBrushDensity} {coverBrushAsset.label}; Erase clears a tile. The cover scatters from the density.</p>
+            <p className="le-board-note">Brush paints {coverBrushDensity} {coverBrushAsset.label} on any tile; Erase clears a tile. The cover scatters from the density.</p>
             <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
             <p className="le-board-note">{coverCount} tile{coverCount === 1 ? '' : 's'} with cover.</p>
           </section>
