@@ -119,10 +119,11 @@ export interface GameState {
    */
   terrain?: TerrainCell[];
   /**
-   * Edge fences: walls on the boundary between two orthogonally-adjacent cells, as canonical
-   * edge keys (roadEdgeKey "x,y|x,y"). A move that crosses a fenced edge is blocked (knights,
-   * whose steps are never orthogonally adjacent, hop over — like water). Optional + serializable,
-   * mirroring `terrain?`: a fence-free state omits it, and movement is unaffected when absent.
+   * Edge fences: walls on orthogonal cell edges, as canonical edge keys (roadEdgeKey "x,y|x,y").
+   * A move that crosses an interior fenced edge is blocked (knights, whose steps are never
+   * orthogonally adjacent, hop over — like water). Boundary rails may use one off-board endpoint
+   * and are visual because pieces cannot move off the board. Optional + serializable, mirroring
+   * `terrain?`: a fence-free state omits it, and movement is unaffected when absent.
    */
   fences?: string[];
   /**

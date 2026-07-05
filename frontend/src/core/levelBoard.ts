@@ -16,7 +16,7 @@ import type { PlacedProp } from './props';
 import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { TileFamilyId } from './tileSockets';
 import { decodeBoard, encodeBoard, type EditorBoard } from '../ui/boardCode';
-import { parseEdgeKey, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
+import { parseEdgeKey, isOrthogonalPair, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
 import { studioFamilies } from '../ui/studioBoard';
 import { UNIT_PALETTES } from './pieces';
 import { unitAssets, type Faction } from '../ui/unitCatalog';
@@ -40,6 +40,16 @@ const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
 // this set: it renders as a grass placeholder and is preserved on save rather than flattened
 // (an INV7 data-loss on legacy officials that predate boardCode).
 const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>([...Object.values(FAMILY_TO_TERRAIN), 'road', 'void']);
+
+function pointInBoard(x: number, y: number, cols: number, rows: number): boolean {
+  return x >= 0 && y >= 0 && x < cols && y < rows;
+}
+
+function fenceTouchesBoard(edge: string, cols: number, rows: number): boolean {
+  const p = parseEdgeKey(edge);
+  if (!p || !isOrthogonalPair(p.ax, p.ay, p.bx, p.by)) return false;
+  return pointInBoard(p.ax, p.ay, cols, rows) || pointInBoard(p.bx, p.by, cols, rows);
+}
 
 // Side ↔ faction (team palette). The editor paints a faction; the level stores a side.
 const SIDE_TO_FACTION: Record<'player' | 'enemy', Faction> = { player: 'navy-blue', enemy: 'crimson' };
@@ -238,8 +248,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
   // edge→material map at the default material (the boardCode path above already round-tripped both).
   const fences: EditorBoard['fences'] = {};
   for (const edge of level.layers.fences ?? []) {
-    const p = parseEdgeKey(edge);
-    if (!p || [[p.ax, p.ay], [p.bx, p.by]].some(([x, y]) => x < 0 || x >= cols || y < 0 || y >= rows)) continue;
+    if (!fenceTouchesBoard(edge, cols, rows)) continue;
     fences[edge] = DEFAULT_FENCE_MATERIAL;
   }
   const hasAuthoredPlayer = level.layers.units.some((unit) => unit.side === 'player');
@@ -335,11 +344,10 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
 
   // Fences ride BOTH channels: layers.fences (edge keys — the durable wall list the GAME reads for
   // collision) AND boardCode `fe` (edge→material, for the editor + rail rendering, via encodeBoard).
-  // Out-of-bounds edges are dropped on resize, like units/props/zones.
+  // Boundary rails use one off-board endpoint, so keep any orthogonal edge that touches the board.
   const fences: string[] = [];
   for (const edge of Object.keys(board.fences ?? {})) {
-    const p = parseEdgeKey(edge);
-    if (!p || [[p.ax, p.ay], [p.bx, p.by]].some(([x, y]) => x < 0 || x >= cols || y < 0 || y >= rows)) continue;
+    if (!fenceTouchesBoard(edge, cols, rows)) continue;
     fences.push(edge);
   }
 

@@ -5627,12 +5627,14 @@ h1 {
 .le-status-entry.is-warning { border-image-source: url("/assets/ui/explore/frames/panel-line-warning.png"); }
 .le-status-entry.is-error { border-image-source: url("/assets/ui/explore/frames/panel-line-error.png"); }
 
-/* road connection editor — clickable diamond edges for the selected road tile */
+/* path/fence edge editor — clickable diamond edges for the selected tile */
 .le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
 .le-roadconn-edge { cursor: pointer; }
 .le-roadconn-edge.is-joined:hover line:last-child { stroke: #8fefff; }
 .le-roadconn-edge.is-cut:hover line:last-child { stroke: #ffd089; }
 .le-roadconn-edge.is-exit:hover line:last-child { stroke: #9bf0bb; }
+.le-roadconn-edge.is-fence:hover line:last-child { stroke: #f0d898; }
+.le-roadconn-edge.is-boundary:hover line:last-child { stroke: #9bf0bb; }
 /* No same-kind neighbour: dim until hovered, where it previews the green "run off this edge" stub. */
 .le-roadconn-edge.is-none:hover line:last-child { stroke: #67d98a; }
 .le-roadconn-edge:focus-visible { outline: none; }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createBlankLevel, validateLevel, LEVEL_FORMAT_VERSION } from './level';
+import { roadEdgeKey } from './featureAutotile';
 
 describe('level schema', () => {
   it('creates a full-size, valid blank level', () => {
@@ -88,6 +89,18 @@ describe('level schema', () => {
   it('rejects an out-of-bounds prop anchor (symmetric with the unit bounds check)', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
     lvl.layers.props = [{ x: 99, y: 0, propId: 'oak' }];
+    expect(validateLevel(lvl).ok).toBe(false);
+  });
+
+  it('accepts boundary fence rails that touch the board', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.layers.fences = [roadEdgeKey(0, 0, 0, -1), roadEdgeKey(7, 7, 8, 7)];
+    expect(validateLevel(lvl).ok).toBe(true);
+  });
+
+  it('rejects fence edges that do not touch the board', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.layers.fences = [roadEdgeKey(-2, 0, -1, 0)];
     expect(validateLevel(lvl).ok).toBe(false);
   });
 
