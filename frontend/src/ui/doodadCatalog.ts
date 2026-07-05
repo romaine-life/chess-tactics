@@ -2,6 +2,9 @@
 // back/front sprite pair (rendered from Blender, split at the contact plane) so the unit
 // sorts between them — back tucks behind, front falls over the shins. Mirrors unitCatalog.
 
+import { currentSeats, propDef, structurePartsFromSeat, type StructurePart, type StructureSourceRef } from '../core/props';
+import { structureArtAsset, structureArtHalfSrc } from '../core/structureArt';
+
 export interface DoodadAsset {
   id: string;
   label: string;
@@ -13,18 +16,79 @@ export interface DoodadAsset {
   /** ground-contact-anchored sprite halves (96x180, anchor at pixel 48,69). */
   back: string;
   front: string;
+  /** Optional frame geometry for authored doodads that share non-doodad source art. */
+  sprite?: { w: number; h: number; anchorX: number; anchorY: number; scale?: number };
+  source?: StructureSourceRef;
+  parts?: StructurePart[];
 }
 
-const sprite = (id: string, half: 'back' | 'front') => `/assets/doodads/${id}/${half}.png`;
+const sourceSpritePath = (source: StructureSourceRef, half: 'back' | 'front'): string => {
+  if (source.kind === 'asset') return structureArtHalfSrc(source.id, half);
+  if (source.kind === 'doodad') return sprite(source.id, half);
+  const def = propDef(source.id);
+  if (def?.spriteParts?.length) return sourceSpritePath(def.spriteParts[0].source, half);
+  if (def?.spriteSource && (def.spriteSource.kind !== 'prop' || def.spriteSource.id !== source.id)) {
+    return sourceSpritePath(def.spriteSource, half);
+  }
+  return `/assets/props/${def?.spriteId ?? source.id}/${half}.png`;
+};
+const DOODAD_SPRITE = { w: 96, h: 180, anchorX: 48, anchorY: 69, scale: 1 } as const;
+const sprite = (id: string, half: 'back' | 'front') => structureArtHalfSrc(id, half);
+const doodadFromArt = (id: string, label: string): DoodadAsset => {
+  const art = structureArtAsset(id);
+  const spriteFrame = art?.sprite ?? DOODAD_SPRITE;
+  const source: StructureSourceRef = { kind: 'asset', id };
+  return {
+    id,
+    label,
+    status: 'render',
+    terrains: art?.terrains ?? [],
+    back: sourceSpritePath(source, 'back'),
+    front: sourceSpritePath(source, 'front'),
+    sprite: spriteFrame,
+    source,
+    parts: [{ source, anchorX: spriteFrame.anchorX, anchorY: spriteFrame.anchorY, scale: spriteFrame.scale ?? 1 }],
+  };
+};
 
 // Grass tuft retired: ambient grass is now the general ground-cover tile feature
 // (core/groundCover + GroundCoverLayer), not a placed doodad. The glossary keeps the
 // grass-tuft sprites only as a static figure illustrating the back/front split.
-export const DOODAD_ASSETS: DoodadAsset[] = [
-  { id: 'boulder', label: 'Boulder', status: 'render', terrains: ['stone'], back: sprite('boulder', 'back'), front: sprite('boulder', 'front') },
-  { id: 'stump', label: 'Tree stump', status: 'render', terrains: ['dirt'], back: sprite('stump', 'back'), front: sprite('stump', 'front') },
-  { id: 'fern', label: 'Fern', status: 'render', terrains: ['water'], back: sprite('fern', 'back'), front: sprite('fern', 'front') },
-  { id: 'flower', label: 'Flower', status: 'render', terrains: ['grass'], back: sprite('flower', 'back'), front: sprite('flower', 'front') },
+export const BASE_DOODAD_ASSETS: DoodadAsset[] = [
+  doodadFromArt('boulder', 'Boulder'),
+  doodadFromArt('stump', 'Tree stump'),
+  doodadFromArt('fern', 'Fern'),
+  doodadFromArt('flower', 'Flower'),
 ];
 
-export const doodadAsset = (id: string): DoodadAsset => DOODAD_ASSETS.find((d) => d.id === id) ?? DOODAD_ASSETS[0];
+export const DOODAD_ASSETS: DoodadAsset[] = BASE_DOODAD_ASSETS;
+
+export function currentDoodadAssets(): DoodadAsset[] {
+  const byBaseId = new Map(BASE_DOODAD_ASSETS.map((asset) => [asset.id, asset]));
+  const byId = new Map(BASE_DOODAD_ASSETS.map((asset) => [asset.id, asset]));
+  for (const [id, seat] of Object.entries(currentSeats())) {
+    if (seat.placement !== 'doodad') continue;
+    const parts = structurePartsFromSeat(seat);
+    if (!parts.length) continue;
+    const source = parts[0].source;
+    const sourceArt = source.kind === 'asset' ? structureArtAsset(source.id) : undefined;
+    const sourceProp = source.kind === 'prop' ? propDef(source.id) : undefined;
+    const sourceDoodad = source.kind === 'doodad' ? byBaseId.get(source.id) : undefined;
+    const sourceGeometry = sourceArt?.sprite ?? sourceProp?.sprite ?? sourceDoodad?.sprite ?? DOODAD_SPRITE;
+    const sourceTerrains = sourceArt?.terrains ?? sourceProp?.terrains ?? sourceDoodad?.terrains ?? ['grass', 'dirt', 'stone'];
+    byId.set(id, {
+      id,
+      label: seat.label ?? id,
+      status: 'authored',
+      terrains: seat.terrains ?? sourceTerrains,
+      back: sourceSpritePath(source, 'back'),
+      front: sourceSpritePath(source, 'front'),
+      source,
+      parts,
+      sprite: { w: sourceGeometry.w, h: sourceGeometry.h, anchorX: parts[0].anchorX, anchorY: parts[0].anchorY, scale: parts[0].scale },
+    });
+  }
+  return [...byId.values()];
+}
+
+export const doodadAsset = (id: string): DoodadAsset => currentDoodadAssets().find((d) => d.id === id) ?? BASE_DOODAD_ASSETS[0];

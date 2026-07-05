@@ -32,9 +32,9 @@ import {
   type Direction,
   type Faction,
 } from '../ui/unitCatalog';
-import { DOODAD_ASSETS, type DoodadAsset } from '../ui/doodadCatalog';
+import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
 import { resolveFeatureOverlays, resolveFenceOverlays } from '../core/featureAutotile';
-import { propHalfSrc, propZBracket, structureSeatPoint } from './BoardStructure';
+import { propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite } from './BoardStructure';
 import { fenceOverlayZIndex } from './fenceOverlayDepth';
 import { propDef } from '../core/props';
 import { groundCoverSet, resolveGroundCover, densityFieldAt, type GroundCover } from '../core/groundCover';
@@ -86,7 +86,7 @@ type Canvas2D = HTMLCanvasElement | OffscreenCanvas;
 const studioTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
 const resolveTile = (id: string): StudioAsset | undefined => studioTiles.find((asset) => asset.id === id);
 const resolveUnit = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
-const resolveDoodad = (id: string): DoodadAsset | undefined => DOODAD_ASSETS.find((d) => d.id === id);
+const resolveDoodad = (id: string): DoodadAsset | undefined => doodadAsset(id);
 
 /**
  * The flat, z-sorted list of image draws for a board — the bake's "scene graph". Pure (no
@@ -154,10 +154,16 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
     const doodadPlacement = board.doodads[key];
     const doodad = doodadPlacement ? resolveDoodad(doodadPlacement.doodadId) : undefined;
     if (doodad) {
-      const frameX = left - TILE_STEP_X;
-      const frameY = top - TILE_EQUATOR;
-      ops.push({ src: doodad.back, dx: frameX, dy: frameY, dw: DOODAD_FRAME_W, dh: DOODAD_FRAME_H, z: base - 1 });
-      ops.push({ src: doodad.front, dx: frameX, dy: frameY, dw: DOODAD_FRAME_W, dh: DOODAD_FRAME_H, z: base + 1 });
+      const sprite = doodad.sprite ?? { w: DOODAD_FRAME_W, h: DOODAD_FRAME_H, anchorX: TILE_STEP_X, anchorY: TILE_EQUATOR };
+      const parts = doodad.parts?.length
+        ? doodad.parts
+        : [{ source: doodad.source ?? { kind: 'doodad' as const, id: doodad.id }, anchorX: sprite.anchorX, anchorY: sprite.anchorY, scale: sprite.scale ?? 1 }];
+      for (const part of parts) {
+        const sourceSprite = structureSourceSprite(part.source);
+        const scale = part.scale ?? 1;
+        ops.push({ src: structureSourceHalfSrc(part.source, 'back'), dx: left - part.anchorX * scale, dy: top - part.anchorY * scale, dw: sourceSprite.w * scale, dh: sourceSprite.h * scale, z: base - 1 });
+        ops.push({ src: structureSourceHalfSrc(part.source, 'front'), dx: left - part.anchorX * scale, dy: top - part.anchorY * scale, dw: sourceSprite.w * scale, dh: sourceSprite.h * scale, z: base + 1 });
+      }
     }
 
     const placement = board.units[key];
@@ -187,15 +193,20 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
     // differs ONLY by scale (+ anchor) — the live <StructureSprite> sizes the frame at w/h*scale and
     // seats the contact pixel with a PERCENTAGE translate, so the anchor offset scales too. Without
     // this the variant renders at BASE size in the thumbnail.
-    const s = def.sprite.scale ?? 1;
-    const dx = left - def.sprite.anchorX * s;
-    const dy = top - def.sprite.anchorY * s;
-    const dw = def.sprite.w * s;
-    const dh = def.sprite.h * s;
     const { back, front } = propZBracket(ax, ay, def.w, def.h);
-    // Size variants share the base's PNG — bake by spriteId (the base), not the placed variant id.
-    ops.push({ src: propHalfSrc(def.spriteId, 'back'), dx, dy, dw, dh, z: back });
-    ops.push({ src: propHalfSrc(def.spriteId, 'front'), dx, dy, dw, dh, z: front });
+    const parts = def.spriteParts?.length
+      ? def.spriteParts
+      : [{ source: def.spriteSource ?? { kind: 'prop' as const, id: def.spriteId }, anchorX: def.sprite.anchorX, anchorY: def.sprite.anchorY, scale: def.sprite.scale ?? 1 }];
+    for (const part of parts) {
+      const sourceSprite = structureSourceSprite(part.source);
+      const s = part.scale ?? 1;
+      const dx = left - part.anchorX * s;
+      const dy = top - part.anchorY * s;
+      const dw = sourceSprite.w * s;
+      const dh = sourceSprite.h * s;
+      ops.push({ src: structureSourceHalfSrc(part.source, 'back'), dx, dy, dw, dh, z: back });
+      ops.push({ src: structureSourceHalfSrc(part.source, 'front'), dx, dy, dw, dh, z: front });
+    }
   }
 
   // Ground cover (grass/water/sand tufts) — the SAME vegetation the GAME scatters (SkirmishBoard),

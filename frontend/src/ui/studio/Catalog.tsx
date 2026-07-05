@@ -24,6 +24,13 @@ export interface CatalogCardModel {
   isUnit?: boolean;
 }
 
+export interface CatalogCardAction {
+  label: string;
+  title: string;
+  run: () => void;
+  icon: ReactNode;
+}
+
 export interface CatalogType<A extends { id: string }> {
   id: string;
   label: string;
@@ -45,6 +52,11 @@ export interface CatalogType<A extends { id: string }> {
   onView: (asset: A) => void;
   /** Arm the asset as the board brush (🖌). Omit for assets that can't be painted. */
   onArm?: (asset: A) => void;
+  /** Optional per-card actions beside brush/inspect, e.g. "Copy from this". */
+  cardActions?: (asset: A) => CatalogCardAction[];
+  /** Optional first card + rail action for creating a new asset in this catalog. */
+  onCreate?: () => void;
+  createLabel?: string;
   selectedId: string | undefined;
   /** Short helper line under the rail controls. */
   note?: string;
@@ -73,10 +85,17 @@ const InspectIcon = (): ReactElement => (
   </svg>
 );
 
+const PlusIcon = (): ReactElement => (
+  <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+    <path d="M8 2.5 V13.5 M2.5 8 H13.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+  </svg>
+);
+
 function CatalogCard<A extends { id: string }>({ type, asset }: { type: CatalogType<A>; asset: A }): ReactElement {
   const model = type.card(asset);
   const selected = asset.id === type.selectedId;
   const zoomStyle = type.zoom ? ({ [type.zoom.cssVar]: type.zoom.value } as CSSProperties) : undefined;
+  const extraActions = type.cardActions?.(asset) ?? [];
   const action = (run: () => void) => ({
     role: 'button' as const,
     tabIndex: 0,
@@ -107,9 +126,30 @@ function CatalogCard<A extends { id: string }>({ type, asset }: { type: CatalogT
               🖌
             </span>
           ) : null}
+          {extraActions.map((item) => (
+            <span key={item.label} className="tileset-card-action" title={item.title} aria-label={item.label} {...action(item.run)}>
+              {item.icon}
+            </span>
+          ))}
           <span className="tileset-card-action" title={`Inspect ${model.title}`} aria-label={`Inspect ${model.title}`} {...action(() => type.onView(asset))}>
             <InspectIcon />
           </span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function CatalogCreateCard({ label, onCreate }: { label: string; onCreate: () => void }): ReactElement {
+  return (
+    <button type="button" className="tileset-studio-card is-create" onClick={onCreate} title={label}>
+      <span className="tileset-studio-card-image">
+        <span className="tileset-create-glyph"><PlusIcon /></span>
+      </span>
+      <span className="tileset-studio-card-meta">
+        <span className="tileset-studio-card-text">
+          <strong>{label}</strong>
+          <em>create</em>
         </span>
       </span>
     </button>
@@ -129,6 +169,7 @@ export function CatalogGrid<A extends { id: string }>({ type }: { type: CatalogT
   // filtered out) doesn't render a bare header and read as if nothing is filtered.
   const sections = allSections.filter((section) => section.assets.length > 0);
   const empty = sections.length === 0;
+  const createCard = type.onCreate ? <CatalogCreateCard label={type.createLabel ?? `New ${type.label}`} onCreate={type.onCreate} /> : null;
   const scrollRef = useRef<HTMLElement>(null);
   // Restore the saved position on (re)mount and when switching catalog category.
   useLayoutEffect(() => {
@@ -148,13 +189,20 @@ export function CatalogGrid<A extends { id: string }>({ type }: { type: CatalogT
             <section key={section.id} className="tileset-asset-section" aria-label={section.label}>
               <h3>{section.label}</h3>
               <div className="tileset-studio-grid" aria-label={`${section.label} assets`}>
+                {section === sections[0] ? createCard : null}
                 {section.assets.map((asset) => (
                   <CatalogCard key={asset.id} type={type} asset={asset} />
                 ))}
               </div>
             </section>
           ))}
-          {empty ? (
+          {empty && createCard ? (
+            <section className="tileset-asset-section" aria-label="Create">
+              <h3>Create</h3>
+              <div className="tileset-studio-grid" aria-label="Create asset">{createCard}</div>
+            </section>
+          ) : null}
+          {empty && !createCard ? (
             <div className="unit-catalog-empty">
               <h3>{type.emptyLabel ?? 'Nothing matches'}</h3>
               <p>Adjust the search or filters.</p>
@@ -286,6 +334,11 @@ export function CatalogControls<A extends { id: string }>({ type }: { type: Cata
         </label>
       ) : null}
       {type.extra ?? null}
+      {type.onCreate ? (
+        <button type="button" className="tileset-view-action" onClick={type.onCreate}>
+          {type.createLabel ?? `New ${type.label}`}
+        </button>
+      ) : null}
       {type.filters && type.filters.length > 0 ? <CatalogFilters filters={type.filters} /> : null}
       <button
         type="button"

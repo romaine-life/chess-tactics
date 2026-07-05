@@ -9,8 +9,18 @@
 // No rotation in v1, so a prop serialises as a single entry at its anchor.
 
 import propSeats from './propSeats.json';
+import { structureArtAsset } from './structureArt';
 
 export type PropKind = 'tree' | 'house' | 'rock';
+export type StructurePlacement = 'prop' | 'doodad';
+export type StructureSourceKind = 'asset' | 'prop' | 'doodad';
+export interface StructureSourceRef { kind: StructureSourceKind; id: string }
+export interface StructurePart {
+  source: StructureSourceRef;
+  anchorX: number;
+  anchorY: number;
+  scale: number;
+}
 
 /** The sprite frame geometry for a prop (pixel dims + the ground-contact anchor pixel). */
 export interface PropSprite {
@@ -39,7 +49,21 @@ export interface PropSprite {
 // PROP_DEFS entry synthesized from the base. Authored by eye in /prop-lab.
 // A prop-config entry: the seat (anchor + render scale), an optional gameplay FOOTPRINT override
 // (w × h cells — absent means the default/base footprint), and, for a size variant, its `base`.
-export type PropSeatEntry = { anchorX: number; anchorY: number; scale: number; w?: number; h?: number; base?: string; label?: string };
+export type PropSeatEntry = {
+  anchorX: number;
+  anchorY: number;
+  scale: number;
+  w?: number;
+  h?: number;
+  base?: string;
+  label?: string;
+  placement?: StructurePlacement;
+  source?: StructureSourceRef;
+  parts?: StructurePart[];
+  kind?: PropKind;
+  terrains?: string[];
+  blocking?: boolean;
+};
 export type PropSeatMap = Record<string, PropSeatEntry>;
 
 // The committed baseline — the always-render seed (ADR-0061). Live DB overrides (loaded async by
@@ -85,6 +109,10 @@ export interface PropDef {
   /** The asset folder to load (/assets/props/<spriteId>/…). Size variants SHARE the base's
    *  PNG, so their spriteId is the base's id, not their own. Base props: spriteId === id. */
   spriteId: string;
+  /** Optional source artwork override. Authored structures can share prop OR doodad art. */
+  spriteSource?: StructureSourceRef;
+  /** Optional placed artwork slots. When present, render each slot over the same footprint. */
+  spriteParts?: StructurePart[];
   /** Catalog grouping — a base and its size variants share one family. Base props: family === id. */
   family: string;
 }
@@ -111,6 +139,7 @@ function baseDefs(seats: PropSeatMap): PropDef[] {
       blocking: true,
       terrains: ['grass', 'dirt'],
       spriteId: 'oak',
+      spriteSource: { kind: 'asset', id: 'oak' },
       family: 'oak',
       sprite: { w: 192, h: 300, ...seat(seats, 'oak') },
     },
@@ -123,6 +152,7 @@ function baseDefs(seats: PropSeatMap): PropDef[] {
       blocking: true,
       terrains: ['grass', 'dirt', 'stone'],
       spriteId: 'cottage',
+      spriteSource: { kind: 'asset', id: 'cottage' },
       family: 'cottage',
       sprite: { w: 177, h: 184, ...seat(seats, 'cottage') },
     },
@@ -130,17 +160,17 @@ function baseDefs(seats: PropSeatMap): PropDef[] {
     // gated Codex img2img RESTYLES of real Blender captures (photoreal meshes read "too realistic"
     // raw, so the cabin/green-roof shapes are kept but re-skinned to pixel-art). Method-verified via
     // imageGenVerdict (rollout image_generation_call), NOT code-drawn.
-    { id: 'cabin', label: 'Log cabin', kind: 'house', w: footW(seats, 'cabin'), h: footH(seats, 'cabin'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'cabin', family: 'cabin', sprite: { w: 220, h: 176, ...seat(seats, 'cabin') } },
-    { id: 'lodge', label: 'Green-roof house', kind: 'house', w: footW(seats, 'lodge'), h: footH(seats, 'lodge'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'lodge', family: 'lodge', sprite: { w: 210, h: 177, ...seat(seats, 'lodge') } },
+    { id: 'cabin', label: 'Log cabin', kind: 'house', w: footW(seats, 'cabin'), h: footH(seats, 'cabin'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'cabin', spriteSource: { kind: 'asset', id: 'cabin' }, family: 'cabin', sprite: { w: 220, h: 176, ...seat(seats, 'cabin') } },
+    { id: 'lodge', label: 'Green-roof house', kind: 'house', w: footW(seats, 'lodge'), h: footH(seats, 'lodge'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'lodge', spriteSource: { kind: 'asset', id: 'lodge' }, family: 'lodge', sprite: { w: 210, h: 177, ...seat(seats, 'lodge') } },
     // Rocks — 1×1 blocking boulders: the placeable impassable-cell obstacle (the old editor's rock
     // terrain swatch, reborn as a prop so the rules engine stays untouched). Same gated Codex restyle
     // pipeline as cabin/lodge, from the two staged /rocks meshes (see SOURCES.md). Native-res PNGs;
     // tile-fit is the `scale` in propSeats.json (eye-tunable in /prop-lab), not a baked-small sprite.
-    { id: 'rock', label: 'Rock', kind: 'rock', w: footW(seats, 'rock'), h: footH(seats, 'rock'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'rock', family: 'rock', sprite: { w: 40, h: 45, ...seat(seats, 'rock') } },
+    { id: 'rock', label: 'Rock', kind: 'rock', w: footW(seats, 'rock'), h: footH(seats, 'rock'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'rock', spriteSource: { kind: 'asset', id: 'rock' }, family: 'rock', sprite: { w: 40, h: 45, ...seat(seats, 'rock') } },
     // Named 'fieldstone' (not 'granite') to avoid colliding with the obstacle-piece sprite variant
     // ROCK_VARIANTS=['boulder','granite'] under /assets/units/rock/ (render/SkirmishBoard.tsx) — a
     // separate system from these placeable props. Both derive from the same round-boulder mesh.
-    { id: 'fieldstone', label: 'Fieldstone', kind: 'rock', w: footW(seats, 'fieldstone'), h: footH(seats, 'fieldstone'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'fieldstone', family: 'fieldstone', sprite: { w: 51, h: 47, ...seat(seats, 'fieldstone') } },
+    { id: 'fieldstone', label: 'Fieldstone', kind: 'rock', w: footW(seats, 'fieldstone'), h: footH(seats, 'fieldstone'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'fieldstone', spriteSource: { kind: 'asset', id: 'fieldstone' }, family: 'fieldstone', sprite: { w: 51, h: 47, ...seat(seats, 'fieldstone') } },
   ];
 }
 
@@ -151,6 +181,7 @@ function variantDefs(seats: PropSeatMap, bases: readonly PropDef[]): PropDef[] {
   const byId = new Map(bases.map((d) => [d.id, d]));
   const out: PropDef[] = [];
   for (const [id, s] of Object.entries(seats)) {
+    if (s.placement) continue;
     if (!s.base) continue;
     const base = byId.get(s.base);
     if (!base) throw new Error(`prop variant "${id}" in propSeats.json references unknown base "${s.base}"`);
@@ -167,9 +198,73 @@ function variantDefs(seats: PropSeatMap, bases: readonly PropDef[]): PropDef[] {
   return out;
 }
 
+const DOODAD_SOURCE_SPRITE = { w: 96, h: 180, anchorX: 48, anchorY: 69 } as const;
+
+const isStructureSource = (value: unknown): value is StructureSourceRef =>
+  !!value
+  && typeof value === 'object'
+  && ((value as StructureSourceRef).kind === 'asset' || (value as StructureSourceRef).kind === 'prop' || (value as StructureSourceRef).kind === 'doodad')
+  && typeof (value as StructureSourceRef).id === 'string'
+  && (value as StructureSourceRef).id.length > 0;
+
+const isStructurePart = (value: unknown): value is StructurePart =>
+  !!value
+  && typeof value === 'object'
+  && isStructureSource((value as StructurePart).source)
+  && Number.isFinite((value as StructurePart).anchorX)
+  && Number.isFinite((value as StructurePart).anchorY)
+  && Number.isFinite((value as StructurePart).scale)
+  && (value as StructurePart).scale > 0;
+
+export function structurePartsFromSeat(seat: PropSeatEntry): StructurePart[] {
+  const authoredParts = Array.isArray(seat.parts) ? seat.parts.filter(isStructurePart) : [];
+  if (authoredParts.length) {
+    return authoredParts.map((part) => ({
+      source: part.source,
+      anchorX: part.anchorX,
+      anchorY: part.anchorY,
+      scale: part.scale,
+    }));
+  }
+  if (!seat.source) return [];
+  return [{ source: seat.source, anchorX: seat.anchorX, anchorY: seat.anchorY, scale: seat.scale }];
+}
+
+function authoredPropDefs(seats: PropSeatMap, sourceProps: readonly PropDef[]): PropDef[] {
+  const byId = new Map(sourceProps.map((d) => [d.id, d]));
+  const out: PropDef[] = [];
+  for (const [id, s] of Object.entries(seats)) {
+    if (s.placement !== 'prop') continue;
+    const parts = structurePartsFromSeat(s);
+    if (!parts.length) continue;
+    const source = parts[0].source;
+    const sourceProp = source.kind === 'prop' ? byId.get(source.id) : undefined;
+    const sourceArt = source.kind === 'asset' ? structureArtAsset(source.id) : undefined;
+    const sourceSprite = sourceArt?.sprite ?? sourceProp?.sprite ?? DOODAD_SOURCE_SPRITE;
+    const sourceTerrains = sourceArt?.terrains ?? sourceProp?.terrains ?? ['grass', 'dirt', 'stone'];
+    const sourceKind = sourceProp?.kind ?? sourceArt?.propKind ?? (sourceArt?.kind === 'tree' || sourceArt?.kind === 'rock' ? sourceArt.kind : 'house');
+    out.push({
+      id,
+      label: s.label ?? id,
+      kind: s.kind ?? sourceKind,
+      w: s.w ?? sourceProp?.w ?? 1,
+      h: s.h ?? sourceProp?.h ?? 1,
+      blocking: s.blocking ?? true,
+      terrains: s.terrains ?? sourceTerrains,
+      spriteId: source.kind === 'prop' ? (sourceProp?.spriteId ?? source.id) : source.id,
+      spriteSource: source,
+      spriteParts: parts,
+      family: id,
+      sprite: { w: sourceSprite.w, h: sourceSprite.h, anchorX: parts[0].anchorX, anchorY: parts[0].anchorY, scale: parts[0].scale },
+    });
+  }
+  return out;
+}
+
 function deriveDefs(seats: PropSeatMap): PropDef[] {
   const bases = baseDefs(seats);
-  return [...bases, ...variantDefs(seats, bases)];
+  const variants = variantDefs(seats, bases);
+  return [...bases, ...variants, ...authoredPropDefs(seats, [...bases, ...variants])];
 }
 
 // `let`, not `const`: applyLiveSeats re-derives this in place when the DB overlay arrives. Consumers

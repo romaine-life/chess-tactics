@@ -20,7 +20,7 @@ import { TitleBarSlot } from './shell/TitleBarSlot';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
-import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
+import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, type EditorBoard, type FeatureCell } from './boardCode';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -1089,8 +1089,9 @@ export function LevelEditor(): ReactElement {
       if (hasDirectionSprite(unitBrushAsset, next)) { setUnitFacing(next); return; }
     }
   };
-  const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAsset(id);
-  const doodadBrushAsset = resolveDoodadAsset(doodadBrushId) ?? DOODAD_ASSETS[0];
+  const doodadAssets = currentDoodadAssets();
+  const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAssets.find((doodad) => doodad.id === id) ?? doodadAsset(id);
+  const doodadBrushAsset = resolveDoodadAsset(doodadBrushId) ?? doodadAssets[0] ?? DOODAD_ASSETS[0];
   // HARD terrain gate (mirrors the Studio): a doodad only lands on a tile of its home terrain.
   const doodadFitsTile = (doodad: DoodadAsset, tileId: string | undefined): boolean => {
     const terrain = tileId ? leFamilyOfTile(tileId)?.id : undefined;
@@ -2521,7 +2522,7 @@ export function LevelEditor(): ReactElement {
           <section className="skirmish-card le-brush-panel">
             <h2>Doodads</h2>
               <div className="le-swatches">
-                {DOODAD_ASSETS.map((doodad) => (
+                {doodadAssets.map((doodad) => (
                   <button
                     type="button"
                     key={doodad.id}

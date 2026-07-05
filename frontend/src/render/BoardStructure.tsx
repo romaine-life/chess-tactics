@@ -1,6 +1,8 @@
 import { boardLabCellPosition } from './boardProjection';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
-import { propDef, type PlacedProp, type PropDef } from '../core/props';
+import { propDef, type PlacedProp, type PropDef, type StructurePart, type StructureSourceRef } from '../core/props';
+import { structureArtAsset, structureArtHalfSrc } from '../core/structureArt';
+import { doodadAsset } from '../ui/doodadCatalog';
 
 // THE single way a multi-cell board STRUCTURE (prop) renders on a board — shared by the game
 // board (SkirmishBoard) and the Studio editor so a prop seats identically in both. A prop is a
@@ -62,8 +64,59 @@ export function propHalfSrc(propId: string, half: 'back' | 'front'): string {
   return `/assets/props/${propId}/${half}.png`;
 }
 
+/** The canonical src of any structure-source half. Authored structures can share prop or doodad art. */
+export function structureSourceHalfSrc(source: StructureSourceRef, half: 'back' | 'front'): string {
+  if (source.kind === 'asset') return structureArtHalfSrc(source.id, half);
+  if (source.kind === 'doodad') return `/assets/doodads/${source.id}/${half}.png`;
+  const def = propDef(source.id);
+  if (def?.spriteParts?.length) return structureSourceHalfSrc(def.spriteParts[0].source, half);
+  if (def?.spriteSource && (def.spriteSource.kind !== 'prop' || def.spriteSource.id !== source.id)) {
+    return structureSourceHalfSrc(def.spriteSource, half);
+  }
+  return propHalfSrc(def?.spriteId ?? source.id, half);
+}
+
+export function structureSourceSprite(source: StructureSourceRef): { w: number; h: number; anchorX: number; anchorY: number; scale?: number } {
+  if (source.kind === 'asset') return structureArtAsset(source.id)?.sprite ?? DOODAD_SPRITE;
+  if (source.kind === 'prop') return propDef(source.id)?.sprite ?? DOODAD_SPRITE;
+  return doodadAsset(source.id).sprite ?? DOODAD_SPRITE;
+}
+
+function StructurePartSprites({
+  anchor,
+  w,
+  h,
+  parts,
+  attrsFor,
+}: {
+  anchor: { x: number; y: number };
+  w: number;
+  h: number;
+  parts: readonly StructurePart[];
+  attrsFor: (half: 'back' | 'front', index: number) => Record<string, string>;
+}) {
+  return (
+    <>
+      {parts.map((part, index) => {
+        const sprite = structureSourceSprite(part.source);
+        return (
+          <StructureSprite
+            key={`${part.source.kind}-${part.source.id}-${index}`}
+            anchor={anchor}
+            w={w}
+            h={h}
+            sprite={{ w: sprite.w, h: sprite.h, anchorX: part.anchorX, anchorY: part.anchorY, scale: part.scale }}
+            srcFor={(half) => structureSourceHalfSrc(part.source, half)}
+            attrsFor={(half) => attrsFor(half, index)}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 /** Seat a sprite (frame `sw×sh`, contact pixel at `ax,ay`) over a footprint anchored at `anchor`. */
-function StructureSprite({
+export function StructureSprite({
   anchor,
   w,
   h,
@@ -115,6 +168,17 @@ function StructureSprite({
 export function PropSprite({ prop, def }: { prop: PlacedProp; def?: PropDef }) {
   const resolved = def ?? propDef(prop.propId);
   if (!resolved) return null; // unknown prop id — render nothing (matches the bridge's skip)
+  if (resolved.spriteParts?.length) {
+    return (
+      <StructurePartSprites
+        anchor={{ x: prop.x, y: prop.y }}
+        w={resolved.w}
+        h={resolved.h}
+        parts={resolved.spriteParts}
+        attrsFor={(half, index) => ({ 'data-prop': prop.propId, 'data-half': half, 'data-part': String(index + 1) })}
+      />
+    );
+  }
   return (
     <StructureSprite
       anchor={{ x: prop.x, y: prop.y }}
@@ -122,7 +186,7 @@ export function PropSprite({ prop, def }: { prop: PlacedProp; def?: PropDef }) {
       h={resolved.h}
       sprite={resolved.sprite}
       // Size variants SHARE the base's PNG — load by spriteId (the base), not the placed prop id.
-      srcFor={(half) => propHalfSrc(resolved.spriteId, half)}
+      srcFor={(half) => structureSourceHalfSrc(resolved.spriteSource ?? { kind: 'prop', id: resolved.spriteId }, half)}
       attrsFor={(half) => ({ 'data-prop': prop.propId, 'data-half': half })}
     />
   );
@@ -136,13 +200,25 @@ export type Doodad = { x: number; y: number; type: string };
  * z-brackets exactly as before (back base-1, front base+1, contact pixel on the cell centre).
  */
 export function DoodadSprite({ doodad }: { doodad: Doodad }) {
+  const asset = doodadAsset(doodad.type);
+  if (asset.parts?.length) {
+    return (
+      <StructurePartSprites
+        anchor={{ x: doodad.x, y: doodad.y }}
+        w={1}
+        h={1}
+        parts={asset.parts}
+        attrsFor={(half, index) => ({ 'data-doodad': half, 'data-part': String(index + 1) })}
+      />
+    );
+  }
   return (
     <StructureSprite
       anchor={{ x: doodad.x, y: doodad.y }}
       w={1}
       h={1}
-      sprite={DOODAD_SPRITE}
-      srcFor={(half) => `/assets/doodads/${doodad.type}/${half}.png`}
+      sprite={asset.sprite ?? DOODAD_SPRITE}
+      srcFor={(half) => half === 'back' ? asset.back : asset.front}
       attrsFor={(half) => ({ 'data-doodad': half })}
     />
   );
