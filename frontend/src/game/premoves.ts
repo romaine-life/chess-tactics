@@ -7,7 +7,7 @@
 // and the drain in scheduleEnemyReply); this module is the pure projection those
 // paths share so neither re-derives the fold.
 
-import type { GameState, Move, Vec } from '../core/types';
+import type { GameState, Move, Piece, Vec } from '../core/types';
 import { applyMove, gameEnv, legalMoves, type MoveEnv } from '../core/rules';
 
 /** One queued move: a player piece and where it will go. The "from" is implied by
@@ -36,9 +36,13 @@ function envFor(game: GameState): MoveEnv {
 // (its piece gone, or the square no longer reachable) stops the fold there. The caller
 // only ever appends steps that were legal when queued, so this is a safety net rather
 // than the gate.
-function foldPremoves(game: GameState, premoves: readonly PremoveStep[]): { state: GameState; arrows: PremoveArrow[] } {
+function foldPremoves(game: GameState, premoves: readonly PremoveStep[]): { state: GameState; arrows: PremoveArrow[]; ghosts: Piece[] } {
   let state = game;
   const arrows: PremoveArrow[] = [];
+  // A ghost for EVERY square a unit lands on across its chain (not just its final square), keyed
+  // by that square so a later landing on the same square overwrites an earlier one — last-to-land
+  // wins when two premoves share a square.
+  const ghostBySquare = new Map<string, Piece>();
   for (const step of premoves) {
     const p = state.pieces.find((q) => q.id === step.pieceId && q.alive && q.side === 'player');
     if (!p) break;
@@ -46,8 +50,10 @@ function foldPremoves(game: GameState, premoves: readonly PremoveStep[]): { stat
     if (!mv) break;
     arrows.push({ from: { x: p.x, y: p.y }, to: { x: step.x, y: step.y } });
     state = applyMove(state, p.id, mv).state;
+    const landed = state.pieces.find((q) => q.id === step.pieceId);
+    if (landed && landed.alive) ghostBySquare.set(`${landed.x},${landed.y}`, landed);
   }
-  return { state, arrows };
+  return { state, arrows, ghosts: [...ghostBySquare.values()] };
 }
 
 /** The board as it would stand after every queued premove applies (no enemy replies). */
@@ -58,6 +64,13 @@ export function provisionalBoard(game: GameState, premoves: readonly PremoveStep
 /** From→to cells for each queued step, for the chain overlay. */
 export function premoveArrows(game: GameState, premoves: readonly PremoveStep[]): PremoveArrow[] {
   return foldPremoves(game, premoves).arrows;
+}
+
+/** A ghost unit for each square a premove lands a piece on — the whole planned path, one per
+ *  square (last-to-land wins on a shared square). Includes intermediate steps of a multi-step
+ *  chain, not just each piece's final square. */
+export function premoveGhosts(game: GameState, premoves: readonly PremoveStep[]): Piece[] {
+  return foldPremoves(game, premoves).ghosts;
 }
 
 /** Legal next-step destinations for `pieceId` on the provisional board — what the

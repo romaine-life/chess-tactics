@@ -10,7 +10,7 @@ import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pi
 import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
-import { provisionalBoard, premoveArrows, premoveTargets, type PremoveArrow } from '../game/premoves';
+import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
 import { GroundCoverLayer } from './GroundCoverLayer';
 import { PropSprite } from './BoardStructure';
@@ -671,10 +671,9 @@ export function SkirmishBoard() {
     for (const p of game.pieces) if (p.alive && premovedIds.has(p.id)) out.add(`${p.x},${p.y}`);
     return out;
   }, [game.pieces, premovedIds]);
-  const afterGhosts = useMemo(
-    () => (premovedIds.size ? provGame.pieces.filter((p) => p.alive && premovedIds.has(p.id)) : []),
-    [provGame.pieces, premovedIds],
-  );
+  // A ghost on every square each premoved unit lands on across its chain (intermediate steps
+  // included, not just the final square), one per square (last-to-land wins on a shared square).
+  const afterGhosts = useMemo(() => premoveGhosts(game, premoves), [game, premoves]);
 
   // The chain-building selection is only meaningful during the opponent's turn; when it
   // ends (a premove fires, or the player regains a live turn) drop it so the next enemy
@@ -934,7 +933,7 @@ export function SkirmishBoard() {
             />
           ))}
           {afterGhosts.map((piece) => (
-            <PremoveGhost key={`premove-ghost-${piece.id}`} piece={piece} />
+            <PremoveGhost key={`premove-ghost-${piece.x}-${piece.y}`} piece={piece} />
           ))}
           <PremoveArrowLayer arrows={premoveChain} />
         </BoardLabBoard>
