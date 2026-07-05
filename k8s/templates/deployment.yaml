@@ -95,6 +95,10 @@ spec:
             - name: BGM_BASE_URL
               value: {{ .Values.bgm.baseUrl | quote }}
             {{- end }}
+            # Deployed backends intentionally own schema rollout. Local backend
+            # defaults to read-only schema checks unless explicitly opted into auto.
+            - name: SCHEMA_MIGRATIONS
+              value: "auto"
             {{- if eq (include "chess-tactics.isTestEnv" .) "true" }}
             # Test slot: ephemeral in-cluster Postgres (password mode, throwaway).
             - name: DATABASE_URL

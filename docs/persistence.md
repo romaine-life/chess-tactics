@@ -65,14 +65,30 @@ Two connection modes, chosen by environment in `backend/server.js`:
 - **CI / test slots / local** — `DATABASE_URL` is set and used directly
   (password mode) against a throwaway Postgres.
 
+## Schema migration mode
+
+The backend always connects to the configured database, but schema mutation is
+controlled separately by `SCHEMA_MIGRATIONS`:
+
+| Value | Behavior | Intended use |
+| --- | --- | --- |
+| `check` | Default. Read-only verification that `schema_migrations` exists and contains every migration version in `backend/server.js`; missing schema returns `503 schema_migration_required` on persistence endpoints. | Local backend runs against an already-prepared DB without applying DDL by surprise. |
+| `auto` | Applies any missing inline migrations under the Postgres advisory lock, then serves persistence endpoints. | Kubernetes prod/test-slot backends and smoke tests, where the environment intentionally owns schema rollout. |
+| `off` | Skips schema readiness entirely; queries run against whatever schema exists and fail naturally if it is incompatible. | Debugging unusual DB states. |
+
+The Helm deployment sets `SCHEMA_MIGRATIONS=auto` explicitly. Local backend
+startup defaults to `check`; set `SCHEMA_MIGRATIONS=auto` only when you
+intentionally want that run to advance the local database schema.
+
 ## Failure behavior
 
 The game (`/`, `/play`) and static serving do **not** depend on the database, so
 a DB outage must never take the site down. `/health` (liveness/readiness) stays
 DB-independent; the persistence endpoints return **503** with a logged error
-when the database is unavailable, and `ensureDbReady()` retries migrations on the
-next request (self-healing after a transient outage). Startup never blocks on the
-DB.
+when the database is unavailable or behind the required schema. In `check` mode,
+a behind/missing schema is reported as `schema_migration_required`; in `auto`
+mode, `ensureDbReady()` retries migrations on the next request (self-healing
+after a transient outage). Startup never blocks on the DB.
 
 ## Backups & break-glass
 
@@ -113,7 +129,8 @@ A Glimmung test slot can't federate to the prod UAMI (its ServiceAccount subject
 differs) and must never touch prod data, so the chart renders an **ephemeral
 in-cluster Postgres** (`k8s/templates/postgres-testslot.yaml`, `postgres:16-alpine`
 on `emptyDir`) for slots only, and points the app at it via `DATABASE_URL`. The
-data dies with the slot.
+data dies with the slot. The chart also sets `SCHEMA_MIGRATIONS=auto`, so the
+throwaway DB is prepared by the app before endpoint tests run.
 
 ## CI
 
@@ -122,8 +139,9 @@ Postgres-backed endpoints. It uses `DATABASE_URL` if provided, otherwise
 self-provisions a throwaway local Postgres from system binaries (present on the
 GitHub-hosted runners), so CI needs no database service container or workflow
 change. Hosts without Postgres binaries (e.g. the musl session pod) must supply
-`DATABASE_URL` or rely on the test slot. The smoke-test resets the document
-tables at the start of each run, so it is idempotent.
+`DATABASE_URL` or rely on the test slot. The smoke-test sets
+`SCHEMA_MIGRATIONS=auto` and resets the document tables at the start of each run,
+so it is idempotent against the intended throwaway database.
 
 ## Boundaries
 

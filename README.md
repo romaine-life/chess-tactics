@@ -82,6 +82,9 @@ The server uses `auth.romaine.life` for Microsoft sign-in. Optional env:
 - `FRONTEND_DIR` defaults to the built `frontend/dist` directory.
 - `STATIC_FRONTEND_DIR` defaults to `/var/run/chess-tactics-static-override`.
 - `HOT_BACKEND_DIR` defaults to `/var/run/chess-tactics-hot`.
+- `SCHEMA_MIGRATIONS` controls DB schema readiness:
+  `check` (default, read-only), `auto` (apply missing migrations), or `off`
+  (skip readiness checks).
 
 The container starts `backend/supervisor.js` as PID 1. The supervisor prepares
 the runtime server entrypoint, runs it with `NODE_PATH` pointed at the baked
@@ -97,7 +100,9 @@ Durable game/design data (levels, campaigns, campaign workspaces, design
 portfolios) lives in **Azure Database for PostgreSQL**, reached passwordless via
 Entra workload identity. Art assets remain committed files under
 `frontend/public/assets`; they are not database records. The database is
-self-provisioned by this repo's `tofu/`. See
+self-provisioned by this repo's `tofu/`. Local backend startup defaults to
+read-only schema checks; set `SCHEMA_MIGRATIONS=auto` when you intentionally want
+to apply missing migrations to a local database. See
 [docs/persistence.md](docs/persistence.md) for the schema, auth model, backups,
 failure behavior, and the one post-`tofu apply` value to pin.
 
@@ -111,8 +116,9 @@ npm test
 The backend smoke-test exercises the Postgres-backed endpoints, so it needs a
 Postgres. It uses `DATABASE_URL` if set, otherwise self-provisions a throwaway
 local Postgres from system binaries (as on the GitHub-hosted CI runners). Hosts
-without Postgres binaries should set `DATABASE_URL`. The frontend gate runs
-without a database:
+without Postgres binaries should set `DATABASE_URL`. The smoke-test explicitly
+runs with `SCHEMA_MIGRATIONS=auto` because its database is throwaway/reset. The
+frontend gate runs without a database:
 
 ```sh
 cd frontend
