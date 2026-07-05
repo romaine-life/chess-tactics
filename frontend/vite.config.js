@@ -262,9 +262,9 @@ function officialCampaignsDevProxy() {
 // child is tied to vite's lifecycle — starts with the dev server, relaunches if it
 // crashes, and is killed when vite exits — so `vite` ALONE is "full prod from dev", and
 // a reboot is just re-running it. `apply:'serve'`, so this NEVER touches a production
-// build. Escape hatch: DEV_NO_BACKEND=1 runs the frontend ALONE against the mock stack — no
-// backend process, no DB (dev auth, bgm, official-campaigns fallback). DEV_OFFLINE=1 still works
-// as a legacy alias.
+// build. Owner-only escape hatch: DEV_NO_BACKEND=1 runs the frontend ALONE against the mock stack —
+// no backend process, no DB (dev auth, bgm, official-campaigns fallback). DEV_OFFLINE=1 still
+// works as a legacy alias. Agents must not use either flag to bypass a backend startup failure.
 // host/db/user are not secrets (see k8s deployment); override any via the env.
 // Ask the OS for a free port instead of hardcoding one, so multiple dev servers /
 // worktrees never fight over a fixed number (the crash-loop that happened when several
@@ -282,6 +282,7 @@ function getFreePort() {
 
 function prodBackend(port) {
   const backendDir = fileURLToPath(new URL('../backend', import.meta.url));
+  const backendDepsMarker = join(backendDir, 'node_modules', 'express', 'package.json');
   // Per-worktree pidfile in the OS temp dir. On start we kill any backend left running
   // by a previously force-killed dev server, so orphans (each holding a live prod DB
   // connection) never stack up.
@@ -292,7 +293,8 @@ function prodBackend(port) {
   // exits within STARTUP_GRACE_MS never became healthy; after MAX_FAST_CRASHES such failures in
   // a row we bring vite down too (process.exit) instead of relaunching forever. A crash AFTER a
   // healthy run resets the counter, so genuine transient restarts stay resilient. The only
-  // sanctioned frontend-only mode is DEV_NO_BACKEND=1 (this plugin isn't registered then).
+  // frontend-only mode is owner-only DEV_NO_BACKEND=1 (this plugin isn't registered then);
+  // agents must fix/report backend startup failures instead of using it.
   const STARTUP_GRACE_MS = 3000;
   const MAX_FAST_CRASHES = 3;
   let fastCrashes = 0;
@@ -309,6 +311,10 @@ function prodBackend(port) {
     apply: 'serve',
     configureServer(server) {
       const log = server.config.logger;
+      if (!existsSync(backendDepsMarker)) {
+        log.error('[backend] setup needed for this fresh worktree: backend/node_modules is expected to be absent because dependencies are not committed or shared between worktrees. Run `cd backend && npm install`, then restart Vite. Agents must do this setup or report the blocker; DEV_NO_BACKEND=1 is owner-only.');
+        process.exit(1);
+      }
       killStale();
       const start = () => {
         const launchedAt = Date.now();
@@ -338,7 +344,7 @@ function prodBackend(port) {
           if (ranFor < STARTUP_GRACE_MS) {
             fastCrashes += 1;
             if (fastCrashes >= MAX_FAST_CRASHES) {
-              log.error(`[backend] failed to start ${MAX_FAST_CRASHES}× in a row (last exit code ${code}, ran ${ranFor}ms). The dev server requires a working backend — shutting vite down. Fix it (e.g. \`cd backend && npm ci\`, ensure the DB/az login is reachable) or run frontend-only with DEV_NO_BACKEND=1.`);
+              log.error(`[backend] failed to start ${MAX_FAST_CRASHES}× in a row (last exit code ${code}, ran ${ranFor}ms). The dev server requires a working backend — shutting vite down. Fix it (e.g. \`cd backend && npm ci\`, ensure the DB/az login is reachable). DEV_NO_BACKEND=1 is an owner-only frontend escape hatch; agents must not use it as a workaround.`);
               process.exit(1);
             }
             log.warn(`[backend] exited (code ${code}) after ${ranFor}ms — relaunching (fast-crash ${fastCrashes}/${MAX_FAST_CRASHES})`);

@@ -66,6 +66,15 @@ it owns the hot backend and static override paths used during session edits.
 When the session does not provide explicit override directories, the launcher
 uses writable paths under `${XDG_RUNTIME_DIR:-/tmp}`.
 
+Agent sessions must not bypass backend startup with `DEV_NO_BACKEND=1` or
+`DEV_OFFLINE=1`. Those flags are owner-only escape hatches for deliberate
+manual frontend-only work. If the backend fails to start, agents should fix the
+backend startup problem or report it as a blocker.
+
+Fresh worktrees do not have `backend/node_modules`; that is expected every time.
+Install backend dependencies once per worktree (`cd backend && npm install`)
+before starting a preview that needs the backend.
+
 To check whether the expected preview is running:
 
 ```sh

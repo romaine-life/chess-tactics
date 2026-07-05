@@ -44,6 +44,11 @@ const GYM_CSS = `
 .gym-controls input,.gym-controls select { background:#0c1116; color:#e7ebf0; border:1px solid #3a4657; border-radius:4px; padding:5px 8px; font-size:13px; }
 .gym-run-row { display:flex; gap:8px; align-items:center; margin:10px 0; }
 .gym-run-row .play { background:#46d6b8; color:#06231d; border-color:#46d6b8; font-weight:700; }
+.gym-latest-games-wrap { max-height:190px; overflow:auto; border:1px solid #29323f; border-radius:6px; background:#0b1016; margin-bottom:10px; }
+.gym-latest-games { width:100%; border-collapse:collapse; font:11px ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+.gym-latest-games th { position:sticky; top:0; background:#161d26; color:#93a0b0; text-align:left; font-weight:600; padding:5px 7px; border-bottom:1px solid #29323f; }
+.gym-latest-games td { padding:4px 7px; border-bottom:1px solid #141b23; color:#c6d0dc; }
+.gym-latest-games .win { color:#5ad19a; } .gym-latest-games .draw { color:#e0b24a; } .gym-latest-games .loss { color:#e0685f; }
 .gym-estab { display:flex; align-items:center; gap:8px; margin:4px 0 10px; }
 .gym-meter { flex:1; height:6px; border-radius:3px; background:#0c1116; border:1px solid #29323f; overflow:hidden; }
 .gym-meter i { display:block; height:100%; background:linear-gradient(90deg,#e0b24a,#46d6b8); }
@@ -51,10 +56,17 @@ const GYM_CSS = `
 .gym-weights .k { color:#93a0b0; } .gym-weights .v { text-align:right; font-variant-numeric:tabular-nums; }
 .gym-weights .d { text-align:right; width:56px; } .gym-weights .d.up { color:#5ad19a; } .gym-weights .d.dn { color:#e0685f; } .gym-weights .d.z { color:#5c6875; }
 .gym-num { font-family:ui-monospace,monospace; font-variant-numeric:tabular-nums; }
-.gym-steps { display:flex; gap:0; margin-bottom:12px; }
-.gym-steps button { border:1px solid #29323f; background:#161d26; color:#93a0b0; padding:6px 16px; font-size:12px; }
-.gym-steps button:first-child { border-radius:6px 0 0 6px; } .gym-steps button:last-child { border-radius:0 6px 6px 0; border-left:none; }
-.gym-steps button.active { background:#212b37; color:#e7ebf0; }
+.gym-modebar { display:flex; align-items:stretch; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.gym-modebar button { border:1px solid #29323f; background:#161d26; color:#93a0b0; font:600 12px system-ui,sans-serif; cursor:pointer; }
+.gym-modebar button:disabled { opacity:.45; cursor:default; }
+.gym-modebar button:not(:disabled):hover { border-color:#3a4757; color:#c6d0dc; }
+.gym-modebar button.active { background:#212b37; color:#e7ebf0; border-color:#3a4757; }
+.gym-book-mode { min-height:40px; padding:0 14px; border-radius:7px; }
+.gym-training-mode { min-height:40px; display:flex; align-items:center; gap:8px; border:1px solid #29323f; background:#12181f; border-radius:7px; padding:4px; }
+.gym-training-mode.is-active { border-color:#3a4757; background:#151d26; }
+.gym-training-label { padding:0 6px 0 8px; color:#7c8a9c; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.gym-training-tabs { display:flex; gap:4px; }
+.gym-training-tabs button { min-height:30px; min-width:72px; padding:0 12px; border-radius:5px; }
 .cluster-runs { display:flex; flex-direction:column; gap:10px; }
 .cluster-runs-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .cluster-runs-note { font-size:11px; color:#7c8a9c; max-width:420px; }
@@ -469,6 +481,7 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   // --- Derived training view (from the active book's retained session) -------
   const session: GymSession | undefined = activeBook?.session;
   const traj = session?.traj ?? [];
+  const latestStepGames = session?.latestStepGames ?? [];
   const champion = session?.champion ?? { step: -1, score: 0.5, theta: REF_VEC };
   const established = session?.established ?? 0;
   const lastScore = traj.length ? traj[traj.length - 1].score : 0.5;
@@ -476,6 +489,10 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   const estabPct = champion.step < 0 ? 0 : Math.min(96, 40 + established * 4);
   const hasChampion = champion.step >= 0;
   const adoptedActive = adoptedVec !== null;
+  const gameOutcome = (game: typeof latestStepGames[number]): 'win' | 'draw' | 'loss' => {
+    if (game.record.winner === 'draw') return 'draw';
+    return game.record.winner === game.candidateSide ? 'win' : 'loss';
+  };
 
   // SPRT view derivation: map the live LLR onto the [lower, upper] bar (0 => reject
   // edge, 1 => accept edge, .5 => the zero line). The fill grows from center toward
@@ -556,10 +573,15 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
         ) : (
           <>
             <div className="gym-head">
-              <nav className="gym-steps" aria-label="Gym steps">
-                <button type="button" className={mode === 'book' ? 'active' : ''} onClick={() => setMode('book')}>1 · Opening book</button>
-                <button type="button" className={mode === 'train' ? 'active' : ''} onClick={() => setMode('train')} disabled={!activeBook}>2 · Train (local)</button>
-                <button type="button" className={mode === 'cluster' ? 'active' : ''} onClick={() => setMode('cluster')}>3 · Cluster</button>
+              <nav className="gym-modebar" aria-label="Gym mode">
+                <button type="button" className={`gym-book-mode ${mode === 'book' ? 'active' : ''}`} onClick={() => setMode('book')} aria-pressed={mode === 'book'}>Opening book</button>
+                <div className={`gym-training-mode ${mode === 'train' || mode === 'cluster' ? 'is-active' : ''}`} role="group" aria-label="Training location">
+                  <span className="gym-training-label">Training</span>
+                  <div className="gym-training-tabs">
+                    <button type="button" className={mode === 'train' ? 'active' : ''} onClick={() => setMode('train')} disabled={!activeBook} aria-pressed={mode === 'train'}>Local</button>
+                    <button type="button" className={mode === 'cluster' ? 'active' : ''} onClick={() => setMode('cluster')} aria-pressed={mode === 'cluster'}>Cluster</button>
+                  </div>
+                </div>
               </nav>
 
               {mode === 'book' ? (
@@ -624,7 +646,7 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                   )}
                 </div>
               </>
-            ) : (
+            ) : mode === 'train' ? (
               <div className="gym-run">
                 <div className="gym-run-head">
                   <span className={`gym-run-state ${playing || busy ? 'live' : ''}`}>{playing ? '▶ training' : busy ? '▶ stepping' : '⏸ paused'}</span>
@@ -702,7 +724,7 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                   </table>
                 </div>
               </div>
-            )}
+            ) : null}
           </>
         )}
       </section>
@@ -783,6 +805,31 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                   <span className="gym-meter"><i style={{ width: estabPct + '%' }} /></span>
                   <span className="gym-hint gym-num">{champion.step < 0 ? 'no gain yet' : `+${established} since best`}</span>
                 </div>
+
+                <h3>Latest step games</h3>
+                {latestStepGames.length ? (
+                  <div className="gym-latest-games-wrap">
+                    <table className="gym-latest-games">
+                      <thead><tr><th>probe</th><th>pos</th><th>A side</th><th>outcome</th><th>plies</th></tr></thead>
+                      <tbody>
+                        {latestStepGames.map((game, i) => {
+                          const outcome = gameOutcome(game);
+                          return (
+                            <tr key={`${game.probe}-${game.bookIndex}-${game.candidateSide}-${game.seed}-${i}`} title={`seed ${game.seed}, winner ${game.record.winner}, ${game.record.turnsElapsed} rounds`}>
+                              <td>{game.probe === 'plus' ? 'theta+' : 'theta-'}</td>
+                              <td>#{game.bookIndex + 1}</td>
+                              <td>{game.candidateSide}</td>
+                              <td className={outcome}>{outcome}</td>
+                              <td>{game.record.plies}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="gym-hint">Run one local step to retain its inspectable game records.</p>
+                )}
 
                 <h3>Validate <span className="gym-hint">(SPRT vs shipped)</span></h3>
                 <button type="button" className="gym-val-btn" onClick={validateChampion}

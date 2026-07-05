@@ -1,5 +1,13 @@
 # Working in this repo
 
+## Agent backend rule
+
+`DEV_NO_BACKEND=1` and `DEV_OFFLINE=1` are owner-only escape hatches. Agents must
+not set them, suggest them, or use them to keep working after the backend fails to
+start. If the Vite-spawned backend fails, fix the backend startup issue (for
+example install backend dependencies or address auth/DB access) or report the
+backend failure as the blocker.
+
 ## Taking screenshots (read this before trying to screenshot the app)
 
 **Do NOT use the in-editor preview/screenshot tool to capture images on this
@@ -45,6 +53,10 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
 
 ## Dev environment gotchas (git worktrees)
 
+- A fresh worktree's `backend/node_modules` is expected to be missing. That is
+  normal setup, not a surprising backend failure. Run `npm install` in
+  `backend/` once per worktree before expecting the Vite-spawned backend to
+  start. Do not use `DEV_NO_BACKEND=1` to skip this.
 - A worktree's `frontend/node_modules` may be **partial** (missing react /
   typescript / etc.). Run `npm install` in the worktree once, or typecheck with
   the main checkout's compiler:

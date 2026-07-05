@@ -14,7 +14,7 @@
 // same trajectory, so a gym run is deterministic (like the eight-queens engine).
 
 import type { Level } from '../core/level';
-import { playLevelGame } from './selfplay';
+import { playLevelGame, type GameRecord } from './selfplay';
 import { DEFAULT_EVAL_WEIGHTS, type EvalWeights, type SearchOptions } from '../core/ai';
 import { createRng } from '../core/rng';
 import type { PieceType } from '../core/types';
@@ -107,13 +107,26 @@ export interface MatchStats {
   wins: number;
   draws: number;
   losses: number;
+  records: MatchGameRecord[];
 }
 
-export function matchStats(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions): MatchStats {
+export interface MatchGameRecord {
+  bookIndex: number;
+  seed: number;
+  /** Which side config A played in this game. */
+  candidateSide: 'player' | 'enemy';
+  /** Opening plies that produced the book position before this recorded game began. */
+  openingMoves: BookPosition['moves'];
+  record: GameRecord;
+}
+
+export function matchStats(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions, retainRecords = true): MatchStats {
   const searchA: SearchOptions = { ...opts.search, weights: a };
   const searchB: SearchOptions = { ...opts.search, weights: b };
   let wins = 0, draws = 0, losses = 0;
-  for (const pos of book) {
+  const records: MatchGameRecord[] = [];
+  for (let bookIndex = 0; bookIndex < book.length; bookIndex += 1) {
+    const pos = book[bookIndex];
     // Each game STARTS from this book position (the seeded opening plies), then A
     // and B play it out. Playing it both ways (A-as-player then A-as-enemy) cancels
     // side bias — so matchScore(w, w, book) === 0.5 for any book (swap symmetry).
@@ -122,17 +135,19 @@ export function matchStats(level: Level, a: EvalWeights, b: EvalWeights, book: r
     // A as player, B as enemy.
     const r1 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchA, enemy: searchB }, maxPlies: opts.maxPlies });
     if (r1.winner === 'player') wins += 1; else if (r1.winner === 'draw') draws += 1; else losses += 1;
+    if (retainRecords) records.push({ bookIndex, seed, candidateSide: 'player', openingMoves: opening, record: r1 });
     // Same position, sides swapped: A as enemy, B as player.
     const r2 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchB, enemy: searchA }, maxPlies: opts.maxPlies });
     if (r2.winner === 'enemy') wins += 1; else if (r2.winner === 'draw') draws += 1; else losses += 1;
+    if (retainRecords) records.push({ bookIndex, seed, candidateSide: 'enemy', openingMoves: opening, record: r2 });
   }
   const games = wins + draws + losses;
-  return { score: games ? (wins + 0.5 * draws) / games : 0.5, games, wins, draws, losses };
+  return { score: games ? (wins + 0.5 * draws) / games : 0.5, games, wins, draws, losses, records };
 }
 
 /** (wins + ½·draws)/games from A's perspective. matchScore(w, w, book) === 0.5. */
 export function matchScore(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions): number {
-  return matchStats(level, a, b, book, opts).score;
+  return matchStats(level, a, b, book, opts, false).score;
 }
 
 export interface SpsaHyperParams {
@@ -169,6 +184,12 @@ export interface StepResult {
   wins: number;
   draws: number;
   losses: number;
+  /** Full self-play records for the latest step only, tagged by probe and book position. */
+  latestGames: SpsaStepGameRecord[];
+}
+
+export interface SpsaStepGameRecord extends MatchGameRecord {
+  probe: 'plus' | 'minus';
 }
 
 /**
@@ -210,6 +231,10 @@ export function spsaStep(
     wins: sPlus.wins + sMinus.wins,
     draws: sPlus.draws + sMinus.draws,
     losses: sPlus.losses + sMinus.losses,
+    latestGames: [
+      ...sPlus.records.map((record) => ({ ...record, probe: 'plus' as const })),
+      ...sMinus.records.map((record) => ({ ...record, probe: 'minus' as const })),
+    ],
   };
 }
 
