@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-fdc1af6267855429271535895b22373032254d90d4acac1a621bae14837057a5"
+  tag: "app-c77e6038bc80ae81631ff1a154146453460991839872b6a59ccca85dc72ddba1"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "fix(kit): ship the divider junction at its hand-tuned values (scale 1.2, jy 1)"
-  prNumber: "397"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/397"
-  commit: "ca2697a"
+  prTitle: "Gate backend schema migrations by mode"
+  prNumber: "398"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/398"
+  commit: "97072c6"
 
 name: chess-tactics
 namespace: chess-tactics
