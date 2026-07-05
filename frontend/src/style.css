@@ -4659,9 +4659,9 @@ h1 {
   padding: 0 var(--ds-gutter);
 }
 
-/* Icon-only battle-lifecycle buttons (Restart ↻ / New ＋): a square kit frame with the glyph
-   centered, no text or tooltip — the "Scenario" heading and the marks carry the meaning. The
-   glyph is stroked in currentColor, so it inherits the button ink and its hover/focus lift. */
+/* Icon-only battle-lifecycle buttons (Restart / New): a square kit frame with the glyph
+   centered. The glyph is stroked in currentColor, so it inherits the button ink and its
+   hover/focus lift. Back and Resign keep text labels because navigation/destruction should be explicit. */
 .skirmish-view-row .app-header-button.skirmish-lifecycle-button {
   inline-size: 46px;
   justify-content: center;
