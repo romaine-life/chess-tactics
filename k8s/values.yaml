@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-4f3910ae9565894b7e651b28d61d39c74a8fc1a688709eae75b514ea276b45cf"
+  tag: "app-0e9d0eb69215771d734597349e754515eec9df5af2fb37d0456f436855e8af91"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Align studio titlebar button spacing"
-  prNumber: "401"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/401"
-  commit: "1199aa0"
+  prTitle: "Compact campaign level selector rows"
+  prNumber: "402"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/402"
+  commit: "8389486"
 
 name: chess-tactics
 namespace: chess-tactics
