@@ -2,6 +2,9 @@
    Source of truth: config/nine-slice/<asset>.json */
 :root {
   --ns-content-mode-button: 5px; /* mode-button · opt-in: footprint-px where top-left content starts */
+  --ns-fill-mode-button: 2px; /* mode-button · opt-in: footprint-px where a backing surface stops */
   --ns-content-button: 5px; /* button · opt-in: footprint-px where top-left content starts */
+  --ns-fill-button: 0px; /* button · opt-in: footprint-px where a backing surface stops */
   --ns-content-panel: 4px; /* panel · opt-in: footprint-px where top-left content starts */
+  --ns-fill-panel: 6px; /* panel · opt-in: footprint-px where a backing surface stops */
 }

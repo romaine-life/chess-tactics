@@ -6,17 +6,19 @@ import { fileURLToPath } from 'node:url';
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const frontendDir = resolve(scriptDir, '..');
 const backendDir = resolve(frontendDir, '..', 'backend');
-const backendDepsMarker = resolve(backendDir, 'node_modules', 'express', 'package.json');
+const backendDepsMarker = resolve(backendDir, 'node_modules', 'express');
+const backendLockfile = resolve(backendDir, 'package-lock.json');
 
 if (existsSync(backendDepsMarker)) {
   console.log('[backend deps] already installed.');
   process.exit(0);
 }
 
-console.log('[backend deps] installing backend dependencies for this fresh worktree...');
+const installArgs = existsSync(backendLockfile) ? ['ci'] : ['install'];
+console.log(`[backend deps] installing backend dependencies with npm ${installArgs.join(' ')} for this fresh worktree...`);
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const install = spawnSync(npmCommand, ['ci'], {
+const install = spawnSync(npmCommand, installArgs, {
   cwd: backendDir,
   env: process.env,
   stdio: 'inherit',

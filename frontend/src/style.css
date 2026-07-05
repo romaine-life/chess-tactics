@@ -6584,12 +6584,6 @@ body { font-size: 17px; }
   width: calc(100% - 8px);
 }
 
-.ce-empty-large {
-  align-self: center;
-  justify-self: center;
-  text-align: center;
-}
-
 .ce-campaign-list,
 .ce-level-list {
   align-content: start;
@@ -6921,45 +6915,7 @@ body { font-size: 17px; }
 .ce-force-ally { color: var(--ce-ally); }
 .ce-force-enemy { color: var(--ce-enemy); }
 
-/* ===== Compact Level Info — toggles into the level preview slot ===== */
-/* View toggle = kit button frames (neutral; active swaps to the blue primary),
-   NOT hand-rolled bg/border (ADR-0002/0011/0012/0014); label on the type scale
-   (ADR-0024) — no raw font-size/family. */
-.ce-level-view-toggle {
-  display: inline-flex;
-  gap: 4px;
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  z-index: 3;
-}
-
-.ce-level-view-toggle button {
-  background: transparent;
-  border: 9px solid transparent;
-  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 9px round;
-  color: var(--ce-slate);
-  cursor: pointer;
-  font-family: var(--ds-font-pixel);
-  font-size: var(--ds-text-2xs);
-  image-rendering: pixelated;
-  min-height: 30px;
-  padding: 0 8px;
-  text-transform: uppercase;
-}
-
-.ce-level-view-toggle button.is-active {
-  border-image-source: url("/assets/ui/kit/panel.png");
-  color: var(--ce-cyan-bright);
-}
-
-.ce-level-view-toggle button:not(.is-active):hover {
-  color: #f4fbff;
-}
-.ce-level-view-toggle button:focus-visible {
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
-}
+/* ===== Compact Level Info — stacked under the map preview in the Editor's 4th column ===== */
 
 .ce-level-info {
   align-content: start;
@@ -7087,59 +7043,56 @@ body { font-size: 17px; }
 .terrain-void { background: #1f2430; }
 /* ===== end Compact Level Info ===== */
 
+/* The SELECTED-level map preview lives in a kit BOX (the panel 9-slice frame). The frame is drawn
+   as an OVERLAY (::after) at the footprint, ON TOP of the board. The board itself is a baked image
+   that fills the box with object-fit:cover (see .ce-level-viewer-board) — the skirmish fill: draw
+   bigger than the box, crop the overflow at the frame. No pan/zoom/fit math, so there's no empty
+   padding to chase (ADR-0067). (The nine-slice Fill box is a separate mechanism — it clips a flat
+   CSS *background surface* behind a frame, e.g. the Settings panels; the board is not a background
+   surface, so it does not consume that value.) */
 .ce-preview-frame {
-  border: 14px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 18 fill / 14px stretch;
-  image-rendering: pixelated;
-  margin: 8px 4px 6px;
-  min-height: 0;
-  padding: 2px;
-}
-
-.level-preview-empty {
-  align-items: center;
-  background:
-    radial-gradient(circle at 17% 10%, rgba(221, 244, 255, .72) 0 14px, rgba(113, 190, 233, .28) 15px 24px, transparent 25px),
-    radial-gradient(circle at 66% 18%, rgba(255, 255, 255, .8) 0 1px, transparent 2px),
-    radial-gradient(circle at 82% 36%, rgba(255, 255, 255, .56) 0 1px, transparent 2px),
-    linear-gradient(180deg, #0a2a50 0%, #061322 100%);
-  display: grid;
-  height: 100%;
-  justify-items: center;
-  min-height: 190px;
-  overflow: hidden;
   position: relative;
-}
-
-.level-preview-empty.is-compact {
+  flex: none;
+  block-size: clamp(190px, 26vh, 300px);
   min-height: 0;
 }
-
-/* The SELECTED-level LIVE viewer: a pan/zoom ViewPane (StudioReadOnlyBoard inside) filling the
-   preview frame. Mirrors the old static preview's footprint so the panel doesn't resize when a
-   level is selected. The stage owns its own dark grid fill (.tileset-view-stage). */
+.ce-preview-frame::after {
+  /* panel.png is 72×72 = a 3×3 grid of 24px cells → slice 24 (not 18, which cut through the corner
+     atom and glitched it), edges tiled with `round` (integer repeats, crisp pixel art). No `fill`
+     → transparent interior, so the board shows through. pointer-events:none keeps the board pannable. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 / 12px round;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+/* The board viewport fills the WHOLE footprint (inset 0). The board is a baked image dropped in
+   with object-fit:cover (below) so it covers this box and clips the overflow; the frame ::after
+   (above) overlays the board's outer band. The box carries the level's world (night-sky) backdrop
+   so the diamond's cropped corners read as sky, never a transparency checkerboard (ADR-0067 /
+   ADR-0032). */
 .ce-level-viewer {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  height: 100%;
-  min-height: 220px;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
+  background: var(--skirmish-world-bg, linear-gradient(180deg, #071017, #02070c));
 }
 
-.ce-level-viewer .tileset-view-stage {
-  border: 0;
-  border-radius: 0;
-}
-
-/* The read-only board sprites mustn't show the editor's grab/select cursors in this preview. */
-.ce-level-viewer .tileset-placement-board.is-readonly .tileset-generated-board-tile {
-  cursor: default;
-}
-
-.level-preview-empty {
-  color: var(--ce-slate);
-  font-size: var(--ds-text-md);
-  place-items: center;
+/* The board raster is the board's dense SOLID region (bakeBoardPaintedImage crops off the
+   transparent headroom + diamond corners), so object-fit:cover fills the box edge-to-edge with
+   solid board — no transparent corner can show as sky — and clips the overflow. That is the whole
+   fix: cover a solid crop, not the diamond bounding box. pixelated: pixel art scaled with no blur. */
+.ce-level-viewer-board {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  object-position: center;
+  image-rendering: pixelated;
+  pointer-events: none;
 }
 
 .ce-preview-actions {
@@ -7148,6 +7101,8 @@ body { font-size: 17px; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   padding: 0 4px 8px;
 }
+/* Single full-width verb (the play screen's preview has just Play/Replay, not Edit + Test). */
+.ce-preview-actions.is-single { grid-template-columns: minmax(0, 1fr); }
 
 .ce-preview-actions .ce-link-button {
   min-width: 0;
@@ -12160,6 +12115,11 @@ button.tileset-relationship-cell {
   --col-side-inset: calc(var(--rail-frame) + var(--rail-pad-inline)); /* col1's button-side offset, exactly */
   --col-tab-w: 322px;
   --col-action-w: 572px;
+  /* Preview column (the Editor's col 4): compact by intent — a small board thumbnail, not a
+     third full panel. Narrower than a tab column so the row stays inside the body cap on wide
+     screens; it may extend past the cap under heavy browser zoom (overflow:visible), which is
+     fine for a peripheral preview. Only the Editor mounts a column of this width. */
+  --col-preview-w: 300px;
   /* col1 and the destination row ABUT (no grid gap): the space you see between columns is then col1's
      OWN right inset — the SAME distance as col1's left inset to the page edge. One inset value, one gap. */
   gap: 0;
@@ -12797,37 +12757,72 @@ button.tileset-relationship-cell {
 .ce-rail-actions .settings-chrome-button { inline-size: 100%; }
 .ce-rail-actions .ce-status { margin: 2px 0 0; }
 
-/* Content — a single column: the live preview PINNED at top (always visible) over a
-   scrolling stack of SettingsSection groups. The main frame's 1fr row (row 2) holds this
-   body; the sr-only heading sits in the collapsed row 1. Single column = faithful to the
-   settings pattern (rail + one content column) and gives the board + rows the full width.
-   Explicit grid-rows place the preview (row 1) above the scroll (.settings-scroll → row 2)
-   regardless of DOM order. */
+/* Content — a single scrolling column of SettingsSection groups. The main frame's 1fr row
+   (row 2) holds this body; the sr-only heading sits in the collapsed row 1. The live preview
+   used to pin in this body's row 1 — it's now its OWN column (.ce-preview-col below), so the
+   body is a single row that hands the scroll the full column height. */
 .ce-editor-main .ce-editor-body {
   display: grid;
-  gap: clamp(10px, calc(var(--layout-vw, 100vw) * .01), 16px);
   grid-row: 2;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
 }
-.ce-editor-body > .ce-preview-col { grid-row: 1; }
+/* The scroll's shared .settings-scroll pins it to grid-row 2 (below an optional header row);
+   this body has no header row, so pull it back to the sole row 1. */
+.ce-editor-body > .ce-editor-scroll { grid-row: 1; }
 /* Restore the inter-section gap the settings crossfade layer normally provides (the Editor
    doesn't run the crossfade, so its sections are direct children of the panel content). */
 .ce-editor-scroll .settings-panel-content {
   align-content: start;
   gap: clamp(14px, calc(var(--layout-vw, 100vw) * .013), 22px);
 }
-/* The pinned live preview: head · framed board · verbs, stacked; the board is capped so it
-   never crowds out the scrolling sections below. */
+
+/* ── Preview column (col 4, top-right): the selected level's head · map preview · level info ·
+   verbs, stacked in its own fixed-width column. Only mounted when a level is selected
+   (CampaignEditor gates it), so there's never an empty frame or placeholder art here. ── */
+.menu-dest-preview {
+  display: flex;
+  flex-direction: column;
+  inline-size: var(--col-preview-w);
+}
+/* Standalone Editor route (legacy, non-embedded): the shipping path is the embedded menu shell
+   above, where the preview is one more menu-dest column. Here the shell is a plain grid, so give
+   it a third track and a matching width — keeps the fallback from wrapping the preview onto a new
+   row when a level is selected. */
+.ce-editor-shell { grid-template-columns: 322px minmax(0, 1fr) auto; }
+.ce-editor-preview-col { inline-size: var(--col-preview-w); }
 .ce-preview-col {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
 }
-.ce-preview-col .ce-level-viewer,
-.ce-preview-col .level-preview-empty { max-height: 34vh; }
+/* Two-line head: the level name gets its OWN line (full width, no truncation), with the
+   ally/enemy force counts on a second line beneath it. */
+.ce-preview-col .ce-selected-head {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 4px;
+}
+.ce-preview-col .ce-selected-head h2 {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+.ce-preview-col .ce-force-readout { justify-content: flex-start; }
+/* Level info fills the column's otherwise-empty lower half. One column (this column is narrow),
+   on a kit panel surface so the text stays readable over the night-sky backdrop the board floats
+   on — a bare tinted rect here would be the exact "bland CSS surface" ADR-0032 forbids. */
+.ce-preview-col .ce-level-info {
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 12px round;
+  flex: 1 1 auto;
+  grid-template-columns: 1fr;
+  height: auto;
+  image-rendering: pixelated;
+  min-height: 0;
+}
 
 /* A selectable level row (a role=button div over the shared .settings-row). */
 .ce-editor-level-row {
@@ -12924,6 +12919,10 @@ button.tileset-relationship-cell {
 
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
+/* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */
+.campaign-level-row { cursor: pointer; }
+.campaign-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
+.campaign-level-row:not(.is-selected):not(.is-disabled):hover { filter: brightness(1.06); }
 /* The level list wraps its rows only to carry a data-testid — it must not disturb the
    section-rows grid, so it disappears and its rows become the grid's direct items. */
 .ce-level-list { display: contents; }

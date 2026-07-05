@@ -75,6 +75,15 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
 - Plain `npx vite` serves reliably. If you use the preview tool's managed server,
   pin an explicit `--port` and matching `port` in `.claude/launch.json` (no
   `autoPort`), or a port mismatch will make a healthy server look dead.
+- **`npm run dev` (from `frontend/`) runs the WHOLE app** — vite auto-spawns the backend
+  (each worktree gets its own free port + pidfile, so many run side-by-side). On a fresh
+  worktree it now **auto-installs `backend/node_modules` on first run**, so you no longer
+  `cd backend && npm ci` by hand for dev. And the backend is a **HARD dependency**: if it
+  can't start (deps install fails, exits before ready 3×, or hangs >60s), vite prints a
+  loud banner and **exits `npm run dev` with code 1** instead of crash-looping or serving a
+  backend-less UI that silently 500s on `/api`. Do NOT work around a dead backend — fix it.
+  The one sanctioned no-backend run is the explicit `DEV_NO_BACKEND=1` (mock stack).
+  Implementation: `frontend/vite.config.js` → `prodBackend`.
 
 ## Verifying backend / multiplayer changes (NO Postgres needed)
 
@@ -84,7 +93,7 @@ them even with no DB configured (`server.js` starts anyway and only 503s the *pe
 endpoints). So multiplayer features are fully testable locally without Postgres:
 
 ```
-cd backend && npm ci        # once per worktree — a fresh worktree has NO backend node_modules
+cd backend && npm ci        # for the smoke test's OWN `node` run — `npm run dev` auto-installs this itself
 node netplay-smoke-test.js  # boots the server DB-free, exercises the lobby/netplay lifecycle
 ```
 
