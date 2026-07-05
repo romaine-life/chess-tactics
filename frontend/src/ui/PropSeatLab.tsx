@@ -4,12 +4,14 @@ import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { PropSprite } from '../render/BoardStructure';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
-import { PROP_DEFS, propCells, currentSeats, type PropDef } from '../core/props';
+import { PROP_DEFS, propCells, currentSeats, applyLiveSeats, type PropDef, type PropKind, type PropSeatEntry, type PropSeatMap, type StructurePart, type StructurePlacement, type StructureSourceRef } from '../core/props';
 import { pieceSpritePath } from '../core/pieces';
 import { ViewPane } from './shared/ViewPane';
 import { SliderRow } from './dressing/SliderRow';
 import { saveLiveSeats } from '../net/propSeats';
 import { mapSaveError } from '../campaign/save';
+import { currentDoodadAssets, type DoodadAsset } from './doodadCatalog';
+import { STRUCTURE_ART_ASSETS, structureArtAsset, type StructureArtAsset } from '../core/structureArt';
 
 // The prop-seat editor as an embedded Studio Viewer kind (docs/studio-control-architecture.md,
 // ADR-0058): it renders into the shared studio shell — the board in `.al-lab-main`, EVERY
@@ -22,6 +24,12 @@ import { mapSaveError } from '../campaign/save';
 
 type Seat = { anchorX: number; anchorY: number; scale: number; w?: number; h?: number; base?: string; label?: string };
 type Seats = Record<string, Seat>;
+export interface StructureEditorDraft {
+  target: StructurePlacement;
+  source?: StructureSourceRef;
+  editId?: string;
+  copyFrom?: { target: StructurePlacement; id: string };
+}
 
 const FAMILIES = ['grass', 'dirt', 'stone'] as const;
 type Family = (typeof FAMILIES)[number];
@@ -29,6 +37,11 @@ const COLS = 9;
 const ROWS = 7;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const DEFAULT_DOODAD_SPRITE = { w: 96, h: 180, anchorX: 48, anchorY: 69, scale: 1 };
+const slugify = (value: string): string => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 80);
+const draftIdInput = (value: string): string => value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-{2,}/g, '-').slice(0, 80);
+const parseTerrains = (value: string): string[] => value.split(',').map((part) => part.trim()).filter(Boolean);
+const sourceKey = (source: StructureSourceRef): string => `${source.kind}:${source.id}`;
 
 // The 8-direction nudge pad, row-major (null = the inert centre dot). vx/vy are SCREEN deltas
 // (vx>0 = right, vy>0 = down); `nudge` maps them to anchor deltas. `deg` rotates one up-arrow.
@@ -53,10 +66,103 @@ function DirArrow({ deg }: { deg: number }): ReactElement {
   );
 }
 
-export function PropSeatLab({ propId, onPropId, header }: {
-  propId: string; onPropId: (id: string) => void; header?: ReactNode;
+export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: {
+  propId: string; onPropId: (id: string) => void; header?: ReactNode; draft?: StructureEditorDraft | null; onDraftChange?: (draft: StructureEditorDraft | null) => void;
 }): ReactElement {
   const activeId = PROP_DEFS.some((d) => d.id === propId) ? propId : PROP_DEFS[0].id;
+  const selectedPropDef = PROP_DEFS.find((d) => d.id === activeId) as PropDef;
+  const doodadSources = currentDoodadAssets();
+  const sourceAsArt = (source: StructureSourceRef): StructureSourceRef => (
+    source.kind === 'asset' || !structureArtAsset(source.id) ? source : { kind: 'asset', id: source.id }
+  );
+  const fallbackSource: StructureSourceRef = sourceAsArt(selectedPropDef.spriteParts?.[0]?.source ?? selectedPropDef.spriteSource ?? { kind: 'asset', id: STRUCTURE_ART_ASSETS[0].id });
+  const sourceInfo = (source: StructureSourceRef): {
+    label: string;
+    terrains: string[];
+    kind: PropKind;
+    sprite: { w: number; h: number; anchorX: number; anchorY: number; scale?: number };
+    art?: StructureArtAsset;
+    prop?: PropDef;
+    doodad?: DoodadAsset;
+  } => {
+    if (source.kind === 'asset') {
+      const art = structureArtAsset(source.id) ?? STRUCTURE_ART_ASSETS[0];
+      const kind: PropKind = art.propKind ?? (art.kind === 'tree' || art.kind === 'rock' ? art.kind : 'house');
+      return { label: art.label, terrains: art.terrains, kind, sprite: art.sprite, art };
+    }
+    if (source.kind === 'prop') {
+      const prop = PROP_DEFS.find((d) => d.id === source.id) ?? PROP_DEFS[0];
+      return { label: prop.label, terrains: prop.terrains, kind: prop.kind, sprite: prop.sprite, prop };
+    }
+    const doodad = doodadSources.find((d) => d.id === source.id) ?? doodadSources[0];
+    return { label: doodad.label, terrains: doodad.terrains, kind: 'house', sprite: doodad.sprite ?? DEFAULT_DOODAD_SPRITE, doodad };
+  };
+  const seatFromSource = (source: StructureSourceRef): Seat => {
+    const info = sourceInfo(source);
+    return {
+      anchorX: info.sprite.anchorX,
+      anchorY: info.sprite.anchorY,
+      scale: info.sprite.scale ?? 1,
+      w: info.prop?.w ?? info.art?.footprint?.w ?? 1,
+      h: info.prop?.h ?? info.art?.footprint?.h ?? 1,
+    };
+  };
+  const partFromSource = (source: StructureSourceRef): StructurePart => {
+    const normalizedSource = sourceAsArt(source);
+    const seat = seatFromSource(normalizedSource);
+    return { source: normalizedSource, anchorX: seat.anchorX, anchorY: seat.anchorY, scale: seat.scale };
+  };
+  const footprintFromSource = (source: StructureSourceRef): { w: number; h: number } => {
+    const seat = seatFromSource(source);
+    return { w: seat.w ?? 1, h: seat.h ?? 1 };
+  };
+  const partsFromDoodad = (asset: DoodadAsset): StructurePart[] => (
+    asset.parts?.length
+      ? asset.parts.map((part) => ({ ...part, source: sourceAsArt(part.source) }))
+      : [partFromSource(sourceAsArt(asset.source ?? { kind: 'asset', id: asset.id }))]
+  );
+  const partsFromProp = (def: PropDef): StructurePart[] => (
+    def.spriteParts?.length
+      ? def.spriteParts.map((part) => ({ ...part, source: sourceAsArt(part.source) }))
+      : [{ source: sourceAsArt(def.spriteSource ?? { kind: 'asset', id: def.spriteId }), anchorX: def.sprite.anchorX, anchorY: def.sprite.anchorY, scale: def.sprite.scale }]
+  );
+  const draftSeed = (): {
+    target: StructurePlacement;
+    slots: StructurePart[];
+    footprint: { w: number; h: number };
+    name: string;
+    id: string;
+    terrains: string;
+  } => {
+    if (draft?.editId) {
+      if (draft.target === 'doodad') {
+        const asset = doodadSources.find((d) => d.id === draft.editId) ?? doodadSources[0];
+        return { target: 'doodad', slots: partsFromDoodad(asset), footprint: { w: 1, h: 1 }, name: asset.label, id: asset.id, terrains: asset.terrains.join(', ') };
+      }
+      const def = PROP_DEFS.find((d) => d.id === draft.editId) ?? selectedPropDef;
+      return { target: 'prop', slots: partsFromProp(def), footprint: { w: def.w, h: def.h }, name: def.label, id: def.id, terrains: def.terrains.join(', ') };
+    }
+    if (draft?.copyFrom) {
+      if (draft.copyFrom.target === 'doodad') {
+        const asset = doodadSources.find((d) => d.id === draft.copyFrom?.id) ?? doodadSources[0];
+        return { target: draft.target, slots: partsFromDoodad(asset), footprint: { w: 1, h: 1 }, name: `${asset.label} copy`, id: '', terrains: asset.terrains.join(', ') };
+      }
+      const def = PROP_DEFS.find((d) => d.id === draft.copyFrom?.id) ?? selectedPropDef;
+      return { target: draft.target, slots: partsFromProp(def), footprint: { w: def.w, h: def.h }, name: `${def.label} copy`, id: '', terrains: def.terrains.join(', ') };
+    }
+    const source = sourceAsArt(draft?.source ?? fallbackSource);
+    const info = sourceInfo(source);
+    return {
+      target: draft?.target ?? 'prop',
+      slots: [partFromSource(source)],
+      footprint: footprintFromSource(source),
+      name: `${info.label.replace(/\s+art$/i, '')} ${draft?.target ?? 'prop'}`,
+      id: '',
+      terrains: info.terrains.join(', '),
+    };
+  };
+  const initialDraft = draftSeed();
+  const initialDraftPart = initialDraft.slots[0] ?? partFromSource(fallbackSource);
   const [family, setFamily] = useState<Family>('grass');
   const [seed, setSeed] = useState(7);
   const [zoom, setZoom] = useState(1.4);
@@ -68,6 +174,13 @@ export function PropSeatLab({ propId, onPropId, header }: {
   const [status, setStatus] = useState('');
   const [variantName, setVariantName] = useState('');
   const [renameText, setRenameText] = useState('');
+  const [draftTarget, setDraftTarget] = useState<StructurePlacement>(initialDraft.target);
+  const [draftSlots, setDraftSlots] = useState<StructurePart[]>(() => initialDraft.slots);
+  const [selectedSlotIndex, setSelectedSlotIndex] = useState(0);
+  const [draftFootprint, setDraftFootprint] = useState(initialDraft.footprint);
+  const [draftName, setDraftName] = useState(initialDraft.name);
+  const [draftId, setDraftId] = useState(initialDraft.id);
+  const [draftTerrains, setDraftTerrains] = useState(initialDraft.terrains);
   const drag = useRef<{ px: number; py: number; anchorX: number; anchorY: number } | null>(null);
 
   // The currently-SAVED live map (committed baseline ∪ live DB overrides) that PROP_DEFS is derived
@@ -76,20 +189,57 @@ export function PropSeatLab({ propId, onPropId, header }: {
   // the "saved" state to diff against and to re-publish untouched.
   const committedSeats = currentSeats() as Seats;
   const seats: Seats = { ...committedSeats, ...overrides };
-  const def = PROP_DEFS.find((d) => d.id === activeId) as PropDef;
-  const liveSeat = seats[activeId];
-  const committed = committedSeats[activeId];
+  const draftMode = Boolean(draft);
+  const editMode = Boolean(draft?.editId);
+  const existingDef = selectedPropDef;
+  const activeSlotIndex = Math.min(selectedSlotIndex, Math.max(0, draftSlots.length - 1));
+  const activeDraftSlot = draftSlots[activeSlotIndex] ?? initialDraftPart;
+  const draftSource = activeDraftSlot.source;
+  const draftInfo = sourceInfo(draftSource);
+  const draftSeat: Seat = { ...activeDraftSlot, w: draftFootprint.w, h: draftFootprint.h };
+  const normalizedDraftId = editMode ? draftId : (slugify(draftId || draftName) || `new-${draftTarget}`);
+  const draftDef: PropDef = {
+    id: normalizedDraftId,
+    label: draftName.trim() || `New ${draftTarget}`,
+    kind: draftInfo.kind,
+    w: draftTarget === 'doodad' ? 1 : draftFootprint.w,
+    h: draftTarget === 'doodad' ? 1 : draftFootprint.h,
+    blocking: draftTarget === 'prop',
+    terrains: parseTerrains(draftTerrains),
+    spriteId: draftSource.kind === 'prop' ? (draftInfo.prop?.spriteId ?? draftSource.id) : normalizedDraftId,
+    spriteSource: draftSlots[0]?.source ?? draftSource,
+    spriteParts: draftSlots,
+    family: normalizedDraftId,
+    sprite: { w: draftInfo.sprite.w, h: draftInfo.sprite.h, anchorX: draftSeat.anchorX, anchorY: draftSeat.anchorY, scale: draftSeat.scale },
+  };
+  const def = draftMode ? draftDef : existingDef;
+  const liveSeat = draftMode ? draftSeat : seats[activeId];
+  const committed = draftMode ? { ...seatFromSource(draftSource), ...draftFootprint } : committedSeats[activeId];
   // Base vs copy (the user's model): a base OWNS its sprite (spriteId === id) and can't be deleted;
   // a copy shares another prop's sprite (spriteId !== id) and is free to rename/delete. baseDef is
   // the sprite owner either way (itself for a base), so "make/rename a copy" always roots at the base.
-  const isCopy = def.spriteId !== def.id;
-  const baseDef = PROP_DEFS.find((d) => d.id === def.spriteId) ?? def;
+  const isCopy = !draftMode && def.spriteId !== def.id;
+  const baseDef = !draftMode ? (PROP_DEFS.find((d) => d.id === def.spriteId) ?? def) : def;
   // Live gameplay footprint — an override's w/h if set, else the committed def's cells.
-  const liveW = liveSeat.w ?? def.w;
-  const liveH = liveSeat.h ?? def.h;
+  const liveW = draftMode && draftTarget === 'doodad' ? 1 : liveSeat.w ?? def.w;
+  const liveH = draftMode && draftTarget === 'doodad' ? 1 : liveSeat.h ?? def.h;
   const sameSeat = (a: Seat | undefined, b: Seat | undefined) =>
     !!a && !!b && a.anchorX === b.anchorX && a.anchorY === b.anchorY && a.scale === b.scale && a.w === b.w && a.h === b.h;
-  const dirty = Object.keys(overrides).some((id) => !sameSeat(overrides[id], committedSeats[id]));
+  const dirty = draftMode || Object.keys(overrides).some((id) => !sameSeat(overrides[id], committedSeats[id]));
+
+  useEffect(() => {
+    if (!draft) return;
+    const next = draftSeed();
+    setDraftTarget(next.target);
+    setDraftSlots(next.slots);
+    setSelectedSlotIndex(0);
+    setDraftFootprint(next.footprint);
+    setDraftName(next.name);
+    setDraftId(next.id);
+    setDraftTerrains(next.terrains);
+    setStatus('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.target, draft?.source?.kind, draft?.source?.id, draft?.editId, draft?.copyFrom?.target, draft?.copyFrom?.id]);
 
   // Drop an override once it matches committed again (after a Save's HMR, or an external edit),
   // so a lingering equal override can't pin a prop against the next change to the file.
@@ -123,6 +273,17 @@ export function PropSeatLab({ propId, onPropId, header }: {
 
   const setSeat = (patch: Partial<Seat>) => {
     setStatus('');
+    if (draftMode) {
+      if (patch.w != null || patch.h != null) {
+        setDraftFootprint((cur) => ({ w: patch.w ?? cur.w, h: patch.h ?? cur.h }));
+      }
+      if (patch.anchorX != null || patch.anchorY != null || patch.scale != null) {
+        setDraftSlots((cur) => cur.map((slot, index) => index === activeSlotIndex
+          ? { ...slot, anchorX: patch.anchorX ?? slot.anchorX, anchorY: patch.anchorY ?? slot.anchorY, scale: patch.scale ?? slot.scale }
+          : slot));
+      }
+      return;
+    }
     setOverrides((o) => ({ ...o, [activeId]: { ...(o[activeId] ?? committedSeats[activeId]), ...patch } }));
   };
 
@@ -136,6 +297,12 @@ export function PropSeatLab({ propId, onPropId, header }: {
   // ground point, so moving the sprite right/down pulls the anchor left/up — hence anchor -= v.
   const nudge = (vx: number, vy: number, step: number) => {
     setStatus('');
+    if (draftMode) {
+      setDraftSlots((cur) => cur.map((slot, index) => index === activeSlotIndex
+        ? { ...slot, anchorX: slot.anchorX - vx * step, anchorY: slot.anchorY - vy * step }
+        : slot));
+      return;
+    }
     setOverrides((o) => {
       const cur = o[activeId] ?? committedSeats[activeId];
       return { ...o, [activeId]: { ...cur, anchorX: cur.anchorX - vx * step, anchorY: cur.anchorY - vy * step } };
@@ -155,7 +322,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeId]);
+  }, [activeId, activeSlotIndex, draftMode]);
 
   const onDragStart = (ev: React.PointerEvent<HTMLDivElement>) => {
     ev.preventDefault();
@@ -176,14 +343,44 @@ export function PropSeatLab({ propId, onPropId, header }: {
     // Instant-live publish (ADR-0061): PUT the WHOLE live map (baseline ∪ overrides) to the DB — the
     // endpoint REPLACES the document, so we always send the full map (never just the edited entries)
     // or an omitted prop would vanish. Admin-gated; mapSaveError turns 401/403/503 into a message.
-    if (!dirty) return;
+    if (draftMode || !dirty) return;
     setStatus('saving…');
     try {
       await saveLiveSeats(seats);
+      applyLiveSeats(seats as PropSeatMap);
+      setOverrides({});
       setStatus('saved — live now');
     } catch (err) {
       const r = mapSaveError(err);
       setStatus(`error: ${'action' in r ? 'sign in required' : r.message} — use Copy JSON`);
+    }
+  };
+  const saveDraft = async () => {
+    if (!draftMode) return;
+    const id = normalizedDraftId;
+    if (!id) return;
+    const primarySlot = draftSlots[0] ?? activeDraftSlot;
+    const entry: PropSeatEntry = {
+      placement: draftTarget,
+      source: primarySlot.source,
+      label: draftName.trim() || id,
+      anchorX: primarySlot.anchorX,
+      anchorY: primarySlot.anchorY,
+      scale: primarySlot.scale,
+      terrains: parseTerrains(draftTerrains),
+      ...(draftSlots.length > 1 ? { parts: draftSlots } : {}),
+      ...(draftTarget === 'prop' ? { kind: def.kind, w: liveW, h: liveH, blocking: true } : {}),
+    };
+    const next = { ...(seats as Record<string, PropSeatEntry>), [id]: entry };
+    setStatus(`saving ${draftTarget}...`);
+    try {
+      await saveLiveSeats(next);
+      applyLiveSeats(next as PropSeatMap);
+      setStatus(`${editMode ? 'saved' : 'created'} ${draftTarget} "${id}"`);
+      if (draftTarget === 'prop') onPropId(id);
+    } catch (err) {
+      const r = mapSaveError(err);
+      setStatus(`error: ${'action' in r ? 'sign in required' : r.message}`);
     }
   };
   const copy = async () => {
@@ -223,6 +420,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
     const next: Seats = { ...seats, [variantId]: { base: baseId, label: `${baseDef.label} — ${suffix}`, anchorX: liveSeat.anchorX, anchorY: liveSeat.anchorY, scale: liveSeat.scale, ...footprint } };
     try {
       await saveLiveSeats(next);
+      applyLiveSeats(next as PropSeatMap);
       setStatus(`saved variant "${variantId}" — pick it from Prop after reload`); setVariantName('');
     } catch (err) {
       const r = mapSaveError(err);
@@ -242,6 +440,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
     const next: Seats = { ...seats, [activeId]: { ...cur, base: def.spriteId, label } };
     try {
       await saveLiveSeats(next);
+      applyLiveSeats(next as PropSeatMap);
       setStatus(`renamed to "${label}"`);
     } catch (err) {
       const r = mapSaveError(err);
@@ -263,6 +462,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
     delete next[removed];
     try {
       await saveLiveSeats(next);
+      applyLiveSeats(next as PropSeatMap);
       onPropId(def.spriteId); // fall back to the base prop
       setOverrides((o) => { const n = { ...o }; delete n[removed]; return n; });
       setStatus(`deleted "${removed}"`);
@@ -275,6 +475,36 @@ export function PropSeatLab({ propId, onPropId, header }: {
   const toggle = (on: boolean, set: (v: boolean) => void, label: string, title?: string) => (
     <button type="button" className={`ps-toggle ${on ? 'is-on' : ''}`} title={title} onClick={() => set(!on)}>{label}</button>
   );
+  const sourceOptions: { key: string; source: StructureSourceRef; label: string }[] = [
+    ...STRUCTURE_ART_ASSETS.map((asset) => ({ key: sourceKey({ kind: 'asset', id: asset.id }), source: { kind: 'asset' as const, id: asset.id }, label: `Structure art: ${asset.label}` })),
+  ];
+  if (!sourceOptions.some((item) => item.key === sourceKey(draftSource))) {
+    sourceOptions.unshift({ key: sourceKey(draftSource), source: draftSource, label: `Legacy source: ${draftInfo.label}` });
+  }
+  const slotLabel = (part: StructurePart, index: number): string => `Slot ${index + 1} · ${sourceInfo(part.source).label}`;
+  const addDraftSlot = () => {
+    setStatus('');
+    const source = draftSlots[activeSlotIndex] ?? activeDraftSlot;
+    const next = { ...source, anchorX: source.anchorX - Math.round(28 / source.scale) };
+    setDraftSlots((cur) => [...cur, next]);
+    setSelectedSlotIndex(draftSlots.length);
+  };
+  const removeDraftSlot = () => {
+    if (draftSlots.length <= 1) return;
+    setStatus('');
+    setDraftSlots((cur) => cur.filter((_, index) => index !== activeSlotIndex));
+    setSelectedSlotIndex(Math.max(0, activeSlotIndex - 1));
+  };
+  const setDraftSourceFromKey = (key: string) => {
+    const option = sourceOptions.find((item) => item.key === key);
+    if (!option) return;
+    const nextPart = partFromSource(option.source);
+    const info = sourceInfo(nextPart.source);
+    setDraftSlots((cur) => cur.map((slot, index) => index === activeSlotIndex ? nextPart : slot));
+    if (draftSlots.length === 1 || activeSlotIndex === 0) setDraftFootprint(footprintFromSource(option.source));
+    setDraftTerrains(info.terrains.join(', '));
+    setStatus('');
+  };
 
   // Anchor slider bounds — a generous per-frame window (negatives reachable, well past the frame),
   // derived from the frame dims so the thumb doesn't rescale mid-drag.
@@ -326,12 +556,55 @@ export function PropSeatLab({ propId, onPropId, header }: {
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
-            <label className="tileset-category-select" title="Which prop's seat you're tuning.">
-              <span>Prop</span>
-              <select value={activeId} onChange={(e) => onPropId(e.target.value)} aria-label="Prop">
-                {PROP_DEFS.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-              </select>
-            </label>
+            {draftMode ? (
+              <div className="ps-variant">
+                <span className="ps-ctl-label">{editMode ? 'Edit structure' : 'New structure'}</span>
+                <div className="ps-toggles">
+                  {(['prop', 'doodad'] as StructurePlacement[]).map((target) => (
+                    <button key={target} type="button" className={`ps-toggle ${draftTarget === target ? 'is-on' : ''}`} onClick={() => { setDraftTarget(target); setStatus(''); }}>
+                      {target === 'prop' ? 'Prop / blocks' : 'Doodad / passable'}
+                    </button>
+                  ))}
+                </div>
+                <span className="ps-slot-row">
+                  <label className="tileset-category-select" title="Which placed artwork slot the controls below edit.">
+                    <span>Artwork slot</span>
+                    <select value={activeSlotIndex} onChange={(e) => setSelectedSlotIndex(Number(e.target.value))} aria-label="Artwork slot">
+                      {draftSlots.map((part, index) => <option key={`${sourceKey(part.source)}-${index}`} value={index}>{slotLabel(part, index)}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" className="ps-slot-button" onClick={addDraftSlot} title="Add another artwork slot" aria-label="Add artwork slot">+</button>
+                  <button type="button" className="ps-slot-button ps-slot-remove" onClick={removeDraftSlot} disabled={draftSlots.length <= 1}
+                    title={draftSlots.length <= 1 ? 'At least one artwork slot is required' : 'Remove selected artwork slot'} aria-label="Remove selected artwork slot">-</button>
+                </span>
+                <label className="tileset-category-select" title="The raw artwork asset this slot uses.">
+                  <span>Source artwork</span>
+                  <select value={sourceKey(draftSource)} onChange={(e) => setDraftSourceFromKey(e.target.value)} aria-label="Source art">
+                    {sourceOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label className="tileset-category-select">
+                  <span>Name</span>
+                  <input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder={`New ${draftTarget}`} />
+                </label>
+                <label className="tileset-category-select">
+                  <span>ID</span>
+                  <input value={draftId} onChange={(e) => setDraftId(draftIdInput(e.target.value))} onBlur={() => setDraftId((value) => slugify(value))} placeholder={normalizedDraftId}
+                    disabled={editMode} title={editMode ? 'Existing IDs stay fixed so placed boards keep their references.' : undefined} />
+                </label>
+                <label className="tileset-category-select">
+                  <span>Terrain</span>
+                  <input value={draftTerrains} onChange={(e) => setDraftTerrains(e.target.value)} placeholder="grass, dirt, stone" />
+                </label>
+              </div>
+            ) : (
+              <label className="tileset-category-select" title="Which prop's seat you're tuning.">
+                <span>Prop</span>
+                <select value={activeId} onChange={(e) => onPropId(e.target.value)} aria-label="Prop">
+                  {PROP_DEFS.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                </select>
+              </label>
+            )}
             <label className="tileset-category-select" title="The ground family under the prop (preview only).">
               <span>Ground</span>
               <select value={family} onChange={(e) => setFamily(e.target.value as Family)} aria-label="Ground family">
@@ -368,24 +641,38 @@ export function PropSeatLab({ propId, onPropId, header }: {
             <SliderRow label={`Scale · ${liveSeat.scale.toFixed(2)}×`} value={liveSeat.scale} set={(v) => setSeat({ scale: round2(v) })}
               min={0.05} max={2} step={0.01} nudge={0.05} dflt={committed.scale} />
 
-            {/* Footprint — how many gameplay cells the prop occupies (placement + blocking rocks).
-                Separate from Scale (visual only); the guides + seat reflow as you change it. */}
-            <span className="ps-ctl-label" style={{ marginTop: 6 }}>Footprint <em>{liveW} × {liveH} cells</em></span>
-            <SliderRow label={`Width · ${liveW}`} value={liveW} set={(v) => setSeat({ w: Math.round(v) })}
-              min={1} max={6} step={1} nudge={1} dflt={def.w} />
-            <SliderRow label={`Height · ${liveH}`} value={liveH} set={(v) => setSeat({ h: Math.round(v) })}
-              min={1} max={6} step={1} nudge={1} dflt={def.h} />
+            {draftMode && draftTarget === 'doodad' ? null : (
+              <>
+                {/* Footprint — how many gameplay cells the prop occupies (placement + blocking rocks).
+                    Separate from Scale (visual only); the guides + seat reflow as you change it. */}
+                <span className="ps-ctl-label" style={{ marginTop: 6 }}>Footprint <em>{liveW} × {liveH} cells</em></span>
+                <SliderRow label={`Width · ${liveW}`} value={liveW} set={(v) => setSeat({ w: Math.round(v) })}
+                  min={1} max={6} step={1} nudge={1} dflt={def.w} />
+                <SliderRow label={`Height · ${liveH}`} value={liveH} set={(v) => setSeat({ h: Math.round(v) })}
+                  min={1} max={6} step={1} nudge={1} dflt={def.h} />
+              </>
+            )}
 
-            <p className="ps-saved">saved: ({committed.anchorX}, {committed.anchorY}) @ {committed.scale.toFixed(2)}× · {def.w}×{def.h} cells</p>
+            <p className="ps-saved">{draftMode ? `draft: ${draftTarget} · slot ${activeSlotIndex + 1}/${draftSlots.length} from ${draftInfo.label}` : `saved: (${committed.anchorX}, ${committed.anchorY}) @ ${committed.scale.toFixed(2)}× · ${def.w}×${def.h} cells`}</p>
             <div className="ps-actions">
-              <button type="button" className="tileset-view-action ps-primary" onClick={save} disabled={!dirty} title="Publish these seats live (instant, no deploy)">Save live</button>
-              <button type="button" className="tileset-view-action" onClick={copy}>Copy JSON</button>
-              <button type="button" className="tileset-view-action" onClick={() => setSeat({ ...committed })} disabled={!dirty} title="Reset all three controls to the saved seat">Reset all</button>
+              {draftMode ? (
+                <>
+                  <button type="button" className="tileset-view-action ps-primary" onClick={saveDraft} disabled={!normalizedDraftId} title={editMode ? 'Save changes to this existing object' : 'Create this object from the selected source artwork'}>{editMode ? 'Save changes' : 'Save new'}</button>
+                  <button type="button" className="tileset-view-action" onClick={() => onDraftChange?.(null)}>Cancel</button>
+                  <button type="button" className="tileset-view-action" onClick={() => setSeat({ ...committed })} title="Reset the draft seat to the source art">Reset</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="tileset-view-action ps-primary" onClick={save} disabled={!dirty} title="Publish these seats live (instant, no deploy)">Save live</button>
+                  <button type="button" className="tileset-view-action" onClick={copy}>Copy JSON</button>
+                  <button type="button" className="tileset-view-action" onClick={() => setSeat({ ...committed })} disabled={!dirty} title="Reset all three controls to the saved seat">Reset all</button>
+                </>
+              )}
             </div>
             {status ? <p className={`ps-status ${status.startsWith('error') ? 'is-error' : ''}`}>{status}</p> : null}
             {dirty && !status ? <p className="ps-status">unsaved changes</p> : null}
 
-            <div className="ps-variant">
+            {!draftMode ? <div className="ps-variant">
               {isCopy ? (
                 <>
                   <span className="ps-ctl-label">Copy of {baseDef.label}</span>
@@ -412,7 +699,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
                   title={`Save the current size as a new copy of ${baseDef.label}`}>Create copy</button>
               </span>
               <p className="ps-variant-hint">A copy shares {baseDef.label}’s sprite at {liveSeat.scale.toFixed(2)}×; tune its scale + footprint on its own. Pick it above after reload.</p>
-            </div>
+            </div> : null}
           </div>
         </section>
       </aside>
@@ -472,4 +759,12 @@ const PS_CSS = `
 .ps-variant-input { flex: 1; min-width: 0; box-sizing: border-box; height: 32px; padding: 0 8px; font: inherit; font-size: 13px;
   color: #eaf3ff; background: #101a2e; border: 1px solid #2a3c5e; border-radius: 5px; }
 .ps-variant-hint { margin: 0; font-size: 11px; color: #6b83a8; line-height: 1.4; }
+.ps-slot-row { display: grid; grid-template-columns: minmax(0, 1fr) 32px 32px; align-items: end; gap: 6px; }
+.ps-slot-button { box-sizing: border-box; width: 32px; height: 32px; padding: 0; display: grid; place-items: center;
+  cursor: pointer; font: inherit; font-size: 18px; line-height: 1; color: #dff7ff; background: #16233f;
+  border: 1px solid #2a3c5e; border-radius: 5px; }
+.ps-slot-button:hover:not(:disabled) { background: #1e3054; color: #ffffff; }
+.ps-slot-button:disabled { cursor: default; opacity: 0.42; }
+.ps-slot-remove:not(:disabled) { color: #ffd8d8; background: rgba(74,29,29,0.65); border-color: rgba(156,63,63,0.55); }
+.ps-slot-remove:hover:not(:disabled) { background: rgba(96,36,36,0.9); color: #ffffff; }
 `;

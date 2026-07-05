@@ -3795,6 +3795,7 @@ h1 {
    slot) · account cluster. The extra track lets the icon nav sit before the always-present
    cluster (ADR-0042). */
 .app-shell-titlebar.studio-topbar {
+  column-gap: var(--titlebar-control-gap, 10px);
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
@@ -7711,7 +7712,7 @@ body { font-size: 17px; }
 .studio-mode-nav {
   align-items: center;
   display: flex;
-  gap: 6px;
+  gap: var(--titlebar-control-gap, 10px);
 }
 
 /* The Studio's title-bar actions cluster: the "‹ Scene" back (shown in the waterfall
@@ -7720,7 +7721,7 @@ body { font-size: 17px; }
 .studio-topbar-actions {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--titlebar-control-gap, 10px);
 }
 .studio-scene-back {
   white-space: nowrap;
@@ -10382,6 +10383,29 @@ button.tileset-relationship-cell {
   display: block;
 }
 
+.tileset-studio-card.is-create {
+  border-style: dashed;
+  border-color: rgba(111, 210, 255, 0.42);
+  background: rgba(8, 24, 36, 0.58);
+}
+
+.tileset-studio-card.is-create:hover,
+.tileset-studio-card.is-create:focus-visible {
+  border-color: rgba(111, 210, 255, 0.82);
+  background: rgba(14, 42, 62, 0.72);
+}
+
+.tileset-create-glyph {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  color: #dff7ff;
+  background: #0e2536;
+  border: 1px solid rgba(111, 210, 255, 0.55);
+  border-radius: 999px;
+}
+
 /* Units category (chess pieces folded into the studio catalog). */
 .unit-card-image {
   min-height: calc(150px * var(--tile-zoom, 1));
@@ -11532,6 +11556,7 @@ button.tileset-relationship-cell {
      --app-header-h is sized so this inset fits (content + rule + 2×inset). */
   --titlebar-rule-h: 14px;
   --ds-titlebar-inset: var(--ds-space-2);
+  --titlebar-control-gap: 10px;
   /* Trailing/leading inline padding, published as a var so the account cluster can pull its
      own trailing edge in to match (see .header-account-cluster). Tightened at the
      landscape-phone breakpoint, where the cluster's pull-in follows automatically. */
@@ -11718,7 +11743,7 @@ button.tileset-relationship-cell {
 .header-account-cluster {
   /* ONE spacing source for the cluster's two edges: the inter-button gap AND the gap that
      frames the whole cluster against the bar. Both read this so they can never drift apart. */
-  --cluster-gap: 10px;
+  --cluster-gap: var(--titlebar-control-gap, 10px);
   align-items: center;
   display: flex;
   gap: var(--cluster-gap);
@@ -12817,7 +12842,98 @@ button.tileset-relationship-cell {
 .ce-preview-col .level-preview-empty { max-height: 34vh; }
 
 /* A selectable level row (a role=button div over the shared .settings-row). */
-.ce-editor-level-row { cursor: pointer; }
+.ce-editor-level-row {
+  align-items: center;
+  block-size: 86px;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-areas: "thumb copy actions";
+  grid-template-columns: 78px minmax(0, 1fr) auto;
+  min-block-size: 86px;
+  overflow: hidden;
+  padding: 12px 18px;
+}
+
+.ce-editor-level-row + .ce-editor-level-row {
+  margin-top: 8px;
+  min-block-size: 86px;
+  padding: 12px 18px;
+}
+
+.ce-editor-level-row.is-read-only {
+  grid-template-areas: "thumb copy";
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
+.ce-editor-level-row .settings-row-thumb {
+  block-size: 54px;
+  border-width: 5px;
+  border-image-width: 5px;
+  grid-area: thumb;
+  inline-size: 78px;
+}
+
+.ce-editor-level-copy {
+  align-content: center;
+  gap: 4px;
+  grid-area: copy;
+}
+
+.ce-editor-level-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ce-editor-level-heading h4 {
+  flex: 1 1 auto;
+  font-size: var(--ds-text-md);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-editor-level-row p {
+  font-size: var(--ds-text-sm);
+  line-height: 1.1;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-editor-level-row .ce-stars {
+  flex: none;
+  gap: 1px;
+}
+
+.ce-editor-level-row .ce-star {
+  block-size: 12px;
+  inline-size: 12px;
+}
+
+.ce-editor-level-row .ce-row-actions {
+  gap: 4px;
+  grid-area: actions;
+  justify-content: end;
+}
+
+.ce-editor-level-row .ce-icon-button {
+  block-size: 32px;
+  border-width: 8px;
+  border-image-width: 8px;
+  inline-size: 32px;
+}
+
+.ce-editor-level-row .ce-icon-button .ce-icon-img {
+  max-block-size: 14px;
+  max-inline-size: 14px;
+}
+
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
 /* The level list wraps its rows only to carry a data-testid — it must not disturb the

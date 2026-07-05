@@ -244,7 +244,7 @@ function LevelRow({
       role="button"
       tabIndex={0}
       aria-current={active ? 'true' : undefined}
-      className={`settings-row ce-editor-level-row ${active ? 'is-selected' : ''}`.trim()}
+      className={`settings-row ce-editor-level-row ${active ? 'is-selected' : ''} ${readOnly ? 'is-read-only' : ''}`.trim()}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -254,13 +254,15 @@ function LevelRow({
       }}
     >
       <span className="settings-row-thumb" aria-hidden="true">
-        {level ? <LevelThumbnail level={level} width={72} height={48} /> : <span className="settings-row-thumb-empty" />}
+        {level ? <LevelThumbnail level={level} width={68} height={44} /> : <span className="settings-row-thumb-empty" />}
       </span>
-      <div className="settings-row-copy">
-        <h4>{index + 1}. {level?.name ?? levelRef.levelId}</h4>
+      <div className="settings-row-copy ce-editor-level-copy">
+        <div className="ce-editor-level-heading">
+          <h4>{index + 1}. {level?.name ?? levelRef.levelId}</h4>
+          <Stars count={levelRef.stars ?? 0} />
+        </div>
         <p>{goalLine}</p>
       </div>
-      <div className="settings-row-value"><Stars count={levelRef.stars ?? 0} /></div>
       {readOnly ? null : (
         <div className="settings-row-control ce-row-actions" aria-label="Level actions">
           <IconButton onClick={onMoveUp} aria-label="Move level up"><CeIcon icon="chevron-up" /></IconButton>
