@@ -3,8 +3,9 @@
 // two-line head (name + ally/enemy forces), the board in a kit box floating on the world
 // background (ADR-0067), the compact level info stacked beneath, and a caller-supplied actions
 // block (Edit/Test in the editor, Play on the play screen).
-import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { bakeBoardPaintedImage } from '../render/bakeBoardThumbnail';
+import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
+import { ViewPane } from './shared/ViewPane';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import type { Level } from '../core/level';
@@ -26,24 +27,12 @@ export function LevelPreviewColumn({
   // The board is derived the SAME way the list thumbnails and the editor derive theirs (prefers
   // boardCode, falls back to layers), so the preview, a row's thumbnail, and the editor all agree.
   const board = useMemo(() => levelToEditorBoard(level), [level]);
-  // Bake the board's dense SOLID region to an image (headroom + diamond corners cropped off), then
-  // fill the box with it via object-fit:cover below. A solid crop cover-fitted covers the box with
-  // board and can never show a transparent corner as sky — the skirmish fill, no pan/zoom math.
-  // Async (awaits sprite decode); re-bakes + revokes the object URL on level change.
-  const [boardImg, setBoardImg] = useState<string | null>(null);
-  useEffect(() => {
-    if (!board) { setBoardImg(null); return; }
-    let cancelled = false;
-    let created: string | null = null;
-    setBoardImg(null);
-    bakeBoardPaintedImage(board, { scale: 2 })
-      .then((res) => {
-        if (cancelled) { if (res) URL.revokeObjectURL(res.url); return; }
-        if (res) { created = res.url; setBoardImg(res.url); }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; if (created) URL.revokeObjectURL(created); };
-  }, [board]);
+  // The viewer is the LIVE board (pan/zoom) rendered through the SAME read-only renderer the
+  // editor uses, inside the shared ViewPane — the pre-#409 framing: the whole board at a calm
+  // 0.5x, floating on the night sky, not a baked crop zoomed into the board's center. Static
+  // frame (no animation clock): a preview shouldn't run a per-frame loop while the screen is open.
+  const [viewZoom, setViewZoom] = useState(0.5);
+  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const allyCount = level.layers.units.filter((u) => u.side === 'player').length;
   const enemyCount = level.layers.units.filter((u) => u.side === 'enemy').length;
 
@@ -56,13 +45,26 @@ export function LevelPreviewColumn({
           <span className="ce-force ce-force-enemy"><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{enemyCount}</strong></span>
         </div>
       </div>
-      {/* Map preview: the board in a kit box, floating on the level's world (night-sky) background —
-          no checkerboard, no letterbox padding (ADR-0067). A baked still (no animation clock): a
-          preview shouldn't run a per-frame loop while the screen is open. */}
+      {/* Map preview: the live board in a kit box, floating on the level's world (night-sky)
+          background — no checkerboard, no letterbox padding (ADR-0067). The viewport stops at the
+          panel's hand-tuned Fill box; the line frame overlays it (see .ce-level-viewer CSS). */}
       {board ? (
         <div className="ce-preview-frame">
           <div className="ce-level-viewer">
-            {boardImg ? <img className="ce-level-viewer-board" src={boardImg} alt={`${level.name} board`} /> : null}
+            <ViewPane
+              kind="board"
+              ariaLabel={`${level.name} board`}
+              zoom={viewZoom}
+              pan={viewPan}
+              minZoom={0.2}
+              maxZoom={2}
+              onZoomChange={setViewZoom}
+              onPanChange={setViewPan}
+            >
+              <div className="tileset-view-board-content is-board">
+                <StudioReadOnlyBoard board={board} boardZoom={viewZoom} boardPan={viewPan} ariaLabel={`${level.name} board`} />
+              </div>
+            </ViewPane>
           </div>
         </div>
       ) : null}
