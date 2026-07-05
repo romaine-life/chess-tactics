@@ -1596,6 +1596,14 @@ export function LevelEditor(): ReactElement {
   const testHref = canTest
     ? `/play?${routeParams.campaignId ? `campaignId=${encodeURIComponent(routeParams.campaignId)}&` : ''}levelId=${encodeURIComponent(targetLevelId as string)}&mode=test`
     : undefined;
+  // "Play" a Test Board: play the CURRENT (possibly unsaved) board against the AI right now via
+  // the ephemeral ?board= link — the position rides the URL, so unlike Test it needs no saved
+  // level and is gated only on playability. mode=test keeps it non-persisted and surfaces the
+  // Test Board's CPU-delay control in the HUD.
+  const playBoardHref = useMemo(
+    () => (playability.ok ? `/play?board=${encodeBoard(currentEditorBoard)}&obj=${encodeURIComponent(objective)}&mode=test` : undefined),
+    [playability.ok, currentEditorBoard, objective],
+  );
 
   return (
     <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle} ready={editorReady}>
@@ -1812,6 +1820,11 @@ export function LevelEditor(): ReactElement {
             <div className="le-board-actions">
               <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
+              {playBoardHref ? (
+                <NavButton className="le-seg-btn" data-testid="le-play-board" to={playBoardHref} title="Play this exact board against the AI now — no save needed (a Test Board; set a CPU-delay floor in the Controls tab).">Play</NavButton>
+              ) : (
+                <button type="button" className="le-seg-btn" disabled title="Fix the playability issues above to play this board.">Play</button>
+              )}
               <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy Link</button>
               <button type="button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
             </div>

@@ -215,6 +215,9 @@ export function Skirmish() {
     // restart a live battle. Turn disk persistence on for real play, off for the
     // editor's ephemeral Test Play and for one-off `?board=` link positions.
     setMatchPersistenceEnabled(!isTestPlay && !routeBoard && !routeMap);
+    // Test-board controls (the CPU-delay floor) are live only for ?mode=test; leaving test mode
+    // resets the floor so real/campaign play is never slowed.
+    useSkirmish.getState().setTestMode(isTestPlay);
 
     // Returning here from the menu (or any other screen) should resume, not
     // restart: the store is a singleton that already holds the live board. Only

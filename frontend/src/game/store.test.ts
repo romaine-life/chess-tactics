@@ -596,6 +596,8 @@ describe('skirmish store: premoves', () => {
       started: true,
       clock: null,
       premoves: [],
+      testMode: false,
+      testMinCpuDelayMs: 0,
     });
   }
 
@@ -663,6 +665,31 @@ describe('skirmish store: premoves', () => {
     expect(useSkirmish.getState().premoves).toHaveLength(1);
     useSkirmish.getState().clearPremoves();
     expect(useSkirmish.getState().premoves).toEqual([]);
+  });
+
+  it('test board: a min CPU-delay floor holds the reply until the floor elapses', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().setTestMode(true);
+    useSkirmish.getState().setTestMinCpuDelay(3000); // floor well past the 520ms default
+    useSkirmish.getState().tryMoveTo(1, 7);
+    expect(useSkirmish.getState().game.turn).toBe('enemy');
+    vi.advanceTimersByTime(2999);
+    expect(useSkirmish.getState().game.turn).toBe('enemy'); // still thinking — floored to 3s
+    vi.advanceTimersByTime(2); // cross 3000ms
+    expect(useSkirmish.getState().game.turn).toBe('player'); // reply resolves once the floor elapses
+  });
+
+  it('the CPU-delay floor is test-only and clears on leaving test mode (real play never floored)', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('ek', 'enemy', 'king', 7, 7)], 'pr');
+    // Outside test mode the setter is a no-op — real/campaign play can never be floored.
+    useSkirmish.getState().setTestMinCpuDelay(3000);
+    expect(useSkirmish.getState().testMinCpuDelayMs).toBe(0);
+    // In test mode it takes; leaving test mode resets it so it can't leak into real play.
+    useSkirmish.getState().setTestMode(true);
+    useSkirmish.getState().setTestMinCpuDelay(3000);
+    expect(useSkirmish.getState().testMinCpuDelayMs).toBe(3000);
+    useSkirmish.getState().setTestMode(false);
+    expect(useSkirmish.getState().testMinCpuDelayMs).toBe(0);
   });
 });
 

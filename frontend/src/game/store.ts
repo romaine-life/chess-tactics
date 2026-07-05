@@ -289,6 +289,19 @@ export interface SkirmishState {
   queueMove: (pieceId: string, x: number, y: number) => void;
   /** Drop the whole queued chain (bound to Escape). */
   clearPremoves: () => void;
+  /** Test-board only: true while playing a `?mode=test` board, which surfaces the Test Board's
+   *  controls (the CPU-delay floor). False for real/campaign play. */
+  testMode: boolean;
+  /** Test-board only: a MINIMUM CPU think time (ms) floored onto ENEMY_REPLY_DELAY to widen the
+   *  premove window for testing. 0 = off, and forced to 0 outside test mode so real play is
+   *  untouched. The player's clock is already paused across the reply, so the extra wait costs
+   *  the tester nothing — a deliberate softball. */
+  testMinCpuDelayMs: number;
+  /** Enter/leave test-board mode. Leaving resets the CPU-delay floor so it can never leak into
+   *  real play. */
+  setTestMode: (on: boolean) => void;
+  /** Set the test-board CPU-delay floor (ms); no-op outside test mode. */
+  setTestMinCpuDelay: (ms: number) => void;
 }
 
 /**
@@ -376,6 +389,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   // of the player's click. The turn is already flipped to 'enemy' (which locks
   // player input) before this fires.
   const scheduleEnemyReply = () => {
+    // A Test Board can floor the CPU's think time (testMinCpuDelayMs) to widen the premove
+    // window; real/campaign play leaves it 0, so this is exactly ENEMY_REPLY_DELAY.
+    const delay = Math.max(ENEMY_REPLY_DELAY, get().testMinCpuDelayMs);
     setTimeout(() => {
       const cur = get();
       // Bail if a new game reset the turn, or it somehow already resolved.
@@ -457,7 +473,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
           }
         },
       );
-    }, ENEMY_REPLY_DELAY);
+    }, delay);
   };
 
   // Apply a legal player move and run the full post-move pipeline: bank the clock
@@ -610,6 +626,8 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   clock: null,
   net: null,
   premoves: [],
+  testMode: false,
+  testMinCpuDelayMs: 0,
 
   newSkirmish: (opts) => {
     // A previous game's ticker must never outlive its game.
@@ -835,6 +853,16 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
 
   clearPremoves: () => {
     if (get().premoves.length) set({ premoves: [] });
+  },
+
+  setTestMode: (on) => {
+    // Leaving test mode clears the CPU-delay floor so it can never affect real/campaign play.
+    set(on ? { testMode: true } : { testMode: false, testMinCpuDelayMs: 0 });
+  },
+
+  setTestMinCpuDelay: (ms) => {
+    if (!get().testMode) return; // test-board only — never floors real play
+    set({ testMinCpuDelayMs: Math.max(0, Math.min(10_000, Math.round(ms))) });
   },
   };
 });

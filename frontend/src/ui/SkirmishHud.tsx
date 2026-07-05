@@ -45,6 +45,10 @@ const HUD_TABS: { id: HudTab; label: string }[] = [
   { id: 'controls', label: 'Controls' },
 ];
 
+// Test Board: CPU-delay floor presets (ms). Off + 1–5s. The player's clock is paused across the
+// reply, so a longer floor only widens the premove window — it costs the tester nothing.
+const CPU_DELAY_PRESETS = [0, 1000, 2000, 3000, 5000] as const;
+
 // ---- In-match shortcut grid (StarCraft-style "grid" keys) -------------------
 // A 3x5 command card in the Controls tab. Cells map to REAL keyboard positions
 // (Q-W-E-R-T / A-S-D-F-G / Z-X-C-V-B) so the painted grid and the physical keys
@@ -143,6 +147,9 @@ export function SkirmishHud({
   const resign = useSkirmish((s) => s.resign);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
+  const testMode = useSkirmish((s) => s.testMode);
+  const testMinCpuDelayMs = useSkirmish((s) => s.testMinCpuDelayMs);
+  const setTestMinCpuDelay = useSkirmish((s) => s.setTestMinCpuDelay);
 
   // Resign is irreversible and hands the opponent the win — gate it behind a confirm
   // (the kit-framed one, not window.confirm, so it stays in-world). See ConfirmDialog.
@@ -418,6 +425,27 @@ export function SkirmishHud({
               <div className="skirmish-view-group">
                 <span className="skirmish-eyebrow">Battle clock</span>
                 <SkirmishClockControl timedHint="Applies on your next New skirmish." />
+              </div>
+            ) : null}
+            {/* Test Board only: floor the CPU's think time so there's room to build a premove chain.
+                The player's clock is already paused across the reply, so this is a free softball. */}
+            {testMode ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Min CPU delay (test board)</span>
+                <div className="skirmish-view-row">
+                  {CPU_DELAY_PRESETS.map((ms) => (
+                    <button
+                      key={ms}
+                      type="button"
+                      className={`app-header-button skirmish-cpu-delay-button ${testMinCpuDelayMs === ms ? 'is-active' : ''}`.trim()}
+                      aria-pressed={testMinCpuDelayMs === ms}
+                      onClick={() => setTestMinCpuDelay(ms)}
+                    >
+                      {ms === 0 ? 'Off' : `${ms / 1000}s`}
+                    </button>
+                  ))}
+                </div>
+                <p className="skirmish-grid-hint">Widens the window to premove while the CPU thinks. Your clock is paused during it anyway.</p>
               </div>
             ) : null}
             <div className="skirmish-view-group">
