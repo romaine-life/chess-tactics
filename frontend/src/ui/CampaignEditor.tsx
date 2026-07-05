@@ -98,7 +98,7 @@ function Stars({ count = 0 }: { count?: number }): ReactElement {
 
 // A campaign as a settings-style rail tab — the same carved chrome the main menu's mode
 // tabs and the play-side Campaign screen use (ADR-0059), extended to a icon | name | trail
-// grid so the favorite star / OFFICIAL tag / padlock sits at the tab's end. Kept as a
+// grid so the favorite star / padlock sits at the tab's end. Kept as a
 // role=button div (not a <button>) because the favorite is a nested interactive control:
 // selection + keyboard activation mirror the original row exactly.
 function CampaignRailTab({
@@ -118,7 +118,7 @@ function CampaignRailTab({
 }): ReactElement {
   const isOfficial = campaign.origin === 'official';
   // Lock (and the padlock) is UI-derived: officials lock only for non-admins. An admin
-  // sees officials selectable + editable, tagged "OFFICIAL" instead of a padlock.
+  // sees officials selectable + editable; the rail group title carries the official tier.
   const locked = isOfficial && !isAdmin;
   const selectCampaign = () => {
     if (!locked) onSelect();
@@ -153,9 +153,7 @@ function CampaignRailTab({
         <span className="ce-tab-trail ce-row-lock" aria-label={`${campaign.name} locked`} role="img">
           <CeIcon icon="lock" />
         </span>
-      ) : isOfficial ? (
-        <span className="ce-tab-trail ce-official-badge" aria-label={`${campaign.name} is an official campaign`}>OFFICIAL</span>
-      ) : (
+      ) : !isOfficial ? (
         <button
           type="button"
           className={`ce-tab-trail ce-row-favorite ${campaign.favorite ? 'is-selected' : ''}`.trim()}
@@ -164,7 +162,7 @@ function CampaignRailTab({
         >
           <img className="ce-star" src={CE_ICONS.star} alt="" aria-hidden="true" />
         </button>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -483,7 +481,9 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   // read-only ONLY for non-admins. Admins edit officials in place. This drives every
   // mutation control below.
   const readOnly = campIsOfficial && !isAdmin;
-  const ownCount = campaigns.filter((c) => c.origin !== 'official').length;
+  const officialCampaigns = campaigns.filter((c) => c.origin === 'official');
+  const userCampaigns = campaigns.filter((c) => c.origin !== 'official');
+  const ownCount = userCampaigns.length;
   const orderedLevels = camp ? camp.levels.slice().sort((a, b) => a.ordinal - b.ordinal) : [];
   const levelDoc = selectedLevelId ? levels[selectedLevelId] : null;
   const levelRef = !isUnassignedSelected && camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
@@ -566,25 +566,48 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       <aside className={embedded ? 'menu-dest-col menu-dest-tabs ce-editor-rail' : 'settings-frame settings-rail-frame ce-editor-rail'} aria-label="Campaigns">
             <KitScroll className="ce-rail-scroll">
               <div className="ce-rail-list">
-                <p className="campaign-rail-group">
-                  <span>Campaigns</span>
-                  <span className="ce-rail-count">{ownCount} / 20</span>
-                </p>
                 {campaigns.length === 0 ? <p className="ce-empty">No campaigns yet.</p> : null}
-                {campaigns.map((campaign, index) => (
-                  <CampaignRailTab
-                    key={campaign.id}
-                    campaign={campaign}
-                    index={index}
-                    active={!isUnassignedSelected && campaign.id === selectedCampaignId}
-                    isAdmin={isAdmin}
-                    onSelect={() => selectCampaignCollection(campaign.id)}
-                    onFavorite={(event) => {
-                      event.stopPropagation();
-                      useCampaigns.getState().toggleCampaignFavorite(campaign.id);
-                    }}
-                  />
-                ))}
+                {officialCampaigns.length > 0 ? (
+                  <>
+                    <p className="campaign-rail-group">Official campaigns</p>
+                    {officialCampaigns.map((campaign, index) => (
+                      <CampaignRailTab
+                        key={campaign.id}
+                        campaign={campaign}
+                        index={index}
+                        active={!isUnassignedSelected && campaign.id === selectedCampaignId}
+                        isAdmin={isAdmin}
+                        onSelect={() => selectCampaignCollection(campaign.id)}
+                        onFavorite={(event) => {
+                          event.stopPropagation();
+                          useCampaigns.getState().toggleCampaignFavorite(campaign.id);
+                        }}
+                      />
+                    ))}
+                  </>
+                ) : null}
+                {userCampaigns.length > 0 ? (
+                  <>
+                    <p className="campaign-rail-group">
+                      <span>Your campaigns</span>
+                      <span className="ce-rail-count">{ownCount} / 20</span>
+                    </p>
+                    {userCampaigns.map((campaign, index) => (
+                      <CampaignRailTab
+                        key={campaign.id}
+                        campaign={campaign}
+                        index={officialCampaigns.length + index}
+                        active={!isUnassignedSelected && campaign.id === selectedCampaignId}
+                        isAdmin={isAdmin}
+                        onSelect={() => selectCampaignCollection(campaign.id)}
+                        onFavorite={(event) => {
+                          event.stopPropagation();
+                          useCampaigns.getState().toggleCampaignFavorite(campaign.id);
+                        }}
+                      />
+                    ))}
+                  </>
+                ) : null}
                 <p className="campaign-rail-group">Workspace</p>
                 {/* Continue the stone slice past the campaign tabs so the rail stays one sheet. */}
                 <UnassignedRailTab

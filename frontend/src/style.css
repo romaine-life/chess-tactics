@@ -12749,7 +12749,7 @@ button.tileset-relationship-cell {
    the same shared mechanism the menu / Settings / Campaign rails use. */
 
 /* A campaign tab = the shared icon | label grid + a trailing cell for the favorite star /
-   OFFICIAL tag / padlock. */
+   padlock. Official identity is carried by the rail group heading. */
 .ce-campaign-tab {
   align-items: center;
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr) auto;
