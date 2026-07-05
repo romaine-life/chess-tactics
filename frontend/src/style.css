@@ -13094,7 +13094,67 @@ button.tileset-relationship-cell {
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
 /* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */
-.campaign-level-row { cursor: pointer; }
+.campaign-level-row {
+  align-items: center;
+  block-size: 86px;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-areas: "thumb copy value control";
+  grid-template-columns: 78px minmax(0, 1fr) auto auto;
+  min-block-size: 86px;
+  overflow: hidden;
+  padding: 12px 18px;
+}
+.campaign-level-row + .campaign-level-row {
+  margin-top: 8px;
+  min-block-size: 86px;
+  padding: 12px 18px;
+}
+.campaign-level-row .settings-row-thumb {
+  block-size: 54px;
+  border-width: 5px;
+  border-image-width: 5px;
+  grid-area: thumb;
+  inline-size: 78px;
+}
+.campaign-level-row .settings-row-copy {
+  align-content: center;
+  gap: 4px;
+  grid-area: copy;
+}
+.campaign-level-row h4 {
+  font-size: var(--ds-text-md);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campaign-level-row p {
+  font-size: var(--ds-text-sm);
+  line-height: 1.1;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campaign-level-row .settings-row-value {
+  grid-area: value;
+  min-width: 0;
+}
+.campaign-level-row .ce-stars {
+  gap: 1px;
+}
+.campaign-level-row .ce-star {
+  block-size: 12px;
+  inline-size: 12px;
+}
+.campaign-level-row .settings-row-control {
+  grid-area: control;
+  gap: 4px;
+  justify-content: end;
+}
 .campaign-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .campaign-level-row:not(.is-selected):not(.is-disabled):hover { filter: brightness(1.06); }
 /* The level list wraps its rows only to carry a data-testid — it must not disturb the

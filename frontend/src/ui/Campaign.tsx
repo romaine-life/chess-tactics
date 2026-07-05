@@ -114,7 +114,7 @@ function LevelSelect({ campaign, progress, embedded, selectedLevelId, onSelectLe
                       levels still show their board (dimmed) as a peek at what's ahead. */}
                   <span className="settings-row-thumb" aria-hidden="true">
                     {level
-                      ? <LevelThumbnail level={level} width={72} height={48} alt="" />
+                      ? <LevelThumbnail level={level} width={68} height={44} alt="" />
                       : <span className="settings-row-thumb-empty" />}
                   </span>
                   <div className="settings-row-copy">
