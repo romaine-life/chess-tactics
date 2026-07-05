@@ -2809,6 +2809,17 @@ function validatePropSeatsData(data) {
     for (const dim of ['w', 'h']) {
       if (Object.hasOwn(seat, dim) && !(Number.isInteger(seat[dim]) && seat[dim] >= 1)) return `seat "${id}" ${dim} must be a positive integer`;
     }
+    if (Object.hasOwn(seat, 'parts')) {
+      if (!Array.isArray(seat.parts) || seat.parts.length < 1) return `seat "${id}" parts must be a non-empty array`;
+      for (const [index, part] of seat.parts.entries()) {
+        if (!isObjectRecord(part)) return `seat "${id}" part ${index + 1} must be an object`;
+        if (!isObjectRecord(part.source) || (part.source.kind !== 'asset' && part.source.kind !== 'prop' && part.source.kind !== 'doodad') || typeof part.source.id !== 'string') {
+          return `seat "${id}" part ${index + 1} needs an asset/prop/doodad source`;
+        }
+        if (!Number.isFinite(part.anchorX) || !Number.isFinite(part.anchorY)) return `seat "${id}" part ${index + 1} needs numeric anchorX/anchorY`;
+        if (!(Number.isFinite(part.scale) && part.scale > 0)) return `seat "${id}" part ${index + 1} needs a positive scale`;
+      }
+    }
     if (Object.hasOwn(seat, 'base') && (typeof seat.base !== 'string' || !Object.hasOwn(data, seat.base))) {
       return `seat "${id}" base "${seat.base}" must reference an existing prop in the same document`;
     }
