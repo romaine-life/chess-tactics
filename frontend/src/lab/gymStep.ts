@@ -55,6 +55,7 @@ export function advanceSession(
     champion,
     established,
     traj: [...session.traj, point],
+    latestStepGames: r.latestGames,
   };
   return { point, session: next };
 }

@@ -14,6 +14,7 @@
 import { encodeWeights } from '../game/tuning';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
 import type { BookPosition, OpeningBookSettings } from '../game/openingBook';
+import type { SpsaStepGameRecord } from '../game/tuning';
 
 /** One point on a book's convergence curve — the worker's step output. Game outcomes
  * (this step's decisive/draw split) are optional so trajectories persisted before they
@@ -42,6 +43,8 @@ export interface GymSession {
   champion: { step: number; score: number; theta: number[] };
   established: number;
   traj: GymPoint[];
+  /** Full records for the most recent local training step only; replaced every step. */
+  latestStepGames?: SpsaStepGameRecord[];
 }
 
 /** One opening book: its settings, generated positions, and retained session. */

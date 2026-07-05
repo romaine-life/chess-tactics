@@ -39,6 +39,7 @@ describe('advanceSession', () => {
     expect(session.k).toBe(1);
     expect(session.traj).toHaveLength(1);
     expect(session.traj[0]).toEqual(point);
+    expect(session.latestStepGames).toHaveLength(point.games ?? 0);
     expect(point.step).toBe(0);
   });
 
@@ -83,6 +84,8 @@ describe('advanceSession', () => {
     const { session: s2 } = advanceSession(cfg(), s1, book());
     expect(s2.k).toBe(2);
     expect(s2.traj).toHaveLength(2);
-    expect(s2.traj[1].step).toBe(1);
+    expect(s2.traj[1]?.step).toBe(1);
+    expect(s2.latestStepGames).toHaveLength(s2.traj[1]?.games ?? 0);
+    expect(s2.latestStepGames).not.toBe(s1.latestStepGames);
   });
 });
