@@ -35,6 +35,7 @@ import {
 import { DOODAD_ASSETS, type DoodadAsset } from '../ui/doodadCatalog';
 import { resolveFeatureOverlays, resolveFenceOverlays } from '../core/featureAutotile';
 import { propHalfSrc, propZBracket, structureSeatPoint } from './BoardStructure';
+import { fenceOverlayZIndex } from './fenceOverlayDepth';
 import { propDef } from '../core/props';
 import { groundCoverSet, resolveGroundCover, densityFieldAt, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
@@ -131,14 +132,14 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
 
       const fence = fenceOverlays.get(key);
       if (fence) {
-        // Edge rails ride just above the ribbon band (still under the +20000 unit/prop band).
+        // Edge rails are foreground objects; they match the live board-level fence layer.
         ops.push({
           src: fenceFrameSrc(fence.material, fence.mask),
           dx: frameX,
           dy: frameY,
           dw: TILE_FRAME_W,
           dh: TILE_FRAME_H,
-          z: zIndex + 0.6,
+          z: fenceOverlayZIndex({ x, y }),
         });
       }
     }
@@ -266,6 +267,7 @@ export function boardContentHash(board: EditorBoard): string {
     `p:${sortedEntries(board.props ?? {})}`,
     `v:${sortedEntries(board.cover)}`,
     `f:${sortedEntries(board.features)}`,
+    `fe:${sortedEntries(board.fences ?? {})}`,
     `x:${Object.keys(board.featureCuts).sort().join(',')}`,
   ];
   return fnv1a(parts.join('|'));

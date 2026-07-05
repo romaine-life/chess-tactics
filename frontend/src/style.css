@@ -10073,6 +10073,18 @@ button.tileset-relationship-cell {
   top: 0;
 }
 
+.tileset-board-fence-overlay {
+  position: absolute;
+  width: 96px;
+  height: 180px;
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-equator)));
+  display: block;
+  image-rendering: pixelated;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* Animated tile TOP (water ripple). The motion is BAKED frames in a horizontal sheet
    (<tile>-top-anim.png, each frame the full 96x180 tile frame); this rule only advances
    the frame index via steps() — the same model as .gc-tuft below. Per-cell phase is a

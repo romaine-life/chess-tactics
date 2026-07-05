@@ -9,6 +9,7 @@ import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { DoodadSprite } from '../render/BoardDoodad';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
+import { FenceOverlayLayer } from '../render/FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
@@ -234,7 +235,7 @@ function StudioEditableBoard({
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
-            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key], fence: fenceOverlayMap.get(key), animationFrame, hidden, x, y })}
+            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key], animationFrame, hidden, x, y })}
             {/* Zone tint: a translucent diamond seated on the tile EQUATOR — it reuses the exact
                 seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
                 which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
@@ -410,6 +411,7 @@ function StudioEditableBoard({
       onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
     >
       {overlay}
+      <FenceOverlayLayer overlays={fenceOverlayMap} />
       {overlaySprites}
     </TileGrid>
   );
