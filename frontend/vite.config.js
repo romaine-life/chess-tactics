@@ -312,7 +312,7 @@ function prodBackend(port) {
     configureServer(server) {
       const log = server.config.logger;
       if (!existsSync(backendDepsMarker)) {
-        log.error('[backend] setup needed for this fresh worktree: backend/node_modules is expected to be absent because dependencies are not committed or shared between worktrees. Run `cd backend && npm install`, then restart Vite. Agents must do this setup or report the blocker; DEV_NO_BACKEND=1 is owner-only.');
+        log.error('[backend] dependencies are missing after predev setup. `npm run dev` should install backend dependencies before Vite starts; rerun it and inspect the predev output if this persists. DEV_NO_BACKEND=1 is owner-only.');
         process.exit(1);
       }
       killStale();

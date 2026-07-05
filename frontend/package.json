@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/ensure-backend-deps.mjs",
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "build:trainer": "vite build --config vite.trainer.config.js",
