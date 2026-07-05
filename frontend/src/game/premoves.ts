@@ -1,17 +1,18 @@
-// Premove chain: the moves a player queues while the opponent is thinking, fired
-// one-per-turn when control returns. These pure helpers fold the queue onto the
-// live board so the UI can build a chain on a PROVISIONAL board (the current board
-// plus the moves already queued, but none of the opponent's unknown replies) and
-// draw it as chess.com-style arrows. Execution — validation at fire time, and the
-// "one illegal step drops the whole chain" rule — lives in the store (see queueMove
-// and the drain in scheduleEnemyReply); this module is the pure projection those
-// paths share so neither re-derives the fold.
+// Premove chain: the moves a player queues while the opponent is thinking, fired one-per-turn
+// when control returns. These pure helpers project the queue so the UI can draw each unit's
+// planned path (chess.com-style arrows + ghost units) and let the player extend it.
+//
+// PREMOVES ARE INDEPENDENT SPECULATIVE PLANS. Each unit's plan is folded onto the REAL board with
+// only THAT unit's own steps applied — other units' premoves never block it. So two units may plan
+// the same square (their ghosts SHARE the tile, split between them); execution stays honest because
+// the store's drain re-validates each move against reality at fire time, so only one actually
+// arrives (or the chain drops). This module has no store/DOM deps so it also runs inline in tests.
 
 import type { GameState, Move, Piece, Vec } from '../core/types';
 import { applyMove, gameEnv, legalMoves, type MoveEnv } from '../core/rules';
 
-/** One queued move: a player piece and where it will go. The "from" is implied by
- *  the piece's position on the provisional board at that point in the chain. */
+/** One queued move: a player piece and where it will go. The "from" is implied by the piece's
+ *  position along its own plan at that point. */
 export interface PremoveStep {
   pieceId: string;
   x: number;
@@ -24,61 +25,93 @@ export interface PremoveArrow {
   to: Vec;
 }
 
-// Movement environment for a state: the canonical static env (terrain + edge fences,
-// via gameEnv so premove legality honours the SAME gameplay layers as real moves) plus
-// this ply's lastMove for en passant. Mirrors store.envFor.
+/** A square one or more premoved units plan to occupy. `pieces` is capped at 4 (the max the tile
+ *  is split between); the UI lays them out symmetrically. */
+export interface PremoveGhostGroup {
+  key: string;
+  pieces: Piece[];
+}
+
+/** Max units shown sharing one tile. */
+const MAX_GHOSTS_PER_TILE = 4;
+
+// Movement environment for a state: the canonical static env (terrain + edge fences, via gameEnv
+// so premove legality honours the SAME gameplay layers as real moves) plus this ply's lastMove.
 function envFor(game: GameState): MoveEnv {
   return { ...gameEnv(game), lastMove: game.lastMove };
 }
 
-// Fold the queued steps onto `game`, applying each as a real move on the board built
-// so far. Each step is re-validated against that provisional board; an invalid step
-// (its piece gone, or the square no longer reachable) stops the fold there. The caller
-// only ever appends steps that were legal when queued, so this is a safety net rather
-// than the gate.
-function foldPremoves(game: GameState, premoves: readonly PremoveStep[]): { state: GameState; arrows: PremoveArrow[]; ghosts: Piece[] } {
+const premovedIds = (premoves: readonly PremoveStep[]): string[] => [...new Set(premoves.map((s) => s.pieceId))];
+
+// Fold ONLY one piece's queued steps onto the board, leaving every OTHER piece at its real
+// position — so a unit's plan is never blocked by another unit's plan. Each step is re-validated
+// against this per-piece board; an illegal step stops that piece's plan there.
+function foldPiece(game: GameState, premoves: readonly PremoveStep[], pieceId: string): { state: GameState; steps: { from: Vec; landed: Piece }[] } {
   let state = game;
-  const arrows: PremoveArrow[] = [];
-  // A ghost for EVERY square a unit lands on across its chain (not just its final square), keyed
-  // by that square so a later landing on the same square overwrites an earlier one — last-to-land
-  // wins when two premoves share a square.
-  const ghostBySquare = new Map<string, Piece>();
+  const steps: { from: Vec; landed: Piece }[] = [];
   for (const step of premoves) {
-    const p = state.pieces.find((q) => q.id === step.pieceId && q.alive && q.side === 'player');
+    if (step.pieceId !== pieceId) continue;
+    const p = state.pieces.find((q) => q.id === pieceId && q.alive && q.side === 'player');
     if (!p) break;
     const mv = legalMoves(p, state.pieces, state.size, envFor(state)).find((m) => m.x === step.x && m.y === step.y);
     if (!mv) break;
-    arrows.push({ from: { x: p.x, y: p.y }, to: { x: step.x, y: step.y } });
+    const from: Vec = { x: p.x, y: p.y };
     state = applyMove(state, p.id, mv).state;
-    const landed = state.pieces.find((q) => q.id === step.pieceId);
-    if (landed && landed.alive) ghostBySquare.set(`${landed.x},${landed.y}`, landed);
+    const landed = state.pieces.find((q) => q.id === pieceId);
+    if (landed && landed.alive) steps.push({ from, landed });
   }
-  return { state, arrows, ghosts: [...ghostBySquare.values()] };
+  return { state, steps };
 }
 
-/** The board as it would stand after every queued premove applies (no enemy replies). */
+/** The board with each premoved piece moved to the TIP of its own plan (others at their real
+ *  positions). Used for hit-testing which piece a click lands on. Two plans MAY share a square, so
+ *  a lookup takes the first match — enough to pick a piece to keep premoving. */
 export function provisionalBoard(game: GameState, premoves: readonly PremoveStep[]): GameState {
-  return foldPremoves(game, premoves).state;
+  const tip = new Map<string, Vec>();
+  for (const id of premovedIds(premoves)) {
+    const p = foldPiece(game, premoves, id).state.pieces.find((q) => q.id === id);
+    if (p) tip.set(id, { x: p.x, y: p.y });
+  }
+  const pieces = game.pieces.map((p) => {
+    const t = tip.get(p.id);
+    return t ? { ...p, x: t.x, y: t.y } : p;
+  });
+  return { ...game, pieces };
 }
 
-/** From→to cells for each queued step, for the chain overlay. */
+/** From→to cells for every queued step, per piece — the chain arrows. */
 export function premoveArrows(game: GameState, premoves: readonly PremoveStep[]): PremoveArrow[] {
-  return foldPremoves(game, premoves).arrows;
+  const arrows: PremoveArrow[] = [];
+  for (const id of premovedIds(premoves)) {
+    for (const { from, landed } of foldPiece(game, premoves, id).steps) {
+      arrows.push({ from, to: { x: landed.x, y: landed.y } });
+    }
+  }
+  return arrows;
 }
 
-/** A ghost unit for each square a premove lands a piece on — the whole planned path, one per
- *  square (last-to-land wins on a shared square). Includes intermediate steps of a multi-step
- *  chain, not just each piece's final square. */
-export function premoveGhosts(game: GameState, premoves: readonly PremoveStep[]): Piece[] {
-  return foldPremoves(game, premoves).ghosts;
+/** Ghost units grouped by the square they land on — the whole planned path of every premoved unit.
+ *  When several units plan the same square they SHARE it (up to MAX_GHOSTS_PER_TILE), so the tile
+ *  is split between them rather than one hiding the others. */
+export function premoveGhosts(game: GameState, premoves: readonly PremoveStep[]): PremoveGhostGroup[] {
+  const bySquare = new Map<string, Piece[]>();
+  for (const id of premovedIds(premoves)) {
+    for (const { landed } of foldPiece(game, premoves, id).steps) {
+      const key = `${landed.x},${landed.y}`;
+      const arr = bySquare.get(key) ?? [];
+      if (arr.length < MAX_GHOSTS_PER_TILE && !arr.some((p) => p.id === landed.id)) arr.push(landed);
+      bySquare.set(key, arr);
+    }
+  }
+  return [...bySquare.entries()].map(([key, pieces]) => ({ key, pieces }));
 }
 
-/** Legal next-step destinations for `pieceId` on the provisional board — what the
- *  player can add to the chain from the current tip. Empty when the piece can't be
- *  premoved (gone, not the player's, or nothing selected). */
+/** Legal next-step destinations for `pieceId` — validated against ITS OWN plan only (other units'
+ *  premoves don't block it), so two units can be queued onto the same square. Empty when the piece
+ *  can't be premoved (gone, not the player's, or nothing selected). */
 export function premoveTargets(game: GameState, premoves: readonly PremoveStep[], pieceId: string | null): Move[] {
   if (!pieceId) return [];
-  const state = provisionalBoard(game, premoves);
+  const state = foldPiece(game, premoves, pieceId).state;
   const p = state.pieces.find((q) => q.id === pieceId && q.alive && q.side === 'player');
   return p ? legalMoves(p, state.pieces, state.size, envFor(state)) : [];
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { premoveGhosts, premoveArrows } from './premoves';
+import { premoveGhosts, premoveArrows, premoveTargets } from './premoves';
 import type { GameState, Piece, PieceType, Side } from '../core/types';
 
 function piece(id: string, side: Side, type: PieceType, x: number, y: number): Piece {
@@ -10,39 +10,44 @@ function board(pieces: Piece[]): GameState {
 }
 
 describe('premoveGhosts', () => {
-  it('a single premove yields one ghost at its destination', () => {
+  it('a single premove yields one ghost group at its destination', () => {
     const g = board([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 7, 0), piece('ek', 'enemy', 'king', 7, 7)]);
-    const ghosts = premoveGhosts(g, [{ pieceId: 'pr', x: 0, y: 3 }]);
-    expect(ghosts).toHaveLength(1);
-    expect(ghosts[0]).toMatchObject({ id: 'pr', x: 0, y: 3 });
+    const groups = premoveGhosts(g, [{ pieceId: 'pr', x: 0, y: 3 }]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].key).toBe('0,3');
+    expect(groups[0].pieces.map((p) => p.id)).toEqual(['pr']);
   });
 
   it('leaves a ghost on EVERY square a unit lands on across a multi-step chain', () => {
     const g = board([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 7, 0), piece('ek', 'enemy', 'king', 7, 7)]);
     // rook: (0,0) → (0,3) → (3,3). Both landing squares get a ghost, not just the final one.
-    const ghosts = premoveGhosts(g, [{ pieceId: 'pr', x: 0, y: 3 }, { pieceId: 'pr', x: 3, y: 3 }]);
-    expect(ghosts.map((p) => `${p.x},${p.y}`).sort()).toEqual(['0,3', '3,3']);
-    expect(ghosts.every((p) => p.id === 'pr')).toBe(true);
-    // The arrows trace the same path.
+    const groups = premoveGhosts(g, [{ pieceId: 'pr', x: 0, y: 3 }, { pieceId: 'pr', x: 3, y: 3 }]);
+    expect(groups.map((gr) => gr.key).sort()).toEqual(['0,3', '3,3']);
+    expect(groups.every((gr) => gr.pieces.length === 1 && gr.pieces[0].id === 'pr')).toBe(true);
     expect(premoveArrows(g, [{ pieceId: 'pr', x: 0, y: 3 }, { pieceId: 'pr', x: 3, y: 3 }])).toHaveLength(2);
   });
 
-  it('when two premoves share a square, the last to land wins', () => {
+  it('two units that plan the same square SHARE the tile (both shown), not one hiding the other', () => {
     const g = board([
       piece('rx', 'player', 'rook', 0, 0),
-      piece('ry', 'player', 'rook', 3, 3),
+      piece('ry', 'player', 'rook', 5, 3),
       piece('pk', 'player', 'king', 7, 0),
       piece('ek', 'enemy', 'king', 7, 7),
     ]);
-    // rx passes THROUGH (0,3) then vacates up to (0,5); ry then lands on (0,3) — ry wins that square.
-    const ghosts = premoveGhosts(g, [
-      { pieceId: 'rx', x: 0, y: 3 },
-      { pieceId: 'rx', x: 0, y: 5 },
-      { pieceId: 'ry', x: 0, y: 3 },
+    // Both rooks plan to land on (0,3). Plans are independent, so ry isn't blocked by rx's plan.
+    const groups = premoveGhosts(g, [{ pieceId: 'rx', x: 0, y: 3 }, { pieceId: 'ry', x: 0, y: 3 }]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].pieces.map((p) => p.id).sort()).toEqual(['rx', 'ry']);
+  });
+
+  it('a unit can target a square another unit already plans — plans do not block each other', () => {
+    const g = board([
+      piece('rx', 'player', 'rook', 0, 0),
+      piece('ry', 'player', 'rook', 5, 3),
+      piece('pk', 'player', 'king', 7, 0),
+      piece('ek', 'enemy', 'king', 7, 7),
     ]);
-    const at = (sq: string) => ghosts.find((p) => `${p.x},${p.y}` === sq);
-    expect(at('0,3')?.id).toBe('ry'); // last to land wins
-    expect(at('0,5')?.id).toBe('rx');
-    expect(ghosts).toHaveLength(2);
+    const targets = premoveTargets(g, [{ pieceId: 'rx', x: 0, y: 3 }], 'ry');
+    expect(targets.some((m) => m.x === 0 && m.y === 3)).toBe(true);
   });
 });

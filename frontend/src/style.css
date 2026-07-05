@@ -4101,6 +4101,10 @@ h1 {
 
 .board-unit-seat.is-premove-ghost img {
   filter: drop-shadow(0 1px 5px rgba(96, 132, 240, .65));
+  /* Shrink toward the feet when a tile is split between multiple planned units, so they sit side
+     by side on the tile instead of overlapping (--ghost-scale is 1 for a lone ghost). */
+  transform: scale(var(--ghost-scale, 1));
+  transform-origin: center bottom;
 }
 
 /* The queued-chain arrows (placeholder art). Coordinates are board-space, so the stroke

@@ -470,18 +470,29 @@ function PremoveArrowLayer({ arrows }: { arrows: PremoveArrow[] }) {
   );
 }
 
-// The "after" ghost: a translucent copy of a premoved piece on its planned (provisional) square,
-// the far end of the premove arrow. It's pointer-events:none (inherits from .board-unit-seat), so
-// the cell-hit button beneath owns the click — clicking the ghost's square re-selects the piece to
-// extend its chain. `piece` is the provisional-board piece (already facing its move direction).
-function PremoveGhost({ piece }: { piece: Piece }) {
+// When more than one unit plans the same tile, the tile is SPLIT between them (up to 4) —
+// symmetric board-space offsets (px) from the tile centre + a scale so they fit side by side.
+const GHOST_SLOTS: Record<number, ReadonlyArray<{ dx: number; dy: number }>> = {
+  1: [{ dx: 0, dy: 0 }],
+  2: [{ dx: -18, dy: 0 }, { dx: 18, dy: 0 }],
+  3: [{ dx: 0, dy: -11 }, { dx: -18, dy: 9 }, { dx: 18, dy: 9 }],
+  4: [{ dx: -17, dy: -10 }, { dx: 17, dy: -10 }, { dx: -17, dy: 10 }, { dx: 17, dy: 10 }],
+};
+const ghostScaleFor = (count: number): number => (count >= 3 ? 0.5 : count === 2 ? 0.62 : 1);
+
+// The "after" ghost: a translucent copy of a premoved piece on a square it plans to land on, the
+// far end of a premove arrow. It's pointer-events:none (inherits from .board-unit-seat), so the
+// cell-hit button beneath owns the click — clicking the ghost's square re-selects the piece to
+// extend its chain. `slot`/`count` place it symmetrically when several units share the tile.
+function PremoveGhost({ piece, slot = 0, count = 1 }: { piece: Piece; slot?: number; count?: number }) {
   const { left, top, zIndex } = boardLabCellPosition(piece);
   const src = pieceImageSrc(piece);
   if (!src) return null;
+  const off = (GHOST_SLOTS[count] ?? GHOST_SLOTS[1])[slot] ?? { dx: 0, dy: 0 };
   return (
     <div
       className={`board-unit-seat skirmish-board-unit is-${piece.side} is-${piece.type} is-premove-ghost`}
-      style={{ left, top, zIndex: zIndex + 20000 } as CSSProperties}
+      style={{ left: left + off.dx, top: top + off.dy, zIndex: zIndex + 20000, ['--ghost-scale' as string]: ghostScaleFor(count) } as CSSProperties}
       aria-hidden="true"
     >
       <img src={src} alt="" draggable={false} />
@@ -671,8 +682,9 @@ export function SkirmishBoard() {
     for (const p of game.pieces) if (p.alive && premovedIds.has(p.id)) out.add(`${p.x},${p.y}`);
     return out;
   }, [game.pieces, premovedIds]);
-  // A ghost on every square each premoved unit lands on across its chain (intermediate steps
-  // included, not just the final square), one per square (last-to-land wins on a shared square).
+  // Ghost units grouped by the square they land on — a ghost on every square each premoved unit
+  // passes through, and when several units plan the same square they SHARE it (the tile splits
+  // between them, up to 4) rather than one hiding the others.
   const afterGhosts = useMemo(() => premoveGhosts(game, premoves), [game, premoves]);
 
   // The chain-building selection is only meaningful during the opponent's turn; when it
@@ -932,9 +944,11 @@ export function SkirmishBoard() {
               premoveOrigin={premovedIds.has(piece.id)}
             />
           ))}
-          {afterGhosts.map((piece) => (
-            <PremoveGhost key={`premove-ghost-${piece.x}-${piece.y}`} piece={piece} />
-          ))}
+          {afterGhosts.flatMap((group) =>
+            group.pieces.map((piece, i) => (
+              <PremoveGhost key={`premove-ghost-${group.key}-${piece.id}`} piece={piece} slot={i} count={group.pieces.length} />
+            )),
+          )}
           <PremoveArrowLayer arrows={premoveChain} />
         </BoardLabBoard>
       </ViewPane>
