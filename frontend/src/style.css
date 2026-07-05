@@ -12279,6 +12279,7 @@ button.tileset-relationship-cell {
    Mirrors MM_LIVE.btnH (mmLive.test.ts derives btnH from THIS rule). Placed after the .settings-tab
    base so it overrides its padding. Re-tune in the dressing room (MainMenuViewer → Buttons). */
 .main-menu-mode-tab {
+  block-size: 61px;
   min-height: 61px;
   padding-top: 8.5px;
   padding-bottom: 8.5px;
@@ -12299,6 +12300,24 @@ button.tileset-relationship-cell {
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
   transform: translateX(16px); /* label nudge — baked from the Main Menu tuner, shared with Settings */
+}
+
+.settings-tab-label {
+  align-content: center;
+  block-size: var(--settings-tab-icon-slot);
+  inline-size: 100%;
+  justify-items: start;
+  max-inline-size: 100%;
+  overflow: hidden;
+}
+
+.settings-tab-label strong {
+  --settings-tab-label-min-font-size: 8px;
+  display: block;
+  inline-size: 100%;
+  max-block-size: 100%;
+  overflow: hidden;
+  text-wrap: balance;
 }
 
 .settings-tab:not(.is-active):hover {
