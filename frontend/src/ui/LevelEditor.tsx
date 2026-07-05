@@ -1419,6 +1419,7 @@ export function LevelEditor(): ReactElement {
       stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
     }
     setRegionSelection(found);
+    setTool('select');
   };
   const clearRegion = (): void => { setRegionSelection(new Set()); };
   // How many cells a share applies to right now: the marquee selection if any, else the whole board.

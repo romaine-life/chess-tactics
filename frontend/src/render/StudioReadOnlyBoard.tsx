@@ -57,9 +57,11 @@ const familyOfTile = (id: string): TileFamilyId | undefined =>
 export function deriveFeatureOverlays(
   features: EditorBoard['features'],
   featureCuts: EditorBoard['featureCuts'],
+  featureExits: EditorBoard['featureExits'] = {},
 ): FeatureOverlayMap {
   const isSevered = (edge: string): boolean => featureCuts[edge] === true;
-  return resolveFeatureOverlays(features, isSevered);
+  const isExit = (edge: string): boolean => featureExits[edge] === true;
+  return resolveFeatureOverlays(features, isSevered, isExit);
 }
 
 /** The tile + feature-overlay <img>s for one cell (no interaction chrome). Shared by both boards. */
@@ -175,12 +177,14 @@ export function studioCoverCells(
   cells: Record<string, string>,
   cover: Record<string, GroundCoverDensity>,
   seed: number,
+  coverTypes: Record<string, TileFamilyId> = {},
 ): Array<{ x: number; y: number; terrain: TileFamilyId; groundCover: GroundCover }> {
   const list: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover: GroundCover }> = [];
   for (const [key, density] of Object.entries(cover)) {
     const [x, y] = key.split(',').map(Number);
     const tileId = cells[key];
-    const terrain = tileId ? familyOfTile(tileId) : undefined;
+    const tileTerrain = tileId ? familyOfTile(tileId) : undefined;
+    const terrain = coverTypes[key] ?? tileTerrain;
     if (!terrain || !groundCoverSet(terrain)) continue;
     list.push({ x, y, terrain, groundCover: { density, tufts: rollGroundCover(terrain, x, y, seed, density) } });
   }
@@ -211,7 +215,7 @@ export function StudioReadOnlyBoard({
   className?: string;
   ariaLabel?: string;
 }): ReactElement {
-  const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts);
+  const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts, board.featureExits);
   const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
 
   const gridCells: TileGridCell[] = [];
@@ -230,7 +234,7 @@ export function StudioReadOnlyBoard({
   }
 
   const sprites = studioBoardSprites({ units: board.units, doodads: board.doodads, props: board.props });
-  const coverCells = studioCoverCells(board.cells, board.cover, coverSeed);
+  const coverCells = studioCoverCells(board.cells, board.cover, coverSeed, board.coverTypes ?? {});
 
   return (
     <TileGrid

@@ -219,8 +219,10 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
   const coverCells: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover?: GroundCover }> = [];
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
-      const tileId = board.cells[`${x},${y}`];
-      const terrain = tileId ? familyOfTile(tileId) : undefined;
+      const key = `${x},${y}`;
+      const tileId = board.cells[key];
+      const tileTerrain = tileId ? familyOfTile(tileId) : undefined;
+      const terrain = board.coverTypes?.[key] ?? tileTerrain;
       if (terrain && groundCoverSet(terrain)) coverCells.push({ x, y, terrain });
     }
   }
@@ -277,9 +279,11 @@ export function boardContentHash(board: EditorBoard): string {
     `d:${sortedEntries(board.doodads)}`,
     `p:${sortedEntries(board.props ?? {})}`,
     `v:${sortedEntries(board.cover)}`,
+    `ct:${sortedEntries(board.coverTypes ?? {})}`,
     `f:${sortedEntries(board.features)}`,
     `fe:${sortedEntries(board.fences ?? {})}`,
-    `x:${Object.keys(board.featureCuts).sort().join(',')}`,
+    `x:${sortedEntries(board.featureCuts)}`,
+    `xe:${sortedEntries(board.featureExits)}`,
   ];
   return fnv1a(parts.join('|'));
 }
