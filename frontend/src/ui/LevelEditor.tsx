@@ -21,7 +21,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
-import { readBoardParam, encodeBoard, decodeBoardLinkInput, type BoardFactionDirections, type EditorBoard, type FeatureCell } from './boardCode';
+import { readBoardParam, encodeBoard, decodeBoardLinkInput, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type FeatureCell } from './boardCode';
 import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -468,6 +468,31 @@ const LE_COVER_TYPES: ReadonlyArray<{ id: TileFamilyId; label: string }> = [
   { id: 'water', label: 'Reeds' },
   { id: 'sand', label: 'Sand' },
 ];
+const defaultScatterRows = (): ScatterRow[] => [
+  { id: 0, terrain: 'grass', share: 60, locked: false, covers: [{ id: 1, type: 'grass', expanded: false, knobs: { ...DEFAULT_COVER } }] },
+  { id: 1, terrain: 'stone', share: 40, locked: false, covers: [] },
+];
+const regionCellSort = (a: string, b: string): number => {
+  const [ax, ay] = a.split(',').map(Number);
+  const [bx, by] = b.split(',').map(Number);
+  return ay === by ? ax - bx : ay - by;
+};
+const sortRegionCells = (cells: Iterable<string>): string[] => [...new Set(cells)].sort(regionCellSort);
+const regionCellsEqual = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((key, index) => key === b[index]);
+const scatterRowsToGeneratedSections = (rows: ScatterRow[]): BoardGeneratedRegionSection[] =>
+  rows.map((row) => ({
+    terrain: row.terrain,
+    share: row.share,
+    locked: row.locked || undefined,
+    covers: row.covers.map((cover) => ({ type: cover.type, knobs: { ...cover.knobs } })),
+  }));
+const nextGeneratedRegionName = (regions: readonly BoardGeneratedRegion[]): string => {
+  const used = new Set(regions.map((region) => region.name));
+  let n = regions.length + 1;
+  while (used.has(`Region ${n}`)) n += 1;
+  return `Region ${n}`;
+};
 // A terrain's own cover set (grass tufts / water reeds / sand), or null — the default cover a region
 // picks up when it uses that terrain (the author can then change it to anything).
 const defaultCoverType = (terrain: TileFamilyId): TileFamilyId | null => (groundCoverSet(terrain) ? terrain : null);
@@ -847,6 +872,7 @@ export function LevelEditor(): ReactElement {
   const initialCampaignBoard = useMemo(() => initialCampaignLevel ? levelToEditorBoard(initialCampaignLevel) : undefined, [initialCampaignLevel]);
   const initialBoard = localDraft?.board ?? loadedBoard ?? initialCampaignBoard;
   const initialFactionDirections = normalizeFactionDirections(initialBoard?.factionDirections);
+  const initialGeneratedRegions = initialBoard?.generatedRegions ?? [];
   const needsCampaignHydration = Boolean(routeParams.levelId && !loadedBoard && !localDraft && !initialCampaignLevel);
   const [editorReady, setEditorReady] = useState(!needsCampaignHydration);
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
@@ -861,13 +887,14 @@ export function LevelEditor(): ReactElement {
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   // Marquee region selection — the scope a Generate fills. "x,y" cell keys; empty ⇒ whole board.
   const [regionSelection, setRegionSelection] = useState<Set<string>>(() => new Set());
+  // Saved generated-region units: rerunnable selections plus the Generate panel settings they used.
+  const [generatedRegions, setGeneratedRegions] = useState<BoardGeneratedRegion[]>(() => initialGeneratedRegions);
+  const [activeGeneratedRegionId, setActiveGeneratedRegionId] = useState<string | null>(null);
   // Terrain-scatter (Generate) controls: which families may appear, patch size, clumpiness, seed.
-  const [scatterSections, setScatterSections] = useState<ScatterRow[]>(() => [
-    { id: 0, terrain: 'grass', share: 60, locked: false, covers: [{ id: 1, type: 'grass', expanded: false, knobs: { ...DEFAULT_COVER } }] },
-    { id: 1, terrain: 'stone', share: 40, locked: false, covers: [] },
-  ]);
+  const [scatterSections, setScatterSections] = useState<ScatterRow[]>(() => defaultScatterRows());
   const scatterIdRef = useRef(2);
   const coverIdRef = useRef(100);
+  const generatedRegionIdRef = useRef(initialGeneratedRegions.length);
   const [scatterBuffer, setScatterBuffer] = useState(0);
   const [scatterWiggle, setScatterWiggle] = useState(0.5);
   const [viewZoom, setViewZoom] = useState(1);
@@ -1060,6 +1087,9 @@ export function LevelEditor(): ReactElement {
       setFeatureCuts(board.featureCuts);
       setFeatureExits(board.featureExits);
       setBoardZones(board.zones ?? {});
+      setGeneratedRegions(board.generatedRegions ?? []);
+      setActiveGeneratedRegionId(null);
+      setRegionSelection(new Set());
       setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
       setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
       setUndoStack([]);
@@ -1089,8 +1119,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the board link
   // and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, featureCuts, featureExits, zones: boardZones }),
-    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, featureCuts, featureExits, boardZones],
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, featureCuts, featureExits, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, featureCuts, featureExits, boardZones, generatedRegions],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -1108,6 +1138,12 @@ export function LevelEditor(): ReactElement {
     setFeatureCuts(board.featureCuts);
     setFeatureExits(board.featureExits);
     setBoardZones(board.zones ?? {});
+    const nextGeneratedRegions = board.generatedRegions ?? [];
+    setGeneratedRegions(nextGeneratedRegions);
+    if (activeGeneratedRegionId && !nextGeneratedRegions.some((region) => region.id === activeGeneratedRegionId)) {
+      setActiveGeneratedRegionId(null);
+      setRegionSelection(new Set());
+    }
     setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
     setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
   };
@@ -1348,7 +1384,9 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, featureCuts: {}, featureExits: {}, zones: {} }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, featureCuts: {}, featureExits: {}, zones: {}, generatedRegions: [] }, null);
+    setActiveGeneratedRegionId(null);
+    setRegionSelection(new Set());
   };
   const clearActiveLayer = (): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -1393,6 +1431,67 @@ export function LevelEditor(): ReactElement {
     next.cells = Object.fromEntries(generated.cells.map((cell) => [`${cell.x},${cell.y}`, cell.asset?.id ?? leDefaultTile.id]));
     commitEditorBoard(next, null);
   };
+  const activeGeneratedRegion = useMemo(
+    () => generatedRegions.find((region) => region.id === activeGeneratedRegionId) ?? null,
+    [activeGeneratedRegionId, generatedRegions],
+  );
+  const cellWithinBoard = (key: string, cols = boardCols, rows = boardRows): boolean => {
+    const [x, y] = key.split(',').map(Number);
+    return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < cols && y < rows;
+  };
+  const hydrateGeneratedRegionSections = (sections: BoardGeneratedRegionSection[]): ScatterRow[] => {
+    const source = sections.length ? sections : scatterRowsToGeneratedSections(defaultScatterRows());
+    return source.map((section) => ({
+      id: (scatterIdRef.current += 1),
+      terrain: section.terrain,
+      share: section.share,
+      locked: Boolean(section.locked),
+      covers: (section.covers ?? []).map((cover) => ({
+        id: (coverIdRef.current += 1),
+        type: cover.type,
+        expanded: false,
+        knobs: { ...cover.knobs },
+      })),
+    }));
+  };
+  const makeGeneratedRegionUnit = (
+    cells: string[],
+    regions: readonly BoardGeneratedRegion[],
+    existing?: BoardGeneratedRegion,
+  ): BoardGeneratedRegion => ({
+    id: existing?.id ?? `region-${Date.now().toString(36)}-${(generatedRegionIdRef.current += 1)}`,
+    name: existing?.name ?? nextGeneratedRegionName(regions),
+    cells,
+    sections: scatterRowsToGeneratedSections(scatterSections),
+    buffer: scatterBuffer,
+    wiggle: scatterWiggle,
+  });
+  const selectGeneratedRegionUnit = (id: string): void => {
+    if (!id) {
+      setActiveGeneratedRegionId(null);
+      setRegionSelection(new Set());
+      return;
+    }
+    const region = generatedRegions.find((r) => r.id === id);
+    if (!region) return;
+    const cells = sortRegionCells(region.cells.filter((key) => cellWithinBoard(key)));
+    setActiveGeneratedRegionId(region.id);
+    setRegionSelection(new Set(cells));
+    setScatterBuffer(region.buffer);
+    setScatterWiggle(region.wiggle);
+    setScatterSections(normalizeToTotal(hydrateGeneratedRegionSections(region.sections), 100 - region.buffer));
+  };
+  const removeGeneratedRegionUnit = (id: string): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const remaining = (next.generatedRegions ?? []).filter((region) => region.id !== id);
+    if (remaining.length === (next.generatedRegions ?? []).length) return;
+    next.generatedRegions = remaining;
+    commitEditorBoard(next);
+    if (activeGeneratedRegionId === id) {
+      setActiveGeneratedRegionId(null);
+      setRegionSelection(new Set());
+    }
+  };
   // "Select region" = click an already-drawn clump. From the clicked cell, flood-fill every
   // orthogonally-connected cell of the SAME terrain family (empty matches empty), so one click
   // grabs exactly that patch and "knows how big it is". There is no rectangle marquee — to scope a
@@ -1414,10 +1513,26 @@ export function LevelEditor(): ReactElement {
       found.add(key);
       stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
     }
-    setRegionSelection(found);
+    const cells = sortRegionCells(found);
+    const existing = generatedRegions.find((region) => regionCellsEqual(sortRegionCells(region.cells), cells));
+    if (existing) {
+      selectGeneratedRegionUnit(existing.id);
+      setTool('select');
+      return;
+    }
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const regions = next.generatedRegions ?? [];
+    const region = makeGeneratedRegionUnit(cells, regions);
+    next.generatedRegions = [...regions, region];
+    commitEditorBoard(next);
+    setActiveGeneratedRegionId(region.id);
+    setRegionSelection(new Set(cells));
     setTool('select');
   };
-  const clearRegion = (): void => { setRegionSelection(new Set()); };
+  const clearRegion = (): void => {
+    setActiveGeneratedRegionId(null);
+    setRegionSelection(new Set());
+  };
   // How many cells a share applies to right now: the marquee selection if any, else the whole board.
   const scopeCells = regionSelection.size > 0 ? regionSelection.size : boardCols * boardRows;
   const setSectionShare = (id: number, value: number): void => setScatterSections((prev) => rebalanceShares(prev, id, value, scatterBuffer));
@@ -1461,6 +1576,7 @@ export function LevelEditor(): ReactElement {
   const generateScatter = (): void => {
     const sections = scatterSections.map((s) => ({ terrain: s.terrain, share: s.share }));
     if (sections.length === 0) return;
+    const selectedRegionCells = sortRegionCells([...regionSelection].filter((key) => cellWithinBoard(key)));
     const seed = Date.now() >>> 0; // a fresh layout each press; the committed board is the artifact
     const cols = boardCols;
     const rows = boardRows;
@@ -1468,9 +1584,9 @@ export function LevelEditor(): ReactElement {
       const id = boardCells[`${i % cols},${(i / cols) | 0}`];
       return id ? (leFamilyOfTile(id)?.id as TileFamilyId | undefined) : undefined;
     });
-    const region = regionSelection.size > 0
+    const region = selectedRegionCells.length > 0
       ? new Set(
-          [...regionSelection]
+          selectedRegionCells
             .map((key) => { const [x, y] = key.split(',').map(Number); return y * cols + x; })
             .filter((i) => i >= 0 && i < cols * rows),
         )
@@ -1487,6 +1603,17 @@ export function LevelEditor(): ReactElement {
     });
     const solved = solveSocketBoard({ assets: leTileAssets, terrainMap, seed, columns: cols, rows, familyAssets: leFamilyAssets });
     const next = cloneEditorBoard(currentEditorBoardRef.current);
+    let savedRegion: BoardGeneratedRegion | null = null;
+    if (selectedRegionCells.length > 0) {
+      const regions = next.generatedRegions ?? [];
+      const existing = activeGeneratedRegionId
+        ? regions.find((r) => r.id === activeGeneratedRegionId)
+        : regions.find((r) => regionCellsEqual(sortRegionCells(r.cells), selectedRegionCells));
+      savedRegion = makeGeneratedRegionUnit(selectedRegionCells, regions, existing);
+      next.generatedRegions = existing
+        ? regions.map((r) => (r.id === existing.id ? savedRegion! : r))
+        : [...regions, savedRegion];
+    }
     // Each generated cell also gets its region's ground cover rolled in. A region holds a LIST of
     // cover entries (each a set decoupled from terrain, with its own Coverage/Density knobs that
     // blend a default with a value-noise field scaled by their randomness knob). Per cell the first
@@ -1515,6 +1642,10 @@ export function LevelEditor(): ReactElement {
       if (!placed) { delete next.cover[key]; delete next.coverTypes[key]; }
     }
     commitEditorBoard(next, null);
+    if (savedRegion) {
+      setActiveGeneratedRegionId(savedRegion.id);
+      setRegionSelection(new Set(savedRegion.cells));
+    }
   };
   // The ADR-0050 mode fields the RULES panel authors, packaged for editorBoardToLevel. Only the
   // toggle + its config live here (objective is always written); placement/roster/surviveTurns are
@@ -1764,6 +1895,8 @@ export function LevelEditor(): ReactElement {
       reportStatus('Board link already matches this board.', 'info', dirty ? 'There are still unsaved changes.' : 'Save remains unavailable until the board changes.');
       return;
     }
+    setActiveGeneratedRegionId(null);
+    setRegionSelection(new Set());
     const detail = isCampaignLevel && !next.playerFaction
       ? 'Choose a Player faction before saving this campaign level.'
       : targetLevelId
@@ -1860,6 +1993,10 @@ export function LevelEditor(): ReactElement {
     // Zones are a per-cell channel like cover — drop any tile now off the board, so a shrunk
     // board never keeps a spawn/goal tile hanging past its edge (mirrors the units/props pruning).
     nextBoard.zones = prune(nextBoard.zones ?? {});
+    const prunedGeneratedRegions = (nextBoard.generatedRegions ?? [])
+      .map((region) => ({ ...region, cells: sortRegionCells(region.cells.filter((key) => within(key))) }))
+      .filter((region) => region.cells.length > 0);
+    nextBoard.generatedRegions = prunedGeneratedRegions;
     // Cuts are keyed by edge ("a|b"); keep only edges whose BOTH endpoints survive.
     {
       const next: Record<string, true> = {};
@@ -1886,6 +2023,16 @@ export function LevelEditor(): ReactElement {
     nextBoard.cols = nextCols;
     nextBoard.rows = nextRows;
     commitEditorBoard(nextBoard, selectedCell && (selectedCell.x >= nextCols || selectedCell.y >= nextRows) ? null : selectedCell);
+    if (activeGeneratedRegionId) {
+      const activeAfterResize = prunedGeneratedRegions.find((region) => region.id === activeGeneratedRegionId);
+      if (activeAfterResize) setRegionSelection(new Set(activeAfterResize.cells));
+      else {
+        setActiveGeneratedRegionId(null);
+        setRegionSelection(new Set());
+      }
+    } else {
+      setRegionSelection((prev) => new Set([...prev].filter((key) => within(key))));
+    }
   };
 
   const paintedCount = Object.keys(boardCells).length;
@@ -2348,7 +2495,32 @@ export function LevelEditor(): ReactElement {
         ) : layer === 'generate' ? (<>
           <section className="skirmish-card le-generate">
             <h2>Generate terrain</h2>
-            <p className="le-board-note">Carve a selection — or the whole board — into terrain regions. Add regions and dial each one's share (they rebalance to 100 − buffer); each becomes one contiguous area. Then Generate.</p>
+            <p className="le-board-note">Carve a saved region — or the whole board — into terrain regions. Add regions and dial each one's share (they rebalance to 100 − buffer); each becomes one contiguous area. Then Generate.</p>
+            <div className="le-gen-unit-row">
+              <label className="le-gen-unit-select">
+                <span>Region</span>
+                <select
+                  className="le-gen-region-terrain"
+                  value={activeGeneratedRegionId ?? ''}
+                  onChange={(event) => selectGeneratedRegionUnit(event.target.value)}
+                  aria-label="Saved generated region"
+                >
+                  <option value="">New selection</option>
+                  {generatedRegions.map((region) => (
+                    <option key={region.id} value={region.id}>{region.name} · {region.cells.length}</option>
+                  ))}
+                </select>
+              </label>
+              {activeGeneratedRegion ? (
+                <button
+                  type="button"
+                  className="le-gen-icon"
+                  onClick={() => removeGeneratedRegionUnit(activeGeneratedRegion.id)}
+                  title={`Remove ${activeGeneratedRegion.name}`}
+                  aria-label={`Remove ${activeGeneratedRegion.name}`}
+                >×</button>
+              ) : null}
+            </div>
             <div className="le-gen-scope">
               <button
                 type="button"
@@ -2356,7 +2528,7 @@ export function LevelEditor(): ReactElement {
                 onClick={() => setTool(tool === 'region' ? 'select' : 'region')}
                 title="Click an already-drawn clump to select its whole same-terrain patch. Click this button again to stop."
               >{tool === 'region' ? 'Selecting…' : 'Select region'}</button>
-              <span className="le-gen-scope-label">{regionSelection.size > 0 ? `Selection · ${regionSelection.size} cells` : 'Whole board'}</span>
+              <span className="le-gen-scope-label">{regionSelection.size > 0 ? `${activeGeneratedRegion?.name ?? 'Selection'} · ${regionSelection.size} cells` : 'Whole board'}</span>
               {regionSelection.size > 0 ? <button type="button" className="le-seg-btn" onClick={clearRegion} title="Clear the selection — Generate will cover the whole board.">Clear</button> : null}
             </div>
             {tool === 'region' ? <p className="le-board-note">Click a drawn clump to select its whole same-terrain patch. Generate fills the selection; everything outside it stays put.</p> : null}
