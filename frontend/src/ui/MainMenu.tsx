@@ -3,6 +3,7 @@ import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { Settings } from './Settings';
 import { Campaign } from './Campaign';
+import { Lobbies } from './Lobbies';
 import { NavButton } from './shared/NavButton';
 
 // The Editor and Solo Skirmish picker are heavier / code-split out of the menu bundle — lazy-loaded
@@ -95,9 +96,9 @@ function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?:
 // Which menu destinations render INSIDE the persistent shell (their own columns beside the pinned
 // button column) vs. navigate away to a full screen. Menu-family destinations (Settings, Campaign)
 // live in the shell; heavy gameplay/editor surfaces (Skirmish, Level Editor) take the whole screen.
-type ShellDest = 'settings' | 'campaign' | 'editor' | 'skirmish';
-const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', campaign: '/campaign', editor: '/editor', skirmish: '/skirmish' };
-const DEST_LABEL: Record<ShellDest, string> = { settings: 'Settings', campaign: 'Campaign', editor: 'Editor', skirmish: 'Solo skirmish' };
+type ShellDest = 'settings' | 'campaign' | 'editor' | 'skirmish' | 'lobbies';
+const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', campaign: '/campaign', editor: '/editor', skirmish: '/skirmish', lobbies: '/lobbies' };
+const DEST_LABEL: Record<ShellDest, string> = { settings: 'Settings', campaign: 'Campaign', editor: 'Editor', skirmish: 'Solo skirmish', lobbies: 'Lobbies' };
 // How long the destination panel fades in/out. Matches --ds-duration-fade (the ONE shared fade
 // speed, ADR-0046) — same as the Settings panel crossfade + the screen entrance.
 const DEST_FADE_MS = 350;
@@ -109,6 +110,8 @@ function shellDest(path: string): ShellDest | null {
   if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return 'editor';
   // Solo Skirmish is the map/mode PICKER (a settings-twin); the live board (/play) is full-screen.
   if (path === '/skirmish') return 'skirmish';
+  // Lobbies is a single ACTION column (tab → action) — host/join + the lobby list.
+  if (path === '/lobbies' || path.startsWith('/lobbies/')) return 'lobbies';
   return null;
 }
 
@@ -201,6 +204,7 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
             <div className={`menu-dest ${leaving ? 'is-leaving' : ''}`.trim()} key={renderedDest} aria-label={DEST_LABEL[renderedDest]}>
               {renderedDest === 'settings' ? <Settings embedded />
                 : renderedDest === 'campaign' ? <Campaign embedded />
+                : renderedDest === 'lobbies' ? <Lobbies embedded />
                 : renderedDest === 'editor' ? <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><CampaignEditor embedded /></Suspense>
                 : <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><SkirmishMapPickerRoute embedded /></Suspense>}
             </div>

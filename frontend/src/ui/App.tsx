@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, 
 import { MainMenu } from './MainMenu';
 import { getSnapshot as getRevealSnapshot, subscribe as subscribeReveal } from './shell/coldReveal';
 import { armBoardArtForNav, isBoardArtPending, subscribeBoardArt } from '../render/boardArtReady';
-import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
@@ -369,7 +368,8 @@ function renderRoute(path: string): ReactElement {
   // /campaigns) all render INSIDE the persistent menu shell — they fall through to the MainMenu
   // default below, sharing the 'menu' screen key so the button column stays mounted. MainMenu fills
   // its second column with each destination's own columns (Settings / Campaign / Editor).
-  if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
+  // /lobbies now renders INSIDE the persistent menu shell (MainMenu fills its second column with the
+  // lobbies action column). Falls through to the MainMenu default below, sharing the 'menu' key.
   if (path === '/party') return <Party />;
   // /settings now renders inside the persistent menu shell (MainMenu fills its second column with
   // the Settings sections + content). It falls through to the MainMenu default below, which reads
