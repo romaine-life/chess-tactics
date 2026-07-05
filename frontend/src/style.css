@@ -7043,13 +7043,13 @@ body { font-size: 17px; }
 .terrain-void { background: #1f2430; }
 /* ===== end Compact Level Info ===== */
 
-/* The SELECTED-level map preview lives in a kit BOX (the panel 9-slice frame). The frame is drawn
-   as an OVERLAY (::after) at the footprint, ON TOP of the board. The board itself is a baked image
-   that fills the box with object-fit:cover (see .ce-level-viewer-board) — the skirmish fill: draw
-   bigger than the box, crop the overflow at the frame. No pan/zoom/fit math, so there's no empty
-   padding to chase (ADR-0067). The board viewport IS this frame's backing surface, so it stops at
-   the asset's hand-tuned Fill box (--ns-fill-panel, tuned in the nine-slice editor's Boxes mode
-   and baked to src/generated/nine-slice.css) — the frame ornament bleeds outside that line. */
+/* The SELECTED-level map preview lives in a kit BOX (the panel-line 9-slice frame). The frame is
+   drawn as an OVERLAY (::after) at the footprint, ON TOP of the board viewport. The board is the
+   LIVE pan/zoom viewer (StudioReadOnlyBoard in a ViewPane at 0.5x — the pre-#409 framing; the
+   baked cover-crop zoomed into the board's center and was reverted by owner call). The viewport
+   IS this frame's backing surface, so it stops at the asset's hand-tuned Fill box (--ns-fill-panel,
+   tuned in the nine-slice editor's Boxes mode and baked to src/generated/nine-slice.css) — the
+   frame ornament bleeds outside that line. */
 .ce-preview-frame {
   position: relative;
   flex: none;
@@ -7084,22 +7084,24 @@ body { font-size: 17px; }
   position: absolute;
   inset: calc(var(--ns-fill-panel, 0px) * 12 / 24);
   overflow: hidden;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
   background: var(--skirmish-world-bg, linear-gradient(180deg, #071017, #02070c));
 }
 
-/* The board raster is the board's dense SOLID region (bakeBoardPaintedImage crops off the
-   transparent headroom + diamond corners), so object-fit:cover fills the box edge-to-edge with
-   solid board — no transparent corner can show as sky — and clips the overflow. That is the whole
-   fix: cover a solid crop, not the diamond bounding box. pixelated: pixel art scaled with no blur. */
-.ce-level-viewer-board {
-  position: absolute;
-  inset: 0;
-  inline-size: 100%;
-  block-size: 100%;
-  object-fit: cover;
-  object-position: center;
-  image-rendering: pixelated;
-  pointer-events: none;
+/* The live viewer's stage is a bare viewport here: strip the Studio stage's box (10px padding,
+   border, transparency checkerboard) so the board floats on the night-sky backdrop above —
+   the checkerboard is banned from board/level previews (ADR-0067). */
+.ce-level-viewer .tileset-view-stage {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+/* The read-only board sprites mustn't show the editor's grab/select cursors in this preview. */
+.ce-level-viewer .tileset-placement-board.is-readonly .tileset-generated-board-tile {
+  cursor: default;
 }
 
 .ce-preview-actions {
