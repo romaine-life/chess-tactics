@@ -12,8 +12,8 @@ import type { GameState, Move, Side } from '../core/types';
 //   * every applyMove is relayed in order and folded through the same pure core.
 // This test proves that two independent boards fed the same relayed move sequence stay
 // byte-identical at every step and reach the same outcome — the whole basis of the
-// relay design. It deliberately mirrors the store's applyMove usage (NO { ap } option,
-// so every move flips the turn — strict one-move-per-turn alternation).
+// relay design. It deliberately mirrors the store's applyMove usage, so every
+// move flips the turn: strict one-move-per-turn alternation.
 
 const env = (g: GameState) => ({ terrain: g.terrain ? buildTerrainIndex(g.terrain) : undefined, lastMove: g.lastMove });
 

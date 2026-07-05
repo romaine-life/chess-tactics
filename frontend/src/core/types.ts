@@ -54,23 +54,6 @@ export interface Piece {
   /** Original pawn-forward direction. Unlike `facing`, this never changes after setup. */
   pawnForward?: UnitFacing;
   /**
-   * Current hit points. Optional + defaults to 1 everywhere (`pieceHp`), so
-   * legacy single-hit capture behaviour is preserved when unset. With hp > 1 a
-   * captured piece survives until its hp reaches 0 (Into-the-Breach-style).
-   */
-  hp?: number;
-  /** Max hit points (for HUD bars). Defaults to the spawn hp. */
-  maxHp?: number;
-  /**
-   * Action points remaining this turn. Opt-in: when unset, `pieceAp` defaults to
-   * 1 and the classic one-action-per-turn model holds. With AP authored and the
-   * AP-aware apply path enabled, a side keeps acting until its pieces run out of
-   * AP, then AP refreshes to `maxAp` on the next turn (Into-the-Breach-style).
-   */
-  ap?: number;
-  /** Max action points; refreshed to this at the start of the owner's turn. */
-  maxAp?: number;
-  /**
    * Lifetime "service record" stats for this skirmish, surfaced in the HUD.
    * All optional + default to 0; accumulated by `applyMove` on committed moves
    * only (never during hypothetical AI/telegraph evaluation).
@@ -79,7 +62,7 @@ export interface Piece {
   timesUsed?: number;
   /** Cumulative distance moved; a diagonal step counts 1.5, an orthogonal 1. */
   squaresTraveled?: number;
-  /** Opponents this unit has reduced to 0 hp (kills). */
+  /** Opponents this unit has captured. */
   enemiesKilled?: number;
   /** Times this unit moved off a square an opponent was attacking. */
   escapes?: number;
@@ -105,12 +88,10 @@ export interface EnemyIntent {
   pieceId: string;
   from: Vec;
   to: Vec;
-  /** `attack` if the queued move captures/damages a piece, else `move`. */
+  /** `attack` if the queued move captures a piece, else `move`. */
   kind: 'move' | 'attack';
   /** Victim of an `attack` intent. */
   targetId?: string;
-  /** Damage the attack would deal (defaults to 1). */
-  damage?: number;
 }
 
 export interface Move {
@@ -172,6 +153,5 @@ export interface GameState {
 export type GameEvent =
   | { kind: 'moved'; pieceId: string; from: Vec; to: Vec }
   | { kind: 'captured'; pieceId: string; by: string }
-  | { kind: 'damaged'; pieceId: string; by: string; amount: number; hp: number }
   | { kind: 'promoted'; pieceId: string; to: PieceType }
   | { kind: 'victory'; winner: Side };

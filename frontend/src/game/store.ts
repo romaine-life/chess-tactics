@@ -515,9 +515,8 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     pauseClockWithIncrement();
     const playerRes = applyMove(s.game, piece.id, mv);
     let game = playerRes.state;
-    // Footstep: only when the piece actually relocates (a 'moved' event). An attack-in-
-    // place against an hp>1 target emits 'damaged' with no 'moved', so it must not sound
-    // a landing — the single 'moved' event's destination equals (mv.x, mv.y).
+    // Footstep: only when the piece actually relocates. The single 'moved'
+    // event's destination equals (mv.x, mv.y).
     if (playerRes.events.some((e) => e.kind === 'moved')) {
       playLandingSfx(s.env, mv.x, mv.y, LANDING_SFX_DELAY);
     }

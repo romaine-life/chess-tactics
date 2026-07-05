@@ -226,7 +226,6 @@
   --move: #65b8ff;
   --power: #ffbd58;
   --threat: #ff5f49;
-  --hp: #5dd64a;
   --good: #7bd0a4;
   --danger: #ffb09d;
 
@@ -4227,7 +4226,7 @@ h1 {
 
 /* THE single source of truth for seating a unit sprite on a tile — shared by the game
    board (.skirmish-board-unit) and the Studio editor so a unit sits identically in both.
-   Each board adds only its own chrome (move animation/HP, or selection/hit) around this;
+   Each board adds only its own chrome (move animation, or selection/hit) around this;
    the seat geometry lives nowhere else. Do not re-derive it per board. */
 .board-unit-seat {
   position: absolute;
@@ -4273,10 +4272,6 @@ h1 {
 .skirmish-board-unit.is-dragging {
   opacity: .3;
   transition: none;
-}
-
-.skirmish-board-unit.is-dragging .skirmish-board-hp {
-  opacity: 0;
 }
 
 /* The carried piece, in screen space (position: fixed), portaled to <body>. Its left/top track
@@ -4393,25 +4388,6 @@ h1 {
 
 .skirmish-board-unit.is-neutral span {
   background: #606872;
-}
-
-.skirmish-board-hp {
-  background: rgba(3, 8, 12, .9);
-  border: 1px solid rgba(235, 247, 255, .72);
-  display: block;
-  height: 5px;
-  left: 50%;
-  position: absolute;
-  top: 4px;
-  transform: translateX(-50%);
-  width: 30px;
-  z-index: 2;
-}
-
-.skirmish-board-hp b {
-  background: var(--skirmish-cyan);
-  display: block;
-  height: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {
