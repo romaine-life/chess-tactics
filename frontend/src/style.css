@@ -7047,9 +7047,9 @@ body { font-size: 17px; }
    as an OVERLAY (::after) at the footprint, ON TOP of the board. The board itself is a baked image
    that fills the box with object-fit:cover (see .ce-level-viewer-board) — the skirmish fill: draw
    bigger than the box, crop the overflow at the frame. No pan/zoom/fit math, so there's no empty
-   padding to chase (ADR-0067). (The nine-slice Fill box is a separate mechanism — it clips a flat
-   CSS *background surface* behind a frame, e.g. the Settings panels; the board is not a background
-   surface, so it does not consume that value.) */
+   padding to chase (ADR-0067). The board viewport IS this frame's backing surface, so it stops at
+   the asset's hand-tuned Fill box (--ns-fill-panel, tuned in the nine-slice editor's Boxes mode
+   and baked to src/generated/nine-slice.css) — the frame ornament bleeds outside that line. */
 .ce-preview-frame {
   position: relative;
   flex: none;
@@ -7071,14 +7071,15 @@ body { font-size: 17px; }
   image-rendering: pixelated;
   pointer-events: none;
 }
-/* The board viewport fills the WHOLE footprint (inset 0). The board is a baked image dropped in
-   with object-fit:cover (below) so it covers this box and clips the overflow; the frame ::after
-   (above) overlays the board's outer band. The box carries the level's world (night-sky) backdrop
-   so the diamond's cropped corners read as sky, never a transparency checkerboard (ADR-0067 /
-   ADR-0032). */
+/* The board viewport stops at the panel's hand-tuned FILL box (--ns-fill-panel, generated from
+   config/nine-slice/panel.json — the eye-tuned "where a backing surface stops" line), not the raw
+   footprint: the frame ornament may bleed outside it. The board is a baked image dropped in with
+   object-fit:cover (below) so it covers this box and clips the overflow; the frame ::after (above)
+   overlays the board's outer band. The box carries the level's world (night-sky) backdrop so the
+   diamond's cropped corners read as sky, never a transparency checkerboard (ADR-0067 / ADR-0032). */
 .ce-level-viewer {
   position: absolute;
-  inset: 0;
+  inset: var(--ns-fill-panel, 0px);
   overflow: hidden;
   background: var(--skirmish-world-bg, linear-gradient(180deg, #071017, #02070c));
 }
