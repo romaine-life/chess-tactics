@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-73e7223526c8ee02f65f310be2d2926b1e3daa6f7561592ae5aa8f35ddcebcfb"
+  tag: "app-f938eff65356be7c02b3a763ce3ad2b40f2cbc2f2d640a582e674a50aca385a0"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Remove AP and HP game references"
-  prNumber: "406"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/406"
-  commit: "3fe70de"
+  prTitle: "Remove knight movement hint from unit role"
+  prNumber: "407"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/407"
+  commit: "4c7877a"
 
 name: chess-tactics
 namespace: chess-tactics
