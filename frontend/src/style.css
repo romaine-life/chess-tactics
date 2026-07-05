@@ -912,14 +912,16 @@ h1 {
 
    The ONE thing a host must supply is --frame-w: the panel's frame width in px (its border-width,
    or the padding a ::before frame insets its content by). The divider bleeds out by exactly that,
-   so the three-way tees land on the side rail no matter how thick the frame is. Slice `0 24 0 24`
-   = the cap width (barCapWidth('panel-divider') = the tee atom width). The bar is the tee's own
-   height (24px) so it renders 1:1 — no downscale, crisp — and the element height matches it. */
+   so the three-way tees land on the side rail no matter how thick the frame is. Slice/width/height
+   track the baked asset: cap = barCapWidth('panel-divider') = round(tee 24px × junction-size), and
+   the bar's height = the (scaled) tee's own height, so the consumer renders it 1:1 (no downscale).
+   The tuned junction size + nudge live in config/nine-slice/panel-divider.json (scale 1.2, jy 1)
+   -> cap 29px, height 30px. Re-run apply-nine-slice + kit-manifest after changing them. */
 .kit-divider {
-  height: 24px;
+  height: 30px;
   border: 0 solid transparent;
-  border-width: 0 24px;
-  border-image: url("/assets/ui/kit/panel-divider.png") 0 24 0 24 fill / 0 24px;
+  border-width: 0 29px;
+  border-image: url("/assets/ui/kit/panel-divider.png") 0 29 0 29 fill / 0 29px;
   image-rendering: pixelated;
   margin: var(--kit-divider-gap, 6px) calc(-1 * var(--frame-w, 16px));
   align-self: stretch;
