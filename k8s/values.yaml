@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-c77e6038bc80ae81631ff1a154146453460991839872b6a59ccca85dc72ddba1"
+  tag: "app-7ac3baf22b22d6c05af949f1e9b93a7b76ad0c5d0926dda3567437802a74f5aa"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Gate backend schema migrations by mode"
-  prNumber: "398"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/398"
-  commit: "97072c6"
+  prTitle: "Improve Gym training modes and inspection"
+  prNumber: "399"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/399"
+  commit: "74488fe"
 
 name: chess-tactics
 namespace: chess-tactics
