@@ -138,7 +138,7 @@ describe('divider bar geometry (ADR-0063: authored three-way tee cap + edge rail
   it('has at least one bar asset registered', () => expect(bars.length).toBeGreaterThan(0));
   for (const id of bars) {
     it(`${id}: tall tee stubs, full-width rail, hollow interior, gold three-way tees, mirror-symmetric`, () => {
-      const png = bakeAsset(id, { asset: id }).variants[0].png;
+      const png = bakeAsset(id, loadConfig(id)).variants[0].png; // bakes at the committed junction size
       const { width: W, height: H } = png;
       const cap = barCapWidth(id);
       const op = (x: number, y: number) => png.data[(y * W + x) * 4 + 3] > 40;
