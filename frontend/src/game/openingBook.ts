@@ -158,6 +158,44 @@ export function generateOpeningBook(
   return positions;
 }
 
+/** Curation knobs. Stockfish's UHO idea: a BALANCED opening tends to draw (no
+ * training signal), an IMBALANCED one decides. So over-generate candidate positions
+ * and keep only the most materially-imbalanced — the cheap, self-play-free proxy for
+ * decisiveness (material lead ⇒ a decisive game far more often than an even one). */
+export interface CurationSettings {
+  /** Generate size × candidateMultiplier candidates, keep the `size` most imbalanced. */
+  candidateMultiplier: number;
+  /** Prefer candidates with |material balance| ≥ this (pawns); `passed` reports how
+   * many cleared it. If fewer than `size` clear it, the least-balanced available fill
+   * the rest (the book is never short — a short book stalls SPRT). */
+  minImbalance: number;
+}
+
+export const DEFAULT_CURATION: CurationSettings = { candidateMultiplier: 4, minImbalance: 1 };
+
+/**
+ * Curated book: generate candidateMultiplier× the requested size, then keep the
+ * `size` positions with the largest |material balance| (most decisive). Deterministic
+ * (same inputs ⇒ same book) and cheap (ranks by positionBalance, plays no games).
+ * Returns `passed` = how many candidates cleared minImbalance, so a weak-signal book
+ * (an inherently balanced level) is visible instead of silently drawish.
+ */
+export function generateCuratedBook(
+  level: Level,
+  settings: OpeningBookSettings,
+  match: { search: SearchOptions },
+  curation: CurationSettings = DEFAULT_CURATION,
+): { positions: BookPosition[]; passed: number } {
+  const size = Math.max(0, Math.floor(settings.size));
+  const mult = Math.max(1, Math.floor(curation.candidateMultiplier));
+  const candidates = generateOpeningBook(level, { ...settings, size: size * mult }, match);
+  const scored = candidates.map((pos) => ({ pos, imbalance: Math.abs(positionBalance(level, pos)) }));
+  // Most-imbalanced first; stable tiebreak by seed so the result is deterministic.
+  scored.sort((a, b) => b.imbalance - a.imbalance || a.pos.seed - b.pos.seed);
+  const passed = scored.filter((s) => s.imbalance >= curation.minImbalance).length;
+  return { positions: scored.slice(0, size).map((s) => s.pos), passed };
+}
+
 /** Replay a book position onto a live GameState — for the UI board and balance.
  * createFromLevel(level, pos.seed) then applyMove each recorded move in order. */
 export function stateAtPosition(level: Level, pos: BookPosition): GameState {

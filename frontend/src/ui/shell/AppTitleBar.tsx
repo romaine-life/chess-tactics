@@ -21,10 +21,11 @@ import { titleBarConfig } from './titleBarConfig';
 // per ADR-0036), NOT before the brand. The brand lockup is a fixed leading anchor and
 // never moves. Both the Settings back and the Level Editor's ‹ Back/‹ Catalog portal into
 // the SAME actions slot, so every return control sits in one consistent place.
-export function AppTitleBar({ path, onCenterNode, onActionsNode, revealTitle }: {
+export function AppTitleBar({ path, onCenterNode, onActionsNode, onStudNode, revealTitle }: {
   path: string;
   onCenterNode: (el: HTMLElement | null) => void;
   onActionsNode: (el: HTMLElement | null) => void;
+  onStudNode: (el: HTMLElement | null) => void;
   // Cold-load reveal only: false while the bar is waiting its turn on a fresh menu load
   // (see ui/shell/coldReveal). Undefined/true everywhere else — the bar renders opaque,
   // so this can never blink the persistent bar on a normal route or a later navigation.
@@ -42,6 +43,10 @@ export function AppTitleBar({ path, onCenterNode, onActionsNode, revealTitle }: 
       <BrandLockup screenName={config.screenName} />
       {config.centerSlot ? <div className="app-shell-titlebar-center" ref={onCenterNode} /> : null}
       {config.actionsSlot ? <div className="app-shell-titlebar-actions" ref={onActionsNode} /> : null}
+      {/* Bottom-centre stud target: absolutely positioned over the ornament diamond (out of
+          the grid), so it never shifts the brand/center/cluster tracks. Empty unless a
+          single-player Skirmish portals its Retry control in. */}
+      {config.studSlot ? <div className="app-shell-titlebar-stud" ref={onStudNode} /> : null}
       <HeaderAccountCluster signInReturnTo={config.signInReturnTo} showSettingsGear={config.showSettingsGear} />
     </header>
   );

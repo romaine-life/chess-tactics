@@ -1,27 +1,36 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import { buildSceneBackdropNode } from './SceneBackdrop';
 
-// AmbienceBackground renders cross-client-synchronized rain by subscribing to
-// ambience's rain-pinned `/chess` world (https://github.com/romaine-life/ambience).
-// Every chess client pointed at the same world renders the same rain at the same
-// moment (the authority owns the clock; clients replay a fixed delay behind it).
+// HomepageBackdrop is the ONE shared backdrop every homepage-family surface renders
+// (main menu, settings, lobbies, party, campaign, campaign editor, skirmish picker,
+// level editor). It owns the animated menu scene AND the cross-client-synced rain as a
+// single continuous instance, so navigating between those surfaces never re-adjusts the
+// art. This is the structural lock behind ADR-0046 §G / ADR-0049 (the homepage art
+// background + rain are app-continuous and must not re-fade or blink) — and the reason
+// screens are forbidden (check-light-art-chrome.mjs) from importing the scene/rain
+// pieces directly: there is exactly one owner.
 //
-// The runtime is VENDORED, not loaded from ambience at runtime: a pinned snapshot
-// of ambience's client (rain-scoped WASM + JS) lives in public/ambience/ (see
-// scripts/vendor-ambience.mjs) and is served from our own origin. Only the SSE
-// stream points at ambience. This avoids the stale-client drift that comes from
-// runtime-loading an unversioned, separately-cached runtime.
+// CONTINUITY (why this isn't a plain component): both halves are ONE living effect that
+// must survive client-side route changes without re-initializing.
+//   - The rain is a vendored WASM client bound ONCE at page load to a single
+//     `<canvas data-ambience>` via querySelector; it never re-scans. A per-route canvas
+//     goes blank after the first soft navigation.
+//   - The scene is a `container-type: size` cover-crop with baked waterfall sheets; a
+//     fresh per-screen React subtree recomputes its crop and replays its reveal on every
+//     hop — the visible "re-adjust" this component exists to kill.
+// So the scene node and both rain canvases are created ONCE as module singletons, and
+// RE-PARENTED into whichever screen currently mounts this component. A moved node keeps
+// its layout, animation, and (rain) draw loop, so the whole backdrop stays put across
+// navigation. They re-parent INTO the screen (not up to the app shell) on purpose: the
+// layer order is screen-relative — scene (z1) under rain field (z2) under screen UI (z3)
+// under the near rain overlay (z5, drops crossing IN FRONT of the UI) — and only nesting
+// the nodes inside the mounting screen's stacking context preserves that overlay layer.
 //
-// PERSISTENCE (why this isn't a plain component): the rain is ONE living effect
-// that must survive client-side route changes (menu <-> settings) without
-// re-initializing. The vendored client binds to a single `<canvas data-ambience>`
-// ONCE at page load via querySelector and never re-scans; the SPA swaps route DOM
-// on navigation. So a per-route canvas goes blank after the first soft navigation
-// (the bound canvas unmounts, the new one is never picked up). Instead we create
-// the canvases ONCE as module singletons, let the client bind them once, and
-// RE-PARENT the same nodes into whichever screen currently wants the rain. A
-// canvas's 2D context and the client's draw loop survive a DOM move, so the rain
-// keeps running continuously and shows on every screen that mounts this component
-// (currently the main menu and settings).
+// The vendored rain runtime is VENDORED, not loaded from ambience at runtime: a pinned
+// snapshot of ambience's client (rain-scoped WASM + JS) lives in public/ambience/ (see
+// scripts/vendor-ambience.mjs) and is served from our own origin. Only the SSE stream
+// points at ambience. This avoids the stale-client drift of runtime-loading an
+// unversioned, separately-cached runtime.
 
 // The rain world's stream endpoint. The vendored client derives /chess/events +
 // /chess/snapshot from this.
@@ -63,16 +72,22 @@ function loadVendoredClient(): void {
     });
 }
 
-// The living singletons: created once, bound once by the client, re-parented forever.
+// The living singletons: created once, bound once (rain), re-parented forever.
+let sceneNode: HTMLDivElement | null = null;
 let fieldCanvas: HTMLCanvasElement | null = null;
 let overlayCanvas: HTMLCanvasElement | null = null;
 let parked: HTMLDivElement | null = null;
-// The host div currently showing the canvases — so an outgoing screen doesn't park
-// canvases a newly-mounted screen has already claimed (mount/unmount can interleave).
+// The host div currently showing the backdrop — so an outgoing screen doesn't park
+// nodes a newly-mounted screen has already claimed (mount/unmount can interleave).
 let currentHost: HTMLDivElement | null = null;
 
 function ensureScene(): void {
   if (fieldCanvas) return;
+
+  // The animated menu scene (still art + baked waterfalls + scrim). Built once as a
+  // detached DOM subtree; re-parented across screens with its cover-crop intact. Sits
+  // at z1, behind the rain field.
+  const scene = buildSceneBackdropNode();
 
   // Main rain field — the canvas the world's stream paints. The vendored client
   // finds it by [data-ambience] and configures itself from these attributes.
@@ -97,16 +112,17 @@ function ensureScene(): void {
   overlay.setAttribute('aria-hidden', 'true');
   overlay.setAttribute('data-ambience-overlay', '');
 
-  // Holder where the canvases live whenever no screen is showing them. display:none
+  // Holder where the nodes live whenever no screen is showing them. display:none
   // is safe: the client sizes the canvas from window.innerWidth (not the container)
   // and rAF keeps running, so the rain keeps simulating while parked and is ready
   // the instant it's re-parented onto the next screen.
   const holder = document.createElement('div');
   holder.style.display = 'none';
   holder.setAttribute('data-ambience-parked', '');
-  holder.append(field, overlay);
+  holder.append(scene, field, overlay);
   document.body.appendChild(holder);
 
+  sceneNode = scene;
   fieldCanvas = field;
   overlayCanvas = overlay;
   parked = holder;
@@ -122,9 +138,9 @@ type AmbienceDebugState = {
   scene?: { currentName?: string | null };
 };
 
-// The label lives at MODULE scope, like the canvases, and for the same reason:
+// The label lives at MODULE scope, like the nodes, and for the same reason:
 // the backdrop layer must be continuous across route swaps (ADR-0046 B/G). A
-// screen that remounts AmbienceBackground seeds its state from this cache in
+// screen that remounts HomepageBackdrop seeds its state from this cache in
 // its first commit, so the credit never blinks out or re-fades on navigation —
 // only its very first appearance (client just loaded) fades in.
 let lastEffectName: string | null = null;
@@ -182,37 +198,37 @@ function useCreditEntrance(effectName: string | null): boolean {
   return entered;
 }
 
-// Mount point for the shared rain on a screen. Renders a display:contents host so
-// the re-parented canvases behave as direct children of the positioned screen
-// layer — their position:absolute inset:0 anchors to that layer, exactly as if the
-// canvases were declared inline (the menu's z-order is unchanged).
+// Mount point for the shared backdrop on a screen. Renders a display:contents host so
+// the re-parented nodes behave as direct children of the positioned screen layer — their
+// position:absolute inset:0 anchors to that layer, exactly as if the scene/canvases were
+// declared inline (the screen's z-order is unchanged: scene z1, field z2, overlay z5).
 //
-// Alongside the canvases it renders the ambience credit: a quiet bottom-right
+// Alongside the backdrop it renders the ambience credit: a quiet bottom-right
 // link naming the scene the world is running right now, opening ambience's
 // read-only monitor for the same broadcast. It lives here (not per screen) so
-// every surface that shows the shared rain carries the credit automatically.
-export function AmbienceBackground(): ReactElement {
+// every surface that shows the shared backdrop carries the credit automatically.
+export function HomepageBackdrop(): ReactElement {
   const hostRef = useRef<HTMLDivElement>(null);
   const effectName = useAmbienceEffectName();
   const creditEntered = useCreditEntrance(effectName);
 
-  // useLayoutEffect (not useEffect): re-parent the canvases BEFORE the browser
-  // paints the new screen. With useEffect the canvas is detached for one painted
-  // frame during a route swap (the old host is gone, the new one not yet filled),
-  // which reads as the rain blinking/restarting when you change screens.
+  // useLayoutEffect (not useEffect): re-parent the nodes BEFORE the browser paints the
+  // new screen. With useEffect the backdrop is detached for one painted frame during a
+  // route swap (the old host is gone, the new one not yet filled), which reads as the
+  // scene/rain blinking or restarting when you change screens.
   useLayoutEffect(() => {
     ensureScene();
     const host = hostRef.current;
-    if (host && fieldCanvas && overlayCanvas) {
-      host.append(fieldCanvas, overlayCanvas);
+    if (host && sceneNode && fieldCanvas && overlayCanvas) {
+      host.append(sceneNode, fieldCanvas, overlayCanvas);
       currentHost = host;
     }
     return () => {
       // Park the singletons so they persist (and keep running) across the route
       // swap — but only if we still own them; a screen that mounted before this one
       // unmounted may have already claimed them.
-      if (currentHost === host && parked && fieldCanvas && overlayCanvas) {
-        parked.append(fieldCanvas, overlayCanvas);
+      if (currentHost === host && parked && sceneNode && fieldCanvas && overlayCanvas) {
+        parked.append(sceneNode, fieldCanvas, overlayCanvas);
         currentHost = null;
       }
     };

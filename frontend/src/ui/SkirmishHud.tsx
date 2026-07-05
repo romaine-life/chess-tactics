@@ -11,6 +11,9 @@ import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import { UnitPortrait, loadCrops, STORAGE_KEY, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
 import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { useConfirm } from './shared/ConfirmDialog';
+import { RestartGlyph, NewGlyph } from './shared/actionGlyphs';
+import { SkirmishClockControl } from './SkirmishClockControl';
+import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -117,15 +120,19 @@ function CountPip({ side, count }: { side: Side; count: number }) {
 }
 
 type SkirmishHudProps = {
+  /** Show the "New skirmish" (+) button — single-player free skirmish only. */
   canStartNewSkirmish?: boolean;
-  onRestartLevel?: (() => void) | null;
-  showRestartLevel?: boolean;
+  /** In-place restart of the CURRENT battle (campaign level or free skirmish). Non-null only
+   *  in single-player; shown as the ↻ Restart button. Same action as the title-bar diamond. */
+  onRestart?: (() => void) | null;
+  /** Accessible name for the Restart button (e.g. "Restart level" / "Restart skirmish"). */
+  restartLabel?: string;
 };
 
 export function SkirmishHud({
   canStartNewSkirmish = true,
-  onRestartLevel = null,
-  showRestartLevel = false,
+  onRestart = null,
+  restartLabel = 'Restart',
 }: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
@@ -404,30 +411,44 @@ export function SkirmishHud({
               </div>
               <p className="skirmish-grid-hint">Keys work any time during the match.</p>
             </div>
+            {/* Battle clock for a random skirmish. Free-play only — a campaign level and a
+                netplay match carry their own time control, so the picker is hidden there
+                (same gate as the "New skirmish" button it feeds). */}
+            {canStartNewSkirmish && !net ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Battle clock</span>
+                <SkirmishClockControl timedHint="Applies on your next New skirmish." />
+              </div>
+            ) : null}
             <div className="skirmish-view-group">
-              <span className="skirmish-eyebrow">Match</span>
+              {/* Battle lifecycle: restart THIS scenario (↻) or start a fresh one (＋). Both are
+                  icon-only — the group heading names them and the marks are self-evident, so no
+                  per-button tooltip. Netplay shows Resign here instead (a shared board can't be
+                  locally reset/reseeded without desyncing). */}
+              <span className="skirmish-eyebrow">Scenario</span>
               <div className="skirmish-view-row">
-                {showRestartLevel ? (
+                {onRestart && !net ? (
                   <button
                     type="button"
-                    className="app-header-button"
+                    className="app-header-button skirmish-lifecycle-button"
                     data-testid="restart-level"
-                    disabled={!onRestartLevel}
-                    onClick={onRestartLevel ?? undefined}
+                    aria-label={restartLabel}
+                    onClick={onRestart}
                   >
-                    Restart level
+                    <RestartGlyph className="skirmish-lifecycle-icon" />
                   </button>
                 ) : null}
-                {/* "New skirmish" resets the local board, which would desync a shared
+                {/* "New skirmish" reseeds the local board, which would desync a shared
                     netplay match — offer it only in single-player. */}
                 {canStartNewSkirmish && !net ? (
                   <button
                     type="button"
-                    className="app-header-button"
+                    className="app-header-button skirmish-lifecycle-button"
                     data-testid="new-skirmish"
-                    onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff })}
+                    aria-label="New skirmish"
+                    onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff, timeControl: loadSkirmishClockPref() })}
                   >
-                    New skirmish
+                    <NewGlyph className="skirmish-lifecycle-icon" />
                   </button>
                 ) : null}
                 {/* Concede a live multiplayer match (hands the opponent the win). Hidden

@@ -1,4 +1,4 @@
-// Durable guard for ADR-0063 (the title-bar rule is a forged tileset). Fails the build if a
+// Durable guard for ADR-0066 (the title-bar rule is a forged tileset). Fails the build if a
 // RETIRED asset reappears in live src, if a deleted asset returns, or if the rule stops being
 // wired the way the ADR requires. Enforcement, not a buried memory.
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
@@ -53,7 +53,7 @@ for (const need of ['band-forged.png', 'rail-forged.png', 'joint-square-forged.p
 }
 
 if (failures.length) {
-  console.error('\n✗ title-bar rule kit guard FAILED (ADR-0063):');
+  console.error('\n✗ title-bar rule kit guard FAILED (ADR-0066):');
   for (const f of failures) console.error('  - ' + f);
   process.exit(1);
 }

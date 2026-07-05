@@ -4,7 +4,7 @@ date: 2026-07-04
 deciders: Nelson, Claude
 ---
 
-# ADR-0063: The title-bar rule is a forged TILESET — shared-rivet runs, orientation-lit straps, distinct joints
+# ADR-0066: The title-bar rule is a forged TILESET — shared-rivet runs, orientation-lit straps, distinct joints
 
 Extends [ADR-0037](0037-title-bar-full-bleed-bottom-rule.md) (the full-bleed bottom rule is a
 forged nailhead band). Builds on [ADR-0011](0011-chrome-art-generated-not-extracted.md) /

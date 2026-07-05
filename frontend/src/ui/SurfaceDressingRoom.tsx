@@ -223,12 +223,13 @@ function buildCss(config: DressingConfig, base: Record<RegionId, GeomBase>): str
 
 // `header` (optional) is the Studio Viewer's kind-selector strip, injected when this is mounted as
 // the Settings page's viewer (Pages catalog) so it matches the sibling page viewers.
-export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: ReactNode }): ReactElement {
+export function SurfaceDressingRoom({ seed, header, zoom = 1 }: { seed?: string; header?: ReactNode; zoom?: number }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  // True-to-window miniature: /settings centres its body under a viewport-relative cap (the same
-  // .settings-shell as the menu), so a panel-sized iframe would re-proportion the rail/rows. Scaling
-  // the iframe ELEMENT doesn't disturb the in-iframe background-attachment:fixed surface continuity.
-  const { hostRef, frameStyle } = useWindowScaledPreview();
+  // Full-size, scrollable preview scaled by the Viewer zoom: /settings centres its body under a
+  // viewport-relative cap (the same .settings-shell as the menu), so the iframe carries the live
+  // window's size to re-proportion the rail/rows exactly as shipped. Scaling the iframe ELEMENT
+  // doesn't disturb the in-iframe background-attachment:fixed surface continuity.
+  const { canvasStyle, frameStyle } = useWindowScaledPreview(zoom);
   const [config, setConfig] = useState<DressingConfig>(() => loadConfig(seed));
   const [base, setBase] = useState<Record<RegionId, GeomBase>>({} as Record<RegionId, GeomBase>);
   const [activeId, setActiveId] = useState<RegionId>('buttons');
@@ -309,8 +310,10 @@ export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: 
 
   return (
     <>
-      <section className="surface-dressing-main is-window-scaled" aria-label="Settings preview" ref={hostRef}>
-        <iframe ref={iframeRef} className="surface-dressing-frame" src="/settings" title="Live settings preview" style={frameStyle} />
+      <section className="surface-dressing-main is-window-zoom" aria-label="Settings preview">
+        <div className="surface-dressing-canvas" style={canvasStyle}>
+          <iframe ref={iframeRef} className="surface-dressing-frame" src="/settings" title="Live settings preview" style={frameStyle} />
+        </div>
       </section>
       <aside className="tileset-view-controls" aria-label="Settings element controls">
         <section className="tileset-inspector-section">

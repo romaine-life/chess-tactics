@@ -4,7 +4,7 @@
 // store evaluates this after each resolved turn.
 
 import type { BoardSize, GameState, Piece, Vec, Winner } from './types';
-import type { Level, ObjectiveType } from './level';
+import type { ConditionSide, Level, ObjectiveType, VictoryAction, VictoryCondition, VictoryRule, VictoryRules } from './level';
 import { livingPieces } from './rules';
 
 /** The "royal" piece whose loss ends a capture-king / rival-kings objective. */
@@ -75,45 +75,116 @@ export interface ObjectiveContext {
   kingSide?: 'player' | 'enemy';
 }
 
-/**
- * Resolve a level objective to a winner, or `null` while undecided. Pure.
- * A full player wipe is always a loss regardless of objective; otherwise each
- * objective defines the player's win.
- */
-export function evaluateObjective(state: GameState, objective: ObjectiveType, ctx: ObjectiveContext = {}): Winner {
-  const players = livingPieces(state.pieces, 'player');
-  if (!players.length) return 'enemy';
-  const enemies = livingPieces(state.pieces, 'enemy');
-
-  switch (objective) {
-    case 'capture-all':
-      return enemies.length ? null : 'player';
-    case 'capture-king': {
-      // Direction-aware (ADR-0050): the King-holding side loses the MOMENT its King
-      // falls; the kingless side loses only by wipe. ctx.kingSide defaults to 'enemy'
-      // (free skirmish / legacy levels), which is the classic hunt-the-King reading.
-      if ((ctx.kingSide ?? 'enemy') === 'player') {
-        if (!players.some((p) => p.type === ROYAL)) return 'enemy';
-        return enemies.length ? null : 'player';
-      }
-      return enemies.some((p) => p.type === ROYAL) ? null : 'player';
+/** Does a single victory condition hold on this settled state? Pure. */
+function conditionHolds(state: GameState, cond: VictoryCondition, ctx: ObjectiveContext): boolean {
+  switch (cond.kind) {
+    case 'eliminate': {
+      const alive = livingPieces(state.pieces, cond.side);
+      const matching = cond.filter?.type ? alive.filter((p) => p.type === cond.filter!.type) : alive;
+      return matching.length === 0;
     }
-    case 'rival-kings':
-      // Both sides field one King; the first King captured decides (capture, not
-      // checkmate — check is unimplemented). One move can only remove one King, so
-      // the order of these tests never actually ties.
-      if (!enemies.some((p) => p.type === ROYAL)) return 'player';
-      if (!players.some((p) => p.type === ROYAL)) return 'enemy';
-      return null;
-    case 'survive':
-      return (ctx.turnsElapsed ?? 0) >= (ctx.surviveTurns ?? 0) ? 'player' : null;
     case 'reach': {
       const cells = ctx.reachCells ?? [];
-      return players.some((p) => cells.some((c) => c.x === p.x && c.y === p.y)) ? 'player' : null;
+      if (!cells.length) return false;
+      const onGoal = (x: number, y: number) => cells.some((c) => c.x === x && c.y === y);
+      // Pawn-only (the game's rule). A pawn that reaches a FAR-EDGE reach zone promotes to a
+      // queen inside applyMove, so the settled board shows a queen on the goal — but `lastMove`
+      // records the PRE-promotion type ('pawn', see rules.ts) and the destination, so the
+      // arriving pawn still scores. lastMove is side-checked (an enemy reply never triggers a
+      // player reach) and excludes a queen/knight that merely wandered onto the goal.
+      const lm = state.lastMove;
+      if (lm && lm.side === cond.side && lm.pieceType === 'pawn' && onGoal(lm.to.x, lm.to.y)) return true;
+      // A pawn standing on the goal without a fresh promoting move (mid-board zones already
+      // won earlier, or a pre-placed test fixture): still a pawn on the settled board.
+      return livingPieces(state.pieces, cond.side).some((p) => p.type === 'pawn' && onGoal(p.x, p.y));
     }
+    case 'turnLimit':
+      return (ctx.turnsElapsed ?? 0) >= cond.turns;
     default:
-      return enemies.length ? null : 'player';
+      return false;
   }
+}
+
+/** Player↔enemy — the other side. Used to resolve a `lose` action (side loses ⇒ the other wins). */
+const OTHER: Record<ConditionSide, Winner> = { player: 'enemy', enemy: 'player' };
+
+/** The Winner a fired rule declares — from its first win/lose action (`win(side)` ⇒ that side wins,
+ * `lose(side)` ⇒ the other side wins). Null when the rule has no win/lose action. Exported for the
+ * per-faction save gate (validatePlayability P6). Pure. */
+export function ruleOutcome(rule: VictoryRule): Winner {
+  const act = rule.do.find((a) => a.kind === 'win' || a.kind === 'lose');
+  if (!act) return null;
+  return act.kind === 'win' ? act.side : OTHER[act.side];
+}
+
+/**
+ * Resolve authored event rules to the FIRST rule that decides the game, plus the winner it declares —
+ * or `{ winner: null, rule: null }` while undecided. Pure. Rules are checked in ORDER, top-to-bottom
+ * (ADR-0064): the first rule whose conditions ALL hold wins. Presets seed lose rules above win rules,
+ * so a settled turn that trips both resolves as a loss (defeat-first — e.g. Survive's clock reaches N
+ * on the turn the last player piece is wiped). The fired rule is returned so the result screen / log
+ * can name the exact condition that ended the battle (its authored `name`) instead of the mode label.
+ */
+export function resolveVictory(state: GameState, rules: VictoryRules, ctx: ObjectiveContext = {}): { winner: Winner; rule: VictoryRule | null } {
+  for (const rule of rules) {
+    if (rule.if.every((c) => conditionHolds(state, c, ctx))) {
+      const winner = ruleOutcome(rule);
+      if (winner) return { winner, rule };
+    }
+  }
+  return { winner: null, rule: null };
+}
+
+/** The winner authored event rules declare, or `null` while undecided. Pure. Thin wrapper over
+ * `resolveVictory` for the many call sites that only need the outcome, not the rule that caused it. */
+export function evaluateVictory(state: GameState, rules: VictoryRules, ctx: ObjectiveContext = {}): Winner {
+  return resolveVictory(state, rules, ctx).winner;
+}
+
+const eliminate = (side: ConditionSide, type?: Piece['type']): VictoryCondition =>
+  ({ kind: 'eliminate', side, ...(type ? { filter: { type } } : {}) });
+const act = (kind: VictoryAction['kind'], side: ConditionSide): VictoryAction => ({ kind, side });
+// Preset rules are authored from the PLAYER's perspective (win/lose for 'player'); in the 2-player
+// game that implies the mirror for the enemy, which is what satisfies the per-faction save gate.
+const loseRule = (name: string, ...conds: VictoryCondition[]): VictoryRule => ({ name, if: conds, do: [act('lose', 'player')] });
+const winRule = (name: string, ...conds: VictoryCondition[]): VictoryRule => ({ name, if: conds, do: [act('win', 'player')] });
+
+/**
+ * Expand a legacy `objective` preset into the if-then rule model (ADR-0064) — the ONLY place the 5
+ * stored modes are defined in terms of rules. `evaluateObjective` and the store both route through
+ * it, so preset and authored levels share one evaluator. Lose rules are seeded ABOVE win rules so
+ * first-match ordering reproduces the pre-ADR-0064 defeat-first semantics exactly (the only
+ * theoretical shift is rival-kings' both-Kings-fall tie → loss, unreachable since one move removes
+ * only one King).
+ */
+export function victoryRulesForObjective(objective: ObjectiveType, ctx: ObjectiveContext = {}): VictoryRules {
+  switch (objective) {
+    case 'capture-all':
+      return [loseRule('Your force is wiped out', eliminate('player')), winRule('Enemy is wiped out', eliminate('enemy'))];
+    case 'capture-king':
+      // Direction-aware: the King-holder loses when its King falls; the kingless side loses only
+      // by wipe. ctx.kingSide defaults to 'enemy' (free skirmish / legacy = hunt the enemy King).
+      return (ctx.kingSide ?? 'enemy') === 'player'
+        ? [loseRule('Your King is captured', eliminate('player', ROYAL)), winRule('Enemy is wiped out', eliminate('enemy'))]
+        : [loseRule('Your force is wiped out', eliminate('player')), winRule('Enemy King is captured', eliminate('enemy', ROYAL))];
+    case 'rival-kings':
+      return [loseRule('Your King is captured', eliminate('player', ROYAL)), winRule('Enemy King is captured', eliminate('enemy', ROYAL))];
+    case 'survive':
+      return [loseRule('Your force is wiped out', eliminate('player')), winRule('You outlast the assault', { kind: 'turnLimit', turns: ctx.surviveTurns ?? 0 })];
+    case 'reach':
+      return [loseRule('Your force is wiped out', eliminate('player')), winRule('A pawn reaches the goal', { kind: 'reach', side: 'player' })];
+    default:
+      return [loseRule('Your force is wiped out', eliminate('player')), winRule('Enemy is wiped out', eliminate('enemy'))];
+  }
+}
+
+/**
+ * Resolve a level objective to a winner, or `null` while undecided. Pure. Thin wrapper over the
+ * two-list model (ADR-0064): expands the preset, then evaluates it defeat-first. Kept as the
+ * entry point for every preset (non-authored) game so existing call sites read unchanged.
+ */
+export function evaluateObjective(state: GameState, objective: ObjectiveType, ctx: ObjectiveContext = {}): Winner {
+  return evaluateVictory(state, victoryRulesForObjective(objective, ctx), ctx);
 }
 
 /** With no objective zone authored, `reach` defaults to the enemy's back rank. */

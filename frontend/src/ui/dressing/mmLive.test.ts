@@ -22,14 +22,36 @@ function firstBlock(selector: string): string {
 }
 
 describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () => {
-  it('btnH + icon: the .settings-tab base rule', () => {
-    const tab = firstBlock('.settings-tab');
-    expect(tab).toContain(`min-height: ${MM_LIVE.btnH}px`);
-    expect(tab).toContain(`--settings-tab-icon-size: ${MM_LIVE.icon}px`);
+  it('btnH: the menu-scoped .main-menu-mode-tab height', () => {
+    // The menu runs shorter buttons than the .settings-tab base (88px), so btnH mirrors the
+    // menu's own rule, not the shared base.
+    expect(firstBlock('.main-menu-mode-tab')).toContain(`min-height: ${MM_LIVE.btnH}px`);
+  });
+
+  it('icon: the .settings-tab base rule', () => {
+    expect(firstBlock('.settings-tab')).toContain(`--settings-tab-icon-size: ${MM_LIVE.icon}px`);
   });
 
   it('railW: the .settings-shell rail column', () => {
     expect(firstBlock('.settings-shell')).toContain(`grid-template-columns: ${MM_LIVE.railW}px minmax(0, 1fr)`);
+  });
+
+  it('menu-shell column pull mirrors MM_LIVE.btnX/btnY from one source', () => {
+    // The destination columns (Settings sections + content) derive their leftward/up pull from
+    // --rail-pull-x/y on the menu shell, NOT a copied literal, so col2/col3 stay locked to col1's
+    // column. Those vars must mirror the rail's own offset (|btnX|/|btnY|) — guarded so the single
+    // source can't silently drift when the rail is re-tuned.
+    const shellBlock = css.slice(css.indexOf('.main-menu-twin-screen .settings-shell {'));
+    expect(shellBlock).toContain(`--rail-pull-x: ${-MM_LIVE.btnX}px`);
+    expect(shellBlock).toContain(`--rail-pull-y: ${-MM_LIVE.btnY}px`);
+  });
+
+  it('btnX zoom floor: the shared .settings-shell margin is floored at |btnX| (ADR-0062)', () => {
+    // The rail is pulled left by translate(<btnX>px, …); the shell's left margin MUST be floored at
+    // the same magnitude, or the rail shears off the left edge at high browser zoom (the PR #339
+    // regression). The tuner now bakes the transform and this floor together — this guards they can
+    // never drift apart again.
+    expect(firstBlock('.settings-shell')).toContain(`margin-inline-start: max(${-MM_LIVE.btnX}px,`);
   });
 
   it('btnX/btnY: the .settings-rail-frame group offset', () => {

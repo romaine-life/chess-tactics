@@ -14,7 +14,7 @@ import os from 'node:os';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { generateOpeningBook, DEFAULT_EVAL_WEIGHTS } from '../frontend/trainer-bundle/engine.mjs';
+import { generateCuratedBook, splitBook, decodeWeights, validateStep, DEFAULT_SPRT, DEFAULT_EVAL_WEIGHTS } from '../frontend/trainer-bundle/engine.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const log = (o) => console.log(JSON.stringify({ t: new Date().toISOString(), ...o }));
@@ -60,28 +60,51 @@ async function main() {
   const restarts = Math.max(1, Math.min(spec.restarts ?? (os.cpus().length - 1), os.cpus().length));
   const masterSeed = spec.masterSeed ?? 1;
   const reference = spec.reference ?? DEFAULT_EVAL_WEIGHTS;
-  const book = spec.book ?? generateOpeningBook(level, spec.bookSettings ?? { size: 8, seedBase: 1, plies: 4, variety: 0.6 }, match);
+  // Curated (UHO/imbalanced) book so games are DECISIVE (a balanced book draws out
+  // and yields no signal), split into a TRAIN slice (SPSA tunes on it) and a disjoint
+  // HELD-OUT slice (the champion is SPRT-validated on it — the anti-overfit guard: it
+  // must beat the shipped AI on openings it never trained on).
+  const fullBook = spec.book
+    ?? generateCuratedBook(level, spec.bookSettings ?? { size: 16, seedBase: 1, plies: 4, variety: 0.6 }, match, spec.curation).positions;
+  const split = splitBook(fullBook.length, spec.holdoutFraction ?? 0.3);
+  const holdSet = new Set(split.holdout);
+  const trainBook = fullBook.filter((_, i) => !holdSet.has(i));
+  const holdoutBook = fullBook.filter((_, i) => holdSet.has(i));
 
-  log({ event: 'start', level: level.id, restarts, steps, book: book.length, cores: os.cpus().length });
-  await persist(runId, { status: 'running', body: { startedAt: new Date().toISOString(), restarts, steps } });
+  log({ event: 'start', level: level.id, restarts, steps, book: fullBook.length, train: trainBook.length, holdout: holdoutBook.length, cores: os.cpus().length });
+  await persist(runId, { status: 'running', body: { startedAt: new Date().toISOString(), restarts, steps, train: trainBook.length, holdout: holdoutBook.length } });
 
-  const cfg = { steps, book, match, masterSeed, reference };
+  const cfg = { steps, book: trainBook, match, masterSeed, reference };
   const t0 = performance.now();
   const results = await Promise.all(Array.from({ length: restarts }, (_, r) => runRestart(r, level, cfg)));
-  const secs = (performance.now() - t0) / 1000;
-
   results.sort((a, b) => b.champion.score - a.champion.score);
   const best = results[0];
+
+  // Validate the best champion on the HELD-OUT openings (only if a restart actually
+  // improved on train — champion.step === -1 means nothing beat the reference).
+  let holdout = { verdict: 'skipped', elo: 0, n: 0, w: 0, d: 0, l: 0 };
+  if (holdoutBook.length && best.champion.step >= 0) {
+    const candidate = decodeWeights(best.champion.theta);
+    let vs = null;
+    let guard = 0;
+    do {
+      vs = validateStep(level, candidate, reference, holdoutBook, match, masterSeed + 12345, vs, DEFAULT_SPRT, 300);
+      guard += 1;
+    } while (!vs.done && guard < 305);
+    holdout = { verdict: vs.sprt.verdict, elo: +vs.sprt.elo.toFixed(1), n: vs.gameIndex, w: vs.w, d: vs.d, l: vs.l };
+  }
+
+  const secs = (performance.now() - t0) / 1000;
   const summary = {
     event: 'done',
     secs: +secs.toFixed(1),
-    gamesPerSec: null,
-    best: { restart: best.r, score: +best.champion.score.toFixed(4), step: best.champion.step },
+    best: { restart: best.r, trainScore: +best.champion.score.toFixed(4), step: best.champion.step },
+    holdout,
     restarts: results.map((x) => ({ r: x.r, score: +x.champion.score.toFixed(4) })),
     championTheta: best.champion.theta,
   };
   log(summary);
-  await persist(runId, { status: 'done', body: { finishedAt: new Date().toISOString(), secs: summary.secs, champion: best.champion, restarts: summary.restarts } });
+  await persist(runId, { status: 'done', body: { finishedAt: new Date().toISOString(), secs: summary.secs, champion: best.champion, holdout, restarts: summary.restarts } });
   process.exit(0);
 }
 

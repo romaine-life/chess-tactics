@@ -50,6 +50,12 @@ export interface OpeningBook {
   settings: OpeningBookSettings;
   positions: BookPosition[];
   session: GymSession;
+  /** Optional deterministic train/holdout partition (holdout = indices into
+   * positions). Absent ⇒ whole book is train, holdout empty (back-compat with
+   * pre-split books). SPSA tunes on trainPositions; SPRT validates on
+   * holdoutPositions — the anti-overfit guard: a champion must beat the shipped AI
+   * on openings it never trained on. */
+  split?: { holdout: number[] };
 }
 
 /** The per-level persisted blob: an id counter and the level's books. */
@@ -112,4 +118,38 @@ export function deleteBook(blob: BooksBlob, id: number): BooksBlob {
 /** Replace a book in the blob by id (returns a new blob; unchanged if id absent). */
 export function updateBook(blob: BooksBlob, book: OpeningBook): BooksBlob {
   return { ...blob, books: blob.books.map((b) => (b.id === book.id ? book : b)) };
+}
+
+const clamp01ob = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/**
+ * Deterministic disjoint train/holdout partition of `positionCount` positions BY
+ * INDEX (indices survive re-sorting and are compact to persist). Holdout = the
+ * ceil(count × fraction) indices with the smallest seeded hash — stable, exactly the
+ * fraction, and disjoint from train by construction. `salt` lets a book re-split
+ * reproducibly (e.g. rotation across runs).
+ */
+export function splitBook(positionCount: number, holdoutFraction = 0.3, salt = 0): { holdout: number[] } {
+  const n = Math.max(0, Math.floor(positionCount));
+  const k = Math.min(n, Math.ceil(n * clamp01ob(holdoutFraction)));
+  if (k <= 0) return { holdout: [] };
+  const hash = (i: number): number => {
+    let h = (((i + 1) * 2654435761) + (salt * 40503)) >>> 0;
+    h ^= h >>> 15; h = (h * 2246822519) >>> 0;
+    return h >>> 0;
+  };
+  const idx = Array.from({ length: n }, (_, i) => i).sort((a, b) => hash(a) - hash(b) || a - b);
+  return { holdout: idx.slice(0, k).sort((a, b) => a - b) };
+}
+
+/** Positions SPSA trains on (everything not in the holdout). Absent split ⇒ all. */
+export function trainPositions(book: OpeningBook): BookPosition[] {
+  const h = new Set(book.split?.holdout ?? []);
+  return h.size ? book.positions.filter((_, i) => !h.has(i)) : book.positions;
+}
+
+/** Positions the champion is SPRT-validated on (never trained). Absent split ⇒ []. */
+export function holdoutPositions(book: OpeningBook): BookPosition[] {
+  const h = new Set(book.split?.holdout ?? []);
+  return h.size ? book.positions.filter((_, i) => h.has(i)) : [];
 }

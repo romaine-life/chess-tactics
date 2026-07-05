@@ -44,6 +44,34 @@ describe('level schema', () => {
     expect(validateLevel(lvl).ok).toBe(true);
   });
 
+  it('accepts a well-formed authored victory (if-then rules), and an absent field (preset) — ADR-0064', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.victory = [
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { if: [{ kind: 'turnLimit', turns: 5 }, { kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], do: [{ kind: 'win', side: 'player' }] },
+      { if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
+    ];
+    expect(validateLevel(lvl).ok).toBe(true);
+    delete (lvl as { victory?: unknown }).victory; // absent ⇒ valid (the objective preset applies)
+    expect(validateLevel(lvl).ok).toBe(true);
+  });
+
+  it('rejects malformed victory rules (bad action/kind/side/turns/filter, non-array) — ADR-0064', () => {
+    const bad: unknown[] = [
+      { not: 'an array' },
+      [{ if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'maybe', side: 'player' }] }], // bad action kind
+      [{ if: [{ kind: 'eliminate', side: 'enemy' }], do: 'nope' }], // do not an array
+      [{ if: [{ kind: 'nope' }], do: [{ kind: 'win', side: 'player' }] }],
+      [{ if: [{ kind: 'eliminate', side: 'neither' }], do: [{ kind: 'win', side: 'player' }] }],
+      [{ if: [{ kind: 'turnLimit', turns: 0 }], do: [{ kind: 'win', side: 'player' }] }],
+      [{ if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'rock' } }], do: [{ kind: 'win', side: 'player' }] }],
+      [{ if: 'nope', do: [{ kind: 'win', side: 'player' }] }], // if not an array
+    ];
+    for (const victory of bad) {
+      expect(validateLevel({ ...createBlankLevel('l1', 'T', 8, 8), victory } as unknown).ok).toBe(false);
+    }
+  });
+
   it('rejects a malformed layers.props entry when present', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
     // missing propId / non-numeric coords

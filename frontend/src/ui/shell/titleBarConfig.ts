@@ -22,6 +22,11 @@ export interface TitleBarConfig {
    *  <TitleBarSlot region="actions">. Laid out BEFORE the cluster — additive, never
    *  a replacement for it (ADR-0042). */
   actionsSlot?: boolean;
+  /** Render the bottom-centre "stud" portal slot — the decorative nailhead diamond
+   *  becomes an interactive control the screen fills via <TitleBarSlot region="stud">.
+   *  Absolutely positioned over the ornament, out of the grid, so it never shifts the
+   *  brand/center/cluster layout. Only single-player Skirmish uses it (a Retry button). */
+  studSlot?: boolean;
 }
 
 export function titleBarConfig(path: string): TitleBarConfig | null {
@@ -36,7 +41,10 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
   if (path === '/portrait-editor') return { screenName: 'Portrait Editor' };
 
   if (path === '/play' || path === '/skirmish') {
-    return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true };
+    // studSlot lets a single-player battle turn the ornament diamond into a Retry button
+    // (the Skirmish screen portals it in, netplay omitted). The map-picker (/skirmish)
+    // simply never fills it, so its diamond stays the plain decoration.
+    return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true, studSlot: true };
   }
   if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     return { screenName: 'Lobbies', signInReturnTo: '/lobbies' };
@@ -44,11 +52,14 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
   if (path === '/party') {
     return { screenName: 'Party', signInReturnTo: '/party' };
   }
-  if (path === '/edit' || path === '/level-editor') {
+  if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
     return { screenName: 'Level Editor', barClass: 'le-topbar', centerSlot: true, actionsSlot: true };
   }
-  if (path === '/campaigns-next' || path === '/campaigns') {
-    return { screenName: 'Editor', barClass: 'ce-topbar', centerSlot: true };
+  if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') {
+    // The Editor is a settings-twin now: a ‹ Back control in the trailing actions slot
+    // (like Settings) plus the live save-state chip in the center slot. ce-topbar adds the
+    // trailing grid column the actions slot needs (mirrors settings-topbar).
+    return { screenName: 'Editor', barClass: 'ce-topbar', centerSlot: true, actionsSlot: true };
   }
   if (path === '/settings' || path.startsWith('/settings/')) {
     // screen, so only Settings scales.
