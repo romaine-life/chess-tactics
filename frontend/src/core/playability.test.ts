@@ -303,25 +303,63 @@ describe('P6 — authored victory conditions (ADR-0064)', () => {
   it('accepts a rule set with at least one win rule and one lose rule, and an absent field (preset)', () => {
     const authored = fixedLevel((l) => {
       l.victory = [
-        { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
-        { if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
-        { if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
+        { name: 'Your force is wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+        { name: 'A pawn breaks through', if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
+        { name: 'Enemy is routed', if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
       ];
     });
     expect(validatePlayability(authored)).toEqual({ ok: true, violations: [] });
     expect(validatePlayability(fixedLevel(() => {})).ok).toBe(true); // no victory → preset
   });
 
-  it('rejects per faction: a set that leaves an on-board faction unable to win or lose', () => {
-    // Only "player loses": the player has no way to win, and — the same gap — the enemy has no way
-    // to lose (a win for one side is a loss for the other in the 2-player game). Reported per side.
-    const onlyLose = fixedLevel((l) => { l.victory = [{ if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] }]; });
-    expect(codes(onlyLose)).toEqual(['P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE']);
-    // Only "player wins": the player has no way to lose, and the enemy no way to win.
-    const onlyWin = fixedLevel((l) => { l.victory = [{ if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] }]; });
-    expect(codes(onlyWin)).toEqual(['P6_VICTORY_NO_LOSE', 'P6_VICTORY_NO_WIN']);
-    // Empty set: every on-board faction flags both.
+  it('flags each on-board faction that cannot win — once per gap, not once per seat', () => {
+    // Only "player loses" ⇒ the only reachable winner is the enemy, so the PLAYER can't win. The
+    // same missing rule used to also read "enemy has no way to lose"; win-reachability reports it once.
+    const onlyLose = fixedLevel((l) => { l.victory = [{ name: 'Wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] }]; });
+    expect(codes(onlyLose)).toEqual(['P6_VICTORY_NO_WIN']);
+    expect(messages(onlyLose)[0]).toContain('Player side');
+    // Only "player wins" ⇒ the only reachable winner is the player, so the ENEMY can't win (which is
+    // the player's missing way to LOSE) — one message, naming the enemy.
+    const onlyWin = fixedLevel((l) => { l.victory = [{ name: 'Enemy routed', if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] }]; });
+    expect(codes(onlyWin)).toEqual(['P6_VICTORY_NO_WIN']);
+    expect(messages(onlyWin)[0]).toContain('Enemy side');
+    // Empty set: no faction can win → one message per on-board faction.
     const neither = fixedLevel((l) => { l.victory = []; });
-    expect(codes(neither)).toEqual(['P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE', 'P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE']);
+    expect(codes(neither)).toEqual(['P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_WIN']);
+  });
+});
+
+describe('P7 — authored victory event names (ADR-0064)', () => {
+  // A well-formed, fully-decidable rule set so P7 is the only thing under test — mutate its names.
+  const named = (mutate: (v: NonNullable<Level['victory']>) => void): Level =>
+    fixedLevel((l) => {
+      l.victory = [
+        { name: 'Your force is wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+        { name: 'Enemy is routed', if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
+      ];
+      mutate(l.victory);
+    });
+
+  it('accepts distinct, non-empty names', () => {
+    expect(validatePlayability(named(() => {}))).toEqual({ ok: true, violations: [] });
+  });
+
+  it('flags an empty or whitespace-only name', () => {
+    expect(codes(named((v) => { v[0].name = ''; }))).toContain('P7_EVENT_NAME_EMPTY');
+    expect(codes(named((v) => { v[1].name = '   '; }))).toContain('P7_EVENT_NAME_EMPTY');
+    // A missing name field reads as empty too (the editor always assigns one).
+    expect(codes(named((v) => { delete v[0].name; }))).toContain('P7_EVENT_NAME_EMPTY');
+  });
+
+  it('flags duplicate names, naming the collision, and trims before comparing', () => {
+    const dup = validatePlayability(named((v) => { v[1].name = 'Your force is wiped out'; }));
+    expect(dup.violations.map((x) => x.code)).toContain('P7_EVENT_NAME_DUP');
+    expect(dup.violations.find((x) => x.code === 'P7_EVENT_NAME_DUP')?.message).toContain('"Your force is wiped out"');
+    // Whitespace around a name doesn't make it distinct.
+    expect(codes(named((v) => { v[1].name = '  Your force is wiped out  '; }))).toContain('P7_EVENT_NAME_DUP');
+  });
+
+  it('does not run on preset levels (absent victory)', () => {
+    expect(codes(fixedLevel(() => {}))).not.toContain('P7_EVENT_NAME_EMPTY');
   });
 });

@@ -135,10 +135,15 @@ needed; the store already evaluates on the settled state that carries `lastMove`
 
 `validateLevel` (structural, `core/level.ts`, mirrored in the backend workspace PUT
 `validateWorkspaceVictory`) recursively checks condition shape/enum/range when `victory` is
-present. The gameplay rule — each authored list needs at least one condition (an empty win is
-unwinnable; an empty lose is unlosable-by-wipe) — is `validatePlayability`'s **P6**
-(`P6_VICTORY_NO_WIN` / `P6_VICTORY_NO_LOSE`), the editor's save gate, exactly as the owner
-asked (the save-blocker owns "is this level actually losable", not a runtime injection).
+present. The gameplay rule is `validatePlayability`'s **P6** (`P6_VICTORY_NO_WIN`), the editor's
+save gate: **every on-board faction must have a path to winning.** That one check also guarantees a
+path to losing — a faction loses whenever another wins, and with two-plus factions each able to win,
+everyone can also lose — so the earlier separate "can it lose?" code (`P6_VICTORY_NO_LOSE`) was pure
+redundancy that double-reported the same missing rule from both seats and has been dropped. The
+win-reachability gate is also the form that survives multi-faction: it's the *lose* side that a
+binary player↔enemy flip can't express. **P7** (`P7_EVENT_NAME_EMPTY` / `P7_EVENT_NAME_DUP`) gates
+event names — non-empty and unique — matching the editor's named-event list and the result screen's
+"how it ended" line.
 
 ## Consequences
 

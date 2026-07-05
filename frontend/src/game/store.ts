@@ -7,8 +7,8 @@ import type { GameEvent, GameState, Move, Side, Winner } from '../core/types';
 import { applyMove, enemyMove, gameEnv, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { searchEnemyMove } from '../core/ai';
 import { adoptedWeightsFor } from './adoptedWeights';
-import { evaluateVictory, kingSideOf, objectiveContextForLevel, objectiveSummary, victoryRulesForObjective, type ObjectiveContext } from '../core/objectives';
-import type { Level, ObjectiveType, TimeControl, VictoryRules } from '../core/level';
+import { evaluateVictory, resolveVictory, kingSideOf, objectiveContextForLevel, objectiveSummary, victoryRulesForObjective, type ObjectiveContext } from '../core/objectives';
+import type { Level, ObjectiveType, TimeControl, VictoryRule, VictoryRules } from '../core/level';
 import { DEFAULT_TIME_CONTROL } from '../core/clock';
 import { terrainAt } from '../core/terrain';
 import { ARRIVAL_BAKED, playArrival, playTerrain } from '../sfx';
@@ -163,6 +163,21 @@ function netOutcomeCopy(winner: Winner, localSide: Side): string {
   return winner === localSide ? 'Victory — the field is yours.' : 'Defeat — your force has fallen.';
 }
 
+/** Log copy for an AUTHORED victory (ADR-0064): name the exact rule that fired rather than the mode
+ * label — a level won by a condition that diverges from its headline objective reads honestly
+ * ("Victory — Enemy King is captured." not "…the objective is reached."). Preset games keep
+ * objectiveOutcomeCopy's polished mode sentence. */
+function victoryOutcomeCopy(winner: Winner, rule: VictoryRule | null): string {
+  const name = rule?.name?.trim();
+  if (!name) return winner === 'player' ? 'Victory — the objective is complete.' : 'Defeat — your force has fallen.';
+  return `${winner === 'player' ? 'Victory' : 'Defeat'} — ${name}.`;
+}
+
+/** The fired rule's authored name, for the result screen's "how it ended" line (both preset and
+ * authored rules carry names). Null when no victory rule decided the game (checkmate / clock / draw /
+ * resignation) — the screen then falls back to the static objective goal. */
+const ruleResultDetail = (rule: VictoryRule | null): string | null => rule?.name?.trim() || null;
+
 /** True if any living piece of `side` has at least one legal move. */
 export function sideHasLegalMove(game: GameState, side: Side, env: MoveEnv): boolean {
   return livingPieces(game.pieces, side).some((p) => legalMoves(p, game.pieces, game.size, env).length > 0);
@@ -262,6 +277,10 @@ export interface SkirmishState {
    * `objectiveCtx` stay the single source of truth for preset games; the eval sites derive the
    * preset rules each turn, matching how evaluateObjective always worked. */
   victoryOverride: VictoryRules | null;
+  /** The name of the victory rule that just ENDED this game (ADR-0064), for the result screen's
+   * "how it ended" line — set the moment a rule fires, null otherwise (fresh game, or a win by
+   * checkmate / clock / draw / resignation, which the screen shows as the plain objective goal). */
+  resultDetail: string | null;
   /** Completed player→enemy rounds — the clock the `survive` objective counts. */
   turnsElapsed: number;
   /** True once newSkirmish has built a real game (vs the module-load placeholder). */
@@ -420,12 +439,14 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       // A full player→enemy round just elapsed: advance the survive clock, then
       // re-check the objective — survive reached, or a player wipe = defeat.
       const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
+      let resultDetail: string | null = null;
       if (!game.winner) {
         const ctx = { ...(cur.objectiveCtx ?? {}), turnsElapsed };
-        const winner = evaluateVictory(game, cur.victoryOverride ?? victoryRulesForObjective(cur.objective, ctx), ctx);
+        const { winner, rule } = resolveVictory(game, cur.victoryOverride ?? victoryRulesForObjective(cur.objective, ctx), ctx);
         if (winner) {
           game = { ...game, winner, turn: 'done' };
-          msgs.push(objectiveOutcomeCopy(cur.objective, winner, cur.objectiveCtx?.kingSide));
+          resultDetail = ruleResultDetail(rule);
+          msgs.push(cur.victoryOverride ? victoryOutcomeCopy(winner, rule) : objectiveOutcomeCopy(cur.objective, winner, cur.objectiveCtx?.kingSide));
         }
       }
       // Turn returns to the player: keep the piece they were working with selected so
@@ -437,6 +458,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
         env: envFor(game),
         tick: enemyRes.tick,
         turnsElapsed,
+        resultDetail,
         selectedId: keep,
         focusedId: keep,
         log: [...msgs.reverse(), ...cur.log].slice(0, 12),
@@ -525,6 +547,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   objective: 'capture-king',
   objectiveCtx: {},
   victoryOverride: null,
+  resultDetail: null,
   turnsElapsed: 0,
   started: false,
   levelId: null,
@@ -570,7 +593,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       : null;
     // An explicit opts.ai wins; otherwise keep the running mode (a HUD retry
     // preserves the A/B lever the route set on entry).
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, net: null });
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail: null, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, net: null });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
     startClock();
@@ -613,6 +636,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       turnsElapsed: 0,
       objective,
       objectiveCtx,
+      // Netplay honours the level's own authored victory (else the objective preset); resetting it
+      // here also stops a prior single-player game's override leaking into the match.
+      victoryOverride: level.victory ?? null,
+      resultDetail: null,
       selectedId,
       focusedId: selectedId,
       log: [`Multiplayer skirmish — ${objectiveSummary(objective, objectiveCtx.kingSide)}. You command ${youCommand}.`],
@@ -674,6 +701,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       objectiveCtx: match.objectiveCtx,
       // Back-compat: a match saved before ADR-0064 has no override → preset (null).
       victoryOverride: match.victoryOverride ?? null,
+      resultDetail: null, // a resumed match is always mid-game (winner === null), so no result yet
       log: match.log,
       levelId: match.levelId,
       // Restore the enemy policy so the ?ai=greedy A/B lever survives a reload
@@ -753,12 +781,14 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // last enemy, or stepping a piece onto a reach tile ends the game immediately —
     // what makes the displayed objective honest. (survive can only be decided once
     // a round elapses, so it's checked after the enemy reply, not here.)
+    let resultDetail: string | null = null;
     if (!game.winner) {
       const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 };
-      const winner = evaluateVictory(game, s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx), ctx);
+      const { winner, rule } = resolveVictory(game, s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx), ctx);
       if (winner) {
         game = { ...game, winner, turn: 'done' };
-        msgs.push(objectiveOutcomeCopy(s.objective, winner, s.objectiveCtx?.kingSide));
+        resultDetail = ruleResultDetail(rule);
+        msgs.push(s.victoryOverride ? victoryOutcomeCopy(winner, rule) : objectiveOutcomeCopy(s.objective, winner, s.objectiveCtx?.kingSide));
       }
     }
     // Checkmate the player just delivered ends the game immediately: if the enemy
@@ -785,6 +815,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     set({
       game,
       env: enemyEnv,
+      resultDetail,
       selectedId: p.id,
       focusedId: p.id,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
