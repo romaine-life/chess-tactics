@@ -34,7 +34,14 @@ import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } fro
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell } from './boardCode';
 import { removeZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
-import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
+import {
+  appendLevelEventsParam,
+  appendTimeControlParams,
+  appendVictoryRulesParam,
+  readLevelEventsParam,
+  readTimeControlParams,
+  readVictoryRulesParam,
+} from './playtestRoute';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { HomepageBackdrop } from './HomepageBackdrop';
@@ -1282,11 +1289,14 @@ export function LevelEditor(): ReactElement {
   // Optional `?board=<code>` deep-link: decode a whole board to start from (see boardCode.ts).
   // It takes precedence over a campaign level (it's the explicit "inspect this exact board").
   const loadedBoard = useMemo(() => readBoardParam(), []);
-  const urlTimeControl = useMemo(() => readTimeControlParams(new URLSearchParams(window.location.search)), []);
+  const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const urlTimeControl = useMemo(() => readTimeControlParams(urlParams), [urlParams]);
+  const urlEvents = useMemo(() => readLevelEventsParam(urlParams), [urlParams]);
+  const urlVictory = useMemo(() => readVictoryRulesParam(urlParams), [urlParams]);
   const urlObjective = useMemo(() => {
-    const raw = new URLSearchParams(window.location.search).get('obj');
+    const raw = urlParams.get('obj');
     return (OBJECTIVE_TYPES as readonly string[]).includes(raw ?? '') ? raw as ObjectiveType : undefined;
-  }, []);
+  }, [urlParams]);
   const draftKey = useMemo(() => levelEditorDraftKey({ levelId: routeParams.levelId, boardCode: routeParams.boardCode }), [routeParams.levelId, routeParams.boardCode]);
   const localDraft = useMemo(() => readLevelEditorDraft(draftKey), [draftKey]);
   const initialCampaignLevel = useMemo(
@@ -1406,10 +1416,10 @@ export function LevelEditor(): ReactElement {
   // that never customized them; a level stores `victory` only when the lists diverge from that
   // preset (see victoryForSave), which keeps preset levels' bodies clean and out of the dirty check.
   const [victory, setVictory] = useState<VictoryRules>(
-    localDraft?.victory ?? initialCampaignLevel?.victory ?? victoryRulesForObjective(objective, { surviveTurns }),
+    localDraft?.victory ?? initialCampaignLevel?.victory ?? urlVictory ?? victoryRulesForObjective(objective, { surviveTurns }),
   );
   const [events, setEvents] = useState<LevelEvents>(() =>
-    normalizeLevelEvents(localDraft?.events ?? (initialCampaignLevel ? effectiveLevelEvents(initialCampaignLevel) : [])),
+    normalizeLevelEvents(localDraft?.events ?? (initialCampaignLevel ? effectiveLevelEvents(initialCampaignLevel) : urlEvents ?? [])),
   );
   // The victory-events editor opens as a full-size overlay over the board — the narrow control
   // panel can't give rule authoring room to breathe. The panel stays put; a button opens this.
@@ -2173,19 +2183,26 @@ export function LevelEditor(): ReactElement {
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
   const playability = useMemo(() => validatePlayability(candidateLevel), [candidateLevel]);
+  const targetLevelId = editingId ?? routeParams.levelId;
+  const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
   // Real dirty flag: the board has unsaved changes when its signature differs from the one
   // captured at the last save. The signature folds in rules/settings/events through the candidate
-  // level, so event edits mark the level dirty, not just board paint. A standalone board (never
-  // saved) seeds savedSig lazily on first render below.
+  // level, so event edits mark the level dirty, not just board paint.
   const currentSig = useMemo(() => levelSignature(candidateLevel), [candidateLevel]);
-  const dirty = savedSig === null ? false : currentSig !== savedSig;
+  // Standalone / board-link editors do not have a saved Level document to compare against. Capture
+  // the very first rendered signature and keep that as the clean baseline; otherwise a first
+  // event-template edit can become the baseline if the seeding effect runs after that edit.
+  const standaloneBaselineSigRef = useRef<string | null>(routeParams.levelId ? null : currentSig);
+  const dirty = savedSig === null
+    ? currentSig !== (standaloneBaselineSigRef.current ?? currentSig)
+    : currentSig !== savedSig;
   // Establish the clean baseline signature. Two ways in: a standalone board (no campaign level)
-  // seeds it on first render; a campaign level seeds it AFTER hydrate has settled the board state
-  // (needsBaselineRef, captured from the live currentSig so it always matches). Depends on
-  // currentSig so the post-hydrate capture fires once the seeded state has flowed through.
+  // seeds from its first-render signature; a campaign level seeds it AFTER hydrate has settled the
+  // board state (needsBaselineRef, captured from the live currentSig so it always matches). Depends
+  // on currentSig so the post-hydrate capture fires once the seeded state has flowed through.
   useEffect(() => {
     if (needsBaselineRef.current) { needsBaselineRef.current = false; setSavedSig(currentSig); return; }
-    if (savedSig === null && !routeParams.levelId) setSavedSig(currentSig);
+    if (savedSig === null && !routeParams.levelId) setSavedSig(standaloneBaselineSigRef.current ?? currentSig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSig]);
 
@@ -2208,8 +2225,6 @@ export function LevelEditor(): ReactElement {
     });
   }, [currentEditorBoard, dirty, draftKey, levelName, objective, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
 
-  const targetLevelId = editingId ?? routeParams.levelId;
-  const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
   const isCampaignLevel = useCampaigns((s) =>
     Boolean(routeParams.campaignId || (targetLevelId && s.campaigns.some((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId)))),
   );
@@ -2734,6 +2749,19 @@ export function LevelEditor(): ReactElement {
   // Save-state label priority (Status card fallback): saving → blocked-by-violations →
   // needs-player → dirty → clean.
   const saveStateLabel = saving ? 'Saving…' : !playability.ok ? 'Fix issues to save' : needsPlayerFaction ? 'Needs Player' : dirty ? 'Unsaved' : 'No changes';
+  // Button text should name the available action or the current blocker. In particular, a clean
+  // official level should not look like it is waiting to publish.
+  const saveButtonLabel = canSave
+    ? saveLabel
+    : saving
+    ? 'Saving…'
+    : !playability.ok
+    ? 'Fix issues'
+    : needsPlayerFaction
+    ? 'Set Player'
+    : !dirty
+    ? 'No changes'
+    : saveLabel;
   // Test-Play is enabled only for a SAVED (clean, in-store), violation-free level with a resolvable
   // id: /play resolves the level from the store, so an unsaved board would test-play the stale
   // saved version. mode=test skips progress recording. See below (button title explains the state).
@@ -2756,10 +2784,14 @@ export function LevelEditor(): ReactElement {
     const timeControl = clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined;
     const backParams = new URLSearchParams({ board: code, obj: objective });
     appendTimeControlParams(backParams, timeControl);
+    appendLevelEventsParam(backParams, eventsForSave);
+    appendVictoryRulesParam(backParams, victoryForSave);
     const playParams = new URLSearchParams({ board: code, obj: objective, mode: 'test', returnTo: `/editor/level?${backParams.toString()}` });
     appendTimeControlParams(playParams, timeControl);
+    appendLevelEventsParam(playParams, eventsForSave);
+    appendVictoryRulesParam(playParams, victoryForSave);
     return `/play?${playParams.toString()}`;
-  }, [playability.ok, currentEditorBoard, objective, clockEnabled, clockInitialSeconds, clockIncrementSeconds]);
+  }, [playability.ok, currentEditorBoard, objective, clockEnabled, clockInitialSeconds, clockIncrementSeconds, eventsForSave, victoryForSave]);
 
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
@@ -3016,10 +3048,10 @@ export function LevelEditor(): ReactElement {
                 type="button"
                 className={`le-seg-btn ${canSave ? 'active' : 'is-blocked'}`.trim()}
                 data-testid="le-save"
-                aria-label={canSave ? saveLabel : `${saveLabel}: ${saveBlockedMessage}`}
+                aria-label={canSave ? saveLabel : `${saveButtonLabel}: ${saveBlockedMessage}`}
                 title={canSave ? (isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.') : `${saveBlockedMessage} ${saveBlockedDetail}`.trim()}
                 onClick={() => { if (canSave) void saveLevel(); else explainBlockedSave(); }}
-              >{saveLabel}</button>
+              >{saveButtonLabel}</button>
             </div>
             <div className="le-material-values" aria-label="Team material point values">
               <div className="le-material-values-head">

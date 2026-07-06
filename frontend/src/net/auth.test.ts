@@ -10,6 +10,13 @@ describe('HttpError', () => {
     expect(err.message).toContain('401');
     expect(err).toBeInstanceOf(Error);
   });
+
+  it('includes backend details when present', () => {
+    const err = new HttpError('save-official', 400, 'invalid_workspace: levels.off-l.layers.zones contains an invalid zone');
+    expect(err.status).toBe(400);
+    expect(err.details).toContain('invalid_workspace');
+    expect(err.message).toContain('levels.off-l.layers.zones');
+  });
 });
 
 describe('isUnauthorized', () => {

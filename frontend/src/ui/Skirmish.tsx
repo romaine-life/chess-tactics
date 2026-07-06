@@ -15,7 +15,14 @@ import { formatClockMs } from '../core/clock';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { decodeBoard } from './boardCode';
-import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
+import {
+  appendLevelEventsParam,
+  appendTimeControlParams,
+  appendVictoryRulesParam,
+  readLevelEventsParam,
+  readTimeControlParams,
+  readVictoryRulesParam,
+} from './playtestRoute';
 import { editorBoardToLevel } from '../core/levelBoard';
 import { fetchPublicMap } from '../net/maps';
 import { OBJECTIVE_TYPES, type ObjectiveType } from '../core/level';
@@ -41,6 +48,8 @@ export function Skirmish() {
   const routeBoard = routeParams.get('board');
   const routeObjective = routeParams.get('obj');
   const routeTimeControl = useMemo(() => readTimeControlParams(routeParams), [routeParams]);
+  const routeEvents = useMemo(() => readLevelEventsParam(routeParams), [routeParams]);
+  const routeVictory = useMemo(() => readVictoryRulesParam(routeParams), [routeParams]);
   const [scenarioTimeControl, setScenarioTimeControl] = useState<TimeControl | null>(() => routeTimeControl ?? null);
   const routeBoardLevel = useMemo(() => {
     if (!routeBoard) return null;
@@ -48,8 +57,15 @@ export function Skirmish() {
     if (!decoded) return null;
     const objective: ObjectiveType = (OBJECTIVE_TYPES as readonly string[]).includes(routeObjective ?? '')
       ? (routeObjective as ObjectiveType) : 'capture-all';
-    return editorBoardToLevel(decoded, { id: 'board-link', name: 'Board Link', objective, timeControl: scenarioTimeControl ?? undefined });
-  }, [routeBoard, routeObjective, scenarioTimeControl]);
+    return editorBoardToLevel(decoded, {
+      id: 'board-link',
+      name: 'Board Link',
+      objective,
+      timeControl: scenarioTimeControl ?? undefined,
+      events: routeEvents,
+      victory: routeVictory,
+    });
+  }, [routeBoard, routeObjective, scenarioTimeControl, routeEvents, routeVictory]);
   // Multiplayer: `?lobby=<id>` enters a lobby's shared board as one of the two seats.
   const routeLobby = routeParams.get('lobby');
   // A shared USER map: `?map=<publicId>` fetches its public snapshot and plays it (no sign-in, no
@@ -69,8 +85,10 @@ export function Skirmish() {
       : 'capture-all';
     const params = new URLSearchParams({ board: routeBoard, obj: objective });
     appendTimeControlParams(params, scenarioTimeControl ?? undefined);
+    appendLevelEventsParam(params, routeEvents);
+    appendVictoryRulesParam(params, routeVictory);
     return `/editor/level?${params.toString()}`;
-  }, [routeBoard, routeObjective, scenarioTimeControl]);
+  }, [routeBoard, routeObjective, scenarioTimeControl, routeEvents, routeVictory]);
   const levelReturnHref = useMemo(() => {
     if (routeMode !== 'test' || !routeLevelId) return null;
     const params = new URLSearchParams({ levelId: routeLevelId });

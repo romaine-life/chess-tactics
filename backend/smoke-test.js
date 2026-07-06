@@ -544,7 +544,21 @@ async function main() {
         formatVersion: 1, id: 'off-l-test', name: 'Test Level', notes: '',
         board: { cols: 8, rows: 8, heightLevels: 1 }, objective: 'capture-all', difficulty: 'normal',
         economy: { startingFunds: 1000, incomePerTurn: 100 }, theme: 'grassland',
-        layers: { terrain: [], decals: [], zones: [], units: [] },
+        events: [{
+          id: 'player-pawn-promotion',
+          name: 'Player pawn promotion',
+          trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId: 'promotion-zone' },
+          do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }],
+        }],
+        layers: {
+          terrain: [],
+          decals: [],
+          zones: [
+            { id: 'promotion-zone', name: 'Promotion zone', color: 'amber', type: 'region', tiles: [[0, 0]] },
+            { id: 'legacy-promotion-zone', type: 'pawn-promotion', tiles: [[1, 0]] },
+          ],
+          units: [],
+        },
       },
     },
   };
@@ -588,7 +602,8 @@ async function main() {
     adminOfficialWrite.statusCode !== 200 ||
     adminOfficialWriteBody.portfolio.revision !== 1 ||
     adminOfficialWriteBody.portfolio.updated_by !== 'player@example.com' ||
-    adminOfficialWriteBody.portfolio.data.campaigns[0].id !== 'off-c-test'
+    adminOfficialWriteBody.portfolio.data.campaigns[0].id !== 'off-c-test' ||
+    adminOfficialWriteBody.portfolio.data.levels['off-l-test'].events[0].trigger.zoneId !== 'promotion-zone'
   ) {
     throw new Error(`Unexpected admin official write: ${adminOfficialWrite.statusCode} ${adminOfficialWrite.body}`);
   }
