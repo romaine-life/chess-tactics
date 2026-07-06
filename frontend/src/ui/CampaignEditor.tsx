@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
@@ -25,6 +25,7 @@ const CE_ICONS = {
   'chevron-down': '/assets/ui/kit/icons/chevron-down.png',
   delete: '/assets/ui/kit/icons/delete.png',
   lock: '/assets/ui/kit/icons/lock.png',
+  pencil: '/assets/ui/kit/icons/pencil.png',
 } as const;
 
 // The carved rail-tab icon, shared with the play-side Campaign screen (Campaign.tsx) so a
@@ -77,6 +78,7 @@ function IconButton({
   danger = false,
   selected = false,
   className = '',
+  onKeyDown,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { danger?: boolean; selected?: boolean }): ReactElement {
   return (
@@ -84,9 +86,39 @@ function IconButton({
       type="button"
       className={`ce-icon-button ${danger ? 'is-danger' : ''} ${selected ? 'is-selected' : ''} ${className}`.trim()}
       {...props}
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        event.stopPropagation();
+      }}
     >
       <span aria-hidden="true">{children}</span>
     </button>
+  );
+}
+
+function IconNavButton({
+  children,
+  selected = false,
+  className = '',
+  onClick,
+  onKeyDown,
+  ...props
+}: ComponentProps<typeof NavButton> & { selected?: boolean }): ReactElement {
+  return (
+    <NavButton
+      {...props}
+      className={`ce-icon-button ${selected ? 'is-selected' : ''} ${className}`.trim()}
+      onClick={(event) => {
+        onClick?.(event);
+        event.stopPropagation();
+      }}
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        event.stopPropagation();
+      }}
+    >
+      <span aria-hidden="true">{children}</span>
+    </NavButton>
   );
 }
 
@@ -215,6 +247,7 @@ function LevelRow({
   active,
   readOnly = false,
   onSelect,
+  editHref,
   onMoveUp,
   onMoveDown,
   onDelete,
@@ -225,6 +258,7 @@ function LevelRow({
   active: boolean;
   readOnly?: boolean;
   onSelect: () => void;
+  editHref?: string;
   onMoveUp: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onMoveDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
@@ -258,6 +292,11 @@ function LevelRow({
       </div>
       {readOnly ? null : (
         <div className="settings-row-control ce-row-actions" aria-label="Level actions">
+          {editHref ? (
+            <IconNavButton to={editHref} aria-label={`Edit ${level?.name ?? levelRef.levelId}`}>
+              <CeIcon icon="pencil" />
+            </IconNavButton>
+          ) : null}
           <IconButton onClick={onMoveUp} aria-label="Move level up"><CeIcon icon="chevron-up" /></IconButton>
           <IconButton onClick={onMoveDown} aria-label="Move level down"><CeIcon icon="chevron-down" /></IconButton>
           <IconButton danger onClick={onDelete} aria-label="Delete level"><CeIcon icon="delete" /></IconButton>
@@ -507,6 +546,8 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       ? `${isSkirmishProfilesSelected ? 'Profile' : 'Level'} ${selectedVisibleLevelIndex + 1}: ${levelDoc.name}`
       : levelDoc.name
     : 'Selected Level';
+  const editHrefForCampaignLevel = (campaignId: string, levelId: string): string =>
+    `/editor/level?campaignId=${encodeURIComponent(campaignId)}&levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`;
   const editHrefForUnassigned = (levelId: string): string =>
     `/editor/level?levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`;
   const editHref = levelDoc
@@ -515,7 +556,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       : isUnassignedSelected
       ? editHrefForUnassigned(levelDoc.id)
       : camp
-        ? `/editor/level?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
+        ? editHrefForCampaignLevel(camp.id, levelDoc.id)
         : '/editor/level'
     : '/editor/level';
   const playHref = levelDoc
@@ -774,6 +815,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                               active={ref.levelId === selectedLevelId}
                               readOnly={readOnly}
                               onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
+                              editHref={levels[ref.levelId] ? editHrefForCampaignLevel(camp.id, ref.levelId) : undefined}
                               onMoveUp={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, -1); }}
                               onMoveDown={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, 1); }}
                               onDelete={(event) => { event.stopPropagation(); if (levels[ref.levelId]) confirmDeleteLevel(levels[ref.levelId]); }}

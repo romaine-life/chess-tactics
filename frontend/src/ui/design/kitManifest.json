@@ -1,5 +1,5 @@
 {
-  "generated": "2026-07-05",
+  "generated": "2026-07-06",
   "gate": "verify-kit-asset.mjs --glyph (transparency hygiene: magenta despill + edge bleed; anti-aliasing allowed)",
   "summary": {
     "pass": 47,
@@ -212,6 +212,17 @@
         {
           "name": "pawn",
           "url": "/assets/ui/kit/icons/pawn.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "pencil",
+          "url": "/assets/ui/kit/icons/pencil.png",
           "w": 64,
           "h": 64,
           "magenta": 0,
