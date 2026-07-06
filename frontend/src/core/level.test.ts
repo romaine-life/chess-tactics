@@ -57,6 +57,41 @@ describe('level schema', () => {
     expect(validateLevel(lvl).ok).toBe(true);
   });
 
+  it('accepts well-formed setup spawn and pawn-promotion events', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.layers.zones = [
+      { id: 'deployment', name: 'Deployment', color: 'blue', type: 'region', tiles: [[0, 7], [1, 7]] },
+      { id: 'promotion', name: 'Promotion lane', color: 'amber', type: 'region', tiles: [[4, 0]] },
+    ];
+    lvl.events = [
+      { kind: 'spawn', name: 'Deploy', trigger: { kind: 'setup' }, side: 'player', roster: { pawn: 2 }, zoneIds: ['deployment'] },
+      {
+        kind: 'pawn-promotion',
+        name: 'Promote',
+        trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId: 'promotion' },
+        choices: ['queen', 'rook'],
+        defaultPromotion: 'rook',
+      },
+    ];
+    expect(validateLevel(lvl).ok).toBe(true);
+  });
+
+  it('rejects malformed non-victory events', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    const bad: unknown[] = [
+      'nope',
+      [{ kind: 'teleport', trigger: { kind: 'setup' } }],
+      [{ kind: 'spawn', trigger: { kind: 'later' }, side: 'player', roster: { pawn: 1 }, zoneIds: ['z'] }],
+      [{ kind: 'spawn', trigger: { kind: 'setup' }, side: 'enemy', roster: { rock: 1 }, zoneIds: ['z'] }],
+      [{ kind: 'spawn', trigger: { kind: 'setup' }, side: 'enemy', roster: { pawn: 1 }, zoneIds: [] }],
+      [{ kind: 'pawn-promotion', trigger: { kind: 'unit-enters-zone', unit: { type: 'queen' }, zoneId: 'z' } }],
+      [{ kind: 'pawn-promotion', trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: 'z' }, choices: ['king'] }],
+    ];
+    for (const events of bad) {
+      expect(validateLevel({ ...lvl, events } as unknown).ok).toBe(false);
+    }
+  });
+
   it('rejects malformed victory rules (bad action/kind/side/turns/filter, non-array) — ADR-0064', () => {
     const bad: unknown[] = [
       { not: 'an array' },
@@ -159,7 +194,7 @@ describe('level schema', () => {
   it('zones: well-formed entries pass; bad id/type/tiles shapes fail', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
     lvl.layers.zones = [
-      { id: 'z1', type: 'player-spawn', tiles: [[0, 7], [1, 7]] },
+      { id: 'z1', name: 'Deployment', color: 'blue', type: 'region', tiles: [[0, 7], [1, 7]] },
       { id: 'promo', type: 'pawn-promotion', tiles: [[4, 0]] },
     ];
     expect(validateLevel(lvl).ok).toBe(true);
@@ -170,6 +205,8 @@ describe('level schema', () => {
       return validateLevel(l).ok;
     };
     expect(withZones([{ id: 5, type: 'player-spawn', tiles: [] }])).toBe(false); // non-string id
+    expect(withZones([{ id: 'z', name: 5, type: 'region', tiles: [] }])).toBe(false); // non-string name
+    expect(withZones([{ id: 'z', color: 'plaid', type: 'region', tiles: [] }])).toBe(false); // unknown color
     expect(withZones([{ id: 'z', type: 'lava-pit', tiles: [] }])).toBe(false); // unknown type
     expect(withZones([{ id: 'z', type: 'objective' }])).toBe(false); // missing tiles
     expect(withZones([{ id: 'z', type: 'objective', tiles: [[1]] }])).toBe(false); // not a pair

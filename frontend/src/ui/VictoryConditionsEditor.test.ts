@@ -1,26 +1,28 @@
 import { describe, it, expect } from 'vitest';
-import { mergeRules, rulesEqual, conditionKey } from './VictoryConditionsEditor';
+import { appendRules, rulesEqual, conditionKey } from './VictoryConditionsEditor';
 import type { VictoryRules } from '../core/level';
 
-// The pure helpers behind the additive-preset / idempotent-add behaviour (ADR-0064 if-then rules).
+// The pure helpers behind additive event templates (ADR-0064 if-then rules).
 
 describe('victory rule helpers (ADR-0064)', () => {
-  it('mergeRules adds rules but never duplicates, and re-merging is a no-op', () => {
-    const base: VictoryRules = [{ if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] }];
+  it('appendRules always adds template rules with fresh identities, even when content duplicates', () => {
+    const base: VictoryRules = [{ id: 'reach-goal', name: 'Reach goal', if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] }];
     const add: VictoryRules = [
-      { if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
-      { if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] }, // identical to base → not duplicated
+      { id: 'wipe-enemy', name: 'Wipe enemy', if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
+      { id: 'reach-goal', name: 'Reach goal', if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
     ];
-    const merged = mergeRules(base, add);
-    expect(merged).toHaveLength(2);
-    expect(mergeRules(merged, add)).toEqual(merged); // idempotent
+    const merged = appendRules(base, add);
+    expect(merged).toHaveLength(3);
+    expect(merged.map((rule) => rule.id)).toEqual(['reach-goal', 'wipe-enemy', 'reach-goal-2']);
+    expect(merged.map((rule) => rule.name)).toEqual(['Reach goal', 'Wipe enemy', 'Reach goal 2']);
+    expect(appendRules(merged, add)).toHaveLength(5);
   });
 
   it('a win rule and a lose rule with the same conditions are distinct', () => {
     const win: VictoryRules = [{ if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] }];
     const lose: VictoryRules = [{ if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'lose', side: 'player' }] }];
     expect(rulesEqual(win, lose)).toBe(false);
-    expect(mergeRules(win, lose)).toHaveLength(2); // different `then` → both kept
+    expect(appendRules(win, lose)).toHaveLength(2); // different `then` → both kept
   });
 
   it('conditionKey de-dupes eliminate by side+filter, but turnLimit by kind alone', () => {

@@ -56,9 +56,21 @@ describe('boardCode — zones wire key (z)', () => {
   it('round-trips authored zone entries without merging same-type or empty zones', () => {
     const board = base({
       zoneEntries: [
+        { id: 'zone-1', name: 'North landing', color: 'blue', type: 'region', tiles: ['0,0'] },
+        { id: 'zone-2', name: 'South landing', color: 'red', type: 'region', tiles: ['1,0'] },
+        { id: 'zone-3', name: 'Empty label', color: 'gold', type: 'region', tiles: [] },
+      ],
+    });
+    const decoded = decodeBoard(encodeBoard(board))!;
+    expect(decoded.zoneEntries).toEqual(board.zoneEntries);
+    expect(decoded.zones).toEqual({ '0,0': 'region', '1,0': 'region' });
+  });
+
+  it('decodes legacy authored zone entries that do not carry names', () => {
+    const board = base({
+      zoneEntries: [
         { id: 'zone-1', type: 'pawn-promotion', tiles: ['0,0'] },
         { id: 'zone-2', type: 'pawn-promotion', tiles: ['1,0'] },
-        { id: 'zone-3', type: 'objective', tiles: [] },
       ],
     });
     const decoded = decodeBoard(encodeBoard(board))!;

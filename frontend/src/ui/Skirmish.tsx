@@ -19,6 +19,7 @@ import { appendTimeControlParams, readTimeControlParams } from './playtestRoute'
 import { editorBoardToLevel } from '../core/levelBoard';
 import { fetchPublicMap } from '../net/maps';
 import { OBJECTIVE_TYPES, type ObjectiveType } from '../core/level';
+import { spawnEventsForLevel } from '../core/levelEvents';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import { PALETTE_FOR_SIDE, isPlayablePieceType } from '../core/pieces';
 import { masterSrc, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
@@ -26,6 +27,7 @@ import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
 import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
 import { navigateApp, readValidatedReturnTo } from './navigation';
+import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
 
 export function Skirmish() {
   const routeSearch = window.location.search;
@@ -53,8 +55,8 @@ export function Skirmish() {
   // A shared USER map: `?map=<publicId>` fetches its public snapshot and plays it (no sign-in, no
   // campaign). The dead-link message shows if the id is unknown/removed.
   const routeMap = routeParams.get('map');
-  // The Skirmish hub's "Start" enters as `?random=1`: always roll a FRESH random battle on
-  // the player's chosen clock, rather than resuming a prior in-progress skirmish.
+  // Legacy free-skirmish links can still enter as `?random=1`: always roll a FRESH random
+  // battle on the player's chosen clock, rather than resuming a prior in-progress skirmish.
   const routeRandom = routeParams.get('random') === '1';
   // Where a test-play should return to (the editor board that launched it, via ?returnTo). Drives
   // a "‹ Back to editor" in the title bar so a live board test is a LOOP — tweak, play, back —
@@ -104,9 +106,9 @@ export function Skirmish() {
   const campaigns = useCampaigns((s) => s.campaigns);
   const levelDocs = useCampaigns((s) => s.levels);
   // The live objective + which side holds the King come from the STORE (not routeLevel):
-  // the store computes kingSide from the actual starting pieces, so a random-placement
-  // King Assault whose roster deals the player the King reads "Protect your King" too, and
-  // a free skirmish (no level) still gets a correct goal line. objectiveSummary is the one
+  // the store computes kingSide from the actual starting pieces, so a setup-spawn King
+  // Assault whose events deal the player the King reads "Protect your King" too, and a
+  // free skirmish (no level) still gets a correct goal line. objectiveSummary is the one
   // source of that copy (ADR-0050 — no re-hardcoded objective strings in the UI).
   const objective = useSkirmish((s) => s.objective);
   const kingSide = useSkirmish((s) => s.objectiveCtx.kingSide);
@@ -159,15 +161,10 @@ export function Skirmish() {
   const replayLevel = () => {
     const level = activeLevel;
     if (!level) return;
-    // Retry the SAME position: a fixed-placement level reuses the current seed so it rebuilds
-    // byte-identical. The board art signature is then unchanged, so the deploy "arrival" drop
-    // never re-arms (SkirmishBoard) — the pieces simply hop back to their starting seats, which
-    // is the whole reset the player wants. Rolling a fresh seed would leave every piece on its
-    // authored square yet still re-hide the board and re-play the drop, reading as "move back,
-    // disappear, fall again." A random-placement level instead re-rolls: reshuffling the deal is
-    // that mode's point (ADR-0050), and a fresh deal reads better as a new deploy than as pieces
-    // sliding to random new homes.
-    const seed = level.placement === 'random' ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
+    // Retry the SAME position when pieces are authored on the board: reuse the current seed so it
+    // rebuilds byte-identical. Setup spawn events instead re-roll, since reshuffling the deal is
+    // the point of event-driven deployment and reads better as a fresh deploy.
+    const seed = spawnEventsForLevel(level).length ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
     newSkirmish({ seed, level });
   };
 
@@ -288,9 +285,9 @@ export function Skirmish() {
       });
     };
 
-    // The Skirmish hub's "Start" (`?random=1`) ALWAYS rolls a fresh random battle on the
-    // chosen clock — never resumes — then strips the flag so a later reload resumes THIS
-    // battle instead of re-rolling a different one.
+    // Legacy `?random=1` links ALWAYS roll a fresh free battle on the chosen clock — never
+    // resume — then strip the flag so a later reload resumes THIS battle instead of
+    // re-rolling a different one. The Skirmish hub now routes through editable profiles.
     if (routeRandom) {
       newSkirmish({ seed: freshSeed(), ai, timeControl: loadSkirmishClockPref() });
       navigateApp('/play', { replace: true, scroll: false });
@@ -345,6 +342,7 @@ export function Skirmish() {
     ensureCampaignsHydrated()
       .then(() => {
         if (!active) return;
+        ensureDefaultSkirmishProfileLevel();
         if (routeCampaignId) useCampaigns.getState().selectCampaign(routeCampaignId);
         useCampaigns.getState().selectLevel(routeLevelId);
         const level = useCampaigns.getState().levels[routeLevelId] ?? null;

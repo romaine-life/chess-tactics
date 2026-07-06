@@ -2,41 +2,58 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { useCampaigns } from '../campaign/store';
 import type { Level } from '../core/level';
+import { spawnEventsForLevel } from '../core/levelEvents';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { NavButton } from './shared/NavButton';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { levelObjectiveLine } from './LevelInfoCompact';
-import { SkirmishClockControl } from './SkirmishClockControl';
 import { FittedTabLabel } from './shared/FittedTabLabel';
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
+import { ensureDefaultSkirmishProfileLevel, skirmishProfileLevels } from './skirmishProfiles';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
 
-type SkirmishTab = 'random' | 'levels';
+type SkirmishTab = 'profiles' | 'levels';
 
-// The "Random Skirmish" section: pick the battle clock, then roll a fresh random board.
-// Time controls write straight to the shared preference (SkirmishClockControl), and Start
-// enters the board with ?random=1 — which always rolls a fresh battle on that clock
-// (ui/Skirmish reads the preference).
-function RandomSkirmishPanel({ embedded }: { embedded?: boolean }): ReactElement {
+function levelForceSummary(level: Level): string {
+  const count = (side: 'player' | 'enemy'): number => {
+    const painted = level.layers.units.filter((unit) => unit.side === side).length;
+    const spawned = spawnEventsForLevel(level)
+      .filter((event) => event.side === side)
+      .reduce((sum, event) => sum + Object.values(event.roster ?? {}).reduce((inner, n) => inner + (n ?? 0), 0), 0);
+    return painted + spawned;
+  };
+  return `${count('player')}v${count('enemy')}`;
+}
+
+function SkirmishProfilesPanel({ levels, embedded }: { levels: Level[]; embedded?: boolean }): ReactElement {
   return (
     <main className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}>
       <div className="settings-panel-content">
-        <section className="settings-section skirmish-setup-section">
-          <h3 className="settings-section-title">Random Skirmish</h3>
-          <p className="skirmish-setup-blurb">
-            A freshly rolled board and forces every time — capture the enemy King. Set the
-            battle clock, then start.
-          </p>
-          <div className="skirmish-setup-clock">
-            <span className="skirmish-eyebrow">Battle clock</span>
-            <SkirmishClockControl timedHint="Starts a fresh random battle on this clock." />
-          </div>
-          <div className="skirmish-setup-actions">
-            <NavButton className="app-header-button app-header-button-active skirmish-setup-start" to="/play?random=1">
-              Start Skirmish
-            </NavButton>
+        <section className="settings-section">
+          <h3 className="settings-section-title">Skirmish Profiles</h3>
+          <div className="settings-section-rows">
+            {levels.map((level) => (
+              <section className="settings-row" key={level.id}>
+                <span className="settings-row-thumb" aria-hidden="true">
+                  <LevelThumbnail level={level} width={72} height={48} alt="" />
+                </span>
+                <div className="settings-row-copy">
+                  <h4>{level.name}</h4>
+                  <p>{levelObjectiveLine(level)} · {levelForceSummary(level)} · {level.board.cols}x{level.board.rows}</p>
+                </div>
+                <div className="settings-row-control">
+                  <NavButton
+                    className="app-header-button app-header-button-active"
+                    to={playSkirmishLevelHref(level.id)}
+                    aria-label={`Play ${level.name}`}
+                  >
+                    Play
+                  </NavButton>
+                </div>
+              </section>
+            ))}
           </div>
         </section>
       </div>
@@ -101,13 +118,13 @@ function SkirmishLevelsPanel({ levels, loading, embedded }: { levels: Level[]; l
 }
 
 // The Skirmish hub: a settings-twin of the main menu (like Campaign). The rail switches
-// between "Random Skirmish" (roll a fresh board, choose the clock) and "Levels" (pick a
-// standalone board). Click the brand lockup to go home.
+// between editable skirmish profiles and standalone saved levels. Click the brand lockup to go home.
 export function SkirmishMapPickerRoute({ embedded = false }: { embedded?: boolean } = {}): ReactElement {
   const campaigns = useCampaigns((s) => s.campaigns);
   const levels = useCampaigns((s) => s.levels);
+  const profileLevels = useMemo(() => skirmishProfileLevels(levels), [levels]);
   const skirmishLevels = useMemo(() => skirmishMapLevels(campaigns, levels), [campaigns, levels]);
-  const [tab, setTab] = useState<SkirmishTab>('random');
+  const [tab, setTab] = useState<SkirmishTab>('profiles');
   const [contentReady, setContentReady] = useState(() => useCampaigns.getState().campaigns.length > 0);
   const [loading, setLoading] = useState(true);
 
@@ -123,16 +140,19 @@ export function SkirmishMapPickerRoute({ embedded = false }: { embedded?: boolea
     setLoading(true);
     ensureCampaignsHydrated()
       .catch(() => {})
-      .finally(() => { if (active) { setLoading(false); setContentReady(true); } });
+      .finally(() => {
+        ensureDefaultSkirmishProfileLevel();
+        if (active) { setLoading(false); setContentReady(true); }
+      });
     return () => { active = false; };
   }, []);
 
   const TABS: { id: SkirmishTab; label: string; icon: string }[] = [
-    { id: 'random', label: 'Random Skirmish', icon: 'solo-skirmish' },
+    { id: 'profiles', label: 'Skirmish Profiles', icon: 'solo-skirmish' },
     { id: 'levels', label: 'Levels', icon: 'level-editor' },
   ];
 
-  // The two skirmish columns — the Random/Levels rail (a tab column) + the chosen panel (an action
+  // The two skirmish columns — the Profiles/Levels rail (a tab column) + the chosen panel (an action
   // column). Shared by the standalone route AND the embedded-in-shell render. The rail tabs are
   // internal STATE (setTab), not routes, so the skirmish sub-nav lives inside the one instance.
   const inner = (
@@ -158,8 +178,8 @@ export function SkirmishMapPickerRoute({ embedded = false }: { embedded?: boolea
         ))}
       </aside>
 
-      {tab === 'random'
-        ? <RandomSkirmishPanel embedded={embedded} />
+      {tab === 'profiles'
+        ? <SkirmishProfilesPanel levels={profileLevels} embedded={embedded} />
         : <SkirmishLevelsPanel levels={skirmishLevels} loading={loading} embedded={embedded} />}
     </>
   );

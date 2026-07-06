@@ -10,7 +10,7 @@
 //    `boardCode` so the next open is exact, and projecting terrain/units into `layers` so
 //    the game (which reads `layers`, not `boardCode`) plays the authored board.
 
-import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, TimeControl, VictoryRules, Zone } from './level';
+import type { Level, LevelEconomy, LevelEvents, LevelUnit, ObjectiveType, Roster, TimeControl, VictoryRules, Zone } from './level';
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
 import type { PlacedProp } from './props';
 import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
@@ -80,7 +80,8 @@ function zonesToLayers(
       tiles.push([x, y]);
     }
     tiles.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
-    return { id: entry.id.trim() || `zone-${index + 1}`, type: entry.type, tiles };
+    const name = entry.name?.trim();
+    return { id: entry.id.trim() || `zone-${index + 1}`, ...(name ? { name } : {}), ...(entry.color ? { color: entry.color } : {}), type: entry.type, tiles };
   });
 }
 
@@ -105,7 +106,8 @@ function zoneEntriesFromLayers(zones: Zone[] | undefined, cols: number, rows: nu
       return ay - by || ax - bx;
     });
     index += 1;
-    entries.push({ id: zone.id.trim() || `zone-${index}`, type: zone.type, tiles });
+    const name = zone.name?.trim();
+    entries.push({ id: zone.id.trim() || `zone-${index}`, ...(name ? { name } : {}), ...(zone.color ? { color: zone.color } : {}), type: zone.type, tiles });
   }
   return entries;
 }
@@ -152,9 +154,9 @@ export interface LevelMeta {
   name: string;
   notes?: string;
   objective?: ObjectiveType;
-  // The ADR-0050 placement axis + its config, authored in the editor's RULES panel and written
-  // straight onto the Level. Omitted (undefined) means 'fixed' / no roster / default survive turns
-  // — the back-compat default — so a save from a level that never touched these leaves them absent.
+  // The legacy placement axis + its config, authored in the editor's RULES panel and written
+  // straight onto the Level for compatibility. Setup spawn events in `events` own the actual
+  // random deployment behavior on new saves.
   placement?: 'fixed' | 'random';
   roster?: { player: Roster; enemy: Roster };
   surviveTurns?: number;
@@ -163,6 +165,8 @@ export interface LevelMeta {
   // Authored win/lose lists (ADR-0064). Omitted ⇒ the `objective` preset defines the outcome
   // (the RULES panel's "Custom win/lose" toggle is off) — the same back-compat default as above.
   victory?: VictoryRules;
+  // Authored non-victory events: setup spawns, pawn promotion triggers, and future event kinds.
+  events?: LevelEvents;
   difficulty?: string;
   economy?: LevelEconomy;
   theme?: string;
@@ -352,7 +356,8 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   }
 
   // Project authored zones into real `layers.zones` — spawn pools, reach targets and promotion
-  // zones read these directly. Legacy boards without entries are grouped by their collapsed map.
+// entries are named regions; gameplay behavior comes from level events. Legacy boards without
+// entries are grouped by their collapsed map.
   const zoneEntries = board.zoneEntries ?? zoneEntriesFromCellMap(board.zones, cols, rows);
   const zones = zonesToLayers(zoneEntries, cols, rows);
 
@@ -389,5 +394,6 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   if (meta.surviveTurns !== undefined) level.surviveTurns = meta.surviveTurns;
   if (meta.timeControl !== undefined) level.timeControl = meta.timeControl;
   if (meta.victory !== undefined) level.victory = meta.victory;
+  if (meta.events !== undefined) level.events = meta.events;
   return level;
 }

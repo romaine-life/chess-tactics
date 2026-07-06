@@ -11,6 +11,7 @@ import { generateSocketBoard } from '../core/tileBoardGenerator';
 import type { TileFamilyId } from '../core/tileSockets';
 import { PLAYABLE_PIECE_TYPES, defaultFacingForSide } from '../core/pieces';
 import { propCells, propDef } from '../core/props';
+import { promotionRulesForLevel, spawnEventsForLevel, zoneCellsByIds } from '../core/levelEvents';
 
 const DEFAULT_SIZE: BoardSize = { cols: 8, rows: 12 };
 const ENEMY_CHOICES: readonly PieceType[] = ['knight', 'bishop', 'rook', 'queen'];
@@ -113,34 +114,31 @@ export function createFromLevel(level: Level, seed: number): GameState {
     });
   }
 
-  // Random placement (ADR-0050): deal the authored roster onto seeded-random free cells
-  // of each side's pooled spawn zones instead of reading authored positions (a playable
-  // random level has `layers.units` empty — the editor's playability gate enforces it).
-  // Order of operations matters: terrain + the blocking-prop colliders above joined the
-  // taken set FIRST, so no piece is ever dealt inside a tree footprint or onto impassable
-  // ground. Restarting with a new seed reshuffles the deal — that's the mode's point.
-  if (level.placement === 'random') {
+  // Setup spawn events: zones are dumb named tile groups; the event says which side and
+  // roster to deal onto which zone ids. Legacy random-placement levels are expanded into
+  // equivalent spawn events by spawnEventsForLevel, so old content still plays.
+  const spawnEvents = spawnEventsForLevel(level);
+  if (spawnEvents.length > 0) {
     const rng = createRng(seed);
     const taken = new Set(occupied);
     for (const c of level.layers.terrain) if (!isPassableTerrain(c.terrain)) taken.add(`${c.x},${c.y}`);
-    for (const side of ['player', 'enemy'] as const) {
-      const zoneType = side === 'player' ? 'player-spawn' : 'enemy-spawn';
-      // Pool the side's spawn tiles (multiple zones of a type pool), deduped, in-bounds,
-      // minus taken cells — the same usable-tile math validatePlayability promised on.
+    const nextId = (() => {
+      const counts = new Map<string, number>();
+      return (side: 'player' | 'enemy', type: PieceType): string => {
+        const prefix = `spawn-${side}-${type}`;
+        const count = counts.get(prefix) ?? 0;
+        counts.set(prefix, count + 1);
+        return `${prefix}-${count}`;
+      };
+    })();
+    for (const event of spawnEvents) {
       const free: Array<{ x: number; y: number }> = [];
-      const seen = new Set<string>();
-      for (const zone of level.layers.zones) {
-        if (zone.type !== zoneType) continue;
-        for (const [x, y] of zone.tiles) {
-          const k = `${x},${y}`;
-          if (seen.has(k)) continue;
-          seen.add(k);
-          if (taken.has(k)) continue;
-          if (x < 0 || x >= level.board.cols || y < 0 || y >= level.board.rows) continue;
-          free.push({ x, y });
-        }
+      for (const cell of zoneCellsByIds(level, event.zoneIds)) {
+        const k = `${cell.x},${cell.y}`;
+        if (taken.has(k)) continue;
+        free.push(cell);
       }
-      const roster = level.roster?.[side] ?? {};
+      const roster = event.roster ?? {};
       // Iterate piece types in the canonical order, never Object.keys — object key order
       // is authoring-insertion order, which would silently change the deal between two
       // otherwise identical levels. Same seed must always mean the same layout.
@@ -150,39 +148,26 @@ export function createFromLevel(level: Level, seed: number): GameState {
           const cell = free.splice(rng.int(free.length), 1)[0];
           taken.add(`${cell.x},${cell.y}`);
           pieces.push({
-            id: `${side}-${type}-${i}`,
-            side,
+            id: nextId(event.side, type),
+            side: event.side,
             type,
             x: cell.x,
             y: cell.y,
-            facing: defaultFacingForSide(side),
+            facing: defaultFacingForSide(event.side),
             alive: true,
             // The dealt cell is the piece's home rank, so a dealt pawn keeps its
             // double-step — matching the free-skirmish spawn behavior.
             startX: cell.x,
             startY: cell.y,
-            ...pawnForwardFields(type, defaultFacingForSide(side)),
+            ...pawnForwardFields(type, defaultFacingForSide(event.side)),
           });
         }
       }
     }
   }
 
-  const promotionZones = (() => {
-    const cells: Array<{ x: number; y: number }> = [];
-    const seen = new Set<string>();
-    for (const zone of level.layers.zones) {
-      if (zone.type !== 'pawn-promotion') continue;
-      for (const [x, y] of zone.tiles) {
-        const key = `${x},${y}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        if (x < 0 || x >= level.board.cols || y < 0 || y >= level.board.rows) continue;
-        cells.push({ x, y });
-      }
-    }
-    return cells;
-  })();
+  const promotionRules = promotionRulesForLevel(level);
+  const promotionZones = promotionRules.flatMap((rule) => rule.cells);
 
   return {
     size: { cols: level.board.cols, rows: level.board.rows },
@@ -196,6 +181,7 @@ export function createFromLevel(level: Level, seed: number): GameState {
     // colliders above do the blocking. Defaults to [] so a prop-free level stays prop-free.
     props,
     promotionZones: promotionZones.length ? promotionZones : undefined,
+    promotionRules: promotionRules.length ? promotionRules : undefined,
     turn: 'player',
     winner: null,
   };

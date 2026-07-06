@@ -3,7 +3,8 @@
 // obstacles, side-based pawns, threat = enemy attacked squares, capture/promote/
 // last-side-standing) — but deterministic and immutable.
 
-import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, PromotionPieceType, Side, UnitFacing, Vec, Winner } from './types';
+import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, PawnPromotionRule, Piece, PieceType, PromotionPieceType, Side, UnitFacing, Vec, Winner } from './types';
+import { PROMOTION_PIECE_TYPES } from './types';
 import type { Rng } from './rng';
 import { buildTerrainIndex, canTraverse, elevationAt, haltsTravel, type TerrainIndex } from './terrain';
 import { facingFromDelta } from './pieces';
@@ -376,8 +377,25 @@ export interface ApplyOptions {
   promotion?: PromotionPieceType;
 }
 
-function isPawnPromotionCell(state: GameState, piece: Piece): boolean {
-  return !!state.promotionZones?.some((cell) => cell.x === piece.x && cell.y === piece.y);
+export function promotionRuleForMove(state: GameState, piece: Piece, to: Vec): PawnPromotionRule | null {
+  if (piece.type !== 'pawn') return null;
+  const rules = state.promotionRules;
+  if (rules?.length) {
+    return rules.find((rule) =>
+      (rule.side === undefined || rule.side === piece.side) &&
+      rule.cells.some((cell) => cell.x === to.x && cell.y === to.y)
+    ) ?? null;
+  }
+  if (state.promotionZones?.some((cell) => cell.x === to.x && cell.y === to.y)) {
+    return { cells: state.promotionZones };
+  }
+  return null;
+}
+
+function promotionChoice(rule: PawnPromotionRule, requested: PromotionPieceType | undefined): PromotionPieceType {
+  const choices = rule.choices?.length ? rule.choices : PROMOTION_PIECE_TYPES;
+  const fallback = rule.defaultPromotion && choices.includes(rule.defaultPromotion) ? rule.defaultPromotion : choices[0] ?? 'queen';
+  return requested && choices.includes(requested) ? requested : fallback;
 }
 
 /**
@@ -424,12 +442,11 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
   piece.y = move.y;
   events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
 
-  if (piece.type === 'pawn') {
-    if (isPawnPromotionCell(state, piece)) {
-      const promotion = options.promotion ?? 'queen';
-      piece.type = promotion;
-      events.push({ kind: 'promoted', pieceId: piece.id, to: promotion });
-    }
+  const promoRule = promotionRuleForMove(state, { ...piece, type: movedPieceType }, { x: piece.x, y: piece.y });
+  if (promoRule) {
+    const promotion = promotionChoice(promoRule, options.promotion);
+    piece.type = promotion;
+    events.push({ kind: 'promoted', pieceId: piece.id, to: promotion });
   }
 
   // Tally the service record now that the piece sits at its final square.

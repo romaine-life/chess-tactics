@@ -3638,12 +3638,14 @@ h1 {
   --ds-inline: var(--ds-space-2);
   --ds-inline-tight: var(--ds-space-1);
   --ds-gutter: var(--ds-space-3);
+  --skirmish-grid-gap: 12px;
+  --skirmish-rail-w: clamp(300px, 24vw, 360px);
   align-items: stretch;
   color: var(--skirmish-ink);
   display: grid;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 360px);
+  gap: var(--skirmish-grid-gap);
+  grid-template-columns: minmax(0, 1fr) var(--skirmish-rail-w);
   /* Row-first: a full-bleed title bar spanning both columns on top (ADR-0004),
      then the board + HUD below. Matches the settings screen's header pattern. */
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
@@ -4718,9 +4720,7 @@ h1 {
   text-transform: uppercase;
 }
 
-/* Random Skirmish setup panel (the /skirmish hub's first tab): a blurb, the shared clock
-   picker in a width-capped column so its rows don't stretch across the whole panel, and a
-   Start button. Reuses .skirmish-clock-row from the picker above. */
+/* Skirmish setup/profile rows in the /skirmish hub. */
 .skirmish-setup-section {
   display: grid;
   gap: var(--ds-stack);
@@ -5087,13 +5087,16 @@ h1 {
 }
 .le-board-warning { color: #f0bd55; font-size: var(--ds-text-sm); line-height: 1.3; margin: 0; text-shadow: 0 0 8px rgba(240, 189, 85, .22); }
 
-/* Layer picker — a dropdown (the tab count outgrew a single segmented row). Wears the same
-   kit frame (border-image button atom) as the editor buttons so it reads as one control family,
-   not a lone gradient; the native select keeps its dropdown chevron. */
-/* The 10px kit frame's fill slice paints over the select's own background, and a <select>
-   can't host a reliable ::after — so the dropdown chevron rides on the wrapper, above the frame. */
-.le-layer-select-wrap { position: relative; }
-.le-layer-select-wrap::after {
+/* Canonical Level Editor select: the <select> wears the kit frame; the wrapper owns the
+   chevron because native selects cannot host a reliable ::after above the 9-slice fill. */
+.le-select-wrap,
+.le-layer-select-wrap,
+.le-event-select-wrap {
+  position: relative;
+}
+.le-select-wrap::after,
+.le-layer-select-wrap::after,
+.le-event-select-wrap::after {
   content: "";
   position: absolute;
   top: 50%;
@@ -5103,6 +5106,17 @@ h1 {
   transform: translateY(-50%);
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23cfe6f1' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain;
   pointer-events: none;
+}
+.le-select-wrap .le-layer-select,
+.le-layer-select-wrap .le-layer-select,
+.le-event-select-wrap .le-layer-select {
+  overflow: hidden;
+  padding-left: 10px;
+  padding-right: 34px;
+  text-align: left;
+  text-align-last: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .le-layer-select {
   appearance: none;
@@ -5116,7 +5130,7 @@ h1 {
   font-size: var(--ds-text-xs);
   min-height: 40px;
   outline: none;
-  padding: 0 22px 0 6px;
+  padding: 0 34px 0 10px;
   text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
   width: 100%;
@@ -5154,6 +5168,61 @@ h1 {
 .le-zone-stepper-button:disabled {
   cursor: default;
   opacity: .42;
+}
+.le-zone-panel {
+  --le-zone-button-w: 38px;
+  --le-zone-row-h: 42px;
+}
+.le-zone-panel .le-ctrlrow {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: var(--le-zone-row-h);
+}
+.le-zone-panel .le-zone-select-controls,
+.le-zone-panel .le-select-wrap,
+.le-zone-panel .le-zone-name-input,
+.le-zone-panel .le-zone-color-swatches {
+  box-sizing: border-box;
+  justify-self: stretch;
+  min-width: 0;
+  width: 100%;
+}
+.le-zone-panel .le-zone-select-controls {
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) var(--le-zone-button-w) var(--le-zone-button-w);
+  height: var(--le-zone-row-h);
+}
+.le-zone-panel .le-select-wrap,
+.le-zone-panel .le-layer-select-wrap,
+.le-zone-panel .le-layer-select,
+.le-zone-panel .le-zone-name-input,
+.le-zone-panel .le-zone-stepper-button.settings-chrome-button,
+.le-zone-panel .le-zone-color-button {
+  height: var(--le-zone-row-h);
+  min-height: var(--le-zone-row-h);
+}
+.le-zone-panel .le-zone-stepper-button.settings-chrome-button {
+  min-width: var(--le-zone-button-w);
+  width: var(--le-zone-button-w);
+}
+.le-zone-panel .le-zone-name-input {
+  max-width: none;
+}
+.le-zone-panel .le-zone-color-swatches {
+  align-items: stretch;
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  height: var(--le-zone-row-h);
+  justify-content: stretch;
+}
+.le-zone-panel .le-zone-color-button {
+  width: 100%;
+}
+.le-zone-panel .le-zone-color-button .le-zone-dot {
+  height: 14px;
+  width: 14px;
 }
 /* The board-link field wears the kit `field-input` 9-slice (its own navy well is the frame's
    fill slice), never a hand-rolled border (ADR-0032/0034) — the same input chrome the Codex
@@ -5211,15 +5280,15 @@ h1 {
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
 /* ---- Gameplay zones (ADR-0050) ------------------------------------------------------------
-   Zone tint palette — one accent per paintable zone type: player placement (cyan), enemy
-   placement (crimson), goal (gold). Shared by the board overlay diamond, the brush preview,
-   and the swatch dots so a colour always means the same zone. */
-.le-zone-player { --le-zone-accent: 90, 200, 255; }
-.le-zone-enemy { --le-zone-accent: 235, 96, 96; }
-.le-zone-goal { --le-zone-accent: 245, 200, 90; }
-.le-zone-threat { --le-zone-accent: 236, 95, 194; }
-.le-zone-rock { --le-zone-accent: 166, 178, 190; }
-.le-zone-promotion { --le-zone-accent: 255, 226, 118; }
+   Zone tint palette — cosmetic only. Events/rules decide behavior; color just helps authors
+   distinguish named regions. Old hidden-type aliases stay so legacy renders keep their tint. */
+.le-zone-teal, .le-zone-region { --le-zone-accent: 120, 214, 184; }
+.le-zone-blue, .le-zone-player { --le-zone-accent: 90, 200, 255; }
+.le-zone-red, .le-zone-enemy { --le-zone-accent: 235, 96, 96; }
+.le-zone-gold, .le-zone-goal { --le-zone-accent: 245, 200, 90; }
+.le-zone-violet, .le-zone-threat { --le-zone-accent: 236, 95, 194; }
+.le-zone-slate, .le-zone-rock { --le-zone-accent: 166, 178, 190; }
+.le-zone-amber, .le-zone-promotion { --le-zone-accent: 255, 226, 118; }
 
 /* The on-board zone overlay: a translucent tinted diamond. It COPIES the selection ring's
    seating exactly — top: --iso-tile-surface-top + the diamond clip-path — so it sits on the
@@ -5437,6 +5506,32 @@ h1 {
   background: rgba(var(--le-zone-accent), .95);
   box-shadow: 0 0 0 1px rgba(var(--le-zone-accent), .5);
 }
+.le-zone-color-swatches {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(7, 24px);
+  justify-content: end;
+}
+.le-zone-color-button {
+  appearance: none;
+  background: rgba(7, 18, 27, .72);
+  border: 1px solid rgba(120, 160, 180, .28);
+  border-radius: 4px;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: grid;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  width: 24px;
+}
+.le-zone-color-button.active {
+  border-color: rgba(var(--le-zone-accent), .95);
+  box-shadow: 0 0 0 1px rgba(var(--le-zone-accent), .65), 0 0 10px rgba(var(--le-zone-accent), .2);
+}
+.le-zone-color-button:disabled { cursor: default; opacity: .45; }
+.le-zone-color-button:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
+.le-zone-color-button .le-zone-dot { height: 12px; width: 12px; }
 
 /* A wrapping segmented row for controls with more items than fit one line (the 5-mode picker). */
 .le-seg-wrap { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: 1fr 1fr; }
@@ -5588,9 +5683,9 @@ h1 {
 .le-rule-add { margin-top: 12px; }
 .le-seg-compact .le-seg-btn { min-width: 0; padding: 0 12px; }
 
-/* Victory events editor opens as a full-size overlay OVER the board (.skirmish-field is
-   position:relative), leaving the right control panel untouched. Two columns inside: templates on
-   the left, the rules grid on the right — room to breathe that the narrow panel couldn't give. */
+/* Victory events editor opens as a pop-out over the left editor area, leaving the right
+   control panel untouched. It is fixed to the editor viewport instead of absolute inside
+   .skirmish-field because the board column can collapse before the rail at narrow widths. */
 .le-events-open { width: 100%; }
 .le-events-overlay {
   /* Same kit panel frame as the right control panel (.skirmish-hud, ADR-0033): the panel.png
@@ -5600,15 +5695,41 @@ h1 {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  inset: 0;
+  bottom: 0;
+  left: 0;
   overflow: hidden;
   padding: 0;
-  position: absolute;
+  position: fixed;
+  right: calc(var(--skirmish-rail-w) + var(--skirmish-grid-gap));
   text-align: left;
+  top: calc(var(--app-header-h) + var(--skirmish-grid-gap));
   z-index: 30;
 }
-.le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; justify-content: space-between; padding: 0 2px 10px; }
+.le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; gap: 12px; justify-content: space-between; padding: 0 2px 8px; }
 .le-events-head h2 { color: #eafaff; margin: 0; }
+.le-events-head-actions { align-items: center; display: flex; flex: 1; gap: 8px; justify-content: flex-end; min-width: 0; }
+.le-events-tabs {
+  flex: 0 1 auto;
+  gap: 4px;
+  grid-auto-columns: unset;
+  grid-auto-flow: column;
+  grid-template-columns: repeat(2, minmax(92px, auto));
+  margin: 0;
+  max-width: min(46vw, 320px);
+  min-width: 0;
+}
+.le-events-tabs .le-seg-btn,
+.le-events-done {
+  font-size: var(--ds-text-2xs);
+  min-height: 28px;
+  min-width: 0;
+  padding: 0 12px;
+}
+.le-events-tabs .le-seg-btn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Master-detail: a scrollable NAMED rule list (left) + the selected rule's editor (right). */
 .le-md { display: grid; flex: 1; gap: 20px; grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); min-height: 0; padding: 12px 2px 4px; }
 .le-md-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
@@ -5622,12 +5743,44 @@ h1 {
 .le-md-item-out.win { color: #9ff0b0; }
 .le-md-detail { min-height: 0; overflow-y: auto; padding-right: 6px; }
 .le-md-detail .le-rule { border: 0; margin-top: 0; padding: 0; }
+.le-events-other .le-rule > .le-ctrlrow {
+  display: grid;
+  grid-template-columns: minmax(82px, 118px) minmax(240px, 360px);
+  justify-content: start;
+}
+.le-events-other .le-rule > .le-ctrlrow .le-text-input,
+.le-events-other .le-rule > .le-ctrlrow .le-select-wrap,
+.le-events-other .le-rule > .le-ctrlrow .le-event-select-wrap {
+  justify-self: stretch;
+  min-width: 0;
+  width: 100%;
+}
+.le-events-other .le-rule > .le-roster-row {
+  grid-template-columns: minmax(82px, 118px) auto;
+}
+.le-roster-stepper {
+  justify-self: start;
+}
+.le-roster-stepper .settings-stepper {
+  gap: 6px;
+  grid-template-columns: 32px 44px 32px;
+  width: max-content;
+}
+.le-roster-stepper .settings-stepper output {
+  box-sizing: border-box;
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  text-align: center;
+  width: 44px;
+}
 .le-events-templates { border-bottom: 1px solid rgba(150, 180, 200, .14); flex: none; padding-bottom: 12px; }
-.le-template-apply { align-items: center; display: flex; gap: 8px; margin-top: 8px; }
-.le-template-apply .le-layer-select { flex: 1; }
+.le-template-apply { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.le-template-select-wrap { flex: 1 1 180px; min-width: 0; }
+.le-template-apply .le-seg-btn { flex: none; }
 .le-text-input { background: rgba(8, 18, 26, .8); border: 1px solid rgba(120, 160, 180, .35); border-radius: 4px; color: #eafaff; font-family: inherit; font-size: var(--ds-text-sm); min-width: 0; padding: 5px 8px; }
 .le-text-input:focus-visible { border-color: var(--skirmish-cyan, #7fd7ff); outline: none; }
-.le-events-tabs { flex: none; margin: 8px 0 0; }
+.le-zone-name-input { box-sizing: border-box; flex: 1; max-width: 220px; text-align: left; width: 100%; }
 .le-events-placeholder { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 2px; }
 
 /* A LIVE flex column (ADR-0056): the gap actually applies — it was declared on a block
