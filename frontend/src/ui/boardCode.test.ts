@@ -42,6 +42,17 @@ describe('boardCode round-trip', () => {
     expect(decoded!.walls).toEqual(board.walls);
   });
 
+  it('preserves wall art independently from wall materials', () => {
+    const board = emptyBoard({
+      walls: { '0,0|0,-1': 'stone', '0,1|-1,1': 'stone' },
+      wallArt: { '0,0|-1,0': 'banner-stone-wall' },
+    });
+    const decoded = decodeBoard(encodeBoard(board));
+    expect(decoded).not.toBeNull();
+    expect(decoded!.walls).toEqual(board.walls);
+    expect(decoded!.wallArt).toEqual(board.wallArt);
+  });
+
   it('encodes a fence-free board byte-identically to a code that predates fences', () => {
     expect(encodeBoard(emptyBoard({ fences: {} }))).toBe(encodeBoard(emptyBoard()));
     // an old code with no `fe` decodes fences to an empty map (back-compat contract).
@@ -51,6 +62,11 @@ describe('boardCode round-trip', () => {
   it('encodes a wall-free board byte-identically to a code that predates walls', () => {
     expect(encodeBoard(emptyBoard({ walls: {} }))).toBe(encodeBoard(emptyBoard()));
     expect(decodeBoard(encodeBoard(emptyBoard()))!.walls).toEqual({});
+  });
+
+  it('encodes a wall-art-free board byte-identically to a code that predates wall art', () => {
+    expect(encodeBoard(emptyBoard({ wallArt: {} }))).toBe(encodeBoard(emptyBoard()));
+    expect(decodeBoard(encodeBoard(emptyBoard()))!.wallArt).toEqual({});
   });
 
   it('round-trips faction default directions', () => {

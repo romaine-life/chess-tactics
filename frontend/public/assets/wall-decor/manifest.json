@@ -1,0 +1,139 @@
+{
+  "generatedBy": "frontend/scripts/build-wall-decor.py",
+  "source": "docs/art/wall-decor-concepts/codex/<id>-alpha.png",
+  "imageRendering": "pixelated",
+  "assets": [
+    {
+      "id": "banner-tattered",
+      "label": "Tattered Banner",
+      "kind": "banner",
+      "badge": "cloth",
+      "src": "/assets/wall-decor/banner-tattered.png",
+      "width": 72,
+      "height": 96,
+      "mountX": 36,
+      "mountY": 10,
+      "faces": {
+        "west": {
+          "src": "/assets/wall-decor/banner-tattered-west.png",
+          "width": 26,
+          "height": 84,
+          "mountX": 13,
+          "mountY": 10,
+          "previewX": 42,
+          "previewY": 24
+        },
+        "north": {
+          "src": "/assets/wall-decor/banner-tattered-north.png",
+          "width": 26,
+          "height": 84,
+          "mountX": 13,
+          "mountY": 11,
+          "previewX": 84,
+          "previewY": 24
+        }
+      },
+      "method": "Codex img2img + chroma-key alpha + deterministic frame normalization",
+      "notes": "Faded hanging banner for stone perimeter walls."
+    },
+    {
+      "id": "relief-pawn",
+      "label": "Pawn Relief",
+      "kind": "relief",
+      "badge": "stone",
+      "src": "/assets/wall-decor/relief-pawn.png",
+      "width": 72,
+      "height": 72,
+      "mountX": 36,
+      "mountY": 36,
+      "faces": {
+        "west": {
+          "src": "/assets/wall-decor/relief-pawn-west.png",
+          "width": 33,
+          "height": 48,
+          "mountX": 13,
+          "mountY": 29,
+          "previewX": 42,
+          "previewY": 42
+        },
+        "north": {
+          "src": "/assets/wall-decor/relief-pawn-north.png",
+          "width": 33,
+          "height": 48,
+          "mountX": 13,
+          "mountY": 25,
+          "previewX": 84,
+          "previewY": 42
+        }
+      },
+      "method": "Codex img2img + chroma-key alpha + deterministic frame normalization",
+      "notes": "Carved pawn plaque for quiet chess-themed wall dressing."
+    },
+    {
+      "id": "relief-rook",
+      "label": "Rook Relief",
+      "kind": "relief",
+      "badge": "stone",
+      "src": "/assets/wall-decor/relief-rook.png",
+      "width": 72,
+      "height": 72,
+      "mountX": 36,
+      "mountY": 36,
+      "faces": {
+        "west": {
+          "src": "/assets/wall-decor/relief-rook-west.png",
+          "width": 40,
+          "height": 59,
+          "mountX": 20,
+          "mountY": 29,
+          "previewX": 42,
+          "previewY": 42
+        },
+        "north": {
+          "src": "/assets/wall-decor/relief-rook-north.png",
+          "width": 40,
+          "height": 59,
+          "mountX": 20,
+          "mountY": 29,
+          "previewX": 84,
+          "previewY": 42
+        }
+      },
+      "method": "Codex img2img + chroma-key alpha + deterministic frame normalization",
+      "notes": "Carved rook plaque for quiet chess-themed wall dressing."
+    },
+    {
+      "id": "lantern-brass",
+      "label": "Brass Lantern",
+      "kind": "lantern",
+      "badge": "metal",
+      "src": "/assets/wall-decor/lantern-brass.png",
+      "width": 56,
+      "height": 80,
+      "mountX": 28,
+      "mountY": 8,
+      "faces": {
+        "west": {
+          "src": "/assets/wall-decor/lantern-brass-west.png",
+          "width": 16,
+          "height": 63,
+          "mountX": 8,
+          "mountY": 4,
+          "previewX": 42,
+          "previewY": 28
+        },
+        "north": {
+          "src": "/assets/wall-decor/lantern-brass-north.png",
+          "width": 16,
+          "height": 63,
+          "mountX": 8,
+          "mountY": 5,
+          "previewX": 84,
+          "previewY": 28
+        }
+      },
+      "method": "Codex img2img + chroma-key alpha + deterministic frame normalization",
+      "notes": "Unlit brass wall bracket with soot-darkened cap."
+    }
+  ]
+}

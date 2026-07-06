@@ -27,6 +27,10 @@ describe('level editor route helpers', () => {
       layer: 'wall',
       brushKind: 'wall',
     });
+    expect(readLevelEditorRouteState('?kind=wallart')).toMatchObject({
+      layer: 'wallart',
+      brushKind: 'wallart',
+    });
   });
 
   it('preserves board identity while replacing stale editor route params', () => {
@@ -53,6 +57,15 @@ describe('level editor route helpers', () => {
       brushKind: levelEditorRouteBrushKind('wall', undefined),
       brush: null,
     })).toBe('/editor/level?board=abc&layer=wall&kind=wall');
+  });
+
+  it('serializes the wall art layer as its own brush kind', () => {
+    expect(levelEditorRouteBrushKind('wallart', undefined)).toBe('wallart');
+    expect(levelEditorHrefWithRouteState('/editor/level?board=abc', {
+      layer: 'wallart',
+      brushKind: levelEditorRouteBrushKind('wallart', undefined),
+      brush: null,
+    })).toBe('/editor/level?board=abc&layer=wallart&kind=wallart');
   });
 
   it('recognizes canonical and legacy level editor routes', () => {

@@ -14,6 +14,7 @@ import { initBgm } from './bgm.js';
 import { primeSfx } from './sfx';
 import { initProgressSync } from './campaign/progressSync';
 import { loadLiveSeats } from './net/propSeats';
+import { loadLiveWallArt } from './net/wallArt';
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
 // content-hashed + immutable — correct — but that does NOT save a tab that
@@ -69,6 +70,9 @@ if (root) {
   void loadLiveSeats()
     .then((changed) => { if (changed) reactRoot.render(<App />); })
     .catch(() => { /* prop seats are decorative tuning — baseline always renders */ });
+  void loadLiveWallArt()
+    .then((changed) => { if (changed) reactRoot.render(<App />); })
+    .catch(() => { /* wall art is decorative tuning — baseline always renders */ });
 }
 
 // Fold this browser's campaign progress together with the signed-in account's, so clears follow

@@ -217,7 +217,8 @@ export function StudioReadOnlyBoard({
 }): ReactElement {
   const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts, board.featureExits);
   const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
-  const wallOverlays = resolveWallOverlays(board.walls ?? {}, { cols: board.cols, rows: board.rows });
+  const wallBounds = { cols: board.cols, rows: board.rows };
+  const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
 
   const gridCells: TileGridCell[] = [];
   for (let y = 0; y < board.rows; y += 1) {
@@ -245,7 +246,7 @@ export function StudioReadOnlyBoard({
       boardZoom={boardZoom}
       boardPan={boardPan}
     >
-      <WallOverlayLayer overlays={wallOverlays} />
+      <WallOverlayLayer overlays={wallOverlays} wallArt={board.wallArt} bounds={wallBounds} />
       <FenceOverlayLayer overlays={fenceOverlays} />
       <GroundCoverLayer cells={coverCells} />
       {sprites}
