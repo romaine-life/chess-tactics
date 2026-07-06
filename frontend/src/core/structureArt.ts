@@ -1,4 +1,5 @@
 export type StructureArtKind = 'tree' | 'house' | 'rock' | 'doodad';
+export type StructureSplitMode = 'authored' | 'flat-contact';
 
 export interface StructureArtAsset {
   id: string;
@@ -9,6 +10,11 @@ export interface StructureArtAsset {
   terrains: string[];
   sprite: { w: number; h: number; anchorX: number; anchorY: number; scale: number };
   footprint?: { w: number; h: number };
+  /**
+   * Authored halves already contain distinct alpha. Flat imagegen/restyle sprites ship the same
+   * PNG as both halves, so the renderer clips them at the contact line before z-sorting.
+   */
+  splitMode?: StructureSplitMode;
 }
 
 export const STRUCTURE_ART_ASSETS: StructureArtAsset[] = [
@@ -29,6 +35,7 @@ export const STRUCTURE_ART_ASSETS: StructureArtAsset[] = [
     terrains: ['grass', 'dirt', 'stone'],
     sprite: { w: 177, h: 184, anchorX: 91, anchorY: 110, scale: 0.62 },
     footprint: { w: 2, h: 2 },
+    splitMode: 'flat-contact',
   },
   {
     id: 'cabin',
@@ -38,6 +45,7 @@ export const STRUCTURE_ART_ASSETS: StructureArtAsset[] = [
     terrains: ['grass', 'dirt', 'stone'],
     sprite: { w: 220, h: 176, anchorX: 118, anchorY: 107, scale: 0.35 },
     footprint: { w: 1, h: 1 },
+    splitMode: 'flat-contact',
   },
   {
     id: 'lodge',
@@ -47,6 +55,7 @@ export const STRUCTURE_ART_ASSETS: StructureArtAsset[] = [
     terrains: ['grass', 'dirt', 'stone'],
     sprite: { w: 210, h: 177, anchorX: 103, anchorY: 126, scale: 1 },
     footprint: { w: 2, h: 2 },
+    splitMode: 'flat-contact',
   },
   {
     id: 'rock',
@@ -56,6 +65,7 @@ export const STRUCTURE_ART_ASSETS: StructureArtAsset[] = [
     terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'],
     sprite: { w: 40, h: 45, anchorX: 20, anchorY: 44, scale: 1 },
     footprint: { w: 1, h: 1 },
+    splitMode: 'flat-contact',
   },
   {
     id: 'fieldstone',
@@ -65,6 +75,7 @@ export const STRUCTURE_ART_ASSETS: StructureArtAsset[] = [
     terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'],
     sprite: { w: 51, h: 47, anchorX: 25, anchorY: 46, scale: 1 },
     footprint: { w: 1, h: 1 },
+    splitMode: 'flat-contact',
   },
   {
     id: 'boulder',

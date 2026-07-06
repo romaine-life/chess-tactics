@@ -34,9 +34,9 @@ import {
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
 import { resolveFeatureOverlays, resolveFenceOverlays } from '../core/featureAutotile';
-import { propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite } from './BoardStructure';
+import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './BoardStructure';
 import { fenceOverlayZIndex } from './fenceOverlayDepth';
-import { propDef } from '../core/props';
+import { propDef, type StructureSourceRef } from '../core/props';
 import { groundCoverSet, resolveGroundCover, densityFieldAt, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
@@ -87,6 +87,56 @@ const studioTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.ass
 const resolveTile = (id: string): StudioAsset | undefined => studioTiles.find((asset) => asset.id === id);
 const resolveUnit = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
 const resolveDoodad = (id: string): DoodadAsset | undefined => doodadAsset(id);
+
+function pushStructureDrawOps(
+  ops: DrawOp[],
+  source: StructureSourceRef,
+  sourceSprite: { w: number; h: number },
+  anchorY: number,
+  scale: number,
+  dx: number,
+  dy: number,
+  backZ: number,
+  frontZ: number,
+): void {
+  const fullW = sourceSprite.w * scale;
+  const fullH = sourceSprite.h * scale;
+  if (structureSourceSplitMode(source) !== 'flat-contact') {
+    ops.push({ src: structureSourceHalfSrc(source, 'back'), dx, dy, dw: fullW, dh: fullH, z: backZ });
+    ops.push({ src: structureSourceHalfSrc(source, 'front'), dx, dy, dw: fullW, dh: fullH, z: frontZ });
+    return;
+  }
+
+  const clips = flatContactClipRects({ w: sourceSprite.w, h: sourceSprite.h, anchorY });
+  if (clips.back.sh > 0) {
+    ops.push({
+      src: structureSourceHalfSrc(source, 'back'),
+      sx: clips.back.sx,
+      sy: clips.back.sy,
+      sw: clips.back.sw,
+      sh: clips.back.sh,
+      dx,
+      dy,
+      dw: fullW,
+      dh: clips.back.sh * scale,
+      z: backZ,
+    });
+  }
+  if (clips.front.sh > 0) {
+    ops.push({
+      src: structureSourceHalfSrc(source, 'front'),
+      sx: clips.front.sx,
+      sy: clips.front.sy,
+      sw: clips.front.sw,
+      sh: clips.front.sh,
+      dx,
+      dy: dy + clips.front.sy * scale,
+      dw: fullW,
+      dh: clips.front.sh * scale,
+      z: frontZ,
+    });
+  }
+}
 
 /**
  * The flat, z-sorted list of image draws for a board — the bake's "scene graph". Pure (no
@@ -161,8 +211,17 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
       for (const part of parts) {
         const sourceSprite = structureSourceSprite(part.source);
         const scale = part.scale ?? 1;
-        ops.push({ src: structureSourceHalfSrc(part.source, 'back'), dx: left - part.anchorX * scale, dy: top - part.anchorY * scale, dw: sourceSprite.w * scale, dh: sourceSprite.h * scale, z: base - 1 });
-        ops.push({ src: structureSourceHalfSrc(part.source, 'front'), dx: left - part.anchorX * scale, dy: top - part.anchorY * scale, dw: sourceSprite.w * scale, dh: sourceSprite.h * scale, z: base + 1 });
+        pushStructureDrawOps(
+          ops,
+          part.source,
+          sourceSprite,
+          part.anchorY,
+          scale,
+          left - part.anchorX * scale,
+          top - part.anchorY * scale,
+          base - 1,
+          base + 1,
+        );
       }
     }
 
@@ -202,10 +261,7 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
       const s = part.scale ?? 1;
       const dx = left - part.anchorX * s;
       const dy = top - part.anchorY * s;
-      const dw = sourceSprite.w * s;
-      const dh = sourceSprite.h * s;
-      ops.push({ src: structureSourceHalfSrc(part.source, 'back'), dx, dy, dw, dh, z: back });
-      ops.push({ src: structureSourceHalfSrc(part.source, 'front'), dx, dy, dw, dh, z: front });
+      pushStructureDrawOps(ops, part.source, sourceSprite, part.anchorY, s, dx, dy, back, front);
     }
   }
 
