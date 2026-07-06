@@ -239,6 +239,25 @@ export const FENCE_MATERIAL_LABELS: Record<FenceMaterial, string> = { wood: 'Woo
 /** The E(2) and S(4) render bits — a per-cell fence frame only ever shows its two FRONT sides. */
 export const FENCE_RENDER_MASKS = [2, 4, 6] as const;
 
+/**
+ * Wall surface look — one baked set per material (wall-<material>-<mask>.png).
+ * Walls share the edge-keyed movement contract with fences, but are valid only on
+ * the map's northmost/westmost perimeter. They render on N(1)/W(8) tile sides.
+ */
+export type WallMaterial = 'stone' | 'brick' | 'mossy' | 'basalt' | 'palisade';
+export const WALL_MATERIALS: readonly WallMaterial[] = ['stone', 'brick', 'mossy', 'basalt', 'palisade'];
+export const DEFAULT_WALL_MATERIAL: WallMaterial = 'stone';
+export const WALL_MATERIAL_LABELS: Record<WallMaterial, string> = {
+  stone: 'Stone',
+  brick: 'Brick',
+  mossy: 'Mossy Stone',
+  basalt: 'Basalt',
+  palisade: 'Palisade',
+};
+
+/** The N(1) and W(8) render bits — wall frames show only the BACK sides of their owner cell. */
+export const WALL_RENDER_MASKS = [1, 8, 9] as const;
+
 /** Parse an edge key "ax,ay|bx,by" into its two cells, or null if malformed. */
 export function parseEdgeKey(edge: string): { ax: number; ay: number; bx: number; by: number } | null {
   const parts = edge.split('|');
@@ -281,6 +300,12 @@ export interface ResolvedFenceOverlay {
   material: FenceMaterial;
 }
 
+/** A walled cell resolved to its render selector: an N(1)/W(8) mask + which wall material. */
+export interface ResolvedWallOverlay {
+  mask: number;
+  material: WallMaterial;
+}
+
 /**
  * Resolve an edge-keyed fence map to the per-cell render overlay (E=2 / S=4 mask + material) —
  * each edge is assigned to its UPPER-LEFT cell (smaller x for a horizontal-screen pair, smaller
@@ -314,6 +339,53 @@ export function resolveFenceOverlays(fences: Record<string, FenceMaterial>): Map
     const key = featureKey(ownerX, ownerY);
     const prev = out.get(key);
     out.set(key, { mask: (prev?.mask ?? 0) | bit, material: prev?.material ?? material });
+  }
+  return out;
+}
+
+function inBarrierBounds(cell: { x: number; y: number }, bounds: { cols: number; rows: number } | undefined): boolean {
+  return !bounds || (cell.x >= 0 && cell.y >= 0 && cell.x < bounds.cols && cell.y < bounds.rows);
+}
+
+function northWestBoundaryWallTarget(
+  edge: string,
+  bounds: { cols: number; rows: number },
+): { x: number; y: number; bit: 1 | 8 } | null {
+  const cells = parseEdgeKey(edge);
+  if (!cells) return null;
+  const { ax, ay, bx, by } = cells;
+  if (!isOrthogonalPair(ax, ay, bx, by)) return null;
+  if (ay === by) {
+    if (ay < 0 || ay >= bounds.rows) return null;
+    return [ax, bx].includes(-1) && [ax, bx].includes(0) ? { x: 0, y: ay, bit: 8 } : null;
+  }
+  if (ax !== bx || ax < 0 || ax >= bounds.cols) return null;
+  return [ay, by].includes(-1) && [ay, by].includes(0) ? { x: ax, y: 0, bit: 1 } : null;
+}
+
+/** True iff an edge is placeable as a wall: the board's north or west perimeter only. */
+export function isNorthWestBoundaryWallEdge(edge: string, bounds: { cols: number; rows: number }): boolean {
+  return northWestBoundaryWallTarget(edge, bounds) !== null;
+}
+
+/**
+ * Resolve an edge-keyed wall map to per-cell render overlays on N(1)/W(8). Walls are
+ * perimeter scenery/blockers only: the board's northmost and westmost edges. Interior
+ * edges and east/south boundaries are ignored even if stale data contains them.
+ */
+export function resolveWallOverlays(
+  walls: Record<string, WallMaterial>,
+  bounds?: { cols: number; rows: number },
+): Map<string, ResolvedWallOverlay> {
+  const out = new Map<string, ResolvedWallOverlay>();
+  if (!bounds) return out;
+  for (const [edge, material] of Object.entries(walls)) {
+    const target = northWestBoundaryWallTarget(edge, bounds);
+    if (!target) continue;
+    if (!inBarrierBounds(target, bounds)) continue;
+    const key = featureKey(target.x, target.y);
+    const prev = out.get(key);
+    out.set(key, { mask: (prev?.mask ?? 0) | target.bit, material: prev?.material ?? material });
   }
   return out;
 }

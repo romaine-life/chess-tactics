@@ -128,7 +128,7 @@ Lobbies/`utility-*` pattern, generalized and fed by the manifest.
 
 ## Migration map + order
 
-Out of scope: **Studio** (`/tileset-studio`, `/unit-studio`, tile/tileset
+Out of scope: **Studio** (`/studio`, `/unit-studio`, tile/tileset
 review + preview). The owner is evolving those under intense UI needs and will
 style them to the app separately. Do not touch.
 

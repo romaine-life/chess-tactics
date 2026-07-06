@@ -108,7 +108,7 @@ function isTracksView(pathname: string): boolean {
 // and the UI-kit asset library are all categories within it. (The broader Design
 // Index still lives at /design directly.)
 const creatorTools: CreatorTool[] = [
-  { label: 'Studio', href: '/tileset-studio', description: 'The creator workspace — browse tiles, units, the UI-kit asset library, and the artwork gallery, all in one place.' },
+  { label: 'Studio', href: '/studio', description: 'The creator workspace — browse tiles, units, the UI-kit asset library, and the artwork gallery, all in one place.' },
   { label: 'Artwork Compare', href: '/artwork-compare', description: 'Two-panel view — the accepted concept art beside the live screen, for matching the art direction.' },
   { label: 'Broadcast Monitor', href: 'https://ambience.romaine.life/?world=chess', description: 'Inspect the live menu-rain broadcast on ambience — the current scene, what is queued up next, and the event log. Opens in a new tab.', external: true },
 ];

@@ -16,7 +16,7 @@ import type { PlacedProp } from './props';
 import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { TileFamilyId } from './tileSockets';
 import { decodeBoard, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type EditorBoard, type EditorZoneEntry } from '../ui/boardCode';
-import { parseEdgeKey, isOrthogonalPair, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
+import { parseEdgeKey, isOrthogonalPair, isNorthWestBoundaryWallEdge, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
 import { studioFamilies } from '../ui/studioBoard';
 import { UNIT_PALETTES } from './pieces';
 import { unitAssets, type Faction } from '../ui/unitCatalog';
@@ -279,6 +279,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     cover,
     features,
     fences,
+    walls: {},
     featureCuts: {},
     featureExits: {},
     zoneEntries,
@@ -361,11 +362,19 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   const zoneEntries = board.zoneEntries ?? zoneEntriesFromCellMap(board.zones, cols, rows);
   const zones = zonesToLayers(zoneEntries, cols, rows);
 
-  // Fences ride BOTH channels: layers.fences (edge keys — the durable wall list the GAME reads for
-  // collision) AND boardCode `fe` (edge→material, for the editor + rail rendering, via encodeBoard).
-  // Boundary rails use one off-board endpoint, so keep any orthogonal edge that touches the board.
+  // Edge barriers ride BOTH channels: layers.fences (edge keys — the durable blocked-edge list the
+  // GAME reads for collision) AND boardCode `fe`/`wl` (edge→material, for editor/rendering).
+  // Fence rails may touch any board edge. Walls are perimeter-only and only valid on the
+  // northmost/westmost board edges.
   const fences: string[] = [];
-  for (const edge of Object.keys(board.fences ?? {})) {
+  const blockedEdges = new Set(Object.keys(board.fences ?? {}));
+  const validWalls: NonNullable<EditorBoard['walls']> = {};
+  for (const [edge, material] of Object.entries(board.walls ?? {})) {
+    if (!isNorthWestBoundaryWallEdge(edge, { cols, rows })) continue;
+    validWalls[edge] = material;
+    blockedEdges.add(edge);
+  }
+  for (const edge of blockedEdges) {
     if (!fenceTouchesBoard(edge, cols, rows)) continue;
     fences.push(edge);
   }
@@ -382,7 +391,7 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     difficulty: meta.difficulty ?? 'normal',
     economy: meta.economy ?? { startingFunds: 1200, incomePerTurn: 150 },
     theme: meta.theme ?? 'grassland',
-    boardCode: encodeBoard({ ...board, cols, rows }),
+    boardCode: encodeBoard({ ...board, cols, rows, walls: validWalls }),
     layers: { terrain, decals: [], zones, units, props, fences },
   };
   // ADR-0050 mode fields ride as OPTIONAL keys: written only when meta supplies a non-default

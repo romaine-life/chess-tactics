@@ -56,7 +56,7 @@ Get-Content frontend/.codex-vite-3000.err.log -Tail 120
 After `visual:health` succeeds:
 
 ```powershell
-npm run visual:screenshot -- --url http://localhost:3000/tileset-studio --out ../.pwshot/tileset-studio.png --width 1600 --height 900 --budget 5000
+npm run visual:screenshot -- --url http://localhost:3000/studio --out ../.pwshot/studio.png --width 1600 --height 900 --budget 5000
 ```
 
 If screenshot capture fails, inspect the browser/screenshot error separately. Do not collapse screenshot failure, Vite compile failure, and server health failure into the same phrase.

@@ -23,7 +23,7 @@ import {
   TILE_STEP_Y,
 } from '../art/projectionContract';
 import { studioFamilies, assetFrameSrc, type StudioAsset } from '../ui/studioBoard';
-import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
+import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
 import {
   unitAssets,
   hasDirectionSprite,
@@ -33,9 +33,9 @@ import {
   type Faction,
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { resolveFeatureOverlays, resolveFenceOverlays } from '../core/featureAutotile';
+import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays } from '../core/featureAutotile';
 import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './BoardStructure';
-import { fenceOverlayZIndex } from './fenceOverlayDepth';
+import { fenceOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
 import { propDef, type StructureSourceRef } from '../core/props';
 import { groundCoverSet, resolveGroundCover, densityFieldAt, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
@@ -49,6 +49,10 @@ import type { EditorBoard } from '../ui/boardCode';
 const TILE_FRAME_W = TILE_STEP_X * 2; // 96 — the full tile sprite width
 const TILE_FRAME_H = TILE_FRAME_HEIGHT; // 180 — the full tile sprite frame
 const TILE_EQUATOR = 69; // --iso-tile-equator: the frame's contact diamond, from the apex
+const WALL_FRAME_W = 128;
+const WALL_FRAME_H = 240;
+const WALL_ANCHOR_X = 64;
+const WALL_ANCHOR_Y = 96;
 // The doodad sprite is the same 96x180 frame seated by `translate(-50%, -38.333%)` ⇒ the
 // contact pixel (48,69) lands on the cell point. So its frame origin is (-stepX, -equator) too.
 const DOODAD_FRAME_W = TILE_FRAME_W;
@@ -154,6 +158,7 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
   const isExit = (edge: string): boolean => board.featureExits[edge] === true;
   const overlays = resolveFeatureOverlays(board.features, isSevered, isExit);
   const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
+  const wallOverlays = resolveWallOverlays(board.walls ?? {}, { cols: board.cols, rows: board.rows });
 
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
@@ -181,6 +186,19 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
       }
 
       const fence = fenceOverlays.get(key);
+      const wall = wallOverlays.get(key);
+      if (wall) {
+        // Perimeter walls share the live board-level wall layer and tie the owner unit's band.
+        ops.push({
+          src: wallFrameSrc(wall.material, wall.mask),
+          dx: left - WALL_ANCHOR_X,
+          dy: top - WALL_ANCHOR_Y,
+          dw: WALL_FRAME_W,
+          dh: WALL_FRAME_H,
+          z: wallOverlayZIndex({ x, y }),
+        });
+      }
+
       if (fence) {
         // Edge rails are foreground objects; they match the live board-level fence layer.
         ops.push({
@@ -338,6 +356,7 @@ export function boardContentHash(board: EditorBoard): string {
     `ct:${sortedEntries(board.coverTypes ?? {})}`,
     `f:${sortedEntries(board.features)}`,
     `fe:${sortedEntries(board.fences ?? {})}`,
+    `wl:${sortedEntries(board.walls ?? {})}`,
     `x:${sortedEntries(board.featureCuts)}`,
     `xe:${sortedEntries(board.featureExits)}`,
   ];

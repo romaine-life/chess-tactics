@@ -7,3 +7,12 @@ export const FENCE_OVERLAY_DEPTH_OFFSET = 20001;
 export function fenceOverlayZIndex(cell: { x: number; y: number }): number {
   return cell.x + cell.y + FENCE_OVERLAY_DEPTH_OFFSET;
 }
+
+// Walls are owned by a northmost/westmost perimeter cell and drawn on that cell's N/W edge.
+// Tie them to the owner unit's band; units render after barrier overlays in the DOM, so the
+// owner unit stays visible while the wall remains seated to the map border.
+export const WALL_OVERLAY_DEPTH_OFFSET = 20000;
+
+export function wallOverlayZIndex(cell: { x: number; y: number }): number {
+  return cell.x + cell.y + WALL_OVERLAY_DEPTH_OFFSET;
+}

@@ -23,6 +23,10 @@ describe('level editor route helpers', () => {
       layer: 'paths',
       brushKind: 'river',
     });
+    expect(readLevelEditorRouteState('?kind=wall')).toMatchObject({
+      layer: 'wall',
+      brushKind: 'wall',
+    });
   });
 
   it('preserves board identity while replacing stale editor route params', () => {
@@ -40,6 +44,15 @@ describe('level editor route helpers', () => {
       brushKind: levelEditorRouteBrushKind('paths', 'river'),
       brush: null,
     })).toBe('/editor/level?board=abc&layer=paths&kind=river');
+  });
+
+  it('serializes the wall layer as its own brush kind', () => {
+    expect(levelEditorRouteBrushKind('wall', undefined)).toBe('wall');
+    expect(levelEditorHrefWithRouteState('/editor/level?board=abc', {
+      layer: 'wall',
+      brushKind: levelEditorRouteBrushKind('wall', undefined),
+      brush: null,
+    })).toBe('/editor/level?board=abc&layer=wall&kind=wall');
   });
 
   it('recognizes canonical and legacy level editor routes', () => {

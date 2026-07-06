@@ -337,7 +337,7 @@ function renderRoute(path: string): ReactElement {
   if (path === '/play') return <Skirmish />;
   // /skirmish (the Solo Skirmish picker) now renders INSIDE the persistent menu shell — it falls
   // through to the MainMenu default below, sharing the 'menu' key so the button column stays mounted.
-  if (path === '/tileset-studio') return <TilesetStudio />;
+  if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   // /unit-studio is a deep-link into the one Studio with the Units shelf
   // preselected — not a separate surface. Keeps old links working while the
   // catalog/lab/brush flow stays a single mounted component (no route swaps).
@@ -348,7 +348,7 @@ function renderRoute(path: string): ReactElement {
   if (path === '/doodad-editor') return <TilesetStudio initialCategory="doodads" />;
   // /nine-slice-editor is a deep-link alias into the one Studio (like /unit-studio):
   // the 9-slice editor is an embedded Viewer surface, not its own route. The studio
-  // reads ?asset=<frame> off this path and canonicalises the URL to /tileset-studio.
+  // reads ?asset=<frame> off this path and canonicalises the URL to /studio.
   if (path === '/nine-slice-editor') return <TilesetStudio />;
   // /prop-lab is the same shape: a deep-link alias that opens the Studio's embedded
   // prop-seat Viewer (Props category). Not its own route or toolbar (ADR-0058).

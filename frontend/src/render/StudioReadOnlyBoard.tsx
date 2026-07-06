@@ -4,7 +4,7 @@ import { DoodadSprite } from './BoardDoodad';
 import { PropSprite } from './BoardStructure';
 import { propDef, type PropDef } from '../core/props';
 import { GroundCoverLayer } from './GroundCoverLayer';
-import { FenceOverlayLayer } from './FenceOverlayLayer';
+import { FenceOverlayLayer, WallOverlayLayer } from './FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
 import { TileTopLayer } from './TileTopLayer';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
@@ -18,7 +18,7 @@ import {
   type UnitAsset,
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { resolveFeatureOverlays, resolveFenceOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
+import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
@@ -217,6 +217,7 @@ export function StudioReadOnlyBoard({
 }): ReactElement {
   const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts, board.featureExits);
   const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
+  const wallOverlays = resolveWallOverlays(board.walls ?? {}, { cols: board.cols, rows: board.rows });
 
   const gridCells: TileGridCell[] = [];
   for (let y = 0; y < board.rows; y += 1) {
@@ -244,6 +245,7 @@ export function StudioReadOnlyBoard({
       boardZoom={boardZoom}
       boardPan={boardPan}
     >
+      <WallOverlayLayer overlays={wallOverlays} />
       <FenceOverlayLayer overlays={fenceOverlays} />
       <GroundCoverLayer cells={coverCells} />
       {sprites}

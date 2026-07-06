@@ -4,6 +4,7 @@ export const LEVEL_EDITOR_ROUTE_LAYERS = [
   'generate',
   'paths',
   'fence',
+  'wall',
   'unit',
   'doodad',
   'prop',
@@ -24,6 +25,7 @@ export const LEVEL_EDITOR_ROUTE_BRUSH_KINDS = [
   'road',
   'river',
   'fence',
+  'wall',
   'zone',
 ] as const;
 
@@ -74,7 +76,7 @@ export function levelEditorRouteBrushKind(
   current: LevelEditorBrushKind | undefined,
 ): LevelEditorBrushKind | null {
   if (layer === 'paths') return current === 'river' ? 'river' : 'road';
-  if (layer === 'tile' || layer === 'unit' || layer === 'doodad' || layer === 'prop' || layer === 'cover' || layer === 'fence' || layer === 'zone') {
+  if (layer === 'tile' || layer === 'unit' || layer === 'doodad' || layer === 'prop' || layer === 'cover' || layer === 'fence' || layer === 'wall' || layer === 'zone') {
     return layer;
   }
   return null;

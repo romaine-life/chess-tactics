@@ -7,7 +7,7 @@ import puppeteer from 'puppeteer-core';
 const surface = process.argv[2] || 'hybrid-stone-blue';
 const tilePx = Number(process.argv[3] || 1024);
 const out = resolve(process.cwd(), process.argv[4] || 'tmp-shots/dressing-applied.png');
-const url = 'http://127.0.0.1:5177/tileset-studio?mode=dressing&family=stone';
+const url = 'http://127.0.0.1:5177/studio?mode=dressing&family=stone';
 
 const CHROMES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',

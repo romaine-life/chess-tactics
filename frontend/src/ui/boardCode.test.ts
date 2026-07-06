@@ -31,10 +31,26 @@ describe('boardCode round-trip', () => {
     expect(decoded!.fences).toEqual(board.fences);
   });
 
+  it('preserves perimeter walls independently from fences', () => {
+    const board = emptyBoard({
+      fences: { '1,1|2,1': 'wood' },
+      walls: { '0,0|0,-1': 'stone', '0,2|-1,2': 'brick' },
+    });
+    const decoded = decodeBoard(encodeBoard(board));
+    expect(decoded).not.toBeNull();
+    expect(decoded!.fences).toEqual(board.fences);
+    expect(decoded!.walls).toEqual(board.walls);
+  });
+
   it('encodes a fence-free board byte-identically to a code that predates fences', () => {
     expect(encodeBoard(emptyBoard({ fences: {} }))).toBe(encodeBoard(emptyBoard()));
     // an old code with no `fe` decodes fences to an empty map (back-compat contract).
     expect(decodeBoard(encodeBoard(emptyBoard()))!.fences).toEqual({});
+  });
+
+  it('encodes a wall-free board byte-identically to a code that predates walls', () => {
+    expect(encodeBoard(emptyBoard({ walls: {} }))).toBe(encodeBoard(emptyBoard()));
+    expect(decodeBoard(encodeBoard(emptyBoard()))!.walls).toEqual({});
   });
 
   it('round-trips faction default directions', () => {
