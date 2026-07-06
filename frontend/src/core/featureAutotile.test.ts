@@ -10,10 +10,14 @@ import {
   featureMaterials,
   defaultFeatureMaterial,
   resolveFenceOverlays,
+  resolveWallOverlays,
   fenceBlocksCrossing,
   parseEdgeKey,
   FENCE_MATERIALS,
   DEFAULT_FENCE_MATERIAL,
+  WALL_MATERIALS,
+  DEFAULT_WALL_MATERIAL,
+  isNorthWestBoundaryWallEdge,
 } from './featureAutotile';
 
 const setOf = (...keys: string[]): Set<string> => new Set(keys);
@@ -213,5 +217,50 @@ describe('edge fences', () => {
   it('exposes wood + stone fence materials with wood as the default', () => {
     expect(FENCE_MATERIALS).toEqual(['wood', 'stone']);
     expect(DEFAULT_FENCE_MATERIAL).toBe('wood');
+  });
+});
+
+describe('edge walls', () => {
+  it('only resolves walls on the north and west board perimeter', () => {
+    const walls = resolveWallOverlays({
+      [roadEdgeKey(2, 0, 2, -1)]: 'stone',
+      [roadEdgeKey(0, 2, -1, 2)]: 'brick',
+      [roadEdgeKey(1, 1, 1, 2)]: 'stone',
+      [roadEdgeKey(1, 1, 2, 1)]: 'stone',
+      [roadEdgeKey(2, 2, 3, 2)]: 'stone',
+      [roadEdgeKey(2, 2, 2, 3)]: 'stone',
+    }, { cols: 3, rows: 3 });
+    expect(walls.get('2,0')).toEqual({ mask: 1, material: 'stone' });
+    expect(walls.get('0,2')).toEqual({ mask: 8, material: 'brick' });
+    expect(walls.size).toBe(2);
+  });
+
+  it('combines north and west boundary walls at the top-left corner', () => {
+    const walls = resolveWallOverlays({
+      [roadEdgeKey(0, 0, 0, -1)]: 'stone',
+      [roadEdgeKey(0, 0, -1, 0)]: 'stone',
+    }, { cols: 3, rows: 3 });
+    expect(walls.get('0,0')).toEqual({ mask: 9, material: 'stone' });
+  });
+
+  it('exposes the north/west boundary placement predicate', () => {
+    const bounds = { cols: 3, rows: 3 };
+    expect(isNorthWestBoundaryWallEdge(roadEdgeKey(1, 0, 1, -1), bounds)).toBe(true);
+    expect(isNorthWestBoundaryWallEdge(roadEdgeKey(0, 1, -1, 1), bounds)).toBe(true);
+    expect(isNorthWestBoundaryWallEdge(roadEdgeKey(1, 1, 1, 2), bounds)).toBe(false);
+    expect(isNorthWestBoundaryWallEdge(roadEdgeKey(2, 1, 3, 1), bounds)).toBe(false);
+    expect(isNorthWestBoundaryWallEdge(roadEdgeKey(1, 2, 1, 3), bounds)).toBe(false);
+  });
+
+  it('exposes stone wall materials with stone as the default', () => {
+    expect(WALL_MATERIALS).toEqual(['stone', 'brick', 'mossy', 'basalt', 'palisade']);
+    expect(DEFAULT_WALL_MATERIAL).toBe('stone');
+  });
+
+  it('supports generated wall material variants', () => {
+    const edge = roadEdgeKey(2, 0, 2, -1);
+    const walls = resolveWallOverlays({ [edge]: 'brick' }, { cols: 3, rows: 3 });
+
+    expect(walls.get('2,0')).toEqual({ mask: 1, material: 'brick' });
   });
 });

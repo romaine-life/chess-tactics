@@ -17,8 +17,8 @@ import { PropSprite } from './BoardStructure';
 import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardArtReveal } from './boardArtReady';
 import { groundCoverSet } from '../core/groundCover';
-import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
-import { resolveFeatureOverlays, resolveFenceOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay } from '../core/featureAutotile';
+import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
+import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay, type ResolvedWallOverlay } from '../core/featureAutotile';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 
 const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
@@ -272,9 +272,11 @@ function collectBoardArt(
   board: SocketBoardResult<TileAsset>,
   livePieces: readonly Piece[],
   fenceOverlays: ReadonlyMap<string, ResolvedFenceOverlay>,
+  wallOverlays: ReadonlyMap<string, ResolvedWallOverlay>,
 ): { urls: string[]; signature: string } {
   const tiles = new Set<string>();
   for (const fence of fenceOverlays.values()) tiles.add(fenceFrameSrc(fence.material, fence.mask));
+  for (const wall of wallOverlays.values()) tiles.add(wallFrameSrc(wall.material, wall.mask));
   for (const cell of board.cells) {
     if (cell.asset) {
       const top = tileFrameSrc(cell.asset);
@@ -575,12 +577,15 @@ export function SkirmishBoard() {
     return piece ? legalMoves(piece, game.pieces, game.size, env) : [];
   }, [env, game.pieces, game.size, game.turn, game.winner, pendingPromotion, selectedId, localSide]);
   const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
+  const exactBoard = useMemo(() => game.boardCode ? decodeBoard(game.boardCode) : null, [game.boardCode]);
   // Edge fences resolve from the authored board code (each shared edge → its upper-left cell's
   // E/S rail). Keyed "x,y" to match resolveFenceOverlays; empty for a generated/fence-free board.
   const fenceOverlays = useMemo<ReadonlyMap<string, ResolvedFenceOverlay>>(() => {
-    const eb = game.boardCode ? decodeBoard(game.boardCode) : null;
-    return eb ? resolveFenceOverlays(eb.fences ?? {}) : new Map();
-  }, [game.boardCode]);
+    return exactBoard ? resolveFenceOverlays(exactBoard.fences ?? {}) : new Map();
+  }, [exactBoard]);
+  const wallOverlays = useMemo<ReadonlyMap<string, ResolvedWallOverlay>>(() => {
+    return exactBoard ? resolveWallOverlays(exactBoard.walls ?? {}, { cols: game.size.cols, rows: game.size.rows }) : new Map();
+  }, [exactBoard, game.size.cols, game.size.rows]);
   const livePieces = useMemo(
     // Prop colliders (`prop-…`) block movement but render as the tall PropSprite, not a unit
     // seat — exclude them so they don't paint an empty/phantom seat over their footprint cells.
@@ -590,7 +595,7 @@ export function SkirmishBoard() {
   // Hold the board hidden until its whole art set has decoded, then fade it in as one
   // unit — no per-tile popcorn (see render/boardArtReady). The signature is the tile set
   // (stable across moves), so this arms once per board/seed, not on every move.
-  const boardArt = useMemo(() => collectBoardArt(board, livePieces, fenceOverlays), [board, livePieces, fenceOverlays]);
+  const boardArt = useMemo(() => collectBoardArt(board, livePieces, fenceOverlays, wallOverlays), [board, livePieces, fenceOverlays, wallOverlays]);
   const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
   // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
   // the tile signature so a new skirmish/replay re-arms it, but moves (signature stable) don't.
@@ -883,6 +888,7 @@ export function SkirmishBoard() {
         <BoardLabBoard
           board={board}
           assetFrameSrc={tileFrameSrc}
+          wallOverlays={wallOverlays}
           fenceOverlays={fenceOverlays}
           boardZoom={boardZoom}
           boardPan={boardPan}

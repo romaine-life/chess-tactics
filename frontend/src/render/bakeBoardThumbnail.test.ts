@@ -7,7 +7,8 @@ import {
   largestSolidRect,
 } from './bakeBoardThumbnail';
 import { roadEdgeKey } from '../core/featureAutotile';
-import { fenceOverlayZIndex } from './fenceOverlayDepth';
+import { TILE_TEMPLATE } from '../art/tileTemplate';
+import { fenceOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
 import type { EditorBoard } from '../ui/boardCode';
 
 // Coverage (opaque fraction) of a rect under an opacity predicate — the property object-fit:cover
@@ -86,6 +87,12 @@ describe('boardContentHash — stability + sensitivity', () => {
   it('changes when an edge fence is added', () => {
     const before = blank();
     const after: EditorBoard = { ...blank(), fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' } };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(after));
+  });
+
+  it('changes when an edge wall is added', () => {
+    const before = blank();
+    const after: EditorBoard = { ...blank(), walls: { [roadEdgeKey(1, 0, 1, -1)]: 'stone' } };
     expect(boardContentHash(before)).not.toBe(boardContentHash(after));
   });
 
@@ -234,6 +241,26 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(fence!.z).toBe(doodadFront!.z);
     expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(nearUnit!));
     expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(doodadFront!));
+  });
+
+  it('draws north/west perimeter walls with the wall frame anchor', () => {
+    const board: EditorBoard = {
+      ...blank(3, 3),
+      cells: { '1,0': TILE },
+      walls: { [roadEdgeKey(1, 0, 1, -1)]: 'stone' },
+      units: { '1,0': UNIT },
+    };
+    const ops = boardDrawOps(board);
+    const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-1.png');
+    const ownerUnit = ops.find((op) => op.contain && op.z === 1 + 0 + 20000);
+    expect(wall).toBeDefined();
+    expect(ownerUnit).toBeDefined();
+    expect(wall).toMatchObject({ dw: 128, dh: 240 });
+    expect(wall!.dx).toBeCloseTo((1 - 0) * TILE_TEMPLATE.stepX - 64);
+    expect(wall!.dy).toBeCloseTo((1 + 0) * TILE_TEMPLATE.stepY - 96);
+    expect(wall!.z).toBe(wallOverlayZIndex({ x: 1, y: 0 }));
+    expect(wall!.z).toBe(ownerUnit!.z);
+    expect(ops.indexOf(wall!)).toBeLessThan(ops.indexOf(ownerUnit!));
   });
 });
 

@@ -10260,16 +10260,26 @@ button.tileset-relationship-cell {
   top: 0;
 }
 
-.tileset-board-fence-overlay {
+.tileset-board-fence-overlay,
+.tileset-board-wall-overlay {
   position: absolute;
-  width: 96px;
-  height: 180px;
-  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-equator)));
   display: block;
   image-rendering: pixelated;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.tileset-board-fence-overlay {
+  width: 96px;
+  height: 180px;
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-equator)));
+}
+
+.tileset-board-wall-overlay {
+  width: 128px;
+  height: 240px;
+  transform: translate(-64px, -96px);
 }
 
 /* Animated tile TOP (water ripple). The motion is BAKED frames in a horizontal sheet

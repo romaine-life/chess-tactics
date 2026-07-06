@@ -7,21 +7,23 @@
 //   f?:fillTileId, t?:{cell:tileId}, h?:[cell], u?:{cell:[unitId,dir,faction]},
 //   d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fe?:{edgeKey:fenceMaterial},
+//   wl?:{edgeKey:wallMaterial},
 //   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
 //   gr?:generatedRegionUnits }. `f` fills every cell, then `t` overrides — so a "mostly one tile"
 // board stays tiny; `h` punches intentional holes back out of that fill. The autotiling ribbon
 // features split per kind on the wire (rd=roads, rv=rivers) and merge into one `features` map on
 // decode. FENCES are edge-based, not per-cell: `fe` maps a shared-edge key (roadEdgeKey "x,y|x,y")
 // to a fence material — same edge keying as `rc` (severed edges) and `rx` (forced outward exits).
+// `wl` is a wall material map; valid wall placement is the northmost/westmost map perimeter.
 // `zn` is the authored gameplay-zone list; `z` is the legacy collapsed view (cell -> type) kept
 // for old links/clients. `gr` stores editor-only generated-region units: saved cell selections
 // plus the Generate panel settings needed to rerun them. base64url of the JSON (no padding, +/ -> -_).
 //
-// FORWARD/BACK-COMPAT: `z`/`p`/`fe` are emitted only when non-empty, so a board without them
+// FORWARD/BACK-COMPAT: `z`/`p`/`fe`/`wl` are emitted only when non-empty, so a board without them
 // encodes byte-identically to a code that predates them, and an OLD code decodes them to empty.
 
 import type { GroundCoverDensity } from '../core/groundCover';
-import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial, FenceMaterial } from '../core/featureAutotile';
+import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial, FenceMaterial, WallMaterial } from '../core/featureAutotile';
 import { ZONE_COLORS, ZONE_TYPES, type ZoneColor, type ZoneType } from '../core/level';
 import type { TileFamilyId } from '../core/tileSockets';
 import { UNIT_FACINGS, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
@@ -94,6 +96,10 @@ export interface EditorBoard {
    * Optional + back-compat (like `zones`): a bare board literal omits it; `decodeBoard` always
    * returns it populated (empty for an old code). */
   fences?: Record<string, FenceMaterial>;
+  /** Edge walls, keyed like fences, but valid only on the northmost/westmost map perimeter.
+   * Saves as its own visual channel while `editorBoardToLevel` projects it into the same
+   * durable blocked-edge list as fences. Optional + back-compat like `fences`. */
+  walls?: Record<string, WallMaterial>;
   featureCuts: Record<string, true>;
   featureExits: Record<string, true>;
   /** Authored gameplay zone entries. Empty entries are allowed so the editor's zone dropdown can
@@ -331,6 +337,9 @@ export function encodeBoard(b: EditorBoard): string {
   if (nonEmpty(rv)) wire.rv = rv;
   // Fences: an edge-key -> material map (emitted only when non-empty, back-compat like `z`/`p`).
   if (b.fences && nonEmpty(b.fences)) wire.fe = b.fences;
+  // Walls: edge-key -> material map. Separate from fences visually, but gameplay blocks the
+  // same edge when the board is projected to a Level.
+  if (b.walls && nonEmpty(b.walls)) wire.wl = b.walls;
   if (nonEmpty(b.featureCuts)) wire.rc = Object.keys(b.featureCuts);
   if (nonEmpty(b.featureExits)) wire.rx = Object.keys(b.featureExits);
   // Zones ride primarily as entries so same-type zones and empty authored zones survive a reopen.
@@ -377,6 +386,9 @@ export function decodeBoard(code: string): EditorBoard | null {
     // Fences: edge-key -> material (an OLD code without `fe` yields an empty map — back-compat).
     const fences: Record<string, FenceMaterial> = {};
     if (w.fe) for (const [k, m] of Object.entries(w.fe as Record<string, FenceMaterial>)) fences[k] = m;
+    // Walls: edge-key -> material (an OLD code without `wl` yields an empty map — back-compat).
+    const walls: Record<string, WallMaterial> = {};
+    if (w.wl) for (const [k, m] of Object.entries(w.wl as Record<string, WallMaterial>)) walls[k] = m;
     // Zones: `zn` carries authored entries; old codes only have `z`, which is grouped back into
     // one entry per type so the editor still opens them in the new dropdown model.
     let zoneEntries: EditorZoneEntry[] = [];
@@ -408,6 +420,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
       features,
       fences,
+      walls,
       featureCuts,
       featureExits,
       zoneEntries,

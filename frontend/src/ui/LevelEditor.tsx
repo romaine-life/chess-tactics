@@ -9,7 +9,7 @@ import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { DoodadSprite } from '../render/BoardDoodad';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
-import { FenceOverlayLayer } from '../render/FenceOverlayLayer';
+import { FenceOverlayLayer, WallOverlayLayer } from '../render/FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
@@ -56,8 +56,8 @@ import {
   type StudioAsset,
   type StudioFamily,
 } from './studioBoard';
-import { featureThumbSrc, fenceThumbSrc, tileTopSrc } from '../art/tileset';
-import { resolveFeatureOverlays, resolveFenceOverlays, roadEdgeKey, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, DEFAULT_FENCE_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial } from '../core/featureAutotile';
+import { featureThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
+import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
 import { scatterTerrainDetailed } from '../core/terrainScatter';
@@ -107,9 +107,13 @@ function StudioEditableBoard({
   props: placedProps = {},
   features: placedFeatures = {},
   fences: placedFences = {},
+  walls: placedWalls = {},
   fenceTool = false,
+  wallTool = false,
   onPaintEdge,
   onEraseEdge,
+  onPaintWallEdge,
+  onEraseWallEdge,
   zones: placedZones = {},
   resolveAsset,
   resolveUnit,
@@ -142,12 +146,20 @@ function StudioEditableBoard({
   features?: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
   /** Edge fences keyed by shared-edge key (roadEdgeKey) -> fence material — drawn as edge rails. */
   fences?: Record<string, FenceMaterial>;
+  /** Edge walls keyed by shared-edge key (roadEdgeKey) -> wall material; valid only on the north/west map perimeter. */
+  walls?: Record<string, WallMaterial>;
   /** When true, the brush paints EDGES (fences) not cells: hover picks the nearest diamond edge. */
   fenceTool?: boolean;
+  /** When true, the brush paints EDGES (walls) not cells: hover picks the nearest diamond edge. */
+  wallTool?: boolean;
   /** Add a fence on an edge; boundary edges use one off-board endpoint. */
   onPaintEdge?: (edgeKey: string) => void;
   /** Remove a fence from an edge. */
   onEraseEdge?: (edgeKey: string) => void;
+  /** Add a wall on an edge; only the northmost and westmost map edges render. */
+  onPaintWallEdge?: (edgeKey: string) => void;
+  /** Remove a wall from an edge. */
+  onEraseWallEdge?: (edgeKey: string) => void;
   /** Cosmetic zone colors keyed by cell "x,y" — drawn as a tinted diamond. */
   zones?: Record<string, ZoneColor>;
   resolveAsset: (id: string) => StudioAsset | undefined;
@@ -183,7 +195,9 @@ function StudioEditableBoard({
   const [movingFrom, setMovingFrom] = useState<MoveSubject | null>(null);
   // Edge-fence painting: which diamond side is under the cursor (the rail will drop there).
   const [hoverEdge, setHoverEdge] = useState<{ x: number; y: number; edge: FeatureEdge } | null>(null);
+  const edgeTool = fenceTool || wallTool;
   const fenceOverlayMap = resolveFenceOverlays(placedFences);
+  const wallOverlayMap = resolveWallOverlays(placedWalls, { cols, rows });
   const applyTool = (x: number, y: number) => {
     if (tool === 'brush') onPaint(x, y);
     else if (tool === 'erase') onErase(x, y);
@@ -207,9 +221,14 @@ function StudioEditableBoard({
     const dy = e.clientY - (rect.top + rect.height / 2);
     return dy < 0 ? (dx >= 0 ? 'N' : 'W') : (dx >= 0 ? 'E' : 'S');
   };
-  // Toggle a fence on the diamond edge under the cursor (brush adds, erase/right-click removes).
-  const applyFenceAt = (x: number, y: number, edge: FeatureEdge, erasing: boolean): void => {
+  // Toggle an edge barrier on the diamond edge under the cursor (brush adds, erase/right-click removes).
+  const applyBarrierAt = (x: number, y: number, edge: FeatureEdge, erasing: boolean): void => {
     const { key } = edgeTarget(x, y, edge);
+    if (wallTool) {
+      if (erasing) onEraseWallEdge?.(key);
+      else onPaintWallEdge?.(key);
+      return;
+    }
     if (erasing) onEraseEdge?.(key);
     else onPaintEdge?.(key);
   };
@@ -241,6 +260,15 @@ function StudioEditableBoard({
     return new Set(propCells(subject.x, subject.y, def).map((cell) => `${cell.x},${cell.y}`));
   };
 
+  const hoverBarrierEdge = (x: number, y: number, edge: FeatureEdge): void => {
+    const { key } = edgeTarget(x, y, edge);
+    if (wallTool && !isNorthWestBoundaryWallEdge(key, { cols, rows })) {
+      setHoverEdge(null);
+      return;
+    }
+    setHoverEdge({ x, y, edge });
+  };
+
   const finishMoveAt = (to: { x: number; y: number } | null): void => {
     if (movingFrom) {
       if (to && !(to.x === movingFrom.x && to.y === movingFrom.y)) onMove?.(movingFrom, to);
@@ -268,8 +296,8 @@ function StudioEditableBoard({
       const movingCells = movingFootprintCells(movingFrom);
       const isMoveFrom = tool === 'move' && movingCells.has(key);
       const isMoveTo = tool === 'move' && !!movingFrom && !isMoveFrom && hoverCell?.x === x && hoverCell?.y === y;
-      const moveDroppable = isMoveTo && (canMoveTo ? canMoveTo(movingFrom, { x, y }) : true);
-      const fenceHere = fenceTool && hoverEdge?.x === x && hoverEdge?.y === y ? hoverEdge.edge : null;
+      const moveDroppable = isMoveTo && movingFrom ? (canMoveTo ? canMoveTo(movingFrom, { x, y }) : true) : false;
+      const fenceHere = edgeTool && hoverEdge?.x === x && hoverEdge?.y === y ? hoverEdge.edge : null;
       cells.push({
         key,
         x,
@@ -300,9 +328,9 @@ function StudioEditableBoard({
               onPointerDown={(event) => {
                 if (event.button === 2) return; // right-click erases via onContextMenu
                 event.stopPropagation(); // don't let the ViewPane start a pan while editing
-                if (fenceTool && (tool === 'brush' || tool === 'erase')) {
-                  // Fence tool paints EDGES: toggle the diamond side under the cursor.
-                  applyFenceAt(x, y, edgeAtPointer(event), tool === 'erase');
+                if (edgeTool && (tool === 'brush' || tool === 'erase')) {
+                  // Barrier tools paint EDGES: toggle the diamond side under the cursor.
+                  applyBarrierAt(x, y, edgeAtPointer(event), tool === 'erase');
                   return;
                 }
                 if (tool === 'move') {
@@ -323,15 +351,15 @@ function StudioEditableBoard({
                 if (tool !== 'select') paintingRef.current = true;
                 applyTool(x, y);
               }}
-              onPointerEnter={() => { setHoverCell({ x, y }); if (!fenceTool && paintingRef.current) applyTool(x, y); }}
-              onPointerMove={fenceTool ? (event) => setHoverEdge({ x, y, edge: edgeAtPointer(event) }) : undefined}
+              onPointerEnter={() => { setHoverCell({ x, y }); if (!edgeTool && paintingRef.current) applyTool(x, y); }}
+              onPointerMove={edgeTool ? (event) => hoverBarrierEdge(x, y, edgeAtPointer(event)) : undefined}
               onPointerUp={(event) => {
                 if (tool === 'move' && movingFrom) {
                   event.stopPropagation();
                   finishMoveAt({ x, y });
                 }
               }}
-              onContextMenu={(event) => { event.preventDefault(); if (fenceTool) applyFenceAt(x, y, edgeAtPointer(event), true); else onErase(x, y); }}
+              onContextMenu={(event) => { event.preventDefault(); if (edgeTool) applyBarrierAt(x, y, edgeAtPointer(event), true); else onErase(x, y); }}
             />
           </>
         ),
@@ -469,6 +497,7 @@ function StudioEditableBoard({
       onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
     >
       {overlay}
+      <WallOverlayLayer overlays={wallOverlayMap} />
       <FenceOverlayLayer overlays={fenceOverlayMap} />
       {overlaySprites}
     </TileGrid>
@@ -1200,6 +1229,69 @@ function FenceConnections({
   );
 }
 
+function WallConnections({
+  cell,
+  cols,
+  rows,
+  walls,
+  onPaint,
+  onErase,
+}: {
+  cell: { x: number; y: number };
+  cols: number;
+  rows: number;
+  walls: Record<string, WallMaterial>;
+  onPaint: (edge: string) => void;
+  onErase: (edge: string) => void;
+}): ReactElement {
+  const V = { apex: [64, 14], right: [114, 48], bottom: [64, 82], left: [14, 48] } as const;
+  const EDGE_GEO: Record<string, readonly [readonly [number, number], readonly [number, number]]> = {
+    N: [V.apex, V.right],
+    E: [V.right, V.bottom],
+    S: [V.bottom, V.left],
+    W: [V.left, V.apex],
+  };
+  return (
+    <svg className="le-roadconn" viewBox="0 0 128 96" role="group" aria-label="Wall edges for the selected tile">
+      <polygon points={`${V.apex} ${V.right} ${V.bottom} ${V.left}`} fill="rgba(8,20,28,.55)" stroke="rgba(82,142,170,.35)" strokeWidth="1" />
+      {FEATURE_DIRS.map((dir) => {
+        const nx = cell.x + dir.dx;
+        const ny = cell.y + dir.dy;
+        const edge = roadEdgeKey(cell.x, cell.y, nx, ny);
+        const material = walls[edge];
+        const renderable = isNorthWestBoundaryWallEdge(edge, { cols, rows });
+        const [[x1, y1], [x2, y2]] = EDGE_GEO[dir.edge];
+        const stroke = material ? '#c9d0c2' : renderable ? 'rgba(160,176,164,.48)' : 'rgba(100,112,122,.22)';
+        const toggle = (): void => {
+          if (material) onErase(edge);
+          else if (renderable) onPaint(edge);
+        };
+        const label = material
+          ? `Remove ${WALL_MATERIAL_LABELS[material]} wall from ${dir.edge} edge`
+          : renderable
+          ? `Add wall to ${dir.edge} edge`
+          : `${dir.edge} edge is not a north/west map edge`;
+        return (
+          <g
+            key={dir.edge}
+            className={`le-roadconn-edge is-${material ? 'wall' : renderable ? 'none' : 'boundary'}`}
+            role="button"
+            aria-label={label}
+            aria-pressed={Boolean(material)}
+            aria-disabled={!material && !renderable}
+            tabIndex={renderable || material ? 0 : -1}
+            onClick={toggle}
+            onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && (renderable || material)) { e.preventDefault(); toggle(); } }}
+          >
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="20" strokeLinecap="round" />
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={material ? '9' : '5'} strokeLinecap="round" strokeDasharray={material ? undefined : renderable ? '4 7' : '2 8'} />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // The editor's palette layers. Roads and rivers share one "Paths" layer (both are linear
 // connection features); the brush kind under it decides road vs river. Fence is its own EDGE
 // layer (you paint the boundary between two tiles). The layer picker is a dropdown.
@@ -1211,6 +1303,7 @@ const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }>
   { id: 'generate', label: 'Generate' },
   { id: 'paths', label: 'Paths' },
   { id: 'fence', label: 'Fence' },
+  { id: 'wall', label: 'Wall' },
   { id: 'unit', label: 'Unit' },
   { id: 'doodad', label: 'Doodad' },
   { id: 'prop', label: 'Prop' },
@@ -1221,6 +1314,13 @@ const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }>
 ];
 const isLayerOptionDisabled = (_layer: LayerKey): boolean => false;
 const defaultLevelEditorLayer = (): LayerKey => LEVEL_EDITOR_LAYER_OPTIONS.find((option) => !isLayerOptionDisabled(option.id))?.id ?? LEVEL_EDITOR_LAYER_OPTIONS[0].id;
+function perimeterWalls(walls: Record<string, WallMaterial> | undefined, cols: number, rows: number): Record<string, WallMaterial> {
+  const next: Record<string, WallMaterial> = {};
+  for (const [edge, material] of Object.entries(walls ?? {})) {
+    if (isNorthWestBoundaryWallEdge(edge, { cols, rows })) next[edge] = material;
+  }
+  return next;
+}
 // `rules` (events/settings) and `board`/`status` are non-painting layers → select tool.
 const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (layer === 'board' || layer === 'status' || layer === 'rules' || layer === 'generate') ? 'select' : 'brush';
 const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
@@ -1349,6 +1449,15 @@ export function LevelEditor(): ReactElement {
   // (roadEdgeKey) -> material. Painted per-edge, not per-cell; blocks crossing that edge in play.
   const [boardFences, setBoardFences] = useState<Record<string, FenceMaterial>>(initialBoard?.fences ?? {});
   const [fenceBrushMaterial, setFenceBrushMaterial] = useState<FenceMaterial>(DEFAULT_FENCE_MATERIAL);
+  // Edge walls use fence-style edge keys, but the editor accepts only the map's northmost
+  // and westmost perimeter edges.
+  const [boardWalls, setBoardWalls] = useState<Record<string, WallMaterial>>(() =>
+    perimeterWalls(initialBoard?.walls, initialBoard?.cols ?? LE_COLS, initialBoard?.rows ?? LE_ROWS));
+  const [wallBrushMaterial, setWallBrushMaterial] = useState<WallMaterial>(
+    (studioArm.kind === 'wall' && (WALL_MATERIALS as readonly string[]).includes(studioArm.brush ?? ''))
+      ? studioArm.brush as WallMaterial
+      : DEFAULT_WALL_MATERIAL,
+  );
   // The remembered brush material PER kind, so switching Road↔River keeps each picker's choice.
   const [featureBrushMaterial, setFeatureBrushMaterial] = useState<Record<FeatureKind, FeatureMaterial>>({
     road: defaultFeatureMaterial('road'),
@@ -1365,6 +1474,7 @@ export function LevelEditor(): ReactElement {
   const featureKind: FeatureKind | null = brushKind === 'road' || brushKind === 'river' ? brushKind : null;
   // The fence tool paints EDGES (a separate, edge-based feature), not per-cell ribbons.
   const fenceTool = brushKind === 'fence';
+  const wallTool = brushKind === 'wall';
   const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : leUnitAssets[0].id);
   const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>(() => factionDefaultDirection('navy-blue', initialFactionDirections));
@@ -1551,8 +1661,10 @@ export function LevelEditor(): ReactElement {
       setBoardDoodads(board.doodads);
       setBoardProps(board.props);
       setBoardCover(board.cover);
-    setBoardCoverTypes(board.coverTypes ?? {});
+      setBoardCoverTypes(board.coverTypes ?? {});
       setBoardFeatures(board.features);
+      setBoardFences(board.fences ?? {});
+      setBoardWalls(perimeterWalls(board.walls, board.cols, board.rows));
       setFeatureCuts(board.featureCuts);
       setFeatureExits(board.featureExits);
       setBoardZoneEntries(zoneEntriesForBoard(board));
@@ -1588,8 +1700,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the board link
   // and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, walls: boardWalls, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardWalls, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -1604,6 +1716,7 @@ export function LevelEditor(): ReactElement {
     setBoardCoverTypes(board.coverTypes ?? {});
     setBoardFeatures(board.features);
     setBoardFences(board.fences ?? {});
+    setBoardWalls(perimeterWalls(board.walls, board.cols, board.rows));
     setFeatureCuts(board.featureCuts);
     setFeatureExits(board.featureExits);
     setBoardZoneEntries(zoneEntriesForBoard(board));
@@ -1864,8 +1977,25 @@ export function LevelEditor(): ReactElement {
     next.fences = fences;
     commitEditorBoard(next);
   };
+  const wallEdgeCanRender = (edgeKey: string): boolean =>
+    isNorthWestBoundaryWallEdge(edgeKey, { cols: boardCols, rows: boardRows });
+  const paintWallEdge = (edgeKey: string): void => {
+    if (!wallEdgeCanRender(edgeKey)) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    next.walls = { ...(next.walls ?? {}), [edgeKey]: wallBrushMaterial };
+    commitEditorBoard(next);
+  };
+  const eraseWallEdge = (edgeKey: string): void => {
+    const current = currentEditorBoardRef.current.walls ?? {};
+    if (!(edgeKey in current)) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const walls = { ...(next.walls ?? {}) };
+    delete walls[edgeKey];
+    next.walls = walls;
+    commitEditorBoard(next);
+  };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, walls: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
     setActiveGeneratedRegionId(null);
     setRegionSelection(new Set());
   };
@@ -1884,6 +2014,7 @@ export function LevelEditor(): ReactElement {
       }
     }
     else if (brushKind === 'fence') next.fences = {};
+    else if (brushKind === 'wall') next.walls = {};
     else if (featureKind) {
       const cleared = new Set<string>();
       for (const [key, feature] of Object.entries(next.features)) {
@@ -2573,6 +2704,18 @@ export function LevelEditor(): ReactElement {
       }
       if (dropped) nextBoard.fences = next;
     }
+    // Walls are perimeter-only; after a resize, keep just the northmost/westmost edges
+    // that are still valid on the new board bounds.
+    {
+      const next: Record<string, WallMaterial> = {};
+      let dropped = false;
+      for (const [edge, material] of Object.entries(nextBoard.walls ?? {})) {
+        const [p1, p2] = edge.split('|');
+        if (((p1 && within(p1)) || (p2 && within(p2))) && isNorthWestBoundaryWallEdge(edge, { cols: nextCols, rows: nextRows })) next[edge] = material;
+        else dropped = true;
+      }
+      if (dropped) nextBoard.walls = next;
+    }
     nextBoard.cols = nextCols;
     nextBoard.rows = nextRows;
     commitEditorBoard(nextBoard, selectedCell && (selectedCell.x >= nextCols || selectedCell.y >= nextRows) ? null : selectedCell);
@@ -2784,7 +2927,7 @@ export function LevelEditor(): ReactElement {
               Unity/Unreal/Godot/Blender convention). The bar stays brand + return-nav +
               account cluster, matching Settings. */}
           <TitleBarActions aria-label="Editor navigation">
-            {cameFromStudio ? <TitleBarButton to="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</TitleBarButton> : null}
+            {cameFromStudio ? <TitleBarButton to="/studio" title="Return to the Studio catalog">‹ Catalog</TitleBarButton> : null}
             {routeParams.returnTo ? <TitleBarButton variant="return" to={routeParams.returnTo} title="Return to the campaign editor">‹ Back</TitleBarButton> : null}
           </TitleBarActions>
         </TitleBarSlot> : null}
@@ -2820,6 +2963,10 @@ export function LevelEditor(): ReactElement {
                   fenceTool={fenceTool}
                   onPaintEdge={paintFenceEdge}
                   onEraseEdge={eraseFenceEdge}
+                  walls={boardWalls}
+                  wallTool={wallTool}
+                  onPaintWallEdge={paintWallEdge}
+                  onEraseWallEdge={eraseWallEdge}
                   propBrush={brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
                   overlay={<GroundCoverLayer cells={coverCells} />}
                   regionCells={regionSelection}
@@ -3297,6 +3444,8 @@ export function LevelEditor(): ReactElement {
                 ? <GroundCoverPreview asset={coverBrushAsset} />
                 : brushKind === 'zone'
                 ? <span className={`le-brush-thumb-zone le-zone-${activeZoneColor}`} aria-hidden="true" />
+                : wallTool
+                ? <img src={wallThumbSrc(wallBrushMaterial)} alt="" draggable={false} />
                 : fenceTool
                 ? <img src={fenceThumbSrc(fenceBrushMaterial)} alt="" draggable={false} />
                 : featureKind
@@ -3304,8 +3453,8 @@ export function LevelEditor(): ReactElement {
                 : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : wallTool ? `${WALL_MATERIAL_LABELS[wallBrushMaterial]} wall` : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : wallTool ? 'wall · edge' : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -3500,6 +3649,30 @@ export function LevelEditor(): ReactElement {
             })}
             <p className="le-board-note">This prop spans {propBrushDef.w}×{propBrushDef.h} tile{propBrushDef.w * propBrushDef.h > 1 ? 's' : ''}, anchored at the clicked cell. Props only land where every footprint tile is one of their terrains and no unit or other prop is in the way. Blocking props (trees, houses, rocks) become impassable in play.</p>
           </section>
+        ) : wallTool ? (
+          <section className="skirmish-card le-brush-panel">
+            <h2>Wall</h2>
+            <div className="le-pal-group">
+              <span className="le-pal-grouplabel">Back edge</span>
+              <div className="le-swatches">
+                {WALL_MATERIALS.map((mat) => (
+                  <button
+                    type="button"
+                    key={`wall-${mat}`}
+                    className={`le-swatch ${wallBrushMaterial === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    title={WALL_MATERIAL_LABELS[mat]}
+                    onClick={() => { setWallBrushMaterial(mat); setBrushKind('wall'); setLayer('wall'); setTool('brush'); }}
+                  >
+                    <img src={wallThumbSrc(mat)} alt="" draggable={false} />
+                    <small>{WALL_MATERIAL_LABELS[mat]}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="le-board-note">
+              Walls are placeable only on the map&rsquo;s northmost and westmost perimeter edges. They block crossing like fences and render as tall border pieces without hiding the board front.
+            </p>
+          </section>
         ) : fenceTool ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Fence</h2>
@@ -3589,6 +3762,14 @@ export function LevelEditor(): ReactElement {
                   </div>
                 </div>
               ))}
+          </section>
+        ) : null}
+
+        {wallTool && selectedCell ? (
+          <section className="skirmish-card">
+            <h2>Wall edges</h2>
+            <WallConnections cell={selectedCell} cols={boardCols} rows={boardRows} walls={boardWalls} onPaint={paintWallEdge} onErase={eraseWallEdge} />
+            <p className="le-board-note">Click a north or west map-edge segment to select or clear a wall. Interior edges and the south/east perimeter are not wall targets.</p>
           </section>
         ) : null}
 

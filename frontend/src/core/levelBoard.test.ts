@@ -69,6 +69,20 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
     expect(levelToEditorBoard(level).fences).toEqual(board.fences);
   });
 
+  it('projects and saves only north/west perimeter walls', () => {
+    const board = filledBoard(4, 4);
+    const north = roadEdgeKey(0, 0, 0, -1);
+    const west = roadEdgeKey(0, 2, -1, 2);
+    const interior = roadEdgeKey(1, 1, 1, 2);
+    board.walls = { [north]: 'stone', [west]: 'brick', [interior]: 'stone' };
+
+    const level = editorBoardToLevel(board, { id: 'l14', name: 'Walls' });
+    expect(level.layers.fences).toEqual([north, west]);
+    const reopened = levelToEditorBoard(level);
+    expect(reopened.walls).toEqual({ [north]: 'stone', [west]: 'brick' });
+    expect(reopened.fences).toEqual({});
+  });
+
   it('maps only the assigned player faction to player and leaves unassigned maps CPU-only', () => {
     const board = filledBoard(4, 4);
     board.playerFaction = 'emerald';

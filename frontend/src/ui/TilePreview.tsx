@@ -5,7 +5,8 @@
 // board-placeable thing is a catalogCategories entry + a focus, never a bespoke view or a
 // `category === '…'` branch.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { tileFamilies, edgeTiles } from '../art/tileset';
+import { tileFamilies, edgeTiles, wallThumbSrc } from '../art/tileset';
+import { WALL_MATERIALS, WALL_MATERIAL_LABELS, type WallMaterial } from '../core/featureAutotile';
 import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
 import {
   terrainLabels,
@@ -86,7 +87,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'groundcover' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'groundcover' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
@@ -120,6 +121,37 @@ const FIRST_ARTWORK_ID: string = artworkManifest.groups[0]?.items[0]?.id ?? '';
 type PortraitCandidateAsset = { id: string; piece: PortraitPiece; method: PortraitMethod; methodLabel: string; methodSub: string };
 const PORTRAIT_CANDIDATE_ASSETS: PortraitCandidateAsset[] = PORTRAIT_PIECES.flatMap((piece) =>
   PORTRAIT_METHODS.map((m) => ({ id: `${piece}-${m.key}`, piece, method: m.key, methodLabel: m.label, methodSub: m.sub })));
+type WallCatalogAsset = { id: string; material: WallMaterial; label: string; badge: string; method: string; notes: string };
+const WALL_CATALOG_META: Record<WallMaterial, { method: string; notes: string }> = {
+  stone: {
+    method: 'Photoscan material + runtime geometry',
+    notes: 'Photoscanned wall texture from the staged wall pack, projected into the shipped north/west perimeter geometry.',
+  },
+  brick: {
+    method: 'Codex img2img material + runtime geometry',
+    notes: 'Method-gated Codex img2img brick material, projected into the same shipped north/west perimeter geometry.',
+  },
+  mossy: {
+    method: 'PixelLab material + runtime geometry',
+    notes: 'PixelLab tiles_pro mossy-stone material candidate, projected into the same shipped north/west perimeter geometry.',
+  },
+  basalt: {
+    method: 'PixelLab material + runtime geometry',
+    notes: 'PixelLab tiles_pro basalt material candidate, projected into the same shipped north/west perimeter geometry.',
+  },
+  palisade: {
+    method: 'PixelLab material + runtime geometry',
+    notes: 'PixelLab tiles_pro palisade-plank material candidate, projected into the same shipped north/west perimeter geometry.',
+  },
+};
+const WALL_CATALOG_ASSETS: WallCatalogAsset[] = WALL_MATERIALS.map((material) => ({
+  id: `wall-${material}`,
+  material,
+  label: `${WALL_MATERIAL_LABELS[material]} wall`,
+  badge: 'edge blocker',
+  method: WALL_CATALOG_META[material].method,
+  notes: WALL_CATALOG_META[material].notes,
+}));
 type TileFilter = 'base' | 'board';
 type LabMode = 'board' | 'tile' | 'unit' | 'doodad';
 type CollectionFilter = Exclude<TileFilter, 'board'>;
@@ -194,7 +226,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'groundcover' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'groundcover' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -226,11 +258,11 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   // /nine-slice-editor is a deep-link ALIAS into this one studio (like /unit-studio):
   // it opens the embedded 9-slice surface (Assets category, Viewer mode, 'nineslice'
   // kind) with ?asset=<frame>. The studio's own route writer then canonicalises the
-  // URL to /tileset-studio?…&frame=<frame>. No separate route, no page chrome.
+  // URL to /studio?…&frame=<frame>. No separate route, no page chrome.
   const isNineSliceAlias = window.location.pathname === '/nine-slice-editor';
   // /prop-lab is a deep-link ALIAS into this one studio (like /nine-slice-editor): it opens
   // the embedded prop-seat surface (Props category, Viewer mode, 'propseat' kind) with
-  // ?prop=<id>. The route writer then canonicalises the URL to /tileset-studio. No separate
+  // ?prop=<id>. The route writer then canonicalises the URL to /studio. No separate
   // route, no bespoke toolbar (docs/studio-control-architecture.md, ADR-0058).
   const isPropLabAlias = window.location.pathname === '/prop-lab';
   // /tile-compare is another deep-link alias into the studio (ADR-0058): the Tile Pipeline
@@ -300,10 +332,10 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   };
 };
 
-const STUDIO_PATH = '/tileset-studio';
+const STUDIO_PATH = '/studio';
 
 const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
-  // Canonicalise to /tileset-studio even when entered via the /nine-slice-editor
+  // Canonicalise to /studio even when entered via the /nine-slice-editor
   // alias, so the alias is a pure entry point and all subsequent state rides the
   // one studio URL (the embedded 9-slice surface is not its own route).
   if (window.location.pathname !== STUDIO_PATH && window.location.pathname !== '/nine-slice-editor' && window.location.pathname !== '/prop-lab' && window.location.pathname !== '/tile-compare' && window.location.pathname !== '/surface-lab' && window.location.pathname !== '/scene-anim-lab' && window.location.pathname !== '/doodad-editor' && window.location.pathname !== '/artwork-compare') return;
@@ -435,6 +467,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Which pipeline tile the embedded Tile Pipeline compare (Viewer 'tilecompare' kind) shows.
   const [selectedTileCompareId, setSelectedTileCompareId] = useState(initialRoute.selectedTileCompareId ?? COMPARE_TILES[0].id);
   const [selectedGroundCoverId, setSelectedGroundCoverId] = useState<GroundCoverId>(groundCoverAsset(initialRoute.selectedGroundCoverId).id);
+  const [selectedWallId, setSelectedWallId] = useState<string>(WALL_CATALOG_ASSETS[0].id);
   // Which family the embedded Tileset Surfaces inspector (Viewer 'surfacetiles' kind) opens on.
   const [selectedSurfaceFamily, setSelectedSurfaceFamily] = useState(initialRoute.selectedSurfaceFamily ?? SURFACE_TILE_FAMILIES[0]);
   // Which menu region the embedded Scene Animations inspector (Viewer 'sceneanim' kind) shows.
@@ -693,7 +726,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
 
   // Every catalog card (tile/unit/doodad/cover, paintbrush + inspect) now opens the standalone
   // Level Editor with that asset pre-armed as the brush — the in-studio board lab is retired.
-  const openInLevelEditor = (kind: 'tile' | 'unit' | 'doodad' | 'cover', id: string): void => {
+  const openInLevelEditor = (kind: 'tile' | 'unit' | 'doodad' | 'cover' | 'wall', id: string): void => {
     navigateApp(`/editor/level?from=studio&kind=${kind}&brush=${encodeURIComponent(id)}`);
   };
 
@@ -962,6 +995,26 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     onArm: (cover) => openInLevelEditor('cover', cover.id),
     selectedId: selectedGroundCoverId,
     note: 'Ground cover paints density onto tiles; the chosen cover set is stored separately when it differs from the tile terrain.',
+  };
+
+  const wallsCatalogType: CatalogType<WallCatalogAsset> = {
+    id: 'walls',
+    label: 'Walls',
+    assets: WALL_CATALOG_ASSETS,
+    card: (wall) => ({ img: wallThumbSrc(wall.material), title: wall.label, badge: wall.badge }),
+    sections: (visible) => [{ id: 'walls', label: 'Walls', assets: [...visible] }],
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'wall, material, method...',
+      match: (wall, q) => [wall.label, wall.material, wall.badge, wall.method, wall.notes].join(' ').toLowerCase().includes(q),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    onSelect: (wall) => setSelectedWallId(wall.id),
+    onView: (wall) => openInLevelEditor('wall', wall.material),
+    onArm: (wall) => openInLevelEditor('wall', wall.material),
+    selectedId: selectedWallId,
+    note: 'Walls are tall blockers for the map north and west perimeter edges.',
   };
 
   // Tile Pipeline — the 36 QA tiles (raw PixelLab vs snapped-to-grid). Read-only; Inspect
@@ -1363,6 +1416,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           <button type="button" className="tileset-view-action" onClick={() => navigateApp('/editor/level?from=studio&layer=fence')}>Paint fences in the editor</button>
         </>
       ),
+    },
+    {
+      id: 'walls', label: 'Walls', hint: 'Tall blockers for the map north and west perimeter. Paint them in the Level Editor.',
+      main: <CatalogGrid type={wallsCatalogType} />,
+      controls: <CatalogControls type={wallsCatalogType} />,
     },
     {
       id: 'scrollbars', label: 'Scrollbars', hint: 'Scrollbar-grip candidates — carved wooden elements. PixelLab is the current preferred default.',

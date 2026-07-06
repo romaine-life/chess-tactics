@@ -1,6 +1,6 @@
 import type { TileAssetKind, TileFamilyId, TileSocketAsset } from '../core/tileSockets';
 import { terrainLabels } from '../core/tileSockets';
-import type { FeatureKind, FeatureMaterial, FenceMaterial } from '../core/featureAutotile';
+import type { FeatureKind, FeatureMaterial, FenceMaterial, WallMaterial } from '../core/featureAutotile';
 import type { EdgeFeatureSpec } from '../core/tileBoardGenerator';
 
 export interface TileAsset extends TileSocketAsset {
@@ -185,6 +185,14 @@ export const featureFrameSrc = (kind: FeatureKind, material: FeatureMaterial, ma
 export const fenceFrameSrc = (material: FenceMaterial, mask: number): string =>
   `/assets/tiles/feature/fence-${material}-${mask}.png`;
 
+// A per-cell WALL frame: walls on a board-perimeter cell's OWN N(1)/W(8) diamond
+// sides (mask ∈ {1,8,9}). Only northmost/westmost map edges use these frames.
+// Baked by scripts/build-wall-tiles.py from generated material. These are tall
+// 128x240 frames seated at a wall-specific anchor; they intentionally do not
+// reuse the tile/fence frame contract.
+export const wallFrameSrc = (material: WallMaterial, mask: number): string =>
+  `/assets/tiles/feature/wall-${material}-${mask}.png`;
+
 // A square, pre-centered preview icon for editor palettes/brush (the board sprites
 // are tall 96x180 frames with the art only in the top diamond, so they don't center
 // in a small box — this is cropped + squared at bake time). See build-feature-tiles.py.
@@ -194,3 +202,7 @@ export const featureThumbSrc = (kind: FeatureKind, material: FeatureMaterial): s
 /** Square preview icon for the fence palette/brush (baked alongside the fence frames). */
 export const fenceThumbSrc = (material: FenceMaterial): string =>
   `/assets/tiles/feature/fence-${material}-thumb.png`;
+
+/** Square preview icon for the wall palette/brush (baked alongside the wall frames). */
+export const wallThumbSrc = (material: WallMaterial): string =>
+  `/assets/tiles/feature/wall-${material}-thumb.png`;
