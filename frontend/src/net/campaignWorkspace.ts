@@ -11,7 +11,7 @@ export interface Workspace {
 
 export async function loadWorkspace(): Promise<Workspace> {
   const res = await fetch('/api/campaign-workspace', { credentials: 'include' });
-  if (!res.ok) throw new HttpError('load', res.status);
+  if (!res.ok) throw await HttpError.fromResponse('load', res);
   const data = (await res.json()) as Partial<Workspace>;
   return {
     campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
@@ -26,7 +26,7 @@ export async function saveWorkspace(ws: Workspace): Promise<{ ok: boolean }> {
     credentials: 'include',
     body: JSON.stringify(ws),
   });
-  if (!res.ok) throw new HttpError('save', res.status);
+  if (!res.ok) throw await HttpError.fromResponse('save', res);
   return res.json() as Promise<{ ok: boolean }>;
 }
 
@@ -66,7 +66,7 @@ export async function saveOfficialCampaigns(ws: Workspace): Promise<{ revision: 
     credentials: 'include',
     body: JSON.stringify({ data: ws }),
   });
-  if (!res.ok) throw new HttpError('save-official', res.status);
+  if (!res.ok) throw await HttpError.fromResponse('save-official', res);
   const body = (await res.json()) as { portfolio?: { revision?: number } };
   return { revision: body.portfolio?.revision ?? 0 };
 }

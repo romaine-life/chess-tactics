@@ -2007,7 +2007,7 @@ function isLevelBody(body) {
 // force a prod data migration (docs/migration-policy.md).
 const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach']);
 const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'sand', 'dirt', 'pebble', 'void']);
-const WORKSPACE_ZONE_TYPES = new Set(['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock']);
+const WORKSPACE_ZONE_TYPES = new Set(['region', 'player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion']);
 const WORKSPACE_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king', 'rock', 'random-rock']);
 const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // Playable-only piece types for a random-placement roster (no rocks) — mirrors the
@@ -2015,6 +2015,7 @@ const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 const WORKSPACE_ROSTER_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 // ADR-0064 victory-condition kinds — mirror of core/level.ts VictoryCondition.
 const WORKSPACE_CONDITION_KINDS = new Set(['eliminate', 'reach', 'turnLimit']);
+const WORKSPACE_PROMOTION_PIECES = new Set(['queen', 'rook', 'bishop', 'knight']);
 
 /** Structural check for one ADR-0064 victory condition. Returns an error string or null. Shape/enum
  * only, mirroring the frontend's conditionErrors (core/level.ts). */
@@ -2056,6 +2057,92 @@ function validateWorkspaceVictory(victory, key) {
       if (!a || typeof a !== 'object' || Array.isArray(a)) return `${label}.do[${j}] must be an action object`;
       if (a.kind !== 'win' && a.kind !== 'lose') return `${label}.do[${j}].kind is invalid`;
       if (a.side !== 'player' && a.side !== 'enemy') return `${label}.do[${j}].side is invalid`;
+    }
+  }
+  return null;
+}
+
+function validateWorkspaceRosterCounts(roster, label) {
+  if (!roster || typeof roster !== 'object' || Array.isArray(roster)) return `${label} is invalid`;
+  for (const [type, count] of Object.entries(roster)) {
+    if (!WORKSPACE_ROSTER_PIECES.has(type) || !isFiniteInteger(count) || count < 1) return `${label} contains an invalid piece count`;
+  }
+  return null;
+}
+
+function validateWorkspaceEventTrigger(trigger, label) {
+  if (!trigger || typeof trigger !== 'object' || Array.isArray(trigger)) return `${label} is invalid`;
+  if (trigger.kind !== 'setup' && trigger.kind !== 'unit-enters-zone') return `${label}.kind is invalid`;
+  if (trigger.kind === 'unit-enters-zone') {
+    if (typeof trigger.zoneId !== 'string' || !trigger.zoneId.trim()) return `${label}.zoneId is invalid`;
+    const unit = trigger.unit;
+    if (!unit || typeof unit !== 'object' || Array.isArray(unit)) return `${label}.unit is invalid`;
+    if (unit.type !== 'pawn') return `${label}.unit.type is invalid`;
+    if (unit.side !== undefined && unit.side !== 'player' && unit.side !== 'enemy') return `${label}.unit.side is invalid`;
+  }
+  return null;
+}
+
+function validateWorkspaceSpawnAction(action, label, triggerKind) {
+  if (triggerKind !== 'setup') return `${label}.kind spawn requires setup trigger`;
+  if (action.side !== 'player' && action.side !== 'enemy') return `${label}.side is invalid`;
+  const rosterErr = validateWorkspaceRosterCounts(action.roster, `${label}.roster`);
+  if (rosterErr) return rosterErr;
+  if (!Array.isArray(action.zoneIds) || action.zoneIds.length === 0 || action.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
+    return `${label}.zoneIds is invalid`;
+  }
+  return null;
+}
+
+function validateWorkspacePromoteAction(action, label, triggerKind) {
+  if (triggerKind !== 'unit-enters-zone') return `${label}.kind promote requires unit-enters-zone trigger`;
+  if (!action.target || typeof action.target !== 'object' || Array.isArray(action.target) || action.target.kind !== 'triggering-unit') {
+    return `${label}.target is invalid`;
+  }
+  return null;
+}
+
+function validateWorkspaceEvents(events, key) {
+  if (!Array.isArray(events)) return `levels.${key}.events is invalid`;
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i];
+    const label = `levels.${key}.events[${i}]`;
+    if (!event || typeof event !== 'object' || Array.isArray(event)) return `${label} must be an event object`;
+    if (event.id !== undefined && typeof event.id !== 'string') return `${label}.id is invalid`;
+    if (event.name !== undefined && typeof event.name !== 'string') return `${label}.name is invalid`;
+    if (event.kind !== undefined) {
+      if (event.kind !== 'spawn' && event.kind !== 'pawn-promotion') return `${label}.kind is invalid`;
+      const triggerErr = validateWorkspaceEventTrigger(event.trigger, `${label}.trigger`);
+      if (triggerErr) return triggerErr;
+      if (event.kind === 'spawn') {
+        const spawnErr = validateWorkspaceSpawnAction(event, label, event.trigger && event.trigger.kind);
+        if (spawnErr) return spawnErr;
+      } else {
+        if (event.trigger.kind !== 'unit-enters-zone') return `${label}.trigger.kind is invalid`;
+        if (event.choices !== undefined) {
+          if (!Array.isArray(event.choices) || event.choices.length === 0 || event.choices.some((choice) => !WORKSPACE_PROMOTION_PIECES.has(choice))) return `${label}.choices is invalid`;
+        }
+        if (event.defaultPromotion !== undefined && !WORKSPACE_PROMOTION_PIECES.has(event.defaultPromotion)) return `${label}.defaultPromotion is invalid`;
+        if (event.defaultPromotion !== undefined && Array.isArray(event.choices) && !event.choices.includes(event.defaultPromotion)) return `${label}.defaultPromotion is invalid`;
+      }
+      continue;
+    }
+    const triggerErr = validateWorkspaceEventTrigger(event.trigger, `${label}.trigger`);
+    if (triggerErr) return triggerErr;
+    if (!Array.isArray(event.do) || event.do.length === 0) return `${label}.do is invalid`;
+    for (let j = 0; j < event.do.length; j += 1) {
+      const action = event.do[j];
+      const actionLabel = `${label}.do[${j}]`;
+      if (!action || typeof action !== 'object' || Array.isArray(action)) return `${actionLabel} must be an action object`;
+      if (action.kind === 'spawn') {
+        const spawnErr = validateWorkspaceSpawnAction(action, actionLabel, event.trigger.kind);
+        if (spawnErr) return spawnErr;
+      } else if (action.kind === 'promote') {
+        const promoteErr = validateWorkspacePromoteAction(action, actionLabel, event.trigger.kind);
+        if (promoteErr) return promoteErr;
+      } else {
+        return `${actionLabel}.kind is invalid`;
+      }
     }
   }
   return null;
@@ -2117,6 +2204,10 @@ function validateWorkspaceLevel(level, key) {
   if (level.victory !== undefined) {
     const victoryErr = validateWorkspaceVictory(level.victory, key);
     if (victoryErr) return victoryErr;
+  }
+  if (level.events !== undefined) {
+    const eventsErr = validateWorkspaceEvents(level.events, key);
+    if (eventsErr) return eventsErr;
   }
   if (level.roster !== undefined) {
     if (!level.roster || typeof level.roster !== 'object' || Array.isArray(level.roster)) {
