@@ -1,6 +1,6 @@
 {
   "process": "forge-atom clean pipeline (codex img2img on a chroma plate -> despill -> low-fi -> trim glyph -> pad to the ADR-0026 64x64 canvas -> dimension assert), method-verified via the codex rollout (image_generation_call), NOT code-drawn",
-  "lastRun": "2026-07-03",
+  "lastRun": "2026-07-06",
   "assets": {
     "pawn": {
       "group": "settings",
@@ -222,6 +222,13 @@
       "tries": 1,
       "method": "image-generator (verified) — scripts/forge-studio-switcher-icons.mjs; indie pixel-art of a period object (brass-rimmed hand lens). NOT anti-story-anchored (owner's call).",
       "canvas": "64x64",
+      "gate": "pass"
+    },
+    "pencil": {
+      "group": "settings",
+      "forged": "2026-07-06",
+      "tries": 1,
+      "method": "image-generator (verified)",
       "gate": "pass"
     }
   },
