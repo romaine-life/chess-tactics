@@ -2704,7 +2704,7 @@ export function LevelEditor(): ReactElement {
             return nav rides the bar (below). */}
         {editorReady ? <TitleBarSlot region="actions">
           {/* Only the RETURN nav rides the global title bar now (‹ Catalog / ‹ Back). The
-              workspace ACTIONS live in the editor's OWN chrome — Undo/Redo in the pinned
+              workspace ACTIONS live in the editor's OWN chrome — tools + Undo/Redo in the pinned
               dock (.le-actions-dock), Test + Save/Publish in the Status layer card — because
               document verbs belong in the editor's toolbar, not global chrome (the
               Unity/Unreal/Godot/Blender convention). The bar stays brand + return-nav +
@@ -2840,14 +2840,17 @@ export function LevelEditor(): ReactElement {
           </SelectFrame>
         </section>
 
-        {/* Pinned editor ACTIONS dock: only the ALWAYS-relevant verbs — Undo · Redo — stay
-            universal (a fixed flex child of the rail ABOVE the sole scroll region, always
-            visible without overlaying the Pixi board; kit .le-seg-btn atoms only). Test and
-            Save/Publish are session verbs, not per-edit verbs, so they live in the Status
-            layer card below with the rest of the save workflow. */}
+        {/* Pinned editor ACTIONS dock: the universal edit controls — tools plus Undo/Redo — stay
+            above the sole scroll region, visible on every layer without overlaying the board.
+            Test and Save/Publish are session verbs, so they live with the save workflow. */}
         <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
           <h2>Actions</h2>
-          <div className="le-board-actions le-history-actions">
+          <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
+            <button type="button" className={`le-seg-btn ${tool === 'select' ? 'active' : ''}`.trim()} onClick={() => setTool('select')} title="Select" aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></button>
+            <button type="button" className={`le-seg-btn ${tool === 'brush' ? 'active' : ''}`.trim()} onClick={() => setTool('brush')} title="Brush" aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></button>
+            <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')} title="Erase" aria-label="Erase"><span className="le-ico ic-eraser" aria-hidden="true" /></button>
+            <button type="button" className={`le-seg-btn ${tool === 'move' ? 'active' : ''}`.trim()} onClick={() => setTool('move')} title="Move — drag a placed unit to a new cell; it keeps its piece, side and facing." aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
+            <span className="le-action-toolbar-divider" aria-hidden="true" />
             <button
               type="button"
               className="le-seg-btn le-icon-btn"
@@ -3206,13 +3209,7 @@ export function LevelEditor(): ReactElement {
         </>) : (<>
 
         <section className="skirmish-card">
-          <h2>Tool</h2>
-          <div className="le-seg le-seg-icons">
-            <button type="button" className={`le-seg-btn ${tool === 'select' ? 'active' : ''}`.trim()} onClick={() => setTool('select')} title="Select" aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'brush' ? 'active' : ''}`.trim()} onClick={() => setTool('brush')} title="Brush" aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')} title="Erase" aria-label="Erase"><span className="le-ico ic-eraser" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'move' ? 'active' : ''}`.trim()} onClick={() => setTool('move')} title="Move — drag a placed unit to a new cell; it keeps its piece, side and facing." aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
-          </div>
+          <h2>Brush</h2>
           {tool === 'move' ? <p className="le-board-note">Drag a placed unit to a new cell. It keeps its piece, side and facing; you can't drop onto another unit or a prop.</p> : null}
           <div className="le-brush-pick">
             <span className="le-brush-thumb">
