@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-37c81dcb8a60efff0bbbb61c764808e4c339613772f0720c99bbeeed44abfad0"
+  tag: "app-5b40b9a75ac18ec70ab08ab43542eef4ea1638c10d993fade26018fa2ee4100b"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Refine level editor zones and events"
-  prNumber: "431"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/431"
-  commit: "5be7f11"
+  prTitle: "Add perimeter wall tiles and editor support"
+  prNumber: "432"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/432"
+  commit: "31e5b1a"
 
 name: chess-tactics
 namespace: chess-tactics
