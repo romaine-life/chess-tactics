@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-b9f70d7ea125851f5da49ab4dfa7b2bb5cad839d0a955d151c0501237720a266"
+  tag: "app-db16ca5b211d6e8a66c0b0e3f1cafb7b752e2c7c9423301befcc1525809967f2"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix premove input during enemy reply"
-  prNumber: "435"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/435"
-  commit: "11b5a09"
+  prTitle: "Sort catalog categories alphabetically"
+  prNumber: "436"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/436"
+  commit: "c840f9f"
 
 name: chess-tactics
 namespace: chess-tactics
