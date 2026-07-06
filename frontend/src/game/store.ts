@@ -76,7 +76,7 @@ const ENEMY_REPLY_DELAY = 520;
 // on the board before it executes. Without it, a fast reply makes the premove invisible:
 // the arrow and the move happen in the same frame. Roughly the enemy's move-glide, so the
 // premove reads as "the enemy moved, then I answered", not two moves at once.
-const PREMOVE_FIRE_DELAY = 460;
+const PREMOVE_FIRE_DELAY = 620;
 
 // Landing-SFX timing. The move tween runs ~170ms (see SkirmishBoard); fire the
 // terrain footstep a beat into it so the sound lands as the piece *seats*, not as
@@ -329,9 +329,13 @@ export interface SkirmishState {
   /** Moves queued while the opponent is thinking (premoves), fired one-per-turn as
    *  control returns. Ephemeral — dropped on reload, never persisted. */
   premoves: PremoveStep[];
+  /** True during the short post-enemy-reply landing beat. The rules board has already
+   *  advanced back to the player, but input still belongs to premove generation until
+   *  the opponent's visible move settles. */
+  premoveInputOpen: boolean;
   /** Append a premove for `pieceId` → (x, y) to the chain, validated against the
    *  provisional board (current board + the moves already queued). No-op on the
-   *  player's own live turn (a click there is a real move) or a decided game. */
+   *  player's own live turn unless the post-reply premove input window is open. */
   queueMove: (pieceId: string, x: number, y: number) => void;
   /** Drop the whole queued chain (bound to Escape). */
   clearPremoves: () => void;
@@ -393,6 +397,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       clock: { ...cur.clock, remainingMs: 0, running: false },
       selectedId: null,
       focusedId: null,
+      premoveInputOpen: false,
       log: ['Defeat — your clock ran out.', ...cur.log].slice(0, 12),
     });
     persistMatch(get()); // game decided → drops the saved copy
@@ -431,6 +436,18 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     set({ clock: { ...cur.clock, remainingMs, running: false } });
   };
 
+  const finishPremoveInputBeat = (gameRef: GameState) => {
+    const s = get();
+    if (s.game !== gameRef || s.game.winner || !s.premoveInputOpen) return;
+    if (s.premoves.length > 0) {
+      const fired = drainPremove();
+      if (fired) return;
+    }
+    set({ premoveInputOpen: false });
+    startClock();
+    persistMatch(get());
+  };
+
   // Stage the enemy half-turn after a beat so it reads as a reply, not a mirror
   // of the player's click. The turn is already flipped to 'enemy' (which locks
   // player input) before this fires.
@@ -462,9 +479,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
         },
         (enemyRes) => {
           // The worker computed while the board was live; make sure nothing replaced the board
-          // meanwhile (a new game / a resume) before applying its move. Queuing a premove only
-          // touches the `premoves` slice, so a live board still satisfies game === cur.game.
-          if (get().game !== cur.game) return;
+          // meanwhile (a new game / a resume) before applying its move. Premove selection can
+          // legitimately change while the worker thinks, so read the latest live slice here.
+          const live = get();
+          if (live.game !== cur.game) return;
           const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
           // With no manual End Turn, a player handed the turn with no legal move would
           // soft-lock — resolve that as a loss (you can't pass in chess).
@@ -489,9 +507,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
             }
           }
           // Turn returns to the player: keep the piece they were working with selected so the
-          // board reads continuously, only falling back to their first piece if the enemy
-          // captured it (or nothing was selected — e.g. a resumed match).
-          const keep = livingSelected(game, cur.selectedId, 'player') ?? firstPlayerId(game);
+          // board reads continuously. That can change while the enemy reply is in flight when the
+          // player picks a premove unit, so use the latest store selection rather than `cur`.
+          const keep = livingSelected(game, live.selectedId, 'player') ?? firstPlayerId(game);
+          const openPremoveInput = !game.winner && game.turn === 'player';
           set({
             game,
             env: envFor(game),
@@ -500,7 +519,8 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
             resultDetail,
             selectedId: keep,
             focusedId: keep,
-            log: [...msgs.reverse(), ...cur.log].slice(0, 12),
+            log: [...msgs.reverse(), ...live.log].slice(0, 12),
+            premoveInputOpen: openPremoveInput,
           });
           // Footsteps for the enemy half-turn: one per piece that moved, spread out so a
           // multi-move reply reads as a sequence, not one muddy stack. Terrain is static, so the
@@ -508,19 +528,17 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
           enemyRes.events
             .filter((e): e is Extract<GameEvent, { kind: 'moved' }> => e.kind === 'moved')
             .forEach((e, i) => playLandingSfx(cur.env, e.to.x, e.to.y, LANDING_SFX_DELAY + i * ENEMY_LANDING_STAGGER));
-          // The turn is back with the player — their clock resumes (no-op when untimed or the
-          // reply decided the game).
-          startClock();
+          // The rules board is back with the player, but input still belongs to premove
+          // generation for the enemy landing beat. The clock resumes only when that beat closes
+          // without an auto-fired premove.
           // Persist the settled post-reply position now (a reload here resumes it; the queued
           // premove is ephemeral and intentionally not saved).
           persistMatch(get());
           // A queued premove fires after a visible beat rather than in this same frame, so the
           // player sees the enemy's move land with their queued arrow still on the board before
-          // it executes. drainPremove re-checks validity when it fires — a manual move made
-          // during the beat (which flips the turn) makes it drop the chain instead.
-          if (get().premoves.length > 0 && !get().game.winner) {
-            setTimeout(() => drainPremove(), PREMOVE_FIRE_DELAY);
-          }
+          // it executes. Premoves queued during that landing beat are accepted too.
+          if (openPremoveInput) setTimeout(() => finishPremoveInputBeat(game), PREMOVE_FIRE_DELAY);
+          else startClock();
         },
       );
     }, delay);
@@ -577,6 +595,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       env: enemyEnv,
       resultDetail,
       pendingPromotion: null,
+      premoveInputOpen: false,
       selectedId: piece.id,
       focusedId: piece.id,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
@@ -591,20 +610,20 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   // dropped (chess default: one illegal step kills the queue). A decided game clears the
   // queue too. When a premove fires, its move re-stages the enemy reply, so the next
   // reply's drain pops the next step and the chain plays out as a back-and-forth flurry.
-  const drainPremove = (): boolean => {
+  function drainPremove(): boolean {
     const s = get();
     if (s.premoves.length === 0) return false;
-    if (s.game.turn !== 'player' || s.game.winner) { set({ premoves: [] }); return false; }
+    if (s.game.turn !== 'player' || s.game.winner) { set({ premoves: [], premoveInputOpen: false }); return false; }
     const [head, ...rest] = s.premoves;
     const p = s.game.pieces.find((q) => q.id === head.pieceId && q.alive && q.side === 'player');
     const mv = p ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === head.x && m.y === head.y) : undefined;
-    if (!p || !mv) { set({ premoves: [] }); return false; }
+    if (!p || !mv) { set({ premoves: [], premoveInputOpen: false }); return false; }
     set({ premoves: rest });
     commitPlayerMove(p, mv);
     // A premove that ended the game leaves the rest of the chain moot — drop it.
-    if (get().game.winner) set({ premoves: [] });
+    if (get().game.winner) set({ premoves: [], premoveInputOpen: false });
     return true;
-  };
+  }
 
   // Apply ONE ordered move to a netplay board. Netplay is SERVER-SEQUENCED: the local
   // player's own move comes back through the server echo like any other, so this is the
@@ -659,6 +678,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       selectedId: nextSel,
       focusedId: nextSel,
       pendingPromotion: null,
+      premoveInputOpen: false,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
       net: { ...s.net, moveCount: s.net.moveCount + 1 },
     });
@@ -685,6 +705,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   pendingPromotion: null,
   net: null,
   premoves: [],
+  premoveInputOpen: false,
   testMode: false,
   testMinCpuDelayMs: 0,
 
@@ -726,7 +747,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       : null;
     // An explicit opts.ai wins; otherwise keep the running mode (a HUD retry
     // preserves the A/B lever the route set on entry).
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail: null, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, pendingPromotion: null, net: null, premoves: [] });
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail: null, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, pendingPromotion: null, net: null, premoves: [], premoveInputOpen: false });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
     startClock();
@@ -780,6 +801,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       levelId: level.id,
       clock: null, // netplay is untimed in v1 (a shared wall-clock is future work)
       pendingPromotion: null,
+      premoveInputOpen: false,
       net: { lobbyId, localSide, moveCount: 0 },
     });
     // Deploy roll-call for the pieces this client commands (cosmetic; each client
@@ -813,6 +835,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       selectedId: null,
       focusedId: null,
       premoves: [],
+      premoveInputOpen: false,
       pendingPromotion: null,
       resultDetail: null,
       clock: s.clock ? { ...s.clock, running: false } : null,
@@ -833,6 +856,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       selectedId: null,
       focusedId: null,
       pendingPromotion: null,
+      premoveInputOpen: false,
       log: [copy, ...s.log].slice(0, 12),
     });
   },
@@ -865,6 +889,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       // A queued premove is ephemeral thinking-time intent — a reload drops it, like
       // navigating away mid-plan.
       premoves: [],
+      premoveInputOpen: false,
       pendingPromotion: null,
       // Resume with the clock paused; startClock re-arms the deadline from the
       // banked remainder when it's the player's live turn. A reload isn't thinking
@@ -917,17 +942,17 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
     if (movePromotesPawn(s.game, p, mv)) {
-      set({ pendingPromotion: { pieceId: p.id, move: mv, choices: promotionChoicesForMove(s.game, p, mv) }, premoves: [] });
+      set({ pendingPromotion: { pieceId: p.id, move: mv, choices: promotionChoicesForMove(s.game, p, mv) }, premoves: [], premoveInputOpen: false });
       return;
     }
     // Netplay is server-sequenced: DON'T apply locally — relay the target cell and let
     // the server's echo apply it in order on both boards (no optimistic apply, so a
     // dropped POST is a no-op the seat can retry, never a permanent desync). Clear the
     // selection for immediate "click registered" feedback; the echo sets the next one.
-    if (s.net) { if (netMoveSink) netMoveSink(p.id, { x: mv.x, y: mv.y }); set({ selectedId: null, focusedId: null }); return; }
+    if (s.net) { if (netMoveSink) netMoveSink(p.id, { x: mv.x, y: mv.y }); set({ selectedId: null, focusedId: null, premoveInputOpen: false }); return; }
     // A deliberate manual move overrides any premove queued during the fire-beat — the
     // player took the wheel, so drop the chain rather than firing it a beat later.
-    if (s.premoves.length) set({ premoves: [] });
+    if (s.premoves.length || s.premoveInputOpen) set({ premoves: [], premoveInputOpen: false });
     // Single-player: the move's rhythm — it lands on its own so it animates and reads, then
     // a beat, then the enemy answers — lives in commitPlayerMove, shared with the premove
     // drain so an auto-fired premove is byte-for-byte the same move a click would make.
@@ -944,24 +969,25 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === pending.move.x && m.y === pending.move.y)
       : undefined;
     if (!p || !mv || !movePromotesPawn(s.game, p, mv)) {
-      set({ pendingPromotion: null });
+      set({ pendingPromotion: null, premoveInputOpen: false });
       return;
     }
     if (s.net) {
       if (netMoveSink) netMoveSink(p.id, { x: mv.x, y: mv.y, promotion: type });
-      set({ pendingPromotion: null, selectedId: null, focusedId: null });
+      set({ pendingPromotion: null, selectedId: null, focusedId: null, premoveInputOpen: false });
       return;
     }
-    if (s.premoves.length) set({ premoves: [] });
+    if (s.premoves.length || s.premoveInputOpen) set({ premoves: [], premoveInputOpen: false });
     commitPlayerMove(p, mv, type);
   },
 
   queueMove: (pieceId, x, y) => {
     const s = get();
     // Premoves are single-player only — the local AI reply is what drains them, and a
-    // netplay match has no such local reply. They're also the OPPONENT-turn action: on the
-    // player's own live turn a click is a real move. Nothing queues onto a decided game.
-    if (s.net || s.pendingPromotion || s.game.turn === 'player' || s.game.winner) return;
+    // netplay match has no such local reply. They're also the OPPONENT-turn action; the only
+    // player-turn exception is the short post-reply input window while the enemy is still
+    // visibly landing. Nothing queues onto a decided game.
+    if (s.net || s.pendingPromotion || (s.game.turn === 'player' && !s.premoveInputOpen) || s.game.winner) return;
     // Validate against the PROVISIONAL board (current board + the moves already queued)
     // so the chain builds on itself; the tip stays legal for the click that follows.
     if (!premoveTargets(s.game, s.premoves, pieceId).some((m) => m.x === x && m.y === y)) return;

@@ -64,8 +64,8 @@ function foldPiece(game: GameState, premoves: readonly PremoveStep[], pieceId: s
 }
 
 /** The board with each premoved piece moved to the TIP of its own plan (others at their real
- *  positions). Used for hit-testing which piece a click lands on. Two plans MAY share a square, so
- *  a lookup takes the first match — enough to pick a piece to keep premoving. */
+ *  positions). Used by the UI for unshared speculative-piece hit-testing; shared ghost stacks
+ *  stay ambiguous so the UI asks the player to use an original-piece handle instead. */
 export function provisionalBoard(game: GameState, premoves: readonly PremoveStep[]): GameState {
   const tip = new Map<string, Vec>();
   for (const id of premovedIds(premoves)) {

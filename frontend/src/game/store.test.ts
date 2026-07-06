@@ -460,9 +460,16 @@ describe('skirmish store: battle clock', () => {
     vi.advanceTimersByTime(400);
     expect(clock()!.remainingMs).toBe(paused);
 
-    // The reply resolves (520ms beat) and the player's clock resumes.
+    // The reply resolves (520ms beat), but the enemy's visible landing beat still belongs
+    // to premove input, so the player's clock stays paused.
     vi.advanceTimersByTime(200);
     expect(useSkirmish.getState().game.turn).toBe('player');
+    expect(useSkirmish.getState().premoveInputOpen).toBe(true);
+    expect(clock()!.running).toBe(false);
+
+    // Once that premove input beat closes without a queued move, live control and clock resume.
+    vi.advanceTimersByTime(620);
+    expect(useSkirmish.getState().premoveInputOpen).toBe(false);
     expect(clock()!.running).toBe(true);
   });
 
@@ -650,6 +657,7 @@ describe('skirmish store: premoves', () => {
       started: true,
       clock: null,
       premoves: [],
+      premoveInputOpen: false,
       testMode: false,
       testMinCpuDelayMs: 0,
     });
@@ -667,6 +675,64 @@ describe('skirmish store: premoves', () => {
     expect(useSkirmish.getState().premoves).toEqual([]);
     useSkirmish.getState().queueMove('pr', 0, 5); // legal along the file
     expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 0, y: 5 }]);
+  });
+
+  it('preserves a different unit selected during the opponent reply', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7); // selected mover is pk; reply is now staged
+    expect(useSkirmish.getState().selectedId).toBe('pk');
+
+    useSkirmish.getState().select('pr'); // mirrors clicking a different unit in premove mode
+    expect(useSkirmish.getState().selectedId).toBe('pr');
+
+    vi.runAllTimers();
+    expect(useSkirmish.getState().game.turn).toBe('player');
+    expect(useSkirmish.getState().selectedId).toBe('pr');
+    expect(useSkirmish.getState().focusedId).toBe('pr');
+  });
+
+  it('keeps the premove unit selected during the fire beat after the reply', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7);
+    useSkirmish.getState().select('pr');
+    useSkirmish.getState().queueMove('pr', 0, 5);
+
+    vi.advanceTimersByTime(520); // enemy reply resolves; the premove waits for its visible beat
+    const duringBeat = useSkirmish.getState();
+    expect(duringBeat.game.turn).toBe('player');
+    expect(duringBeat.premoveInputOpen).toBe(true);
+    expect(duringBeat.premoves).toEqual([{ pieceId: 'pr', x: 0, y: 5 }]);
+    expect(duringBeat.selectedId).toBe('pr');
+  });
+
+  it('accepts a premove queued while the enemy reply is visibly landing', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7);
+
+    vi.advanceTimersByTime(520); // reply has applied; landing beat is still premove input
+    expect(useSkirmish.getState().game.turn).toBe('player');
+    expect(useSkirmish.getState().premoveInputOpen).toBe(true);
+
+    useSkirmish.getState().queueMove('pr', 0, 5);
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 0, y: 5 }]);
+
+    vi.advanceTimersByTime(619);
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 0, y: 5 }]);
+    vi.advanceTimersByTime(2);
+    const afterFire = useSkirmish.getState();
+    expect(afterFire.game.pieces.find((p) => p.id === 'pr')).toMatchObject({ x: 0, y: 5 });
+    expect(afterFire.premoveInputOpen).toBe(false);
+  });
+
+  it('closes the post-reply premove input beat when no premove is queued', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7);
+
+    vi.advanceTimersByTime(520);
+    expect(useSkirmish.getState().premoveInputOpen).toBe(true);
+    vi.advanceTimersByTime(620);
+    expect(useSkirmish.getState().premoveInputOpen).toBe(false);
+    expect(useSkirmish.getState().game.turn).toBe('player');
   });
 
   it('fires a queued premove the instant control returns to the player', () => {
