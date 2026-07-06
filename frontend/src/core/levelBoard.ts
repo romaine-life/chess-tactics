@@ -280,6 +280,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     features,
     fences,
     walls: {},
+    wallArt: {},
     featureCuts: {},
     featureExits: {},
     zoneEntries,
@@ -365,7 +366,7 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   // Edge barriers ride BOTH channels: layers.fences (edge keys — the durable blocked-edge list the
   // GAME reads for collision) AND boardCode `fe`/`wl` (edge→material, for editor/rendering).
   // Fence rails may touch any board edge. Walls are perimeter-only and only valid on the
-  // northmost/westmost board edges.
+  // northmost/westmost board edges. Wall art is visual-only and stays in boardCode `wa`.
   const fences: string[] = [];
   const blockedEdges = new Set(Object.keys(board.fences ?? {}));
   const validWalls: NonNullable<EditorBoard['walls']> = {};

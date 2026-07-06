@@ -7,6 +7,7 @@ import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenera
 import type { TileSocketAsset } from '../core/tileSockets';
 import { featureFrameSrc } from '../art/tileset';
 import type { ResolvedFenceOverlay, ResolvedWallOverlay } from '../core/featureAutotile';
+import type { WallArtPlacementMap } from '../core/wallArt';
 
 // Re-export the projection so existing importers (SkirmishBoard, TilePreview, the
 // thumbnail bake) keep working; the math itself now lives in one place: boardProjection.
@@ -36,6 +37,9 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
    * Only northmost/westmost map edges resolve to this layer.
    */
   wallOverlays?: ReadonlyMap<string, ResolvedWallOverlay>;
+  /** Raw wall-art ids by anchor edge key; used to draw mounted wall art over wall frames. */
+  wallArt?: WallArtPlacementMap;
+  wallBounds?: { cols: number; rows: number };
   children?: ReactNode;
 }
 
@@ -50,6 +54,8 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   renderCellOverlay,
   fenceOverlays,
   wallOverlays,
+  wallArt,
+  wallBounds,
   children,
 }: BoardLabBoardProps<TAsset>) {
   const sourceCells = board.cells;
@@ -117,7 +123,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
           : undefined
       }
     >
-      <WallOverlayLayer overlays={wallOverlays} />
+      <WallOverlayLayer overlays={wallOverlays} wallArt={wallArt} bounds={wallBounds} />
       <FenceOverlayLayer overlays={fenceOverlays} />
       {children}
     </TileGrid>

@@ -308,6 +308,24 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 12,
+    name: 'wall art global tier',
+    // Global wall art definitions: one row per id holding a map of wallArtId →
+    // {label,span,slots[]}. Public GET / admin PUT mirrors prop_seats, with
+    // committed wallArt.json as the always-render baseline.
+    sql: `
+      CREATE TABLE IF NOT EXISTS wall_art (
+        id                    text        PRIMARY KEY,
+        data                  jsonb       NOT NULL,
+        client_schema_version integer,
+        revision              integer     NOT NULL DEFAULT 0,
+        created_at            timestamptz NOT NULL DEFAULT now(),
+        updated_at            timestamptz NOT NULL DEFAULT now(),
+        updated_by            text
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -3003,6 +3021,128 @@ app.put('/api/prop-seats/:id', async (req, res) => {
     });
   } catch (error) {
     dbUnavailable(res, 'prop seats write failed', error, 'prop_seats_store_unavailable');
+  }
+});
+
+// --- Wall-art tuning (global) tier ----------------------------------------
+// Placeable wall art: N face artwork slots mounted on existing walls.
+// Public GET / requireAdmin PUT, parallel to prop_seats. The committed
+// wallArt.json is the baseline; this row is an optional live overlay.
+const WALL_ART_STORE_SCHEMA_VERSION = 1;
+const WALL_ART_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
+const WALL_ART_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+const WALL_ART_FACES = new Set(['west', 'north']);
+
+function wallArtRowId(raw) {
+  const id = String(raw || '').trim();
+  return WALL_ART_ROW_ID_PATTERN.test(id) ? id : null;
+}
+
+function validateWallArtData(data) {
+  if (!isObjectRecord(data)) return 'wall art must be an object map of wallArtId → definition';
+  for (const [id, asset] of Object.entries(data)) {
+    if (!WALL_ART_ID_PATTERN.test(id)) return `wall art id "${id}" must be a lowercase slug`;
+    if (!isObjectRecord(asset)) return `wall art "${id}" must be an object`;
+    if (typeof asset.label !== 'string' || !asset.label.trim()) return `wall art "${id}" needs a label`;
+    if (Object.hasOwn(asset, 'span') && !(Number.isInteger(asset.span) && asset.span >= 1 && asset.span <= 16)) return `wall art "${id}" span must be an integer from 1 to 16`;
+    if (!Array.isArray(asset.slots)) return `wall art "${id}" slots must be an array`;
+    for (const [index, slot] of asset.slots.entries()) {
+      if (!isObjectRecord(slot)) return `wall art "${id}" slot ${index + 1} must be an object`;
+      if (typeof slot.id !== 'string' || !WALL_ART_ID_PATTERN.test(slot.id)) return `wall art "${id}" slot ${index + 1} needs a lowercase slug id`;
+      if (typeof slot.sourceId !== 'string' || !WALL_ART_ID_PATTERN.test(slot.sourceId)) return `wall art "${id}" slot ${index + 1} needs a sourceId`;
+      if (typeof slot.face !== 'string' || !WALL_ART_FACES.has(slot.face)) return `wall art "${id}" slot ${index + 1} face must be west or north`;
+      if (!Number.isFinite(slot.x) || !Number.isFinite(slot.y)) return `wall art "${id}" slot ${index + 1} needs numeric x/y`;
+      if (!(Number.isFinite(slot.scale) && slot.scale > 0)) return `wall art "${id}" slot ${index + 1} needs a positive scale`;
+    }
+  }
+  return null;
+}
+
+async function dbGetWallArt(id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT data, client_schema_version, revision, created_at, updated_at, updated_by FROM wall_art WHERE id = $1',
+    [id],
+  );
+  return rows[0] || null;
+}
+
+async function dbUpsertWallArt(id, input) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO wall_art (id, data, client_schema_version, revision, updated_by)
+       VALUES ($1, $2::jsonb, $3, 1, $4)
+     ON CONFLICT (id) DO UPDATE SET
+       data = EXCLUDED.data,
+       client_schema_version = EXCLUDED.client_schema_version,
+       revision = wall_art.revision + 1,
+       updated_at = now(),
+       updated_by = EXCLUDED.updated_by
+     RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+    [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+  );
+  return rows[0];
+}
+
+function publicWallArtDocument(id, document) {
+  return {
+    id,
+    data: isObjectRecord(document && document.data) ? document.data : {},
+    client_schema_version: document && Object.hasOwn(document, 'client_schema_version') ? document.client_schema_version : null,
+    revision: Number.isInteger(document && document.revision) ? document.revision : 0,
+    created_at: document && document.created_at ? document.created_at : null,
+    updated_at: document && document.updated_at ? document.updated_at : null,
+    updated_by: document && document.updated_by ? document.updated_by : null,
+  };
+}
+
+app.get('/api/wall-art/:id', async (req, res) => {
+  const id = wallArtRowId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_wall_art_id' });
+    return;
+  }
+  try {
+    const document = await dbGetWallArt(id);
+    res.status(200).json({
+      portfolio: publicWallArtDocument(id, document),
+      store_schema_version: WALL_ART_STORE_SCHEMA_VERSION,
+    });
+  } catch (error) {
+    dbUnavailable(res, 'wall art read failed', error, 'wall_art_store_unavailable');
+  }
+});
+
+app.put('/api/wall-art/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = wallArtRowId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_wall_art_id' });
+    return;
+  }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!isObjectRecord(raw.data)) {
+    res.status(400).json({ error: 'wall_art_data_object_required' });
+    return;
+  }
+  const validationError = validateWallArtData(raw.data);
+  if (validationError) {
+    res.status(400).json({ error: 'invalid_wall_art', details: validationError });
+    return;
+  }
+  try {
+    const document = await dbUpsertWallArt(id, {
+      data: raw.data,
+      client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
+      updated_by: user.email,
+    });
+    res.status(200).json({
+      portfolio: publicWallArtDocument(id, document),
+      store_schema_version: WALL_ART_STORE_SCHEMA_VERSION,
+    });
+  } catch (error) {
+    dbUnavailable(res, 'wall art write failed', error, 'wall_art_store_unavailable');
   }
 });
 

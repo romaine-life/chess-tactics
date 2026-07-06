@@ -34,6 +34,7 @@ import {
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
 import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays } from '../core/featureAutotile';
+import { resolveWallArtFaces, slotSource, wallArtSlotsForFace } from '../core/wallArt';
 import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './BoardStructure';
 import { fenceOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
 import { propDef, type StructureSourceRef } from '../core/props';
@@ -158,7 +159,9 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
   const isExit = (edge: string): boolean => board.featureExits[edge] === true;
   const overlays = resolveFeatureOverlays(board.features, isSevered, isExit);
   const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
-  const wallOverlays = resolveWallOverlays(board.walls ?? {}, { cols: board.cols, rows: board.rows });
+  const wallBounds = { cols: board.cols, rows: board.rows };
+  const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
+  const wallFaceStyles = resolveWallArtFaces(board.wallArt, wallBounds);
 
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
@@ -189,14 +192,31 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
       const wall = wallOverlays.get(key);
       if (wall) {
         // Perimeter walls share the live board-level wall layer and tie the owner unit's band.
+        const wallZ = wallOverlayZIndex({ x, y });
         ops.push({
           src: wallFrameSrc(wall.material, wall.mask),
           dx: left - WALL_ANCHOR_X,
           dy: top - WALL_ANCHOR_Y,
           dw: WALL_FRAME_W,
           dh: WALL_FRAME_H,
-          z: wallOverlayZIndex({ x, y }),
+          z: wallZ,
         });
+        const faceStyles = wallFaceStyles.get(key);
+        for (const face of ['west', 'north'] as const) {
+          const maskBit = face === 'west' ? 8 : 1;
+          if (!(wall.mask & maskBit)) continue;
+          for (const slot of wallArtSlotsForFace(faceStyles?.[face], face)) {
+            const faceAsset = slotSource(slot).faces[face];
+            ops.push({
+              src: faceAsset.src,
+              dx: left - WALL_ANCHOR_X + slot.x - faceAsset.mountX * slot.scale,
+              dy: top - WALL_ANCHOR_Y + slot.y - faceAsset.mountY * slot.scale,
+              dw: faceAsset.width * slot.scale,
+              dh: faceAsset.height * slot.scale,
+              z: wallZ + 1,
+            });
+          }
+        }
       }
 
       if (fence) {
@@ -357,6 +377,7 @@ export function boardContentHash(board: EditorBoard): string {
     `f:${sortedEntries(board.features)}`,
     `fe:${sortedEntries(board.fences ?? {})}`,
     `wl:${sortedEntries(board.walls ?? {})}`,
+    `wa:${sortedEntries(board.wallArt ?? {})}`,
     `x:${sortedEntries(board.featureCuts)}`,
     `xe:${sortedEntries(board.featureExits)}`,
   ];
