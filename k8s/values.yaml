@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-7c2ccf56cf5f94e30e02516b60ba53068c6e5e54d440eb2839990838e938168b"
+  tag: "app-eda56a37ae57d97506c93a9072817154ac5bbdda7f4081a6982b71dab5740278"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add editable skirmish event profiles"
-  prNumber: "428"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/428"
-  commit: "1918137"
+  prTitle: "Fix prop depth and editor dragging"
+  prNumber: "429"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/429"
+  commit: "6d500fa"
 
 name: chess-tactics
 namespace: chess-tactics
