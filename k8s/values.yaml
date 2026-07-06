@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-262f3eeb0a66850726f5a920cd7b8be594975daad050ec61294c0c8ca7de06cd"
+  tag: "app-ffbad5c1c2f7ef49c04ce338d144f83999ed2596b94b5aaddd2de1b4ad1abc35"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix promotion zones in play-test links"
-  prNumber: "433"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/433"
-  commit: "0946ec1"
+  prTitle: "Add campaign level edit shortcut"
+  prNumber: "434"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/434"
+  commit: "fcc0ee9"
 
 name: chess-tactics
 namespace: chess-tactics
