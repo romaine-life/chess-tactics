@@ -334,6 +334,22 @@ describe('applyMove', () => {
     expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('knight');
     expect(res.events).toContainEqual({ kind: 'promoted', pieceId: pawn.id, to: 'knight' });
   });
+  it('honours side and choice restrictions on authored promotion rules', () => {
+    const playerPawn = P('player', 'pawn', 4, 1);
+    const enemyPawn = P('enemy', 'pawn', 5, 1);
+    const state: GameState = {
+      size: SIZE,
+      pieces: [playerPawn, enemyPawn, P('enemy', 'king', 7, 0), P('player', 'king', 0, 11)],
+      turn: 'player',
+      winner: null,
+      promotionRules: [{ side: 'player', cells: [{ x: 4, y: 0 }], choices: ['rook'], defaultPromotion: 'rook' }],
+    };
+    const promoted = applyMove(state, playerPawn.id, { x: 4, y: 0 }, { promotion: 'queen' });
+    expect(promoted.state.pieces.find((p) => p.id === playerPawn.id)?.type).toBe('rook');
+    const enemyState: GameState = { ...state, turn: 'enemy' };
+    const notPromoted = applyMove(enemyState, enemyPawn.id, { x: 4, y: 0 });
+    expect(notPromoted.state.pieces.find((p) => p.id === enemyPawn.id)?.type).toBe('pawn');
+  });
   it('removes the side pawn captured en passant', () => {
     const pawn = P('player', 'pawn', 4, 3);
     const target = P('enemy', 'pawn', 3, 3);

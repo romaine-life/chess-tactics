@@ -132,6 +132,20 @@ describe('createFromLevel — pawn promotion zones', () => {
     const game = createSkirmish({ seed: 1, level });
     expect(game.promotionZones).toEqual([{ x: 4, y: 0 }, { x: 5, y: 0 }]);
   });
+
+  it('builds side-aware live promotion rules from authored promotion events', () => {
+    const level = createBlankLevel('promo-event', 'Promotion Event', 8, 8);
+    level.layers.zones = [{ id: 'promo-a', type: 'pawn-promotion', tiles: [[4, 0]] }];
+    level.events = [{
+      kind: 'pawn-promotion',
+      name: 'Player promotion',
+      trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId: 'promo-a' },
+      choices: ['rook'],
+      defaultPromotion: 'rook',
+    }];
+    const game = createSkirmish({ seed: 1, level });
+    expect(game.promotionRules).toEqual([{ side: 'player', cells: [{ x: 4, y: 0 }], choices: ['rook'], defaultPromotion: 'rook' }]);
+  });
 });
 
 // ADR-0050 random placement: a level with placement 'random' deals its roster onto
@@ -177,6 +191,13 @@ describe('createFromLevel — random placement', () => {
     // No two pieces share a cell.
     const cells = game.pieces.map((p) => `${p.x},${p.y}`);
     expect(new Set(cells).size).toBe(cells.length);
+  });
+
+  it('does not infer legacy spawn behavior when an explicit empty events list is authored', () => {
+    const level = randomLevel((l) => { l.events = []; });
+    const game = createSkirmish({ seed: 3, level });
+    expect(livingPieces(game.pieces, 'player')).toHaveLength(0);
+    expect(livingPieces(game.pieces, 'enemy')).toHaveLength(0);
   });
 
   it('dealt pieces get unique ids, default facing and startY = their spawn row (pawn double-step)', () => {
@@ -237,6 +258,25 @@ describe('createFromLevel — random placement', () => {
       ['knight', 2, 6],
       ['king', 5, 1],
     ]);
+  });
+
+  it('authored setup spawn events deal rosters into the named zone ids without relying on zone type', () => {
+    const level = createBlankLevel('ev-spawn', 'Event Spawn', 8, 8);
+    level.events = [
+      { kind: 'spawn', name: 'Player event', trigger: { kind: 'setup' }, side: 'player', roster: { pawn: 1, rook: 1 }, zoneIds: ['blue-camp'] },
+      { kind: 'spawn', name: 'Enemy event', trigger: { kind: 'setup' }, side: 'enemy', roster: { king: 1 }, zoneIds: ['red-camp'] },
+    ];
+    level.layers.zones = [
+      { id: 'blue-camp', type: 'objective', tiles: [[0, 7], [1, 7]] },
+      { id: 'red-camp', type: 'falling-rock', tiles: [[5, 0], [6, 0]] },
+    ];
+    const game = createSkirmish({ seed: 5, level });
+    const players = livingPieces(game.pieces, 'player');
+    const enemies = livingPieces(game.pieces, 'enemy');
+    expect(players.map((p) => p.type).sort()).toEqual(['pawn', 'rook']);
+    expect(enemies.map((p) => p.type)).toEqual(['king']);
+    expect(players.every((p) => ['0,7', '1,7'].includes(`${p.x},${p.y}`))).toBe(true);
+    expect(enemies.every((p) => ['5,0', '6,0'].includes(`${p.x},${p.y}`))).toBe(true);
   });
 
   it('fixed placement gives pawns their double-step from the authored starting row', () => {

@@ -33,6 +33,7 @@ import { APP_NAVIGATION_EVENT, navigateApp } from './navigation';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell } from './boardCode';
+import { clearZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
 import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -69,17 +70,20 @@ import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { OBJECTIVE_LABEL } from '../core/objectives';
-import { VictoryConditionsEditor, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
+import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { publishMap } from '../net/maps';
 import { HttpError } from '../net/http';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, ZONE_TYPES, type Level, type ObjectiveType, type Roster, type VictoryRules, type ZoneType } from '../core/level';
+import { OBJECTIVE_TYPES, ZONE_COLORS, type Level, type LevelEvent, type LevelEvents, type ObjectiveType, type PawnPromotionEvent, type SpawnEvent, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
+import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
+import { effectiveLevelEvents } from '../core/levelEvents';
+import { PROMOTION_PIECE_TYPES, type PromotionPieceType } from '../core/types';
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -141,8 +145,8 @@ function StudioEditableBoard({
   onPaintEdge?: (edgeKey: string) => void;
   /** Remove a fence from an edge. */
   onEraseEdge?: (edgeKey: string) => void;
-  /** Gameplay zones (ADR-0050) keyed by cell "x,y" -> zone type — drawn as a tinted diamond. */
-  zones?: Record<string, ZoneType>;
+  /** Cosmetic zone colors keyed by cell "x,y" — drawn as a tinted diamond. */
+  zones?: Record<string, ZoneColor>;
   resolveAsset: (id: string) => StudioAsset | undefined;
   resolveUnit: (id: string) => UnitAsset | undefined;
   resolveDoodad: (id: string) => DoodadAsset | undefined;
@@ -251,7 +255,7 @@ function StudioEditableBoard({
             {/* Zone tint: a translucent diamond seated on the tile EQUATOR — it reuses the exact
                 seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
                 which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
-            {placedZones[key] ? <span className={`le-zone-cell le-zone-${LE_ZONE_TINT[placedZones[key]] ?? 'goal'}`} aria-hidden="true" /> : null}
+            {placedZones[key] ? <span className={`le-zone-cell le-zone-${placedZones[key]}`} aria-hidden="true" /> : null}
             {/* Selected-patch highlight — a tinted diamond seated exactly like the zone tint, so
                 the author sees which cells a Generate will fill. */}
             {regionCells?.has(key) ? <span className="le-region-cell" aria-hidden="true" /> : null}
@@ -597,6 +601,29 @@ const normalizeFactionDirections = (directions?: BoardFactionDirections): Factio
   ) as FactionDirections;
 const factionDefaultDirection = (faction: UnitPalette, directions: FactionDirections): Direction =>
   directions[faction] ?? DEFAULT_FACTION_DIRECTIONS[faction];
+const isUnitPalette = (value: unknown): value is UnitPalette =>
+  typeof value === 'string' && (UNIT_PALETTES as readonly string[]).includes(value);
+const sideDefaultFaction = (
+  side: 'player' | 'enemy',
+  playerFaction: UnitPalette | null,
+  units: Record<string, BoardUnitPlacement>,
+): UnitPalette => {
+  const player = playerFaction ?? 'navy-blue';
+  if (side === 'player') return player;
+  const authoredEnemy = Object.values(units).find((unit) => unit.faction !== player)?.faction;
+  if (isUnitPalette(authoredEnemy)) return authoredEnemy;
+  if (playerFaction && playerFaction !== 'crimson') return 'crimson';
+  return UNIT_PALETTES.find((faction) => faction !== player) ?? 'crimson';
+};
+const promotionEdgeTiles = (cols: number, rows: number, direction: Direction): string[] => {
+  const tiles = new Set<string>();
+  const add = (x: number, y: number): void => { if (x >= 0 && y >= 0 && x < cols && y < rows) tiles.add(`${x},${y}`); };
+  if (direction.includes('north')) for (let x = 0; x < cols; x += 1) add(x, 0);
+  if (direction.includes('south')) for (let x = 0; x < cols; x += 1) add(x, rows - 1);
+  if (direction.includes('east')) for (let y = 0; y < rows; y += 1) add(cols - 1, y);
+  if (direction.includes('west')) for (let y = 0; y < rows; y += 1) add(0, y);
+  return sortRegionCells(tiles);
+};
 const leUnitAssets = productionUnitAssets.length ? productionUnitAssets : unitAssets;
 const CHESS_MATERIAL_POINT_VALUE: Record<PlayablePieceType, number> = {
   pawn: 1,
@@ -612,19 +639,29 @@ const materialPointsForUnitId = (unitId: string): number => {
   return type ? CHESS_MATERIAL_POINT_VALUE[type] : 0;
 };
 
-// Authored gameplay zones. The editor controls the number of zone entries separately from each
-// entry's type, so same-type zones can stay distinct on save/reopen.
-const LE_ZONE_TYPES = [
-  { type: 'player-spawn', label: 'Player spawn', tint: 'player' },
-  { type: 'enemy-spawn', label: 'Enemy spawn', tint: 'enemy' },
-  { type: 'enemy-threat', label: 'Enemy threat', tint: 'threat' },
-  { type: 'objective', label: 'Objective', tint: 'goal' },
-  { type: 'falling-rock', label: 'Falling rock', tint: 'rock' },
-  { type: 'pawn-promotion', label: 'Pawn promotion', tint: 'promotion' },
-] as const satisfies ReadonlyArray<{ type: ZoneType; label: string; tint: string }>;
-const DEFAULT_ZONE_TYPE: ZoneType = 'pawn-promotion';
-const LE_ZONE_TINT: Record<ZoneType, string> = Object.fromEntries(LE_ZONE_TYPES.map((z) => [z.type, z.tint])) as Record<ZoneType, string>;
-const LE_ZONE_LABEL: Record<ZoneType, string> = Object.fromEntries(LE_ZONE_TYPES.map((z) => [z.type, z.label])) as Record<ZoneType, string>;
+// Authored zones are named tile regions. Legacy semantic types stay in the schema for import and
+// back-compat, but new editor-authored behavior belongs in events/rules.
+const DEFAULT_ZONE_TYPE: ZoneType = 'region';
+const DEFAULT_ZONE_COLOR: ZoneColor = 'teal';
+const LEGACY_ZONE_COLOR: Record<ZoneType, ZoneColor> = {
+  region: 'teal',
+  'player-spawn': 'blue',
+  'enemy-spawn': 'red',
+  'enemy-threat': 'violet',
+  objective: 'gold',
+  'falling-rock': 'slate',
+  'pawn-promotion': 'amber',
+};
+const LE_ZONE_COLOR_OPTIONS = [
+  { color: 'teal', label: 'Teal' },
+  { color: 'blue', label: 'Blue' },
+  { color: 'red', label: 'Red' },
+  { color: 'gold', label: 'Gold' },
+  { color: 'violet', label: 'Violet' },
+  { color: 'slate', label: 'Slate' },
+  { color: 'amber', label: 'Amber' },
+] as const satisfies ReadonlyArray<{ color: ZoneColor; label: string }>;
+const isZoneColor = (value: unknown): value is ZoneColor => (ZONE_COLORS as readonly unknown[]).includes(value);
 
 // A one-line, owner-facing gloss of each mode's win rule (the ADR-0050 table, in plain terms),
 // shown under the mode picker so the author knows what they picked.
@@ -636,6 +673,11 @@ const MODE_DESCRIPTION: Record<ObjectiveType, string> = {
   reach: 'A player piece reaching a Goal zone tile wins (defaults to the far edge if none is painted).',
 };
 
+const OTHER_EVENT_TEMPLATES = [
+  { id: 'pawn-promotion', label: 'Pawn promotion' },
+] as const;
+type OtherEventTemplateId = typeof OTHER_EVENT_TEMPLATES[number]['id'];
+
 // A stable fingerprint of an editor board, the basis of the real dirty flag: encodeBoard is
 // deterministic + lossless, so two boards encode identically iff they're the same board.
 // The dirty-flag signature of a whole Level: its name, lossless boardCode, and the ADR-0050 mode
@@ -643,7 +685,7 @@ const MODE_DESCRIPTION: Record<ObjectiveType, string> = {
 // signature and for the just-saved / just-loaded baseline, so a freshly hydrated level reads clean
 // and a mode/name change (not just a board paint) marks it dirty.
 const levelSignature = (level: Level): string =>
-  JSON.stringify([level.name, level.boardCode ?? '', level.objective, level.placement ?? 'fixed', level.surviveTurns ?? '', level.roster ?? {}, level.timeControl ?? '', level.victory ?? '']);
+  JSON.stringify([level.name, level.boardCode ?? '', level.objective, level.placement ?? 'fixed', level.surviveTurns ?? '', level.roster ?? {}, level.timeControl ?? '', level.victory ?? '', effectiveLevelEvents(level)]);
 // The undo/redo history signature of an editor board (boardCode is deterministic + lossless, so two
 // boards encode identically iff equal); plus a deep clone + the history-stack depth cap.
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
@@ -665,6 +707,244 @@ function nextZoneEntryId(entries: readonly EditorZoneEntry[]): string {
     const id = `zone-${i}`;
     if (!used.has(id)) return id;
   }
+}
+
+function fallbackZoneName(entry: EditorZoneEntry, index: number): string {
+  const id = entry.id.trim();
+  const zoneNumber = /^zone-(\d+)$/i.exec(id)?.[1];
+  if (zoneNumber) return `Zone ${zoneNumber}`;
+  return id || `Zone ${index + 1}`;
+}
+
+function zoneDisplayName(entry: EditorZoneEntry, index: number): string {
+  return entry.name?.trim() || fallbackZoneName(entry, index);
+}
+
+function zoneDisplayColor(entry: EditorZoneEntry): ZoneColor {
+  return isZoneColor(entry.color) ? entry.color : LEGACY_ZONE_COLOR[entry.type] ?? DEFAULT_ZONE_COLOR;
+}
+
+function zoneCellColorMapFromEntries(entries: readonly EditorZoneEntry[] | undefined): Record<string, ZoneColor> {
+  const zones: Record<string, ZoneColor> = {};
+  for (const entry of entries ?? []) {
+    const color = zoneDisplayColor(entry);
+    for (const key of entry.tiles) zones[key] = color;
+  }
+  return zones;
+}
+
+function nextZoneEntryName(entries: readonly EditorZoneEntry[]): string {
+  const used = new Set(entries.map((entry, index) => zoneDisplayName(entry, index).toLocaleLowerCase()));
+  for (let i = entries.length + 1; ; i += 1) {
+    const candidate = `Zone ${i}`;
+    if (!used.has(candidate.toLocaleLowerCase())) return candidate;
+  }
+}
+
+function uniqueZoneEntryName(base: string, entries: readonly EditorZoneEntry[]): string {
+  const used = new Set(entries.map((entry, index) => zoneDisplayName(entry, index).toLocaleLowerCase()));
+  if (!used.has(base.toLocaleLowerCase())) return base;
+  for (let i = 2; ; i += 1) {
+    const candidate = `${base} ${i}`;
+    if (!used.has(candidate.toLocaleLowerCase())) return candidate;
+  }
+}
+
+type EventZoneOption = { id: string; label: string };
+
+const eventName = (event: LevelEvent, index: number): string =>
+  event.name?.trim() || (event.kind === 'spawn' ? `Setup spawn ${index + 1}` : `Pawn promotion ${index + 1}`);
+
+const eventIdSlug = (value: string): string =>
+  value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+
+function uniqueEventId(base: string, events: readonly LevelEvent[]): string {
+  const used = new Set(events.map((event) => event.id?.trim()).filter((id): id is string => Boolean(id)));
+  const clean = eventIdSlug(base) || 'event';
+  if (!used.has(clean)) return clean;
+  for (let i = 2; ; i += 1) {
+    const candidate = `${clean}-${i}`;
+    if (!used.has(candidate)) return candidate;
+  }
+}
+
+function uniqueEventName(base: string, events: readonly LevelEvent[]): string {
+  const used = new Set(events.map((event, index) => eventName(event, index)));
+  if (!used.has(base)) return base;
+  for (let i = 2; ; i += 1) {
+    const candidate = `${base} ${i}`;
+    if (!used.has(candidate)) return candidate;
+  }
+}
+
+function SelectFrame({ children, className = '' }: { children: ReactNode; className?: string }): ReactElement {
+  return <div className={`le-select-wrap ${className}`.trim()}>{children}</div>;
+}
+
+function LevelEventsEditor({ value, zones, onChange, templates }: {
+  value: LevelEvents;
+  zones: EventZoneOption[];
+  onChange: (next: LevelEvents, removedEvents?: readonly LevelEvent[]) => void;
+  templates?: ReactNode;
+}): ReactElement {
+  const [sel, setSel] = useState(0);
+  const selected = value.length ? Math.min(sel, value.length - 1) : -1;
+  const event = selected >= 0 ? value[selected] : null;
+  const firstZone = zones[0]?.id ?? '';
+  const defaultZoneIds = (): string[] => firstZone ? [firstZone] : [];
+  const setEvent = (index: number, next: LevelEvent): void => onChange(value.map((item, i) => (i === index ? next : item)));
+  const addSpawn = (): void => {
+    const fresh: SpawnEvent = {
+      kind: 'spawn',
+      id: uniqueEventId('setup-spawn', value),
+      name: uniqueEventName('Setup spawn', value),
+      trigger: { kind: 'setup' },
+      side: 'player',
+      roster: { pawn: 1 },
+      zoneIds: defaultZoneIds(),
+    };
+    setSel(value.length);
+    onChange([...value, fresh]);
+  };
+  const addPromotion = (): void => {
+    const fresh: PawnPromotionEvent = {
+      kind: 'pawn-promotion',
+      id: uniqueEventId('pawn-promotion', value),
+      name: uniqueEventName('Pawn promotion', value),
+      trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId: firstZone },
+      choices: [...PROMOTION_PIECE_TYPES],
+      defaultPromotion: 'queen',
+    };
+    setSel(value.length);
+    onChange([...value, fresh]);
+  };
+  const removeEvent = (index: number): void => {
+    const removed = value[index];
+    setSel(Math.max(0, index - 1));
+    onChange(value.filter((_, i) => i !== index), removed ? [removed] : undefined);
+  };
+  const patchSpawnRoster = (spawn: SpawnEvent, type: PlayablePieceType, delta: number): SpawnEvent => {
+    const count = Math.max(0, (spawn.roster[type] ?? 0) + delta);
+    const roster = { ...spawn.roster };
+    if (count === 0) delete roster[type];
+    else roster[type] = count;
+    return { ...spawn, roster };
+  };
+
+  return (
+    <div className="le-md le-events-other">
+      <div className="le-md-list">
+        {templates}
+        <h3 className="le-victory-head">Events</h3>
+        {value.length === 0 ? <p className="le-board-warning">No setup or promotion events yet.</p> : null}
+        <div className="le-md-rules">
+          {value.map((item, index) => (
+            <button type="button" key={index} className={`le-md-item ${index === selected ? 'active' : ''}`.trim()} onClick={() => setSel(index)}>
+              <span className="le-md-item-name">{eventName(item, index)}</span>
+              <span className="le-md-item-out">{item.kind === 'spawn' ? 'spawn' : 'promote'}</span>
+            </button>
+          ))}
+        </div>
+        <div className="le-cond-add le-rule-add">
+          <button type="button" className="le-seg-btn le-add-event" onClick={addSpawn}>+ Spawn</button>
+          <button type="button" className="le-seg-btn le-add-event" onClick={addPromotion}>+ Promotion</button>
+        </div>
+      </div>
+      <div className="le-md-detail">
+        {event?.kind === 'spawn' ? (
+          <div className="le-rule">
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Event name</span>
+              <input className="le-text-input" value={event.name ?? ''} placeholder={`Event ${selected + 1}`} aria-label="Event name"
+                onChange={(e) => setEvent(selected, { ...event, name: e.target.value })} />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Faction</span>
+              <SelectFrame>
+                <select className="le-layer-select le-faction-select" value={event.side} aria-label="Spawn faction"
+                  onChange={(e) => {
+                    const side = e.target.value as 'player' | 'enemy';
+                    const next = { ...event, side, zoneIds: event.zoneIds.length ? event.zoneIds : defaultZoneIds() };
+                    setEvent(selected, next);
+                  }}>
+                  <option value="player">Player</option>
+                  <option value="enemy">Enemy</option>
+                </select>
+              </SelectFrame>
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Zone</span>
+              <SelectFrame>
+                <select className="le-layer-select" value={event.zoneIds[0] ?? ''} aria-label="Spawn zone"
+                  onChange={(e) => setEvent(selected, { ...event, zoneIds: e.target.value ? [e.target.value] : [] })}>
+                  {zones.length === 0 ? <option value="">No zones painted</option> : null}
+                  {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}
+                </select>
+              </SelectFrame>
+            </div>
+            <h3 className="le-victory-head">Roster</h3>
+            {PLAYABLE_PIECE_TYPES.map((type) => (
+              <div className="le-ctrlrow le-roster-row" key={type}>
+                <span className="le-ctrllabel">{PIECE_LABEL[type]}</span>
+                <div className="le-roster-stepper">
+                  <Stepper value={event.roster[type] ?? 0} suffix="" decreaseLabel={`One fewer ${PIECE_LABEL[type]}`} increaseLabel={`One more ${PIECE_LABEL[type]}`}
+                    onDecrease={() => setEvent(selected, patchSpawnRoster(event, type, -1))}
+                    onIncrease={() => setEvent(selected, patchSpawnRoster(event, type, 1))} />
+                </div>
+              </div>
+            ))}
+            <div className="le-rule-then">
+              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+            </div>
+          </div>
+        ) : event?.kind === 'pawn-promotion' ? (
+          <div className="le-rule">
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Event name</span>
+              <input className="le-text-input" value={event.name ?? ''} placeholder={`Event ${selected + 1}`} aria-label="Event name"
+                onChange={(e) => setEvent(selected, { ...event, name: e.target.value })} />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Unit</span>
+              <SelectFrame>
+                <select className="le-layer-select le-faction-select" value={event.trigger.unit.side ?? 'any'} aria-label="Promotion faction"
+                  onChange={(e) => {
+                    const side = e.target.value === 'any' ? undefined : e.target.value as 'player' | 'enemy';
+                    setEvent(selected, { ...event, trigger: { ...event.trigger, unit: { type: 'pawn', side } } });
+                  }}>
+                  <option value="player">Player pawn</option>
+                  <option value="enemy">Enemy pawn</option>
+                  <option value="any">Any pawn</option>
+                </select>
+              </SelectFrame>
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Zone</span>
+              <SelectFrame>
+                <select className="le-layer-select" value={event.trigger.zoneId} aria-label="Promotion zone"
+                  onChange={(e) => setEvent(selected, { ...event, trigger: { ...event.trigger, zoneId: e.target.value } })}>
+                  {zones.length === 0 ? <option value="">No zones painted</option> : null}
+                  {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}
+                </select>
+              </SelectFrame>
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Promote to</span>
+              <SelectFrame>
+                <select className="le-layer-select le-faction-select" value={event.defaultPromotion ?? 'queen'} aria-label="Default promotion piece"
+                  onChange={(e) => setEvent(selected, { ...event, choices: [...PROMOTION_PIECE_TYPES], defaultPromotion: e.target.value as PromotionPieceType })}>
+                  {PROMOTION_PIECE_TYPES.map((type) => <option key={type} value={type}>{PIECE_LABEL[type]}</option>)}
+                </select>
+              </SelectFrame>
+            </div>
+            <div className="le-rule-then">
+              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+            </div>
+          </div>
+        ) : <p className="le-board-note">Select an event or add one on the left.</p>}
+      </div>
+    </div>
+  );
 }
 
 function DirectionPopover({ value, label, onChange }: {
@@ -885,7 +1165,7 @@ const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }>
 ];
 const isLayerOptionDisabled = (_layer: LayerKey): boolean => false;
 const defaultLevelEditorLayer = (): LayerKey => LEVEL_EDITOR_LAYER_OPTIONS.find((option) => !isLayerOptionDisabled(option.id))?.id ?? LEVEL_EDITOR_LAYER_OPTIONS[0].id;
-// `rules` (a mode/placement panel) and `board`/`status` are non-painting layers → select tool.
+// `rules` (events/settings) and `board`/`status` are non-painting layers → select tool.
 const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (layer === 'board' || layer === 'status' || layer === 'rules' || layer === 'generate') ? 'select' : 'brush';
 const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'paths') return 'road';
@@ -1035,29 +1315,27 @@ export function LevelEditor(): ReactElement {
   const [unitFaction, setUnitFactionState] = useState<UnitPalette>('navy-blue');
   const [undoStack, setUndoStack] = useState<EditorBoard[]>([]);
   const [redoStack, setRedoStack] = useState<EditorBoard[]>([]);
-  // Gameplay zones: an authored list of zone entries. `boardZones` below is the legacy per-cell
-  // overlay map derived from this list for board rendering and old board-code compatibility.
+  // Gameplay zones: an authored list of named region entries. `boardZones` below is the legacy
+  // per-cell overlay map derived from this list for board rendering and old board-code compatibility.
   const [boardZoneEntries, setBoardZoneEntries] = useState<EditorZoneEntry[]>(() => zoneEntriesForBoard(initialBoard ?? { cols: boardCols, rows: boardRows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, zones: {} }));
   const [selectedZoneIndex, setSelectedZoneIndex] = useState(0);
   const boardZones = useMemo(() => zoneCellMapFromEntries(boardZoneEntries), [boardZoneEntries]);
   const activeZone = boardZoneEntries[selectedZoneIndex] ?? null;
-  const activeZoneType = activeZone?.type ?? DEFAULT_ZONE_TYPE;
-  const activeZoneTint = LE_ZONE_TINT[activeZoneType] ?? 'goal';
-  const activeZoneOverlay = useMemo(() => activeZone ? zoneCellMapFromEntries([activeZone]) : {}, [activeZone]);
+  const activeZoneName = activeZone ? zoneDisplayName(activeZone, selectedZoneIndex) : '';
+  const activeZoneNameValue = activeZone ? activeZone.name ?? activeZoneName : '';
+  const activeZoneColor = activeZone ? zoneDisplayColor(activeZone) : DEFAULT_ZONE_COLOR;
+  const activeZoneOverlay = useMemo(() => activeZone ? zoneCellColorMapFromEntries([activeZone]) : {}, [activeZone]);
   const visibleZones = brushKind === 'zone' ? activeZoneOverlay : {};
   useEffect(() => {
     if (selectedZoneIndex < boardZoneEntries.length || selectedZoneIndex === 0) return;
     setSelectedZoneIndex(Math.max(0, boardZoneEntries.length - 1));
   }, [boardZoneEntries.length, selectedZoneIndex]);
 
-  // The RULES panel state — the authored win-rule mode + the orthogonal placement axis (ADR-0050).
+  // The Rules panel state: authored win rules, non-victory events, and ancillary battle settings.
   // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
   // schema defaults so it reads exactly like a blank createBlankLevel.
   const [objective, setObjective] = useState<ObjectiveType>(localDraft?.objective ?? initialCampaignLevel?.objective ?? urlObjective ?? 'capture-all');
-  const [placement, setPlacement] = useState<'fixed' | 'random'>(localDraft?.placement ?? initialCampaignLevel?.placement ?? 'fixed');
   const [surviveTurns, setSurviveTurns] = useState<number>(localDraft?.surviveTurns ?? initialCampaignLevel?.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
-  // Random-placement roster: per side, per playable piece type. An absent count reads as 0.
-  const [roster, setRoster] = useState<{ player: Roster; enemy: Roster }>(localDraft?.roster ?? { player: initialCampaignLevel?.roster?.player ?? {}, enemy: initialCampaignLevel?.roster?.enemy ?? {} });
   // The battle clock (ADR-0053) — off by default; when on, the level carries a TimeControl and the
   // skirmish runs the player's chess clock (the enemy is untimed). Seeded like the other RULES
   // fields: a restored draft (present ⇒ on, with its authored seconds) beats the campaign level.
@@ -1074,14 +1352,16 @@ export function LevelEditor(): ReactElement {
   const [victory, setVictory] = useState<VictoryRules>(
     localDraft?.victory ?? initialCampaignLevel?.victory ?? victoryRulesForObjective(objective, { surviveTurns }),
   );
+  const [events, setEvents] = useState<LevelEvents>(
+    localDraft?.events ?? (initialCampaignLevel ? effectiveLevelEvents(initialCampaignLevel) : []),
+  );
   // The victory-events editor opens as a full-size overlay over the board — the narrow control
   // panel can't give rule authoring room to breathe. The panel stays put; a button opens this.
   const [eventsOpen, setEventsOpen] = useState(false);
-  // The template the overlay's "Set template" button applies (a dropdown choice, not the old
-  // row of buttons). Seeded from the current objective.
+  // The template dropdown choices append event rows; Clear is the explicit page-local reset.
   const [templateChoice, setTemplateChoice] = useState<ObjectiveType>(objective);
-  // The events overlay's tab: victory rules (win/lose events) vs other events (spawn/gate/phase —
-  // future, empty for now). The Template control only appears on the victory-rules tab.
+  const [otherTemplateChoice, setOtherTemplateChoice] = useState<OtherEventTemplateId>('pawn-promotion');
+  // The events overlay's tab: victory rules (win/lose events) vs other events (spawn/promotion).
   const [eventsTab, setEventsTab] = useState<'victory' | 'other'>('victory');
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
@@ -1123,7 +1403,6 @@ export function LevelEditor(): ReactElement {
       const routeState = readLevelEditorRouteState(window.location.search);
       const nextLayer = routeState.layer ?? defaultLevelEditorLayer();
       if (isLayerOptionDisabled(nextLayer)) return;
-      setEventsOpen(false);
       setLayer(nextLayer);
       setTool(toolForLayer(nextLayer));
       setBrushKind(brushKindForRouteState(nextLayer, routeState.brushKind));
@@ -1191,6 +1470,7 @@ export function LevelEditor(): ReactElement {
         // The editor can still show the blank/local board; don't leave the fade held forever.
       }
       if (!active) return;
+      ensureDefaultSkirmishProfileLevel();
       if (loadedBoard || !routeParams.levelId) {
         setEditorReady(true);
         return;
@@ -1227,16 +1507,16 @@ export function LevelEditor(): ReactElement {
       setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
       setUndoStack([]);
       setRedoStack([]);
-      // Restore the mode fields from the Level so the RULES panel opens on what was authored.
-      // Defaults mirror createBlankLevel (fixed placement, capture-all, DEFAULT_SURVIVE_TURNS).
+      // Restore the rule fields from the Level so the Rules panel opens on what was authored.
+      // Defaults mirror createBlankLevel (capture-all, DEFAULT_SURVIVE_TURNS).
       setObjective(level.objective);
-      setPlacement(level.placement ?? 'fixed');
+      setTemplateChoice(level.objective);
       setSurviveTurns(level.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
-      setRoster({ player: level.roster?.player ?? {}, enemy: level.roster?.enemy ?? {} });
       setClockEnabled(level.timeControl !== undefined);
       setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
       setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
       setVictory(level.victory ?? victoryRulesForObjective(level.objective, { surviveTurns: level.surviveTurns ?? DEFAULT_SURVIVE_TURNS }));
+      setEvents(effectiveLevelEvents(level));
       setEditingId(level.id);
       setLevelName(level.name);
       // Defer the clean-baseline capture to the effect below: it reads the SETTLED signature, so a
@@ -1796,10 +2076,9 @@ export function LevelEditor(): ReactElement {
       setRegionSelection(new Set(savedRegion.cells));
     }
   };
-  // The ADR-0050 mode fields the RULES panel authors, packaged for editorBoardToLevel. Only the
-  // toggle + its config live here (objective is always written); placement/roster/surviveTurns are
-  // sent WHEN they diverge from the schema default, so a fixed capture-all board serializes without
-  // them (back-compat) — but the roster/survive values are always carried when their mode is active.
+  // The rules metadata the editor authors, packaged for editorBoardToLevel. Objective is always
+  // written; optional fields are sent only when their editor surfaces define them. Setup spawning is
+  // authored through events, with legacy placement/roster read only as an import/playback fallback.
   // The factions offered in each condition's "IF <faction>" dropdown — one per side, labelled by the
   // board's assigned palette (ADR-0064). Maps to the engine's player/enemy side; true multi-faction
   // (two distinct enemies) is future work.
@@ -1819,14 +2098,14 @@ export function LevelEditor(): ReactElement {
     () => (rulesEqual(victory, victoryRulesForObjective(objective, { surviveTurns })) ? undefined : victory),
     [victory, objective, surviveTurns],
   );
+  const eventsForSave = useMemo(() => (events.length ? events : undefined), [events]);
   const modeMeta = useMemo(() => ({
     objective,
-    placement: placement === 'random' ? ('random' as const) : undefined,
-    roster: placement === 'random' ? roster : undefined,
     surviveTurns: objective === 'survive' ? surviveTurns : undefined,
     timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
     victory: victoryForSave,
-  }), [objective, placement, roster, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave]);
+    events: eventsForSave,
+  }), [objective, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
   // The live candidate Level — the exact document a Save would persist — recomputed from the board
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
@@ -1838,9 +2117,9 @@ export function LevelEditor(): ReactElement {
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
   const playability = useMemo(() => validatePlayability(candidateLevel), [candidateLevel]);
   // Real dirty flag: the board has unsaved changes when its signature differs from the one
-  // captured at the last save. The signature folds in the mode meta (via candidateLevel.boardCode
-  // + the mode fields) so flipping the mode picker / roster also marks the level dirty, not just a
-  // board paint. A standalone board (never saved) seeds savedSig lazily on first render below.
+  // captured at the last save. The signature folds in rules/settings/events through the candidate
+  // level, so event edits mark the level dirty, not just board paint. A standalone board (never
+  // saved) seeds savedSig lazily on first render below.
   const currentSig = useMemo(() => levelSignature(candidateLevel), [candidateLevel]);
   const dirty = savedSig === null ? false : currentSig !== savedSig;
   // Establish the clean baseline signature. Two ways in: a standalone board (no campaign level)
@@ -1865,13 +2144,12 @@ export function LevelEditor(): ReactElement {
       board: currentEditorBoard,
       levelName,
       objective,
-      placement,
       surviveTurns,
-      roster,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
       victory: victoryForSave,
+      events: eventsForSave,
     });
-  }, [currentEditorBoard, dirty, draftKey, levelName, objective, placement, roster, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave]);
+  }, [currentEditorBoard, dirty, draftKey, levelName, objective, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
 
   const targetLevelId = editingId ?? routeParams.levelId;
   const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
@@ -1952,8 +2230,8 @@ export function LevelEditor(): ReactElement {
       id: targetId,
       name: levelName,
       notes: existing?.notes,
-      // The RULES panel is the source of truth for the mode fields (objective/placement/roster/
-      // surviveTurns) — write what the author set, not the existing level's stale values.
+      // The Rules panel is the source of truth for objective, battle settings, and authored events;
+      // setup spawning is explicit events, not the legacy placement/roster fields.
       ...modeMeta,
       difficulty: existing?.difficulty,
       economy: existing?.economy,
@@ -2056,7 +2334,6 @@ export function LevelEditor(): ReactElement {
   };
   const selectLayer = (nextLayer: LayerKey): void => {
     if (isLayerOptionDisabled(nextLayer)) return;
-    setEventsOpen(false); // the events overlay belongs to the rules layer; close it on any switch
     setLayer(nextLayer);
     setTool(toolForLayer(nextLayer));
     if (nextLayer === 'paths') {
@@ -2067,19 +2344,67 @@ export function LevelEditor(): ReactElement {
     if (nextLayer !== 'board' && nextLayer !== 'status' && nextLayer !== 'rules' && nextLayer !== 'generate') setBrushKind(nextLayer);
   };
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
-  // Roster stepper: bump one side's count of one piece type, clamped to >= 0. A 0 count is dropped
-  // from the map so the serialized roster carries only real entries (matches validateLevel, which
-  // rejects zero/negative counts and treats an absent type as none).
-  const adjustRoster = (side: 'player' | 'enemy', type: PlayablePieceType, delta: number): void =>
-    setRoster((prev) => {
-      const next = Math.max(0, (prev[side][type] ?? 0) + delta);
-      const sideRoster = { ...prev[side] };
-      if (next === 0) delete sideRoster[type];
-      else sideRoster[type] = next;
-      return { ...prev, [side]: sideRoster };
-    });
-  // One-click "Clear pieces": drop every painted unit, offered next to the "remove the placed
-  // units" violation so switching to random placement is a single action, not manual erasing.
+  const eventZoneOptions = useMemo<EventZoneOption[]>(
+    () => boardZoneEntries.map((entry, index) => ({ id: entry.id, label: zoneDisplayName(entry, index) })),
+    [boardZoneEntries],
+  );
+  const clearZonesForRemovedEvents = (removedEvents: readonly LevelEvent[], remainingEvents: readonly LevelEvent[]): void => {
+    const board = cloneEditorBoard(currentEditorBoardRef.current);
+    const entries = zoneEntriesForBoard(board);
+    const updated = clearZoneEntriesReferencedOnlyByRemovedEvents(entries, removedEvents, remainingEvents);
+    if (!updated) return;
+    commitEditorBoard(withZoneEntries(board, updated), null);
+  };
+  const setEventsWithZoneCleanup = (nextEvents: LevelEvents, removedEvents: readonly LevelEvent[] = []): void => {
+    setEvents(nextEvents);
+    if (removedEvents.length) clearZonesForRemovedEvents(removedEvents, nextEvents);
+  };
+  const clearOtherEvents = (): void => setEventsWithZoneCleanup([], events);
+  const addPawnPromotionTemplate = (): void => {
+    const board = cloneEditorBoard(currentEditorBoardRef.current);
+    const entries = zoneEntriesForBoard(board).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
+    const directions = normalizeFactionDirections(board.factionDirections);
+    const makeZone = (side: 'player' | 'enemy'): string => {
+      const boardPlayerFaction = isUnitPalette(board.playerFaction) ? board.playerFaction : playerFaction;
+      const faction = sideDefaultFaction(side, boardPlayerFaction, board.units as Record<string, BoardUnitPlacement>);
+      const direction = factionDefaultDirection(faction, directions);
+      const name = uniqueZoneEntryName(side === 'player' ? 'Player promotion zone' : 'Enemy promotion zone', entries);
+      const id = nextZoneEntryId(entries);
+      entries.push({
+        id,
+        name,
+        color: 'amber',
+        type: DEFAULT_ZONE_TYPE,
+        tiles: promotionEdgeTiles(board.cols, board.rows, direction),
+      });
+      return id;
+    };
+    const playerZoneId = makeZone('player');
+    const enemyZoneId = makeZone('enemy');
+    let nextEvents = events.slice();
+    const appendPromotion = (side: 'player' | 'enemy', zoneId: string): void => {
+      const baseName = side === 'player' ? 'Player pawn promotion' : 'Enemy pawn promotion';
+      const name = uniqueEventName(baseName, nextEvents);
+      const event: PawnPromotionEvent = {
+        kind: 'pawn-promotion',
+        id: uniqueEventId(baseName, nextEvents),
+        name,
+        trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side }, zoneId },
+        choices: [...PROMOTION_PIECE_TYPES],
+        defaultPromotion: 'queen',
+      };
+      nextEvents = [...nextEvents, event];
+    };
+    appendPromotion('player', playerZoneId);
+    appendPromotion('enemy', enemyZoneId);
+    commitEditorBoard(withZoneEntries(board, entries), null);
+    setEvents(nextEvents);
+  };
+  const addOtherEventTemplate = (): void => {
+    if (otherTemplateChoice === 'pawn-promotion') addPawnPromotionTemplate();
+  };
+  // One-click "Clear pieces": drop every painted unit, offered next to setup-spawn validation
+  // when events are dealing the starting forces.
   const clearUnits = (): void => setBoardUnits((prev) => (Object.keys(prev).length ? {} : prev));
   // A held unit may drop on an in-bounds cell that has no other unit and isn't under a prop
   // footprint — the same collision the unit brush enforces, so a moved unit lands where a
@@ -2241,11 +2566,15 @@ export function LevelEditor(): ReactElement {
     return list;
   }, [boardCover, boardCoverTypes, boardCells, coverSeed]);
   const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
-  const selectedZones = selectedCell && activeZone?.tiles.includes(`${selectedCell.x},${selectedCell.y}`) ? [activeZone] : [];
+  const selectedZones = selectedCell
+    ? boardZoneEntries
+      .map((zone, index) => ({ zone, index }))
+      .filter(({ zone }) => zone.tiles.includes(`${selectedCell.x},${selectedCell.y}`))
+    : [];
   const addZoneEntry = (): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     const entries = zoneEntriesForBoard(next).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
-    entries.push({ id: nextZoneEntryId(entries), type: DEFAULT_ZONE_TYPE, tiles: [] });
+    entries.push({ id: nextZoneEntryId(entries), name: nextZoneEntryName(entries), color: DEFAULT_ZONE_COLOR, type: DEFAULT_ZONE_TYPE, tiles: [] });
     const nextIndex = entries.length - 1;
     setSelectedZoneIndex(nextIndex);
     commitEditorBoard(withZoneEntries(next, entries), null);
@@ -2264,10 +2593,16 @@ export function LevelEditor(): ReactElement {
     const index = boardZoneEntries.findIndex((zone) => zone.id === id);
     if (index >= 0) setSelectedZoneIndex(index);
   };
-  const setActiveZoneType = (type: ZoneType): void => {
-    if (!(ZONE_TYPES as readonly string[]).includes(type) || !activeZone) return;
+  const setActiveZoneName = (name: string): void => {
+    if (!activeZone) return;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    const entries = zoneEntriesForBoard(next).map((entry, index) => index === selectedZoneIndex ? { ...entry, type } : entry);
+    const entries = zoneEntriesForBoard(next).map((entry, index) => index === selectedZoneIndex ? { ...entry, name } : entry);
+    commitEditorBoard(withZoneEntries(next, entries));
+  };
+  const setActiveZoneColor = (color: ZoneColor): void => {
+    if (!activeZone || !isZoneColor(color)) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const entries = zoneEntriesForBoard(next).map((entry, index) => index === selectedZoneIndex ? { ...entry, color } : entry);
     commitEditorBoard(withZoneEntries(next, entries));
   };
   const toggleFeatureCut = (edge: string): void => {
@@ -2423,11 +2758,13 @@ export function LevelEditor(): ReactElement {
             <div className="le-events-overlay" role="dialog" aria-label="Level events editor">
               <div className="le-events-head">
                 <h2>Events</h2>
-                <button type="button" className="le-seg-btn" onClick={() => setEventsOpen(false)}>Done</button>
-              </div>
-              <div className="le-seg le-seg-wrap le-events-tabs">
-                <button type="button" className={`le-seg-btn ${eventsTab === 'victory' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('victory')}>Victory rules</button>
-                <button type="button" className={`le-seg-btn ${eventsTab === 'other' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('other')}>Other events</button>
+                <div className="le-events-head-actions">
+                  <div className="le-seg le-events-tabs" role="tablist" aria-label="Event editor sections">
+                    <button type="button" role="tab" aria-selected={eventsTab === 'victory'} className={`le-seg-btn ${eventsTab === 'victory' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('victory')}>Victory rules</button>
+                    <button type="button" role="tab" aria-selected={eventsTab === 'other'} className={`le-seg-btn ${eventsTab === 'other' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('other')}>Other events</button>
+                  </div>
+                  <button type="button" className="le-seg-btn le-events-done" onClick={() => setEventsOpen(false)}>Done</button>
+                </div>
               </div>
               {eventsTab === 'victory' ? (
                 <VictoryConditionsEditor
@@ -2437,26 +2774,48 @@ export function LevelEditor(): ReactElement {
                   templates={(
                     <div className="le-events-templates">
                       <h3 className="le-victory-head">Template</h3>
-                      <p className="le-board-note">Set a template to REPLACE the victory rules with a full set (each faction gets a way to win and lose). Then edit.</p>
+                      <p className="le-board-note">Add a victory template. Existing events stay in place; use Clear first when you want a clean replacement.</p>
                       <div className="le-template-apply">
-                        <select className="le-layer-select" aria-label="Victory template" title={MODE_DESCRIPTION[templateChoice]}
-                          value={templateChoice} onChange={(e) => setTemplateChoice(e.target.value as ObjectiveType)}>
-                          {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
-                        </select>
+                        <SelectFrame className="le-template-select-wrap">
+                          <select className="le-layer-select" aria-label="Victory template" title={MODE_DESCRIPTION[templateChoice]}
+                            value={templateChoice} onChange={(e) => setTemplateChoice(e.target.value as ObjectiveType)}>
+                            {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
+                          </select>
+                        </SelectFrame>
                         <button type="button" className="le-seg-btn" onClick={() => {
                           const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
-                          setObjective(templateChoice);
-                          setVictory(victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) }));
-                        }}>Set template</button>
+                          const templateRules = victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) });
+                          setVictory((prev) => appendRules(prev, templateRules));
+                        }}>Add template</button>
+                        <button type="button" className="le-seg-btn danger" disabled={victory.length === 0} onClick={() => setVictory([])}>Clear rules</button>
                       </div>
                       <p className="le-board-note">Events run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
                     </div>
                   )}
                 />
               ) : (
-                <div className="le-events-placeholder">
-                  <p className="le-board-note">Other event types — spawn reinforcements, open a gate, advance a phase — will live here. There are none yet; today every event is a victory rule.</p>
-                </div>
+                <LevelEventsEditor
+                  value={events}
+                  zones={eventZoneOptions}
+                  onChange={setEventsWithZoneCleanup}
+                  templates={(
+                    <div className="le-events-templates">
+                      <h3 className="le-victory-head">Template</h3>
+                      <p className="le-board-note">Add a non-victory event template. Existing events stay in place; use Clear first when you want a clean replacement.</p>
+                      <div className="le-template-apply">
+                        <SelectFrame className="le-template-select-wrap">
+                          <select className="le-layer-select" aria-label="Other event template"
+                            value={otherTemplateChoice} onChange={(e) => setOtherTemplateChoice(e.target.value as OtherEventTemplateId)}>
+                            {OTHER_EVENT_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}
+                          </select>
+                        </SelectFrame>
+                        <button type="button" className="le-seg-btn" onClick={addOtherEventTemplate}>Add template</button>
+                        <button type="button" className="le-seg-btn danger" disabled={events.length === 0} onClick={clearOtherEvents}>Clear events</button>
+                      </div>
+                      <p className="le-board-note">Clear affects only this events list and any zones used only by those events.</p>
+                    </div>
+                  )}
+                />
               )}
             </div>
           ) : null}
@@ -2465,7 +2824,7 @@ export function LevelEditor(): ReactElement {
       <aside className="skirmish-hud" aria-label="Editor controls">
         <section className="skirmish-card">
           <h2>Layer</h2>
-          <div className="le-layer-select-wrap">
+          <SelectFrame>
             <select
               className="le-layer-select"
               aria-label="Editor layer"
@@ -2478,7 +2837,7 @@ export function LevelEditor(): ReactElement {
                 </option>
               ))}
             </select>
-          </div>
+          </SelectFrame>
         </section>
 
         {/* Pinned editor ACTIONS dock: only the ALWAYS-relevant verbs — Undo · Redo — stay
@@ -2528,8 +2887,7 @@ export function LevelEditor(): ReactElement {
               discovered when the author comes to save. Every line is plain language from
               core/validatePlayability — described by what the author sees (sides, painted
               units, spawn zones), never by schema jargon. A "Clear pieces" shortcut rides the
-              "remove the placed units" violation so switching to random placement is one
-              click. */}
+              "remove the placed units" violation for setup-spawn boards. */}
           {!playability.ok ? (
             <section className="skirmish-card le-violations" aria-label="Playability issues" data-testid="le-violations">
               <h2>Fix before saving</h2>
@@ -2787,25 +3145,8 @@ export function LevelEditor(): ReactElement {
             <h2>Victory events</h2>
             {/* ADR-0064: the rule authoring lives in a full-size overlay over the board (this panel is
                 too narrow) — see the .le-events-overlay below. This card is just the entry point. */}
-            <p className="le-board-note">How this level is won and lost, as <b>IF … THEN</b> events. {victory.length} event{victory.length === 1 ? '' : 's'} set — templates and editing open over the board.</p>
+            <p className="le-board-note">How this level is won, lost, deployed, and promoted. {victory.length} victory event{victory.length === 1 ? '' : 's'} and {events.length} other event{events.length === 1 ? '' : 's'} set.</p>
             <button type="button" className="le-seg-btn le-events-open" onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
-          </section>
-
-          <section className="skirmish-card">
-            <h2>Placement</h2>
-            <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Random placement</span>
-              <Toggle
-                checked={placement === 'random'}
-                label="Toggle random placement"
-                onChange={(on) => setPlacement(on ? 'random' : 'fixed')}
-              />
-            </div>
-            <p className="le-board-note">
-              {placement === 'random'
-                ? 'Each side fields the roster below, dealt onto random free tiles of its placement zones at the start of every play. Paint the zones on the Zone layer.'
-                : 'Units play from exactly where they are painted on the board (the Unit layer).'}
-            </p>
           </section>
 
           <section className="skirmish-card">
@@ -2862,27 +3203,6 @@ export function LevelEditor(): ReactElement {
                 : 'Untimed — the player can think as long as they like.'}
             </p>
           </section>
-
-          {placement === 'random' ? (
-            (['player', 'enemy'] as const).map((side) => (
-              <section className="skirmish-card" key={side}>
-                <h2>{side === 'player' ? 'Player' : 'Enemy'} roster</h2>
-                {PLAYABLE_PIECE_TYPES.map((type) => (
-                  <div className="le-ctrlrow" key={type}>
-                    <span className="le-ctrllabel">{PIECE_LABEL[type]}</span>
-                    <Stepper
-                      value={roster[side][type] ?? 0}
-                      suffix=""
-                      decreaseLabel={`One fewer ${PIECE_LABEL[type]}`}
-                      increaseLabel={`One more ${PIECE_LABEL[type]}`}
-                      onDecrease={() => adjustRoster(side, type, -1)}
-                      onIncrease={() => adjustRoster(side, type, 1)}
-                    />
-                  </div>
-                ))}
-              </section>
-            ))
-          ) : null}
         </>) : (<>
 
         <section className="skirmish-card">
@@ -2905,7 +3225,7 @@ export function LevelEditor(): ReactElement {
                 : brushKind === 'cover'
                 ? <GroundCoverPreview asset={coverBrushAsset} />
                 : brushKind === 'zone'
-                ? <span className={`le-brush-thumb-zone le-zone-${activeZoneTint}`} aria-hidden="true" />
+                ? <span className={`le-brush-thumb-zone le-zone-${activeZoneColor}`} aria-hidden="true" />
                 : fenceTool
                 ? <img src={fenceThumbSrc(fenceBrushMaterial)} alt="" draggable={false} />
                 : featureKind
@@ -2913,7 +3233,7 @@ export function LevelEditor(): ReactElement {
                 : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? LE_ZONE_LABEL[activeZone.type] : 'No zones') : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
               <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
             </span>
           </div>
@@ -2947,12 +3267,12 @@ export function LevelEditor(): ReactElement {
         ) : null}
 
         {brushKind === 'zone' ? (
-          <section className="skirmish-card le-brush-panel">
+          <section className="skirmish-card le-brush-panel le-zone-panel">
             <h2>Zone</h2>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
               <div className="le-zone-select-controls">
-                <div className="le-layer-select-wrap">
+                <SelectFrame>
                   <select
                     className="le-layer-select"
                     value={activeZone?.id ?? ''}
@@ -2962,10 +3282,10 @@ export function LevelEditor(): ReactElement {
                   >
                     {activeZone ? null : <option value="">None</option>}
                     {boardZoneEntries.map((zone, index) => (
-                      <option key={zone.id} value={zone.id}>Zone {index + 1} - {LE_ZONE_LABEL[zone.type]}</option>
+                      <option key={zone.id} value={zone.id}>{zoneDisplayName(zone, index)}</option>
                     ))}
                   </select>
-                </div>
+                </SelectFrame>
                 <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Remove selected zone" title="Remove selected zone" disabled={!activeZone} onClick={removeActiveZoneEntry}>
                   <span><span className="stepper-glyph stepper-minus" aria-hidden="true" /></span>
                 </button>
@@ -2975,23 +3295,36 @@ export function LevelEditor(): ReactElement {
               </div>
             </div>
             <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Type</span>
-              <div className="le-layer-select-wrap">
-                <select
-                  className="le-layer-select"
-                  value={activeZone?.type ?? DEFAULT_ZONE_TYPE}
-                  disabled={!activeZone}
-                  onChange={(event) => setActiveZoneType(event.target.value as ZoneType)}
-                  aria-label="Zone type"
-                >
-                  {LE_ZONE_TYPES.map((zone) => (
-                    <option key={zone.type} value={zone.type}>{zone.label}</option>
-                  ))}
-                </select>
+              <span className="le-ctrllabel">Name</span>
+              <input
+                className="le-text-input le-zone-name-input"
+                value={activeZoneNameValue}
+                disabled={!activeZone}
+                aria-label="Zone name"
+                placeholder="Zone name"
+                onChange={(event) => setActiveZoneName(event.target.value)}
+              />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Color</span>
+              <div className="le-zone-color-swatches" role="group" aria-label="Zone color">
+                {LE_ZONE_COLOR_OPTIONS.map((option) => (
+                  <button
+                    type="button"
+                    key={option.color}
+                    className={`le-zone-color-button ${activeZoneColor === option.color ? 'active' : ''}`.trim()}
+                    disabled={!activeZone}
+                    title={option.label}
+                    aria-label={`Zone color ${option.label}`}
+                    onClick={() => setActiveZoneColor(option.color)}
+                  >
+                    <span className={`le-zone-dot le-zone-${option.color}`} aria-hidden="true" />
+                  </button>
+                ))}
               </div>
             </div>
             <p className="le-board-note">
-              Brush paints cells into the selected zone. Erase removes cells from the selected zone.
+              Brush paints cells into the selected zone. Events decide what that zone does.
             </p>
           </section>
         ) : null}
@@ -3263,7 +3596,7 @@ export function LevelEditor(): ReactElement {
               <div><dt>Type</dt><dd>{leFamilyOfTile(selectedAsset.id)?.label ?? '—'}</dd></div>
               <div><dt>Source</dt><dd>{selectedAsset.id}</dd></div>
               <div><dt>Cell</dt><dd>{selectedCell?.x}, {selectedCell?.y}</dd></div>
-              {selectedZones.length ? <div><dt>Zone</dt><dd>{selectedZones.map((zone) => LE_ZONE_LABEL[zone.type]).join(', ')}</dd></div> : null}
+              {selectedZones.length ? <div><dt>Zone</dt><dd>{selectedZones.map(({ zone, index }) => zoneDisplayName(zone, index)).join(', ')}</dd></div> : null}
             </dl>
           ) : (
             <dl>

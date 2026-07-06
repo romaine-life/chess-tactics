@@ -4,7 +4,7 @@
 
 import { create } from 'zustand';
 import { PROMOTION_PIECE_TYPES, type GameEvent, type GameState, type Move, type Piece, type PromotionPieceType, type Side, type Winner } from '../core/types';
-import { applyMove, gameEnv, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
+import { applyMove, gameEnv, legalMoves, livingPieces, promotionRuleForMove, sideInCheck, type MoveEnv } from '../core/rules';
 import { adoptedWeightsFor } from './adoptedWeights';
 import { premoveTargets, type PremoveStep } from './premoves';
 import { requestEnemyReply } from './aiWorkerClient';
@@ -147,7 +147,11 @@ function describeEvent(ev: GameEvent): string | null {
 }
 
 function movePromotesPawn(game: GameState, piece: Piece, move: Move): boolean {
-  return piece.type === 'pawn' && !!game.promotionZones?.some((cell) => cell.x === move.x && cell.y === move.y);
+  return !!promotionRuleForMove(game, piece, { x: move.x, y: move.y });
+}
+
+function promotionChoicesForMove(game: GameState, piece: Piece, move: Move): readonly PromotionPieceType[] {
+  return promotionRuleForMove(game, piece, { x: move.x, y: move.y })?.choices ?? PROMOTION_PIECE_TYPES;
 }
 
 function firstPlayerId(game: GameState): string | null {
@@ -913,7 +917,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
     if (movePromotesPawn(s.game, p, mv)) {
-      set({ pendingPromotion: { pieceId: p.id, move: mv, choices: PROMOTION_PIECE_TYPES }, premoves: [] });
+      set({ pendingPromotion: { pieceId: p.id, move: mv, choices: promotionChoicesForMove(s.game, p, mv) }, premoves: [] });
       return;
     }
     // Netplay is server-sequenced: DON'T apply locally — relay the target cell and let

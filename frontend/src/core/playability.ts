@@ -6,12 +6,13 @@
 // whole-workspace PUT carries legacy levels; one broken level must not brick the rest),
 // so this module is the single owner of the P1–P5 rule set. Pure + deterministic.
 
-import type { Level, Roster, ZoneType } from './level';
+import type { Level, Roster } from './level';
 import type { PieceType } from './types';
 import { PLAYABLE_PIECE_TYPES, isPlayablePieceType } from './pieces';
 import { MODE_NAME, ruleOutcome } from './objectives';
 import { isPassableTerrain } from './terrain';
 import { propCells, propDef } from './props';
+import { spawnEventsForLevel, zoneCellsByIds, zonesByIds } from './levelEvents';
 
 export interface PlayabilityViolation {
   /** Stable machine id (P1_SIDE_EMPTY, P2_KING_ASSAULT_KINGS, P2_RIVAL_KINGS_KINGS,
@@ -33,7 +34,6 @@ const SIDES = ['player', 'enemy'] as const;
 type CombatSide = (typeof SIDES)[number];
 
 const SIDE_NAME: Record<CombatSide, string> = { player: 'Player side', enemy: 'Enemy side' };
-const SPAWN_ZONE: Record<CombatSide, ZoneType> = { player: 'player-spawn', enemy: 'enemy-spawn' };
 
 const key = (x: number, y: number): string => `${x},${y}`;
 
@@ -44,35 +44,27 @@ function rosterTotal(roster: Roster | undefined): number {
   return PLAYABLE_PIECE_TYPES.reduce((sum, type) => sum + (roster[type] ?? 0), 0);
 }
 
+function spawnedRosterTotal(level: Level, side: CombatSide): number {
+  const total = spawnEventsForLevel(level)
+    .filter((event) => event.side === side)
+    .reduce((sum, event) => sum + rosterTotal(event.roster), 0);
+  return total || (level.placement === 'random' ? rosterTotal(level.roster?.[side]) : 0);
+}
+
 /** How many pieces a side fields — from `layers.units` when fixed, from `roster` when
  * random. Only playable types count as "pieces" (a painted neutral rock is scenery). */
 function pieceCount(level: Level, side: CombatSide): number {
-  if (level.placement === 'random') return rosterTotal(level.roster?.[side]);
-  return level.layers.units.filter((u) => u.side === side && isPlayablePieceType(u.type)).length;
+  const fixed = level.layers.units.filter((u) => u.side === side && isPlayablePieceType(u.type)).length;
+  return fixed + spawnedRosterTotal(level, side);
 }
 
 /** How many Kings a side fields, placement-aware like pieceCount. */
 function kingCount(level: Level, side: CombatSide): number {
   const king: PieceType = 'king';
-  if (level.placement === 'random') return level.roster?.[side]?.[king] ?? 0;
-  return level.layers.units.filter((u) => u.side === side && u.type === king).length;
-}
-
-/**
- * A side's pooled spawn tiles: every tile of every zone of its spawn type (multiple
- * zones pool), deduped, in-bounds. This is the RAW pool — usability (terrain/props)
- * is filtered separately so the overlap check can compare authored intent directly.
- */
-function pooledSpawnTiles(level: Level, side: CombatSide): Set<string> {
-  const pool = new Set<string>();
-  for (const zone of level.layers.zones) {
-    if (zone.type !== SPAWN_ZONE[side]) continue;
-    for (const [x, y] of zone.tiles) {
-      if (x < 0 || x >= level.board.cols || y < 0 || y >= level.board.rows) continue;
-      pool.add(key(x, y));
-    }
-  }
-  return pool;
+  const fixed = level.layers.units.filter((u) => u.side === side && u.type === king).length;
+  const spawnedFromEvents = spawnEventsForLevel(level).reduce((sum, event) => sum + (event.side === side ? event.roster.king ?? 0 : 0), 0);
+  const spawned = spawnedFromEvents || (level.placement === 'random' ? level.roster?.[side]?.[king] ?? 0 : 0);
+  return fixed + spawned;
 }
 
 /** Cells a spawned piece can never stand on: impassable terrain + blocking-prop
@@ -99,6 +91,7 @@ function blockedCells(level: Level): Set<string> {
 export function validatePlayability(level: Level): PlayabilityResult {
   const violations: PlayabilityViolation[] = [];
   const random = level.placement === 'random';
+  const spawnEvents = spawnEventsForLevel(level);
 
   // P1 — presence: each side fields at least one piece, whatever the mode. A side
   // with nothing on the board is an instant (or impossible) win.
@@ -106,7 +99,7 @@ export function validatePlayability(level: Level): PlayabilityResult {
     if (pieceCount(level, side) < 1) {
       violations.push({
         code: 'P1_SIDE_EMPTY',
-        message: `${SIDE_NAME[side]} needs at least one piece${random ? ' in its roster' : ''}.`,
+        message: `${SIDE_NAME[side]} needs at least one piece${random || spawnEvents.length ? ' in its setup' : ''}.`,
       });
     }
   }
@@ -137,47 +130,61 @@ export function validatePlayability(level: Level): PlayabilityResult {
     }
   }
 
-  // P3 — random placement: units are authored as a roster + spawn zones, never as
-  // painted positions, and each side's pool must actually hold its force.
-  if (random) {
+  // P3 — setup spawning: zones are dumb tile groups; spawn events say which roster
+  // is dealt into which zone ids. Legacy random placement expands into the same event
+  // shape, preserving old levels while new editor saves make the behavior explicit.
+  if (random || spawnEvents.length > 0) {
     if (level.layers.units.length > 0) {
       violations.push({
         code: 'P3_UNITS_NOT_EMPTY',
-        message: 'Random placement uses the roster — remove the placed units (or switch placement to fixed).',
+        message: 'Setup spawn events deal pieces into zones — remove the painted units or remove the setup spawn events.',
       });
     }
 
     const blocked = blockedCells(level);
-    const pools: Record<CombatSide, Set<string>> = {
-      player: pooledSpawnTiles(level, 'player'),
-      enemy: pooledSpawnTiles(level, 'enemy'),
-    };
+    const used = new Set<string>();
+    const poolsByEvent = spawnEvents.map((event) => ({
+      event,
+      hasZone: zonesByIds(level, event.zoneIds).length > 0,
+      pool: new Set(zoneCellsByIds(level, event.zoneIds).map((cell) => key(cell.x, cell.y))),
+    }));
     for (const side of SIDES) {
-      // Zone presence is checked on the authored zones (not the pool) so an authored-
-      // but-empty zone reads as a capacity problem, not a missing-zone one.
-      if (!level.layers.zones.some((z) => z.type === SPAWN_ZONE[side])) {
+      if (!spawnEvents.some((event) => event.side === side)) {
         violations.push({
           code: 'P3_NO_SPAWN_ZONE',
-          message: `${SIDE_NAME[side]} needs at least one spawn zone painted for random placement.`,
+          message: `${SIDE_NAME[side]} needs a setup spawn event with a painted zone.`,
+        });
+      }
+    }
+    for (const { event, hasZone, pool } of poolsByEvent) {
+      if (!hasZone) {
+        violations.push({
+          code: 'P3_NO_SPAWN_ZONE',
+          message: `${SIDE_NAME[event.side]} spawn event "${event.name?.trim() || 'Setup spawn'}" needs at least one painted zone tile.`,
         });
         continue;
       }
-      // Usable = pooled tiles a piece can actually be dealt onto (in-bounds and deduped
-      // already, minus impassable terrain and blocking-prop footprints).
       let usable = 0;
-      for (const tile of pools[side]) if (!blocked.has(tile)) usable += 1;
-      const needed = rosterTotal(level.roster?.[side]);
+      for (const tile of pool) if (!blocked.has(tile) && !used.has(tile)) usable += 1;
+      const needed = rosterTotal(event.roster);
       if (usable < needed) {
         violations.push({
           code: 'P3_ZONE_CAPACITY',
-          message: `${SIDE_NAME[side]} spawn zones need ${needed - usable} more usable tile${needed - usable === 1 ? '' : 's'} (${usable} usable for ${needed} pieces).`,
+          message: `${SIDE_NAME[event.side]} spawn event "${event.name?.trim() || 'Setup spawn'}" needs ${needed - usable} more usable tile${needed - usable === 1 ? '' : 's'} (${usable} usable for ${needed} pieces).`,
         });
       }
+      for (const tile of pool) if (!blocked.has(tile)) used.add(tile);
     }
     // Overlapping pools would let both sides claim the same square; compared on the raw
     // pools because a shared-but-blocked tile is still an authoring mistake worth flagging.
     let overlap = 0;
-    for (const tile of pools.player) if (pools.enemy.has(tile)) overlap += 1;
+    const playerPool = new Set<string>();
+    const enemyPool = new Set<string>();
+    for (const { event, pool } of poolsByEvent) {
+      const target = event.side === 'player' ? playerPool : enemyPool;
+      for (const tile of pool) target.add(tile);
+    }
+    for (const tile of playerPool) if (enemyPool.has(tile)) overlap += 1;
     if (overlap > 0) {
       violations.push({
         code: 'P3_ZONES_OVERLAP',

@@ -7,7 +7,7 @@
 //   f?:fillTileId, t?:{cell:tileId}, h?:[cell], u?:{cell:[unitId,dir,faction]},
 //   d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fe?:{edgeKey:fenceMaterial},
-//   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell]]], z?:{cell:zoneType},
+//   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
 //   gr?:generatedRegionUnits }. `f` fills every cell, then `t` overrides — so a "mostly one tile"
 // board stays tiny; `h` punches intentional holes back out of that fill. The autotiling ribbon
 // features split per kind on the wire (rd=roads, rv=rivers) and merge into one `features` map on
@@ -22,7 +22,7 @@
 
 import type { GroundCoverDensity } from '../core/groundCover';
 import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial, FenceMaterial } from '../core/featureAutotile';
-import { ZONE_TYPES, type ZoneType } from '../core/level';
+import { ZONE_COLORS, ZONE_TYPES, type ZoneColor, type ZoneType } from '../core/level';
 import type { TileFamilyId } from '../core/tileSockets';
 import { UNIT_FACINGS, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
 import type { UnitFacing } from '../core/types';
@@ -38,6 +38,8 @@ export interface FeatureCell {
 
 export interface EditorZoneEntry {
   id: string;
+  name?: string;
+  color?: ZoneColor;
   type: ZoneType;
   tiles: string[];
 }
@@ -113,6 +115,7 @@ const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 const clampNumber = (value: unknown, fallback: number, min: number, max: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
 const validZoneTypes = new Set<string>(ZONE_TYPES);
+const validZoneColors = new Set<string>(ZONE_COLORS);
 
 function cellParts(key: string): [number, number] | null {
   const [xs, ys] = key.split(',');
@@ -145,7 +148,9 @@ function normalizeZoneEntries(entries: readonly EditorZoneEntry[] | undefined, c
       seen.add(key);
       tiles.push(key);
     }
-    out.push({ id: entry.id.trim() || `zone-${index + 1}`, type: entry.type, tiles: sortCellKeys(tiles) });
+    const name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : undefined;
+    const color = entry.color && validZoneColors.has(entry.color) ? entry.color : undefined;
+    out.push({ id: entry.id.trim() || `zone-${index + 1}`, ...(name ? { name } : {}), ...(color ? { color } : {}), type: entry.type, tiles: sortCellKeys(tiles) });
   }
   return out;
 }
@@ -333,7 +338,11 @@ export function encodeBoard(b: EditorBoard): string {
   // a best-effort zone overlay. Zone-free boards still omit both keys.
   const zoneEntries = normalizeZoneEntries(b.zoneEntries ?? zoneEntriesFromCellMap(b.zones, b.cols, b.rows), b.cols, b.rows);
   const zones = zoneCellMapFromEntries(zoneEntries);
-  if (zoneEntries.length) wire.zn = zoneEntries.map((z) => [z.id, z.type, z.tiles]);
+  if (zoneEntries.length) wire.zn = zoneEntries.map((z) => {
+    const name = z.name?.trim();
+    const color = z.color && validZoneColors.has(z.color) ? z.color : undefined;
+    return name || color ? [z.id, z.type, z.tiles, name ?? '', color ?? ''] : [z.id, z.type, z.tiles];
+  });
   if (nonEmpty(zones)) wire.z = zones;
   const gr = encodeGeneratedRegions(b.generatedRegions, b.cols, b.rows);
   if (gr.length) wire.gr = gr;
@@ -373,8 +382,10 @@ export function decodeBoard(code: string): EditorBoard | null {
     let zoneEntries: EditorZoneEntry[] = [];
     if (Array.isArray(w.zn)) {
       zoneEntries = normalizeZoneEntries(
-        (w.zn as Array<[unknown, unknown, unknown]>).map(([id, type, tiles]) => ({
+        (w.zn as Array<[unknown, unknown, unknown, unknown?, unknown?]>).map(([id, type, tiles, name, color]) => ({
           id: String(id ?? ''),
+          name: typeof name === 'string' ? name : undefined,
+          color: typeof color === 'string' ? color as ZoneColor : undefined,
           type: type as ZoneType,
           tiles: Array.isArray(tiles) ? tiles.map(String) : [],
         })),

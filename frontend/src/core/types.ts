@@ -72,6 +72,14 @@ export interface Piece {
   threatsMade?: number;
 }
 
+export interface PawnPromotionRule {
+  /** Absent means either combat side may trigger the promotion. */
+  side?: 'player' | 'enemy';
+  cells: Vec[];
+  choices?: PromotionPieceType[];
+  defaultPromotion?: PromotionPieceType;
+}
+
 export interface LastMove {
   pieceId: string;
   pieceType: PieceType;
@@ -144,8 +152,11 @@ export interface GameState {
   /**
    * Authored pawn-promotion cells. A pawn promotes only after landing on one of these
    * cells; a level/free skirmish with none disables promotion entirely.
+   * @deprecated Use promotionRules; kept so old saved matches continue to resume.
    */
   promotionZones?: Vec[];
+  /** Authored promotion events resolved to live board cells. */
+  promotionRules?: PawnPromotionRule[];
   turn: Turn;
   winner: Winner;
   /** Last displaced move, used for immediate pawn en passant eligibility. */

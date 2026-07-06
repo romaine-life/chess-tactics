@@ -27,23 +27,23 @@ describe('levelBoard — zone projection into layers.zones', () => {
     const level = editorBoardToLevel(
       board({
         zoneEntries: [
-          { id: 'zone-1', type: 'pawn-promotion', tiles: ['0,0'] },
-          { id: 'zone-2', type: 'pawn-promotion', tiles: ['1,0'] },
-          { id: 'zone-3', type: 'objective', tiles: [] },
+          { id: 'zone-1', name: 'North landing', color: 'blue', type: 'region', tiles: ['0,0'] },
+          { id: 'zone-2', name: 'South landing', color: 'red', type: 'region', tiles: ['1,0'] },
+          { id: 'zone-3', name: 'Empty label', color: 'gold', type: 'region', tiles: [] },
         ],
       }),
       { id: 'promo', name: 'Promotion Zones' },
     );
     expect(level.layers.zones).toEqual([
-      { id: 'zone-1', type: 'pawn-promotion', tiles: [[0, 0]] },
-      { id: 'zone-2', type: 'pawn-promotion', tiles: [[1, 0]] },
-      { id: 'zone-3', type: 'objective', tiles: [] },
+      { id: 'zone-1', name: 'North landing', color: 'blue', type: 'region', tiles: [[0, 0]] },
+      { id: 'zone-2', name: 'South landing', color: 'red', type: 'region', tiles: [[1, 0]] },
+      { id: 'zone-3', name: 'Empty label', color: 'gold', type: 'region', tiles: [] },
     ]);
     const reopened = levelToEditorBoard(level);
     expect(reopened.zoneEntries).toEqual([
-      { id: 'zone-1', type: 'pawn-promotion', tiles: ['0,0'] },
-      { id: 'zone-2', type: 'pawn-promotion', tiles: ['1,0'] },
-      { id: 'zone-3', type: 'objective', tiles: [] },
+      { id: 'zone-1', name: 'North landing', color: 'blue', type: 'region', tiles: ['0,0'] },
+      { id: 'zone-2', name: 'South landing', color: 'red', type: 'region', tiles: ['1,0'] },
+      { id: 'zone-3', name: 'Empty label', color: 'gold', type: 'region', tiles: [] },
     ]);
   });
 
@@ -112,6 +112,12 @@ describe('levelBoard — ADR-0050 mode meta fields', () => {
     expect(level.roster).toEqual(roster);
     expect(level.surviveTurns).toBe(12);
     expect(level.timeControl).toEqual({ initialSeconds: 300, incrementSeconds: 2 });
+  });
+
+  it('writes authored non-victory events from meta onto the Level', () => {
+    const events = [{ kind: 'spawn' as const, name: 'Deploy', trigger: { kind: 'setup' as const }, side: 'player' as const, roster: { pawn: 1 }, zoneIds: ['z'] }];
+    const level = editorBoardToLevel(board(), { id: 'l-events', name: 'Events', events });
+    expect(level.events).toEqual(events);
   });
 
   it('omits the optional mode fields when meta leaves them undefined (back-compat)', () => {
