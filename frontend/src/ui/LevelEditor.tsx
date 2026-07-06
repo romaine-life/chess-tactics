@@ -33,7 +33,7 @@ import { APP_NAVIGATION_EVENT, navigateApp } from './navigation';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell } from './boardCode';
-import { clearZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
+import { removeZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
 import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -76,14 +76,13 @@ import { publishMap } from '../net/maps';
 import { HttpError } from '../net/http';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, ZONE_COLORS, type Level, type LevelEvent, type LevelEvents, type ObjectiveType, type PawnPromotionEvent, type SpawnEvent, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { OBJECTIVE_TYPES, ZONE_COLORS, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
 import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
-import { effectiveLevelEvents } from '../core/levelEvents';
-import { PROMOTION_PIECE_TYPES, type PromotionPieceType } from '../core/types';
+import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -795,8 +794,17 @@ function uniqueZoneEntryName(base: string, entries: readonly EditorZoneEntry[]):
 
 type EventZoneOption = { id: string; label: string };
 
+const primaryEventAction = (event: LevelEvent): LevelEventAction | undefined => event.do[0];
+
 const eventName = (event: LevelEvent, index: number): string =>
-  event.name?.trim() || (event.kind === 'spawn' ? `Setup spawn ${index + 1}` : `Pawn promotion ${index + 1}`);
+  event.name?.trim() || (primaryEventAction(event)?.kind === 'spawn' ? `Setup spawn ${index + 1}` : `Pawn promotion ${index + 1}`);
+
+function replaceEventAction(event: LevelEvent, nextAction: LevelEventAction): LevelEvent {
+  const nextDo = event.do.some((action) => action.kind === nextAction.kind)
+    ? event.do.map((action) => (action.kind === nextAction.kind ? nextAction : action))
+    : [...event.do, nextAction];
+  return { ...event, do: nextDo };
+}
 
 const eventIdSlug = (value: string): string =>
   value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
@@ -833,30 +841,28 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
   const [sel, setSel] = useState(0);
   const selected = value.length ? Math.min(sel, value.length - 1) : -1;
   const event = selected >= 0 ? value[selected] : null;
+  const spawnAction = event?.do.find((action): action is SpawnEventAction => action.kind === 'spawn') ?? null;
+  const promotionTrigger = event?.trigger.kind === 'unit-enters-zone' ? event.trigger : null;
+  const promotesTriggeringUnit = Boolean(event?.do.some((action) => action.kind === 'promote' && action.target.kind === 'triggering-unit'));
   const firstZone = zones[0]?.id ?? '';
   const defaultZoneIds = (): string[] => firstZone ? [firstZone] : [];
   const setEvent = (index: number, next: LevelEvent): void => onChange(value.map((item, i) => (i === index ? next : item)));
   const addSpawn = (): void => {
-    const fresh: SpawnEvent = {
-      kind: 'spawn',
+    const fresh: LevelEvent = {
       id: uniqueEventId('setup-spawn', value),
       name: uniqueEventName('Setup spawn', value),
       trigger: { kind: 'setup' },
-      side: 'player',
-      roster: { pawn: 1 },
-      zoneIds: defaultZoneIds(),
+      do: [{ kind: 'spawn', side: 'player', roster: { pawn: 1 }, zoneIds: defaultZoneIds() }],
     };
     setSel(value.length);
     onChange([...value, fresh]);
   };
   const addPromotion = (): void => {
-    const fresh: PawnPromotionEvent = {
-      kind: 'pawn-promotion',
+    const fresh: LevelEvent = {
       id: uniqueEventId('pawn-promotion', value),
       name: uniqueEventName('Pawn promotion', value),
       trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId: firstZone },
-      choices: [...PROMOTION_PIECE_TYPES],
-      defaultPromotion: 'queen',
+      do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }],
     };
     setSel(value.length);
     onChange([...value, fresh]);
@@ -866,7 +872,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
     setSel(Math.max(0, index - 1));
     onChange(value.filter((_, i) => i !== index), removed ? [removed] : undefined);
   };
-  const patchSpawnRoster = (spawn: SpawnEvent, type: PlayablePieceType, delta: number): SpawnEvent => {
+  const patchSpawnRoster = (spawn: SpawnEventAction, type: PlayablePieceType, delta: number): SpawnEventAction => {
     const count = Math.max(0, (spawn.roster[type] ?? 0) + delta);
     const roster = { ...spawn.roster };
     if (count === 0) delete roster[type];
@@ -884,7 +890,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
           {value.map((item, index) => (
             <button type="button" key={index} className={`le-md-item ${index === selected ? 'active' : ''}`.trim()} onClick={() => setSel(index)}>
               <span className="le-md-item-name">{eventName(item, index)}</span>
-              <span className="le-md-item-out">{item.kind === 'spawn' ? 'spawn' : 'promote'}</span>
+              <span className="le-md-item-out">{primaryEventAction(item)?.kind ?? 'event'}</span>
             </button>
           ))}
         </div>
@@ -894,7 +900,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
         </div>
       </div>
       <div className="le-md-detail">
-        {event?.kind === 'spawn' ? (
+        {event && spawnAction ? (
           <div className="le-rule">
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Event name</span>
@@ -902,13 +908,17 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
                 onChange={(e) => setEvent(selected, { ...event, name: e.target.value })} />
             </div>
             <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Trigger</span>
+              <output className="le-event-readout" aria-label="Event trigger">Setup</output>
+            </div>
+            <div className="le-ctrlrow">
               <span className="le-ctrllabel">Faction</span>
               <SelectFrame>
-                <select className="le-layer-select le-faction-select" value={event.side} aria-label="Spawn faction"
+                <select className="le-layer-select le-faction-select" value={spawnAction.side} aria-label="Spawn faction"
                   onChange={(e) => {
                     const side = e.target.value as 'player' | 'enemy';
-                    const next = { ...event, side, zoneIds: event.zoneIds.length ? event.zoneIds : defaultZoneIds() };
-                    setEvent(selected, next);
+                    const nextAction = { ...spawnAction, side, zoneIds: spawnAction.zoneIds.length ? spawnAction.zoneIds : defaultZoneIds() };
+                    setEvent(selected, replaceEventAction(event, nextAction));
                   }}>
                   <option value="player">Player</option>
                   <option value="enemy">Enemy</option>
@@ -918,8 +928,8 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
               <SelectFrame>
-                <select className="le-layer-select" value={event.zoneIds[0] ?? ''} aria-label="Spawn zone"
-                  onChange={(e) => setEvent(selected, { ...event, zoneIds: e.target.value ? [e.target.value] : [] })}>
+                <select className="le-layer-select" value={spawnAction.zoneIds[0] ?? ''} aria-label="Spawn zone"
+                  onChange={(e) => setEvent(selected, replaceEventAction(event, { ...spawnAction, zoneIds: e.target.value ? [e.target.value] : [] }))}>
                   {zones.length === 0 ? <option value="">No zones painted</option> : null}
                   {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}
                 </select>
@@ -930,9 +940,9 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               <div className="le-ctrlrow le-roster-row" key={type}>
                 <span className="le-ctrllabel">{PIECE_LABEL[type]}</span>
                 <div className="le-roster-stepper">
-                  <Stepper value={event.roster[type] ?? 0} suffix="" decreaseLabel={`One fewer ${PIECE_LABEL[type]}`} increaseLabel={`One more ${PIECE_LABEL[type]}`}
-                    onDecrease={() => setEvent(selected, patchSpawnRoster(event, type, -1))}
-                    onIncrease={() => setEvent(selected, patchSpawnRoster(event, type, 1))} />
+                  <Stepper value={spawnAction.roster[type] ?? 0} suffix="" decreaseLabel={`One fewer ${PIECE_LABEL[type]}`} increaseLabel={`One more ${PIECE_LABEL[type]}`}
+                    onDecrease={() => setEvent(selected, replaceEventAction(event, patchSpawnRoster(spawnAction, type, -1)))}
+                    onIncrease={() => setEvent(selected, replaceEventAction(event, patchSpawnRoster(spawnAction, type, 1)))} />
                 </div>
               </div>
             ))}
@@ -940,7 +950,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
-        ) : event?.kind === 'pawn-promotion' ? (
+        ) : event && promotionTrigger && promotesTriggeringUnit ? (
           <div className="le-rule">
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Event name</span>
@@ -948,12 +958,16 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
                 onChange={(e) => setEvent(selected, { ...event, name: e.target.value })} />
             </div>
             <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Trigger</span>
+              <output className="le-event-readout" aria-label="Event trigger">Unit enters zone</output>
+            </div>
+            <div className="le-ctrlrow">
               <span className="le-ctrllabel">Unit</span>
               <SelectFrame>
-                <select className="le-layer-select le-faction-select" value={event.trigger.unit.side ?? 'any'} aria-label="Promotion faction"
+                <select className="le-layer-select le-faction-select" value={promotionTrigger.unit.side ?? 'any'} aria-label="Promotion faction"
                   onChange={(e) => {
                     const side = e.target.value === 'any' ? undefined : e.target.value as 'player' | 'enemy';
-                    setEvent(selected, { ...event, trigger: { ...event.trigger, unit: { type: 'pawn', side } } });
+                    setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side }, zoneId: promotionTrigger.zoneId } });
                   }}>
                   <option value="player">Player pawn</option>
                   <option value="enemy">Enemy pawn</option>
@@ -964,21 +978,20 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
               <SelectFrame>
-                <select className="le-layer-select" value={event.trigger.zoneId} aria-label="Promotion zone"
-                  onChange={(e) => setEvent(selected, { ...event, trigger: { ...event.trigger, zoneId: e.target.value } })}>
+                <select className="le-layer-select" value={promotionTrigger.zoneId} aria-label="Promotion zone"
+                  onChange={(e) => setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: promotionTrigger.unit, zoneId: e.target.value } })}>
                   {zones.length === 0 ? <option value="">No zones painted</option> : null}
                   {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}
                 </select>
               </SelectFrame>
             </div>
             <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Promote to</span>
-              <SelectFrame>
-                <select className="le-layer-select le-faction-select" value={event.defaultPromotion ?? 'queen'} aria-label="Default promotion piece"
-                  onChange={(e) => setEvent(selected, { ...event, choices: [...PROMOTION_PIECE_TYPES], defaultPromotion: e.target.value as PromotionPieceType })}>
-                  {PROMOTION_PIECE_TYPES.map((type) => <option key={type} value={type}>{PIECE_LABEL[type]}</option>)}
-                </select>
-              </SelectFrame>
+              <span className="le-ctrllabel">Target</span>
+              <output className="le-event-readout" aria-label="Event target">Unit that entered zone</output>
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Action</span>
+              <output className="le-event-readout" aria-label="Event action">Promote</output>
             </div>
             <div className="le-rule-then">
               <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
@@ -1395,8 +1408,8 @@ export function LevelEditor(): ReactElement {
   const [victory, setVictory] = useState<VictoryRules>(
     localDraft?.victory ?? initialCampaignLevel?.victory ?? victoryRulesForObjective(objective, { surviveTurns }),
   );
-  const [events, setEvents] = useState<LevelEvents>(
-    localDraft?.events ?? (initialCampaignLevel ? effectiveLevelEvents(initialCampaignLevel) : []),
+  const [events, setEvents] = useState<LevelEvents>(() =>
+    normalizeLevelEvents(localDraft?.events ?? (initialCampaignLevel ? effectiveLevelEvents(initialCampaignLevel) : [])),
   );
   // The victory-events editor opens as a full-size overlay over the board — the narrow control
   // panel can't give rule authoring room to breathe. The panel stays put; a button opens this.
@@ -2392,16 +2405,17 @@ export function LevelEditor(): ReactElement {
     () => boardZoneEntries.map((entry, index) => ({ id: entry.id, label: zoneDisplayName(entry, index) })),
     [boardZoneEntries],
   );
-  const clearZonesForRemovedEvents = (removedEvents: readonly LevelEvent[], remainingEvents: readonly LevelEvent[]): void => {
+  const removeZonesForRemovedEvents = (removedEvents: readonly LevelEvent[], remainingEvents: readonly LevelEvent[]): void => {
     const board = cloneEditorBoard(currentEditorBoardRef.current);
     const entries = zoneEntriesForBoard(board);
-    const updated = clearZoneEntriesReferencedOnlyByRemovedEvents(entries, removedEvents, remainingEvents);
+    const updated = removeZoneEntriesReferencedOnlyByRemovedEvents(entries, removedEvents, remainingEvents);
     if (!updated) return;
     commitEditorBoard(withZoneEntries(board, updated), null);
   };
   const setEventsWithZoneCleanup = (nextEvents: LevelEvents, removedEvents: readonly LevelEvent[] = []): void => {
-    setEvents(nextEvents);
-    if (removedEvents.length) clearZonesForRemovedEvents(removedEvents, nextEvents);
+    const normalizedNextEvents = normalizeLevelEvents(nextEvents);
+    setEvents(normalizedNextEvents);
+    if (removedEvents.length) removeZonesForRemovedEvents(removedEvents, normalizedNextEvents);
   };
   const clearOtherEvents = (): void => setEventsWithZoneCleanup([], events);
   const addPawnPromotionTemplate = (): void => {
@@ -2429,13 +2443,11 @@ export function LevelEditor(): ReactElement {
     const appendPromotion = (side: 'player' | 'enemy', zoneId: string): void => {
       const baseName = side === 'player' ? 'Player pawn promotion' : 'Enemy pawn promotion';
       const name = uniqueEventName(baseName, nextEvents);
-      const event: PawnPromotionEvent = {
-        kind: 'pawn-promotion',
+      const event: LevelEvent = {
         id: uniqueEventId(baseName, nextEvents),
         name,
         trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side }, zoneId },
-        choices: [...PROMOTION_PIECE_TYPES],
-        defaultPromotion: 'queen',
+        do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }],
       };
       nextEvents = [...nextEvents, event];
     };
@@ -2646,6 +2658,14 @@ export function LevelEditor(): ReactElement {
   const selectZoneEntry = (id: string): void => {
     const index = boardZoneEntries.findIndex((zone) => zone.id === id);
     if (index >= 0) setSelectedZoneIndex(index);
+  };
+  const stepZoneEntry = (delta: -1 | 1): void => {
+    const count = boardZoneEntries.length;
+    if (!count) return;
+    setSelectedZoneIndex((current) => {
+      const normalized = Math.min(Math.max(current, 0), count - 1);
+      return (normalized + delta + count) % count;
+    });
   };
   const setActiveZoneName = (name: string): void => {
     if (!activeZone) return;
@@ -3323,6 +3343,9 @@ export function LevelEditor(): ReactElement {
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
               <div className="le-zone-select-controls">
+                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Previous zone" title="Previous zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(-1)}>
+                  <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
+                </button>
                 <SelectFrame>
                   <select
                     className="le-layer-select"
@@ -3337,6 +3360,9 @@ export function LevelEditor(): ReactElement {
                     ))}
                   </select>
                 </SelectFrame>
+                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Next zone" title="Next zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(1)}>
+                  <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
+                </button>
                 <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Remove selected zone" title="Remove selected zone" disabled={!activeZone} onClick={removeActiveZoneEntry}>
                   <span><span className="stepper-glyph stepper-minus" aria-hidden="true" /></span>
                 </button>

@@ -115,7 +115,7 @@ describe('levelBoard — ADR-0050 mode meta fields', () => {
   });
 
   it('writes authored non-victory events from meta onto the Level', () => {
-    const events = [{ kind: 'spawn' as const, name: 'Deploy', trigger: { kind: 'setup' as const }, side: 'player' as const, roster: { pawn: 1 }, zoneIds: ['z'] }];
+    const events = [{ name: 'Deploy', trigger: { kind: 'setup' as const }, do: [{ kind: 'spawn' as const, side: 'player' as const, roster: { pawn: 1 }, zoneIds: ['z'] }] }];
     const level = editorBoardToLevel(board(), { id: 'l-events', name: 'Events', events });
     expect(level.events).toEqual(events);
   });

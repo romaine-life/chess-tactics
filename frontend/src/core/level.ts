@@ -101,6 +101,45 @@ export type VictoryRules = VictoryRule[];
 /** Piece counts per side for random placement — playable piece types only (no rocks). */
 export type Roster = Partial<Record<PieceType, number>>;
 
+export type LevelEventTrigger =
+  | { kind: 'setup' }
+  | {
+      kind: 'unit-enters-zone';
+      unit: { type: 'pawn'; side?: ConditionSide };
+      zoneId: string;
+    };
+
+export interface SpawnEventAction {
+  kind: 'spawn';
+  side: ConditionSide;
+  roster: Roster;
+  /** One or more dumb zone ids whose tiles form the random placement pool. */
+  zoneIds: string[];
+}
+
+export interface PromoteEventAction {
+  kind: 'promote';
+  target: { kind: 'triggering-unit' };
+}
+
+export type LevelEventAction = SpawnEventAction | PromoteEventAction;
+
+/**
+ * Generic authored level events: WHEN <trigger> THEN <do actions>. Zones stay dumb tile groups;
+ * the action says what happens and the target says what object is affected.
+ */
+export interface LevelEvent {
+  /** Stable editor identity. Optional for back-compat / hand-authored bodies. */
+  id?: string;
+  /** Author-facing name shown in the editor. */
+  name?: string;
+  trigger: LevelEventTrigger;
+  do: LevelEventAction[];
+}
+
+export type LevelEvents = LevelEvent[];
+
+/** @deprecated Legacy pre-trigger/action spawn event shape. Normalized by core/levelEvents.ts. */
 export interface SpawnEvent {
   kind: 'spawn';
   /** Stable editor identity. Optional for back-compat / hand-authored bodies. */
@@ -114,6 +153,7 @@ export interface SpawnEvent {
   zoneIds: string[];
 }
 
+/** @deprecated Legacy pre-trigger/action pawn-promotion event shape. Normalized by core/levelEvents.ts. */
 export interface PawnPromotionEvent {
   kind: 'pawn-promotion';
   /** Stable editor identity. Optional for back-compat / hand-authored bodies. */
@@ -128,9 +168,6 @@ export interface PawnPromotionEvent {
   choices?: PromotionPieceType[];
   defaultPromotion?: PromotionPieceType;
 }
-
-export type LevelEvent = SpawnEvent | PawnPromotionEvent;
-export type LevelEvents = LevelEvent[];
 
 /** The battle clock's authored time control — a standard chess clock for the PLAYER only
  * (the enemy is untimed): a starting bank plus a Fischer increment banked after every
@@ -275,7 +312,9 @@ export function createBlankLevel(id: string, name = 'Untitled', cols = 12, rows 
 export type ValidateResult = { ok: true; level: Level } | { ok: false; errors: string[] };
 
 const CONDITION_KINDS = ['eliminate', 'reach', 'turnLimit'] as const;
-const EVENT_KINDS = ['spawn', 'pawn-promotion'] as const;
+const LEGACY_EVENT_KINDS = ['spawn', 'pawn-promotion'] as const;
+const LEVEL_EVENT_TRIGGER_KINDS = ['setup', 'unit-enters-zone'] as const;
+const LEVEL_EVENT_ACTION_KINDS = ['spawn', 'promote'] as const;
 
 /** Structural errors for a single victory condition (ADR-0064). Shape/enum checks only. */
 function conditionErrors(c: unknown, path: string): string[] {
@@ -360,55 +399,110 @@ function rosterCountsErrors(value: unknown, path: string): string[] {
   return errs;
 }
 
+function legacyEventErrors(ev: Record<string, unknown>, path: string): string[] {
+  const event = ev as { kind?: unknown; id?: unknown; name?: unknown; trigger?: unknown };
+  if (typeof event.kind !== 'string' || !(LEGACY_EVENT_KINDS as readonly string[]).includes(event.kind)) {
+    return [`${path}.kind must be one of: ${LEGACY_EVENT_KINDS.join(', ')}, or omit kind and use trigger/do`];
+  }
+  const errs: string[] = [];
+  if (event.id !== undefined && typeof event.id !== 'string') errs.push(`${path}.id must be a string`);
+  if (event.name !== undefined && typeof event.name !== 'string') errs.push(`${path}.name must be a string`);
+  if (!event.trigger || typeof event.trigger !== 'object' || Array.isArray(event.trigger)) {
+    errs.push(`${path}.trigger must be an object`);
+    return errs;
+  }
+  if (event.kind === 'spawn') {
+    const spawn = ev as { side?: unknown; roster?: unknown; zoneIds?: unknown; trigger?: { kind?: unknown } };
+    if (spawn.trigger?.kind !== 'setup') errs.push(`${path}.trigger.kind must be 'setup'`);
+    if (spawn.side !== 'player' && spawn.side !== 'enemy') errs.push(`${path}.side must be 'player' or 'enemy'`);
+    errs.push(...rosterCountsErrors(spawn.roster, `${path}.roster`));
+    if (!Array.isArray(spawn.zoneIds) || spawn.zoneIds.length === 0 || spawn.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
+      errs.push(`${path}.zoneIds must be a non-empty array of zone ids`);
+    }
+  } else {
+    const promo = ev as { trigger?: { kind?: unknown; unit?: unknown; zoneId?: unknown }; choices?: unknown; defaultPromotion?: unknown };
+    if (promo.trigger?.kind !== 'unit-enters-zone') errs.push(`${path}.trigger.kind must be 'unit-enters-zone'`);
+    if (typeof promo.trigger?.zoneId !== 'string' || !promo.trigger.zoneId.trim()) errs.push(`${path}.trigger.zoneId must be a zone id`);
+    const unit = promo.trigger?.unit;
+    if (!unit || typeof unit !== 'object' || Array.isArray(unit)) {
+      errs.push(`${path}.trigger.unit must be an object`);
+    } else {
+      const u = unit as { type?: unknown; side?: unknown };
+      if (u.type !== 'pawn') errs.push(`${path}.trigger.unit.type must be 'pawn'`);
+      if (u.side !== undefined && u.side !== 'player' && u.side !== 'enemy') errs.push(`${path}.trigger.unit.side must be 'player' or 'enemy'`);
+    }
+    if (promo.choices !== undefined) {
+      if (!Array.isArray(promo.choices) || promo.choices.length === 0 || promo.choices.some((choice) => !(PROMOTION_PIECE_TYPES as readonly unknown[]).includes(choice))) {
+        errs.push(`${path}.choices must be a non-empty list of promotion piece types`);
+      }
+    }
+    if (promo.defaultPromotion !== undefined && !(PROMOTION_PIECE_TYPES as readonly unknown[]).includes(promo.defaultPromotion)) {
+      errs.push(`${path}.defaultPromotion must be a promotion piece type`);
+    }
+    if (promo.defaultPromotion !== undefined && Array.isArray(promo.choices) && !promo.choices.includes(promo.defaultPromotion)) {
+      errs.push(`${path}.defaultPromotion must be included in choices`);
+    }
+  }
+  return errs;
+}
+
+function levelEventTriggerErrors(trigger: unknown, path: string): string[] {
+  if (!trigger || typeof trigger !== 'object' || Array.isArray(trigger)) return [`${path} must be a trigger object`];
+  const t = trigger as { kind?: unknown; unit?: unknown; zoneId?: unknown };
+  if (typeof t.kind !== 'string' || !(LEVEL_EVENT_TRIGGER_KINDS as readonly string[]).includes(t.kind)) {
+    return [`${path}.kind must be one of: ${LEVEL_EVENT_TRIGGER_KINDS.join(', ')}`];
+  }
+  const errs: string[] = [];
+  if (t.kind === 'unit-enters-zone') {
+    if (typeof t.zoneId !== 'string' || !t.zoneId.trim()) errs.push(`${path}.zoneId must be a zone id`);
+    if (!t.unit || typeof t.unit !== 'object' || Array.isArray(t.unit)) {
+      errs.push(`${path}.unit must be an object`);
+    } else {
+      const unit = t.unit as { type?: unknown; side?: unknown };
+      if (unit.type !== 'pawn') errs.push(`${path}.unit.type must be 'pawn'`);
+      if (unit.side !== undefined && unit.side !== 'player' && unit.side !== 'enemy') errs.push(`${path}.unit.side must be 'player' or 'enemy'`);
+    }
+  }
+  return errs;
+}
+
+function levelEventActionErrors(action: unknown, trigger: unknown, path: string): string[] {
+  if (!action || typeof action !== 'object' || Array.isArray(action)) return [`${path} must be an action object`];
+  const a = action as { kind?: unknown; side?: unknown; roster?: unknown; zoneIds?: unknown; target?: unknown };
+  if (typeof a.kind !== 'string' || !(LEVEL_EVENT_ACTION_KINDS as readonly string[]).includes(a.kind)) {
+    return [`${path}.kind must be one of: ${LEVEL_EVENT_ACTION_KINDS.join(', ')}`];
+  }
+  const triggerKind = trigger && typeof trigger === 'object' && !Array.isArray(trigger) ? (trigger as { kind?: unknown }).kind : undefined;
+  const errs: string[] = [];
+  if (a.kind === 'spawn') {
+    if (triggerKind !== 'setup') errs.push(`${path}.kind 'spawn' requires a setup trigger`);
+    if (a.side !== 'player' && a.side !== 'enemy') errs.push(`${path}.side must be 'player' or 'enemy'`);
+    errs.push(...rosterCountsErrors(a.roster, `${path}.roster`));
+    if (!Array.isArray(a.zoneIds) || a.zoneIds.length === 0 || a.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
+      errs.push(`${path}.zoneIds must be a non-empty array of zone ids`);
+    }
+  } else {
+    if (triggerKind !== 'unit-enters-zone') errs.push(`${path}.kind 'promote' requires a unit-enters-zone trigger`);
+    if (!a.target || typeof a.target !== 'object' || Array.isArray(a.target) || (a.target as { kind?: unknown }).kind !== 'triggering-unit') {
+      errs.push(`${path}.target.kind must be 'triggering-unit'`);
+    }
+  }
+  return errs;
+}
+
 function eventErrors(value: unknown): string[] {
   if (!Array.isArray(value)) return ['events must be an array'];
   const errs: string[] = [];
   value.forEach((ev, i) => {
     const path = `events[${i}]`;
     if (!ev || typeof ev !== 'object' || Array.isArray(ev)) { errs.push(`${path} must be an event object`); return; }
-    const event = ev as { kind?: unknown; id?: unknown; name?: unknown; trigger?: unknown };
-    if (typeof event.kind !== 'string' || !(EVENT_KINDS as readonly string[]).includes(event.kind)) {
-      errs.push(`${path}.kind must be one of: ${EVENT_KINDS.join(', ')}`);
-      return;
-    }
+    const event = ev as { kind?: unknown; id?: unknown; name?: unknown; trigger?: unknown; do?: unknown };
+    if (event.kind !== undefined) { errs.push(...legacyEventErrors(ev as Record<string, unknown>, path)); return; }
     if (event.id !== undefined && typeof event.id !== 'string') errs.push(`${path}.id must be a string`);
     if (event.name !== undefined && typeof event.name !== 'string') errs.push(`${path}.name must be a string`);
-    if (!event.trigger || typeof event.trigger !== 'object' || Array.isArray(event.trigger)) {
-      errs.push(`${path}.trigger must be an object`);
-      return;
-    }
-    if (event.kind === 'spawn') {
-      const spawn = event as { side?: unknown; roster?: unknown; zoneIds?: unknown; trigger?: { kind?: unknown } };
-      if (spawn.trigger?.kind !== 'setup') errs.push(`${path}.trigger.kind must be 'setup'`);
-      if (spawn.side !== 'player' && spawn.side !== 'enemy') errs.push(`${path}.side must be 'player' or 'enemy'`);
-      errs.push(...rosterCountsErrors(spawn.roster, `${path}.roster`));
-      if (!Array.isArray(spawn.zoneIds) || spawn.zoneIds.length === 0 || spawn.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
-        errs.push(`${path}.zoneIds must be a non-empty array of zone ids`);
-      }
-    } else {
-      const promo = event as { trigger?: { kind?: unknown; unit?: unknown; zoneId?: unknown }; choices?: unknown; defaultPromotion?: unknown };
-      if (promo.trigger?.kind !== 'unit-enters-zone') errs.push(`${path}.trigger.kind must be 'unit-enters-zone'`);
-      if (typeof promo.trigger?.zoneId !== 'string' || !promo.trigger.zoneId.trim()) errs.push(`${path}.trigger.zoneId must be a zone id`);
-      const unit = promo.trigger?.unit;
-      if (!unit || typeof unit !== 'object' || Array.isArray(unit)) {
-        errs.push(`${path}.trigger.unit must be an object`);
-      } else {
-        const u = unit as { type?: unknown; side?: unknown };
-        if (u.type !== 'pawn') errs.push(`${path}.trigger.unit.type must be 'pawn'`);
-        if (u.side !== undefined && u.side !== 'player' && u.side !== 'enemy') errs.push(`${path}.trigger.unit.side must be 'player' or 'enemy'`);
-      }
-      if (promo.choices !== undefined) {
-        if (!Array.isArray(promo.choices) || promo.choices.length === 0 || promo.choices.some((choice) => !(PROMOTION_PIECE_TYPES as readonly unknown[]).includes(choice))) {
-          errs.push(`${path}.choices must be a non-empty list of promotion piece types`);
-        }
-      }
-      if (promo.defaultPromotion !== undefined && !(PROMOTION_PIECE_TYPES as readonly unknown[]).includes(promo.defaultPromotion)) {
-        errs.push(`${path}.defaultPromotion must be a promotion piece type`);
-      }
-      if (promo.defaultPromotion !== undefined && Array.isArray(promo.choices) && !promo.choices.includes(promo.defaultPromotion)) {
-        errs.push(`${path}.defaultPromotion must be included in choices`);
-      }
-    }
+    errs.push(...levelEventTriggerErrors(event.trigger, `${path}.trigger`));
+    if (!Array.isArray(event.do) || event.do.length === 0) errs.push(`${path}.do must be a non-empty array of actions`);
+    else event.do.forEach((action, j) => errs.push(...levelEventActionErrors(action, event.trigger, `${path}.do[${j}]`)));
   });
   return errs;
 }

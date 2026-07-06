@@ -27,60 +27,95 @@ export function zoneCellsByIds(level: Level, zoneIds: readonly string[]): Vec[] 
   return zoneCells(level, zonesByIds(level, zoneIds));
 }
 
-function legacySpawnEvents(level: Level): SpawnEvent[] {
+export type StoredLevelEvent = LevelEvent | SpawnEvent | PawnPromotionEvent;
+
+export function normalizeLevelEvent(event: StoredLevelEvent): LevelEvent {
+  if ('kind' in event) {
+    if (event.kind === 'spawn') {
+      return {
+        id: event.id,
+        name: event.name,
+        trigger: { kind: 'setup' },
+        do: [{ kind: 'spawn', side: event.side, roster: event.roster, zoneIds: event.zoneIds }],
+      };
+    }
+    return {
+      id: event.id,
+      name: event.name,
+      trigger: event.trigger,
+      do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }],
+    };
+  }
+  if (!Array.isArray((event as { do?: unknown }).do) && event.trigger.kind === 'unit-enters-zone') {
+    return {
+      id: event.id,
+      name: event.name,
+      trigger: event.trigger,
+      do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }],
+    };
+  }
+  return event;
+}
+
+export function normalizeLevelEvents(events: readonly StoredLevelEvent[]): LevelEvents {
+  return events.map(normalizeLevelEvent);
+}
+
+function legacySpawnEvents(level: Level): LevelEvents {
   if (level.placement !== 'random') return [];
-  const events: SpawnEvent[] = [];
+  const events: LevelEvents = [];
   for (const side of ['player', 'enemy'] as const) {
     const roster: Roster = level.roster?.[side] ?? {};
     const legacyType = side === 'player' ? 'player-spawn' : 'enemy-spawn';
     const zoneIds = level.layers.zones.filter((zone) => zone.type === legacyType).map((zone) => zone.id);
     if (!zoneIds.length) continue;
     events.push({
-      kind: 'spawn',
       name: side === 'player' ? 'Deploy player force' : 'Deploy enemy force',
       trigger: { kind: 'setup' },
-      side,
-      roster,
-      zoneIds,
+      do: [{ kind: 'spawn', side, roster, zoneIds }],
     });
   }
   return events;
 }
 
-function legacyPromotionEvents(level: Level): PawnPromotionEvent[] {
+function legacyPromotionEvents(level: Level): LevelEvents {
   return level.layers.zones
     .filter((zone) => zone.type === 'pawn-promotion')
-    .map((zone): PawnPromotionEvent => ({
-      kind: 'pawn-promotion',
+    .map((zone): LevelEvent => ({
       name: `Promote at ${zone.id}`,
       trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: zone.id },
+      do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }],
     }));
 }
 
 export function effectiveLevelEvents(level: Level): LevelEvents {
-  if (level.events !== undefined) return level.events;
-  const authored: LevelEvents = [];
-  const hasSpawn = authored.some((event) => event.kind === 'spawn');
-  const hasPromotion = authored.some((event) => event.kind === 'pawn-promotion');
-  const legacy: LevelEvent[] = [
-    ...(hasSpawn ? [] : legacySpawnEvents(level)),
-    ...(hasPromotion ? [] : legacyPromotionEvents(level)),
-  ];
-  return [...authored, ...legacy];
+  if (level.events !== undefined) return normalizeLevelEvents(level.events as readonly StoredLevelEvent[]);
+  return [...legacySpawnEvents(level), ...legacyPromotionEvents(level)];
 }
 
 export function spawnEventsForLevel(level: Level): SpawnEvent[] {
-  return effectiveLevelEvents(level).filter((event): event is SpawnEvent => event.kind === 'spawn');
+  return effectiveLevelEvents(level).flatMap((event): SpawnEvent[] => {
+    if (event.trigger.kind !== 'setup') return [];
+    return event.do
+      .filter((action) => action.kind === 'spawn')
+      .map((action) => ({
+        kind: 'spawn',
+        id: event.id,
+        name: event.name,
+        trigger: { kind: 'setup' },
+        side: action.side,
+        roster: action.roster,
+        zoneIds: action.zoneIds,
+      }));
+  });
 }
 
 export function promotionRulesForLevel(level: Level): PawnPromotionRule[] {
   return effectiveLevelEvents(level)
-    .filter((event): event is PawnPromotionEvent => event.kind === 'pawn-promotion')
+    .filter((event) => event.trigger.kind === 'unit-enters-zone' && event.do.some((action) => action.kind === 'promote' && action.target.kind === 'triggering-unit'))
     .map((event) => ({
-      side: event.trigger.unit.side,
-      cells: zoneCellsByIds(level, [event.trigger.zoneId]),
-      choices: event.choices,
-      defaultPromotion: event.defaultPromotion,
+      side: event.trigger.kind === 'unit-enters-zone' ? event.trigger.unit.side : undefined,
+      cells: event.trigger.kind === 'unit-enters-zone' ? zoneCellsByIds(level, [event.trigger.zoneId]) : [],
     }))
     .filter((rule) => rule.cells.length > 0);
 }
