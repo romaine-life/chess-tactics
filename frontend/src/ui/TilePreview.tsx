@@ -114,6 +114,9 @@ const sourceFromProp = (prop: PropDef) => prop.spriteParts?.[0]?.source ?? prop.
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
 const FIRST_ARTWORK_ID: string = artworkManifest.groups[0]?.items[0]?.id ?? '';
+const compareByLabel = <T extends { label: string }>(a: T, b: T): number => (
+  a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
+);
 
 // The Portraits catalog's assets: every piece × every bake-off method (navy only). A
 // dedicated top-level category so portraits get their own Unit + Treatment filters,
@@ -1515,6 +1518,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     },
   ];
   const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
+  const catalogCategoryOptions = [...catalogCategories].sort(compareByLabel);
 
   // The Viewer's kind selector — which item type the Viewer shows. A dropdown, not a button
   // strip: eight kinds can't fit the 260px controls rail without clipping each label to its
@@ -1607,7 +1611,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               <label className="tileset-category-select" title={activeCatalog.hint}>
                 <span>Category</span>
                 <select value={category} onChange={(event) => setCategory(event.target.value as StudioCategory)} aria-label="Catalog category">
-                  {catalogCategories.map((entry) => (
+                  {catalogCategoryOptions.map((entry) => (
                     <option key={entry.id} value={entry.id}>{entry.label}</option>
                   ))}
                 </select>
