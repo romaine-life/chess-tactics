@@ -4996,16 +4996,24 @@ h1 {
   position: fixed;
   z-index: 40;
 }
-/* Pinned Actions dock in the rail — only the universal per-edit verbs (Undo/Redo), as
-   COMPACT icon-only squares (owner: icons, not letters — the labels ride aria-label +
-   title). Glyphs come from the editor icon set (.le-ico/.ic-*), same treatment as the
-   tool row; press swaps to the set's gold -active variant. Test + Save/Publish are
-   session verbs and live in the Status layer card (.le-status-actions, 2-col grid; the
-   base grid stays 3-col for the Board layer's row). Spacing rides the ADR-0056 ladder —
-   no per-row margin hand-picks. */
+/* Pinned Actions dock in the rail: universal tools + Undo/Redo as compact icon-only
+   squares. Labels ride aria-label + title; active/press states come from the editor
+   icon set. Test + Save/Publish stay with the Status layer's save workflow. */
 .le-board-actions { display: grid; gap: var(--ds-inline-tight); grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--ds-stack); }
-.le-board-actions.le-history-actions { display: flex; }
 .le-board-actions.le-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.le-action-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--ds-stack);
+}
+.le-action-toolbar-divider {
+  align-self: stretch;
+  background: rgba(146, 201, 235, .28);
+  min-height: 38px;
+  width: 1px;
+}
 /* Undo/Redo glyph PNGs already carry their OWN kit frame, so we drop the outer .le-seg-btn
    button frame (same treatment as the .le-seg-icons tool row) — otherwise the two frames nest
    into a double border. The icon fills the square so its single frame IS the button edge. */
@@ -5547,6 +5555,7 @@ h1 {
 .le-seg-icons .le-seg-btn { border: 0; border-image: none; min-height: 0; padding: 0; width: 44px; height: 44px; }
 .le-seg-icons .le-seg-btn .le-ico { width: 100%; height: 100%; }
 .le-seg-icons .le-seg-btn.active { border-image: none; }
+.le-action-toolbar .le-seg-btn { width: 38px; height: 38px; }
 .le-seg-icons .le-seg-btn.active .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper-active.png"); }
 .le-seg-icons .le-seg-btn.active .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush-active.png"); }
 .le-seg-icons .le-seg-btn.active .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser-active.png"); }
