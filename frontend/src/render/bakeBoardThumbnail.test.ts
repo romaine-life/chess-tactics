@@ -168,11 +168,32 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const unit = ops.find((op) => op.contain);
     expect(back!.z).toBeLessThan(unit!.z);
     expect(front!.z).toBeGreaterThan(unit!.z);
-    // The frame is the prop's own (177×184 for the cottage) scaled by its render scale (0.62) —
-    // the SAME size the live <StructureSprite> draws. (Base props and size variants both carry a
-    // scale; without applying it here, props with scale≠1 rendered oversized in the thumbnail.)
+    // Cottage is flat-contact art: the source PNG is clipped at anchorY=110 before the halves are
+    // z-sorted, so the roof/body do not get painted a second time above a nearby unit.
     expect(back!.dw).toBeCloseTo(177 * 0.62, 2);
-    expect(back!.dh).toBeCloseTo(184 * 0.62, 2);
+    expect(back!.sy).toBe(0);
+    expect(back!.sh).toBe(110);
+    expect(back!.dh).toBeCloseTo(110 * 0.62, 2);
+    expect(front!.sy).toBe(110);
+    expect(front!.sh).toBe(184 - 110);
+    expect(front!.dy).toBeCloseTo(back!.dy + 110 * 0.62, 2);
+    expect(front!.dh).toBeCloseTo((184 - 110) * 0.62, 2);
+  });
+
+  it('keeps authored split props full-frame because their alpha already defines each half', () => {
+    const board: EditorBoard = {
+      ...blank(8, 6),
+      props: { '3,2': { propId: 'oak' } },
+    };
+    const ops = boardDrawOps(board);
+    const back = ops.find((op) => op.src === '/assets/props/oak/back.png');
+    const front = ops.find((op) => op.src === '/assets/props/oak/front.png');
+    expect(back).toBeDefined();
+    expect(front).toBeDefined();
+    expect(back!.sx).toBeUndefined();
+    expect(front!.sx).toBeUndefined();
+    expect(back!.dw).toBe(192);
+    expect(back!.dh).toBe(300);
   });
 
   it('places a feature overlay just above its own tile (same cell band)', () => {

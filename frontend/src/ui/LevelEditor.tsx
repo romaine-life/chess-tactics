@@ -91,6 +91,10 @@ type BoardUnitPlacement = {
   faction: Faction;
 };
 
+type MoveSubject =
+  | { kind: 'unit'; x: number; y: number }
+  | { kind: 'prop'; x: number; y: number; propId: string };
+
 // Unified editable board: every Studio view renders through this. It's a full
 // clickable grid seeded from whatever was loaded (a tile, a transition, a
 // generated board). The `tool` decides what a click does — select (highlight),
@@ -159,10 +163,10 @@ function StudioEditableBoard({
   onPaint: (x: number, y: number) => void;
   onErase: (x: number, y: number) => void;
   onSelect: (x: number, y: number) => void;
-  /** Move tool: drag a placed unit from one cell to another (drop cancelled if omitted). */
-  onMove?: (from: { x: number; y: number }, to: { x: number; y: number }) => void;
-  /** Move tool: whether a held unit may drop on (x,y) — drives the destination ring's colour. */
-  canMoveTo?: (x: number, y: number) => boolean;
+  /** Move tool: drag a placed unit or prop to another cell (drop cancelled if omitted). */
+  onMove?: (subject: MoveSubject, to: { x: number; y: number }) => void;
+  /** Move tool: whether a held object may drop on (x,y) — drives the destination ring's colour. */
+  canMoveTo?: (subject: MoveSubject, to: { x: number; y: number }) => boolean;
   /** When the prop brush is armed: its def + a placeability test, used for the footprint hover. */
   propBrush?: { def: PropDef; canPlaceAt: (ax: number, ay: number) => boolean } | null;
   overlay?: ReactNode;
@@ -175,9 +179,9 @@ function StudioEditableBoard({
 }): ReactElement {
   const paintingRef = useRef(false);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
-  // The unit picked up under the Move tool (its source cell), held while the pointer drags to a
-  // destination. It's state (not a ref) so the source/target highlights re-render as you drag.
-  const [movingFrom, setMovingFrom] = useState<{ x: number; y: number } | null>(null);
+  // The unit/prop picked up under the Move tool, held while the pointer drags to a destination.
+  // It's state (not a ref) so source/target highlights re-render as you drag.
+  const [movingFrom, setMovingFrom] = useState<MoveSubject | null>(null);
   // Edge-fence painting: which diamond side is under the cursor (the rail will drop there).
   const [hoverEdge, setHoverEdge] = useState<{ x: number; y: number; edge: FeatureEdge } | null>(null);
   const fenceOverlayMap = resolveFenceOverlays(placedFences);
@@ -217,15 +221,37 @@ function StudioEditableBoard({
     S: [50, 100, 0, 50],
     W: [0, 50, 50, 0],
   };
-  // End a pointer interaction: drop a held unit at the cell under the cursor (a no-op if it's the
-  // same cell or off-board), then clear the paint/move latches. Fired on pointer-up over the board.
-  const endInteraction = () => {
+  const propAtCell = (x: number, y: number): MoveSubject | null => {
+    const entries = Object.entries(placedProps);
+    for (let i = entries.length - 1; i >= 0; i -= 1) {
+      const [anchorKey, placement] = entries[i];
+      const def = resolveProp(placement.propId);
+      if (!def) continue;
+      const [ax, ay] = anchorKey.split(',').map(Number);
+      if (propCells(ax, ay, def).some((cell) => cell.x === x && cell.y === y)) {
+        return { kind: 'prop', x: ax, y: ay, propId: placement.propId };
+      }
+    }
+    return null;
+  };
+  const movingFootprintCells = (subject: MoveSubject | null): Set<string> => {
+    if (!subject) return new Set();
+    if (subject.kind === 'unit') return new Set([`${subject.x},${subject.y}`]);
+    const def = resolveProp(subject.propId);
+    if (!def) return new Set([`${subject.x},${subject.y}`]);
+    return new Set(propCells(subject.x, subject.y, def).map((cell) => `${cell.x},${cell.y}`));
+  };
+
+  const finishMoveAt = (to: { x: number; y: number } | null): void => {
     if (movingFrom) {
-      if (hoverCell && !(hoverCell.x === movingFrom.x && hoverCell.y === movingFrom.y)) onMove?.(movingFrom, hoverCell);
+      if (to && !(to.x === movingFrom.x && to.y === movingFrom.y)) onMove?.(movingFrom, to);
       setMovingFrom(null);
     }
     paintingRef.current = false;
   };
+  // End a pointer interaction: drop a held object at the cell under the cursor (a no-op if it's the
+  // same anchor/cell or off-board), then clear the paint/move latches. Fired on pointer-up over the board.
+  const endInteraction = () => finishMoveAt(hoverCell);
 
   // The editor is an adapter over the shared StudioReadOnlyBoard render path (the same cell
   // art + sprite seating the Campaign Editor's read-only viewer uses): it supplies the SHARED
@@ -239,10 +265,11 @@ function StudioEditableBoard({
       const asset = assetId ? resolveAsset(assetId) : undefined;
       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
       // Move-tool feedback reuses the built-in diamond tile-ring (not an axis-aligned box): the
-      // picked-up unit's cell, plus the cell under the cursor tinted by whether a drop is legal.
-      const isMoveFrom = tool === 'move' && movingFrom?.x === x && movingFrom?.y === y;
+      // picked-up object's footprint, plus the cell under the cursor tinted by whether a drop is legal.
+      const movingCells = movingFootprintCells(movingFrom);
+      const isMoveFrom = tool === 'move' && movingCells.has(key);
       const isMoveTo = tool === 'move' && !!movingFrom && !isMoveFrom && hoverCell?.x === x && hoverCell?.y === y;
-      const moveDroppable = isMoveTo && (canMoveTo ? canMoveTo(x, y) : true);
+      const moveDroppable = isMoveTo && (canMoveTo ? canMoveTo(movingFrom, { x, y }) : true);
       const fenceHere = fenceTool && hoverEdge?.x === x && hoverEdge?.y === y ? hoverEdge.edge : null;
       cells.push({
         key,
@@ -280,8 +307,13 @@ function StudioEditableBoard({
                   return;
                 }
                 if (tool === 'move') {
-                  // Pick up a unit to drag — only if one sits here; empty cells aren't grabbable.
-                  if (placedUnits[`${x},${y}`]) { setMovingFrom({ x, y }); setHoverCell({ x, y }); }
+                  // Pick up a unit or prop to drag — empty cells aren't grabbable.
+                  if (placedUnits[`${x},${y}`]) setMovingFrom({ kind: 'unit', x, y });
+                  else {
+                    const prop = propAtCell(x, y);
+                    if (prop) setMovingFrom(prop);
+                  }
+                  setHoverCell({ x, y });
                   return;
                 }
                 if (tool === 'region') {
@@ -294,6 +326,12 @@ function StudioEditableBoard({
               }}
               onPointerEnter={() => { setHoverCell({ x, y }); if (!fenceTool && paintingRef.current) applyTool(x, y); }}
               onPointerMove={fenceTool ? (event) => setHoverEdge({ x, y, edge: edgeAtPointer(event) }) : undefined}
+              onPointerUp={(event) => {
+                if (tool === 'move' && movingFrom) {
+                  event.stopPropagation();
+                  finishMoveAt({ x, y });
+                }
+              }}
               onContextMenu={(event) => { event.preventDefault(); if (fenceTool) applyFenceAt(x, y, edgeAtPointer(event), true); else onErase(x, y); }}
             />
           </>
@@ -319,7 +357,7 @@ function StudioEditableBoard({
       <span
         key={`dd-hit-${cx},${cy}`}
         className="tileset-doodad-hit"
-        style={{ position: 'absolute', left, top, zIndex: zIndex + 20002, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' || tool === 'move' ? 'none' : 'auto' }}
+        style={{ position: 'absolute', left, top, zIndex: zIndex + 20002, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' || tool === 'move' || movingFrom ? 'none' : 'auto' }}
         onPointerDown={(event) => {
           if (event.button === 2) return;
           event.stopPropagation();
@@ -361,11 +399,16 @@ function StudioEditableBoard({
           width: (maxLeft - minLeft) + 96,
           height: (maxTop - minTop) + 96,
           transform: 'translate(-50%, -75%)',
-          pointerEvents: tool === 'brush' || tool === 'move' ? 'none' : 'auto',
+          pointerEvents: tool === 'brush' || movingFrom ? 'none' : 'auto',
         }}
         onPointerDown={(event) => {
           if (event.button === 2) return;
           event.stopPropagation();
+          if (tool === 'move') {
+            setMovingFrom({ kind: 'prop', x: ax, y: ay, propId: placement.propId });
+            setHoverCell({ x: ax, y: ay });
+            return;
+          }
           if (tool !== 'select') paintingRef.current = true;
           applyTool(ax, ay);
         }}
@@ -1661,9 +1704,10 @@ export function LevelEditor(): ReactElement {
   };
   // The footprint cells of every already-placed prop (skipping unknown ids), so a new prop can't
   // overlap an existing one. Recomputed per call — cheap for a hand-authored board.
-  const occupiedPropCells = (): Set<string> => {
+  const occupiedPropCells = (exceptAnchorKey?: string): Set<string> => {
     const set = new Set<string>();
     for (const [key, placement] of Object.entries(boardProps)) {
+      if (key === exceptAnchorKey) continue;
       const def = resolvePropDef(placement.propId);
       if (!def) continue;
       const [ax, ay] = key.split(',').map(Number);
@@ -1673,9 +1717,9 @@ export function LevelEditor(): ReactElement {
   };
   // A prop places at (ax,ay) iff it FITS (bounds + terrain) AND no footprint cell collides with a
   // placed unit or another prop's footprint. Used for the paint gate AND the hover preview styling.
-  const canPlaceProp = (def: PropDef, ax: number, ay: number): boolean => {
+  const canPlaceProp = (def: PropDef, ax: number, ay: number, exceptAnchorKey?: string): boolean => {
     if (!propFitsBoard(def, ax, ay)) return false;
-    const occupied = occupiedPropCells();
+    const occupied = occupiedPropCells(exceptAnchorKey);
     return propCells(ax, ay, def).every((c) => {
       const key = `${c.x},${c.y}`;
       return !boardUnits[key] && !occupied.has(key);
@@ -2406,25 +2450,35 @@ export function LevelEditor(): ReactElement {
   // One-click "Clear pieces": drop every painted unit, offered next to setup-spawn validation
   // when events are dealing the starting forces.
   const clearUnits = (): void => setBoardUnits((prev) => (Object.keys(prev).length ? {} : prev));
-  // A held unit may drop on an in-bounds cell that has no other unit and isn't under a prop
-  // footprint — the same collision the unit brush enforces, so a moved unit lands where a
-  // freshly-painted one could. Drives the destination ring colour and gates the drop itself.
-  const canMoveUnitTo = (x: number, y: number): boolean => {
-    const key = `${x},${y}`;
-    return x >= 0 && y >= 0 && x < boardCols && y < boardRows && !boardUnits[key] && !occupiedPropCells().has(key);
+  // A held unit/prop may drop only where a freshly painted object of the same kind could land.
+  // Props validate their whole footprint and ignore their own old footprint while moving.
+  const canMoveObjectTo = (subject: MoveSubject, to: { x: number; y: number }): boolean => {
+    if (subject.kind === 'unit') {
+      const key = `${to.x},${to.y}`;
+      return to.x >= 0 && to.y >= 0 && to.x < boardCols && to.y < boardRows && !boardUnits[key] && !occupiedPropCells().has(key);
+    }
+    const fromKey = `${subject.x},${subject.y}`;
+    const def = resolvePropDef(subject.propId);
+    return !!def && canPlaceProp(def, to.x, to.y, fromKey);
   };
-  // Relocate a placed unit (drag-and-drop under the Move tool): re-key its placement from the
-  // source cell to the destination, preserving piece/side/facing. Rejected if the source is
-  // empty or the destination is occupied; keeps the selection on the unit at its new home.
-  const moveUnit = (from: { x: number; y: number }, to: { x: number; y: number }): void => {
-    const fromKey = `${from.x},${from.y}`;
+  // Relocate a placed unit or prop (drag-and-drop under the Move tool): re-key its placement from
+  // the source cell/anchor to the destination, preserving the object identity and selection.
+  const moveObject = (subject: MoveSubject, to: { x: number; y: number }): void => {
+    const fromKey = `${subject.x},${subject.y}`;
     const toKey = `${to.x},${to.y}`;
-    if (!boardUnits[fromKey] || !canMoveUnitTo(to.x, to.y)) return;
+    if (!canMoveObjectTo(subject, to)) return;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    const placement = next.units[fromKey];
-    if (!placement) return;
-    delete next.units[fromKey];
-    next.units[toKey] = placement;
+    if (subject.kind === 'unit') {
+      const placement = next.units[fromKey];
+      if (!placement) return;
+      delete next.units[fromKey];
+      next.units[toKey] = placement;
+    } else {
+      const placement = next.props[fromKey];
+      if (!placement || placement.propId !== subject.propId) return;
+      delete next.props[fromKey];
+      next.props[toKey] = placement;
+    }
     commitEditorBoard(next, to);
   };
   const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
@@ -2740,8 +2794,8 @@ export function LevelEditor(): ReactElement {
                   onPaint={paintCell}
                   onErase={eraseCell}
                   onSelect={selectCell}
-                  onMove={moveUnit}
-                  canMoveTo={canMoveUnitTo}
+                  onMove={moveObject}
+                  canMoveTo={canMoveObjectTo}
                   fences={boardFences}
                   fenceTool={fenceTool}
                   onPaintEdge={paintFenceEdge}
@@ -3211,9 +3265,9 @@ export function LevelEditor(): ReactElement {
             <button type="button" className={`le-seg-btn ${tool === 'select' ? 'active' : ''}`.trim()} onClick={() => setTool('select')} title="Select" aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></button>
             <button type="button" className={`le-seg-btn ${tool === 'brush' ? 'active' : ''}`.trim()} onClick={() => setTool('brush')} title="Brush" aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></button>
             <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')} title="Erase" aria-label="Erase"><span className="le-ico ic-eraser" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'move' ? 'active' : ''}`.trim()} onClick={() => setTool('move')} title="Move — drag a placed unit to a new cell; it keeps its piece, side and facing." aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
+            <button type="button" className={`le-seg-btn ${tool === 'move' ? 'active' : ''}`.trim()} onClick={() => setTool('move')} title="Move — drag a placed unit or prop to a new cell." aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
           </div>
-          {tool === 'move' ? <p className="le-board-note">Drag a placed unit to a new cell. It keeps its piece, side and facing; you can't drop onto another unit or a prop.</p> : null}
+          {tool === 'move' ? <p className="le-board-note">Drag a placed unit or prop to a new cell. Units keep their piece, side and facing; props keep their footprint and terrain rules.</p> : null}
           <div className="le-brush-pick">
             <span className="le-brush-thumb">
               {brushKind === 'unit'
