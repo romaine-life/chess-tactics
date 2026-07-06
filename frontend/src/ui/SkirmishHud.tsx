@@ -16,6 +16,7 @@ import { BackGlyph, RestartGlyph, NewGlyph } from './shared/actionGlyphs';
 import { NavButton } from './shared/NavButton';
 import { SkirmishClockControl } from './SkirmishClockControl';
 import { loadSkirmishClockPref } from '../game/skirmishClockPref';
+import { Stepper } from './shared/Stepper';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -93,6 +94,16 @@ function fmtStat(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+function fmtDelaySeconds(ms: number): string {
+  const seconds = ms / 1000;
+  return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1);
+}
+
+function parseDelaySeconds(raw: string): number | null {
+  const seconds = Number(raw.trim());
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
+}
+
 function UnitBadge({ piece, large = false }: { piece: Piece | null; large?: boolean }) {
   const side = piece?.side ?? 'neutral';
   const label = piece ? MARK[piece.type] : '?';
@@ -161,11 +172,6 @@ export function SkirmishHud({
   const testMode = useSkirmish((s) => s.testMode);
   const testMinCpuDelayMs = useSkirmish((s) => s.testMinCpuDelayMs);
   const setTestMinCpuDelay = useSkirmish((s) => s.setTestMinCpuDelay);
-  // Free-text seconds for the Test Board CPU-delay floor: local so the field edits freely (clear
-  // it, type a decimal) without the store's clamped ms value fighting the caret; committed on
-  // change. Cleared when leaving test mode (the store zeroes the floor there too).
-  const [delaySecInput, setDelaySecInput] = useState(() => (testMinCpuDelayMs ? String(testMinCpuDelayMs / 1000) : ''));
-  useEffect(() => { if (!testMode) setDelaySecInput(''); }, [testMode]);
 
   // Resign is irreversible and hands the opponent the win — gate it behind a confirm
   // (the kit-framed one, not window.confirm, so it stays in-world). Netplay relays it
@@ -470,23 +476,24 @@ export function SkirmishHud({
             {testMode ? (
               <div className="skirmish-view-group">
                 <span className="skirmish-eyebrow">Min CPU delay (test board)</span>
-                <label className="skirmish-cpu-delay-field">
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={delaySecInput}
-                    aria-label="Minimum CPU delay in seconds"
-                    onChange={(event) => {
-                      setDelaySecInput(event.target.value);
-                      const secs = parseFloat(event.target.value);
-                      setTestMinCpuDelay(Number.isFinite(secs) && secs > 0 ? secs * 1000 : 0);
+                <div className="skirmish-clock-row skirmish-cpu-delay-field">
+                  <span>Delay floor</span>
+                  <Stepper
+                    suffix="s"
+                    decreaseLabel="Shorter minimum CPU delay"
+                    increaseLabel="Longer minimum CPU delay"
+                    onDecrease={() => setTestMinCpuDelay(Math.max(0, testMinCpuDelayMs - 500))}
+                    onIncrease={() => setTestMinCpuDelay(testMinCpuDelayMs + 500)}
+                    edit={{
+                      value: testMinCpuDelayMs,
+                      min: 0,
+                      format: fmtDelaySeconds,
+                      parse: parseDelaySeconds,
+                      onCommit: setTestMinCpuDelay,
+                      ariaLabel: 'Minimum CPU delay in seconds',
                     }}
                   />
-                  <span>seconds</span>
-                </label>
+                </div>
                 <p className="skirmish-grid-hint">Type any floor for the CPU's think time — it widens the window to premove. Your clock is paused during it anyway.</p>
               </div>
             ) : null}
