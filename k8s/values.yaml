@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-eda56a37ae57d97506c93a9072817154ac5bbdda7f4081a6982b71dab5740278"
+  tag: "app-97ba68aa428cf7cc8df0c51c31f01ed9258c1ceb7a16c77e44fcd82d3c775b3b"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix prop depth and editor dragging"
-  prNumber: "429"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/429"
-  commit: "6d500fa"
+  prTitle: "Move level editor tools into actions dock"
+  prNumber: "430"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/430"
+  commit: "618f6d8"
 
 name: chess-tactics
 namespace: chess-tactics
