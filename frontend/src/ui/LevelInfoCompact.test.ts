@@ -45,24 +45,24 @@ describe('kingSideForLevel — which side owns the King, read off the level cont
   it('setup spawns: reads event rosters, not the empty authored units', () => {
     const player = fixedLevel([], (l) => {
       l.events = [
-        { kind: 'spawn', trigger: { kind: 'setup' }, side: 'player', roster: { king: 1, pawn: 2 }, zoneIds: ['p'] },
-        { kind: 'spawn', trigger: { kind: 'setup' }, side: 'enemy', roster: { pawn: 3 }, zoneIds: ['e'] },
+        { trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'player', roster: { king: 1, pawn: 2 }, zoneIds: ['p'] }] },
+        { trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 3 }, zoneIds: ['e'] }] },
       ];
     });
     expect(kingSideForLevel(player)).toBe('player');
 
     const enemy = fixedLevel([], (l) => {
       l.events = [
-        { kind: 'spawn', trigger: { kind: 'setup' }, side: 'player', roster: { pawn: 2 }, zoneIds: ['p'] },
-        { kind: 'spawn', trigger: { kind: 'setup' }, side: 'enemy', roster: { king: 1 }, zoneIds: ['e'] },
+        { trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'player', roster: { pawn: 2 }, zoneIds: ['p'] }] },
+        { trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'enemy', roster: { king: 1 }, zoneIds: ['e'] }] },
       ];
     });
     expect(kingSideForLevel(enemy)).toBe('enemy');
 
     const both = fixedLevel([], (l) => {
       l.events = [
-        { kind: 'spawn', trigger: { kind: 'setup' }, side: 'player', roster: { king: 1 }, zoneIds: ['p'] },
-        { kind: 'spawn', trigger: { kind: 'setup' }, side: 'enemy', roster: { king: 1 }, zoneIds: ['e'] },
+        { trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'player', roster: { king: 1 }, zoneIds: ['p'] }] },
+        { trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'enemy', roster: { king: 1 }, zoneIds: ['e'] }] },
       ];
     });
     expect(kingSideForLevel(both)).toBe('enemy');

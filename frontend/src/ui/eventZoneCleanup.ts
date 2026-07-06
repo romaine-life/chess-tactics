@@ -4,20 +4,22 @@ import type { EditorZoneEntry } from './boardCode';
 export function eventReferencedZoneIds(events: readonly LevelEvent[]): Set<string> {
   const ids = new Set<string>();
   for (const event of events) {
-    if (event.kind === 'spawn') {
-      for (const id of event.zoneIds) {
+    if (event.trigger.kind === 'unit-enters-zone') {
+      const clean = event.trigger.zoneId.trim();
+      if (clean) ids.add(clean);
+    }
+    for (const action of event.do) {
+      if (action.kind !== 'spawn') continue;
+      for (const id of action.zoneIds) {
         const clean = id.trim();
         if (clean) ids.add(clean);
       }
-      continue;
     }
-    const clean = event.trigger.zoneId.trim();
-    if (clean) ids.add(clean);
   }
   return ids;
 }
 
-export function clearZoneEntriesReferencedOnlyByRemovedEvents(
+export function removeZoneEntriesReferencedOnlyByRemovedEvents(
   entries: readonly EditorZoneEntry[],
   removedEvents: readonly LevelEvent[],
   remainingEvents: readonly LevelEvent[],
@@ -30,11 +32,6 @@ export function clearZoneEntriesReferencedOnlyByRemovedEvents(
   if (orphanedZoneIds.length === 0) return null;
 
   const orphaned = new Set(orphanedZoneIds);
-  let changed = false;
-  const next = entries.map((entry) => {
-    if (!orphaned.has(entry.id) || entry.tiles.length === 0) return entry;
-    changed = true;
-    return { ...entry, tiles: [] };
-  });
-  return changed ? next : null;
+  const next = entries.filter((entry) => !orphaned.has(entry.id));
+  return next.length === entries.length ? null : next;
 }

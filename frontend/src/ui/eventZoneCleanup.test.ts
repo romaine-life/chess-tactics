@@ -2,22 +2,18 @@ import { describe, expect, it } from 'vitest';
 import type { LevelEvent } from '../core/level';
 import type { EditorZoneEntry } from './boardCode';
 import {
-  clearZoneEntriesReferencedOnlyByRemovedEvents,
   eventReferencedZoneIds,
+  removeZoneEntriesReferencedOnlyByRemovedEvents,
 } from './eventZoneCleanup';
 
 const spawn = (zoneIds: string[]): LevelEvent => ({
-  kind: 'spawn',
   trigger: { kind: 'setup' },
-  side: 'player',
-  roster: { pawn: 1 },
-  zoneIds,
+  do: [{ kind: 'spawn', side: 'player', roster: { pawn: 1 }, zoneIds }],
 });
 
 const promotion = (zoneId: string): LevelEvent => ({
-  kind: 'pawn-promotion',
   trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId },
-  defaultPromotion: 'queen',
+  do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }],
 });
 
 const zones = (): EditorZoneEntry[] => [
@@ -32,28 +28,28 @@ describe('event zone cleanup', () => {
       .toEqual(['zone-a', 'zone-b', 'zone-c']);
   });
 
-  it('clears a zone when the removed event was its only reference', () => {
-    const updated = clearZoneEntriesReferencedOnlyByRemovedEvents(zones(), [spawn(['zone-a'])], [])!;
+  it('deletes a zone when the removed event was its only reference', () => {
+    const updated = removeZoneEntriesReferencedOnlyByRemovedEvents(zones(), [spawn(['zone-a'])], [])!;
 
-    expect(updated.find((zone) => zone.id === 'zone-a')?.tiles).toEqual([]);
+    expect(updated.some((zone) => zone.id === 'zone-a')).toBe(false);
     expect(updated.find((zone) => zone.id === 'zone-b')?.tiles).toEqual(['1,0']);
   });
 
   it('keeps a zone painted when a remaining event still references it', () => {
-    const updated = clearZoneEntriesReferencedOnlyByRemovedEvents(zones(), [spawn(['zone-a'])], [promotion('zone-a')]);
+    const updated = removeZoneEntriesReferencedOnlyByRemovedEvents(zones(), [spawn(['zone-a'])], [promotion('zone-a')]);
 
     expect(updated).toBeNull();
   });
 
-  it('clears only zones that become unreferenced after a bulk clear', () => {
-    const updated = clearZoneEntriesReferencedOnlyByRemovedEvents(
+  it('deletes only zones that become unreferenced after a bulk clear', () => {
+    const updated = removeZoneEntriesReferencedOnlyByRemovedEvents(
       zones(),
       [spawn(['zone-a', 'zone-b']), promotion('zone-c')],
       [spawn(['zone-b'])],
     )!;
 
-    expect(updated.find((zone) => zone.id === 'zone-a')?.tiles).toEqual([]);
+    expect(updated.some((zone) => zone.id === 'zone-a')).toBe(false);
     expect(updated.find((zone) => zone.id === 'zone-b')?.tiles).toEqual(['1,0']);
-    expect(updated.find((zone) => zone.id === 'zone-c')?.tiles).toEqual([]);
+    expect(updated.some((zone) => zone.id === 'zone-c')).toBe(false);
   });
 });

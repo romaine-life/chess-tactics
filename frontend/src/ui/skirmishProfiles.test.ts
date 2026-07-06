@@ -26,7 +26,7 @@ describe('skirmish profiles', () => {
     expect(profile.layers.zones.map((zone) => zone.type)).toEqual(['region', 'region']);
     expect(profile.layers.zones.map((zone) => zone.name)).toEqual(['Player deployment', 'Enemy deployment']);
     expect(profile.layers.zones.map((zone) => zone.color)).toEqual(['blue', 'red']);
-    expect(profile.events?.filter((event) => event.kind === 'spawn')).toHaveLength(2);
+    expect(profile.events?.filter((event) => event.do.some((action) => action.kind === 'spawn'))).toHaveLength(2);
     expect(validatePlayability(profile).ok).toBe(true);
   });
 

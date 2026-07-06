@@ -87,13 +87,29 @@ describe('level editor draft codec', () => {
 
   it('round-trips authored setup/promotion events, and stays undefined when absent', () => {
     const events = [
-      { kind: 'spawn' as const, name: 'Deploy', trigger: { kind: 'setup' as const }, side: 'player' as const, roster: { pawn: 1 }, zoneIds: ['deployment'] },
-      { kind: 'pawn-promotion' as const, trigger: { kind: 'unit-enters-zone' as const, unit: { type: 'pawn' as const, side: 'player' as const }, zoneId: 'goal' }, defaultPromotion: 'queen' as const },
+      { name: 'Deploy', trigger: { kind: 'setup' as const }, do: [{ kind: 'spawn' as const, side: 'player' as const, roster: { pawn: 1 }, zoneIds: ['deployment'] }] },
+      { trigger: { kind: 'unit-enters-zone' as const, unit: { type: 'pawn' as const, side: 'player' as const }, zoneId: 'goal' }, do: [{ kind: 'promote' as const, target: { kind: 'triggering-unit' as const } }] },
     ];
     const custom = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft({ events })))!;
     expect(custom.events).toEqual(events);
     const plain = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft()))!;
     expect(plain.events).toBeUndefined();
+  });
+
+  it('normalizes legacy and interim promotion event drafts to trigger/action events', () => {
+    const raw = JSON.parse(serializeLevelEditorDraft(baseDraft())) as Record<string, unknown>;
+    raw.events = [
+      { kind: 'spawn', name: 'Deploy', trigger: { kind: 'setup' }, side: 'player', roster: { pawn: 1 }, zoneIds: ['deployment'] },
+      { kind: 'pawn-promotion', trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId: 'goal' }, defaultPromotion: 'queen' },
+      { trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'enemy' }, zoneId: 'enemy-goal' } },
+    ];
+    const parsed = parseLevelEditorDraft(JSON.stringify(raw))!;
+
+    expect(parsed.events).toEqual([
+      { name: 'Deploy', trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'player', roster: { pawn: 1 }, zoneIds: ['deployment'] }] },
+      { trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId: 'goal' }, do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }] },
+      { trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'enemy' }, zoneId: 'enemy-goal' }, do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }] },
+    ]);
   });
 
   it('drops a non-array victory (e.g. a pre-ADR-0064 draft) back to the preset', () => {

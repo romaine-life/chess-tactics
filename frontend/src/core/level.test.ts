@@ -64,6 +64,19 @@ describe('level schema', () => {
       { id: 'promotion', name: 'Promotion lane', color: 'amber', type: 'region', tiles: [[4, 0]] },
     ];
     lvl.events = [
+      { name: 'Deploy', trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'player', roster: { pawn: 2 }, zoneIds: ['deployment'] }] },
+      {
+        name: 'Promote',
+        trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId: 'promotion' },
+        do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }],
+      },
+    ];
+    expect(validateLevel(lvl).ok).toBe(true);
+  });
+
+  it('accepts legacy setup spawn and pawn-promotion event bodies for migration', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    const legacyEvents = [
       { kind: 'spawn', name: 'Deploy', trigger: { kind: 'setup' }, side: 'player', roster: { pawn: 2 }, zoneIds: ['deployment'] },
       {
         kind: 'pawn-promotion',
@@ -73,7 +86,7 @@ describe('level schema', () => {
         defaultPromotion: 'rook',
       },
     ];
-    expect(validateLevel(lvl).ok).toBe(true);
+    expect(validateLevel({ ...lvl, events: legacyEvents } as unknown).ok).toBe(true);
   });
 
   it('rejects malformed non-victory events', () => {
@@ -81,11 +94,12 @@ describe('level schema', () => {
     const bad: unknown[] = [
       'nope',
       [{ kind: 'teleport', trigger: { kind: 'setup' } }],
-      [{ kind: 'spawn', trigger: { kind: 'later' }, side: 'player', roster: { pawn: 1 }, zoneIds: ['z'] }],
-      [{ kind: 'spawn', trigger: { kind: 'setup' }, side: 'enemy', roster: { rock: 1 }, zoneIds: ['z'] }],
-      [{ kind: 'spawn', trigger: { kind: 'setup' }, side: 'enemy', roster: { pawn: 1 }, zoneIds: [] }],
-      [{ kind: 'pawn-promotion', trigger: { kind: 'unit-enters-zone', unit: { type: 'queen' }, zoneId: 'z' } }],
-      [{ kind: 'pawn-promotion', trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: 'z' }, choices: ['king'] }],
+      [{ trigger: { kind: 'setup' }, do: [] }],
+      [{ trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: 'z' }, do: [{ kind: 'spawn', side: 'player', roster: { pawn: 1 }, zoneIds: ['z'] }] }],
+      [{ trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'enemy', roster: { rock: 1 }, zoneIds: ['z'] }] }],
+      [{ trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 1 }, zoneIds: [] }] }],
+      [{ trigger: { kind: 'unit-enters-zone', unit: { type: 'queen' }, zoneId: 'z' }, do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }] }],
+      [{ trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: 'z' }, do: [{ kind: 'promote', target: { kind: 'selected-unit' } }] }],
     ];
     for (const events of bad) {
       expect(validateLevel({ ...lvl, events } as unknown).ok).toBe(false);

@@ -22,20 +22,14 @@ export function createDefaultSkirmishProfileLevel(): Level {
     timeControl: DEFAULT_TIME_CONTROL,
     events: [
       {
-        kind: 'spawn',
         name: 'Deploy player force',
         trigger: { kind: 'setup' },
-        side: 'player',
-        roster: { pawn: 1, knight: 1, bishop: 1 },
-        zoneIds: ['player-deployment'],
+        do: [{ kind: 'spawn', side: 'player', roster: { pawn: 1, knight: 1, bishop: 1 }, zoneIds: ['player-deployment'] }],
       },
       {
-        kind: 'spawn',
         name: 'Deploy enemy force',
         trigger: { kind: 'setup' },
-        side: 'enemy',
-        roster: { king: 1, knight: 1, rook: 1 },
-        zoneIds: ['enemy-deployment'],
+        do: [{ kind: 'spawn', side: 'enemy', roster: { king: 1, knight: 1, rook: 1 }, zoneIds: ['enemy-deployment'] }],
       },
     ],
     layers: {

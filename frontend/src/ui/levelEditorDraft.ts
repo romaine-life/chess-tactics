@@ -1,5 +1,6 @@
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 import { OBJECTIVE_TYPES, type LevelEvents, type ObjectiveType, type TimeControl, type VictoryRules } from '../core/level';
+import { normalizeLevelEvents, type StoredLevelEvent } from '../core/levelEvents';
 import { decodeBoard, encodeBoard, type EditorBoard } from './boardCode';
 
 const STORAGE_PREFIX = 'ct:level-editor-draft:v1';
@@ -16,7 +17,7 @@ export interface LevelEditorDraft {
   timeControl?: TimeControl;
   // Authored victory conditions (ADR-0064), or undefined when the level uses the objective preset.
   victory?: VictoryRules;
-  // Authored non-victory events: setup spawn and pawn-promotion triggers.
+  // Authored non-victory events: setup spawns and trigger/action events.
   events?: LevelEvents;
 }
 
@@ -74,7 +75,7 @@ const cleanVictory = (raw: unknown): VictoryRules | undefined =>
   Array.isArray(raw) ? (raw as VictoryRules) : undefined;
 
 const cleanEvents = (raw: unknown): LevelEvents | undefined =>
-  Array.isArray(raw) ? (raw as LevelEvents) : undefined;
+  Array.isArray(raw) ? normalizeLevelEvents(raw as StoredLevelEvent[]) : undefined;
 
 export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
   try {

@@ -137,14 +137,12 @@ describe('createFromLevel — pawn promotion zones', () => {
     const level = createBlankLevel('promo-event', 'Promotion Event', 8, 8);
     level.layers.zones = [{ id: 'promo-a', type: 'pawn-promotion', tiles: [[4, 0]] }];
     level.events = [{
-      kind: 'pawn-promotion',
       name: 'Player promotion',
       trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId: 'promo-a' },
-      choices: ['rook'],
-      defaultPromotion: 'rook',
+      do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }],
     }];
     const game = createSkirmish({ seed: 1, level });
-    expect(game.promotionRules).toEqual([{ side: 'player', cells: [{ x: 4, y: 0 }], choices: ['rook'], defaultPromotion: 'rook' }]);
+    expect(game.promotionRules).toEqual([{ side: 'player', cells: [{ x: 4, y: 0 }] }]);
   });
 });
 
@@ -263,8 +261,8 @@ describe('createFromLevel — random placement', () => {
   it('authored setup spawn events deal rosters into the named zone ids without relying on zone type', () => {
     const level = createBlankLevel('ev-spawn', 'Event Spawn', 8, 8);
     level.events = [
-      { kind: 'spawn', name: 'Player event', trigger: { kind: 'setup' }, side: 'player', roster: { pawn: 1, rook: 1 }, zoneIds: ['blue-camp'] },
-      { kind: 'spawn', name: 'Enemy event', trigger: { kind: 'setup' }, side: 'enemy', roster: { king: 1 }, zoneIds: ['red-camp'] },
+      { name: 'Player event', trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'player', roster: { pawn: 1, rook: 1 }, zoneIds: ['blue-camp'] }] },
+      { name: 'Enemy event', trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'enemy', roster: { king: 1 }, zoneIds: ['red-camp'] }] },
     ];
     level.layers.zones = [
       { id: 'blue-camp', type: 'objective', tiles: [[0, 7], [1, 7]] },
