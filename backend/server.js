@@ -53,6 +53,9 @@ app.use('/api/lab-runs', express.json({ limit: '10mb' }));
 // Training run specs embed a whole level object (+ optionally a generated book), so
 // they exceed the 256kb global ceiling; mount a larger parser first, like lab-runs.
 app.use('/api/train-runs', express.json({ limit: '10mb' }));
+// Solve run specs embed a whole level object (SolveSpec.level), same as train-runs, so
+// they exceed the 256kb global ceiling; mount a larger parser first.
+app.use('/api/solve-runs', express.json({ limit: '10mb' }));
 // Opening-book blobs carry every book's capped training trajectory (up to a few
 // hundred points each across several books), which can exceed the global 256kb
 // ceiling. Mount a larger parser first, same as lab-runs; the global parser below
@@ -306,6 +309,29 @@ const MIGRATIONS = [
         updated_by text,
         updated_at timestamptz NOT NULL DEFAULT now()
       );
+    `,
+  },
+  {
+    version: 12,
+    name: 'solve runs',
+    // Account-scoped headless BOARD-SOLVER runs (ADR-0068 §5), mirroring train_runs.
+    // `spec` is the immutable SolveSpec (level + bounds + mode) the solver Job reads;
+    // `body` is the progressively-patched result (feasibility, tightening rootBounds,
+    // proven census, final rootValue + piece values + tablebase ref); `status` is
+    // pending|running|done|error|cancelled; `job_name` is the k8s Job the backend
+    // launched (so a cancel can delete it). DELETE is cancel-not-purge (keeps body).
+    sql: `
+      CREATE TABLE IF NOT EXISTS solve_runs (
+        id          text        PRIMARY KEY,
+        owner_email text        NOT NULL,
+        spec        jsonb       NOT NULL,
+        body        jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        status      text        NOT NULL DEFAULT 'pending',
+        job_name    text,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS solve_runs_owner_idx ON solve_runs (owner_email, created_at DESC);
     `,
   },
 ];
@@ -2428,6 +2454,52 @@ async function dbDeleteTrainRun(ownerEmail, id) {
   return rowCount > 0;
 }
 
+// ── Board-solver runs (headless cluster solving) ──────────────────────────────
+// Two DISTINCT projections (F4): the list omits `body` + `job_name` (heavy + private);
+// the single-row read includes them.
+async function dbListSolveRuns(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, spec, status, created_at, updated_at FROM solve_runs WHERE owner_email = $1 ORDER BY created_at DESC LIMIT 100',
+    [ownerEmail],
+  );
+  return rows;
+}
+
+async function dbGetSolveRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, spec, body, status, job_name, created_at, updated_at FROM solve_runs WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return rows[0] || null;
+}
+
+async function dbInsertSolveRun(ownerEmail, id, spec) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'INSERT INTO solve_runs (id, owner_email, spec) VALUES ($1, $2, $3::jsonb) RETURNING created_at',
+    [id, ownerEmail, JSON.stringify(spec)],
+  );
+  return rows[0].created_at;
+}
+
+async function dbSetSolveRunJob(id, jobName, status) {
+  await ensureDbReady();
+  await pool.query('UPDATE solve_runs SET job_name = $2, status = $3, updated_at = now() WHERE id = $1', [id, jobName, status]);
+}
+
+// Cancel-not-purge (ADR §5, ruling 8): mark cancelled but KEEP the partial body so the
+// run stays viewable. The k8s Job is deleted separately in the DELETE route.
+async function dbCancelSolveRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rowCount } = await pool.query(
+    "UPDATE solve_runs SET status = 'cancelled', updated_at = now() WHERE owner_email = $1 AND id = $2",
+    [ownerEmail, id],
+  );
+  return rowCount > 0;
+}
+
 // ── Global shipped per-level AI weights (ship-to-everyone) ────────────────────
 async function dbGetAllAiWeights() {
   await ensureDbReady();
@@ -2577,6 +2649,83 @@ app.delete('/api/train-runs/:id', async (req, res) => {
     res.status(200).json({ ok: true });
   } catch (error) {
     dbUnavailable(res, 'train run delete failed', error, 'train_runs_unavailable');
+  }
+});
+
+// ── Board-solver runs: launch a headless bounded/anytime solve Job, read status,
+// cancel ─── Clone of /api/train-runs (ADR-0068 §5). POST persists the SolveSpec then
+// creates a k8s Job on the trainer pool running `node backend/solve-worker.mjs` (the
+// worker reads its own solve_runs row via SOLVE_RUN_ID and JSONB-patches progress
+// back). In local dev (not in-cluster) the row persists as 'pending' and isn't launched.
+app.post('/api/solve-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const spec = req.body && typeof req.body === 'object' ? req.body : null;
+  if (!spec || !spec.level || typeof spec.level !== 'object') {
+    res.status(400).json({ error: 'invalid_solve_spec', details: 'spec.level (a level object) is required' });
+    return;
+  }
+  const id = crypto.randomUUID();
+  try {
+    await dbInsertSolveRun(user.email, id, spec);
+  } catch (error) {
+    dbUnavailable(res, 'solve run write failed', error, 'solve_runs_unavailable');
+    return;
+  }
+  try {
+    const k8s = await import('./solve/k8s.mjs');
+    if (k8s.inCluster()) {
+      const jobName = await k8s.createSolverJob(id);
+      await dbSetSolveRunJob(id, jobName, 'running');
+      res.status(200).json({ ok: true, id, status: 'running', job: jobName });
+    } else {
+      res.status(200).json({ ok: true, id, status: 'pending', note: 'not in-cluster: run persisted but not launched' });
+    }
+  } catch (error) {
+    try { await dbSetSolveRunJob(id, null, 'error'); } catch { /* best effort */ }
+    console.error('solve job launch failed', error);
+    res.status(502).json({ error: 'solve_launch_failed', id, details: String((error && error.message) || error) });
+  }
+});
+
+app.get('/api/solve-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    res.status(200).json({ runs: await dbListSolveRuns(user.email) });
+  } catch (error) {
+    dbUnavailable(res, 'solve run list failed', error, 'solve_runs_unavailable');
+  }
+});
+
+app.get('/api/solve-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const run = await dbGetSolveRun(user.email, req.params.id);
+    if (!run) { res.status(404).json({ error: 'run_not_found' }); return; }
+    res.status(200).json(run);
+  } catch (error) {
+    dbUnavailable(res, 'solve run read failed', error, 'solve_runs_unavailable');
+  }
+});
+
+// Cancel-not-purge (ADR §5, ruling 8): delete the k8s Job (stops the run, releases the
+// node) then mark the row `cancelled` while KEEPING the partial body — the client/UI
+// treat a cancelled run as still-viewable. A hard-purge is intentionally NOT offered.
+app.delete('/api/solve-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const run = await dbGetSolveRun(user.email, req.params.id);
+    if (run && run.job_name) {
+      try { const k8s = await import('./solve/k8s.mjs'); await k8s.deleteSolverJob(run.job_name); }
+      catch (e) { console.warn('solver job delete failed', e && e.message); }
+    }
+    await dbCancelSolveRun(user.email, req.params.id);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    dbUnavailable(res, 'solve run delete failed', error, 'solve_runs_unavailable');
   }
 });
 

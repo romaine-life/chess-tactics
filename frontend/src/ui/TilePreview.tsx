@@ -32,6 +32,7 @@ import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudi
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
 import { GymCatalog, GymViewer } from './Gym';
+import { SolveCatalog, SolveViewer } from './SolveRuns';
 import { PAGE_ENTRIES } from './pagesCatalog';
 import { SliderRow } from './dressing/SliderRow';
 import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
@@ -84,13 +85,13 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym' | 'solver';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
 // 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
 // in full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'divider' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscene' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx' | 'gamelab' | 'gym';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'divider' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscene' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx' | 'gamelab' | 'gym' | 'solver';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -134,6 +135,9 @@ interface TilesetStudioRouteState {
   selectedPageName?: string;
   selectedGameLabLevelId?: string;
   selectedGymLevelId?: string;
+  selectedSolverLevelId?: string;
+  /** Which Board Solver surface is open (Stepper / cluster Run / Glossary) — the `stab=` param. */
+  solverTab?: 'step' | 'run' | 'glossary';
   selectedTileSideId?: string;
   selectedFrameName?: string;
   selectedPropName?: string;
@@ -191,7 +195,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -210,6 +214,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const page = params.get('page');
   const glvl = params.get('glvl');
   const gymlvl = params.get('gymlvl');
+  const slvl = params.get('slvl');
+  const stab = params.get('stab');
   const side = params.get('side');
   const vk = params.get('vk');
   const lab = params.get('lab');
@@ -273,6 +279,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedPageName: page || undefined,
     selectedGameLabLevelId: glvl || undefined,
     selectedGymLevelId: gymlvl || undefined,
+    selectedSolverLevelId: slvl || undefined,
+    solverTab: stab === 'run' ? 'run' : stab === 'glossary' ? 'glossary' : stab === 'step' ? 'step' : undefined,
     selectedTileSideId: side || undefined,
     selectedFrameName: frame || undefined,
     selectedPropName: prop || undefined,
@@ -280,7 +288,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedSurfaceFamily: sfamily || undefined,
     selectedRegionId: regionParam || undefined,
     viewerKind: isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
-      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'divider' || vk === 'propseat' || vk === 'tilecompare' || vk === 'surfacetiles' || vk === 'sceneanim' || vk === 'animscene' || vk === 'artworkcompare' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' || vk === 'gamelab' || vk === 'gym' ? vk : undefined,
+      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'divider' || vk === 'propseat' || vk === 'tilecompare' || vk === 'surfacetiles' || vk === 'sceneanim' || vk === 'animscene' || vk === 'artworkcompare' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' || vk === 'gamelab' || vk === 'gym' || vk === 'solver' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -314,6 +322,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     if (route.category === 'tilesides' && route.selectedTileSideId) catalogParams.set('side', route.selectedTileSideId);
     if (route.category === 'gamelab' && route.selectedGameLabLevelId) catalogParams.set('glvl', route.selectedGameLabLevelId);
     if (route.category === 'gym' && route.selectedGymLevelId) catalogParams.set('gymlvl', route.selectedGymLevelId);
+    if (route.category === 'solver' && route.selectedSolverLevelId) catalogParams.set('slvl', route.selectedSolverLevelId);
     const catalogQuery = catalogParams.toString();
     const nextHref = catalogQuery ? `${STUDIO_PATH}?${catalogQuery}` : STUDIO_PATH;
     const currentHref = `${window.location.pathname}${window.location.search}`;
@@ -336,12 +345,16 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     else if (route.viewerKind === 'page' && route.selectedPageName) params.set('page', route.selectedPageName);
     else if (route.viewerKind === 'gamelab' && route.selectedGameLabLevelId) params.set('glvl', route.selectedGameLabLevelId);
     else if (route.viewerKind === 'gym' && route.selectedGymLevelId) params.set('gymlvl', route.selectedGymLevelId);
+    else if (route.viewerKind === 'solver' && route.selectedSolverLevelId) params.set('slvl', route.selectedSolverLevelId);
     else if (route.viewerKind === 'tileside' && route.selectedTileSideId) params.set('side', route.selectedTileSideId);
     else if (route.viewerKind === 'nineslice' && route.selectedFrameName) params.set('frame', route.selectedFrameName);
     else if (route.viewerKind === 'propseat' && route.selectedPropName) params.set('prop', route.selectedPropName);
     else if (route.viewerKind === 'tilecompare' && route.selectedTileCompareId) params.set('tile', route.selectedTileCompareId);
     else if (route.viewerKind === 'surfacetiles' && route.selectedSurfaceFamily) params.set('sfamily', route.selectedSurfaceFamily);
     else if (route.viewerKind === 'sceneanim' && route.selectedRegionId) params.set('region', route.selectedRegionId);
+    // The solver's open surface (Stepper is the default, so only non-default tabs are
+    // written) — rides beside slvl so a solver deep link restores both the level AND the tab.
+    if (route.viewerKind === 'solver' && route.solverTab && route.solverTab !== 'step') params.set('stab', route.solverTab);
   }
   params.set('collection', route.tileFilter);
   if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
@@ -416,6 +429,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedGameLabLevelId, setSelectedGameLabLevelId] = useState<string | undefined>(initialRoute.selectedGameLabLevelId);
   const [gymSearch, setGymSearch] = useState('');
   const [selectedGymLevelId, setSelectedGymLevelId] = useState<string | undefined>(initialRoute.selectedGymLevelId);
+  const [solverSearch, setSolverSearch] = useState('');
+  const [selectedSolverLevelId, setSelectedSolverLevelId] = useState<string | undefined>(initialRoute.selectedSolverLevelId);
+  const [solverTab, setSolverTab] = useState<'step' | 'run' | 'glossary'>(initialRoute.solverTab ?? 'step');
   const [glossarySearch, setGlossarySearch] = useState('');
   // Assets and artwork each own their own selection — never one shared field
   // (that's how an Assets id like 'gear' used to leak into the Artwork stage).
@@ -562,6 +578,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.selectedTileSideId) setSelectedTileSideId(route.selectedTileSideId);
       if (route.selectedGameLabLevelId) setSelectedGameLabLevelId(route.selectedGameLabLevelId);
       if (route.selectedGymLevelId) setSelectedGymLevelId(route.selectedGymLevelId);
+      if (route.selectedSolverLevelId) setSelectedSolverLevelId(route.selectedSolverLevelId);
+      // No-param means the default Stepper tab — browser-Back from ?stab=run must actually
+      // leave the Run tab, so this resets rather than only setting when present.
+      setSolverTab(route.solverTab ?? 'step');
       if (route.selectedFrameName) setSelectedFrameName(route.selectedFrameName);
       if (route.viewerKind) setViewerKind(route.viewerKind);
       setViewHasTarget(Boolean(route.selectedAssetId || route.selectedSlotMask || route.tileFilter === 'board'));
@@ -629,6 +649,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedPageName,
       selectedGameLabLevelId,
       selectedGymLevelId,
+      selectedSolverLevelId,
+      solverTab,
       selectedTileSideId,
       selectedFrameName,
       selectedPropName,
@@ -648,7 +670,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedTileSideId, selectedFrameName, selectedPropName, selectedTileCompareId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, solverTab, selectedTileSideId, selectedFrameName, selectedPropName, selectedTileCompareId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
   // the card you came from — not the top of the grid. The selection is already kept
@@ -1405,6 +1427,19 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </>
       ),
     },
+    {
+      id: 'solver', label: 'Board Solver', hint: 'Solve a board exactly and watch it think — step the retrograde/search phases live, watch the value spread from the terminals onto the board, or launch a bounded cluster solve; feasibility read + honest per-piece values.',
+      main: <SolveCatalog search={solverSearch} selected={selectedSolverLevelId} onSelect={setSelectedSolverLevelId} />,
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={solverSearch} onChange={(event) => setSolverSearch(event.target.value)} placeholder="level, mode…" />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('solver')} disabled={!selectedSolverLevelId}>Open Solver</button>
+        </>
+      ),
+    },
   ];
   const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
 
@@ -1434,6 +1469,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <option value="page">Page</option>
         <option value="gamelab">Game Lab</option>
         <option value="gym">Training Gym</option>
+        <option value="solver">Board Solver</option>
         <option value="tileside">Tile Sides</option>
       </select>
     </label>
@@ -1551,6 +1587,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                         ? <GameLabViewer levelId={selectedGameLabLevelId} header={studioViewerHeader} />
                         : viewerKind === 'gym'
                         ? <GymViewer levelId={selectedGymLevelId} header={studioViewerHeader} />
+                        : viewerKind === 'solver'
+                        ? <SolveViewer levelId={selectedSolverLevelId} header={studioViewerHeader} tab={solverTab} onTabChange={setSolverTab} />
                         : viewerKind === 'tileside'
                           ? <TileSidesViewer name={selectedTileSideId} header={studioViewerHeader} />
                           : viewerKind === 'sfx'

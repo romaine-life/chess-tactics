@@ -115,8 +115,13 @@ const DEFAULT_EPSILON = 0.25;
 // can't recurse unbounded (the node budget is the other, global, backstop).
 const QUIESCE_MAX_PLY = 8;
 
-/** Terminal score magnitude; ply-adjusted so faster wins (and later losses) rank higher. */
-const WIN_SCORE = 10_000;
+/** Terminal score magnitude; ply-adjusted so faster wins (and later losses) rank higher.
+ * Exported for the solver's proof fork: a quiescence leaf score at/above (WIN_SCORE -
+ * WIN_SCORE_PLY_SLACK) is a proven mate, and (WIN_SCORE - |score|) recovers its DTM ply. */
+export const WIN_SCORE = 10_000;
+/** Any |score| above this came from a terminalScore (WIN_SCORE - ply), never the static
+ * eval — the boundary the solver uses to tell a proven mate leaf from a heuristic bound. */
+export const WIN_SCORE_PLY_SLACK = 1_000;
 
 export interface ChosenAction {
   pieceId: string;
@@ -254,7 +259,17 @@ interface RootEntry {
   score: number;
 }
 
-interface SearchState {
+// ─── Solver reuse surface (ADR-0068 Phase 4) ────────────────────────────────────────
+// The board solver's search-mode weak-solver (core/solver/search) forks this file's
+// negamax/quiescence with proof tracking. To do so soundly it must reuse the EXACT
+// budget check, capture ordering, terminal scoring, leaf quiescence, and SearchState
+// shape — a divergent copy would silently disagree with the live engine. The exports
+// in this commented block are that shared surface; they add zero behavior (they are the
+// same symbols, only now visible). `makeSearchState` is the ONE construction path so the
+// solver builds an identical state (adopted by searchBestAction below, grep-verified as
+// the only construction site).
+
+export interface SearchState {
   nodes: number;
   deadline: number;
   maxNodes: number;
@@ -265,7 +280,24 @@ interface SearchState {
   sctx: SearchContext;
 }
 
-function outOfBudget(s: SearchState): boolean {
+/** Build a SearchState — the single construction path the live search and the solver's
+ * proof-tracking fork share, so both count budget and score leaves identically. `env`
+ * supplies the static terrain + fences (its `lastMove` is ignored — negamax threads
+ * per-ply lastMove itself). No time budget ⇒ Infinity deadline (deterministic). */
+export function makeSearchState(env: MoveEnv, sctx: SearchContext, opts: SearchOptions = {}): SearchState {
+  return {
+    nodes: 0,
+    deadline: opts.timeBudgetMs != null ? Date.now() + opts.timeBudgetMs : Infinity,
+    maxNodes: opts.maxNodes ?? DEFAULT_MAX_NODES,
+    aborted: false,
+    weights: opts.weights ?? DEFAULT_EVAL_WEIGHTS,
+    terrainEnv: env.terrain,
+    fences: env.fences,
+    sctx,
+  };
+}
+
+export function outOfBudget(s: SearchState): boolean {
   if (s.nodes >= s.maxNodes || ((s.nodes & 1023) === 0 && Date.now() > s.deadline)) {
     s.aborted = true;
     return true;
@@ -273,13 +305,13 @@ function outOfBudget(s: SearchState): boolean {
   return false;
 }
 
-function terminalScore(winner: Winner, ply: number): number {
+export function terminalScore(winner: Winner, ply: number): number {
   if (winner === 'player') return WIN_SCORE - ply;
   if (winner === 'enemy') return -(WIN_SCORE - ply);
   return 0; // draw
 }
 
-function captureValue(move: Move, pieces: readonly Piece[], values: Record<PieceType, number>): number {
+export function captureValue(move: Move, pieces: readonly Piece[], values: Record<PieceType, number>): number {
   if (!move.capture) return -1;
   const target = pieces.find((p) => p.id === move.capture);
   return target ? values[target.type] : -1;
@@ -297,7 +329,7 @@ function captureValue(move: Move, pieces: readonly Piece[], values: Record<Piece
  * it drops in at `depth === 0`. Adds NO randomness and reuses the exact `captureValue`
  * ordering + `legalMoves` generation negamax uses, so seeds still replay identically.
  */
-function quiesce(
+export function quiesce(
   s: SearchState,
   state: GameState,
   lastMove: GameState['lastMove'],
@@ -447,19 +479,11 @@ export function searchBestAction(
   }
   if (!roots.length) return null;
 
-  const s: SearchState = {
-    nodes: 0,
-    // No time budget ⇒ Infinity deadline: search is bounded by maxDepth + maxNodes
-    // only, which is deterministic (so a seed replays identically). A finite budget
-    // is a live-play responsiveness cap; frozen-clock tests leave it out.
-    deadline: opts.timeBudgetMs != null ? Date.now() + opts.timeBudgetMs : Infinity,
-    maxNodes: opts.maxNodes ?? DEFAULT_MAX_NODES,
-    aborted: false,
-    weights,
-    terrainEnv: env.terrain,
-    fences: env.fences,
-    sctx,
-  };
+  // No time budget ⇒ Infinity deadline: search is bounded by maxDepth + maxNodes only,
+  // which is deterministic (so a seed replays identically). A finite budget is a live-play
+  // responsiveness cap; frozen-clock tests leave it out. Built via the shared factory so the
+  // solver's proof fork constructs a byte-identical state.
+  const s: SearchState = makeSearchState(env, sctx, { ...opts, weights });
 
   let completed: RootEntry[] | null = null;
   let completedDepth = 0;
