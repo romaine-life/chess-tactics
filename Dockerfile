@@ -9,6 +9,8 @@ COPY frontend/ ./
 RUN npm run build
 # DOM-free engine bundle for the headless training Job (backend/train-worker.mjs).
 RUN npm run build:trainer
+# DOM-free board render bundle for server-side OG thumbnails.
+RUN npm run build:server-render
 
 FROM node:20-alpine
 
@@ -18,6 +20,7 @@ COPY backend/package*.json backend/
 RUN cd backend && npm install --omit=dev
 
 COPY backend/ backend/
+COPY --from=frontend-build /app/backend/generated backend/generated
 COPY --from=frontend-build /app/frontend/dist frontend/dist
 COPY --from=frontend-build /app/frontend/trainer-bundle frontend/trainer-bundle
 

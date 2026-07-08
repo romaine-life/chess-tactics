@@ -14,6 +14,7 @@ if [ ! -d "$repo_dir/frontend/node_modules" ]; then
   npm --prefix "$repo_dir/frontend" ci
 fi
 npm --prefix "$repo_dir/frontend" run build
+npm --prefix "$repo_dir/frontend" run build:server-render
 
 cd "$repo_dir/backend"
 

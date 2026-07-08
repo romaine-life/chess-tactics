@@ -8,6 +8,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "build:trainer": "vite build --config vite.trainer.config.js",
+    "build:server-render": "node scripts/build-server-render.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "shot": "node scripts/shot.mjs",
     "e2e:lobby": "node scripts/lobby-e2e.mjs",

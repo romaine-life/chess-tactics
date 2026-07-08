@@ -4,6 +4,18 @@ const crypto = require('crypto');
 const express = require('express');
 const { Pool } = require('pg');
 
+// Pure board-render geometry, generated at build/preview/test time from the same
+// frontend render source the in-app thumbnails use. server.js is hot-copied to
+// and run from a temp dir by supervisor.js, so sibling backend assets must
+// resolve from the baked backend dir instead of this process' __dirname.
+const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
+let serverRender = null;
+try {
+  serverRender = require(path.join(bakedBackendDir, 'generated', 'board-render.cjs'));
+} catch (error) {
+  console.error('board-render bundle unavailable; level thumbnails will use the default image:', error && error.message);
+}
+
 const app = express();
 const port = process.env.PORT || 3000;
 const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend', 'dist');
@@ -3239,8 +3251,12 @@ app.post('/api/maps/publish', async (req, res) => {
     const level = row && row.body && row.body.levels && typeof row.body.levels === 'object'
       ? row.body.levels[levelId] : null;
     if (!level || typeof level !== 'object') { res.status(404).json({ error: 'level_not_found' }); return; }
-    // content_hash was only a server-thumbnail cache-buster; that path is gone, so it's null now.
-    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, null);
+    let contentHash = null;
+    try {
+      const renderInputs = await applyThumbnailRenderInputs();
+      contentHash = serverRender && thumbnailVersion(serverRender.boardHashForLevel(level), renderInputs);
+    } catch { contentHash = null; }
+    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, contentHash);
     res.status(200).json({ public_id: publicId, url: `${publicOrigin}/play?map=${publicId}` });
   } catch (error) {
     dbUnavailable(res, 'map publish failed', error, 'map_store_unavailable');
@@ -3350,11 +3366,11 @@ function makeStaticCacheHeaders(rootDir) {
   };
 }
 
-// --- Open Graph unfurl ------------------------------------------------------
+// --- Open Graph unfurl + on-demand board thumbnails -------------------------
 // A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
-// JS, no auth). The SPA fallback injects per-level og:/twitter: title/description tags; og:image is
-// the branded default card. (Per-level server-rendered preview images were removed — the in-app
-// thumbnails are client-baked and nothing else consumed the server render path.)
+// JS, no auth). The SPA fallback injects per-level og:/twitter: tags, and og:image points at an
+// on-demand board render served here. Officials resolve from the LIVE DB; user maps from public_maps.
+// A render/resolve failure degrades to the branded default image.
 const OG_SITE_NAME = 'Chess Tactics';
 const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
 const DEFAULT_OG_IMAGE = '/assets/og/default.png';
@@ -3405,8 +3421,38 @@ async function officialWorkspace() {
   } catch { /* DB unreachable — fall through to the last-good real read below, else empty */ }
   return _officialCache.ws || { campaigns: [], levels: {} };
 }
-// Resolve a share reference to { level, title, subtitle, description }. Officials read the on-disk
-// baked file (sync, no DB); user maps read public_maps (async). Returns null when unresolvable.
+const THUMBNAIL_PROP_SEATS_TTL_MS = 60 * 1000;
+let _thumbnailPropSeatsCache = { at: 0, data: null, revision: 0 }; // last SUCCESSFUL DB read
+async function thumbnailPropSeats() {
+  const now = Date.now();
+  if (_thumbnailPropSeatsCache.data && now - _thumbnailPropSeatsCache.at < THUMBNAIL_PROP_SEATS_TTL_MS) {
+    return _thumbnailPropSeatsCache;
+  }
+  try {
+    const doc = await dbGetPropSeats('default');
+    const data = doc && doc.data && typeof doc.data === 'object' ? doc.data : {};
+    _thumbnailPropSeatsCache = {
+      at: now,
+      data,
+      revision: Number.isInteger(doc && doc.revision) ? doc.revision : 0,
+    };
+    return _thumbnailPropSeatsCache;
+  } catch { /* DB unreachable — fall through to the last-good seats below, else baseline */ }
+  return _thumbnailPropSeatsCache.data ? _thumbnailPropSeatsCache : { at: now, data: {}, revision: 0 };
+}
+async function applyThumbnailRenderInputs() {
+  const seats = await thumbnailPropSeats();
+  if (serverRender && typeof serverRender.applyPropSeatOverrides === 'function') {
+    try { serverRender.applyPropSeatOverrides(seats.data); } catch { /* keep the renderer's last-good seats */ }
+  }
+  return { propSeatsRevision: seats.revision || 0 };
+}
+function thumbnailVersion(boardHash, renderInputs) {
+  const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
+  return [boardHash, propSeatsRevision].filter(Boolean).join('-');
+}
+// Resolve a share reference to { level, title, subtitle, description }. Officials read the live
+// official workspace cache; user maps read public_maps. Returns null when unresolvable.
 async function resolveShareTarget({ levelId, campaignId, mapId }) {
   if (mapId) {
     const row = await dbGetPublicMap(mapId).catch(() => null);
@@ -3420,7 +3466,7 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
       description: objective ? `A community-made ${objective} map.` : OG_DEFAULT_DESC,
     };
   }
-  if (levelId && /^off-[a-z-]+$/.test(levelId)) {
+  if (levelId && OFFICIAL_WORKSPACE_ID_PATTERN.test(levelId)) {
     const ws = await officialWorkspace();
     const level = Object.hasOwn(ws.levels, levelId) && ws.levels[levelId] && typeof ws.levels[levelId] === 'object'
       ? ws.levels[levelId] : null;
@@ -3437,6 +3483,39 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
   return null;
 }
 
+// On-demand board thumbnail: /assets/level-thumb/<id>.png (?v=<hash> only busts caches).
+// Registered before express.static so the .png is not handled by the SPA asset guard.
+const _thumbCache = new Map(); // `${id}:${hash}` -> Buffer
+const THUMB_CACHE_MAX = 200;
+app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
+  const id = String(req.params[0] || '');
+  const isOfficial = OFFICIAL_WORKSPACE_ID_PATTERN.test(id);
+  const isMap = PUBLIC_ID_RE.test(id);
+  if (!isOfficial && !isMap) { res.status(404).send('not found'); return; }
+  try {
+    if (!serverRender) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
+    const target = await resolveShareTarget(isOfficial ? { levelId: id } : { mapId: id });
+    if (!target) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
+    const renderInputs = await applyThumbnailRenderInputs();
+    const plan = serverRender.levelRenderPlan(target.level);
+    const cacheKey = `${id}:${thumbnailVersion(plan.contentHash, renderInputs)}`;
+    let png = _thumbCache.get(cacheKey);
+    if (!png) {
+      const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
+      const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
+      png = await renderLevelCard({ plan, frontendDir, title: target.title, subtitle: target.subtitle, backgroundSrc });
+      if (_thumbCache.size >= THUMB_CACHE_MAX) _thumbCache.delete(_thumbCache.keys().next().value);
+      _thumbCache.set(cacheKey, png);
+    }
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.status(200).end(png);
+  } catch (error) {
+    console.error('level-thumb render failed:', error && error.message);
+    res.redirect(302, DEFAULT_OG_IMAGE);
+  }
+});
+
 async function ogTagsFor(req) {
   const origin = publicOrigin; // TRUSTED canonical origin, never the spoofable Host header
   const levelId = typeof req.query.levelId === 'string' ? req.query.levelId : null;
@@ -3450,7 +3529,15 @@ async function ogTagsFor(req) {
   if (target) {
     title = target.title || OG_SITE_NAME;
     description = target.description || target.subtitle || OG_DEFAULT_DESC;
-    // og:image stays the branded default card — per-level server-rendered previews were removed.
+    if (serverRender) {
+      const key = mapId || levelId;
+      let hash = '';
+      try {
+        const renderInputs = await applyThumbnailRenderInputs();
+        hash = thumbnailVersion(serverRender.boardHashForLevel(target.level), renderInputs);
+      } catch { hash = ''; }
+      image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${hash ? `?v=${hash}` : ''}`;
+    }
   }
   const url = `${origin}${req.originalUrl}`;
   const meta = [
