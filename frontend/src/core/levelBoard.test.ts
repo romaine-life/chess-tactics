@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { editorBoardToLevel, levelToEditorBoard } from './levelBoard';
 import type { EditorBoard } from '../ui/boardCode';
 import type { TerrainCell } from './types';
+import { roadEdgeKey } from './featureAutotile';
 
 // A blank board (no painted cells) derives every cell to void — enough to exercise the
 // save-time projection without depending on specific Studio tile / unit ids.
@@ -55,6 +56,31 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
     const reopened = levelToEditorBoard(level);
     expect(reopened.cells['2,1']).toBeUndefined();
     expect(reopened.cells['0,0']).toBeTruthy();
+  });
+
+  it('keeps boundary fence rails in layers and boardCode', () => {
+    const board = filledBoard(4, 4);
+    const north = roadEdgeKey(0, 0, 0, -1);
+    const east = roadEdgeKey(3, 1, 4, 1);
+    board.fences = { [north]: 'wood', [east]: 'stone' };
+
+    const level = editorBoardToLevel(board, { id: 'l12', name: 'Boundary fences' });
+    expect(level.layers.fences).toEqual([north, east]);
+    expect(levelToEditorBoard(level).fences).toEqual(board.fences);
+  });
+
+  it('projects and saves only north/west perimeter walls', () => {
+    const board = filledBoard(4, 4);
+    const north = roadEdgeKey(0, 0, 0, -1);
+    const west = roadEdgeKey(0, 2, -1, 2);
+    const interior = roadEdgeKey(1, 1, 1, 2);
+    board.walls = { [north]: 'stone', [west]: 'brick', [interior]: 'stone' };
+
+    const level = editorBoardToLevel(board, { id: 'l14', name: 'Walls' });
+    expect(level.layers.fences).toEqual([north, west]);
+    const reopened = levelToEditorBoard(level);
+    expect(reopened.walls).toEqual({ [north]: 'stone', [west]: 'brick' });
+    expect(reopened.fences).toEqual({});
   });
 
   it('maps only the assigned player faction to player and leaves unassigned maps CPU-only', () => {
@@ -125,6 +151,17 @@ describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
     };
     expect(levelToEditorBoard(legacy).cells['1,2']).toBeUndefined();
     expect(levelToEditorBoard(legacy).cells['0,0']).toBeTruthy();
+  });
+
+  it('re-seeds legacy boundary fence rails from layers', () => {
+    const edge = roadEdgeKey(0, 0, -1, 0);
+    const saved = editorBoardToLevel(filledBoard(4, 4), { id: 'l13', name: 'Legacy Fence' });
+    const legacy = {
+      ...saved,
+      boardCode: undefined,
+      layers: { ...saved.layers, fences: [edge] },
+    };
+    expect(levelToEditorBoard(legacy).fences).toEqual({ [edge]: 'wood' });
   });
 });
 

@@ -3,7 +3,8 @@
 // elevation + gameplay zones); LDtk-inspired structure (defs/instances spirit,
 // world/levels model, typed fields). Persisted as a validated JSONB body.
 
-import type { BoardSize, PieceType, Side, TerrainCell, TerrainType, UnitFacing } from './types';
+import type { BoardSize, PieceType, PromotionPieceType, Side, TerrainCell, TerrainType, UnitFacing } from './types';
+import { PROMOTION_PIECE_TYPES } from './types';
 import type { PlacedProp } from './props';
 import { isPlayablePieceType } from './pieces';
 import { parseEdgeKey, isOrthogonalPair } from './featureAutotile';
@@ -22,8 +23,10 @@ export const CAMPAIGN_FORMAT_VERSION = 1;
 export const BOARD_COLS = { min: 1, max: 48 } as const;
 export const BOARD_ROWS = { min: 1, max: 48 } as const;
 
-export type ZoneType = 'player-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock';
-export const ZONE_TYPES = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock'] as const satisfies readonly ZoneType[];
+export type ZoneType = 'region' | 'player-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock' | 'pawn-promotion';
+export const ZONE_TYPES = ['region', 'player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'] as const satisfies readonly ZoneType[];
+export type ZoneColor = 'teal' | 'blue' | 'red' | 'gold' | 'violet' | 'slate' | 'amber';
+export const ZONE_COLORS = ['teal', 'blue', 'red', 'gold', 'violet', 'slate', 'amber'] as const satisfies readonly ZoneColor[];
 
 // The win-rule MODE ids (ADR-0050). Stored ids stay the legacy objective ids deliberately —
 // they exist in the live DB, and `capture-all` ≡ Last Man
@@ -77,6 +80,8 @@ export interface VictoryAction {
  * (an empty `if` always fires); order matters ACROSS rules (see VictoryRules). A future `when`
  * trigger ("each turn" today) is the reserved Event half for on-capture / on-turn-N. */
 export interface VictoryRule {
+  /** Stable editor identity. Optional for back-compat / hand-authored bodies. */
+  id?: string;
   /** Author-facing name, shown in the editor's rule list and unique within a level. Optional for
    * back-compat / hand-authored bodies; the editor always assigns one. */
   name?: string;
@@ -96,6 +101,74 @@ export type VictoryRules = VictoryRule[];
 /** Piece counts per side for random placement — playable piece types only (no rocks). */
 export type Roster = Partial<Record<PieceType, number>>;
 
+export type LevelEventTrigger =
+  | { kind: 'setup' }
+  | {
+      kind: 'unit-enters-zone';
+      unit: { type: 'pawn'; side?: ConditionSide };
+      zoneId: string;
+    };
+
+export interface SpawnEventAction {
+  kind: 'spawn';
+  side: ConditionSide;
+  roster: Roster;
+  /** One or more dumb zone ids whose tiles form the random placement pool. */
+  zoneIds: string[];
+}
+
+export interface PromoteEventAction {
+  kind: 'promote';
+  target: { kind: 'triggering-unit' };
+}
+
+export type LevelEventAction = SpawnEventAction | PromoteEventAction;
+
+/**
+ * Generic authored level events: WHEN <trigger> THEN <do actions>. Zones stay dumb tile groups;
+ * the action says what happens and the target says what object is affected.
+ */
+export interface LevelEvent {
+  /** Stable editor identity. Optional for back-compat / hand-authored bodies. */
+  id?: string;
+  /** Author-facing name shown in the editor. */
+  name?: string;
+  trigger: LevelEventTrigger;
+  do: LevelEventAction[];
+}
+
+export type LevelEvents = LevelEvent[];
+
+/** @deprecated Legacy pre-trigger/action spawn event shape. Normalized by core/levelEvents.ts. */
+export interface SpawnEvent {
+  kind: 'spawn';
+  /** Stable editor identity. Optional for back-compat / hand-authored bodies. */
+  id?: string;
+  /** Author-facing name shown in the editor. */
+  name?: string;
+  trigger: { kind: 'setup' };
+  side: ConditionSide;
+  roster: Roster;
+  /** One or more dumb zone ids whose tiles form the random placement pool. */
+  zoneIds: string[];
+}
+
+/** @deprecated Legacy pre-trigger/action pawn-promotion event shape. Normalized by core/levelEvents.ts. */
+export interface PawnPromotionEvent {
+  kind: 'pawn-promotion';
+  /** Stable editor identity. Optional for back-compat / hand-authored bodies. */
+  id?: string;
+  /** Author-facing name shown in the editor. */
+  name?: string;
+  trigger: {
+    kind: 'unit-enters-zone';
+    unit: { type: 'pawn'; side?: ConditionSide };
+    zoneId: string;
+  };
+  choices?: PromotionPieceType[];
+  defaultPromotion?: PromotionPieceType;
+}
+
 /** The battle clock's authored time control — a standard chess clock for the PLAYER only
  * (the enemy is untimed): a starting bank plus a Fischer increment banked after every
  * completed player move. Whole seconds; the game converts to ms at clock start. */
@@ -112,6 +185,10 @@ export interface Decal {
 
 export interface Zone {
   id: string;
+  /** Author-facing label. Gameplay behavior lives in events/rules, not in this name. */
+  name?: string;
+  /** Cosmetic editor/playtest tint only. Events/rules own all behavior. */
+  color?: ZoneColor;
   type: ZoneType;
   tiles: Array<[number, number]>;
 }
@@ -146,14 +223,12 @@ export interface Level {
   // present it is the source of truth for re-seeding the editor (round-trips doodads,
   // cover, roads/rivers and unit facing that `layers` alone can't fully express).
   boardCode?: string;
-  // The ADR-0050 placement axis — an orthogonal toggle on any mode. Absent ⇒ 'fixed'
-  // (authored `layers.units` positions, today's behavior), same back-compat pattern as
-  // `boardCode`. 'random' means `layers.units` is EMPTY and the game instead deals
-  // `roster` onto seeded-random free cells of the pooled player-spawn / enemy-spawn zone
-  // tiles at game start (see game/setup.ts). Restart reshuffles — that's the point.
+  // Legacy ADR-0050 placement axis. Absent ⇒ 'fixed' (authored `layers.units` positions).
+  // 'random' is still read for old levels and editor convenience, but new behavior is authored
+  // through setup spawn events in `events` so zones can stay dumb named tile groups.
   placement?: 'fixed' | 'random';
-  // Random placement's force definition: how many of each playable piece type each side
-  // fields. Only meaningful when placement === 'random'.
+  // Legacy/random-placement force definition, mirrored by setup spawn events on new saves.
+  // Only meaningful when placement === 'random' or when converted to explicit spawn events.
   roster?: { player: Roster; enemy: Roster };
   // `survive` mode's authored turn target (player-turns to outlast). Absent ⇒
   // DEFAULT_SURVIVE_TURNS (core/objectives.ts) so every existing survive level keeps
@@ -167,6 +242,10 @@ export interface Level {
   // that lets one level combine several win and several lose conditions. Optional + back-compat
   // like the other rules fields; `objective` stays required (mode label + fallback outcome copy).
   victory?: VictoryRules;
+  // Authored non-victory events. Zones are dumb named tile groups; these events say what happens
+  // when setup or a unit interaction refers to one of those zone ids. Legacy placement/roster and
+  // pawn-promotion zone labels are still read as compatibility inputs (see core/levelEvents.ts).
+  events?: LevelEvents;
   layers: {
     terrain: TerrainCell[];
     decals: Decal[];
@@ -178,10 +257,10 @@ export interface Level {
     // (createFromLevel reads `layers`, not `boardCode`); boardCode carries a parallel 'p' map
     // only to re-seed the editor losslessly.
     props?: PlacedProp[];
-    // Edge fences: walls on the boundary between two orthogonally-adjacent tiles, as canonical
-    // edge keys (roadEdgeKey "x,y|x,y"). Optional + back-compat like `props`. This is the durable
-    // GAMEPLAY channel (createFromLevel → GameState.fences → movement blocking); boardCode carries
-    // a parallel `fe` map (edge → material) to re-seed the editor + render the rails.
+    // Edge fences: walls on an orthogonal tile edge, as canonical edge keys (roadEdgeKey
+    // "x,y|x,y"). Boundary rails use one off-board endpoint. Optional + back-compat like `props`.
+    // This is the durable GAMEPLAY channel (createFromLevel → GameState.fences → movement
+    // blocking); boardCode carries a parallel `fe` map (edge → material) for editor rendering.
     fences?: string[];
   };
 }
@@ -190,7 +269,6 @@ export interface CampaignLevelRef {
   levelId: string;
   ordinal: number;
   objective?: ObjectiveType;
-  stars?: number;
   completed?: boolean;
 }
 
@@ -234,6 +312,9 @@ export function createBlankLevel(id: string, name = 'Untitled', cols = 12, rows 
 export type ValidateResult = { ok: true; level: Level } | { ok: false; errors: string[] };
 
 const CONDITION_KINDS = ['eliminate', 'reach', 'turnLimit'] as const;
+const LEGACY_EVENT_KINDS = ['spawn', 'pawn-promotion'] as const;
+const LEVEL_EVENT_TRIGGER_KINDS = ['setup', 'unit-enters-zone'] as const;
+const LEVEL_EVENT_ACTION_KINDS = ['spawn', 'promote'] as const;
 
 /** Structural errors for a single victory condition (ADR-0064). Shape/enum checks only. */
 function conditionErrors(c: unknown, path: string): string[] {
@@ -291,12 +372,137 @@ function victoryRuleErrors(value: unknown): string[] {
   value.forEach((r, i) => {
     const path = `victory[${i}]`;
     if (!r || typeof r !== 'object' || Array.isArray(r)) { errs.push(`${path} must be a rule object`); return; }
-    const rule = r as { name?: unknown; if?: unknown; do?: unknown };
+    const rule = r as { id?: unknown; name?: unknown; if?: unknown; do?: unknown };
+    if (rule.id !== undefined && typeof rule.id !== 'string') errs.push(`${path}.id must be a string`);
     if (rule.name !== undefined && typeof rule.name !== 'string') errs.push(`${path}.name must be a string`);
     if (!Array.isArray(rule.if)) errs.push(`${path}.if must be an array of conditions`);
     else rule.if.forEach((c, j) => errs.push(...conditionErrors(c, `${path}.if[${j}]`)));
     if (!Array.isArray(rule.do)) errs.push(`${path}.do must be an array of actions`);
     else rule.do.forEach((a, j) => errs.push(...actionErrors(a, `${path}.do[${j}]`)));
+  });
+  return errs;
+}
+
+function rosterCountsErrors(value: unknown, path: string): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [`${path} must be an object of piece counts`];
+  const errs: string[] = [];
+  for (const [type, count] of Object.entries(value)) {
+    if (!isPlayablePieceType(type as PieceType)) {
+      errs.push(`${path} has a non-playable piece type "${type}"`);
+      break;
+    }
+    if (!Number.isInteger(count) || (count as number) < 1) {
+      errs.push(`${path}.${type} must be a positive integer`);
+      break;
+    }
+  }
+  return errs;
+}
+
+function legacyEventErrors(ev: Record<string, unknown>, path: string): string[] {
+  const event = ev as { kind?: unknown; id?: unknown; name?: unknown; trigger?: unknown };
+  if (typeof event.kind !== 'string' || !(LEGACY_EVENT_KINDS as readonly string[]).includes(event.kind)) {
+    return [`${path}.kind must be one of: ${LEGACY_EVENT_KINDS.join(', ')}, or omit kind and use trigger/do`];
+  }
+  const errs: string[] = [];
+  if (event.id !== undefined && typeof event.id !== 'string') errs.push(`${path}.id must be a string`);
+  if (event.name !== undefined && typeof event.name !== 'string') errs.push(`${path}.name must be a string`);
+  if (!event.trigger || typeof event.trigger !== 'object' || Array.isArray(event.trigger)) {
+    errs.push(`${path}.trigger must be an object`);
+    return errs;
+  }
+  if (event.kind === 'spawn') {
+    const spawn = ev as { side?: unknown; roster?: unknown; zoneIds?: unknown; trigger?: { kind?: unknown } };
+    if (spawn.trigger?.kind !== 'setup') errs.push(`${path}.trigger.kind must be 'setup'`);
+    if (spawn.side !== 'player' && spawn.side !== 'enemy') errs.push(`${path}.side must be 'player' or 'enemy'`);
+    errs.push(...rosterCountsErrors(spawn.roster, `${path}.roster`));
+    if (!Array.isArray(spawn.zoneIds) || spawn.zoneIds.length === 0 || spawn.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
+      errs.push(`${path}.zoneIds must be a non-empty array of zone ids`);
+    }
+  } else {
+    const promo = ev as { trigger?: { kind?: unknown; unit?: unknown; zoneId?: unknown }; choices?: unknown; defaultPromotion?: unknown };
+    if (promo.trigger?.kind !== 'unit-enters-zone') errs.push(`${path}.trigger.kind must be 'unit-enters-zone'`);
+    if (typeof promo.trigger?.zoneId !== 'string' || !promo.trigger.zoneId.trim()) errs.push(`${path}.trigger.zoneId must be a zone id`);
+    const unit = promo.trigger?.unit;
+    if (!unit || typeof unit !== 'object' || Array.isArray(unit)) {
+      errs.push(`${path}.trigger.unit must be an object`);
+    } else {
+      const u = unit as { type?: unknown; side?: unknown };
+      if (u.type !== 'pawn') errs.push(`${path}.trigger.unit.type must be 'pawn'`);
+      if (u.side !== undefined && u.side !== 'player' && u.side !== 'enemy') errs.push(`${path}.trigger.unit.side must be 'player' or 'enemy'`);
+    }
+    if (promo.choices !== undefined) {
+      if (!Array.isArray(promo.choices) || promo.choices.length === 0 || promo.choices.some((choice) => !(PROMOTION_PIECE_TYPES as readonly unknown[]).includes(choice))) {
+        errs.push(`${path}.choices must be a non-empty list of promotion piece types`);
+      }
+    }
+    if (promo.defaultPromotion !== undefined && !(PROMOTION_PIECE_TYPES as readonly unknown[]).includes(promo.defaultPromotion)) {
+      errs.push(`${path}.defaultPromotion must be a promotion piece type`);
+    }
+    if (promo.defaultPromotion !== undefined && Array.isArray(promo.choices) && !promo.choices.includes(promo.defaultPromotion)) {
+      errs.push(`${path}.defaultPromotion must be included in choices`);
+    }
+  }
+  return errs;
+}
+
+function levelEventTriggerErrors(trigger: unknown, path: string): string[] {
+  if (!trigger || typeof trigger !== 'object' || Array.isArray(trigger)) return [`${path} must be a trigger object`];
+  const t = trigger as { kind?: unknown; unit?: unknown; zoneId?: unknown };
+  if (typeof t.kind !== 'string' || !(LEVEL_EVENT_TRIGGER_KINDS as readonly string[]).includes(t.kind)) {
+    return [`${path}.kind must be one of: ${LEVEL_EVENT_TRIGGER_KINDS.join(', ')}`];
+  }
+  const errs: string[] = [];
+  if (t.kind === 'unit-enters-zone') {
+    if (typeof t.zoneId !== 'string' || !t.zoneId.trim()) errs.push(`${path}.zoneId must be a zone id`);
+    if (!t.unit || typeof t.unit !== 'object' || Array.isArray(t.unit)) {
+      errs.push(`${path}.unit must be an object`);
+    } else {
+      const unit = t.unit as { type?: unknown; side?: unknown };
+      if (unit.type !== 'pawn') errs.push(`${path}.unit.type must be 'pawn'`);
+      if (unit.side !== undefined && unit.side !== 'player' && unit.side !== 'enemy') errs.push(`${path}.unit.side must be 'player' or 'enemy'`);
+    }
+  }
+  return errs;
+}
+
+function levelEventActionErrors(action: unknown, trigger: unknown, path: string): string[] {
+  if (!action || typeof action !== 'object' || Array.isArray(action)) return [`${path} must be an action object`];
+  const a = action as { kind?: unknown; side?: unknown; roster?: unknown; zoneIds?: unknown; target?: unknown };
+  if (typeof a.kind !== 'string' || !(LEVEL_EVENT_ACTION_KINDS as readonly string[]).includes(a.kind)) {
+    return [`${path}.kind must be one of: ${LEVEL_EVENT_ACTION_KINDS.join(', ')}`];
+  }
+  const triggerKind = trigger && typeof trigger === 'object' && !Array.isArray(trigger) ? (trigger as { kind?: unknown }).kind : undefined;
+  const errs: string[] = [];
+  if (a.kind === 'spawn') {
+    if (triggerKind !== 'setup') errs.push(`${path}.kind 'spawn' requires a setup trigger`);
+    if (a.side !== 'player' && a.side !== 'enemy') errs.push(`${path}.side must be 'player' or 'enemy'`);
+    errs.push(...rosterCountsErrors(a.roster, `${path}.roster`));
+    if (!Array.isArray(a.zoneIds) || a.zoneIds.length === 0 || a.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
+      errs.push(`${path}.zoneIds must be a non-empty array of zone ids`);
+    }
+  } else {
+    if (triggerKind !== 'unit-enters-zone') errs.push(`${path}.kind 'promote' requires a unit-enters-zone trigger`);
+    if (!a.target || typeof a.target !== 'object' || Array.isArray(a.target) || (a.target as { kind?: unknown }).kind !== 'triggering-unit') {
+      errs.push(`${path}.target.kind must be 'triggering-unit'`);
+    }
+  }
+  return errs;
+}
+
+function eventErrors(value: unknown): string[] {
+  if (!Array.isArray(value)) return ['events must be an array'];
+  const errs: string[] = [];
+  value.forEach((ev, i) => {
+    const path = `events[${i}]`;
+    if (!ev || typeof ev !== 'object' || Array.isArray(ev)) { errs.push(`${path} must be an event object`); return; }
+    const event = ev as { kind?: unknown; id?: unknown; name?: unknown; trigger?: unknown; do?: unknown };
+    if (event.kind !== undefined) { errs.push(...legacyEventErrors(ev as Record<string, unknown>, path)); return; }
+    if (event.id !== undefined && typeof event.id !== 'string') errs.push(`${path}.id must be a string`);
+    if (event.name !== undefined && typeof event.name !== 'string') errs.push(`${path}.name must be a string`);
+    errs.push(...levelEventTriggerErrors(event.trigger, `${path}.trigger`));
+    if (!Array.isArray(event.do) || event.do.length === 0) errs.push(`${path}.do must be a non-empty array of actions`);
+    else event.do.forEach((action, j) => errs.push(...levelEventActionErrors(action, event.trigger, `${path}.do[${j}]`)));
   });
   return errs;
 }
@@ -344,6 +550,7 @@ export function validateLevel(value: unknown): ValidateResult {
     }
   }
   if (v.victory !== undefined) errors.push(...victoryRuleErrors(v.victory));
+  if (v.events !== undefined) errors.push(...eventErrors(v.events));
   if (v.roster !== undefined) {
     if (!v.roster || typeof v.roster !== 'object' || Array.isArray(v.roster)) {
       errors.push('roster must be an object with player and enemy piece counts');
@@ -354,18 +561,7 @@ export function validateLevel(value: unknown): ValidateResult {
           errors.push(`roster.${side} must be an object of piece counts`);
           continue;
         }
-        for (const [type, count] of Object.entries(counts)) {
-          // Playable piece types only — a roster of rocks (or a typo'd type) is meaningless
-          // to deal onto spawn tiles.
-          if (!isPlayablePieceType(type as PieceType)) {
-            errors.push(`roster.${side} has a non-playable piece type "${type}"`);
-            break;
-          }
-          if (!Number.isInteger(count) || (count as number) < 1) {
-            errors.push(`roster.${side}.${type} must be a positive integer`);
-            break;
-          }
-        }
+        errors.push(...rosterCountsErrors(counts, `roster.${side}`));
       }
     }
   }
@@ -393,6 +589,14 @@ export function validateLevel(value: unknown): ValidateResult {
       for (const z of layers.zones) {
         if (!z || typeof z !== 'object' || typeof z.id !== 'string' || !(ZONE_TYPES as readonly unknown[]).includes(z.type) || !Array.isArray(z.tiles)) {
           errors.push('malformed zone entry (need a string id, a known type and a tiles array)');
+          break;
+        }
+        if ((z as { name?: unknown }).name !== undefined && typeof (z as { name?: unknown }).name !== 'string') {
+          errors.push(`zone "${z.id}" name must be a string`);
+          break;
+        }
+        if ((z as { color?: unknown }).color !== undefined && !(ZONE_COLORS as readonly unknown[]).includes((z as { color?: unknown }).color)) {
+          errors.push(`zone "${z.id}" color must be one of: ${ZONE_COLORS.join(', ')}`);
           break;
         }
         const badTile = z.tiles.find((t) => !Array.isArray(t) || t.length !== 2 || !Number.isInteger(t[0]) || !Number.isInteger(t[1]));
@@ -430,8 +634,8 @@ export function validateLevel(value: unknown): ValidateResult {
       }
     }
     // Fences are an OPTIONAL layer (back-compat like props). Each entry is a canonical edge key
-    // "x,y|x,y" between two in-bounds, orthogonally-adjacent cells — an off-board or diagonal
-    // "edge" would block nothing meaningful and points at corrupt data, so reject it.
+    // "x,y|x,y" for an orthogonal edge. Interior fences block movement; boundary fences use one
+    // off-board endpoint and are visual rails on the level edge.
     if (layers.fences !== undefined) {
       if (!Array.isArray(layers.fences)) {
         errors.push('layers.fences must be an array');
@@ -442,8 +646,8 @@ export function validateLevel(value: unknown): ValidateResult {
             errors.push('malformed fence edge (need "x,y|x,y" between two orthogonally-adjacent cells)');
             break;
           }
-          if (b && [[cells.ax, cells.ay], [cells.bx, cells.by]].some(([x, y]) => x < 0 || x >= b.cols || y < 0 || y >= b.rows)) {
-            errors.push(`fence edge "${edge}" out of bounds`);
+          if (b && ![[cells.ax, cells.ay], [cells.bx, cells.by]].some(([x, y]) => x >= 0 && x < b.cols && y >= 0 && y < b.rows)) {
+            errors.push(`fence edge "${edge}" does not touch the board`);
             break;
           }
         }

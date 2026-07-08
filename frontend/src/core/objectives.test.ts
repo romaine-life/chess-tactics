@@ -73,9 +73,8 @@ describe('evaluateObjective', () => {
   });
 
   it('reach: a pawn that promotes on arrival still scores (lastMove carries the pre-promotion type)', () => {
-    // A pawn reaching the enemy back rank (y=0) promotes to a queen inside applyMove, so the
-    // settled board shows a queen on the goal — but lastMove records pieceType 'pawn' + the
-    // destination, so reach still fires.
+    // A pawn landing on an authored promotion zone can settle as a queen on the goal, but lastMove
+    // records pieceType 'pawn' + the destination, so reach still fires.
     const promoted: GameState = {
       size: { cols: 8, rows: 8 },
       pieces: [piece('q', 'player', 'queen', 7, 0), piece('e', 'enemy', 'pawn', 1, 1)],

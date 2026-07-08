@@ -4,7 +4,7 @@ import { DoodadSprite } from './BoardDoodad';
 import { PropSprite } from './BoardStructure';
 import { propDef, type PropDef } from '../core/props';
 import { GroundCoverLayer } from './GroundCoverLayer';
-import { FenceOverlayLayer } from './FenceOverlayLayer';
+import { FenceOverlayLayer, WallOverlayLayer } from './FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
 import { TileTopLayer } from './TileTopLayer';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
@@ -18,7 +18,7 @@ import {
   type UnitAsset,
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { resolveFeatureOverlays, resolveFenceOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
+import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
@@ -57,9 +57,11 @@ const familyOfTile = (id: string): TileFamilyId | undefined =>
 export function deriveFeatureOverlays(
   features: EditorBoard['features'],
   featureCuts: EditorBoard['featureCuts'],
+  featureExits: EditorBoard['featureExits'] = {},
 ): FeatureOverlayMap {
   const isSevered = (edge: string): boolean => featureCuts[edge] === true;
-  return resolveFeatureOverlays(features, isSevered);
+  const isExit = (edge: string): boolean => featureExits[edge] === true;
+  return resolveFeatureOverlays(features, isSevered, isExit);
 }
 
 /** The tile + feature-overlay <img>s for one cell (no interaction chrome). Shared by both boards. */
@@ -175,12 +177,14 @@ export function studioCoverCells(
   cells: Record<string, string>,
   cover: Record<string, GroundCoverDensity>,
   seed: number,
+  coverTypes: Record<string, TileFamilyId> = {},
 ): Array<{ x: number; y: number; terrain: TileFamilyId; groundCover: GroundCover }> {
   const list: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover: GroundCover }> = [];
   for (const [key, density] of Object.entries(cover)) {
     const [x, y] = key.split(',').map(Number);
     const tileId = cells[key];
-    const terrain = tileId ? familyOfTile(tileId) : undefined;
+    const tileTerrain = tileId ? familyOfTile(tileId) : undefined;
+    const terrain = coverTypes[key] ?? tileTerrain;
     if (!terrain || !groundCoverSet(terrain)) continue;
     list.push({ x, y, terrain, groundCover: { density, tufts: rollGroundCover(terrain, x, y, seed, density) } });
   }
@@ -211,8 +215,10 @@ export function StudioReadOnlyBoard({
   className?: string;
   ariaLabel?: string;
 }): ReactElement {
-  const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts);
+  const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts, board.featureExits);
   const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
+  const wallBounds = { cols: board.cols, rows: board.rows };
+  const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
 
   const gridCells: TileGridCell[] = [];
   for (let y = 0; y < board.rows; y += 1) {
@@ -230,7 +236,7 @@ export function StudioReadOnlyBoard({
   }
 
   const sprites = studioBoardSprites({ units: board.units, doodads: board.doodads, props: board.props });
-  const coverCells = studioCoverCells(board.cells, board.cover, coverSeed);
+  const coverCells = studioCoverCells(board.cells, board.cover, coverSeed, board.coverTypes ?? {});
 
   return (
     <TileGrid
@@ -240,6 +246,7 @@ export function StudioReadOnlyBoard({
       boardZoom={boardZoom}
       boardPan={boardPan}
     >
+      <WallOverlayLayer overlays={wallOverlays} wallArt={board.wallArt} bounds={wallBounds} />
       <FenceOverlayLayer overlays={fenceOverlays} />
       <GroundCoverLayer cells={coverCells} />
       {sprites}

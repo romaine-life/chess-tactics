@@ -10,6 +10,7 @@ import { Toggle } from './shared/Toggle';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { TitleBarSlot } from './shell/TitleBarSlot';
+import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
@@ -107,7 +108,7 @@ function isTracksView(pathname: string): boolean {
 // and the UI-kit asset library are all categories within it. (The broader Design
 // Index still lives at /design directly.)
 const creatorTools: CreatorTool[] = [
-  { label: 'Studio', href: '/tileset-studio', description: 'The creator workspace — browse tiles, units, the UI-kit asset library, and the artwork gallery, all in one place.' },
+  { label: 'Studio', href: '/studio', description: 'The creator workspace — browse tiles, units, the UI-kit asset library, and the artwork gallery, all in one place.' },
   { label: 'Artwork Compare', href: '/artwork-compare', description: 'Two-panel view — the accepted concept art beside the live screen, for matching the art direction.' },
   { label: 'Broadcast Monitor', href: 'https://ambience.romaine.life/?world=chess', description: 'Inspect the live menu-rain broadcast on ambience — the current scene, what is queued up next, and the event log. Opens in a new tab.', external: true },
 ];
@@ -733,20 +734,28 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
     </>
   );
 
-  // Embedded in the persistent menu shell (MainMenu's second column): render just the two columns.
-  // The shell owns the backdrop, screen wrapper, and zoom-safe placement. A standalone open still
-  // renders the full art-route (direct /settings loads outside the shell keep working).
-  if (embedded) return inner;
+  // The Settings route now usually renders inside MainMenu's persistent shell, but the
+  // return affordance still belongs to Settings: it reads Settings' ?returnTo and portals
+  // into the app title bar's actions slot. Keep it mounted in embedded mode too, or the
+  // title-bar gear becomes a one-way trip from full-screen routes like a campaign game.
+  const returnSlot = returnTo ? (
+    <TitleBarSlot region="actions">
+      <TitleBarActions aria-label="Settings navigation">
+        <TitleBarButton variant="return" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</TitleBarButton>
+      </TitleBarActions>
+    </TitleBarSlot>
+  ) : null;
+
+  // Embedded in the persistent menu shell (MainMenu's second column): render the two columns
+  // plus any title-bar portal content. The shell owns the backdrop, screen wrapper, and
+  // zoom-safe placement. A standalone open still renders the full art-route below.
+  if (embedded) return <>{returnSlot}{inner}</>;
 
   return (
     <section className="settings-art-route" aria-label="Settings" data-testid="settings">
       {/* Return control rides the title-bar actions slot (the app's nav home); shown only when the
           URL carries a valid origin. On a direct open the brand lockup is the way home. */}
-      <TitleBarSlot region="actions">
-        {returnTo ? (
-          <NavButton className="app-header-button" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</NavButton>
-        ) : null}
-      </TitleBarSlot>
+      {returnSlot}
       {/* One continuous homepage backdrop (scene + synced rain), shared across the menu family (ADR-0064). */}
       <HomepageBackdrop />
       <div className="settings-screen app-shell-bar-pad">

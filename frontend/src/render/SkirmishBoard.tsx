@@ -17,8 +17,9 @@ import { PropSprite } from './BoardStructure';
 import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardArtReveal } from './boardArtReady';
 import { groundCoverSet } from '../core/groundCover';
-import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
-import { resolveFeatureOverlays, resolveFenceOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay } from '../core/featureAutotile';
+import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
+import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay, type ResolvedWallOverlay } from '../core/featureAutotile';
+import { wallArtSrcs } from '../core/wallArt';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 
 const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
@@ -272,9 +273,13 @@ function collectBoardArt(
   board: SocketBoardResult<TileAsset>,
   livePieces: readonly Piece[],
   fenceOverlays: ReadonlyMap<string, ResolvedFenceOverlay>,
+  wallOverlays: ReadonlyMap<string, ResolvedWallOverlay>,
+  wallArtUrls: readonly string[],
 ): { urls: string[]; signature: string } {
   const tiles = new Set<string>();
   for (const fence of fenceOverlays.values()) tiles.add(fenceFrameSrc(fence.material, fence.mask));
+  for (const wall of wallOverlays.values()) tiles.add(wallFrameSrc(wall.material, wall.mask));
+  for (const url of wallArtUrls) tiles.add(url);
   for (const cell of board.cells) {
     if (cell.asset) {
       const top = tileFrameSrc(cell.asset);
@@ -475,8 +480,9 @@ const ghostScaleFor = (count: number): number => (count >= 3 ? 0.5 : count === 2
 
 // The "after" ghost: a translucent copy of a premoved piece on a square it plans to land on, the
 // far end of a premove arrow. It's pointer-events:none (inherits from .board-unit-seat), so the
-// cell-hit button beneath owns the click — clicking the ghost's square re-selects the piece to
-// extend its chain. `slot`/`count` place it symmetrically when several units share the tile.
+// cell-hit button beneath owns the click. A single ghost can be picked from that square; shared
+// ghost stacks stay ambiguous, so the player uses an original-piece handle. `slot`/`count` place
+// ghosts symmetrically when several units share the tile.
 function PremoveGhost({ piece, slot = 0, count = 1 }: { piece: Piece; slot?: number; count?: number }) {
   const { left, top, zIndex } = boardLabCellPosition(piece);
   const src = pieceImageSrc(piece);
@@ -502,6 +508,7 @@ export function SkirmishBoard() {
   const showEnemyMoves = useSkirmishView((s) => s.showEnemyMoves);
   const showPlayerAttacks = useSkirmishView((s) => s.showPlayerAttacks);
   const showPlayerMoves = useSkirmishView((s) => s.showPlayerMoves);
+  const showPromotionZones = useSkirmishView((s) => s.showPromotionZones);
   const boardZoom = useSkirmishView((s) => s.zoom);
   const boardPan = useSkirmishView((s) => s.pan);
   const setZoom = useSkirmishView((s) => s.setZoom);
@@ -510,16 +517,18 @@ export function SkirmishBoard() {
   const env = useSkirmish((s) => s.env);
   const selectedId = useSkirmish((s) => s.selectedId);
   const focusedId = useSkirmish((s) => s.focusedId);
+  const pendingPromotion = useSkirmish((s) => s.pendingPromotion);
   const seed = useSkirmish((s) => s.seed);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
   const tryMoveTo = useSkirmish((s) => s.tryMoveTo);
   const premoves = useSkirmish((s) => s.premoves);
+  const premoveInputOpen = useSkirmish((s) => s.premoveInputOpen);
   const queueMove = useSkirmish((s) => s.queueMove);
   const clearPremoves = useSkirmish((s) => s.clearPremoves);
-  // Premove building: which piece the player is queueing from. Component-local (not the
-  // game store's selection) so it never fights the live-turn selection overlays — during
-  // the enemy turn the store's selectedId is null, leaving this the only selection in play.
+  // Premove building: which provisional-board piece the player is queueing from. This stays
+  // component-local because queued pieces can be rendered at ghost destinations, but clicks also
+  // mirror into the store selection so the chosen unit survives the async enemy-reply boundary.
   const [premoveSelectedId, setPremoveSelectedId] = useState<string | null>(null);
   const net = useSkirmish((s) => s.net);
   // The side THIS client controls: 'player' in single-player, or its lobby seat in
@@ -556,6 +565,9 @@ export function SkirmishBoard() {
   } | null>(null);
   const [dropHoverKey, setDropHoverKey] = useState<string | null>(null);
   const [noHopId, setNoHopId] = useState<string | null>(null);
+  // Single-player premove input is open while the enemy owns the turn AND for the short
+  // post-reply landing beat before live player control resumes.
+  const premoveMode = !net && (game.turn === 'enemy' || premoveInputOpen) && !game.winner;
   // The ghost rides the cursor imperatively (per frame, no board re-render). When a drag-related
   // re-render DOES happen (pick-up, or the drop-target cell changing), React would otherwise
   // reset the ghost's inline position — so re-apply the last cursor after each such commit,
@@ -568,17 +580,24 @@ export function SkirmishBoard() {
     }
   }, [drag, dropHoverKey]);
   const selectedMoves = useMemo(() => {
-    if (game.turn !== localSide || game.winner) return [];
+    if (premoveMode || pendingPromotion || game.turn !== localSide || game.winner) return [];
     const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === localSide);
     return piece ? legalMoves(piece, game.pieces, game.size, env) : [];
-  }, [env, game.pieces, game.size, game.turn, game.winner, selectedId, localSide]);
+  }, [env, game.pieces, game.size, game.turn, game.winner, pendingPromotion, premoveMode, selectedId, localSide]);
   const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
+  const exactBoard = useMemo(() => game.boardCode ? decodeBoard(game.boardCode) : null, [game.boardCode]);
   // Edge fences resolve from the authored board code (each shared edge → its upper-left cell's
   // E/S rail). Keyed "x,y" to match resolveFenceOverlays; empty for a generated/fence-free board.
   const fenceOverlays = useMemo<ReadonlyMap<string, ResolvedFenceOverlay>>(() => {
-    const eb = game.boardCode ? decodeBoard(game.boardCode) : null;
-    return eb ? resolveFenceOverlays(eb.fences ?? {}) : new Map();
-  }, [game.boardCode]);
+    return exactBoard ? resolveFenceOverlays(exactBoard.fences ?? {}) : new Map();
+  }, [exactBoard]);
+  const wallOverlays = useMemo<ReadonlyMap<string, ResolvedWallOverlay>>(() => {
+    return exactBoard ? resolveWallOverlays(exactBoard.walls ?? {}, { cols: game.size.cols, rows: game.size.rows }) : new Map();
+  }, [exactBoard, game.size.cols, game.size.rows]);
+  const wallArtUrls = useMemo(
+    () => exactBoard ? wallArtSrcs(exactBoard.wallArt, { cols: game.size.cols, rows: game.size.rows }) : [],
+    [exactBoard, game.size.cols, game.size.rows],
+  );
   const livePieces = useMemo(
     // Prop colliders (`prop-…`) block movement but render as the tall PropSprite, not a unit
     // seat — exclude them so they don't paint an empty/phantom seat over their footprint cells.
@@ -588,7 +607,7 @@ export function SkirmishBoard() {
   // Hold the board hidden until its whole art set has decoded, then fade it in as one
   // unit — no per-tile popcorn (see render/boardArtReady). The signature is the tile set
   // (stable across moves), so this arms once per board/seed, not on every move.
-  const boardArt = useMemo(() => collectBoardArt(board, livePieces, fenceOverlays), [board, livePieces, fenceOverlays]);
+  const boardArt = useMemo(() => collectBoardArt(board, livePieces, fenceOverlays, wallOverlays, wallArtUrls), [board, livePieces, fenceOverlays, wallOverlays, wallArtUrls]);
   const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
   // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
   // the tile signature so a new skirmish/replay re-arms it, but moves (signature stable) don't.
@@ -646,14 +665,17 @@ export function SkirmishBoard() {
     () => armyLayer(showPlayerMoves, (p) => legalMoves(p, game.pieces, game.size, env), 'player'),
     [env, game.pieces, game.size, showPlayerMoves],
   );
+  const promotionZoneSet = useMemo(
+    () => new Set((showPromotionZones ? game.promotionZones ?? [] : []).map((cell) => `${cell.x},${cell.y}`)),
+    [game.promotionZones, showPromotionZones],
+  );
 
-  // Premoves: while the opponent is thinking (game.turn === 'enemy'), the board stays
-  // live — the player can queue a chain that fires one-per-turn as control returns. The
-  // chain is built on the PROVISIONAL board (current board + the moves already queued),
-  // so a later step sees the piece where its earlier steps left it. See game/premoves.
-  // Single-player only: a netplay opponent has no local AI reply to drain the queue on,
-  // and the local seat may even BE 'enemy', so `!net` keeps this off the netplay path.
-  const premoveMode = !net && game.turn === 'enemy' && !game.winner;
+  // Premoves: while the opponent is thinking or visibly landing a reply, the board accepts
+  // a queued chain that fires one-per-turn as live control returns. The chain is built on the
+  // PROVISIONAL board (current board + the moves already queued), so a later step sees the
+  // piece where its earlier steps left it. See game/premoves. Single-player only: a netplay
+  // opponent has no local AI reply to drain the queue on, and the local seat may even BE
+  // 'enemy', so the store keeps this off the netplay path.
   const provGame = useMemo(() => provisionalBoard(game, premoves), [game, premoves]);
   const premoveChain = useMemo(() => premoveArrows(game, premoves), [game, premoves]);
   const premoveTargetSet = useMemo(
@@ -666,19 +688,28 @@ export function SkirmishBoard() {
     const p = provGame.pieces.find((q) => q.id === premoveSelectedId && q.alive && q.side === 'player');
     return p ? `${p.x},${p.y}` : null;
   }, [premoveMode, premoveSelectedId, provGame.pieces]);
+  const showStoreSelection = !premoveMode || !premoveSelectedId;
   // Pieces with a queued premove get TWO ghosts: the real piece dimmed in place (before) and a
-  // translucent copy on its planned square (after). `premovedOrigins` is the before squares —
-  // clicking one cancels the chain; `afterGhosts` are the provisional-board pieces to draw.
+  // translucent copy on its planned square (after). The before/origin square is also a precise
+  // handle for continuing that unit's premove when several after-ghosts share one tile.
   const premovedIds = useMemo(() => new Set(premoves.map((s) => s.pieceId)), [premoves]);
-  const premovedOrigins = useMemo(() => {
-    const out = new Set<string>();
-    for (const p of game.pieces) if (p.alive && premovedIds.has(p.id)) out.add(`${p.x},${p.y}`);
-    return out;
-  }, [game.pieces, premovedIds]);
+  const premovedOriginPieceAt = (x: number, y: number): Piece | null =>
+    game.pieces.find((p) => p.alive && p.side === 'player' && premovedIds.has(p.id) && p.x === x && p.y === y) ?? null;
   // Ghost units grouped by the square they land on — a ghost on every square each premoved unit
   // passes through, and when several units plan the same square they SHARE it (the tile splits
   // between them, up to 4) rather than one hiding the others.
   const afterGhosts = useMemo(() => premoveGhosts(game, premoves), [game, premoves]);
+  const sharedPremoveGhostKeys = useMemo(
+    () => new Set(afterGhosts.filter((group) => group.pieces.length > 1).map((group) => group.key)),
+    [afterGhosts],
+  );
+  const provisionalPlayerPieceAt = (x: number, y: number): Piece | null => {
+    const key = `${x},${y}`;
+    if (sharedPremoveGhostKeys.has(key)) return null;
+    return provGame.pieces.find((piece) => piece.alive && piece.side === 'player' && piece.x === x && piece.y === y) ?? null;
+  };
+  const premoveDraggablePieceAt = (x: number, y: number): Piece | null =>
+    premovedOriginPieceAt(x, y) ?? provisionalPlayerPieceAt(x, y);
 
   // The chain-building selection is only meaningful during the opponent's turn; when it
   // ends (a premove fires, or the player regains a live turn) drop it so the next enemy
@@ -703,16 +734,28 @@ export function SkirmishBoard() {
 
   const handleTile = (x: number, y: number) => {
     // Opponent's turn: clicks build the premove chain instead of being ignored.
+    if (pendingPromotion) return;
     if (premoveMode) {
       const key = `${x},${y}`;
+      // A premoved unit's real/origin square is always a precise selection handle.
+      // Treat it before legal-target clicks so tapping the dimmed original never
+      // accidentally adds a return-to-origin step.
+      const originalHere = premovedOriginPieceAt(x, y);
+      if (originalHere) {
+        setPremoveSelectedId(originalHere.id);
+        select(originalHere.id);
+        return;
+      }
       // A legal target for the selected piece → queue the step.
       if (premoveSelectedId && premoveTargetSet.has(key)) { queueMove(premoveSelectedId, x, y); return; }
-      // A premoved piece's BEFORE ghost (its real square) → cancel the queued chain.
-      if (premovedOrigins.has(key)) { clearPremoves(); setPremoveSelectedId(null); return; }
-      // A player piece on the provisional board — a fresh piece, or a premoved piece's AFTER
-      // ghost on its planned square → select it to (continue) premoving.
-      const here = provGame.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
-      if (here && here.side === 'player') setPremoveSelectedId(here.id);
+      // A single unshared provisional ghost selects that unit to continue premoving.
+      // Shared ghost stacks are intentionally not picked from the stack; use the
+      // original piece square to choose the exact unit.
+      const here = provisionalPlayerPieceAt(x, y);
+      if (here) {
+        setPremoveSelectedId(here.id);
+        select(here.id);
+      }
       return;
     }
     const here = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
@@ -752,19 +795,26 @@ export function SkirmishBoard() {
     if (dragRef.current) return;
     // Don't let a press start a drag before the board is even visible (cold load = opacity:0
     // but still hit-testable) — you'd be dragging a piece you can't see.
-    if (game.winner || !boardReady) return;
-    // On your turn a drag MOVES; on the opponent's turn (premoveMode: single-player only) it
-    // queues a PREMOVE instead. Either way only your own pieces initiate — empty/opponent
-    // cells fall through to onClick. localSide is 'player' whenever premoveMode is on (!net).
-    const canMove = game.turn === localSide;
+    if (pendingPromotion || game.winner || !boardReady) return;
+    // On your turn a drag MOVES from the live board; on the opponent's turn (premoveMode:
+    // single-player only) it queues a PREMOVE from the provisional board. That makes a queued
+    // after-ghost draggable from the square the player already moved it to.
+    const canMove = game.turn === localSide && !premoveMode;
     if (!canMove && !premoveMode) return;
-    const piece = livePieces.find((p) => p.x === cx && p.y === cy && p.side === localSide);
+    const piece = premoveMode
+      ? premoveDraggablePieceAt(cx, cy)
+      : livePieces.find((p) => p.x === cx && p.y === cy && p.side === localSide);
     if (!piece) return;
     // Pick it up: select (so the ring shows) and arm a potential drag. It only becomes a real
     // drag once the pointer crosses the threshold, so a plain tap still falls through to the
     // click handler unchanged. Targets are this move's legal squares, or — for a premove —
     // the provisional-board squares the piece could be queued to.
-    if (canMove) select(piece.id); else setPremoveSelectedId(piece.id);
+    if (canMove) {
+      select(piece.id);
+    } else {
+      setPremoveSelectedId(piece.id);
+      select(piece.id);
+    }
     dragRef.current = {
       pointerId: event.pointerId,
       pieceId: piece.id,
@@ -777,7 +827,7 @@ export function SkirmishBoard() {
       ),
       src: pieceImageSrc(piece),
       side: piece.side,
-      premove: !canMove,
+      premove: premoveMode,
     };
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -876,6 +926,9 @@ export function SkirmishBoard() {
         <BoardLabBoard
           board={board}
           assetFrameSrc={tileFrameSrc}
+          wallOverlays={wallOverlays}
+          wallArt={exactBoard?.wallArt}
+          wallBounds={{ cols: game.size.cols, rows: game.size.rows }}
           fenceOverlays={fenceOverlays}
           boardZoom={boardZoom}
           boardPan={boardPan}
@@ -886,6 +939,7 @@ export function SkirmishBoard() {
             const key = `${cell.x},${cell.y}`;
             const state = [
               playerMoveSet.has(key) ? 'is-player-move' : '',
+              promotionZoneSet.has(key) ? 'is-promotion-zone' : '',
               enemyMoveSet.has(key) ? 'is-enemy-move' : '',
               playerAttackSet.has(key) ? 'is-player-attack' : '',
               moveSet.has(key) || dragTargetSet.has(key) ? 'is-move' : '',
@@ -894,9 +948,9 @@ export function SkirmishBoard() {
               premoveTargetSet.has(key) ? 'is-premove-target' : '',
               premoveDestSet.has(key) ? 'is-premove' : '',
               dropHoverKey === key ? 'is-drop-hover' : '',
-              game.pieces.some((piece) => piece.id === selectedId && piece.alive && piece.x === cell.x && piece.y === cell.y) ? 'is-selected' : '',
+              showStoreSelection && game.pieces.some((piece) => piece.id === selectedId && piece.alive && piece.x === cell.x && piece.y === cell.y) ? 'is-selected' : '',
               premoveSelKey === key ? 'is-selected' : '',
-              focusPiece && focusPiece.x === cell.x && focusPiece.y === cell.y ? 'is-focused-piece' : '',
+              showStoreSelection && focusPiece && focusPiece.x === cell.x && focusPiece.y === cell.y ? 'is-focused-piece' : '',
             ].filter(Boolean).join(' ');
             return (
               <button

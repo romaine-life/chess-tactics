@@ -7,6 +7,8 @@ import type { PlacedProp } from './props';
 export type Side = 'player' | 'enemy' | 'neutral';
 
 export type PieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king' | 'rock' | 'random-rock';
+export type PromotionPieceType = 'queen' | 'rook' | 'bishop' | 'knight';
+export const PROMOTION_PIECE_TYPES = ['queen', 'rook', 'bishop', 'knight'] as const satisfies readonly PromotionPieceType[];
 
 export type UnitFacing = 'north' | 'north-east' | 'east' | 'south-east' | 'south' | 'south-west' | 'west' | 'north-west';
 
@@ -70,6 +72,14 @@ export interface Piece {
   threatsMade?: number;
 }
 
+export interface PawnPromotionRule {
+  /** Absent means either combat side may trigger the promotion. */
+  side?: 'player' | 'enemy';
+  cells: Vec[];
+  choices?: PromotionPieceType[];
+  defaultPromotion?: PromotionPieceType;
+}
+
 export interface LastMove {
   pieceId: string;
   pieceType: PieceType;
@@ -119,10 +129,11 @@ export interface GameState {
    */
   terrain?: TerrainCell[];
   /**
-   * Edge fences: walls on the boundary between two orthogonally-adjacent cells, as canonical
-   * edge keys (roadEdgeKey "x,y|x,y"). A move that crosses a fenced edge is blocked (knights,
-   * whose steps are never orthogonally adjacent, hop over — like water). Optional + serializable,
-   * mirroring `terrain?`: a fence-free state omits it, and movement is unaffected when absent.
+   * Edge fences: walls on orthogonal cell edges, as canonical edge keys (roadEdgeKey "x,y|x,y").
+   * A move that crosses an interior fenced edge is blocked (knights, whose steps are never
+   * orthogonally adjacent, hop over — like water). Boundary rails may use one off-board endpoint
+   * and are visual because pieces cannot move off the board. Optional + serializable, mirroring
+   * `terrain?`: a fence-free state omits it, and movement is unaffected when absent.
    */
   fences?: string[];
   /**
@@ -138,6 +149,14 @@ export interface GameState {
    * list is the RENDER channel the board reads to draw the tall prop sprite (see SkirmishBoard).
    */
   props?: PlacedProp[];
+  /**
+   * Authored pawn-promotion cells. A pawn promotes only after landing on one of these
+   * cells; a level/free skirmish with none disables promotion entirely.
+   * @deprecated Use promotionRules; kept so old saved matches continue to resume.
+   */
+  promotionZones?: Vec[];
+  /** Authored promotion events resolved to live board cells. */
+  promotionRules?: PawnPromotionRule[];
   turn: Turn;
   winner: Winner;
   /** Last displaced move, used for immediate pawn en passant eligibility. */

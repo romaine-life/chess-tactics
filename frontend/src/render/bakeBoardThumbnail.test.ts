@@ -7,7 +7,8 @@ import {
   largestSolidRect,
 } from './bakeBoardThumbnail';
 import { roadEdgeKey } from '../core/featureAutotile';
-import { fenceOverlayZIndex } from './fenceOverlayDepth';
+import { TILE_TEMPLATE } from '../art/tileTemplate';
+import { fenceOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
 import type { EditorBoard } from '../ui/boardCode';
 
 // Coverage (opaque fraction) of a rect under an opacity predicate — the property object-fit:cover
@@ -72,9 +73,36 @@ describe('boardContentHash — stability + sensitivity', () => {
     expect(boardContentHash(before)).not.toBe(boardContentHash(after));
   });
 
+  it('changes when a ground-cover type override changes', () => {
+    const before: EditorBoard = { ...blank(), cells: { '0,0': 'stone-surf-0' }, cover: { '0,0': 'filled' } };
+    const after: EditorBoard = {
+      ...blank(),
+      cells: { '0,0': 'stone-surf-0' },
+      cover: { '0,0': 'filled' },
+      coverTypes: { '0,0': 'grass' },
+    };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(after));
+  });
+
   it('changes when an edge fence is added', () => {
     const before = blank();
     const after: EditorBoard = { ...blank(), fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' } };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(after));
+  });
+
+  it('changes when an edge wall is added', () => {
+    const before = blank();
+    const after: EditorBoard = { ...blank(), walls: { [roadEdgeKey(1, 0, 1, -1)]: 'stone' } };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(after));
+  });
+
+  it('changes when a forced feature exit is added', () => {
+    const before: EditorBoard = { ...blank(), features: { '1,1': { kind: 'road', material: 'cobble' } } };
+    const after: EditorBoard = {
+      ...blank(),
+      features: { '1,1': { kind: 'road', material: 'cobble' } },
+      featureExits: { [roadEdgeKey(1, 1, 2, 1)]: true },
+    };
     expect(boardContentHash(before)).not.toBe(boardContentHash(after));
   });
 
@@ -147,11 +175,32 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const unit = ops.find((op) => op.contain);
     expect(back!.z).toBeLessThan(unit!.z);
     expect(front!.z).toBeGreaterThan(unit!.z);
-    // The frame is the prop's own (177×184 for the cottage) scaled by its render scale (0.62) —
-    // the SAME size the live <StructureSprite> draws. (Base props and size variants both carry a
-    // scale; without applying it here, props with scale≠1 rendered oversized in the thumbnail.)
+    // Cottage is flat-contact art: the source PNG is clipped at anchorY=110 before the halves are
+    // z-sorted, so the roof/body do not get painted a second time above a nearby unit.
     expect(back!.dw).toBeCloseTo(177 * 0.62, 2);
-    expect(back!.dh).toBeCloseTo(184 * 0.62, 2);
+    expect(back!.sy).toBe(0);
+    expect(back!.sh).toBe(110);
+    expect(back!.dh).toBeCloseTo(110 * 0.62, 2);
+    expect(front!.sy).toBe(110);
+    expect(front!.sh).toBe(184 - 110);
+    expect(front!.dy).toBeCloseTo(back!.dy + 110 * 0.62, 2);
+    expect(front!.dh).toBeCloseTo((184 - 110) * 0.62, 2);
+  });
+
+  it('keeps authored split props full-frame because their alpha already defines each half', () => {
+    const board: EditorBoard = {
+      ...blank(8, 6),
+      props: { '3,2': { propId: 'oak' } },
+    };
+    const ops = boardDrawOps(board);
+    const back = ops.find((op) => op.src === '/assets/props/oak/back.png');
+    const front = ops.find((op) => op.src === '/assets/props/oak/front.png');
+    expect(back).toBeDefined();
+    expect(front).toBeDefined();
+    expect(back!.sx).toBeUndefined();
+    expect(front!.sx).toBeUndefined();
+    expect(back!.dw).toBe(192);
+    expect(back!.dh).toBe(300);
   });
 
   it('places a feature overlay just above its own tile (same cell band)', () => {
@@ -169,24 +218,49 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(featureOp!.z).toBeLessThan(tileOp!.z + 1); // within the same cell band
   });
 
-  it('draws edge fences in the foreground band above same-cell units and structures', () => {
+  it('draws edge fences above the owner unit and below the near unit/front-half draw order', () => {
     const board: EditorBoard = {
       ...blank(3, 3),
       cells: { '1,1': TILE },
       fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' },
-      units: { '1,1': UNIT },
+      units: { '1,1': UNIT, '2,1': UNIT },
       doodads: { '1,1': { doodadId: 'boulder' } },
     };
     const ops = boardDrawOps(board);
     const fence = ops.find((op) => op.src === '/assets/tiles/feature/fence-wood-2.png');
-    const unit = ops.find((op) => op.contain);
+    const ownerUnit = ops.find((op) => op.contain && op.z === 1 + 1 + 20000);
+    const nearUnit = ops.find((op) => op.contain && op.z === 2 + 1 + 20000);
     const doodadFront = ops.find((op) => op.src === '/assets/doodads/boulder/front.png');
     expect(fence).toBeDefined();
-    expect(unit).toBeDefined();
+    expect(ownerUnit).toBeDefined();
+    expect(nearUnit).toBeDefined();
     expect(doodadFront).toBeDefined();
     expect(fence!.z).toBe(fenceOverlayZIndex({ x: 1, y: 1 }));
-    expect(fence!.z).toBeGreaterThan(unit!.z);
-    expect(fence!.z).toBeGreaterThan(doodadFront!.z);
+    expect(fence!.z).toBeGreaterThan(ownerUnit!.z);
+    expect(fence!.z).toBe(nearUnit!.z);
+    expect(fence!.z).toBe(doodadFront!.z);
+    expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(nearUnit!));
+    expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(doodadFront!));
+  });
+
+  it('draws north/west perimeter walls with the wall frame anchor', () => {
+    const board: EditorBoard = {
+      ...blank(3, 3),
+      cells: { '1,0': TILE },
+      walls: { [roadEdgeKey(1, 0, 1, -1)]: 'stone' },
+      units: { '1,0': UNIT },
+    };
+    const ops = boardDrawOps(board);
+    const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-1.png');
+    const ownerUnit = ops.find((op) => op.contain && op.z === 1 + 0 + 20000);
+    expect(wall).toBeDefined();
+    expect(ownerUnit).toBeDefined();
+    expect(wall).toMatchObject({ dw: 128, dh: 240 });
+    expect(wall!.dx).toBeCloseTo((1 - 0) * TILE_TEMPLATE.stepX - 64);
+    expect(wall!.dy).toBeCloseTo((1 + 0) * TILE_TEMPLATE.stepY - 96);
+    expect(wall!.z).toBe(wallOverlayZIndex({ x: 1, y: 0 }));
+    expect(wall!.z).toBe(ownerUnit!.z);
+    expect(ops.indexOf(wall!)).toBeLessThan(ops.indexOf(ownerUnit!));
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createBlankLevel, validateLevel, LEVEL_FORMAT_VERSION } from './level';
+import { roadEdgeKey } from './featureAutotile';
 
 describe('level schema', () => {
   it('creates a full-size, valid blank level', () => {
@@ -56,6 +57,55 @@ describe('level schema', () => {
     expect(validateLevel(lvl).ok).toBe(true);
   });
 
+  it('accepts well-formed setup spawn and pawn-promotion events', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.layers.zones = [
+      { id: 'deployment', name: 'Deployment', color: 'blue', type: 'region', tiles: [[0, 7], [1, 7]] },
+      { id: 'promotion', name: 'Promotion lane', color: 'amber', type: 'region', tiles: [[4, 0]] },
+    ];
+    lvl.events = [
+      { name: 'Deploy', trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'player', roster: { pawn: 2 }, zoneIds: ['deployment'] }] },
+      {
+        name: 'Promote',
+        trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId: 'promotion' },
+        do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }],
+      },
+    ];
+    expect(validateLevel(lvl).ok).toBe(true);
+  });
+
+  it('accepts legacy setup spawn and pawn-promotion event bodies for migration', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    const legacyEvents = [
+      { kind: 'spawn', name: 'Deploy', trigger: { kind: 'setup' }, side: 'player', roster: { pawn: 2 }, zoneIds: ['deployment'] },
+      {
+        kind: 'pawn-promotion',
+        name: 'Promote',
+        trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side: 'player' }, zoneId: 'promotion' },
+        choices: ['queen', 'rook'],
+        defaultPromotion: 'rook',
+      },
+    ];
+    expect(validateLevel({ ...lvl, events: legacyEvents } as unknown).ok).toBe(true);
+  });
+
+  it('rejects malformed non-victory events', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    const bad: unknown[] = [
+      'nope',
+      [{ kind: 'teleport', trigger: { kind: 'setup' } }],
+      [{ trigger: { kind: 'setup' }, do: [] }],
+      [{ trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: 'z' }, do: [{ kind: 'spawn', side: 'player', roster: { pawn: 1 }, zoneIds: ['z'] }] }],
+      [{ trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'enemy', roster: { rock: 1 }, zoneIds: ['z'] }] }],
+      [{ trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 1 }, zoneIds: [] }] }],
+      [{ trigger: { kind: 'unit-enters-zone', unit: { type: 'queen' }, zoneId: 'z' }, do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }] }],
+      [{ trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: 'z' }, do: [{ kind: 'promote', target: { kind: 'selected-unit' } }] }],
+    ];
+    for (const events of bad) {
+      expect(validateLevel({ ...lvl, events } as unknown).ok).toBe(false);
+    }
+  });
+
   it('rejects malformed victory rules (bad action/kind/side/turns/filter, non-array) — ADR-0064', () => {
     const bad: unknown[] = [
       { not: 'an array' },
@@ -88,6 +138,18 @@ describe('level schema', () => {
   it('rejects an out-of-bounds prop anchor (symmetric with the unit bounds check)', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
     lvl.layers.props = [{ x: 99, y: 0, propId: 'oak' }];
+    expect(validateLevel(lvl).ok).toBe(false);
+  });
+
+  it('accepts boundary fence rails that touch the board', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.layers.fences = [roadEdgeKey(0, 0, 0, -1), roadEdgeKey(7, 7, 8, 7)];
+    expect(validateLevel(lvl).ok).toBe(true);
+  });
+
+  it('rejects fence edges that do not touch the board', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.layers.fences = [roadEdgeKey(-2, 0, -1, 0)];
     expect(validateLevel(lvl).ok).toBe(false);
   });
 
@@ -145,7 +207,10 @@ describe('level schema', () => {
 
   it('zones: well-formed entries pass; bad id/type/tiles shapes fail', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
-    lvl.layers.zones = [{ id: 'z1', type: 'player-spawn', tiles: [[0, 7], [1, 7]] }];
+    lvl.layers.zones = [
+      { id: 'z1', name: 'Deployment', color: 'blue', type: 'region', tiles: [[0, 7], [1, 7]] },
+      { id: 'promo', type: 'pawn-promotion', tiles: [[4, 0]] },
+    ];
     expect(validateLevel(lvl).ok).toBe(true);
 
     const withZones = (zones: unknown) => {
@@ -154,6 +219,8 @@ describe('level schema', () => {
       return validateLevel(l).ok;
     };
     expect(withZones([{ id: 5, type: 'player-spawn', tiles: [] }])).toBe(false); // non-string id
+    expect(withZones([{ id: 'z', name: 5, type: 'region', tiles: [] }])).toBe(false); // non-string name
+    expect(withZones([{ id: 'z', color: 'plaid', type: 'region', tiles: [] }])).toBe(false); // unknown color
     expect(withZones([{ id: 'z', type: 'lava-pit', tiles: [] }])).toBe(false); // unknown type
     expect(withZones([{ id: 'z', type: 'objective' }])).toBe(false); // missing tiles
     expect(withZones([{ id: 'z', type: 'objective', tiles: [[1]] }])).toBe(false); // not a pair

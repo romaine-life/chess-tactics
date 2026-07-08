@@ -34,7 +34,7 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
   // switcher (Catalog/Lab/Viewer icons) in the actions slot, account cluster right. The
   // Studio portals its icon nav there via <TitleBarSlot region="actions">; studio-topbar
   // adds the 3rd grid column (brand · actions · cluster) that slot needs.
-  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') {
+  if (path === '/studio' || path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') {
     return { screenName: 'Studio', barClass: 'studio-topbar', actionsSlot: true };
   }
   // Dev / inspector tools — the shared bar with just brand + account cluster.
@@ -53,7 +53,7 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
     return { screenName: 'Party', signInReturnTo: '/party' };
   }
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
-    return { screenName: 'Level Editor', barClass: 'le-topbar', centerSlot: true, actionsSlot: true };
+    return { screenName: 'Level Editor', barClass: 'le-topbar', actionsSlot: true };
   }
   if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') {
     // The Editor is a settings-twin now: a ‹ Back control in the trailing actions slot

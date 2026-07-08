@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { fetchMe, goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
 import { normalizeRoutePath } from '../navigation';
+import { TitleBarButton, TitleBarIconButton } from '../shell/TitleBarControls';
 import { AccountMenu } from './AccountMenu';
-import { NavButton } from './NavButton';
 
 // The shared trailing-edge "settings + user" cluster for the standard app title
 // bar (ADR-0023/0036): an icon-only Settings gear next to the account control —
@@ -105,9 +105,7 @@ export function HeaderAccountCluster({
         // editor rewrite their query via replaceState WITHOUT re-rendering this persistent
         // bar, which is why the anchor this replaced needed a pointerdown/keydown
         // just-in-time href rewrite hack (ADR-0052 retires it).
-        <NavButton className="cluster-icon-button" to={() => settingsHref()} aria-label="Settings" title="Settings">
-          <img src={SETTINGS_ICON} alt="" />
-        </NavButton>
+        <TitleBarIconButton className="cluster-icon-button" to={() => settingsHref()} label="Settings" title="Settings" iconSrc={SETTINGS_ICON} />
       ) : null}
       {signedIn ? (
         <AccountMenu
@@ -122,7 +120,7 @@ export function HeaderAccountCluster({
       ) : (
         // A button, not an anchor (ADR-0052): the sign-in is still a full-page trip to
         // the auth backend — goSignIn sets window.location — it just shows no URL.
-        <button type="button" className="app-header-button app-header-button-active" onClick={() => goSignIn(signInReturnTo)}>Sign In</button>
+        <TitleBarButton active onClick={() => goSignIn(signInReturnTo)}>Sign In</TitleBarButton>
       )}
     </div>
   );

@@ -7,7 +7,7 @@ import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 // The Level Editor's "Victory events" editor (ADR-0064) — a MASTER-DETAIL surface inside the
 // events overlay: a scrollable list of NAMED rules on the left, the selected rule's `IF <conditions>
 // THEN <faction> wins|loses` on the right. Templates (passed in via `templates`) sit atop the list
-// and fill it. Chrome is the editor's kit idiom only — le-seg-btn buttons, the shared Toggle /
+// and append rules to it. Chrome is the editor's kit idiom only — le-seg-btn buttons, the shared Toggle /
 // Stepper, the styled le-layer-select dropdown.
 
 /** The board's factions offered in the "IF <faction>" / "THEN <faction>" dropdowns — one per side,
@@ -16,7 +16,7 @@ export interface FactionOption { side: ConditionSide; label: string; }
 
 const DEFAULT_ACTION: VictoryAction = { kind: 'win', side: 'player' };
 
-// ---- pure helpers (exported for the template-merge / dirty-diff in LevelEditor) ---------------
+// ---- pure helpers (exported for template append / dirty-diff in LevelEditor) ------------------
 
 /** De-dupe identity for a condition. `turnLimit` collides on kind ALONE (one deadline per rule);
  * eliminate/reach distinguish by side/filter. */
@@ -31,22 +31,40 @@ function conditionFullKey(c: VictoryCondition): string {
   return c.kind === 'turnLimit' ? `turnLimit:${c.turns}` : conditionKey(c);
 }
 const actionKey = (a: VictoryAction): string => `${a.kind}:${a.side}`;
-/** Content identity (actions + conditions, NAME-independent) — for de-duping template rules. */
+/** Content identity (actions + conditions, NAME-independent) — for preset equality checks. */
 const ruleContentKey = (r: VictoryRule, condKey: (c: VictoryCondition) => string): string =>
   `[${r.do.map(actionKey).slice().sort().join('&')}]|${r.if.map(condKey).slice().sort().join('&')}`;
 /** Full identity incl. name — for the diverges-from-preset check (so a rename counts as a change). */
 const ruleFullKey = (r: VictoryRule): string => `${r.name ?? ''}::${ruleContentKey(r, conditionFullKey)}`;
-
-/** Merge template rules into the current list — each rule added only if the same CONTENT isn't
- * already present (name aside), so loading two templates composes without duplicates. */
-export function mergeRules(base: VictoryRules, add: VictoryRules): VictoryRules {
-  const seen = new Set(base.map((r) => ruleContentKey(r, conditionKey)));
-  const out = base.slice();
-  for (const r of add) {
-    const k = ruleContentKey(r, conditionKey);
-    if (!seen.has(k)) { seen.add(k); out.push(r); }
+const displayName = (r: VictoryRule, i: number): string => (r.name && r.name.trim()) || `Event ${i + 1}`;
+const idSlug = (value: string): string => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+function uniqueName(base: string, taken: Set<string>): string {
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n += 1) { const candidate = `${base} ${n}`; if (!taken.has(candidate)) return candidate; }
+}
+function uniqueId(base: string, taken: Set<string>): string {
+  const clean = idSlug(base) || 'victory-event';
+  if (!taken.has(clean)) return clean;
+  for (let n = 2; ; n += 1) {
+    const candidate = `${clean}-${n}`;
+    if (!taken.has(candidate)) return candidate;
   }
-  return out;
+}
+
+/** Append template rules into the current list. Templates are intentionally additive: even an
+ * identical rule becomes a fresh editable event row with its own id and label. */
+export function appendRules(base: VictoryRules, add: VictoryRules): VictoryRules {
+  const takenNames = new Set(base.map((r, i) => displayName(r, i)));
+  const takenIds = new Set(base.map((r) => r.id?.trim()).filter((id): id is string => Boolean(id)));
+  const appended = add.map((rule, index) => {
+    const baseName = rule.name?.trim() || `Template event ${index + 1}`;
+    const name = uniqueName(baseName, takenNames);
+    takenNames.add(name);
+    const id = uniqueId(rule.id?.trim() || baseName, takenIds);
+    takenIds.add(id);
+    return { ...rule, id, name };
+  });
+  return [...base, ...appended];
 }
 
 /** True when two rule lists hold the same rules incl. names (order-insensitive) — keeps a level
@@ -69,15 +87,10 @@ function conditionSummary(c: VictoryCondition, factionLabel: (s: ConditionSide) 
       return `turn ${c.turns} is reached`;
   }
 }
-const displayName = (r: VictoryRule, i: number): string => (r.name && r.name.trim()) || `Event ${i + 1}`;
 const outcomeLabel = (r: VictoryRule, factionLabel: (s: ConditionSide) => string): string => {
   const a = r.do[0] ?? DEFAULT_ACTION;
   return `${factionLabel(a.side)} ${a.kind === 'win' ? 'wins' : 'loses'}`;
 };
-function uniqueName(base: string, taken: Set<string>): string {
-  if (!taken.has(base)) return base;
-  for (let n = 2; ; n += 1) { const candidate = `${base} ${n}`; if (!taken.has(candidate)) return candidate; }
-}
 
 // ---- component --------------------------------------------------------------------------------
 
@@ -85,7 +98,7 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
   value: VictoryRules;
   factions: FactionOption[];
   onChange: (next: VictoryRules) => void;
-  /** The templates control (dropdown + Set button), rendered atop the rule list. */
+  /** The templates control (dropdown + Add/Clear buttons), rendered atop the rule list. */
   templates?: ReactNode;
 }): ReactElement {
   const [sel, setSel] = useState(0);
@@ -99,8 +112,9 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
     // One "add event": a blank event with a starting condition + action, both edited in the detail.
     // Win vs lose is a property of the action (the THEN control), not a separate kind of rule.
     const taken = new Set(value.map((r, i) => displayName(r, i)));
+    const takenIds = new Set(value.map((r) => r.id?.trim()).filter((id): id is string => Boolean(id)));
     const name = uniqueName('New event', taken);
-    const fresh: VictoryRule = { name, if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] };
+    const fresh: VictoryRule = { id: uniqueId(name, takenIds), name, if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] };
     setSel(value.length); // focus the new event
     onChange([...value, fresh]);
   };
@@ -120,7 +134,7 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
       <div className="le-md-list">
         {templates}
         <h3 className="le-victory-head">Events</h3>
-        {value.length === 0 ? <p className="le-board-warning">No events yet — set a template above, or add one below.</p> : null}
+        {value.length === 0 ? <p className="le-board-warning">No events yet — add a template above, or add one below.</p> : null}
         <div className="le-md-rules">
           {value.map((r, i) => (
             <button type="button" key={i} className={`le-md-item ${i === selected ? 'active' : ''}`.trim()} onClick={() => setSel(i)}>
@@ -199,7 +213,7 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
               <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeRule(selected)}>Remove event</button>
             </div>
           </div>
-        ) : <p className="le-board-note">No event selected — set a template or add an event on the left.</p>}
+        ) : <p className="le-board-note">No event selected — add a template or add an event on the left.</p>}
       </div>
     </div>
   );

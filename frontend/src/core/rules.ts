@@ -3,7 +3,8 @@
 // obstacles, side-based pawns, threat = enemy attacked squares, capture/promote/
 // last-side-standing) — but deterministic and immutable.
 
-import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, Side, UnitFacing, Vec, Winner } from './types';
+import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, PawnPromotionRule, Piece, PieceType, PromotionPieceType, Side, UnitFacing, Vec, Winner } from './types';
+import { PROMOTION_PIECE_TYPES } from './types';
 import type { Rng } from './rng';
 import { buildTerrainIndex, canTraverse, elevationAt, haltsTravel, type TerrainIndex } from './terrain';
 import { facingFromDelta } from './pieces';
@@ -130,14 +131,6 @@ function isPawnDoubleStep(last: LastMove): boolean {
   const dx = Math.abs(last.from.x - last.to.x);
   const dy = Math.abs(last.from.y - last.to.y);
   return (dx === 0 && dy === 2) || (dx === 2 && dy === 0) || (dx === 2 && dy === 2);
-}
-
-function reachedPawnFarEdge(piece: Piece, size: BoardSize): boolean {
-  const [dx, dy] = pawnForwardVector(piece);
-  return (dx < 0 && piece.x === 0) ||
-    (dx > 0 && piece.x === size.cols - 1) ||
-    (dy < 0 && piece.y === 0) ||
-    (dy > 0 && piece.y === size.rows - 1);
 }
 
 function rayMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, dirs: ReadonlyArray<readonly [number, number]>, env: MoveEnv | undefined, originElev: number): Move[] {
@@ -380,12 +373,37 @@ export interface ApplyResult {
   events: GameEvent[];
 }
 
+export interface ApplyOptions {
+  promotion?: PromotionPieceType;
+}
+
+export function promotionRuleForMove(state: GameState, piece: Piece, to: Vec): PawnPromotionRule | null {
+  if (piece.type !== 'pawn') return null;
+  const rules = state.promotionRules;
+  if (rules?.length) {
+    return rules.find((rule) =>
+      (rule.side === undefined || rule.side === piece.side) &&
+      rule.cells.some((cell) => cell.x === to.x && cell.y === to.y)
+    ) ?? null;
+  }
+  if (state.promotionZones?.some((cell) => cell.x === to.x && cell.y === to.y)) {
+    return { cells: state.promotionZones };
+  }
+  return null;
+}
+
+function promotionChoice(rule: PawnPromotionRule, requested: PromotionPieceType | undefined): PromotionPieceType {
+  const choices = rule.choices?.length ? rule.choices : PROMOTION_PIECE_TYPES;
+  const fallback = rule.defaultPromotion && choices.includes(rule.defaultPromotion) ? rule.defaultPromotion : choices[0] ?? 'queen';
+  return requested && choices.includes(requested) ? requested : fallback;
+}
+
 /**
  * Apply a move to the state, returning a NEW state plus the events it produced.
  * Handles capture, pawn promotion, victory (last side standing), and turn
  * hand-off. Pure: the input state is never mutated.
  */
-export function applyMove(state: GameState, pieceId: string, move: Move): ApplyResult {
+export function applyMove(state: GameState, pieceId: string, move: Move, options: ApplyOptions = {}): ApplyResult {
   const events: GameEvent[] = [];
   const pieces = state.pieces.map((p) => ({ ...p }));
   const piece = pieces.find((p) => p.id === pieceId && p.alive);
@@ -424,11 +442,11 @@ export function applyMove(state: GameState, pieceId: string, move: Move): ApplyR
   piece.y = move.y;
   events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
 
-  if (piece.type === 'pawn') {
-    if (reachedPawnFarEdge(piece, state.size)) {
-      piece.type = 'queen';
-      events.push({ kind: 'promoted', pieceId: piece.id, to: 'queen' });
-    }
+  const promoRule = promotionRuleForMove(state, { ...piece, type: movedPieceType }, { x: piece.x, y: piece.y });
+  if (promoRule) {
+    const promotion = promotionChoice(promoRule, options.promotion);
+    piece.type = promotion;
+    events.push({ kind: 'promoted', pieceId: piece.id, to: promotion });
   }
 
   // Tally the service record now that the piece sits at its final square.

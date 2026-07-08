@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
@@ -12,24 +12,27 @@ import { levelObjectiveLine } from './LevelInfoCompact';
 import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
+import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { KitScroll } from './KitScroll';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
+import { editSkirmishProfileHref, ensureDefaultSkirmishProfileLevel, isSkirmishProfileLevel, skirmishProfileLevels } from './skirmishProfiles';
 
 const CE_ICONS = {
-  star: '/assets/ui/kit/icons/star.png',
+  favorite: '/assets/ui/kit/icons/brand-shield.png',
   'chevron-up': '/assets/ui/kit/icons/chevron-up.png',
   'chevron-down': '/assets/ui/kit/icons/chevron-down.png',
   delete: '/assets/ui/kit/icons/delete.png',
   lock: '/assets/ui/kit/icons/lock.png',
+  pencil: '/assets/ui/kit/icons/pencil.png',
 } as const;
 
 // The carved rail-tab icon, shared with the play-side Campaign screen (Campaign.tsx) so a
 // campaign looks identical whether you're picking one to play or one to edit.
 const CAMPAIGN_TAB_ICON = '/assets/ui/main-menu/icons-carved/campaign-editor.png';
 
-type CampaignCollection = 'campaign' | 'unassigned';
+type CampaignCollection = 'campaign' | 'unassigned' | 'skirmish-profiles';
 
 // The Editor is now a settings-twin at /editor (the nested board editor is /editor/level);
 // returns thread back here so Back/Save round-trips land on the Editor, not the old route.
@@ -75,6 +78,7 @@ function IconButton({
   danger = false,
   selected = false,
   className = '',
+  onKeyDown,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { danger?: boolean; selected?: boolean }): ReactElement {
   return (
@@ -82,23 +86,45 @@ function IconButton({
       type="button"
       className={`ce-icon-button ${danger ? 'is-danger' : ''} ${selected ? 'is-selected' : ''} ${className}`.trim()}
       {...props}
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        event.stopPropagation();
+      }}
     >
       <span aria-hidden="true">{children}</span>
     </button>
   );
 }
 
-function Stars({ count = 0 }: { count?: number }): ReactElement {
+function IconNavButton({
+  children,
+  selected = false,
+  className = '',
+  onClick,
+  onKeyDown,
+  ...props
+}: ComponentProps<typeof NavButton> & { selected?: boolean }): ReactElement {
   return (
-    <span className="ce-stars" aria-label={`${count} stars`}>
-      {[0, 1, 2].map((i) => <img key={i} className={`ce-star ${i < count ? 'is-filled' : ''}`.trim()} src={CE_ICONS.star} alt="" aria-hidden="true" />)}
-    </span>
+    <NavButton
+      {...props}
+      className={`ce-icon-button ${selected ? 'is-selected' : ''} ${className}`.trim()}
+      onClick={(event) => {
+        onClick?.(event);
+        event.stopPropagation();
+      }}
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        event.stopPropagation();
+      }}
+    >
+      <span aria-hidden="true">{children}</span>
+    </NavButton>
   );
 }
 
 // A campaign as a settings-style rail tab — the same carved chrome the main menu's mode
 // tabs and the play-side Campaign screen use (ADR-0059), extended to a icon | name | trail
-// grid so the favorite star / padlock sits at the tab's end. Kept as a
+// grid so the favorite control / padlock sits at the tab's end. Kept as a
 // role=button div (not a <button>) because the favorite is a nested interactive control:
 // selection + keyboard activation mirror the original row exactly.
 function CampaignRailTab({
@@ -160,7 +186,7 @@ function CampaignRailTab({
           aria-label={campaign.favorite ? `Unfavorite ${campaign.name}` : `Favorite ${campaign.name}`}
           onClick={onFavorite}
         >
-          <img className="ce-star" src={CE_ICONS.star} alt="" aria-hidden="true" />
+          <CeIcon icon="favorite" />
         </button>
       ) : null}
     </div>
@@ -173,13 +199,17 @@ function UnassignedRailTab({
   active,
   index,
   onSelect,
+  title = 'Unassigned levels',
+  itemName = 'level',
 }: {
   count: number;
   active: boolean;
   index: number;
   onSelect: () => void;
+  title?: string;
+  itemName?: string;
 }): ReactElement {
-  const levelCount = `${count} level${count === 1 ? '' : 's'}`;
+  const levelCount = `${count} ${itemName}${count === 1 ? '' : 's'}`;
   return (
     <div
       role="button"
@@ -199,7 +229,7 @@ function UnassignedRailTab({
         <img src={CAMPAIGN_TAB_ICON} alt="" />
       </span>
       <span className="ce-campaign-tab-copy">
-        <strong>Unassigned levels</strong>
+        <strong>{title}</strong>
         <small>{levelCount}</small>
       </span>
     </div>
@@ -217,6 +247,7 @@ function LevelRow({
   active,
   readOnly = false,
   onSelect,
+  editHref,
   onMoveUp,
   onMoveDown,
   onDelete,
@@ -227,6 +258,7 @@ function LevelRow({
   active: boolean;
   readOnly?: boolean;
   onSelect: () => void;
+  editHref?: string;
   onMoveUp: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onMoveDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
@@ -255,12 +287,16 @@ function LevelRow({
       <div className="settings-row-copy ce-editor-level-copy">
         <div className="ce-editor-level-heading">
           <h4>{index + 1}. {level?.name ?? levelRef.levelId}</h4>
-          <Stars count={levelRef.stars ?? 0} />
         </div>
         <p>{goalLine}</p>
       </div>
       {readOnly ? null : (
         <div className="settings-row-control ce-row-actions" aria-label="Level actions">
+          {editHref ? (
+            <IconNavButton to={editHref} aria-label={`Edit ${level?.name ?? levelRef.levelId}`}>
+              <CeIcon icon="pencil" />
+            </IconNavButton>
+          ) : null}
           <IconButton onClick={onMoveUp} aria-label="Move level up"><CeIcon icon="chevron-up" /></IconButton>
           <IconButton onClick={onMoveDown} aria-label="Move level down"><CeIcon icon="chevron-down" /></IconButton>
           <IconButton danger onClick={onDelete} aria-label="Delete level"><CeIcon icon="delete" /></IconButton>
@@ -340,6 +376,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
         if (active && isUnauthorized(e)) setStatus('Official campaigns shown. Sign in to author your own.');
       }
       if (!active) return;
+      ensureDefaultSkirmishProfileLevel();
       // Dev-only perf harness: `?stress=<n>` injects a throwaway campaign of N generated levels
       // (selecting it) so scroll/thumbnail perf can be measured on a long list. No-op without the
       // flag, so it never touches normal use; the levels live only in the in-memory store.
@@ -458,6 +495,8 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
 
   const isAdmin = Boolean(me?.is_admin);
   const isUnassignedSelected = selectedCollection === 'unassigned';
+  const isSkirmishProfilesSelected = selectedCollection === 'skirmish-profiles';
+  const isMetaCollectionSelected = isUnassignedSelected || isSkirmishProfilesSelected;
   // Unassigned levels: store level docs referenced by NO campaign — typically a board authored
   // cold in the Level Editor (createUnassignedLevel) before it is filed into a campaign. They
   // live in the workspace and round-trip through campaign_workspaces just like any other level.
@@ -467,15 +506,20 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   );
   const unassignedLevels = useMemo(
     () => Object.values(levels)
-      .filter((level) => !referencedLevelIds.has(level.id))
+      .filter((level) => !referencedLevelIds.has(level.id) && !isSkirmishProfileLevel(level))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id.localeCompare(b.id)),
     [levels, referencedLevelIds],
   );
+  const profileLevels = useMemo(() => skirmishProfileLevels(levels), [levels]);
   const unassignedLevelRefs = useMemo<CampaignLevelRef[]>(
     () => unassignedLevels.map((level, index) => ({ levelId: level.id, ordinal: index, objective: level.objective })),
     [unassignedLevels],
   );
-  const camp = isUnassignedSelected ? null : campaigns.find((c) => c.id === selectedCampaignId) ?? null;
+  const profileLevelRefs = useMemo<CampaignLevelRef[]>(
+    () => profileLevels.map((level, index) => ({ levelId: level.id, ordinal: index, objective: level.objective })),
+    [profileLevels],
+  );
+  const camp = isMetaCollectionSelected ? null : campaigns.find((c) => c.id === selectedCampaignId) ?? null;
   const campIsOfficial = camp?.origin === 'official';
   // readOnly is UI-derived, never trusted from a baked tag: an official campaign is
   // read-only ONLY for non-admins. Admins edit officials in place. This drives every
@@ -486,38 +530,47 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   const ownCount = userCampaigns.length;
   const orderedLevels = camp ? camp.levels.slice().sort((a, b) => a.ordinal - b.ordinal) : [];
   const levelDoc = selectedLevelId ? levels[selectedLevelId] : null;
-  const levelRef = !isUnassignedSelected && camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
+  const levelRef = !isMetaCollectionSelected && camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
   const selectedLevelIndex = orderedLevels.findIndex((r) => r.levelId === selectedLevelId);
   const selectedUnassignedLevelIndex = unassignedLevels.findIndex((level) => level.id === selectedLevelId);
-  const selectedVisibleLevelIndex = isUnassignedSelected ? selectedUnassignedLevelIndex : selectedLevelIndex;
+  const selectedProfileLevelIndex = profileLevels.findIndex((level) => level.id === selectedLevelId);
+  const selectedVisibleLevelIndex = isUnassignedSelected
+    ? selectedUnassignedLevelIndex
+    : isSkirmishProfilesSelected
+      ? selectedProfileLevelIndex
+      : selectedLevelIndex;
   const enemyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'enemy').length ?? 0;
   const allyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'player').length ?? 0;
   const selectedLevelTitle = levelDoc
     ? selectedVisibleLevelIndex >= 0
-      ? `Level ${selectedVisibleLevelIndex + 1}: ${levelDoc.name}`
+      ? `${isSkirmishProfilesSelected ? 'Profile' : 'Level'} ${selectedVisibleLevelIndex + 1}: ${levelDoc.name}`
       : levelDoc.name
     : 'Selected Level';
+  const editHrefForCampaignLevel = (campaignId: string, levelId: string): string =>
+    `/editor/level?campaignId=${encodeURIComponent(campaignId)}&levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`;
   const editHrefForUnassigned = (levelId: string): string =>
     `/editor/level?levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`;
   const editHref = levelDoc
-    ? isUnassignedSelected
+    ? isSkirmishProfilesSelected
+      ? editSkirmishProfileHref(levelDoc.id, CAMPAIGN_EDITOR_RETURN_TO)
+      : isUnassignedSelected
       ? editHrefForUnassigned(levelDoc.id)
       : camp
-        ? `/editor/level?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
+        ? editHrefForCampaignLevel(camp.id, levelDoc.id)
         : '/editor/level'
     : '/editor/level';
   const playHref = levelDoc
-    ? isUnassignedSelected
+    ? isMetaCollectionSelected
       ? `/play?levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
       : camp
         ? `/play?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
         : '/play'
     : '/play';
   const editableCampaignsForLevel = useMemo(
-    () => (isUnassignedSelected && levelDoc
+    () => (isUnassignedSelected && !isSkirmishProfilesSelected && levelDoc
       ? campaigns.filter((campaign) => !(campaign.origin === 'official' && !isAdmin) && tierOf(levelDoc.id) === tierOf(campaign.id))
       : []),
-    [campaigns, isAdmin, isUnassignedSelected, levelDoc],
+    [campaigns, isAdmin, isSkirmishProfilesSelected, isUnassignedSelected, levelDoc],
   );
 
   useEffect(() => {
@@ -528,6 +581,14 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
     else useCampaigns.setState({ selectedLevelId: null });
   }, [isUnassignedSelected, selectedLevelId, unassignedLevels]);
 
+  useEffect(() => {
+    if (!isSkirmishProfilesSelected) return;
+    if (selectedLevelId && profileLevels.some((level) => level.id === selectedLevelId)) return;
+    const first = profileLevels[0];
+    if (first) useCampaigns.getState().selectLevel(first.id);
+    else useCampaigns.setState({ selectedLevelId: null });
+  }, [isSkirmishProfilesSelected, profileLevels, selectedLevelId]);
+
   const selectCampaignCollection = (campaignId: string) => {
     setSelectedCollection('campaign');
     useCampaigns.getState().selectCampaign(campaignId);
@@ -537,6 +598,15 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
     setSelectedCollection('unassigned');
     const selectedIsStillUnassigned = selectedLevelId && unassignedLevels.some((level) => level.id === selectedLevelId);
     const nextLevelId = selectedIsStillUnassigned ? selectedLevelId : unassignedLevels[0]?.id;
+    if (nextLevelId) useCampaigns.getState().selectLevel(nextLevelId);
+    else useCampaigns.setState({ selectedLevelId: null });
+  };
+
+  const selectSkirmishProfilesCollection = () => {
+    ensureDefaultSkirmishProfileLevel();
+    setSelectedCollection('skirmish-profiles');
+    const selectedIsStillProfile = selectedLevelId && profileLevels.some((level) => level.id === selectedLevelId);
+    const nextLevelId = selectedIsStillProfile ? selectedLevelId : profileLevels[0]?.id ?? ensureDefaultSkirmishProfileLevel().id;
     if (nextLevelId) useCampaigns.getState().selectLevel(nextLevelId);
     else useCampaigns.setState({ selectedLevelId: null });
   };
@@ -575,7 +645,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                         key={campaign.id}
                         campaign={campaign}
                         index={index}
-                        active={!isUnassignedSelected && campaign.id === selectedCampaignId}
+                        active={!isMetaCollectionSelected && campaign.id === selectedCampaignId}
                         isAdmin={isAdmin}
                         onSelect={() => selectCampaignCollection(campaign.id)}
                         onFavorite={(event) => {
@@ -597,7 +667,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                         key={campaign.id}
                         campaign={campaign}
                         index={officialCampaigns.length + index}
-                        active={!isUnassignedSelected && campaign.id === selectedCampaignId}
+                        active={!isMetaCollectionSelected && campaign.id === selectedCampaignId}
                         isAdmin={isAdmin}
                         onSelect={() => selectCampaignCollection(campaign.id)}
                         onFavorite={(event) => {
@@ -611,8 +681,16 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                 <p className="campaign-rail-group">Workspace</p>
                 {/* Continue the stone slice past the campaign tabs so the rail stays one sheet. */}
                 <UnassignedRailTab
-                  count={unassignedLevels.length}
+                  title="Skirmish profiles"
+                  itemName="profile"
+                  count={profileLevels.length}
                   index={campaigns.length}
+                  active={isSkirmishProfilesSelected}
+                  onSelect={selectSkirmishProfilesCollection}
+                />
+                <UnassignedRailTab
+                  count={unassignedLevels.length}
+                  index={campaigns.length + 1}
                   active={isUnassignedSelected}
                   onSelect={selectUnassignedCollection}
                 />
@@ -654,11 +732,30 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
               groups (Campaign · Levels · Actions), now the full column height. The live level
               preview used to pin above this scroll; it's its own column now (see below). ── */}
           <main className={embedded ? 'menu-dest-col menu-dest-action ce-editor-main' : 'settings-frame settings-main-frame ce-editor-main'}>
-            <h2 className="sr-only">{isUnassignedSelected ? 'Unassigned Levels' : camp?.name ?? 'Editor'}</h2>
+            <h2 className="sr-only">{isSkirmishProfilesSelected ? 'Skirmish Profiles' : isUnassignedSelected ? 'Unassigned Levels' : camp?.name ?? 'Editor'}</h2>
             <div className="ce-editor-body">
               <KitScroll className="settings-scroll ce-editor-scroll">
                 <div className="settings-panel-content">
-                  {isUnassignedSelected ? (
+                  {isSkirmishProfilesSelected ? (
+                    <SettingsSection title="Skirmish Profiles">
+                      <div className="ce-level-list" data-testid="skirmish-profiles">
+                        {profileLevelRefs.map((ref, index) => (
+                          <LevelRow
+                            key={ref.levelId}
+                            levelRef={ref}
+                            level={levels[ref.levelId]}
+                            index={index}
+                            active={ref.levelId === selectedLevelId}
+                            readOnly
+                            onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
+                            onMoveUp={(event) => { event.stopPropagation(); }}
+                            onMoveDown={(event) => { event.stopPropagation(); }}
+                            onDelete={(event) => { event.stopPropagation(); }}
+                          />
+                        ))}
+                      </div>
+                    </SettingsSection>
+                  ) : isUnassignedSelected ? (
                     <SettingsSection title="Unassigned Levels">
                       <div className="ce-level-list" data-testid="unassigned-levels">
                         {unassignedLevelRefs.length === 0 ? <p className="ce-empty">No unassigned levels.</p> : null}
@@ -718,6 +815,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                               active={ref.levelId === selectedLevelId}
                               readOnly={readOnly}
                               onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
+                              editHref={levels[ref.levelId] ? editHrefForCampaignLevel(camp.id, ref.levelId) : undefined}
                               onMoveUp={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, -1); }}
                               onMoveDown={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, 1); }}
                               onDelete={(event) => { event.stopPropagation(); if (levels[ref.levelId]) confirmDeleteLevel(levels[ref.levelId]); }}
@@ -769,7 +867,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
               level={levelDoc}
               title={selectedLevelTitle}
               embedded={embedded}
-              actions={(levelRef || isUnassignedSelected) ? (
+              actions={(levelRef || isMetaCollectionSelected) ? (
                 <div className={`ce-preview-actions ${isUnassignedSelected ? 'has-assign' : ''}`.trim()}>
                   <NavButton className="ce-link-button" to={editHref}><span>Edit Board</span></NavButton>
                   <NavButton className="ce-link-button ce-link-button-ghost" to={playHref}><span>Test Play</span></NavButton>
@@ -817,7 +915,9 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       <HomepageBackdrop />
       {/* ‹ Back to the menu — trailing actions slot (the brand lockup remains the leading anchor). */}
       <TitleBarSlot region="actions">
-        <NavButton className="app-header-button" data-testid="editor-back" to="/" title="Back to the menu">‹ Back</NavButton>
+        <TitleBarActions aria-label="Editor navigation">
+          <TitleBarButton variant="return" data-testid="editor-back" to="/" title="Back to the menu">‹ Back</TitleBarButton>
+        </TitleBarActions>
       </TitleBarSlot>
       {centerSlot}
       <div className="settings-screen main-menu-twin-screen ce-editor-screen app-shell-bar-pad">

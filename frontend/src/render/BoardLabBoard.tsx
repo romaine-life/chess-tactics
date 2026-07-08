@@ -2,11 +2,12 @@ import type { ReactNode } from 'react';
 import { boardLabCellPosition } from './boardProjection';
 import { TileGrid } from './TileGrid';
 import { TileTopLayer } from './TileTopLayer';
-import { FenceOverlayLayer } from './FenceOverlayLayer';
+import { FenceOverlayLayer, WallOverlayLayer } from './FenceOverlayLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileSocketAsset } from '../core/tileSockets';
 import { featureFrameSrc } from '../art/tileset';
-import type { ResolvedFenceOverlay } from '../core/featureAutotile';
+import type { ResolvedFenceOverlay, ResolvedWallOverlay } from '../core/featureAutotile';
+import type { WallArtPlacementMap } from '../core/wallArt';
 
 // Re-export the projection so existing importers (SkirmishBoard, TilePreview, the
 // thumbnail bake) keep working; the math itself now lives in one place: boardProjection.
@@ -31,6 +32,14 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
    * They render in a board-level foreground layer so the near rails can occlude same-cell art.
    */
   fenceOverlays?: ReadonlyMap<string, ResolvedFenceOverlay>;
+  /**
+   * Perimeter walls resolved to a per-cell wall overlay (N/W mask + material), keyed by "x,y".
+   * Only northmost/westmost map edges resolve to this layer.
+   */
+  wallOverlays?: ReadonlyMap<string, ResolvedWallOverlay>;
+  /** Raw wall-art ids by anchor edge key; used to draw mounted wall art over wall frames. */
+  wallArt?: WallArtPlacementMap;
+  wallBounds?: { cols: number; rows: number };
   children?: ReactNode;
 }
 
@@ -44,6 +53,9 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   ariaLabel = 'Generated board',
   renderCellOverlay,
   fenceOverlays,
+  wallOverlays,
+  wallArt,
+  wallBounds,
   children,
 }: BoardLabBoardProps<TAsset>) {
   const sourceCells = board.cells;
@@ -111,6 +123,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
           : undefined
       }
     >
+      <WallOverlayLayer overlays={wallOverlays} wallArt={wallArt} bounds={wallBounds} />
       <FenceOverlayLayer overlays={fenceOverlays} />
       {children}
     </TileGrid>

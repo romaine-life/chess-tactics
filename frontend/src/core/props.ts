@@ -293,6 +293,13 @@ export function applyLiveSeats(overrides: PropSeatMap | null | undefined): boole
   return true;
 }
 
+export function resetLiveSeats(): boolean {
+  if (SEATS === BASELINE_SEATS) return false;
+  SEATS = BASELINE_SEATS;
+  PROP_DEFS = deriveDefs(SEATS);
+  return true;
+}
+
 /**
  * Resolve a prop id to its definition, or `undefined` for an unknown id. Callers (the
  * collision bridge, the renderer) SKIP unknown ids rather than falling back to a default —

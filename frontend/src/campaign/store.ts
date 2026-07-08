@@ -54,7 +54,6 @@ export interface CampaignState {
   setLevelObjective: (levelId: string, objective: ObjectiveType) => void;
   setLevelDifficulty: (levelId: string, difficulty: string) => void;
   setLevelEconomy: (levelId: string, startingFunds: number, incomePerTurn: number) => void;
-  setLevelStars: (levelId: string, stars: number) => void;
 }
 
 const selected = (s: CampaignState): Campaign | undefined => s.campaigns.find((c) => c.id === s.selectedCampaignId);
@@ -259,7 +258,7 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
       counter += 1;
       const sourceLevel = s.levels[ref.levelId] ?? createBlankLevel(ref.levelId, ref.levelId);
       copiedLevels[newLevelId] = { ...withLevelDefaults(sourceLevel), id: newLevelId, name: `${sourceLevel.name} Copy` };
-      const { stars: _stars, completed: _completed, ...authoringRef } = ref;
+      const { completed: _completed, ...authoringRef } = ref;
       return { ...authoringRef, levelId: newLevelId };
     });
     const campaignId = `c${counter}`;
@@ -388,12 +387,5 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
   setLevelEconomy: (levelId, startingFunds, incomePerTurn) => set((s) => {
     const lvl = s.levels[levelId];
     return lvl ? { levels: { ...s.levels, [levelId]: { ...withLevelDefaults(lvl), economy: { startingFunds, incomePerTurn } } } } : {};
-  }),
-
-  setLevelStars: (levelId, stars) => set((s) => {
-    const camp = selected(s);
-    if (!camp) return {};
-    const clamped = Math.max(0, Math.min(3, Math.round(stars)));
-    return { campaigns: s.campaigns.map((c) => (c.id === camp.id ? { ...c, levels: c.levels.map((r) => (r.levelId === levelId ? { ...r, stars: clamped, completed: clamped > 0 } : r)) } : c)) };
   }),
 }));

@@ -53,7 +53,7 @@ keeping one bake implementation and never reaching a production build.
   per `docs/studio-control-architecture.md` — it is NOT its own route. `/nine-slice-editor`
   survives only as a deep-link **alias** into the Studio (like `/unit-studio`): the
   Studio reads `?asset=<id>` off that path and canonicalises the URL to
-  `/tileset-studio?…&vk=nineslice&frame=<id>`. It derives its asset list from the
+  `/studio?…&vk=nineslice&frame=<id>`. It derives its asset list from the
   registry, so every registered atom-built frame is editable with no per-frame code.
   The arrow keys (and a d-pad) nudge the active piece 1px; offsets are clamped so a
   piece can't leave the footprint. The Asset Viewer deep-links into it —

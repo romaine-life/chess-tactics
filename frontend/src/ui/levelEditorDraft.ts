@@ -1,11 +1,10 @@
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
-import { OBJECTIVE_TYPES, type ObjectiveType, type Roster, type TimeControl, type VictoryRules } from '../core/level';
+import { OBJECTIVE_TYPES, type LevelEvents, type ObjectiveType, type TimeControl, type VictoryRules } from '../core/level';
+import { normalizeLevelEvents, type StoredLevelEvent } from '../core/levelEvents';
 import { decodeBoard, encodeBoard, type EditorBoard } from './boardCode';
 
 const STORAGE_PREFIX = 'ct:level-editor-draft:v1';
 const DRAFT_VERSION = 1;
-
-type PlacementMode = 'fixed' | 'random';
 
 export interface LevelEditorDraft {
   savedAt: number;
@@ -13,13 +12,13 @@ export interface LevelEditorDraft {
   board: EditorBoard;
   levelName: string;
   objective: ObjectiveType;
-  placement: PlacementMode;
   surviveTurns: number;
-  roster: { player: Roster; enemy: Roster };
   // The battle clock (ADR-0053), or undefined when the level is untimed.
   timeControl?: TimeControl;
   // Authored victory conditions (ADR-0064), or undefined when the level uses the objective preset.
   victory?: VictoryRules;
+  // Authored non-victory events: setup spawns and trigger/action events.
+  events?: LevelEvents;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -42,16 +41,6 @@ export function levelEditorDraftKey({ levelId, boardCode }: { levelId?: string; 
   return `${STORAGE_PREFIX}:standalone`;
 }
 
-const cleanRoster = (raw: unknown): Roster => {
-  if (!isRecord(raw)) return {};
-  const out: Roster = {};
-  for (const [piece, count] of Object.entries(raw)) {
-    if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) continue;
-    out[piece as keyof Roster] = Math.floor(count);
-  }
-  return out;
-};
-
 export function serializeLevelEditorDraft(draft: LevelEditorDraft): string {
   return JSON.stringify({
     v: DRAFT_VERSION,
@@ -60,11 +49,10 @@ export function serializeLevelEditorDraft(draft: LevelEditorDraft): string {
     boardCode: encodeBoard(draft.board),
     levelName: draft.levelName,
     objective: draft.objective,
-    placement: draft.placement,
     surviveTurns: draft.surviveTurns,
-    roster: draft.roster,
     timeControl: draft.timeControl,
     victory: draft.victory,
+    events: draft.events,
   });
 }
 
@@ -86,6 +74,9 @@ const cleanTimeControl = (raw: unknown): TimeControl | undefined => {
 const cleanVictory = (raw: unknown): VictoryRules | undefined =>
   Array.isArray(raw) ? (raw as VictoryRules) : undefined;
 
+const cleanEvents = (raw: unknown): LevelEvents | undefined =>
+  Array.isArray(raw) ? normalizeLevelEvents(raw as StoredLevelEvent[]) : undefined;
+
 export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
   try {
     const value = JSON.parse(raw) as unknown;
@@ -96,7 +87,6 @@ export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
     const objective = (OBJECTIVE_TYPES as readonly string[]).includes(String(value.objective))
       ? value.objective as ObjectiveType
       : 'capture-all';
-    const placement: PlacementMode = value.placement === 'random' ? 'random' : 'fixed';
     const surviveTurns = typeof value.surviveTurns === 'number' && Number.isFinite(value.surviveTurns) && value.surviveTurns > 0
       ? Math.floor(value.surviveTurns)
       : DEFAULT_SURVIVE_TURNS;
@@ -106,14 +96,10 @@ export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
       board,
       levelName: typeof value.levelName === 'string' && value.levelName.trim() ? value.levelName : 'Untitled level',
       objective,
-      placement,
       surviveTurns,
-      roster: {
-        player: cleanRoster(isRecord(value.roster) ? value.roster.player : undefined),
-        enemy: cleanRoster(isRecord(value.roster) ? value.roster.enemy : undefined),
-      },
       timeControl: cleanTimeControl(value.timeControl),
       victory: cleanVictory(value.victory),
+      events: cleanEvents(value.events),
     };
   } catch {
     return null;

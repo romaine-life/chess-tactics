@@ -9,7 +9,7 @@
 // arrives (or the chain drops). This module has no store/DOM deps so it also runs inline in tests.
 
 import type { GameState, Move, Piece, Vec } from '../core/types';
-import { applyMove, gameEnv, legalMoves, type MoveEnv } from '../core/rules';
+import { applyMove, gameEnv, legalMoves, pieceAt, type MoveEnv } from '../core/rules';
 
 /** One queued move: a player piece and where it will go. The "from" is implied by the piece's
  *  position along its own plan at that point. */
@@ -43,6 +43,50 @@ function envFor(game: GameState): MoveEnv {
 
 const premovedIds = (premoves: readonly PremoveStep[]): string[] => [...new Set(premoves.map((s) => s.pieceId))];
 
+function oppositeSideForSpeculation(piece: Piece): Piece['side'] {
+  return piece.side === 'enemy' ? 'player' : 'enemy';
+}
+
+function isSpeculativeRecaptureTarget(piece: Piece, target: Piece | null): target is Piece {
+  return !!target &&
+    target.alive &&
+    target.id !== piece.id &&
+    target.side === piece.side &&
+    target.side !== 'neutral' &&
+    target.type !== 'rock' &&
+    target.type !== 'random-rock';
+}
+
+function premoveMoves(piece: Piece, pieces: readonly Piece[], size: GameState['size'], env: MoveEnv): Move[] {
+  const moves = legalMoves(piece, pieces, size, env);
+  const seen = new Set(moves.map((m) => `${m.x},${m.y}`));
+  const out = [...moves];
+  for (const target of pieces) {
+    if (!isSpeculativeRecaptureTarget(piece, target)) continue;
+    const speculativePieces = pieces.map((p) =>
+      p.id === target.id ? { ...p, side: oppositeSideForSpeculation(piece) } : p,
+    );
+    const speculativePiece = speculativePieces.find((p) => p.id === piece.id);
+    const move = speculativePiece
+      ? legalMoves(speculativePiece, speculativePieces, size, env).find((m) => m.x === target.x && m.y === target.y)
+      : undefined;
+    const key = `${target.x},${target.y}`;
+    if (move && !seen.has(key)) {
+      seen.add(key);
+      out.push({ x: target.x, y: target.y });
+    }
+  }
+  return out;
+}
+
+function applyFoldMove(state: GameState, piece: Piece, move: Move): GameState {
+  const target = pieceAt(state.pieces, move.x, move.y);
+  if (isSpeculativeRecaptureTarget(piece, target)) {
+    return applyMove({ ...state, pieces: state.pieces.filter((p) => p.id !== target.id) }, piece.id, move).state;
+  }
+  return applyMove(state, piece.id, move).state;
+}
+
 // Fold ONLY one piece's queued steps onto the board, leaving every OTHER piece at its real
 // position — so a unit's plan is never blocked by another unit's plan. Each step is re-validated
 // against this per-piece board; an illegal step stops that piece's plan there.
@@ -53,10 +97,10 @@ function foldPiece(game: GameState, premoves: readonly PremoveStep[], pieceId: s
     if (step.pieceId !== pieceId) continue;
     const p = state.pieces.find((q) => q.id === pieceId && q.alive && q.side === 'player');
     if (!p) break;
-    const mv = legalMoves(p, state.pieces, state.size, envFor(state)).find((m) => m.x === step.x && m.y === step.y);
+    const mv = premoveMoves(p, state.pieces, state.size, envFor(state)).find((m) => m.x === step.x && m.y === step.y);
     if (!mv) break;
     const from: Vec = { x: p.x, y: p.y };
-    state = applyMove(state, p.id, mv).state;
+    state = applyFoldMove(state, p, mv);
     const landed = state.pieces.find((q) => q.id === pieceId);
     if (landed && landed.alive) steps.push({ from, landed });
   }
@@ -64,8 +108,8 @@ function foldPiece(game: GameState, premoves: readonly PremoveStep[], pieceId: s
 }
 
 /** The board with each premoved piece moved to the TIP of its own plan (others at their real
- *  positions). Used for hit-testing which piece a click lands on. Two plans MAY share a square, so
- *  a lookup takes the first match — enough to pick a piece to keep premoving. */
+ *  positions). Used by the UI for unshared speculative-piece hit-testing; shared ghost stacks
+ *  stay ambiguous so the UI asks the player to use an original-piece handle instead. */
 export function provisionalBoard(game: GameState, premoves: readonly PremoveStep[]): GameState {
   const tip = new Map<string, Vec>();
   for (const id of premovedIds(premoves)) {
@@ -113,5 +157,5 @@ export function premoveTargets(game: GameState, premoves: readonly PremoveStep[]
   if (!pieceId) return [];
   const state = foldPiece(game, premoves, pieceId).state;
   const p = state.pieces.find((q) => q.id === pieceId && q.alive && q.side === 'player');
-  return p ? legalMoves(p, state.pieces, state.size, envFor(state)) : [];
+  return p ? premoveMoves(p, state.pieces, state.size, envFor(state)) : [];
 }

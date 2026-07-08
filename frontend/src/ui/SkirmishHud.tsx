@@ -3,7 +3,7 @@ import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PALETTE_FOR_SIDE, isPlayablePieceType, pieceSpritePath } from '../core/pieces';
-import type { Piece, PieceType, Side } from '../core/types';
+import type { Piece, PieceType, PromotionPieceType, Side } from '../core/types';
 import type { TimeControl } from '../core/level';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 // One shared "unit portrait box" (master render + crop + the fill-frame) — the Selected-Unit
@@ -16,6 +16,7 @@ import { BackGlyph, RestartGlyph, NewGlyph } from './shared/actionGlyphs';
 import { NavButton } from './shared/NavButton';
 import { SkirmishClockControl } from './SkirmishClockControl';
 import { loadSkirmishClockPref } from '../game/skirmishClockPref';
+import { Stepper } from './shared/Stepper';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -54,7 +55,7 @@ const HUD_TABS: { id: HudTab; label: string }[] = [
 // The same SHORTCUT_BINDINGS table drives both the painted buttons and the global
 // key handler, so a click and its key can never drift apart.
 
-type OverlayFlag = 'showEnemyAttacks' | 'showEnemyMoves' | 'showPlayerAttacks' | 'showPlayerMoves';
+type OverlayFlag = 'showEnemyAttacks' | 'showEnemyMoves' | 'showPlayerAttacks' | 'showPlayerMoves' | 'showPromotionZones';
 
 type GridAction =
   | { kind: 'toggle'; flag: OverlayFlag; label: string; hint: string }
@@ -76,6 +77,12 @@ const SHORTCUT_BINDINGS: Record<string, GridAction> = {
 };
 
 const ZOOM_STEP = 0.1;
+const PROMOTION_LABEL: Record<PromotionPieceType, string> = {
+  queen: 'Queen',
+  rook: 'Rook',
+  bishop: 'Bishop',
+  knight: 'Knight',
+};
 
 function unitSprite(piece: Piece | null): string | null {
   if (!piece || piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
@@ -85,6 +92,16 @@ function unitSprite(piece: Piece | null): string | null {
 /** Whole numbers print bare; fractional distances print to one decimal (6.5). */
 function fmtStat(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function fmtDelaySeconds(ms: number): string {
+  const seconds = ms / 1000;
+  return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1);
+}
+
+function parseDelaySeconds(raw: string): number | null {
+  const seconds = Number(raw.trim());
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
 }
 
 function UnitBadge({ piece, large = false }: { piece: Piece | null; large?: boolean }) {
@@ -148,16 +165,13 @@ export function SkirmishHud({
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const resign = useSkirmish((s) => s.resign);
   const resignLocal = useSkirmish((s) => s.resignLocal);
+  const pendingPromotion = useSkirmish((s) => s.pendingPromotion);
+  const choosePromotion = useSkirmish((s) => s.choosePromotion);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
   const testMode = useSkirmish((s) => s.testMode);
   const testMinCpuDelayMs = useSkirmish((s) => s.testMinCpuDelayMs);
   const setTestMinCpuDelay = useSkirmish((s) => s.setTestMinCpuDelay);
-  // Free-text seconds for the Test Board CPU-delay floor: local so the field edits freely (clear
-  // it, type a decimal) without the store's clamped ms value fighting the caret; committed on
-  // change. Cleared when leaving test mode (the store zeroes the floor there too).
-  const [delaySecInput, setDelaySecInput] = useState(() => (testMinCpuDelayMs ? String(testMinCpuDelayMs / 1000) : ''));
-  useEffect(() => { if (!testMode) setDelaySecInput(''); }, [testMode]);
 
   // Resign is irreversible and hands the opponent the win — gate it behind a confirm
   // (the kit-framed one, not window.confirm, so it stays in-world). Netplay relays it
@@ -181,6 +195,7 @@ export function SkirmishHud({
   const showEnemyMoves = useSkirmishView((s) => s.showEnemyMoves);
   const showPlayerAttacks = useSkirmishView((s) => s.showPlayerAttacks);
   const showPlayerMoves = useSkirmishView((s) => s.showPlayerMoves);
+  const showPromotionZones = useSkirmishView((s) => s.showPromotionZones);
   const zoom = useSkirmishView((s) => s.zoom);
   const toggleOverlay = useSkirmishView((s) => s.toggle);
   const setZoom = useSkirmishView((s) => s.setZoom);
@@ -188,7 +203,7 @@ export function SkirmishHud({
 
   // Current state of each grid toggle, for the pressed/active look on the cards.
   const flagValue: Record<OverlayFlag, boolean> = {
-    showEnemyAttacks, showEnemyMoves, showPlayerAttacks, showPlayerMoves,
+    showEnemyAttacks, showEnemyMoves, showPlayerAttacks, showPlayerMoves, showPromotionZones,
   };
 
   // Global key handler — the grid keys work anywhere on the board, not just while the
@@ -221,6 +236,7 @@ export function SkirmishHud({
   const enemyPieces = livingPieces(game.pieces, 'enemy');
   const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins — capture the enemy King.'];
   const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? DEFAULT_BACKGROUND_SET.portraits[focused.type] : null;
+  const promotingPiece = pendingPromotion ? game.pieces.find((p) => p.id === pendingPromotion.pieceId) ?? null : null;
   // Status reads from THIS client's seat. Single-player: 'you' = 'player'. Netplay:
   // 'you' = the lobby seat this client controls (host='player', guest='enemy'), so the
   // guest sees "Victory" when the 'enemy' side wins and "Your turn" on the enemy turn.
@@ -244,6 +260,31 @@ export function SkirmishHud({
           <CountPip side="enemy" count={enemyPieces.length} />
         </div>
       </section>
+
+      {pendingPromotion ? (
+        <section className="skirmish-card skirmish-promotion-card" aria-label="Pawn promotion">
+          <span className="skirmish-eyebrow">Promote Pawn</span>
+          <div className="skirmish-promotion-options">
+            {pendingPromotion.choices.map((type) => {
+              const palette = PALETTE_FOR_SIDE[promotingPiece?.side ?? localSide];
+              const src = pieceSpritePath(type, palette, promotingPiece?.facing);
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  className="app-header-button skirmish-promotion-option"
+                  onClick={() => choosePromotion(type)}
+                  aria-label={`Promote to ${PROMOTION_LABEL[type]}`}
+                  title={`Promote to ${PROMOTION_LABEL[type]}`}
+                >
+                  <img src={src} alt="" draggable={false} />
+                  <span>{PROMOTION_LABEL[type]}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <div className="skirmish-hud-tabs" role="tablist" aria-label="HUD sections">
         {HUD_TABS.map((t) => (
@@ -374,6 +415,7 @@ export function SkirmishHud({
                 <button type="button" className={`app-header-button ${showMoves ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showMoves')} aria-pressed={showMoves}>Moves</button>
                 <button type="button" className={`app-header-button ${showEnemyAttacks ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showEnemyAttacks')} aria-pressed={showEnemyAttacks}>Attacks</button>
                 <button type="button" className={`app-header-button ${showBlocked ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showBlocked')} aria-pressed={showBlocked}>Blocks</button>
+                <button type="button" className={`app-header-button ${showPromotionZones ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showPromotionZones')} aria-pressed={showPromotionZones}>Promotion</button>
               </div>
             </div>
           </section>
@@ -434,23 +476,24 @@ export function SkirmishHud({
             {testMode ? (
               <div className="skirmish-view-group">
                 <span className="skirmish-eyebrow">Min CPU delay (test board)</span>
-                <label className="skirmish-cpu-delay-field">
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={delaySecInput}
-                    aria-label="Minimum CPU delay in seconds"
-                    onChange={(event) => {
-                      setDelaySecInput(event.target.value);
-                      const secs = parseFloat(event.target.value);
-                      setTestMinCpuDelay(Number.isFinite(secs) && secs > 0 ? secs * 1000 : 0);
+                <div className="skirmish-clock-row skirmish-cpu-delay-field">
+                  <span>Delay floor</span>
+                  <Stepper
+                    suffix="s"
+                    decreaseLabel="Shorter minimum CPU delay"
+                    increaseLabel="Longer minimum CPU delay"
+                    onDecrease={() => setTestMinCpuDelay(Math.max(0, testMinCpuDelayMs - 500))}
+                    onIncrease={() => setTestMinCpuDelay(testMinCpuDelayMs + 500)}
+                    edit={{
+                      value: testMinCpuDelayMs,
+                      min: 0,
+                      format: fmtDelaySeconds,
+                      parse: parseDelaySeconds,
+                      onCommit: setTestMinCpuDelay,
+                      ariaLabel: 'Minimum CPU delay in seconds',
                     }}
                   />
-                  <span>seconds</span>
-                </label>
+                </div>
                 <p className="skirmish-grid-hint">Type any floor for the CPU's think time — it widens the window to premove. Your clock is paused during it anyway.</p>
               </div>
             ) : null}

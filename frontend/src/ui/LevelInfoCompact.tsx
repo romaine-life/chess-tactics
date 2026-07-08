@@ -4,18 +4,19 @@
 // (the Rules row). Its consumer (CampaignEditor's Info tab) is display-only, so
 // there is no editing grid; this is the whole readout, not a header above one.
 import { type ReactElement } from 'react';
-import type { Level, Roster as PieceRoster, ZoneType } from '../core/level';
+import type { Level, ZoneType } from '../core/level';
 import { MODE_NAME, objectiveSummary } from '../core/objectives';
 import { formatClockSeconds } from '../core/clock';
 import type { PieceType } from '../core/types';
+import { spawnEventsForLevel } from '../core/levelEvents';
 
 const PIECE_ORDER: PieceType[] = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn', 'rock', 'random-rock'];
 const PIECE_LABEL: Record<PieceType, string> = {
   king: 'King', queen: 'Queen', rook: 'Rook', bishop: 'Bishop', knight: 'Knight', pawn: 'Pawn', rock: 'Rock', 'random-rock': 'Rubble',
 };
-const ZONE_ORDER: ZoneType[] = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock'];
+const ZONE_ORDER: ZoneType[] = ['region', 'player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'];
 const ZONE_LABEL: Record<ZoneType, string> = {
-  'player-spawn': 'Ally spawns', 'enemy-spawn': 'Enemy spawns', 'enemy-threat': 'Threats', objective: 'Objectives', 'falling-rock': 'Hazards',
+  region: 'Named regions', 'player-spawn': 'Ally deployment', 'enemy-spawn': 'Enemy deployment', 'enemy-threat': 'Threat markers', objective: 'Goal markers', 'falling-rock': 'Rockfall markers', 'pawn-promotion': 'Promotion markers',
 };
 const TERRAIN_LABEL: Record<string, string> = {
   grass: 'Grass', water: 'Water', bridge: 'Bridge', road: 'Road', stone: 'Stone', rock: 'Rock', cliff: 'Cliff', dirt: 'Dirt', pebble: 'Pebble', sand: 'Sand',
@@ -28,17 +29,35 @@ function countMap<K extends string>(keys: K[]): Partial<Record<K, number>> {
   return out;
 }
 
+type PieceCounts = Partial<Record<PieceType, number>>;
+
+function forceCountsForSide(level: Level, side: 'player' | 'enemy'): PieceCounts {
+  const counts = countMap(level.layers.units.filter((u) => u.side === side).map((u) => u.type));
+  for (const event of spawnEventsForLevel(level)) {
+    if (event.side !== side) continue;
+    for (const [piece, count] of Object.entries(event.roster ?? {})) {
+      if (typeof count !== 'number' || count <= 0) continue;
+      const type = piece as PieceType;
+      counts[type] = (counts[type] ?? 0) + count;
+    }
+  }
+  return counts;
+}
+
+function countTotal(counts: PieceCounts): number {
+  return PIECE_ORDER.reduce((sum, piece) => sum + (counts[piece] ?? 0), 0);
+}
+
 // Which side "owns" the King for a level, mirroring core's kingSideOf(pieces) but read
-// off the LEVEL's own content instead of a live board: authored units when placement is
-// fixed, the roster counts when it's random. Same rule — the player owns it only when the
-// player fields a King and the enemy doesn't; both/neither ⇒ 'enemy' (rival-kings /
-// free-skirmish default). Lets the level-select surfaces render King Assault's
-// direction-aware copy ("Protect your King") without instantiating a game. Exported so the
-// campaign play/edit level rows share ONE implementation (ADR-0050: no re-hardcoded labels).
+// off the LEVEL's own content instead of a live board: authored units plus setup spawn
+// events. Same rule — the player owns it only when the player fields a King and the enemy
+// doesn't; both/neither ⇒ 'enemy' (rival-kings / free-skirmish default). Lets the
+// level-select surfaces render King Assault's direction-aware copy ("Protect your King")
+// without instantiating a game. Exported so the campaign play/edit level rows share ONE
+// implementation (ADR-0050: no re-hardcoded labels).
 export function kingSideForLevel(level: Level): 'player' | 'enemy' {
   const hasKing = (side: 'player' | 'enemy'): boolean => {
-    if (level.placement === 'random') return Boolean(level.roster?.[side]?.king);
-    return level.layers.units.some((u) => u.side === side && u.type === 'king');
+    return Boolean(forceCountsForSide(level, side).king);
   };
   return hasKing('player') && !hasKing('enemy') ? 'player' : 'enemy';
 }
@@ -49,19 +68,11 @@ export function levelObjectiveLine(level: Level): string {
   return `${MODE_NAME[level.objective]} — ${objectiveSummary(level.objective, kingSideForLevel(level))}`;
 }
 
-// A compact "Pawn ×3, Knight ×1" line for a random-placement roster, in board order.
-function rosterSummary(roster: PieceRoster | undefined): string {
-  if (!roster) return 'none';
-  const parts = PIECE_ORDER.filter((p) => roster[p]).map((p) => `${PIECE_LABEL[p]} ×${roster[p]}`);
-  return parts.length ? parts.join(', ') : 'none';
-}
-
-function Roster({ units, tone, label }: { units: Level['layers']['units']; tone: string; label: string }): ReactElement {
-  const counts = countMap(units.map((u) => u.type));
+function Roster({ counts, tone, label }: { counts: PieceCounts; tone: string; label: string }): ReactElement {
   const present = PIECE_ORDER.filter((p) => counts[p]);
   return (
     <div className="ce-li-roster">
-      <div className={`ce-li-roster-head ${tone}`}><span>{label}</span><strong>{units.length}</strong></div>
+      <div className={`ce-li-roster-head ${tone}`}><span>{label}</span><strong>{countTotal(counts)}</strong></div>
       <ul>
         {present.map((p) => <li key={p}><span>{PIECE_LABEL[p]}</span><b>×{counts[p]}</b></li>)}
         {present.length === 0 ? <li className="ce-li-none">none</li> : null}
@@ -75,8 +86,8 @@ export function LevelInfoCompact({ level }: { level: Level }): ReactElement {
   const total = cols * rows;
   const filled = level.layers.terrain.filter((tile) => tile.terrain !== 'void').length;
   const terrainMix = Object.entries(countMap(level.layers.terrain.map((t) => t.terrain))).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
-  const allies = level.layers.units.filter((u) => u.side === 'player');
-  const enemies = level.layers.units.filter((u) => u.side === 'enemy');
+  const allies = forceCountsForSide(level, 'player');
+  const enemies = forceCountsForSide(level, 'enemy');
   const zoneMix = countMap(level.layers.zones.map((z) => z.type));
   const zoneParts = ZONE_ORDER.filter((z) => zoneMix[z]).map((z) => `${ZONE_LABEL[z]} ${zoneMix[z]}`);
 
@@ -96,8 +107,8 @@ export function LevelInfoCompact({ level }: { level: Level }): ReactElement {
       <section className="ce-li-forces">
         <span className="ce-li-title">Forces</span>
         <div className="ce-li-rosters">
-          <Roster units={allies} tone="is-ally" label="Allies" />
-          <Roster units={enemies} tone="is-enemy" label="Enemies" />
+          <Roster counts={allies} tone="is-ally" label="Allies" />
+          <Roster counts={enemies} tone="is-enemy" label="Enemies" />
         </div>
       </section>
 
@@ -119,18 +130,6 @@ export function LevelInfoCompact({ level }: { level: Level }): ReactElement {
             : 'Untimed'}
         </span>
       </section>
-
-      {level.placement === 'random' ? (
-        // Under random placement the Forces rosters above are empty (units are dealt at game
-        // start from the roster, not authored), so surface the roster counts explicitly —
-        // otherwise the Info tab reads as a level with no pieces.
-        <section className="ce-li-zones-row">
-          <span className="ce-li-title">Placement</span>
-          <span className="ce-li-zones">
-            Random placement  ·  Allies {rosterSummary(level.roster?.player)}  ·  Enemies {rosterSummary(level.roster?.enemy)}
-          </span>
-        </section>
-      ) : null}
     </div>
   );
 }

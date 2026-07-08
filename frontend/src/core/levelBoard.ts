@@ -10,13 +10,13 @@
 //    `boardCode` so the next open is exact, and projecting terrain/units into `layers` so
 //    the game (which reads `layers`, not `boardCode`) plays the authored board.
 
-import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, TimeControl, VictoryRules, Zone, ZoneType } from './level';
+import type { Level, LevelEconomy, LevelEvents, LevelUnit, ObjectiveType, Roster, TimeControl, VictoryRules, Zone } from './level';
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
 import type { PlacedProp } from './props';
 import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { TileFamilyId } from './tileSockets';
-import { decodeBoard, encodeBoard, type EditorBoard } from '../ui/boardCode';
-import { parseEdgeKey, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
+import { decodeBoard, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type EditorBoard, type EditorZoneEntry } from '../ui/boardCode';
+import { parseEdgeKey, isOrthogonalPair, isNorthWestBoundaryWallEdge, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
 import { studioFamilies } from '../ui/studioBoard';
 import { UNIT_PALETTES } from './pieces';
 import { unitAssets, type Faction } from '../ui/unitCatalog';
@@ -41,6 +41,16 @@ const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
 // (an INV7 data-loss on legacy officials that predate boardCode).
 const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>([...Object.values(FAMILY_TO_TERRAIN), 'road', 'void']);
 
+function pointInBoard(x: number, y: number, cols: number, rows: number): boolean {
+  return x >= 0 && y >= 0 && x < cols && y < rows;
+}
+
+function fenceTouchesBoard(edge: string, cols: number, rows: number): boolean {
+  const p = parseEdgeKey(edge);
+  if (!p || !isOrthogonalPair(p.ax, p.ay, p.bx, p.by)) return false;
+  return pointInBoard(p.ax, p.ay, cols, rows) || pointInBoard(p.bx, p.by, cols, rows);
+}
+
 // Side ↔ faction (team palette). The editor paints a faction; the level stores a side.
 const SIDE_TO_FACTION: Record<'player' | 'enemy', Faction> = { player: 'navy-blue', enemy: 'crimson' };
 const isFaction = (faction: string | null | undefined): faction is Faction =>
@@ -48,50 +58,58 @@ const isFaction = (faction: string | null | undefined): faction is Faction =>
 const sideForFaction = (faction: string, playerFaction: string | null | undefined): Side =>
   playerFaction && faction === playerFaction ? 'player' : 'enemy';
 
-// A zone id is derived deterministically from its type (`z-<type>`), so the same painted
-// board always projects the same ids — a resave never churns them, and equality of two saves
-// stays a pure function of what was painted. The editor collapses all cells of one zone type
-// into ONE Zone entry (playability pools per-type anyway, so a single zone per type suffices).
-const zoneId = (type: ZoneType): string => `z-${type}`;
-
 /**
- * Project the editor's per-cell `zones` channel (cell "x,y" -> zone type) into the schema's
- * `layers.zones` (one Zone per type, each with its pooled [x,y] tile list, in-bounds only).
- * Tiles are emitted in row-major order for a stable, diff-friendly serialization.
+ * Project the editor's authored zone entries into `layers.zones`. Empty entries are preserved
+ * because the editor's zone dropdown is explicitly controlled by the author; in-bounds tiles are
+ * emitted in row-major order for stable, diff-friendly saves.
  */
 function zonesToLayers(
-  channel: Record<string, ZoneType> | undefined,
+  entries: readonly EditorZoneEntry[] | undefined,
   cols: number,
   rows: number,
 ): Zone[] {
-  if (!channel) return [];
-  const byType = new Map<ZoneType, Array<[number, number]>>();
-  for (let y = 0; y < rows; y += 1) {
-    for (let x = 0; x < cols; x += 1) {
-      const type = channel[`${x},${y}`];
-      if (!type) continue;
-      const list = byType.get(type) ?? [];
-      list.push([x, y]);
-      byType.set(type, list);
+  return (entries ?? []).map((entry, index) => {
+    const tiles: Array<[number, number]> = [];
+    const seen = new Set<string>();
+    for (const key of entry.tiles) {
+      const [x, y] = key.split(',').map(Number);
+      if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || x >= cols || y < 0 || y >= rows) continue;
+      const stableKey = `${x},${y}`;
+      if (seen.has(stableKey)) continue;
+      seen.add(stableKey);
+      tiles.push([x, y]);
     }
-  }
-  const zones: Zone[] = [];
-  for (const [type, tiles] of byType) zones.push({ id: zoneId(type), type, tiles });
-  return zones;
+    tiles.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    const name = entry.name?.trim();
+    return { id: entry.id.trim() || `zone-${index + 1}`, ...(name ? { name } : {}), ...(entry.color ? { color: entry.color } : {}), type: entry.type, tiles };
+  });
 }
 
-/** Rebuild the editor's per-cell zones channel from a Level's `layers.zones` (used only on the
- * layers-derive fallback for legacy levels; the boardCode path carries the channel losslessly).
- * Out-of-bounds tiles are dropped like units/props. */
-function zonesFromLayers(zones: Zone[] | undefined, cols: number, rows: number): Record<string, ZoneType> {
-  const channel: Record<string, ZoneType> = {};
+/** Rebuild the editor's zone entries from `layers.zones` (used on legacy/no-boardCode paths, and
+ * as a fallback for older board codes that only carried the collapsed `z` map). */
+function zoneEntriesFromLayers(zones: Zone[] | undefined, cols: number, rows: number): EditorZoneEntry[] {
+  const entries: EditorZoneEntry[] = [];
+  let index = 0;
   for (const zone of zones ?? []) {
+    const tiles: string[] = [];
+    const seen = new Set<string>();
     for (const [x, y] of zone.tiles) {
       if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
-      channel[`${x},${y}`] = zone.type;
+      const key = `${x},${y}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tiles.push(key);
     }
+    tiles.sort((a, b) => {
+      const [ax, ay] = a.split(',').map(Number);
+      const [bx, by] = b.split(',').map(Number);
+      return ay - by || ax - bx;
+    });
+    index += 1;
+    const name = zone.name?.trim();
+    entries.push({ id: zone.id.trim() || `zone-${index}`, ...(name ? { name } : {}), ...(zone.color ? { color: zone.color } : {}), type: zone.type, tiles });
   }
-  return channel;
+  return entries;
 }
 
 // Resolve a Studio tile id to its family (so its terrain material is known). Exported so the
@@ -136,9 +154,9 @@ export interface LevelMeta {
   name: string;
   notes?: string;
   objective?: ObjectiveType;
-  // The ADR-0050 placement axis + its config, authored in the editor's RULES panel and written
-  // straight onto the Level. Omitted (undefined) means 'fixed' / no roster / default survive turns
-  // — the back-compat default — so a save from a level that never touched these leaves them absent.
+  // The legacy placement axis + its config, authored in the editor's RULES panel and written
+  // straight onto the Level for compatibility. Setup spawn events in `events` own the actual
+  // random deployment behavior on new saves.
   placement?: 'fixed' | 'random';
   roster?: { player: Roster; enemy: Roster };
   surviveTurns?: number;
@@ -147,6 +165,8 @@ export interface LevelMeta {
   // Authored win/lose lists (ADR-0064). Omitted ⇒ the `objective` preset defines the outcome
   // (the RULES panel's "Custom win/lose" toggle is off) — the same back-compat default as above.
   victory?: VictoryRules;
+  // Authored non-victory events: setup spawns, pawn promotion triggers, and future event kinds.
+  events?: LevelEvents;
   difficulty?: string;
   economy?: LevelEconomy;
   theme?: string;
@@ -181,7 +201,12 @@ export function unitsForGamePieces(pieces: readonly Piece[]): EditorBoard['units
 export function levelToEditorBoard(level: Level): EditorBoard {
   if (level.boardCode) {
     const decoded = decodeBoard(level.boardCode);
-    if (decoded) return decoded;
+    if (decoded) {
+      const zoneEntries = decoded.zoneEntries?.length
+        ? decoded.zoneEntries
+        : zoneEntriesFromLayers(level.layers.zones, decoded.cols, decoded.rows);
+      return { ...decoded, zoneEntries, zones: zoneCellMapFromEntries(zoneEntries) };
+    }
   }
 
   const cols = clamp(level.board.cols, BOARD_COLS.min, BOARD_COLS.max);
@@ -231,15 +256,15 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     props[`${p.x},${p.y}`] = { propId: p.propId };
   }
 
-  // Legacy fallback: rebuild the zones channel from layers.zones (the boardCode path above already
-  // carried it losslessly). Out-of-bounds tiles are dropped like units/props.
-  const zones = zonesFromLayers(level.layers.zones, cols, rows);
+  // Legacy fallback: rebuild authored zones from layers.zones. Out-of-bounds tiles are dropped
+  // like units/props, but empty zone entries are preserved.
+  const zoneEntries = zoneEntriesFromLayers(level.layers.zones, cols, rows);
+  const zones = zoneCellMapFromEntries(zoneEntries);
   // Legacy fallback (no boardCode): layers.fences carries edge keys only — re-seed the editor's
   // edge→material map at the default material (the boardCode path above already round-tripped both).
   const fences: EditorBoard['fences'] = {};
   for (const edge of level.layers.fences ?? []) {
-    const p = parseEdgeKey(edge);
-    if (!p || [[p.ax, p.ay], [p.bx, p.by]].some(([x, y]) => x < 0 || x >= cols || y < 0 || y >= rows)) continue;
+    if (!fenceTouchesBoard(edge, cols, rows)) continue;
     fences[edge] = DEFAULT_FENCE_MATERIAL;
   }
   const hasAuthoredPlayer = level.layers.units.some((unit) => unit.side === 'player');
@@ -254,8 +279,11 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     cover,
     features,
     fences,
+    walls: {},
+    wallArt: {},
     featureCuts: {},
     featureExits: {},
+    zoneEntries,
     zones,
   };
 }
@@ -329,17 +357,26 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     props.push({ x, y, propId: placement.propId });
   }
 
-  // Project the painted zones channel into real `layers.zones` — spawn pools (random placement)
-  // and reach targets read these directly. Clamped to the (possibly resized) bounds like units.
-  const zones = zonesToLayers(board.zones, cols, rows);
+  // Project authored zones into real `layers.zones` — spawn pools, reach targets and promotion
+// entries are named regions; gameplay behavior comes from level events. Legacy boards without
+// entries are grouped by their collapsed map.
+  const zoneEntries = board.zoneEntries ?? zoneEntriesFromCellMap(board.zones, cols, rows);
+  const zones = zonesToLayers(zoneEntries, cols, rows);
 
-  // Fences ride BOTH channels: layers.fences (edge keys — the durable wall list the GAME reads for
-  // collision) AND boardCode `fe` (edge→material, for the editor + rail rendering, via encodeBoard).
-  // Out-of-bounds edges are dropped on resize, like units/props/zones.
+  // Edge barriers ride BOTH channels: layers.fences (edge keys — the durable blocked-edge list the
+  // GAME reads for collision) AND boardCode `fe`/`wl` (edge→material, for editor/rendering).
+  // Fence rails may touch any board edge. Walls are perimeter-only and only valid on the
+  // northmost/westmost board edges. Wall art is visual-only and stays in boardCode `wa`.
   const fences: string[] = [];
-  for (const edge of Object.keys(board.fences ?? {})) {
-    const p = parseEdgeKey(edge);
-    if (!p || [[p.ax, p.ay], [p.bx, p.by]].some(([x, y]) => x < 0 || x >= cols || y < 0 || y >= rows)) continue;
+  const blockedEdges = new Set(Object.keys(board.fences ?? {}));
+  const validWalls: NonNullable<EditorBoard['walls']> = {};
+  for (const [edge, material] of Object.entries(board.walls ?? {})) {
+    if (!isNorthWestBoundaryWallEdge(edge, { cols, rows })) continue;
+    validWalls[edge] = material;
+    blockedEdges.add(edge);
+  }
+  for (const edge of blockedEdges) {
+    if (!fenceTouchesBoard(edge, cols, rows)) continue;
     fences.push(edge);
   }
 
@@ -355,7 +392,7 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     difficulty: meta.difficulty ?? 'normal',
     economy: meta.economy ?? { startingFunds: 1200, incomePerTurn: 150 },
     theme: meta.theme ?? 'grassland',
-    boardCode: encodeBoard({ ...board, cols, rows }),
+    boardCode: encodeBoard({ ...board, cols, rows, walls: validWalls }),
     layers: { terrain, decals: [], zones, units, props, fences },
   };
   // ADR-0050 mode fields ride as OPTIONAL keys: written only when meta supplies a non-default
@@ -367,5 +404,6 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   if (meta.surviveTurns !== undefined) level.surviveTurns = meta.surviveTurns;
   if (meta.timeControl !== undefined) level.timeControl = meta.timeControl;
   if (meta.victory !== undefined) level.victory = meta.victory;
+  if (meta.events !== undefined) level.events = meta.events;
   return level;
 }

@@ -26,7 +26,7 @@ afterEach(() => {
   vi.useRealTimers();
   // The store is a module singleton shared across tests; a test that sets an authored victory
   // override (ADR-0064) must not leak it into the next test's preset eval. Reset the victory state.
-  useSkirmish.setState({ victoryOverride: null, resultDetail: null });
+  useSkirmish.setState({ victoryOverride: null, resultDetail: null, pendingPromotion: null });
 });
 
 function playFirstMove(seed: number) {
@@ -353,11 +353,9 @@ describe('skirmish store: survive + reach objectives', () => {
     expect(useSkirmish.getState().game.winner).toBe('player');
   });
 
-  it('reach: a PAWN stepping onto a target cell wins instantly (even as it promotes there)', () => {
+  it('reach: a PAWN promoting on a target cell wins after the promotion choice', () => {
     useSkirmish.setState({
-      // Pawn one step from the target (0,0) is the enemy back rank, so it promotes on arrival —
-      // reach still fires because lastMove records the pre-promotion type (ADR-0064).
-      game: { size: { cols: 8, rows: 8 }, pieces: [piece('pp', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 7, 7)], turn: 'player', winner: null },
+      game: { size: { cols: 8, rows: 8 }, pieces: [piece('pp', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 7, 7)], turn: 'player', winner: null, promotionZones: [{ x: 0, y: 0 }] },
       env: { terrain: undefined, lastMove: undefined },
       objective: 'reach',
       objectiveCtx: { reachCells: [{ x: 0, y: 0 }] },
@@ -369,9 +367,13 @@ describe('skirmish store: survive + reach objectives', () => {
       log: [],
     });
     useSkirmish.getState().tryMoveTo(0, 0); // pawn steps onto the target
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ pieceId: 'pp' });
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
+    useSkirmish.getState().choosePromotion('rook');
     const { game } = useSkirmish.getState();
     expect(game.winner).toBe('player');
     expect(game.turn).toBe('done');
+    expect(game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'rook', x: 0, y: 0 });
   });
 
   it('reach: a NON-pawn on a target cell does NOT win (reach is pawn-only)', () => {
@@ -458,9 +460,16 @@ describe('skirmish store: battle clock', () => {
     vi.advanceTimersByTime(400);
     expect(clock()!.remainingMs).toBe(paused);
 
-    // The reply resolves (520ms beat) and the player's clock resumes.
+    // The reply resolves (520ms beat), but the enemy's visible landing beat still belongs
+    // to premove input, so the player's clock stays paused.
     vi.advanceTimersByTime(200);
     expect(useSkirmish.getState().game.turn).toBe('player');
+    expect(useSkirmish.getState().premoveInputOpen).toBe(true);
+    expect(clock()!.running).toBe(false);
+
+    // Once that premove input beat closes without a queued move, live control and clock resume.
+    vi.advanceTimersByTime(620);
+    expect(useSkirmish.getState().premoveInputOpen).toBe(false);
     expect(clock()!.running).toBe(true);
   });
 
@@ -648,6 +657,7 @@ describe('skirmish store: premoves', () => {
       started: true,
       clock: null,
       premoves: [],
+      premoveInputOpen: false,
       testMode: false,
       testMinCpuDelayMs: 0,
     });
@@ -665,6 +675,64 @@ describe('skirmish store: premoves', () => {
     expect(useSkirmish.getState().premoves).toEqual([]);
     useSkirmish.getState().queueMove('pr', 0, 5); // legal along the file
     expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 0, y: 5 }]);
+  });
+
+  it('preserves a different unit selected during the opponent reply', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7); // selected mover is pk; reply is now staged
+    expect(useSkirmish.getState().selectedId).toBe('pk');
+
+    useSkirmish.getState().select('pr'); // mirrors clicking a different unit in premove mode
+    expect(useSkirmish.getState().selectedId).toBe('pr');
+
+    vi.runAllTimers();
+    expect(useSkirmish.getState().game.turn).toBe('player');
+    expect(useSkirmish.getState().selectedId).toBe('pr');
+    expect(useSkirmish.getState().focusedId).toBe('pr');
+  });
+
+  it('keeps the premove unit selected during the fire beat after the reply', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7);
+    useSkirmish.getState().select('pr');
+    useSkirmish.getState().queueMove('pr', 0, 5);
+
+    vi.advanceTimersByTime(520); // enemy reply resolves; the premove waits for its visible beat
+    const duringBeat = useSkirmish.getState();
+    expect(duringBeat.game.turn).toBe('player');
+    expect(duringBeat.premoveInputOpen).toBe(true);
+    expect(duringBeat.premoves).toEqual([{ pieceId: 'pr', x: 0, y: 5 }]);
+    expect(duringBeat.selectedId).toBe('pr');
+  });
+
+  it('accepts a premove queued while the enemy reply is visibly landing', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7);
+
+    vi.advanceTimersByTime(520); // reply has applied; landing beat is still premove input
+    expect(useSkirmish.getState().game.turn).toBe('player');
+    expect(useSkirmish.getState().premoveInputOpen).toBe(true);
+
+    useSkirmish.getState().queueMove('pr', 0, 5);
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 0, y: 5 }]);
+
+    vi.advanceTimersByTime(619);
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 0, y: 5 }]);
+    vi.advanceTimersByTime(2);
+    const afterFire = useSkirmish.getState();
+    expect(afterFire.game.pieces.find((p) => p.id === 'pr')).toMatchObject({ x: 0, y: 5 });
+    expect(afterFire.premoveInputOpen).toBe(false);
+  });
+
+  it('closes the post-reply premove input beat when no premove is queued', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7);
+
+    vi.advanceTimersByTime(520);
+    expect(useSkirmish.getState().premoveInputOpen).toBe(true);
+    vi.advanceTimersByTime(620);
+    expect(useSkirmish.getState().premoveInputOpen).toBe(false);
+    expect(useSkirmish.getState().game.turn).toBe('player');
   });
 
   it('fires a queued premove the instant control returns to the player', () => {
@@ -708,6 +776,32 @@ describe('skirmish store: premoves', () => {
     expect(s.game.pieces.find((p) => p.id === 'pp')?.alive).toBe(false); // captured by the reply
     expect(s.premoves).toEqual([]); // chain dropped — the premove never fired
     expect(s.game.turn).toBe('player');
+  });
+
+  it('fires a queued recapture after the enemy captures a friendly-occupied square', () => {
+    loadBoard([
+      piece('pk', 'player', 'king', 0, 7),
+      piece('pr', 'player', 'rook', 0, 4),
+      piece('bait', 'player', 'pawn', 4, 4),
+      piece('er', 'enemy', 'rook', 4, 0), // greedy reply: er takes bait on the recapture square
+      piece('ek', 'enemy', 'king', 7, 0),
+    ], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7); // safe king step -> opponent's turn
+    useSkirmish.getState().queueMove('pr', 4, 4);
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 4, y: 4 }]);
+
+    vi.advanceTimersByTime(520); // enemy reply lands; the premove waits for its visible beat
+    const afterReply = useSkirmish.getState();
+    expect(afterReply.game.pieces.find((p) => p.id === 'bait')?.alive).toBe(false);
+    expect(afterReply.game.pieces.find((p) => p.id === 'er')).toMatchObject({ x: 4, y: 4, alive: true });
+    expect(afterReply.premoveInputOpen).toBe(true);
+
+    vi.advanceTimersByTime(621); // fire the queued recapture, but not the next enemy reply
+    const afterRecapture = useSkirmish.getState();
+    expect(afterRecapture.game.pieces.find((p) => p.id === 'pr')).toMatchObject({ x: 4, y: 4, alive: true });
+    expect(afterRecapture.game.pieces.find((p) => p.id === 'er')?.alive).toBe(false);
+    expect(afterRecapture.premoves).toEqual([]);
+    expect(afterRecapture.game.turn).toBe('enemy');
   });
 
   it('clearPremoves drops the whole queued chain', () => {

@@ -35,6 +35,8 @@ describe('route surface classification', () => {
 
 describe('route screen key (ADR-0051 exit-dissolve grouping)', () => {
   it('groups sub-paths handled inside one screen instance', () => {
+    expect(routeScreenKey('/studio')).toBe(routeScreenKey('/tileset-studio'));
+    expect(routeScreenKey('/studio')).toBe('studio');
     expect(routeScreenKey('/settings')).toBe(routeScreenKey('/settings/audio'));
     expect(routeScreenKey('/settings/general')).toBe(routeScreenKey('/settings/audio/tracks'));
     expect(routeScreenKey('/campaign')).toBe(routeScreenKey('/campaign/official-1'));

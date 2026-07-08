@@ -23,7 +23,7 @@ import {
   TILE_STEP_Y,
 } from '../art/projectionContract';
 import { studioFamilies, assetFrameSrc, type StudioAsset } from '../ui/studioBoard';
-import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
+import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
 import {
   unitAssets,
   hasDirectionSprite,
@@ -33,10 +33,11 @@ import {
   type Faction,
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { resolveFeatureOverlays, resolveFenceOverlays } from '../core/featureAutotile';
-import { propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite } from './BoardStructure';
-import { fenceOverlayZIndex } from './fenceOverlayDepth';
-import { propDef } from '../core/props';
+import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays } from '../core/featureAutotile';
+import { resolveWallArtFaces, slotSource, wallArtSlotsForFace } from '../core/wallArt';
+import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './BoardStructure';
+import { fenceOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
+import { propDef, type StructureSourceRef } from '../core/props';
 import { groundCoverSet, resolveGroundCover, densityFieldAt, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
@@ -49,6 +50,10 @@ import type { EditorBoard } from '../ui/boardCode';
 const TILE_FRAME_W = TILE_STEP_X * 2; // 96 — the full tile sprite width
 const TILE_FRAME_H = TILE_FRAME_HEIGHT; // 180 — the full tile sprite frame
 const TILE_EQUATOR = 69; // --iso-tile-equator: the frame's contact diamond, from the apex
+const WALL_FRAME_W = 128;
+const WALL_FRAME_H = 240;
+const WALL_ANCHOR_X = 64;
+const WALL_ANCHOR_Y = 96;
 // The doodad sprite is the same 96x180 frame seated by `translate(-50%, -38.333%)` ⇒ the
 // contact pixel (48,69) lands on the cell point. So its frame origin is (-stepX, -equator) too.
 const DOODAD_FRAME_W = TILE_FRAME_W;
@@ -88,6 +93,56 @@ const resolveTile = (id: string): StudioAsset | undefined => studioTiles.find((a
 const resolveUnit = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
 const resolveDoodad = (id: string): DoodadAsset | undefined => doodadAsset(id);
 
+function pushStructureDrawOps(
+  ops: DrawOp[],
+  source: StructureSourceRef,
+  sourceSprite: { w: number; h: number },
+  anchorY: number,
+  scale: number,
+  dx: number,
+  dy: number,
+  backZ: number,
+  frontZ: number,
+): void {
+  const fullW = sourceSprite.w * scale;
+  const fullH = sourceSprite.h * scale;
+  if (structureSourceSplitMode(source) !== 'flat-contact') {
+    ops.push({ src: structureSourceHalfSrc(source, 'back'), dx, dy, dw: fullW, dh: fullH, z: backZ });
+    ops.push({ src: structureSourceHalfSrc(source, 'front'), dx, dy, dw: fullW, dh: fullH, z: frontZ });
+    return;
+  }
+
+  const clips = flatContactClipRects({ w: sourceSprite.w, h: sourceSprite.h, anchorY });
+  if (clips.back.sh > 0) {
+    ops.push({
+      src: structureSourceHalfSrc(source, 'back'),
+      sx: clips.back.sx,
+      sy: clips.back.sy,
+      sw: clips.back.sw,
+      sh: clips.back.sh,
+      dx,
+      dy,
+      dw: fullW,
+      dh: clips.back.sh * scale,
+      z: backZ,
+    });
+  }
+  if (clips.front.sh > 0) {
+    ops.push({
+      src: structureSourceHalfSrc(source, 'front'),
+      sx: clips.front.sx,
+      sy: clips.front.sy,
+      sw: clips.front.sw,
+      sh: clips.front.sh,
+      dx,
+      dy: dy + clips.front.sy * scale,
+      dw: fullW,
+      dh: clips.front.sh * scale,
+      z: frontZ,
+    });
+  }
+}
+
 /**
  * The flat, z-sorted list of image draws for a board — the bake's "scene graph". Pure (no
  * canvas, no DOM), so it can be unit-tested and so the unique-src set is trivially derivable.
@@ -104,6 +159,9 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
   const isExit = (edge: string): boolean => board.featureExits[edge] === true;
   const overlays = resolveFeatureOverlays(board.features, isSevered, isExit);
   const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
+  const wallBounds = { cols: board.cols, rows: board.rows };
+  const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
+  const wallFaceStyles = resolveWallArtFaces(board.wallArt, wallBounds);
 
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
@@ -131,6 +189,36 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
       }
 
       const fence = fenceOverlays.get(key);
+      const wall = wallOverlays.get(key);
+      if (wall) {
+        // Perimeter walls share the live board-level wall layer and tie the owner unit's band.
+        const wallZ = wallOverlayZIndex({ x, y });
+        ops.push({
+          src: wallFrameSrc(wall.material, wall.mask),
+          dx: left - WALL_ANCHOR_X,
+          dy: top - WALL_ANCHOR_Y,
+          dw: WALL_FRAME_W,
+          dh: WALL_FRAME_H,
+          z: wallZ,
+        });
+        const faceStyles = wallFaceStyles.get(key);
+        for (const face of ['west', 'north'] as const) {
+          const maskBit = face === 'west' ? 8 : 1;
+          if (!(wall.mask & maskBit)) continue;
+          for (const slot of wallArtSlotsForFace(faceStyles?.[face], face)) {
+            const faceAsset = slotSource(slot).faces[face];
+            ops.push({
+              src: faceAsset.src,
+              dx: left - WALL_ANCHOR_X + slot.x - faceAsset.mountX * slot.scale,
+              dy: top - WALL_ANCHOR_Y + slot.y - faceAsset.mountY * slot.scale,
+              dw: faceAsset.width * slot.scale,
+              dh: faceAsset.height * slot.scale,
+              z: wallZ + 1,
+            });
+          }
+        }
+      }
+
       if (fence) {
         // Edge rails are foreground objects; they match the live board-level fence layer.
         ops.push({
@@ -161,8 +249,17 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
       for (const part of parts) {
         const sourceSprite = structureSourceSprite(part.source);
         const scale = part.scale ?? 1;
-        ops.push({ src: structureSourceHalfSrc(part.source, 'back'), dx: left - part.anchorX * scale, dy: top - part.anchorY * scale, dw: sourceSprite.w * scale, dh: sourceSprite.h * scale, z: base - 1 });
-        ops.push({ src: structureSourceHalfSrc(part.source, 'front'), dx: left - part.anchorX * scale, dy: top - part.anchorY * scale, dw: sourceSprite.w * scale, dh: sourceSprite.h * scale, z: base + 1 });
+        pushStructureDrawOps(
+          ops,
+          part.source,
+          sourceSprite,
+          part.anchorY,
+          scale,
+          left - part.anchorX * scale,
+          top - part.anchorY * scale,
+          base - 1,
+          base + 1,
+        );
       }
     }
 
@@ -202,10 +299,7 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
       const s = part.scale ?? 1;
       const dx = left - part.anchorX * s;
       const dy = top - part.anchorY * s;
-      const dw = sourceSprite.w * s;
-      const dh = sourceSprite.h * s;
-      ops.push({ src: structureSourceHalfSrc(part.source, 'back'), dx, dy, dw, dh, z: back });
-      ops.push({ src: structureSourceHalfSrc(part.source, 'front'), dx, dy, dw, dh, z: front });
+      pushStructureDrawOps(ops, part.source, sourceSprite, part.anchorY, s, dx, dy, back, front);
     }
   }
 
@@ -219,8 +313,10 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
   const coverCells: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover?: GroundCover }> = [];
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
-      const tileId = board.cells[`${x},${y}`];
-      const terrain = tileId ? familyOfTile(tileId) : undefined;
+      const key = `${x},${y}`;
+      const tileId = board.cells[key];
+      const tileTerrain = tileId ? familyOfTile(tileId) : undefined;
+      const terrain = board.coverTypes?.[key] ?? tileTerrain;
       if (terrain && groundCoverSet(terrain)) coverCells.push({ x, y, terrain });
     }
   }
@@ -277,9 +373,13 @@ export function boardContentHash(board: EditorBoard): string {
     `d:${sortedEntries(board.doodads)}`,
     `p:${sortedEntries(board.props ?? {})}`,
     `v:${sortedEntries(board.cover)}`,
+    `ct:${sortedEntries(board.coverTypes ?? {})}`,
     `f:${sortedEntries(board.features)}`,
     `fe:${sortedEntries(board.fences ?? {})}`,
-    `x:${Object.keys(board.featureCuts).sort().join(',')}`,
+    `wl:${sortedEntries(board.walls ?? {})}`,
+    `wa:${sortedEntries(board.wallArt ?? {})}`,
+    `x:${sortedEntries(board.featureCuts)}`,
+    `xe:${sortedEntries(board.featureExits)}`,
   ];
   return fnv1a(parts.join('|'));
 }

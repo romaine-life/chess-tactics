@@ -489,9 +489,9 @@ export function initBgm() {
   function buildControl() {
     const el = document.createElement('button');
     el.type = 'button';
-    el.className = 'bgm-control';
+    el.className = 'titlebar-control titlebar-control--icon bgm-control';
     const icon = document.createElement('img');
-    icon.className = 'bgm-control-icon';
+    icon.className = 'titlebar-control-glyph bgm-control-icon';
     icon.src = '/assets/ui/kit/icons/music.png';
     icon.alt = '';
     icon.setAttribute('aria-hidden', 'true');

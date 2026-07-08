@@ -15,30 +15,26 @@ import { formatClockMs } from '../core/clock';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { decodeBoard } from './boardCode';
-import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
+import {
+  appendLevelEventsParam,
+  appendTimeControlParams,
+  appendVictoryRulesParam,
+  readLevelEventsParam,
+  readTimeControlParams,
+  readVictoryRulesParam,
+} from './playtestRoute';
 import { editorBoardToLevel } from '../core/levelBoard';
 import { fetchPublicMap } from '../net/maps';
 import { OBJECTIVE_TYPES, type ObjectiveType } from '../core/level';
+import { spawnEventsForLevel } from '../core/levelEvents';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import { PALETTE_FOR_SIDE, isPlayablePieceType } from '../core/pieces';
 import { masterSrc, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
 import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
-import { livingPieces } from '../core/rules';
-import { computeStars, nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
+import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
 import { navigateApp, readValidatedReturnTo } from './navigation';
-
-const STAR_ICON = '/assets/ui/kit/icons/star.png';
-
-function ResultStars({ count }: { count: number }) {
-  return (
-    <span className="campaign-result-stars" aria-label={`${count} of 3 stars`}>
-      {[0, 1, 2].map((i) => (
-        <img key={i} src={STAR_ICON} alt="" aria-hidden="true" style={{ width: 26, height: 26, opacity: i < count ? 1 : 0.22 }} />
-      ))}
-    </span>
-  );
-}
+import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
 
 export function Skirmish() {
   const routeSearch = window.location.search;
@@ -52,6 +48,8 @@ export function Skirmish() {
   const routeBoard = routeParams.get('board');
   const routeObjective = routeParams.get('obj');
   const routeTimeControl = useMemo(() => readTimeControlParams(routeParams), [routeParams]);
+  const routeEvents = useMemo(() => readLevelEventsParam(routeParams), [routeParams]);
+  const routeVictory = useMemo(() => readVictoryRulesParam(routeParams), [routeParams]);
   const [scenarioTimeControl, setScenarioTimeControl] = useState<TimeControl | null>(() => routeTimeControl ?? null);
   const routeBoardLevel = useMemo(() => {
     if (!routeBoard) return null;
@@ -59,15 +57,22 @@ export function Skirmish() {
     if (!decoded) return null;
     const objective: ObjectiveType = (OBJECTIVE_TYPES as readonly string[]).includes(routeObjective ?? '')
       ? (routeObjective as ObjectiveType) : 'capture-all';
-    return editorBoardToLevel(decoded, { id: 'board-link', name: 'Board Link', objective, timeControl: scenarioTimeControl ?? undefined });
-  }, [routeBoard, routeObjective, scenarioTimeControl]);
+    return editorBoardToLevel(decoded, {
+      id: 'board-link',
+      name: 'Board Link',
+      objective,
+      timeControl: scenarioTimeControl ?? undefined,
+      events: routeEvents,
+      victory: routeVictory,
+    });
+  }, [routeBoard, routeObjective, scenarioTimeControl, routeEvents, routeVictory]);
   // Multiplayer: `?lobby=<id>` enters a lobby's shared board as one of the two seats.
   const routeLobby = routeParams.get('lobby');
   // A shared USER map: `?map=<publicId>` fetches its public snapshot and plays it (no sign-in, no
   // campaign). The dead-link message shows if the id is unknown/removed.
   const routeMap = routeParams.get('map');
-  // The Skirmish hub's "Start" enters as `?random=1`: always roll a FRESH random battle on
-  // the player's chosen clock, rather than resuming a prior in-progress skirmish.
+  // Legacy free-skirmish links can still enter as `?random=1`: always roll a FRESH random
+  // battle on the player's chosen clock, rather than resuming a prior in-progress skirmish.
   const routeRandom = routeParams.get('random') === '1';
   // Where a test-play should return to (the editor board that launched it, via ?returnTo). Drives
   // a "‹ Back to editor" in the title bar so a live board test is a LOOP — tweak, play, back —
@@ -80,8 +85,10 @@ export function Skirmish() {
       : 'capture-all';
     const params = new URLSearchParams({ board: routeBoard, obj: objective });
     appendTimeControlParams(params, scenarioTimeControl ?? undefined);
+    appendLevelEventsParam(params, routeEvents);
+    appendVictoryRulesParam(params, routeVictory);
     return `/editor/level?${params.toString()}`;
-  }, [routeBoard, routeObjective, scenarioTimeControl]);
+  }, [routeBoard, routeObjective, scenarioTimeControl, routeEvents, routeVictory]);
   const levelReturnHref = useMemo(() => {
     if (routeMode !== 'test' || !routeLevelId) return null;
     const params = new URLSearchParams({ levelId: routeLevelId });
@@ -117,9 +124,9 @@ export function Skirmish() {
   const campaigns = useCampaigns((s) => s.campaigns);
   const levelDocs = useCampaigns((s) => s.levels);
   // The live objective + which side holds the King come from the STORE (not routeLevel):
-  // the store computes kingSide from the actual starting pieces, so a random-placement
-  // King Assault whose roster deals the player the King reads "Protect your King" too, and
-  // a free skirmish (no level) still gets a correct goal line. objectiveSummary is the one
+  // the store computes kingSide from the actual starting pieces, so a setup-spawn King
+  // Assault whose events deal the player the King reads "Protect your King" too, and a
+  // free skirmish (no level) still gets a correct goal line. objectiveSummary is the one
   // source of that copy (ADR-0050 — no re-hardcoded objective strings in the UI).
   const objective = useSkirmish((s) => s.objective);
   const kingSide = useSkirmish((s) => s.objectiveCtx.kingSide);
@@ -152,18 +159,10 @@ export function Skirmish() {
     navigateApp('/lobbies', { replace: true });
   };
 
-  // Stars earned this clear (3 flawless, 2 light losses, 1 any win), from the level's
-  // authored player force vs. who's still standing.
-  const stars = useMemo(() => {
-    if (!routeLevel || game.winner !== 'player') return 0;
-    const initial = routeLevel.layers.units.filter((u) => u.side === 'player').length;
-    return computeStars(initial, livingPieces(game.pieces, 'player').length);
-  }, [routeLevel, game.winner, game.pieces]);
-
-  // Bank the win the moment a campaign battle is won (idempotent — keeps the best stars).
+  // Bank the win the moment a campaign battle is won (idempotent).
   useEffect(() => {
-    if (isCampaignPlay && routeLevel && game.winner === 'player') recordLevelWin(routeLevel.id, stars);
-  }, [isCampaignPlay, routeLevel, game.winner, stars]);
+    if (isCampaignPlay && routeLevel && game.winner === 'player') recordLevelWin(routeLevel.id);
+  }, [isCampaignPlay, routeLevel, game.winner]);
 
   // Re-arm the netplay result card whenever a fresh game is built (winner clears), so a
   // dismissal from the previous match doesn't suppress the next one's result.
@@ -180,15 +179,10 @@ export function Skirmish() {
   const replayLevel = () => {
     const level = activeLevel;
     if (!level) return;
-    // Retry the SAME position: a fixed-placement level reuses the current seed so it rebuilds
-    // byte-identical. The board art signature is then unchanged, so the deploy "arrival" drop
-    // never re-arms (SkirmishBoard) — the pieces simply hop back to their starting seats, which
-    // is the whole reset the player wants. Rolling a fresh seed would leave every piece on its
-    // authored square yet still re-hide the board and re-play the drop, reading as "move back,
-    // disappear, fall again." A random-placement level instead re-rolls: reshuffling the deal is
-    // that mode's point (ADR-0050), and a fresh deal reads better as a new deploy than as pieces
-    // sliding to random new homes.
-    const seed = level.placement === 'random' ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
+    // Retry the SAME position when pieces are authored on the board: reuse the current seed so it
+    // rebuilds byte-identical. Setup spawn events instead re-roll, since reshuffling the deal is
+    // the point of event-driven deployment and reads better as a fresh deploy.
+    const seed = spawnEventsForLevel(level).length ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
     newSkirmish({ seed, level });
   };
 
@@ -309,9 +303,9 @@ export function Skirmish() {
       });
     };
 
-    // The Skirmish hub's "Start" (`?random=1`) ALWAYS rolls a fresh random battle on the
-    // chosen clock — never resumes — then strips the flag so a later reload resumes THIS
-    // battle instead of re-rolling a different one.
+    // Legacy `?random=1` links ALWAYS roll a fresh free battle on the chosen clock — never
+    // resume — then strip the flag so a later reload resumes THIS battle instead of
+    // re-rolling a different one. The Skirmish hub now routes through editable profiles.
     if (routeRandom) {
       newSkirmish({ seed: freshSeed(), ai, timeControl: loadSkirmishClockPref() });
       navigateApp('/play', { replace: true, scroll: false });
@@ -366,6 +360,7 @@ export function Skirmish() {
     ensureCampaignsHydrated()
       .then(() => {
         if (!active) return;
+        ensureDefaultSkirmishProfileLevel();
         if (routeCampaignId) useCampaigns.getState().selectCampaign(routeCampaignId);
         useCampaigns.getState().selectLevel(routeLevelId);
         const level = useCampaigns.getState().levels[routeLevelId] ?? null;
@@ -623,7 +618,6 @@ export function Skirmish() {
         <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result">
           <div className="settings-frame campaign-result-panel">
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Stalemate' : 'Defeat'}</h2>
-            {game.winner === 'player' && <ResultStars count={stars} />}
             <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
             <div className="campaign-result-actions">
               <button type="button" className="app-header-button" onClick={replayLevel}>

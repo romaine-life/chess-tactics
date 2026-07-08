@@ -110,6 +110,7 @@ const SPECS = [
   ['settings', 'star', ref.general, 'a single gold five-pointed star, flat low-fi'],
   ['settings', 'chevron-up', ref.general, 'a single upward chevron / caret (the ^ symbol), pale steel blue, flat low-fi'],
   ['settings', 'chevron-down', ref.general, 'a single downward chevron / caret (an inverted ^), pale steel blue, flat low-fi'],
+  ['settings', 'pencil', ref.general, 'a short gold wooden pencil with a pink-red eraser and a dark graphite tip, shown at a slight diagonal, flat low-fi'],
   ['settings', 'delete', ref.general, 'a red X delete mark: two crossed diagonal strokes, flat low-fi'],
   ['settings', 'lock', ref.general, 'a closed gold padlock, flat low-fi'],
   // sign-out: a world-object icon, not a stock "exit" arrow — a stripped cloister

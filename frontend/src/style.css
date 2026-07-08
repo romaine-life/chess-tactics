@@ -511,10 +511,6 @@ h1 {
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
   gap: clamp(6px, calc(var(--layout-vw, 100vw) * .0072), 12px);
   min-block-size: 0;
-  /* .menu-layer.main-menu-layer is pointer-events:none (so the rain stays click-through);
-     the old menu re-enabled interaction on .main-menu-left/right. Re-enable it for the whole
-     twin UI, or every click falls through to the app root and the tabs do nothing. */
-  pointer-events: auto;
 }
 /* Home has no Back/Menu actions, so the bar is just brand | account. */
 .main-menu-twin-header {
@@ -559,9 +555,8 @@ h1 {
    shared rain world is running right now (read live off the vendored client;
    rendered by HomepageBackdrop, so every screen with the shared backdrop
    carries it). Links to ambience's read-only monitor for the same broadcast.
-   z4: above the screens' z3 UI tier so the corner stays clickable under
-   footers/panels that reach it, still below the near-drop overlay (z5) so the
-   promoted drops cross in front of it like the rest of the chrome. */
+   It shares the backdrop tier with the scene art: later DOM order keeps it
+   barely above the raw art, while rain tint/screen UI/overlay layers cover it. */
 .ambience-credit {
   /* A <button> since ADR-0052: clear the UA button chrome AND the global `button`
      base (radius/shadow/line-height); everything else below is the same label
@@ -585,10 +580,10 @@ h1 {
   padding: 0 var(--ds-space-2);
   display: inline-flex;
   align-items: center;
-  z-index: 4;
+  z-index: 1;
   /* .menu-layer (menu/campaign) is pointer-events:none so the rain stays
-     click-through, and the credit would inherit that inertness — opt back in,
-     like .main-menu-twin-screen does for the menu UI. */
+     click-through, and the credit would inherit that inertness. Opt back in,
+     but at this backdrop z-index it only wins over exposed scene art. */
   pointer-events: auto;
   font-family: var(--ds-font-pixel);
   font-size: var(--ds-text-2xs);
@@ -3643,12 +3638,14 @@ h1 {
   --ds-inline: var(--ds-space-2);
   --ds-inline-tight: var(--ds-space-1);
   --ds-gutter: var(--ds-space-3);
+  --skirmish-grid-gap: 12px;
+  --skirmish-rail-w: clamp(300px, 24vw, 360px);
   align-items: stretch;
   color: var(--skirmish-ink);
   display: grid;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 360px);
+  gap: var(--skirmish-grid-gap);
+  grid-template-columns: minmax(0, 1fr) var(--skirmish-rail-w);
   /* Row-first: a full-bleed title bar spanning both columns on top (ADR-0004),
      then the board + HUD below. Matches the settings screen's header pattern. */
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
@@ -3775,12 +3772,11 @@ h1 {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
-/* Level Editor bar: 4 columns — brand · live save-state (center) · return-nav (‹ Catalog /
-   ‹ Back, actions slot) · account cluster. Two classes out-rank the base grid so the cluster
-   keeps its own track. (Undo/Test/Save moved into the editor's rail dock, so the actions slot
-   now carries only the return-nav.) */
+/* Level Editor bar: 3 columns — brand · return-nav (‹ Catalog / ‹ Back, actions slot) ·
+   account cluster. Undo/Test/Save moved into the editor's rail dock, and the owner removed
+   the center status cluster, so do not render a ghost center track/gap here. */
 .app-shell-titlebar.le-topbar {
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 /* Editor bar: 4 columns — brand · save-state (center) · ‹ Back (actions) · account cluster.
    The Editor is a settings-twin, so like Settings it carries a Back control in the trailing
@@ -3794,7 +3790,7 @@ h1 {
    slot) · account cluster. The extra track lets the icon nav sit before the always-present
    cluster (ADR-0042). */
 .app-shell-titlebar.studio-topbar {
-  column-gap: var(--titlebar-control-gap, 10px);
+  column-gap: var(--titlebar-control-gap, var(--ds-space-2));
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
@@ -4106,6 +4102,13 @@ h1 {
 
 .skirmish-board-cell-hit.is-player-attack::before {
   background: rgba(74, 210, 132, .32);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-promotion-zone::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 236, 150, .40), transparent 62%),
+    rgba(246, 198, 80, .26);
   opacity: 1;
 }
 
@@ -4680,23 +4683,15 @@ h1 {
   border-image-source: url("/assets/ui/kit/button-danger.png");
 }
 
-/* Test Board CPU-delay floor (HUD Controls tab, test only): a typeable seconds field. */
+/* Test Board CPU-delay floor (HUD Controls tab, test only): the shared editable Stepper,
+   scoped just enough to sit cleanly in the narrow HUD column. */
 .skirmish-cpu-delay-field {
-  align-items: center;
-  color: var(--skirmish-muted);
-  display: flex;
-  font-size: var(--ds-text-xs);
-  gap: var(--ds-inline);
+  gap: var(--ds-inline-tight);
 }
-.skirmish-cpu-delay-field input {
-  background: rgba(8, 20, 30, .55);
-  border: 1px solid rgba(120, 170, 255, .35);
-  border-radius: 6px;
-  color: #eaf6ff;
-  font: inherit;
-  inline-size: 6ch;
-  padding: 5px 7px;
-  text-align: right;
+
+.skirmish-cpu-delay-field .settings-stepper-field {
+  background: rgba(3, 12, 19, .82);
+  border-color: rgba(137, 205, 255, .58);
 }
 
 /* New-skirmish battle-clock picker (HUD Controls tab): a caps label + a shared
@@ -4717,9 +4712,7 @@ h1 {
   text-transform: uppercase;
 }
 
-/* Random Skirmish setup panel (the /skirmish hub's first tab): a blurb, the shared clock
-   picker in a width-capped column so its rows don't stretch across the whole panel, and a
-   Start button. Reuses .skirmish-clock-row from the picker above. */
+/* Skirmish setup/profile rows in the /skirmish hub. */
 .skirmish-setup-section {
   display: grid;
   gap: var(--ds-stack);
@@ -4871,6 +4864,38 @@ h1 {
   min-width: 56px;
 }
 
+.skirmish-promotion-card {
+  display: grid;
+  gap: var(--ds-inline);
+}
+
+.skirmish-promotion-options {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.skirmish-promotion-option.app-header-button {
+  flex-direction: column;
+  gap: 4px;
+  height: auto;
+  min-height: 72px;
+  min-width: 0;
+  padding: 6px 4px;
+}
+
+.skirmish-promotion-option img {
+  height: 36px;
+  image-rendering: pixelated;
+  object-fit: contain;
+  width: 46px;
+}
+
+.skirmish-promotion-option span {
+  font-size: var(--ds-text-xs);
+  line-height: 1;
+}
+
 /* ============================================================
    LEVEL EDITOR — Skirmish-sibling rail helpers.
    The /edit shell reuses the real .skirmish-screen / .skirmish-war-room /
@@ -4904,10 +4929,9 @@ h1 {
    columns, gap, and padding all come from .app-titlebar + .settings-header-frame carried
    on the element itself. The editor puts NO status in the bar (the level name and
    save-state cluster were removed — that state lives in the Status layer card); only the
-   return-nav buttons ride it (.app-header-button on the kit gold frame). Bar-content
-   rules are scoped to the bar class (.le-topbar), NOT the screen — the bar lives in the
-   app shell, outside .level-editor-screen. */
-.le-topbar .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
+   return-nav buttons ride it through the title-bar controls API. Bar-content rules are
+   scoped to the bar class (.le-topbar), NOT the screen — the bar lives in the app shell,
+   outside .level-editor-screen. */
 
 /* segmented switch (layer / tool / fill) */
 .le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
@@ -4964,16 +4988,24 @@ h1 {
   position: fixed;
   z-index: 40;
 }
-/* Pinned Actions dock in the rail — only the universal per-edit verbs (Undo/Redo), as
-   COMPACT icon-only squares (owner: icons, not letters — the labels ride aria-label +
-   title). Glyphs come from the editor icon set (.le-ico/.ic-*), same treatment as the
-   tool row; press swaps to the set's gold -active variant. Test + Save/Publish are
-   session verbs and live in the Status layer card (.le-status-actions, 2-col grid; the
-   base grid stays 3-col for the Board layer's row). Spacing rides the ADR-0056 ladder —
-   no per-row margin hand-picks. */
+/* Pinned Actions dock in the rail: universal tools + Undo/Redo as compact icon-only
+   squares. Labels ride aria-label + title; active/press states come from the editor
+   icon set. Test + Save/Publish stay with the Status layer's save workflow. */
 .le-board-actions { display: grid; gap: var(--ds-inline-tight); grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--ds-stack); }
-.le-board-actions.le-history-actions { display: flex; }
 .le-board-actions.le-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.le-action-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--ds-stack);
+}
+.le-action-toolbar-divider {
+  align-self: stretch;
+  background: rgba(146, 201, 235, .28);
+  min-height: 38px;
+  width: 1px;
+}
 /* Undo/Redo glyph PNGs already carry their OWN kit frame, so we drop the outer .le-seg-btn
    button frame (same treatment as the .le-seg-icons tool row) — otherwise the two frames nest
    into a double border. The icon fills the square so its single frame IS the button edge. */
@@ -5023,8 +5055,9 @@ h1 {
 }
 .le-faction-select:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
 .le-faction-select option {
-  background: #0a1f2e;
-  color: #cfe6f1;
+  background: #f3f7fb;
+  color: #142536;
+  text-shadow: none;
   text-transform: none;
 }
 .le-direction-popover { min-width: 0; position: relative; width: 100%; }
@@ -5054,13 +5087,16 @@ h1 {
 }
 .le-board-warning { color: #f0bd55; font-size: var(--ds-text-sm); line-height: 1.3; margin: 0; text-shadow: 0 0 8px rgba(240, 189, 85, .22); }
 
-/* Layer picker — a dropdown (the tab count outgrew a single segmented row). Wears the same
-   kit frame (border-image button atom) as the editor buttons so it reads as one control family,
-   not a lone gradient; the native select keeps its dropdown chevron. */
-/* The 10px kit frame's fill slice paints over the select's own background, and a <select>
-   can't host a reliable ::after — so the dropdown chevron rides on the wrapper, above the frame. */
-.le-layer-select-wrap { position: relative; }
-.le-layer-select-wrap::after {
+/* Canonical Level Editor select: the <select> wears the kit frame; the wrapper owns the
+   chevron because native selects cannot host a reliable ::after above the 9-slice fill. */
+.le-select-wrap,
+.le-layer-select-wrap,
+.le-event-select-wrap {
+  position: relative;
+}
+.le-select-wrap::after,
+.le-layer-select-wrap::after,
+.le-event-select-wrap::after {
   content: "";
   position: absolute;
   top: 50%;
@@ -5070,6 +5106,17 @@ h1 {
   transform: translateY(-50%);
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23cfe6f1' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain;
   pointer-events: none;
+}
+.le-select-wrap .le-layer-select,
+.le-layer-select-wrap .le-layer-select,
+.le-event-select-wrap .le-layer-select {
+  overflow: hidden;
+  padding-left: 10px;
+  padding-right: 34px;
+  text-align: left;
+  text-align-last: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .le-layer-select {
   appearance: none;
@@ -5083,7 +5130,7 @@ h1 {
   font-size: var(--ds-text-xs);
   min-height: 40px;
   outline: none;
-  padding: 0 22px 0 6px;
+  padding: 0 34px 0 10px;
   text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
   width: 100%;
@@ -5093,11 +5140,90 @@ h1 {
   outline-offset: 2px;
 }
 .le-layer-select option {
-  background: #0a1f2e;
-  color: #cfe6f1;
+  background: #f3f7fb;
+  color: #142536;
+  text-shadow: none;
   text-transform: none;
 }
-.le-layer-select option:disabled { color: rgba(207, 230, 241, .4); }
+.le-faction-select option:checked,
+.le-layer-select option:checked {
+  background: #8fbdeb;
+  color: #082033;
+}
+.le-layer-select option:disabled { color: rgba(20, 37, 54, .45); }
+.le-zone-select-controls {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
+  min-width: 0;
+}
+.le-zone-stepper-button.settings-chrome-button {
+  height: 34px;
+  min-height: 34px;
+  min-width: 34px;
+  padding: 0;
+  width: 34px;
+}
+.le-zone-stepper-button:disabled {
+  cursor: default;
+  opacity: .42;
+}
+.le-zone-panel {
+  --le-zone-button-w: 38px;
+  --le-zone-row-h: 42px;
+}
+.le-zone-panel .le-ctrlrow {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: var(--le-zone-row-h);
+}
+.le-zone-panel .le-zone-select-controls,
+.le-zone-panel .le-select-wrap,
+.le-zone-panel .le-zone-name-input,
+.le-zone-panel .le-zone-color-swatches {
+  box-sizing: border-box;
+  justify-self: stretch;
+  min-width: 0;
+  width: 100%;
+}
+.le-zone-panel .le-zone-select-controls {
+  gap: 6px;
+  grid-template-columns: var(--le-zone-button-w) minmax(0, 1fr) var(--le-zone-button-w) var(--le-zone-button-w) var(--le-zone-button-w);
+  height: var(--le-zone-row-h);
+}
+.le-zone-panel .le-select-wrap,
+.le-zone-panel .le-layer-select-wrap,
+.le-zone-panel .le-layer-select,
+.le-zone-panel .le-zone-name-input,
+.le-zone-panel .le-zone-stepper-button.settings-chrome-button,
+.le-zone-panel .le-zone-color-button {
+  height: var(--le-zone-row-h);
+  min-height: var(--le-zone-row-h);
+}
+.le-zone-panel .le-zone-stepper-button.settings-chrome-button {
+  min-width: var(--le-zone-button-w);
+  width: var(--le-zone-button-w);
+}
+.le-zone-panel .le-zone-name-input {
+  max-width: none;
+}
+.le-zone-panel .le-zone-color-swatches {
+  align-items: stretch;
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  height: var(--le-zone-row-h);
+  justify-content: stretch;
+}
+.le-zone-panel .le-zone-color-button {
+  width: 100%;
+}
+.le-zone-panel .le-zone-color-button .le-zone-dot {
+  height: 14px;
+  width: 14px;
+}
 /* The board-link field wears the kit `field-input` 9-slice (its own navy well is the frame's
    fill slice), never a hand-rolled border (ADR-0032/0034) — the same input chrome the Codex
    editor uses. Single-line control: horizontal inset on the role token, vertical centring from
@@ -5144,16 +5270,25 @@ h1 {
    `contain` shrinks it to a low sliver. Fill the chip and frame the diamond so the preview
    focuses on the surface. object-position pulls the upper diamond into the box center. */
 .le-brush-thumb img.le-thumb-tile { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; object-position: center 26%; }
+.le-brush-thumb .ground-cover-preview {
+  --tile-zoom: .42;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
 /* ---- Gameplay zones (ADR-0050) ------------------------------------------------------------
-   Zone tint palette — one accent per paintable zone type: player placement (cyan), enemy
-   placement (crimson), goal (gold). Shared by the board overlay diamond, the brush preview,
-   and the swatch dots so a colour always means the same zone. */
-.le-zone-player { --le-zone-accent: 90, 200, 255; }
-.le-zone-enemy { --le-zone-accent: 235, 96, 96; }
-.le-zone-goal { --le-zone-accent: 245, 200, 90; }
+   Zone tint palette — cosmetic only. Events/rules decide behavior; color just helps authors
+   distinguish named regions. Old hidden-type aliases stay so legacy renders keep their tint. */
+.le-zone-teal, .le-zone-region { --le-zone-accent: 120, 214, 184; }
+.le-zone-blue, .le-zone-player { --le-zone-accent: 90, 200, 255; }
+.le-zone-red, .le-zone-enemy { --le-zone-accent: 235, 96, 96; }
+.le-zone-gold, .le-zone-goal { --le-zone-accent: 245, 200, 90; }
+.le-zone-violet, .le-zone-threat { --le-zone-accent: 236, 95, 194; }
+.le-zone-slate, .le-zone-rock { --le-zone-accent: 166, 178, 190; }
+.le-zone-amber, .le-zone-promotion { --le-zone-accent: 255, 226, 118; }
 
 /* The on-board zone overlay: a translucent tinted diamond. It COPIES the selection ring's
    seating exactly — top: --iso-tile-surface-top + the diamond clip-path — so it sits on the
@@ -5190,6 +5325,30 @@ h1 {
 }
 
 /* Generate (terrain scatter) panel — chips + sliders + seed, reusing .le-seg-btn for the toggles. */
+.le-generate .le-gen-unit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 6px;
+}
+.le-generate .le-gen-unit-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(239, 249, 255, .82);
+}
+.le-generate .le-gen-unit-select > span {
+  flex: 0 0 auto;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.le-generate .le-gen-unit-select select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .le-generate .le-gen-scope {
   display: flex;
   flex-wrap: wrap;
@@ -5347,6 +5506,32 @@ h1 {
   background: rgba(var(--le-zone-accent), .95);
   box-shadow: 0 0 0 1px rgba(var(--le-zone-accent), .5);
 }
+.le-zone-color-swatches {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(7, 24px);
+  justify-content: end;
+}
+.le-zone-color-button {
+  appearance: none;
+  background: rgba(7, 18, 27, .72);
+  border: 1px solid rgba(120, 160, 180, .28);
+  border-radius: 4px;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: grid;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  width: 24px;
+}
+.le-zone-color-button.active {
+  border-color: rgba(var(--le-zone-accent), .95);
+  box-shadow: 0 0 0 1px rgba(var(--le-zone-accent), .65), 0 0 10px rgba(var(--le-zone-accent), .2);
+}
+.le-zone-color-button:disabled { cursor: default; opacity: .45; }
+.le-zone-color-button:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
+.le-zone-color-button .le-zone-dot { height: 12px; width: 12px; }
 
 /* A wrapping segmented row for controls with more items than fit one line (the 5-mode picker). */
 .le-seg-wrap { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: 1fr 1fr; }
@@ -5362,6 +5547,7 @@ h1 {
 .le-seg-icons .le-seg-btn { border: 0; border-image: none; min-height: 0; padding: 0; width: 44px; height: 44px; }
 .le-seg-icons .le-seg-btn .le-ico { width: 100%; height: 100%; }
 .le-seg-icons .le-seg-btn.active { border-image: none; }
+.le-action-toolbar .le-seg-btn { width: 38px; height: 38px; }
 .le-seg-icons .le-seg-btn.active .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper-active.png"); }
 .le-seg-icons .le-seg-btn.active .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush-active.png"); }
 .le-seg-icons .le-seg-btn.active .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser-active.png"); }
@@ -5428,6 +5614,31 @@ h1 {
 }
 .le-swatch img { height: 46px; image-rendering: pixelated; object-fit: contain; width: 46px; }
 .le-swatch small { font-size: var(--ds-text-2xs); line-height: 1; text-align: center; }
+.le-cover-swatches {
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  margin-bottom: 8px;
+}
+.le-cover-swatch {
+  min-width: 0;
+  overflow: hidden;
+  padding: 5px 4px 6px;
+}
+.le-cover-swatch .ground-cover-preview {
+  width: min(100%, calc(132px * var(--tile-zoom, 1)));
+  height: calc(112px * var(--tile-zoom, 1));
+}
+.le-cover-swatch .ground-cover-preview-tile {
+  width: calc(96px * var(--tile-zoom, 1));
+  height: calc(96px * var(--tile-zoom, 1));
+  max-width: none;
+  max-height: none;
+}
+.le-cover-swatch small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .le-swatch.active { border-color: var(--skirmish-cyan); box-shadow: 0 0 0 1px rgba(56, 215, 255, .35); color: #eafaff; }
 .le-swatch:hover {
   color: #f4fbff;
@@ -5473,9 +5684,9 @@ h1 {
 .le-rule-add { margin-top: 12px; }
 .le-seg-compact .le-seg-btn { min-width: 0; padding: 0 12px; }
 
-/* Victory events editor opens as a full-size overlay OVER the board (.skirmish-field is
-   position:relative), leaving the right control panel untouched. Two columns inside: templates on
-   the left, the rules grid on the right — room to breathe that the narrow panel couldn't give. */
+/* Victory events editor opens as a pop-out over the left editor area, leaving the right
+   control panel untouched. It is fixed to the editor viewport instead of absolute inside
+   .skirmish-field because the board column can collapse before the rail at narrow widths. */
 .le-events-open { width: 100%; }
 .le-events-overlay {
   /* Same kit panel frame as the right control panel (.skirmish-hud, ADR-0033): the panel.png
@@ -5485,15 +5696,41 @@ h1 {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  inset: 0;
+  bottom: 0;
+  left: 0;
   overflow: hidden;
   padding: 0;
-  position: absolute;
+  position: fixed;
+  right: calc(var(--skirmish-rail-w) + var(--skirmish-grid-gap));
   text-align: left;
+  top: calc(var(--app-header-h) + var(--skirmish-grid-gap));
   z-index: 30;
 }
-.le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; justify-content: space-between; padding: 0 2px 10px; }
+.le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; gap: 12px; justify-content: space-between; padding: 0 2px 8px; }
 .le-events-head h2 { color: #eafaff; margin: 0; }
+.le-events-head-actions { align-items: center; display: flex; flex: 1; gap: 8px; justify-content: flex-end; min-width: 0; }
+.le-events-tabs {
+  flex: 0 1 auto;
+  gap: 4px;
+  grid-auto-columns: unset;
+  grid-auto-flow: column;
+  grid-template-columns: repeat(2, minmax(92px, auto));
+  margin: 0;
+  max-width: min(46vw, 320px);
+  min-width: 0;
+}
+.le-events-tabs .le-seg-btn,
+.le-events-done {
+  font-size: var(--ds-text-2xs);
+  min-height: 28px;
+  min-width: 0;
+  padding: 0 12px;
+}
+.le-events-tabs .le-seg-btn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Master-detail: a scrollable NAMED rule list (left) + the selected rule's editor (right). */
 .le-md { display: grid; flex: 1; gap: 20px; grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); min-height: 0; padding: 12px 2px 4px; }
 .le-md-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
@@ -5507,12 +5744,60 @@ h1 {
 .le-md-item-out.win { color: #9ff0b0; }
 .le-md-detail { min-height: 0; overflow-y: auto; padding-right: 6px; }
 .le-md-detail .le-rule { border: 0; margin-top: 0; padding: 0; }
+.le-events-other .le-rule > .le-ctrlrow {
+  display: grid;
+  grid-template-columns: minmax(82px, 118px) minmax(240px, 360px);
+  justify-content: start;
+}
+.le-events-other .le-rule > .le-ctrlrow .le-text-input,
+.le-events-other .le-rule > .le-ctrlrow .le-select-wrap,
+.le-events-other .le-rule > .le-ctrlrow .le-event-select-wrap {
+  justify-self: stretch;
+  min-width: 0;
+  width: 100%;
+}
+.le-events-other .le-rule > .le-roster-row {
+  grid-template-columns: minmax(82px, 118px) auto;
+}
+.le-roster-stepper {
+  justify-self: start;
+}
+.le-roster-stepper .settings-stepper {
+  gap: 6px;
+  grid-template-columns: 32px 44px 32px;
+  width: max-content;
+}
+.le-roster-stepper .settings-stepper output {
+  box-sizing: border-box;
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  text-align: center;
+  width: 44px;
+}
 .le-events-templates { border-bottom: 1px solid rgba(150, 180, 200, .14); flex: none; padding-bottom: 12px; }
-.le-template-apply { align-items: center; display: flex; gap: 8px; margin-top: 8px; }
-.le-template-apply .le-layer-select { flex: 1; }
+.le-template-apply { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.le-template-select-wrap { flex: 1 1 180px; min-width: 0; }
+.le-template-apply .le-seg-btn { flex: none; }
+.le-event-readout {
+  align-items: center;
+  align-self: stretch;
+  background: rgba(8, 18, 26, .8);
+  border: 1px solid rgba(120, 160, 180, .35);
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: #eafaff;
+  display: flex;
+  font-size: var(--ds-text-sm);
+  min-height: 34px;
+  min-width: 0;
+  padding: 5px 8px;
+  text-transform: uppercase;
+  width: 100%;
+}
 .le-text-input { background: rgba(8, 18, 26, .8); border: 1px solid rgba(120, 160, 180, .35); border-radius: 4px; color: #eafaff; font-family: inherit; font-size: var(--ds-text-sm); min-width: 0; padding: 5px 8px; }
 .le-text-input:focus-visible { border-color: var(--skirmish-cyan, #7fd7ff); outline: none; }
-.le-events-tabs { flex: none; margin: 8px 0 0; }
+.le-zone-name-input { box-sizing: border-box; flex: 1; max-width: 220px; text-align: left; width: 100%; }
 .le-events-placeholder { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 2px; }
 
 /* A LIVE flex column (ADR-0056): the gap actually applies — it was declared on a block
@@ -5603,12 +5888,14 @@ h1 {
 .le-status-entry.is-warning { border-image-source: url("/assets/ui/explore/frames/panel-line-warning.png"); }
 .le-status-entry.is-error { border-image-source: url("/assets/ui/explore/frames/panel-line-error.png"); }
 
-/* road connection editor — clickable diamond edges for the selected road tile */
+/* path/fence edge editor — clickable diamond edges for the selected tile */
 .le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
 .le-roadconn-edge { cursor: pointer; }
 .le-roadconn-edge.is-joined:hover line:last-child { stroke: #8fefff; }
 .le-roadconn-edge.is-cut:hover line:last-child { stroke: #ffd089; }
 .le-roadconn-edge.is-exit:hover line:last-child { stroke: #9bf0bb; }
+.le-roadconn-edge.is-fence:hover line:last-child { stroke: #f0d898; }
+.le-roadconn-edge.is-boundary:hover line:last-child { stroke: #9bf0bb; }
 /* No same-kind neighbour: dim until hovered, where it previews the green "run off this edge" stub. */
 .le-roadconn-edge.is-none:hover line:last-child { stroke: #67d98a; }
 .le-roadconn-edge:focus-visible { outline: none; }
@@ -6321,8 +6608,7 @@ body { font-size: 17px; }
   padding: 0 clamp(10px, 1.2vw, 18px);
 }
 
-.ce-topbar-stats,
-.ce-topbar-actions {
+.ce-topbar-stats {
   align-items: center;
   display: flex;
 }
@@ -6390,10 +6676,6 @@ body { font-size: 17px; }
   color: var(--ce-gold-bright);
   font-weight: 700;
   letter-spacing: .08em;
-}
-
-.ce-topbar-actions {
-  gap: 10px;
 }
 
 .ce-icon-button {
@@ -6721,8 +7003,7 @@ body { font-size: 17px; }
 }
 
 .ce-row-favorite,
-.ce-row-lock,
-.ce-stars {
+.ce-row-lock {
   color: var(--ce-gold-bright);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-sm);
@@ -6760,22 +7041,6 @@ body { font-size: 17px; }
   opacity: 1;
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
-}
-
-.ce-stars {
-  display: flex;
-  gap: 2px;
-  white-space: nowrap;
-}
-
-.ce-star {
-  height: 14px;
-  image-rendering: pixelated;
-  width: 14px;
-}
-
-.ce-stars .ce-star:not(.is-filled) {
-  opacity: .32;
 }
 
 .ce-level-thumb {
@@ -7136,7 +7401,7 @@ body { font-size: 17px; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   padding: 0 4px 8px;
 }
-/* Single full-width verb (the play screen's preview has just Play/Replay, not Edit + Test). */
+/* Single full-width verb (the play screen's preview has just Play, not Edit + Test). */
 .ce-preview-actions.is-single { grid-template-columns: minmax(0, 1fr); }
 
 .ce-preview-actions .ce-link-button {
@@ -7245,8 +7510,7 @@ body { font-size: 17px; }
     justify-items: stretch;
   }
 
-  .ce-topbar-stats,
-  .ce-topbar-actions {
+  .ce-topbar-stats {
     justify-content: space-between;
   }
 
@@ -7271,7 +7535,6 @@ body { font-size: 17px; }
   }
 
   .ce-row-favorite,
-  .ce-stars,
   .ce-row-actions {
     grid-column: 2;
   }
@@ -7328,33 +7591,13 @@ body { font-size: 17px; }
 }
 
 .bgm-control {
-  align-items: center;
-  block-size: 52px;
-  inline-size: 52px;
-  box-sizing: border-box;
-  display: inline-flex;
-  justify-content: center;
-  padding: 0;
-  cursor: pointer;
-  appearance: none;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
-  image-rendering: pixelated;
   /* Motion tokens (ADR-0043): press/hover transform = fast tier; the show/hide opacity
      fade = base tier (was an ad-hoc 0.2s — now the one shared content-fade speed). */
   transition: transform var(--ds-duration-fast) var(--ds-ease-standard), opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
 
 .bgm-control-icon {
-  block-size: 26px;
-  inline-size: 26px;
-  image-rendering: pixelated;
   pointer-events: none;
-}
-
-.bgm-control:focus-visible {
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
 }
 
 .bgm-control.is-playing,
@@ -7671,67 +7914,6 @@ body { font-size: 17px; }
   cursor: pointer;
   font: 700 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
-
-/* The Studio workspace switcher (Catalog / Lab / Viewer). It rides the title bar's
-   actions slot as three kit-framed icon buttons, so it reads as a sibling of the trailing
-   gear/account cluster instead of eating a row on every Viewer's control rail. */
-.studio-mode-nav {
-  align-items: center;
-  display: flex;
-  gap: var(--titlebar-control-gap, 10px);
-}
-
-/* The Studio's title-bar actions cluster: the "‹ Scene" back (shown in the waterfall
-   inspector) sits inline, left of the Catalog/Lab/Viewer nav — one flex row so the text
-   button doesn't drop onto its own line above the icons. */
-.studio-topbar-actions {
-  align-items: center;
-  display: flex;
-  gap: var(--titlebar-control-gap, 10px);
-}
-.studio-scene-back {
-  white-space: nowrap;
-}
-
-.studio-mode-icon {
-  align-items: center;
-  appearance: none;
-  background: transparent;
-  block-size: 52px;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
-  box-sizing: border-box;
-  cursor: pointer;
-  display: inline-flex;
-  image-rendering: pixelated;
-  inline-size: 52px;
-  justify-content: center;
-  overflow: hidden;
-  padding: 0;
-}
-
-/* Active mode gets the lit frame — same swap the settings gear / mode buttons use. */
-.studio-mode-icon.is-active {
-  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 10px stretch;
-}
-
-.studio-mode-icon:focus-visible {
-  outline: 2px solid rgba(101, 184, 255, 0.72);
-  outline-offset: 2px;
-}
-
-/* Forged pixel-art glyph, sized like the neighbouring gear's icon (26px in its frame). */
-.studio-mode-icon > img {
-  block-size: 28px;
-  image-rendering: pixelated;
-  inline-size: 28px;
-  object-fit: contain;
-}
-
-/* Idle glyphs sit a touch dimmed so the lit (active) mode reads as selected; hover/active full. */
-.studio-mode-icon > img { opacity: 0.82; }
-.studio-mode-icon.is-active > img,
-.studio-mode-icon:hover > img { opacity: 1; }
 
 .tileset-context-tabs {
   flex: none;
@@ -9834,6 +10016,393 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
+.ground-cover-preview {
+  position: relative;
+  display: block;
+  width: calc(132px * var(--tile-zoom, 1));
+  height: calc(112px * var(--tile-zoom, 1));
+  overflow: hidden;
+  border: 1px solid rgba(67, 127, 179, .16);
+  border-radius: 4px;
+  background: rgba(2, 8, 13, .34);
+}
+
+.tileset-studio-card-image .ground-cover-preview-tile,
+.ground-cover-preview-tile {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  width: calc(96px * var(--tile-zoom, 1));
+  height: calc(96px * var(--tile-zoom, 1));
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+  image-rendering: pixelated;
+  transform: translate(-50%, -50%);
+}
+
+.ground-cover-preview-tuft {
+  position: absolute;
+  transform: scale(var(--tile-zoom, 1));
+  transform-origin: 0 0;
+}
+
+.wall-decor-preview {
+  position: relative;
+  display: block;
+  width: 152px;
+  height: 132px;
+  overflow: hidden;
+  border: 1px solid rgba(67, 127, 179, .16);
+  border-radius: 4px;
+  background: rgba(2, 8, 13, .34);
+}
+
+.wall-decor-preview-wall {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+
+.wall-decor-preview-sprite,
+.wall-decor-large-sprite,
+.wall-decor-standalone {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+
+.wall-decor-lab-stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 22px;
+}
+
+.wall-decor-large-preview {
+  position: relative;
+  display: block;
+  width: 300px;
+  height: 260px;
+  overflow: hidden;
+  border: 1px solid #1f3346;
+  border-radius: 8px;
+  background: #0c121a;
+}
+
+.wall-decor-large-wall {
+  position: absolute;
+  left: 70px;
+  top: 20px;
+  width: 192px;
+  height: 360px;
+  max-width: none;
+  max-height: none;
+  image-rendering: pixelated;
+}
+
+.wall-decor-checker {
+  position: relative;
+  width: 220px;
+  height: 260px;
+}
+
+.wall-decor-checker .wall-decor-standalone {
+  left: 50%;
+  top: 50%;
+  width: auto;
+  height: auto;
+  max-width: 160px;
+  max-height: 200px;
+  transform: translate(-50%, -50%);
+}
+
+.wall-asset-preview {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 1px solid rgba(67, 127, 179, .16);
+  border-radius: 4px;
+  background: rgba(2, 8, 13, .34);
+}
+
+.wall-asset-preview-wall,
+.wall-asset-preview-sprite {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+  image-rendering: pixelated;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.wall-asset-lab-main {
+  align-content: stretch;
+  padding: 0;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.wall-art-board-surface .tileset-generated-board-tile img {
+  image-rendering: pixelated;
+}
+
+.wall-art-board-slot {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  padding: 0;
+  max-width: none;
+  max-height: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: move;
+  image-rendering: pixelated;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.wall-art-board-slot img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.wall-art-board-slot.is-active {
+  border-color: rgba(255, 207, 112, .95);
+  box-shadow: 0 0 0 1px rgba(24, 12, 4, .75), 0 0 0 3px rgba(255, 207, 112, .2);
+}
+
+.wall-art-board-slot.is-ghost {
+  opacity: .34;
+  filter: saturate(.45);
+  pointer-events: none;
+}
+
+.wall-asset-lab-stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 18px;
+}
+
+.wall-asset-lab-figure {
+  min-width: min-content;
+}
+
+.wall-asset-lab-figure.is-committed {
+  opacity: .78;
+}
+
+.le-wall-asset-swatches {
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+}
+
+.le-wall-asset-swatch {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.le-wall-asset-swatch .wall-asset-preview {
+  border: 0;
+}
+
+.ps-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ps-actions .tileset-view-action {
+  flex: 1;
+}
+
+.ps-primary {
+  background: rgba(29, 74, 46, 0.9) !important;
+  border-color: rgba(63, 156, 98, 0.7) !important;
+  color: #e7ffe9 !important;
+}
+
+.ps-primary:disabled {
+  opacity: .45;
+}
+
+.ps-status {
+  margin: 0;
+  font-size: 12px;
+  color: #8fd0a0;
+}
+
+.ps-status.is-error {
+  color: #f0a0a0;
+}
+
+.ps-saved {
+  margin: 0;
+  font-size: 11px;
+  color: #6b83a8;
+  font-variant-numeric: tabular-nums;
+}
+
+.ps-variant {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid #1b2740;
+}
+
+.ps-ctl-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #8fa8cc;
+}
+
+.ps-ctl-label em {
+  font-style: normal;
+  color: #eaf3ff;
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.ps-slot-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px 32px;
+  align-items: end;
+  gap: 6px;
+}
+
+.ps-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ps-toggle {
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  background: #111a2c;
+  color: #cfe3ff;
+  border: 1px solid #2a3c5e;
+  border-radius: 5px;
+}
+
+.ps-toggle:hover {
+  background: #17223a;
+}
+
+.ps-toggle.is-on {
+  background: #1d3354;
+  border-color: #3f74c0;
+  color: #eaf3ff;
+}
+
+.ps-block {
+  display: grid;
+  gap: 6px;
+}
+
+.ps-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 42px);
+  gap: 6px;
+}
+
+.ps-pad-btn,
+.ps-pad-center {
+  box-sizing: border-box;
+  width: 42px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+}
+
+.ps-pad-btn {
+  padding: 0;
+  cursor: pointer;
+  color: #bcd4f2;
+  background: #16233f;
+  border: 1px solid #2a3c5e;
+  border-radius: 6px;
+}
+
+.ps-pad-btn:hover {
+  background: #1e3054;
+  color: #eaf3ff;
+}
+
+.ps-pad-btn:active {
+  background: #244071;
+}
+
+.ps-pad-center::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #33415e;
+}
+
+.ps-slot-button {
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: #dff7ff;
+  background: #16233f;
+  border: 1px solid #2a3c5e;
+  border-radius: 5px;
+}
+
+.ps-slot-button:hover:not(:disabled) {
+  background: #1e3054;
+  color: #ffffff;
+}
+
+.ps-slot-button:disabled {
+  cursor: default;
+  opacity: .42;
+}
+
+.ps-slot-remove:not(:disabled) {
+  color: #ffd8d8;
+  background: rgba(74, 29, 29, 0.65);
+  border-color: rgba(156, 63, 63, 0.55);
+}
+
+.ps-slot-remove:hover:not(:disabled) {
+  background: rgba(96, 36, 36, 0.9);
+  color: #ffffff;
+}
+
 .tileset-studio-card-meta {
   display: flex;
   align-items: center;
@@ -10039,16 +10608,32 @@ button.tileset-relationship-cell {
   top: 0;
 }
 
-.tileset-board-fence-overlay {
+.tileset-board-fence-overlay,
+.tileset-board-wall-overlay,
+.tileset-board-wall-decor {
   position: absolute;
-  width: 96px;
-  height: 180px;
-  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-equator)));
   display: block;
   image-rendering: pixelated;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.tileset-board-fence-overlay {
+  width: 96px;
+  height: 180px;
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-equator)));
+}
+
+.tileset-board-wall-overlay {
+  width: 128px;
+  height: 240px;
+  transform: translate(-64px, -96px);
+}
+
+.tileset-board-wall-decor {
+  max-width: none;
+  max-height: none;
 }
 
 /* Animated tile TOP (water ripple). The motion is BAKED frames in a horizontal sheet
@@ -11397,6 +11982,10 @@ button.tileset-relationship-cell {
      containing block for fixed backgrounds, so the surface stays unbroken across
      regions at any scale. */
   zoom: var(--settings-ui-scale, 1);
+  /* This is a full-screen placement layer, not visible chrome. Keep empty screen
+     real estate click-through so the ambience credit can remain clickable wherever
+     only raw background art is exposed; the actual panels opt back in below. */
+  pointer-events: none;
 }
 
 /* Shared frame primitive. One panel.png 9-slice with a SINGLE corner-size token,
@@ -11412,6 +12001,12 @@ button.tileset-relationship-cell {
   --settings-frame-corner: 16px;
   border: var(--settings-frame-corner) solid transparent;
   box-sizing: border-box;
+}
+
+.settings-frame,
+.menu-dest-col,
+.utility-screen {
+  pointer-events: auto;
 }
 
 /* Shared title bar — the ONE app-header treatment: panel.png frame at a single
@@ -11459,10 +12054,9 @@ button.tileset-relationship-cell {
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
-/* Shared title-bar control button — kit gold mode-button 9-slice frame, equal
-   height, always labeled (ADR-0016). The cyan `-active` variant marks a single
-   primary action (e.g. Save / Sign In). Used by every app title bar's controls;
-   the in-game skirmish bar uses its own icon+label variant of the same frame. */
+/* Shared kit-framed text button. Non-title-bar panels and HUDs still use this visual
+   primitive directly; title-bar controls must go through TitleBarControls.tsx so the bar,
+   not the caller, owns control geometry. */
 .app-header-button {
   align-items: center;
   block-size: 46px;
@@ -11505,12 +12099,107 @@ button.tileset-relationship-cell {
   outline-offset: 2px;
 }
 
+.app-shell-titlebar-center,
+.app-shell-titlebar-actions {
+  min-width: 0;
+}
+
+.app-shell-titlebar-actions,
+.titlebar-actions {
+  align-items: center;
+  display: flex;
+}
+
+.titlebar-actions {
+  gap: var(--titlebar-control-gap, var(--ds-space-2));
+}
+
+/* TitleBarControls.tsx is the only supported way for routed screens to add title-bar
+   buttons. It clears the global button base and consumes the title-bar geometry tokens
+   below, so no screen chooses its own padding, frame width, or fixed control size. */
+.titlebar-control {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  block-size: var(--titlebar-control-size, 52px);
+  border: var(--titlebar-control-frame-w, 10px) solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / var(--titlebar-control-frame-w, 10px) stretch;
+  border-radius: 0;
+  box-shadow: none;
+  box-sizing: border-box;
+  color: #eef6ff;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  gap: var(--titlebar-label-gap, var(--ds-space-2));
+  image-rendering: pixelated;
+  justify-content: center;
+  letter-spacing: .04em;
+  line-height: 1;
+  min-block-size: 0;
+  overflow: hidden;
+  padding: 0 var(--titlebar-label-pad-inline, var(--ds-space-4));
+  position: relative;
+  text-align: center;
+  text-decoration: none;
+  text-shadow: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.titlebar-control--active,
+.titlebar-control.is-playing,
+.titlebar-control.is-othertab {
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+}
+
+.titlebar-control--return,
+.titlebar-control--icon {
+  inline-size: var(--titlebar-control-size, 52px);
+  padding: 0;
+}
+
+.titlebar-control-glyph {
+  block-size: var(--titlebar-control-icon-size, 26px);
+  image-rendering: pixelated;
+  inline-size: var(--titlebar-control-icon-size, 26px);
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.titlebar-control[aria-pressed="false"] .titlebar-control-glyph {
+  opacity: 0.82;
+}
+
+.titlebar-control--active .titlebar-control-glyph,
+.titlebar-control:hover .titlebar-control-glyph {
+  opacity: 1;
+}
+
+.titlebar-control.is-disabled,
+.titlebar-control[aria-disabled="true"],
+.titlebar-control:disabled {
+  cursor: help;
+  filter: grayscale(.12);
+  opacity: .55;
+}
+
+.titlebar-control:hover {
+  color: #f4fbff;
+}
+
+.titlebar-control:focus-visible {
+  color: #f4fbff;
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
 .settings-header-frame {
   align-content: center;
   align-items: center;
   block-size: var(--app-header-h);
   display: grid;
-  gap: clamp(10px, calc(var(--layout-vw, 100vw) * .011), 18px);
   /* The DEFAULT bar is two sections: brand (1fr, leading) · account cluster (auto,
      trailing) — the invariant chrome every screen carries (ADR-0042). The cluster is the
      last DOM child, so it lands in this final column flush to the right padding edge.
@@ -11534,7 +12223,16 @@ button.tileset-relationship-cell {
      --app-header-h is sized so this inset fits (content + rule + 2×inset). */
   --titlebar-rule-h: 14px;
   --ds-titlebar-inset: var(--ds-space-2);
-  --titlebar-control-gap: 10px;
+  --titlebar-control-gap: var(--ds-space-2);
+  --titlebar-control-size: 52px;
+  --titlebar-control-frame-w: 10px;
+  --titlebar-control-icon-size: 26px;
+  --titlebar-label-gap: var(--ds-space-2);
+  --titlebar-label-pad-inline: var(--ds-space-4);
+  /* The grid column gap is the space OUTSIDE the invariant wall; the cluster flex gap is
+     the space INSIDE it. Both must use the same token or controls frame the divider
+     asymmetrically. */
+  column-gap: var(--titlebar-control-gap);
   /* Trailing/leading inline padding, published as a var so the account cluster can pull its
      own trailing edge in to match (see .header-account-cluster). Tightened at the
      landscape-phone breakpoint, where the cluster's pull-in follows automatically. */
@@ -11721,7 +12419,7 @@ button.tileset-relationship-cell {
 .header-account-cluster {
   /* ONE spacing source for the cluster's two edges: the inter-button gap AND the gap that
      frames the whole cluster against the bar. Both read this so they can never drift apart. */
-  --cluster-gap: var(--titlebar-control-gap, 10px);
+  --cluster-gap: var(--titlebar-control-gap, var(--ds-space-2));
   align-items: center;
   display: flex;
   gap: var(--cluster-gap);
@@ -11796,45 +12494,10 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
 }
 
-/* Square icon-only button — the app's kit mode-button frame, made equal-sided. A
-   slightly thinner border than the labelled header button so the 32px opening
-   carries a glyph/avatar without the frame dominating. */
+/* Title-bar icon-only controls get their geometry from .titlebar-control--icon. This
+   semantic hook remains for cluster-specific descendants such as the avatar image. */
 .cluster-icon-button {
-  align-items: center;
-  /* Rendered as a <button> since ADR-0052 (the gear): clear the UA button surface so
-     only the kit mode-button frame paints, exactly as the anchor version did. */
-  appearance: none;
-  background: transparent;
-  block-size: 52px;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
-  box-sizing: border-box;
-  cursor: pointer;
-  display: inline-flex;
-  image-rendering: pixelated;
-  inline-size: 52px;
-  justify-content: center;
-  overflow: hidden;
-  padding: 0;
   position: relative;
-}
-
-.cluster-icon-button:focus-visible {
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
-}
-
-/* Signed-out Sign In rides the same cluster — match the icon buttons' height so the
-   gear + control read as one unit. */
-.header-account-cluster .app-header-button {
-  block-size: 52px;
-}
-
-.cluster-icon-button > img {
-  block-size: 26px;
-  image-rendering: pixelated;
-  inline-size: 26px;
-  object-fit: contain;
 }
 
 /* The Gravatar fills the avatar button's opening, clipped square by the frame. */
@@ -12748,7 +13411,7 @@ button.tileset-relationship-cell {
    past the Unassigned tab), so the rail reads as one sheet however many campaigns there are —
    the same shared mechanism the menu / Settings / Campaign rails use. */
 
-/* A campaign tab = the shared icon | label grid + a trailing cell for the favorite star /
+/* A campaign tab = the shared icon | label grid + a trailing cell for the favorite control /
    padlock. Official identity is carried by the rail group heading. */
 .ce-campaign-tab {
   align-items: center;
@@ -12924,16 +13587,6 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-.ce-editor-level-row .ce-stars {
-  flex: none;
-  gap: 1px;
-}
-
-.ce-editor-level-row .ce-star {
-  block-size: 12px;
-  inline-size: 12px;
-}
-
 .ce-editor-level-row .ce-row-actions {
   gap: 4px;
   grid-area: actions;
@@ -12955,9 +13608,109 @@ button.tileset-relationship-cell {
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
 /* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */
-.campaign-level-row { cursor: pointer; }
+.campaign-level-row {
+  align-items: center;
+  block-size: 86px;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-areas: "thumb copy control";
+  grid-template-columns: 78px minmax(0, 1fr) auto;
+  min-block-size: 86px;
+  overflow: hidden;
+  padding: 10px 18px;
+}
+.campaign-level-row + .campaign-level-row {
+  margin-top: 8px;
+  min-block-size: 86px;
+  padding: 10px 18px;
+}
+.campaign-level-row .settings-row-thumb {
+  block-size: 54px;
+  border-width: 5px;
+  border-image-width: 5px;
+  grid-area: thumb;
+  inline-size: 78px;
+}
+.campaign-level-row .settings-row-copy {
+  align-content: center;
+  gap: 2px;
+  grid-area: copy;
+}
+.campaign-level-row h4 {
+  font-size: var(--ds-text-md);
+  line-height: .98;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campaign-level-row p {
+  font-size: var(--ds-text-sm);
+  line-height: 1.05;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campaign-level-row .settings-row-control {
+  grid-area: control;
+  gap: 4px;
+  justify-content: end;
+}
 .campaign-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .campaign-level-row:not(.is-selected):not(.is-disabled):hover { filter: brightness(1.06); }
+
+.campaign-level-meta {
+  align-items: start;
+  display: grid;
+  gap: 3px;
+}
+
+.campaign-level-goal {
+  margin: 0;
+}
+
+.campaign-level-status {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  line-height: 1.05;
+}
+
+.campaign-level-status.is-cleared {
+  color: #7ee787;
+  text-shadow: 0 1px 0 #082812;
+}
+
+.campaign-level-status.is-locked {
+  color: #c7a178;
+}
+
+.campaign-level-status-check {
+  background: #1f8f45;
+  border: 1px solid #97f2a0;
+  box-shadow: 0 1px 0 #073116;
+  display: inline-block;
+  flex: none;
+  height: 13px;
+  position: relative;
+  width: 13px;
+}
+
+.campaign-level-status-check::after {
+  border: solid #f2fff4;
+  border-width: 0 2px 2px 0;
+  content: "";
+  display: block;
+  height: 7px;
+  left: 4px;
+  position: absolute;
+  top: 1px;
+  transform: rotate(45deg);
+  width: 3px;
+}
 /* The level list wraps its rows only to carry a data-testid — it must not disturb the
    section-rows grid, so it disappears and its rows become the grid's direct items. */
 .ce-level-list { display: contents; }
@@ -13059,6 +13812,23 @@ button.tileset-relationship-cell {
   inset-block: 0;
   inset-inline-start: calc(50% - 1.5px);
   inline-size: 3px;
+}
+.stepper-chevron::before {
+  background: transparent;
+  border-block-end: 3px solid currentColor;
+  border-inline-start: 3px solid currentColor;
+  block-size: 9px;
+  inline-size: 9px;
+  inset-block-start: 1px;
+  inset-inline-start: 3px;
+  transform: rotate(45deg);
+}
+.stepper-chevron::after {
+  content: none;
+}
+.stepper-chevron-right::before {
+  inset-inline-start: 1px;
+  transform: rotate(225deg);
 }
 
 .settings-stepper output {
@@ -13551,7 +14321,6 @@ button.tileset-relationship-cell {
   margin: 0;
   color: var(--ds-ink-3, #9eb1c5);
 }
-.campaign-result-stars { display: inline-flex; gap: 8px; }
 .campaign-result-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 4px; }
 
 /* ============================================================================

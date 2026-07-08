@@ -6,8 +6,8 @@ This document preserves the working plan for turning the skirmish concept art in
 
 Use the right server for the job:
 
-- `http://localhost:5173/tileset-studio` is the Vite hot-reload workbench for tile UI, art review, and rapid iteration.
-- `http://localhost:3000/tileset-studio` is the backend/Express baked preview. It serves `frontend/dist`, so source edits only appear there after `npm run build` and a browser refresh.
+- `http://localhost:5173/studio` is the Vite hot-reload workbench for tile UI, art review, and rapid iteration.
+- `http://localhost:3000/studio` is the backend/Express baked preview. It serves `frontend/dist`, so source edits only appear there after `npm run build` and a browser refresh.
 
 Do not debug live UI iteration on `3000` unless the goal is specifically to verify the baked build. A correct dev page contains `@vite/client` and `/src/main.tsx`; a baked preview contains `/assets/index-*.js`.
 
@@ -90,7 +90,7 @@ Status: first prototype active.
 
 Review surface:
 
-- `http://localhost:3000/tileset-studio`
+- `http://localhost:3000/studio`
 - Legacy review: `http://localhost:3000/tile-review`
 - Implementation: `frontend/src/ui/TilePreview.tsx`
 

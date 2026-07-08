@@ -4,6 +4,18 @@ const crypto = require('crypto');
 const express = require('express');
 const { Pool } = require('pg');
 
+// Pure board-render geometry, generated at build/preview/test time from the same
+// frontend render source the in-app thumbnails use. server.js is hot-copied to
+// and run from a temp dir by supervisor.js, so sibling backend assets must
+// resolve from the baked backend dir instead of this process' __dirname.
+const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
+let serverRender = null;
+try {
+  serverRender = require(path.join(bakedBackendDir, 'generated', 'board-render.cjs'));
+} catch (error) {
+  console.error('board-render bundle unavailable; level thumbnails will use the default image:', error && error.message);
+}
+
 const app = express();
 const port = process.env.PORT || 3000;
 const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend', 'dist');
@@ -313,6 +325,24 @@ const MIGRATIONS = [
   },
   {
     version: 12,
+    name: 'wall art global tier',
+    // Global wall art definitions: one row per id holding a map of wallArtId →
+    // {label,span,slots[]}. Public GET / admin PUT mirrors prop_seats, with
+    // committed wallArt.json as the always-render baseline.
+    sql: `
+      CREATE TABLE IF NOT EXISTS wall_art (
+        id                    text        PRIMARY KEY,
+        data                  jsonb       NOT NULL,
+        client_schema_version integer,
+        revision              integer     NOT NULL DEFAULT 0,
+        created_at            timestamptz NOT NULL DEFAULT now(),
+        updated_at            timestamptz NOT NULL DEFAULT now(),
+        updated_by            text
+      );
+    `,
+  },
+  {
+    version: 13,
     name: 'solve runs',
     // Account-scoped headless BOARD-SOLVER runs (ADR-0068 §5), mirroring train_runs.
     // `spec` is the immutable SolveSpec (level + bounds + mode) the solver Job reads;
@@ -2033,7 +2063,7 @@ function isLevelBody(body) {
 // force a prod data migration (docs/migration-policy.md).
 const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach']);
 const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'sand', 'dirt', 'pebble', 'void']);
-const WORKSPACE_ZONE_TYPES = new Set(['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock']);
+const WORKSPACE_ZONE_TYPES = new Set(['region', 'player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion']);
 const WORKSPACE_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king', 'rock', 'random-rock']);
 const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // Playable-only piece types for a random-placement roster (no rocks) — mirrors the
@@ -2041,6 +2071,7 @@ const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 const WORKSPACE_ROSTER_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 // ADR-0064 victory-condition kinds — mirror of core/level.ts VictoryCondition.
 const WORKSPACE_CONDITION_KINDS = new Set(['eliminate', 'reach', 'turnLimit']);
+const WORKSPACE_PROMOTION_PIECES = new Set(['queen', 'rook', 'bishop', 'knight']);
 
 /** Structural check for one ADR-0064 victory condition. Returns an error string or null. Shape/enum
  * only, mirroring the frontend's conditionErrors (core/level.ts). */
@@ -2082,6 +2113,92 @@ function validateWorkspaceVictory(victory, key) {
       if (!a || typeof a !== 'object' || Array.isArray(a)) return `${label}.do[${j}] must be an action object`;
       if (a.kind !== 'win' && a.kind !== 'lose') return `${label}.do[${j}].kind is invalid`;
       if (a.side !== 'player' && a.side !== 'enemy') return `${label}.do[${j}].side is invalid`;
+    }
+  }
+  return null;
+}
+
+function validateWorkspaceRosterCounts(roster, label) {
+  if (!roster || typeof roster !== 'object' || Array.isArray(roster)) return `${label} is invalid`;
+  for (const [type, count] of Object.entries(roster)) {
+    if (!WORKSPACE_ROSTER_PIECES.has(type) || !isFiniteInteger(count) || count < 1) return `${label} contains an invalid piece count`;
+  }
+  return null;
+}
+
+function validateWorkspaceEventTrigger(trigger, label) {
+  if (!trigger || typeof trigger !== 'object' || Array.isArray(trigger)) return `${label} is invalid`;
+  if (trigger.kind !== 'setup' && trigger.kind !== 'unit-enters-zone') return `${label}.kind is invalid`;
+  if (trigger.kind === 'unit-enters-zone') {
+    if (typeof trigger.zoneId !== 'string' || !trigger.zoneId.trim()) return `${label}.zoneId is invalid`;
+    const unit = trigger.unit;
+    if (!unit || typeof unit !== 'object' || Array.isArray(unit)) return `${label}.unit is invalid`;
+    if (unit.type !== 'pawn') return `${label}.unit.type is invalid`;
+    if (unit.side !== undefined && unit.side !== 'player' && unit.side !== 'enemy') return `${label}.unit.side is invalid`;
+  }
+  return null;
+}
+
+function validateWorkspaceSpawnAction(action, label, triggerKind) {
+  if (triggerKind !== 'setup') return `${label}.kind spawn requires setup trigger`;
+  if (action.side !== 'player' && action.side !== 'enemy') return `${label}.side is invalid`;
+  const rosterErr = validateWorkspaceRosterCounts(action.roster, `${label}.roster`);
+  if (rosterErr) return rosterErr;
+  if (!Array.isArray(action.zoneIds) || action.zoneIds.length === 0 || action.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
+    return `${label}.zoneIds is invalid`;
+  }
+  return null;
+}
+
+function validateWorkspacePromoteAction(action, label, triggerKind) {
+  if (triggerKind !== 'unit-enters-zone') return `${label}.kind promote requires unit-enters-zone trigger`;
+  if (!action.target || typeof action.target !== 'object' || Array.isArray(action.target) || action.target.kind !== 'triggering-unit') {
+    return `${label}.target is invalid`;
+  }
+  return null;
+}
+
+function validateWorkspaceEvents(events, key) {
+  if (!Array.isArray(events)) return `levels.${key}.events is invalid`;
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i];
+    const label = `levels.${key}.events[${i}]`;
+    if (!event || typeof event !== 'object' || Array.isArray(event)) return `${label} must be an event object`;
+    if (event.id !== undefined && typeof event.id !== 'string') return `${label}.id is invalid`;
+    if (event.name !== undefined && typeof event.name !== 'string') return `${label}.name is invalid`;
+    if (event.kind !== undefined) {
+      if (event.kind !== 'spawn' && event.kind !== 'pawn-promotion') return `${label}.kind is invalid`;
+      const triggerErr = validateWorkspaceEventTrigger(event.trigger, `${label}.trigger`);
+      if (triggerErr) return triggerErr;
+      if (event.kind === 'spawn') {
+        const spawnErr = validateWorkspaceSpawnAction(event, label, event.trigger && event.trigger.kind);
+        if (spawnErr) return spawnErr;
+      } else {
+        if (event.trigger.kind !== 'unit-enters-zone') return `${label}.trigger.kind is invalid`;
+        if (event.choices !== undefined) {
+          if (!Array.isArray(event.choices) || event.choices.length === 0 || event.choices.some((choice) => !WORKSPACE_PROMOTION_PIECES.has(choice))) return `${label}.choices is invalid`;
+        }
+        if (event.defaultPromotion !== undefined && !WORKSPACE_PROMOTION_PIECES.has(event.defaultPromotion)) return `${label}.defaultPromotion is invalid`;
+        if (event.defaultPromotion !== undefined && Array.isArray(event.choices) && !event.choices.includes(event.defaultPromotion)) return `${label}.defaultPromotion is invalid`;
+      }
+      continue;
+    }
+    const triggerErr = validateWorkspaceEventTrigger(event.trigger, `${label}.trigger`);
+    if (triggerErr) return triggerErr;
+    if (!Array.isArray(event.do) || event.do.length === 0) return `${label}.do is invalid`;
+    for (let j = 0; j < event.do.length; j += 1) {
+      const action = event.do[j];
+      const actionLabel = `${label}.do[${j}]`;
+      if (!action || typeof action !== 'object' || Array.isArray(action)) return `${actionLabel} must be an action object`;
+      if (action.kind === 'spawn') {
+        const spawnErr = validateWorkspaceSpawnAction(action, actionLabel, event.trigger.kind);
+        if (spawnErr) return spawnErr;
+      } else if (action.kind === 'promote') {
+        const promoteErr = validateWorkspacePromoteAction(action, actionLabel, event.trigger.kind);
+        if (promoteErr) return promoteErr;
+      } else {
+        return `${actionLabel}.kind is invalid`;
+      }
     }
   }
   return null;
@@ -2143,6 +2260,10 @@ function validateWorkspaceLevel(level, key) {
   if (level.victory !== undefined) {
     const victoryErr = validateWorkspaceVictory(level.victory, key);
     if (victoryErr) return victoryErr;
+  }
+  if (level.events !== undefined) {
+    const eventsErr = validateWorkspaceEvents(level.events, key);
+    if (eventsErr) return eventsErr;
   }
   if (level.roster !== undefined) {
     if (!level.roster || typeof level.roster !== 'object' || Array.isArray(level.roster)) {
@@ -3064,6 +3185,128 @@ app.put('/api/prop-seats/:id', async (req, res) => {
   }
 });
 
+// --- Wall-art tuning (global) tier ----------------------------------------
+// Placeable wall art: N face artwork slots mounted on existing walls.
+// Public GET / requireAdmin PUT, parallel to prop_seats. The committed
+// wallArt.json is the baseline; this row is an optional live overlay.
+const WALL_ART_STORE_SCHEMA_VERSION = 1;
+const WALL_ART_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
+const WALL_ART_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+const WALL_ART_FACES = new Set(['west', 'north']);
+
+function wallArtRowId(raw) {
+  const id = String(raw || '').trim();
+  return WALL_ART_ROW_ID_PATTERN.test(id) ? id : null;
+}
+
+function validateWallArtData(data) {
+  if (!isObjectRecord(data)) return 'wall art must be an object map of wallArtId → definition';
+  for (const [id, asset] of Object.entries(data)) {
+    if (!WALL_ART_ID_PATTERN.test(id)) return `wall art id "${id}" must be a lowercase slug`;
+    if (!isObjectRecord(asset)) return `wall art "${id}" must be an object`;
+    if (typeof asset.label !== 'string' || !asset.label.trim()) return `wall art "${id}" needs a label`;
+    if (Object.hasOwn(asset, 'span') && !(Number.isInteger(asset.span) && asset.span >= 1 && asset.span <= 16)) return `wall art "${id}" span must be an integer from 1 to 16`;
+    if (!Array.isArray(asset.slots)) return `wall art "${id}" slots must be an array`;
+    for (const [index, slot] of asset.slots.entries()) {
+      if (!isObjectRecord(slot)) return `wall art "${id}" slot ${index + 1} must be an object`;
+      if (typeof slot.id !== 'string' || !WALL_ART_ID_PATTERN.test(slot.id)) return `wall art "${id}" slot ${index + 1} needs a lowercase slug id`;
+      if (typeof slot.sourceId !== 'string' || !WALL_ART_ID_PATTERN.test(slot.sourceId)) return `wall art "${id}" slot ${index + 1} needs a sourceId`;
+      if (typeof slot.face !== 'string' || !WALL_ART_FACES.has(slot.face)) return `wall art "${id}" slot ${index + 1} face must be west or north`;
+      if (!Number.isFinite(slot.x) || !Number.isFinite(slot.y)) return `wall art "${id}" slot ${index + 1} needs numeric x/y`;
+      if (!(Number.isFinite(slot.scale) && slot.scale > 0)) return `wall art "${id}" slot ${index + 1} needs a positive scale`;
+    }
+  }
+  return null;
+}
+
+async function dbGetWallArt(id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT data, client_schema_version, revision, created_at, updated_at, updated_by FROM wall_art WHERE id = $1',
+    [id],
+  );
+  return rows[0] || null;
+}
+
+async function dbUpsertWallArt(id, input) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO wall_art (id, data, client_schema_version, revision, updated_by)
+       VALUES ($1, $2::jsonb, $3, 1, $4)
+     ON CONFLICT (id) DO UPDATE SET
+       data = EXCLUDED.data,
+       client_schema_version = EXCLUDED.client_schema_version,
+       revision = wall_art.revision + 1,
+       updated_at = now(),
+       updated_by = EXCLUDED.updated_by
+     RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+    [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+  );
+  return rows[0];
+}
+
+function publicWallArtDocument(id, document) {
+  return {
+    id,
+    data: isObjectRecord(document && document.data) ? document.data : {},
+    client_schema_version: document && Object.hasOwn(document, 'client_schema_version') ? document.client_schema_version : null,
+    revision: Number.isInteger(document && document.revision) ? document.revision : 0,
+    created_at: document && document.created_at ? document.created_at : null,
+    updated_at: document && document.updated_at ? document.updated_at : null,
+    updated_by: document && document.updated_by ? document.updated_by : null,
+  };
+}
+
+app.get('/api/wall-art/:id', async (req, res) => {
+  const id = wallArtRowId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_wall_art_id' });
+    return;
+  }
+  try {
+    const document = await dbGetWallArt(id);
+    res.status(200).json({
+      portfolio: publicWallArtDocument(id, document),
+      store_schema_version: WALL_ART_STORE_SCHEMA_VERSION,
+    });
+  } catch (error) {
+    dbUnavailable(res, 'wall art read failed', error, 'wall_art_store_unavailable');
+  }
+});
+
+app.put('/api/wall-art/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = wallArtRowId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_wall_art_id' });
+    return;
+  }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!isObjectRecord(raw.data)) {
+    res.status(400).json({ error: 'wall_art_data_object_required' });
+    return;
+  }
+  const validationError = validateWallArtData(raw.data);
+  if (validationError) {
+    res.status(400).json({ error: 'invalid_wall_art', details: validationError });
+    return;
+  }
+  try {
+    const document = await dbUpsertWallArt(id, {
+      data: raw.data,
+      client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
+      updated_by: user.email,
+    });
+    res.status(200).json({
+      portfolio: publicWallArtDocument(id, document),
+      store_schema_version: WALL_ART_STORE_SCHEMA_VERSION,
+    });
+  } catch (error) {
+    dbUnavailable(res, 'wall art write failed', error, 'wall_art_store_unavailable');
+  }
+});
+
 // Global shipped per-level AI weights (ship-to-everyone). Public GET returns the whole
 // map (every player's live AI reads it before falling back to DEFAULT weights);
 // admin-gated PUT sets one level's vector, or clears it with { weights: null }. A
@@ -3157,8 +3400,12 @@ app.post('/api/maps/publish', async (req, res) => {
     const level = row && row.body && row.body.levels && typeof row.body.levels === 'object'
       ? row.body.levels[levelId] : null;
     if (!level || typeof level !== 'object') { res.status(404).json({ error: 'level_not_found' }); return; }
-    // content_hash was only a server-thumbnail cache-buster; that path is gone, so it's null now.
-    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, null);
+    let contentHash = null;
+    try {
+      const renderInputs = await applyThumbnailRenderInputs();
+      contentHash = serverRender && thumbnailVersion(serverRender.boardHashForLevel(level), renderInputs);
+    } catch { contentHash = null; }
+    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, contentHash);
     res.status(200).json({ public_id: publicId, url: `${publicOrigin}/play?map=${publicId}` });
   } catch (error) {
     dbUnavailable(res, 'map publish failed', error, 'map_store_unavailable');
@@ -3268,11 +3515,11 @@ function makeStaticCacheHeaders(rootDir) {
   };
 }
 
-// --- Open Graph unfurl ------------------------------------------------------
+// --- Open Graph unfurl + on-demand board thumbnails -------------------------
 // A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
-// JS, no auth). The SPA fallback injects per-level og:/twitter: title/description tags; og:image is
-// the branded default card. (Per-level server-rendered preview images were removed — the in-app
-// thumbnails are client-baked and nothing else consumed the server render path.)
+// JS, no auth). The SPA fallback injects per-level og:/twitter: tags, and og:image points at an
+// on-demand board render served here. Officials resolve from the LIVE DB; user maps from public_maps.
+// A render/resolve failure degrades to the branded default image.
 const OG_SITE_NAME = 'Chess Tactics';
 const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
 const DEFAULT_OG_IMAGE = '/assets/og/default.png';
@@ -3323,8 +3570,38 @@ async function officialWorkspace() {
   } catch { /* DB unreachable — fall through to the last-good real read below, else empty */ }
   return _officialCache.ws || { campaigns: [], levels: {} };
 }
-// Resolve a share reference to { level, title, subtitle, description }. Officials read the on-disk
-// baked file (sync, no DB); user maps read public_maps (async). Returns null when unresolvable.
+const THUMBNAIL_PROP_SEATS_TTL_MS = 60 * 1000;
+let _thumbnailPropSeatsCache = { at: 0, data: null, revision: 0 }; // last SUCCESSFUL DB read
+async function thumbnailPropSeats() {
+  const now = Date.now();
+  if (_thumbnailPropSeatsCache.data && now - _thumbnailPropSeatsCache.at < THUMBNAIL_PROP_SEATS_TTL_MS) {
+    return _thumbnailPropSeatsCache;
+  }
+  try {
+    const doc = await dbGetPropSeats('default');
+    const data = doc && doc.data && typeof doc.data === 'object' ? doc.data : {};
+    _thumbnailPropSeatsCache = {
+      at: now,
+      data,
+      revision: Number.isInteger(doc && doc.revision) ? doc.revision : 0,
+    };
+    return _thumbnailPropSeatsCache;
+  } catch { /* DB unreachable — fall through to the last-good seats below, else baseline */ }
+  return _thumbnailPropSeatsCache.data ? _thumbnailPropSeatsCache : { at: now, data: {}, revision: 0 };
+}
+async function applyThumbnailRenderInputs() {
+  const seats = await thumbnailPropSeats();
+  if (serverRender && typeof serverRender.applyPropSeatOverrides === 'function') {
+    try { serverRender.applyPropSeatOverrides(seats.data); } catch { /* keep the renderer's last-good seats */ }
+  }
+  return { propSeatsRevision: seats.revision || 0 };
+}
+function thumbnailVersion(boardHash, renderInputs) {
+  const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
+  return [boardHash, propSeatsRevision].filter(Boolean).join('-');
+}
+// Resolve a share reference to { level, title, subtitle, description }. Officials read the live
+// official workspace cache; user maps read public_maps. Returns null when unresolvable.
 async function resolveShareTarget({ levelId, campaignId, mapId }) {
   if (mapId) {
     const row = await dbGetPublicMap(mapId).catch(() => null);
@@ -3338,7 +3615,7 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
       description: objective ? `A community-made ${objective} map.` : OG_DEFAULT_DESC,
     };
   }
-  if (levelId && /^off-[a-z-]+$/.test(levelId)) {
+  if (levelId && OFFICIAL_WORKSPACE_ID_PATTERN.test(levelId)) {
     const ws = await officialWorkspace();
     const level = Object.hasOwn(ws.levels, levelId) && ws.levels[levelId] && typeof ws.levels[levelId] === 'object'
       ? ws.levels[levelId] : null;
@@ -3355,6 +3632,39 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
   return null;
 }
 
+// On-demand board thumbnail: /assets/level-thumb/<id>.png (?v=<hash> only busts caches).
+// Registered before express.static so the .png is not handled by the SPA asset guard.
+const _thumbCache = new Map(); // `${id}:${hash}` -> Buffer
+const THUMB_CACHE_MAX = 200;
+app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
+  const id = String(req.params[0] || '');
+  const isOfficial = OFFICIAL_WORKSPACE_ID_PATTERN.test(id);
+  const isMap = PUBLIC_ID_RE.test(id);
+  if (!isOfficial && !isMap) { res.status(404).send('not found'); return; }
+  try {
+    if (!serverRender) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
+    const target = await resolveShareTarget(isOfficial ? { levelId: id } : { mapId: id });
+    if (!target) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
+    const renderInputs = await applyThumbnailRenderInputs();
+    const plan = serverRender.levelRenderPlan(target.level);
+    const cacheKey = `${id}:${thumbnailVersion(plan.contentHash, renderInputs)}`;
+    let png = _thumbCache.get(cacheKey);
+    if (!png) {
+      const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
+      const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
+      png = await renderLevelCard({ plan, frontendDir, title: target.title, subtitle: target.subtitle, backgroundSrc });
+      if (_thumbCache.size >= THUMB_CACHE_MAX) _thumbCache.delete(_thumbCache.keys().next().value);
+      _thumbCache.set(cacheKey, png);
+    }
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.status(200).end(png);
+  } catch (error) {
+    console.error('level-thumb render failed:', error && error.message);
+    res.redirect(302, DEFAULT_OG_IMAGE);
+  }
+});
+
 async function ogTagsFor(req) {
   const origin = publicOrigin; // TRUSTED canonical origin, never the spoofable Host header
   const levelId = typeof req.query.levelId === 'string' ? req.query.levelId : null;
@@ -3368,7 +3678,15 @@ async function ogTagsFor(req) {
   if (target) {
     title = target.title || OG_SITE_NAME;
     description = target.description || target.subtitle || OG_DEFAULT_DESC;
-    // og:image stays the branded default card — per-level server-rendered previews were removed.
+    if (serverRender) {
+      const key = mapId || levelId;
+      let hash = '';
+      try {
+        const renderInputs = await applyThumbnailRenderInputs();
+        hash = thumbnailVersion(serverRender.boardHashForLevel(target.level), renderInputs);
+      } catch { hash = ''; }
+      image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${hash ? `?v=${hash}` : ''}`;
+    }
   }
   const url = `${origin}${req.originalUrl}`;
   const meta = [

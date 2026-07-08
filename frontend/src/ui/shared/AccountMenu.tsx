@@ -72,7 +72,7 @@ export function AccountMenu({ name, email, avatarUrl, onRename, onSignOut, defau
     <div className="account-menu-root" ref={rootRef}>
       <button
         type="button"
-        className="cluster-icon-button account-avatar-button"
+        className="titlebar-control titlebar-control--icon cluster-icon-button account-avatar-button"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${name} — account menu`}

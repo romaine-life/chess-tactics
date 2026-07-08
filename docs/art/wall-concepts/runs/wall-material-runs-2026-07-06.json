@@ -1,0 +1,66 @@
+{
+  "date": "2026-07-06",
+  "outputs": {
+    "contact_sheet": "docs/art/wall-concepts/wall-bake-contact-sheet.png",
+    "proofs": "docs/art/wall-concepts/proofs/wall-<material>-proof.png",
+    "runtime_seat_proofs": "docs/art/wall-concepts/proofs/wall-<material>-runtime-seat-proof.png",
+    "final_assets": "frontend/public/assets/tiles/feature/wall-<material>-{1,8,9,thumb}.png",
+    "wall_frame": {
+      "width": 128,
+      "height": 240,
+      "anchor_x": 64,
+      "anchor_y": 96
+    }
+  },
+  "lanes": [
+    {
+      "material": "stone",
+      "lane": "photoscan_material",
+      "source": "walls/photoscanned-old-stone-wall-2x4m.zip",
+      "prepared_material": "docs/art/wall-concepts/materials/source/stone-photoscan.png",
+      "normal_map": "docs/art/wall-concepts/materials/source/stone-photoscan-normal.png",
+      "normalization": "Photoscan supplies material; the shipped tile diamond owns the N/W masks and seating."
+    },
+    {
+      "material": "brick",
+      "lane": "codex_img2img_material",
+      "tool": "frontend/scripts/forge-wall-material.mjs",
+      "input_reference": "docs/art/wall-concepts/materials/source/stone-photoscan.png",
+      "prepared_material": "docs/art/wall-concepts/materials/codex/brick-img2img.png",
+      "prompt_target": "gray castle brick wall texture",
+      "gate": "image_generation_call in rollout",
+      "attempts": 1,
+      "normalization": "Generated flat material projected into shipped tile back-edge geometry."
+    },
+    {
+      "material": "mossy",
+      "lane": "pixellab_material",
+      "tool": "create_tiles_pro",
+      "tile_id": "33f3529a-0331-4511-a714-39426fa3d5f8",
+      "seed": 70601,
+      "raw_candidate": "docs/art/wall-concepts/materials/pixellab/run-33f3529a-0331-4511-a714-39426fa3d5f8/tile_6.png",
+      "prepared_material": "docs/art/wall-concepts/materials/pixellab/mossy-stone.png",
+      "normalization": "Generated flat material projected into shipped tile back-edge geometry."
+    },
+    {
+      "material": "basalt",
+      "lane": "pixellab_material",
+      "tool": "create_tiles_pro",
+      "tile_id": "33f3529a-0331-4511-a714-39426fa3d5f8",
+      "seed": 70601,
+      "raw_candidate": "docs/art/wall-concepts/materials/pixellab/run-33f3529a-0331-4511-a714-39426fa3d5f8/tile_10.png",
+      "prepared_material": "docs/art/wall-concepts/materials/pixellab/dark-basalt.png",
+      "normalization": "Generated flat material projected into shipped tile back-edge geometry."
+    },
+    {
+      "material": "palisade",
+      "lane": "pixellab_material",
+      "tool": "create_tiles_pro",
+      "tile_id": "33f3529a-0331-4511-a714-39426fa3d5f8",
+      "seed": 70601,
+      "raw_candidate": "docs/art/wall-concepts/materials/pixellab/run-33f3529a-0331-4511-a714-39426fa3d5f8/tile_14.png",
+      "prepared_material": "docs/art/wall-concepts/materials/pixellab/wood-palisade.png",
+      "normalization": "Generated flat material projected into shipped tile back-edge geometry."
+    }
+  ]
+}
