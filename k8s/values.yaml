@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-d27559eecfc9e79cce66e030caa9e6f2ff1f7da96fa63d5ca5a814929492a374"
+  tag: "app-29a4066e131efdb966be46ec54a0cb6761d86a5cdf28eda5d834faed6ba5beb5"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add wall art authoring workflow"
-  prNumber: "437"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/437"
-  commit: "6faae5e"
+  prTitle: "Fix settings return from campaign games"
+  prNumber: "438"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/438"
+  commit: "bc4fbe1"
 
 name: chess-tactics
 namespace: chess-tactics
