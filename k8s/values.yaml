@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-29a4066e131efdb966be46ec54a0cb6761d86a5cdf28eda5d834faed6ba5beb5"
+  tag: "app-1df3cb17b0587704853a60ad5e4fe10c125314dfd5dc1f7e6fcfcb3a19b96ef7"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix settings return from campaign games"
-  prNumber: "438"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/438"
-  commit: "bc4fbe1"
+  prTitle: "Allow premove recaptures on occupied ally squares"
+  prNumber: "439"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/439"
+  commit: "c00ebfa"
 
 name: chess-tactics
 namespace: chess-tactics
