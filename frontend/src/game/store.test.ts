@@ -778,6 +778,32 @@ describe('skirmish store: premoves', () => {
     expect(s.game.turn).toBe('player');
   });
 
+  it('fires a queued recapture after the enemy captures a friendly-occupied square', () => {
+    loadBoard([
+      piece('pk', 'player', 'king', 0, 7),
+      piece('pr', 'player', 'rook', 0, 4),
+      piece('bait', 'player', 'pawn', 4, 4),
+      piece('er', 'enemy', 'rook', 4, 0), // greedy reply: er takes bait on the recapture square
+      piece('ek', 'enemy', 'king', 7, 0),
+    ], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7); // safe king step -> opponent's turn
+    useSkirmish.getState().queueMove('pr', 4, 4);
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 4, y: 4 }]);
+
+    vi.advanceTimersByTime(520); // enemy reply lands; the premove waits for its visible beat
+    const afterReply = useSkirmish.getState();
+    expect(afterReply.game.pieces.find((p) => p.id === 'bait')?.alive).toBe(false);
+    expect(afterReply.game.pieces.find((p) => p.id === 'er')).toMatchObject({ x: 4, y: 4, alive: true });
+    expect(afterReply.premoveInputOpen).toBe(true);
+
+    vi.advanceTimersByTime(621); // fire the queued recapture, but not the next enemy reply
+    const afterRecapture = useSkirmish.getState();
+    expect(afterRecapture.game.pieces.find((p) => p.id === 'pr')).toMatchObject({ x: 4, y: 4, alive: true });
+    expect(afterRecapture.game.pieces.find((p) => p.id === 'er')?.alive).toBe(false);
+    expect(afterRecapture.premoves).toEqual([]);
+    expect(afterRecapture.game.turn).toBe('enemy');
+  });
+
   it('clearPremoves drops the whole queued chain', () => {
     loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
     useSkirmish.getState().tryMoveTo(1, 7);

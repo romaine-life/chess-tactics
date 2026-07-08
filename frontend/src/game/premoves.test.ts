@@ -50,4 +50,27 @@ describe('premoveGhosts', () => {
     const targets = premoveTargets(g, [{ pieceId: 'rx', x: 0, y: 3 }], 'ry');
     expect(targets.some((m) => m.x === 0 && m.y === 3)).toBe(true);
   });
+
+  it('a unit can premove onto a friendly-occupied square as a speculative recapture', () => {
+    const g = board([
+      piece('pr', 'player', 'rook', 0, 3),
+      piece('bait', 'player', 'pawn', 3, 3),
+      piece('pk', 'player', 'king', 7, 0),
+      piece('ek', 'enemy', 'king', 7, 7),
+    ]);
+    const targets = premoveTargets(g, [], 'pr');
+    expect(targets.some((m) => m.x === 3 && m.y === 3)).toBe(true);
+    expect(targets.some((m) => m.x === 4 && m.y === 3)).toBe(false);
+  });
+
+  it('a chain can continue from a speculative recapture square', () => {
+    const g = board([
+      piece('pr', 'player', 'rook', 0, 3),
+      piece('bait', 'player', 'pawn', 3, 3),
+      piece('pk', 'player', 'king', 7, 0),
+      piece('ek', 'enemy', 'king', 7, 7),
+    ]);
+    const targets = premoveTargets(g, [{ pieceId: 'pr', x: 3, y: 3 }], 'pr');
+    expect(targets.some((m) => m.x === 3 && m.y === 0)).toBe(true);
+  });
 });
