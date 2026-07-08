@@ -27,8 +27,9 @@ import { PhasePanel } from './phasePanels';
 import { FrontierBoard } from './FrontierBoard';
 import { SolverHelpBar } from './HelpBar';
 import { SolverGlossaryPanel } from './SolverGlossary';
+import { SolverHelpPanel } from './SolverHelp';
 
-export type SolverTab = 'step' | 'run' | 'glossary';
+export type SolverTab = 'step' | 'run' | 'help' | 'glossary';
 
 // Live-stepping budget: comfortably interactive in a browser tab. Retrograde additionally
 // gates on the feasibility estimate below — the engine generator is collect-then-yield, so
@@ -299,6 +300,10 @@ export function SolverStepper({
         <nav className="solver-modebar" aria-label="Solver surface">
           <button type="button" className={tab === 'step' ? 'active' : ''} onClick={() => onTabChange('step')} aria-pressed={tab === 'step'}>Stepper</button>
           <button type="button" className={tab === 'run' ? 'active' : ''} onClick={() => onTabChange('run')} aria-pressed={tab === 'run'}>Cluster run</button>
+          <button type="button" className={tab === 'help' ? 'active' : ''} onClick={() => onTabChange('help')} aria-pressed={tab === 'help'}
+            data-help="How to use this tool: what it is, why the demo boards, the build-then-step model, how to read each region, and how to check it isn't lying.">
+            Help
+          </button>
           <button type="button" className={tab === 'glossary' ? 'active' : ''} onClick={() => onTabChange('glossary')} aria-pressed={tab === 'glossary'}
             data-help="The vocabulary reference: retrograde analysis, tablebase, DTM, the back-up rule, fixpoint, GHI and the rest of what the panels say.">
             Glossary
@@ -307,6 +312,8 @@ export function SolverStepper({
         <SolverHelpBar onOpenGlossary={openGlossary} />
         {tab === 'run' ? (
           <div className="solver-run-wrap">{runTab}</div>
+        ) : tab === 'help' ? (
+          <div className="solver-run-wrap"><SolverHelpPanel /></div>
         ) : tab === 'glossary' ? (
           <div className="solver-run-wrap"><SolverGlossaryPanel highlight={glossaryTerm} /></div>
         ) : (
@@ -499,6 +506,18 @@ const SOLVER_CSS = `
 .solver-glossary-entry.is-highlight { border-color:#d9b871; box-shadow:0 0 10px #d9b87133; }
 .solver-glossary-entry dt { font-size:13px; font-weight:700; color:#e7ebf0; margin:0 0 4px; }
 .solver-glossary-entry dd { font-size:12px; color:#a9b4c1; margin:0; line-height:1.5; }
+/* Help (same visual family as the glossary cards) */
+.solver-help { padding:14px 18px; max-width:820px; }
+.solver-help-section { border:1px solid #29323f; background:#12181f; border-radius:6px; padding:12px 14px; margin:0 0 10px; }
+.solver-help-section h3 { font-size:13px; font-weight:700; color:#e7ebf0; margin:0 0 6px; }
+.solver-help-section p, .solver-help-section li { font-size:12px; color:#a9b4c1; line-height:1.55; }
+.solver-help-section p { margin:0 0 8px; }
+.solver-help-section p:last-child { margin-bottom:0; }
+.solver-help-section ol, .solver-help-section ul { margin:0; padding-left:18px; }
+.solver-help-section li { margin:0 0 6px; }
+.solver-help-section code, .solver-help-section kbd { font-size:11px; color:#d9b871; background:#1a222c; border:1px solid #29323f; border-radius:3px; padding:0 4px; }
+.solver-help-section b { color:#cfd7e0; }
+.solver-help-verdict { color:#d9b871; font-weight:700; font-size:11px; letter-spacing:0.4px; }
 
 /* Body: board + phase panel */
 .solver-body { display:flex; flex:1 1 0; min-height:0; gap:12px; padding:12px 14px; }

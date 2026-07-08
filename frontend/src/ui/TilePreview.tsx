@@ -176,8 +176,8 @@ interface TilesetStudioRouteState {
   selectedGameLabLevelId?: string;
   selectedGymLevelId?: string;
   selectedSolverLevelId?: string;
-  /** Which Board Solver surface is open (Stepper / cluster Run / Glossary) — the `stab=` param. */
-  solverTab?: 'step' | 'run' | 'glossary';
+  /** Which Board Solver surface is open (Stepper / cluster Run / Help / Glossary) — the `stab=` param. */
+  solverTab?: 'step' | 'run' | 'help' | 'glossary';
   selectedTileSideId?: string;
   selectedFrameName?: string;
   selectedPropName?: string;
@@ -328,7 +328,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedGameLabLevelId: glvl || undefined,
     selectedGymLevelId: gymlvl || undefined,
     selectedSolverLevelId: slvl || undefined,
-    solverTab: stab === 'run' ? 'run' : stab === 'glossary' ? 'glossary' : stab === 'step' ? 'step' : undefined,
+    solverTab: stab === 'run' ? 'run' : stab === 'help' ? 'help' : stab === 'glossary' ? 'glossary' : stab === 'step' ? 'step' : undefined,
     selectedTileSideId: side || undefined,
     selectedFrameName: frame || undefined,
     selectedPropName: prop || undefined,
@@ -489,7 +489,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedGymLevelId, setSelectedGymLevelId] = useState<string | undefined>(initialRoute.selectedGymLevelId);
   const [solverSearch, setSolverSearch] = useState('');
   const [selectedSolverLevelId, setSelectedSolverLevelId] = useState<string | undefined>(initialRoute.selectedSolverLevelId);
-  const [solverTab, setSolverTab] = useState<'step' | 'run' | 'glossary'>(initialRoute.solverTab ?? 'step');
+  const [solverTab, setSolverTab] = useState<'step' | 'run' | 'help' | 'glossary'>(initialRoute.solverTab ?? 'step');
   const [glossarySearch, setGlossarySearch] = useState('');
   // Assets and artwork each own their own selection — never one shared field
   // (that's how an Assets id like 'gear' used to leak into the Artwork stage).
