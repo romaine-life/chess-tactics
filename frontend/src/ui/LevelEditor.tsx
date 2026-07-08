@@ -81,8 +81,6 @@ import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { OBJECTIVE_LABEL } from '../core/objectives';
 import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
-import { publishMap } from '../net/maps';
-import { HttpError } from '../net/http';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
 import { OBJECTIVE_TYPES, ZONE_COLORS, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
@@ -2634,33 +2632,8 @@ export function LevelEditor(): ReactElement {
     void navigator.clipboard?.writeText(`${window.location.origin}/editor/level?board=${code}`);
     reportStatus('Copied board link.', 'success');
   };
-  // Publish this map to the server and copy a public /play?map=<id> link. Unlike the board-code
-  // link, this one UNFURLS on Discord (the server can resolve it) and is a short, stable URL anyone
-  // can play. Requires the map to be saved & clean (publish reads the stored copy) and signed in (a
-  // public link needs an owner).
-  const [sharing, setSharing] = useState(false);
-  const copyShareLink = async (): Promise<void> => {
-    if (sharing) return;
-    if (!editingId || dirty) {
-      reportStatus('Save this map first.', 'warning', dirty ? 'You have unsaved changes — Save, then Share Link.' : 'Give it a name and Save, then Share Link.');
-      return;
-    }
-    setSharing(true);
-    try {
-      const { url } = await publishMap(editingId);
-      await navigator.clipboard?.writeText(url);
-      reportStatus('Copied share link.', 'success', 'Anyone with the link can preview and play this map.');
-    } catch (err) {
-      if (err instanceof HttpError && err.status === 401) {
-        reportStatus('Sign in to share.', 'warning', 'A public share link needs a signed-in owner.');
-      } else if (err instanceof HttpError && err.status === 404) {
-        reportStatus('Save this map first.', 'warning', 'The saved copy wasn’t found — Save, then Share Link.');
-      } else {
-        reportStatus('Couldn’t create a share link.', 'error');
-      }
-    } finally {
-      setSharing(false);
-    }
+  const copyUrlBarLink = (): void => {
+    void navigator.clipboard?.writeText(window.location.href);
   };
   const loadBoardLink = (): void => {
     setLayer('status');
@@ -3420,7 +3393,7 @@ export function LevelEditor(): ReactElement {
               <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
               <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board — the recipient can edit AND live-test it.">Copy Link</button>
-              <button type="button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
+              <button type="button" className="le-seg-btn" onClick={copyUrlBarLink} title="Copy the current browser URL.">Copy URL</button>
             </div>
             <input
               className="le-board-link-input"

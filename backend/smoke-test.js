@@ -181,7 +181,28 @@ child.stderr.on('data', (chunk) => {
   output += chunk.toString();
 });
 
-function request(method, path, headers = {}, body = null) {
+function waitForProcessExit(proc, timeoutMs = 5000) {
+  if (!proc || proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, timeoutMs);
+    proc.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+function closeHttpServer(server) {
+  return new Promise((resolve) => {
+    try {
+      server.close(() => resolve());
+    } catch {
+      resolve();
+    }
+  });
+}
+
+function request(method, path, headers = {}, body = null, timeoutMs = 1000) {
   return new Promise((resolve, reject) => {
     const req = http.request({ hostname: '127.0.0.1', port, method, path, headers }, (res) => {
       let body = '';
@@ -192,15 +213,15 @@ function request(method, path, headers = {}, body = null) {
       res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, body }));
     });
     req.on('error', reject);
-    req.setTimeout(1000, () => {
+    req.setTimeout(timeoutMs, () => {
       req.destroy(new Error(`Timed out requesting ${path}`));
     });
     req.end(body);
   });
 }
 
-function get(path, headers) {
-  return request('GET', path, headers);
+function get(path, headers, timeoutMs) {
+  return request('GET', path, headers, null, timeoutMs);
 }
 
 // Open a long-lived SSE stream and expose its parsed `data:` frames. Unlike request()
@@ -305,9 +326,8 @@ async function waitForHotBackend() {
     try {
       const response = await get('/__hot_backend');
       if (response.statusCode === 200 && response.body === 'hot-backend-ok') return;
-    } catch (_error) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    } catch (_error) { /* keep polling while the supervisor restarts */ }
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Hot backend did not become active\n${output}`);
 }
@@ -617,6 +637,24 @@ async function main() {
     publishedOfficialBody.portfolio.data.campaigns[0].id !== 'off-c-test'
   ) {
     throw new Error(`Official campaigns did not persist for public read: ${publishedOfficial.statusCode} ${publishedOfficial.body}`);
+  }
+
+  const officialPlay = await get('/play?campaignId=off-c-test&levelId=off-l-test');
+  if (
+    officialPlay.statusCode !== 200 ||
+    !officialPlay.body.includes('Test Level') ||
+    !officialPlay.body.includes('/assets/level-thumb/off-l-test.png') ||
+    officialPlay.body.includes('/assets/og/default.png')
+  ) {
+    throw new Error(`Official play page should advertise the level thumbnail: ${officialPlay.statusCode}`);
+  }
+  const officialThumb = await get('/assets/level-thumb/off-l-test.png', undefined, 5000);
+  if (
+    officialThumb.statusCode !== 200 ||
+    !String(officialThumb.headers['content-type'] || '').includes('image/png') ||
+    officialThumb.body.length < 1000
+  ) {
+    throw new Error(`Official level thumbnail should render PNG: ${officialThumb.statusCode} ${officialThumb.headers['content-type'] || ''}`);
   }
 
   // Non-off-prefixed ids are rejected (would collide the per-user id counter).
@@ -1389,11 +1427,11 @@ async function main() {
 }
 
 main()
-  .finally(() => {
+  .finally(async () => {
     child.kill();
-    mockAuth.close();
-    mockBgm.close();
-    fs.rmSync(hotRoot, { recursive: true, force: true });
+    await waitForProcessExit(child);
+    await Promise.all([closeHttpServer(mockAuth), closeHttpServer(mockBgm)]);
+    fs.rmSync(hotRoot, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
   })
   .catch((error) => {
     console.error(error);
