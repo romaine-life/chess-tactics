@@ -88,6 +88,7 @@ describe('boardCode round-trip', () => {
       cells: ['1,1', '2,1', '1,2'],
       buffer: 12,
       wiggle: 0.35,
+      surfacePatchDensity: 0.65,
       sections: [
         {
           terrain: 'water',
@@ -99,6 +100,20 @@ describe('boardCode round-trip', () => {
       ],
     }];
     expect(decodeBoard(encodeBoard(emptyBoard({ generatedRegions })))!.generatedRegions).toEqual(generatedRegions);
+  });
+
+  it('round-trips seamless surface patch placements', () => {
+    const surfacePatches = [
+      { assetId: 'grass-soft-bands-3x3', x: 1, y: 1 },
+      { assetId: 'future-patch', x: 4, y: 3 },
+    ];
+    const decoded = decodeBoard(encodeBoard(emptyBoard({ surfacePatches })))!;
+    expect(decoded.surfacePatches).toEqual(surfacePatches);
+  });
+
+  it('encodes a patch-free board byte-identically to a code that predates surface patches', () => {
+    expect(encodeBoard(emptyBoard({ surfacePatches: [] }))).toBe(encodeBoard(emptyBoard()));
+    expect(decodeBoard(encodeBoard(emptyBoard()))!.surfacePatches).toEqual([]);
   });
 
   it('round-trips cover type overrides for grass painted on non-grass tiles', () => {

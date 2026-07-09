@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "grass-meadow-drift-4x4",
+      "label": "Meadow drift",
+      "family": "grass",
+      "columns": 4,
+      "rows": 4,
+      "src": "/assets/tiles/surface-patches/grass-meadow-drift-4x4.png",
+      "edgeBlendCells": 0.65,
+      "weight": 1
+    },
+    {
+      "id": "grass-soft-bands-3x3",
+      "label": "Soft grass bands",
+      "family": "grass",
+      "columns": 3,
+      "rows": 3,
+      "src": "/assets/tiles/surface-patches/grass-soft-bands-3x3.png",
+      "edgeBlendCells": 0.65,
+      "weight": 1.15
+    },
+    {
+      "id": "dirt-worn-field-4x3",
+      "label": "Worn earth",
+      "family": "dirt",
+      "columns": 4,
+      "rows": 3,
+      "src": "/assets/tiles/surface-patches/dirt-worn-field-4x3.png",
+      "edgeBlendCells": 0.65,
+      "weight": 1
+    },
+    {
+      "id": "dirt-soft-wear-2x3",
+      "label": "Soft earth wear",
+      "family": "dirt",
+      "columns": 2,
+      "rows": 3,
+      "src": "/assets/tiles/surface-patches/dirt-soft-wear-2x3.png",
+      "edgeBlendCells": 0.65,
+      "weight": 1.15
+    },
+    {
+      "id": "stone-moss-field-3x3",
+      "label": "Mossy paving",
+      "family": "stone",
+      "columns": 3,
+      "rows": 3,
+      "src": "/assets/tiles/surface-patches/stone-moss-field-3x3.png",
+      "edgeBlendCells": 0.65,
+      "weight": 1
+    }
+  ]
+}

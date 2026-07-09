@@ -12,7 +12,7 @@ import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../c
 import { FenceOverlayLayer, WallOverlayLayer } from '../render/FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { BoardGridLayer } from '../render/BoardGridLayer';
-import { BoardTerrainLayer, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
+import { BoardTerrainLayer, terrainCanvasPatches, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
 import { studioBoardSprites, studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
@@ -74,6 +74,13 @@ import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
 import { scatterTerrainDetailed } from '../core/terrainScatter';
 import { createRng } from '../core/rng';
+import {
+  DEFAULT_SURFACE_PATCH_DENSITY,
+  generateSurfacePatches,
+  surfacePatchAsset,
+  surfacePatchCellIndices,
+  type SurfacePatchPlacement,
+} from '../core/surfacePatches';
 import { SliderRow } from './dressing/SliderRow';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
@@ -185,6 +192,7 @@ function StudioEditableBoard({
   units: placedUnits,
   doodads: placedDoodads,
   props: placedProps = {},
+  surfacePatches: placedSurfacePatches = [],
   features: placedFeatures = {},
   fences: placedFences = {},
   walls: placedWalls = {},
@@ -228,6 +236,8 @@ function StudioEditableBoard({
   doodads: Record<string, { doodadId: string }>;
   /** Multi-cell props keyed by ANCHOR cell "x,y" -> {propId}. */
   props?: Record<string, { propId: string }>;
+  /** Visual-only top-surface patches spanning several same-family cells. */
+  surfacePatches?: readonly SurfacePatchPlacement[];
   /** Linear-feature overlays (roads + rivers) keyed by "x,y" -> {kind, material, mask}. */
   features?: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
   /** Edge fences keyed by shared-edge key (roadEdgeKey) -> fence material — drawn as edge rails. */
@@ -618,7 +628,7 @@ function StudioEditableBoard({
       ariaLabel="Editable tile board"
       boardZoom={boardZoom}
       boardPan={boardPan}
-      backgroundLayer={<BoardTerrainLayer cells={terrainCells} />}
+      backgroundLayer={<BoardTerrainLayer cells={terrainCells} patches={terrainCanvasPatches(placedSurfacePatches)} />}
       onPointerUp={endInteraction}
       onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
     >
@@ -653,6 +663,36 @@ const leFamilyAssets = studioFamilies.reduce((acc, family) => {
 }, {} as Record<TileFamilyId, readonly StudioAsset[]>);
 const leAllTiles = studioFamilies.flatMap((family) => family.assets);
 const leFamilyOfTile = (id: string): StudioFamily | undefined => studioFamilies.find((family) => family.assets.some((asset) => asset.id === id));
+const validSurfacePatchesForBoard = (board: EditorBoard): SurfacePatchPlacement[] => {
+  const reserved = new Set<number>();
+  return (board.surfacePatches ?? [])
+    .slice()
+    .sort((a, b) => a.y - b.y || a.x - b.x || a.assetId.localeCompare(b.assetId))
+    .filter((placement) => {
+      const asset = surfacePatchAsset(placement.assetId);
+      if (!asset) return placement.x >= 0 && placement.y >= 0 && placement.x < board.cols && placement.y < board.rows;
+      const cells = surfacePatchCellIndices(placement, board.cols, board.rows);
+      if (cells.length !== asset.columns * asset.rows || cells.some((index) => reserved.has(index))) return false;
+      const matches = cells.every((index) => {
+        const key = `${index % board.cols},${Math.floor(index / board.cols)}`;
+        const tileId = board.cells[key];
+        return !!tileId && leFamilyOfTile(tileId)?.id === asset.family;
+      });
+      if (!matches) return false;
+      for (const index of cells) {
+        const x = index % board.cols;
+        const y = Math.floor(index / board.cols);
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx >= 0 && ny >= 0 && nx < board.cols && ny < board.rows) reserved.add(ny * board.cols + nx);
+          }
+        }
+      }
+      return true;
+    });
+};
 // The terrain families the Generate (scatter) panel offers as toggles, in display order.
 const LE_SCATTER_FAMILIES: ReadonlyArray<{ id: TileFamilyId; label: string }> = [
   { id: 'grass', label: 'Grass' },
@@ -1698,6 +1738,7 @@ export function LevelEditor(): ReactElement {
   const [adminAuditEvents, setAdminAuditEvents] = useState<EditorMapAuditEvent[]>([]);
   const [adminAuditLoading, setAdminAuditLoading] = useState(false);
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
+  const [boardSurfacePatches, setBoardSurfacePatches] = useState<SurfacePatchPlacement[]>(() => initialBoard?.surfacePatches ?? []);
   const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
   const [boardRows, setBoardRows] = useState(initialBoard?.rows ?? LE_ROWS);
   const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() =>
@@ -1719,6 +1760,7 @@ export function LevelEditor(): ReactElement {
   const generatedRegionIdRef = useRef(initialGeneratedRegions.length);
   const [scatterBuffer, setScatterBuffer] = useState(0);
   const [scatterWiggle, setScatterWiggle] = useState(0.5);
+  const [scatterSurfaceDensity, setScatterSurfaceDensity] = useState(DEFAULT_SURFACE_PATCH_DENSITY);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [showGrid, setShowGrid] = useState(false);
@@ -1980,6 +2022,7 @@ export function LevelEditor(): ReactElement {
     setBoardCols(board.cols);
     setBoardRows(board.rows);
     setBoardCells(board.cells);
+    setBoardSurfacePatches(board.surfacePatches ?? []);
     setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
     setBoardDoodads(board.doodads);
     setBoardProps(board.props);
@@ -2096,6 +2139,7 @@ export function LevelEditor(): ReactElement {
       setBoardCols(board.cols);
       setBoardRows(board.rows);
       setBoardCells(board.cells);
+      setBoardSurfacePatches(board.surfacePatches ?? []);
       setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
       setBoardDoodads(board.doodads);
       setBoardProps(board.props);
@@ -2133,8 +2177,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, surfacePatches: boardSurfacePatches, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardSurfacePatches, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -2142,6 +2186,7 @@ export function LevelEditor(): ReactElement {
     setBoardCols(board.cols);
     setBoardRows(board.rows);
     setBoardCells(board.cells);
+    setBoardSurfacePatches(board.surfacePatches ?? []);
     setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
     setBoardDoodads(board.doodads);
     setBoardProps(board.props);
@@ -2165,11 +2210,12 @@ export function LevelEditor(): ReactElement {
   };
   const commitEditorBoard = (next: EditorBoard, selection?: { x: number; y: number } | null): boolean => {
     const current = currentEditorBoardRef.current;
-    if (boardSignature(next) === boardSignature(current)) return false;
+    const normalized = { ...next, surfacePatches: validSurfacePatchesForBoard(next) };
+    if (boardSignature(normalized) === boardSignature(current)) return false;
     setUndoStack((prev) => [...prev, cloneEditorBoard(current)].slice(-HISTORY_LIMIT));
     setRedoStack([]);
-    currentEditorBoardRef.current = next;
-    applyEditorBoard(next);
+    currentEditorBoardRef.current = normalized;
+    applyEditorBoard(normalized);
     if (selection !== undefined) setSelectedCell(selection);
     return true;
   };
@@ -2467,7 +2513,7 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, surfacePatches: [], units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
     setActiveGeneratedRegionId(null);
     setRegionSelection(new Set());
   };
@@ -2555,6 +2601,7 @@ export function LevelEditor(): ReactElement {
     sections: scatterRowsToGeneratedSections(scatterSections),
     buffer: scatterBuffer,
     wiggle: scatterWiggle,
+    surfacePatchDensity: scatterSurfaceDensity,
   });
   const selectGeneratedRegionUnit = (id: string): void => {
     if (!id) {
@@ -2569,6 +2616,7 @@ export function LevelEditor(): ReactElement {
     setRegionSelection(new Set(cells));
     setScatterBuffer(region.buffer);
     setScatterWiggle(region.wiggle);
+    setScatterSurfaceDensity(region.surfacePatchDensity ?? DEFAULT_SURFACE_PATCH_DENSITY);
     setScatterSections(normalizeToTotal(hydrateGeneratedRegionSections(region.sections), 100 - region.buffer));
   };
   const removeGeneratedRegionUnit = (id: string): void => {
@@ -2693,6 +2741,22 @@ export function LevelEditor(): ReactElement {
     });
     const solved = solveSocketBoard({ assets: leTileAssets, terrainMap, seed, columns: cols, rows, familyAssets: leFamilyAssets });
     const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const generatedSurfacePatches = generateSurfacePatches({
+      terrainMap,
+      columns: cols,
+      rows,
+      seed,
+      density: scatterSurfaceDensity,
+      sectionOf,
+      region,
+    });
+    const rewrittenCells = region ?? new Set(Array.from({ length: cols * rows }, (_, index) => index));
+    const preservedSurfacePatches = (next.surfacePatches ?? []).filter((placement) => {
+      const cells = surfacePatchCellIndices(placement, cols, rows);
+      if (cells.length > 0) return !cells.some((index) => rewrittenCells.has(index));
+      return !rewrittenCells.has(placement.y * cols + placement.x);
+    });
+    next.surfacePatches = [...preservedSurfacePatches, ...generatedSurfacePatches];
     let savedRegion: BoardGeneratedRegion | null = null;
     if (selectedRegionCells.length > 0) {
       const regions = next.generatedRegions ?? [];
@@ -3714,6 +3778,7 @@ export function LevelEditor(): ReactElement {
                   cols={boardCols}
                   rows={boardRows}
                   cells={boardCells}
+                  surfacePatches={boardSurfacePatches}
                   units={boardUnits}
                   doodads={boardDoodads}
                   props={boardProps}
@@ -4301,6 +4366,7 @@ export function LevelEditor(): ReactElement {
             <button type="button" className="le-seg-btn le-gen-add" onClick={addSection} title="Add another terrain region and rebalance the shares.">+ Add terrain region</button>
             <SliderRow label={`Randomness buffer · ${scatterBuffer}%`} value={scatterBuffer} set={setScatterBufferBalanced} min={0} max={60} step={1} nudge={1} dflt={0} />
             <SliderRow label="Edge roughness" value={scatterWiggle} set={setScatterWiggle} min={0} max={1} step={0.05} nudge={0.05} dflt={0.5} />
+            <SliderRow label={`Surface continuity · ${Math.round(scatterSurfaceDensity * 100)}%`} value={scatterSurfaceDensity} set={setScatterSurfaceDensity} min={0} max={1} step={0.05} nudge={0.05} dflt={DEFAULT_SURFACE_PATCH_DENSITY} />
             <button type="button" className="le-seg-btn le-gen-run" style={{ width: '100%', marginTop: 8 }} onClick={generateScatter} title="Roll a fresh layout into the selection (or the whole board) and autotile it.">Generate</button>
           </section>
         </>) : layer === 'rules' ? (<>

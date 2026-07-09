@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactElement } from 'react';
 import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X } from '../art/projectionContract';
+import { surfacePatchAsset, surfacePatchFrame, type SurfacePatchPlacement } from '../core/surfacePatches';
 import { boardLabCellPosition } from './boardProjection';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
@@ -17,6 +18,29 @@ export interface TerrainCanvasCell {
   featureSrc?: string;
   topAnimFrames?: number;
   drawSide?: boolean;
+}
+
+export interface TerrainCanvasPatch {
+  key: string;
+  x: number;
+  y: number;
+  src: string;
+  columns: number;
+  rows: number;
+}
+
+export function terrainCanvasPatches(placements: readonly SurfacePatchPlacement[] | undefined): TerrainCanvasPatch[] {
+  return (placements ?? []).flatMap((placement, index) => {
+    const asset = surfacePatchAsset(placement.assetId);
+    return asset ? [{
+      key: `${placement.assetId}:${placement.x},${placement.y}:${index}`,
+      x: placement.x,
+      y: placement.y,
+      src: asset.src,
+      columns: asset.columns,
+      rows: asset.rows,
+    }] : [];
+  });
 }
 
 interface TerrainBounds {
@@ -60,8 +84,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return promise;
 }
 
-function terrainBounds(cells: readonly TerrainCanvasCell[]): TerrainBounds {
-  if (cells.length === 0) return { left: 0, top: 0, width: 1, height: 1 };
+function terrainBounds(cells: readonly TerrainCanvasCell[], patches: readonly TerrainCanvasPatch[]): TerrainBounds {
+  if (cells.length === 0 && patches.length === 0) return { left: 0, top: 0, width: 1, height: 1 };
   const frames = cells.map((cell) => {
     const { left, top } = boardLabCellPosition(cell);
     return {
@@ -71,6 +95,16 @@ function terrainBounds(cells: readonly TerrainCanvasCell[]): TerrainBounds {
       bottom: top - TILE_EQUATOR + TILE_FRAME_H,
     };
   });
+  for (const patch of patches) {
+    const { left, top } = boardLabCellPosition(patch);
+    const frame = surfacePatchFrame(patch);
+    frames.push({
+      left: left + frame.left,
+      top: top + frame.top,
+      right: left + frame.left + frame.width,
+      bottom: top + frame.top + frame.height,
+    });
+  }
   const left = Math.floor(Math.min(...frames.map((frame) => frame.left)));
   const top = Math.floor(Math.min(...frames.map((frame) => frame.top)));
   const right = Math.ceil(Math.max(...frames.map((frame) => frame.right)));
@@ -78,8 +112,8 @@ function terrainBounds(cells: readonly TerrainCanvasCell[]): TerrainBounds {
   return { left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
 }
 
-function terrainSignature(cells: readonly TerrainCanvasCell[]): string {
-  return cells
+function terrainSignature(cells: readonly TerrainCanvasCell[], patches: readonly TerrainCanvasPatch[]): string {
+  const cellSignature = cells
     .map((cell) => [
       cell.key,
       cell.x,
@@ -91,15 +125,20 @@ function terrainSignature(cells: readonly TerrainCanvasCell[]): string {
       cell.drawSide ? 1 : 0,
     ].join(':'))
     .join('|');
+  const patchSignature = patches
+    .map((patch) => [patch.key, patch.x, patch.y, patch.src, patch.columns, patch.rows].join(':'))
+    .join('|');
+  return `${cellSignature}||${patchSignature}`;
 }
 
-function uniqueSources(cells: readonly TerrainCanvasCell[]): string[] {
+function uniqueSources(cells: readonly TerrainCanvasCell[], patches: readonly TerrainCanvasPatch[]): string[] {
   const urls = new Set<string>();
   for (const cell of cells) {
     if (cell.topSrc) urls.add(cell.topSrc);
     if (cell.sideSrc && cell.drawSide !== false) urls.add(cell.sideSrc);
     if (cell.featureSrc) urls.add(cell.featureSrc);
   }
+  for (const patch of patches) urls.add(patch.src);
   return [...urls];
 }
 
@@ -268,9 +307,29 @@ function drawCellFeature(
   ctx.drawImage(feature, dx, dy, TILE_FRAME_W, TILE_FRAME_H);
 }
 
+function drawSurfacePatch(
+  ctx: CanvasRenderingContext2D,
+  patch: TerrainCanvasPatch,
+  bounds: TerrainBounds,
+  images: ReadonlyMap<string, HTMLImageElement>,
+): void {
+  const image = images.get(patch.src);
+  if (!imageReady(image)) return;
+  const { left, top } = boardLabCellPosition(patch);
+  const frame = surfacePatchFrame(patch);
+  ctx.drawImage(
+    image,
+    left + frame.left - bounds.left,
+    top + frame.top - bounds.top,
+    frame.width,
+    frame.height,
+  );
+}
+
 function drawFrame(
   ctx: CanvasRenderingContext2D,
   cells: readonly TerrainCanvasCell[],
+  patches: readonly TerrainCanvasPatch[],
   bounds: TerrainBounds,
   images: ReadonlyMap<string, HTMLImageElement>,
   timeMs: number,
@@ -294,14 +353,22 @@ function drawFrame(
 
   for (const cell of ordered) {
     drawCellTop(ctx, cell, bounds, images, timeMs, false);
-    drawCellFeature(ctx, cell, bounds, images);
   }
+
+  for (const patch of patches) drawSurfacePatch(ctx, patch, bounds, images);
+  for (const cell of ordered) drawCellFeature(ctx, cell, bounds, images);
 }
 
-export function BoardTerrainLayer({ cells }: { cells: readonly TerrainCanvasCell[] }): ReactElement {
+export function BoardTerrainLayer({
+  cells,
+  patches = [],
+}: {
+  cells: readonly TerrainCanvasCell[];
+  patches?: readonly TerrainCanvasPatch[];
+}): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const signature = useMemo(() => terrainSignature(cells), [cells]);
-  const bounds = useMemo(() => terrainBounds(cells), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+  const signature = useMemo(() => terrainSignature(cells, patches), [cells, patches]);
+  const bounds = useMemo(() => terrainBounds(cells, patches), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -310,12 +377,12 @@ export function BoardTerrainLayer({ cells }: { cells: readonly TerrainCanvasCell
 
     let cancelled = false;
     let raf = 0;
-    const sources = uniqueSources(cells);
+    const sources = uniqueSources(cells, patches);
     const animated = cells.some((cell) => (cell.topAnimFrames ?? 0) > 1);
 
     const paint = (images: ReadonlyMap<string, HTMLImageElement>, timeMs = performance.now()): void => {
       if (cancelled) return;
-      drawFrame(ctx, cells, bounds, images, timeMs);
+      drawFrame(ctx, cells, patches, bounds, images, timeMs);
     };
 
     void Promise.all(sources.map(async (src): Promise<[string, HTMLImageElement]> => [src, await loadImage(src)])).then((entries) => {
@@ -333,7 +400,7 @@ export function BoardTerrainLayer({ cells }: { cells: readonly TerrainCanvasCell
       cancelled = true;
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [bounds, cells, signature]);
+  }, [bounds, cells, patches, signature]);
 
   const style = {
     left: `${bounds.left}px`,

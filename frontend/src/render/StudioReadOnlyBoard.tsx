@@ -6,7 +6,7 @@ import { propDef, type PropDef } from '../core/props';
 import { GroundCoverLayer } from './GroundCoverLayer';
 import { FenceOverlayLayer, WallOverlayLayer } from './FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
-import { BoardTerrainLayer, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
+import { BoardTerrainLayer, terrainCanvasPatches, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
 import { featureFrameSrc } from '../art/tileset';
 import {
@@ -238,7 +238,7 @@ export function StudioReadOnlyBoard({
       ariaLabel={ariaLabel}
       boardZoom={boardZoom}
       boardPan={boardPan}
-      backgroundLayer={<BoardTerrainLayer cells={terrainCells} />}
+      backgroundLayer={<BoardTerrainLayer cells={terrainCells} patches={terrainCanvasPatches(board.surfacePatches)} />}
     >
       <WallOverlayLayer overlays={wallOverlays} wallArt={board.wallArt} bounds={wallBounds} />
       <FenceOverlayLayer overlays={fenceOverlays} />

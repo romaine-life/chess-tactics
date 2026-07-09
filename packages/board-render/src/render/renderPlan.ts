@@ -21,10 +21,11 @@ import { resolveWallArtFaces, slotSource, wallArtSlotsForFace } from '../core/wa
 import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './structureGeometry';
 import { fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
 import { propDef, type StructureSourceRef } from '../core/props';
-import { groundCoverSet, resolveGroundCover, densityFieldAt, type GroundCover } from '../core/groundCover';
+import { groundCoverSet, resolveGroundCover, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
+import { surfacePatchAsset, surfacePatchFrame } from '../core/surfacePatches';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
 const TILE_FRAME_H = TILE_FRAME_HEIGHT;
@@ -40,6 +41,9 @@ const UNIT_SEAT_W = 72;
 const UNIT_SEAT_H = 86;
 const UNIT_SEAT_OFFSET_X = -0.5;
 const UNIT_SEAT_OFFSET_Y = -0.78;
+const TERRAIN_TOP_DEPTH_OFFSET = 1000;
+const TERRAIN_PATCH_DEPTH_OFFSET = 2000;
+const TERRAIN_FEATURE_DEPTH_OFFSET = 3000;
 export const UNIT_IMG_MAX_W = 78;
 export const UNIT_IMG_MAX_H = 92;
 
@@ -131,6 +135,11 @@ export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
   const wallBounds = { cols: board.cols, rows: board.rows };
   const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
   const wallFaceStyles = resolveWallArtFaces(board.wallArt, wallBounds);
+  const occupiedTerrain = new Set(
+    Object.entries(board.cells)
+      .filter(([, id]) => !!resolveTile(id))
+      .map(([key]) => key),
+  );
 
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
@@ -141,7 +150,12 @@ export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
 
       const tile = board.cells[key] ? resolveTile(board.cells[key]) : undefined;
       if (tile) {
-        ops.push({ src: assetFrameSrc(tile, 0), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
+        const frameSrc = assetFrameSrc(tile, 0);
+        const drawSide = !occupiedTerrain.has(`${x + 1},${y}`) || !occupiedTerrain.has(`${x},${y + 1}`);
+        if (drawSide) {
+          ops.push({ src: frameSrc.replace(/\.png$/, '-side.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
+        }
+        ops.push({ src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
       }
 
       const feature = overlays[key];
@@ -152,7 +166,7 @@ export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
           dy: frameY,
           dw: TILE_FRAME_W,
           dh: TILE_FRAME_H,
-          z: zIndex + 0.5,
+          z: TERRAIN_FEATURE_DEPTH_OFFSET + zIndex,
         });
       }
 
@@ -197,6 +211,21 @@ export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
         });
       }
     }
+  }
+
+  for (const placement of board.surfacePatches ?? []) {
+    const asset = surfacePatchAsset(placement.assetId);
+    if (!asset) continue;
+    const { left, top } = boardLabCellPosition(placement);
+    const frame = surfacePatchFrame(asset);
+    ops.push({
+      src: asset.src,
+      dx: left + frame.left,
+      dy: top + frame.top,
+      dw: frame.width,
+      dh: frame.height,
+      z: TERRAIN_PATCH_DEPTH_OFFSET,
+    });
   }
 
   for (const key of new Set([...Object.keys(board.units), ...Object.keys(board.doodads)])) {
@@ -270,9 +299,10 @@ export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
       if (terrain && groundCoverSet(terrain)) coverCells.push({ x, y, terrain });
     }
   }
-  const hasPaintedCover = Object.keys(board.cover ?? {}).length > 0;
-  resolveGroundCover(coverCells, COVER_SEED, (cell) =>
-    board.cover?.[`${cell.x},${cell.y}`] ?? (hasPaintedCover ? null : densityFieldAt(cell.x, cell.y, COVER_SEED)));
+  // An EditorBoard is exact authoring data: an empty cover map means bare terrain, just as it
+  // does in the live editor and exact-board play path. Ambient fallback belongs only to legacy
+  // generated game states, which are resolved before they reach this renderer.
+  resolveGroundCover(coverCells, COVER_SEED, (cell) => board.cover?.[`${cell.x},${cell.y}`] ?? null);
   for (const cell of coverCells) {
     if (!cell.groundCover) continue;
     const set = groundCoverSet(cell.terrain);
@@ -311,10 +341,13 @@ export function boardContentHash(board: RenderBoard): string {
       .sort()
       .map((key) => `${key}=${JSON.stringify(record[key])}`)
       .join(';');
+  const surfacePatches = [...(board.surfacePatches ?? [])]
+    .sort((a, b) => a.y - b.y || a.x - b.x || a.assetId.localeCompare(b.assetId));
   const parts = [
     `c${board.cols}`,
     `r${board.rows}`,
     `t:${sortedEntries(board.cells)}`,
+    `sp:${JSON.stringify(surfacePatches)}`,
     `u:${sortedEntries(board.units)}`,
     `d:${sortedEntries(board.doodads)}`,
     `p:${sortedEntries(board.props ?? {})}`,

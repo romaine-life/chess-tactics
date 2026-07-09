@@ -39,3 +39,26 @@ block. Use the packs' full content: **displacement/height maps** for real surfac
 **normal maps** for micro-detail, and the **3D models / alpha grass cards** for protruding
 doodads. Source packs ship all of these; rendering only the base-color flat was the bug
 this contract corrects.
+
+## Composed terrain and multi-cell surfaces
+
+The runtime board is one composed terrain canvas, but its source data remains layered:
+
+1. Exposed 1x1 tile sides.
+2. The complete 1x1 top bed, which always owns every playable cell.
+3. Visual-only multi-cell surface patches from `EditorBoard.surfacePatches`.
+4. Road and river feature overlays.
+5. Optional grid, cover, doodads, props, units, and tactical overlays.
+
+A surface patch never changes movement, collision, terrain family, or cell addressing. Its
+catalog entry declares a rectangular footprint and one board-space PNG. Generate may place it
+only when every footprint cell belongs to the same generated section and terrain family; patches
+cannot overlap or touch. Painting or resizing the underlying board invalidates a placement that
+no longer fits.
+
+PixelLab owns the top-down material idea, not board geometry. Raw sources live in
+`docs/art/pixellab-runs/surface-patches/`; `frontend/scripts/build-surface-patches.py` crops and
+projects them into the canonical 96x54 cell plane. The bake seals projection misses, then gives
+the outer half-cell a quantized alpha apron so a patch blends into the complete 1x1 bed without
+requiring a hand-authored transition atlas. The editor, play route, read-only viewers, and server
+thumbnail plan all consume the same persisted placements and catalog.

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { boardLabCellPosition } from './boardProjection';
 import { BoardGridLayer } from './BoardGridLayer';
-import { BoardTerrainLayer, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
+import { BoardTerrainLayer, terrainCanvasPatches, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { TileGrid } from './TileGrid';
 import { FenceOverlayLayer, WallOverlayLayer } from './FenceOverlayLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
@@ -9,6 +9,7 @@ import type { TileSocketAsset } from '../core/tileSockets';
 import { featureFrameSrc } from '../art/tileset';
 import type { ResolvedFenceOverlay, ResolvedWallOverlay } from '../core/featureAutotile';
 import type { WallArtPlacementMap } from '../core/wallArt';
+import type { SurfacePatchPlacement } from '../core/surfacePatches';
 
 // Re-export the projection so existing importers (SkirmishBoard, TilePreview, the
 // thumbnail bake) keep working; the math itself now lives in one place: boardProjection.
@@ -28,6 +29,7 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   className?: string;
   ariaLabel?: string;
   showGrid?: boolean;
+  surfacePatches?: readonly SurfacePatchPlacement[];
   renderCellOverlay?: (context: BoardLabBoardOverlayContext<TAsset>) => ReactNode;
   /**
    * Edge fences resolved to a per-cell rail overlay (E/S mask + material), keyed by "x,y".
@@ -54,6 +56,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   className = '',
   ariaLabel = 'Generated board',
   showGrid = false,
+  surfacePatches,
   renderCellOverlay,
   fenceOverlays,
   wallOverlays,
@@ -111,7 +114,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       ariaLabel={ariaLabel}
       boardZoom={boardZoom}
       boardPan={boardPan}
-      backgroundLayer={<BoardTerrainLayer cells={terrainCells} />}
+      backgroundLayer={<BoardTerrainLayer cells={terrainCells} patches={terrainCanvasPatches(surfacePatches)} />}
       renderCellOverlay={
         renderCellOverlay
           ? (cell, position) => {
