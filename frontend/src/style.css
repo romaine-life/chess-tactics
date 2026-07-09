@@ -12707,8 +12707,14 @@ button.tileset-relationship-cell {
 .account-menu-root {
   align-items: center;
   display: flex;
+  flex: 0 0 var(--titlebar-control-size, 52px);
   gap: 10px;
+  inline-size: var(--titlebar-control-size, 52px);
   position: relative;
+}
+
+.account-sign-in-button {
+  flex: 0 0 var(--titlebar-control-size, 52px);
 }
 
 /* Account menu — small kit panel-framed popover anchored under the avatar. A
