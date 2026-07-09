@@ -28,8 +28,8 @@ and don't tell the user screenshots are impossible. Use the helper below.
 
 1. Start the dev server **persistently** — through devctl (the dev-servers skill), not a
    backgrounded bash that dies between turns. Plain fallback from `frontend/`:
-   `npx vite --host 127.0.0.1 --port 5199 --strictPort`. It serves `index.html` for every
-   route (SPA), so any path works.
+   `npm run dev`. It serves `index.html` for every route (SPA), so any path works.
+   Use the local URL Vite prints.
 
 2. Capture with the `shot` tool. It drives the installed Chrome via `puppeteer-core`
    (system browser, no bundled download), freezes animation for determinism, and **clips
@@ -41,10 +41,10 @@ and don't tell the user screenshots are impossible. Use the helper below.
    Examples:
    ```
    # one element off a REAL screen — small, exact, no fixture needed:
-   npm run shot -- http://127.0.0.1:5199/skirmish --select '[data-testid=skirmish-board]'
-   npm run shot -- http://127.0.0.1:5199/skirmish --select '.skirmish-board-unit' --out tmp-shots/unit.png
+   npm run shot -- <vite-url>/skirmish --select '[data-testid=skirmish-board]'
+   npm run shot -- <vite-url>/skirmish --select '.skirmish-board-unit' --out tmp-shots/unit.png
    # whole viewport / a small fixture page:
-   npm run shot -- http://127.0.0.1:5199/unit-studio --size 1200x800
+   npm run shot -- <vite-url>/unit-studio --size 1200x800
    ```
    Output defaults to `frontend/tmp-shots/shot.png` (gitignored). **Default to showing the
    small PNG inline — never substitute a link + description for the pixels.**
@@ -73,17 +73,16 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
 ## Dev environment gotchas (git worktrees)
 
 - A fresh worktree's `backend/node_modules` is expected to be missing. That is
-  normal setup, not a surprising backend failure. Run `npm install` in
-  `backend/` once per worktree before expecting the Vite-spawned backend to
-  start. Do not use `DEV_NO_BACKEND=1` to skip this.
+  normal setup, not a surprising backend failure. `npm run dev` installs or
+  refreshes backend dependencies before starting the Vite-spawned backend.
+  Do not use `DEV_NO_BACKEND=1` to skip this.
 - A worktree's `frontend/node_modules` may be **partial** (missing react /
   typescript / etc.). Run `npm install` in the worktree once, or typecheck with
   the main checkout's compiler:
   `node ../../../frontend/node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`.
 - Never create symlinks/junctions to share `node_modules` — do a real install.
-- Plain `npx vite` serves reliably. If you use the preview tool's managed server,
-  pin an explicit `--port` and matching `port` in `.claude/launch.json` (no
-  `autoPort`), or a port mismatch will make a healthy server look dead.
+- Plain `npm run dev` serves the full app and lets Vite dynamically acquire a
+  frontend port. Use the URL Vite prints instead of assuming a fixed port.
 - **`npm run dev` (from `frontend/`) runs the WHOLE app** — vite auto-spawns the backend
   (each worktree gets its own free port + pidfile, so many run side-by-side). On a fresh
   worktree it now **auto-installs `backend/node_modules` on first run**, so you no longer

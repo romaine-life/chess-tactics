@@ -7,27 +7,15 @@ hybrid chess units defend anchors against enemy telegraphs across six breaches.
 
 ## Local Dev
 
-Use two fixed local ports with fixed meanings:
-
-- `http://localhost:3000` is the backend/Express preview. It serves the baked
-  Vite build from `frontend/dist` and requires `npm run build` to reflect
-  frontend source changes.
-- `http://localhost:5173` is the Vite frontend dev server. Use it for UI,
-  Tileset Studio, and art-workbench iteration that needs hot reload.
-
-Do not try to make `3000` do both jobs during an agent session. If the page HTML
-contains `/assets/index-*.js`, it is the baked preview. If it contains
-`/@vite/client` and `/src/main.tsx`, it is the hot Vite dev server.
-
-For fast frontend iteration:
+Use Vite for local development. It dynamically acquires a frontend port and
+spawns the backend on its own free port, then proxies `/api` through Vite.
+Open the local URL printed by Vite.
 
 ```sh
 cd frontend
 npm install
-npm run dev -- --host localhost --port 5173 --strictPort
+npm run dev
 ```
-
-Open `http://localhost:5173`.
 
 For baked preview:
 
@@ -51,25 +39,7 @@ under `frontend/public`.
 
 - Main menu design portfolio: <https://chess.romaine.life/design/main-menu>
 
-## Agent Preview Contract
-
-Agents and session tooling should start preview through the repo-owned launcher:
-
-```sh
-bin/agent-preview
-```
-
-The launcher uses `$PORT` when it is set by the session, otherwise `3000`.
-It always starts `backend/supervisor.js`; do not run `backend/server.js`
-directly for preview work. The supervisor is the supported entrypoint because
-it owns the hot backend and static override paths used during session edits.
-When the session does not provide explicit override directories, the launcher
-uses writable paths under `${XDG_RUNTIME_DIR:-/tmp}`.
-
-Agent sessions must not bypass backend startup with `DEV_NO_BACKEND=1` or
-`DEV_OFFLINE=1`. Those flags are owner-only escape hatches for deliberate
-manual frontend-only work. If the backend fails to start, agents should fix the
-backend startup problem or report it as a blocker.
+## Local Backend
 
 When agents hand off Level Editor boards through the backend, use an anonymous
 misc editor map: `POST /api/editor-maps` with `{ "level": ..., "misc": true }`.
@@ -79,17 +49,8 @@ Nelson opens them read-only. Misc handoffs are anonymous and can be loaded as
 editable copies from the Misc Map Pool.
 
 Fresh worktrees do not have `backend/node_modules`; that is expected every time.
-Install backend dependencies once per worktree (`cd backend && npm install`)
-before starting a preview that needs the backend.
-
-To check whether the expected preview is running:
-
-```sh
-bin/agent-preview-status
-```
-
-A direct `node backend/server.js` process, even on the right port, is not the
-agent preview contract.
+`npm run dev` installs/refreshes backend dependencies before Vite starts the
+backend child process.
 
 The server uses `auth.romaine.life` for Microsoft sign-in. Optional env:
 

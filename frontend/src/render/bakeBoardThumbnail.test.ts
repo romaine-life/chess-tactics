@@ -4,6 +4,7 @@ import {
   boardDrawOps,
   uniqueDrawSrcs,
   boardBounds,
+  boardSocialFramingBounds,
   largestSolidRect,
 } from './bakeBoardThumbnail';
 import { roadEdgeKey } from '../core/featureAutotile';
@@ -316,6 +317,20 @@ describe('boardBounds — dimension / scale math', () => {
     const bounds = boardBounds(board);
     expect(Number.isInteger(bounds.width)).toBe(true);
     expect(Number.isInteger(bounds.height)).toBe(true);
+  });
+});
+
+describe('boardSocialFramingBounds — board-first social-card framing', () => {
+  it('keeps the full board width and top headroom but stops front edge depth from owning scale', () => {
+    const board: EditorBoard = { ...blank(), cells: { '0,0': TILE } };
+    const draw = boardBounds(board);
+    const frame = boardSocialFramingBounds(board);
+
+    expect(frame.minX).toBe(draw.minX);
+    expect(frame.minY).toBe(draw.minY);
+    expect(frame.width).toBe(draw.width);
+    expect(frame.height).toBeGreaterThan(0);
+    expect(frame.height).toBeLessThan(draw.height);
   });
 });
 
