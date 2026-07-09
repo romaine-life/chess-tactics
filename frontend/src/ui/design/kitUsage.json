@@ -1,9 +1,11 @@
 {
-  "note": "Where each UI-kit asset is actually used on a real screen — MANUALLY audited. The catalog/manifest only LIST assets; appearing there is not usage. An asset in `orphans` is referenced by no live screen. Re-audit when wiring/unwiring assets. Last audited 2026-07-03, when the Studio workspace switcher (studio-catalog/lab/viewer) moved onto the title bar.",
+  "note": "Where each UI-kit asset is actually used on a real screen — MANUALLY audited. The catalog/manifest only LIST assets; appearing there is not usage. An asset in `orphans` is referenced by no live screen. Re-audit when wiring/unwiring assets. Last audited 2026-07-09, when the title-bar account control moved signed-out state to an icon.",
   "usedOn": {
     "studio-catalog": "Studio title bar — workspace switcher (Catalog)",
     "studio-lab": "Studio title bar — workspace switcher (Lab)",
     "studio-viewer": "Studio title bar — workspace switcher (Viewer)",
+    "sign-in": "Shared title bar — signed-out account control",
+    "sign-out": "Account popover — sign-out door button",
     "gear": "Settings rail tab — General; Skirmish HUD Settings button (shared carved settings gear)",
     "speaker": "Settings rail tab — Audio",
     "knight": "Settings rail tab — Gameplay",
