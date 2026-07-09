@@ -20,6 +20,14 @@ function tinyLevel(units: LevelUnit[], opts: { cols: number; rows: number; objec
   return lvl;
 }
 
+/** Author last-rank promotion the way real levels do — a pawn-promotion zone across row `y`.
+ * There is no built-in far-edge default (promotion is strictly rules-driven since the
+ * authored-events merge); a fixture whose story needs queening must AUTHOR it, like a level. */
+function withPromoRow(lvl: Level, y = 0): Level {
+  lvl.layers.zones.push({ id: 'promo', type: 'pawn-promotion', tiles: Array.from({ length: lvl.board.cols }, (_, x) => [x, y] as [number, number]) });
+  return lvl;
+}
+
 function solve(lvl: Level, cap = 5_000_000) {
   const input = toSolverInput(lvl, 0);
   const space = enumerateReachable(input, cap);
@@ -95,11 +103,11 @@ describe('K+Q vs K → forced win with exact DTM', () => {
 describe('K+P vs K', () => {
   it('winning variant: the pawn queens and mates (win, player)', () => {
     // Player pawn one rank from promotion, king supporting; enemy king too far to stop it.
-    const lvl = tinyLevel([
+    const lvl = withPromoRow(tinyLevel([
       { x: 2, y: 4, side: 'enemy', type: 'king', facing: 'south' },
       { x: 1, y: 2, side: 'player', type: 'king', facing: 'north' },
       { x: 1, y: 1, side: 'player', type: 'pawn', facing: 'north' },
-    ], { cols: 3, rows: 5, objective: 'rival-kings' });
+    ], { cols: 3, rows: 5, objective: 'rival-kings' }));
     const { result } = solve(lvl);
     expect(result.rootValue.outcome).toBe('win');
     expect(result.rootValue.winner).toBe('player');
@@ -108,22 +116,22 @@ describe('K+P vs K', () => {
 
   it('blockade-draw variant: the enemy king holds the pawn (draw)', () => {
     // Enemy king in front of the pawn's promotion path with the player king behind: no win.
-    const lvl = tinyLevel([
+    const lvl = withPromoRow(tinyLevel([
       { x: 0, y: 0, side: 'enemy', type: 'king', facing: 'south' },
       { x: 2, y: 4, side: 'player', type: 'king', facing: 'north' },
       { x: 1, y: 3, side: 'player', type: 'pawn', facing: 'north' },
-    ], { cols: 3, rows: 5, objective: 'rival-kings' });
+    ], { cols: 3, rows: 5, objective: 'rival-kings' }));
     const { result } = solve(lvl);
     expect(result.rootValue.outcome).toBe('draw');
     expect(result.rootValue.distancePlies).toBeUndefined();
   });
 
   it('the winning variant actually materialises a promoted queen somewhere in the space', () => {
-    const lvl = tinyLevel([
+    const lvl = withPromoRow(tinyLevel([
       { x: 2, y: 4, side: 'enemy', type: 'king', facing: 'south' },
       { x: 1, y: 2, side: 'player', type: 'king', facing: 'north' },
       { x: 1, y: 1, side: 'player', type: 'pawn', facing: 'north' },
-    ], { cols: 3, rows: 5, objective: 'rival-kings' });
+    ], { cols: 3, rows: 5, objective: 'rival-kings' }));
     const { space, input } = solve(lvl);
     let sawQueen = false;
     for (const key of space.keys) {
@@ -410,11 +418,11 @@ describe('solveStepWithPhases — frontier emission', () => {
 
 describe('solveStepWithPhases — honest per-sweep census, drain, why, ablation', () => {
   const bounds = { wallClockMs: 30_000, maxStates: 5_000_000, maxMemoryBytes: 3 * 2 ** 30 };
-  const kpk = () => tinyLevel([
+  const kpk = () => withPromoRow(tinyLevel([
     { x: 2, y: 4, side: 'enemy', type: 'king', facing: 'south' },
     { x: 1, y: 2, side: 'player', type: 'king', facing: 'north' },
     { x: 1, y: 1, side: 'player', type: 'pawn', facing: 'north' },
-  ], { cols: 3, rows: 5, objective: 'rival-kings' });
+  ], { cols: 3, rows: 5, objective: 'rival-kings' }));
   const steps = [...solveStepWithPhases(kpk(), bounds)];
   const converges = steps.filter((s): s is Extract<SolveStep, { phase: 'Converge' }> => s.phase === 'Converge');
 

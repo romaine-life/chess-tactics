@@ -603,10 +603,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // (a no-op unless this game enforces threefold). enemyEnv matches the post-move state.
     const enemyEnv = envFor(playerRes.state);
     let game = recordPosition(playerRes.state, enemyEnv);
-    // Footstep: only when the piece actually relocates. The single 'moved'
-    // event's destination equals (mv.x, mv.y).
+    // Footstep: only when the piece actually relocates, at the mover's real landing
+    // square (a castle's gesture square can differ from where the king lands).
     if (playerRes.events.some((e) => e.kind === 'moved')) {
-      playLandingSfx(s.env, mv.x, mv.y, LANDING_SFX_DELAY);
+      playLandingSfx(s.env, mv.castle?.kingTo.x ?? mv.x, mv.castle?.kingTo.y ?? mv.y, LANDING_SFX_DELAY);
     }
     const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
     // Objective win on the player's move: capturing the enemy King, routing the last
@@ -701,7 +701,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // netplay apply path — so a rule draw fires identically on both boards.
     const postEnv = envFor(res.state);
     let game = recordPosition(res.state, postEnv);
-    if (res.events.some((e) => e.kind === 'moved')) playLandingSfx(s.env, mv.x, mv.y, LANDING_SFX_DELAY);
+    if (res.events.some((e) => e.kind === 'moved')) playLandingSfx(s.env, mv.castle?.kingTo.x ?? mv.x, mv.castle?.kingTo.y ?? mv.y, LANDING_SFX_DELAY);
     const msgs = res.events.map(describeEvent).filter((m): m is string => m !== null);
     // A full enemy turn completing (enemy→player) advances the survive-clock round count.
     const turnsElapsed = (s.turnsElapsed ?? 0) + (prevTurn === 'enemy' && game.turn === 'player' ? 1 : 0);

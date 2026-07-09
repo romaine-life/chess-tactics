@@ -507,8 +507,31 @@ describe('castling', () => {
   it('offers both castles when the rules hold, encoded as a two-square king move carrying the rook hop', () => {
     const pieces = [king(), rookK(), rookQ(), foeKing()];
     const moves = legalMoves(pieces[0], pieces, SIZE, env());
-    expect(find(moves, 6, 11)?.castle).toEqual({ rookId: pieces[1].id, rookTo: { x: 5, y: 11 } });
-    expect(find(moves, 2, 11)?.castle).toEqual({ rookId: pieces[2].id, rookTo: { x: 3, y: 11 } });
+    expect(find(moves, 6, 11)?.castle).toEqual({ rookId: pieces[1].id, rookTo: { x: 5, y: 11 }, kingTo: { x: 6, y: 11 } });
+    expect(find(moves, 2, 11)?.castle).toEqual({ rookId: pieces[2].id, rookTo: { x: 3, y: 11 }, kingTo: { x: 2, y: 11 } });
+  });
+
+  it('offers the whole chess.com gesture range: every square from two out THROUGH the rook itself', () => {
+    const pieces = [king(), rookK(), rookQ(), foeKing()];
+    const moves = legalMoves(pieces[0], pieces, SIZE, env());
+    // Kingside (rook 3 away): the hop square and the rook's own square.
+    for (const x of [6, 7]) expect(find(moves, x, 11)?.castle?.kingTo).toEqual({ x: 6, y: 11 });
+    // Queenside (rook 4 away): the hop square, the crossed b-file, and the rook's square.
+    for (const x of [2, 1, 0]) expect(find(moves, x, 11)?.castle?.kingTo).toEqual({ x: 2, y: 11 });
+    // Normal king steps are untouched; nothing else on the rank is offered.
+    expect(find(moves, 3, 11)?.castle).toBeUndefined();
+    expect(find(moves, 5, 11)?.castle).toBeUndefined();
+  });
+
+  it('dropping the king ON the rook commits the castle: the king still lands on kingTo', () => {
+    const pieces = [king(), rookK(), foeKing()];
+    const state: GameState = { size: SIZE, pieces, turn: 'player', winner: null, castleRules: [KINGSIDE] };
+    const onRook = find(legalMoves(pieces[0], pieces, SIZE, env()), 7, 11)!;
+    const res = applyMove(state, pieces[0].id, onRook);
+    expect(res.state.pieces.find((p) => p.id === pieces[0].id)).toMatchObject({ x: 6, y: 11, hasMoved: true });
+    expect(res.state.pieces.find((p) => p.id === pieces[1].id)).toMatchObject({ x: 5, y: 11, hasMoved: true });
+    expect(res.state.pieces.filter((p) => p.alive && p.x === 6 && p.y === 11)).toHaveLength(1); // no stacking
+    expect(res.state.lastMove?.to).toEqual({ x: 6, y: 11 }); // history records the real landing
   });
 
   it('offers no castle without authored castle rules (every existing board is unchanged)', () => {

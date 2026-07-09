@@ -19,6 +19,12 @@ function tinyLevel(units: LevelUnit[], cols: number, rows: number, objective: Ob
   return lvl;
 }
 
+/** Author last-rank promotion the way real levels do (no built-in far-edge default). */
+function withPromoRow(lvl: Level, y = 0): Level {
+  lvl.layers.zones.push({ id: 'promo', type: 'pawn-promotion', tiles: Array.from({ length: lvl.board.cols }, (_, x) => [x, y] as [number, number]) });
+  return lvl;
+}
+
 describe('runSolve — mode:search dispatch (feasibility gate routes hard/infeasible here)', () => {
   it('Break the Line is a search-mode board and runSolve returns a well-formed search SolveResult', () => {
     // Break the Line is `hard` (too big to strong-solve) → the feasibility gate selects search.
@@ -81,11 +87,11 @@ describe('bounds + result adapters', () => {
 describe('stepSearchWithPhases — five-phase trace', () => {
   // A board that requires real interior search (K+P vs K, a mate-in-5) so the node decision phases
   // actually fire — an immediate mate-in-1 resolves at the root terminal with nothing to show.
-  const searchBoard = () => tinyLevel([
+  const searchBoard = () => withPromoRow(tinyLevel([
     { x: 2, y: 4, side: 'enemy', type: 'king', facing: 'south' },
     { x: 1, y: 2, side: 'player', type: 'king', facing: 'north' },
     { x: 1, y: 1, side: 'player', type: 'pawn', facing: 'north' },
-  ], 3, 5);
+  ], 3, 5));
 
   it('emits the ADR §7 search phases (Generate/Order/Descend/BackUp) as contract SolveSteps', () => {
     const input = toSolverInput(searchBoard(), 0);

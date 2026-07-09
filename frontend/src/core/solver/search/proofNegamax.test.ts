@@ -20,6 +20,12 @@ function tinyLevel(units: LevelUnit[], cols: number, rows: number, objective: Ob
   return lvl;
 }
 
+/** Author last-rank promotion the way real levels do (no built-in far-edge default). */
+function withPromoRow(lvl: Level, y = 0): Level {
+  lvl.layers.zones.push({ id: 'promo', type: 'pawn-promotion', tiles: Array.from({ length: lvl.board.cols }, (_, x) => [x, y] as [number, number]) });
+  return lvl;
+}
+
 /** Solve a level's ROOT through the real weak-solve pipeline; returns the contract Value. */
 function solveRoot(lvl: Level, maxNodes = 3_000_000) {
   const input = toSolverInput(lvl, 0);
@@ -69,11 +75,11 @@ describe('proofNegamax — proof AGREES with retrograde ground truth', () => {
   });
 
   it('K+P vs K winning (3×5): search DTM equals the retrograde DTM (5)', () => {
-    const lvl = tinyLevel([
+    const lvl = withPromoRow(tinyLevel([
       { x: 2, y: 4, side: 'enemy', type: 'king', facing: 'south' },
       { x: 1, y: 2, side: 'player', type: 'king', facing: 'north' },
       { x: 1, y: 1, side: 'player', type: 'pawn', facing: 'north' },
-    ], 3, 5);
+    ], 3, 5));
     const gt = retroRoot(lvl);
     const sv = solveRoot(lvl).value;
     expect(sv.outcome).toBe(gt.outcome);
@@ -82,11 +88,11 @@ describe('proofNegamax — proof AGREES with retrograde ground truth', () => {
   });
 
   it('K+P vs K blockade (3×5): both prove a draw', () => {
-    const lvl = tinyLevel([
+    const lvl = withPromoRow(tinyLevel([
       { x: 0, y: 0, side: 'enemy', type: 'king', facing: 'south' },
       { x: 2, y: 4, side: 'player', type: 'king', facing: 'north' },
       { x: 1, y: 3, side: 'player', type: 'pawn', facing: 'north' },
-    ], 3, 5);
+    ], 3, 5));
     expect(solveRoot(lvl).value.outcome).toBe(retroRoot(lvl).outcome);
     expect(retroRoot(lvl).outcome).toBe('draw');
   });
@@ -138,7 +144,7 @@ describe('proofNegamax / runWeakSolve — GHI guard (no unsound proven entries i
   ];
   for (const { name, units, cols, rows } of cases) {
     it(`${name}: every TT proven entry matches the retrograde ground truth`, () => {
-      const lvl = tinyLevel(units, cols, rows);
+      const lvl = withPromoRow(tinyLevel(units, cols, rows));
       const input = toSolverInput(lvl, 0);
       const tt = new TranspositionTable();
       runWeakSolve(input, { maxNodes: 3_000_000, maxDepthPlies: 40 }, undefined, undefined, tt);

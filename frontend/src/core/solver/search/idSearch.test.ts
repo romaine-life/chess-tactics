@@ -16,6 +16,12 @@ function tinyLevel(units: LevelUnit[], cols: number, rows: number, objective: Ob
   return lvl;
 }
 
+/** Author last-rank promotion the way real levels do (no built-in far-edge default). */
+function withPromoRow(lvl: Level, y = 0): Level {
+  lvl.layers.zones.push({ id: 'promo', type: 'pawn-promotion', tiles: Array.from({ length: lvl.board.cols }, (_, x) => [x, y] as [number, number]) });
+  return lvl;
+}
+
 const KvK = () => tinyLevel([
   { x: 0, y: 0, side: 'enemy', type: 'king', facing: 'south' },
   { x: 3, y: 3, side: 'player', type: 'king', facing: 'north' },
@@ -27,11 +33,11 @@ const KQvK = () => tinyLevel([
   { x: 2, y: 0, side: 'player', type: 'queen', facing: 'north' },
 ], 3, 3);
 
-const KPvKwin = () => tinyLevel([
+const KPvKwin = () => withPromoRow(tinyLevel([
   { x: 2, y: 4, side: 'enemy', type: 'king', facing: 'south' },
   { x: 1, y: 2, side: 'player', type: 'king', facing: 'north' },
   { x: 1, y: 1, side: 'player', type: 'pawn', facing: 'north' },
-], 3, 5);
+], 3, 5));
 
 function retroValue(lvl: Level) {
   const input = toSolverInput(lvl, 0);

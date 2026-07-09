@@ -11,7 +11,8 @@ import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import { FenceOverlayLayer, WallOverlayLayer } from '../render/FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
-import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
+import { BoardTerrainLayer, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
+import { studioBoardSprites, studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
 import { NavButton } from './shared/NavButton';
@@ -20,6 +21,7 @@ import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
+import { PaletteSelect } from './shared/PaletteSelect';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import {
   levelEditorHrefWithRouteState,
@@ -33,7 +35,7 @@ import { APP_NAVIGATION_EVENT, navigateApp } from './navigation';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { WallArtPreview } from './WallArtLab';
-import { readBoardParam, encodeBoard, decodeBoardLinkInput, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell } from './boardCode';
+import { readBoardParam, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell } from './boardCode';
 import { removeZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
 import {
   appendLevelEventsParam,
@@ -74,7 +76,7 @@ import { createRng } from '../core/rng';
 import { SliderRow } from './dressing/SliderRow';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
-import { UNIT_PALETTES, type UnitPalette } from '../core/pieces';
+import { UNIT_PALETTE_LABELS, UNIT_PALETTES, isUnitPalette, type UnitPalette } from '../core/pieces';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
@@ -82,6 +84,20 @@ import { OBJECTIVE_LABEL } from '../core/objectives';
 import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
+import {
+  createEditorMap,
+  listAdminEditorMaps,
+  listEditorMapAuditEvents,
+  listEditorMaps,
+  loadEditorMap,
+  markEditorMapSaved,
+  updateEditorMap,
+  type EditorMapAdminSummary,
+  type EditorMapAuditEvent,
+  type EditorMapCreator,
+  type EditorMapDocument,
+  type EditorMapSummary,
+} from '../net/editorMaps';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
 import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
@@ -306,16 +322,32 @@ function StudioEditableBoard({
   // same anchor/cell or off-board), then clear the paint/move latches. Fired on pointer-up over the board.
   const endInteraction = () => finishMoveAt(hoverCell);
 
-  // The editor is an adapter over the shared StudioReadOnlyBoard render path (the same cell
-  // art + sprite seating the Campaign Editor's read-only viewer uses): it supplies the SHARED
-  // tile/feature art via `studioCellArt`, then layers its own interaction chrome — the selection
+  // The editor is an adapter over the shared StudioReadOnlyBoard render path: it supplies
+  // terrain to the composed canvas layer, then layers its own interaction chrome — the selection
   // ring and the paint/erase/select hit target — on top per cell.
   const cells: TileGridCell[] = [];
+  const terrainCells: TerrainCanvasCell[] = [];
+  const occupiedTiles = new Set(
+    Object.entries(placed)
+      .filter(([, id]) => !!resolveAsset(id))
+      .map(([key]) => key),
+  );
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < cols; x += 1) {
       const key = `${x},${y}`;
       const assetId = placed[key];
       const asset = assetId ? resolveAsset(assetId) : undefined;
+      const drawSide = !!asset && (!occupiedTiles.has(`${x + 1},${y}`) || !occupiedTiles.has(`${x},${y + 1}`));
+      terrainCells.push(studioTerrainCanvasCell({
+        key,
+        x,
+        y,
+        tileAsset: asset,
+        feature: placedFeatures[key],
+        animationFrame,
+        hidden,
+        drawSide,
+      }));
       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
       // Move-tool feedback reuses the built-in diamond tile-ring (not an axis-aligned box): the
       // picked-up object's footprint, plus the cell under the cursor tinted by whether a drop is legal.
@@ -331,7 +363,6 @@ function StudioEditableBoard({
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
-            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key], animationFrame, hidden, x, y })}
             {/* Zone tint: a translucent diamond seated on the tile EQUATOR — it reuses the exact
                 seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
                 which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
@@ -519,6 +550,7 @@ function StudioEditableBoard({
       ariaLabel="Editable tile board"
       boardZoom={boardZoom}
       boardPan={boardPan}
+      backgroundLayer={<BoardTerrainLayer cells={terrainCells} />}
       onPointerUp={endInteraction}
       onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
     >
@@ -677,18 +709,15 @@ const leSeedBoard = (): Record<string, string> => {
   for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile.id;
   return cells;
 };
-const LE_FACTION_LABELS: Record<UnitPalette, string> = {
-  'navy-blue': 'Navy',
-  crimson: 'Crimson',
-  golden: 'Golden',
-  emerald: 'Emerald',
-};
+const LE_FACTION_LABELS = UNIT_PALETTE_LABELS;
 type FactionDirections = Partial<Record<UnitPalette, Direction>>;
 const DEFAULT_FACTION_DIRECTIONS: Record<UnitPalette, Direction> = {
   'navy-blue': 'north',
   crimson: 'south',
   golden: 'north',
   emerald: 'south',
+  black: 'south',
+  white: 'north',
 };
 const normalizeFactionDirections = (directions?: BoardFactionDirections): FactionDirections =>
   Object.fromEntries(
@@ -698,8 +727,6 @@ const normalizeFactionDirections = (directions?: BoardFactionDirections): Factio
   ) as FactionDirections;
 const factionDefaultDirection = (faction: UnitPalette, directions: FactionDirections): Direction =>
   directions[faction] ?? DEFAULT_FACTION_DIRECTIONS[faction];
-const isUnitPalette = (value: unknown): value is UnitPalette =>
-  typeof value === 'string' && (UNIT_PALETTES as readonly string[]).includes(value);
 const sideDefaultFaction = (
   side: 'player' | 'enemy',
   playerFaction: UnitPalette | null,
@@ -1555,11 +1582,12 @@ export function LevelEditor(): ReactElement {
       levelId: params.get('levelId') ?? undefined,
       returnTo: params.get('returnTo') ?? undefined,
       boardCode: params.get('board') ?? undefined,
+      mapId: params.get('map') ?? undefined,
     };
   }, []);
   // Optional `?board=<code>` deep-link: decode a whole board to start from (see boardCode.ts).
   // It takes precedence over a campaign level (it's the explicit "inspect this exact board").
-  const loadedBoard = useMemo(() => readBoardParam(), []);
+  const loadedBoard = useMemo(() => routeParams.mapId ? null : readBoardParam(), [routeParams.mapId]);
   const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const urlTimeControl = useMemo(() => readTimeControlParams(urlParams), [urlParams]);
   const urlEvents = useMemo(() => readLevelEventsParam(urlParams), [urlParams]);
@@ -1569,17 +1597,37 @@ export function LevelEditor(): ReactElement {
     return (OBJECTIVE_TYPES as readonly string[]).includes(raw ?? '') ? raw as ObjectiveType : undefined;
   }, [urlParams]);
   const draftKey = useMemo(() => levelEditorDraftKey({ levelId: routeParams.levelId, boardCode: routeParams.boardCode }), [routeParams.levelId, routeParams.boardCode]);
-  const localDraft = useMemo(() => readLevelEditorDraft(draftKey), [draftKey]);
+  const localDraft = useMemo(() => routeParams.mapId ? null : readLevelEditorDraft(draftKey), [draftKey, routeParams.mapId]);
   const initialCampaignLevel = useMemo(
-    () => (!localDraft && !loadedBoard && routeParams.levelId ? useCampaigns.getState().levels[routeParams.levelId] : undefined),
-    [loadedBoard, localDraft, routeParams.levelId],
+    () => (!routeParams.mapId && !localDraft && !loadedBoard && routeParams.levelId ? useCampaigns.getState().levels[routeParams.levelId] : undefined),
+    [loadedBoard, localDraft, routeParams.levelId, routeParams.mapId],
   );
   const initialCampaignBoard = useMemo(() => initialCampaignLevel ? levelToEditorBoard(initialCampaignLevel) : undefined, [initialCampaignLevel]);
   const initialBoard = localDraft?.board ?? loadedBoard ?? initialCampaignBoard;
   const initialFactionDirections = normalizeFactionDirections(initialBoard?.factionDirections);
   const initialGeneratedRegions = initialBoard?.generatedRegions ?? [];
-  const needsCampaignHydration = Boolean(routeParams.levelId && !loadedBoard && !localDraft && !initialCampaignLevel);
-  const [editorReady, setEditorReady] = useState(!needsCampaignHydration);
+  const needsRemoteMapHydration = Boolean(routeParams.mapId);
+  const needsCampaignHydration = Boolean(routeParams.levelId && !routeParams.mapId && !loadedBoard && !localDraft && !initialCampaignLevel);
+  const [editorReady, setEditorReady] = useState(!needsCampaignHydration && !needsRemoteMapHydration);
+  const [remoteMapId, setRemoteMapId] = useState<string | undefined>(routeParams.mapId);
+  const [remoteMapCanEdit, setRemoteMapCanEdit] = useState(false);
+  const [remoteMapRevision, setRemoteMapRevision] = useState<number | null>(null);
+  const [remoteMapUpdatedAt, setRemoteMapUpdatedAt] = useState<string | null>(null);
+  const [remoteMapExpiresAt, setRemoteMapExpiresAt] = useState<string | null>(null);
+  const [remoteMapSavedAt, setRemoteMapSavedAt] = useState<string | null>(null);
+  const [remoteMapIsMisc, setRemoteMapIsMisc] = useState(false);
+  const [remoteMapCreator, setRemoteMapCreator] = useState<EditorMapCreator | null>(null);
+  const [sourceMiscMapId, setSourceMiscMapId] = useState<string | null>(null);
+  const [liveSyncState, setLiveSyncState] = useState<'idle' | 'creating' | 'pending' | 'saving' | 'saved' | 'error'>(routeParams.mapId ? 'idle' : 'creating');
+  const [myMaps, setMyMaps] = useState<EditorMapSummary[]>([]);
+  const [myMapsLoading, setMyMapsLoading] = useState(false);
+  const [miscMaps, setMiscMaps] = useState<EditorMapSummary[]>([]);
+  const [miscMapsLoading, setMiscMapsLoading] = useState(false);
+  const [adminMaps, setAdminMaps] = useState<EditorMapAdminSummary[]>([]);
+  const [adminMapsLoading, setAdminMapsLoading] = useState(false);
+  const [adminAuditMapId, setAdminAuditMapId] = useState<string | null>(null);
+  const [adminAuditEvents, setAdminAuditEvents] = useState<EditorMapAuditEvent[]>([]);
+  const [adminAuditLoading, setAdminAuditLoading] = useState(false);
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
   const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
   const [boardRows, setBoardRows] = useState(initialBoard?.rows ?? LE_ROWS);
@@ -1719,10 +1767,11 @@ export function LevelEditor(): ReactElement {
   const [eventsTab, setEventsTab] = useState<'victory' | 'other'>('victory');
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
-  // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
-  // the title bar; `savedSig` is the board signature at last save, the basis of the dirty chip.
+  // through; `editingId` may differ once a cold board is saved (Phase 3). The name is edited in
+  // Status, beside the save workflow; `savedSig` is the level signature at last save, the dirty basis.
   const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId);
   const [levelName, setLevelName] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? 'Untitled level');
+  const levelNameForSave = useMemo(() => levelName.trim() || 'Untitled level', [levelName]);
   const [savedSig, setSavedSig] = useState<string | null>(localDraft?.savedSig ?? (initialCampaignLevel ? levelSignature(initialCampaignLevel) : null));
   // Set true once a campaign level has been hydrated into the board state; the baseline effect
   // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
@@ -1733,9 +1782,13 @@ export function LevelEditor(): ReactElement {
   const statusLogSeq = useRef(0);
   const [saving, setSaving] = useState(false);
   const [me, setMe] = useState<AuthUser | null>(null);
-  const [boardLinkDraft, setBoardLinkDraft] = useState('');
+  const isAdmin = Boolean(me?.is_admin);
   const { ask, dialog: confirmDialog } = useConfirm();
   const didMountRouteSync = useRef(false);
+  const autoCreateMapRef = useRef(false);
+  const lastRemoteSyncedSigRef = useRef<string | null>(null);
+  const remoteMapRevisionRef = useRef<number | null>(null);
+  useEffect(() => { remoteMapRevisionRef.current = remoteMapRevision; }, [remoteMapRevision]);
 
   useEffect(() => {
     if (!didMountRouteSync.current) {
@@ -1791,11 +1844,93 @@ export function LevelEditor(): ReactElement {
     const entry: StatusLogEntry = { id: statusLogSeq.current, tone, message, detail, at };
     setStatusLog((prev) => [entry, ...prev].slice(0, STATUS_LOG_LIMIT));
   };
+  const readOnlyLiveMap = Boolean(remoteMapId && !remoteMapCanEdit);
+
+  const applyRemoteMapMetadata = (doc: EditorMapDocument): void => {
+    setRemoteMapId(doc.public_id);
+    setRemoteMapCanEdit(doc.can_edit);
+    setRemoteMapRevision(doc.revision);
+    setRemoteMapUpdatedAt(doc.updated_at ?? null);
+    setRemoteMapExpiresAt(doc.expires_at ?? null);
+    setRemoteMapSavedAt(doc.saved_at ?? null);
+    setRemoteMapIsMisc(doc.is_misc);
+    setRemoteMapCreator(doc.creator ?? null);
+  };
+
+  const applyLevelDocument = (level: Level, options: { editingId?: string; clean?: boolean } = {}): void => {
+    const board = levelToEditorBoard(level);
+    setBoardCols(board.cols);
+    setBoardRows(board.rows);
+    setBoardCells(board.cells);
+    setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
+    setBoardDoodads(board.doodads);
+    setBoardProps(board.props);
+    setBoardCover(board.cover);
+    setBoardCoverTypes(board.coverTypes ?? {});
+    setBoardFeatures(board.features);
+    setBoardFences(board.fences ?? {});
+    setBoardWalls(perimeterWalls(board.walls, board.cols, board.rows));
+    setBoardWallArt(perimeterWallArt(board.wallArt, board.cols, board.rows));
+    setFeatureCuts(board.featureCuts);
+    setFeatureExits(board.featureExits);
+    setBoardZoneEntries(zoneEntriesForBoard(board));
+    setGeneratedRegions(board.generatedRegions ?? []);
+    setActiveGeneratedRegionId(null);
+    setRegionSelection(new Set());
+    setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
+    setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
+    setUndoStack([]);
+    setRedoStack([]);
+    setObjective(level.objective);
+    setTemplateChoice(level.objective);
+    setSurviveTurns(level.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
+    setClockEnabled(level.timeControl !== undefined);
+    setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
+    setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
+    setVictory(level.victory ?? victoryRulesForObjective(level.objective, { surviveTurns: level.surviveTurns ?? DEFAULT_SURVIVE_TURNS }));
+    setEvents(effectiveLevelEvents(level));
+    setEditingId(options.editingId);
+    setLevelName(level.name);
+    if (options.clean !== false) {
+      setSavedSig(levelSignature(level));
+      needsBaselineRef.current = true;
+    }
+  };
 
   useEffect(() => {
     if (quietDraftRestore) return;
     if (!localDraft || (routeParams.levelId && !loadedBoard)) return;
     reportStatus('Restored unsaved local draft.', 'success', 'This browser saved it before the refresh.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!routeParams.mapId) return;
+    let active = true;
+    setEditorReady(false);
+    void loadEditorMap(routeParams.mapId)
+      .then((doc) => {
+        if (!active) return;
+        applyRemoteMapMetadata(doc);
+        setSourceMiscMapId(doc.is_misc ? doc.public_id : null);
+        lastRemoteSyncedSigRef.current = levelSignature(doc.level);
+        applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: true });
+        setLiveSyncState(doc.can_edit ? 'saved' : 'idle');
+        setEditorReady(true);
+        reportStatus(
+          doc.can_edit ? 'Live editor link connected.' : 'Viewing live map.',
+          'success',
+          doc.can_edit ? 'The browser URL now follows your board for viewers.' : 'This board updates as the owner edits, but controls are locked here.',
+        );
+      })
+      .catch((error) => {
+        if (!active) return;
+        setEditorReady(true);
+        setRemoteMapCanEdit(false);
+        setLiveSyncState('error');
+        reportStatus('Could not load live map.', 'error', (error as Error).message);
+      });
+    return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1828,6 +1963,7 @@ export function LevelEditor(): ReactElement {
       }
       if (!active) return;
       ensureDefaultSkirmishProfileLevel();
+      if (routeParams.mapId) return;
       if (loadedBoard || !routeParams.levelId) {
         setEditorReady(true);
         return;
@@ -1889,8 +2025,8 @@ export function LevelEditor(): ReactElement {
   }, []);
 
   const resolveAsset = (id: string): StudioAsset | undefined => leAllTiles.find((asset) => asset.id === id);
-  // The current painted board as a single EditorBoard — the one shape both the board link
-  // and the level save serialize from, so they can never describe different boards.
+  // The current painted board as a single EditorBoard — the one shape both the transient
+  // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
     () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
     [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
@@ -2503,8 +2639,7 @@ export function LevelEditor(): ReactElement {
   // board's assigned palette (ADR-0064). Maps to the engine's player/enemy side; true multi-faction
   // (two distinct enemies) is future work.
   const victoryFactions = useMemo((): FactionOption[] => {
-    const label = (p: string): string =>
-      (({ 'navy-blue': 'Navy', crimson: 'Crimson', golden: 'Golden', emerald: 'Emerald' }) as Record<string, string>)[p] ?? p;
+    const label = (p: string): string => (isUnitPalette(p) ? LE_FACTION_LABELS[p] : p);
     const enemyPalette = Object.values(boardUnits).map((u) => u.faction).find((f) => f && f !== playerFaction);
     return [
       { side: 'player', label: playerFaction ? label(playerFaction) : 'You (Player)' },
@@ -2530,8 +2665,8 @@ export function LevelEditor(): ReactElement {
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
   const candidateLevel = useMemo(
-    () => editorBoardToLevel(currentEditorBoard, { id: editingId ?? 'draft', name: levelName, ...modeMeta }),
-    [currentEditorBoard, editingId, levelName, modeMeta],
+    () => editorBoardToLevel(currentEditorBoard, { id: editingId ?? 'draft', name: levelNameForSave, ...modeMeta }),
+    [currentEditorBoard, editingId, levelNameForSave, modeMeta],
   );
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
@@ -2560,6 +2695,7 @@ export function LevelEditor(): ReactElement {
   }, [currentSig]);
 
   useEffect(() => {
+    if (remoteMapId) return;
     if (savedSig === null) return;
     if (!dirty) {
       clearLevelEditorDraft(draftKey);
@@ -2569,14 +2705,158 @@ export function LevelEditor(): ReactElement {
       savedAt: Date.now(),
       savedSig,
       board: currentEditorBoard,
-      levelName,
+      levelName: levelNameForSave,
       objective,
       surviveTurns,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
       victory: victoryForSave,
       events: eventsForSave,
     });
-  }, [currentEditorBoard, dirty, draftKey, levelName, objective, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
+  }, [currentEditorBoard, dirty, draftKey, levelNameForSave, objective, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
+
+  useEffect(() => {
+    if (!editorReady || routeParams.mapId || remoteMapId || readOnlyLiveMap) return;
+    if (autoCreateMapRef.current) return;
+    autoCreateMapRef.current = true;
+    setLiveSyncState('creating');
+    const levelAtCreate = candidateLevel;
+    void createEditorMap(levelAtCreate)
+      .then((doc) => {
+        applyRemoteMapMetadata(doc);
+        lastRemoteSyncedSigRef.current = levelSignature(levelAtCreate);
+        setLiveSyncState('saved');
+        refreshMyMaps();
+        const url = new URL(window.location.href);
+        url.searchParams.delete('board');
+        url.searchParams.set('map', doc.public_id);
+        navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
+        reportStatus('Live editor link is ready.', 'success', 'Anyone else opening this URL sees the board read-only as you edit.');
+      })
+      .catch((error) => {
+        autoCreateMapRef.current = false;
+        setLiveSyncState('error');
+        reportStatus('Live editor link is unavailable.', 'warning', (error as Error).message);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorReady, remoteMapId, readOnlyLiveMap, routeParams.mapId]);
+
+  useEffect(() => {
+    if (!editorReady || !remoteMapId || !remoteMapCanEdit || readOnlyLiveMap) return undefined;
+    if (lastRemoteSyncedSigRef.current === currentSig) {
+      setLiveSyncState('saved');
+      return undefined;
+    }
+    setLiveSyncState('pending');
+    const timer = window.setTimeout(() => {
+      setLiveSyncState('saving');
+      void updateEditorMap(remoteMapId, candidateLevel)
+        .then((doc) => {
+          lastRemoteSyncedSigRef.current = currentSig;
+          applyRemoteMapMetadata(doc);
+          setLiveSyncState('saved');
+        })
+        .catch((error) => {
+          setLiveSyncState('error');
+          reportStatus('Live map autosave failed.', 'warning', (error as Error).message);
+        });
+    }, 700);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidateLevel, currentSig, editorReady, remoteMapCanEdit, remoteMapId, readOnlyLiveMap]);
+
+  useEffect(() => {
+    if (!editorReady || !remoteMapId || !readOnlyLiveMap) return undefined;
+    let active = true;
+    const poll = (): void => {
+      void loadEditorMap(remoteMapId)
+        .then((doc) => {
+          if (!active) return;
+          applyRemoteMapMetadata(doc);
+          if (!doc.can_edit) setLiveSyncState('idle');
+          if (doc.revision !== remoteMapRevisionRef.current) {
+            lastRemoteSyncedSigRef.current = levelSignature(doc.level);
+            applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: true });
+          }
+        })
+        .catch(() => {
+          if (active) setLiveSyncState('error');
+        });
+    };
+    const timer = window.setInterval(poll, 2000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorReady, remoteMapId, readOnlyLiveMap]);
+
+  const refreshMyMaps = (): void => {
+    setMyMapsLoading(true);
+    void listEditorMaps('mine')
+      .then(setMyMaps)
+      .catch(() => setMyMaps([]))
+      .finally(() => setMyMapsLoading(false));
+  };
+
+  const refreshMiscMaps = (): void => {
+    setMiscMapsLoading(true);
+    void listEditorMaps('misc')
+      .then(setMiscMaps)
+      .catch(() => setMiscMaps([]))
+      .finally(() => setMiscMapsLoading(false));
+  };
+
+  const refreshAdminMaps = (): void => {
+    if (!isAdmin) {
+      setAdminMaps([]);
+      setAdminAuditMapId(null);
+      setAdminAuditEvents([]);
+      return;
+    }
+    setAdminMapsLoading(true);
+    void listAdminEditorMaps()
+      .then(setAdminMaps)
+      .catch(() => setAdminMaps([]))
+      .finally(() => setAdminMapsLoading(false));
+  };
+
+  const loadAdminAuditEvents = (publicId: string): void => {
+    if (!isAdmin) return;
+    setAdminAuditMapId(publicId);
+    setAdminAuditLoading(true);
+    void listEditorMapAuditEvents(publicId)
+      .then(setAdminAuditEvents)
+      .catch(() => setAdminAuditEvents([]))
+      .finally(() => setAdminAuditLoading(false));
+  };
+
+  const openMyEditorMap = async (publicId: string): Promise<void> => {
+    setLayer('board');
+    setTool('select');
+    try {
+      const doc = await loadEditorMap(publicId);
+      applyRemoteMapMetadata(doc);
+      setSourceMiscMapId(doc.is_misc ? doc.public_id : null);
+      lastRemoteSyncedSigRef.current = levelSignature(doc.level);
+      applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: true });
+      setLiveSyncState(doc.can_edit ? 'saved' : 'idle');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('board');
+      url.searchParams.set('map', doc.public_id);
+      navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
+      reportStatus(doc.can_edit ? 'Live map opened.' : 'Viewing live map.', 'success', doc.can_edit ? 'This URL follows your edits for viewers.' : 'Controls are locked for this browser.');
+    } catch (error) {
+      reportStatus('Could not open live map.', 'error', (error as Error).message);
+    }
+  };
+
+  useEffect(() => {
+    if (!editorReady || readOnlyLiveMap || layer !== 'board') return;
+    refreshMyMaps();
+    refreshMiscMaps();
+    if (isAdmin) refreshAdminMaps();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorReady, layer, readOnlyLiveMap, isAdmin]);
 
   const isCampaignLevel = useCampaigns((s) =>
     Boolean(routeParams.campaignId || (targetLevelId && s.campaigns.some((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId)))),
@@ -2611,6 +2891,50 @@ export function LevelEditor(): ReactElement {
     setFactionControl(faction, event.currentTarget.value as FactionControl);
   };
 
+  const markSourceMapSaved = async (): Promise<void> => {
+    const id = sourceMiscMapId ?? remoteMapId;
+    if (!id) return;
+    try {
+      const doc = await markEditorMapSaved(id);
+      setRemoteMapSavedAt(doc.saved_at ?? null);
+      setRemoteMapExpiresAt(doc.expires_at ?? null);
+      if (sourceMiscMapId === id) setSourceMiscMapId(null);
+      refreshMyMaps();
+      refreshMiscMaps();
+      if (isAdmin) refreshAdminMaps();
+    } catch {
+      /* Marking the handoff saved is bookkeeping; the workspace save already succeeded. */
+    }
+  };
+
+  const loadMiscMapIntoEditor = async (publicId: string): Promise<void> => {
+    setLayer('status');
+    setTool('select');
+    try {
+      const doc = await loadEditorMap(publicId);
+      const previousSig = currentSig;
+      setRemoteMapId(undefined);
+      setRemoteMapCanEdit(false);
+      setRemoteMapRevision(null);
+      setRemoteMapUpdatedAt(null);
+      setRemoteMapExpiresAt(null);
+      setRemoteMapSavedAt(null);
+      setRemoteMapIsMisc(false);
+      setRemoteMapCreator(null);
+      setSourceMiscMapId(publicId);
+      lastRemoteSyncedSigRef.current = null;
+      applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: false });
+      setSavedSig(previousSig);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('map');
+      url.searchParams.delete('board');
+      navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
+      reportStatus('Loaded misc map.', 'success', 'Save will adopt it into your workspace and clear its expiry.');
+    } catch (error) {
+      reportStatus('Could not load misc map.', 'error', (error as Error).message);
+    }
+  };
+
   // Save the painted board. Campaign path: serialize into the resolved level id and write it
   // back into the store, then route by TIER — an official (`off-`) level publishes to all
   // players (confirmed); a private/unassigned level saves to the user workspace. The server's
@@ -2631,12 +2955,13 @@ export function LevelEditor(): ReactElement {
       // Mint a fresh per-user level id (`l<n>`) and write it into the user workspace — never
       // an `off-` id (INV8). createUnassignedLevel stamps the minted id onto the level and
       // returns it; the editor then tracks that id so subsequent saves write back to it.
-      const newLevel = editorBoardToLevel(currentEditorBoard, { id: 'new', name: levelName, ...modeMeta });
+      const newLevel = editorBoardToLevel(currentEditorBoard, { id: 'new', name: levelNameForSave, ...modeMeta });
       const newId = useCampaigns.getState().createUnassignedLevel(newLevel);
       setEditingId(newId);
       setSaving(true);
       try {
         await saveUserWorkspace();
+        await markSourceMapSaved();
         reportStatus('Saved to server.', 'success');
         setSavedSig(currentSig);
       } catch (e) {
@@ -2653,7 +2978,7 @@ export function LevelEditor(): ReactElement {
     const existing = useCampaigns.getState().levels[targetId];
     const level = editorBoardToLevel(currentEditorBoard, {
       id: targetId,
-      name: levelName,
+      name: levelNameForSave,
       notes: existing?.notes,
       // The Rules panel is the source of truth for objective, battle settings, and authored events;
       // setup spawning is explicit events, not the legacy placement/roster fields.
@@ -2677,9 +3002,11 @@ export function LevelEditor(): ReactElement {
     try {
       if (official) {
         const { revision } = await publishOfficialWorkspace();
+        await markSourceMapSaved();
         reportStatus(`Published revision ${revision}.`, 'success');
       } else {
         await saveUserWorkspace();
+        await markSourceMapSaved();
         reportStatus('Saved to server.', 'success');
       }
       setSavedSig(currentSig);
@@ -2692,46 +3019,6 @@ export function LevelEditor(): ReactElement {
     }
   };
 
-  // Export the whole board as a /editor/level?board=<code> link (round-trips via boardCode.ts).
-  const copyBoardLink = (): void => {
-    const code = encodeBoard(currentEditorBoard);
-    void navigator.clipboard?.writeText(`${window.location.origin}/editor/level?board=${code}`);
-    reportStatus('Copied board link.', 'success');
-  };
-  const copyUrlBarLink = (): void => {
-    void navigator.clipboard?.writeText(window.location.href);
-  };
-  const loadBoardLink = (): void => {
-    setLayer('status');
-    setTool('select');
-    const input = boardLinkDraft.trim();
-    if (!input) {
-      reportStatus('Paste a board link first.', 'warning', 'Open Board, paste a /editor/level?board=... link or raw board code, then press Load board link.');
-      return;
-    }
-    const decoded = decodeBoardLinkInput(input);
-    if (!decoded) {
-      reportStatus('Could not load board link.', 'error', 'Paste a Level Editor board link that contains ?board=, or paste the raw board code.');
-      return;
-    }
-    const next = cloneEditorBoard(decoded);
-    if (!next.playerFaction || !(UNIT_PALETTES as readonly string[]).includes(next.playerFaction)) next.playerFaction = null;
-    if (savedSig === null) setSavedSig(boardSignature(currentEditorBoardRef.current));
-    const changed = commitEditorBoard(next, null);
-    if (!changed) {
-      reportStatus('Board link already matches this board.', 'info', dirty ? 'There are still unsaved changes.' : 'Save remains unavailable until the board changes.');
-      return;
-    }
-    setActiveGeneratedRegionId(null);
-    setRegionSelection(new Set());
-    const detail = isCampaignLevel && !next.playerFaction
-      ? 'Choose a Player faction before saving this campaign level.'
-      : targetLevelId
-      ? `Save will overwrite "${levelName}".`
-      : 'Save will create a workspace level.';
-    setBoardLinkDraft('');
-    reportStatus(`Loaded board link (${next.cols}x${next.rows}).`, 'success', detail);
-  };
   const selectLayer = (nextLayer: LayerKey): void => {
     if (isLayerOptionDisabled(nextLayer)) return;
     setLayer(nextLayer);
@@ -3118,14 +3405,15 @@ export function LevelEditor(): ReactElement {
   // tier once a target id is known (campaign path); a fresh standalone board saves as private.
   const isOfficialTarget = targetLevelId ? tierOf(targetLevelId) === 'official' : false;
   const saveLabel = isOfficialTarget ? 'Publish to all players' : 'Save';
-  const isAdmin = Boolean(me?.is_admin);
   // Save (user save AND official publish) is gated on ZERO playability violations (ADR-0050) — the
   // editor gives full freedom to mess the board up, but blocks persisting a rule-breaking level —
   // AND on main's conditions: something to save (dirty), no in-flight save, and (campaign levels) a
   // resolved Player faction.
-  const canSave = !saving && dirty && !needsPlayerFaction && playability.ok;
+  const canSave = !readOnlyLiveMap && !saving && dirty && !needsPlayerFaction && playability.ok;
   const saveBlockedMessage = saving
     ? 'Save is already in progress.'
+    : readOnlyLiveMap
+    ? 'This live map is locked for viewing.'
     : !playability.ok
     ? 'Save is blocked by playability issues.'
     : needsPlayerFaction
@@ -3137,14 +3425,16 @@ export function LevelEditor(): ReactElement {
     : '';
   const saveBlockedDetail = saving
     ? 'Wait for the current save to finish.'
+    : readOnlyLiveMap
+    ? 'Open your own editor session or load this map from the misc pool to make a copy.'
     : !playability.ok
     ? 'Resolve the issues in the Fix-before-saving list above, then Save.'
     : needsPlayerFaction
     ? 'Open Board > Level Settings, then assign Player to one board faction.'
     : !dirty && targetLevelId
-    ? 'Make an edit, or use Board > Load board link to paste a board and overwrite this target.'
+    ? 'Make an edit, or load a backend map from the Board tab and overwrite this target.'
     : !dirty
-    ? 'Make an edit or use Board > Load board link; then Save will create a workspace level.'
+    ? 'Make an edit or load a backend map; then Save will create a workspace level.'
     : '';
   const explainBlockedSave = (): void => {
     if (!saveBlockedMessage) return;
@@ -3169,6 +3459,12 @@ export function LevelEditor(): ReactElement {
     : !dirty
     ? 'No changes'
     : saveLabel;
+  const anonymousIdentityLabel = remoteMapCreator?.kind === 'anonymous'
+    ? remoteMapCreator.label
+    : myMaps.find((map) => map.creator?.kind === 'anonymous')?.creator?.label ?? 'Anonymous browser';
+  const editorMapIdentityLabel = me?.signed_in ? me.email ?? 'Signed-in account' : anonymousIdentityLabel;
+  const remoteMapCreatorLabel = remoteMapCreator?.label ?? (remoteMapId ? 'Unknown creator' : editorMapIdentityLabel);
+  const selectedAdminMap = adminAuditMapId ? adminMaps.find((map) => map.public_id === adminAuditMapId) ?? null : null;
   // Test-Play is enabled only for a SAVED (clean, in-store), violation-free level with a resolvable
   // id: /play resolves the level from the store, so an unsaved board would test-play the stale
   // saved version. mode=test skips progress recording. See below (button title explains the state).
@@ -3180,11 +3476,11 @@ export function LevelEditor(): ReactElement {
     return `/play?${params.toString()}`;
   })() : undefined;
   // "Play" a Test Board: play the CURRENT (possibly unsaved) board against the AI right now via
-  // the ephemeral ?board= link — the position rides the URL, so unlike Test it needs no saved
+  // the transient ?board= play-test URL — the position rides the URL, so unlike Test it needs no saved
   // level and is gated only on playability. mode=test keeps it non-persisted and surfaces the
   // Test Board's CPU-delay control in the HUD. returnTo carries the SAME board back, so ending
   // (or leaving) the test lands you in the editor on the identical position (encode/decode is
-  // lossless) — this is what makes a shared /level-editor?board=<code> link a live-test loop.
+  // lossless) — this is what makes an unsaved play-test return to the same in-editor position.
   const playBoardHref = useMemo(() => {
     if (!playability.ok) return undefined;
     const code = encodeBoard(currentEditorBoard);
@@ -3245,32 +3541,32 @@ export function LevelEditor(): ReactElement {
                   resolveUnit={resolveUnitAsset}
                   resolveDoodad={resolveDoodadAsset}
                   resolveProp={resolvePropDef}
-                  tool={tool}
+                  tool={readOnlyLiveMap ? 'select' : tool}
                   selectedCell={selectedCell}
                   boardZoom={viewZoom}
                   boardPan={viewPan}
                   animationFrame={animationFrame}
-                  onPaint={paintCell}
-                  onErase={eraseCell}
+                  onPaint={readOnlyLiveMap ? (() => {}) : paintCell}
+                  onErase={readOnlyLiveMap ? (() => {}) : eraseCell}
                   onSelect={selectCell}
-                  onMove={moveObject}
-                  canMoveTo={canMoveObjectTo}
+                  onMove={readOnlyLiveMap ? undefined : moveObject}
+                  canMoveTo={readOnlyLiveMap ? undefined : canMoveObjectTo}
                   fences={boardFences}
-                  fenceTool={fenceTool}
+                  fenceTool={readOnlyLiveMap ? false : fenceTool}
                   onPaintEdge={paintFenceEdge}
                   onEraseEdge={eraseFenceEdge}
                   walls={boardWalls}
-                  wallTool={wallTool}
+                  wallTool={readOnlyLiveMap ? false : wallTool}
                   onPaintWallEdge={paintWallEdge}
                   onEraseWallEdge={eraseWallEdge}
                   wallArt={boardWallArt}
-                  wallArtTool={wallArtTool}
+                  wallArtTool={readOnlyLiveMap ? false : wallArtTool}
                   onPaintWallArtEdge={paintWallArtEdge}
                   onEraseWallArtEdge={eraseWallArtEdge}
-                  propBrush={brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
+                  propBrush={!readOnlyLiveMap && brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
                   overlay={<GroundCoverLayer cells={coverCells} />}
-                  regionCells={regionSelection}
-                  onRegionStart={regionSelectPatch}
+                  regionCells={readOnlyLiveMap ? undefined : regionSelection}
+                  onRegionStart={readOnlyLiveMap ? undefined : regionSelectPatch}
                 />
               </div>
             </ViewPane>
@@ -3342,6 +3638,46 @@ export function LevelEditor(): ReactElement {
           ) : null}
         </div>
 
+      {readOnlyLiveMap ? (
+      <aside className="skirmish-hud le-live-viewer" aria-label="Live map viewer controls">
+        <section className="skirmish-card le-status-card">
+          <h2>Live View</h2>
+          <div className="le-status-level" aria-label="Level">
+            <span className="le-level-name">{levelName}</span>
+            <span className="le-official-tag">LOCKED</span>
+          </div>
+          <div className="le-status-current is-ready">
+            <strong>Watching owner edits</strong>
+            <span>{liveSyncState === 'error' ? 'The live map is temporarily unreachable.' : 'The board refreshes automatically while this page is open.'}</span>
+          </div>
+          <dl className="le-settings-list le-live-meta">
+            <div><dt>Creator</dt><dd>{remoteMapCreatorLabel}</dd></div>
+            <div><dt>Revision</dt><dd>{remoteMapRevision ?? '—'}</dd></div>
+            <div><dt>Updated</dt><dd>{remoteMapUpdatedAt ? new Date(remoteMapUpdatedAt).toLocaleString() : '—'}</dd></div>
+            <div><dt>Expires</dt><dd>{remoteMapSavedAt ? 'Saved' : remoteMapExpiresAt ? new Date(remoteMapExpiresAt).toLocaleString() : '—'}</dd></div>
+            <div><dt>Board</dt><dd>{boardCols}×{boardRows}</dd></div>
+          </dl>
+        </section>
+        <section className="skirmish-card le-details">
+          <h2>Inspect</h2>
+          <dl>
+            {selectedCell ? <div><dt>Cell</dt><dd>{selectedCell.x}, {selectedCell.y}</dd></div> : null}
+            <div><dt>Tiles</dt><dd>{paintedCount}</dd></div>
+            <div><dt>Units</dt><dd>{unitCount}</dd></div>
+            <div><dt>Props</dt><dd>{propCount}</dd></div>
+            <div><dt>Zones</dt><dd>{zoneCount}</dd></div>
+          </dl>
+          {remoteMapIsMisc && remoteMapId ? (
+            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 10 }} onClick={() => void loadMiscMapIntoEditor(remoteMapId)} title="Load this misc map into your editor as a saveable copy.">Edit copy</button>
+          ) : null}
+        </section>
+        {playBoardHref ? (
+          <NavButton className="le-seg-btn le-play-board" data-testid="le-play-board" to={playBoardHref} title="Play this exact board against the AI now.">Play test</NavButton>
+        ) : (
+          <button type="button" className="le-seg-btn le-play-board" disabled title="This board needs playable pieces before it can be tested.">Play test</button>
+        )}
+      </aside>
+      ) : (
       <aside className="skirmish-hud" aria-label="Editor controls">
         <section className="skirmish-card">
           <h2>Layer</h2>
@@ -3390,9 +3726,8 @@ export function LevelEditor(): ReactElement {
             ><span className="le-ico ic-redo" aria-hidden="true" /></button>
           </div>
           {/* Live-test: play THIS board against the AI now, no save. Lives in the always-visible
-              Actions dock (not a layer-gated card) so a recipient of a shared /level-editor?board=…
-              link can test-play on sight; the test returns here (returnTo) so it's a loop, not a
-              one-way trip. Gated on playability, like Save/Test. */}
+              Actions dock (not a layer-gated card); the test returns here (returnTo) so it's a
+              loop, not a one-way trip. Gated on playability, like Save/Test. */}
           {playBoardHref ? (
             <NavButton className="le-seg-btn le-play-board" data-testid="le-play-board" to={playBoardHref} title="Play this exact board against the AI now — no save (a Test Board; set a CPU-delay floor in the game's Controls tab). ‹ Back returns you here.">▶ Play test</NavButton>
           ) : (
@@ -3429,9 +3764,20 @@ export function LevelEditor(): ReactElement {
           ) : null}
           <section className="skirmish-card le-status-card" aria-live="polite">
             <h2>Status</h2>
-            {/* The level's identity lives here now, not in the title bar. */}
-            <div className="le-status-level" aria-label="Level">
-              <span className="le-level-name">{levelName}</span>
+            {/* The level's identity lives with the save workflow, not duplicated in Board settings. */}
+            <div className="le-status-level">
+              <label className="le-status-name-field">
+                <span className="le-settings-label">Name</span>
+                <input
+                  className="le-text-input le-level-name-input"
+                  value={levelName}
+                  aria-label="Level name"
+                  placeholder="Untitled level"
+                  maxLength={80}
+                  onChange={(event) => setLevelName(event.target.value)}
+                  onBlur={() => setLevelName(levelNameForSave)}
+                />
+              </label>
               {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
             </div>
             <div className={`le-status-current ${canSave ? 'is-ready' : 'is-blocked'}`}>
@@ -3509,19 +3855,122 @@ export function LevelEditor(): ReactElement {
             <div className="le-board-actions">
               <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
-              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board — the recipient can edit AND live-test it.">Copy Link</button>
-              <button type="button" className="le-seg-btn" onClick={copyUrlBarLink} title="Copy the current browser URL.">Copy URL</button>
             </div>
-            <input
-              className="le-board-link-input"
-              type="text"
-              value={boardLinkDraft}
-              onChange={(event) => setBoardLinkDraft(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Enter') loadBoardLink(); }}
-              placeholder="Paste board link"
-              aria-label="Board link"
-            />
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /editor/level?board=... link and replace this editor board with it.">Load board link</button>
+            <div className={`le-live-link-status is-${liveSyncState}`}>
+              <strong>{remoteMapId ? 'URL is live' : 'Preparing live URL'}</strong>
+              <span>
+                {remoteMapId
+                  ? liveSyncState === 'saving' || liveSyncState === 'pending'
+                    ? 'Syncing current edits to the backend map.'
+                    : liveSyncState === 'error'
+                    ? 'Live sync needs attention; local editing still works.'
+                    : 'The browser URL opens this board read-only for other viewers.'
+                  : 'A backend map id will be added to the URL automatically.'}
+              </span>
+            </div>
+          </section>
+          <section className="skirmish-card le-map-audit">
+            <div className="le-card-row">
+              <h2>My Maps</h2>
+              <button type="button" className="le-seg-btn le-mini-btn" onClick={refreshMyMaps} disabled={myMapsLoading} title="Refresh my maps">Refresh</button>
+            </div>
+            <dl className="le-settings-list le-map-identity">
+              <div><dt>Identity</dt><dd>{editorMapIdentityLabel}</dd></div>
+              <div><dt>Current</dt><dd>{remoteMapId ?? 'New draft'}</dd></div>
+              {remoteMapId ? <div><dt>Creator</dt><dd>{remoteMapCreatorLabel}</dd></div> : null}
+            </dl>
+            {myMapsLoading ? (
+              <p className="le-board-note">Loading maps…</p>
+            ) : myMaps.length ? (
+              <div className="le-misc-map-list">
+                {myMaps.map((map) => (
+                  <article className="le-misc-map-row" key={map.public_id}>
+                    <div>
+                      <strong>{map.name}</strong>
+                      <span>{map.cols ?? '?'}×{map.rows ?? '?'} · rev {map.revision} · {map.saved_at ? 'saved' : map.expires_at ? `expires ${new Date(map.expires_at).toLocaleDateString()}` : 'no expiry'}</span>
+                    </div>
+                    <button type="button" className="le-seg-btn le-mini-btn" onClick={() => void openMyEditorMap(map.public_id)} title="Open this backend map">Open</button>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="le-board-note">No backend maps are tied to this identity yet.</p>
+            )}
+          </section>
+          {isAdmin ? (
+            <section className="skirmish-card le-map-audit">
+              <div className="le-card-row">
+                <h2>Admin Audit</h2>
+                <button type="button" className="le-seg-btn le-mini-btn" onClick={refreshAdminMaps} disabled={adminMapsLoading} title="Refresh admin audit">Refresh</button>
+              </div>
+              {adminMapsLoading ? (
+                <p className="le-board-note">Loading maps…</p>
+              ) : adminMaps.length ? (
+                <div className="le-misc-map-list">
+                  {adminMaps.slice(0, 10).map((map) => {
+                    const ownerLabel = map.owner_email ?? map.anonymous_label ?? map.creator?.label ?? 'system';
+                    return (
+                      <article className="le-misc-map-row" key={map.public_id} title={map.anonymous_user_hash ?? map.owner_email ?? undefined}>
+                        <div>
+                          <strong>{map.name}</strong>
+                          <span>{ownerLabel} · {map.listed ? 'misc' : 'direct'} · rev {map.revision}</span>
+                        </div>
+                        <button type="button" className="le-seg-btn le-mini-btn" onClick={() => loadAdminAuditEvents(map.public_id)} title="Show audit events">Events</button>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="le-board-note">No backend maps found.</p>
+              )}
+              {adminAuditMapId ? (
+                <div className="le-admin-events">
+                  <div className="le-admin-events-head">
+                    <strong>{selectedAdminMap?.name ?? 'Selected map'}</strong>
+                    <span>{adminAuditMapId}</span>
+                  </div>
+                  {adminAuditLoading ? (
+                    <p className="le-board-note">Loading events…</p>
+                  ) : adminAuditEvents.length ? (
+                    <div className="le-misc-map-list">
+                      {adminAuditEvents.slice(0, 8).map((event) => (
+                        <article className="le-misc-map-row" key={event.id}>
+                          <div>
+                            <strong>{event.action}</strong>
+                            <span>{event.actor_email ?? event.anonymous_label ?? 'system'} · {event.created_at ? new Date(event.created_at).toLocaleString() : 'unknown time'}</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="le-board-note">No audit events recorded.</p>
+                  )}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+          <section className="skirmish-card le-misc-pool">
+            <div className="le-card-row">
+              <h2>Misc Map Pool</h2>
+              <button type="button" className="le-seg-btn le-mini-btn" onClick={refreshMiscMaps} disabled={miscMapsLoading} title="Refresh misc maps">Refresh</button>
+            </div>
+            {miscMapsLoading ? (
+              <p className="le-board-note">Loading maps…</p>
+            ) : miscMaps.length ? (
+              <div className="le-misc-map-list">
+                {miscMaps.map((map) => (
+                  <article className="le-misc-map-row" key={map.public_id}>
+                    <div>
+                      <strong>{map.name}</strong>
+                      <span>{map.cols ?? '?'}×{map.rows ?? '?'} · expires {map.expires_at ? new Date(map.expires_at).toLocaleDateString() : 'later'}</span>
+                    </div>
+                    <button type="button" className="le-seg-btn le-mini-btn" onClick={() => void loadMiscMapIntoEditor(map.public_id)} title="Load this backend map into the editor">Load</button>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="le-board-note">No unsaved misc maps are waiting.</p>
+            )}
           </section>
           <section className="skirmish-card le-level-settings">
             <h2>Level Settings</h2>
@@ -3860,15 +4309,14 @@ export function LevelEditor(): ReactElement {
         {brushKind === 'unit' ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Paint Faction</h2>
-            <div className="le-seg">
-              {UNIT_PALETTES.map((faction) => (
-                <button
-                  type="button"
-                  key={faction}
-                  className={`le-seg-btn ${unitFaction === faction ? 'active' : ''}`.trim()}
-                  onClick={() => setUnitFaction(faction)}
-                >{LE_FACTION_LABELS[faction]}</button>
-              ))}
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Faction</span>
+              <PaletteSelect
+                className="le-faction-palette-select"
+                value={unitFaction}
+                aria-label="Paint faction"
+                onChange={setUnitFaction}
+              />
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Default facing</span>
@@ -4211,6 +4659,7 @@ export function LevelEditor(): ReactElement {
         ) : null}
         </KitScroll>
       </aside>
+      )}
       </ArtRouteChrome>
     </div>
   );

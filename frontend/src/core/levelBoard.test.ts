@@ -85,14 +85,16 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
 
   it('maps only the assigned player faction to player and leaves unassigned maps CPU-only', () => {
     const board = filledBoard(4, 4);
-    board.playerFaction = 'emerald';
+    board.playerFaction = 'white';
     board.units = {
-      '0,0': { unitId: 'rook-blender-v4-calibrated', direction: 'south', faction: 'emerald' },
-      '1,0': { unitId: 'knight-fur', direction: 'south', faction: 'crimson' },
+      '0,0': { unitId: 'rook-blender-v4-calibrated', direction: 'south', faction: 'white' },
+      '1,0': { unitId: 'knight-fur', direction: 'south', faction: 'black' },
     };
     const assigned = editorBoardToLevel(board, { id: 'l6', name: 'Faction' });
     expect(assigned.layers.units.find((unit) => unit.x === 0)?.side).toBe('player');
+    expect(assigned.layers.units.find((unit) => unit.x === 0)?.palette).toBe('white');
     expect(assigned.layers.units.find((unit) => unit.x === 1)?.side).toBe('enemy');
+    expect(assigned.layers.units.find((unit) => unit.x === 1)?.palette).toBe('black');
 
     const unassigned = editorBoardToLevel({ ...board, playerFaction: null }, { id: 'l7', name: 'Neutral' });
     expect(unassigned.layers.units.every((unit) => unit.side === 'enemy')).toBe(true);

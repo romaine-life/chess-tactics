@@ -32,12 +32,18 @@ const kvk = () => tinyLevel([
   { x: 3, y: 3, side: 'player', type: 'king', facing: 'north' },
 ], 4, 4);
 
-/** 3×5 K+P vs K — mate-in-5 via queening; a real interior search for the search phases. */
-const pawnBoard = () => tinyLevel([
-  { x: 2, y: 4, side: 'enemy', type: 'king', facing: 'south' },
-  { x: 1, y: 2, side: 'player', type: 'king', facing: 'north' },
-  { x: 1, y: 1, side: 'player', type: 'pawn', facing: 'north' },
-], 3, 5);
+/** 3×5 K+P vs K — mate-in-5 via queening; a real interior search for the search phases.
+ * Promotion must be AUTHORED (a pawn-promotion zone) like a real level — there is no
+ * built-in far-edge default since the authored-events merge. */
+const pawnBoard = (): Level => {
+  const lvl = tinyLevel([
+    { x: 2, y: 4, side: 'enemy', type: 'king', facing: 'south' },
+    { x: 1, y: 2, side: 'player', type: 'king', facing: 'north' },
+    { x: 1, y: 1, side: 'player', type: 'pawn', facing: 'north' },
+  ], 3, 5);
+  lvl.layers.zones.push({ id: 'promo', type: 'pawn-promotion', tiles: [[0, 0], [1, 0], [2, 0]] });
+  return lvl;
+};
 
 const retroConfig = (level: Level): SolverStepConfig => ({ level, bounds: BOUNDS, seed: 0, mode: 'retrograde' });
 const searchConfig = (level: Level): SolverStepConfig => ({

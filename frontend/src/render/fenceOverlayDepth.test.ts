@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { FENCE_OVERLAY_DEPTH_OFFSET, WALL_OVERLAY_DEPTH_OFFSET, fenceOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
+import { FENCE_OVERLAY_DEPTH_OFFSET, WALL_OVERLAY_DEPTH_OFFSET, fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
 
 describe('fenceOverlayZIndex', () => {
   it('places an edge fence above its owner cell and under the near cell unit band', () => {
@@ -25,5 +25,13 @@ describe('wallOverlayZIndex', () => {
     expect(WALL_OVERLAY_DEPTH_OFFSET).toBe(20_000);
     expect(wallZIndex).toBeGreaterThan(farUnitZIndex);
     expect(wallZIndex).toBe(nearUnitZIndex);
+  });
+});
+
+describe('wallArtOverlayZIndex', () => {
+  it('keeps mounted art in the wall display layer', () => {
+    const ownerCell = { x: 2, y: 3 };
+
+    expect(wallArtOverlayZIndex(ownerCell)).toBe(wallOverlayZIndex(ownerCell));
   });
 });

@@ -202,16 +202,16 @@
   --panel-inset: #0a131b;
   --focus-ring: var(--cobalt-bright);
   --iso-tile-width: 96px;
-  --iso-tile-height: 55.426px;
+  --iso-tile-height: 54px;
   --iso-tile-step-x: 48px;
-  --iso-tile-step-y: 27.713px;
+  --iso-tile-step-y: 27px;
   --iso-tile-canvas-height: 140px;
   /* div-local Y of the tile's top-face centre (equator) inside the 180px frame.
      This is the widest row of the sprite PNG; the frame's translate anchors it to
      the cell. Every overlay diamond (grid, hit, footprint, selection ring) seats on
      this same plane, so they line up with placed tiles' top faces. Change in ONE
      place if the sprite's equator row ever moves. */
-  --iso-tile-equator: 69px;
+  --iso-tile-equator: 68px;
   /* Top edge of a top-face diamond: the equator minus half the diamond's height. */
   --iso-tile-surface-top: calc(var(--iso-tile-equator) - var(--iso-tile-height) / 2);
 
@@ -434,9 +434,8 @@ h1 {
     linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46));
 }
 
-/* An animated scene region (menu twin of the board's .tile-layer-top-anim): a
-   BAKED horizontal frame sheet (scripts/build-scene-anim.py), only water pixels
-   opaque, frame 0 = the shipped scene; steps() just advances the frame index.
+/* An animated scene region: a BAKED horizontal frame sheet (scripts/build-scene-anim.py),
+   only water pixels opaque, frame 0 = the shipped scene; steps() just advances the frame index.
    !important clears the global `* { animation: none }` OS-reduce reset (~6477):
    Windows "animations off" reports prefers-reduced-motion falsely, and ambient
    scenery must not freeze for those players (deploy-drop/ADR-0048 precedent).
@@ -4027,9 +4026,9 @@ h1 {
   background: transparent;
 }
 
-/* Coordinated board reveal (render/boardArtReady). The board's dozens of tile <img>s each
-   load independently; without this they'd pop in one at a time ("popcorn"). The board is
-   held hidden until its whole art set has DECODED, then fades in as one unit on the same
+/* Coordinated board reveal (render/boardArtReady). The board's terrain canvas and sprite
+   images load independently. The board is held hidden until its whole art set has DECODED,
+   then fades in as one unit on the same
    320ms opacity fade the cold-load menu uses (ui/shell/coldReveal). A failsafe in the hook
    reveals anyway if an asset stalls, so the board can never hang invisible. */
 .skirmish-board-lab {
@@ -5017,7 +5016,118 @@ h1 {
 .le-board-actions.le-status-actions { margin-top: 0; }
 .le-board-actions .le-seg-btn { min-width: 0; }
 
+.le-card-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+.le-card-row h2 { margin: 0; }
+.le-mini-btn {
+  min-height: 32px;
+  min-width: 72px;
+  padding-inline: 4px;
+}
+.le-live-link-status {
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/field-input.png") 18 fill / 10px stretch;
+  display: grid;
+  gap: 4px;
+  margin-top: var(--ds-stack);
+  padding: 4px 8px;
+}
+.le-live-link-status strong {
+  color: #f3ead8;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  font-weight: 400;
+  text-transform: uppercase;
+}
+.le-live-link-status span {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.35;
+}
+.le-live-link-status.is-saving strong,
+.le-live-link-status.is-pending strong,
+.le-live-link-status.is-creating strong { color: #9fe0ff; }
+.le-live-link-status.is-error strong { color: #ffb1a8; }
+.le-map-identity {
+  margin-top: var(--ds-stack);
+}
+.le-admin-events {
+  border-top: 1px solid rgba(146, 201, 235, .18);
+  display: grid;
+  gap: 8px;
+  margin-top: var(--ds-stack);
+  padding-top: var(--ds-stack);
+}
+.le-admin-events-head {
+  display: grid;
+  gap: 2px;
+}
+.le-admin-events-head strong {
+  color: #f3ead8;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  font-weight: 400;
+  text-transform: uppercase;
+}
+.le-admin-events-head span {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.le-misc-map-list {
+  display: grid;
+  gap: 7px;
+  margin-top: var(--ds-stack);
+}
+.le-misc-map-row {
+  align-items: center;
+  border-bottom: 1px solid rgba(146, 201, 235, .18);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0 0 7px;
+}
+.le-misc-map-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.le-misc-map-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.le-misc-map-row strong {
+  color: #f3ead8;
+  font-size: var(--ds-text-sm);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.le-misc-map-row span {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+}
+.le-live-viewer {
+  align-content: start;
+  gap: var(--ds-gutter);
+}
+.le-live-viewer .le-play-board {
+  border-image-source: url("/assets/ui/kit/button-primary.png");
+  width: 100%;
+}
+.le-live-meta {
+  margin: 0;
+}
+
 /* Level settings live under the Board layer: rule readout + faction-control assignment. */
+.le-level-name-input { box-sizing: border-box; width: 100%; }
 .le-settings-list { display: grid; gap: var(--ds-inline-tight); margin: 0 0 var(--ds-gutter); }
 .le-settings-list div { align-items: start; display: grid; gap: 8px; grid-template-columns: 74px minmax(0, 1fr); }
 .le-settings-list dt,
@@ -5035,6 +5145,120 @@ h1 {
 .le-faction-dot.is-crimson { background: #bf3e4a; }
 .le-faction-dot.is-golden { background: #d9a73f; }
 .le-faction-dot.is-emerald { background: #3ca66b; }
+.le-faction-dot.is-black { background: #2d3338; }
+.le-faction-dot.is-white { background: #e7dfc8; }
+.palette-select {
+  min-width: 0;
+  position: relative;
+  width: 100%;
+}
+.palette-select-trigger {
+  align-items: center;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  color: #eff9ff;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 40px;
+  outline: none;
+  padding: 0 28px 0 10px;
+  text-align: left;
+  text-shadow: 0 2px 0 #010407;
+  text-transform: uppercase;
+  width: 100%;
+}
+.palette-select-trigger::after {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23cfe6f1' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain;
+  content: "";
+  height: 8px;
+  width: 12px;
+}
+.palette-select-trigger:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+.palette-select-trigger:disabled {
+  cursor: default;
+  filter: saturate(.55);
+  opacity: .64;
+}
+.palette-select-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-select-swatch {
+  border: 1px solid rgba(240, 231, 211, .42);
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18);
+  display: inline-block;
+  height: 13px;
+  width: 13px;
+}
+.palette-select-swatch.is-navy-blue { background: #2f7fd4; }
+.palette-select-swatch.is-crimson { background: #bf3e4a; }
+.palette-select-swatch.is-golden { background: #d9a73f; }
+.palette-select-swatch.is-emerald { background: #3ca66b; }
+.palette-select-swatch.is-black { background: #2d3338; }
+.palette-select-swatch.is-white {
+  background: #e7dfc8;
+  border-color: rgba(255, 255, 255, .8);
+}
+.palette-select-menu {
+  background: rgba(3, 10, 17, .98);
+  border: 1px solid rgba(93, 160, 211, .42);
+  border-radius: 6px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, .52), inset 0 0 0 1px rgba(221, 237, 255, .05);
+  display: grid;
+  gap: 2px;
+  left: 0;
+  max-height: 238px;
+  overflow: auto;
+  padding: 4px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 150;
+}
+.palette-select-option {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #dceef7;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 32px;
+  padding: 0 8px;
+  text-align: left;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 #010407;
+}
+.palette-select-option:hover,
+.palette-select-option:focus-visible {
+  background: rgba(101, 184, 255, .16);
+  outline: none;
+}
+.palette-select-option.is-active {
+  background: rgba(143, 189, 235, .26);
+  color: #ffffff;
+}
+.le-faction-palette-select {
+  flex: 0 1 170px;
+  min-width: 140px;
+}
 .le-faction-select {
   appearance: none;
   -webkit-appearance: none;
@@ -5807,11 +6031,10 @@ h1 {
 .le-status-card { display: flex; flex-direction: column; gap: var(--ds-stack); }
 .le-status-card > h2 { margin: 0; }
 .le-status-log .le-board-note { margin: 0; }
-/* The level's identity (name + OFFICIAL tag) — moved here from the title bar; global
-   chrome carries no editor status. */
-.le-status-level { align-items: baseline; display: flex; gap: var(--ds-inline-tight); min-width: 0; }
-.le-status-level .le-level-name { color: #f0e7d3; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.le-official-tag { color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; }
+/* The level's identity (name + OFFICIAL tag) lives with the save workflow. */
+.le-status-level { align-items: end; display: grid; gap: var(--ds-inline-tight); grid-template-columns: minmax(0, 1fr) auto; min-width: 0; }
+.le-status-name-field { display: grid; gap: 6px; min-width: 0; }
+.le-official-tag { align-self: end; color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; padding-bottom: 8px; }
 /* Drawn text boxes wear a kit line frame (ADR-0032/0034): the transparent-interior panel-line
    9-slice over the box's own navy surface (a border-box background layer, reaching the frame
    edge). Ready/blocked swap the SOURCE to the success/warning tone twin — one frame, tone at the
@@ -10566,6 +10789,16 @@ button.tileset-relationship-cell {
   --board-origin-top: 0px;
 }
 
+.tileset-terrain-layer {
+  display: block;
+  image-rendering: pixelated;
+  pointer-events: none;
+  position: absolute;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 0;
+}
+
 .tileset-generated-board-tile {
   position: absolute;
   width: 96px;
@@ -10598,16 +10831,6 @@ button.tileset-relationship-cell {
   -webkit-user-select: none;
 }
 
-/* Linear-feature overlay (road; rivers later): a transparent ribbon sprite stacked
-   directly over the base tile in the same 96x180 frame, so it aligns pixel-for-pixel.
-   The base <img> sits at top:0 of the tile box; this overrides its block flow to
-   occupy the identical box rather than stacking below it. */
-.tileset-generated-board-tile img.tileset-feature-overlay {
-  position: absolute;
-  left: 0;
-  top: 0;
-}
-
 .tileset-board-fence-overlay,
 .tileset-board-wall-overlay,
 .tileset-board-wall-decor {
@@ -10636,42 +10859,6 @@ button.tileset-relationship-cell {
   max-height: none;
 }
 
-/* Animated tile TOP (water ripple). The motion is BAKED frames in a horizontal sheet
-   (<tile>-top-anim.png, each frame the full 96x180 tile frame); this rule only advances
-   the frame index via steps() — the same model as .gc-tuft below. Per-cell phase is a
-   negative delay set from --tile-anim-phase (a whole-frame fraction) so open water
-   shimmers loosely instead of pulsing in unison. The animation is !important to clear
-   the global `* { animation: none }` OS-reduce reset (~6055): OS "animations off"
-   (Windows) reports prefers-reduced-motion falsely, and ambient board art is scenery,
-   not a UI transition — the deploy drop (~3842) sets the same precedent. The EXPLICIT
-   in-game reduce-motion choice (:root.reduce-motion) does freeze it, to frame 0 = the
-   exact static art. */
-.tileset-generated-board-tile .tile-layer-top-anim {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: block;
-  width: 96px;
-  height: 180px;
-  image-rendering: pixelated;
-  background-repeat: no-repeat;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
-  animation: tile-top-anim var(--tile-anim-dur, 1.6s) steps(var(--tile-anim-frames, 1)) infinite !important;
-  animation-delay: calc(-1 * var(--tile-anim-phase, 0) * var(--tile-anim-dur, 1.6s)) !important;
-  will-change: background-position;
-}
-
-:root.reduce-motion .tileset-generated-board-tile .tile-layer-top-anim {
-  animation: none !important;
-}
-
-@keyframes tile-top-anim {
-  from { background-position-x: 0; }
-  to { background-position-x: var(--tile-anim-travel, 0); }
-}
-
 /* Units and doodads no longer render inside cells here — both boards seat them at grid
    level via the shared .board-unit-seat and <DoodadSprite> (see render/BoardDoodad.tsx).
    The old per-cell .tileset-board-unit / .tileset-board-doodad rules were removed with them. */
@@ -10697,9 +10884,9 @@ button.tileset-relationship-cell {
 
 .tileset-generated-board-overlay-cell {
   position: absolute;
-  width: 96px;
-  height: 140px;
-  transform: translate(-48px, -27px);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-canvas-height);
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y)));
   pointer-events: none;
 }
 

@@ -1,9 +1,9 @@
 // Coordinated board-art reveal.
 //
-// The skirmish board renders dozens of independent tile <img>s (a -top + -side layer
-// per cell, plus feature overlays, ground-cover sheets, and unit sprites). Each is
-// discovered only after the board mounts and fetched on its own, so without
-// coordination they pop in ONE AT A TIME as their PNGs arrive — the "popcorn" load.
+// The skirmish board renders one composed terrain canvas plus many board sprites
+// (ground-cover sheets, units, doodads, props, walls, and fences). Their images are discovered
+// only after the board mounts and fetched on their own, so without coordination the screen can
+// reveal before its PNGs arrive.
 //
 // This module fixes that the same way the cold-load menu does (ui/shell/coldReveal):
 // reveal REAL pixels, gated on actual decode, with a single generous failsafe so a

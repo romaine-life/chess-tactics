@@ -95,17 +95,20 @@ describe('netplay relay determinism', () => {
     let guest = createSkirmish({ seed: 9, level });
     expect(guest).toEqual(host);
 
-    // Host clicks the castle: the two-square king move, relayed as destination only.
+    // Host castles chess.com-style: drops the king ON the rook's square (7,7). The wire
+    // still carries only that destination; both boards land the king on kingTo (6,7).
     const hostKing = host.pieces.find((p) => p.type === 'king' && p.side === 'player')!;
-    const castle = legalMoves(hostKing, host.pieces, host.size, env(host)).find((m) => m.castle);
-    expect(castle).toMatchObject({ x: 6, y: 7 });
+    const castle = legalMoves(hostKing, host.pieces, host.size, env(host)).find((m) => m.x === 7 && m.y === 7);
+    expect(castle?.castle?.kingTo).toEqual({ x: 6, y: 7 });
     // Both seats fold the settled position into the threefold table, as commitNet does.
     host = recordPosition(applyMove(host, hostKing.id, castle as Move).state);
-    const canon = reDerive(guest, hostKing.id, 6, 7);
+    const canon = reDerive(guest, hostKing.id, 7, 7);
     expect(canon?.castle).toBeDefined();
     guest = recordPosition(applyMove(guest, hostKing.id, canon as Move).state);
     expect(guest).toEqual(host);
-    // The rook hopped on both boards, rights burned, the clock ticked, the table grew.
+    // The king landed on kingTo and the rook hopped on both boards, rights burned,
+    // the clock ticked, the table grew.
+    expect(guest.pieces.find((p) => p.type === 'king' && p.side === 'player')).toMatchObject({ x: 6, y: 7, hasMoved: true });
     expect(guest.pieces.find((p) => p.type === 'rook' && p.side === 'player')).toMatchObject({ x: 5, y: 7, hasMoved: true });
     expect(guest.halfmoveClock).toBe(1);
     expect(Object.keys(guest.positionCounts ?? {})).toHaveLength(2);

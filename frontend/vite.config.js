@@ -282,6 +282,7 @@ function getFreePort() {
 
 function prodBackend(port) {
   const backendDir = fileURLToPath(new URL('../backend', import.meta.url));
+  const boardRenderDir = fileURLToPath(new URL('../packages/board-render', import.meta.url));
   // Per-worktree pidfile in the OS temp dir. On start we kill any backend left running
   // by a previously force-killed dev server, so orphans (each holding a live prod DB
   // connection) never stack up.
@@ -303,6 +304,10 @@ function prodBackend(port) {
     log.info(`[backend] installing dependencies (${cmd}) — first run in this worktree, one moment…`);
     execSync(cmd, { cwd: backendDir, stdio: 'inherit' });
     log.info('[backend] dependencies installed.');
+  };
+  const ensureBoardRenderPackage = (log) => {
+    log.info('[backend] building shared board-render package.');
+    execSync('npm run build', { cwd: boardRenderDir, stdio: 'inherit' });
   };
   const killStale = () => {
     try {
@@ -346,8 +351,9 @@ function prodBackend(port) {
       // otherwise the spawn below would just crash-loop on a missing module forever.
       try {
         ensureBackendDeps(log);
+        ensureBoardRenderPackage(log);
       } catch (e) {
-        fatal(`Could not install backend dependencies (${e.message}). Try \`npm ci\` in ${backendDir} by hand.`);
+        fatal(`Could not prepare backend dependencies (${e.message}). Try \`npm ci\` in ${backendDir} and \`npm run build\` in ${boardRenderDir} by hand.`);
       }
 
       // "Ready" = the backend logged that it's listening. Until we've seen that for a given
@@ -422,9 +428,10 @@ const noBackend = process.env.DEV_NO_BACKEND === '1' || process.env.DEV_OFFLINE 
 export default defineConfig(async ({ command }) => {
   // Only a dev server (command 'serve') spawns the backend + proxy; a production build
   // touches none of this. A fresh free port is chosen each start and shared by both.
-  const useBackend = command === 'serve' && !noBackend;
+  const isVitest = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+  const useBackend = command === 'serve' && !noBackend && !isVitest;
   const backendPort = useBackend ? await getFreePort() : 0;
-  const devApiPlugins = command === 'serve'
+  const devApiPlugins = command === 'serve' && !isVitest
     ? (noBackend ? [bgmDevMock(), officialCampaignsDevProxy(), devAuthMock()] : [prodBackend(backendPort)])
     : [];
   return {

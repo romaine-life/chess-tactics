@@ -27,8 +27,8 @@ the change stick.
 Two constraints from the code shape the design. `frontend/src/core/props.ts`
 imports the seats **synchronously** (`import propSeats from './propSeats.json'`)
 and **throws** if any `PROP_DEFS` entry has no seat — props are composed at module
-load and must always render. And `backend/generated/board-render.cjs` embeds its
-**own** copy of the seats for server-side level thumbnails. So the seats can't
+load and must always render. The shared `@chess-tactics/board-render` package
+also carries that baseline for server-side level thumbnails. So the seats can't
 simply move to an async-only DB fetch, and any live change must reach the
 thumbnail renderer too or thumbnails drift from the live look.
 
@@ -187,10 +187,11 @@ test encodes.
   the officials tier, don't fork).
 - Contrast: unlike ADR-0038's `official.json` (deleted, because empty officials is
   valid), `propSeats.json` **stays** as the required render baseline.
-- Code touchpoints: `frontend/src/core/props.ts` (sync baseline import + overlay),
+- Code touchpoints: `packages/board-render/src/core/props.ts` (sync baseline import
+  + overlay, re-exported through `frontend/src/core/props.ts`),
   `frontend/src/ui/PropSeatLab.tsx` (Save → PUT), `frontend/vite.config.js`
   (`propSeatSave`/`propSeatDelete` retire), `backend/server.js` (new tier + migration,
-  mirrors `official_campaigns`), `backend/generated/board-render.cjs` (thumbnail
-  overlay), `frontend/src/core/props.test.ts` (baseline ∪ overlay invariant).
+  mirrors `official_campaigns`), `@chess-tactics/board-render` (thumbnail overlay),
+  `frontend/src/core/props.test.ts` (baseline ∪ overlay invariant).
 - Direction + intent: the `props-to-db-direction` design note; the locked
   instant-live edit model.

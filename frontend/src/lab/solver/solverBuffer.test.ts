@@ -215,17 +215,17 @@ describe('StepBuffer — prefill / snapshot / trim bookkeeping', () => {
   });
 });
 
-/** 3×5 K+P vs K mate-in-5 — a LONG trace (many sweeps), so +10 batches never hit the end. */
-const longConfig = (): SolverStepConfig => ({
-  level: tinyLevel([
+/** 3×5 K+P vs K mate-in-5 — a LONG trace (many sweeps), so +10 batches never hit the end.
+ * Promotion is AUTHORED (a pawn-promotion zone) like a real level — no far-edge default. */
+const longConfig = (): SolverStepConfig => {
+  const level = tinyLevel([
     { x: 2, y: 4, side: 'enemy', type: 'king', facing: 'south' },
     { x: 1, y: 2, side: 'player', type: 'king', facing: 'north' },
     { x: 1, y: 1, side: 'player', type: 'pawn', facing: 'north' },
-  ], 3, 5),
-  bounds: BOUNDS,
-  seed: 0,
-  mode: 'retrograde',
-});
+  ], 3, 5);
+  level.layers.zones.push({ id: 'promo', type: 'pawn-promotion', tiles: [[0, 0], [1, 0], [2, 0]] });
+  return { level, bounds: BOUNDS, seed: 0, mode: 'retrograde' };
+};
 
 // The hook's exact gesture sequences (useSolverStepper delegates every position change to
 // these buffer calls; there is deliberately NO stored-entry redo stack to fall out of sync).
