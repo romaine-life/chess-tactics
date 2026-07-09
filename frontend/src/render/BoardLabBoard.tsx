@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { boardLabCellPosition } from './boardProjection';
+import { BoardGridLayer } from './BoardGridLayer';
 import { BoardTerrainLayer, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { TileGrid } from './TileGrid';
 import { FenceOverlayLayer, WallOverlayLayer } from './FenceOverlayLayer';
@@ -26,6 +27,7 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   boardPan?: { x: number; y: number };
   className?: string;
   ariaLabel?: string;
+  showGrid?: boolean;
   renderCellOverlay?: (context: BoardLabBoardOverlayContext<TAsset>) => ReactNode;
   /**
    * Edge fences resolved to a per-cell rail overlay (E/S mask + material), keyed by "x,y".
@@ -51,6 +53,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   boardPan = { x: 0, y: 0 },
   className = '',
   ariaLabel = 'Generated board',
+  showGrid = false,
   renderCellOverlay,
   fenceOverlays,
   wallOverlays,
@@ -118,6 +121,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
           : undefined
       }
     >
+      {showGrid ? <BoardGridLayer cells={sourceCells} /> : null}
       <WallOverlayLayer overlays={wallOverlays} wallArt={wallArt} bounds={wallBounds} />
       <FenceOverlayLayer overlays={fenceOverlays} />
       {children}

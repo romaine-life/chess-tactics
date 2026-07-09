@@ -5532,6 +5532,56 @@ h1 {
   z-index: 2;
 }
 
+.le-tactical-cell {
+  position: absolute;
+  left: 0;
+  top: var(--iso-tile-surface-top);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.le-tactical-cell::before,
+.le-tactical-cell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+.le-tactical-cell.is-promotion-zone::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 236, 150, .40), transparent 62%),
+    rgba(246, 198, 80, .26);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-threat::before {
+  background: rgba(255, 105, 64, .38);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-move::before {
+  background: rgba(61, 210, 255, .42);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-blocked-candidate::before {
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 214, 97, .42) 0 7px, rgba(81, 43, 14, .38) 7px 14px);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-focused-piece::after {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 221, 112, .96),
+    inset 0 0 0 4px rgba(128, 55, 25, .42),
+    0 0 12px rgba(255, 151, 68, .54);
+  opacity: 1;
+}
+
 /* Marquee selection highlight for the Generate scope — same diamond seating as the zone tint, in
    a distinct cyan so it reads as "these cells will be generated", not a gameplay zone. Painted
    before the selection ring in the DOM so a single-cell ring still shows on top at equal z. */
@@ -10797,6 +10847,34 @@ button.tileset-relationship-cell {
   user-select: none;
   -webkit-user-select: none;
   z-index: 0;
+}
+
+.tileset-board-grid-layer {
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 8500;
+}
+
+.tileset-placement-board .tileset-board-grid-layer {
+  z-index: 1;
+}
+
+.tileset-board-grid-layer path {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.36);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.15;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
+}
+
+.tileset-placement-board .tileset-board-grid-layer path {
+  stroke: rgba(0, 0, 0, 0.42);
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.16));
 }
 
 .tileset-generated-board-tile {

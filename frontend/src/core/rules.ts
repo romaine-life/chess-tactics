@@ -225,6 +225,80 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
   return moves;
 }
 
+function addBlockedCandidate(
+  out: Map<string, Vec>,
+  piece: Piece,
+  pieces: readonly Piece[],
+  size: BoardSize,
+  env: MoveEnv | undefined,
+  originElev: number,
+  fromX: number,
+  fromY: number,
+  x: number,
+  y: number,
+): boolean {
+  if (!inBounds(x, y, size)) return false;
+  if (fenceBlocks(env, fromX, fromY, x, y) || blockedByTerrain(env, originElev, x, y)) {
+    out.set(`${x},${y}`, { x, y });
+    return false;
+  }
+  const occ = pieceAt(pieces, x, y);
+  if (occ) {
+    if (!isEnemy(piece, occ)) out.set(`${x},${y}`, { x, y });
+    return false;
+  }
+  return !haltsTravelAt(env, x, y);
+}
+
+/** Squares that are geometrically relevant to a piece but blocked by terrain, fences,
+ * friendly pieces, or neutral obstacles. Used by render overlays only; legalMoves
+ * remains the source of truth for playable destinations. */
+export function blockedCandidateSquares(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Vec[] {
+  const blocked = new Map<string, Vec>();
+  if (!piece.alive || isObstacle(piece)) return [];
+  const originElev = env?.terrain ? elevationAt(env.terrain, piece.x, piece.y) : 0;
+  const ray = (dirs: ReadonlyArray<readonly [number, number]>) => {
+    for (const [dx, dy] of dirs) {
+      for (let step = 1; ; step += 1) {
+        const fromX = piece.x + dx * (step - 1);
+        const fromY = piece.y + dy * (step - 1);
+        const x = piece.x + dx * step;
+        const y = piece.y + dy * step;
+        if (!addBlockedCandidate(blocked, piece, pieces, size, env, originElev, fromX, fromY, x, y)) break;
+      }
+    }
+  };
+  const step = (deltas: ReadonlyArray<readonly [number, number]>) => {
+    for (const [dx, dy] of deltas) {
+      addBlockedCandidate(blocked, piece, pieces, size, env, originElev, piece.x, piece.y, piece.x + dx, piece.y + dy);
+    }
+  };
+
+  if (piece.type === 'pawn') {
+    const [forwardX, forwardY] = pawnForwardVector(piece);
+    const oneX = piece.x + forwardX;
+    const oneY = piece.y + forwardY;
+    const oneOpen = addBlockedCandidate(blocked, piece, pieces, size, env, originElev, piece.x, piece.y, oneX, oneY);
+    if (oneOpen && onPawnStart(piece)) {
+      addBlockedCandidate(blocked, piece, pieces, size, env, originElev, oneX, oneY, piece.x + forwardX * 2, piece.y + forwardY * 2);
+    }
+    for (const [dx, dy] of pawnCaptureVectors(piece)) {
+      addBlockedCandidate(blocked, piece, pieces, size, env, originElev, piece.x, piece.y, piece.x + dx, piece.y + dy);
+    }
+  } else if (piece.type === 'knight') {
+    step(KNIGHT);
+  } else if (piece.type === 'king') {
+    step(ALL8);
+  } else if (piece.type === 'bishop') {
+    ray(DIAG);
+  } else if (piece.type === 'rook') {
+    ray(ORTHO);
+  } else if (piece.type === 'queen') {
+    ray(ALL8);
+  }
+  return [...blocked.values()];
+}
+
 /**
  * The board (positions only) after `mover` plays `move`. Mirrors `applyMove`'s
  * displacement so a hypothetical check test sees the same occupancy a committed
