@@ -46,14 +46,21 @@ once at build, resolved into GameState fields the way promotion events already r
   them empty; destinations clear; king not in check, crossing no attacked square (landing
   safety comes from the standard king filter via `boardAfterMove`, which mirrors the rook
   hop); and both pieces' straight-line travel respects terrain/water/fences like any slide.
-- Encoding: a castle is ONE `Move` — the king's two-square destination plus
-  `castle: { rookId, rookTo }`. `applyMove` relocates both pieces in one action (one turn
-  flip — netplay parity, tick seeding, and round detection all assume one action per move)
-  and emits `moved` for both plus a `castled` event for the log. Because the destination is
-  unique, every destination-keyed consumer works UNCHANGED: click/drag input, premoves, the
-  netplay relay (`{pieceId, x, y}` on the wire, re-derived by `legalMoves` on each board —
-  zero wire/backend change), replay, and search. The mouse gesture is simply the king's
-  two-square move-dot.
+- Encoding: a castle is ONE `Move` — a gesture destination plus
+  `castle: { rookId, rookTo, kingTo }`. The gesture range is chess.com's: `legalMoves`
+  offers EVERY square from the two-square hop through the rook's own square (all carrying
+  the same payload), and the king lands on `kingTo` regardless of which was clicked or
+  dragged onto — `applyMove` and `boardAfterMove` displace by `kingTo`, never the gesture
+  square. No gesture square can collide with another move: they're all ≥2 from the king
+  (never a normal step) and the rook square holds a friendly piece (never a normal
+  destination; the premove layer's speculative same-side targets dedupe in the castle's
+  favor). `applyMove` relocates both pieces in one action (one turn flip — netplay parity,
+  tick seeding, and round detection all assume one action per move) and emits `moved` for
+  both plus a `castled` event for the log. Every destination-keyed consumer works
+  UNCHANGED: click/drag input (the board already prefers a legal destination over
+  selecting the piece sitting on it, so click-the-rook castles), premoves, the netplay
+  relay (`{pieceId, x, y}` on the wire — any alias re-derives to the same castle on both
+  boards), replay, and search.
 
 ### Chess draws (`chess-draws` event action)
 

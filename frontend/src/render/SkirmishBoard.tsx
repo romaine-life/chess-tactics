@@ -6,7 +6,7 @@ import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { BoardSize, GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
 import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, livingPieces, pieceAt } from '../core/rules';
 import { canTraverse, elevationAt, haltsTravel } from '../core/terrain';
-import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
+import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
@@ -46,13 +46,6 @@ function isPlayablePieceType(type: Piece['type']): type is PlayablePieceType {
   return (PLAYABLE_PIECE_TYPES as readonly Piece['type'][]).includes(type);
 }
 
-// Team palettes: each side is assigned a body color so the two armies read apart.
-const SIDE_PALETTE: Record<Piece['side'], UnitPalette> = {
-  player: 'navy-blue',
-  enemy: 'crimson',
-  neutral: 'navy-blue',
-};
-
 // Neutral rocks: two boulder variants x 8 rotations. Pick deterministically from the
 // piece id so each rock on the board looks distinct (no repeated-blob feel) yet stays
 // stable across re-renders.
@@ -82,7 +75,7 @@ function pieceImageSrc(piece: Piece): string | null {
   if (isPropCollider(piece)) return null;
   if (piece.type === 'rock' || piece.type === 'random-rock') return rockSpritePath(piece);
   if (piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
-  return pieceSpritePath(piece.type, SIDE_PALETTE[piece.side], piece.facing ?? defaultFacingForSide(piece.side));
+  return pieceSpritePath(piece.type, paletteForSide(piece.side, piece.palette), piece.facing ?? defaultFacingForSide(piece.side));
 }
 
 function terrainMapForGame(game: GameState): TileFamilyId[] {

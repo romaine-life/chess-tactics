@@ -49,6 +49,8 @@ export interface Piece {
   alive: boolean;
   /** Board-facing direction for the rendered directional sprite. */
   facing?: UnitFacing;
+  /** Authored unit palette. Absent falls back to the side default. */
+  palette?: string;
   /** Starting column — used with `startY` for directional pawn double-steps. */
   startX?: number;
   /** Starting row — used for the pawn double-step. */
@@ -119,11 +121,15 @@ export interface Move {
   enPassant?: boolean;
   /**
    * Castling: this king move also relocates the named rook. Self-contained so replay,
-   * netplay re-derivation, and search all reproduce the rook hop from (pieceId, Move)
-   * alone. The destination (x, y) is the king's landing square — always distinct from
-   * a one-step king move, so destination-keyed move matching stays unambiguous.
+   * netplay re-derivation, and search all reproduce the whole castle from
+   * (pieceId, Move) alone. The move's (x, y) is the GESTURE square — the chess.com
+   * range offers every square from the two-square hop through the rook's own square,
+   * and all of them commit the same castle — while `kingTo` is where the king actually
+   * lands. Every gesture square is ≥2 from the king (never a normal king step) and the
+   * rook square holds a friendly piece (never a normal destination), so destination-
+   * keyed move matching stays unambiguous.
    */
-  castle?: { rookId: string; rookTo: Vec };
+  castle?: { rookId: string; rookTo: Vec; kingTo: Vec };
 }
 
 /**

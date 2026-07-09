@@ -238,9 +238,11 @@ function boardAfterMove(mover: Piece, move: Move, pieces: readonly Piece[]): Pie
   const captured = capturedId ? pieces.find((p) => p.id === capturedId) : undefined;
   const captures = !!captured && isEnemy(mover, captured);
   const after: Piece[] = [];
+  const landX = move.castle?.kingTo.x ?? move.x;
+  const landY = move.castle?.kingTo.y ?? move.y;
   for (const p of pieces) {
     if (captures && p.id === capturedId) continue;
-    if (p.id === mover.id) after.push({ ...p, x: move.x, y: move.y });
+    if (p.id === mover.id) after.push({ ...p, x: landX, y: landY });
     else if (move.castle && p.id === move.castle.rookId) after.push({ ...p, x: move.castle.rookTo.x, y: move.castle.rookTo.y });
     else after.push(p);
   }
@@ -322,7 +324,23 @@ function castleMoves(king: Piece, pieces: readonly Piece[], size: BoardSize, env
     const rookElev = env?.terrain ? elevationAt(env.terrain, rook.x, rook.y) : 0;
     if (!walk(rook.x, rook.y, rule.rookTo, rookElev, false, opponent)) continue;
 
-    out.push({ x: rule.kingTo.x, y: rule.kingTo.y, castle: { rookId: rook.id, rookTo: { x: rule.rookTo.x, y: rule.rookTo.y } } });
+    // The chess.com gesture range: dropping the king anywhere from the two-square hop
+    // THROUGH the rook's own square commits this castle (the king still lands on
+    // kingTo). Every gesture square carries the same payload; extension past kingTo
+    // only applies when kingTo sits between king and rook (always true for the
+    // template's chess geometry — exotic authored rules just get the single square).
+    const castle = { rookId: rook.id, rookTo: { x: rule.rookTo.x, y: rule.rookTo.y }, kingTo: { x: rule.kingTo.x, y: rule.kingTo.y } };
+    const taken = new Set(out.map((m) => `${m.x},${m.y}`));
+    const offer = (x: number, y: number): void => {
+      if (!taken.has(`${x},${y}`)) out.push({ x, y, castle });
+    };
+    offer(rule.kingTo.x, rule.kingTo.y);
+    if (Math.sign(rule.rook.x - rule.kingTo.x) === dx && Math.sign(rule.rook.y - rule.kingTo.y) === dy) {
+      for (let x = rule.kingTo.x + dx, y = rule.kingTo.y + dy; inBounds(x, y, size); x += dx, y += dy) {
+        offer(x, y);
+        if (x === rule.rook.x && y === rule.rook.y) break;
+      }
+    }
   }
   return out;
 }
@@ -516,7 +534,12 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
     ? opponentsUnderAttackBy(piece, state.pieces, state.size, statEnv)
     : new Set<string>();
 
-  const nextFacing = facingFromDelta(move.x - from.x, move.y - from.y);
+  // A castle's (x, y) is the gesture square (chess.com range: two-out through the rook's
+  // square); the king's REAL landing square is castle.kingTo. Everything below — facing,
+  // displacement, stats, events, lastMove — uses the landing square.
+  const landX = move.castle?.kingTo.x ?? move.x;
+  const landY = move.castle?.kingTo.y ?? move.y;
+  const nextFacing = facingFromDelta(landX - from.x, landY - from.y);
   if (nextFacing) piece.facing = nextFacing;
   let tookPiece = false;
   const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
@@ -530,12 +553,12 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
     }
   }
 
-  piece.x = move.x;
-  piece.y = move.y;
+  piece.x = landX;
+  piece.y = landY;
   // Castling-rights history: only tracked when the game HAS castle rules, so a level
   // without them keeps a byte-identical serialized GameState (ADR-0072 back-compat).
   if (state.castleRules?.length) piece.hasMoved = true;
-  events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
+  events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: landX, y: landY } });
 
   // Castling: the same action also hops the rook (see Move.castle / castleMoves).
   if (move.castle) {

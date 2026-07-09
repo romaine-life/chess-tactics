@@ -316,6 +316,18 @@ describe('createFromLevel — random placement', () => {
     expect(hasMove(legalMoves(pawn, game.pieces, game.size), 4, 4)).toBe(true);
     expect(hasMove(legalMoves(pawn, game.pieces, game.size), 2, 3)).toBe(false);
   });
+
+  it('fixed placement copies authored palettes onto live pieces', () => {
+    const level = createBlankLevel('fx-palettes', 'Fixed Palettes', 8, 8);
+    level.layers.units = [
+      { x: 2, y: 6, type: 'king', side: 'player', palette: 'white' },
+      { x: 5, y: 1, type: 'king', side: 'enemy', palette: 'black' },
+    ];
+
+    const game = createSkirmish({ seed: 9, level });
+    expect(game.pieces.find((p) => p.side === 'player')?.palette).toBe('white');
+    expect(game.pieces.find((p) => p.side === 'enemy')?.palette).toBe('black');
+  });
 });
 
 // The `/play?board=<code>` play-test path: a shared board-code link decodes into a
