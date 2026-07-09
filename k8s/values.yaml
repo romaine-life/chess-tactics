@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-0e234826f1d937750d57f57e4d0b15c258334cc8e56a8cf0e98f6606313e9344"
+  tag: "app-384a9de6b29ecf122e79734291647f81e91239e7f95c84e77c7eee5423fb6910"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Render board terrain as a composed canvas"
-  prNumber: "448"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/448"
-  commit: "c5dc44d"
+  prTitle: "Add live editor map sharing"
+  prNumber: "447"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/447"
+  commit: "60bf191"
 
 name: chess-tactics
 namespace: chess-tactics
