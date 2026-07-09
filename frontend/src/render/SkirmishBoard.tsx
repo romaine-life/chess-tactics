@@ -3,9 +3,8 @@ import { createPortal } from 'react-dom';
 import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
-import type { BoardSize, GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
-import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, livingPieces, pieceAt } from '../core/rules';
-import { canTraverse, elevationAt, haltsTravel } from '../core/terrain';
+import type { GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
+import { attackedSquares, blockedCandidateSquares, enemyThreats, legalMoves, livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
@@ -204,64 +203,11 @@ export function buildSkirmishBoard(game: GameState, seed: number): SocketBoardRe
   return exactSkirmishBoard(game, seed, exactBoard, base);
 }
 
-function terrainBlocks(env: ReturnType<typeof useSkirmish.getState>['env'], piece: Piece, x: number, y: number): boolean {
-  return !!env.terrain && !canTraverse(env.terrain, elevationAt(env.terrain, piece.x, piece.y), x, y);
-}
-
-function addBlockedStep(
-  out: Map<string, Vec>,
-  piece: Piece,
-  pieces: readonly Piece[],
-  size: BoardSize,
-  env: ReturnType<typeof useSkirmish.getState>['env'],
-  x: number,
-  y: number,
-): boolean {
-  if (!inBounds(x, y, size)) return false;
-  const occ = pieceAt(pieces, x, y);
-  if (terrainBlocks(env, piece, x, y) || (occ && !isEnemy(piece, occ))) {
-    out.set(`${x},${y}`, { x, y });
-    return false;
-  }
-  // Mirror rules.ts rayMoves: water may be entered but ends the walk, so squares
-  // beyond it are neither reachable nor a "blocked by X" misattribution.
-  return !occ && !(env.terrain && haltsTravel(env.terrain, x, y));
-}
-
-function blockedCandidateSquares(piece: Piece, pieces: readonly Piece[], size: BoardSize, env: ReturnType<typeof useSkirmish.getState>['env']): Vec[] {
-  const blocked = new Map<string, Vec>();
-  if (piece.type === 'rock' || piece.type === 'random-rock') return [];
-  const ray = (dirs: ReadonlyArray<readonly [number, number]>) => {
-    for (const [dx, dy] of dirs) {
-      for (let step = 1; ; step += 1) {
-        if (!addBlockedStep(blocked, piece, pieces, size, env, piece.x + dx * step, piece.y + dy * step)) break;
-      }
-    }
-  };
-  const step = (deltas: ReadonlyArray<readonly [number, number]>) => {
-    for (const [dx, dy] of deltas) addBlockedStep(blocked, piece, pieces, size, env, piece.x + dx, piece.y + dy);
-  };
-  if (piece.type === 'pawn') {
-    const dir = piece.side === 'player' ? -1 : 1;
-    addBlockedStep(blocked, piece, pieces, size, env, piece.x, piece.y + dir);
-    for (const dx of [-1, 1]) addBlockedStep(blocked, piece, pieces, size, env, piece.x + dx, piece.y + dir);
-  } else if (piece.type === 'knight') {
-    step([[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]);
-  } else if (piece.type === 'king') {
-    step([[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]);
-  } else {
-    const diag: ReadonlyArray<readonly [number, number]> = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
-    const ortho: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    ray(piece.type === 'bishop' ? diag : piece.type === 'rook' ? ortho : [...ortho, ...diag]);
-  }
-  return [...blocked.values()];
-}
-
 // Every image URL the board will draw, split into the STABLE tile set (terrain/seed —
 // unchanged by play) and the live unit set (changes on capture). The reveal arms on the
 // tile signature so it fires once per board, not once per move; the full list is what we
-// preload so units don't popcorn in on the first paint either. The -top/-side derivation
-// mirrors BoardLabBoard exactly (one tile = a SIDE layer under a TOP layer, ADR-0039).
+// preload so units don't popcorn in on the first paint either. Terrain URLs match the
+// sources BoardTerrainLayer consumes: split top/side frames plus feature and edge art.
 function collectBoardArt(
   board: SocketBoardResult<TileAsset>,
   livePieces: readonly Piece[],
@@ -502,6 +448,7 @@ export function SkirmishBoard() {
   const showPlayerAttacks = useSkirmishView((s) => s.showPlayerAttacks);
   const showPlayerMoves = useSkirmishView((s) => s.showPlayerMoves);
   const showPromotionZones = useSkirmishView((s) => s.showPromotionZones);
+  const showGrid = useSkirmishView((s) => s.showGrid);
   const boardZoom = useSkirmishView((s) => s.zoom);
   const boardPan = useSkirmishView((s) => s.pan);
   const setZoom = useSkirmishView((s) => s.setZoom);
@@ -927,6 +874,7 @@ export function SkirmishBoard() {
           boardPan={boardPan}
           className="skirmish-board-surface"
           ariaLabel="Skirmish board"
+          showGrid={showGrid}
           renderCellOverlay={({ cell }) => {
             if (!cell.asset && !cell.missing) return null;
             const key = `${cell.x},${cell.y}`;

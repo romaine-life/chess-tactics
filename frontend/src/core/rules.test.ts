@@ -3,6 +3,7 @@ import type { BoardSize, GameState, Move, Piece, PieceType, Side } from './types
 import {
   applyMove,
   attackedSquares,
+  blockedCandidateSquares,
   enemyMove,
   enemyThreats,
   gameEnv,
@@ -139,6 +140,29 @@ describe('sliding pieces', () => {
     expect(legalMoves(rock, [rock], SIZE)).toHaveLength(0);
     expect(isEnemy(queen, rock)).toBe(false);
     expect(has(legalMoves(queen, [queen, rock], SIZE), 4, 3)).toBe(false); // blocked, no capture
+  });
+});
+
+describe('blockedCandidateSquares', () => {
+  it('reports friendly pieces, neutral obstacles, and fences without including legal captures', () => {
+    const rook = P('player', 'rook', 2, 2);
+    const friend = P('player', 'pawn', 4, 2);
+    const rock = P('neutral', 'rock', 2, 4);
+    const foe = P('enemy', 'pawn', 2, 0);
+    const env: MoveEnv = { fences: new Set([roadEdgeKey(2, 2, 1, 2)]) };
+    const blocked = new Set(blockedCandidateSquares(rook, [rook, friend, rock, foe], SIZE, env).map((tile) => `${tile.x},${tile.y}`));
+
+    expect(blocked).toEqual(new Set(['4,2', '2,4', '1,2']));
+  });
+
+  it('uses a pawn authored forward direction when finding blocked pawn squares', () => {
+    const pawn = P('player', 'pawn', 2, 6, { startX: 2, startY: 6, pawnForward: 'east' });
+    const eastBlocker = P('player', 'pawn', 3, 6);
+    const northBlocker = P('player', 'pawn', 2, 5);
+    const blocked = new Set(blockedCandidateSquares(pawn, [pawn, eastBlocker, northBlocker], SIZE).map((tile) => `${tile.x},${tile.y}`));
+
+    expect(blocked.has('3,6')).toBe(true);
+    expect(blocked.has('2,5')).toBe(false);
   });
 });
 

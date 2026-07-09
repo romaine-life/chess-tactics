@@ -13,6 +13,7 @@
     "shot": "node scripts/shot.mjs",
     "e2e:lobby": "node scripts/lobby-e2e.mjs",
     "vendor:ambience": "node scripts/vendor-ambience.mjs",
+    "assets:diagnose:terrain": "node scripts/diagnose-terrain-assets.mjs",
     "optimize:assets": "node scripts/optimize-main-menu-assets.mjs",
     "units:sprites": "node scripts/generate-unit-sprites.mjs",
     "units:normalize-concepts": "node scripts/normalize-unit-direction-concepts.mjs",

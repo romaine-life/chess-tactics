@@ -11,6 +11,7 @@ import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import { FenceOverlayLayer, WallOverlayLayer } from '../render/FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
+import { BoardGridLayer } from '../render/BoardGridLayer';
 import { BoardTerrainLayer, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
 import { studioBoardSprites, studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
@@ -80,6 +81,9 @@ import { UNIT_PALETTE_LABELS, UNIT_PALETTES, isUnitPalette, type UnitPalette } f
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
+import { createFromLevel } from '../game/setup';
+import { attackedSquares, blockedCandidateSquares, enemyThreats, gameEnv, legalMoves, type MoveEnv } from '../core/rules';
+import type { GameState, Move, Piece, Vec } from '../core/types';
 import { OBJECTIVE_LABEL } from '../core/objectives';
 import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
@@ -118,6 +122,57 @@ type MoveSubject =
   | { kind: 'unit'; x: number; y: number }
   | { kind: 'prop'; x: number; y: number; propId: string };
 
+type BoardViewOverlayFlags = {
+  showMoves: boolean;
+  showEnemyAttacks: boolean;
+  showBlocked: boolean;
+  showPromotionZones: boolean;
+};
+
+type BoardTacticalPreview = {
+  moveSet: Set<string>;
+  threatSet: Set<string>;
+  blockedSet: Set<string>;
+  promotionZoneSet: Set<string>;
+  focusKey: string | null;
+};
+
+const emptyTacticalPreview = (): BoardTacticalPreview => ({
+  moveSet: new Set(),
+  threatSet: new Set(),
+  blockedSet: new Set(),
+  promotionZoneSet: new Set(),
+  focusKey: null,
+});
+
+const vecKey = (vec: Vec): string => `${vec.x},${vec.y}`;
+const vecSet = (tiles: readonly Vec[]): Set<string> => new Set(tiles.map(vecKey));
+
+function tacticalPreviewForGame(
+  game: GameState | null,
+  env: MoveEnv | null,
+  focusPiece: Piece | null,
+  flags: BoardViewOverlayFlags,
+): BoardTacticalPreview {
+  if (!game || !env) return emptyTacticalPreview();
+  const focusMoves: Move[] = focusPiece ? legalMoves(focusPiece, game.pieces, game.size, env) : [];
+  const moveSet = flags.showMoves ? vecSet(focusMoves) : new Set<string>();
+  const threatSet = flags.showEnemyAttacks
+    ? vecSet(focusPiece?.side === 'enemy' ? attackedSquares(focusPiece, game.pieces, game.size, env) : enemyThreats(game.pieces, game.size, env))
+    : new Set<string>();
+  const legal = new Set(focusMoves.map(vecKey));
+  const blockedSet = flags.showBlocked && focusPiece
+    ? vecSet(blockedCandidateSquares(focusPiece, game.pieces, game.size, env).filter((tile) => !legal.has(vecKey(tile))))
+    : new Set<string>();
+  return {
+    moveSet,
+    threatSet,
+    blockedSet,
+    promotionZoneSet: flags.showPromotionZones ? vecSet(game.promotionZones ?? []) : new Set<string>(),
+    focusKey: focusPiece ? `${focusPiece.x},${focusPiece.y}` : null,
+  };
+}
+
 // Unified editable board: every Studio view renders through this. It's a full
 // clickable grid seeded from whatever was loaded (a tile, a transition, a
 // generated board). The `tool` decides what a click does — select (highlight),
@@ -151,6 +206,8 @@ function StudioEditableBoard({
   selectedCell,
   boardZoom,
   boardPan,
+  showGrid = false,
+  tacticalPreview,
   animationFrame,
   onPaint,
   onErase,
@@ -206,6 +263,8 @@ function StudioEditableBoard({
   selectedCell: { x: number; y: number } | null;
   boardZoom: number;
   boardPan: { x: number; y: number };
+  showGrid?: boolean;
+  tacticalPreview?: BoardTacticalPreview;
   animationFrame: number;
   onPaint: (x: number, y: number) => void;
   onErase: (x: number, y: number) => void;
@@ -356,6 +415,13 @@ function StudioEditableBoard({
       const isMoveTo = tool === 'move' && !!movingFrom && !isMoveFrom && hoverCell?.x === x && hoverCell?.y === y;
       const moveDroppable = isMoveTo && movingFrom ? (canMoveTo ? canMoveTo(movingFrom, { x, y }) : true) : false;
       const fenceHere = edgeTool && hoverEdge?.x === x && hoverEdge?.y === y ? hoverEdge.edge : null;
+      const tacticalState = tacticalPreview ? [
+        tacticalPreview.promotionZoneSet.has(key) ? 'is-promotion-zone' : '',
+        tacticalPreview.moveSet.has(key) ? 'is-move' : '',
+        tacticalPreview.threatSet.has(key) ? 'is-threat' : '',
+        tacticalPreview.blockedSet.has(key) ? 'is-blocked-candidate' : '',
+        tacticalPreview.focusKey === key ? 'is-focused-piece' : '',
+      ].filter(Boolean).join(' ') : '';
       cells.push({
         key,
         x,
@@ -377,6 +443,7 @@ function StudioEditableBoard({
                 <line x1={EDGE_LINE[fenceHere][0]} y1={EDGE_LINE[fenceHere][1]} x2={EDGE_LINE[fenceHere][2]} y2={EDGE_LINE[fenceHere][3]} />
               </svg>
             ) : null}
+            {tacticalState ? <span className={`le-tactical-cell ${tacticalState}`} aria-hidden="true" /> : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             {isMoveFrom ? <span className="tileset-cell-ring is-move-from" aria-hidden="true" /> : null}
             {isMoveTo ? <span className={`tileset-cell-ring ${moveDroppable ? 'is-move-ok' : 'is-move-blocked'}`} aria-hidden="true" /> : null}
@@ -555,6 +622,7 @@ function StudioEditableBoard({
       onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
     >
       {overlay}
+      {showGrid ? <BoardGridLayer cells={cells} /> : null}
       <WallOverlayLayer overlays={wallOverlayMap} wallArt={placedWallArt} bounds={wallBounds} />
       <FenceOverlayLayer overlays={fenceOverlayMap} />
       {overlaySprites}
@@ -1652,6 +1720,11 @@ export function LevelEditor(): ReactElement {
   const [scatterWiggle, setScatterWiggle] = useState(0.5);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [showGrid, setShowGrid] = useState(false);
+  const [showMoves, setShowMoves] = useState(true);
+  const [showEnemyAttacks, setShowEnemyAttacks] = useState(true);
+  const [showBlocked, setShowBlocked] = useState(false);
+  const [showPromotionZones, setShowPromotionZones] = useState(false);
   const [brushKind, setBrushKind] = useState<BrushKind>(initialBrushKind);
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((initialBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
@@ -2671,6 +2744,57 @@ export function LevelEditor(): ReactElement {
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
   const playability = useMemo(() => validatePlayability(candidateLevel), [candidateLevel]);
+  const previewPlayerFaction = useMemo<UnitPalette | null>(() => {
+    if (playerFaction) return playerFaction;
+    for (let y = 0; y < boardRows; y += 1) {
+      for (let x = 0; x < boardCols; x += 1) {
+        const faction = boardUnits[`${x},${y}`]?.faction;
+        if (isUnitPalette(faction)) return faction;
+      }
+    }
+    return null;
+  }, [boardCols, boardRows, boardUnits, playerFaction]);
+  const tacticalPreviewLevel = useMemo<Level | null>(() => {
+    if (!previewPlayerFaction) return null;
+    return editorBoardToLevel(
+      { ...currentEditorBoard, playerFaction: previewPlayerFaction },
+      { id: editingId ?? 'draft-preview', name: levelNameForSave, ...modeMeta },
+    );
+  }, [currentEditorBoard, editingId, levelNameForSave, modeMeta, previewPlayerFaction]);
+  const tacticalPreviewGame = useMemo<GameState | null>(() => {
+    if (!tacticalPreviewLevel) return null;
+    const game = createFromLevel(tacticalPreviewLevel, 1);
+    const authoredPieceIds = new Set(tacticalPreviewLevel.layers.units.map((unit, index) => `${unit.side}-${unit.type}-${index}`));
+    return {
+      ...game,
+      pieces: game.pieces.filter((piece) => authoredPieceIds.has(piece.id) || piece.id.startsWith('prop-')),
+    };
+  }, [tacticalPreviewLevel]);
+  const tacticalPreviewEnv = useMemo<MoveEnv | null>(
+    () => tacticalPreviewGame ? { ...gameEnv(tacticalPreviewGame), lastMove: tacticalPreviewGame.lastMove } : null,
+    [tacticalPreviewGame],
+  );
+  const tacticalFocusPiece = useMemo<Piece | null>(() => {
+    if (!tacticalPreviewGame) return null;
+    const selected = selectedCell
+      ? tacticalPreviewGame.pieces.find((piece) =>
+          piece.alive &&
+          (piece.side === 'player' || piece.side === 'enemy') &&
+          piece.x === selectedCell.x &&
+          piece.y === selectedCell.y,
+        )
+      : null;
+    return selected ?? tacticalPreviewGame.pieces.find((piece) => piece.alive && piece.side === 'player') ?? null;
+  }, [selectedCell, tacticalPreviewGame]);
+  const tacticalPreview = useMemo(
+    () => tacticalPreviewForGame(tacticalPreviewGame, tacticalPreviewEnv, tacticalFocusPiece, {
+      showMoves,
+      showEnemyAttacks,
+      showBlocked,
+      showPromotionZones,
+    }),
+    [showBlocked, showEnemyAttacks, showMoves, showPromotionZones, tacticalFocusPiece, tacticalPreviewEnv, tacticalPreviewGame],
+  );
   const targetLevelId = editingId ?? routeParams.levelId;
   const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
   // Real dirty flag: the board has unsaved changes when its signature differs from the one
@@ -3188,6 +3312,10 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next, to);
   };
   const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
+  const resetBoardView = (): void => {
+    setViewZoom(1);
+    setViewPan({ x: 0, y: 0 });
+  };
   // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
   // tiles/units — and a now-offboard selection — whose coordinates fall outside the new
   // bounds, so nothing keeps rendering or counting off the edge of the board.
@@ -3558,6 +3686,8 @@ export function LevelEditor(): ReactElement {
                   selectedCell={selectedCell}
                   boardZoom={viewZoom}
                   boardPan={viewPan}
+                  showGrid={showGrid}
+                  tacticalPreview={tacticalPreview}
                   animationFrame={animationFrame}
                   onPaint={readOnlyLiveMap ? (() => {}) : paintCell}
                   onErase={readOnlyLiveMap ? (() => {}) : eraseCell}
@@ -4612,18 +4742,26 @@ export function LevelEditor(): ReactElement {
         {/* Board-page-only zoom readout — a whole-workspace setting, not per-brush. Zoom is also
             reachable anywhere via the mouse wheel over the board. */}
         {layer === 'board' ? (
-        <section className="skirmish-card">
-          <h2>Display</h2>
-          <div className="le-ctrlrow">
-            <span className="le-ctrllabel">Zoom</span>
-            <Stepper
-              value={Math.round(viewZoom * 100)}
-              suffix="%"
-              decreaseLabel="Zoom out"
-              increaseLabel="Zoom in"
-              onDecrease={() => adjustZoom(-0.2)}
-              onIncrease={() => adjustZoom(0.2)}
-            />
+        <section className="skirmish-card skirmish-view-card" aria-label="Board view">
+          <h2>Board View</h2>
+          <div className="skirmish-view-group">
+            <span className="skirmish-eyebrow">Zoom</span>
+            <div className="skirmish-view-row">
+              <button type="button" className="app-header-button" onClick={() => adjustZoom(-0.1)} aria-label="Zoom out">−</button>
+              <span className="skirmish-zoom-readout">{Math.round(viewZoom * 100)}%</span>
+              <button type="button" className="app-header-button" onClick={() => adjustZoom(0.1)} aria-label="Zoom in">+</button>
+              <button type="button" className="app-header-button" onClick={resetBoardView}>Reset</button>
+            </div>
+          </div>
+          <div className="skirmish-view-group">
+            <span className="skirmish-eyebrow">Overlays</span>
+            <div className="skirmish-view-row">
+              <button type="button" className={`app-header-button ${showMoves ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowMoves((value) => !value)} aria-pressed={showMoves}>Moves</button>
+              <button type="button" className={`app-header-button ${showEnemyAttacks ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowEnemyAttacks((value) => !value)} aria-pressed={showEnemyAttacks}>Attacks</button>
+              <button type="button" className={`app-header-button ${showBlocked ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowBlocked((value) => !value)} aria-pressed={showBlocked}>Blocks</button>
+              <button type="button" className={`app-header-button ${showPromotionZones ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowPromotionZones((value) => !value)} aria-pressed={showPromotionZones}>Promotion</button>
+              <button type="button" className={`app-header-button ${showGrid ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowGrid((value) => !value)} aria-pressed={showGrid}>Grid</button>
+            </div>
           </div>
         </section>
         ) : null}

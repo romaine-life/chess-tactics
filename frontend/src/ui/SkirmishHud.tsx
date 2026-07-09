@@ -55,7 +55,7 @@ const HUD_TABS: { id: HudTab; label: string }[] = [
 // The same SHORTCUT_BINDINGS table drives both the painted buttons and the global
 // key handler, so a click and its key can never drift apart.
 
-type OverlayFlag = 'showEnemyAttacks' | 'showEnemyMoves' | 'showPlayerAttacks' | 'showPlayerMoves' | 'showPromotionZones';
+type OverlayFlag = 'showEnemyAttacks' | 'showEnemyMoves' | 'showPlayerAttacks' | 'showPlayerMoves' | 'showPromotionZones' | 'showGrid';
 
 type GridAction =
   | { kind: 'toggle'; flag: OverlayFlag; label: string; hint: string }
@@ -70,6 +70,7 @@ const SHORTCUT_KEY_ROWS: string[][] = [
 const SHORTCUT_BINDINGS: Record<string, GridAction> = {
   q: { kind: 'toggle', flag: 'showEnemyAttacks', label: 'Opp. attacks', hint: 'Show all enemy attack squares (danger zone)' },
   w: { kind: 'toggle', flag: 'showEnemyMoves', label: 'Opp. moves', hint: 'Show all enemy legal-move squares' },
+  e: { kind: 'toggle', flag: 'showGrid', label: 'Grid', hint: 'Show the board grid overlay' },
   a: { kind: 'toggle', flag: 'showPlayerAttacks', label: 'Your attacks', hint: 'Show all friendly attack squares' },
   s: { kind: 'toggle', flag: 'showPlayerMoves', label: 'Your moves', hint: 'Show all friendly legal-move squares' },
   z: { kind: 'zoom', dir: 1, label: 'Zoom in', hint: 'Zoom the board in' },
@@ -196,6 +197,7 @@ export function SkirmishHud({
   const showPlayerAttacks = useSkirmishView((s) => s.showPlayerAttacks);
   const showPlayerMoves = useSkirmishView((s) => s.showPlayerMoves);
   const showPromotionZones = useSkirmishView((s) => s.showPromotionZones);
+  const showGrid = useSkirmishView((s) => s.showGrid);
   const zoom = useSkirmishView((s) => s.zoom);
   const toggleOverlay = useSkirmishView((s) => s.toggle);
   const setZoom = useSkirmishView((s) => s.setZoom);
@@ -203,7 +205,7 @@ export function SkirmishHud({
 
   // Current state of each grid toggle, for the pressed/active look on the cards.
   const flagValue: Record<OverlayFlag, boolean> = {
-    showEnemyAttacks, showEnemyMoves, showPlayerAttacks, showPlayerMoves, showPromotionZones,
+    showEnemyAttacks, showEnemyMoves, showPlayerAttacks, showPlayerMoves, showPromotionZones, showGrid,
   };
 
   // Global key handler — the grid keys work anywhere on the board, not just while the
@@ -416,6 +418,7 @@ export function SkirmishHud({
                 <button type="button" className={`app-header-button ${showEnemyAttacks ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showEnemyAttacks')} aria-pressed={showEnemyAttacks}>Attacks</button>
                 <button type="button" className={`app-header-button ${showBlocked ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showBlocked')} aria-pressed={showBlocked}>Blocks</button>
                 <button type="button" className={`app-header-button ${showPromotionZones ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showPromotionZones')} aria-pressed={showPromotionZones}>Promotion</button>
+                <button type="button" className={`app-header-button ${showGrid ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showGrid')} aria-pressed={showGrid}>Grid</button>
               </div>
             </div>
           </section>
