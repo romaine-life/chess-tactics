@@ -2158,6 +2158,29 @@ function validateWorkspacePromoteAction(action, label, triggerKind) {
   return null;
 }
 
+/** Structural check for an ADR-0072 castle action — mirror of the frontend's
+ * levelEventActionErrors (core/level.ts). Shape/enum only; alignment and board bounds
+ * stay editor-side like the other gameplay gates. */
+function validateWorkspaceCastleAction(action, label, triggerKind) {
+  if (triggerKind !== 'setup') return `${label}.kind castle requires setup trigger`;
+  if (action.side !== 'player' && action.side !== 'enemy') return `${label}.side is invalid`;
+  for (const field of ['king', 'rook', 'kingTo', 'rookTo']) {
+    const cell = action[field];
+    if (!cell || typeof cell !== 'object' || Array.isArray(cell) || !isFiniteInteger(cell.x) || !isFiniteInteger(cell.y)) {
+      return `${label}.${field} is invalid`;
+    }
+  }
+  return null;
+}
+
+/** Structural check for an ADR-0072 chess-draws action (50-move rule / threefold repetition flags). */
+function validateWorkspaceChessDrawsAction(action, label, triggerKind) {
+  if (triggerKind !== 'setup') return `${label}.kind chess-draws requires setup trigger`;
+  if (action.fiftyMove !== undefined && typeof action.fiftyMove !== 'boolean') return `${label}.fiftyMove is invalid`;
+  if (action.threefold !== undefined && typeof action.threefold !== 'boolean') return `${label}.threefold is invalid`;
+  return null;
+}
+
 function validateWorkspaceEvents(events, key) {
   if (!Array.isArray(events)) return `levels.${key}.events is invalid`;
   for (let i = 0; i < events.length; i += 1) {
@@ -2196,6 +2219,12 @@ function validateWorkspaceEvents(events, key) {
       } else if (action.kind === 'promote') {
         const promoteErr = validateWorkspacePromoteAction(action, actionLabel, event.trigger.kind);
         if (promoteErr) return promoteErr;
+      } else if (action.kind === 'castle') {
+        const castleErr = validateWorkspaceCastleAction(action, actionLabel, event.trigger.kind);
+        if (castleErr) return castleErr;
+      } else if (action.kind === 'chess-draws') {
+        const drawsErr = validateWorkspaceChessDrawsAction(action, actionLabel, event.trigger.kind);
+        if (drawsErr) return drawsErr;
       } else {
         return `${actionLabel}.kind is invalid`;
       }

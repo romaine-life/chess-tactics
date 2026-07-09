@@ -357,3 +357,40 @@ describe('play a board-code link', () => {
     expect(enemyReplies).toHaveLength(0);
   });
 });
+
+describe('createFromLevel castling + chess draw rules (ADR-0072)', () => {
+  it('resolves castle and chess-draws events into GameState, counting the start position', () => {
+    const level = createBlankLevel('lab-castle', 'Castle', 8, 8);
+    level.objective = 'capture-king';
+    level.layers.units = [
+      { x: 4, y: 7, type: 'king', side: 'player' },
+      { x: 7, y: 7, type: 'rook', side: 'player' },
+      { x: 4, y: 0, type: 'king', side: 'enemy' },
+    ];
+    level.events = [
+      { trigger: { kind: 'setup' }, do: [{ kind: 'castle', side: 'player', king: { x: 4, y: 7 }, rook: { x: 7, y: 7 }, kingTo: { x: 6, y: 7 }, rookTo: { x: 5, y: 7 } }] },
+      { trigger: { kind: 'setup' }, do: [{ kind: 'chess-draws', fiftyMove: true, threefold: true }] },
+    ];
+    const game = createSkirmish({ seed: 1, level });
+    expect(game.castleRules).toEqual([{ side: 'player', king: { x: 4, y: 7 }, rook: { x: 7, y: 7 }, kingTo: { x: 6, y: 7 }, rookTo: { x: 5, y: 7 } }]);
+    expect(game.drawRules).toEqual({ fiftyMove: true, threefold: true });
+    // The starting position is threefold occurrence #1.
+    expect(Object.values(game.positionCounts ?? {})).toEqual([1]);
+    // And the authored castle is actually offered from the start.
+    const king = game.pieces.find((p) => p.type === 'king' && p.side === 'player')!;
+    const moves = legalMoves(king, game.pieces, game.size, { castleRules: game.castleRules });
+    expect(moves.some((m) => m.x === 6 && m.y === 7 && m.castle)).toBe(true);
+  });
+
+  it('leaves an event-free level exactly as before (no castle rules, no draw rules, no table)', () => {
+    const level = createBlankLevel('lab-plain', 'Plain', 8, 8);
+    level.layers.units = [
+      { x: 4, y: 7, type: 'king', side: 'player' },
+      { x: 4, y: 0, type: 'king', side: 'enemy' },
+    ];
+    const game = createSkirmish({ seed: 1, level });
+    expect(game.castleRules).toBeUndefined();
+    expect(game.drawRules).toBeUndefined();
+    expect(game.positionCounts).toBeUndefined();
+  });
+});

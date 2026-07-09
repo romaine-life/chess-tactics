@@ -72,6 +72,13 @@ export interface SolverInput {
    * runner's retrograde draw-proof fallback must NOT emit a proven value on it (the same refusal,
    * enforced at both places from this single flag). See §"En passant". */
   enPassantUnsound: boolean;
+  /** True when the level authors castle or chess-draws events (ADR-0072): those rules make
+   * value depend on a HIDDEN LEDGER the solver's position keys cannot see — Piece.hasMoved
+   * (castling rights), the halfmove clock (50-move), and committed-position repetition counts.
+   * Two positions with identical piece placement but different ledgers can have different true
+   * values, so keys would conflate them: retrograde strong solves AND search-mode proofs are
+   * both unsound. Same refusal path as enPassantUnsound, same two enforcement sites. */
+  hiddenStateUnsound: boolean;
 }
 
 const isObstacleType = (t: PieceType): boolean => t === 'rock' || t === 'random-rock';
@@ -91,6 +98,23 @@ export function canTriggerEnPassant(start: GameState): boolean {
   const hasPlayerPawn = pawns.some((p) => p.side === 'player');
   const hasEnemyPawn = pawns.some((p) => p.side === 'enemy');
   return hasPlayerPawn && hasEnemyPawn;
+}
+
+/**
+ * Whether the level authors any ADR-0072 hidden-ledger rule (castle or chess-draws events).
+ * Those rules make legality/terminality depend on state the solver's position encoding does
+ * not carry (hasMoved, halfmoveClock, positionCounts), so ANY proof keyed on placement alone
+ * is unsound. Pure function of the authored level — the single source both feasibility and
+ * the search prover consume. Detection is by EVENT (authored intent), not resolved GameState,
+ * so a castle event whose squares never resolve still refuses (over-refusal is the safe side).
+ */
+export function hasHiddenLedgerEvents(level: Level): boolean {
+  for (const event of level.events ?? []) {
+    for (const action of event.do ?? []) {
+      if (action.kind === 'castle' || action.kind === 'chess-draws') return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -185,8 +209,9 @@ export function toSolverInput(level: Level, seed = 0): SolverInput {
   }
 
   const enPassantUnsound = canTriggerEnPassant(start);
+  const hiddenStateUnsound = hasHiddenLedgerEvents(level);
 
-  return { level, start, env, ctx, victoryRules, clockMatters, clockCeil, slots, passableCells, obstacles, enPassantUnsound };
+  return { level, start, env, ctx, victoryRules, clockMatters, clockCeil, slots, passableCells, obstacles, enPassantUnsound, hiddenStateUnsound };
 }
 
 /**

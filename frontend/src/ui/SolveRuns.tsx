@@ -87,6 +87,9 @@ function FeasibilityLine({ report }: { report: FeasibilityReport }): ReactElemen
       {report.enPassantUnsound ? (
         <p className="notes warn">En-passant reachable on this board — a strong solve is unsound; the run is downgraded to at best a bounded search.</p>
       ) : null}
+      {report.hiddenStateUnsound ? (
+        <p className="notes warn">Castle / chess-draws events on this level (ADR-0072) — the solver cannot key their hidden ledger yet; launching will be refused.</p>
+      ) : null}
       {report.notes?.length ? <p className="notes">{report.notes.join(' · ')}</p> : null}
     </div>
   );
@@ -195,6 +198,7 @@ export function SolveRuns({ level }: { level?: Level }): ReactElement {
                   {' · '}est. states {fmtInt(body.feasibility.stateSpaceUpperBound)}
                   {' · '}est. tablebase {fmtBytes(body.feasibility.tablebaseBytesEstimate)}
                   {body.feasibility.enPassantUnsound ? <span className="warn"> · en-passant refusal</span> : null}
+                  {body.feasibility.hiddenStateUnsound ? <span className="warn"> · hidden-ledger refusal (ADR-0072)</span> : null}
                 </p>
               ) : null}
 

@@ -140,11 +140,19 @@ export function estimateFeasibility(level: Level, opts: FeasibilityOptions = {})
     notes.push('REFUSED for strong solve: board can trigger en passant, whose successors the '
       + 'decoded (lastMove-free) move graph cannot reproduce (F6). Verdict capped at `hard`.');
   }
+  // Hidden-ledger refusal (ADR-0072) — castle / chess-draws events make value depend on
+  // hasMoved / halfmove clock / repetition counts, which position keys do not carry.
+  const hiddenStateUnsound = input.hiddenStateUnsound;
+  if (hiddenStateUnsound) {
+    notes.push('REFUSED for strong solve: level authors castle or chess-draws events (ADR-0072), '
+      + 'whose hidden ledger (castling rights, halfmove clock, repetition counts) position keys '
+      + 'cannot see. Verdict capped at `hard`; search-mode PROOFS are also refused on this board.');
+  }
 
   // Verdict + recommended mode.
   const fitsMemory = tablebaseBytesEstimate <= memoryCap;
   let verdict: SolveVerdict;
-  if (enPassantUnsound) {
+  if (enPassantUnsound || hiddenStateUnsound) {
     verdict = Number.isFinite(corrected) ? 'hard' : 'infeasible';
   } else if (Number.isFinite(corrected) && corrected <= SOLVABLE_STATE_CEILING && fitsMemory) {
     verdict = 'solvable';
@@ -167,6 +175,7 @@ export function estimateFeasibility(level: Level, opts: FeasibilityOptions = {})
     etaSeconds,
     recommendedMode,
     enPassantUnsound,
+    hiddenStateUnsound,
     notes,
   };
 }

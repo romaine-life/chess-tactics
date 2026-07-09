@@ -156,6 +156,7 @@ function FeasibilityReadout({ report }: { report: FeasibilityReport }): ReactEle
         {' · '}recommends <b>{report.recommendedMode}</b>
       </p>
       {report.enPassantUnsound ? <p className="warn">en passant reachable — retrograde would be unsound here.</p> : null}
+      {report.hiddenStateUnsound ? <p className="warn">castle / chess-draws events on this level — the solver can't key their hidden ledger yet; solving is refused (ADR-0072).</p> : null}
       {report.notes.length > 0 ? <p className="dim">{report.notes.join(' · ')}</p> : null}
     </div>
   );
@@ -203,6 +204,8 @@ export function SolverStepper({
   const gate = ((): { ok: boolean; why?: string } => {
     if (!activeLevel) return { ok: false, why: 'Pick a board (a demo, or select a level in the catalog).' };
     if (trace) return { ok: true }; // replaying a recording computes nothing
+    // Hidden-ledger refusal blocks BOTH modes (runWeakSolve throws on such boards too).
+    if (feasibility?.hiddenStateUnsound) return { ok: false, why: 'This level authors castle or chess-draws events (ADR-0072) — the solver cannot key their hidden ledger yet, so solving is refused on this board.' };
     if (resolvedMode === 'retrograde') {
       if (!feasibility) return { ok: false, why: 'No feasibility read for this board.' };
       if (feasibility.enPassantUnsound) return { ok: false, why: 'En passant is reachable — a retrograde strong solve is unsound here. Step it in search mode instead.' };

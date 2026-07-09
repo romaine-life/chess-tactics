@@ -345,6 +345,13 @@ export function decodePosition(key: bigint, input: SolverInput): GameState {
     pieces,
     terrain: input.start.terrain,
     fences: input.start.fences,
+    // Static per-level rule fields the rules engine reads off the STATE (post-ADR-0072
+    // promotion is strictly rules-driven — no last-rank fallback): a decoded position
+    // must carry them or pawns silently stop promoting inside the solve. castleRules /
+    // drawRules are deliberately NOT carried: boards authoring those are refused
+    // upstream (hiddenStateUnsound) precisely because their ledger can't be keyed.
+    promotionZones: input.start.promotionZones,
+    promotionRules: input.start.promotionRules,
     turn,
     winner: null,
   };

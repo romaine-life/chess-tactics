@@ -7,6 +7,7 @@ import { createBlankLevel, type Level, type LevelUnit, type ObjectiveType } from
 import { estimateFeasibility } from './feasibility';
 import { toSolverInput } from './input';
 import { canonicalKey, enumerateReachable } from './encode';
+import { runWeakSolve } from './search/idSearch';
 import { legalMoves, livingPieces } from '../rules';
 import { breakLineLevel } from '../../game/__fixtures__/breakLine';
 
@@ -75,6 +76,49 @@ describe('en-passant refusal (F6)', () => {
     expect(report.enPassantUnsound).toBe(true);
     expect(report.verdict).not.toBe('solvable');
     expect(report.notes.some((n) => /en passant/i.test(n))).toBe(true);
+  });
+});
+
+// ─── Hidden-ledger refusal (ADR-0072: castle / chess-draws events) ──────────────────────
+
+describe('hidden-ledger refusal (ADR-0072)', () => {
+  const base = () => tinyLevel([
+    { x: 0, y: 0, side: 'enemy', type: 'king', facing: 'south' },
+    { x: 2, y: 3, side: 'player', type: 'king', facing: 'north' },
+    { x: 3, y: 3, side: 'player', type: 'rook', facing: 'north' },
+  ], { cols: 4, rows: 4, objective: 'rival-kings' });
+
+  it('a castle event → hiddenStateUnsound, verdict capped, refusal note', () => {
+    const lvl = base();
+    lvl.events = [{
+      id: 'e1', name: 'castle', trigger: { kind: 'setup' },
+      do: [{ kind: 'castle', side: 'player', king: { x: 2, y: 3 }, rook: { x: 3, y: 3 }, kingTo: { x: 3, y: 3 }, rookTo: { x: 2, y: 3 } }],
+    }] as typeof lvl.events;
+    const report = estimateFeasibility(lvl);
+    expect(report.hiddenStateUnsound).toBe(true);
+    expect(report.verdict).not.toBe('solvable');
+    expect(report.notes.some((n) => /hidden ledger|castle/i.test(n))).toBe(true);
+  });
+
+  it('a chess-draws event → hiddenStateUnsound; boards without ledger events stay clean', () => {
+    const lvl = base();
+    lvl.events = [{
+      id: 'e1', name: 'draws', trigger: { kind: 'setup' },
+      do: [{ kind: 'chess-draws', fiftyMove: true, threefold: true }],
+    }] as typeof lvl.events;
+    expect(estimateFeasibility(lvl).hiddenStateUnsound).toBe(true);
+    expect(estimateFeasibility(base()).hiddenStateUnsound).toBe(false);
+  });
+
+  it('runWeakSolve refuses the board outright (no unsound proofs)', () => {
+    const lvl = base();
+    lvl.events = [{
+      id: 'e1', name: 'draws', trigger: { kind: 'setup' },
+      do: [{ kind: 'chess-draws', fiftyMove: true }],
+    }] as typeof lvl.events;
+    const input = toSolverInput(lvl, 0);
+    expect(input.hiddenStateUnsound).toBe(true);
+    expect(() => runWeakSolve(input, { maxNodes: 1_000, maxDepthPlies: 2 })).toThrow(/ADR-0072|hidden ledger/i);
   });
 });
 

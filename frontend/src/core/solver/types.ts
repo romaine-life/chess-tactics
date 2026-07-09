@@ -88,6 +88,11 @@ export interface FeasibilityReport {
    * verdict is forced to at best `hard` and a REFUSAL note is added — a retrograde strong
    * solve on such a board is UNSOUND. See §"En passant". */
   enPassantUnsound?: boolean;
+  /** True when the level authors castle or chess-draws events (ADR-0072): value then
+   * depends on a hidden ledger (Piece.hasMoved castling rights, the 50-move halfmove
+   * clock, repetition counts) that position keys cannot see. Verdict capped at `hard`
+   * AND search-mode proofs are refused — additive contract field, absent = false. */
+  hiddenStateUnsound?: boolean;
   /** Human-readable caveats: which discounts were applied, why it fell to `hard`,
    * whether the tablebase estimate blew the memory cap, en-passant refusal, etc. */
   notes: string[];

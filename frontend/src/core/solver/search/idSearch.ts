@@ -87,6 +87,16 @@ export function runWeakSolve(
   emit?: PhaseEmit,
   tt: TranspositionTable = new TranspositionTable(bounds.ttEntryLimit),
 ): WeakSolveResult {
+  // ADR-0072 hidden-ledger refusal: castle / chess-draws boards carry state (hasMoved,
+  // halfmove clock, repetition counts) that this prover's TT keys and terminal oracle do
+  // not — transpositions across different ledgers would corrupt "proven" entries, and the
+  // fork misses rule draws entirely. Refuse loudly rather than emit unsound proofs; the
+  // named debt is full ledger support (see the AI research map / decision-log).
+  if (input.hiddenStateUnsound) {
+    throw new Error('solver refused: this level authors castle or chess-draws events (ADR-0072), '
+      + 'whose hidden ledger the solver cannot yet key soundly. Remove those events to solve, or '
+      + 'wait for ledger-aware solving.');
+  }
   // `startedAt` feeds ONLY the `secs` display field of SolveProgress — never a control-flow decision.
   // The in-loop budget is NODE-COUNT ONLY (deterministic): a `Date.now()` stopping condition would
   // make the PROOF CONTENT (which positions are proven + their values, `rootValue`, `rootBounds`,
@@ -254,7 +264,8 @@ export function runWeakSolve(
   // value — exactly the soundness invariant feasibility exists to protect. So on an EP-unsound board
   // we DO NOT fall back: the root stays at the search's honest bounds (`unknown` when unproven), the
   // anytime partial. (α/β search itself is EP-safe: its leaf and terminal checks are the live rules.)
-  if (!rootBounds.proven && !budgetTripped() && !input.enPassantUnsound) {
+  // Same refusal for ADR-0072 hidden-ledger boards: the fold-in's keys are ledger-blind.
+  if (!rootBounds.proven && !budgetTripped() && !input.enPassantUnsound && !input.hiddenStateUnsound) {
     const remainingStates = Math.max(0, maxNodes - pstate.s.nodes);
     if (remainingStates > 0) {
       const space = enumerateReachable(input, remainingStates);
