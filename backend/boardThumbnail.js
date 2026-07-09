@@ -10,8 +10,10 @@ const { UNIT_IMG_MAX_W, UNIT_IMG_MAX_H } = require('@chess-tactics/board-render'
 const CARD_W = 1200;
 const CARD_H = 630;
 const PAD = 56;
-const HERO_TOP = 100;
-const HERO_BOTTOM = 500;
+const TITLEBAR_H = 84;
+const TITLEBAR_RULE_H = 14;
+const HERO_TOP = TITLEBAR_H;
+const HERO_BOTTOM = CARD_H;
 
 let fontFamily = 'sans-serif';
 let fontRegistered = false;
@@ -42,6 +44,20 @@ function truncate(ctx, text, maxWidth) {
   if (ctx.measureText(s).width <= maxWidth) return s;
   while (s.length > 1 && ctx.measureText(`${s}...`).width > maxWidth) s = s.slice(0, -1);
   return `${s}...`;
+}
+
+function drawTiledImage(ctx, img, x, y, width, height, tileWidth, tileHeight) {
+  if (!img || !img.width || !img.height) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, width, height);
+  ctx.clip();
+  for (let yy = y; yy < y + height; yy += tileHeight) {
+    for (let xx = x; xx < x + width; xx += tileWidth) {
+      ctx.drawImage(img, xx, yy, tileWidth, tileHeight);
+    }
+  }
+  ctx.restore();
 }
 
 async function paintBackground(ctx, frontendDir, backgroundSrc) {
@@ -80,7 +96,49 @@ async function paintBackground(ctx, frontendDir, backgroundSrc) {
   ctx.fillRect(0, 0, CARD_W, CARD_H);
 }
 
-async function renderLevelCard({ plan, frontendDir, title, subtitle, backgroundSrc }) {
+async function paintTitleBar(ctx, frontendDir, screenName) {
+  const [wood, band, diamond, shield] = await Promise.all([
+    loadSprite(frontendDir, '/assets/ui/surfaces/hybrid-wood-oak.png'),
+    loadSprite(frontendDir, '/assets/ui/titlebar/band-forged.png'),
+    loadSprite(frontendDir, '/assets/ui/titlebar/joint-diamond-forged.png'),
+    loadSprite(frontendDir, '/assets/ui/kit/icons/brand-shield.png'),
+  ]);
+
+  ctx.imageSmoothingEnabled = false;
+  if (wood) drawTiledImage(ctx, wood, 0, 0, CARD_W, TITLEBAR_H, 1024, 1024);
+  else {
+    ctx.fillStyle = '#22170e';
+    ctx.fillRect(0, 0, CARD_W, TITLEBAR_H);
+  }
+  if (band) drawTiledImage(ctx, band, 0, TITLEBAR_H - TITLEBAR_RULE_H, CARD_W, TITLEBAR_RULE_H, 16, TITLEBAR_RULE_H);
+  if (diamond) {
+    const dh = 26;
+    const dw = diamond.width * (dh / diamond.height);
+    ctx.drawImage(diamond, (CARD_W - dw) / 2, TITLEBAR_H - dh, dw, dh);
+  }
+
+  const mark = 54;
+  const markX = 32;
+  const markY = 8;
+  ctx.imageSmoothingEnabled = true;
+  if (shield) ctx.drawImage(shield, markX, markY, mark, mark);
+
+  const textX = markX + mark + 14;
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowColor = '#02070b';
+  ctx.shadowOffsetY = 2;
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#f0eadb';
+  ctx.font = `25px "${fontFamily}"`;
+  ctx.fillText('CHESS TACTICS', textX, 35);
+  ctx.fillStyle = '#79d3ff';
+  ctx.font = `15px "${fontFamily}"`;
+  ctx.fillText(String(screenName || 'SKIRMISH').toUpperCase(), textX, 57);
+  ctx.shadowColor = 'transparent';
+  ctx.shadowOffsetY = 0;
+}
+
+async function renderLevelCard({ plan, frontendDir, title, subtitle, screenName, backgroundSrc }) {
   ensureFont(frontendDir);
   const canvas = createCanvas(CARD_W, CARD_H);
   const ctx = canvas.getContext('2d');
@@ -88,11 +146,12 @@ async function renderLevelCard({ plan, frontendDir, title, subtitle, backgroundS
   await paintBackground(ctx, frontendDir, backgroundSrc);
 
   const { ops, bounds } = plan;
+  const fitBounds = plan.framingBounds || bounds;
   const heroW = CARD_W - PAD * 2;
   const heroH = HERO_BOTTOM - HERO_TOP;
-  const scale = Math.min(heroW / Math.max(1, bounds.width), heroH / Math.max(1, bounds.height));
-  const drawnW = bounds.width * scale;
-  const drawnH = bounds.height * scale;
+  const scale = Math.min(heroW / Math.max(1, fitBounds.width), heroH / Math.max(1, fitBounds.height));
+  const drawnW = fitBounds.width * scale;
+  const drawnH = fitBounds.height * scale;
   const originX = PAD + (heroW - drawnW) / 2;
   const originY = HERO_TOP + (heroH - drawnH) / 2;
   ctx.imageSmoothingEnabled = false;
@@ -102,11 +161,15 @@ async function renderLevelCard({ plan, frontendDir, title, subtitle, backgroundS
     images.set(src, await loadSprite(frontendDir, src));
   }));
 
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, HERO_TOP, CARD_W, heroH);
+  ctx.clip();
   for (const op of ops) {
     const img = images.get(op.src);
     if (!img) continue;
-    const dx = originX + (op.dx - bounds.minX) * scale;
-    const dy = originY + (op.dy - bounds.minY) * scale;
+    const dx = originX + (op.dx - fitBounds.minX) * scale;
+    const dy = originY + (op.dy - fitBounds.minY) * scale;
     if (op.contain) {
       const boxW = Math.min(op.dw, UNIT_IMG_MAX_W);
       const boxH = Math.min(op.dh, UNIT_IMG_MAX_H);
@@ -117,20 +180,23 @@ async function renderLevelCard({ plan, frontendDir, title, subtitle, backgroundS
       const h = natH * fit;
       const cx = op.dx + (op.dw - w) / 2;
       const cy = op.dy + (op.dh - h) / 2;
-      ctx.drawImage(img, originX + (cx - bounds.minX) * scale, originY + (cy - bounds.minY) * scale, w * scale, h * scale);
+      ctx.drawImage(img, originX + (cx - fitBounds.minX) * scale, originY + (cy - fitBounds.minY) * scale, w * scale, h * scale);
     } else if (op.sw != null) {
       ctx.drawImage(img, op.sx || 0, op.sy || 0, op.sw, op.sh || op.dh, dx, dy, op.dw * scale, op.dh * scale);
     } else {
       ctx.drawImage(img, dx, dy, op.dw * scale, op.dh * scale);
     }
   }
+  ctx.restore();
 
-  ctx.fillStyle = '#e8c86a';
-  ctx.fillRect(PAD, 44, 22, 22);
-  ctx.fillStyle = '#7fd4c8';
-  ctx.font = `22px "${fontFamily}"`;
-  ctx.textBaseline = 'middle';
-  ctx.fillText('CHESS TACTICS', PAD + 34, 56);
+  const titleScrim = ctx.createLinearGradient(0, 420, 0, CARD_H);
+  titleScrim.addColorStop(0, 'rgba(2,7,12,0)');
+  titleScrim.addColorStop(0.58, 'rgba(2,7,12,0.58)');
+  titleScrim.addColorStop(1, 'rgba(2,7,12,0.9)');
+  ctx.fillStyle = titleScrim;
+  ctx.fillRect(0, 420, CARD_W, CARD_H - 420);
+
+  await paintTitleBar(ctx, frontendDir, screenName || 'Level');
 
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#f2f6f7';

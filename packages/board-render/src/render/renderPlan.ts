@@ -357,4 +357,23 @@ export function boardBounds(board: RenderBoard): BakeBounds {
   return { minX, minY, width: Math.ceil(maxX - minX), height: Math.ceil(maxY - minY) };
 }
 
+export function boardSocialFramingBounds(board: RenderBoard): BakeBounds {
+  const drawBounds = boardBounds(board);
+  let surfaceMaxY = -Infinity;
+  for (const key of Object.keys(board.cells)) {
+    const [x, y] = key.split(',').map(Number);
+    if (!Number.isInteger(x) || !Number.isInteger(y)) continue;
+    const { top } = boardLabCellPosition({ x, y });
+    surfaceMaxY = Math.max(surfaceMaxY, top + TILE_STEP_Y);
+  }
+  if (!Number.isFinite(surfaceMaxY)) return drawBounds;
+
+  return {
+    minX: drawBounds.minX,
+    minY: drawBounds.minY,
+    width: drawBounds.width,
+    height: Math.max(1, Math.ceil(surfaceMaxY - drawBounds.minY)),
+  };
+}
+
 export const BAKE_GEOMETRY = { TILE_FRAME_W, TILE_FRAME_H, TILE_STEP_X, TILE_STEP_Y, TILE_EQUATOR } as const;
