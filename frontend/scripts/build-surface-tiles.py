@@ -46,6 +46,53 @@ def diamond_mask():
     return np.array(m) > 0
 DIA = diamond_mask()
 
+def seal_projected_top(top):
+    """Fill affine edge misses inside the diamond from neighbouring surface pixels.
+
+    PIL's affine transform samples outside the square source on a few boundary pixels
+    even though our authored diamond mask includes those pixels. If they remain
+    transparent, the dark Blender edge bleeds through the playable surface after
+    compositing. The top surface is meant to occupy the whole diamond, so copy colour
+    from nearby projected pixels and keep the hard pixel-art alpha.
+    """
+    arr = np.array(top).copy()
+    remaining = DIA & (arr[:, :, 3] == 0)
+    if not remaining.any():
+        return top
+
+    for _ in range(W + H):
+        if not remaining.any():
+            break
+        next_arr = arr.copy()
+        next_remaining = remaining.copy()
+        changed = False
+        ys, xs = np.where(remaining)
+        for y, x in zip(ys, xs):
+            samples = []
+            for dy in (-1, 0, 1):
+                ny = y + dy
+                if ny < 0 or ny >= H:
+                    continue
+                for dx in (-1, 0, 1):
+                    nx = x + dx
+                    if dx == 0 and dy == 0:
+                        continue
+                    if nx < 0 or nx >= W:
+                        continue
+                    if DIA[ny, nx] and arr[ny, nx, 3] > 0:
+                        samples.append(arr[ny, nx, :3])
+            if samples:
+                next_arr[y, x, :3] = np.rint(np.mean(samples, axis=0)).astype(np.uint8)
+                next_arr[y, x, 3] = 255
+                next_remaining[y, x] = False
+                changed = True
+        arr = next_arr
+        remaining = next_remaining
+        if not changed:
+            break
+
+    return Image.fromarray(arr, 'RGBA')
+
 def project_into_diamond(surface):
     """square top-down surface -> our iso top-diamond (affine, NEAREST, masked)."""
     surface = surface.convert('RGBA'); S = surface.size[0]
@@ -56,7 +103,7 @@ def project_into_diamond(surface):
     proj = surface.transform((W, H), Image.AFFINE, coeffs, resample=Image.NEAREST)
     out = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     out.paste(proj, (0, 0), Image.fromarray((DIA * 255).astype(np.uint8)))
-    return out
+    return seal_projected_top(out)
 
 def build_tile(edge, side, raw_path):
     proj = project_into_diamond(Image.open(raw_path))
