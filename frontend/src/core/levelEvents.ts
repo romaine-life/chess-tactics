@@ -1,5 +1,5 @@
-import type { Level, LevelEvent, LevelEvents, PawnPromotionEvent, Roster, SpawnEvent, Zone } from './level';
-import type { PawnPromotionRule, Vec } from './types';
+import type { CastleEventAction, Level, LevelEvent, LevelEvents, PawnPromotionEvent, Roster, SpawnEvent, Zone } from './level';
+import type { CastleRule, DrawRules, PawnPromotionRule, Vec } from './types';
 
 const key = (x: number, y: number): string => `${x},${y}`;
 
@@ -108,6 +108,41 @@ export function spawnEventsForLevel(level: Level): SpawnEvent[] {
         zoneIds: action.zoneIds,
       }));
   });
+}
+
+/**
+ * The level's authored castling options (ADR-0072), resolved for GameState.castleRules.
+ * Setup-triggered castle actions only; a rule with any off-board square is dropped
+ * (the frontend validator rejects such saves — this guards hand-authored bodies).
+ */
+export function castleRulesForLevel(level: Level): CastleRule[] {
+  const onBoard = (v: Vec): boolean => v.x >= 0 && v.x < level.board.cols && v.y >= 0 && v.y < level.board.rows;
+  return effectiveLevelEvents(level).flatMap((event) => {
+    if (event.trigger.kind !== 'setup') return [];
+    return event.do
+      .filter((action): action is CastleEventAction => action.kind === 'castle')
+      .filter((action) => [action.king, action.rook, action.kingTo, action.rookTo].every(onBoard))
+      .map((action) => ({ side: action.side, king: action.king, rook: action.rook, kingTo: action.kingTo, rookTo: action.rookTo }));
+  });
+}
+
+/**
+ * The chess draw rules this level enforces (ADR-0072), OR-ed across its chess-draws
+ * events; undefined when none — the game then plays exactly as before (stalemate only).
+ */
+export function drawRulesForLevel(level: Level): DrawRules | undefined {
+  let fiftyMove = false;
+  let threefold = false;
+  for (const event of effectiveLevelEvents(level)) {
+    if (event.trigger.kind !== 'setup') continue;
+    for (const action of event.do) {
+      if (action.kind !== 'chess-draws') continue;
+      fiftyMove = fiftyMove || action.fiftyMove === true;
+      threefold = threefold || action.threefold === true;
+    }
+  }
+  if (!fiftyMove && !threefold) return undefined;
+  return { ...(fiftyMove ? { fiftyMove: true } : {}), ...(threefold ? { threefold: true } : {}) };
 }
 
 export function promotionRulesForLevel(level: Level): PawnPromotionRule[] {

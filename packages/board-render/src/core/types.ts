@@ -56,6 +56,12 @@ export interface Piece {
   /** Original pawn-forward direction. Unlike `facing`, this never changes after setup. */
   pawnForward?: UnitFacing;
   /**
+   * True once this piece has made any move this game. Castling rights are history-exact:
+   * a king or rook that has EVER moved may not castle, even after returning to its square
+   * (the positional startX/startY proxy can't tell those apart).
+   */
+  hasMoved?: boolean;
+  /**
    * Lifetime "service record" stats for this skirmish, surfaced in the HUD.
    * All optional + default to 0; accumulated by `applyMove` on committed moves
    * only (never during hypothetical AI/telegraph evaluation).
@@ -111,6 +117,36 @@ export interface Move {
   capture?: string;
   /** True when a pawn captures a just-double-stepped pawn from the side. */
   enPassant?: boolean;
+  /**
+   * Castling: this king move also relocates the named rook. Self-contained so replay,
+   * netplay re-derivation, and search all reproduce the rook hop from (pieceId, Move)
+   * alone. The destination (x, y) is the king's landing square — always distinct from
+   * a one-step king move, so destination-keyed move matching stays unambiguous.
+   */
+  castle?: { rookId: string; rookTo: Vec };
+}
+
+/**
+ * One authored castling option — a king-rook pair (ADR-0072). Available while the
+ * rule's king and a friendly rook sit UNMOVED on their authored squares; the king
+ * then slides to `kingTo` and the rook to `rookTo` under chess castling legality
+ * (path clear, not out of / through / into check — see rules.legalMoves).
+ */
+export interface CastleRule {
+  side: 'player' | 'enemy';
+  king: Vec;
+  rook: Vec;
+  kingTo: Vec;
+  rookTo: Vec;
+}
+
+/** Which chess draw rules this game enforces (authored per level via a chess-draws event). */
+export interface DrawRules {
+  /** 100 halfmoves (50 full moves) with no capture or pawn move ends the game as a draw. */
+  fiftyMove?: boolean;
+  /** The same position (placement + side to move + castling rights + en-passant rights)
+   * occurring a third time ends the game as a draw. */
+  threefold?: boolean;
 }
 
 /** Game outcome: a side won, 'draw' (e.g. stalemate — no legal moves), or null while undecided. */
@@ -157,6 +193,30 @@ export interface GameState {
   promotionZones?: Vec[];
   /** Authored promotion events resolved to live board cells. */
   promotionRules?: PawnPromotionRule[];
+  /**
+   * Authored castling options (ADR-0072), resolved from the level's castle events at
+   * build. Absent = no castling, so every existing level plays exactly as before.
+   */
+  castleRules?: CastleRule[];
+  /**
+   * Chess draw rules this game enforces, from the level's chess-draws event. Absent =
+   * none (stalemate remains the only draw), the same back-compat pattern as terrain?.
+   */
+  drawRules?: DrawRules;
+  /**
+   * Halfmoves since the last capture or pawn move — the 50-move rule's clock.
+   * Maintained by applyMove on every move; absent (legacy saves) reads as 0.
+   */
+  halfmoveClock?: number;
+  /**
+   * Threefold repetition table: occurrences per position key (see rules.positionKey)
+   * since the last capture or pawn move (earlier positions can never recur, so the
+   * table restarts there and stays small). Maintained on COMMITTED moves only via
+   * rules.recordPosition — applyMove never touches it, so search nodes share the
+   * committed table by reference at zero copy cost. Present only when drawRules
+   * enables threefold.
+   */
+  positionCounts?: Record<string, number>;
   turn: Turn;
   winner: Winner;
   /** Last displaced move, used for immediate pawn en passant eligibility. */
@@ -173,4 +233,5 @@ export type GameEvent =
   | { kind: 'moved'; pieceId: string; from: Vec; to: Vec }
   | { kind: 'captured'; pieceId: string; by: string }
   | { kind: 'promoted'; pieceId: string; to: PieceType }
+  | { kind: 'castled'; kingId: string; rookId: string }
   | { kind: 'victory'; winner: Side };

@@ -11,7 +11,8 @@ import { generateSocketBoard } from '../core/tileBoardGenerator';
 import type { TileFamilyId } from '../core/tileSockets';
 import { PLAYABLE_PIECE_TYPES, defaultFacingForSide } from '../core/pieces';
 import { propCells, propDef } from '../core/props';
-import { promotionRulesForLevel, spawnEventsForLevel, zoneCellsByIds } from '../core/levelEvents';
+import { castleRulesForLevel, drawRulesForLevel, promotionRulesForLevel, spawnEventsForLevel, zoneCellsByIds } from '../core/levelEvents';
+import { recordPosition } from '../core/rules';
 
 const DEFAULT_SIZE: BoardSize = { cols: 8, rows: 12 };
 const ENEMY_CHOICES: readonly PieceType[] = ['knight', 'bishop', 'rook', 'queen'];
@@ -168,8 +169,10 @@ export function createFromLevel(level: Level, seed: number): GameState {
 
   const promotionRules = promotionRulesForLevel(level);
   const promotionZones = promotionRules.flatMap((rule) => rule.cells);
+  const castleRules = castleRulesForLevel(level);
+  const drawRules = drawRulesForLevel(level);
 
-  return {
+  const state: GameState = {
     size: { cols: level.board.cols, rows: level.board.rows },
     pieces,
     terrain: level.layers.terrain,
@@ -182,9 +185,14 @@ export function createFromLevel(level: Level, seed: number): GameState {
     props,
     promotionZones: promotionZones.length ? promotionZones : undefined,
     promotionRules: promotionRules.length ? promotionRules : undefined,
+    castleRules: castleRules.length ? castleRules : undefined,
+    drawRules,
     turn: 'player',
     winner: null,
   };
+  // Threefold counts the STARTING position as its first occurrence (a no-op without
+  // the threefold rule, so every other level's initial state is unchanged).
+  return recordPosition(state);
 }
 
 function pickEmptyCell(taken: Set<string>, cols: number, ys: readonly number[], rng: Rng): { x: number; y: number } | null {

@@ -574,7 +574,7 @@ describe('soft-lock guard (no manual End Turn)', () => {
 
     const res = resolveIfPlayerStuck(mated, OPEN_ENV);
     expect(res.stuck).toBe(true);
-    expect(res.checkmate).toBe(true);
+    expect(res.kind).toBe('checkmate');
     expect(res.game.winner).toBe('enemy');
     expect(res.game.turn).toBe('done');
   });
@@ -592,7 +592,7 @@ describe('soft-lock guard (no manual End Turn)', () => {
 
     const res = resolveIfPlayerStuck(stuck, OPEN_ENV);
     expect(res.stuck).toBe(true);
-    expect(res.checkmate).toBe(false);
+    expect(res.kind).toBe('stalemate');
     expect(res.game.winner).toBe('draw');
     expect(res.game.turn).toBe('done');
   });
@@ -605,7 +605,7 @@ describe('soft-lock guard (no manual End Turn)', () => {
       piece('pk', 'player', 'king', 2, 5),
     ], 3, 6), turn: 'enemy' as const };
     expect(sideHasLegalMove(g, 'enemy', OPEN_ENV)).toBe(false);
-    expect(terminalIfStuck(g, OPEN_ENV)).toEqual({ winner: 'player', checkmate: true, side: 'enemy' });
+    expect(terminalIfStuck(g, OPEN_ENV)).toEqual({ winner: 'player', kind: 'checkmate', side: 'enemy' });
   });
 
   it('terminalIfStuck resolves the ENEMY to move: stalemate is a draw', () => {
@@ -616,12 +616,20 @@ describe('soft-lock guard (no manual End Turn)', () => {
       piece('pk', 'player', 'king', 5, 5),
     ], 6, 6), turn: 'enemy' as const };
     expect(sideHasLegalMove(g, 'enemy', OPEN_ENV)).toBe(false);
-    expect(terminalIfStuck(g, OPEN_ENV)).toEqual({ winner: 'draw', checkmate: false, side: 'enemy' });
+    expect(terminalIfStuck(g, OPEN_ENV)).toEqual({ winner: 'draw', kind: 'stalemate', side: 'enemy' });
   });
 
   it('terminalIfStuck returns null while the side to move can still move', () => {
     const g = { ...stateOf([piece('ek', 'enemy', 'king', 0, 0), piece('pk', 'player', 'king', 5, 5)], 6, 6), turn: 'enemy' as const };
     expect(terminalIfStuck(g, OPEN_ENV)).toBeNull();
+  });
+
+  it('terminalIfStuck ends a movable position as a draw when the chess draw rules say so', () => {
+    const base = { ...stateOf([piece('ek', 'enemy', 'king', 0, 0), piece('pk', 'player', 'king', 5, 5)], 6, 6), turn: 'enemy' as const };
+    const clocked = { ...base, drawRules: { fiftyMove: true }, halfmoveClock: 100 };
+    expect(terminalIfStuck(clocked, OPEN_ENV)).toEqual({ winner: 'draw', kind: 'fifty-move', side: 'enemy' });
+    // Without the authored rule the same clock means nothing (back-compat).
+    expect(terminalIfStuck({ ...base, halfmoveClock: 100 }, OPEN_ENV)).toBeNull();
   });
 
   it('never fires off the player turn or after the game is decided', () => {
