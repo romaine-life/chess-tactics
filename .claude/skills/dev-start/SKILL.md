@@ -31,7 +31,7 @@ Use this session workflow for `D:\repos\chess-tactics` before making code change
    - If the work is on a feature that can be tested in a playable surface, craft a playable board in the editor and send the user a link to that test version of the board.
    - Keep the server running for the user unless they ask to stop it or `$dev-end` is invoked.
    - After a dev server has been created, every user-facing turn must include a clickable Markdown link to the server or the most relevant feature route being worked on.
-   - Never put that server or feature URL in a code block or inline code. Use normal Markdown link syntax, such as [Open the feature](http://127.0.0.1:5173/path).
+   - Never put that server or feature URL in a code block or inline code. Use normal Markdown link syntax with the printed Vite origin, such as [Open the feature](http://127.0.0.1:<printed-port>/path).
 
 ## Notes
 

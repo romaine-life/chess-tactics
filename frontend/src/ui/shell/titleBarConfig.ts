@@ -5,6 +5,8 @@
 // can only ADD optional regions between brand and cluster; nothing here can suppress
 // the cluster. Every shipping surface (Studio + dev/inspector tools included) is on
 // the shared bar; there is no opt-out set, and the function never returns null.
+import { playRouteScreenName } from '@chess-tactics/board-render';
+
 export interface TitleBarConfig {
   screenName: string;
   /** Hide the Settings gear in the cluster (default: shown). Available modulation, but
@@ -29,7 +31,7 @@ export interface TitleBarConfig {
   studSlot?: boolean;
 }
 
-export function titleBarConfig(path: string): TitleBarConfig | null {
+export function titleBarConfig(path: string, search = ''): TitleBarConfig | null {
   // The design/asset Studio + its deep-link aliases: brand left, then the workspace
   // switcher (Catalog/Lab/Viewer icons) in the actions slot, account cluster right. The
   // Studio portals its icon nav there via <TitleBarSlot region="actions">; studio-topbar
@@ -44,7 +46,7 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
     // studSlot lets a single-player battle turn the ornament diamond into a Retry button
     // (the Skirmish screen portals it in, netplay omitted). The map-picker (/skirmish)
     // simply never fills it, so its diamond stays the plain decoration.
-    return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true, studSlot: true };
+    return { screenName: playRouteScreenName({ path, search }), barClass: 'skirmish-topbar', centerSlot: true, studSlot: true };
   }
   if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     return { screenName: 'Lobbies', signInReturnTo: '/lobbies' };

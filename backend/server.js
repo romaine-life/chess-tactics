@@ -3886,6 +3886,15 @@ function thumbnailVersion(boardHash, renderInputs) {
   const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
   return [boardHash, propSeatsRevision].filter(Boolean).join('-');
 }
+function playScreenName(input) {
+  if (serverRender && typeof serverRender.playRouteScreenName === 'function') {
+    try { return serverRender.playRouteScreenName({ path: '/play', ...input }); } catch { /* fall back below */ }
+  }
+  if (input && input.mapId) return 'Community Map';
+  if (input && input.campaignId && input.levelId) return 'Campaign';
+  if (input && input.levelId) return 'Official Level';
+  return 'Skirmish';
+}
 // Resolve a share reference to { level, title, subtitle, description }. Officials read the live
 // official workspace cache; user maps read public_maps. Returns null when unresolvable.
 async function resolveShareTarget({ levelId, campaignId, mapId }) {
@@ -3896,6 +3905,7 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
     const objective = OG_MODE_NAME[level.objective] || null;
     return {
       level,
+      screenName: playScreenName({ mapId }),
       title: row.name || level.name || OG_SITE_NAME,
       subtitle: objective ? `Community map · ${objective}` : 'Community map',
       description: objective ? `A community-made ${objective} map.` : OG_DEFAULT_DESC,
@@ -3910,6 +3920,7 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
     const objective = OG_MODE_NAME[level.objective] || null;
     return {
       level,
+      screenName: playScreenName({ levelId, campaignId: campaign ? campaignId : null }),
       title: campaign && campaign.name ? `${level.name} — ${campaign.name}` : (level.name || OG_SITE_NAME),
       subtitle: [campaign && campaign.name, objective].filter(Boolean).join(' · ') || null,
       description: level.notes || (campaign && campaign.name ? `A level in ${campaign.name}.` : OG_DEFAULT_DESC),
@@ -3926,19 +3937,20 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
   const id = String(req.params[0] || '');
   const isOfficial = OFFICIAL_WORKSPACE_ID_PATTERN.test(id);
   const isMap = PUBLIC_ID_RE.test(id);
+  const campaignId = typeof req.query.campaignId === 'string' ? req.query.campaignId : null;
   if (!isOfficial && !isMap) { res.status(404).send('not found'); return; }
   try {
     if (!serverRender) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
-    const target = await resolveShareTarget(isOfficial ? { levelId: id } : { mapId: id });
+    const target = await resolveShareTarget(isOfficial ? { levelId: id, campaignId } : { mapId: id });
     if (!target) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
     const renderInputs = await applyThumbnailRenderInputs();
     const plan = serverRender.levelRenderPlan(target.level);
-    const cacheKey = `${id}:${thumbnailVersion(plan.contentHash, renderInputs)}`;
+    const cacheKey = `${id}:${campaignId || ''}:${thumbnailVersion(plan.contentHash, renderInputs)}`;
     let png = _thumbCache.get(cacheKey);
     if (!png) {
       const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
       const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
-      png = await renderLevelCard({ plan, frontendDir, title: target.title, subtitle: target.subtitle, backgroundSrc });
+      png = await renderLevelCard({ plan, frontendDir, title: target.title, subtitle: target.subtitle, screenName: target.screenName, backgroundSrc });
       if (_thumbCache.size >= THUMB_CACHE_MAX) _thumbCache.delete(_thumbCache.keys().next().value);
       _thumbCache.set(cacheKey, png);
     }
@@ -3971,7 +3983,11 @@ async function ogTagsFor(req) {
         const renderInputs = await applyThumbnailRenderInputs();
         hash = thumbnailVersion(serverRender.boardHashForLevel(target.level), renderInputs);
       } catch { hash = ''; }
-      image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${hash ? `?v=${hash}` : ''}`;
+      const imageParams = new URLSearchParams();
+      if (hash) imageParams.set('v', hash);
+      if (campaignId && key === levelId) imageParams.set('campaignId', campaignId);
+      const qs = imageParams.toString();
+      image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${qs ? `?${qs}` : ''}`;
     }
   }
   const url = `${origin}${req.originalUrl}`;

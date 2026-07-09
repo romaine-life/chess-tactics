@@ -59,6 +59,7 @@ const EXIT_HOLD_FAILSAFE_MS = 4000;
 // /menu-next, /main-menu) resolve to React surfaces.
 export function App(): ReactElement {
   const [path, setPath] = useState<string>(() => normalizeRoutePath(window.location.pathname));
+  const [search, setSearch] = useState<string>(() => window.location.search);
   // Cross-route veil: an atmospheric field that fades OVER the current screen, lets
   // a heavy destination load + compose underneath while opaque, then fades UP into
   // it — one calm dissolve, never a "Loading…" snap. The reveal is gated on
@@ -103,18 +104,36 @@ export function App(): ReactElement {
   const veilRef = useRef(veil);
   useLayoutEffect(() => { veilRef.current = veil; }, [veil]);
   const pathRef = useRef(path);
+  const searchRef = useRef(search);
+  const pendingSearch = useRef<string | null>(null);
+  const commitRoute = (nextPath: string, nextSearch: string): void => {
+    pathRef.current = nextPath;
+    searchRef.current = nextSearch;
+    startRouteTransition(() => {
+      setPath(nextPath);
+      setSearch(nextSearch);
+    });
+  };
   // Layout effect (not passive): a destination's on-mount redirect runs as a passive
   // effect and dispatches a nav BEFORE a passive pathRef update would run, which made
   // onNav read a stale (heavy) source and wrongly re-trigger the veil mid-transition.
   // A layout effect lands the current path before any child's passive effect fires.
   useLayoutEffect(() => { pathRef.current = path; }, [path]);
+  useLayoutEffect(() => { searchRef.current = search; }, [search]);
 
   // Navigation + prefetch wiring (delegated at the document, like the click router).
   useEffect(() => {
     const onNav = () => {
       const next = normalizeRoutePath(window.location.pathname);
+      const nextSearch = window.location.search;
       const current = pendingTarget.current ?? pathRef.current;
-      if (next === current) return;
+      if (next === current) {
+        if (nextSearch !== searchRef.current) {
+          searchRef.current = nextSearch;
+          setSearch(nextSearch);
+        }
+        return;
+      }
       // Mark that we've navigated, so the destination screen plays its entrance fade
       // (ADR-0046). The very first cold page load never sets this, so the cold-load reveal
       // owns the initial paint without a competing fade.
@@ -128,9 +147,9 @@ export function App(): ReactElement {
         if (isBoardArtRoute(next)) armBoardArtForNav();
         if (!coverCommitted.current) {
           pendingTarget.current = next;
+          pendingSearch.current = nextSearch;
         } else {
-          pathRef.current = next;
-          startRouteTransition(() => setPath(next));
+          commitRoute(next, nextSearch);
         }
         return;
       }
@@ -140,6 +159,7 @@ export function App(): ReactElement {
       // through: it cancels the dissolve and hands off to the veil.
       if (exitTimer.current && !isHeavyRoute(next)) {
         pendingTarget.current = next;
+        pendingSearch.current = nextSearch;
         return;
       }
       // Dissolve if EITHER end is heavy — entering one, or leaving one for a light screen.
@@ -158,6 +178,7 @@ export function App(): ReactElement {
         }
         exitSwapCommitted.current = false;
         pendingTarget.current = next; // hold the swap until the field is fully opaque
+        pendingSearch.current = nextSearch;
         coverCommitted.current = false;
         // Entering the board: mark its art pending NOW (before the board mounts) so the
         // veil's reveal gate below waits for the real tiles, not just the JS commit.
@@ -169,6 +190,7 @@ export function App(): ReactElement {
         // instance is preserved and handles its own sub-navigation, so a dissolve would
         // blink chrome that never remounts.
         pendingTarget.current = next;
+        pendingSearch.current = nextSearch;
         // A fresh episode owns the bookkeeping: a still-pending previous swap must not
         // let the reset effect below clear the exit state mid-dissolve.
         exitSwapCommitted.current = false;
@@ -180,11 +202,12 @@ export function App(): ReactElement {
         exitTimer.current = window.setTimeout(() => {
           exitTimer.current = 0;
           const target = pendingTarget.current;
+          const targetSearch = pendingSearch.current ?? window.location.search;
           pendingTarget.current = null;
+          pendingSearch.current = null;
           if (target != null) {
             exitSwapCommitted.current = true;
-            pathRef.current = target;
-            startRouteTransition(() => setPath(target));
+            commitRoute(target, targetSearch);
             // Cap the invisible-and-inert post-swap hold: if the incoming chunk is
             // still downloading after this, bring the old screen back rather than
             // stranding the player on a bare backdrop (the swap still lands later).
@@ -197,8 +220,7 @@ export function App(): ReactElement {
         }, SCREEN_EXIT_MS);
       } else {
         // Light hop: keep the current screen painted (no fallback flash), swap when ready.
-        pathRef.current = next;
-        startRouteTransition(() => setPath(next));
+        commitRoute(next, nextSearch);
       }
     };
     const onClick = (event: MouseEvent) => {
@@ -243,10 +265,10 @@ export function App(): ReactElement {
     if (veil !== 'cover') return undefined;
     const timer = window.setTimeout(() => {
       const target = pendingTarget.current;
+      const targetSearch = pendingSearch.current ?? window.location.search;
       if (target != null) {
         coverCommitted.current = true;
-        pathRef.current = target;
-        startRouteTransition(() => setPath(target));
+        commitRoute(target, targetSearch);
       }
     }, VEIL_COVER_MS);
     return () => window.clearTimeout(timer);
@@ -258,6 +280,7 @@ export function App(): ReactElement {
   useEffect(() => {
     if (veil === 'cover' && coverCommitted.current && !isPending && !boardArtPending) {
       pendingTarget.current = null;
+      pendingSearch.current = null;
       // A dissolve the veil took over mid-fade (heavy nav during a light exit) is
       // released here, under the fully opaque field — never in the transparent
       // cover ramp, where dropping the class would visibly snap the chrome back.
@@ -296,7 +319,7 @@ export function App(): ReactElement {
           survives navigation (only its contents change). It always draws the brand +
           account/settings cluster; screens only fill its optional center/actions
           slots (ADR-0042). revealTitle gates only the cold-load reveal. */}
-      <AppTitleBar path={path} onCenterNode={setCenterNode} onActionsNode={setActionsNode} onStudNode={setStudNode} revealTitle={reveal.has('title')} />
+      <AppTitleBar path={path} search={search} onCenterNode={setCenterNode} onActionsNode={setActionsNode} onStudNode={setStudNode} revealTitle={reveal.has('title')} />
       {/* ONE stable Suspense boundary above the router. Because the boundary
           persists across every route swap (rather than each route mounting its
           own), a transition navigation keeps the already-revealed screen painted

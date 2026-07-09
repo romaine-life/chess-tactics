@@ -5,6 +5,7 @@ import {
   boardBounds,
   boardContentHash,
   boardDrawOps,
+  boardSocialFramingBounds,
   uniqueDrawSrcs,
   type BakeBounds,
   type BoardDrawOp,
@@ -16,6 +17,7 @@ export {
   boardBounds,
   boardContentHash,
   boardDrawOps,
+  boardSocialFramingBounds,
   uniqueDrawSrcs,
 };
 

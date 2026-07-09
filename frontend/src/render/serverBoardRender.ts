@@ -2,6 +2,7 @@ export {
   applyPropSeatOverrides,
   boardHashForLevel,
   levelRenderPlan,
+  playRouteScreenName,
   worldBackgroundSrc,
   type ServerDrawOp,
   type ServerRenderPlan,
