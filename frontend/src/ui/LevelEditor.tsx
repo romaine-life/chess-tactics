@@ -20,6 +20,7 @@ import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
+import { PaletteSelect } from './shared/PaletteSelect';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import {
   levelEditorHrefWithRouteState,
@@ -74,7 +75,7 @@ import { createRng } from '../core/rng';
 import { SliderRow } from './dressing/SliderRow';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
-import { UNIT_PALETTES, type UnitPalette } from '../core/pieces';
+import { UNIT_PALETTE_LABELS, UNIT_PALETTES, isUnitPalette, type UnitPalette } from '../core/pieces';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
@@ -97,7 +98,8 @@ import {
   type EditorMapSummary,
 } from '../net/editorMaps';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, ZONE_COLORS, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
@@ -690,18 +692,15 @@ const leSeedBoard = (): Record<string, string> => {
   for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile.id;
   return cells;
 };
-const LE_FACTION_LABELS: Record<UnitPalette, string> = {
-  'navy-blue': 'Navy',
-  crimson: 'Crimson',
-  golden: 'Golden',
-  emerald: 'Emerald',
-};
+const LE_FACTION_LABELS = UNIT_PALETTE_LABELS;
 type FactionDirections = Partial<Record<UnitPalette, Direction>>;
 const DEFAULT_FACTION_DIRECTIONS: Record<UnitPalette, Direction> = {
   'navy-blue': 'north',
   crimson: 'south',
   golden: 'north',
   emerald: 'south',
+  black: 'south',
+  white: 'north',
 };
 const normalizeFactionDirections = (directions?: BoardFactionDirections): FactionDirections =>
   Object.fromEntries(
@@ -711,8 +710,6 @@ const normalizeFactionDirections = (directions?: BoardFactionDirections): Factio
   ) as FactionDirections;
 const factionDefaultDirection = (faction: UnitPalette, directions: FactionDirections): Direction =>
   directions[faction] ?? DEFAULT_FACTION_DIRECTIONS[faction];
-const isUnitPalette = (value: unknown): value is UnitPalette =>
-  typeof value === 'string' && (UNIT_PALETTES as readonly string[]).includes(value);
 const sideDefaultFaction = (
   side: 'player' | 'enemy',
   playerFaction: UnitPalette | null,
@@ -785,6 +782,8 @@ const MODE_DESCRIPTION: Record<ObjectiveType, string> = {
 
 const OTHER_EVENT_TEMPLATES = [
   { id: 'pawn-promotion', label: 'Pawn promotion' },
+  { id: 'castling', label: 'Castling' },
+  { id: 'chess-draws', label: 'Chess draws' },
 ] as const;
 type OtherEventTemplateId = typeof OTHER_EVENT_TEMPLATES[number]['id'];
 
@@ -864,8 +863,15 @@ type EventZoneOption = { id: string; label: string };
 
 const primaryEventAction = (event: LevelEvent): LevelEventAction | undefined => event.do[0];
 
+const EVENT_KIND_FALLBACK_LABEL: Record<string, string> = {
+  spawn: 'Setup spawn',
+  promote: 'Pawn promotion',
+  castle: 'Castling',
+  'chess-draws': 'Chess draws',
+};
+
 const eventName = (event: LevelEvent, index: number): string =>
-  event.name?.trim() || (primaryEventAction(event)?.kind === 'spawn' ? `Setup spawn ${index + 1}` : `Pawn promotion ${index + 1}`);
+  event.name?.trim() || `${EVENT_KIND_FALLBACK_LABEL[primaryEventAction(event)?.kind ?? ''] ?? 'Event'} ${index + 1}`;
 
 function replaceEventAction(event: LevelEvent, nextAction: LevelEventAction): LevelEvent {
   const nextDo = event.do.some((action) => action.kind === nextAction.kind)
@@ -910,6 +916,8 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
   const selected = value.length ? Math.min(sel, value.length - 1) : -1;
   const event = selected >= 0 ? value[selected] : null;
   const spawnAction = event?.do.find((action): action is SpawnEventAction => action.kind === 'spawn') ?? null;
+  const castleAction = event?.do.find((action): action is CastleEventAction => action.kind === 'castle') ?? null;
+  const chessDrawsAction = event?.do.find((action): action is ChessDrawsEventAction => action.kind === 'chess-draws') ?? null;
   const promotionTrigger = event?.trigger.kind === 'unit-enters-zone' ? event.trigger : null;
   const promotesTriggeringUnit = Boolean(event?.do.some((action) => action.kind === 'promote' && action.target.kind === 'triggering-unit'));
   const firstZone = zones[0]?.id ?? '';
@@ -953,7 +961,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
       <div className="le-md-list">
         {templates}
         <h3 className="le-victory-head">Events</h3>
-        {value.length === 0 ? <p className="le-board-warning">No setup or promotion events yet.</p> : null}
+        {value.length === 0 ? <p className="le-board-warning">No events yet.</p> : null}
         <div className="le-md-rules">
           {value.map((item, index) => (
             <button type="button" key={index} className={`le-md-item ${index === selected ? 'active' : ''}`.trim()} onClick={() => setSel(index)}>
@@ -1061,6 +1069,60 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               <span className="le-ctrllabel">Action</span>
               <output className="le-event-readout" aria-label="Event action">Promote</output>
             </div>
+            <div className="le-rule-then">
+              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+            </div>
+          </div>
+        ) : event && castleAction ? (
+          <div className="le-rule">
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Event name</span>
+              <input className="le-text-input" value={event.name ?? ''} placeholder={`Event ${selected + 1}`} aria-label="Event name"
+                onChange={(e) => setEvent(selected, { ...event, name: e.target.value })} />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Faction</span>
+              <output className="le-event-readout" aria-label="Castle faction">{castleAction.side === 'player' ? 'Player' : 'Enemy'}</output>
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">King</span>
+              <output className="le-event-readout" aria-label="Castle king squares">({castleAction.king.x}, {castleAction.king.y}) → ({castleAction.kingTo.x}, {castleAction.kingTo.y})</output>
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Rook</span>
+              <output className="le-event-readout" aria-label="Castle rook squares">({castleAction.rook.x}, {castleAction.rook.y}) → ({castleAction.rookTo.x}, {castleAction.rookTo.y})</output>
+            </div>
+            <p className="le-board-note">
+              In play the castle is offered while the king and rook sit unmoved on their squares, the path is clear,
+              and the king isn't in or moving through check. Moved the pieces or changed the Player faction? Remove
+              this event and re-add the Castling template.
+            </p>
+            <div className="le-rule-then">
+              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+            </div>
+          </div>
+        ) : event && chessDrawsAction ? (
+          <div className="le-rule">
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Event name</span>
+              <input className="le-text-input" value={event.name ?? ''} placeholder={`Event ${selected + 1}`} aria-label="Event name"
+                onChange={(e) => setEvent(selected, { ...event, name: e.target.value })} />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">50-move rule</span>
+              <Toggle checked={chessDrawsAction.fiftyMove === true} label="Toggle the 50-move rule"
+                onChange={(enabled) => setEvent(selected, replaceEventAction(event, { ...chessDrawsAction, fiftyMove: enabled }))} />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Threefold repetition</span>
+              <Toggle checked={chessDrawsAction.threefold === true} label="Toggle threefold repetition"
+                onChange={(enabled) => setEvent(selected, replaceEventAction(event, { ...chessDrawsAction, threefold: enabled }))} />
+            </div>
+            <p className="le-board-note">
+              50-move rule: 50 full moves with no capture or pawn move end the game as a draw. Threefold repetition:
+              the same position occurring three times ends it as a draw. Both match chess exactly, in live play and
+              for the training AI.
+            </p>
             <div className="le-rule-then">
               <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
@@ -1688,10 +1750,11 @@ export function LevelEditor(): ReactElement {
   const [eventsTab, setEventsTab] = useState<'victory' | 'other'>('victory');
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
-  // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
-  // the title bar; `savedSig` is the board signature at last save, the basis of the dirty chip.
+  // through; `editingId` may differ once a cold board is saved (Phase 3). The name is edited in
+  // Status, beside the save workflow; `savedSig` is the level signature at last save, the dirty basis.
   const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId);
   const [levelName, setLevelName] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? 'Untitled level');
+  const levelNameForSave = useMemo(() => levelName.trim() || 'Untitled level', [levelName]);
   const [savedSig, setSavedSig] = useState<string | null>(localDraft?.savedSig ?? (initialCampaignLevel ? levelSignature(initialCampaignLevel) : null));
   // Set true once a campaign level has been hydrated into the board state; the baseline effect
   // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
@@ -2559,8 +2622,7 @@ export function LevelEditor(): ReactElement {
   // board's assigned palette (ADR-0064). Maps to the engine's player/enemy side; true multi-faction
   // (two distinct enemies) is future work.
   const victoryFactions = useMemo((): FactionOption[] => {
-    const label = (p: string): string =>
-      (({ 'navy-blue': 'Navy', crimson: 'Crimson', golden: 'Golden', emerald: 'Emerald' }) as Record<string, string>)[p] ?? p;
+    const label = (p: string): string => (isUnitPalette(p) ? LE_FACTION_LABELS[p] : p);
     const enemyPalette = Object.values(boardUnits).map((u) => u.faction).find((f) => f && f !== playerFaction);
     return [
       { side: 'player', label: playerFaction ? label(playerFaction) : 'You (Player)' },
@@ -2586,8 +2648,8 @@ export function LevelEditor(): ReactElement {
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
   const candidateLevel = useMemo(
-    () => editorBoardToLevel(currentEditorBoard, { id: editingId ?? 'draft', name: levelName, ...modeMeta }),
-    [currentEditorBoard, editingId, levelName, modeMeta],
+    () => editorBoardToLevel(currentEditorBoard, { id: editingId ?? 'draft', name: levelNameForSave, ...modeMeta }),
+    [currentEditorBoard, editingId, levelNameForSave, modeMeta],
   );
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
@@ -2626,14 +2688,14 @@ export function LevelEditor(): ReactElement {
       savedAt: Date.now(),
       savedSig,
       board: currentEditorBoard,
-      levelName,
+      levelName: levelNameForSave,
       objective,
       surviveTurns,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
       victory: victoryForSave,
       events: eventsForSave,
     });
-  }, [currentEditorBoard, dirty, draftKey, levelName, objective, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
+  }, [currentEditorBoard, dirty, draftKey, levelNameForSave, objective, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
 
   useEffect(() => {
     if (!editorReady || routeParams.mapId || remoteMapId || readOnlyLiveMap) return;
@@ -2876,7 +2938,7 @@ export function LevelEditor(): ReactElement {
       // Mint a fresh per-user level id (`l<n>`) and write it into the user workspace — never
       // an `off-` id (INV8). createUnassignedLevel stamps the minted id onto the level and
       // returns it; the editor then tracks that id so subsequent saves write back to it.
-      const newLevel = editorBoardToLevel(currentEditorBoard, { id: 'new', name: levelName, ...modeMeta });
+      const newLevel = editorBoardToLevel(currentEditorBoard, { id: 'new', name: levelNameForSave, ...modeMeta });
       const newId = useCampaigns.getState().createUnassignedLevel(newLevel);
       setEditingId(newId);
       setSaving(true);
@@ -2899,7 +2961,7 @@ export function LevelEditor(): ReactElement {
     const existing = useCampaigns.getState().levels[targetId];
     const level = editorBoardToLevel(currentEditorBoard, {
       id: targetId,
-      name: levelName,
+      name: levelNameForSave,
       notes: existing?.notes,
       // The Rules panel is the source of truth for objective, battle settings, and authored events;
       // setup spawning is explicit events, not the legacy placement/roster fields.
@@ -3007,8 +3069,59 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(withZoneEntries(board, entries), null);
     setEvents(nextEvents);
   };
+  // Scan the painted board for castleable king-rook pairs (see castlingTemplate.ts) and
+  // append one castle event per pair, squares baked in — mirrors the promotion template's
+  // read-the-live-board pattern, but needs no zones so only the events list changes.
+  const addCastlingTemplate = (): void => {
+    const board = currentEditorBoardRef.current;
+    const boardPlayerFaction = isUnitPalette(board.playerFaction) ? board.playerFaction : playerFaction;
+    // Castle events bake a player/enemy side, but the SAVE maps units to sides by the
+    // assigned Player faction (levelBoard.sideForFaction) — guessing here while it's unset
+    // would silently invert every pair once the author assigns it. Refuse instead.
+    if (!boardPlayerFaction) {
+      reportStatus('Assign a Player faction before adding castling.', 'error', 'Castle events are tagged player/enemy by faction. Set the Player faction first so each king-rook pair lands on the right side.');
+      return;
+    }
+    const player = boardPlayerFaction;
+    const units: CastleTemplateUnit[] = [];
+    for (const [key, placement] of Object.entries(board.units as Record<string, BoardUnitPlacement>)) {
+      const [x, y] = key.split(',').map(Number);
+      const type = (leUnitAssets.find((u) => u.id === placement.unitId) ?? unitAssets.find((u) => u.id === placement.unitId))?.family;
+      if (type !== 'king' && type !== 'rook') continue;
+      units.push({ x, y, type, side: placement.faction === player ? 'player' : 'enemy' });
+    }
+    const pairs = computeCastleTemplatePairs(units);
+    if (!pairs.length) {
+      reportStatus('No castleable king-rook pairs on the board.', 'error', 'Castling needs a king and a rook of one side on the same rank or file, at least 3 squares apart.');
+      return;
+    }
+    let nextEvents = events.slice();
+    for (const pair of pairs) {
+      nextEvents = [...nextEvents, {
+        id: uniqueEventId(pair.name, nextEvents),
+        name: uniqueEventName(pair.name, nextEvents),
+        trigger: { kind: 'setup' },
+        do: [pair.action],
+      }];
+    }
+    setEvents(nextEvents);
+    reportStatus(`Added ${pairs.length} castling event${pairs.length === 1 ? '' : 's'}.`, 'success');
+  };
+  // One event that arms both chess draw rules; the detail pane's toggles narrow it.
+  const addChessDrawsTemplate = (): void => {
+    const name = uniqueEventName('Chess draws', events);
+    setEvents([...events, {
+      id: uniqueEventId('chess-draws', events),
+      name,
+      trigger: { kind: 'setup' },
+      do: [{ kind: 'chess-draws', fiftyMove: true, threefold: true }],
+    }]);
+    reportStatus('Added chess draw rules (50-move rule + threefold repetition).', 'success');
+  };
   const addOtherEventTemplate = (): void => {
     if (otherTemplateChoice === 'pawn-promotion') addPawnPromotionTemplate();
+    else if (otherTemplateChoice === 'castling') addCastlingTemplate();
+    else if (otherTemplateChoice === 'chess-draws') addChessDrawsTemplate();
   };
   // One-click "Clear pieces": drop every painted unit, offered next to setup-spawn validation
   // when events are dealing the starting forces.
@@ -3634,9 +3747,20 @@ export function LevelEditor(): ReactElement {
           ) : null}
           <section className="skirmish-card le-status-card" aria-live="polite">
             <h2>Status</h2>
-            {/* The level's identity lives here now, not in the title bar. */}
-            <div className="le-status-level" aria-label="Level">
-              <span className="le-level-name">{levelName}</span>
+            {/* The level's identity lives with the save workflow, not duplicated in Board settings. */}
+            <div className="le-status-level">
+              <label className="le-status-name-field">
+                <span className="le-settings-label">Name</span>
+                <input
+                  className="le-text-input le-level-name-input"
+                  value={levelName}
+                  aria-label="Level name"
+                  placeholder="Untitled level"
+                  maxLength={80}
+                  onChange={(event) => setLevelName(event.target.value)}
+                  onBlur={() => setLevelName(levelNameForSave)}
+                />
+              </label>
               {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
             </div>
             <div className={`le-status-current ${canSave ? 'is-ready' : 'is-blocked'}`}>
@@ -4168,15 +4292,14 @@ export function LevelEditor(): ReactElement {
         {brushKind === 'unit' ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Paint Faction</h2>
-            <div className="le-seg">
-              {UNIT_PALETTES.map((faction) => (
-                <button
-                  type="button"
-                  key={faction}
-                  className={`le-seg-btn ${unitFaction === faction ? 'active' : ''}`.trim()}
-                  onClick={() => setUnitFaction(faction)}
-                >{LE_FACTION_LABELS[faction]}</button>
-              ))}
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Faction</span>
+              <PaletteSelect
+                className="le-faction-palette-select"
+                value={unitFaction}
+                aria-label="Paint faction"
+                onChange={setUnitFaction}
+              />
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Default facing</span>

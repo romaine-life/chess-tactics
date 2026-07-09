@@ -7,12 +7,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement, ReactNode, WheelEvent as ReactWheelEvent } from 'react';
 import COMMITTED_CROPS from '../art/portraitCrops.json';
+import { UNIT_PALETTE_LABELS, type UnitPalette } from '../core/pieces';
 import { PORTRAIT_METHODS, portraitMasterSrc, type PortraitMethod } from './portraitCandidates';
+import { PaletteSelect } from './shared/PaletteSelect';
 
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const;
-const PALETTES = ['navy-blue', 'crimson', 'golden', 'emerald'] as const;
+const paletteEnabledForMethod = (method: PortraitMethod): boolean => method === 'smooth' || method === 'codex-stone';
 export type Piece = (typeof PIECES)[number];
-export type Palette = (typeof PALETTES)[number];
+export type Palette = UnitPalette;
 export type Crop = { cx: number; cy: number; s: number };
 
 // Master render framing (Tz·topZ, span·topZ) used per piece — emitted with the
@@ -193,6 +195,7 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
   const ed = usePortraitEditor();
   const { crops, piece, palette, method, crop } = ed;
   const CANVAS = 360;
+  const paletteEnabled = paletteEnabledForMethod(method);
   return (
     <>
       <section className="al-lab-main" aria-label="Portrait crop editor">
@@ -252,10 +255,15 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
                 <button key={m.key} type="button" className={m.key === method ? 'is-active' : ''} onClick={() => ed.setMethod(m.key)} title={m.sub}>{m.label}</button>
               ))}
             </div>
-            <div className="tileset-tier-seg" aria-label="Palette">
-              {PALETTES.map((p) => (
-                <button key={p} type="button" className={p === palette ? 'is-active' : ''} onClick={() => ed.setPalette(p)} style={{ textTransform: 'capitalize' }} disabled={method !== 'smooth'} title={method !== 'smooth' ? 'Candidates are navy-only' : undefined}>{p.replace('-', ' ')}</button>
-              ))}
+            <div>
+              <span>Palette</span>
+              <PaletteSelect
+                value={palette}
+                aria-label="Palette"
+                disabled={!paletteEnabled}
+                title={paletteEnabled ? undefined : 'This portrait candidate is navy-only'}
+                onChange={ed.setPalette}
+              />
             </div>
             <label className="tileset-catalog-zoom"><span>Zoom</span>
               <input type="range" min={0.15} max={S_MAX} step={0.005} value={Z_OFF - crop.s} onChange={(e) => ed.setZoom(Z_OFF - Number(e.target.value))} />
@@ -345,10 +353,9 @@ export function PortraitEditor(): ReactElement {
 
         {/* Live previews */}
         <div style={{ display: 'grid', gap: 18 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {PALETTES.map((p) => (
-              <button key={p} onClick={() => setPalette(p)} style={tabStyle(p === palette)}>{p}</button>
-            ))}
+          <div style={{ display: 'grid', gap: 6, maxWidth: 220, fontSize: 12, color: '#7fa8bd' }}>
+            <span>Palette</span>
+            <PaletteSelect value={palette} aria-label="Palette" onChange={setPalette} />
           </div>
 
           <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
@@ -357,7 +364,7 @@ export function PortraitEditor(): ReactElement {
           </div>
 
           <div>
-            <div style={{ fontSize: 12, color: '#7fa8bd', marginBottom: 6 }}>All units · {palette}</div>
+            <div style={{ fontSize: 12, color: '#7fa8bd', marginBottom: 6 }}>All units · {UNIT_PALETTE_LABELS[palette]}</div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {PIECES.map((p) => (
                 <HudFrame key={p} piece={p} palette={palette} crop={crops[p]} size={86} label={p} />

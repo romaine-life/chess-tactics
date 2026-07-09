@@ -16,7 +16,7 @@
 
 import type { GameState, Move, Piece, PieceType, Side, Vec, Winner } from './types';
 import type { MoveEnv } from './rules';
-import { applyMove, attackedSquares, legalMoves, livingPieces, sideInCheck } from './rules';
+import { applyMove, attackedSquares, legalMoves, livingPieces, positionKey, sideInCheck } from './rules';
 import { evaluateObjective, type ObjectiveContext } from './objectives';
 import type { ObjectiveType } from './level';
 import type { Rng } from './rng';
@@ -262,7 +262,15 @@ interface SearchState {
   weights: EvalWeights;
   terrainEnv: MoveEnv['terrain'];
   fences: MoveEnv['fences'];
+  castleRules: MoveEnv['castleRules'];
   sctx: SearchContext;
+  /**
+   * Position keys of the current line's ancestor nodes (threefold repetition along the
+   * search path, on top of the game's committed positionCounts). Maintained push/pop by
+   * negamax; only used when the game enforces threefold. Quiescence never repeats a
+   * position (every q-move is a capture), so it neither reads nor extends this.
+   */
+  path: string[];
 }
 
 function outOfBudget(s: SearchState): boolean {
@@ -309,7 +317,7 @@ function quiesce(
 ): number {
   if (outOfBudget(s)) return 0;
   const color = state.turn === 'player' ? 1 : -1;
-  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, lastMove };
+  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, castleRules: s.castleRules, lastMove };
 
   // Same terminal check as negamax, BEFORE stand-pat: a King capture inside the
   // exchange must resolve as a mate via the objective, not as a bag of material.
@@ -381,12 +389,36 @@ function negamax(
   if (outOfBudget(s)) return 0;
   const color = state.turn === 'player' ? 1 : -1;
 
-  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, lastMove };
+  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, castleRules: s.castleRules, lastMove };
   const winner = state.winner ?? evaluateObjective(state, s.sctx.objective, { ...s.sctx.ctx, turnsElapsed });
   if (winner) return color * terminalScore(winner, ply);
-  if (depth === 0) return quiesce(s, state, lastMove, ply, alpha, beta, turnsElapsed, QUIESCE_MAX_PLY);
 
   const side = state.turn as Side;
+  // Chess draw rules (when the game enforces them) are terminal INSIDE the search too,
+  // so the engine steers into a saving repetition and never shuffles into one blindly.
+  // Threefold counts committed occurrences (positionCounts) plus this line's ancestors.
+  const drawRules = state.drawRules;
+  const clock = state.halfmoveClock ?? 0;
+  let nodeKey: string | null = null;
+  if (drawRules?.threefold) {
+    nodeKey = positionKey(state, env);
+    let seen = (state.positionCounts?.[nodeKey] ?? 0) + 1;
+    for (const key of s.path) if (key === nodeKey) seen += 1;
+    if (seen >= 3) return 0;
+  }
+  // A filled 50-move clock is adjudicated EXACTLY here, before the depth-0 handoff —
+  // quiesce knows nothing of the clock, and this node is terminal in committed play.
+  // Mate precedence per FIDE: in check with no escape it is checkmate, else a draw.
+  if (drawRules?.fiftyMove && clock >= 100) {
+    if (!sideInCheck(state, side, env)) return 0;
+    const escape = livingPieces(state.pieces, side).some((p) => legalMoves(p, state.pieces, state.size, env).length > 0);
+    if (escape) return 0;
+    const mated: Winner = side === 'player' ? 'enemy' : 'player';
+    return color * terminalScore(mated, ply);
+  }
+
+  if (depth === 0) return quiesce(s, state, lastMove, ply, alpha, beta, turnsElapsed, QUIESCE_MAX_PLY);
+
   const entries: { piece: Piece; move: Move }[] = [];
   for (const piece of livingPieces(state.pieces, side)) {
     for (const move of legalMoves(piece, state.pieces, state.size, env)) entries.push({ piece, move });
@@ -405,16 +437,18 @@ function negamax(
   );
 
   let best = -Infinity;
+  if (nodeKey !== null) s.path.push(nodeKey);
   for (const entry of entries) {
     s.nodes += 1;
     const res = applyMove(state, entry.piece.id, entry.move);
     const roundDone = state.turn === 'enemy' && res.state.turn === 'player';
     const v = -negamax(s, res.state, res.state.lastMove, depth - 1, ply + 1, -beta, -alpha, turnsElapsed + (roundDone ? 1 : 0));
-    if (s.aborted) return 0;
+    if (s.aborted) { if (nodeKey !== null) s.path.pop(); return 0; }
     if (v > best) best = v;
     if (v > alpha) alpha = v;
     if (alpha >= beta) break;
   }
+  if (nodeKey !== null) s.path.pop();
   return best;
 }
 
@@ -458,7 +492,9 @@ export function searchBestAction(
     weights,
     terrainEnv: env.terrain,
     fences: env.fences,
+    castleRules: env.castleRules,
     sctx,
+    path: [],
   };
 
   let completed: RootEntry[] | null = null;
@@ -470,6 +506,7 @@ export function searchBestAction(
     const scored: RootEntry[] = [];
     for (const root of roots) {
       s.nodes += 1;
+      s.path.length = 0; // fresh line per root move (an abort can leave keys behind)
       const res = applyMove(state, root.piece.id, root.move);
       const roundDone = state.turn === 'enemy' && res.state.turn === 'player';
       const v = -negamax(s, res.state, res.state.lastMove, depth - 1, 1, -Infinity, Infinity, sctx.turnsElapsed + (roundDone ? 1 : 0));

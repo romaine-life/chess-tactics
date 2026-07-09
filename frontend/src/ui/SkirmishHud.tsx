@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
-import { PIECE_LABEL, PIECE_MARK, PALETTE_FOR_SIDE, isPlayablePieceType, pieceSpritePath } from '../core/pieces';
+import { PIECE_LABEL, PIECE_MARK, isPlayablePieceType, paletteForSide, pieceSpritePath } from '../core/pieces';
 import type { Piece, PieceType, PromotionPieceType, Side } from '../core/types';
 import type { TimeControl } from '../core/level';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
@@ -86,7 +86,7 @@ const PROMOTION_LABEL: Record<PromotionPieceType, string> = {
 
 function unitSprite(piece: Piece | null): string | null {
   if (!piece || piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
-  return pieceSpritePath(piece.type, PALETTE_FOR_SIDE[piece.side], piece.facing);
+  return pieceSpritePath(piece.type, paletteForSide(piece.side, piece.palette), piece.facing);
 }
 
 /** Whole numbers print bare; fractional distances print to one decimal (6.5). */
@@ -243,7 +243,7 @@ export function SkirmishHud({
   const localSide: Side = net ? net.localSide : 'player';
   const opponentTurnLabel = net ? 'Opponent turn' : 'Enemy turn';
   const turnLabel = game.winner
-    ? game.winner === 'draw' ? 'Stalemate' : game.winner === localSide ? 'Victory' : 'Defeat'
+    ? game.winner === 'draw' ? 'Draw' : game.winner === localSide ? 'Victory' : 'Defeat'
     : game.turn === localSide ? 'Your turn' : opponentTurnLabel;
 
   return (
@@ -266,7 +266,7 @@ export function SkirmishHud({
           <span className="skirmish-eyebrow">Promote Pawn</span>
           <div className="skirmish-promotion-options">
             {pendingPromotion.choices.map((type) => {
-              const palette = PALETTE_FOR_SIDE[promotingPiece?.side ?? localSide];
+              const palette = paletteForSide(promotingPiece?.side ?? localSide, promotingPiece?.palette);
               const src = pieceSpritePath(type, palette, promotingPiece?.facing);
               return (
                 <button
@@ -318,7 +318,7 @@ export function SkirmishHud({
               {focused && isPlayablePieceType(focused.type) ? (
                 <UnitPortrait
                   piece={focused.type as PortraitPiece}
-                  palette={PALETTE_FOR_SIDE[focused.side] as PortraitPalette}
+                  palette={paletteForSide(focused.side, focused.palette) as PortraitPalette}
                   crop={portraitCrops[focused.type as PortraitPiece]}
                   backdrop={focusedPortraitBackdrop}
                   className="unit-portrait--hud"
@@ -331,7 +331,7 @@ export function SkirmishHud({
               )}
               <div className="skirmish-selected-copy">
                 <strong data-testid="selected-name">{focused ? TYPE_LABEL[focused.type] : 'None'}</strong>
-                <span>{focused ? `${focused.side === 'enemy' ? 'Enemy' : focused.side === 'player' ? 'Blue' : 'Neutral'} - ${ROLE[focused.type]}` : 'Choose a unit on the board.'}</span>
+                <span>{focused ? `${focused.side === 'enemy' ? 'Enemy' : focused.side === 'player' ? 'Player' : 'Neutral'} - ${ROLE[focused.type]}` : 'Choose a unit on the board.'}</span>
               </div>
             </div>
             {focused && (focused.side === 'player' || focused.side === 'enemy') && (
@@ -366,7 +366,7 @@ export function SkirmishHud({
                       {isPlayablePieceType(piece.type) ? (
                         <UnitPortrait
                           piece={piece.type as PortraitPiece}
-                          palette={PALETTE_FOR_SIDE[piece.side] as PortraitPalette}
+                          palette={paletteForSide(piece.side, piece.palette) as PortraitPalette}
                           crop={portraitCrops[piece.type as PortraitPiece]}
                           className="unit-portrait--roster"
                           method={PRODUCTION_PORTRAIT_METHOD}

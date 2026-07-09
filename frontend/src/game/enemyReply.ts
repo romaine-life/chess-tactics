@@ -10,7 +10,7 @@
 // worker bundle stays lean and the same function runs inline in tests unchanged.
 
 import type { GameEvent, GameState, Move } from '../core/types';
-import { applyMove, enemyMove, gameEnv, type MoveEnv } from '../core/rules';
+import { applyMove, enemyMove, gameEnv, recordPosition, type MoveEnv } from '../core/rules';
 import { searchEnemyMove, type EvalWeights } from '../core/ai';
 import { createRng, type Rng } from '../core/rng';
 import type { ObjectiveType } from '../core/level';
@@ -66,7 +66,9 @@ export function resolveEnemyReply(req: EnemyReplyRequest): EnemyReplyResult {
     tick += 1;
     if (!move) { game = { ...game, turn: 'player' }; break; }
     const res = applyMove(game, move.pieceId, move.move);
-    game = res.state;
+    // The committed enemy move joins the threefold table (no-op without the rule); the
+    // key needs the POST-move lastMove, so rebuild that slice of the env.
+    game = recordPosition(res.state, { ...env, lastMove: res.state.lastMove });
     events.push(...res.events);
   }
   return { game, tick, events };

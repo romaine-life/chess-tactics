@@ -28,7 +28,7 @@ import { fetchPublicMap } from '../net/maps';
 import { OBJECTIVE_TYPES, type ObjectiveType } from '../core/level';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
-import { PALETTE_FOR_SIDE, isPlayablePieceType } from '../core/pieces';
+import { isPlayablePieceType, paletteForSide } from '../core/pieces';
 import { masterSrc, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
 import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
@@ -248,7 +248,7 @@ export function Skirmish() {
     const urls: string[] = [];
     for (const piece of game.pieces) {
       if (!isPlayablePieceType(piece.type)) continue;
-      urls.push(masterSrc(piece.type as PortraitPiece, PALETTE_FOR_SIDE[piece.side] as PortraitPalette, PRODUCTION_PORTRAIT_METHOD));
+      urls.push(masterSrc(piece.type as PortraitPiece, paletteForSide(piece.side, piece.palette) as PortraitPalette, PRODUCTION_PORTRAIT_METHOD));
       urls.push(DEFAULT_BACKGROUND_SET.portraits[piece.type]);
     }
     preloadImages(urls);
@@ -617,7 +617,7 @@ export function Skirmish() {
       {isCampaignPlay && routeLevel && game.winner && (
         <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result">
           <div className="settings-frame campaign-result-panel">
-            <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Stalemate' : 'Defeat'}</h2>
+            <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
             <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
             <div className="campaign-result-actions">
               <button type="button" className="app-header-button" onClick={replayLevel}>
