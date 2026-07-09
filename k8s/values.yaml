@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-a4fa5e7ecf6cfd7dc7475080cdf1485f0474b80ad4fced5db98f47745144b9db"
+  tag: "app-0e234826f1d937750d57f57e4d0b15c258334cc8e56a8cf0e98f6606313e9344"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add black and white unit palettes"
-  prNumber: "445"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/445"
-  commit: "e117dda"
+  prTitle: "Render board terrain as a composed canvas"
+  prNumber: "448"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/448"
+  commit: "c5dc44d"
 
 name: chess-tactics
 namespace: chess-tactics
