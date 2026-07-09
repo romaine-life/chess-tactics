@@ -4,7 +4,7 @@ import type { ResolvedFenceOverlay, ResolvedWallOverlay } from '../core/featureA
 import { resolveWallArtFaces, slotSource, wallArtSlotsForFace, type WallArtFaceMap, type WallArtPlacementMap } from '../core/wallArt';
 import type { WallDecorFaceId } from '../core/wallDecor';
 import { boardLabCellPosition } from './boardProjection';
-import { fenceOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
+import { fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
 
 function parseCellKey(key: string): { x: number; y: number } | null {
   const [x, y] = key.split(',').map(Number);
@@ -69,7 +69,7 @@ function wallArtStyle(cell: { x: number; y: number }, face: WallDecorFaceId, art
   const { left, top } = boardLabCellPosition(cell);
   const frameLeft = left + WALL_FRAME_LEFT;
   const frameTop = top + WALL_FRAME_TOP;
-  const zIndex = wallOverlayZIndex(cell) + 1;
+  const zIndex = wallArtOverlayZIndex(cell);
   return slots.map((slot) => {
     const source = slotSource(slot);
     const faceAsset = source.faces[face];

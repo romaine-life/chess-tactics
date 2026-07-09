@@ -1,5 +1,6 @@
 node_modules/
 frontend/dist/
+packages/board-render/dist/
 backend/generated/
 npm-debug.log
 .DS_Store

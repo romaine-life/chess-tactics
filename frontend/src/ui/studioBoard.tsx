@@ -1,73 +1,22 @@
-// Shared Studio board core — the small set that BOTH the design Studio
-// (TilePreview.tsx → TilesetStudio) and the standalone Level Editor
-// (LevelEditor.tsx) build on: the tile-family model derived from the shipped
-// tileset, the per-asset animation frame source, the animation clock, and the
-// 8-way facing compass. Pulling this out of TilePreview.tsx lets the Level Editor
-// ship its own tiny lazy chunk instead of dragging the entire Studio behind it.
-// Keep this lean — anything Studio-only stays in TilePreview.tsx.
 import { useEffect, useState, type ReactElement } from 'react';
-import { tileFamilies } from '../art/tileset';
 import {
-  terrainLabels,
-  type TileAssetKind,
-  type TileFamilyId,
-  type TileSocketAsset,
-} from '../core/tileSockets';
+  assetFrameSrc,
+  studioFamilies,
+  type StudioAsset,
+  type StudioAssetKind,
+  type StudioFamily,
+  type StudioFamilyId,
+} from '@chess-tactics/board-render/ui/studioBoard';
 import { directionCompassCells, rookDirectionLabel, type Direction } from './unitCatalog';
 
-export type StudioFamilyId = TileFamilyId;
-export type StudioAssetKind = TileAssetKind;
-
-export interface StudioAsset extends TileSocketAsset {
-  id: string;
-  label: string;
-  src: string;
-  animation?: {
-    label: string;
-    frames: string[];
-    frameMs: number;
-    status: 'prototype' | 'raw candidate' | 'approved';
-  };
-  role: string;
-  kind: StudioAssetKind;
-  source: string;
-  probability: number;
-  notes: string;
-  /** Non-production reference tile (held out of the board/game); shown in the catalog only. */
-  speculative?: boolean;
-  /** How a tile was produced, e.g. "Codex → Filter", "Textured". */
-  method?: string;
-}
-
-export interface StudioFamily {
-  id: StudioFamilyId;
-  label: string;
-  purpose: string;
-  status: string;
-  review: string;
-  assets: StudioAsset[];
-}
-
-export const assetFrameSrc = (asset: StudioAsset, animationFrame: number): string =>
-  asset.animation ? asset.animation.frames[animationFrame % asset.animation.frames.length] ?? asset.src : asset.src;
-
-const STUDIO_FAMILY_META: Record<TileFamilyId, { purpose: string; status: string; review: string }> = {
-  grass: { purpose: 'High-volume base terrain for most playable cells.', status: 'Production', review: 'Variation + same-footprint repetition.' },
-  dirt: { purpose: 'Bare-earth ground.', status: 'Production', review: 'Variation across the patch.' },
-  stone: { purpose: 'Stone / cobble footing.', status: 'Production', review: 'Variation + readability.' },
-  pebble: { purpose: 'Loose pebble ground.', status: 'Production', review: 'Variation.' },
-  sand: { purpose: 'Sandy ground.', status: 'Production', review: 'Variation.' },
-  water: { purpose: 'Open water (impassable to land units).', status: 'Production', review: 'Variation + surface read.' },
+export {
+  assetFrameSrc,
+  studioFamilies,
+  type StudioAsset,
+  type StudioAssetKind,
+  type StudioFamily,
+  type StudioFamilyId,
 };
-
-// Derived from the shipped tileset registry (frontend/src/art/tileset.ts) so the tile
-// studio ALWAYS mirrors the board — a tile can't exist on the board but not here.
-export const studioFamilies: StudioFamily[] = (Object.keys(tileFamilies) as TileFamilyId[]).map((id) => ({
-  id,
-  label: terrainLabels[id],
-  ...STUDIO_FAMILY_META[id],
-  assets: tileFamilies[id].map((asset): StudioAsset => ({ ...asset })),
-}));
 
 export function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 150): number {
   const [animationFrame, setAnimationFrame] = useState(0);
@@ -85,9 +34,6 @@ export function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 15
   return animationFrame;
 }
 
-// The 8-way facing compass (iso 3×3 grid + a center ↻ rotate hub). Shared by the
-// Level Editor (rotates the selected unit) and the Units catalog (rotates the card
-// preview). `available` greys out directions a unit lacks; omit to enable all 8.
 export function FacingCompass({ direction, onSelect, onRotate, available }: {
   direction: Direction;
   onSelect: (dir: Direction) => void;

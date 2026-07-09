@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "node scripts/ensure-backend-deps.mjs",
+    "predev": "node scripts/ensure-backend-deps.mjs && npm --prefix ../packages/board-render run build",
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "build:trainer": "vite build --config vite.trainer.config.js",
-    "build:server-render": "node scripts/build-server-render.mjs",
+    "build:board-render": "npm --prefix ../packages/board-render run build",
     "preview": "vite preview --host 0.0.0.0",
     "shot": "node scripts/shot.mjs",
     "e2e:lobby": "node scripts/lobby-e2e.mjs",
@@ -37,6 +37,7 @@
     "vitest": "^4.1.8"
   },
   "dependencies": {
+    "@chess-tactics/board-render": "file:../packages/board-render",
     "pixi.js": "^8.19.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

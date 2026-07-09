@@ -8,7 +8,7 @@ import {
 } from './bakeBoardThumbnail';
 import { roadEdgeKey } from '../core/featureAutotile';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
-import { fenceOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
+import { fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
 import type { EditorBoard } from '../ui/boardCode';
 
 // Coverage (opaque fraction) of a rect under an opacity predicate — the property object-fit:cover
@@ -261,6 +261,29 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(wall!.z).toBe(wallOverlayZIndex({ x: 1, y: 0 }));
     expect(wall!.z).toBe(ownerUnit!.z);
     expect(ops.indexOf(wall!)).toBeLessThan(ops.indexOf(ownerUnit!));
+  });
+
+  it('keeps wall art in the wall display layer while drawing it after the wall frame', () => {
+    const edge = roadEdgeKey(0, 0, -1, 0);
+    const board: EditorBoard = {
+      ...blank(3, 3),
+      walls: { [edge]: 'stone' },
+      wallArt: { [edge]: 'banner-stone-wall' },
+      units: { '0,0': UNIT },
+    };
+    const ops = boardDrawOps(board);
+    const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-8.png');
+    const art = ops.find((op) => op.src === '/assets/wall-decor/banner-tattered-west.png');
+    const ownerUnit = ops.find((op) => op.contain && op.z === 0 + 0 + 20000);
+
+    expect(wall).toBeDefined();
+    expect(art).toBeDefined();
+    expect(ownerUnit).toBeDefined();
+    expect(art!.z).toBe(wallArtOverlayZIndex({ x: 0, y: 0 }));
+    expect(art!.z).toBe(wall!.z);
+    expect(art!.z).toBe(ownerUnit!.z);
+    expect(ops.indexOf(wall!)).toBeLessThan(ops.indexOf(art!));
+    expect(ops.indexOf(art!)).toBeLessThan(ops.indexOf(ownerUnit!));
   });
 });
 

@@ -1,18 +1,17 @@
 // Server-side social-card compositor for level/map OG thumbnails.
-// The draw plan comes from backend/generated/board-render.cjs, built from the
-// same pure render geometry the in-app LevelThumbnail uses.
+// The draw plan comes from @chess-tactics/board-render, the same DOM-free
+// render geometry the in-app LevelThumbnail uses.
 
 const path = require('path');
 const fs = require('fs');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const { UNIT_IMG_MAX_W, UNIT_IMG_MAX_H } = require('@chess-tactics/board-render');
 
 const CARD_W = 1200;
 const CARD_H = 630;
 const PAD = 56;
 const HERO_TOP = 100;
 const HERO_BOTTOM = 500;
-const UNIT_IMG_MAX_W = 78;
-const UNIT_IMG_MAX_H = 92;
 
 let fontFamily = 'sans-serif';
 let fontRegistered = false;
