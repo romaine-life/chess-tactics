@@ -557,6 +557,7 @@ export function SkirmishBoard() {
     h: number;
   } | null>(null);
   const [dropHoverKey, setDropHoverKey] = useState<string | null>(null);
+  const [dropAimKey, setDropAimKey] = useState<string | null>(null);
   const [noHopId, setNoHopId] = useState<string | null>(null);
   // Single-player premove input is open while the enemy owns the turn AND for the short
   // post-reply landing beat before live player control resumes.
@@ -571,7 +572,7 @@ export function SkirmishBoard() {
       ghost.style.left = `${lastCursorRef.current.x}px`;
       ghost.style.top = `${lastCursorRef.current.y}px`;
     }
-  }, [drag, dropHoverKey]);
+  }, [drag, dropHoverKey, dropAimKey]);
   const selectedMoves = useMemo(() => {
     if (premoveMode || pendingPromotion || game.turn !== localSide || game.winner) return [];
     const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === localSide);
@@ -766,16 +767,32 @@ export function SkirmishBoard() {
     }
   };
 
-  // Map a viewport point to the board cell under it. elementFromPoint is transform-agnostic,
-  // so this stays correct under any board zoom/pan; the ghost is pointer-events:none and the
-  // unit seats are too, so the topmost hit is always the cell-hit button (which carries cx/cy).
+  // Map a viewport point to the board cell under it by testing the actual on-screen diamond
+  // geometry. `elementFromPoint` is too sensitive to overlapping isometric hit boxes: near a
+  // seam it can report a visually-front cell rather than the cell whose diamond contains the
+  // cursor. Picking the most central containing diamond makes the highlight and drop target
+  // stable under zoom, pan, and per-cell z-index.
   const cellFromPoint = (clientX: number, clientY: number): { x: number; y: number; btn: HTMLElement } | null => {
-    const el = document.elementFromPoint(clientX, clientY);
-    const btn = el?.closest<HTMLElement>('.skirmish-board-cell-hit');
-    if (!btn || btn.dataset.cx === undefined || btn.dataset.cy === undefined) return null;
-    const x = Number(btn.dataset.cx);
-    const y = Number(btn.dataset.cy);
-    return Number.isFinite(x) && Number.isFinite(y) ? { x, y, btn } : null;
+    let best: { x: number; y: number; btn: HTMLElement; score: number } | null = null;
+    const cells = document.querySelectorAll<HTMLElement>('[data-testid="skirmish-board"] .skirmish-board-cell-hit');
+    for (const btn of cells) {
+      if (btn.dataset.cx === undefined || btn.dataset.cy === undefined) continue;
+      const rect = btn.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      const dx = Math.abs(clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
+      const dy = Math.abs(clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
+      const score = dx + dy;
+      if (score > 1.08) continue;
+      if (best && score >= best.score) continue;
+      const x = Number(btn.dataset.cx);
+      const y = Number(btn.dataset.cy);
+      if (Number.isFinite(x) && Number.isFinite(y)) best = { x, y, btn, score };
+    }
+    return best ? { x: best.x, y: best.y, btn: best.btn } : null;
+  };
+  const setDropKeys = (aimKey: string | null, hoverKey: string | null): void => {
+    setDropAimKey((prev) => (prev === aimKey ? prev : aimKey));
+    setDropHoverKey((prev) => (prev === hoverKey ? prev : hoverKey));
   };
 
   const onCellPointerDown = (cx: number, cy: number, event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -829,7 +846,7 @@ export function SkirmishBoard() {
     }
   };
 
-  const onCellPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const updateDragPointer = (event: { pointerId: number; clientX: number; clientY: number }) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== event.pointerId) return;
     lastCursorRef.current = { x: event.clientX, y: event.clientY };
@@ -854,41 +871,39 @@ export function SkirmishBoard() {
       ghost.style.left = `${event.clientX}px`;
       ghost.style.top = `${event.clientY}px`;
     }
-    // Ring the hovered cell only when it's a legal drop. This is React state (not an imperative
-    // class) so it survives the drag's own re-renders; only set it when the cell actually changes.
+    // Show the interpreted cell even when it is not a legal drop; the green drop ring then
+    // layers on top only for targets that will actually commit.
     const hit = cellFromPoint(event.clientX, event.clientY);
-    const key = hit && d.targets.has(`${hit.x},${hit.y}`) ? `${hit.x},${hit.y}` : null;
-    setDropHoverKey((prev) => (prev === key ? prev : key));
+    const aimKey = hit ? `${hit.x},${hit.y}` : null;
+    const dropKey = aimKey && d.targets.has(aimKey) ? aimKey : null;
+    setDropKeys(aimKey, dropKey);
   };
 
-  const onCellPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const finishDragPointer = (event: { pointerId: number; clientX: number; clientY: number }) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== event.pointerId) return;
     dragRef.current = null;
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      /* already released */
-    }
-    setDropHoverKey(null);
+    const releaseHit = cellFromPoint(event.clientX, event.clientY);
+    const releaseAimKey = releaseHit ? `${releaseHit.x},${releaseHit.y}` : null;
+    const releaseDropKey = releaseAimKey && d.targets.has(releaseAimKey) ? releaseAimKey : null;
+    setDropKeys(null, null);
     if (!d.active) return; // a tap, not a drag — let the native click handle select/move
     // A completed drag emits a trailing click; swallow it so it doesn't re-select the piece.
     suppressClickRef.current = true;
     window.setTimeout(() => {
       suppressClickRef.current = false;
     }, 0);
-    const hit = cellFromPoint(event.clientX, event.clientY);
-    if (hit && d.targets.has(`${hit.x},${hit.y}`)) {
+    if (releaseHit && releaseDropKey) {
       if (d.premove) {
         // Opponent's turn: the drop queues a premove step (no board move now).
-        queueMove(d.pieceId, hit.x, hit.y);
+        queueMove(d.pieceId, releaseHit.x, releaseHit.y);
       } else {
         // Legal drop: land with no hop (the drag already showed the travel). noHopId is set in
         // the same handler as tryMoveTo so the destination render carries the suppress flag.
         setNoHopId(d.pieceId);
         window.setTimeout(() => setNoHopId(null), 0);
         select(d.pieceId);
-        tryMoveTo(hit.x, hit.y);
+        tryMoveTo(releaseHit.x, releaseHit.y);
       }
     }
     // Illegal drop (or released off the board): keep the piece selected so its move dots
@@ -896,12 +911,31 @@ export function SkirmishBoard() {
     setDrag(null);
   };
 
-  const onCellPointerCancel = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const cancelDragPointer = (event: { pointerId: number }) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== event.pointerId) return;
     dragRef.current = null;
-    setDropHoverKey(null);
+    setDropKeys(null, null);
     if (d.active) setDrag(null);
+  };
+
+  const onCellPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    updateDragPointer(event);
+  };
+
+  const onCellPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== event.pointerId) return;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* already released */
+    }
+    finishDragPointer(event);
+  };
+
+  const onCellPointerCancel = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    cancelDragPointer(event);
   };
 
   return (
@@ -940,6 +974,7 @@ export function SkirmishBoard() {
               blockedSet.has(key) ? 'is-blocked-candidate' : '',
               premoveTargetSet.has(key) ? 'is-premove-target' : '',
               premoveDestSet.has(key) ? 'is-premove' : '',
+              dropAimKey === key ? 'is-drop-aim' : '',
               dropHoverKey === key ? 'is-drop-hover' : '',
               showStoreSelection && game.pieces.some((piece) => piece.id === selectedId && piece.alive && piece.x === cell.x && piece.y === cell.y) ? 'is-selected' : '',
               premoveSelKey === key ? 'is-selected' : '',
