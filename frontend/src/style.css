@@ -8738,6 +8738,15 @@ body { font-size: 17px; }
   font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
 
+.le-live-map-unavailable {
+  left: 50%;
+  max-width: min(560px, 82vw);
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, 82%);
+}
+
 .tileset-view-board-content {
   position: relative;
   width: 100%;
@@ -10789,13 +10798,21 @@ button.tileset-relationship-cell {
   --board-origin-top: 0px;
 }
 
-.tileset-terrain-layer {
+.tileset-terrain-layer,
+.tileset-scene-layer {
   display: block;
   image-rendering: pixelated;
   pointer-events: none;
   position: absolute;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.tileset-terrain-layer {
+  z-index: 0;
+}
+
+.tileset-scene-layer {
   z-index: 0;
 }
 

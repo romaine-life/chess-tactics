@@ -2486,7 +2486,7 @@ app.put('/api/levels/:id', async (req, res) => {
 // owner's row is writable only by that owner; anonymous rows are agent/misc pool
 // handoffs and can be viewed/imported until they expire or are marked saved.
 const EDITOR_MAP_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
-const EDITOR_MAP_ID_RE = /^[a-hjkmnp-z2-9]{8,24}$/;
+const EDITOR_MAP_ID_RE = new RegExp(`^[${EDITOR_MAP_ID_ALPHABET}]{8,24}$`);
 function newEditorMapId() {
   const bytes = crypto.randomBytes(12);
   let out = '';
@@ -2744,7 +2744,8 @@ app.post('/api/editor-maps', async (req, res) => {
   const user = await readOptionalUser(req);
   const anonymousHash = requestEditorMapAnonymousHash(req);
   const listed = raw.misc === true;
-  const ownerEmail = listed ? null : (user.signed_in ? user.email : null);
+  const headless = raw.headless === true;
+  const ownerEmail = (listed || headless) ? null : (user.signed_in ? user.email : null);
   try {
     const created = await dbCreateEditorMap({ ownerEmail, anonymousHash: ownerEmail ? null : anonymousHash, level: parsed.level, listed });
     await dbLogEditorMapEvent(created.row.public_id, 'create', editorMapActor({ user, anonymousHash }));
@@ -3626,7 +3627,7 @@ app.put('/api/ai-weights/:levelId', async (req, res) => {
 // public_id and snapshots the level into public_maps, which the UNAUTH GET /api/maps/:id and the OG
 // thumbnail path read. Officials keep their global off-* ids and are unaffected.
 const PUBLIC_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'; // no 0/o/1/l ambiguity
-const PUBLIC_ID_RE = /^[a-hjkmnp-z2-9]{8,24}$/;
+const PUBLIC_ID_RE = new RegExp(`^[${PUBLIC_ID_ALPHABET}]{8,24}$`);
 function newPublicId() {
   const bytes = crypto.randomBytes(12);
   let out = '';
