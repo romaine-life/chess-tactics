@@ -78,7 +78,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onload = () => resolve(img);
     img.onerror = () => resolve(img);
     img.src = src;
-    img.decode?.().then(() => resolve(img)).catch(() => {});
+    img.decode?.().catch(() => {});
   });
   imageCache.set(src, promise);
   return promise;

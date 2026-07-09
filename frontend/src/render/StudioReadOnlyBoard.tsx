@@ -1,33 +1,18 @@
-import type { ReactElement, ReactNode } from 'react';
-import { boardLabCellPosition } from './boardProjection';
-import { DoodadSprite } from './BoardDoodad';
-import { PropSprite } from './BoardStructure';
-import { propDef, type PropDef } from '../core/props';
-import { GroundCoverLayer } from './GroundCoverLayer';
-import { FenceOverlayLayer, WallOverlayLayer } from './FenceOverlayLayer';
+import type { ReactElement } from 'react';
+import { BoardSceneLayer } from './BoardSceneLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
 import { BoardTerrainLayer, terrainCanvasPatches, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
 import { featureFrameSrc } from '../art/tileset';
-import {
-  MISSING_DIRECTION_SPRITE,
-  hasDirectionSprite,
-  unitAssets,
-  type Direction,
-  type Faction,
-  type UnitAsset,
-} from '../ui/unitCatalog';
-import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
+import { resolveFeatureOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 
 // THE shared, non-interactive board renderer — one source of truth for how an EditorBoard
-// draws (terrain through a composed canvas layer; units + doodads + props + ground cover bracketed
-// in the +20000 band, exactly like the game's SkirmishBoard). Both surfaces consume it:
-//   - the Level Editor's StudioEditableBoard layers its paint/erase/select interaction on top
-//     of these same cells + sprites (so the editable board and this viewer can never drift), and
+// draws (terrain through one composed canvas layer; units, doodads, props, fences, walls, wall art,
+// and ground cover through the shared scene-depth canvas). Both surfaces consume it:
+//   - the Level Editor layers paint/erase/select interaction on top of these same cells, and
 //   - the Campaign Editor's selected-level viewer renders it read-only inside a ViewPane.
 // It owns NO state and NO animation clock: pass `animationFrame` (default 0 = a static frame).
 
@@ -45,7 +30,6 @@ export type FeatureOverlayMap = Record<string, ResolvedFeatureOverlay>;
 
 const allTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
 const resolveTileAsset = (id: string): StudioAsset | undefined => allTiles.find((asset) => asset.id === id);
-const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
 const familyOfTile = (id: string): TileFamilyId | undefined =>
   studioFamilies.find((family) => family.assets.some((asset) => asset.id === id))?.id;
 
@@ -96,69 +80,7 @@ export function deriveFeatureOverlays(
   return resolveFeatureOverlays(features, isSevered, isExit);
 }
 
-/**
- * The unit + doodad + prop sprites for the whole board, seated via the shared `.board-unit-seat`,
- * `<DoodadSprite>` and `<PropSprite>` (identical to the game board). Pure (no interaction); the
- * editor adds its own doodad/prop hit targets alongside these — it draws its OWN props (so it can
- * bracket them with hit spans) and simply omits `props` here. `renderDoodadExtra` lets a caller
- * inject a per-cell overlay (the editor's transparent doodad hit) without forking the seating logic.
- */
-export function studioBoardSprites({
-  units,
-  doodads,
-  props = {},
-  resolveUnit = resolveUnitAsset,
-  resolveDoodad = doodadAsset,
-  resolveProp = propDef,
-  hidden,
-  renderDoodadExtra,
-}: {
-  units: Record<string, { unitId: string; direction: string; faction: string }>;
-  doodads: Record<string, { doodadId: string }>;
-  /** Multi-cell props keyed by ANCHOR cell "x,y" (optional — the editor renders its own). */
-  props?: Record<string, { propId: string }>;
-  resolveUnit?: (id: string) => UnitAsset | undefined;
-  resolveDoodad?: (id: string) => DoodadAsset | undefined;
-  resolveProp?: (id: string) => PropDef | undefined;
-  hidden?: BoardLayerVisibility;
-  renderDoodadExtra?: (cell: { x: number; y: number; left: number; top: number; zIndex: number }) => ReactNode;
-}): ReactNode[] {
-  const sprites: ReactNode[] = [];
-  // Multi-cell props (trees/houses): the shared tall <PropSprite> (back/front halves), exactly
-  // as the game board seats it. Unknown ids skip silently (forward-compat, same as the bridge).
-  for (const [key, placement] of Object.entries(props)) {
-    const def = resolveProp(placement.propId);
-    if (!def || hidden?.doodad) continue;
-    const [ax, ay] = key.split(',').map(Number);
-    sprites.push(<PropSprite key={`prop-${key}`} prop={{ x: ax, y: ay, propId: placement.propId }} def={def} />);
-  }
-  for (const key of new Set([...Object.keys(units), ...Object.keys(doodads)])) {
-    const [cx, cy] = key.split(',').map(Number);
-    const { left, top, zIndex } = boardLabCellPosition({ x: cx, y: cy });
-    const doodadEntry = doodads[key] ? resolveDoodad(doodads[key].doodadId) : undefined;
-    if (doodadEntry && !hidden?.doodad) {
-      sprites.push(<DoodadSprite key={`dd-${key}`} doodad={{ x: cx, y: cy, type: doodadEntry.id }} />);
-      const extra = renderDoodadExtra?.({ x: cx, y: cy, left, top, zIndex });
-      if (extra) sprites.push(extra);
-    }
-    const placement = units[key];
-    const unitAsset = placement ? resolveUnit(placement.unitId) : undefined;
-    if (unitAsset && placement && !hidden?.unit) {
-      const direction = placement.direction as Direction;
-      const sprite = hasDirectionSprite(unitAsset, direction)
-        ? unitAsset.sprite(placement.faction as Faction, direction)
-        : MISSING_DIRECTION_SPRITE;
-      sprites.push(
-        <div key={`u-${key}`} className={`board-unit-seat is-${unitAsset.family}`} style={{ left, top, zIndex: zIndex + 20000 }}>
-          <img src={sprite} alt="" draggable={false} />
-        </div>,
-      );
-    }
-  }
-  return sprites;
-}
-
-/** Resolve painted ground-cover densities into the concrete tufts the GroundCoverLayer renders. */
+/** Resolve painted ground-cover densities for tests and legacy callers. */
 export function studioCoverCells(
   cells: Record<string, string>,
   cover: Record<string, GroundCoverDensity>,
@@ -202,10 +124,6 @@ export function StudioReadOnlyBoard({
   ariaLabel?: string;
 }): ReactElement {
   const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts, board.featureExits);
-  const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
-  const wallBounds = { cols: board.cols, rows: board.rows };
-  const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
-
   const gridCells: TileGridCell[] = [];
   const terrainCells: TerrainCanvasCell[] = [];
   const occupied = new Set(
@@ -228,9 +146,6 @@ export function StudioReadOnlyBoard({
     }
   }
 
-  const sprites = studioBoardSprites({ units: board.units, doodads: board.doodads, props: board.props });
-  const coverCells = studioCoverCells(board.cells, board.cover, coverSeed, board.coverTypes ?? {});
-
   return (
     <TileGrid
       cells={gridCells}
@@ -238,12 +153,12 @@ export function StudioReadOnlyBoard({
       ariaLabel={ariaLabel}
       boardZoom={boardZoom}
       boardPan={boardPan}
-      backgroundLayer={<BoardTerrainLayer cells={terrainCells} patches={terrainCanvasPatches(board.surfacePatches)} />}
-    >
-      <WallOverlayLayer overlays={wallOverlays} wallArt={board.wallArt} bounds={wallBounds} />
-      <FenceOverlayLayer overlays={fenceOverlays} />
-      <GroundCoverLayer cells={coverCells} />
-      {sprites}
-    </TileGrid>
+      backgroundLayer={(
+        <>
+          <BoardTerrainLayer cells={terrainCells} patches={terrainCanvasPatches(board.surfacePatches)} />
+          <BoardSceneLayer board={board} coverSeed={coverSeed} ambientCover={false} omitTerrain />
+        </>
+      )}
+    />
   );
 }

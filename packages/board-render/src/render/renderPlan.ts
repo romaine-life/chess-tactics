@@ -19,9 +19,9 @@ import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
 import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays } from '../core/featureAutotile';
 import { resolveWallArtFaces, slotSource, wallArtSlotsForFace } from '../core/wallArt';
 import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './structureGeometry';
-import { fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
+import { fenceOverlayZIndex, groundCoverZIndex, objectBaseZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
 import { propDef, type StructureSourceRef } from '../core/props';
-import { groundCoverSet, resolveGroundCover, type GroundCover } from '../core/groundCover';
+import { densityFieldAt, groundCoverSet, resolveGroundCover, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
@@ -55,6 +55,8 @@ export interface BoardDrawOp {
   dh: number;
   z: number;
   contain?: boolean;
+  flipX?: boolean;
+  opacity?: number;
   sx?: number;
   sy?: number;
   sw?: number;
@@ -69,6 +71,11 @@ export interface BakeBounds {
 }
 
 export type RenderBoard = EditorBoard;
+
+export interface BoardDrawOptions {
+  coverSeed?: number;
+  ambientCover?: boolean;
+}
 
 const studioTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
 const resolveTile = (id: string): StudioAsset | undefined => studioTiles.find((asset) => asset.id === id);
@@ -125,7 +132,7 @@ function pushStructureDrawOps(
   }
 }
 
-export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
+export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {}): BoardDrawOp[] {
   const ops: BoardDrawOp[] = [];
 
   const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
@@ -230,8 +237,8 @@ export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
 
   for (const key of new Set([...Object.keys(board.units), ...Object.keys(board.doodads)])) {
     const [x, y] = key.split(',').map(Number);
-    const { left, top, zIndex } = boardLabCellPosition({ x, y });
-    const base = zIndex + 20000;
+    const { left, top } = boardLabCellPosition({ x, y });
+    const base = objectBaseZIndex({ x, y });
 
     const doodadPlacement = board.doodads[key];
     const doodad = doodadPlacement ? resolveDoodad(doodadPlacement.doodadId) : undefined;
@@ -288,7 +295,7 @@ export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
     }
   }
 
-  const COVER_SEED = 1234;
+  const COVER_SEED = options.coverSeed ?? 1234;
   const coverCells: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover?: GroundCover }> = [];
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
@@ -300,15 +307,17 @@ export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
     }
   }
   // An EditorBoard is exact authoring data: an empty cover map means bare terrain, just as it
-  // does in the live editor and exact-board play path. Ambient fallback belongs only to legacy
-  // generated game states, which are resolved before they reach this renderer.
-  resolveGroundCover(coverCells, COVER_SEED, (cell) => board.cover?.[`${cell.x},${cell.y}`] ?? null);
+  // does in the live editor and exact-board play path. Legacy generated game states can opt
+  // into ambient fallback explicitly while they are being adapted for the shared renderer.
+  const hasPaintedCover = Object.keys(board.cover ?? {}).length > 0;
+  const ambientCover = options.ambientCover ?? false;
+  resolveGroundCover(coverCells, COVER_SEED, (cell) =>
+    board.cover?.[`${cell.x},${cell.y}`] ?? (hasPaintedCover || !ambientCover ? null : densityFieldAt(cell.x, cell.y, COVER_SEED)));
   for (const cell of coverCells) {
     if (!cell.groundCover) continue;
     const set = groundCoverSet(cell.terrain);
     if (!set) continue;
-    const { left, top, zIndex } = boardLabCellPosition(cell);
-    const base = zIndex + 20000;
+    const { left, top } = boardLabCellPosition(cell);
     for (const tuft of cell.groundCover.tufts) {
       const meta = set.variants.find((v) => v.id === tuft.variant);
       if (!meta) continue;
@@ -322,7 +331,8 @@ export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
         dy: top + tuft.dy - meta.baseY,
         dw: meta.frameW,
         dh: meta.frameH,
-        z: base + (tuft.dy > 0 ? 1 : -1),
+        z: groundCoverZIndex(cell, tuft.dy),
+        flipX: tuft.flip,
       });
     }
   }
@@ -331,8 +341,8 @@ export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
   return ops;
 }
 
-export function uniqueDrawSrcs(board: RenderBoard): string[] {
-  return [...new Set(boardDrawOps(board).map((op) => op.src))];
+export function uniqueDrawSrcs(board: RenderBoard, options: BoardDrawOptions = {}): string[] {
+  return [...new Set(boardDrawOps(board, options).map((op) => op.src))];
 }
 
 export function boardContentHash(board: RenderBoard): string {
@@ -372,8 +382,8 @@ function fnv1a(value: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
-export function boardBounds(board: RenderBoard): BakeBounds {
-  const ops = boardDrawOps(board);
+export function boardBounds(board: RenderBoard, options: BoardDrawOptions = {}): BakeBounds {
+  const ops = boardDrawOps(board, options);
   if (ops.length === 0) {
     return { minX: -TILE_STEP_X, minY: -TILE_EQUATOR, width: TILE_FRAME_W, height: TILE_FRAME_H };
   }

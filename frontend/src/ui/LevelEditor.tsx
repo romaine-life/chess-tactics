@@ -6,14 +6,13 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
-import { DoodadSprite } from '../render/BoardDoodad';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
-import { FenceOverlayLayer, WallOverlayLayer } from '../render/FenceOverlayLayer';
+import { BoardSceneLayer } from '../render/BoardSceneLayer';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { BoardGridLayer } from '../render/BoardGridLayer';
 import { BoardTerrainLayer, terrainCanvasPatches, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
-import { studioBoardSprites, studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
+import { studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
 import { NavButton } from './shared/NavButton';
@@ -68,7 +67,7 @@ import {
   type StudioFamily,
 } from './studioBoard';
 import { featureThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
-import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
+import { resolveFeatureOverlays, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, wallArtBadge, wallArtItems, wallArtLabel, wallArtSpanEdges, wallArtSpanForId, type WallArtId } from '../core/wallArt';
 import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
@@ -82,8 +81,8 @@ import {
   type SurfacePatchPlacement,
 } from '../core/surfacePatches';
 import { SliderRow } from './dressing/SliderRow';
-import { GroundCoverLayer } from '../render/GroundCoverLayer';
-import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
+import { objectBaseZIndex, structureFrontZIndex } from '../render/sceneDepth';
+import { groundCoverSet, type GroundCoverDensity } from '../core/groundCover';
 import { UNIT_PALETTE_LABELS, UNIT_PALETTES, isUnitPalette, type UnitPalette } from '../core/pieces';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -197,6 +196,9 @@ function StudioEditableBoard({
   fences: placedFences = {},
   walls: placedWalls = {},
   wallArt: placedWallArt = {},
+  cover: placedCover = {},
+  coverTypes: placedCoverTypes = {},
+  coverSeed = 1234,
   fenceTool = false,
   wallTool = false,
   wallArtTool = false,
@@ -224,7 +226,6 @@ function StudioEditableBoard({
   onMove,
   canMoveTo,
   propBrush,
-  overlay,
   hidden,
   regionCells,
   onRegionStart,
@@ -246,6 +247,12 @@ function StudioEditableBoard({
   walls?: Record<string, WallMaterial>;
   /** Wall art keyed by anchor edge; spans across N north/west perimeter wall edges. */
   wallArt?: Record<string, WallArtId>;
+  /** Painted ground-cover densities keyed by cell. */
+  cover?: Record<string, GroundCoverDensity>;
+  /** Optional per-cell ground-cover family overrides. */
+  coverTypes?: Record<string, TileFamilyId>;
+  /** Scatter seed for live ground-cover placement. */
+  coverSeed?: number;
   /** When true, the brush paints EDGES (fences) not cells: hover picks the nearest diamond edge. */
   fenceTool?: boolean;
   /** When true, the brush paints EDGES (walls) not cells: hover picks the nearest diamond edge. */
@@ -286,7 +293,6 @@ function StudioEditableBoard({
   canMoveTo?: (subject: MoveSubject, to: { x: number; y: number }) => boolean;
   /** When the prop brush is armed: its def + a placeability test, used for the footprint hover. */
   propBrush?: { def: PropDef; canPlaceAt: (ax: number, ay: number) => boolean } | null;
-  overlay?: ReactNode;
   /** Per-layer visibility — a true value hides that layer's elements on the board. */
   hidden?: { tile: boolean; unit: boolean; doodad: boolean };
   /** Cells currently selected ("x,y" keys) — drawn as a tinted diamond overlay. */
@@ -302,9 +308,7 @@ function StudioEditableBoard({
   // Edge-fence painting: which diamond side is under the cursor (the rail will drop there).
   const [hoverEdge, setHoverEdge] = useState<{ x: number; y: number; edge: FeatureEdge } | null>(null);
   const edgeTool = fenceTool || wallTool || wallArtTool;
-  const fenceOverlayMap = resolveFenceOverlays(placedFences);
   const wallBounds = { cols, rows };
-  const wallOverlayMap = resolveWallOverlays(placedWalls, wallBounds);
   const applyTool = (x: number, y: number) => {
     if (tool === 'brush') onPaint(x, y);
     else if (tool === 'erase') onErase(x, y);
@@ -502,44 +506,37 @@ function StudioEditableBoard({
     }
   }
 
-  // Units + doodads render at GRID level via the SHARED seat (.board-unit-seat) and the
-  // shared <DoodadSprite> through `studioBoardSprites` — exactly the same seating the read-only
-  // viewer uses, so they can't drift. The editor injects a transparent doodad hit target
-  // alongside each prop: the doodad stands UP above its foot cell and the shared sprite is
-  // pointer-events:none, so clicking the visible body would otherwise fall through to the cell
-  // behind it. The hit routes the tool to the doodad's OWN cell; transparent in brush mode so
-  // painting still flows to the tiles underneath, catching clicks only while erasing/selecting.
-  const overlaySprites: ReactNode[] = studioBoardSprites({
-    units: placedUnits,
-    doodads: placedDoodads,
-    resolveUnit,
-    resolveDoodad,
-    hidden,
-    renderDoodadExtra: ({ x: cx, y: cy, left, top, zIndex }) => (
-      <span
-        key={`dd-hit-${cx},${cy}`}
-        className="tileset-doodad-hit"
-        style={{ position: 'absolute', left, top, zIndex: zIndex + 20002, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' || tool === 'move' || movingFrom ? 'none' : 'auto' }}
-        onPointerDown={(event) => {
-          if (event.button === 2) return;
-          event.stopPropagation();
-          if (tool !== 'select') paintingRef.current = true;
-          applyTool(cx, cy);
-        }}
-        onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
-      />
-    ),
-  });
+  // Board art now renders through BoardSceneLayer. These remaining DOM nodes are editor-only
+  // hit targets for tall bodies whose visible pixels extend beyond their owning tile.
+  const overlaySprites: ReactNode[] = [];
+  if (!hidden?.doodad) {
+    for (const key of Object.keys(placedDoodads)) {
+      const [cx, cy] = key.split(',').map(Number);
+      const { left, top } = boardLabCellPosition({ x: cx, y: cy });
+      overlaySprites.push(
+        <span
+          key={`dd-hit-${cx},${cy}`}
+          className="tileset-doodad-hit"
+          style={{ position: 'absolute', left, top, zIndex: objectBaseZIndex({ x: cx, y: cy }) + 2, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' || tool === 'move' || movingFrom ? 'none' : 'auto' }}
+          onPointerDown={(event) => {
+            if (event.button === 2) return;
+            event.stopPropagation();
+            if (tool !== 'select') paintingRef.current = true;
+            applyTool(cx, cy);
+          }}
+          onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
+        />,
+      );
+    }
+  }
 
-  // Multi-cell props: the tall PropSprite (back/front halves) seated over its footprint, plus a
-  // Studio-only hit target spanning the footprint's screen bbox so a click on the prop body routes
-  // select/erase to the OWNING ANCHOR (the shared sprite is pointer-events:none, so otherwise the
-  // click falls through to whatever cell is behind it).
+  // Multi-cell props use a Studio-only hit target spanning the footprint's screen bbox so a click
+  // on the prop body routes select/erase to the OWNING ANCHOR.
   for (const [key, placement] of Object.entries(placedProps)) {
+    if (hidden?.doodad) continue;
     const def = resolveProp(placement.propId);
     if (!def) continue; // unknown prop id — skip (matches the renderer/collision skip)
     const [ax, ay] = key.split(',').map(Number);
-    overlaySprites.push(<PropSprite key={`prop-${key}`} prop={{ x: ax, y: ay, propId: placement.propId }} def={def} />);
     // Footprint screen bbox: project all footprint cell centres, take their extent, pad to the
     // diamond half-width/height. zIndex above the front-most cell's sprite so clicks land on it.
     const cells = propCells(ax, ay, def);
@@ -548,7 +545,7 @@ function StudioEditableBoard({
     const maxLeft = Math.max(...pts.map((p) => p.left));
     const minTop = Math.min(...pts.map((p) => p.top));
     const maxTop = Math.max(...pts.map((p) => p.top));
-    const frontZ = (ax + def.w - 1) + (ay + def.h - 1) + 20000;
+    const frontZ = structureFrontZIndex({ x: ax + def.w - 1, y: ay + def.h - 1 });
     overlaySprites.push(
       <span
         key={`prop-hit-${key}`}
@@ -621,6 +618,25 @@ function StudioEditableBoard({
     );
   }
 
+  const sceneBoard: EditorBoard = {
+    cols,
+    rows,
+    cells: placed,
+    surfacePatches: [...placedSurfacePatches],
+    units: placedUnits,
+    doodads: placedDoodads,
+    props: placedProps,
+    cover: placedCover,
+    coverTypes: placedCoverTypes,
+    features: placedFeatures as EditorBoard['features'],
+    fences: placedFences,
+    walls: placedWalls,
+    wallArt: placedWallArt,
+    featureCuts: {},
+    featureExits: {},
+    zones: {},
+  };
+
   return (
     <TileGrid
       cells={cells}
@@ -628,14 +644,19 @@ function StudioEditableBoard({
       ariaLabel="Editable tile board"
       boardZoom={boardZoom}
       boardPan={boardPan}
-      backgroundLayer={<BoardTerrainLayer cells={terrainCells} patches={terrainCanvasPatches(placedSurfacePatches)} />}
+      backgroundLayer={(
+        <>
+          <BoardTerrainLayer
+            cells={terrainCells}
+            patches={hidden?.tile ? [] : terrainCanvasPatches(placedSurfacePatches)}
+          />
+          <BoardSceneLayer board={sceneBoard} hidden={hidden} coverSeed={coverSeed} ambientCover={false} omitTerrain />
+        </>
+      )}
       onPointerUp={endInteraction}
       onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
     >
-      {overlay}
       {showGrid ? <BoardGridLayer cells={cells} /> : null}
-      <WallOverlayLayer overlays={wallOverlayMap} wallArt={placedWallArt} bounds={wallBounds} />
-      <FenceOverlayLayer overlays={fenceOverlayMap} />
       {overlaySprites}
     </TileGrid>
   );
@@ -1981,6 +2002,7 @@ export function LevelEditor(): ReactElement {
     setStatusLog((prev) => [entry, ...prev].slice(0, STATUS_LOG_LIMIT));
   };
   const readOnlyLiveMap = Boolean(remoteMapId && !remoteMapCanEdit);
+  const liveMapUnavailable = Boolean(routeParams.mapId && liveSyncState === 'error' && remoteMapRevision === null);
 
   const applyRemoteMapMetadata = (doc: EditorMapDocument): void => {
     setRemoteMapId(doc.public_id);
@@ -2949,7 +2971,8 @@ export function LevelEditor(): ReactElement {
     autoCreateMapRef.current = true;
     setLiveSyncState('creating');
     const levelAtCreate = candidateLevel;
-    void createEditorMap(levelAtCreate)
+    const headless = !routeParams.campaignId && !routeParams.levelId;
+    void createEditorMap(levelAtCreate, { headless })
       .then((doc) => {
         applyRemoteMapMetadata(doc);
         lastRemoteSyncedSigRef.current = levelSignature(levelAtCreate);
@@ -3571,21 +3594,6 @@ export function LevelEditor(): ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCell, boardProps]);
   const coverCount = Object.keys(boardCover).length;
-  // Resolve the painted cover into concrete tufts (once, here — not per render). Re-roll
-  // bumps coverSeed to reshuffle every cell's scatter while keeping the same densities.
-  const coverCells = useMemo(() => {
-    const list: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover: GroundCover }> = [];
-    for (const [key, density] of Object.entries(boardCover)) {
-      const [x, y] = key.split(',').map(Number);
-      const tileId = boardCells[key];
-      const tileTerrain = tileId ? (leFamilyOfTile(tileId)?.id as TileFamilyId | undefined) : undefined;
-      // Cover set: the per-cell override if present (cover decoupled from terrain), else the tile's own terrain.
-      const coverType = boardCoverTypes[key] ?? tileTerrain;
-      if (!coverType || !groundCoverSet(coverType)) continue;
-      list.push({ x, y, terrain: coverType, groundCover: { density, tufts: rollGroundCover(coverType, x, y, coverSeed, density) } });
-    }
-    return list;
-  }, [boardCover, boardCoverTypes, boardCells, coverSeed]);
   const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedZones = selectedCell
     ? boardZoneEntries
@@ -3774,49 +3782,58 @@ export function LevelEditor(): ReactElement {
           <div className="skirmish-board-frame">
             <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
               <div className="tileset-view-board-content is-board">
-                <StudioEditableBoard
-                  cols={boardCols}
-                  rows={boardRows}
-                  cells={boardCells}
-                  surfacePatches={boardSurfacePatches}
-                  units={boardUnits}
-                  doodads={boardDoodads}
-                  props={boardProps}
-                  features={featureOverlays}
-                  zones={visibleZones}
-                  resolveAsset={resolveAsset}
-                  resolveUnit={resolveUnitAsset}
-                  resolveDoodad={resolveDoodadAsset}
-                  resolveProp={resolvePropDef}
-                  tool={readOnlyLiveMap ? 'select' : tool}
-                  selectedCell={selectedCell}
-                  boardZoom={viewZoom}
-                  boardPan={viewPan}
-                  showGrid={showGrid}
-                  tacticalPreview={tacticalPreview}
-                  animationFrame={animationFrame}
-                  onPaint={readOnlyLiveMap ? (() => {}) : paintCell}
-                  onErase={readOnlyLiveMap ? (() => {}) : eraseCell}
-                  onSelect={selectCell}
-                  onMove={readOnlyLiveMap ? undefined : moveObject}
-                  canMoveTo={readOnlyLiveMap ? undefined : canMoveObjectTo}
-                  fences={boardFences}
-                  fenceTool={readOnlyLiveMap ? false : fenceTool}
-                  onPaintEdge={paintFenceEdge}
-                  onEraseEdge={eraseFenceEdge}
-                  walls={boardWalls}
-                  wallTool={readOnlyLiveMap ? false : wallTool}
-                  onPaintWallEdge={paintWallEdge}
-                  onEraseWallEdge={eraseWallEdge}
-                  wallArt={boardWallArt}
-                  wallArtTool={readOnlyLiveMap ? false : wallArtTool}
-                  onPaintWallArtEdge={paintWallArtEdge}
-                  onEraseWallArtEdge={eraseWallArtEdge}
-                  propBrush={!readOnlyLiveMap && brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
-                  overlay={<GroundCoverLayer cells={coverCells} />}
-                  regionCells={readOnlyLiveMap ? undefined : regionSelection}
-                  onRegionStart={readOnlyLiveMap ? undefined : regionSelectPatch}
-                />
+                {liveMapUnavailable ? (
+                  <div className="tileset-view-empty le-live-map-unavailable" role="status" aria-live="polite">
+                    <h2>Live map unavailable</h2>
+                    <p>This map link has expired, was pruned, or could not be reached. No fallback board is being shown.</p>
+                  </div>
+                ) : (
+                  <StudioEditableBoard
+                    cols={boardCols}
+                    rows={boardRows}
+                    cells={boardCells}
+                    surfacePatches={boardSurfacePatches}
+                    units={boardUnits}
+                    doodads={boardDoodads}
+                    props={boardProps}
+                    features={featureOverlays}
+                    zones={visibleZones}
+                    resolveAsset={resolveAsset}
+                    resolveUnit={resolveUnitAsset}
+                    resolveDoodad={resolveDoodadAsset}
+                    resolveProp={resolvePropDef}
+                    tool={readOnlyLiveMap ? 'select' : tool}
+                    selectedCell={selectedCell}
+                    boardZoom={viewZoom}
+                    boardPan={viewPan}
+                    showGrid={showGrid}
+                    tacticalPreview={tacticalPreview}
+                    animationFrame={animationFrame}
+                    onPaint={readOnlyLiveMap ? (() => {}) : paintCell}
+                    onErase={readOnlyLiveMap ? (() => {}) : eraseCell}
+                    onSelect={selectCell}
+                    onMove={readOnlyLiveMap ? undefined : moveObject}
+                    canMoveTo={readOnlyLiveMap ? undefined : canMoveObjectTo}
+                    fences={boardFences}
+                    cover={boardCover}
+                    coverTypes={boardCoverTypes}
+                    coverSeed={coverSeed}
+                    fenceTool={readOnlyLiveMap ? false : fenceTool}
+                    onPaintEdge={paintFenceEdge}
+                    onEraseEdge={eraseFenceEdge}
+                    walls={boardWalls}
+                    wallTool={readOnlyLiveMap ? false : wallTool}
+                    onPaintWallEdge={paintWallEdge}
+                    onEraseWallEdge={eraseWallEdge}
+                    wallArt={boardWallArt}
+                    wallArtTool={readOnlyLiveMap ? false : wallArtTool}
+                    onPaintWallArtEdge={paintWallArtEdge}
+                    onEraseWallArtEdge={eraseWallArtEdge}
+                    propBrush={!readOnlyLiveMap && brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
+                    regionCells={readOnlyLiveMap ? undefined : regionSelection}
+                    onRegionStart={readOnlyLiveMap ? undefined : regionSelectPatch}
+                  />
+                )}
               </div>
             </ViewPane>
           </div>

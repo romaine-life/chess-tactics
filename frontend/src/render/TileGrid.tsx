@@ -20,7 +20,7 @@ export interface TileGridCell {
    * Added to the cell's paint order (x+y). For a cell whose art PROTRUDES far past its own tile
    * into the cells in front — a bridge's near rail + pier hang ~2.5 rows below the equator — so the
    * front (higher-z) tiles don't paint over that overhang. Sorts identically among bumped cells, so
-   * a run stays correctly layered; kept small so it never climbs into the unit band (+20000).
+   * a run stays correctly layered; kept small so it never climbs into the object band.
    */
   zBump?: number;
   /** Per-cell DOM chrome: missing labels, selection rings, editor hit targets, etc. */

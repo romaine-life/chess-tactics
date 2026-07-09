@@ -52,7 +52,7 @@ const doodadFromArt = (id: string, label: string): DoodadAsset => {
 };
 
 // Grass tuft retired: ambient grass is now the general ground-cover tile feature
-// (core/groundCover + GroundCoverLayer), not a placed doodad. The glossary keeps the
+// (core/groundCover + the board scene canvas), not a placed doodad. The glossary keeps the
 // grass-tuft sprites only as a static figure illustrating the back/front split.
 export const BASE_DOODAD_ASSETS: DoodadAsset[] = [
   doodadFromArt('boulder', 'Boulder'),

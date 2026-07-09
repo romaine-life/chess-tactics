@@ -10,6 +10,7 @@ import {
 import { roadEdgeKey } from '../core/featureAutotile';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
+import { objectBaseZIndex, structureBackZIndex } from './sceneDepth';
 import type { EditorBoard } from '../ui/boardCode';
 
 // Coverage (opaque fraction) of a rect under an opacity predicate — the property object-fit:cover
@@ -176,7 +177,7 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
 });
 
 describe('boardDrawOps — z-order matches the live DOM bands', () => {
-  it('sorts tiles by x+y, then brackets the unit/doodad in the +20000 band', () => {
+  it('sorts tiles by x+y, then brackets the unit/doodad in the object band', () => {
     const board: EditorBoard = {
       ...blank(),
       cells: { '0,0': TILE },
@@ -187,8 +188,8 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const z = ops.map((op) => op.z);
     // Non-decreasing (sorted) and the unit/doodad sit far above the tile band.
     expect([...z].sort((a, b) => a - b)).toEqual(z);
-    expect(Math.max(...z)).toBeGreaterThan(20000);
-    expect(Math.min(...z)).toBeLessThan(20000);
+    expect(Math.max(...z)).toBeGreaterThan(objectBaseZIndex({ x: 0, y: 0 }));
+    expect(Math.min(...z)).toBeLessThan(objectBaseZIndex({ x: 0, y: 0 }));
   });
 
   it('brackets a prop around a unit standing on its front-most footprint cell', () => {
@@ -251,29 +252,35 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(featureOp!.z).toBeLessThan(20000);
   });
 
-  it('draws edge fences above the owner unit and below the near unit/front-half draw order', () => {
+  it('draws edge fences above ground cover and below object/unit draw order', () => {
     const board: EditorBoard = {
-      ...blank(3, 3),
-      cells: { '1,1': TILE },
+      ...blank(4, 4),
+      cells: { '1,1': TILE, '2,1': TILE, '2,2': TILE },
+      cover: { '1,1': 'filled', '2,1': 'filled', '2,2': 'filled' },
       fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' },
       units: { '1,1': UNIT, '2,1': UNIT },
       doodads: { '1,1': { doodadId: 'boulder' } },
     };
     const ops = boardDrawOps(board);
     const fence = ops.find((op) => op.src === '/assets/tiles/feature/fence-wood-2.png');
-    const ownerUnit = ops.find((op) => op.contain && op.z === 1 + 1 + 20000);
-    const nearUnit = ops.find((op) => op.contain && op.z === 2 + 1 + 20000);
+    const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 1, y: 1 }));
+    const nearUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 2, y: 1 }));
+    const coverOps = ops.filter((op) => op.src.includes('/assets/groundcover/'));
+    const doodadBack = ops.find((op) => op.src === '/assets/doodads/boulder/back.png');
     const doodadFront = ops.find((op) => op.src === '/assets/doodads/boulder/front.png');
     expect(fence).toBeDefined();
     expect(ownerUnit).toBeDefined();
     expect(nearUnit).toBeDefined();
+    expect(coverOps.length).toBeGreaterThan(0);
+    expect(doodadBack).toBeDefined();
     expect(doodadFront).toBeDefined();
     expect(fence!.z).toBe(fenceOverlayZIndex({ x: 1, y: 1 }));
-    expect(fence!.z).toBeGreaterThan(ownerUnit!.z);
-    expect(fence!.z).toBe(nearUnit!.z);
-    expect(fence!.z).toBe(doodadFront!.z);
-    expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(nearUnit!));
-    expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(doodadFront!));
+    expect(fence!.z).toBeGreaterThan(Math.max(...coverOps.map((op) => op.z)));
+    expect(fence!.z).toBeLessThan(ownerUnit!.z);
+    expect(fence!.z).toBeLessThan(nearUnit!.z);
+    expect(fence!.z).toBeLessThan(doodadBack!.z);
+    expect(fence!.z).toBeLessThan(doodadFront!.z);
+    expect(doodadBack!.z).toBe(structureBackZIndex({ x: 1, y: 1 }));
   });
 
   it('draws north/west perimeter walls with the wall frame anchor', () => {
@@ -285,7 +292,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     };
     const ops = boardDrawOps(board);
     const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-1.png');
-    const ownerUnit = ops.find((op) => op.contain && op.z === 1 + 0 + 20000);
+    const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 1, y: 0 }));
     expect(wall).toBeDefined();
     expect(ownerUnit).toBeDefined();
     expect(wall).toMatchObject({ dw: 128, dh: 240 });
@@ -307,7 +314,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const ops = boardDrawOps(board);
     const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-8.png');
     const art = ops.find((op) => op.src === '/assets/wall-decor/banner-tattered-west.png');
-    const ownerUnit = ops.find((op) => op.contain && op.z === 0 + 0 + 20000);
+    const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 0, y: 0 }));
 
     expect(wall).toBeDefined();
     expect(art).toBeDefined();
