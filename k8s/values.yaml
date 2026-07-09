@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-a9442a1942321f077c76e69ce05c7606192b135c8a56a8c0864a2b816ef714ff"
+  tag: "app-9ab9d73346a6ed7be726e542ec005c6d990a2f59f19a0723d93f2b52d458e938"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix shared level thumbnail rendering"
-  prNumber: "451"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/451"
-  commit: "3386473"
+  prTitle: "Fix victory-rules seeding race clobbering authored templates"
+  prNumber: "453"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/453"
+  commit: "b76e78f"
 
 name: chess-tactics
 namespace: chess-tactics
