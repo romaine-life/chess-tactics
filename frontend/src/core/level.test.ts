@@ -258,6 +258,7 @@ describe('level schema', () => {
     expect(withCastle({ kingTo: { x: 6, y: 6 } })).toBe(false); // destination leaves the line
     expect(withCastle({ rook: { x: 4, y: 7 } })).toBe(false); // king and rook share a square
     expect(withCastle({ kingTo: { x: 4, y: 7 } })).toBe(false); // king "moves" to its own square
+    expect(withCastle({ rookTo: { x: 6, y: 7 } })).toBe(false); // kingTo === rookTo would stack two pieces
     expect(withCastle({ king: { x: 4.5, y: 7 } })).toBe(false); // non-integer square
     expect(withCastle({}, { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: 'z1' })).toBe(false); // wrong trigger
   });

@@ -396,9 +396,7 @@ function negamax(
   const side = state.turn as Side;
   // Chess draw rules (when the game enforces them) are terminal INSIDE the search too,
   // so the engine steers into a saving repetition and never shuffles into one blindly.
-  // Threefold counts committed occurrences (positionCounts) plus this line's ancestors;
-  // the 50-move check honours mate precedence — with the side to move in check it falls
-  // through to move generation, where no-legal-move resolves as mate below.
+  // Threefold counts committed occurrences (positionCounts) plus this line's ancestors.
   const drawRules = state.drawRules;
   const clock = state.halfmoveClock ?? 0;
   let nodeKey: string | null = null;
@@ -408,8 +406,16 @@ function negamax(
     for (const key of s.path) if (key === nodeKey) seen += 1;
     if (seen >= 3) return 0;
   }
-  const fiftyDraw = !!drawRules?.fiftyMove && clock >= 100;
-  if (fiftyDraw && !sideInCheck(state, side, env)) return 0;
+  // A filled 50-move clock is adjudicated EXACTLY here, before the depth-0 handoff —
+  // quiesce knows nothing of the clock, and this node is terminal in committed play.
+  // Mate precedence per FIDE: in check with no escape it is checkmate, else a draw.
+  if (drawRules?.fiftyMove && clock >= 100) {
+    if (!sideInCheck(state, side, env)) return 0;
+    const escape = livingPieces(state.pieces, side).some((p) => legalMoves(p, state.pieces, state.size, env).length > 0);
+    if (escape) return 0;
+    const mated: Winner = side === 'player' ? 'enemy' : 'player';
+    return color * terminalScore(mated, ply);
+  }
 
   if (depth === 0) return quiesce(s, state, lastMove, ply, alpha, beta, turnsElapsed, QUIESCE_MAX_PLY);
 
@@ -426,7 +432,6 @@ function negamax(
     }
     return 0;
   }
-  if (fiftyDraw) return 0; // in check but an escape exists: the clock still draws it
   entries.sort(
     (a, b) => captureValue(b.move, state.pieces, s.weights.pieceValues) - captureValue(a.move, state.pieces, s.weights.pieceValues),
   );

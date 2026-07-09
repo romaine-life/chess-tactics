@@ -193,4 +193,22 @@ describe('search sees the chess draw rules (ADR-0072)', () => {
     const noRule = searchBestAction(losing, {}, sctx(), createRng(1), FAST)!;
     expect(noRule.score).toBeGreaterThan(1);
   });
+
+  it('adjudicates a clock-filling CHECK as the draw it is, even at the search horizon (depth 1)', () => {
+    // Enemy is up a full queen at clock 99. The quiet queen check fills the clock — in
+    // committed play ruleDraw instantly declares the 50-move draw (the king has escapes),
+    // throwing the win away. Before the depth-0 fix, quiesce scored that node as +9
+    // material and depth-1 search happily played it; the pawn push (resets the clock,
+    // keeps the queen) is the only move that preserves the win.
+    const pieces = [
+      piece('p-king', 'player', 'king', 0, 0),
+      piece('e-queen', 'enemy', 'queen', 4, 1),
+      piece('e-king', 'enemy', 'king', 7, 7),
+      piece('e-pawn', 'enemy', 'pawn', 6, 3),
+    ];
+    const s = state(pieces, { drawRules: { fiftyMove: true }, halfmoveClock: 99 });
+    const chosen = searchBestAction(s, {}, sctx(), null, { maxDepth: 1, maxNodes: 50_000 })!;
+    expect(chosen.pieceId).toBe('e-pawn');
+    expect(chosen.score).toBeLessThan(-1); // player-positive: the enemy keeps its winning material
+  });
 });

@@ -541,6 +541,7 @@ function levelEventActionErrors(action: unknown, trigger: unknown, path: string,
       if (king.x === rook.x && king.y === rook.y) errs.push(`${path} king and rook must be different squares`);
       else if (!sameRow && !sameCol) errs.push(`${path} castle squares must share one rank or file`);
       if (kingTo.x === king.x && kingTo.y === king.y) errs.push(`${path}.kingTo must differ from the king's square`);
+      if (kingTo.x === rookTo.x && kingTo.y === rookTo.y) errs.push(`${path}.kingTo and rookTo must be different squares (two pieces cannot land on one square)`);
     }
   } else if (a.kind === 'chess-draws') {
     if (triggerKind !== 'setup') errs.push(`${path}.kind 'chess-draws' requires a setup trigger`);

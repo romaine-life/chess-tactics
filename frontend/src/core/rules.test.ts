@@ -549,9 +549,15 @@ describe('castling', () => {
     expect(find(legalMoves(pieces[0], pieces, SIZE, fenced), 6, 11)).toBeUndefined();
   });
 
+  it('skips a degenerate authored rule whose kingTo and rookTo share a square (no piece stacking)', () => {
+    const pieces = [king(), rookK(), foeKing()];
+    const stacked: MoveEnv = { castleRules: [{ ...KINGSIDE, rookTo: { x: 6, y: 11 } }] };
+    expect(find(legalMoves(pieces[0], pieces, SIZE, stacked), 6, 11)).toBeUndefined();
+  });
+
   it('applyMove relocates both pieces in ONE action: turn flips once, rights burn, castled event fires', () => {
     const pieces = [king(), rookK(), foeKing()];
-    const state: GameState = { size: SIZE, pieces, turn: 'player', winner: null };
+    const state: GameState = { size: SIZE, pieces, turn: 'player', winner: null, castleRules: [KINGSIDE, QUEENSIDE] };
     const mv = find(legalMoves(pieces[0], pieces, SIZE, env()), 6, 11)!;
     const res = applyMove(state, pieces[0].id, mv);
     expect(res.state.pieces.find((p) => p.id === pieces[0].id)).toMatchObject({ x: 6, y: 11, hasMoved: true });
@@ -578,6 +584,7 @@ describe('halfmove clock', () => {
     pieces: [P('player', 'queen', 4, 6), P('player', 'pawn', 0, 11), P('player', 'king', 2, 10), P('enemy', 'pawn', 4, 3), P('enemy', 'king', 7, 0)],
     turn: 'player',
     winner: null,
+    drawRules: { fiftyMove: true },
     halfmoveClock: 7,
   });
 
@@ -592,6 +599,13 @@ describe('halfmove clock', () => {
   it('resets on any pawn move', () => {
     const s = base();
     expect(applyMove(s, 'player-pawn-0-11', { x: 0, y: 10 }).state.halfmoveClock).toBe(0);
+  });
+  it('leaves a state WITHOUT draw rules byte-identical: no clock, no hasMoved (ADR-0072 back-compat)', () => {
+    const s: GameState = { size: SIZE, pieces: base().pieces, turn: 'player', winner: null };
+    const res = applyMove(s, 'player-queen-4-6', { x: 3, y: 6 });
+    expect('halfmoveClock' in res.state).toBe(false);
+    const moved = res.state.pieces.find((p) => p.id === 'player-queen-4-6')!;
+    expect('hasMoved' in moved).toBe(false);
   });
 });
 

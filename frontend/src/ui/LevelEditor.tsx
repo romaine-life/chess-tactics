@@ -1084,8 +1084,8 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
             </div>
             <p className="le-board-note">
               In play the castle is offered while the king and rook sit unmoved on their squares, the path is clear,
-              and the king isn't in or moving through check. Moved the pieces? Remove this event and re-add the
-              Castling template.
+              and the king isn't in or moving through check. Moved the pieces or changed the Player faction? Remove
+              this event and re-add the Castling template.
             </p>
             <div className="le-rule-then">
               <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
@@ -2805,7 +2805,14 @@ export function LevelEditor(): ReactElement {
   const addCastlingTemplate = (): void => {
     const board = currentEditorBoardRef.current;
     const boardPlayerFaction = isUnitPalette(board.playerFaction) ? board.playerFaction : playerFaction;
-    const player = boardPlayerFaction ?? 'navy-blue';
+    // Castle events bake a player/enemy side, but the SAVE maps units to sides by the
+    // assigned Player faction (levelBoard.sideForFaction) — guessing here while it's unset
+    // would silently invert every pair once the author assigns it. Refuse instead.
+    if (!boardPlayerFaction) {
+      reportStatus('Assign a Player faction before adding castling.', 'error', 'Castle events are tagged player/enemy by faction. Set the Player faction first so each king-rook pair lands on the right side.');
+      return;
+    }
+    const player = boardPlayerFaction;
     const units: CastleTemplateUnit[] = [];
     for (const [key, placement] of Object.entries(board.units as Record<string, BoardUnitPlacement>)) {
       const [x, y] = key.split(',').map(Number);

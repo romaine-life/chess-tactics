@@ -79,12 +79,20 @@ once at build, resolved into GameState fields the way promotion events already r
 - Draw resolution: `rules.ruleDraw` — threefold at count ≥ 3 (key computed only past clock 8,
   the provable minimum), 50-move at clock ≥ 100 **unless the position is checkmate** (FIDE:
   mate on the clock-filling move wins; the check is self-contained so call sites need no
-  ordering discipline). Consumed by the store's `terminalIfStuck` (now returning a
-  `kind: checkmate | stalemate | fifty-move | threefold`, feeding log copy + `resultDetail`;
-  the result surfaces say "Draw" with the specific reason), by the self-play loop, and by
-  `negamax` — which also tracks repetition along its own search path (`SearchState.path`,
-  push/pop per node) on top of the committed counts, so the engine steers into or away from
-  draws instead of stumbling into them, which is exactly what the control group needs.
+  ordering discipline against their own mate detection). Consumed by the store's
+  `terminalIfStuck` (now returning a `kind: checkmate | stalemate | fifty-move | threefold`,
+  feeding log copy + `resultDetail`; the result surfaces say "Draw" with the specific
+  reason), by the self-play loop, and by `negamax` — which also tracks repetition along its
+  own search path (`SearchState.path`, push/pop per node) on top of the committed counts,
+  and adjudicates a filled clock exactly even at the search horizon (mate vs draw, before
+  the quiesce handoff), so the engine steers into or away from draws instead of stumbling
+  into them — exactly what the control group needs.
+- **Ordering: victory rules outrank the draw rules on every surface.** A move that both
+  satisfies an authored win and fills the clock (or repeats the position) resolves as the
+  win — identically in `commitPlayerMove`, `commitNet`, the enemy-reply callback (draws are
+  checked AFTER `resolveVictory` there; `resolveIfPlayerStuck` handles stuck positions
+  only), the self-play loop, and search. Live, netplay, and training adjudication can never
+  disagree on the same (level, seed, move sequence).
 
 ### Validation
 

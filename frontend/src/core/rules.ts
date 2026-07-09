@@ -293,6 +293,7 @@ function castleMoves(king: Piece, pieces: readonly Piece[], size: BoardSize, env
     if (rule.side !== king.side) continue;
     if (king.x !== rule.king.x || king.y !== rule.king.y) continue;
     if (rule.kingTo.x === king.x && rule.kingTo.y === king.y) continue; // a "move" to its own square is unclickable
+    if (rule.kingTo.x === rule.rookTo.x && rule.kingTo.y === rule.rookTo.y) continue; // two pieces can't land on one square
     if (!inBounds(rule.kingTo.x, rule.kingTo.y, size) || !inBounds(rule.rookTo.x, rule.rookTo.y, size)) continue;
     const rook = pieceAt(pieces, rule.rook.x, rule.rook.y);
     if (!rook || rook.type !== 'rook' || rook.side !== king.side || rook.hasMoved) continue;
@@ -531,7 +532,9 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
 
   piece.x = move.x;
   piece.y = move.y;
-  piece.hasMoved = true;
+  // Castling-rights history: only tracked when the game HAS castle rules, so a level
+  // without them keeps a byte-identical serialized GameState (ADR-0072 back-compat).
+  if (state.castleRules?.length) piece.hasMoved = true;
   events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
 
   // Castling: the same action also hops the rook (see Move.castle / castleMoves).
@@ -586,10 +589,14 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
   }
 
   const lastMove: LastMove = { pieceId: piece.id, pieceType: movedPieceType, side: piece.side, from, to: { x: piece.x, y: piece.y } };
-  // The 50-move rule's clock: halfmoves since the last capture or pawn move.
-  const halfmoveClock = tookPiece || movedPieceType === 'pawn' ? 0 : (state.halfmoveClock ?? 0) + 1;
+  // The 50-move rule's clock: halfmoves since the last capture or pawn move. Only
+  // maintained when the game enforces draw rules, so every other level's serialized
+  // GameState stays byte-identical to before (ADR-0072 back-compat).
+  const clockField = state.drawRules
+    ? { halfmoveClock: tookPiece || movedPieceType === 'pawn' ? 0 : (state.halfmoveClock ?? 0) + 1 }
+    : undefined;
 
-  return { state: { ...state, pieces, winner, turn, lastMove, halfmoveClock }, events };
+  return { state: { ...state, pieces, winner, turn, lastMove, ...clockField }, events };
 }
 
 const POSITION_TYPE_CODE: Record<PieceType, string> = {
