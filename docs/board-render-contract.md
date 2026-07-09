@@ -59,6 +59,8 @@ no longer fits.
 PixelLab owns the top-down material idea, not board geometry. Raw sources live in
 `docs/art/pixellab-runs/surface-patches/`; `frontend/scripts/build-surface-patches.py` crops and
 projects them into the canonical 96x54 cell plane. The bake seals projection misses, then gives
-the outer half-cell a quantized alpha apron so a patch blends into the complete 1x1 bed without
-requiring a hand-authored transition atlas. The editor, play route, read-only viewers, and server
-thumbnail plan all consume the same persisted placements and catalog.
+each source a controlled palette tie to its production terrain family. The outer half-cell uses
+a deterministic, low-frequency contour and quantized alpha apron, so a patch blends into the
+complete 1x1 bed without exposing a perfect rectangular stamp or requiring a hand-authored
+transition atlas. The editor, play route, read-only viewers, and server thumbnail plan all consume
+the same persisted placements and catalog.
