@@ -82,6 +82,20 @@ describe('advanceTd — the owner grammar over the engine', () => {
     expect(JSON.parse(JSON.stringify(a.session))).toEqual(a.session);
   });
 
+  it('probeEvery 0 with probeGames > 0 probes exactly once, at budget completion (trainValues’ final-snapshot story)', { timeout: 120_000 }, async () => {
+    const lvl = kqk3();
+    const opts: TrainOptions = { games: 20, seed: 5, maxPlies: 40, probeEvery: 0, probeGames: 4 };
+    const cfg: TdRunConfig = { opts, seedCount: 1 };
+    const mid = await advanceTd(lvl, cfg, freshTdSession(opts), 10);
+    expect(mid.session.probe).toBeNull();                       // no cadence -> nothing mid-run
+    const done = await advanceTd(lvl, cfg, mid.session, Number.MAX_SAFE_INTEGER);
+    expect(done.session.probe?.game).toBe(opts.games);          // the one completion probe
+    expect(done.session.probe?.winRate).toBe(evaluateVsRandom(lvl, done.session.train.weights, 4, { maxPlies: 40 }));
+    // ...and probeGames 0 stays silent even at completion.
+    const silent = await advanceTd(lvl, { opts: { ...opts, probeGames: 0 }, seedCount: 1 }, freshTdSession({ ...opts, probeGames: 0 }), Number.MAX_SAFE_INTEGER);
+    expect(silent.session.probe).toBeNull();
+  });
+
   it('clamps at the budget: a step on a completed session runs nothing', { timeout: 120_000 }, async () => {
     const lvl = kqk3();
     const { session: done } = await advanceTd(lvl, CFG, freshTdSession(OPTS), OPTS.games);

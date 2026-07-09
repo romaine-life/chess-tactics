@@ -10,6 +10,7 @@
 
 import type { Level } from '../core/level';
 import {
+  DEFAULT_PROBE_GAMES,
   createTrainingSession, derivedSeeds, evaluateVsRandom, runTrainingGames, summarizeSeeds,
   type SeedSummary, type TrainOptions, type TrainSessionState, type ValueWeights,
 } from '../game/tdValues';
@@ -51,11 +52,11 @@ export function freshTdSession(opts: TrainOptions): TdSession {
   return { train: createTrainingSession(opts), probe: null };
 }
 
-/** trainValues' probe defaulting, verbatim: probeGames defaults to 16 when a cadence
- * is set, else 0 (no probes). */
+/** trainValues' probe defaulting (shared constant, not a re-stated literal):
+ * probeGames defaults to DEFAULT_PROBE_GAMES when a cadence is set, else 0. */
 const probePlanOf = (opts: TrainOptions): { every: number; games: number } => {
   const every = opts.probeEvery ?? 0;
-  return { every, games: opts.probeGames ?? (every > 0 ? 16 : 0) };
+  return { every, games: opts.probeGames ?? (every > 0 ? DEFAULT_PROBE_GAMES : 0) };
 };
 
 /**
@@ -81,7 +82,10 @@ export async function advanceTd(
     if (control?.shouldStop?.()) return { session: cur, stopped: true };
     const train = runTrainingGames(level, opts, cur.train, 1);
     let latest = cur.probe;
-    if (probe.games > 0 && probe.every > 0 && (train.game % probe.every === 0 || train.game === opts.games)) {
+    // trainValues' probe story exactly: on the cadence when one is set, and ALWAYS once
+    // at budget completion while probeGames > 0 (its final snapshot probes even with
+    // probeEvery 0) — so the session reproduces the batch trainer's probes too.
+    if (probe.games > 0 && ((probe.every > 0 && train.game % probe.every === 0) || train.game === opts.games)) {
       latest = { game: train.game, winRate: evaluateVsRandom(level, train.weights, probe.games, { maxPlies: opts.maxPlies }) };
     }
     cur = { train, probe: latest };

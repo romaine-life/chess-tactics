@@ -642,6 +642,7 @@ h1 {
   gap: 7px;
 }
 .pages-ctl-row > input[type="range"],
+.pages-ctl-row > input[type="number"],
 .pages-ctl-row > select,
 .pages-ctl-row > .tileset-tier-seg {
   flex: 1 1 auto;

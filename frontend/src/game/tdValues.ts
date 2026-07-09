@@ -129,6 +129,10 @@ const DEFAULT_LAMBDA = 0.8;
 const DEFAULT_ALPHA: AnnealSchedule = { start: 0.1, end: 0.01 };
 const DEFAULT_EPSILON: AnnealSchedule = { start: 0.25, end: 0.02 };
 const DEFAULT_MAX_PLIES = 120;
+/** Games per win-rate probe when a probe is due but no count was given — exported so
+ * the stepping session (lab/tdSession.ts) and any driving surface derive from HERE
+ * instead of re-stating the literal (ADR-0057: baselines are derived, never copied). */
+export const DEFAULT_PROBE_GAMES = 16;
 /** The engine-baseline knob set, exported so a driving surface's Reset derives from
  * HERE (ADR-0057: reset to the committed baseline, never a hand-copied literal). */
 export const DEFAULT_TRAIN_OPTIONS = {
@@ -501,7 +505,7 @@ export function trainValues(level: Level, opts: TrainOptions): TrainResult {
   const cfg = trainConfigOf(opts);
   const games = cfg.games;
   const probeEvery = opts.probeEvery ?? 0;
-  const probeGames = opts.probeGames ?? (probeEvery > 0 ? 16 : 0);
+  const probeGames = opts.probeGames ?? (probeEvery > 0 ? DEFAULT_PROBE_GAMES : 0);
 
   const w = new Float64Array(TYPE_COUNT).fill(cfg.initialWeight);
   // Root features read the MASTER-seed deal; each training game re-deals from
