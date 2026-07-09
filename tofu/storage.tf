@@ -52,6 +52,16 @@ resource "azurerm_storage_container" "bgm" {
   container_access_type = "blob"
 }
 
+# Editable unit sprites. The browser reads these through same-origin backend
+# routes so canvas rendering stays untainted; the container itself remains
+# private. Blob names are content hashes, so an accepted-art change never
+# overwrites bytes already cached by a browser or thumbnail renderer.
+resource "azurerm_storage_container" "unit_assets" {
+  name                  = "unit-assets"
+  storage_account_id    = azurerm_storage_account.media.id
+  container_access_type = "private"
+}
+
 # chess-tactics' CI service principal (created by module.app_org["chess-tactics"]
 # in infra-bootstrap). Data-plane write lets the `sync-bgm-metadata` workflow
 # stamp each track's title/artist/album onto its blob as metadata (read from the
@@ -76,11 +86,20 @@ moved {
 
 # The app pod's workload identity (chess-tactics-identity, identity.tf) builds
 # /api/bgm by LISTING the container and reading each blob's metadata. Reader
-# includes list; the app never writes. This is the UAMI's only Azure data-plane
-# grant besides being the Postgres Entra admin.
+# includes list; the app never writes BGM. Unit asset write access is granted
+# separately and scoped to its private container below.
 resource "azurerm_role_assignment" "bgm_reader" {
   scope                = azurerm_storage_account.media.id
   role_definition_name = "Storage Blob Data Reader"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+
+# Unit Studio writes candidates and accepted sprite sets through the backend.
+# Scope contributor access to this container; the BGM container remains read-only
+# to the app identity.
+resource "azurerm_role_assignment" "unit_assets_writer" {
+  scope                = azurerm_storage_container.unit_assets.resource_manager_id
+  role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_user_assigned_identity.app.principal_id
 }
 
@@ -99,4 +118,9 @@ output "bgm_container" {
 output "bgm_container_url" {
   value       = "https://${azurerm_storage_account.media.name}.blob.core.windows.net/${azurerm_storage_container.bgm.name}"
   description = "Public base URL for BGM index.json + tracks (the backend's BGM_BASE_URL)."
+}
+
+output "unit_assets_container_url" {
+  value       = "https://${azurerm_storage_account.media.name}.blob.core.windows.net/${azurerm_storage_container.unit_assets.name}"
+  description = "Private container used by the live unit-art catalog."
 }

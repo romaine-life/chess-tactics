@@ -385,6 +385,7 @@ function prodBackend(port) {
             DEV_AUTH_EMAIL: process.env.DEV_AUTH_EMAIL || 'nelson@romaine.life',
             DEV_AUTH_NAME: process.env.DEV_AUTH_NAME || 'Nelson',
             ADMIN_EMAILS: process.env.ADMIN_EMAILS || 'nelson@romaine.life',
+            UNIT_ASSET_CONTAINER_URL: process.env.UNIT_ASSET_CONTAINER_URL || 'https://chesstacticsmedia.blob.core.windows.net/unit-assets',
             PORT: String(port),
           },
           stdio: ['ignore', 'pipe', 'pipe'],

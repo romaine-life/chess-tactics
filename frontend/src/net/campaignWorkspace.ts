@@ -9,6 +9,11 @@ export interface Workspace {
   levels: Record<string, Level>;
 }
 
+export interface OfficialCampaignLoadResult {
+  workspace: Workspace;
+  available: boolean;
+}
+
 export async function loadWorkspace(): Promise<Workspace> {
   const res = await fetch('/api/campaign-workspace', { credentials: 'include' });
   if (!res.ok) throw await HttpError.fromResponse('load', res);
@@ -45,18 +50,23 @@ function asWorkspace(value: unknown): Workspace {
   };
 }
 
-export async function loadOfficialCampaigns(): Promise<Workspace> {
+export async function loadOfficialCampaignsResult(): Promise<OfficialCampaignLoadResult> {
   // The live DB row (public GET, design_portfolios envelope) is authoritative. Any error or a
-  // synthesized-empty miss resolves to no officials rather than throwing.
+  // synthesized-empty miss resolves to no officials rather than throwing. Keep availability
+  // separate so route hydration can retry a transient failure instead of caching it as success.
   const empty: Workspace = { campaigns: [], levels: {} };
   try {
     const res = await fetch(`/api/official-campaigns/${OFFICIAL_ID}`, { cache: 'no-cache' });
-    if (!res.ok) return empty;
+    if (!res.ok) return { workspace: empty, available: false };
     const body = (await res.json()) as { portfolio?: { data?: unknown } };
-    return asWorkspace(body.portfolio?.data);
+    return { workspace: asWorkspace(body.portfolio?.data), available: true };
   } catch {
-    return empty;
+    return { workspace: empty, available: false };
   }
+}
+
+export async function loadOfficialCampaigns(): Promise<Workspace> {
+  return (await loadOfficialCampaignsResult()).workspace;
 }
 
 export async function saveOfficialCampaigns(ws: Workspace): Promise<{ revision: number }> {

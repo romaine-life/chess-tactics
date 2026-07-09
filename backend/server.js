@@ -55,6 +55,18 @@ const BGM_CACHE_TTL_MS = 5 * 60 * 1000;
 let bgmCache = { tracks: null, expiry: 0 };
 let bgmContainerClient = null; // lazily built Azure ContainerClient (list mode only)
 
+// Live Unit Studio art. Metadata and accepted pointers live in Postgres; PNG
+// bytes are content-addressed in this private container. UNIT_ASSET_STORAGE_DIR
+// is the deterministic local/CI implementation of the same blob-key contract.
+const unitAssetContainerUrl = (process.env.UNIT_ASSET_CONTAINER_URL || '').replace(/\/+$/, '');
+const unitAssetStorageDir = String(process.env.UNIT_ASSET_STORAGE_DIR || '').trim();
+const UNIT_ASSET_MAX_BYTES = 10 * 1024 * 1024;
+const UNIT_SPRITE_CACHE_MAX_BYTES = Math.max(
+  0,
+  Number.parseInt(process.env.UNIT_SPRITE_CACHE_BYTES || '', 10) || 24 * 1024 * 1024,
+);
+let unitAssetContainerClient = null;
+
 // Game Lab runs carry whole recorded-game batches (validateLabRun allows up to
 // ~8 MB of JSON), far past the global 256kb ceiling. Mount their larger parser
 // first: once it has consumed the body, the global parser below sees the
@@ -76,6 +88,10 @@ app.use('/api/official-campaigns', express.json({ limit: '10mb' }));
 // Editor maps are live Level documents (boardCode + layer arrays) and can be created by
 // in-editor autosave or an agent handoff. They need the same headroom as a single level doc.
 app.use('/api/editor-maps', express.json({ limit: '4mb' }));
+// Sprite upload routes send one PNG as the request body. Mount this before the
+// global JSON parser; it only consumes image/png, so candidate metadata requests
+// continue through to express.json below.
+app.use('/api/admin/unit-assets', express.raw({ type: 'image/png', limit: '10mb' }));
 app.use(express.json({ limit: '256kb' }));
 
 // ---------------------------------------------------------------------------
@@ -380,6 +396,85 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS editor_map_audit_public_idx ON editor_map_audit_events (public_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS editor_map_audit_anonymous_idx ON editor_map_audit_events (anonymous_user_hash, created_at DESC)
         WHERE anonymous_user_hash IS NOT NULL;
+    `,
+  },
+  {
+    version: 14,
+    name: 'live unit art catalog',
+    // Six stable chess-piece families point at their currently accepted art.
+    // Candidate rows are replaceable art sets, not gameplay identities: levels
+    // continue to mean pawn/rook/etc. regardless of which sprite set is live.
+    // PNG bytes live in Azure Blob Storage; Postgres owns only catalog metadata,
+    // geometry, content hashes, acceptance, and the audit trail.
+    sql: `
+      CREATE TABLE IF NOT EXISTS unit_assets (
+        id                      uuid        PRIMARY KEY,
+        family                  text        NOT NULL CHECK (family IN ('pawn', 'rook', 'knight', 'bishop', 'queen', 'king')),
+        label                   text        NOT NULL,
+        method                  text        NOT NULL DEFAULT 'Imported',
+        notes                   text        NOT NULL DEFAULT '',
+        status                  text        NOT NULL DEFAULT 'candidate' CHECK (status IN ('candidate', 'archived')),
+        footprint_shape         text        NOT NULL DEFAULT 'circle' CHECK (footprint_shape IN ('circle', 'square')),
+        source_canvas_width     integer     NOT NULL CHECK (source_canvas_width > 0 AND source_canvas_width <= 4096),
+        source_canvas_height    integer     NOT NULL CHECK (source_canvas_height > 0 AND source_canvas_height <= 4096),
+        source_footprint_px     numeric     NOT NULL CHECK (source_footprint_px > 0 AND source_footprint_px <= 4096),
+        anchor_x                numeric     NOT NULL DEFAULT 0.5 CHECK (anchor_x >= 0 AND anchor_x <= 1),
+        anchor_y                numeric     NOT NULL DEFAULT 0.80241 CHECK (anchor_y >= 0 AND anchor_y <= 1),
+        row_revision            integer     NOT NULL DEFAULT 0,
+        created_at              timestamptz NOT NULL DEFAULT now(),
+        updated_at              timestamptz NOT NULL DEFAULT now(),
+        updated_by              text,
+        UNIQUE (id, family)
+      );
+
+      CREATE TABLE IF NOT EXISTS unit_families (
+        family                  text        PRIMARY KEY CHECK (family IN ('pawn', 'rook', 'knight', 'bishop', 'queen', 'king')),
+        accepted_asset_id       uuid,
+        display_scale_percent   integer     NOT NULL DEFAULT 100 CHECK (display_scale_percent >= 60 AND display_scale_percent <= 140),
+        row_revision            integer     NOT NULL DEFAULT 0,
+        updated_at              timestamptz NOT NULL DEFAULT now(),
+        updated_by              text,
+        FOREIGN KEY (accepted_asset_id, family) REFERENCES unit_assets (id, family)
+      );
+
+      CREATE TABLE IF NOT EXISTS unit_sprites (
+        asset_id                uuid        NOT NULL REFERENCES unit_assets (id) ON DELETE CASCADE,
+        palette                 text        NOT NULL CHECK (palette IN ('navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white')),
+        direction               text        NOT NULL CHECK (direction IN ('north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west')),
+        sha256                  text        NOT NULL CHECK (char_length(sha256) = 64),
+        blob_key                text        NOT NULL,
+        content_type            text        NOT NULL DEFAULT 'image/png' CHECK (content_type = 'image/png'),
+        width                   integer     NOT NULL CHECK (width > 0 AND width <= 4096),
+        height                  integer     NOT NULL CHECK (height > 0 AND height <= 4096),
+        byte_length             integer     NOT NULL CHECK (byte_length > 0 AND byte_length <= 10485760),
+        created_at              timestamptz NOT NULL DEFAULT now(),
+        updated_at              timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (asset_id, palette, direction)
+      );
+      CREATE INDEX IF NOT EXISTS unit_assets_family_status_idx ON unit_assets (family, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS unit_sprites_sha_idx ON unit_sprites (sha256);
+
+      CREATE TABLE IF NOT EXISTS unit_catalog_state (
+        singleton               boolean     PRIMARY KEY DEFAULT true CHECK (singleton),
+        revision                bigint      NOT NULL DEFAULT 0,
+        updated_at              timestamptz NOT NULL DEFAULT now()
+      );
+      INSERT INTO unit_catalog_state (singleton) VALUES (true) ON CONFLICT (singleton) DO NOTHING;
+
+      INSERT INTO unit_families (family) VALUES
+        ('pawn'), ('rook'), ('knight'), ('bishop'), ('queen'), ('king')
+      ON CONFLICT (family) DO NOTHING;
+
+      CREATE TABLE IF NOT EXISTS unit_asset_events (
+        id                      bigserial   PRIMARY KEY,
+        family                  text        NOT NULL,
+        asset_id                uuid,
+        action                  text        NOT NULL,
+        actor_email             text,
+        details                 jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        created_at              timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS unit_asset_events_family_idx ON unit_asset_events (family, created_at DESC);
     `,
   },
 ];
@@ -3593,6 +3688,719 @@ app.put('/api/wall-art/:id', async (req, res) => {
   }
 });
 
+// --- Live unit-art catalog -------------------------------------------------
+// Gameplay has exactly six stable unit identities. Candidate assets are Studio
+// records that can be accepted for one of those identities; no asset UUID is
+// ever written into gameplay state. Sprite bytes are immutable/content-addressed
+// while these rows provide the editable mapping and render geometry.
+const UNIT_CATALOG_SCHEMA_VERSION = 1;
+const UNIT_FAMILY_IDS = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'king'];
+const UNIT_PALETTE_IDS = ['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white'];
+const UNIT_DIRECTION_IDS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+const UNIT_FAMILY_SET = new Set(UNIT_FAMILY_IDS);
+const UNIT_PALETTE_SET = new Set(UNIT_PALETTE_IDS);
+const UNIT_DIRECTION_SET = new Set(UNIT_DIRECTION_IDS);
+const UNIT_ASSET_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UNIT_SPRITE_SHA_PATTERN = /^[0-9a-f]{64}$/;
+const UNIT_CATALOG_CACHE_TTL_MS = 5 * 1000;
+let unitCatalogCache = { at: 0, body: null };
+const unitSpriteBufferCache = new Map();
+let unitSpriteBufferCacheBytes = 0;
+
+function unitAssetId(raw) {
+  const id = String(raw || '').trim();
+  return UNIT_ASSET_ID_PATTERN.test(id) ? id.toLowerCase() : null;
+}
+
+function unitFamilyId(raw) {
+  const family = String(raw || '').trim().toLowerCase();
+  return UNIT_FAMILY_SET.has(family) ? family : null;
+}
+
+function unitPaletteId(raw) {
+  const palette = String(raw || '').trim().toLowerCase();
+  return UNIT_PALETTE_SET.has(palette) ? palette : null;
+}
+
+function unitDirectionId(raw) {
+  const direction = String(raw || '').trim().toLowerCase();
+  return UNIT_DIRECTION_SET.has(direction) ? direction : null;
+}
+
+function boundedUnitText(raw, fallback, max) {
+  if (raw === undefined) return fallback;
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  return value.length <= max ? value : null;
+}
+
+function finiteUnitNumber(raw, fallback, min, max) {
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= min && value <= max ? value : null;
+}
+
+function integerUnitNumber(raw, fallback, min, max) {
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= min && value <= max ? value : null;
+}
+
+function validateUnitAssetInput(raw, current = null) {
+  if (!isObjectRecord(raw)) return { error: 'unit asset metadata must be an object' };
+  const family = current ? current.family : unitFamilyId(raw.family);
+  if (!family) return { error: 'family must be pawn, rook, knight, bishop, queen, or king' };
+  const label = boundedUnitText(raw.label, current ? current.label : '', 80);
+  if (label === null || !label) return { error: 'label must be 1-80 characters' };
+  const method = boundedUnitText(raw.method, current ? current.method : 'Imported', 80);
+  if (method === null || !method) return { error: 'method must be 1-80 characters' };
+  const notes = boundedUnitText(raw.notes, current ? current.notes : '', 2000);
+  if (notes === null) return { error: 'notes must be at most 2000 characters' };
+  const footprintShape = String(raw.footprintShape ?? raw.footprint_shape ?? current?.footprint_shape ?? 'circle');
+  if (footprintShape !== 'circle' && footprintShape !== 'square') return { error: 'footprintShape must be circle or square' };
+  const sourceCanvasWidth = integerUnitNumber(
+    raw.sourceCanvasWidth ?? raw.source_canvas_width,
+    current ? Number(current.source_canvas_width) : 512,
+    1,
+    4096,
+  );
+  const sourceCanvasHeight = integerUnitNumber(
+    raw.sourceCanvasHeight ?? raw.source_canvas_height,
+    current ? Number(current.source_canvas_height) : 512,
+    1,
+    4096,
+  );
+  const sourceFootprintPx = finiteUnitNumber(
+    raw.sourceFootprintPx ?? raw.source_footprint_px,
+    current ? Number(current.source_footprint_px) : 150,
+    1,
+    4096,
+  );
+  const anchorX = finiteUnitNumber(raw.anchorX ?? raw.anchor_x, current ? Number(current.anchor_x) : 0.5, 0, 1);
+  const anchorY = finiteUnitNumber(raw.anchorY ?? raw.anchor_y, current ? Number(current.anchor_y) : 0.80241, 0, 1);
+  if (sourceCanvasWidth === null || sourceCanvasHeight === null) return { error: 'source canvas dimensions must be integers from 1-4096' };
+  if (sourceFootprintPx === null) return { error: 'sourceFootprintPx must be between 1 and 4096' };
+  if (anchorX === null || anchorY === null) return { error: 'anchor coordinates must be between 0 and 1' };
+  return {
+    value: {
+      family,
+      label,
+      method,
+      notes,
+      footprintShape,
+      sourceCanvasWidth,
+      sourceCanvasHeight,
+      sourceFootprintPx,
+      anchorX,
+      anchorY,
+    },
+  };
+}
+
+function requestExpectedRevision(req) {
+  const rawBody = isObjectRecord(req.body) ? req.body : {};
+  const bodyValue = rawBody.expectedRevision ?? rawBody.expected_revision;
+  if (Number.isInteger(bodyValue) && bodyValue >= 0) return bodyValue;
+  const rawHeader = String(req.headers['if-match'] || '').trim().replace(/^W\//, '').replace(/^"|"$/g, '');
+  if (/^\d+$/.test(rawHeader)) return Number(rawHeader);
+  return null;
+}
+
+function unitMutationError(code, status, details = null) {
+  const error = new Error(code);
+  error.unitCode = code;
+  error.httpStatus = status;
+  error.unitDetails = details;
+  return error;
+}
+
+function sendUnitMutationError(res, error, fallbackCode) {
+  if (error && error.unitCode) {
+    const body = { error: error.unitCode };
+    if (error.unitDetails !== null) body.details = error.unitDetails;
+    res.status(error.httpStatus || 400).json(body);
+    return;
+  }
+  dbUnavailable(res, fallbackCode.replace(/_/g, ' '), error, fallbackCode);
+}
+
+function inspectUnitPng(buffer) {
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  if (!Buffer.isBuffer(buffer) || buffer.length < 33 || !buffer.subarray(0, 8).equals(signature)) {
+    return { error: 'body must be a PNG image' };
+  }
+  if (buffer.toString('ascii', 12, 16) !== 'IHDR') return { error: 'PNG is missing its IHDR header' };
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  if (width < 1 || height < 1 || width > 4096 || height > 4096) {
+    return { error: 'PNG dimensions must be between 1 and 4096 pixels' };
+  }
+  if (buffer.length > UNIT_ASSET_MAX_BYTES) return { error: 'PNG exceeds the 10 MB limit' };
+  return { width, height };
+}
+
+function unitBlobKey(sha256) {
+  return `sprites/${sha256.slice(0, 2)}/${sha256}.png`;
+}
+
+function unitBlobLocalPath(blobKey) {
+  const root = path.resolve(unitAssetStorageDir);
+  const target = path.resolve(root, ...String(blobKey).split('/'));
+  if (target !== root && !target.startsWith(`${root}${path.sep}`)) throw new Error('invalid unit blob key');
+  return target;
+}
+
+function unitStorageConfigured() {
+  return Boolean(unitAssetStorageDir || unitAssetContainerUrl);
+}
+
+function azureUnitContainer() {
+  if (unitAssetContainerClient) return unitAssetContainerClient;
+  if (!unitAssetContainerUrl) throw new Error('UNIT_ASSET_CONTAINER_URL is not configured');
+  const { BlobServiceClient } = require('@azure/storage-blob');
+  const { DefaultAzureCredential } = require('@azure/identity');
+  const url = new URL(unitAssetContainerUrl);
+  const service = new BlobServiceClient(`${url.protocol}//${url.host}`, new DefaultAzureCredential());
+  unitAssetContainerClient = service.getContainerClient(decodeURIComponent(url.pathname.replace(/^\/+/, '')));
+  return unitAssetContainerClient;
+}
+
+async function writeUnitBlob(blobKey, buffer, sha256) {
+  if (unitAssetStorageDir) {
+    const target = unitBlobLocalPath(blobKey);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    if (!fs.existsSync(target)) fs.writeFileSync(target, buffer);
+    return;
+  }
+  const block = azureUnitContainer().getBlockBlobClient(blobKey);
+  try {
+    await block.uploadData(buffer, {
+      conditions: { ifNoneMatch: '*' },
+      blobHTTPHeaders: {
+        blobContentType: 'image/png',
+        blobCacheControl: 'public, max-age=31536000, immutable',
+      },
+      metadata: { sha256 },
+    });
+  } catch (error) {
+    const status = error && (error.statusCode || error.status);
+    if (status !== 409 && status !== 412 && error.code !== 'BlobAlreadyExists') throw error;
+  }
+}
+
+async function readUnitBlob(blobKey) {
+  if (unitAssetStorageDir) return fs.promises.readFile(unitBlobLocalPath(blobKey));
+  return azureUnitContainer().getBlobClient(blobKey).downloadToBuffer();
+}
+
+function cachedUnitSprite(sha256) {
+  const entry = unitSpriteBufferCache.get(sha256);
+  if (!entry) return null;
+  unitSpriteBufferCache.delete(sha256);
+  unitSpriteBufferCache.set(sha256, entry);
+  return entry.buffer;
+}
+
+function cacheUnitSprite(sha256, buffer) {
+  if (!UNIT_SPRITE_CACHE_MAX_BYTES || buffer.length > UNIT_SPRITE_CACHE_MAX_BYTES) return;
+  const prior = unitSpriteBufferCache.get(sha256);
+  if (prior) {
+    unitSpriteBufferCacheBytes -= prior.buffer.length;
+    unitSpriteBufferCache.delete(sha256);
+  }
+  unitSpriteBufferCache.set(sha256, { buffer });
+  unitSpriteBufferCacheBytes += buffer.length;
+  while (unitSpriteBufferCacheBytes > UNIT_SPRITE_CACHE_MAX_BYTES && unitSpriteBufferCache.size) {
+    const oldestKey = unitSpriteBufferCache.keys().next().value;
+    const oldest = unitSpriteBufferCache.get(oldestKey);
+    unitSpriteBufferCache.delete(oldestKey);
+    unitSpriteBufferCacheBytes -= oldest.buffer.length;
+  }
+}
+
+function invalidateUnitCatalogCache() {
+  unitCatalogCache = { at: 0, body: null };
+}
+
+async function withUnitCatalogTransaction(fn) {
+  await ensureDbReady();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    invalidateUnitCatalogCache();
+    return result;
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function bumpUnitCatalog(client) {
+  const { rows } = await client.query(
+    'UPDATE unit_catalog_state SET revision = revision + 1, updated_at = now() WHERE singleton = true RETURNING revision',
+  );
+  return Number(rows[0]?.revision || 0);
+}
+
+async function logUnitAssetEvent(client, family, assetIdValue, action, actorEmail, details = {}) {
+  await client.query(
+    `INSERT INTO unit_asset_events (family, asset_id, action, actor_email, details)
+       VALUES ($1, $2, $3, $4, $5::jsonb)`,
+    [family, assetIdValue, action, actorEmail, JSON.stringify(details)],
+  );
+}
+
+async function dbUnitAssetRow(id, queryable = pool, lock = false) {
+  const { rows } = await queryable.query(
+    `SELECT id, family, label, method, notes, status, footprint_shape,
+            source_canvas_width, source_canvas_height, source_footprint_px,
+            anchor_x, anchor_y, row_revision, created_at, updated_at, updated_by
+       FROM unit_assets WHERE id = $1${lock ? ' FOR UPDATE' : ''}`,
+    [id],
+  );
+  return rows[0] || null;
+}
+
+function assertUnitRevision(row, expected) {
+  if (expected !== null && Number(row.row_revision) !== expected) {
+    throw unitMutationError('unit_asset_conflict', 409, { currentRevision: Number(row.row_revision) });
+  }
+}
+
+async function dbReadUnitCatalog({ includeArchived = false, queryable = null } = {}) {
+  if (!queryable) await ensureDbReady();
+  const db = queryable || pool;
+  const [stateResult, familyResult, assetResult, spriteResult] = await Promise.all([
+    db.query('SELECT revision, updated_at FROM unit_catalog_state WHERE singleton = true'),
+    db.query(
+      `SELECT family, accepted_asset_id, display_scale_percent, row_revision, updated_at, updated_by
+         FROM unit_families
+        ORDER BY array_position($1::text[], family)`,
+      [UNIT_FAMILY_IDS],
+    ),
+    db.query(
+      `SELECT id, family, label, method, notes, status, footprint_shape,
+              source_canvas_width, source_canvas_height, source_footprint_px,
+              anchor_x, anchor_y, row_revision, created_at, updated_at, updated_by
+         FROM unit_assets
+        WHERE $1::boolean OR status <> 'archived'
+        ORDER BY family, created_at DESC`,
+      [includeArchived],
+    ),
+    db.query(
+      `SELECT s.asset_id, s.palette, s.direction, s.sha256, s.width, s.height, s.byte_length
+         FROM unit_sprites s
+         JOIN unit_assets a ON a.id = s.asset_id
+        WHERE $1::boolean OR a.status <> 'archived'
+        ORDER BY s.asset_id, s.palette, s.direction`,
+      [includeArchived],
+    ),
+  ]);
+
+  const acceptedIds = new Set(familyResult.rows.map((row) => row.accepted_asset_id).filter(Boolean).map(String));
+  const assets = assetResult.rows.map((row) => ({
+    id: String(row.id),
+    family: row.family,
+    label: row.label,
+    method: row.method,
+    notes: row.notes,
+    status: row.status,
+    accepted: acceptedIds.has(String(row.id)),
+    footprint: {
+      shape: row.footprint_shape,
+      sourceCanvasWidth: Number(row.source_canvas_width),
+      sourceCanvasHeight: Number(row.source_canvas_height),
+      sourceFootprintPx: Number(row.source_footprint_px),
+    },
+    anchor: { x: Number(row.anchor_x), y: Number(row.anchor_y) },
+    rowRevision: Number(row.row_revision),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    updatedBy: row.updated_by,
+    sprites: {},
+    spriteCount: 0,
+    complete: false,
+  }));
+  const byId = new Map(assets.map((asset) => [asset.id, asset]));
+  for (const row of spriteResult.rows) {
+    const asset = byId.get(String(row.asset_id));
+    if (!asset) continue;
+    if (!asset.sprites[row.palette]) asset.sprites[row.palette] = {};
+    asset.sprites[row.palette][row.direction] = {
+      url: `/api/unit-sprites/${row.sha256}.png`,
+      sha256: row.sha256,
+      width: Number(row.width),
+      height: Number(row.height),
+      byteLength: Number(row.byte_length),
+    };
+    asset.spriteCount += 1;
+  }
+  for (const asset of assets) {
+    asset.complete = UNIT_PALETTE_IDS.every((palette) =>
+      UNIT_DIRECTION_IDS.every((direction) => Boolean(asset.sprites[palette]?.[direction])));
+  }
+
+  return {
+    schemaVersion: UNIT_CATALOG_SCHEMA_VERSION,
+    revision: Number(stateResult.rows[0]?.revision || 0),
+    updatedAt: stateResult.rows[0]?.updated_at || null,
+    families: familyResult.rows.map((row) => ({
+      family: row.family,
+      acceptedAssetId: row.accepted_asset_id ? String(row.accepted_asset_id) : null,
+      displayScalePercent: Number(row.display_scale_percent),
+      rowRevision: Number(row.row_revision),
+      updatedAt: row.updated_at,
+      updatedBy: row.updated_by,
+    })),
+    assets,
+  };
+}
+
+async function publicUnitCatalog() {
+  const now = Date.now();
+  if (unitCatalogCache.body && now - unitCatalogCache.at < UNIT_CATALOG_CACHE_TTL_MS) return unitCatalogCache.body;
+  try {
+    const body = await dbReadUnitCatalog();
+    unitCatalogCache = { at: now, body };
+    return body;
+  } catch (error) {
+    if (unitCatalogCache.body) return unitCatalogCache.body;
+    throw error;
+  }
+}
+
+async function sendFreshUnitCatalog(res, status = 200, includeArchived = false) {
+  const catalog = includeArchived ? await dbReadUnitCatalog({ includeArchived: true }) : await publicUnitCatalog();
+  res.status(status).json(catalog);
+}
+
+app.get('/api/unit-catalog', async (req, res) => {
+  try {
+    const catalog = await publicUnitCatalog();
+    const etag = `"unit-catalog-${catalog.revision}"`;
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end();
+      return;
+    }
+    res.status(200).json(catalog);
+  } catch (error) {
+    dbUnavailable(res, 'unit catalog read failed', error, 'unit_catalog_unavailable');
+  }
+});
+
+async function unitSpriteRecord(sha256) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT blob_key, byte_length FROM unit_sprites WHERE sha256 = $1 LIMIT 1',
+    [sha256],
+  );
+  return rows[0] || null;
+}
+
+async function unitSpriteBytes(sha256, record = null) {
+  let png = cachedUnitSprite(sha256);
+  if (png) return png;
+  const sprite = record || await unitSpriteRecord(sha256);
+  if (!sprite) return null;
+  if (!unitStorageConfigured()) throw new Error('unit asset storage is not configured');
+  png = await readUnitBlob(sprite.blob_key);
+  cacheUnitSprite(sha256, png);
+  return png;
+}
+
+async function thumbnailDynamicSprite(src) {
+  const match = /^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/.exec(String(src || ''));
+  if (!match) return null;
+  return unitSpriteBytes(match[1]);
+}
+
+app.get(/^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/, async (req, res) => {
+  const sha256 = String(req.params[0] || '').toLowerCase();
+  if (!UNIT_SPRITE_SHA_PATTERN.test(sha256)) { res.status(404).send('not found'); return; }
+  try {
+    const record = await unitSpriteRecord(sha256);
+    if (!record) { res.status(404).send('not found'); return; }
+    const etag = `"${sha256}"`;
+    if (req.headers['if-none-match'] === etag) {
+      res.setHeader('ETag', etag);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.status(304).end();
+      return;
+    }
+    const png = await unitSpriteBytes(sha256, record);
+    if (!png) { res.status(404).send('not found'); return; }
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Length', String(png.length));
+    res.status(200).end(png);
+  } catch (error) {
+    console.error('unit sprite read failed:', error && error.message);
+    res.status(503).json({ error: 'unit_sprite_unavailable' });
+  }
+});
+
+app.get('/api/admin/unit-assets', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    await sendFreshUnitCatalog(res, 200, true);
+  } catch (error) {
+    dbUnavailable(res, 'unit catalog admin read failed', error, 'unit_catalog_unavailable');
+  }
+});
+
+app.post('/api/admin/unit-assets', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const validated = validateUnitAssetInput(isObjectRecord(req.body) ? req.body : {});
+  if (validated.error) { res.status(400).json({ error: 'invalid_unit_asset', details: validated.error }); return; }
+  const id = crypto.randomUUID();
+  const asset = validated.value;
+  try {
+    await withUnitCatalogTransaction(async (client) => {
+      await client.query(
+        `INSERT INTO unit_assets (
+           id, family, label, method, notes, footprint_shape, source_canvas_width,
+           source_canvas_height, source_footprint_px, anchor_x, anchor_y, updated_by
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [id, asset.family, asset.label, asset.method, asset.notes, asset.footprintShape,
+          asset.sourceCanvasWidth, asset.sourceCanvasHeight, asset.sourceFootprintPx,
+          asset.anchorX, asset.anchorY, user.email],
+      );
+      await logUnitAssetEvent(client, asset.family, id, 'created', user.email);
+      await bumpUnitCatalog(client);
+    });
+    res.setHeader('Location', `/api/admin/unit-assets/${id}`);
+    const catalog = await dbReadUnitCatalog({ includeArchived: true });
+    res.status(201).json({ assetId: id, catalog });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_asset_create_failed');
+  }
+});
+
+app.patch('/api/admin/unit-assets/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = unitAssetId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_unit_asset_id' }); return; }
+  const expected = requestExpectedRevision(req);
+  try {
+    await withUnitCatalogTransaction(async (client) => {
+      const current = await dbUnitAssetRow(id, client, true);
+      if (!current) throw unitMutationError('unit_asset_not_found', 404);
+      assertUnitRevision(current, expected);
+      const validated = validateUnitAssetInput(isObjectRecord(req.body) ? req.body : {}, current);
+      if (validated.error) throw unitMutationError('invalid_unit_asset', 400, validated.error);
+      const asset = validated.value;
+      await client.query(
+        `UPDATE unit_assets SET
+           label = $2, method = $3, notes = $4, footprint_shape = $5,
+           source_canvas_width = $6, source_canvas_height = $7,
+           source_footprint_px = $8, anchor_x = $9, anchor_y = $10,
+           row_revision = row_revision + 1, updated_at = now(), updated_by = $11
+         WHERE id = $1`,
+        [id, asset.label, asset.method, asset.notes, asset.footprintShape,
+          asset.sourceCanvasWidth, asset.sourceCanvasHeight, asset.sourceFootprintPx,
+          asset.anchorX, asset.anchorY, user.email],
+      );
+      await logUnitAssetEvent(client, current.family, id, 'metadata-updated', user.email);
+      await bumpUnitCatalog(client);
+    });
+    const catalog = await dbReadUnitCatalog({ includeArchived: true });
+    res.status(200).json({ assetId: id, catalog });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_asset_update_failed');
+  }
+});
+
+app.put('/api/admin/unit-assets/:id/sprites/:palette/:direction', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = unitAssetId(req.params.id);
+  const palette = unitPaletteId(req.params.palette);
+  const direction = unitDirectionId(req.params.direction);
+  if (!id || !palette || !direction) { res.status(400).json({ error: 'invalid_unit_sprite_address' }); return; }
+  if (!unitStorageConfigured()) { res.status(503).json({ error: 'unit_asset_storage_unavailable' }); return; }
+  const inspected = inspectUnitPng(req.body);
+  if (inspected.error) { res.status(400).json({ error: 'invalid_unit_sprite', details: inspected.error }); return; }
+  const expected = requestExpectedRevision(req);
+  try {
+    await ensureDbReady();
+    const before = await dbUnitAssetRow(id);
+    if (!before) throw unitMutationError('unit_asset_not_found', 404);
+    assertUnitRevision(before, expected);
+    const familyRow = await pool.query('SELECT accepted_asset_id FROM unit_families WHERE family = $1', [before.family]);
+    if (String(familyRow.rows[0]?.accepted_asset_id || '') === id) {
+      throw unitMutationError('accepted_unit_asset_locked', 409, 'Create a candidate before replacing accepted sprite frames.');
+    }
+    const sha256 = crypto.createHash('sha256').update(req.body).digest('hex');
+    const blobKey = unitBlobKey(sha256);
+    await writeUnitBlob(blobKey, req.body, sha256);
+    const result = await withUnitCatalogTransaction(async (client) => {
+      const current = await dbUnitAssetRow(id, client, true);
+      if (!current) throw unitMutationError('unit_asset_not_found', 404);
+      assertUnitRevision(current, expected);
+      if (current.status === 'archived') throw unitMutationError('unit_asset_archived', 409);
+      const lockedFamily = await client.query(
+        'SELECT accepted_asset_id FROM unit_families WHERE family = $1 FOR UPDATE',
+        [current.family],
+      );
+      if (String(lockedFamily.rows[0]?.accepted_asset_id || '') === id) {
+        throw unitMutationError('accepted_unit_asset_locked', 409, 'Create a candidate before replacing accepted sprite frames.');
+      }
+      await client.query(
+        `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (asset_id, palette, direction) DO UPDATE SET
+           sha256 = EXCLUDED.sha256, blob_key = EXCLUDED.blob_key,
+           width = EXCLUDED.width, height = EXCLUDED.height,
+           byte_length = EXCLUDED.byte_length, updated_at = now()`,
+        [id, palette, direction, sha256, blobKey, inspected.width, inspected.height, req.body.length],
+      );
+      const updated = await client.query(
+        `UPDATE unit_assets SET row_revision = row_revision + 1, updated_at = now(), updated_by = $2
+          WHERE id = $1 RETURNING row_revision`,
+        [id, user.email],
+      );
+      await logUnitAssetEvent(client, current.family, id, 'sprite-uploaded', user.email, { palette, direction, sha256 });
+      const catalogRevision = await bumpUnitCatalog(client);
+      return { rowRevision: Number(updated.rows[0].row_revision), catalogRevision };
+    });
+    res.status(200).json({
+      assetId: id,
+      palette,
+      direction,
+      rowRevision: result.rowRevision,
+      catalogRevision: result.catalogRevision,
+      sprite: { url: `/api/unit-sprites/${sha256}.png`, sha256, width: inspected.width, height: inspected.height, byteLength: req.body.length },
+    });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_sprite_upload_failed');
+  }
+});
+
+app.patch('/api/admin/unit-families/:family', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const family = unitFamilyId(req.params.family);
+  if (!family) { res.status(400).json({ error: 'invalid_unit_family' }); return; }
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  const scale = integerUnitNumber(raw.displayScalePercent ?? raw.display_scale_percent, null, 60, 140);
+  if (scale === null) { res.status(400).json({ error: 'invalid_unit_scale', details: 'displayScalePercent must be an integer from 60-140' }); return; }
+  const expected = requestExpectedRevision(req);
+  try {
+    await withUnitCatalogTransaction(async (client) => {
+      const { rows } = await client.query('SELECT row_revision FROM unit_families WHERE family = $1 FOR UPDATE', [family]);
+      if (!rows[0]) throw unitMutationError('unit_family_not_found', 404);
+      if (expected !== null && Number(rows[0].row_revision) !== expected) {
+        throw unitMutationError('unit_family_conflict', 409, { currentRevision: Number(rows[0].row_revision) });
+      }
+      await client.query(
+        `UPDATE unit_families SET display_scale_percent = $2, row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $3 WHERE family = $1`,
+        [family, scale, user.email],
+      );
+      await logUnitAssetEvent(client, family, null, 'display-scale-published', user.email, { displayScalePercent: scale });
+      await bumpUnitCatalog(client);
+    });
+    const catalog = await dbReadUnitCatalog({ includeArchived: true });
+    res.status(200).json({ family, catalog });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_family_update_failed');
+  }
+});
+
+app.post('/api/admin/unit-assets/:id/accept', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = unitAssetId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_unit_asset_id' }); return; }
+  const expected = requestExpectedRevision(req);
+  try {
+    await withUnitCatalogTransaction(async (client) => {
+      const asset = await dbUnitAssetRow(id, client, true);
+      if (!asset) throw unitMutationError('unit_asset_not_found', 404);
+      assertUnitRevision(asset, expected);
+      const { rows: spriteRows } = await client.query(
+        'SELECT palette, direction FROM unit_sprites WHERE asset_id = $1',
+        [id],
+      );
+      const present = new Set(spriteRows.map((row) => `${row.palette}/${row.direction}`));
+      const missing = [];
+      for (const palette of UNIT_PALETTE_IDS) for (const direction of UNIT_DIRECTION_IDS) {
+        if (!present.has(`${palette}/${direction}`)) missing.push(`${palette}/${direction}`);
+      }
+      if (missing.length) throw unitMutationError('unit_asset_incomplete', 409, { missing });
+      const familyResult = await client.query(
+        'SELECT accepted_asset_id, row_revision FROM unit_families WHERE family = $1 FOR UPDATE',
+        [asset.family],
+      );
+      const previousId = familyResult.rows[0]?.accepted_asset_id ? String(familyResult.rows[0].accepted_asset_id) : null;
+      if (previousId && previousId !== id) {
+        await client.query(
+          `UPDATE unit_assets SET status = 'archived', row_revision = row_revision + 1,
+             updated_at = now(), updated_by = $2 WHERE id = $1`,
+          [previousId, user.email],
+        );
+      }
+      await client.query(
+        `UPDATE unit_assets SET status = 'candidate', row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $2 WHERE id = $1`,
+        [id, user.email],
+      );
+      await client.query(
+        `UPDATE unit_families SET accepted_asset_id = $2, row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $3 WHERE family = $1`,
+        [asset.family, id, user.email],
+      );
+      await logUnitAssetEvent(client, asset.family, id, 'accepted', user.email, { previousAssetId: previousId });
+      await bumpUnitCatalog(client);
+    });
+    const catalog = await dbReadUnitCatalog({ includeArchived: true });
+    res.status(200).json({ assetId: id, catalog });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_asset_accept_failed');
+  }
+});
+
+app.post('/api/admin/unit-assets/:id/archive', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = unitAssetId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_unit_asset_id' }); return; }
+  const expected = requestExpectedRevision(req);
+  try {
+    await withUnitCatalogTransaction(async (client) => {
+      const asset = await dbUnitAssetRow(id, client, true);
+      if (!asset) throw unitMutationError('unit_asset_not_found', 404);
+      assertUnitRevision(asset, expected);
+      const familyResult = await client.query('SELECT accepted_asset_id FROM unit_families WHERE family = $1 FOR UPDATE', [asset.family]);
+      if (String(familyResult.rows[0]?.accepted_asset_id || '') === id) {
+        throw unitMutationError('accepted_unit_asset_cannot_archive', 409, 'Accept another candidate first.');
+      }
+      await client.query(
+        `UPDATE unit_assets SET status = 'archived', row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $2 WHERE id = $1`,
+        [id, user.email],
+      );
+      await logUnitAssetEvent(client, asset.family, id, 'archived', user.email);
+      await bumpUnitCatalog(client);
+    });
+    const catalog = await dbReadUnitCatalog({ includeArchived: true });
+    res.status(200).json({ assetId: id, catalog });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_asset_archive_failed');
+  }
+});
+
 // Global shipped per-level AI weights (ship-to-everyone). Public GET returns the whole
 // map (every player's live AI reads it before falling back to DEFAULT weights);
 // admin-gated PUT sets one level's vector, or clears it with { weights: null }. A
@@ -3880,11 +4688,20 @@ async function applyThumbnailRenderInputs() {
   if (serverRender && typeof serverRender.applyPropSeatOverrides === 'function') {
     try { serverRender.applyPropSeatOverrides(seats.data); } catch { /* keep the renderer's last-good seats */ }
   }
-  return { propSeatsRevision: seats.revision || 0 };
+  let unitCatalogRevision = 0;
+  if (serverRender && typeof serverRender.applyLiveUnitCatalog === 'function') {
+    try {
+      const catalog = await publicUnitCatalog();
+      serverRender.applyLiveUnitCatalog(catalog);
+      unitCatalogRevision = catalog.revision || 0;
+    } catch { /* keep the renderer's committed or last-good unit catalog */ }
+  }
+  return { propSeatsRevision: seats.revision || 0, unitCatalogRevision };
 }
 function thumbnailVersion(boardHash, renderInputs) {
   const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
-  return [boardHash, propSeatsRevision].filter(Boolean).join('-');
+  const unitCatalogRevision = renderInputs && renderInputs.unitCatalogRevision ? `uc${renderInputs.unitCatalogRevision}` : '';
+  return [boardHash, propSeatsRevision, unitCatalogRevision].filter(Boolean).join('-');
 }
 function playScreenName(input) {
   if (serverRender && typeof serverRender.playRouteScreenName === 'function') {
@@ -3950,7 +4767,15 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
     if (!png) {
       const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
       const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
-      png = await renderLevelCard({ plan, frontendDir, title: target.title, subtitle: target.subtitle, screenName: target.screenName, backgroundSrc });
+      png = await renderLevelCard({
+        plan,
+        frontendDir,
+        title: target.title,
+        subtitle: target.subtitle,
+        screenName: target.screenName,
+        backgroundSrc,
+        loadDynamicSprite: thumbnailDynamicSprite,
+      });
       if (_thumbCache.size >= THUMB_CACHE_MAX) _thumbCache.delete(_thumbCache.keys().next().value);
       _thumbCache.set(cacheKey, png);
     }

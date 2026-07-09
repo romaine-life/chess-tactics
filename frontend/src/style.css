@@ -4248,19 +4248,30 @@ h1 {
    Each board adds only its own chrome (move animation, or selection/hit) around this;
    the seat geometry lives nowhere else. Do not re-derive it per board. */
 .board-unit-seat {
+  --unit-scale: 1;
+  --unit-anchor-x: -50%;
+  --unit-anchor-y: -78%;
   position: absolute;
-  width: 72px;
-  height: 86px;
+  width: calc(72px * var(--unit-scale));
+  height: calc(86px * var(--unit-scale));
   display: grid;
   align-items: center;
   justify-items: center;
-  transform: translate(-50%, -78%);
+  transform: translate(var(--unit-anchor-x), var(--unit-anchor-y));
   pointer-events: none;
 }
+
+.board-unit-seat.is-pawn { --unit-scale: var(--unit-scale-pawn, 1); --unit-anchor-x: var(--unit-anchor-x-pawn, -50%); --unit-anchor-y: var(--unit-anchor-y-pawn, -78%); }
+.board-unit-seat.is-knight { --unit-scale: var(--unit-scale-knight, 1); --unit-anchor-x: var(--unit-anchor-x-knight, -50%); --unit-anchor-y: var(--unit-anchor-y-knight, -78%); }
+.board-unit-seat.is-bishop { --unit-scale: var(--unit-scale-bishop, 1); --unit-anchor-x: var(--unit-anchor-x-bishop, -50%); --unit-anchor-y: var(--unit-anchor-y-bishop, -78%); }
+.board-unit-seat.is-rook { --unit-scale: var(--unit-scale-rook, 1); --unit-anchor-x: var(--unit-anchor-x-rook, -50%); --unit-anchor-y: var(--unit-anchor-y-rook, -78%); }
+.board-unit-seat.is-queen { --unit-scale: var(--unit-scale-queen, 1); --unit-anchor-x: var(--unit-anchor-x-queen, -50%); --unit-anchor-y: var(--unit-anchor-y-queen, -78%); }
+.board-unit-seat.is-king { --unit-scale: var(--unit-scale-king, 1); --unit-anchor-x: var(--unit-anchor-x-king, -50%); --unit-anchor-y: var(--unit-anchor-y-king, -78%); }
+
 .board-unit-seat img {
   display: block;
-  max-height: 92px;
-  max-width: 78px;
+  max-height: calc(92px * var(--unit-scale));
+  max-width: calc(78px * var(--unit-scale));
   object-fit: contain;
   image-rendering: auto;
 }
@@ -9650,6 +9661,251 @@ body { font-size: 17px; }
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.unit-size-controls {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(67, 127, 179, 0.28);
+}
+
+.unit-size-controls-head,
+.unit-size-spec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.unit-size-controls-actions,
+.unit-asset-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.unit-size-controls button:disabled,
+.unit-asset-manager button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.unit-size-controls-head strong,
+.unit-size-spec-head strong {
+  color: #9eb1c5;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.unit-size-list {
+  display: grid;
+  gap: 9px;
+}
+
+.unit-size-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px 28px;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.unit-size-row > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.unit-size-row strong {
+  color: #dcecff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.unit-size-row em {
+  color: #79d3ff;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.unit-size-row input[type='number'] {
+  box-sizing: border-box;
+  width: 58px;
+  height: 28px;
+  min-width: 0;
+  padding: 0 5px;
+  color: #f3fbff;
+  text-align: center;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-size-row input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  accent-color: #5bc8ff;
+}
+
+.unit-size-reset {
+  width: 28px;
+  min-width: 28px;
+}
+
+.unit-art-lab-main {
+  padding: 0;
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+  overflow: hidden;
+}
+
+.unit-size-spec {
+  display: grid;
+  gap: 6px;
+}
+
+.unit-size-spec textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  max-height: 120px;
+  resize: vertical;
+  padding: 8px;
+  color: #cfe3ef;
+  background: rgba(2, 8, 13, 0.62);
+  border: 1px solid rgba(67, 127, 179, 0.28);
+  border-radius: 4px;
+  font: 600 10px/1.35 ui-monospace, Cascadia Mono, monospace;
+}
+
+.unit-asset-manager {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(67, 127, 179, 0.28);
+}
+
+.unit-asset-editor {
+  display: grid;
+  gap: 9px;
+}
+
+.unit-asset-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.unit-asset-fields label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.unit-asset-fields label.is-wide {
+  grid-column: 1 / -1;
+}
+
+.unit-asset-fields label > span {
+  color: #91a9bf;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.unit-asset-fields input,
+.unit-asset-fields select,
+.unit-asset-actions select,
+.unit-asset-archive-row select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 29px;
+  padding: 0 6px;
+  color: #eef8ff;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-asset-actions select {
+  flex: 1 1 88px;
+}
+
+.unit-asset-upload {
+  position: relative;
+  flex: 1 1 104px;
+  min-height: 29px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #dcecff;
+  background: rgba(17, 49, 72, 0.88);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.unit-asset-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.unit-asset-completeness {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+
+.unit-asset-completeness span {
+  color: #8fa5b8;
+  font: 700 10px/1.25 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-asset-completeness span.is-complete {
+  color: #76d9a5;
+}
+
+.unit-asset-current {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: #91a9bf;
+  font-size: 11px;
+}
+
+.unit-asset-current strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #dcecff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unit-asset-archive-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.unit-asset-status {
+  min-height: 14px;
+  color: #79d3ff;
+  font: 800 10px/1.3 var(--ds-font-sans, system-ui, sans-serif);
+  text-align: right;
 }
 
 .tileset-collection-select {

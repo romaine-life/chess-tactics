@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactElement } from 'react';
 import {
-  UNIT_IMG_MAX_H,
-  UNIT_IMG_MAX_W,
   type BakeBounds,
   type BoardDrawOp,
 } from '@chess-tactics/board-render';
@@ -83,8 +81,8 @@ function paintOp(
   withOpacity(ctx, op.opacity, () => {
     withFlipX(ctx, op, bounds, (dx, dy) => {
       if (op.contain) {
-        const boxW = Math.min(op.dw, UNIT_IMG_MAX_W);
-        const boxH = Math.min(op.dh, UNIT_IMG_MAX_H);
+        const boxW = op.dw;
+        const boxH = op.dh;
         const natW = img.naturalWidth || boxW;
         const natH = img.naturalHeight || boxH;
         const fit = Math.min(boxW / natW, boxH / natH);

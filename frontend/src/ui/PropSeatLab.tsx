@@ -523,7 +523,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
             {showSavedGhost ? <div className="ps-ghost"><PropSprite prop={{ x: ax, y: ay, propId: activeId }} def={savedDef} /></div> : null}
             <PropSprite prop={{ x: ax, y: ay, propId: activeId }} def={liveDef} />
             {showUnit ? (
-              <span className="board-unit-seat" style={{ left: unitPos.left, top: unitPos.top, zIndex: objectBaseZIndex(unitCell) }}>
+              <span className="board-unit-seat is-knight" style={{ left: unitPos.left, top: unitPos.top, zIndex: objectBaseZIndex(unitCell) }}>
                 <img src={pieceSpritePath('knight')} alt="" draggable={false} />
               </span>
             ) : null}

@@ -1,6 +1,6 @@
 // Portrait bake-off — the candidate pixel-art treatments of each unit's portrait
 // master, shown side by side in the Studio (Viewer › Portrait) so the user can pick
-// one. Mirrors the board-unit bake-off (see PIXEL_LIBRARIES in unitCatalog.ts):
+// one. Mirrors the retired board-unit bake-off treatments:
 // navy-only, held OUT of the shipped game; the live HUD keeps rendering `smooth`
 // until a winner is promoted. Assets are produced by
 // frontend/scripts/portraits/build-portrait-candidate.py.

@@ -60,7 +60,7 @@ const GLOSSARY_DETAILS: Record<string, ReactNode> = {
             <span className="doodad-layer-stage">
               <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
               <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
-              <span className="board-unit-seat" style={{ left: 0, top: 0 }}><img src="/assets/units/knight/navy-blue/south.png" alt="" aria-hidden="true" /></span>
+              <span className="board-unit-seat is-knight" style={{ left: 0, top: 0 }}><img src="/assets/units/knight/navy-blue/south.png" alt="" aria-hidden="true" /></span>
             </span>
           </span>
           <figcaption className="doodad-layer-cap"><strong>Back layer only.</strong> The whole tuft is behind the unit — it just stands in front of it.</figcaption>
@@ -70,7 +70,7 @@ const GLOSSARY_DETAILS: Record<string, ReactNode> = {
             <span className="doodad-layer-stage">
               <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
               <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
-              <span className="board-unit-seat" style={{ left: 0, top: 0 }}><img src="/assets/units/knight/navy-blue/south.png" alt="" aria-hidden="true" /></span>
+              <span className="board-unit-seat is-knight" style={{ left: 0, top: 0 }}><img src="/assets/units/knight/navy-blue/south.png" alt="" aria-hidden="true" /></span>
               <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/front.png" alt="" aria-hidden="true" /></span>
             </span>
           </span>

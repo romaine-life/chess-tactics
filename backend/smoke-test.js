@@ -164,6 +164,7 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     // The mock auth returns player@example.com for any non-rival session; make that
     // the official-campaigns admin so the requireAdmin path is exercised (ADR-0038).
     ADMIN_EMAILS: 'player@example.com',
+    UNIT_ASSET_STORAGE_DIR: path.join(hotRoot, 'unit-assets'),
     // Smoke-test databases are throwaway/reset by this file, so schema mutation is
     // intentional here even though local backend startup defaults to read-only check.
     SCHEMA_MIGRATIONS: 'auto',
@@ -289,7 +290,8 @@ function openSse(path, headers = {}) {
 // server applies migrations before it begins listening (and /health gates on
 // that), so waitForServer() has already returned by the time this runs.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats');
+  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
+  await queryDb("INSERT INTO unit_catalog_state (singleton) VALUES (true); INSERT INTO unit_families (family) VALUES ('pawn'), ('rook'), ('knight'), ('bishop'), ('queen'), ('king');");
 }
 
 async function queryDb(sql, params = []) {
@@ -304,16 +306,15 @@ async function queryDb(sql, params = []) {
 }
 
 async function waitForServer() {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
       throw new Error(`Server exited early with ${child.exitCode}\n${output}`);
     }
     try {
       const response = await get('/health');
       if (response.statusCode === 200 && response.body === 'ok') return;
-    } catch (_error) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    } catch (_error) { /* keep polling while the server starts */ }
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Server did not become healthy\n${output}`);
 }
@@ -444,6 +445,111 @@ async function main() {
   const playerHash = crypto.createHash('md5').update('player@example.com').digest('hex');
   if (!String(signedInBody.gravatar_url).includes(`/avatar/${playerHash}`) || signedInBody.avatar_url !== signedInBody.gravatar_url) {
     throw new Error(`Signed-in user did not include Gravatar avatar data: ${signedIn.body}`);
+  }
+
+  // Live unit catalog: stable six-family metadata, raw PNG upload, immutable
+  // sprite reads, optimistic scale edits, completeness-gated acceptance, and
+  // archive visibility all run against the disposable DB + local blob directory.
+  const emptyUnitCatalog = await get('/api/unit-catalog');
+  const emptyUnitBody = JSON.parse(emptyUnitCatalog.body);
+  if (emptyUnitCatalog.statusCode !== 200 || emptyUnitBody.families.length !== 6 || emptyUnitBody.assets.length !== 0) {
+    throw new Error(`Unexpected empty unit catalog: ${emptyUnitCatalog.statusCode} ${emptyUnitCatalog.body}`);
+  }
+  const unitMetadata = {
+    family: 'pawn',
+    label: 'Smoke pawn candidate',
+    method: 'Smoke test',
+    notes: 'Disposable candidate',
+    footprintShape: 'circle',
+    sourceCanvasWidth: 512,
+    sourceCanvasHeight: 512,
+    sourceFootprintPx: 150,
+    anchorX: 0.5,
+    anchorY: 0.78,
+  };
+  const anonymousUnitCreate = await request(
+    'POST', '/api/admin/unit-assets', { 'content-type': 'application/json' }, JSON.stringify(unitMetadata), 5000,
+  );
+  if (anonymousUnitCreate.statusCode !== 401) throw new Error(`Anonymous unit create should be 401: ${anonymousUnitCreate.statusCode}`);
+  const adminJson = { 'content-type': 'application/json', cookie: 'better-auth.session=abc' };
+  const createdUnit = await request('POST', '/api/admin/unit-assets', adminJson, JSON.stringify(unitMetadata), 5000);
+  if (createdUnit.statusCode !== 201) throw new Error(`Unit candidate create failed: ${createdUnit.statusCode} ${createdUnit.body}`);
+  const firstUnitId = JSON.parse(createdUnit.body).assetId;
+  const pawnPng = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'public', 'assets', 'units', 'pawn', 'navy-blue', 'south.png'));
+  const uploadedUnit = await request(
+    'PUT',
+    `/api/admin/unit-assets/${firstUnitId}/sprites/navy-blue/south`,
+    { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' },
+    pawnPng,
+    5000,
+  );
+  if (uploadedUnit.statusCode !== 200 || JSON.parse(uploadedUnit.body).rowRevision !== 1) {
+    throw new Error(`Unit sprite upload failed: ${uploadedUnit.statusCode} ${uploadedUnit.body}`);
+  }
+  const uploadedSprite = JSON.parse(uploadedUnit.body).sprite;
+  const servedSprite = await get(uploadedSprite.url, {}, 5000);
+  if (servedSprite.statusCode !== 200 || servedSprite.headers.etag !== `"${uploadedSprite.sha256}"` || !String(servedSprite.headers['cache-control']).includes('immutable')) {
+    throw new Error(`Unit sprite immutable read failed: ${servedSprite.statusCode} ${JSON.stringify(servedSprite.headers)}`);
+  }
+  const cachedSprite = await get(uploadedSprite.url, { 'if-none-match': servedSprite.headers.etag }, 5000);
+  if (cachedSprite.statusCode !== 304) throw new Error(`Unit sprite conditional read should be 304: ${cachedSprite.statusCode}`);
+  const incompleteAccept = await request(
+    'POST', `/api/admin/unit-assets/${firstUnitId}/accept`, { ...adminJson, 'if-match': '"1"' }, '{}', 5000,
+  );
+  if (incompleteAccept.statusCode !== 409 || JSON.parse(incompleteAccept.body).error !== 'unit_asset_incomplete') {
+    throw new Error(`Incomplete unit acceptance should be rejected: ${incompleteAccept.statusCode} ${incompleteAccept.body}`);
+  }
+  const publishedScale = await request(
+    'PATCH', '/api/admin/unit-families/pawn', { ...adminJson, 'if-match': '"0"' }, JSON.stringify({ displayScalePercent: 112 }), 5000,
+  );
+  if (publishedScale.statusCode !== 200) throw new Error(`Unit scale publish failed: ${publishedScale.statusCode} ${publishedScale.body}`);
+  const archivedUnit = await request(
+    'POST', `/api/admin/unit-assets/${firstUnitId}/archive`, { ...adminJson, 'if-match': '"1"' }, '{}', 5000,
+  );
+  if (archivedUnit.statusCode !== 200) throw new Error(`Unit archive failed: ${archivedUnit.statusCode} ${archivedUnit.body}`);
+  const publicAfterArchive = JSON.parse((await get('/api/unit-catalog')).body);
+  if (publicAfterArchive.assets.some((asset) => asset.id === firstUnitId)) throw new Error('Archived unit leaked into public catalog');
+  const adminAfterArchive = await get('/api/admin/unit-assets', { cookie: 'better-auth.session=abc' }, 5000);
+  if (!JSON.parse(adminAfterArchive.body).assets.some((asset) => asset.id === firstUnitId && asset.status === 'archived')) {
+    throw new Error(`Archived unit missing from admin catalog: ${adminAfterArchive.body}`);
+  }
+
+  const secondUnit = await request(
+    'POST', '/api/admin/unit-assets', adminJson, JSON.stringify({ ...unitMetadata, label: 'Complete pawn candidate' }), 5000,
+  );
+  if (secondUnit.statusCode !== 201) throw new Error(`Second unit candidate create failed: ${secondUnit.statusCode} ${secondUnit.body}`);
+  const secondUnitId = JSON.parse(secondUnit.body).assetId;
+  const storedSprite = (await queryDb(
+    'SELECT sha256, blob_key, width, height, byte_length FROM unit_sprites WHERE asset_id = $1 LIMIT 1',
+    [firstUnitId],
+  )).rows[0];
+  const palettes = ['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white'];
+  const directions = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+  const spriteParams = [];
+  const spriteValues = [];
+  for (const palette of palettes) for (const direction of directions) {
+    const base = spriteParams.length;
+    spriteParams.push(secondUnitId, palette, direction, storedSprite.sha256, storedSprite.blob_key, storedSprite.width, storedSprite.height, storedSprite.byte_length);
+    spriteValues.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`);
+  }
+  await queryDb(
+    `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length) VALUES ${spriteValues.join(',')}`,
+    spriteParams,
+  );
+  const acceptedUnit = await request(
+    'POST', `/api/admin/unit-assets/${secondUnitId}/accept`, { ...adminJson, 'if-match': '"0"' }, '{}', 5000,
+  );
+  if (acceptedUnit.statusCode !== 200) throw new Error(`Complete unit acceptance failed: ${acceptedUnit.statusCode} ${acceptedUnit.body}`);
+  const acceptedCatalog = JSON.parse((await get('/api/unit-catalog')).body);
+  const acceptedPawn = acceptedCatalog.families.find((family) => family.family === 'pawn');
+  if (acceptedPawn.acceptedAssetId !== secondUnitId || acceptedPawn.displayScalePercent !== 112) {
+    throw new Error(`Accepted pawn pointer/scale mismatch: ${JSON.stringify(acceptedPawn)}`);
+  }
+  const rejectAcceptedArchive = await request(
+    'POST', `/api/admin/unit-assets/${secondUnitId}/archive`, { ...adminJson, 'if-match': '"1"' }, '{}', 5000,
+  );
+  if (rejectAcceptedArchive.statusCode !== 409 || JSON.parse(rejectAcceptedArchive.body).error !== 'accepted_unit_asset_cannot_archive') {
+    throw new Error(`Accepted unit archive should be rejected: ${rejectAcceptedArchive.statusCode} ${rejectAcceptedArchive.body}`);
   }
 
   // BGM playlist: the backend reads the (mocked) blob index.json and resolves

@@ -5,7 +5,6 @@
 const path = require('path');
 const fs = require('fs');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
-const { UNIT_IMG_MAX_W, UNIT_IMG_MAX_H } = require('@chess-tactics/board-render');
 
 const CARD_W = 1200;
 const CARD_H = 630;
@@ -29,13 +28,34 @@ function ensureFont(frontendDir) {
 }
 
 const spriteCache = new Map();
-async function loadSprite(frontendDir, src) {
+const SPRITE_CACHE_MAX = 64;
+function setCachedSprite(key, image) {
+  if (spriteCache.has(key)) spriteCache.delete(key);
+  spriteCache.set(key, image);
+  while (spriteCache.size > SPRITE_CACHE_MAX) spriteCache.delete(spriteCache.keys().next().value);
+}
+
+async function loadSprite(frontendDir, src, loadDynamicSprite) {
   const rel = String(src).replace(/^\/+/, '').split('/');
   const abs = path.join(frontendDir, ...rel);
-  if (spriteCache.has(abs)) return spriteCache.get(abs);
+  const dynamic = String(src).startsWith('/api/unit-sprites/');
+  const cacheKey = dynamic ? String(src) : abs;
+  if (spriteCache.has(cacheKey)) {
+    const image = spriteCache.get(cacheKey);
+    spriteCache.delete(cacheKey);
+    spriteCache.set(cacheKey, image);
+    return image;
+  }
   let img = null;
-  try { img = await loadImage(abs); } catch { img = null; }
-  spriteCache.set(abs, img);
+  try {
+    if (dynamic && typeof loadDynamicSprite === 'function') {
+      const bytes = await loadDynamicSprite(src);
+      if (bytes) img = await loadImage(bytes);
+    } else {
+      img = await loadImage(abs);
+    }
+  } catch { img = null; }
+  if (img || !dynamic) setCachedSprite(cacheKey, img);
   return img;
 }
 
@@ -60,10 +80,10 @@ function drawTiledImage(ctx, img, x, y, width, height, tileWidth, tileHeight) {
   ctx.restore();
 }
 
-async function paintBackground(ctx, frontendDir, backgroundSrc) {
+async function paintBackground(ctx, frontendDir, backgroundSrc, loadDynamicSprite) {
   let drewWorld = false;
   if (backgroundSrc) {
-    const world = await loadSprite(frontendDir, backgroundSrc);
+    const world = await loadSprite(frontendDir, backgroundSrc, loadDynamicSprite);
     if (world && world.width && world.height) {
       const cover = Math.max(CARD_W / world.width, CARD_H / world.height);
       const w = world.width * cover;
@@ -96,12 +116,12 @@ async function paintBackground(ctx, frontendDir, backgroundSrc) {
   ctx.fillRect(0, 0, CARD_W, CARD_H);
 }
 
-async function paintTitleBar(ctx, frontendDir, screenName) {
+async function paintTitleBar(ctx, frontendDir, screenName, loadDynamicSprite) {
   const [wood, band, diamond, shield] = await Promise.all([
-    loadSprite(frontendDir, '/assets/ui/surfaces/hybrid-wood-oak.png'),
-    loadSprite(frontendDir, '/assets/ui/titlebar/band-forged.png'),
-    loadSprite(frontendDir, '/assets/ui/titlebar/joint-diamond-forged.png'),
-    loadSprite(frontendDir, '/assets/ui/kit/icons/brand-shield.png'),
+    loadSprite(frontendDir, '/assets/ui/surfaces/hybrid-wood-oak.png', loadDynamicSprite),
+    loadSprite(frontendDir, '/assets/ui/titlebar/band-forged.png', loadDynamicSprite),
+    loadSprite(frontendDir, '/assets/ui/titlebar/joint-diamond-forged.png', loadDynamicSprite),
+    loadSprite(frontendDir, '/assets/ui/kit/icons/brand-shield.png', loadDynamicSprite),
   ]);
 
   ctx.imageSmoothingEnabled = false;
@@ -138,12 +158,12 @@ async function paintTitleBar(ctx, frontendDir, screenName) {
   ctx.shadowOffsetY = 0;
 }
 
-async function renderLevelCard({ plan, frontendDir, title, subtitle, screenName, backgroundSrc }) {
+async function renderLevelCard({ plan, frontendDir, title, subtitle, screenName, backgroundSrc, loadDynamicSprite }) {
   ensureFont(frontendDir);
   const canvas = createCanvas(CARD_W, CARD_H);
   const ctx = canvas.getContext('2d');
 
-  await paintBackground(ctx, frontendDir, backgroundSrc);
+  await paintBackground(ctx, frontendDir, backgroundSrc, loadDynamicSprite);
 
   const { ops, bounds } = plan;
   const fitBounds = plan.framingBounds || bounds;
@@ -158,7 +178,7 @@ async function renderLevelCard({ plan, frontendDir, title, subtitle, screenName,
 
   const images = new Map();
   await Promise.all([...new Set(ops.map((op) => op.src))].map(async (src) => {
-    images.set(src, await loadSprite(frontendDir, src));
+    images.set(src, await loadSprite(frontendDir, src, loadDynamicSprite));
   }));
 
   ctx.save();
@@ -171,8 +191,8 @@ async function renderLevelCard({ plan, frontendDir, title, subtitle, screenName,
     const dx = originX + (op.dx - fitBounds.minX) * scale;
     const dy = originY + (op.dy - fitBounds.minY) * scale;
     if (op.contain) {
-      const boxW = Math.min(op.dw, UNIT_IMG_MAX_W);
-      const boxH = Math.min(op.dh, UNIT_IMG_MAX_H);
+      const boxW = op.dw;
+      const boxH = op.dh;
       const natW = img.width || boxW;
       const natH = img.height || boxH;
       const fit = Math.min(boxW / natW, boxH / natH);
@@ -196,7 +216,7 @@ async function renderLevelCard({ plan, frontendDir, title, subtitle, screenName,
   ctx.fillStyle = titleScrim;
   ctx.fillRect(0, 420, CARD_W, CARD_H - 420);
 
-  await paintTitleBar(ctx, frontendDir, screenName || 'Level');
+  await paintTitleBar(ctx, frontendDir, screenName || 'Level', loadDynamicSprite);
 
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#f2f6f7';
