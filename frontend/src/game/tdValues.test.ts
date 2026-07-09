@@ -9,10 +9,14 @@ import { createBlankLevel, type Level, type LevelUnit, type ObjectiveType } from
 import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
 import {
   DEFAULT_INITIAL_WEIGHT,
+  DEFAULT_TRAIN_OPTIONS,
+  createTrainingSession,
   evaluateVsRandom,
   pawnRelativeValues,
   playGreedyGame,
   runSeeds,
+  runTrainingGames,
+  scheduleAt,
   trainValues,
 } from './tdValues';
 
@@ -153,6 +157,47 @@ describe('K+P vs K 3×5 with authored promo zone (proven win for player)', () =>
     expect(relative).not.toBeNull();
     expect(relative!.pawn).toBe(1);
     expect(relative!.queen).toBeGreaterThan(1);
+  });
+});
+
+describe('stepping session (createTrainingSession / runTrainingGames)', () => {
+  it('chunked stepping (1 + 7 + rest) reproduces the uninterrupted batch bit-for-bit', { timeout: 120_000 }, () => {
+    const lvl = kqk3();
+    const opts = { games: 80, seed: 9, maxPlies: 40 };
+    const batch = trainValues(lvl, opts);
+
+    let s = createTrainingSession(opts);
+    expect(s.game).toBe(0);
+    for (const type of PLAYABLE_PIECE_TYPES) expect(s.weights[type]).toBe(DEFAULT_INITIAL_WEIGHT);
+    s = runTrainingGames(lvl, opts, s, 1);       // STEP
+    expect(s.game).toBe(1);
+    s = runTrainingGames(lvl, opts, s, 7);       // STEP N
+    expect(s.game).toBe(8);
+    s = runTrainingGames(lvl, opts, s, 10_000);  // RUN to completion (clamped at the budget)
+    expect(s.game).toBe(80);
+
+    // toEqual on numbers is exact (Object.is), so this is the bit-for-bit claim.
+    expect(s.weights).toEqual(batch.weights);
+    expect(s.outcomes).toEqual(batch.outcomes);
+    // JSON-safe (the worker-transport contract).
+    expect(JSON.parse(JSON.stringify(s))).toEqual(s);
+  });
+
+  it('the exported DEFAULT_TRAIN_OPTIONS are the engine baseline (explicit === implicit)', { timeout: 120_000 }, () => {
+    const lvl = kqk3();
+    const implicit = trainValues(lvl, { games: 40, seed: 3 });
+    const explicit = trainValues(lvl, { games: 40, seed: 3, ...DEFAULT_TRAIN_OPTIONS });
+    expect(explicit.weights).toEqual(implicit.weights);
+    expect(explicit.outcomes).toEqual(implicit.outcomes);
+  });
+
+  it('scheduleAt reads the anneal position: start at 0, end at the last game, clamped past it', () => {
+    const opts = { games: 100, seed: 1 };
+    expect(scheduleAt(opts, 0).epsilon).toBe(DEFAULT_TRAIN_OPTIONS.epsilon.start);
+    expect(scheduleAt(opts, 0).alpha).toBe(DEFAULT_TRAIN_OPTIONS.alpha.start);
+    expect(scheduleAt(opts, 99).epsilon).toBeCloseTo(DEFAULT_TRAIN_OPTIONS.epsilon.end, 12);
+    expect(scheduleAt(opts, 100)).toEqual(scheduleAt(opts, 99));
+    expect(scheduleAt(opts, 50).epsilon).toBeLessThan(scheduleAt(opts, 0).epsilon);
   });
 });
 

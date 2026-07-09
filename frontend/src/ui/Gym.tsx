@@ -23,6 +23,14 @@ import { stateAtPosition, type BookPosition, type OpeningBookSettings } from '..
 import type { GymRequest, GymResponse } from '../lab/gymWorker';
 import type { StepProgress } from '../lab/gymStep';
 import type { ValState } from '../lab/validate';
+import type { TdRequest, TdResponse, TdRunConfig, TdSession } from '../lab/tdWorker';
+import { freshTdSession } from '../lab/tdSession';
+import {
+  DEFAULT_TRAIN_OPTIONS, pawnRelativeValues, scheduleAt,
+  type SeedSummary, type TrainOptions,
+} from '../game/tdValues';
+import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
+import { drawRulesForLevel } from '../core/levelEvents';
 import { setAdoptedWeights, readAdoptedVector } from '../game/adoptedWeights';
 import { ClusterRuns } from './ClusterRuns';
 import {
@@ -222,6 +230,25 @@ const GYM_CSS = `
 .gym-adopt-row button:hover { border-color:#e0685f; color:#f0a49d; }
 .gym-val-btn { border:1px solid #e0b24a; background:#1c1a12; color:#f0d488; font-weight:700; border-radius:6px; padding:7px 10px; font-size:13px; cursor:pointer; width:100%; margin-top:6px; }
 .gym-val-btn:disabled { opacity:.45; cursor:default; }
+/* TD piece-value learner (the values mode). NEW rules — typography via the --ds tokens
+   (ADR-0024; the solver UI was audit-flagged for raw font literals, don't repeat it). */
+.gym-td-knobs { border:0; margin:0; padding:0; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.gym-td-knobs:disabled { opacity:.55; }
+.gym-td-knobs .tileset-catalog-zoom .pages-ctl-row { min-width:0; max-width:100%; }
+.gym-td-knobs .tileset-catalog-zoom .pages-ctl-row input[type=range] { min-width:0; }
+.gym-td-stepn-input { width:76px; background:#0c1116; color:#e7ebf0; border:1px solid #3a4657; border-radius:4px; padding:5px 8px; font-family:var(--ds-font-mono); font-size:var(--ds-text-xs); font-variant-numeric:tabular-nums; }
+.gym-td-warn { flex:0 0 auto; margin:0; padding:8px 10px; border:1px solid #5a4a22; border-radius:6px; background:#1c1a12; color:#f0d488; font-family:var(--ds-font-sans); font-size:var(--ds-text-xs); line-height:1.5; }
+.gym-td-weights { margin-top:2px; font-family:var(--ds-font-mono); font-size:var(--ds-text-xs); }
+.gym-td-weights .h { color:#5c6875; font-size:var(--ds-text-2xs); text-transform:uppercase; letter-spacing:.05em; }
+.gym-td-results { flex:0 0 auto; display:flex; flex-direction:column; gap:8px; }
+.gym-td-table-wrap { overflow:auto; border:1px solid #29323f; border-radius:8px; background:#0b1016; }
+.gym-td-table { width:100%; border-collapse:collapse; font-family:var(--ds-font-mono); font-size:var(--ds-text-xs); font-variant-numeric:tabular-nums; }
+.gym-td-table th { position:sticky; top:0; background:#161d26; color:#93a0b0; text-align:right; font-weight:600; padding:6px 12px; border-bottom:1px solid #29323f; font-size:var(--ds-text-2xs); }
+.gym-td-table th:first-child, .gym-td-table td:first-child { text-align:left; }
+.gym-td-table td { text-align:right; padding:5px 12px; border-bottom:1px solid #141b23; color:#c6d0dc; }
+.gym-td-keep { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.gym-td-keep .keep { border:1px solid #46d6b8; background:#46d6b8; color:#06231d; font-weight:700; border-radius:6px; padding:7px 12px; font-size:var(--ds-text-xs); cursor:pointer; }
+.gym-td-keep .discard { border:1px solid #3a4657; background:#161d26; color:#c6d0dc; border-radius:6px; padding:7px 12px; font-size:var(--ds-text-xs); cursor:pointer; }
 `;
 
 /** Catalog grid — the levels you can train on, with board thumbnails. */
@@ -262,6 +289,41 @@ export function GymCatalog({ search, selected, onSelect }: { search: string; sel
 
 const REF_VEC = encodeWeights(DEFAULT_EVAL_WEIGHTS);
 
+// --- TD piece-value learner (the `values` mode) ------------------------------------
+/** Every knob the learner exposes — complete vs TrainOptions (games, seed, λ, ε/α
+ * schedules, ply cap, initial weight, update rule, probe cadence) plus the seed fold.
+ * Defaults derive from the ENGINE's exported baseline (ADR-0057 — never hand-copied). */
+interface TdKnobs {
+  games: number;
+  seed: number;
+  seedCount: number;
+  lambda: number;
+  epsStart: number;
+  epsEnd: number;
+  alphaStart: number;
+  alphaEnd: number;
+  maxPlies: number;
+  initialWeight: number;
+  monteCarlo: boolean;
+  probeEvery: number;
+  probeGames: number;
+}
+const TD_KNOB_DEFAULTS: TdKnobs = {
+  games: 600, seed: 1, seedCount: 3,
+  lambda: DEFAULT_TRAIN_OPTIONS.lambda,
+  epsStart: DEFAULT_TRAIN_OPTIONS.epsilon.start, epsEnd: DEFAULT_TRAIN_OPTIONS.epsilon.end,
+  alphaStart: DEFAULT_TRAIN_OPTIONS.alpha.start, alphaEnd: DEFAULT_TRAIN_OPTIONS.alpha.end,
+  maxPlies: DEFAULT_TRAIN_OPTIONS.maxPlies, initialWeight: DEFAULT_TRAIN_OPTIONS.initialWeight,
+  monteCarlo: false, probeEvery: 25, probeGames: 16,
+};
+const tdOptionsOf = (k: TdKnobs): TrainOptions => ({
+  games: k.games, seed: k.seed, maxPlies: k.maxPlies, lambda: k.lambda,
+  alpha: { start: k.alphaStart, end: k.alphaEnd },
+  epsilon: { start: k.epsStart, end: k.epsEnd },
+  initialWeight: k.initialWeight, monteCarlo: k.monteCarlo,
+  probeEvery: k.probeEvery, probeGames: k.probeGames,
+});
+
 /** Piece type read from a stable piece id ("player-knight-2" -> "knight"). Falls
  * back to the raw id so a promoted/oddly-named piece still renders something. */
 function pieceLabel(pieceId: string): string {
@@ -297,7 +359,7 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   const [activeId, setActiveId] = useState<number | undefined>(undefined);
   const [loadingBooks, setLoadingBooks] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  const [mode, setMode] = useState<'book' | 'train' | 'cluster'>('book');
+  const [mode, setMode] = useState<'book' | 'train' | 'cluster' | 'values'>('book');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedLatestGameIndex, setSelectedLatestGameIndex] = useState(0);
   const [latestReplayPly, setLatestReplayPly] = useState(0);
@@ -466,6 +528,100 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
     return () => { worker.terminate(); workerRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level, depth]);
+
+  // --- TD piece-value learner (`values` mode) --------------------------------
+  // Owner grammar: STEP (one game) / STEP N / RUN to the budget / STOP / RESET.
+  // Running NUMBERS only — no charts (a chart is added when the owner asks).
+  const [tdReady, setTdReady] = useState(false);
+  const [tdKnobs, setTdKnobs] = useState<TdKnobs>(TD_KNOB_DEFAULTS);
+  const [tdStepN, setTdStepN] = useState(25);
+  const [tdSession, setTdSession] = useState<TdSession | null>(null);
+  const [tdBusy, setTdBusy] = useState(false);
+  const [tdSummarizing, setTdSummarizing] = useState<{ done: number; total: number } | null>(null);
+  const [tdSummary, setTdSummary] = useState<SeedSummary | null>(null);
+  const [tdKept, setTdKept] = useState(false);
+  const [tdStopped, setTdStopped] = useState(false);
+  const [tdError, setTdError] = useState<string | null>(null);
+  const tdWorkerRef = useRef<Worker | null>(null);
+  // Freshest session for the send handlers (the ref pattern the SPSA wiring uses).
+  const tdSessionRef = useRef<TdSession | null>(tdSession); tdSessionRef.current = tdSession;
+
+  // RESET: back to a fresh session derived from the engine baseline (ADR-0057) — the
+  // weights return to the all-equal start and the knobs unfreeze. Knob VALUES are kept
+  // (each slider carries its own ↺ back to the engine default).
+  const tdReset = useCallback(() => {
+    setTdSession(null); setTdSummary(null); setTdKept(false); setTdStopped(false);
+    setTdError(null); setTdSummarizing(null); setTdBusy(false);
+  }, []);
+
+  // The learner's OWN worker — never gymWorker (that one is shared by generate/step/
+  // validate and re-inits on `depth`, which would kill a TD run mid-flight). Keyed on
+  // the level ONLY; the session travels in every message (pure-stepper contract), so
+  // nothing else can restart it. Level change ⇒ terminate + full state reset.
+  useEffect(() => {
+    setTdReady(false);
+    tdReset();
+    if (!level) return undefined;
+    const worker = new Worker(new URL('../lab/tdWorker.ts', import.meta.url), { type: 'module' });
+    tdWorkerRef.current = worker;
+    worker.onmessage = (event: MessageEvent<TdResponse>) => {
+      const msg = event.data;
+      if (msg.type === 'ready') {
+        setTdReady(true);
+      } else if (msg.type === 'progress') {
+        setTdSession(msg.session);
+      } else if (msg.type === 'summary-progress') {
+        setTdSummarizing({ done: msg.seedsDone, total: msg.seedsTotal });
+      } else if (msg.type === 'done') {
+        setTdSession(msg.session);
+        setTdBusy(false);
+        setTdSummarizing(null);
+        setTdStopped(msg.stopped);
+        if (msg.summary) { setTdSummary(msg.summary); setTdKept(false); }
+      } else {
+        setTdError(msg.message);
+        setTdBusy(false);
+        setTdSummarizing(null);
+      }
+    };
+    worker.postMessage({ type: 'init', level } as TdRequest);
+    return () => { worker.terminate(); tdWorkerRef.current = null; };
+  }, [level, tdReset]);
+
+  const setTdKnob = useCallback((patch: Partial<TdKnobs>) => setTdKnobs((k) => ({ ...k, ...patch })), []);
+
+  // STEP / STEP N / RUN all send the CURRENT session (or a fresh one) with the fixed
+  // per-run options; the worker loops internally and streams running numbers back.
+  const tdSend = useCallback((n: number | 'run') => {
+    const worker = tdWorkerRef.current;
+    if (!worker || tdBusy) return;
+    setTdError(null); setTdStopped(false); setTdBusy(true);
+    const cfg: TdRunConfig = { opts: tdOptionsOf(tdKnobs), seedCount: tdKnobs.seedCount };
+    const session = tdSessionRef.current ?? freshTdSession(cfg.opts);
+    worker.postMessage((n === 'run'
+      ? { type: 'run', cfg, session }
+      : { type: 'step', cfg, session, n }) as TdRequest);
+  }, [tdBusy, tdKnobs]);
+  const tdStop = useCallback(() => { tdWorkerRef.current?.postMessage({ type: 'stop' } as TdRequest); }, []);
+
+  // Derived running numbers. A null session displays as the fresh all-equal start.
+  const tdOpts = useMemo(() => tdOptionsOf(tdKnobs), [tdKnobs]);
+  const tdFresh = useMemo(() => freshTdSession(tdOpts), [tdOpts]);
+  const tdSess = tdSession ?? tdFresh;
+  const tdGamesDone = tdSess.train.game;
+  const tdComplete = tdGamesDone >= tdKnobs.games;
+  const tdStarted = tdGamesDone > 0;
+  const tdSchedule = useMemo(() => scheduleAt(tdOpts, tdGamesDone), [tdOpts, tdGamesDone]);
+  // pawn = 1 display only when the LEVEL fields pawns — on a pawnless board the pawn
+  // weight never moves off its start, and dividing by that would be noise.
+  const tdHasPawns = useMemo(() => !!level && level.layers.units.some((u) => u.type === 'pawn'), [level]);
+  const tdRel = useMemo(() => (tdHasPawns ? pawnRelativeValues(tdSess.train.weights) : null), [tdHasPawns, tdSess]);
+  const tdSummaryRel = useMemo(() => (tdHasPawns && tdSummary ? pawnRelativeValues(tdSummary.mean) : null), [tdHasPawns, tdSummary]);
+  // Honest-fidelity banner: the learner's 1-ply policy cannot SEE authored chess draws
+  // coming (they are scored only after a move commits) — drawRulesForLevel is the
+  // canonical chess-draws scan (never the solver's castle-inclusive hidden-ledger one).
+  const tdDrawsAuthored = useMemo(() => (level ? drawRulesForLevel(level) !== undefined : false), [level]);
+  const tdKnobsFrozen = tdStarted || tdBusy || tdSummary !== null;
 
   // Keep the inspected position inside the active book as it changes size.
   const posCount = activeBook?.positions.length ?? 0;
@@ -826,6 +982,10 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                     <button type="button" className={mode === 'cluster' ? 'active' : ''} onClick={() => setMode('cluster')} aria-pressed={mode === 'cluster'}>Cluster</button>
                   </div>
                 </div>
+                {/* A different learner, not a third SPSA location — its own mode button,
+                    and deliberately NOT gated on an opening book (it plays from the
+                    level start; it needs only the level). */}
+                <button type="button" className={`gym-book-mode ${mode === 'values' ? 'active' : ''}`} onClick={() => setMode('values')} aria-pressed={mode === 'values'}>Piece values</button>
               </nav>
 
               {mode === 'book' ? (
@@ -849,6 +1009,8 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                 <h3 style={{ margin: '4px 0 8px' }}>
                   Training book <span className="gym-num">#{activeBook?.id}</span> — <span className="gym-num">{posCount}</span> position{posCount === 1 ? '' : 's'}, live run
                 </h3>
+              ) : mode === 'values' ? (
+                <h3 style={{ margin: '4px 0 8px' }}>Piece values — learn this board&apos;s piece values from scratch by self-play (afterstate TD(λ))</h3>
               ) : (
                 <h3 style={{ margin: '4px 0 8px' }}>Cluster training — headless tuning on the D8als_v7 pool</h3>
               )}
@@ -978,6 +1140,85 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                   </>
                 )}
               </div>
+            ) : mode === 'values' ? (
+              <div className="gym-run" aria-label="Piece-value learner">
+                <div className="gym-run-head">
+                  <span className={`gym-run-state ${tdBusy ? 'live' : ''}`}>
+                    {tdSummarizing ? `▶ folding seeds ${tdSummarizing.done}/${tdSummarizing.total}`
+                      : tdBusy ? '▶ learning'
+                      : tdComplete ? '✓ budget complete'
+                      : tdStopped ? '⏹ stopped'
+                      : tdStarted ? '⏸ paused'
+                      : 'ready'}
+                  </span>
+                  <span>game <b className="gym-num">{tdGamesDone}</b> / <b className="gym-num">{tdKnobs.games}</b></span>
+                  <span>ε <b className="gym-num">{tdSchedule.epsilon.toFixed(3)}</b></span>
+                  <span>vs random <b className="gym-num">{tdSess.probe ? tdSess.probe.winRate.toFixed(3) : '—'}</b>{tdSess.probe ? <span className="gym-hint"> @ game {tdSess.probe.game}</span> : null}</span>
+                </div>
+
+                {tdDrawsAuthored ? (
+                  <p className="gym-td-warn">
+                    This level authors chess draw rules (50-move / threefold). The learner scores such a draw
+                    only AFTER the move commits — its 1-ply lookahead can&apos;t see the draw coming — so play near
+                    draw boundaries, and the values learned from it, are approximate on this board.
+                  </p>
+                ) : null}
+
+                <div className="gym-run-stats">
+                  <span className="wdl"><b className="w">{tdSess.train.outcomes.playerWins}</b> W · <b className="d">{tdSess.train.outcomes.draws}</b> D · <b className="l">{tdSess.train.outcomes.enemyWins}</b> L</span>
+                  <span className="gym-hint">training-game outcomes (exploration on) — player wins / draws / enemy wins</span>
+                </div>
+
+                <div>
+                  <h3>Learned values — live</h3>
+                  <div className="gym-weights gym-td-weights">
+                    <div className="k h">piece</div><div className="v h">weight (logit)</div><div className="v h">pawn = 1</div>
+                    {PLAYABLE_PIECE_TYPES.map((t) => (
+                      <Fragment key={t}>
+                        <div className="k">{t}</div>
+                        <div className="v">{tdSess.train.weights[t].toFixed(3)}</div>
+                        <div className="v">{tdRel ? tdRel[t].toFixed(2) : '—'}</div>
+                      </Fragment>
+                    ))}
+                  </div>
+                  {!tdRel ? <p className="gym-hint">{tdHasPawns ? 'Pawn weight too small to normalize by yet — raw logit weights; the RATIOS are the piece-value reading.' : 'No pawns on this board — raw logit weights; the RATIOS are the piece-value reading.'}</p> : null}
+                </div>
+
+                {tdSummary ? (
+                  <div className="gym-td-results" aria-label="Learned values vs chess defaults">
+                    <h3>Result — learned mean ± spread over {tdSummary.perSeed.length} seed{tdSummary.perSeed.length === 1 ? '' : 's'}, next to the chess defaults{tdKept ? ' · KEPT' : ''}</h3>
+                    <div className="gym-td-table-wrap">
+                      <table className="gym-td-table">
+                        <thead><tr><th>piece</th><th>learned (logit)</th><th>± spread</th><th>pawn = 1</th><th>chess default</th></tr></thead>
+                        <tbody>
+                          {PLAYABLE_PIECE_TYPES.map((t) => (
+                            <tr key={t}>
+                              <td>{t}</td>
+                              <td>{tdSummary.mean[t].toFixed(3)}</td>
+                              <td>± {tdSummary.spread[t].toFixed(3)}</td>
+                              <td>{tdSummaryRel ? tdSummaryRel[t].toFixed(2) : '—'}</td>
+                              <td>{DEFAULT_EVAL_WEIGHTS.pieceValues[t]}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="gym-hint">seeds {tdSummary.seeds.join(', ')} — spread is across independent runs (big spread = seed noise, not a real value). Chess defaults are pawn-relative; compare them against the pawn&nbsp;=&nbsp;1 column.</p>
+                    {!tdKept ? (
+                      <div className="gym-td-keep">
+                        <button type="button" className="keep" onClick={() => setTdKept(true)}>Keep result</button>
+                        <button type="button" className="discard" onClick={() => { setTdSummary(null); setTdKept(false); }}>Discard</button>
+                        <span className="gym-hint">Keep pins this table until Reset; Discard clears it (the run&apos;s numbers stay).</span>
+                      </div>
+                    ) : (
+                      <p className="gym-hint">Kept — this table stays until Reset.</p>
+                    )}
+                  </div>
+                ) : null}
+
+                {tdError ? <p className="gym-error">Value learner failed: {tdError}</p> : null}
+                {!tdStarted && !tdBusy ? <p className="gym-hint">Every piece starts at the same weight. Step plays ONE training game and updates them — watch the numbers move. Set the budget in the rail, then Run plays it out.</p> : null}
+              </div>
             ) : null}
           </>
         )}
@@ -992,7 +1233,7 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
             {level && loadingBooks ? <p className="gym-hint">Loading your books…</p> : null}
             {level && signedIn === false ? <p className="gym-hint">Sign in to save opening books to your account.</p> : null}
 
-            {level ? (
+            {level && mode !== 'values' ? (
               <div className="gym-bookmgr">
                 <label className="gl-field">Opening book
                   <select value={activeId ?? ''} onChange={(e) => onSelectBook(Number(e.target.value))} disabled={blob.books.length === 0}>
@@ -1155,6 +1396,69 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                     return (<Fragment key={lab}><div className="k">{lab}</div><div className="v">{champVec[i].toFixed(2)}</div><div className={`d ${cls}`}>{txt}</div></Fragment>);
                   })}
                 </div>
+              </>
+            ) : null}
+
+            {mode === 'values' && level ? (
+              <>
+                <div className="gym-run-row">
+                  <button type="button" onClick={() => tdSend(1)} disabled={!tdReady || tdBusy || tdComplete}>⏭ step 1</button>
+                  <button type="button" onClick={() => tdSend(Math.max(1, tdStepN))} disabled={!tdReady || tdBusy || tdComplete}>⏭ step</button>
+                  <input className="gym-td-stepn-input" type="number" min={1} max={100000} value={tdStepN}
+                    onChange={(e) => setTdStepN(Math.max(1, Math.floor(Number(e.target.value) || 1)))} aria-label="Games per step" />
+                </div>
+                <div className="gym-run-row">
+                  <button type="button" className="play" onClick={() => tdSend('run')} disabled={!tdReady || tdBusy || (tdComplete && tdSummary !== null)}>▶ run</button>
+                  <button type="button" onClick={tdStop} disabled={!tdBusy}>⏹ stop</button>
+                  <button type="button" onClick={tdReset} disabled={tdBusy || (!tdStarted && tdSummary === null && !tdStopped && !tdError)}>↺ reset</button>
+                </div>
+                {!tdReady ? <p className="gym-hint">Preparing learner…</p>
+                  : tdBusy ? <p className="gym-hint">{tdSummarizing ? 'Folding sibling seeds into the mean ± spread table…' : 'Playing training games — Stop lands between games, nothing half-applied.'}</p>
+                  : tdComplete && tdSummary === null ? <p className="gym-hint">Budget done but the seed fold was stopped — Run finishes the mean ± spread table, or Reset.</p>
+                  : tdComplete ? <p className="gym-hint">Budget complete. Keep or Discard the result in the main pane; Reset starts a new run.</p>
+                  : tdStarted ? <p className="gym-hint">Paused at game {tdGamesDone}. Settings are frozen mid-run (the schedules anneal over the whole budget) — Reset to change them.</p>
+                  : null}
+
+                <h3>Learner settings</h3>
+                <fieldset className="gym-td-knobs" disabled={tdKnobsFrozen}>
+                  <label className="gl-field"><span>games budget<InfoTip label="games budget">How many self-play training games one run plays. The exploration (ε) and learning-rate (α) schedules anneal across THIS whole budget, so it is fixed once a run starts — Reset to change it.</InfoTip></span>
+                    <input type="number" min={1} max={100000} value={tdKnobs.games} onChange={(e) => setTdKnob({ games: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} />
+                  </label>
+                  <label className="gl-field"><span>master seed<InfoTip label="master seed">Seeds every training game deterministically — the same seed and settings replay the identical run, game for game.</InfoTip></span>
+                    <input type="number" min={1} value={tdKnobs.seed} onChange={(e) => setTdKnob({ seed: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} />
+                  </label>
+                  <label className="gl-field"><span>seeds for ± spread<InfoTip label="seeds for ± spread">How many independent runs the final table averages. Seed 1 is this live run; the rest replay the same budget from sibling seeds after it completes, giving mean ± spread — is a value real, or seed noise?</InfoTip></span>
+                    <input type="number" min={1} max={16} value={tdKnobs.seedCount} onChange={(e) => setTdKnob({ seedCount: Math.max(1, Math.min(16, Math.floor(Number(e.target.value) || 1))) })} />
+                  </label>
+                  <label className="gl-field"><span>update rule<InfoTip label="update rule">TD(λ) bootstraps each position toward the next one&apos;s value — the TD-Gammon update. Monte-Carlo regresses every position straight to the final outcome (the λ = 1 limit), kept as an A/B lever.</InfoTip></span>
+                    <select value={tdKnobs.monteCarlo ? 'mc' : 'td'} onChange={(e) => setTdKnob({ monteCarlo: e.target.value === 'mc' })}>
+                      <option value="td">TD(λ) — bootstrapped</option>
+                      <option value="mc">Monte-Carlo — outcome only</option>
+                    </select>
+                  </label>
+                  <SliderRow label={<>λ trace decay <b className="gym-num">{tdKnobs.lambda.toFixed(2)}</b><InfoTip label="lambda trace decay">How far credit for a result reaches back along the game. 0 = only the previous position learns; 1 ≈ Monte-Carlo (the whole game regresses to the outcome). Ignored by the Monte-Carlo rule.</InfoTip></>}
+                    value={tdKnobs.lambda} set={(v) => setTdKnob({ lambda: v })} min={0} max={1} step={0.01} nudge={0.05} dflt={DEFAULT_TRAIN_OPTIONS.lambda} />
+                  <SliderRow label={<>ε start <b className="gym-num">{tdKnobs.epsStart.toFixed(2)}</b><InfoTip label="epsilon start">Exploration at game 0: the chance a move is uniformly random instead of greedy. Anneals linearly to ε end by the last game — noisy early, sharp late.</InfoTip></>}
+                    value={tdKnobs.epsStart} set={(v) => setTdKnob({ epsStart: v })} min={0} max={1} step={0.01} nudge={0.05} dflt={DEFAULT_TRAIN_OPTIONS.epsilon.start} />
+                  <SliderRow label={<>ε end <b className="gym-num">{tdKnobs.epsEnd.toFixed(2)}</b><InfoTip label="epsilon end">Exploration at the last game of the budget.</InfoTip></>}
+                    value={tdKnobs.epsEnd} set={(v) => setTdKnob({ epsEnd: v })} min={0} max={1} step={0.01} nudge={0.05} dflt={DEFAULT_TRAIN_OPTIONS.epsilon.end} />
+                  <SliderRow label={<>α start <b className="gym-num">{tdKnobs.alphaStart.toFixed(3)}</b><InfoTip label="alpha start">Learning rate at game 0: how hard each game moves the weights. Anneals linearly to α end — big early steps, fine late ones.</InfoTip></>}
+                    value={tdKnobs.alphaStart} set={(v) => setTdKnob({ alphaStart: v })} min={0} max={0.5} step={0.005} nudge={0.01} dflt={DEFAULT_TRAIN_OPTIONS.alpha.start} />
+                  <SliderRow label={<>α end <b className="gym-num">{tdKnobs.alphaEnd.toFixed(3)}</b><InfoTip label="alpha end">Learning rate at the last game of the budget.</InfoTip></>}
+                    value={tdKnobs.alphaEnd} set={(v) => setTdKnob({ alphaEnd: v })} min={0} max={0.5} step={0.005} nudge={0.01} dflt={DEFAULT_TRAIN_OPTIONS.alpha.end} />
+                  <label className="gl-field"><span>ply cap<InfoTip label="ply cap">Hard game-length cap; a training game that hits it scores as a draw.</InfoTip></span>
+                    <input type="number" min={10} max={400} value={tdKnobs.maxPlies} onChange={(e) => setTdKnob({ maxPlies: Math.max(10, Math.min(400, Math.floor(Number(e.target.value) || 10))) })} />
+                  </label>
+                  <label className="gl-field"><span>initial weight<InfoTip label="initial weight">Every piece type starts at this same small weight — &quot;everything starts equal&quot;, scaled so the value starts near ½ and can learn in both directions.</InfoTip></span>
+                    <input type="number" min={0.01} max={1} step={0.01} value={tdKnobs.initialWeight} onChange={(e) => setTdKnob({ initialWeight: Math.max(0.01, Math.min(1, Number(e.target.value) || DEFAULT_TRAIN_OPTIONS.initialWeight)) })} />
+                  </label>
+                  <label className="gl-field"><span>probe every K games<InfoTip label="probe every K games">Every K training games, freeze the weights and score them against a fixed random opponent — the honest &quot;is it getting better?&quot; number in the header. 0 = never probe.</InfoTip></span>
+                    <input type="number" min={0} max={10000} value={tdKnobs.probeEvery} onChange={(e) => setTdKnob({ probeEvery: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
+                  </label>
+                  <label className="gl-field"><span>probe games<InfoTip label="probe games">Games per probe — more games give a steadier number but a slower probe.</InfoTip></span>
+                    <input type="number" min={0} max={200} value={tdKnobs.probeGames} onChange={(e) => setTdKnob({ probeGames: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
+                  </label>
+                </fieldset>
               </>
             ) : null}
           </div>

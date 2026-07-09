@@ -1631,7 +1631,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       ),
     },
     {
-      id: 'gym', label: 'Training Gym', hint: 'Tune the AI’s eval weights on a level with SPSA — step through the training and watch a champion establish.',
+      id: 'gym', label: 'Training Gym', hint: 'Train the AI on a level, stepping at your own pace — tune its eval weights with SPSA, or learn the board’s piece values from scratch by TD self-play and watch the numbers move.',
       main: <GymCatalog search={gymSearch} selected={selectedGymLevelId} onSelect={setSelectedGymLevelId} />,
       controls: (
         <>

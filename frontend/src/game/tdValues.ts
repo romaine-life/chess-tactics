@@ -129,6 +129,15 @@ const DEFAULT_LAMBDA = 0.8;
 const DEFAULT_ALPHA: AnnealSchedule = { start: 0.1, end: 0.01 };
 const DEFAULT_EPSILON: AnnealSchedule = { start: 0.25, end: 0.02 };
 const DEFAULT_MAX_PLIES = 120;
+/** The engine-baseline knob set, exported so a driving surface's Reset derives from
+ * HERE (ADR-0057: reset to the committed baseline, never a hand-copied literal). */
+export const DEFAULT_TRAIN_OPTIONS = {
+  maxPlies: DEFAULT_MAX_PLIES,
+  lambda: DEFAULT_LAMBDA,
+  alpha: { ...DEFAULT_ALPHA },
+  epsilon: { ...DEFAULT_EPSILON },
+  initialWeight: DEFAULT_INITIAL_WEIGHT,
+} as const;
 /** Frozen probe opponent's seed base — a CONSTANT (not derived from the training seed)
  * so every run, every snapshot, and every seed in runSeeds is probed over the SAME
  * seeded game set. Not literally the same enemy MOVE stream across weight vectors: one
@@ -384,6 +393,61 @@ function mcUpdate(w: Float64Array, afterstates: Float64Array[], z: number, alpha
   }
 }
 
+/** TrainOptions with every default applied — the ONE normalization the batch trainer,
+ * the stepping session, and scheduleAt all share, so they cannot drift. */
+interface TrainConfig {
+  games: number;
+  seed: number;
+  maxPlies: number;
+  lambda: number;
+  alpha: AnnealSchedule;
+  epsilon: AnnealSchedule;
+  initialWeight: number;
+  monteCarlo: boolean;
+}
+
+function trainConfigOf(opts: TrainOptions): TrainConfig {
+  return {
+    games: opts.games,
+    seed: opts.seed,
+    maxPlies: opts.maxPlies ?? DEFAULT_MAX_PLIES,
+    lambda: opts.lambda ?? DEFAULT_LAMBDA,
+    alpha: opts.alpha ?? DEFAULT_ALPHA,
+    epsilon: opts.epsilon ?? DEFAULT_EPSILON,
+    initialWeight: opts.initialWeight ?? DEFAULT_INITIAL_WEIGHT,
+    monteCarlo: opts.monteCarlo === true,
+  };
+}
+
+/** Train game `g` of `cfg.games` in place: one seeded self-play game under the
+ * annealed schedules, then the TD(λ)/MC update on `w`. THE per-game body —
+ * trainValues and runTrainingGames both run exactly this, which is what makes
+ * game-granular stepping reproduce the batch run bit-for-bit (each game's rng
+ * derives from (seed, gameIndex) alone; no random stream crosses games). */
+function runOneGame(level: Level, cfg: TrainConfig, w: Float64Array, g: number, outcomes: TrainResult['outcomes']): void {
+  const t = cfg.games > 1 ? g / (cfg.games - 1) : 0;
+  const pol: SidePolicy = { weights: w, epsilon: lerp(cfg.epsilon, t) };
+  const played = playGame(level, gameSeed(cfg.seed, g), { player: pol, enemy: pol }, cfg.maxPlies);
+  if (played.winner === 'player') outcomes.playerWins += 1;
+  else if (played.winner === 'draw') outcomes.draws += 1;
+  else outcomes.enemyWins += 1;
+  const z = outcomeValue(played.winner);
+  const alpha = lerp(cfg.alpha, t);
+  if (cfg.monteCarlo) mcUpdate(w, played.afterstates, z, alpha);
+  else tdUpdate(w, played.afterstates, z, alpha, cfg.lambda);
+}
+
+/** The annealed (ε, α) at `game` games completed — what the NEXT game will use,
+ * clamped to the last game's values once the budget is done. The schedules lerp on
+ * t = g/(games−1), so the TOTAL budget is part of the schedule: a driving surface
+ * must treat `opts.games` as fixed per run (reset to change it). */
+export function scheduleAt(opts: TrainOptions, game: number): { epsilon: number; alpha: number } {
+  const cfg = trainConfigOf(opts);
+  const g = Math.max(0, Math.min(game, cfg.games - 1));
+  const t = cfg.games > 1 ? g / (cfg.games - 1) : 0;
+  return { epsilon: lerp(cfg.epsilon, t), alpha: lerp(cfg.alpha, t) };
+}
+
 export interface ProbeOptions {
   /** Probe seed base (defaults to the frozen PROBE_SEED_BASE — keep the default for
    * comparable trajectories). */
@@ -434,15 +498,12 @@ export function playGreedyGame(
  * note atop this file), the probe trajectory, and the training-game outcome split.
  */
 export function trainValues(level: Level, opts: TrainOptions): TrainResult {
-  const games = opts.games;
-  const maxPlies = opts.maxPlies ?? DEFAULT_MAX_PLIES;
-  const lambda = opts.lambda ?? DEFAULT_LAMBDA;
-  const alphaSched = opts.alpha ?? DEFAULT_ALPHA;
-  const epsSched = opts.epsilon ?? DEFAULT_EPSILON;
+  const cfg = trainConfigOf(opts);
+  const games = cfg.games;
   const probeEvery = opts.probeEvery ?? 0;
   const probeGames = opts.probeGames ?? (probeEvery > 0 ? 16 : 0);
 
-  const w = new Float64Array(TYPE_COUNT).fill(opts.initialWeight ?? DEFAULT_INITIAL_WEIGHT);
+  const w = new Float64Array(TYPE_COUNT).fill(cfg.initialWeight);
   // Root features read the MASTER-seed deal; each training game re-deals from
   // gameSeed(seed, g) (selfplay's convention), so on levels whose seeded spawn zones
   // truncate a roster differently per deal, rootValue is "the master deal's value" —
@@ -457,29 +518,57 @@ export function trainValues(level: Level, opts: TrainOptions): TrainResult {
       game: gamesDone,
       weights,
       rootValue: valueOf(rootF, w),
-      ...(probeGames > 0 ? { winRateVsRandom: evaluateVsRandom(level, weights, probeGames, { maxPlies }) } : {}),
+      ...(probeGames > 0 ? { winRateVsRandom: evaluateVsRandom(level, weights, probeGames, { maxPlies: cfg.maxPlies }) } : {}),
     };
   };
 
   for (let g = 0; g < games; g += 1) {
-    const t = games > 1 ? g / (games - 1) : 0;
-    const pol: SidePolicy = { weights: w, epsilon: lerp(epsSched, t) };
-    const played = playGame(level, gameSeed(opts.seed, g), { player: pol, enemy: pol }, maxPlies);
-    if (played.winner === 'player') outcomes.playerWins += 1;
-    else if (played.winner === 'draw') outcomes.draws += 1;
-    else outcomes.enemyWins += 1;
-
-    const z = outcomeValue(played.winner);
-    const alpha = lerp(alphaSched, t);
-    if (opts.monteCarlo) mcUpdate(w, played.afterstates, z, alpha);
-    else tdUpdate(w, played.afterstates, z, alpha, lambda);
-
+    runOneGame(level, cfg, w, g, outcomes);
     if (probeEvery > 0 && (g + 1) % probeEvery === 0) trajectory.push(snapshot(g + 1));
   }
   // Always end on a final snapshot (unless the loop just took one at exactly `games`).
   if (trajectory.length === 0 || trajectory[trajectory.length - 1].game !== games) trajectory.push(snapshot(games));
 
   return { weights: toRecord(w), trajectory, games, seed: opts.seed, outcomes };
+}
+
+/** The resumable training state between games: games done, the weights, and the
+ * outcome split. JSON-safe (records, no Float64Array) — the worker-transport shape.
+ * The OPTIONS are deliberately NOT in here: they are the fixed schedule this state
+ * is a position inside (see scheduleAt), so the caller carries (level, opts, state)
+ * and must hold `opts` constant across a run. */
+export interface TrainSessionState {
+  /** Games completed — also the index of the next game to play. */
+  game: number;
+  weights: ValueWeights;
+  outcomes: TrainResult['outcomes'];
+}
+
+/** Game 0 of a run: the all-equal start, nothing played yet. */
+export function createTrainingSession(opts: TrainOptions): TrainSessionState {
+  const cfg = trainConfigOf(opts);
+  return {
+    game: 0,
+    weights: toRecord(new Float64Array(TYPE_COUNT).fill(cfg.initialWeight)),
+    outcomes: { playerWins: 0, draws: 0, enemyWins: 0 },
+  };
+}
+
+/**
+ * Advance the session by up to `n` games (clamped to the `opts.games` budget) and
+ * return the new state. Chunking is INVISIBLE to the learning: stepping 1 + 7 + rest
+ * reproduces trainValues({games}) bit-for-bit — each game's rng derives from
+ * (seed, gameIndex) alone and the weights round-trip losslessly through the record.
+ * Asserted in tdValues.test.ts (the load-bearing equivalence).
+ */
+export function runTrainingGames(level: Level, opts: TrainOptions, state: TrainSessionState, n: number): TrainSessionState {
+  const cfg = trainConfigOf(opts);
+  const w = fromRecord(state.weights);
+  const outcomes = { ...state.outcomes };
+  const end = Math.min(cfg.games, state.game + Math.max(0, Math.floor(n)));
+  let g = state.game;
+  for (; g < end; g += 1) runOneGame(level, cfg, w, g, outcomes);
+  return { game: g, weights: toRecord(w), outcomes };
 }
 
 export interface SeedSummary {
@@ -491,14 +580,17 @@ export interface SeedSummary {
   spread: ValueWeights;
 }
 
-/**
- * Train `k` independent runs from derived seeds and summarize: per-seed weight vectors
- * plus mean ± spread per type — the "is this value real or seed noise?" readout.
- * Probing is inherited from `opts` (pass probeEvery/probeGames 0 to keep runs lean).
- */
-export function runSeeds(level: Level, k: number, opts: TrainOptions): SeedSummary {
-  const seeds = Array.from({ length: k }, (_, i) => (opts.seed + i * 7919) >>> 0);
-  const perSeed = seeds.map((seed) => ({ seed, weights: trainValues(level, { ...opts, seed }).weights }));
+/** The k seeds runSeeds trains — seed i = master + i·7919 (i = 0 is the master
+ * itself). Exported so a stepping surface reproduces the exact same seed family
+ * for its own mean ± spread fold. */
+export function derivedSeeds(seed: number, k: number): number[] {
+  return Array.from({ length: k }, (_, i) => (seed + i * 7919) >>> 0);
+}
+
+/** Fold per-seed weight vectors into the mean ± population-spread summary — the
+ * "is this value real or seed noise?" arithmetic, shared by runSeeds and any
+ * caller that already holds trained vectors. */
+export function summarizeSeeds(perSeed: SeedSummary['perSeed']): SeedSummary {
   const mean = {} as ValueWeights;
   const spread = {} as ValueWeights;
   for (const type of PLAYABLE_PIECE_TYPES) {
@@ -507,7 +599,17 @@ export function runSeeds(level: Level, k: number, opts: TrainOptions): SeedSumma
     mean[type] = m;
     spread[type] = Math.sqrt(values.reduce((s, v) => s + (v - m) * (v - m), 0) / (values.length || 1));
   }
-  return { seeds, perSeed, mean, spread };
+  return { seeds: perSeed.map((r) => r.seed), perSeed, mean, spread };
+}
+
+/**
+ * Train `k` independent runs from derived seeds and summarize: per-seed weight vectors
+ * plus mean ± spread per type — the "is this value real or seed noise?" readout.
+ * Probing is inherited from `opts` (pass probeEvery/probeGames 0 to keep runs lean).
+ */
+export function runSeeds(level: Level, k: number, opts: TrainOptions): SeedSummary {
+  const perSeed = derivedSeeds(opts.seed, k).map((seed) => ({ seed, weights: trainValues(level, { ...opts, seed }).weights }));
+  return summarizeSeeds(perSeed);
 }
 
 /**
