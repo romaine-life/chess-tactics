@@ -72,6 +72,9 @@ way to fit the same ~14 numbers** — it buys *no* extra per-board expressivenes
 and is the hardest to *watch*. So it is **off the critical path** (an optional RL learning
 detour), and we do **not** "skip to rung 3."
 
+_Update 2026-07-09: superseded for VALUE LEARNING — from-scratch TD self-play value learning
+is now the lead direction; see the TD note in §5._
+
 ---
 
 ## 4. What already exists (reuse, do not rebuild)
@@ -128,8 +131,17 @@ Stockfish's recipe), still **inside search**. Reserved for the giant boards (≈
 ~40 units/side) where handcrafted + PST caps out and there is finally enough data. **Not
 before.**
 
-**Optional detour — TDLeaf(λ) / TD-learning.** Real RL, watchable in the Gym, valuable as a
-hands-on learning project — but **off the delivery path** (see §3).
+**TD value learning — PROMOTED from detour to lead direction (updated 2026-07-09).** §3's
+original placement ("off the delivery path") is superseded for value learning: from-scratch
+self-play value learning in the TD-Gammon / Beal & Smith (1997) lineage is now the **lead
+direction of the per-board AI research map** — every piece value starts EQUAL (no chess
+prior), noisy shallow self-play learns V(position) ≈ expected outcome, the noise anneals,
+and the learned weights read back as THIS board's own piece values. The engine is landed
+and anchored to the solver's proven fixtures (`frontend/src/game/tdValues.ts`,
+`tdValues.test.ts`). **Named debt (ADR-0071 rule 5): the instrument is not built yet** —
+the knobs exist only as `TrainOptions` a test/agent can call, with no Gym/Lab surface for
+the owner to drive training, watch the trajectory, or audit the learned values; that
+surface is owed before this reads as delivered.
 
 ---
 

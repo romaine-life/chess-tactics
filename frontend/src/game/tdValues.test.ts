@@ -82,10 +82,13 @@ describe('K+Q vs K 3×3 (proven win for player)', () => {
     // Learning moved the queen UP from the all-equal start.
     expect(res.weights.queen).toBeGreaterThan(DEFAULT_INITIAL_WEIGHT);
 
-    // Trained greedy sweeps the frozen-random probe on a proven-win board…
+    // Trained greedy sweeps the frozen-random probe and separates from a random
+    // player against the SAME frozen opponent. Honest scope: on THIS board the root
+    // mate-in-1 is terminal-scored, so ANY weights sweep (untrained all-equal also
+    // scores 1.0 and clears the +0.1 bar) — these two lines smoke-test the probe
+    // machinery; LEARNING itself is guarded by the queen/rootValue assertions.
     const trained = evaluateVsRandom(lvl, res.weights, 200);
     expect(trained).toBeGreaterThan(0.9);
-    // …and SEPARATES from a random player against the SAME frozen opponent.
     const randomBaseline = evaluateVsRandom(lvl, res.weights, 200, { randomPlayer: true });
     expect(trained).toBeGreaterThan(randomBaseline + 0.1);
 

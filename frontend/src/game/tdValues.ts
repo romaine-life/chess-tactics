@@ -19,7 +19,8 @@
 // minimizes, V being player-positive), with ε-random exploration annealed over games.
 // A terminal successor scores its EXACT outcome (win 1 / draw ½ / loss 0), so a mating
 // move always outranks any heuristic value and a stalemate is dodged whenever a
-// better-than-½ quiet move exists.
+// better-than-½ quiet move exists. Promotions take the promotion rule's DEFAULT piece
+// (no underpromotion in self-play — same as selfplay and the search AI).
 //
 // Learning: afterstate TD(λ) — after each game, run eligibility traces over the game's
 // afterstate sequence (the position AFTER each committed move) with the final target
@@ -27,14 +28,30 @@
 // plain Monte-Carlo update (every afterstate regresses straight to the outcome — the
 // λ = 1 limit) as an A/B lever.
 //
-// Terminality mirrors the live rules EXACTLY, the same triple as game/selfplay.ts and
-// core/solver/input.ts `terminalOutcome`: (a) applyMove's last-side-standing winner,
-// (b) resolveVictory over `level.victory ?? victoryRulesForObjective(...)` (reused, not
-// forked), (c) the stuck-side rule (checkmate/stalemate); plus the committed-move
-// chess draw rules (ruleDraw) and a hard ply cap scored as a draw.
+// Terminality is the live triple: (a) applyMove's last-side-standing winner, (b)
+// resolveVictory over `level.victory ?? victoryRulesForObjective(...)` (reused, not
+// forked — note game/selfplay.ts still routes through evaluateObjective, which ignores
+// authored level.victory; on authored-victory levels this file matches the SOLVER),
+// (c) the stuck-side rule (checkmate/stalemate); plus the committed-move chess draw
+// rules (ruleDraw) and a hard ply cap scored as a draw. Ordering: mid-game is
+// core/solver/input.ts `terminalOutcome` exactly ((a)→(b)→(c)); at PLY 0 the live game
+// checks stuck FIRST (store.newSkirmish's resolveIfPlayerStuck, selfplay's pre-loop
+// check) and playGame does the same — the solver keeps victory-first even at the root,
+// the one spot the repo's references disagree (observable only on double-terminal
+// authored starts).
 //
 // Pure + deterministic (no DOM, no Date, no Math.random): every random draw comes from
-// core/rng seeded per game, so a given (level, opts) reproduces bit-for-bit.
+// core/rng seeded per game, so a given (level, opts) reproduces bit-for-bit on one JS
+// engine (sigmoid's Math.exp is the lone op with no cross-engine bit guarantee; the
+// rng itself is integer-exact).
+//
+// Named debt (ADR-0059): playGame is the repo's THIRD turn-loop skeleton (store,
+// selfplay, here) and terminalWinner re-states the solver's terminalOutcome. Blind
+// reuse was semantically wrong today — selfplay hard-codes searchBestAction and
+// evaluateObjective (no policy hook, no authored victory) and the solver's stuck env
+// omits lastMove (en-passant boards are refused upstream) where this learner must
+// thread it — but the shared extraction (a policy-pluggable turn loop / an
+// env-parameterized terminalOutcome) is owed, not waived.
 
 import type { GameState, Move, Side, Winner } from '../core/types';
 import type { Level, VictoryRules } from '../core/level';
@@ -113,8 +130,11 @@ const DEFAULT_ALPHA: AnnealSchedule = { start: 0.1, end: 0.01 };
 const DEFAULT_EPSILON: AnnealSchedule = { start: 0.25, end: 0.02 };
 const DEFAULT_MAX_PLIES = 120;
 /** Frozen probe opponent's seed base — a CONSTANT (not derived from the training seed)
- * so every run, every snapshot, and every seed in runSeeds is probed against the SAME
- * frozen-random opponent stream. */
+ * so every run, every snapshot, and every seed in runSeeds is probed over the SAME
+ * seeded game set. Not literally the same enemy MOVE stream across weight vectors: one
+ * rng per game serves both sides and greedy tie-breaks consume draws, so the ε=1
+ * enemy's picks shift as the probed weights change. The guarantee is "same fair
+ * uniform-random opponent, same seeds" — deterministic per (level, weights, games). */
 const PROBE_SEED_BASE = 0x50524f42; // 'PROB'
 /** Greedy tie window: successor values within this are one equivalence class and the
  * pick among them is seeded-random (decorrelates games; matches ai.ts's near-best pick). */
@@ -180,17 +200,13 @@ function frameFor(level: Level, seed: number): GameFrame {
 }
 
 /**
- * The store/selfplay/solver terminal triple on a settled position (reproduces
- * core/solver/input.ts `terminalOutcome` exactly): (a) applyMove's last-side-standing
- * winner, (b) resolveVictory over the frame's rules with the clock threaded, (c) the
- * stuck-side rule — no legal move loses in check (checkmate), draws otherwise
- * (stalemate). Null while undecided. Committed-move draw rules (ruleDraw) are the
- * turn loop's job, not this function's — they need the committed threefold table.
+ * The stuck-side rule on its own: the side to move has no legal move — loses in
+ * check (checkmate), draws otherwise (stalemate). Null when a move exists (or no
+ * playable side is on turn). Split out because start-of-game resolution checks
+ * this BEFORE the victory rules (the live order — see playGame), while every
+ * later ply checks it after.
  */
-function terminalWinner(state: GameState, frame: GameFrame, turnsElapsed: number): Winner {
-  if (state.winner) return state.winner;
-  const { winner } = resolveVictory(state, frame.rules, { ...frame.ctx, turnsElapsed });
-  if (winner) return winner;
+function stuckWinner(state: GameState, frame: GameFrame): Winner {
   const side = state.turn;
   if (side !== 'player' && side !== 'enemy') return null;
   const env: MoveEnv = { ...frame.baseEnv, lastMove: state.lastMove };
@@ -198,6 +214,21 @@ function terminalWinner(state: GameState, frame: GameFrame, turnsElapsed: number
     if (legalMoves(p, state.pieces, state.size, env).length > 0) return null;
   }
   return sideInCheck(state, side, env) ? (side === 'player' ? 'enemy' : 'player') : 'draw';
+}
+
+/**
+ * The mid-game terminal triple on a settled position (reproduces core/solver/input.ts
+ * `terminalOutcome` exactly): (a) applyMove's last-side-standing winner, (b)
+ * resolveVictory over the frame's rules with the clock threaded, (c) the stuck-side
+ * rule (checkmate/stalemate). Null while undecided. Committed-move draw rules
+ * (ruleDraw) are the turn loop's job, not this function's — they need the committed
+ * threefold table.
+ */
+function terminalWinner(state: GameState, frame: GameFrame, turnsElapsed: number): Winner {
+  if (state.winner) return state.winner;
+  const { winner } = resolveVictory(state, frame.rules, { ...frame.ctx, turnsElapsed });
+  if (winner) return winner;
+  return stuckWinner(state, frame);
 }
 
 interface Action {
@@ -223,9 +254,14 @@ function actionsFor(state: GameState, side: Side, env: MoveEnv): Action[] {
 /**
  * 1-ply greedy with ε-exploration. Each candidate is applied through the real
  * applyMove; a terminal successor scores its exact outcome, a live one scores
- * σ(w·f). The player maximizes, the enemy minimizes (V is player-positive).
- * Ties (within TIE_EPS) are broken by a seeded pick, so equal-value positions —
- * ubiquitous under the all-equal start — still explore.
+ * σ(w·f). Committed-move chess draws are INVISIBLE at this depth (the threefold
+ * table needs committed history this lookahead doesn't have), so a draw-completing
+ * move is valued σ(w·f) here and scored ½ by the loop one ply later — a
+ * policy-quality nuance near draw boundaries (core/ai.ts does see its halfmove
+ * clock in-tree), never a wrong learning target. The player maximizes, the enemy
+ * minimizes (V is player-positive). Ties (within TIE_EPS) are broken by a seeded
+ * pick, so equal-value positions — ubiquitous under the all-equal start — still
+ * explore.
  */
 function chooseAction(
   state: GameState,
@@ -279,7 +315,12 @@ function playGame(level: Level, seed: number, policy: Record<'player' | 'enemy',
   let plies = 0;
 
   // Start-of-game resolution (a degenerate level can be over before any move).
-  let winner: Winner = terminalWinner(game, frame, turnsElapsed);
+  // Ply-0 ORDER follows the live game — stuck FIRST, then victory rules (the store's
+  // newSkirmish runs resolveIfPlayerStuck before anything else; selfplay's pre-loop
+  // check does the same) — where the solver's terminalOutcome keeps victory-first
+  // even at the root. The repo's references disagree only there, and only on
+  // degenerate double-terminal authored starts.
+  let winner: Winner = stuckWinner(game, frame) ?? terminalWinner(game, frame, turnsElapsed);
 
   while (!winner && plies < maxPlies && (game.turn === 'player' || game.turn === 'enemy')) {
     const side = game.turn;
@@ -312,7 +353,14 @@ function playGame(level: Level, seed: number, policy: Record<'player' | 'enemy',
  * Afterstate TD(λ) over one game's trajectory, updating `w` in place. Online form:
  * step k's value and its successor target are both read under the weights as already
  * updated through step k−1 (the TD-Gammon shape). ∇w σ(w·f) = v(1−v)·f feeds the
- * eligibility trace; the last step's target is the game outcome z.
+ * eligibility trace; the last step's target is the game outcome z. The TERMINAL
+ * afterstate is in the sequence — a deliberate deviation from the textbook "last
+ * PREDICTION targets z" form: the pre-terminal step bootstraps from σ(w·f_terminal)
+ * and the final step regresses that terminal value to z, whose δ still reaches every
+ * earlier afterstate through the λ-trace. With material-only features a mate is
+ * indistinguishable from a live position of equal material anyway, so pinning the
+ * terminal feature vector toward the outcome loses nothing (convergence on the
+ * win/draw/loss fixtures is asserted in the tests).
  */
 function tdUpdate(w: Float64Array, afterstates: Float64Array[], z: number, alpha: number, lambda: number): void {
   const trace = new Float64Array(TYPE_COUNT);
@@ -395,6 +443,10 @@ export function trainValues(level: Level, opts: TrainOptions): TrainResult {
   const probeGames = opts.probeGames ?? (probeEvery > 0 ? 16 : 0);
 
   const w = new Float64Array(TYPE_COUNT).fill(opts.initialWeight ?? DEFAULT_INITIAL_WEIGHT);
+  // Root features read the MASTER-seed deal; each training game re-deals from
+  // gameSeed(seed, g) (selfplay's convention), so on levels whose seeded spawn zones
+  // truncate a roster differently per deal, rootValue is "the master deal's value" —
+  // a readout nuance, not a rules fork (fixed-placement levels are identical anyway).
   const rootF = featuresOf(frameFor(level, opts.seed).start);
   const trajectory: TrainSnapshot[] = [];
   const outcomes = { playerWins: 0, draws: 0, enemyWins: 0 };
