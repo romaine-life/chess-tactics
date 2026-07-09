@@ -1653,10 +1653,11 @@ export function LevelEditor(): ReactElement {
   const [eventsTab, setEventsTab] = useState<'victory' | 'other'>('victory');
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
-  // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
-  // the title bar; `savedSig` is the board signature at last save, the basis of the dirty chip.
+  // through; `editingId` may differ once a cold board is saved (Phase 3). The name is edited in
+  // Status, beside the save workflow; `savedSig` is the level signature at last save, the dirty basis.
   const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId);
   const [levelName, setLevelName] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? 'Untitled level');
+  const levelNameForSave = useMemo(() => levelName.trim() || 'Untitled level', [levelName]);
   const [savedSig, setSavedSig] = useState<string | null>(localDraft?.savedSig ?? (initialCampaignLevel ? levelSignature(initialCampaignLevel) : null));
   // Set true once a campaign level has been hydrated into the board state; the baseline effect
   // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
@@ -2464,8 +2465,8 @@ export function LevelEditor(): ReactElement {
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
   const candidateLevel = useMemo(
-    () => editorBoardToLevel(currentEditorBoard, { id: editingId ?? 'draft', name: levelName, ...modeMeta }),
-    [currentEditorBoard, editingId, levelName, modeMeta],
+    () => editorBoardToLevel(currentEditorBoard, { id: editingId ?? 'draft', name: levelNameForSave, ...modeMeta }),
+    [currentEditorBoard, editingId, levelNameForSave, modeMeta],
   );
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
@@ -2503,14 +2504,14 @@ export function LevelEditor(): ReactElement {
       savedAt: Date.now(),
       savedSig,
       board: currentEditorBoard,
-      levelName,
+      levelName: levelNameForSave,
       objective,
       surviveTurns,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
       victory: victoryForSave,
       events: eventsForSave,
     });
-  }, [currentEditorBoard, dirty, draftKey, levelName, objective, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
+  }, [currentEditorBoard, dirty, draftKey, levelNameForSave, objective, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
 
   const isCampaignLevel = useCampaigns((s) =>
     Boolean(routeParams.campaignId || (targetLevelId && s.campaigns.some((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId)))),
@@ -2565,7 +2566,7 @@ export function LevelEditor(): ReactElement {
       // Mint a fresh per-user level id (`l<n>`) and write it into the user workspace — never
       // an `off-` id (INV8). createUnassignedLevel stamps the minted id onto the level and
       // returns it; the editor then tracks that id so subsequent saves write back to it.
-      const newLevel = editorBoardToLevel(currentEditorBoard, { id: 'new', name: levelName, ...modeMeta });
+      const newLevel = editorBoardToLevel(currentEditorBoard, { id: 'new', name: levelNameForSave, ...modeMeta });
       const newId = useCampaigns.getState().createUnassignedLevel(newLevel);
       setEditingId(newId);
       setSaving(true);
@@ -2587,7 +2588,7 @@ export function LevelEditor(): ReactElement {
     const existing = useCampaigns.getState().levels[targetId];
     const level = editorBoardToLevel(currentEditorBoard, {
       id: targetId,
-      name: levelName,
+      name: levelNameForSave,
       notes: existing?.notes,
       // The Rules panel is the source of truth for objective, battle settings, and authored events;
       // setup spawning is explicit events, not the legacy placement/roster fields.
@@ -2661,7 +2662,7 @@ export function LevelEditor(): ReactElement {
     const detail = isCampaignLevel && !next.playerFaction
       ? 'Choose a Player faction before saving this campaign level.'
       : targetLevelId
-      ? `Save will overwrite "${levelName}".`
+      ? `Save will overwrite "${levelNameForSave}".`
       : 'Save will create a workspace level.';
     setBoardLinkDraft('');
     reportStatus(`Loaded board link (${next.cols}x${next.rows}).`, 'success', detail);
@@ -3312,9 +3313,20 @@ export function LevelEditor(): ReactElement {
           ) : null}
           <section className="skirmish-card le-status-card" aria-live="polite">
             <h2>Status</h2>
-            {/* The level's identity lives here now, not in the title bar. */}
-            <div className="le-status-level" aria-label="Level">
-              <span className="le-level-name">{levelName}</span>
+            {/* The level's identity lives with the save workflow, not duplicated in Board settings. */}
+            <div className="le-status-level">
+              <label className="le-status-name-field">
+                <span className="le-settings-label">Name</span>
+                <input
+                  className="le-text-input le-level-name-input"
+                  value={levelName}
+                  aria-label="Level name"
+                  placeholder="Untitled level"
+                  maxLength={80}
+                  onChange={(event) => setLevelName(event.target.value)}
+                  onBlur={() => setLevelName(levelNameForSave)}
+                />
+              </label>
               {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
             </div>
             <div className={`le-status-current ${canSave ? 'is-ready' : 'is-blocked'}`}>
