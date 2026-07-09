@@ -1,5 +1,6 @@
 import { boardLabCellPosition } from './boardProjection';
 import {
+  TILE_FRAME_EQUATOR_Y,
   TILE_FRAME_HEIGHT,
   TILE_STEP_X,
   TILE_STEP_Y,
@@ -27,13 +28,14 @@ import type { EditorBoard } from '../ui/boardCode';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
 const TILE_FRAME_H = TILE_FRAME_HEIGHT;
-const TILE_EQUATOR = 69;
+const TILE_EQUATOR = TILE_FRAME_EQUATOR_Y;
 const WALL_FRAME_W = 128;
 const WALL_FRAME_H = 240;
 const WALL_ANCHOR_X = 64;
 const WALL_ANCHOR_Y = 96;
 const DOODAD_FRAME_W = TILE_FRAME_W;
 const DOODAD_FRAME_H = TILE_FRAME_H;
+const DOODAD_ANCHOR_Y = 69;
 const UNIT_SEAT_W = 72;
 const UNIT_SEAT_H = 86;
 const UNIT_SEAT_OFFSET_X = -0.5;
@@ -205,7 +207,7 @@ export function boardDrawOps(board: RenderBoard): BoardDrawOp[] {
     const doodadPlacement = board.doodads[key];
     const doodad = doodadPlacement ? resolveDoodad(doodadPlacement.doodadId) : undefined;
     if (doodad) {
-      const sprite = doodad.sprite ?? { w: DOODAD_FRAME_W, h: DOODAD_FRAME_H, anchorX: TILE_STEP_X, anchorY: TILE_EQUATOR };
+      const sprite = doodad.sprite ?? { w: DOODAD_FRAME_W, h: DOODAD_FRAME_H, anchorX: TILE_STEP_X, anchorY: DOODAD_ANCHOR_Y };
       const parts = doodad.parts?.length
         ? doodad.parts
         : [{ source: doodad.source ?? { kind: 'doodad' as const, id: doodad.id }, anchorX: sprite.anchorX, anchorY: sprite.anchorY, scale: sprite.scale ?? 1 }];

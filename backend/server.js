@@ -73,6 +73,9 @@ app.use('/api/opening-books', express.json({ limit: '4mb' }));
 // docs, each carrying a full per-cell terrain array + boardCode), so it grows well past the
 // 256kb ceiling. Mount a larger parser first, same as lab-runs; the global parser below skips it.
 app.use('/api/official-campaigns', express.json({ limit: '10mb' }));
+// Editor maps are live Level documents (boardCode + layer arrays) and can be created by
+// in-editor autosave or an agent handoff. They need the same headroom as a single level doc.
+app.use('/api/editor-maps', express.json({ limit: '4mb' }));
 app.use(express.json({ limit: '256kb' }));
 
 // ---------------------------------------------------------------------------
@@ -335,6 +338,48 @@ const MIGRATIONS = [
         updated_at            timestamptz NOT NULL DEFAULT now(),
         updated_by            text
       );
+    `,
+  },
+  {
+    version: 13,
+    name: 'live editor maps and misc pool',
+    // Live editor maps: a public-by-link Level document for the Level Editor.
+    // owner_email gates writes; public_id gates reads. Anonymous/agent-created rows
+    // live in the misc pool and expire unless somebody saves/adopts them.
+    sql: `
+      CREATE TABLE IF NOT EXISTS editor_maps (
+        public_id   text        PRIMARY KEY,
+        owner_email text,
+        anonymous_user_hash text,
+        anonymous_label text,
+        edit_key_hash text,
+        listed      boolean     NOT NULL DEFAULT false,
+        name        text,
+        body        jsonb       NOT NULL,
+        revision    integer     NOT NULL DEFAULT 0,
+        saved_at    timestamptz,
+        saved_by    text,
+        expires_at  timestamptz,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS editor_maps_owner_idx ON editor_maps (owner_email, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS editor_maps_anonymous_idx ON editor_maps (anonymous_user_hash, updated_at DESC)
+        WHERE anonymous_user_hash IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS editor_maps_misc_idx ON editor_maps (expires_at, updated_at DESC)
+        WHERE listed = true AND saved_at IS NULL;
+      CREATE TABLE IF NOT EXISTS editor_map_audit_events (
+        id                  bigserial   PRIMARY KEY,
+        public_id           text        NOT NULL REFERENCES editor_maps(public_id) ON DELETE CASCADE,
+        action              text        NOT NULL,
+        actor_email         text,
+        anonymous_user_hash text,
+        anonymous_label     text,
+        created_at          timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS editor_map_audit_public_idx ON editor_map_audit_events (public_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS editor_map_audit_anonymous_idx ON editor_map_audit_events (anonymous_user_hash, created_at DESC)
+        WHERE anonymous_user_hash IS NOT NULL;
     `,
   },
 ];
@@ -1112,6 +1157,14 @@ async function requireUser(req, res) {
     return null;
   }
   return user;
+}
+
+async function readOptionalUser(req) {
+  try {
+    return publicUser(await readSession(req));
+  } catch {
+    return { signed_in: false };
+  }
 }
 
 // Gate for authoring the global OFFICIAL campaign tier (ADR-0038). requireUser first
@@ -2425,6 +2478,359 @@ app.put('/api/levels/:id', async (req, res) => {
     res.status(200).json({ ok: true, id, revision: result.revision, updated_at: result.updated_at });
   } catch (error) {
     dbUnavailable(res, 'level write failed', error, 'level_store_unavailable');
+  }
+});
+
+// --- Live editor maps + misc map pool --------------------------------------
+// These are public-by-link live Level documents for the Level Editor. A signed-in
+// owner's row is writable only by that owner; anonymous rows are agent/misc pool
+// handoffs and can be viewed/imported until they expire or are marked saved.
+const EDITOR_MAP_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
+const EDITOR_MAP_ID_RE = /^[a-hjkmnp-z2-9]{8,24}$/;
+function newEditorMapId() {
+  const bytes = crypto.randomBytes(12);
+  let out = '';
+  for (const b of bytes) out += EDITOR_MAP_ID_ALPHABET[b % 32];
+  return out;
+}
+function editorMapId(raw) {
+  const id = String(raw || '').trim();
+  return EDITOR_MAP_ID_RE.test(id) ? id : '';
+}
+function newEditorMapEditKey() {
+  return crypto.randomBytes(32).toString('base64url');
+}
+function editorMapEditKeyHash(key) {
+  const value = String(key || '').trim();
+  if (value.length < 24 || value.length > 128) return '';
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+function editorMapAnonymousHash(raw) {
+  const value = String(raw || '').trim();
+  if (value.length < 24 || value.length > 128) return '';
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+function editorMapAnonymousLabel(hash) {
+  return hash ? `anon-${hash.slice(0, 8)}` : null;
+}
+function requestEditorMapEditKey(req) {
+  return typeof req.get('x-editor-map-key') === 'string' ? req.get('x-editor-map-key') : '';
+}
+function requestEditorMapAnonymousHash(req) {
+  return editorMapAnonymousHash(req.get('x-editor-anonymous-id'));
+}
+function editorMapActor({ user, anonymousHash }) {
+  if (user && user.signed_in) return { actor_email: user.email, anonymous_user_hash: null, anonymous_label: null };
+  return {
+    actor_email: null,
+    anonymous_user_hash: anonymousHash || null,
+    anonymous_label: editorMapAnonymousLabel(anonymousHash),
+  };
+}
+function editorMapExpiry(ownerEmail) {
+  const days = ownerEmail ? 30 : 7;
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+function normalizeEditorMapLevel(raw) {
+  if (!isObjectRecord(raw) || !isObjectRecord(raw.level)) return { error: 'invalid_level_body' };
+  const level = { ...raw.level };
+  if (typeof level.id !== 'string' || !level.id.trim()) level.id = 'draft';
+  const validation = validateWorkspaceLevel(level, level.id);
+  if (validation) return { error: 'invalid_level_body', details: validation };
+  return { level };
+}
+function isExpiredEditorMap(row) {
+  return Boolean(row && !row.saved_at && row.expires_at && new Date(row.expires_at).getTime() < Date.now());
+}
+function editorMapCanEdit(row, { viewerEmail, editKey } = {}) {
+  if (!row) return false;
+  if (row.owner_email && viewerEmail) return row.owner_email.toLowerCase() === String(viewerEmail).toLowerCase();
+  const hash = editorMapEditKeyHash(editKey);
+  return Boolean(!row.owner_email && row.edit_key_hash && hash && row.edit_key_hash === hash);
+}
+async function dbSweepExpiredEditorMaps() {
+  await ensureDbReady();
+  await pool.query('DELETE FROM editor_maps WHERE saved_at IS NULL AND expires_at IS NOT NULL AND expires_at < now()');
+}
+async function dbCreateEditorMap({ ownerEmail, anonymousHash, level, listed }) {
+  await ensureDbReady();
+  const name = typeof level.name === 'string' ? level.name : null;
+  const expiresAt = editorMapExpiry(ownerEmail);
+  const editKey = ownerEmail ? null : newEditorMapEditKey();
+  const editKeyHash = editKey ? editorMapEditKeyHash(editKey) : null;
+  const anonymousLabel = ownerEmail ? null : editorMapAnonymousLabel(anonymousHash);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const id = newEditorMapId();
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO editor_maps (public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 1, $9)
+         RETURNING public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, saved_by, expires_at, created_at, updated_at`,
+        [id, ownerEmail, anonymousHash || null, anonymousLabel, editKeyHash, Boolean(listed), name, JSON.stringify(level), expiresAt],
+      );
+      return { row: rows[0], editKey };
+    } catch (error) {
+      if (error && error.code === '23505') continue;
+      throw error;
+    }
+  }
+  throw new Error('editor_map_id_allocation_failed');
+}
+async function dbGetEditorMap(publicId) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, saved_by, expires_at, created_at, updated_at FROM editor_maps WHERE public_id = $1',
+    [publicId],
+  );
+  return rows[0] || null;
+}
+async function dbUpdateEditorMap(publicId, level) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `UPDATE editor_maps
+       SET name = $2, body = $3::jsonb, revision = revision + 1, updated_at = now()
+     WHERE public_id = $1
+     RETURNING public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, saved_by, expires_at, created_at, updated_at`,
+    [publicId, typeof level.name === 'string' ? level.name : null, JSON.stringify(level)],
+  );
+  return rows[0] || null;
+}
+async function dbMarkEditorMapSaved(publicId, savedBy) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `UPDATE editor_maps
+       SET saved_at = now(), saved_by = $2, expires_at = NULL, updated_at = now()
+     WHERE public_id = $1 AND (owner_email IS NULL OR owner_email = $2)
+     RETURNING public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, saved_by, expires_at, created_at, updated_at`,
+    [publicId, savedBy],
+  );
+  return rows[0] || null;
+}
+async function dbListEditorMaps(scope, ownerEmail, anonymousHash) {
+  await dbSweepExpiredEditorMaps();
+  if (scope === 'misc') {
+    const { rows } = await pool.query(
+      `SELECT public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, expires_at, created_at, updated_at
+         FROM editor_maps
+        WHERE listed = true AND saved_at IS NULL AND (expires_at IS NULL OR expires_at > now())
+        ORDER BY updated_at DESC
+        LIMIT 100`,
+    );
+    return rows;
+  }
+  if (!ownerEmail && !anonymousHash) return [];
+  if (!ownerEmail) {
+    const { rows } = await pool.query(
+      `SELECT public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, expires_at, created_at, updated_at
+         FROM editor_maps
+        WHERE anonymous_user_hash = $1 AND (saved_at IS NOT NULL OR expires_at IS NULL OR expires_at > now())
+        ORDER BY updated_at DESC
+        LIMIT 100`,
+      [anonymousHash],
+    );
+    return rows;
+  }
+  const { rows } = await pool.query(
+    `SELECT public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, expires_at, created_at, updated_at
+       FROM editor_maps
+      WHERE owner_email = $1 AND (saved_at IS NOT NULL OR expires_at IS NULL OR expires_at > now())
+      ORDER BY updated_at DESC
+      LIMIT 100`,
+    [ownerEmail],
+  );
+  return rows;
+}
+async function dbLogEditorMapEvent(publicId, action, actor) {
+  try {
+    await pool.query(
+      `INSERT INTO editor_map_audit_events (public_id, action, actor_email, anonymous_user_hash, anonymous_label)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [publicId, action, actor.actor_email || null, actor.anonymous_user_hash || null, actor.anonymous_label || null],
+    );
+  } catch (error) {
+    console.warn('editor map audit event failed:', error && error.message);
+  }
+}
+async function dbListAdminEditorMaps() {
+  await dbSweepExpiredEditorMaps();
+  const { rows } = await pool.query(
+    `SELECT public_id, owner_email, anonymous_user_hash, anonymous_label, listed, name, body, revision, saved_at, saved_by, expires_at, created_at, updated_at
+       FROM editor_maps
+      ORDER BY updated_at DESC
+      LIMIT 250`,
+  );
+  return rows;
+}
+async function dbListEditorMapEvents(publicId) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT id, public_id, action, actor_email, anonymous_user_hash, anonymous_label, created_at
+       FROM editor_map_audit_events
+      WHERE public_id = $1
+      ORDER BY created_at DESC
+      LIMIT 250`,
+    [publicId],
+  );
+  return rows;
+}
+function publicEditorMapCreator(row) {
+  if (row.owner_email) return { kind: 'account', label: 'Signed-in creator' };
+  if (row.anonymous_user_hash) return { kind: 'anonymous', label: row.anonymous_label || editorMapAnonymousLabel(row.anonymous_user_hash) || 'Anonymous creator' };
+  return { kind: 'system', label: row.listed ? 'Misc pool' : 'Unknown creator' };
+}
+function publicEditorMap(row, { viewerEmail, editKey, issuedEditKey } = {}) {
+  const level = isObjectRecord(row && row.body) ? row.body : {};
+  const canEdit = editorMapCanEdit(row, { viewerEmail, editKey }) || Boolean(issuedEditKey);
+  return {
+    public_id: row.public_id,
+    level,
+    revision: Number.isInteger(row.revision) ? row.revision : 0,
+    created_at: row.created_at ?? null,
+    updated_at: row.updated_at ?? null,
+    expires_at: row.expires_at ?? null,
+    saved_at: row.saved_at ?? null,
+    is_misc: Boolean(row.listed),
+    can_edit: canEdit,
+    creator: publicEditorMapCreator(row),
+    ...(issuedEditKey ? { edit_key: issuedEditKey } : {}),
+  };
+}
+function publicEditorMapSummary(row, viewerEmail) {
+  const level = isObjectRecord(row && row.body) ? row.body : {};
+  const board = isObjectRecord(level.board) ? level.board : {};
+  return {
+    public_id: row.public_id,
+    name: typeof row.name === 'string' && row.name ? row.name : (typeof level.name === 'string' ? level.name : 'Untitled level'),
+    cols: Number.isInteger(board.cols) ? board.cols : null,
+    rows: Number.isInteger(board.rows) ? board.rows : null,
+    revision: Number.isInteger(row.revision) ? row.revision : 0,
+    created_at: row.created_at ?? null,
+    updated_at: row.updated_at ?? null,
+    expires_at: row.expires_at ?? null,
+    saved_at: row.saved_at ?? null,
+    is_misc: Boolean(row.listed),
+    can_edit: editorMapCanEdit(row, { viewerEmail }),
+    creator: publicEditorMapCreator(row),
+  };
+}
+function adminEditorMapSummary(row) {
+  const summary = publicEditorMapSummary(row, row.owner_email);
+  return {
+    ...summary,
+    owner_email: row.owner_email ?? null,
+    anonymous_user_hash: row.anonymous_user_hash ?? null,
+    anonymous_label: row.anonymous_label ?? null,
+    listed: Boolean(row.listed),
+    saved_by: row.saved_by ?? null,
+  };
+}
+
+app.get('/api/editor-maps', async (req, res) => {
+  const scope = req.query.scope === 'misc' ? 'misc' : 'mine';
+  const user = await readOptionalUser(req);
+  const anonymousHash = requestEditorMapAnonymousHash(req);
+  try {
+    const rows = await dbListEditorMaps(scope, user.signed_in ? user.email : null, anonymousHash);
+    res.status(200).json({ maps: rows.map((row) => publicEditorMapSummary(row, user.signed_in ? user.email : null)) });
+  } catch (error) {
+    dbUnavailable(res, 'editor map list failed', error, 'editor_map_store_unavailable');
+  }
+});
+
+app.post('/api/editor-maps', async (req, res) => {
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  const parsed = normalizeEditorMapLevel(raw);
+  if (parsed.error) { res.status(400).json({ error: parsed.error, ...(parsed.details ? { details: parsed.details } : {}) }); return; }
+  const user = await readOptionalUser(req);
+  const anonymousHash = requestEditorMapAnonymousHash(req);
+  const listed = raw.misc === true;
+  const ownerEmail = listed ? null : (user.signed_in ? user.email : null);
+  try {
+    const created = await dbCreateEditorMap({ ownerEmail, anonymousHash: ownerEmail ? null : anonymousHash, level: parsed.level, listed });
+    await dbLogEditorMapEvent(created.row.public_id, 'create', editorMapActor({ user, anonymousHash }));
+    res.status(201).json(publicEditorMap(created.row, { viewerEmail: user.signed_in ? user.email : null, issuedEditKey: created.editKey }));
+  } catch (error) {
+    dbUnavailable(res, 'editor map create failed', error, 'editor_map_store_unavailable');
+  }
+});
+
+app.get('/api/editor-maps/:publicId', async (req, res) => {
+  const publicId = editorMapId(req.params.publicId);
+  if (!publicId) { res.status(400).json({ error: 'invalid_editor_map_id' }); return; }
+  const user = await readOptionalUser(req);
+  const editKey = requestEditorMapEditKey(req);
+  try {
+    const row = await dbGetEditorMap(publicId);
+    if (!row || isExpiredEditorMap(row)) { res.status(404).json({ error: 'editor_map_not_found' }); return; }
+    res.status(200).json(publicEditorMap(row, { viewerEmail: user.signed_in ? user.email : null, editKey }));
+  } catch (error) {
+    dbUnavailable(res, 'editor map read failed', error, 'editor_map_store_unavailable');
+  }
+});
+
+app.put('/api/editor-maps/:publicId', async (req, res) => {
+  const user = await readOptionalUser(req);
+  const publicId = editorMapId(req.params.publicId);
+  if (!publicId) { res.status(400).json({ error: 'invalid_editor_map_id' }); return; }
+  const parsed = normalizeEditorMapLevel(isObjectRecord(req.body) ? req.body : {});
+  if (parsed.error) { res.status(400).json({ error: parsed.error, ...(parsed.details ? { details: parsed.details } : {}) }); return; }
+  const editKey = requestEditorMapEditKey(req);
+  const anonymousHash = requestEditorMapAnonymousHash(req);
+  try {
+    const current = await dbGetEditorMap(publicId);
+    if (!current || isExpiredEditorMap(current)) { res.status(404).json({ error: 'editor_map_not_found' }); return; }
+    if (!editorMapCanEdit(current, { viewerEmail: user.signed_in ? user.email : null, editKey })) {
+      res.status(403).json({ error: 'editor_map_read_only' });
+      return;
+    }
+    const row = await dbUpdateEditorMap(publicId, parsed.level);
+    await dbLogEditorMapEvent(publicId, 'update', editorMapActor({ user, anonymousHash }));
+    res.status(200).json(publicEditorMap(row, { viewerEmail: user.signed_in ? user.email : null, editKey }));
+  } catch (error) {
+    dbUnavailable(res, 'editor map update failed', error, 'editor_map_store_unavailable');
+  }
+});
+
+app.post('/api/editor-maps/:publicId/saved', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const publicId = editorMapId(req.params.publicId);
+  if (!publicId) { res.status(400).json({ error: 'invalid_editor_map_id' }); return; }
+  try {
+    const current = await dbGetEditorMap(publicId);
+    if (!current || isExpiredEditorMap(current)) { res.status(404).json({ error: 'editor_map_not_found' }); return; }
+    if (current.owner_email && current.owner_email.toLowerCase() !== user.email.toLowerCase()) {
+      res.status(403).json({ error: 'editor_map_read_only' });
+      return;
+    }
+    const row = await dbMarkEditorMapSaved(publicId, user.email);
+    await dbLogEditorMapEvent(publicId, 'saved', editorMapActor({ user, anonymousHash: null }));
+    res.status(200).json(publicEditorMap(row, { viewerEmail: user.email }));
+  } catch (error) {
+    dbUnavailable(res, 'editor map saved mark failed', error, 'editor_map_store_unavailable');
+  }
+});
+
+app.get('/api/admin/editor-maps', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    const rows = await dbListAdminEditorMaps();
+    res.status(200).json({ maps: rows.map(adminEditorMapSummary) });
+  } catch (error) {
+    dbUnavailable(res, 'admin editor map list failed', error, 'editor_map_store_unavailable');
+  }
+});
+
+app.get('/api/admin/editor-maps/:publicId/events', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const publicId = editorMapId(req.params.publicId);
+  if (!publicId) { res.status(400).json({ error: 'invalid_editor_map_id' }); return; }
+  try {
+    res.status(200).json({ events: await dbListEditorMapEvents(publicId) });
+  } catch (error) {
+    dbUnavailable(res, 'admin editor map audit failed', error, 'editor_map_store_unavailable');
   }
 });
 

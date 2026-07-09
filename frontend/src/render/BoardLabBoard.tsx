@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { boardLabCellPosition } from './boardProjection';
+import { BoardTerrainLayer, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { TileGrid } from './TileGrid';
-import { TileTopLayer } from './TileTopLayer';
 import { FenceOverlayLayer, WallOverlayLayer } from './FenceOverlayLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileSocketAsset } from '../core/tileSockets';
@@ -62,16 +62,29 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   const byKey = new Map<string, SocketBoardCell<TAsset>>(
     sourceCells.map((cell): [string, SocketBoardCell<TAsset>] => [`${cell.x}-${cell.y}`, cell]),
   );
-  const cells = sourceCells.map((cell) => {
-    // ADR-0039: a tile is a SIDE layer with the TOP composited over it — two stacked layers
-    // in the cell's one z-band (the top via the shared <TileTopLayer>, which also owns the
-    // animated-water case). The TOP comes from `asset`; the SIDE comes from `sideAsset` when set
-    // (the frayed edge / future river-waterfall), else from `asset` itself. Each layer is the
-    // baked tile's `-top`/`-side` half; top ∪ side == the original cube, so a plain cell is
-    // unchanged and an edge cell keeps its own top with a frayed side. A linear-feature
-    // overlay (road) composites OVER the top, on the walkable surface.
+  const occupied = new Set(sourceCells.filter((cell) => cell.asset).map((cell) => `${cell.x}-${cell.y}`));
+  const isSideExposed = (cell: SocketBoardCell<TAsset>): boolean => {
+    if (!cell.asset) return false;
+    if (cell.sideAsset) return true;
+    return !occupied.has(`${cell.x + 1}-${cell.y}`) || !occupied.has(`${cell.x}-${cell.y + 1}`);
+  };
+  const terrainCells: TerrainCanvasCell[] = sourceCells.map((cell) => {
     const topSrc = cell.asset ? assetFrameSrc(cell.asset) : undefined;
-    const sideSrc = cell.sideAsset ? assetFrameSrc(cell.sideAsset) : topSrc;
+    const sideSrc = cell.asset ? assetFrameSrc(cell.sideAsset ?? cell.asset) : undefined;
+    return {
+      key: `${cell.x}-${cell.y}`,
+      x: cell.x,
+      y: cell.y,
+      topSrc: topSrc ? terrainTopSrc(topSrc, cell.asset?.topAnimFrames) : undefined,
+      sideSrc: sideSrc ? terrainSideSrc(sideSrc) : undefined,
+      featureSrc: cell.feature ? featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask) : undefined,
+      topAnimFrames: cell.asset?.topAnimFrames,
+      drawSide: isSideExposed(cell),
+    };
+  });
+  const cells = sourceCells.map((cell) => {
+    // Terrain art is composed once in BoardTerrainLayer; the per-cell DOM stays as semantic
+    // editor/game chrome (data hooks, missing labels, selections, hit targets), not tile pixels.
     return {
       key: `${cell.x}-${cell.y}`,
       x: cell.x,
@@ -84,26 +97,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
         'data-board-x': cell.x,
         'data-board-y': cell.y,
       },
-      children: topSrc || cell.missing ? (
-        <>
-          {topSrc ? (
-            <>
-              <img className="tile-layer-side" src={(sideSrc ?? topSrc).replace(/\.png$/, '-side.png')} alt="" draggable={false} />
-              <TileTopLayer baseSrc={topSrc} animFrames={cell.asset?.topAnimFrames} x={cell.x} y={cell.y} />
-              {cell.feature ? (
-                <img
-                  className="tileset-feature-overlay"
-                  src={featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask)}
-                  alt=""
-                  draggable={false}
-                />
-              ) : null}
-            </>
-          ) : cell.missing ? (
-            <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
-          ) : null}
-        </>
-      ) : null,
+      children: cell.missing ? <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span> : null,
     };
   });
 
@@ -114,6 +108,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       ariaLabel={ariaLabel}
       boardZoom={boardZoom}
       boardPan={boardPan}
+      backgroundLayer={<BoardTerrainLayer cells={terrainCells} />}
       renderCellOverlay={
         renderCellOverlay
           ? (cell, position) => {

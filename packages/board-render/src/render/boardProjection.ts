@@ -1,4 +1,5 @@
 import { TILE_TEMPLATE } from '../art/tileTemplate';
+import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X } from '../art/projectionContract';
 
 // The single source of truth for the board's isometric projection and centering.
 // Every surface — the game board, previews, candidate review, AND the editor —
@@ -18,12 +19,12 @@ export function boardLabCellPosition(cell: { x: number; y: number }): { left: nu
 /** Board origin that centres the projected cells within the stage. */
 export function boardLabMetrics(cells: readonly { x: number; y: number }[]): { originLeft: number; originTop: number } {
   const projectedPoints = (cells.length ? cells : [{ x: 0, y: 0 }]).map((cell) => boardLabCellPosition(cell));
-  const minLeft = Math.min(...projectedPoints.map((point) => point.left - 48));
-  const maxLeft = Math.max(...projectedPoints.map((point) => point.left + 48));
-  // -69: tiles are anchored at their contact diamond (equator), and the 180px frame rises
-  // 69px above it for 3D protrusion (standing grass, relief). Include that in the bounds.
-  const minTop = Math.min(...projectedPoints.map((point) => point.top - 69));
-  const maxTop = Math.max(...projectedPoints.map((point) => point.top + 140));
+  const minLeft = Math.min(...projectedPoints.map((point) => point.left - TILE_STEP_X));
+  const maxLeft = Math.max(...projectedPoints.map((point) => point.left + TILE_STEP_X));
+  // Tiles are anchored at their contact diamond (equator), and the 180px frame rises above
+  // it for relief/headroom. Include the actual frame extents in the board bounds.
+  const minTop = Math.min(...projectedPoints.map((point) => point.top - TILE_FRAME_EQUATOR_Y));
+  const maxTop = Math.max(...projectedPoints.map((point) => point.top + TILE_FRAME_HEIGHT - TILE_FRAME_EQUATOR_Y));
   const boardWidth = maxLeft - minLeft;
   const boardHeight = maxTop - minTop;
   return {
