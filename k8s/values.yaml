@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-b672ed03c5b95b16ee6c9cecba7fa1f9bc41e05d8702e1c083eb09528955d8b5"
+  tag: "app-491632fccacbbfb858806928471a0aff56f1f96a8ea621f3fd7a3266a038d3dc"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Render board scene art on canvas"
-  prNumber: "456"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/456"
-  commit: "fdd45a8"
+  prTitle: "Add live Unit Art editing"
+  prNumber: "457"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/457"
+  commit: "b8735b5"
 
 name: chess-tactics
 namespace: chess-tactics
@@ -101,10 +101,10 @@ serviceAccount: chess-tactics
 # itself still serves.
 serviceAccountClientId: "f9efb041-8b45-4cba-8f79-6a9546f73da1"
 
-# Azure Database for PostgreSQL — the durable game/design document store
-# (levels, campaigns, campaign workspaces, design portfolios). Art assets are
-# committed files, not database rows. Provisioned by tofu/ (postgres.tf +
-# identity.tf). host/database/user are deterministic from tofu and pre-filled;
+# Azure Database for PostgreSQL - the durable game/design store (levels,
+# campaigns, workspaces, portfolios, and live asset metadata). Asset bytes live
+# in Blob Storage. Provisioned by tofu/ (postgres.tf + identity.tf).
+# host/database/user are deterministic from tofu and pre-filled;
 # confirm against the outputs after apply:
 #   host     <- terraform output postgres_fqdn
 #   database <- terraform output postgres_database_name
@@ -128,6 +128,12 @@ postgres:
 # stream from <baseUrl>/<file>. Empty disables BGM (e.g. before it is populated).
 bgm:
   baseUrl: "https://chesstacticsmedia.blob.core.windows.net/bgm"
+
+# Private content-addressed PNG storage for live Unit Studio assets. The backend
+# reads/writes this container with workload identity and serves same-origin image
+# routes to the browser.
+unitAssets:
+  containerUrl: "https://chesstacticsmedia.blob.core.windows.net/unit-assets"
 
 ingress:
   gatewayName: main
