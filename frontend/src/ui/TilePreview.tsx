@@ -32,7 +32,7 @@ import { TILE_SIDE_ITEMS, tileSideFamilyCount, type TileSideItem } from './tileS
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
-import { GymCatalog, GymViewer } from './Gym';
+import { GymCatalog, GymViewer, type GymMode } from './Gym';
 import { SolveCatalog, SolveViewer } from './SolveRuns';
 import { PAGE_ENTRIES } from './pagesCatalog';
 import { SliderRow } from './dressing/SliderRow';
@@ -490,6 +490,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [solverSearch, setSolverSearch] = useState('');
   const [selectedSolverLevelId, setSelectedSolverLevelId] = useState<string | undefined>(initialRoute.selectedSolverLevelId);
   const [solverTab, setSolverTab] = useState<'step' | 'run' | 'help' | 'glossary'>(initialRoute.solverTab ?? 'step');
+  // The Gym's open surface from the URL (`gymtab=`), read once at mount so a deep link
+  // lands INSIDE a mode (e.g. Piece values) instead of on the Gym's default tab.
+  const [initialGymTab] = useState<GymMode | undefined>(() => {
+    const v = new URLSearchParams(window.location.search).get('gymtab');
+    return v === 'book' || v === 'train' || v === 'cluster' || v === 'values' ? v : undefined;
+  });
   const [glossarySearch, setGlossarySearch] = useState('');
   // Assets and artwork each own their own selection — never one shared field
   // (that's how an Assets id like 'gear' used to leak into the Artwork stage).
@@ -1798,7 +1804,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                         : viewerKind === 'gamelab'
                         ? <GameLabViewer levelId={selectedGameLabLevelId} header={studioViewerHeader} />
                         : viewerKind === 'gym'
-                        ? <GymViewer levelId={selectedGymLevelId} header={studioViewerHeader} />
+                        ? <GymViewer levelId={selectedGymLevelId} header={studioViewerHeader} initialMode={initialGymTab} />
                         : viewerKind === 'solver'
                         ? <SolveViewer levelId={selectedSolverLevelId} header={studioViewerHeader} tab={solverTab} onTabChange={setSolverTab} />
                         : viewerKind === 'tileside'

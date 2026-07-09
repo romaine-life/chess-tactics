@@ -365,7 +365,12 @@ function gameMoveLabel(record: GameRecord, index: number): string {
 /** The gym bench for one level: opening-book management + inspection (Stage 1) and
  * retained-session SPSA training over the active book (Stage 2). Each book keeps its
  * own training session, so switching books restores champion + curve exactly. */
-export function GymViewer({ levelId, header }: { levelId?: string; header?: ReactNode }): ReactElement {
+
+/** The Gym's open surface. URL-addressable via the `gymtab=` param (only non-default
+ * values ride the URL) so a deep link can land INSIDE a mode — e.g. Piece values. */
+export type GymMode = 'book' | 'train' | 'cluster' | 'values';
+
+export function GymViewer({ levelId, header, initialMode }: { levelId?: string; header?: ReactNode; initialMode?: GymMode }): ReactElement {
   const workspaceLevels = useCampaigns((s) => s.levels);
   useEffect(() => { void ensureCampaignsHydrated(); }, []);
   const level = levelId ? workspaceLevels[levelId] : undefined;
@@ -377,7 +382,11 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   const [activeId, setActiveId] = useState<number | undefined>(undefined);
   const [loadingBooks, setLoadingBooks] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  const [mode, setMode] = useState<'book' | 'train' | 'cluster' | 'values'>('book');
+  const [mode, setMode] = useState<GymMode>(initialMode ?? 'book');
+  // The per-level reset effect below stomps mode to 'book' on its first run (mount).
+  // A deep-linked mode (`gymtab=`) must survive exactly that first reset — consumed
+  // once here, so switching levels later still lands on the Gym's default.
+  const deepLinkModeRef = useRef<GymMode | undefined>(initialMode);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedLatestGameIndex, setSelectedLatestGameIndex] = useState(0);
   const [latestReplayPly, setLatestReplayPly] = useState(0);
@@ -448,7 +457,8 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
     setSelectedIndex(0);
     setSelectedLatestGameIndex(0);
     setLatestReplayPly(0);
-    setMode('book');
+    setMode(deepLinkModeRef.current ?? 'book');
+    deepLinkModeRef.current = undefined;
     if (!levelId) { setLoadingBooks(false); setAdoptedVec(null); return undefined; }
     // Reflect the local cache immediately (the live AI's synchronous source); the
     // account blob below can overwrite it once it resolves.
