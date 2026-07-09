@@ -3,7 +3,7 @@
 // the heavy library studios + manifests live in TilePreview.tsx and are never
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { DoodadSprite } from '../render/BoardDoodad';
@@ -111,6 +111,7 @@ import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
 import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
+import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -1815,26 +1816,26 @@ export function LevelEditor(): ReactElement {
   // skirmish runs the player's chess clock (the enemy is untimed). Seeded like the other RULES
   // fields: a restored draft (present ⇒ on, with its authored seconds) beats the campaign level.
   const initialTimeControl = localDraft?.timeControl ?? initialCampaignLevel?.timeControl ?? urlTimeControl;
-  const [clockEnabled, setClockEnabled] = useState<boolean>(
+  const [clockEnabled, setClockEnabledState] = useState<boolean>(
     localDraft ? localDraft.timeControl !== undefined : initialCampaignLevel ? initialCampaignLevel.timeControl !== undefined : urlTimeControl !== undefined,
   );
-  const [clockInitialSeconds, setClockInitialSeconds] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
-  const [clockIncrementSeconds, setClockIncrementSeconds] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
+  const [clockInitialSeconds, setClockInitialSecondsState] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
+  const [clockIncrementSeconds, setClockIncrementSecondsState] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
   // Victory conditions (ADR-0064): `victory` is the working win/lose lists — always the truth for
   // this level's outcome, edited in the RULES panel. Seeded from the objective preset for a level
   // that never customized them; a level stores `victory` only when the lists diverge from that
   // preset (see victoryForSave), which keeps preset levels' bodies clean and out of the dirty check.
-  const [victory, setVictory] = useState<VictoryRules>(
+  const [victory, setVictoryState] = useState<VictoryRules>(
     localDraft?.victory ?? initialCampaignLevel?.victory ?? urlVictory ?? victoryRulesForObjective(objective, { surviveTurns }),
   );
-  const [events, setEvents] = useState<LevelEvents>(() =>
+  const [events, setEventsState] = useState<LevelEvents>(() =>
     normalizeLevelEvents(localDraft?.events ?? (initialCampaignLevel ? effectiveLevelEvents(initialCampaignLevel) : urlEvents ?? [])),
   );
   // The victory-events editor opens as a full-size overlay over the board — the narrow control
   // panel can't give rule authoring room to breathe. The panel stays put; a button opens this.
   const [eventsOpen, setEventsOpen] = useState(false);
   // The template dropdown choices append event rows; Clear is the explicit page-local reset.
-  const [templateChoice, setTemplateChoice] = useState<ObjectiveType>(objective);
+  const [templateChoice, setTemplateChoiceState] = useState<ObjectiveType>(objective);
   const [otherTemplateChoice, setOtherTemplateChoice] = useState<OtherEventTemplateId>('pawn-promotion');
   // The events overlay's tab: victory rules (win/lose events) vs other events (spawn/promotion).
   const [eventsTab, setEventsTab] = useState<'victory' | 'other'>('victory');
@@ -1843,13 +1844,33 @@ export function LevelEditor(): ReactElement {
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name is edited in
   // Status, beside the save workflow; `savedSig` is the level signature at last save, the dirty basis.
   const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId);
-  const [levelName, setLevelName] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? 'Untitled level');
+  const [levelName, setLevelNameState] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? 'Untitled level');
   const levelNameForSave = useMemo(() => levelName.trim() || 'Untitled level', [levelName]);
   const [savedSig, setSavedSig] = useState<string | null>(localDraft?.savedSig ?? (initialCampaignLevel ? levelSignature(initialCampaignLevel) : null));
   // Set true once a campaign level has been hydrated into the board state; the baseline effect
   // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
   // clean even for a legacy level whose derived boardCode differs from its saved one).
   const needsBaselineRef = useRef(false);
+  // Which rules-panel fields the user has explicitly authored. The mount-time document
+  // loads resolve asynchronously, and the ADR-0046 entrance failsafe makes the editor
+  // interactive while they are still in flight — so every user-facing rules setter routes
+  // through an authoring wrapper below, and a late seed skips whatever the user already
+  // authored instead of silently clobbering it (see levelEditorRulesSeed.ts). The raw
+  // set*State setters stay reserved for document loads/seeds.
+  const authoredRulesRef = useRef<Set<AuthoredRulesField>>(new Set());
+  // Set when a seed withheld authored fields: the clean baseline below must then anchor on
+  // the seeded DOCUMENT's rules (via seededBaselineLevel), not the merged on-screen state,
+  // so the user's authored delta reads dirty and flows into drafts/saves.
+  const seedSkewRef = useRef<LevelRulesSeed | null>(null);
+  const authorRulesField = <T,>(field: AuthoredRulesField, set: Dispatch<SetStateAction<T>>) =>
+    (next: SetStateAction<T>): void => { authoredRulesRef.current.add(field); set(next); };
+  const setVictory = authorRulesField('victory', setVictoryState);
+  const setEvents = authorRulesField('events', setEventsState);
+  const setLevelName = authorRulesField('name', setLevelNameState);
+  const setClockEnabled = authorRulesField('clock', setClockEnabledState);
+  const setClockInitialSeconds = authorRulesField('clock', setClockInitialSecondsState);
+  const setClockIncrementSeconds = authorRulesField('clock', setClockIncrementSecondsState);
+  const setTemplateChoice = authorRulesField('templateChoice', setTemplateChoiceState);
   const [quietDraftRestore] = useState(() => consumeNewBuildReloadIntent());
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
@@ -1930,7 +1951,31 @@ export function LevelEditor(): ReactElement {
     setRemoteMapCreator(doc.creator ?? null);
   };
 
-  const applyLevelDocument = (level: Level, options: { editingId?: string; clean?: boolean } = {}): void => {
+  // Apply a level document's rules-panel state. A LOAD is the user explicitly opening a
+  // document: it replaces everything and resets authorship. A SEED is a mount-time load
+  // resolving late (campaign hydrate / ?map= fetch): fields the user authored while it was
+  // in flight are kept — both orderings then converge on "loaded document + the user's
+  // edit" — and seedSkewRef records the seeded rules so the clean-baseline capture can
+  // still anchor on the document.
+  const applyLevelRules = (level: Level, mode: 'seed' | 'load'): void => {
+    if (mode === 'load') authoredRulesRef.current.clear();
+    const guarded = guardRulesSeed(levelRulesSeed(level), authoredRulesRef.current);
+    const seed = guarded.seed;
+    setObjective(seed.objective);
+    setSurviveTurns(seed.surviveTurns);
+    if (guarded.apply.templateChoice) setTemplateChoiceState(seed.objective);
+    if (guarded.apply.clock) {
+      setClockEnabledState(seed.clock.enabled);
+      setClockInitialSecondsState(seed.clock.initialSeconds);
+      setClockIncrementSecondsState(seed.clock.incrementSeconds);
+    }
+    if (guarded.apply.victory) setVictoryState(seed.victory);
+    if (guarded.apply.events) setEventsState(seed.events);
+    if (guarded.apply.name) setLevelNameState(seed.name);
+    seedSkewRef.current = mode === 'seed' && guarded.skippedAuthored ? seed : null;
+  };
+
+  const applyLevelDocument = (level: Level, options: { editingId?: string; clean?: boolean; seed?: boolean } = {}): void => {
     const board = levelToEditorBoard(level);
     setBoardCols(board.cols);
     setBoardRows(board.rows);
@@ -1954,16 +1999,8 @@ export function LevelEditor(): ReactElement {
     setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
     setUndoStack([]);
     setRedoStack([]);
-    setObjective(level.objective);
-    setTemplateChoice(level.objective);
-    setSurviveTurns(level.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
-    setClockEnabled(level.timeControl !== undefined);
-    setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
-    setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
-    setVictory(level.victory ?? victoryRulesForObjective(level.objective, { surviveTurns: level.surviveTurns ?? DEFAULT_SURVIVE_TURNS }));
-    setEvents(effectiveLevelEvents(level));
+    applyLevelRules(level, options.seed ? 'seed' : 'load');
     setEditingId(options.editingId);
-    setLevelName(level.name);
     if (options.clean !== false) {
       setSavedSig(levelSignature(level));
       needsBaselineRef.current = true;
@@ -1987,7 +2024,9 @@ export function LevelEditor(): ReactElement {
         applyRemoteMapMetadata(doc);
         setSourceMiscMapId(doc.is_misc ? doc.public_id : null);
         lastRemoteSyncedSigRef.current = levelSignature(doc.level);
-        applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: true });
+        // seed: this mount-time load resolves async — it must not clobber rules the user
+        // authored after the entrance failsafe made the editor interactive.
+        applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: true, seed: true });
         setLiveSyncState(doc.can_edit ? 'saved' : 'idle');
         setEditorReady(true);
         reportStatus(
@@ -2077,17 +2116,10 @@ export function LevelEditor(): ReactElement {
       setUndoStack([]);
       setRedoStack([]);
       // Restore the rule fields from the Level so the Rules panel opens on what was authored.
-      // Defaults mirror createBlankLevel (capture-all, DEFAULT_SURVIVE_TURNS).
-      setObjective(level.objective);
-      setTemplateChoice(level.objective);
-      setSurviveTurns(level.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
-      setClockEnabled(level.timeControl !== undefined);
-      setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
-      setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
-      setVictory(level.victory ?? victoryRulesForObjective(level.objective, { surviveTurns: level.surviveTurns ?? DEFAULT_SURVIVE_TURNS }));
-      setEvents(effectiveLevelEvents(level));
+      // Seed, not load: this hydrate resolves async, and the entrance failsafe may have let
+      // the user author rules first — those must survive (the Rival Kings clobber bug).
+      applyLevelRules(level, 'seed');
       setEditingId(level.id);
-      setLevelName(level.name);
       // Defer the clean-baseline capture to the effect below: it reads the SETTLED signature, so a
       // legacy level (derived boardCode) doesn't spuriously read dirty the instant it loads.
       needsBaselineRef.current = true;
@@ -2813,7 +2845,16 @@ export function LevelEditor(): ReactElement {
   // board state (needsBaselineRef, captured from the live currentSig so it always matches). Depends
   // on currentSig so the post-hydrate capture fires once the seeded state has flowed through.
   useEffect(() => {
-    if (needsBaselineRef.current) { needsBaselineRef.current = false; setSavedSig(currentSig); return; }
+    if (needsBaselineRef.current) {
+      needsBaselineRef.current = false;
+      // A seed that withheld user-authored fields must not adopt the merged on-screen state
+      // as clean: anchor the baseline on the seeded DOCUMENT's rules instead, so exactly the
+      // user's authored delta reads dirty (and keeps flowing into drafts / the Save).
+      const skew = seedSkewRef.current;
+      seedSkewRef.current = null;
+      setSavedSig(skew ? levelSignature(seededBaselineLevel(candidateLevel, skew)) : currentSig);
+      return;
+    }
     if (savedSig === null && !routeParams.levelId) setSavedSig(standaloneBaselineSigRef.current ?? currentSig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSig]);
@@ -3924,7 +3965,7 @@ export function LevelEditor(): ReactElement {
                   placeholder="Untitled level"
                   maxLength={80}
                   onChange={(event) => setLevelName(event.target.value)}
-                  onBlur={() => setLevelName(levelNameForSave)}
+                  onBlur={() => setLevelNameState(levelNameForSave)}
                 />
               </label>
               {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
