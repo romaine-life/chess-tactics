@@ -28,7 +28,7 @@ import { fetchPublicMap } from '../net/maps';
 import { OBJECTIVE_TYPES, type ObjectiveType } from '../core/level';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
-import { PALETTE_FOR_SIDE, isPlayablePieceType } from '../core/pieces';
+import { isPlayablePieceType, paletteForSide } from '../core/pieces';
 import { masterSrc, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
 import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
@@ -248,7 +248,7 @@ export function Skirmish() {
     const urls: string[] = [];
     for (const piece of game.pieces) {
       if (!isPlayablePieceType(piece.type)) continue;
-      urls.push(masterSrc(piece.type as PortraitPiece, PALETTE_FOR_SIDE[piece.side] as PortraitPalette, PRODUCTION_PORTRAIT_METHOD));
+      urls.push(masterSrc(piece.type as PortraitPiece, paletteForSide(piece.side, piece.palette) as PortraitPalette, PRODUCTION_PORTRAIT_METHOD));
       urls.push(DEFAULT_BACKGROUND_SET.portraits[piece.type]);
     }
     preloadImages(urls);

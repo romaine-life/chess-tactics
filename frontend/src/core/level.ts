@@ -6,7 +6,7 @@
 import type { BoardSize, PieceType, PromotionPieceType, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import { PROMOTION_PIECE_TYPES } from './types';
 import type { PlacedProp } from './props';
-import { isPlayablePieceType } from './pieces';
+import { UNIT_PALETTES, isPlayablePieceType, isUnitPalette, type UnitPalette } from './pieces';
 import { parseEdgeKey, isOrthogonalPair } from './featureAutotile';
 
 // Terrain vocabulary now lives in the foundational type module so the editor's
@@ -198,6 +198,8 @@ export interface LevelUnit {
   y: number;
   type: PieceType;
   side: Side;
+  /** Exact authored unit palette. Optional for legacy/free levels; side defaults apply. */
+  palette?: UnitPalette;
   // The 8-direction sprite facing painted in the editor. Optional + back-compat: the
   // game falls back to the side's default facing when absent (see game/setup.ts).
   facing?: UnitFacing;
@@ -577,6 +579,10 @@ export function validateLevel(value: unknown): ValidateResult {
       for (const u of layers.units) {
         if (u.x < 0 || u.x >= b.cols || u.y < 0 || u.y >= b.rows) {
           errors.push(`unit out of bounds at (${u.x}, ${u.y})`);
+          break;
+        }
+        if (u.palette !== undefined && !isUnitPalette(u.palette)) {
+          errors.push(`unit palette must be one of: ${UNIT_PALETTES.join(', ')}`);
           break;
         }
       }

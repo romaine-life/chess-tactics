@@ -11,7 +11,7 @@ export type PortraitMethod = 'smooth' | 'codex-stone' | 'codex-concept' | 'filte
 // The six pieces, for the Portraits catalog's Unit filter (single source of truth).
 export const PORTRAIT_PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const satisfies readonly Piece[];
 
-// codex-stone is the PRODUCTION treatment (shipped to the HUD/roster, all 4 team palettes);
+// codex-stone is the PRODUCTION treatment (shipped to the HUD/roster, all team palettes);
 // the rest are speculative candidates (navy only). Production listed first.
 export const PRODUCTION_PORTRAIT_METHOD: PortraitMethod = 'codex-stone';
 export const PORTRAIT_METHODS: { key: PortraitMethod; label: string; sub: string; production?: boolean }[] = [

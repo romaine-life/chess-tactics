@@ -30,10 +30,12 @@ All pieces (pawn, knight, bishop, rook, queen, king): `30°` (frontal-¾). The u
 in-game south; the camera orbits 30° off the front.
 
 ## Palettes
-One portrait **per team palette** (`navy-blue`, `crimson`, `golden`, `emerald`) — same
-material-swap recipe as the board sprites: the body "navy stone" material is recolored, gold
-accents are kept, except `golden` which swaps accents to dark iron and makes the body a
-polished metal. Body base colours (linear RGB) for `portrait_render.py`:
+One portrait **per team palette** (`navy-blue`, `crimson`, `golden`, `emerald`, `black`,
+`white`) — same material-swap recipe as the board sprites: the body "navy stone" material
+is recolored, gold accents are kept except for `golden`'s iron-accent treatment, and
+black/white are generated as curated value ramps from the navy master so highlights and
+shadows survive. Body base colours (linear RGB) for the Blender-authored palettes in
+`portrait_render.py`:
 
 | palette   | body RGB (linear)       | accent | body metal |
 |-----------|-------------------------|--------|------------|
@@ -41,6 +43,8 @@ polished metal. Body base colours (linear RGB) for `portrait_render.py`:
 | crimson   | `0.2925 0.0483 0.0509`  | keep   | –          |
 | golden    | `0.566  0.392  0.088`   | iron   | `0.6`      |
 | emerald   | `0.0332 0.1570 0.0808`  | keep   | –          |
+| black     | generated ramp           | keep   | –          |
+| white     | generated ramp           | keep   | –          |
 
 (`navy-blue` is the canonical `navy stone` base from `pieces_claude.py`; crimson/golden/
 emerald were recovered by calibrating against the navy renders, since the original ad-hoc

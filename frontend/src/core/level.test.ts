@@ -28,6 +28,11 @@ describe('level schema', () => {
     lvl.layers.units.push({ x: 99, y: 0, type: 'knight', side: 'player' });
     expect(validateLevel(lvl).ok).toBe(false);
   });
+  it('rejects an unknown unit palette', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.layers.units.push({ x: 1, y: 1, type: 'knight', side: 'player', palette: 'ultraviolet' as never });
+    expect(validateLevel(lvl).ok).toBe(false);
+  });
   it('rejects non-objects', () => {
     expect(validateLevel(null).ok).toBe(false);
     expect(validateLevel('nope').ok).toBe(false);

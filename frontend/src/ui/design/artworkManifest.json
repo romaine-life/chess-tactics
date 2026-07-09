@@ -1,7 +1,7 @@
 {
-  "generated": "2026-06-28",
+  "generated": "2026-07-09",
   "summary": {
-    "total": 82,
+    "total": 106,
     "groups": 7
   },
   "groups": [
@@ -142,6 +142,14 @@
       "label": "Unit portraits",
       "items": [
         {
+          "id": "units/bishop/portrait/black",
+          "label": "Bishop · Black",
+          "url": "/assets/units/bishop/portrait/black.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
+        },
+        {
           "id": "units/bishop/portrait/crimson",
           "label": "Bishop · Crimson",
           "url": "/assets/units/bishop/portrait/crimson.png",
@@ -169,6 +177,22 @@
           "id": "units/bishop/portrait/navy-blue",
           "label": "Bishop · Navy Blue",
           "url": "/assets/units/bishop/portrait/navy-blue.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
+        },
+        {
+          "id": "units/bishop/portrait/white",
+          "label": "Bishop · White",
+          "url": "/assets/units/bishop/portrait/white.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
+        },
+        {
+          "id": "units/king/portrait/black",
+          "label": "King · Black",
+          "url": "/assets/units/king/portrait/black.png",
           "w": 512,
           "h": 512,
           "sub": "team palette"
@@ -206,6 +230,22 @@
           "sub": "team palette"
         },
         {
+          "id": "units/king/portrait/white",
+          "label": "King · White",
+          "url": "/assets/units/king/portrait/white.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
+        },
+        {
+          "id": "units/knight/portrait/black",
+          "label": "Knight · Black",
+          "url": "/assets/units/knight/portrait/black.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
+        },
+        {
           "id": "units/knight/portrait/crimson",
           "label": "Knight · Crimson",
           "url": "/assets/units/knight/portrait/crimson.png",
@@ -233,6 +273,22 @@
           "id": "units/knight/portrait/navy-blue",
           "label": "Knight · Navy Blue",
           "url": "/assets/units/knight/portrait/navy-blue.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
+        },
+        {
+          "id": "units/knight/portrait/white",
+          "label": "Knight · White",
+          "url": "/assets/units/knight/portrait/white.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
+        },
+        {
+          "id": "units/pawn/portrait/black",
+          "label": "Pawn · Black",
+          "url": "/assets/units/pawn/portrait/black.png",
           "w": 512,
           "h": 512,
           "sub": "team palette"
@@ -270,6 +326,22 @@
           "sub": "team palette"
         },
         {
+          "id": "units/pawn/portrait/white",
+          "label": "Pawn · White",
+          "url": "/assets/units/pawn/portrait/white.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
+        },
+        {
+          "id": "units/queen/portrait/black",
+          "label": "Queen · Black",
+          "url": "/assets/units/queen/portrait/black.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
+        },
+        {
           "id": "units/queen/portrait/crimson",
           "label": "Queen · Crimson",
           "url": "/assets/units/queen/portrait/crimson.png",
@@ -297,6 +369,22 @@
           "id": "units/queen/portrait/navy-blue",
           "label": "Queen · Navy Blue",
           "url": "/assets/units/queen/portrait/navy-blue.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
+        },
+        {
+          "id": "units/queen/portrait/white",
+          "label": "Queen · White",
+          "url": "/assets/units/queen/portrait/white.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
+        },
+        {
+          "id": "units/rook/portrait/black",
+          "label": "Rook · Black",
+          "url": "/assets/units/rook/portrait/black.png",
           "w": 512,
           "h": 512,
           "sub": "team palette"
@@ -332,6 +420,14 @@
           "w": 512,
           "h": 512,
           "sub": "team palette"
+        },
+        {
+          "id": "units/rook/portrait/white",
+          "label": "Rook · White",
+          "url": "/assets/units/rook/portrait/white.png",
+          "w": 512,
+          "h": 512,
+          "sub": "team palette"
         }
       ]
     },
@@ -339,6 +435,14 @@
       "id": "portrait-editor",
       "label": "Portrait-editor sources",
       "items": [
+        {
+          "id": "portrait-editor/bishop/black",
+          "label": "Bishop · Black",
+          "url": "/assets/portrait-editor/bishop/black.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
         {
           "id": "portrait-editor/bishop/crimson",
           "label": "Bishop · Crimson",
@@ -367,6 +471,22 @@
           "id": "portrait-editor/bishop/navy-blue",
           "label": "Bishop · Navy Blue",
           "url": "/assets/portrait-editor/bishop/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
+        {
+          "id": "portrait-editor/bishop/white",
+          "label": "Bishop · White",
+          "url": "/assets/portrait-editor/bishop/white.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
+        {
+          "id": "portrait-editor/king/black",
+          "label": "King · Black",
+          "url": "/assets/portrait-editor/king/black.png",
           "w": 768,
           "h": 768,
           "sub": "portrait source"
@@ -404,6 +524,22 @@
           "sub": "portrait source"
         },
         {
+          "id": "portrait-editor/king/white",
+          "label": "King · White",
+          "url": "/assets/portrait-editor/king/white.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
+        {
+          "id": "portrait-editor/knight/black",
+          "label": "Knight · Black",
+          "url": "/assets/portrait-editor/knight/black.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
+        {
           "id": "portrait-editor/knight/crimson",
           "label": "Knight · Crimson",
           "url": "/assets/portrait-editor/knight/crimson.png",
@@ -431,6 +567,22 @@
           "id": "portrait-editor/knight/navy-blue",
           "label": "Knight · Navy Blue",
           "url": "/assets/portrait-editor/knight/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
+        {
+          "id": "portrait-editor/knight/white",
+          "label": "Knight · White",
+          "url": "/assets/portrait-editor/knight/white.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
+        {
+          "id": "portrait-editor/pawn/black",
+          "label": "Pawn · Black",
+          "url": "/assets/portrait-editor/pawn/black.png",
           "w": 768,
           "h": 768,
           "sub": "portrait source"
@@ -468,6 +620,22 @@
           "sub": "portrait source"
         },
         {
+          "id": "portrait-editor/pawn/white",
+          "label": "Pawn · White",
+          "url": "/assets/portrait-editor/pawn/white.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
+        {
+          "id": "portrait-editor/queen/black",
+          "label": "Queen · Black",
+          "url": "/assets/portrait-editor/queen/black.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
+        {
           "id": "portrait-editor/queen/crimson",
           "label": "Queen · Crimson",
           "url": "/assets/portrait-editor/queen/crimson.png",
@@ -500,6 +668,22 @@
           "sub": "portrait source"
         },
         {
+          "id": "portrait-editor/queen/white",
+          "label": "Queen · White",
+          "url": "/assets/portrait-editor/queen/white.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
+        {
+          "id": "portrait-editor/rook/black",
+          "label": "Rook · Black",
+          "url": "/assets/portrait-editor/rook/black.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
+        {
           "id": "portrait-editor/rook/crimson",
           "label": "Rook · Crimson",
           "url": "/assets/portrait-editor/rook/crimson.png",
@@ -527,6 +711,14 @@
           "id": "portrait-editor/rook/navy-blue",
           "label": "Rook · Navy Blue",
           "url": "/assets/portrait-editor/rook/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "portrait source"
+        },
+        {
+          "id": "portrait-editor/rook/white",
+          "label": "Rook · White",
+          "url": "/assets/portrait-editor/rook/white.png",
           "w": 768,
           "h": 768,
           "sub": "portrait source"
