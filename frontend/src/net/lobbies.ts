@@ -38,11 +38,14 @@ export interface LobbyList {
 
 // One relayed applyMove. `i` is its 0-based position in the lobby's move log —
 // clients use it for ordering/dedupe (a mover's own echo has i < local moveCount).
+// The wire move is the RelayMove contract (game/store.ts): destination cell plus the
+// one detail rules cannot infer (promotion choice). Capture / en-passant / a castle's
+// rook hop are RE-DERIVED on each board from its own legalMoves, never relayed.
 export interface MoveEvent {
   i: number;
   side: 'player' | 'enemy';
   pieceId: string;
-  move: { x: number; y: number; capture?: boolean; enPassant?: boolean };
+  move: { x: number; y: number; promotion?: 'queen' | 'rook' | 'bishop' | 'knight' };
 }
 
 // Shared request core. GET sends no body; every mutating verb posts JSON (an empty

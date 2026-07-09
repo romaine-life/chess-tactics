@@ -8,6 +8,9 @@ import {
   gameEnv,
   isEnemy,
   legalMoves,
+  positionKey,
+  recordPosition,
+  ruleDraw,
   type MoveEnv,
 } from './rules';
 import { roadEdgeKey } from './featureAutotile';
@@ -486,5 +489,206 @@ describe('edge fences (movement blocking)', () => {
     expect(has(legalMoves(rook, [rook], SIZE, env), 3, 2)).toBe(false); // the fenced edge blocks the step
     // A fence-free state yields no fence set (so movement is byte-identical to a fence-free game).
     expect(gameEnv({ size: SIZE, pieces: [], turn: 'player', winner: null } as GameState).fences).toBeUndefined();
+  });
+});
+
+// ---- Castling (ADR-0072) ---------------------------------------------------
+
+describe('castling', () => {
+  // Chess-standard geometry on the home rank: king e-file (4,11), rooks at (7,11)/(0,11).
+  const KINGSIDE = { side: 'player' as const, king: { x: 4, y: 11 }, rook: { x: 7, y: 11 }, kingTo: { x: 6, y: 11 }, rookTo: { x: 5, y: 11 } };
+  const QUEENSIDE = { side: 'player' as const, king: { x: 4, y: 11 }, rook: { x: 0, y: 11 }, kingTo: { x: 2, y: 11 }, rookTo: { x: 3, y: 11 } };
+  const king = () => P('player', 'king', 4, 11);
+  const rookK = () => P('player', 'rook', 7, 11);
+  const rookQ = () => P('player', 'rook', 0, 11);
+  const foeKing = () => P('enemy', 'king', 7, 0);
+  const env = (): MoveEnv => ({ castleRules: [KINGSIDE, QUEENSIDE] });
+
+  it('offers both castles when the rules hold, encoded as a two-square king move carrying the rook hop', () => {
+    const pieces = [king(), rookK(), rookQ(), foeKing()];
+    const moves = legalMoves(pieces[0], pieces, SIZE, env());
+    expect(find(moves, 6, 11)?.castle).toEqual({ rookId: pieces[1].id, rookTo: { x: 5, y: 11 } });
+    expect(find(moves, 2, 11)?.castle).toEqual({ rookId: pieces[2].id, rookTo: { x: 3, y: 11 } });
+  });
+
+  it('offers no castle without authored castle rules (every existing board is unchanged)', () => {
+    const pieces = [king(), rookK(), rookQ(), foeKing()];
+    const moves = legalMoves(pieces[0], pieces, SIZE);
+    expect(find(moves, 6, 11)).toBeUndefined();
+    expect(find(moves, 2, 11)).toBeUndefined();
+  });
+
+  it('requires every square between king and rook to be empty', () => {
+    const pieces = [king(), rookK(), rookQ(), P('player', 'knight', 1, 11), foeKing()];
+    const moves = legalMoves(pieces[0], pieces, SIZE, env());
+    expect(find(moves, 6, 11)).toBeDefined(); // kingside path is clear
+    expect(find(moves, 2, 11)).toBeUndefined(); // b-file knight blocks queenside
+  });
+
+  it('is gone forever once the king or that rook has moved (history-exact rights)', () => {
+    const movedKing = [P('player', 'king', 4, 11, { hasMoved: true }), rookK(), foeKing()];
+    expect(find(legalMoves(movedKing[0], movedKing, SIZE, env()), 6, 11)).toBeUndefined();
+    const movedRook = [king(), P('player', 'rook', 7, 11, { hasMoved: true }), rookQ(), foeKing()];
+    const moves = legalMoves(movedRook[0], movedRook, SIZE, env());
+    expect(find(moves, 6, 11)).toBeUndefined();
+    expect(find(moves, 2, 11)).toBeDefined(); // the untouched pair still castles
+  });
+
+  it('forbids castling out of, through, and into check', () => {
+    const outOf = [king(), rookK(), foeKing(), P('enemy', 'rook', 4, 0)]; // attacks the king square
+    expect(find(legalMoves(outOf[0], outOf, SIZE, env()), 6, 11)).toBeUndefined();
+    const through = [king(), rookK(), foeKing(), P('enemy', 'rook', 5, 0)]; // attacks the crossed square
+    expect(find(legalMoves(through[0], through, SIZE, env()), 6, 11)).toBeUndefined();
+    const into = [king(), rookK(), foeKing(), P('enemy', 'rook', 6, 0)]; // attacks the landing square
+    expect(find(legalMoves(into[0], into, SIZE, env()), 6, 11)).toBeUndefined();
+  });
+
+  it('respects an edge fence on the king path like any other move', () => {
+    const pieces = [king(), rookK(), foeKing()];
+    const fenced: MoveEnv = { ...env(), fences: new Set([roadEdgeKey(4, 11, 5, 11)]) };
+    expect(find(legalMoves(pieces[0], pieces, SIZE, fenced), 6, 11)).toBeUndefined();
+  });
+
+  it('applyMove relocates both pieces in ONE action: turn flips once, rights burn, castled event fires', () => {
+    const pieces = [king(), rookK(), foeKing()];
+    const state: GameState = { size: SIZE, pieces, turn: 'player', winner: null };
+    const mv = find(legalMoves(pieces[0], pieces, SIZE, env()), 6, 11)!;
+    const res = applyMove(state, pieces[0].id, mv);
+    expect(res.state.pieces.find((p) => p.id === pieces[0].id)).toMatchObject({ x: 6, y: 11, hasMoved: true });
+    expect(res.state.pieces.find((p) => p.id === pieces[1].id)).toMatchObject({ x: 5, y: 11, hasMoved: true });
+    expect(res.state.turn).toBe('enemy');
+    expect(res.events.some((e) => e.kind === 'castled')).toBe(true);
+    // Both displacements emit 'moved' so footstep/log consumers see the rook arrive too.
+    expect(res.events.filter((e) => e.kind === 'moved')).toHaveLength(2);
+  });
+
+  it('gameEnv threads a state\'s castle rules into the movement env', () => {
+    const pieces = [king(), rookK(), foeKing()];
+    const state: GameState = { size: SIZE, pieces, turn: 'player', winner: null, castleRules: [KINGSIDE] };
+    expect(find(legalMoves(pieces[0], pieces, SIZE, gameEnv(state)), 6, 11)).toBeDefined();
+    expect(gameEnv({ ...state, castleRules: undefined }).castleRules).toBeUndefined();
+  });
+});
+
+// ---- Chess draw rules: 50-move clock, position keys, threefold (ADR-0072) ---
+
+describe('halfmove clock', () => {
+  const base = (): GameState => ({
+    size: SIZE,
+    pieces: [P('player', 'queen', 4, 6), P('player', 'pawn', 0, 11), P('player', 'king', 2, 10), P('enemy', 'pawn', 4, 3), P('enemy', 'king', 7, 0)],
+    turn: 'player',
+    winner: null,
+    halfmoveClock: 7,
+  });
+
+  it('increments on a quiet piece move', () => {
+    const s = base();
+    expect(applyMove(s, 'player-queen-4-6', { x: 3, y: 6 }).state.halfmoveClock).toBe(8);
+  });
+  it('resets on a capture', () => {
+    const s = base();
+    expect(applyMove(s, 'player-queen-4-6', { x: 4, y: 3, capture: 'enemy-pawn-4-3' }).state.halfmoveClock).toBe(0);
+  });
+  it('resets on any pawn move', () => {
+    const s = base();
+    expect(applyMove(s, 'player-pawn-0-11', { x: 0, y: 10 }).state.halfmoveClock).toBe(0);
+  });
+});
+
+describe('positionKey / recordPosition / ruleDraw', () => {
+  const KINGSIDE = { side: 'player' as const, king: { x: 4, y: 11 }, rook: { x: 7, y: 11 }, kingTo: { x: 6, y: 11 }, rookTo: { x: 5, y: 11 } };
+  const twoKings = (extra: Piece[] = [], over: Partial<GameState> = {}): GameState => ({
+    size: SIZE,
+    pieces: [P('player', 'king', 4, 11), P('enemy', 'king', 7, 0), ...extra],
+    turn: 'player',
+    winner: null,
+    ...over,
+  });
+
+  it('keys on placement and side to move', () => {
+    const a = twoKings();
+    expect(positionKey(a)).toBe(positionKey({ ...a, pieces: [...a.pieces].reverse() })); // order-insensitive
+    expect(positionKey(a)).not.toBe(positionKey({ ...a, turn: 'enemy' }));
+  });
+
+  it('keys castling rights: the same placement with burned rights is a DIFFERENT position', () => {
+    const fresh = twoKings([P('player', 'rook', 7, 11)], { castleRules: [KINGSIDE] });
+    const burned = {
+      ...fresh,
+      pieces: fresh.pieces.map((p) => (p.type === 'rook' ? { ...p, hasMoved: true } : p)),
+    };
+    expect(positionKey(fresh)).not.toBe(positionKey(burned));
+  });
+
+  it('keys en passant only when the capture is actually legal (a pinned pawn does not count)', () => {
+    const lastMove = { pieceId: 'enemy-pawn-3-3', pieceType: 'pawn' as const, side: 'enemy' as const, from: { x: 3, y: 1 }, to: { x: 3, y: 3 } };
+    const open: GameState = {
+      size: SIZE,
+      pieces: [P('player', 'pawn', 4, 3), P('player', 'king', 4, 11), P('enemy', 'pawn', 3, 3), P('enemy', 'king', 7, 0), P('enemy', 'rook', 0, 0)],
+      turn: 'player',
+      winner: null,
+      lastMove,
+    };
+    expect(positionKey(open)).toContain('ep');
+    // Slide the enemy rook onto the pawn's file: capturing en passant would expose the king.
+    const pinned: GameState = {
+      ...open,
+      pieces: open.pieces.map((p) => (p.type === 'rook' ? { ...p, x: 4, y: 0 } : p)),
+    };
+    expect(positionKey(pinned)).not.toContain('ep');
+  });
+
+  it('recordPosition counts occurrences, restarts on an irreversible move, and no-ops without the rule', () => {
+    const off = twoKings([], { halfmoveClock: 4 });
+    expect(recordPosition(off).positionCounts).toBeUndefined();
+    const on = twoKings([], { halfmoveClock: 4, drawRules: { threefold: true } });
+    const once = recordPosition(on);
+    const twice = recordPosition({ ...once, halfmoveClock: 8 });
+    expect(Object.values(twice.positionCounts!)).toEqual([2]);
+    // A capture/pawn move (clock 0) makes earlier positions unreachable — the table restarts.
+    const wiped = recordPosition({ ...twice, halfmoveClock: 0 });
+    expect(Object.values(wiped.positionCounts!)).toEqual([1]);
+  });
+
+  it('ruleDraw declares the 50-move draw at 100 halfmoves', () => {
+    const s = twoKings([], { drawRules: { fiftyMove: true }, halfmoveClock: 100 });
+    expect(ruleDraw(s)).toBe('fifty-move');
+    expect(ruleDraw({ ...s, halfmoveClock: 99 })).toBeNull();
+    expect(ruleDraw({ ...s, drawRules: {} })).toBeNull();
+  });
+
+  it('mate on the clock-filling move outranks the 50-move draw (FIDE exact)', () => {
+    // Back-rank mate: the enemy king in the corner, both flight files covered.
+    const mated: GameState = {
+      size: SIZE,
+      pieces: [P('enemy', 'king', 7, 0), P('player', 'rook', 7, 11), P('player', 'rook', 6, 11), P('player', 'king', 0, 11)],
+      turn: 'enemy',
+      winner: null,
+      drawRules: { fiftyMove: true },
+      halfmoveClock: 100,
+    };
+    expect(ruleDraw(mated)).toBeNull(); // checkmate, not a draw — terminalIfStuck decides it
+    // The same clock with an escape square IS the draw, even in check.
+    const escapable: GameState = { ...mated, pieces: mated.pieces.filter((p) => p.id !== 'player-rook-6-11') };
+    expect(ruleDraw(escapable)).toBe('fifty-move');
+  });
+
+  it('ruleDraw declares threefold on the third occurrence, end to end through recordPosition', () => {
+    let s = twoKings([], { drawRules: { threefold: true } });
+    s = recordPosition(s); // the starting position is occurrence #1
+    const shuffle: Array<[('player' | 'enemy'), { x: number; y: number }]> = [
+      ['player', { x: 4, y: 10 }], ['enemy', { x: 7, y: 1 }],
+      ['player', { x: 4, y: 11 }], ['enemy', { x: 7, y: 0 }], // occurrence #2
+      ['player', { x: 4, y: 10 }], ['enemy', { x: 7, y: 1 }],
+      ['player', { x: 4, y: 11 }], ['enemy', { x: 7, y: 0 }], // occurrence #3
+    ];
+    const draws: Array<string | null> = [];
+    for (const [side, to] of shuffle) {
+      const mover = s.pieces.find((p) => p.side === side && p.type === 'king')!;
+      s = recordPosition(applyMove(s, mover.id, to).state);
+      draws.push(ruleDraw(s));
+    }
+    expect(draws.slice(0, 7)).toEqual([null, null, null, null, null, null, null]);
+    expect(draws[7]).toBe('threefold');
   });
 });

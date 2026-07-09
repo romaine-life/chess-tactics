@@ -83,7 +83,8 @@ import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } 
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, ZONE_COLORS, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
@@ -771,6 +772,8 @@ const MODE_DESCRIPTION: Record<ObjectiveType, string> = {
 
 const OTHER_EVENT_TEMPLATES = [
   { id: 'pawn-promotion', label: 'Pawn promotion' },
+  { id: 'castling', label: 'Castling' },
+  { id: 'chess-draws', label: 'Chess draws' },
 ] as const;
 type OtherEventTemplateId = typeof OTHER_EVENT_TEMPLATES[number]['id'];
 
@@ -850,8 +853,15 @@ type EventZoneOption = { id: string; label: string };
 
 const primaryEventAction = (event: LevelEvent): LevelEventAction | undefined => event.do[0];
 
+const EVENT_KIND_FALLBACK_LABEL: Record<string, string> = {
+  spawn: 'Setup spawn',
+  promote: 'Pawn promotion',
+  castle: 'Castling',
+  'chess-draws': 'Chess draws',
+};
+
 const eventName = (event: LevelEvent, index: number): string =>
-  event.name?.trim() || (primaryEventAction(event)?.kind === 'spawn' ? `Setup spawn ${index + 1}` : `Pawn promotion ${index + 1}`);
+  event.name?.trim() || `${EVENT_KIND_FALLBACK_LABEL[primaryEventAction(event)?.kind ?? ''] ?? 'Event'} ${index + 1}`;
 
 function replaceEventAction(event: LevelEvent, nextAction: LevelEventAction): LevelEvent {
   const nextDo = event.do.some((action) => action.kind === nextAction.kind)
@@ -896,6 +906,8 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
   const selected = value.length ? Math.min(sel, value.length - 1) : -1;
   const event = selected >= 0 ? value[selected] : null;
   const spawnAction = event?.do.find((action): action is SpawnEventAction => action.kind === 'spawn') ?? null;
+  const castleAction = event?.do.find((action): action is CastleEventAction => action.kind === 'castle') ?? null;
+  const chessDrawsAction = event?.do.find((action): action is ChessDrawsEventAction => action.kind === 'chess-draws') ?? null;
   const promotionTrigger = event?.trigger.kind === 'unit-enters-zone' ? event.trigger : null;
   const promotesTriggeringUnit = Boolean(event?.do.some((action) => action.kind === 'promote' && action.target.kind === 'triggering-unit'));
   const firstZone = zones[0]?.id ?? '';
@@ -939,7 +951,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
       <div className="le-md-list">
         {templates}
         <h3 className="le-victory-head">Events</h3>
-        {value.length === 0 ? <p className="le-board-warning">No setup or promotion events yet.</p> : null}
+        {value.length === 0 ? <p className="le-board-warning">No events yet.</p> : null}
         <div className="le-md-rules">
           {value.map((item, index) => (
             <button type="button" key={index} className={`le-md-item ${index === selected ? 'active' : ''}`.trim()} onClick={() => setSel(index)}>
@@ -1047,6 +1059,60 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               <span className="le-ctrllabel">Action</span>
               <output className="le-event-readout" aria-label="Event action">Promote</output>
             </div>
+            <div className="le-rule-then">
+              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+            </div>
+          </div>
+        ) : event && castleAction ? (
+          <div className="le-rule">
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Event name</span>
+              <input className="le-text-input" value={event.name ?? ''} placeholder={`Event ${selected + 1}`} aria-label="Event name"
+                onChange={(e) => setEvent(selected, { ...event, name: e.target.value })} />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Faction</span>
+              <output className="le-event-readout" aria-label="Castle faction">{castleAction.side === 'player' ? 'Player' : 'Enemy'}</output>
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">King</span>
+              <output className="le-event-readout" aria-label="Castle king squares">({castleAction.king.x}, {castleAction.king.y}) → ({castleAction.kingTo.x}, {castleAction.kingTo.y})</output>
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Rook</span>
+              <output className="le-event-readout" aria-label="Castle rook squares">({castleAction.rook.x}, {castleAction.rook.y}) → ({castleAction.rookTo.x}, {castleAction.rookTo.y})</output>
+            </div>
+            <p className="le-board-note">
+              In play the castle is offered while the king and rook sit unmoved on their squares, the path is clear,
+              and the king isn't in or moving through check. Moved the pieces? Remove this event and re-add the
+              Castling template.
+            </p>
+            <div className="le-rule-then">
+              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+            </div>
+          </div>
+        ) : event && chessDrawsAction ? (
+          <div className="le-rule">
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Event name</span>
+              <input className="le-text-input" value={event.name ?? ''} placeholder={`Event ${selected + 1}`} aria-label="Event name"
+                onChange={(e) => setEvent(selected, { ...event, name: e.target.value })} />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">50-move rule</span>
+              <Toggle checked={chessDrawsAction.fiftyMove === true} label="Toggle the 50-move rule"
+                onChange={(enabled) => setEvent(selected, replaceEventAction(event, { ...chessDrawsAction, fiftyMove: enabled }))} />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Threefold repetition</span>
+              <Toggle checked={chessDrawsAction.threefold === true} label="Toggle threefold repetition"
+                onChange={(enabled) => setEvent(selected, replaceEventAction(event, { ...chessDrawsAction, threefold: enabled }))} />
+            </div>
+            <p className="le-board-note">
+              50-move rule: 50 full moves with no capture or pawn move end the game as a draw. Threefold repetition:
+              the same position occurring three times ends it as a draw. Both match chess exactly, in live play and
+              for the training AI.
+            </p>
             <div className="le-rule-then">
               <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
@@ -2733,8 +2799,52 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(withZoneEntries(board, entries), null);
     setEvents(nextEvents);
   };
+  // Scan the painted board for castleable king-rook pairs (see castlingTemplate.ts) and
+  // append one castle event per pair, squares baked in — mirrors the promotion template's
+  // read-the-live-board pattern, but needs no zones so only the events list changes.
+  const addCastlingTemplate = (): void => {
+    const board = currentEditorBoardRef.current;
+    const boardPlayerFaction = isUnitPalette(board.playerFaction) ? board.playerFaction : playerFaction;
+    const player = boardPlayerFaction ?? 'navy-blue';
+    const units: CastleTemplateUnit[] = [];
+    for (const [key, placement] of Object.entries(board.units as Record<string, BoardUnitPlacement>)) {
+      const [x, y] = key.split(',').map(Number);
+      const type = (leUnitAssets.find((u) => u.id === placement.unitId) ?? unitAssets.find((u) => u.id === placement.unitId))?.family;
+      if (type !== 'king' && type !== 'rook') continue;
+      units.push({ x, y, type, side: placement.faction === player ? 'player' : 'enemy' });
+    }
+    const pairs = computeCastleTemplatePairs(units);
+    if (!pairs.length) {
+      reportStatus('No castleable king-rook pairs on the board.', 'error', 'Castling needs a king and a rook of one side on the same rank or file, at least 3 squares apart.');
+      return;
+    }
+    let nextEvents = events.slice();
+    for (const pair of pairs) {
+      nextEvents = [...nextEvents, {
+        id: uniqueEventId(pair.name, nextEvents),
+        name: uniqueEventName(pair.name, nextEvents),
+        trigger: { kind: 'setup' },
+        do: [pair.action],
+      }];
+    }
+    setEvents(nextEvents);
+    reportStatus(`Added ${pairs.length} castling event${pairs.length === 1 ? '' : 's'}.`, 'success');
+  };
+  // One event that arms both chess draw rules; the detail pane's toggles narrow it.
+  const addChessDrawsTemplate = (): void => {
+    const name = uniqueEventName('Chess draws', events);
+    setEvents([...events, {
+      id: uniqueEventId('chess-draws', events),
+      name,
+      trigger: { kind: 'setup' },
+      do: [{ kind: 'chess-draws', fiftyMove: true, threefold: true }],
+    }]);
+    reportStatus('Added chess draw rules (50-move rule + threefold repetition).', 'success');
+  };
   const addOtherEventTemplate = (): void => {
     if (otherTemplateChoice === 'pawn-promotion') addPawnPromotionTemplate();
+    else if (otherTemplateChoice === 'castling') addCastlingTemplate();
+    else if (otherTemplateChoice === 'chess-draws') addChessDrawsTemplate();
   };
   // One-click "Clear pieces": drop every painted unit, offered next to setup-spawn validation
   // when events are dealing the starting forces.

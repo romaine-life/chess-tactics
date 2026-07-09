@@ -174,3 +174,23 @@ describe('evaluateGameState', () => {
     expect(hangingPenalty).toBeLessThan(evaluateGameState(defended, sctx(), w) - w.pieceValues.pawn + 0.5);
   });
 });
+
+describe('search sees the chess draw rules (ADR-0072)', () => {
+  it('scores every line as a dead draw when the next quiet move fills the 50-move clock', () => {
+    // Player queen up huge, but the clock sits at 99: whatever the enemy plays, the
+    // reply position has clock 100 and no capture available to reset it — the search
+    // must read the whole tree as 0 instead of the big material deficit.
+    const pieces = [
+      piece('p-queen', 'player', 'queen', 0, 7),
+      piece('p-king', 'player', 'king', 7, 7),
+      piece('e-king', 'enemy', 'king', 0, 0),
+    ];
+    const drawn = state(pieces, { drawRules: { fiftyMove: true }, halfmoveClock: 99 });
+    const withRule = searchBestAction(drawn, {}, sctx(), createRng(1), FAST)!;
+    expect(withRule.score).toBeCloseTo(0, 8); // exactly the draw score (±0)
+    // The same position without the authored rule is still a lost game for the enemy.
+    const losing = state(pieces, { halfmoveClock: 99 });
+    const noRule = searchBestAction(losing, {}, sctx(), createRng(1), FAST)!;
+    expect(noRule.score).toBeGreaterThan(1);
+  });
+});

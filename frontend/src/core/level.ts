@@ -3,7 +3,7 @@
 // elevation + gameplay zones); LDtk-inspired structure (defs/instances spirit,
 // world/levels model, typed fields). Persisted as a validated JSONB body.
 
-import type { BoardSize, PieceType, PromotionPieceType, Side, TerrainCell, TerrainType, UnitFacing } from './types';
+import type { BoardSize, PieceType, PromotionPieceType, Side, TerrainCell, TerrainType, UnitFacing, Vec } from './types';
 import { PROMOTION_PIECE_TYPES } from './types';
 import type { PlacedProp } from './props';
 import { isPlayablePieceType } from './pieces';
@@ -122,7 +122,36 @@ export interface PromoteEventAction {
   target: { kind: 'triggering-unit' };
 }
 
-export type LevelEventAction = SpawnEventAction | PromoteEventAction;
+/**
+ * One authored castling option (ADR-0072): a king-rook pair with explicit squares —
+ * the game grants the castle while the side's king and a rook sit UNMOVED on `king` /
+ * `rook`, landing them on `kingTo` / `rookTo` under chess castling legality
+ * (core/rules.ts). Squares are explicit (not derived from geometry at play time) so
+ * castling works on any authored board; the editor's Castling template computes the
+ * chess-standard squares from the painted pieces. Rides a setup trigger: the option is
+ * installed once at build (resolved into GameState.castleRules, like promotion rules).
+ */
+export interface CastleEventAction {
+  kind: 'castle';
+  side: ConditionSide;
+  king: Vec;
+  rook: Vec;
+  kingTo: Vec;
+  rookTo: Vec;
+}
+
+/**
+ * Enables chess draw rules for the level (ADR-0072): the 50-move rule and/or threefold
+ * repetition, enforced identically in live play, netplay, AI search, and self-play.
+ * Absent flags read as off. Rides a setup trigger like `castle`.
+ */
+export interface ChessDrawsEventAction {
+  kind: 'chess-draws';
+  fiftyMove?: boolean;
+  threefold?: boolean;
+}
+
+export type LevelEventAction = SpawnEventAction | PromoteEventAction | CastleEventAction | ChessDrawsEventAction;
 
 /**
  * Generic authored level events: WHEN <trigger> THEN <do actions>. Zones stay dumb tile groups;
@@ -314,7 +343,7 @@ export type ValidateResult = { ok: true; level: Level } | { ok: false; errors: s
 const CONDITION_KINDS = ['eliminate', 'reach', 'turnLimit'] as const;
 const LEGACY_EVENT_KINDS = ['spawn', 'pawn-promotion'] as const;
 const LEVEL_EVENT_TRIGGER_KINDS = ['setup', 'unit-enters-zone'] as const;
-const LEVEL_EVENT_ACTION_KINDS = ['spawn', 'promote'] as const;
+const LEVEL_EVENT_ACTION_KINDS = ['spawn', 'promote', 'castle', 'chess-draws'] as const;
 
 /** Structural errors for a single victory condition (ADR-0064). Shape/enum checks only. */
 function conditionErrors(c: unknown, path: string): string[] {
@@ -466,7 +495,18 @@ function levelEventTriggerErrors(trigger: unknown, path: string): string[] {
   return errs;
 }
 
-function levelEventActionErrors(action: unknown, trigger: unknown, path: string): string[] {
+/** A castle square field must be an {x, y} integer cell, on the board when its size is known. */
+function castleSquareErrors(value: unknown, path: string, board?: BoardSize): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [`${path} must be an {x, y} square`];
+  const cell = value as { x?: unknown; y?: unknown };
+  if (!Number.isInteger(cell.x) || !Number.isInteger(cell.y)) return [`${path} must have integer x and y`];
+  if (board && ((cell.x as number) < 0 || (cell.x as number) >= board.cols || (cell.y as number) < 0 || (cell.y as number) >= board.rows)) {
+    return [`${path} is out of bounds at (${cell.x}, ${cell.y})`];
+  }
+  return [];
+}
+
+function levelEventActionErrors(action: unknown, trigger: unknown, path: string, board?: BoardSize): string[] {
   if (!action || typeof action !== 'object' || Array.isArray(action)) return [`${path} must be an action object`];
   const a = action as { kind?: unknown; side?: unknown; roster?: unknown; zoneIds?: unknown; target?: unknown };
   if (typeof a.kind !== 'string' || !(LEVEL_EVENT_ACTION_KINDS as readonly string[]).includes(a.kind)) {
@@ -481,6 +521,32 @@ function levelEventActionErrors(action: unknown, trigger: unknown, path: string)
     if (!Array.isArray(a.zoneIds) || a.zoneIds.length === 0 || a.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
       errs.push(`${path}.zoneIds must be a non-empty array of zone ids`);
     }
+  } else if (a.kind === 'castle') {
+    if (triggerKind !== 'setup') errs.push(`${path}.kind 'castle' requires a setup trigger`);
+    if (a.side !== 'player' && a.side !== 'enemy') errs.push(`${path}.side must be 'player' or 'enemy'`);
+    const c = action as { king?: unknown; rook?: unknown; kingTo?: unknown; rookTo?: unknown };
+    const squareErrs = [
+      ...castleSquareErrors(c.king, `${path}.king`, board),
+      ...castleSquareErrors(c.rook, `${path}.rook`, board),
+      ...castleSquareErrors(c.kingTo, `${path}.kingTo`, board),
+      ...castleSquareErrors(c.rookTo, `${path}.rookTo`, board),
+    ];
+    errs.push(...squareErrs);
+    if (!squareErrs.length) {
+      // The engine walks straight sign-step lines, so all four squares must share the
+      // king's rank or file, and the king must actually move somewhere else.
+      const king = c.king as Vec; const rook = c.rook as Vec; const kingTo = c.kingTo as Vec; const rookTo = c.rookTo as Vec;
+      const sameRow = rook.y === king.y && kingTo.y === king.y && rookTo.y === king.y;
+      const sameCol = rook.x === king.x && kingTo.x === king.x && rookTo.x === king.x;
+      if (king.x === rook.x && king.y === rook.y) errs.push(`${path} king and rook must be different squares`);
+      else if (!sameRow && !sameCol) errs.push(`${path} castle squares must share one rank or file`);
+      if (kingTo.x === king.x && kingTo.y === king.y) errs.push(`${path}.kingTo must differ from the king's square`);
+    }
+  } else if (a.kind === 'chess-draws') {
+    if (triggerKind !== 'setup') errs.push(`${path}.kind 'chess-draws' requires a setup trigger`);
+    const d = action as { fiftyMove?: unknown; threefold?: unknown };
+    if (d.fiftyMove !== undefined && typeof d.fiftyMove !== 'boolean') errs.push(`${path}.fiftyMove must be a boolean`);
+    if (d.threefold !== undefined && typeof d.threefold !== 'boolean') errs.push(`${path}.threefold must be a boolean`);
   } else {
     if (triggerKind !== 'unit-enters-zone') errs.push(`${path}.kind 'promote' requires a unit-enters-zone trigger`);
     if (!a.target || typeof a.target !== 'object' || Array.isArray(a.target) || (a.target as { kind?: unknown }).kind !== 'triggering-unit') {
@@ -490,7 +556,7 @@ function levelEventActionErrors(action: unknown, trigger: unknown, path: string)
   return errs;
 }
 
-function eventErrors(value: unknown): string[] {
+function eventErrors(value: unknown, board?: BoardSize): string[] {
   if (!Array.isArray(value)) return ['events must be an array'];
   const errs: string[] = [];
   value.forEach((ev, i) => {
@@ -502,7 +568,7 @@ function eventErrors(value: unknown): string[] {
     if (event.name !== undefined && typeof event.name !== 'string') errs.push(`${path}.name must be a string`);
     errs.push(...levelEventTriggerErrors(event.trigger, `${path}.trigger`));
     if (!Array.isArray(event.do) || event.do.length === 0) errs.push(`${path}.do must be a non-empty array of actions`);
-    else event.do.forEach((action, j) => errs.push(...levelEventActionErrors(action, event.trigger, `${path}.do[${j}]`)));
+    else event.do.forEach((action, j) => errs.push(...levelEventActionErrors(action, event.trigger, `${path}.do[${j}]`, board)));
   });
   return errs;
 }
@@ -550,7 +616,7 @@ export function validateLevel(value: unknown): ValidateResult {
     }
   }
   if (v.victory !== undefined) errors.push(...victoryRuleErrors(v.victory));
-  if (v.events !== undefined) errors.push(...eventErrors(v.events));
+  if (v.events !== undefined) errors.push(...eventErrors(v.events, b && typeof b.cols === 'number' && typeof b.rows === 'number' ? b : undefined));
   if (v.roster !== undefined) {
     if (!v.roster || typeof v.roster !== 'object' || Array.isArray(v.roster)) {
       errors.push('roster must be an object with player and enemy piece counts');

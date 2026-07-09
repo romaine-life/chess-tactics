@@ -4,7 +4,7 @@
 
 import { create } from 'zustand';
 import { PROMOTION_PIECE_TYPES, type GameEvent, type GameState, type Move, type Piece, type PromotionPieceType, type Side, type Winner } from '../core/types';
-import { applyMove, gameEnv, legalMoves, livingPieces, promotionRuleForMove, sideInCheck, type MoveEnv } from '../core/rules';
+import { applyMove, gameEnv, legalMoves, livingPieces, promotionRuleForMove, recordPosition, ruleDraw, sideInCheck, type MoveEnv, type RuleDrawKind } from '../core/rules';
 import { adoptedWeightsFor } from './adoptedWeights';
 import { premoveTargets, type PremoveStep } from './premoves';
 import { requestEnemyReply } from './aiWorkerClient';
@@ -141,10 +141,25 @@ function describeEvent(ev: GameEvent): string | null {
   switch (ev.kind) {
     case 'captured': return 'A piece falls.';
     case 'promoted': return `A pawn ascends to a ${PIECE_LABEL[ev.to] ?? ev.to}.`;
+    case 'castled': return 'Castled — the King and Rook regroup.';
     case 'victory': return ev.winner === 'player' ? 'Victory — the enemy is routed.' : 'Defeat — your force has fallen.';
     default: return null;
   }
 }
+
+/** Log copy for a draw forced by the chess draw rules (ADR-0072), same on every surface. */
+const DRAW_RULE_COPY: Record<RuleDrawKind, string> = {
+  'fifty-move': 'Draw — 50 moves have passed without a capture or pawn move.',
+  threefold: 'Draw — the same position has occurred three times.',
+};
+
+/** Result-screen "how it ended" line per draw kind (see resultDetail). */
+const DRAW_RESULT_DETAIL: Record<TerminalKind, string | null> = {
+  checkmate: null, // checkmate keeps the objective-goal fallback line, as before
+  stalemate: 'Stalemate — no legal moves remain.',
+  'fifty-move': '50 moves passed without a capture or pawn move.',
+  threefold: 'The same position occurred three times.',
+};
 
 function movePromotesPawn(game: GameState, piece: Piece, move: Move): boolean {
   return !!promotionRuleForMove(game, piece, { x: move.x, y: move.y });
@@ -204,33 +219,41 @@ export function playerHasLegalMove(game: GameState, env: MoveEnv): boolean {
   return sideHasLegalMove(game, 'player', env);
 }
 
+/** How a settled position ended the game outside the victory rules. */
+export type TerminalKind = 'checkmate' | 'stalemate' | RuleDrawKind;
+
 /**
- * The terminal result when the side to move has no legal move: there is no
- * passing in chess, so the game ends here — a LOSS for that side if its King is
- * in check (checkmate), otherwise a DRAW (stalemate). A kingless army is never in
- * check, so it can only stalemate. Returns null when the side can still move, the
- * game is already decided, or it isn't a live side's turn.
+ * The terminal result at a settled position: when the side to move has no legal
+ * move the game ends here — a LOSS for that side if its King is in check
+ * (checkmate), otherwise a DRAW (stalemate; a kingless army is never in check, so
+ * it can only stalemate). When the side CAN move, the game's authored chess draw
+ * rules (ADR-0072: 50-move rule / threefold repetition) may still end it as a
+ * draw. Returns null when the game goes on, is already decided, or it isn't a
+ * live side's turn.
  */
-export function terminalIfStuck(game: GameState, env: MoveEnv): { winner: Winner; checkmate: boolean; side: Side } | null {
+export function terminalIfStuck(game: GameState, env: MoveEnv): { winner: Winner; kind: TerminalKind; side: Side } | null {
   const side = game.turn;
   if ((side !== 'player' && side !== 'enemy') || game.winner) return null;
-  if (sideHasLegalMove(game, side, env)) return null;
-  const checkmate = sideInCheck(game, side, env);
-  const winner: Winner = checkmate ? (side === 'player' ? 'enemy' : 'player') : 'draw';
-  return { winner, checkmate, side };
+  if (!sideHasLegalMove(game, side, env)) {
+    const checkmate = sideInCheck(game, side, env);
+    const winner: Winner = checkmate ? (side === 'player' ? 'enemy' : 'player') : 'draw';
+    return { winner, kind: checkmate ? 'checkmate' : 'stalemate', side };
+  }
+  const draw = ruleDraw(game, env);
+  return draw ? { winner: 'draw', kind: draw, side } : null;
 }
 
 /**
- * Resolve a soft-lock on the player's turn (handing control back after the enemy
+ * Resolve the player's turn ending the game (handing control back after the enemy
  * reply, and as a start-of-game safety net). Delegates to `terminalIfStuck`:
- * checkmate ⇒ defeat, stalemate ⇒ draw. No-op unless it is the player's
- * undecided turn with no move available.
+ * checkmate ⇒ defeat, stalemate / chess draw rules ⇒ draw. No-op unless it is the
+ * player's undecided turn.
  */
-export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: GameState; stuck: boolean; checkmate: boolean } {
-  if (game.turn !== 'player') return { game, stuck: false, checkmate: false };
+export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: GameState; stuck: boolean; kind: TerminalKind | null } {
+  if (game.turn !== 'player') return { game, stuck: false, kind: null };
   const t = terminalIfStuck(game, env);
-  if (!t) return { game, stuck: false, checkmate: false };
-  return { game: { ...game, winner: t.winner, turn: 'done' }, stuck: true, checkmate: t.checkmate };
+  if (!t) return { game, stuck: false, kind: null };
+  return { game: { ...game, winner: t.winner, turn: 'done' }, stuck: true, kind: t.kind };
 }
 
 /** Enemy decision policies (dev A/B lever: `?ai=greedy` on the skirmish route). The live reply
@@ -489,14 +512,18 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
           const afterEnv = envFor(enemyRes.game);
           const stuckRes = resolveIfPlayerStuck(enemyRes.game, afterEnv);
           let game = stuckRes.game;
-          if (stuckRes.stuck) msgs.push(stuckRes.checkmate
-            ? 'Checkmate — your King is trapped. Defeat.'
-            : 'Stalemate — no legal moves remain. The skirmish is a draw.');
-          else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
+          let resultDetail: string | null = null;
+          if (stuckRes.stuck && stuckRes.kind) {
+            msgs.push(stuckRes.kind === 'checkmate'
+              ? 'Checkmate — your King is trapped. Defeat.'
+              : stuckRes.kind === 'stalemate'
+                ? 'Stalemate — no legal moves remain. The skirmish is a draw.'
+                : DRAW_RULE_COPY[stuckRes.kind]);
+            resultDetail = DRAW_RESULT_DETAIL[stuckRes.kind];
+          } else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
           // A full player→enemy round just elapsed: advance the survive clock, then re-check the
           // objective — survive reached, or a player wipe = defeat.
           const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
-          let resultDetail: string | null = null;
           if (!game.winner) {
             const ctx = { ...(cur.objectiveCtx ?? {}), turnsElapsed };
             const { winner, rule } = resolveVictory(game, cur.victoryOverride ?? victoryRulesForObjective(cur.objective, ctx), ctx);
@@ -553,7 +580,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const s = get();
     pauseClockWithIncrement();
     const playerRes = applyMove(s.game, piece.id, mv, { promotion });
-    let game = playerRes.state;
+    // The settled position joins the threefold table BEFORE the terminal checks read it
+    // (a no-op unless this game enforces threefold). enemyEnv matches the post-move state.
+    const enemyEnv = envFor(playerRes.state);
+    let game = recordPosition(playerRes.state, enemyEnv);
     // Footstep: only when the piece actually relocates. The single 'moved'
     // event's destination equals (mv.x, mv.y).
     if (playerRes.events.some((e) => e.kind === 'moved')) {
@@ -573,16 +603,18 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
         msgs.push(s.victoryOverride ? victoryOutcomeCopy(winner, rule) : objectiveOutcomeCopy(s.objective, winner, s.objectiveCtx?.kingSide));
       }
     }
-    // Checkmate the player just delivered ends the game immediately; a non-terminal
-    // check is announced.
-    const enemyEnv = envFor(game);
+    // Checkmate the player just delivered ends the game immediately; the chess draw
+    // rules (50-move / threefold) end it as a draw; a non-terminal check is announced.
     if (!game.winner && game.turn === 'enemy') {
       const term = terminalIfStuck(game, enemyEnv);
       if (term) {
         game = { ...game, winner: term.winner, turn: 'done' };
-        msgs.push(term.checkmate
+        msgs.push(term.kind === 'checkmate'
           ? 'Checkmate — the enemy King has no escape. Victory!'
-          : 'Stalemate — the enemy has no legal move. The skirmish is a draw.');
+          : term.kind === 'stalemate'
+            ? 'Stalemate — the enemy has no legal move. The skirmish is a draw.'
+            : DRAW_RULE_COPY[term.kind]);
+        resultDetail = DRAW_RESULT_DETAIL[term.kind];
       } else if (sideInCheck(game, 'enemy', enemyEnv)) {
         msgs.push('Check!');
       }
@@ -646,26 +678,32 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const localSide = s.net.localSide;
     const prevTurn = s.game.turn;
     const res = applyMove(s.game, piece.id, mv, { promotion: move.promotion });
-    let game = res.state;
+    // Both clients fold the settled position into the threefold table here — the single
+    // netplay apply path — so a rule draw fires identically on both boards.
+    const postEnv = envFor(res.state);
+    let game = recordPosition(res.state, postEnv);
     if (res.events.some((e) => e.kind === 'moved')) playLandingSfx(s.env, mv.x, mv.y, LANDING_SFX_DELAY);
     const msgs = res.events.map(describeEvent).filter((m): m is string => m !== null);
     // A full enemy turn completing (enemy→player) advances the survive-clock round count.
     const turnsElapsed = (s.turnsElapsed ?? 0) + (prevTurn === 'enemy' && game.turn === 'player' ? 1 : 0);
 
+    let resultDetail: string | null = null;
     if (!game.winner) {
       const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed };
       const winner = evaluateVictory(game, s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx), ctx);
       if (winner) { game = { ...game, winner, turn: 'done' }; msgs.push(netOutcomeCopy(winner, localSide)); }
     }
     if (!game.winner && (game.turn === 'player' || game.turn === 'enemy')) {
-      const env2 = envFor(game);
-      const term = terminalIfStuck(game, env2);
+      const term = terminalIfStuck(game, postEnv);
       if (term) {
         game = { ...game, winner: term.winner, turn: 'done' };
-        msgs.push(term.checkmate
+        msgs.push(term.kind === 'checkmate'
           ? (term.winner === localSide ? 'Checkmate — victory!' : 'Checkmate — defeat.')
-          : 'Stalemate — the skirmish is a draw.');
-      } else if (sideInCheck(game, game.turn, env2)) {
+          : term.kind === 'stalemate'
+            ? 'Stalemate — the skirmish is a draw.'
+            : DRAW_RULE_COPY[term.kind]);
+        resultDetail = DRAW_RESULT_DETAIL[term.kind];
+      } else if (sideInCheck(game, game.turn, postEnv)) {
         msgs.push(game.turn === localSide ? 'Your King is in check!' : 'Check delivered.');
       }
     }
@@ -673,7 +711,8 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const nextSel = game.turn === localSide ? firstOwnId(game, localSide) : null;
     set({
       game,
-      env: envFor(game),
+      env: postEnv,
+      resultDetail,
       turnsElapsed,
       selectedId: nextSel,
       focusedId: nextSel,

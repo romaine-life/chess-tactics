@@ -243,7 +243,7 @@ export function SkirmishHud({
   const localSide: Side = net ? net.localSide : 'player';
   const opponentTurnLabel = net ? 'Opponent turn' : 'Enemy turn';
   const turnLabel = game.winner
-    ? game.winner === 'draw' ? 'Stalemate' : game.winner === localSide ? 'Victory' : 'Defeat'
+    ? game.winner === 'draw' ? 'Draw' : game.winner === localSide ? 'Victory' : 'Defeat'
     : game.turn === localSide ? 'Your turn' : opponentTurnLabel;
 
   return (
