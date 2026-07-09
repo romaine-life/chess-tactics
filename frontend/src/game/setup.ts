@@ -78,6 +78,7 @@ export function createFromLevel(level: Level, seed: number): GameState {
       x: unit.x,
       y: unit.y,
       facing,
+      palette: unit.palette,
       alive: true,
       // Fixed campaign levels author the battle's initial position directly, so a pawn's
       // double-step belongs to the cell it was placed on, matching random/free setup.

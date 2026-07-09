@@ -20,6 +20,7 @@ import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
+import { PaletteSelect } from './shared/PaletteSelect';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import {
   levelEditorHrefWithRouteState,
@@ -74,7 +75,7 @@ import { createRng } from '../core/rng';
 import { SliderRow } from './dressing/SliderRow';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
-import { UNIT_PALETTES, type UnitPalette } from '../core/pieces';
+import { UNIT_PALETTE_LABELS, UNIT_PALETTES, isUnitPalette, type UnitPalette } from '../core/pieces';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
@@ -677,18 +678,15 @@ const leSeedBoard = (): Record<string, string> => {
   for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile.id;
   return cells;
 };
-const LE_FACTION_LABELS: Record<UnitPalette, string> = {
-  'navy-blue': 'Navy',
-  crimson: 'Crimson',
-  golden: 'Golden',
-  emerald: 'Emerald',
-};
+const LE_FACTION_LABELS = UNIT_PALETTE_LABELS;
 type FactionDirections = Partial<Record<UnitPalette, Direction>>;
 const DEFAULT_FACTION_DIRECTIONS: Record<UnitPalette, Direction> = {
   'navy-blue': 'north',
   crimson: 'south',
   golden: 'north',
   emerald: 'south',
+  black: 'south',
+  white: 'north',
 };
 const normalizeFactionDirections = (directions?: BoardFactionDirections): FactionDirections =>
   Object.fromEntries(
@@ -698,8 +696,6 @@ const normalizeFactionDirections = (directions?: BoardFactionDirections): Factio
   ) as FactionDirections;
 const factionDefaultDirection = (faction: UnitPalette, directions: FactionDirections): Direction =>
   directions[faction] ?? DEFAULT_FACTION_DIRECTIONS[faction];
-const isUnitPalette = (value: unknown): value is UnitPalette =>
-  typeof value === 'string' && (UNIT_PALETTES as readonly string[]).includes(value);
 const sideDefaultFaction = (
   side: 'player' | 'enemy',
   playerFaction: UnitPalette | null,
@@ -2504,8 +2500,7 @@ export function LevelEditor(): ReactElement {
   // board's assigned palette (ADR-0064). Maps to the engine's player/enemy side; true multi-faction
   // (two distinct enemies) is future work.
   const victoryFactions = useMemo((): FactionOption[] => {
-    const label = (p: string): string =>
-      (({ 'navy-blue': 'Navy', crimson: 'Crimson', golden: 'Golden', emerald: 'Emerald' }) as Record<string, string>)[p] ?? p;
+    const label = (p: string): string => (isUnitPalette(p) ? LE_FACTION_LABELS[p] : p);
     const enemyPalette = Object.values(boardUnits).map((u) => u.faction).find((f) => f && f !== playerFaction);
     return [
       { side: 'player', label: playerFaction ? label(playerFaction) : 'You (Player)' },
@@ -3872,15 +3867,14 @@ export function LevelEditor(): ReactElement {
         {brushKind === 'unit' ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Paint Faction</h2>
-            <div className="le-seg">
-              {UNIT_PALETTES.map((faction) => (
-                <button
-                  type="button"
-                  key={faction}
-                  className={`le-seg-btn ${unitFaction === faction ? 'active' : ''}`.trim()}
-                  onClick={() => setUnitFaction(faction)}
-                >{LE_FACTION_LABELS[faction]}</button>
-              ))}
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Faction</span>
+              <PaletteSelect
+                className="le-faction-palette-select"
+                value={unitFaction}
+                aria-label="Paint faction"
+                onChange={setUnitFaction}
+              />
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Default facing</span>

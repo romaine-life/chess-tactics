@@ -49,6 +49,8 @@ export interface Piece {
   alive: boolean;
   /** Board-facing direction for the rendered directional sprite. */
   facing?: UnitFacing;
+  /** Authored unit palette. Absent falls back to the side default. */
+  palette?: string;
   /** Starting column — used with `startY` for directional pawn double-steps. */
   startX?: number;
   /** Starting row — used for the pawn double-step. */

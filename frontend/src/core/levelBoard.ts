@@ -18,7 +18,7 @@ import type { TileFamilyId } from './tileSockets';
 import { decodeBoard, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type EditorBoard, type EditorZoneEntry } from '../ui/boardCode';
 import { parseEdgeKey, isOrthogonalPair, isNorthWestBoundaryWallEdge, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
 import { studioFamilies } from '../ui/studioBoard';
-import { UNIT_PALETTES } from './pieces';
+import { isUnitPalette } from './pieces';
 import { unitAssets, type Faction } from '../ui/unitCatalog';
 
 // Family → terrain material, mirroring game/setup.ts. The six tile families map 1:1 onto
@@ -54,7 +54,7 @@ function fenceTouchesBoard(edge: string, cols: number, rows: number): boolean {
 // Side ↔ faction (team palette). The editor paints a faction; the level stores a side.
 const SIDE_TO_FACTION: Record<'player' | 'enemy', Faction> = { player: 'navy-blue', enemy: 'crimson' };
 const isFaction = (faction: string | null | undefined): faction is Faction =>
-  Boolean(faction && (UNIT_PALETTES as readonly string[]).includes(faction));
+  isUnitPalette(faction);
 const sideForFaction = (faction: string, playerFaction: string | null | undefined): Side =>
   playerFaction && faction === playerFaction ? 'player' : 'enemy';
 
@@ -190,7 +190,7 @@ export function unitsForGamePieces(pieces: readonly Piece[]): EditorBoard['units
     if (!p.alive || (p.side !== 'player' && p.side !== 'enemy')) continue;
     const unitId = unitIdForType(p.type);
     if (!unitId) continue;
-    units[`${p.x},${p.y}`] = { unitId, direction: p.facing ?? 'south', faction: SIDE_TO_FACTION[p.side] };
+    units[`${p.x},${p.y}`] = { unitId, direction: p.facing ?? 'south', faction: isFaction(p.palette) ? p.palette : SIDE_TO_FACTION[p.side] };
   }
   return units;
 }
@@ -244,7 +244,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     units[`${unit.x},${unit.y}`] = {
       unitId,
       direction: unit.facing ?? 'south',
-      faction: SIDE_TO_FACTION[unit.side === 'enemy' ? 'enemy' : 'player'],
+      faction: isFaction(unit.palette) ? unit.palette : SIDE_TO_FACTION[unit.side === 'enemy' ? 'enemy' : 'player'],
     };
   }
 
@@ -343,7 +343,7 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     const type = typeOfUnitId(placement.unitId);
     if (!type) continue;
     const side = sideForFaction(placement.faction, isFaction(board.playerFaction) ? board.playerFaction : undefined);
-    units.push({ x, y, type, side, facing: placement.direction as UnitFacing });
+    units.push({ x, y, type, side, palette: isFaction(placement.faction) ? placement.faction : undefined, facing: placement.direction as UnitFacing });
   }
 
   // Dual-write props: the durable game channel (layers.props) AND the lossless boardCode 'p' map

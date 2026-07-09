@@ -31,9 +31,19 @@ export const PIECE_MARK: Record<PieceType, string> = {
 // Team-color palettes. Each unit ships its 8 directions rendered in every palette;
 // a board side is assigned a palette (default player navy-blue / enemy crimson). The
 // roster sprites live at /assets/units/<type>/<palette>/<direction>.png.
-export const UNIT_PALETTES = ['navy-blue', 'crimson', 'golden', 'emerald'] as const;
+export const UNIT_PALETTES = ['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white'] as const;
 export type UnitPalette = typeof UNIT_PALETTES[number];
 export const DEFAULT_PALETTE: UnitPalette = 'navy-blue';
+export const isUnitPalette = (value: unknown): value is UnitPalette =>
+  typeof value === 'string' && (UNIT_PALETTES as readonly string[]).includes(value);
+export const UNIT_PALETTE_LABELS: Record<UnitPalette, string> = {
+  'navy-blue': 'Navy',
+  crimson: 'Crimson',
+  golden: 'Golden',
+  emerald: 'Emerald',
+  black: 'Black',
+  white: 'White',
+};
 
 export const UNIT_FACINGS: readonly UnitFacing[] = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 
@@ -65,6 +75,8 @@ export const PALETTE_FOR_SIDE: Record<Side, UnitPalette> = {
   enemy: 'crimson',
   neutral: 'navy-blue',
 };
+export const paletteForSide = (side: Side, palette?: string | null): UnitPalette =>
+  isUnitPalette(palette) ? palette : PALETTE_FOR_SIDE[side];
 
 // Piece portraits: a dedicated eye-level perspective bust (separate contract from the
 // true-iso board sprite), one per palette. See docs/portrait-contract.md.
