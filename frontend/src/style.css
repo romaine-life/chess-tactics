@@ -5018,6 +5018,7 @@ h1 {
 .le-board-actions .le-seg-btn { min-width: 0; }
 
 /* Level settings live under the Board layer: rule readout + faction-control assignment. */
+.le-level-name-input { box-sizing: border-box; width: 100%; }
 .le-settings-list { display: grid; gap: var(--ds-inline-tight); margin: 0 0 var(--ds-gutter); }
 .le-settings-list div { align-items: start; display: grid; gap: 8px; grid-template-columns: 74px minmax(0, 1fr); }
 .le-settings-list dt,
@@ -5807,11 +5808,10 @@ h1 {
 .le-status-card { display: flex; flex-direction: column; gap: var(--ds-stack); }
 .le-status-card > h2 { margin: 0; }
 .le-status-log .le-board-note { margin: 0; }
-/* The level's identity (name + OFFICIAL tag) — moved here from the title bar; global
-   chrome carries no editor status. */
-.le-status-level { align-items: baseline; display: flex; gap: var(--ds-inline-tight); min-width: 0; }
-.le-status-level .le-level-name { color: #f0e7d3; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.le-official-tag { color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; }
+/* The level's identity (name + OFFICIAL tag) lives with the save workflow. */
+.le-status-level { align-items: end; display: grid; gap: var(--ds-inline-tight); grid-template-columns: minmax(0, 1fr) auto; min-width: 0; }
+.le-status-name-field { display: grid; gap: 6px; min-width: 0; }
+.le-official-tag { align-self: end; color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; padding-bottom: 8px; }
 /* Drawn text boxes wear a kit line frame (ADR-0032/0034): the transparent-interior panel-line
    9-slice over the box's own navy surface (a border-box background layer, reaching the frame
    edge). Ready/blocked swap the SOURCE to the success/warning tone twin — one frame, tone at the
