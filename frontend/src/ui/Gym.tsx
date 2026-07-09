@@ -237,14 +237,16 @@ const GYM_CSS = `
 .gym-td-knobs .tileset-catalog-zoom .pages-ctl-row { min-width:0; max-width:100%; }
 .gym-td-knobs .tileset-catalog-zoom .pages-ctl-row input[type=range] { min-width:0; }
 .gym-td-stepn-input { width:76px; background:#0c1116; color:#e7ebf0; border:1px solid #3a4657; border-radius:4px; padding:5px 8px; font-family:var(--ds-font-mono); font-size:var(--ds-text-xs); font-variant-numeric:tabular-nums; }
-.gym-td-warn { flex:0 0 auto; margin:0; padding:8px 10px; border:1px solid #5a4a22; border-radius:6px; background:#1c1a12; color:#f0d488; font-family:var(--ds-font-sans); font-size:var(--ds-text-xs); line-height:1.5; }
-.gym-td-weights { margin-top:2px; grid-template-columns:1fr auto auto auto; font-family:var(--ds-font-mono); font-size:var(--ds-text-xs); }
+.gym-td-warn { flex:0 0 auto; margin:0; padding:8px 10px; border:1px solid #5a4a22; border-radius:6px; background:#1c1a12; color:#f0d488; font-family:var(--ds-font-sans); font-size:var(--ds-text-xs); line-height:1.5; max-width:78ch; }
+.gym-td-weights { margin-top:2px; grid-template-columns:max-content auto auto auto; width:fit-content; column-gap:22px; font-family:var(--ds-font-mono); font-size:var(--ds-text-xs); }
 .gym-td-weights .h { color:#5c6875; font-size:var(--ds-text-2xs); text-transform:uppercase; letter-spacing:var(--ds-tracking-tight); }
 .gym-td-weights .d { width:auto; min-width:70px; }
 .gym-td-weights .v.na { color:#5c6875; }
 .gym-td-table tr.na td { color:#5c6875; }
 .gym-td-results { flex:0 0 auto; display:flex; flex-direction:column; gap:8px; }
-.gym-td-table-wrap { overflow:auto; border:1px solid #29323f; border-radius:8px; background:#0b1016; }
+/* Reading-width cap: on wide monitors a full-pane table strands the numbers a
+   screen away from their labels — hug content instead (same fix as the live grid). */
+.gym-td-table-wrap { overflow:auto; border:1px solid #29323f; border-radius:8px; background:#0b1016; width:fit-content; max-width:100%; }
 .gym-td-table { width:100%; border-collapse:collapse; font-family:var(--ds-font-mono); font-size:var(--ds-text-xs); font-variant-numeric:tabular-nums; }
 .gym-td-table th { position:sticky; top:0; background:#161d26; color:#93a0b0; text-align:right; font-weight:600; padding:6px 12px; border-bottom:1px solid #29323f; font-size:var(--ds-text-2xs); }
 .gym-td-table th:first-child, .gym-td-table td:first-child { text-align:left; }
