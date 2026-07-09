@@ -6,7 +6,7 @@ import { propDef, type PropDef } from '../core/props';
 import { GroundCoverLayer } from './GroundCoverLayer';
 import { FenceOverlayLayer, WallOverlayLayer } from './FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
-import { TileTopLayer } from './TileTopLayer';
+import { BoardTerrainLayer, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
 import { featureFrameSrc } from '../art/tileset';
 import {
@@ -24,8 +24,8 @@ import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 
 // THE shared, non-interactive board renderer — one source of truth for how an EditorBoard
-// draws (tiles + feature overlays in the cell band; units + doodads + props + ground cover
-// bracketed in the +20000 band, exactly like the game's SkirmishBoard). Both surfaces consume it:
+// draws (terrain through a composed canvas layer; units + doodads + props + ground cover bracketed
+// in the +20000 band, exactly like the game's SkirmishBoard). Both surfaces consume it:
 //   - the Level Editor's StudioEditableBoard layers its paint/erase/select interaction on top
 //     of these same cells + sprites (so the editable board and this viewer can never drift), and
 //   - the Campaign Editor's selected-level viewer renders it read-only inside a ViewPane.
@@ -49,6 +49,38 @@ const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find(
 const familyOfTile = (id: string): TileFamilyId | undefined =>
   studioFamilies.find((family) => family.assets.some((asset) => asset.id === id))?.id;
 
+export function studioTerrainCanvasCell({
+  key,
+  x,
+  y,
+  tileAsset,
+  feature,
+  animationFrame,
+  hidden,
+  drawSide,
+}: {
+  key: string;
+  x: number;
+  y: number;
+  tileAsset: StudioAsset | undefined;
+  feature: ResolvedFeatureOverlay | undefined;
+  animationFrame: number;
+  hidden?: BoardLayerVisibility;
+  drawSide: boolean;
+}): TerrainCanvasCell {
+  const frameSrc = tileAsset && !hidden?.tile ? assetFrameSrc(tileAsset, animationFrame) : undefined;
+  return {
+    key,
+    x,
+    y,
+    topSrc: frameSrc ? terrainTopSrc(frameSrc, tileAsset?.topAnimFrames) : undefined,
+    sideSrc: frameSrc ? terrainSideSrc(frameSrc) : undefined,
+    featureSrc: feature ? featureFrameSrc(feature.kind, feature.material, feature.mask) : undefined,
+    topAnimFrames: tileAsset?.topAnimFrames,
+    drawSide,
+  };
+}
+
 /**
  * Derive each painted feature cell's connection mask from its SAME-KIND neighbours — the same
  * pass the editor runs live (LevelEditor.featureOverlays), pulled here so the read-only viewer
@@ -62,52 +94,6 @@ export function deriveFeatureOverlays(
   const isSevered = (edge: string): boolean => featureCuts[edge] === true;
   const isExit = (edge: string): boolean => featureExits[edge] === true;
   return resolveFeatureOverlays(features, isSevered, isExit);
-}
-
-/** The tile + feature-overlay <img>s for one cell (no interaction chrome). Shared by both boards. */
-export function studioCellArt({
-  tileAsset,
-  feature,
-  animationFrame,
-  hidden,
-  x = 0,
-  y = 0,
-}: {
-  tileAsset: StudioAsset | undefined;
-  feature: ResolvedFeatureOverlay | undefined;
-  animationFrame: number;
-  hidden?: BoardLayerVisibility;
-  /** Board coords; only used to phase-stagger an animated top (water ripple). */
-  x?: number;
-  y?: number;
-}): ReactNode {
-  // A tile with an animated top (water) renders as its split halves so the ripple sheet can
-  // drive the surface while the side stays frozen — the same layers the game board draws
-  // (top ∪ side == the combined sprite, so the static look is unchanged). Static tiles keep
-  // the single combined <img>.
-  const animFrames = tileAsset?.topAnimFrames ?? 0;
-  return (
-    <>
-      {tileAsset && !hidden?.tile ? (
-        animFrames > 1 ? (
-          <>
-            <img className="tile-layer-side" src={tileAsset.src.replace(/\.png$/, '-side.png')} alt="" draggable={false} />
-            <TileTopLayer baseSrc={tileAsset.src} animFrames={animFrames} x={x} y={y} />
-          </>
-        ) : (
-          <img src={assetFrameSrc(tileAsset, animationFrame)} alt="" draggable={false} />
-        )
-      ) : null}
-      {feature ? (
-        <img
-          className="tileset-feature-overlay"
-          src={featureFrameSrc(feature.kind, feature.material, feature.mask)}
-          alt=""
-          draggable={false}
-        />
-      ) : null}
-    </>
-  );
 }
 
 /**
@@ -221,16 +207,23 @@ export function StudioReadOnlyBoard({
   const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
 
   const gridCells: TileGridCell[] = [];
+  const terrainCells: TerrainCanvasCell[] = [];
+  const occupied = new Set(
+    Object.entries(board.cells)
+      .filter(([, id]) => !!resolveTileAsset(id))
+      .map(([key]) => key),
+  );
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
       const key = `${x},${y}`;
       const tileAsset = board.cells[key] ? resolveTileAsset(board.cells[key]) : undefined;
+      const drawSide = !!tileAsset && (!occupied.has(`${x + 1},${y}`) || !occupied.has(`${x},${y + 1}`));
+      terrainCells.push(studioTerrainCanvasCell({ key, x, y, tileAsset, feature: featureOverlays[key], animationFrame, drawSide }));
       gridCells.push({
         key,
         x,
         y,
         className: `tileset-placement-cell ${tileAsset ? '' : 'is-empty'}`.trim(),
-        children: studioCellArt({ tileAsset, feature: featureOverlays[key], animationFrame, x, y }),
       });
     }
   }
@@ -245,6 +238,7 @@ export function StudioReadOnlyBoard({
       ariaLabel={ariaLabel}
       boardZoom={boardZoom}
       boardPan={boardPan}
+      backgroundLayer={<BoardTerrainLayer cells={terrainCells} />}
     >
       <WallOverlayLayer overlays={wallOverlays} wallArt={board.wallArt} bounds={wallBounds} />
       <FenceOverlayLayer overlays={fenceOverlays} />

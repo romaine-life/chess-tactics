@@ -62,8 +62,8 @@ export function groundCoverSet(terrain: TileFamilyId): CoverSet | undefined {
 }
 
 // --- deterministic scatter (per tile) ------------------------------------------
-// The tile top-diamond, in board px relative to the contact point (48,69): half
-// width 46, half height 26. We scatter a few tufts inside it with a min-distance
+// The tile top-diamond, in board px relative to the authored contact row (frame y=68):
+// half width 46, half height 26. We scatter a few tufts inside it with a min-distance
 // rule (even-but-random — blue-noise in miniature), deterministic from cell+seed.
 
 const DIAMOND_HW = 44;
