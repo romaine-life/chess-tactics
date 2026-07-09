@@ -4,16 +4,15 @@ const crypto = require('crypto');
 const express = require('express');
 const { Pool } = require('pg');
 
-// Pure board-render geometry, generated at build/preview/test time from the same
-// frontend render source the in-app thumbnails use. server.js is hot-copied to
-// and run from a temp dir by supervisor.js, so sibling backend assets must
-// resolve from the baked backend dir instead of this process' __dirname.
+// Shared DOM-free board-render geometry. server.js is hot-copied to and run
+// from a temp dir by supervisor.js, so sibling backend assets must resolve from
+// the baked backend dir instead of this process' __dirname.
 const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
 let serverRender = null;
 try {
-  serverRender = require(path.join(bakedBackendDir, 'generated', 'board-render.cjs'));
+  serverRender = require('@chess-tactics/board-render');
 } catch (error) {
-  console.error('board-render bundle unavailable; level thumbnails will use the default image:', error && error.message);
+  console.error('board-render package unavailable; level thumbnails will use the default image:', error && error.message);
 }
 
 const app = express();
