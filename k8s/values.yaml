@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-0a7047e5de2d953ecef6bd7fd9cda3b4259a2e51bb49aa4fb710d5ffb4be33c9"
+  tag: "app-1d30773cba1da4e7227dbf6b5d389cb463dec66c03286f019406aac80391687b"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Restore dynamic OG thumbnails"
-  prNumber: "441"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/441"
-  commit: "307815e"
+  prTitle: "Castling and chess draw rules as authored level events (ADR-0072)"
+  prNumber: "442"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/442"
+  commit: "d674ad4"
 
 name: chess-tactics
 namespace: chess-tactics
