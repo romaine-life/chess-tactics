@@ -3,6 +3,7 @@ import { tileAssets, tileFamilies, edgeTiles, muralTiles, type TileAsset } from 
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { PropSprite } from '../render/BoardStructure';
+import { objectBaseZIndex } from '../render/sceneDepth';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PROP_DEFS, propCells, currentSeats, applyLiveSeats, type PropDef, type PropKind, type PropSeatEntry, type PropSeatMap, type StructurePart, type StructurePlacement, type StructureSourceRef } from '../core/props';
 import { pieceSpritePath } from '../core/pieces';
@@ -522,7 +523,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
             {showSavedGhost ? <div className="ps-ghost"><PropSprite prop={{ x: ax, y: ay, propId: activeId }} def={savedDef} /></div> : null}
             <PropSprite prop={{ x: ax, y: ay, propId: activeId }} def={liveDef} />
             {showUnit ? (
-              <span className="board-unit-seat" style={{ left: unitPos.left, top: unitPos.top, zIndex: unitCell.x + unitCell.y + 20000 }}>
+              <span className="board-unit-seat" style={{ left: unitPos.left, top: unitPos.top, zIndex: objectBaseZIndex(unitCell) }}>
                 <img src={pieceSpritePath('knight')} alt="" draggable={false} />
               </span>
             ) : null}

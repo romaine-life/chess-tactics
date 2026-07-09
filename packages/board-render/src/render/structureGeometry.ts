@@ -3,14 +3,16 @@ import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { propDef, type StructureSourceRef } from '../core/props';
 import { structureArtAsset, structureArtHalfSrc, type StructureSplitMode } from '../core/structureArt';
 import { doodadAsset } from '../ui/doodadCatalog';
+import { objectBaseZIndex, structureBackZIndex, structureFrontZIndex } from './sceneDepth';
 
 const DOODAD_SPRITE = { w: 96, h: 180, anchorX: 48, anchorY: 69 } as const;
 export type { StructureSplitMode } from '../core/structureArt';
 
 export function propZBracket(ax: number, ay: number, w: number, h: number): { base: number; back: number; front: number } {
-  const backBase = ax + ay + 20000;
-  const base = (ax + w - 1) + (ay + h - 1) + 20000;
-  return { base, back: backBase - 1, front: base + 1 };
+  const backCell = { x: ax, y: ay };
+  const frontCell = { x: ax + w - 1, y: ay + h - 1 };
+  const base = objectBaseZIndex(frontCell);
+  return { base, back: structureBackZIndex(backCell), front: structureFrontZIndex(frontCell) };
 }
 
 export function seatTransformPercent(sprite: { w: number; h: number; anchorX: number; anchorY: number }): { x: number; y: number } {
