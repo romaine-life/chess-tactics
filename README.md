@@ -71,6 +71,13 @@ Agent sessions must not bypass backend startup with `DEV_NO_BACKEND=1` or
 manual frontend-only work. If the backend fails to start, agents should fix the
 backend startup problem or report it as a blocker.
 
+When agents hand off Level Editor boards through the backend, use an anonymous
+misc editor map: `POST /api/editor-maps` with `{ "level": ..., "misc": true }`.
+Do not hand off a normal signed-in `/editor/level?map=<id>` created under the
+agent's account; account-owned live maps are editable only by their owner, so
+Nelson opens them read-only. Misc handoffs are anonymous and can be loaded as
+editable copies from the Misc Map Pool.
+
 Fresh worktrees do not have `backend/node_modules`; that is expected every time.
 Install backend dependencies once per worktree (`cd backend && npm install`)
 before starting a preview that needs the backend.

@@ -2907,7 +2907,7 @@ export function LevelEditor(): ReactElement {
     }
   };
 
-  const loadMiscMapIntoEditor = async (publicId: string): Promise<void> => {
+  const loadEditorMapIntoEditor = async (publicId: string): Promise<void> => {
     setLayer('status');
     setTool('select');
     try {
@@ -2921,17 +2921,30 @@ export function LevelEditor(): ReactElement {
       setRemoteMapSavedAt(null);
       setRemoteMapIsMisc(false);
       setRemoteMapCreator(null);
-      setSourceMiscMapId(publicId);
+      setSourceMiscMapId(doc.is_misc ? publicId : null);
       lastRemoteSyncedSigRef.current = null;
       applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: false });
-      setSavedSig(previousSig);
+      const loadedSig = levelSignature(doc.level);
+      // If the copy comes from the read-only map already on screen, force a dirty
+      // baseline so Save can adopt it immediately.
+      setSavedSig(
+        previousSig === loadedSig
+          ? JSON.stringify(['editor-map-copy-source', publicId, loadedSig])
+          : previousSig,
+      );
       const url = new URL(window.location.href);
       url.searchParams.delete('map');
       url.searchParams.delete('board');
       navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
-      reportStatus('Loaded misc map.', 'success', 'Save will adopt it into your workspace and clear its expiry.');
+      reportStatus(
+        doc.is_misc ? 'Loaded misc map copy.' : 'Loaded live map copy.',
+        'success',
+        doc.is_misc
+          ? 'Save will adopt it into your workspace and clear its expiry.'
+          : 'Save will adopt this board into your workspace without changing the source map.',
+      );
     } catch (error) {
-      reportStatus('Could not load misc map.', 'error', (error as Error).message);
+      reportStatus('Could not load map copy.', 'error', (error as Error).message);
     }
   };
 
@@ -3667,8 +3680,14 @@ export function LevelEditor(): ReactElement {
             <div><dt>Props</dt><dd>{propCount}</dd></div>
             <div><dt>Zones</dt><dd>{zoneCount}</dd></div>
           </dl>
-          {remoteMapIsMisc && remoteMapId ? (
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 10 }} onClick={() => void loadMiscMapIntoEditor(remoteMapId)} title="Load this misc map into your editor as a saveable copy.">Edit copy</button>
+          {remoteMapId ? (
+            <button
+              type="button"
+              className="le-seg-btn"
+              style={{ width: '100%', marginTop: 10 }}
+              onClick={() => void loadEditorMapIntoEditor(remoteMapId)}
+              title={remoteMapIsMisc ? 'Load this misc map into your editor as a saveable copy.' : 'Load this live map into your editor as a saveable copy.'}
+            >Edit copy</button>
           ) : null}
         </section>
         {playBoardHref ? (
@@ -3964,7 +3983,7 @@ export function LevelEditor(): ReactElement {
                       <strong>{map.name}</strong>
                       <span>{map.cols ?? '?'}×{map.rows ?? '?'} · expires {map.expires_at ? new Date(map.expires_at).toLocaleDateString() : 'later'}</span>
                     </div>
-                    <button type="button" className="le-seg-btn le-mini-btn" onClick={() => void loadMiscMapIntoEditor(map.public_id)} title="Load this backend map into the editor">Load</button>
+                    <button type="button" className="le-seg-btn le-mini-btn" onClick={() => void loadEditorMapIntoEditor(map.public_id)} title="Load this backend map into the editor">Load</button>
                   </article>
                 ))}
               </div>
