@@ -202,16 +202,16 @@
   --panel-inset: #0a131b;
   --focus-ring: var(--cobalt-bright);
   --iso-tile-width: 96px;
-  --iso-tile-height: 55.426px;
+  --iso-tile-height: 54px;
   --iso-tile-step-x: 48px;
-  --iso-tile-step-y: 27.713px;
+  --iso-tile-step-y: 27px;
   --iso-tile-canvas-height: 140px;
   /* div-local Y of the tile's top-face centre (equator) inside the 180px frame.
      This is the widest row of the sprite PNG; the frame's translate anchors it to
      the cell. Every overlay diamond (grid, hit, footprint, selection ring) seats on
      this same plane, so they line up with placed tiles' top faces. Change in ONE
      place if the sprite's equator row ever moves. */
-  --iso-tile-equator: 69px;
+  --iso-tile-equator: 68px;
   /* Top edge of a top-face diamond: the equator minus half the diamond's height. */
   --iso-tile-surface-top: calc(var(--iso-tile-equator) - var(--iso-tile-height) / 2);
 
@@ -434,9 +434,8 @@ h1 {
     linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46));
 }
 
-/* An animated scene region (menu twin of the board's .tile-layer-top-anim): a
-   BAKED horizontal frame sheet (scripts/build-scene-anim.py), only water pixels
-   opaque, frame 0 = the shipped scene; steps() just advances the frame index.
+/* An animated scene region: a BAKED horizontal frame sheet (scripts/build-scene-anim.py),
+   only water pixels opaque, frame 0 = the shipped scene; steps() just advances the frame index.
    !important clears the global `* { animation: none }` OS-reduce reset (~6477):
    Windows "animations off" reports prefers-reduced-motion falsely, and ambient
    scenery must not freeze for those players (deploy-drop/ADR-0048 precedent).
@@ -4027,9 +4026,9 @@ h1 {
   background: transparent;
 }
 
-/* Coordinated board reveal (render/boardArtReady). The board's dozens of tile <img>s each
-   load independently; without this they'd pop in one at a time ("popcorn"). The board is
-   held hidden until its whole art set has DECODED, then fades in as one unit on the same
+/* Coordinated board reveal (render/boardArtReady). The board's terrain canvas and sprite
+   images load independently. The board is held hidden until its whole art set has DECODED,
+   then fades in as one unit on the same
    320ms opacity fade the cold-load menu uses (ui/shell/coldReveal). A failsafe in the hook
    reveals anyway if an asset stalls, so the board can never hang invisible. */
 .skirmish-board-lab {
@@ -10566,6 +10565,16 @@ button.tileset-relationship-cell {
   --board-origin-top: 0px;
 }
 
+.tileset-terrain-layer {
+  display: block;
+  image-rendering: pixelated;
+  pointer-events: none;
+  position: absolute;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 0;
+}
+
 .tileset-generated-board-tile {
   position: absolute;
   width: 96px;
@@ -10598,16 +10607,6 @@ button.tileset-relationship-cell {
   -webkit-user-select: none;
 }
 
-/* Linear-feature overlay (road; rivers later): a transparent ribbon sprite stacked
-   directly over the base tile in the same 96x180 frame, so it aligns pixel-for-pixel.
-   The base <img> sits at top:0 of the tile box; this overrides its block flow to
-   occupy the identical box rather than stacking below it. */
-.tileset-generated-board-tile img.tileset-feature-overlay {
-  position: absolute;
-  left: 0;
-  top: 0;
-}
-
 .tileset-board-fence-overlay,
 .tileset-board-wall-overlay,
 .tileset-board-wall-decor {
@@ -10636,42 +10635,6 @@ button.tileset-relationship-cell {
   max-height: none;
 }
 
-/* Animated tile TOP (water ripple). The motion is BAKED frames in a horizontal sheet
-   (<tile>-top-anim.png, each frame the full 96x180 tile frame); this rule only advances
-   the frame index via steps() — the same model as .gc-tuft below. Per-cell phase is a
-   negative delay set from --tile-anim-phase (a whole-frame fraction) so open water
-   shimmers loosely instead of pulsing in unison. The animation is !important to clear
-   the global `* { animation: none }` OS-reduce reset (~6055): OS "animations off"
-   (Windows) reports prefers-reduced-motion falsely, and ambient board art is scenery,
-   not a UI transition — the deploy drop (~3842) sets the same precedent. The EXPLICIT
-   in-game reduce-motion choice (:root.reduce-motion) does freeze it, to frame 0 = the
-   exact static art. */
-.tileset-generated-board-tile .tile-layer-top-anim {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: block;
-  width: 96px;
-  height: 180px;
-  image-rendering: pixelated;
-  background-repeat: no-repeat;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
-  animation: tile-top-anim var(--tile-anim-dur, 1.6s) steps(var(--tile-anim-frames, 1)) infinite !important;
-  animation-delay: calc(-1 * var(--tile-anim-phase, 0) * var(--tile-anim-dur, 1.6s)) !important;
-  will-change: background-position;
-}
-
-:root.reduce-motion .tileset-generated-board-tile .tile-layer-top-anim {
-  animation: none !important;
-}
-
-@keyframes tile-top-anim {
-  from { background-position-x: 0; }
-  to { background-position-x: var(--tile-anim-travel, 0); }
-}
-
 /* Units and doodads no longer render inside cells here — both boards seat them at grid
    level via the shared .board-unit-seat and <DoodadSprite> (see render/BoardDoodad.tsx).
    The old per-cell .tileset-board-unit / .tileset-board-doodad rules were removed with them. */
@@ -10697,9 +10660,9 @@ button.tileset-relationship-cell {
 
 .tileset-generated-board-overlay-cell {
   position: absolute;
-  width: 96px;
-  height: 140px;
-  transform: translate(-48px, -27px);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-canvas-height);
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y)));
   pointer-events: none;
 }
 

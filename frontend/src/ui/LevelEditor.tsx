@@ -11,7 +11,8 @@ import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import { FenceOverlayLayer, WallOverlayLayer } from '../render/FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
-import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
+import { BoardTerrainLayer, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
+import { studioBoardSprites, studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
 import { NavButton } from './shared/NavButton';
@@ -305,16 +306,32 @@ function StudioEditableBoard({
   // same anchor/cell or off-board), then clear the paint/move latches. Fired on pointer-up over the board.
   const endInteraction = () => finishMoveAt(hoverCell);
 
-  // The editor is an adapter over the shared StudioReadOnlyBoard render path (the same cell
-  // art + sprite seating the Campaign Editor's read-only viewer uses): it supplies the SHARED
-  // tile/feature art via `studioCellArt`, then layers its own interaction chrome — the selection
+  // The editor is an adapter over the shared StudioReadOnlyBoard render path: it supplies
+  // terrain to the composed canvas layer, then layers its own interaction chrome — the selection
   // ring and the paint/erase/select hit target — on top per cell.
   const cells: TileGridCell[] = [];
+  const terrainCells: TerrainCanvasCell[] = [];
+  const occupiedTiles = new Set(
+    Object.entries(placed)
+      .filter(([, id]) => !!resolveAsset(id))
+      .map(([key]) => key),
+  );
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < cols; x += 1) {
       const key = `${x},${y}`;
       const assetId = placed[key];
       const asset = assetId ? resolveAsset(assetId) : undefined;
+      const drawSide = !!asset && (!occupiedTiles.has(`${x + 1},${y}`) || !occupiedTiles.has(`${x},${y + 1}`));
+      terrainCells.push(studioTerrainCanvasCell({
+        key,
+        x,
+        y,
+        tileAsset: asset,
+        feature: placedFeatures[key],
+        animationFrame,
+        hidden,
+        drawSide,
+      }));
       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
       // Move-tool feedback reuses the built-in diamond tile-ring (not an axis-aligned box): the
       // picked-up object's footprint, plus the cell under the cursor tinted by whether a drop is legal.
@@ -330,7 +347,6 @@ function StudioEditableBoard({
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
-            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key], animationFrame, hidden, x, y })}
             {/* Zone tint: a translucent diamond seated on the tile EQUATOR — it reuses the exact
                 seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
                 which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
@@ -518,6 +534,7 @@ function StudioEditableBoard({
       ariaLabel="Editable tile board"
       boardZoom={boardZoom}
       boardPan={boardPan}
+      backgroundLayer={<BoardTerrainLayer cells={terrainCells} />}
       onPointerUp={endInteraction}
       onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
     >

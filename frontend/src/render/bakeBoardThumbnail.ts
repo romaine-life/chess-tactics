@@ -18,6 +18,7 @@
 
 import { boardLabCellPosition } from './boardProjection';
 import {
+  TILE_FRAME_EQUATOR_Y,
   TILE_FRAME_HEIGHT,
   TILE_STEP_X,
   TILE_STEP_Y,
@@ -49,15 +50,16 @@ import type { EditorBoard } from '../ui/boardCode';
 // then the img fills the frame at (0,0). Feature overlays share that exact frame.
 const TILE_FRAME_W = TILE_STEP_X * 2; // 96 — the full tile sprite width
 const TILE_FRAME_H = TILE_FRAME_HEIGHT; // 180 — the full tile sprite frame
-const TILE_EQUATOR = 69; // --iso-tile-equator: the frame's contact diamond, from the apex
+const TILE_EQUATOR = TILE_FRAME_EQUATOR_Y; // --iso-tile-equator: the frame's contact diamond
 const WALL_FRAME_W = 128;
 const WALL_FRAME_H = 240;
 const WALL_ANCHOR_X = 64;
 const WALL_ANCHOR_Y = 96;
-// The doodad sprite is the same 96x180 frame seated by `translate(-50%, -38.333%)` ⇒ the
-// contact pixel (48,69) lands on the cell point. So its frame origin is (-stepX, -equator) too.
+// Doodads use the same 96x180 frame shape, but their contact anchor is authored per sprite
+// rather than inherited from the terrain top mask.
 const DOODAD_FRAME_W = TILE_FRAME_W;
 const DOODAD_FRAME_H = TILE_FRAME_H;
+const DOODAD_ANCHOR_Y = 69;
 // The unit seat (.board-unit-seat) is a 72x86 box seated by `translate(-50%, -78%)`, with the
 // sprite object-fit:contain into max 78x92 centred in that box.
 const UNIT_SEAT_W = 72;
@@ -242,7 +244,7 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
     const doodadPlacement = board.doodads[key];
     const doodad = doodadPlacement ? resolveDoodad(doodadPlacement.doodadId) : undefined;
     if (doodad) {
-      const sprite = doodad.sprite ?? { w: DOODAD_FRAME_W, h: DOODAD_FRAME_H, anchorX: TILE_STEP_X, anchorY: TILE_EQUATOR };
+      const sprite = doodad.sprite ?? { w: DOODAD_FRAME_W, h: DOODAD_FRAME_H, anchorX: TILE_STEP_X, anchorY: DOODAD_ANCHOR_Y };
       const parts = doodad.parts?.length
         ? doodad.parts
         : [{ source: doodad.source ?? { kind: 'doodad' as const, id: doodad.id }, anchorX: sprite.anchorX, anchorY: sprite.anchorY, scale: sprite.scale ?? 1 }];
