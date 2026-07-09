@@ -5016,6 +5016,116 @@ h1 {
 .le-board-actions.le-status-actions { margin-top: 0; }
 .le-board-actions .le-seg-btn { min-width: 0; }
 
+.le-card-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+.le-card-row h2 { margin: 0; }
+.le-mini-btn {
+  min-height: 32px;
+  min-width: 72px;
+  padding-inline: 4px;
+}
+.le-live-link-status {
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/field-input.png") 18 fill / 10px stretch;
+  display: grid;
+  gap: 4px;
+  margin-top: var(--ds-stack);
+  padding: 4px 8px;
+}
+.le-live-link-status strong {
+  color: #f3ead8;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  font-weight: 400;
+  text-transform: uppercase;
+}
+.le-live-link-status span {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.35;
+}
+.le-live-link-status.is-saving strong,
+.le-live-link-status.is-pending strong,
+.le-live-link-status.is-creating strong { color: #9fe0ff; }
+.le-live-link-status.is-error strong { color: #ffb1a8; }
+.le-map-identity {
+  margin-top: var(--ds-stack);
+}
+.le-admin-events {
+  border-top: 1px solid rgba(146, 201, 235, .18);
+  display: grid;
+  gap: 8px;
+  margin-top: var(--ds-stack);
+  padding-top: var(--ds-stack);
+}
+.le-admin-events-head {
+  display: grid;
+  gap: 2px;
+}
+.le-admin-events-head strong {
+  color: #f3ead8;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  font-weight: 400;
+  text-transform: uppercase;
+}
+.le-admin-events-head span {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.le-misc-map-list {
+  display: grid;
+  gap: 7px;
+  margin-top: var(--ds-stack);
+}
+.le-misc-map-row {
+  align-items: center;
+  border-bottom: 1px solid rgba(146, 201, 235, .18);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0 0 7px;
+}
+.le-misc-map-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.le-misc-map-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.le-misc-map-row strong {
+  color: #f3ead8;
+  font-size: var(--ds-text-sm);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.le-misc-map-row span {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+}
+.le-live-viewer {
+  align-content: start;
+  gap: var(--ds-gutter);
+}
+.le-live-viewer .le-play-board {
+  border-image-source: url("/assets/ui/kit/button-primary.png");
+  width: 100%;
+}
+.le-live-meta {
+  margin: 0;
+}
+
 /* Level settings live under the Board layer: rule readout + faction-control assignment. */
 .le-level-name-input { box-sizing: border-box; width: 100%; }
 .le-settings-list { display: grid; gap: var(--ds-inline-tight); margin: 0 0 var(--ds-gutter); }
