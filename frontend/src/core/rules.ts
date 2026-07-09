@@ -3,7 +3,7 @@
 // obstacles, side-based pawns, threat = enemy attacked squares, capture/promote/
 // last-side-standing) — but deterministic and immutable.
 
-import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, PawnPromotionRule, Piece, PieceType, PromotionPieceType, Side, UnitFacing, Vec, Winner } from './types';
+import type { BoardSize, CastleRule, EnemyIntent, GameEvent, GameState, LastMove, Move, PawnPromotionRule, Piece, PieceType, PromotionPieceType, Side, UnitFacing, Vec, Winner } from './types';
 import { PROMOTION_PIECE_TYPES } from './types';
 import type { Rng } from './rng';
 import { buildTerrainIndex, canTraverse, elevationAt, haltsTravel, type TerrainIndex } from './terrain';
@@ -71,6 +71,12 @@ export interface MoveEnv {
    * water. Omit for no fences.
    */
   fences?: ReadonlySet<string>;
+  /**
+   * Authored castling options (GameState.castleRules), threaded through the env so
+   * `legalMoves` — which never sees the GameState — can generate castle moves. Static
+   * across a game's plies like terrain and fences; sourced by `gameEnv`.
+   */
+  castleRules?: readonly CastleRule[];
   lastMove?: LastMove;
 }
 
@@ -96,6 +102,7 @@ export function gameEnv(state: GameState): MoveEnv {
   return {
     terrain: state.terrain ? buildTerrainIndex(state.terrain) : undefined,
     fences: state.fences && state.fences.length ? new Set(state.fences) : undefined,
+    castleRules: state.castleRules && state.castleRules.length ? state.castleRules : undefined,
   };
 }
 
@@ -223,7 +230,8 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
  * displacement so a hypothetical check test sees the same occupancy a committed
  * move would. En passant is handled implicitly: `move.capture` names the victim
  * by id, so it is the piece removed even though it doesn't sit on the destination
- * square.
+ * square. A castle's rook hop is mirrored too, so king safety after castling is
+ * judged with the rook on its landing square.
  */
 function boardAfterMove(mover: Piece, move: Move, pieces: readonly Piece[]): Piece[] {
   const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
@@ -232,9 +240,91 @@ function boardAfterMove(mover: Piece, move: Move, pieces: readonly Piece[]): Pie
   const after: Piece[] = [];
   for (const p of pieces) {
     if (captures && p.id === capturedId) continue;
-    after.push(p.id === mover.id ? { ...p, x: move.x, y: move.y } : p);
+    if (p.id === mover.id) after.push({ ...p, x: move.x, y: move.y });
+    else if (move.castle && p.id === move.castle.rookId) after.push({ ...p, x: move.castle.rookTo.x, y: move.castle.rookTo.y });
+    else after.push(p);
   }
   return after;
+}
+
+/**
+ * Castle moves for a king, generated from the game's authored king-rook pairs
+ * (env.castleRules) under chess legality: the rule's king and a friendly rook sit
+ * UNMOVED on their authored squares, every square strictly between them is empty,
+ * the destinations are clear, the king is not in check and crosses no attacked
+ * square (landing safety is the standard king filter's job, judged with the rook
+ * displaced — see boardAfterMove), and both pieces' straight-line travel respects
+ * terrain, water, and fences like any slide. Encoded as a king move to `kingTo`
+ * carrying the rook's hop, so one applyMove relocates both pieces in one action.
+ */
+function castleMoves(king: Piece, pieces: readonly Piece[], size: BoardSize, env: MoveEnv | undefined, originElev: number): Move[] {
+  const rules = env?.castleRules;
+  if (!rules?.length || king.hasMoved) return [];
+
+  // A straight sign-step walk from (fromX, fromY) to `to`: false when the line isn't
+  // straight or a step crosses a fence, blocked terrain, or (mid-path) halting water;
+  // when `guarded`, the king may not cross an attacked square. The landing square may
+  // be water (the slide simply ends there).
+  const walk = (fromX: number, fromY: number, to: Vec, elev: number, guarded: boolean, opponent: Side): boolean => {
+    const dx = to.x - fromX;
+    const dy = to.y - fromY;
+    if (dx !== 0 && dy !== 0 && Math.abs(dx) !== Math.abs(dy)) return false;
+    const sx = Math.sign(dx);
+    const sy = Math.sign(dy);
+    let px = fromX;
+    let py = fromY;
+    while (px !== to.x || py !== to.y) {
+      const nx = px + sx;
+      const ny = py + sy;
+      if (!inBounds(nx, ny, size)) return false;
+      if (fenceBlocks(env, px, py, nx, ny)) return false;
+      if (blockedByTerrain(env, elev, nx, ny)) return false;
+      const landing = nx === to.x && ny === to.y;
+      if (!landing && haltsTravelAt(env, nx, ny)) return false;
+      if (guarded && !landing && squareAttackedBy({ x: nx, y: ny }, opponent, pieces, size, env)) return false;
+      px = nx;
+      py = ny;
+    }
+    return true;
+  };
+
+  const out: Move[] = [];
+  for (const rule of rules) {
+    if (rule.side !== king.side) continue;
+    if (king.x !== rule.king.x || king.y !== rule.king.y) continue;
+    if (rule.kingTo.x === king.x && rule.kingTo.y === king.y) continue; // a "move" to its own square is unclickable
+    if (rule.kingTo.x === rule.rookTo.x && rule.kingTo.y === rule.rookTo.y) continue; // two pieces can't land on one square
+    if (!inBounds(rule.kingTo.x, rule.kingTo.y, size) || !inBounds(rule.rookTo.x, rule.rookTo.y, size)) continue;
+    const rook = pieceAt(pieces, rule.rook.x, rule.rook.y);
+    if (!rook || rook.type !== 'rook' || rook.side !== king.side || rook.hasMoved) continue;
+
+    // King and rook on one rank or file, every square strictly between them empty.
+    const dx = Math.sign(rule.rook.x - king.x);
+    const dy = Math.sign(rule.rook.y - king.y);
+    if ((dx !== 0) === (dy !== 0)) continue;
+    let open = true;
+    for (let x = king.x + dx, y = king.y + dy; x !== rule.rook.x || y !== rule.rook.y; x += dx, y += dy) {
+      if (!inBounds(x, y, size) || pieceAt(pieces, x, y)) { open = false; break; }
+    }
+    if (!open) continue;
+
+    // Destinations clear — the vacated king/rook squares themselves don't block.
+    const ktOcc = pieceAt(pieces, rule.kingTo.x, rule.kingTo.y);
+    if (ktOcc && ktOcc.id !== king.id && ktOcc.id !== rook.id) continue;
+    const rtOcc = pieceAt(pieces, rule.rookTo.x, rule.rookTo.y);
+    if (rtOcc && rtOcc.id !== king.id && rtOcc.id !== rook.id) continue;
+
+    // No castling out of check, and the king's crossed squares must be safe. The rook's
+    // path ignores occupancy (both pieces move at once, chess-style) but not terrain.
+    const opponent: Side = king.side === 'player' ? 'enemy' : 'player';
+    if (squareAttackedBy({ x: king.x, y: king.y }, opponent, pieces, size, env)) continue;
+    if (!walk(king.x, king.y, rule.kingTo, originElev, true, opponent)) continue;
+    const rookElev = env?.terrain ? elevationAt(env.terrain, rook.x, rook.y) : 0;
+    if (!walk(rook.x, rook.y, rule.rookTo, rookElev, false, opponent)) continue;
+
+    out.push({ x: rule.kingTo.x, y: rule.kingTo.y, castle: { rookId: rook.id, rookTo: { x: rule.rookTo.x, y: rule.rookTo.y } } });
+  }
+  return out;
 }
 
 /**
@@ -284,7 +374,7 @@ export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSi
     case 'bishop': moves = rayMoves(piece, pieces, size, DIAG, env, originElev); break;
     case 'rook': moves = rayMoves(piece, pieces, size, ORTHO, env, originElev); break;
     case 'queen': moves = rayMoves(piece, pieces, size, ALL8, env, originElev); break;
-    case 'king': moves = stepMoves(piece, pieces, size, ALL8, env, originElev); break;
+    case 'king': moves = [...stepMoves(piece, pieces, size, ALL8, env, originElev), ...castleMoves(piece, pieces, size, env, originElev)]; break;
     default: return [];
   }
   const guardsKing = pieces.some((p) => p.alive && p.type === 'king' && p.side === piece.side);
@@ -428,11 +518,13 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
 
   const nextFacing = facingFromDelta(move.x - from.x, move.y - from.y);
   if (nextFacing) piece.facing = nextFacing;
+  let tookPiece = false;
   const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
   if (capturedId) {
     const target = pieces.find((p) => p.id === capturedId);
     if (target && isEnemy(piece, target)) {
       target.alive = false;
+      tookPiece = true;
       if (tracksStats) piece.enemiesKilled = (piece.enemiesKilled ?? 0) + 1;
       events.push({ kind: 'captured', pieceId: target.id, by: piece.id });
     }
@@ -440,7 +532,25 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
 
   piece.x = move.x;
   piece.y = move.y;
+  // Castling-rights history: only tracked when the game HAS castle rules, so a level
+  // without them keeps a byte-identical serialized GameState (ADR-0072 back-compat).
+  if (state.castleRules?.length) piece.hasMoved = true;
   events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
+
+  // Castling: the same action also hops the rook (see Move.castle / castleMoves).
+  if (move.castle) {
+    const rook = pieces.find((p) => p.id === move.castle!.rookId && p.alive);
+    if (rook) {
+      const rookFrom: Vec = { x: rook.x, y: rook.y };
+      const rookFacing = facingFromDelta(move.castle.rookTo.x - rook.x, move.castle.rookTo.y - rook.y);
+      if (rookFacing) rook.facing = rookFacing;
+      rook.x = move.castle.rookTo.x;
+      rook.y = move.castle.rookTo.y;
+      rook.hasMoved = true;
+      events.push({ kind: 'moved', pieceId: rook.id, from: rookFrom, to: { x: rook.x, y: rook.y } });
+      events.push({ kind: 'castled', kingId: piece.id, rookId: rook.id });
+    }
+  }
 
   const promoRule = promotionRuleForMove(state, { ...piece, type: movedPieceType }, { x: piece.x, y: piece.y });
   if (promoRule) {
@@ -479,8 +589,98 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
   }
 
   const lastMove: LastMove = { pieceId: piece.id, pieceType: movedPieceType, side: piece.side, from, to: { x: piece.x, y: piece.y } };
+  // The 50-move rule's clock: halfmoves since the last capture or pawn move. Only
+  // maintained when the game enforces draw rules, so every other level's serialized
+  // GameState stays byte-identical to before (ADR-0072 back-compat).
+  const clockField = state.drawRules
+    ? { halfmoveClock: tookPiece || movedPieceType === 'pawn' ? 0 : (state.halfmoveClock ?? 0) + 1 }
+    : undefined;
 
-  return { state: { ...state, pieces, winner, turn, lastMove }, events };
+  return { state: { ...state, pieces, winner, turn, lastMove, ...clockField }, events };
+}
+
+const POSITION_TYPE_CODE: Record<PieceType, string> = {
+  pawn: 'P', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', king: 'K', rock: 'X', 'random-rock': 'X',
+};
+
+/**
+ * A serializable identity for the position, for threefold repetition (FIDE 9.2 exact):
+ * combat-piece placement (neutral rocks never move, so they're constant and omitted),
+ * side to move, which authored castle options remain available in principle (both
+ * pieces alive and unmoved on their squares), and — only when a capture is actually
+ * legal, pins included — the en-passant square. Two states with the same key offer the
+ * side to move the identical set of legal moves. Pass `env` when the caller already
+ * holds one (search); omitted, it is built from the state.
+ */
+export function positionKey(state: GameState, env?: MoveEnv): string {
+  const e = env ?? { ...gameEnv(state), lastMove: state.lastMove };
+  const parts: string[] = [
+    state.pieces
+      .filter((p) => p.alive && p.side !== 'neutral')
+      .map((p) => `${p.side === 'player' ? 'w' : 'b'}${POSITION_TYPE_CODE[p.type]}${p.x},${p.y}`)
+      .sort()
+      .join(' '),
+    String(state.turn),
+  ];
+  if (state.castleRules?.length) {
+    parts.push(state.castleRules.map((rule) => {
+      const king = pieceAt(state.pieces, rule.king.x, rule.king.y);
+      const rook = pieceAt(state.pieces, rule.rook.x, rule.rook.y);
+      const open = !!king && king.type === 'king' && king.side === rule.side && !king.hasMoved
+        && !!rook && rook.type === 'rook' && rook.side === rule.side && !rook.hasMoved;
+      return open ? '1' : '0';
+    }).join(''));
+  }
+  const last = e.lastMove;
+  if (
+    last && last.pieceType === 'pawn' && isPawnDoubleStep(last)
+    && (state.turn === 'player' || state.turn === 'enemy') && last.side !== state.turn
+  ) {
+    const epAvailable = livingPieces(state.pieces, state.turn)
+      .some((p) => p.type === 'pawn' && legalMoves(p, state.pieces, state.size, e).some((m) => m.enPassant));
+    if (epAvailable) parts.push(`ep${last.to.x},${last.to.y}`);
+  }
+  return parts.join('|');
+}
+
+/**
+ * Record the state's position in the threefold table — once per COMMITTED move (and
+ * once for the initial position), never for hypothetical search applies. A capture or
+ * pawn move (halfmoveClock 0) makes every earlier position unreachable, so the table
+ * restarts there and stays as small as the clock. No-op unless this game enforces
+ * threefold, so every other level's GameState is byte-identical to before.
+ */
+export function recordPosition(state: GameState, env?: MoveEnv): GameState {
+  if (!state.drawRules?.threefold) return state;
+  const key = positionKey(state, env);
+  if ((state.halfmoveClock ?? 0) === 0) return { ...state, positionCounts: { [key]: 1 } };
+  const counts = state.positionCounts ?? {};
+  return { ...state, positionCounts: { ...counts, [key]: (counts[key] ?? 0) + 1 } };
+}
+
+export type RuleDrawKind = 'fifty-move' | 'threefold';
+
+/**
+ * A draw forced by this game's authored chess draw rules at the settled position, or
+ * null. Threefold reads the committed table (see recordPosition; a third occurrence
+ * needs at least 8 reversible halfmoves, so the key is only computed past that clock).
+ * The 50-move branch is mate-exact per FIDE: a move that fills the clock AND delivers
+ * checkmate wins, so with the side to move in check the clock only draws if an escape
+ * exists. Callers need no particular ordering against their own checkmate detection.
+ */
+export function ruleDraw(state: GameState, env?: MoveEnv): RuleDrawKind | null {
+  const rules = state.drawRules;
+  if (!rules || state.winner || (state.turn !== 'player' && state.turn !== 'enemy')) return null;
+  const clock = state.halfmoveClock ?? 0;
+  const e = env ?? { ...gameEnv(state), lastMove: state.lastMove };
+  if (rules.threefold && clock >= 8 && (state.positionCounts?.[positionKey(state, e)] ?? 0) >= 3) return 'threefold';
+  if (rules.fiftyMove && clock >= 100) {
+    const side = state.turn;
+    const mated = sideInCheck(state, side, e)
+      && !livingPieces(state.pieces, side).some((p) => legalMoves(p, state.pieces, state.size, e).length > 0);
+    if (!mated) return 'fifty-move';
+  }
+  return null;
 }
 
 /**

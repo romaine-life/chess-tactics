@@ -75,6 +75,22 @@ describe('playLevelGame', () => {
     const captures = record.moves.filter((m) => m.move.capture).length;
     expect(record.pieces.reduce((s, p) => s + p.captures, 0)).toBe(captures);
   });
+
+  it('ends a game by the 50-move rule exactly at 100 quiet halfmoves (ADR-0072)', { timeout: 60_000 }, () => {
+    // Two lone kings can never capture or push a pawn, so the halfmove clock runs
+    // 1..100 and the authored 50-move rule must end the game as a draw at ply 100 —
+    // well before the 300-ply cap that used to be the only way out.
+    const level = createBlankLevel('sp-fifty', 'Fifty', 8, 8);
+    level.objective = 'capture-king';
+    level.layers.units = [
+      { x: 4, y: 7, type: 'king', side: 'player' },
+      { x: 4, y: 0, type: 'king', side: 'enemy' },
+    ];
+    level.events = [{ trigger: { kind: 'setup' }, do: [{ kind: 'chess-draws', fiftyMove: true }] }];
+    const record = playLevelGame(level, { seed: 2, search: FAST });
+    expect(record.winner).toBe('draw');
+    expect(record.plies).toBe(100);
+  });
 });
 
 describe('replayStates', () => {

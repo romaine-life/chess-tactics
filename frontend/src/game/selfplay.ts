@@ -12,7 +12,7 @@ import { createFromLevel } from './setup';
 import { searchBestAction, type SearchOptions } from '../core/ai';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType } from '../core/level';
-import { applyMove, gameEnv, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
+import { applyMove, gameEnv, legalMoves, livingPieces, recordPosition, ruleDraw, sideInCheck, type MoveEnv } from '../core/rules';
 import { createRng } from '../core/rng';
 import type { GameState, Move, PieceType, Side, Vec, Winner } from '../core/types';
 
@@ -85,7 +85,9 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
   // decides the game (degenerate books) so we never search a finished board.
   for (const om of opts.openingMoves ?? []) {
     if (game.turn !== 'player' && game.turn !== 'enemy') break;
-    game = applyMove(game, om.pieceId, om.move).state;
+    // Book plies feed the threefold table too (recordPosition no-ops without the rule),
+    // so a repetition across the book/search seam is still counted.
+    game = recordPosition(applyMove(game, om.pieceId, om.move).state);
   }
   // Static terrain + fence env, built once and reused per ply (only lastMove changes). Threading
   // fences here is what keeps self-play/tuning honest on FENCED levels — see rules.gameEnv.
@@ -135,7 +137,7 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
     const from: Vec = mover ? { x: mover.x, y: mover.y } : { x: chosen.move.x, y: chosen.move.y };
     const prevTurn = game.turn;
     const res = applyMove(game, chosen.pieceId, chosen.move);
-    game = res.state;
+    game = recordPosition(res.state, { ...baseEnv, lastMove: res.state.lastMove });
     plies += 1;
     depthSum += chosen.depth;
     nodes += chosen.nodes;
@@ -150,6 +152,13 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
     if (!game.winner) {
       const winner = evaluateObjective(game, objective, { ...ctx, turnsElapsed });
       if (winner) game = { ...game, winner, turn: 'done' };
+    }
+    // Chess draw rules (50-move / threefold), mirroring the store's terminalIfStuck so a
+    // self-play game ends exactly where a live game would. ruleDraw is mate-exact, so
+    // checking it before next iteration's stuck check never eats a mate on the same move.
+    if (!game.winner) {
+      const draw = ruleDraw(game, { ...baseEnv, lastMove: game.lastMove });
+      if (draw) game = { ...game, winner: 'draw', turn: 'done' };
     }
   }
 
@@ -195,11 +204,12 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
 export function replayStates(level: Level, record: GameRecord, openingMoves: readonly RecordedMove[] = []): GameState[] {
   let game = createFromLevel(level, record.seed);
   for (const m of openingMoves) {
-    game = applyMove(game, m.pieceId, m.move).state;
+    game = recordPosition(applyMove(game, m.pieceId, m.move).state);
   }
   const states: GameState[] = [game];
   for (const m of record.moves) {
-    game = applyMove(game, m.pieceId, m.move).state;
+    // recordPosition keeps replayed states byte-identical to the live game's (threefold table included).
+    game = recordPosition(applyMove(game, m.pieceId, m.move).state);
     states.push(game);
   }
   return states;
