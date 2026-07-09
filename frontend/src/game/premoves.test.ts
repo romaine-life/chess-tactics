@@ -73,4 +73,19 @@ describe('premoveGhosts', () => {
     const targets = premoveTargets(g, [{ pieceId: 'pr', x: 3, y: 3 }], 'pr');
     expect(targets.some((m) => m.x === 3 && m.y === 0)).toBe(true);
   });
+
+  it('a premove onto the rook square is the CASTLE, not a speculative recapture (ADR-0072)', () => {
+    const g: GameState = {
+      ...board([
+        piece('pk', 'player', 'king', 4, 7),
+        piece('prk', 'player', 'rook', 7, 7),
+        piece('ek', 'enemy', 'king', 0, 0),
+      ]),
+      castleRules: [{ side: 'player', king: { x: 4, y: 7 }, rook: { x: 7, y: 7 }, kingTo: { x: 6, y: 7 }, rookTo: { x: 5, y: 7 } }],
+    };
+    const targets = premoveTargets(g, [], 'pk');
+    const onRook = targets.find((m) => m.x === 7 && m.y === 7);
+    expect(onRook?.castle?.kingTo).toEqual({ x: 6, y: 7 }); // the castle payload wins the square
+    expect(targets.filter((m) => m.x === 7 && m.y === 7)).toHaveLength(1); // no duplicate speculative entry
+  });
 });
