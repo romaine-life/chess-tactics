@@ -24,7 +24,7 @@ for (let i = 0x640000; i < 0x660000 - 16; i += 4) {
 const CAT_TERRAIN = { grass: 'grass', water: 'water', mountain: 'stone', road: 'road', forest: 'grass' };
 const TYPE_PIECE = { 1: 'pawn', 2: 'pawn', 7: 'pawn', 3: 'bishop', 5: 'rook', 6: 'bishop', 8: 'bishop', 11: 'knight', 14: 'knight', 15: 'knight' }; // air/sea omitted -> dropped
 const FACTION = ['golden', 'navy-blue', 'crimson', 'emerald', 'golden'];
-const PIECE_UNIT = { pawn: 'pawn-codexsheet', rook: 'rook-blender-v4-calibrated', knight: 'knight-fur', bishop: 'bishop-mitre', queen: 'queen-tiara', king: 'king-crown' };
+const PIECE_UNIT = { pawn: 'pawn', rook: 'rook', knight: 'knight', bishop: 'bishop', queen: 'queen', king: 'king' };
 const sideOf = (owner) => owner === 0 ? 'neutral' : owner === 1 ? 'player' : 'enemy';
 const b64 = (o) => Buffer.from(JSON.stringify(o), 'latin1').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 // Official ids must be off- prefixed, lowercase, DIGIT-FREE slugs (backend validateWorkspace).

@@ -10,7 +10,7 @@
 // the prod "no campaigns" bug. See ADR-0038.
 
 import { useCampaigns } from './store';
-import { loadOfficialCampaigns, loadWorkspace } from '../net/campaignWorkspace';
+import { loadOfficialCampaignsResult, loadWorkspace } from '../net/campaignWorkspace';
 
 let hydrated = false;
 let inFlight: Promise<void> | null = null;
@@ -22,13 +22,15 @@ export function ensureCampaignsHydrated(): Promise<void> {
   // longer an official-authoring mode to rebuild around: the store is always the proper
   // merged player view, so /play can always reuse it. An admin's unpublished official
   // edits preview in /play — identical to how unsaved private edits already preview.
-  if (hydrated || state.campaigns.length) return Promise.resolve();
+  if (hydrated || state.campaigns.some((campaign) => campaign.origin === 'official')) return Promise.resolve();
   if (inFlight) return inFlight;
   inFlight = (async () => {
     try {
-      // 1. Officials — always, for everyone. loadOfficialCampaigns never throws (it
-      //    falls back to the committed static file on any backend failure).
-      useCampaigns.getState().mergeOfficial(await loadOfficialCampaigns());
+      // 1. Officials — always, for everyone. A backend failure yields an empty slice
+      //    for this visit, but is not cached as successful hydration: the next visit
+      //    retries and can recover without a hard reload.
+      const official = await loadOfficialCampaignsResult();
+      useCampaigns.getState().mergeOfficial(official.workspace);
       // 2. The signed-in user's own campaigns, merged on top. 401 / unreachable ⇒ skip,
       //    leaving officials in place.
       try {
@@ -36,7 +38,7 @@ export function ensureCampaignsHydrated(): Promise<void> {
       } catch {
         /* not signed in, or no /api proxy (dev) ⇒ officials only */
       }
-      hydrated = true;
+      hydrated = official.available;
     } finally {
       // Never cache a rejected promise: if a merge ever throws, the next visit must
       // retry instead of every future caller inheriting the poisoned inFlight.

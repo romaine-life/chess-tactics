@@ -15,6 +15,8 @@ import { primeSfx } from './sfx';
 import { initProgressSync } from './campaign/progressSync';
 import { loadLiveSeats } from './net/propSeats';
 import { loadLiveWallArt } from './net/wallArt';
+import { loadLiveUnitCatalog } from './net/unitAssets';
+import { initUnitSizeTuning } from './ui/unitSizeTuning';
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
 // content-hashed + immutable — correct — but that does NOT save a tab that
@@ -58,6 +60,7 @@ try { initBgm(); } catch { /* background music is decorative */ }
 // Arm the procedural terrain SFX on the first user gesture (mirrors initBgm). Only
 // attaches listeners — no AudioContext until a gesture, so it's cheap + autoplay-safe.
 try { primeSfx(); } catch { /* sound effects are decorative */ }
+try { initUnitSizeTuning(); } catch { /* unit-size tuning is local-only */ }
 
 const root = document.getElementById('root');
 if (root) {
@@ -73,6 +76,9 @@ if (root) {
   void loadLiveWallArt()
     .then((changed) => { if (changed) reactRoot.render(<App />); })
     .catch(() => { /* wall art is decorative tuning — baseline always renders */ });
+  void loadLiveUnitCatalog()
+    .then((changed) => { if (changed) reactRoot.render(<App />); })
+    .catch(() => { /* unit art keeps the committed cutover baseline */ });
 }
 
 // Fold this browser's campaign progress together with the signed-in account's, so clears follow
