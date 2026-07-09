@@ -1,4 +1,4 @@
-// Board solver — the instant, pre-commit feasibility read (ADR-0068 §2, Phase 1).
+// Board solver — the instant, pre-commit feasibility read (ADR-0069 §2, Phase 1).
 //
 // Every number here is cheap: a combinatorial state-space estimate plus a shallow
 // legalMoves sample. Nothing starts the heavy solve. This is the number that answers

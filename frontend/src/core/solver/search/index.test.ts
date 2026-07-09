@@ -1,4 +1,4 @@
-// Phase-4 wiring tests (ADR-0068): runSolve's `mode:'search'` dispatch, the SolveResult adapter,
+// Phase-4 wiring tests (ADR-0069): runSolve's `mode:'search'` dispatch, the SolveResult adapter,
 // and the stepSearchWithPhases five-phase trace. vitest v4 hides console.log for passing tests.
 
 import { describe, it, expect } from 'vitest';

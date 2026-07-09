@@ -1,4 +1,4 @@
-// Cluster board-solver panel (ADR-0068 §5) — the "Run" tab. Cloned from ui/ClusterRuns.tsx
+// Cluster board-solver panel (ADR-0069 §5) — the "Run" tab. Cloned from ui/ClusterRuns.tsx
 // but the solver's output is a PROVEN GAME VALUE + a (partial) tablebase, not an eval vector
 // to adopt, so the whole adopt/ship machinery (onAdopt, shipAiWeights, verdictLabel, isAdmin,
 // champTheta, canAdopt) is dropped — a prop-shape change, not a block delete (F5). Before

@@ -1,4 +1,4 @@
-// Board solver — search-mode barrel (ADR-0068 Phase 4). Re-exports the weak-solver surface
+// Board solver — search-mode barrel (ADR-0069 Phase 4). Re-exports the weak-solver surface
 // and supplies the `mode:'search'` delegate that Phase-1's `runSolve` dispatches to.
 //
 // runSolve (retrograde.ts) owns the dispatcher; this module supplies the search runner via

@@ -1,4 +1,4 @@
-// Phase-4 transposition-table tests (ADR-0068). vitest v4 hides console.log for passing tests,
+// Phase-4 transposition-table tests (ADR-0069). vitest v4 hides console.log for passing tests,
 // so every claim is an assertion. Covers the six-flag model, depth-preferred + proven-sticky
 // replacement, ttEntryLimit eviction (proofs survive), and provenCounts.
 

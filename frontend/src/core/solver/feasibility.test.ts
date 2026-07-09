@@ -1,4 +1,4 @@
-// Phase-1 feasibility + en-passant + clock-in-key tests (ADR-0068). The Break the Line
+// Phase-1 feasibility + en-passant + clock-in-key tests (ADR-0069). The Break the Line
 // FeasibilityReport is asserted here (the ADR §2 "toy vs chess by computation" number).
 // Vitest v4 hides console.log for passing tests, so every field is ASSERTED directly.
 

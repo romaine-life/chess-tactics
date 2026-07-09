@@ -1,4 +1,4 @@
-// Shared contracts for the board solver (ADR-0068). The single source of truth for
+// Shared contracts for the board solver (ADR-0069). The single source of truth for
 // every interface exchanged across the solver's phases: feasibility estimator,
 // retrograde strong-solver, search weak-solver, interactive stepper, cluster worker,
 // DB body patches, the polling client (net/solveRuns.ts), and every panel component.
@@ -15,14 +15,14 @@ import type { ObjectiveContext } from '../objectives';
 
 // ─── Game-theoretic value (ADR §1, DTM-style) ──────────────────────────────────────
 
-/** Game-theoretic outcome of a position under perfect play (ADR-0068 §1). `unknown`
+/** Game-theoretic outcome of a position under perfect play (ADR-0069 §1). `unknown`
  * is the still-undecided label a PARTIAL solve carries; a proven win/loss/draw is
  * final and never regresses to `unknown`. `win`/`loss` are from the perspective of
  * the side to move at that position unless a `winner` side is given (see Value). */
 export type Outcome = 'win' | 'loss' | 'draw' | 'unknown';
 
 /**
- * The definite value of a position under perfect play (Zermelo — ADR-0068 §1).
+ * The definite value of a position under perfect play (Zermelo — ADR-0069 §1).
  * - `outcome`: win / loss / draw / unknown.
  * - `winner`: the SIDE that wins under perfect play, present iff outcome is win|loss.
  *   Redundant with side-to-move for a well-formed position but stored so a Value read
@@ -30,7 +30,7 @@ export type Outcome = 'win' | 'loss' | 'draw' | 'unknown';
  * - `distancePlies`: DTM — plies from THIS position to the king-capture that settles it
  *   under perfect play (0 = already terminal). Present for a proven win|loss; ABSENT for
  *   a draw (loopy game: "neither side forces a capture in finite moves" has no finite
- *   distance — ADR-0068 §1) and for `unknown`. Mirrors ai.ts's `WIN_SCORE - ply` ranking
+ *   distance — ADR-0069 §1) and for `unknown`. Mirrors ai.ts's `WIN_SCORE - ply` ranking
  *   made a first-class integer instead of a score offset.
  */
 export interface Value {
@@ -51,20 +51,20 @@ export function flipOutcome(v: Value): Value {
 // ─── Feasibility (ADR §2/§4) ────────────────────────────────────────────────────────
 
 export const SOLVE_VERDICTS = ['solvable', 'hard', 'infeasible'] as const;
-/** The feasibility verdict (ADR-0068 §2, normalized from the prose labels): `solvable` =
+/** The feasibility verdict (ADR-0069 §2, normalized from the prose labels): `solvable` =
  * strong-solve exactly in secs/mins; `hard` = too big to enumerate, weak-solve bounded
  * (search mode); `infeasible` = heuristic territory, a full tablebase would exceed the
  * Job memory cap. */
 export type SolveVerdict = (typeof SOLVE_VERDICTS)[number];
 
 /**
- * The instant, pre-commit feasibility read (ADR-0068 §2). Every number is cheap
+ * The instant, pre-commit feasibility read (ADR-0069 §2). Every number is cheap
  * (combinatorial estimate + a shallow legalMoves sample), computed WITHOUT starting
  * the heavy solve. This is the number that answers "toy vs chess" by computation.
  */
 export interface FeasibilityReport {
   /** Reachable-state upper bound: piece-types × squares discounted for illegal/duplicate/
-   * pawn-rank constraints, ×2 side-to-move, × promotion expansion (ADR-0068 §2). An
+   * pawn-rank constraints, ×2 side-to-move, × promotion expansion (ADR-0069 §2). An
    * UPPER bound, not the exact reachable count. Number (not bigint) for JSON; may be
    * Infinity-ish large, so it is carried as an order-of-magnitude estimate. */
   stateSpaceUpperBound: number;
@@ -73,10 +73,10 @@ export interface FeasibilityReport {
   /** Mean legal-move count over a shallow sample of reachable states. */
   branchingSampled: number;
   /** states × bytes-per-entry estimate for a full tablebase, compared against
-   * bounds.maxMemoryBytes to pick the verdict (ADR-0068 §2, §5 "caps the tablebase
+   * bounds.maxMemoryBytes to pick the verdict (ADR-0069 §2, §5 "caps the tablebase
    * to the Job memory limit before it starts"). */
   tablebaseBytesEstimate: number;
-  /** The recommended method (ADR-0068 §2). */
+  /** The recommended method (ADR-0069 §2). */
   verdict: SolveVerdict;
   /** Rough wall-clock estimate to a COMPLETE solve, in seconds; a lower-confidence
    * hint, not a promise (the run is anytime and bounded regardless). */
@@ -96,12 +96,12 @@ export interface FeasibilityReport {
 // ─── Mode, bounds, spec (ADR §4/§5) ─────────────────────────────────────────────────
 
 export const SOLVE_MODES = ['retrograde', 'search'] as const;
-/** Which algorithm the solver runs (ADR-0068 §1): `retrograde` = strong solve / full
+/** Which algorithm the solver runs (ADR-0069 §1): `retrograde` = strong solve / full
  * tablebase by backward induction (small boards); `search` = iterative-deepening
  * alpha-beta anytime weak-solve (too big to enumerate). */
 export type SolveMode = (typeof SOLVE_MODES)[number];
 
-/** Hard caps every run carries — never a runaway (ADR-0068 §4). The solver checks these
+/** Hard caps every run carries — never a runaway (ADR-0069 §4). The solver checks these
  * on a fixed cadence and exits cleanly with its partial result persisted. */
 export interface SolveBounds {
   /** Wall-clock ceiling in ms. */
@@ -109,12 +109,12 @@ export interface SolveBounds {
   /** Node/state ceiling — states enumerated (retrograde) or nodes expanded (search). */
   maxStates: number;
   /** Memory ceiling in bytes for in-core tablebase/TT growth; feasibility refuses a
-   * full tablebase above this and falls to search (ADR-0068 §5). Set comfortably UNDER
+   * full tablebase above this and falls to search (ADR-0069 §5). Set comfortably UNDER
    * the container memory limit so the self-check trips before an OOM-kill. */
   maxMemoryBytes: number;
 }
 
-/** The complete, serializable job description POSTed to /api/solve-runs (ADR-0068 §5).
+/** The complete, serializable job description POSTed to /api/solve-runs (ADR-0069 §5).
  * `level` is the whole authored document; the worker re-derives objective + victory rules
  * from it (level.victory ?? victoryRulesForObjective(...) — F1), exactly as the store does. */
 export interface SolveSpec {
@@ -125,21 +125,21 @@ export interface SolveSpec {
    * Absent ⇒ a fixed default, so a spec replays identically. */
   seed?: number;
   /** Run the fast random-playout / shallow-MCTS "looks like a draw / looks winning" pass
-   * first (ADR-0068 §1 "instant read"). Default true; the estimate is advisory, never a proof. */
+   * first (ADR-0069 §1 "instant read"). Default true; the estimate is advisory, never a proof. */
   instantRead?: boolean;
 }
 
 // ─── Streamed progress (ADR §3/§5) ──────────────────────────────────────────────────
 
 /** Counts of positions PROVEN to each terminal value so far — the partial tablebase's
- * census (ADR-0068 §3, §5). */
+ * census (ADR-0069 §3, §5). */
 export interface ProvenCounts {
   win: number;
   loss: number;
   draw: number;
 }
 
-/** Tightening upper/lower bounds on the ROOT position's value (ADR-0068 §3). As the
+/** Tightening upper/lower bounds on the ROOT position's value (ADR-0069 §3). As the
  * anytime solve runs, the interval [lower, upper] narrows; when it collapses to a single
  * proven outcome the root is solved. */
 export interface RootBounds {
@@ -153,7 +153,7 @@ export interface RootBounds {
   proven: boolean;
 }
 
-/** The streamed progress record (ADR-0068 §5, verbatim fields). Patched into the solve_runs
+/** The streamed progress record (ADR-0069 §5, verbatim fields). Patched into the solve_runs
  * JSONB body on a cadence and re-read by the polling client (net/solveRuns.ts). Flat +
  * JSON-safe: no Maps/Sets/functions. The interactive stepper's Run tab renders this live; a
  * cluster run's stepper REPLAYS a recorded SolveStep trace, but the headline dashboard is this. */
@@ -183,7 +183,7 @@ export interface SolveProgress {
 // ─── Result, tablebase ref, piece values (ADR §1/§3/§5) ─────────────────────────────
 
 /** Pointer to a full tablebase written to blob storage when too big for the JSONB row
- * (ADR-0068 §5). Absent ⇒ the partial tablebase (if any) lives inline / was not persisted. */
+ * (ADR-0069 §5). Absent ⇒ the partial tablebase (if any) lives inline / was not persisted. */
 export interface TablebaseRef {
   /** Blob URL of the serialized tablebase. */
   url: string;
@@ -194,7 +194,7 @@ export interface TablebaseRef {
   format: 'solver-tablebase-v1';
 }
 
-/** One piece TYPE's ablation result (ADR-0068 §1). Removing every piece of `type` from
+/** One piece TYPE's ablation result (ADR-0069 §1). Removing every piece of `type` from
  * the root and re-solving yields `ablatedValue`; the DIFFERENCE from the unablated root
  * value is the piece's honest, board-specific worth — in OUTCOME + win-distance terms,
  * measured against perfect play. */
@@ -216,7 +216,7 @@ export interface PieceValueEntry {
   authoredScalar?: number;
 }
 
-/** Honest per-piece-type values for a SOLVED board (ADR-0068 §1). Only meaningful when the
+/** Honest per-piece-type values for a SOLVED board (ADR-0069 §1). Only meaningful when the
  * root is strongly (or at least weakly) solved. */
 export interface PieceValueReport {
   /** Root value the ablations are measured against. */
@@ -227,7 +227,7 @@ export interface PieceValueReport {
   partial?: boolean;
 }
 
-/** The terminal deliverable of a run (ADR-0068 §1/§3). At ANY stop (budget, memory, cancel)
+/** The terminal deliverable of a run (ADR-0069 §1/§3). At ANY stop (budget, memory, cancel)
  * this is well-formed: `complete` false + a partial tablebase + tightening rootBounds is the
  * anytime guarantee. */
 export interface SolveResult {
@@ -237,16 +237,16 @@ export interface SolveResult {
   /** True iff the whole reachable space was solved to a fixpoint (strong solve) OR the root
    * was proven (weak solve); false for a bounded/partial stop. */
   complete: boolean;
-  /** How many positions were proven — the partial tablebase size (ADR-0068 §3). */
+  /** How many positions were proven — the partial tablebase size (ADR-0069 §3). */
   provenCount: number;
   proven: ProvenCounts;
   /** Final tightened bounds on the root (mirrors SolveProgress.rootBounds at stop). */
   rootBounds: RootBounds;
   /** Coverage at stop (see SolveProgress.coveragePct semantics). */
   coveragePct: number;
-  /** Present iff a full tablebase was written to blob (ADR-0068 §5). */
+  /** Present iff a full tablebase was written to blob (ADR-0069 §5). */
   tablebaseRef?: TablebaseRef;
-  /** Present once solved: ablation-derived piece values (ADR-0068 §1). May carry partial:true. */
+  /** Present once solved: ablation-derived piece values (ADR-0069 §1). May carry partial:true. */
   pieceValues?: PieceValueReport;
   /** Which mode actually ran. */
   mode: SolveMode;

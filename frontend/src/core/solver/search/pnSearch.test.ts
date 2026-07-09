@@ -1,4 +1,4 @@
-// Phase-4 proof-number search tests (ADR-0068 §1). PN is OPTIONAL for this cut — shipped as a
+// Phase-4 proof-number search tests (ADR-0069 §1). PN is OPTIONAL for this cut — shipped as a
 // typed `not-implemented` stub behind `bounds.prover` (default 'ab'). The `it.skip` case documents
 // the intended guarantee for when PN lands; the active test pins the stub's loud-failure contract.
 

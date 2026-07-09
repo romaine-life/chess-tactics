@@ -1,4 +1,4 @@
-// Board solver — honest per-piece values by ablation against perfect play (ADR-0068 §1).
+// Board solver — honest per-piece values by ablation against perfect play (ADR-0069 §1).
 //
 // Removing every piece of a slot from the root and re-solving yields the ablated root value;
 // the DIFFERENCE from the unablated baseline is that piece's honest, board-specific worth in

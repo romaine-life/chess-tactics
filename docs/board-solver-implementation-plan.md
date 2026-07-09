@@ -1,6 +1,6 @@
 # Board Solver — Unified Implementation Plan
 
-Implements **ADR-0068 — Board solving is the front of the per-board AI pipeline** (`docs/adr/0068-board-solver-is-the-front-of-the-per-board-ai-pipeline.md`). The ADR decides we build a bounded, anytime, cluster-backed board solver with an interactive stepper, sharing one pure engine core. Given any board it (a) estimates feasibility (ADR §2), (b) runs a bounded anytime solve — strong (retrograde tablebase) when small enough, weak (iterative-deepening αβ) otherwise (ADR §1/§3/§4) — and (c) reports the proven game value, a partial/complete tablebase, and honest piece values by ablation. It has two faces over one pure engine: an in-browser phase-by-phase **stepper** (the learning surface, the `bender-world`/`eight-queens` idiom) and a **cluster-backed run** cloned from the `train-runs` Job lifecycle.
+Implements **ADR-0069 — Board solving is the front of the per-board AI pipeline** (`docs/adr/0069-board-solver-is-the-front-of-the-per-board-ai-pipeline.md`). The ADR decides we build a bounded, anytime, cluster-backed board solver with an interactive stepper, sharing one pure engine core. Given any board it (a) estimates feasibility (ADR §2), (b) runs a bounded anytime solve — strong (retrograde tablebase) when small enough, weak (iterative-deepening αβ) otherwise (ADR §1/§3/§4) — and (c) reports the proven game value, a partial/complete tablebase, and honest piece values by ablation. It has two faces over one pure engine: an in-browser phase-by-phase **stepper** (the learning surface, the `bender-world`/`eight-queens` idiom) and a **cluster-backed run** cloned from the `train-runs` Job lifecycle.
 
 This plan merges four build parts (ADR §"Build phases") plus the shared-contracts module that binds them:
 
@@ -24,7 +24,7 @@ Every fact below was confirmed against the worktree during planning. They correc
 - **F4 — The list query and the get query have DIFFERENT projections.** `dbListTrainRuns` (server.js:2393) selects `id, spec, status, created_at, updated_at` — **no `body`, no `job_name`**, `ORDER BY created_at DESC LIMIT 100`. `dbGetTrainRun` (server.js:2402) selects `id, spec, body, status, job_name, created_at, updated_at`. `TrainRunSummary` (trainRuns.ts:34) is `{ id, spec, status, created_at, updated_at }`; `TrainRunDoc extends TrainRunSummary` adds `{ body, job_name }`. The solver's DB helpers + client types must preserve this split.
 - **F5 — `ClusterRuns` signature is `ClusterRuns({ level, levelId, onAdopt })` with `onAdopt` REQUIRED** (ClusterRuns.tsx:24) and `levelId` woven through. The adopt/ship machinery (`verdictLabel` at module top, `shipAiWeights`, `isAdmin`, `champTheta`) is threaded through the render, not an isolated block. The solver's `SolveRuns` drops these — a prop-shape change, not a delete-a-block edit.
 - **F6 — `legalMoves` GENERATES en-passant moves from `env.lastMove`** (rules.ts:207 `const last = env?.lastMove`, rules.ts:221 `moves.push({ x, y, capture: last.pieceId, enPassant: true })`). `gameEnv(state)` returns **no** `lastMove` (rules.ts:88–92); callers spread `{ ...gameEnv(state), lastMove }` per ply. A decoded position with no `lastMove` therefore **cannot** produce the en-passant capture the live engine would — a silent move-graph divergence on pawn-adjacent boards. See §"En passant" for the mandatory refusal gate.
-- **F7 — ADR-0068 exists on this branch** (`docs/adr/0068-board-solver-is-the-front-of-the-per-board-ai-pipeline.md`) and §6 names the three engine entrypoints **verbatim**: `estimateFeasibility(level) → FeasibilityReport`, `runSolve(level, bounds, onProgress) → SolveResult`, `solveStepWithPhases(...)`. All three are named contracts; Phase 1's barrel must export all three. The ADR's own header (line 3) flags the number as provisional (0063/0064 already collide across parallel branches) — reconcile at merge.
+- **F7 — ADR-0069 exists on this branch** (`docs/adr/0069-board-solver-is-the-front-of-the-per-board-ai-pipeline.md`) and §6 names the three engine entrypoints **verbatim**: `estimateFeasibility(level) → FeasibilityReport`, `runSolve(level, bounds, onProgress) → SolveResult`, `solveStepWithPhases(...)`. All three are named contracts; Phase 1's barrel must export all three. The ADR's own header (line 3) flags the number as provisional (0063/0064 already collide across parallel branches) — reconcile at merge.
 - **F8 — This repo has NO repetition/50-move rule** (ADR §1, verified in rules/objectives/selfplay). "Draw" = neither side can force a king-capture in finite plies. This is why win-distance/DTM labels + explicit cycle detection are load-bearing, not an artificial ply cap.
 - **F9 — `random-rock` does not appear in `game/setup.ts` or `game/__fixtures__/breakLine.ts`.** The three tiny test boards and BtL do not use it. Confirm any *new* target board before assuming rocks are a static frame (§"Determinism / random-rock").
 
@@ -59,14 +59,14 @@ import type { ObjectiveContext } from '../objectives';
 ### Game-theoretic value (ADR §1, DTM-style)
 
 ```ts
-/** Game-theoretic outcome of a position under perfect play (ADR-0068 §1). `unknown`
+/** Game-theoretic outcome of a position under perfect play (ADR-0069 §1). `unknown`
  * is the still-undecided label a PARTIAL solve carries; a proven win/loss/draw is
  * final and never regresses to `unknown`. `win`/`loss` are from the perspective of
  * the side to move at that position unless a `winner` side is given (see Value). */
 export type Outcome = 'win' | 'loss' | 'draw' | 'unknown';
 
 /**
- * The definite value of a position under perfect play (Zermelo — ADR-0068 §1).
+ * The definite value of a position under perfect play (Zermelo — ADR-0069 §1).
  * - `outcome`: win / loss / draw / unknown.
  * - `winner`: the SIDE that wins under perfect play, present iff outcome is win|loss.
  *   Redundant with side-to-move for a well-formed position but stored so a Value read
@@ -74,7 +74,7 @@ export type Outcome = 'win' | 'loss' | 'draw' | 'unknown';
  * - `distancePlies`: DTM — plies from THIS position to the king-capture that settles it
  *   under perfect play (0 = already terminal). Present for a proven win|loss; ABSENT for
  *   a draw (loopy game: "neither side forces a capture in finite moves" has no finite
- *   distance — ADR-0068 §1) and for `unknown`. Mirrors ai.ts's `WIN_SCORE - ply` ranking
+ *   distance — ADR-0069 §1) and for `unknown`. Mirrors ai.ts's `WIN_SCORE - ply` ranking
  *   made a first-class integer instead of a score offset.
  */
 export interface Value {
@@ -97,20 +97,20 @@ export function flipOutcome(v: Value): Value {
 
 ```ts
 export const SOLVE_VERDICTS = ['solvable', 'hard', 'infeasible'] as const;
-/** The feasibility verdict (ADR-0068 §2, normalized from the prose labels): `solvable` =
+/** The feasibility verdict (ADR-0069 §2, normalized from the prose labels): `solvable` =
  * strong-solve exactly in secs/mins; `hard` = too big to enumerate, weak-solve bounded
  * (search mode); `infeasible` = heuristic territory, a full tablebase would exceed the
  * Job memory cap. */
 export type SolveVerdict = (typeof SOLVE_VERDICTS)[number];
 
 /**
- * The instant, pre-commit feasibility read (ADR-0068 §2). Every number is cheap
+ * The instant, pre-commit feasibility read (ADR-0069 §2). Every number is cheap
  * (combinatorial estimate + a shallow legalMoves sample), computed WITHOUT starting
  * the heavy solve. This is the number that answers "toy vs chess" by computation.
  */
 export interface FeasibilityReport {
   /** Reachable-state upper bound: piece-types × squares discounted for illegal/duplicate/
-   * pawn-rank constraints, ×2 side-to-move, × promotion expansion (ADR-0068 §2). An
+   * pawn-rank constraints, ×2 side-to-move, × promotion expansion (ADR-0069 §2). An
    * UPPER bound, not the exact reachable count. Number (not bigint) for JSON; may be
    * Infinity-ish large, so it is carried as an order-of-magnitude estimate. */
   stateSpaceUpperBound: number;
@@ -119,10 +119,10 @@ export interface FeasibilityReport {
   /** Mean legal-move count over a shallow sample of reachable states. */
   branchingSampled: number;
   /** states × bytes-per-entry estimate for a full tablebase, compared against
-   * bounds.maxMemoryBytes to pick the verdict (ADR-0068 §2, §5 "caps the tablebase
+   * bounds.maxMemoryBytes to pick the verdict (ADR-0069 §2, §5 "caps the tablebase
    * to the Job memory limit before it starts"). */
   tablebaseBytesEstimate: number;
-  /** The recommended method (ADR-0068 §2). */
+  /** The recommended method (ADR-0069 §2). */
   verdict: SolveVerdict;
   /** Rough wall-clock estimate to a COMPLETE solve, in seconds; a lower-confidence
    * hint, not a promise (the run is anytime and bounded regardless). */
@@ -145,12 +145,12 @@ Phase 1 MAY add optional fields (`boardCells`, `pieces`, `bytesPerEntry`, `reach
 
 ```ts
 export const SOLVE_MODES = ['retrograde', 'search'] as const;
-/** Which algorithm the solver runs (ADR-0068 §1): `retrograde` = strong solve / full
+/** Which algorithm the solver runs (ADR-0069 §1): `retrograde` = strong solve / full
  * tablebase by backward induction (small boards); `search` = iterative-deepening
  * alpha-beta anytime weak-solve (too big to enumerate). */
 export type SolveMode = (typeof SOLVE_MODES)[number];
 
-/** Hard caps every run carries — never a runaway (ADR-0068 §4). The solver checks these
+/** Hard caps every run carries — never a runaway (ADR-0069 §4). The solver checks these
  * on a fixed cadence and exits cleanly with its partial result persisted. */
 export interface SolveBounds {
   /** Wall-clock ceiling in ms. */
@@ -158,12 +158,12 @@ export interface SolveBounds {
   /** Node/state ceiling — states enumerated (retrograde) or nodes expanded (search). */
   maxStates: number;
   /** Memory ceiling in bytes for in-core tablebase/TT growth; feasibility refuses a
-   * full tablebase above this and falls to search (ADR-0068 §5). Set comfortably UNDER
+   * full tablebase above this and falls to search (ADR-0069 §5). Set comfortably UNDER
    * the container memory limit so the self-check trips before an OOM-kill. */
   maxMemoryBytes: number;
 }
 
-/** The complete, serializable job description POSTed to /api/solve-runs (ADR-0068 §5).
+/** The complete, serializable job description POSTed to /api/solve-runs (ADR-0069 §5).
  * `level` is the whole authored document; the worker re-derives objective + victory rules
  * from it (level.victory ?? victoryRulesForObjective(...) — F1), exactly as the store does. */
 export interface SolveSpec {
@@ -174,7 +174,7 @@ export interface SolveSpec {
    * Absent ⇒ a fixed default, so a spec replays identically. */
   seed?: number;
   /** Run the fast random-playout / shallow-MCTS "looks like a draw / looks winning" pass
-   * first (ADR-0068 §1 "instant read"). Default true; the estimate is advisory, never a proof. */
+   * first (ADR-0069 §1 "instant read"). Default true; the estimate is advisory, never a proof. */
   instantRead?: boolean;
 }
 ```
@@ -185,14 +185,14 @@ export interface SolveSpec {
 
 ```ts
 /** Counts of positions PROVEN to each terminal value so far — the partial tablebase's
- * census (ADR-0068 §3, §5). */
+ * census (ADR-0069 §3, §5). */
 export interface ProvenCounts {
   win: number;
   loss: number;
   draw: number;
 }
 
-/** Tightening upper/lower bounds on the ROOT position's value (ADR-0068 §3). As the
+/** Tightening upper/lower bounds on the ROOT position's value (ADR-0069 §3). As the
  * anytime solve runs, the interval [lower, upper] narrows; when it collapses to a single
  * proven outcome the root is solved. */
 export interface RootBounds {
@@ -206,7 +206,7 @@ export interface RootBounds {
   proven: boolean;
 }
 
-/** The streamed progress record (ADR-0068 §5, verbatim fields). Patched into the solve_runs
+/** The streamed progress record (ADR-0069 §5, verbatim fields). Patched into the solve_runs
  * JSONB body on a cadence and re-read by the polling client (net/solveRuns.ts). Flat +
  * JSON-safe: no Maps/Sets/functions. The interactive stepper's Run tab renders this live; a
  * cluster run's stepper REPLAYS a recorded SolveStep trace, but the headline dashboard is this. */
@@ -238,7 +238,7 @@ export interface SolveProgress {
 
 ```ts
 /** Pointer to a full tablebase written to blob storage when too big for the JSONB row
- * (ADR-0068 §5). Absent ⇒ the partial tablebase (if any) lives inline / was not persisted. */
+ * (ADR-0069 §5). Absent ⇒ the partial tablebase (if any) lives inline / was not persisted. */
 export interface TablebaseRef {
   /** Blob URL of the serialized tablebase. */
   url: string;
@@ -249,7 +249,7 @@ export interface TablebaseRef {
   format: 'solver-tablebase-v1';
 }
 
-/** One piece TYPE's ablation result (ADR-0068 §1). Removing every piece of `type` from
+/** One piece TYPE's ablation result (ADR-0069 §1). Removing every piece of `type` from
  * the root and re-solving yields `ablatedValue`; the DIFFERENCE from the unablated root
  * value is the piece's honest, board-specific worth — in OUTCOME + win-distance terms,
  * measured against perfect play. */
@@ -271,7 +271,7 @@ export interface PieceValueEntry {
   authoredScalar?: number;
 }
 
-/** Honest per-piece-type values for a SOLVED board (ADR-0068 §1). Only meaningful when the
+/** Honest per-piece-type values for a SOLVED board (ADR-0069 §1). Only meaningful when the
  * root is strongly (or at least weakly) solved. */
 export interface PieceValueReport {
   /** Root value the ablations are measured against. */
@@ -282,7 +282,7 @@ export interface PieceValueReport {
   partial?: boolean;
 }
 
-/** The terminal deliverable of a run (ADR-0068 §1/§3). At ANY stop (budget, memory, cancel)
+/** The terminal deliverable of a run (ADR-0069 §1/§3). At ANY stop (budget, memory, cancel)
  * this is well-formed: `complete` false + a partial tablebase + tightening rootBounds is the
  * anytime guarantee. */
 export interface SolveResult {
@@ -292,16 +292,16 @@ export interface SolveResult {
   /** True iff the whole reachable space was solved to a fixpoint (strong solve) OR the root
    * was proven (weak solve); false for a bounded/partial stop. */
   complete: boolean;
-  /** How many positions were proven — the partial tablebase size (ADR-0068 §3). */
+  /** How many positions were proven — the partial tablebase size (ADR-0069 §3). */
   provenCount: number;
   proven: ProvenCounts;
   /** Final tightened bounds on the root (mirrors SolveProgress.rootBounds at stop). */
   rootBounds: RootBounds;
   /** Coverage at stop (see SolveProgress.coveragePct semantics). */
   coveragePct: number;
-  /** Present iff a full tablebase was written to blob (ADR-0068 §5). */
+  /** Present iff a full tablebase was written to blob (ADR-0069 §5). */
   tablebaseRef?: TablebaseRef;
-  /** Present once solved: ablation-derived piece values (ADR-0068 §1). May carry partial:true. */
+  /** Present once solved: ablation-derived piece values (ADR-0069 §1). May carry partial:true. */
   pieceValues?: PieceValueReport;
   /** Which mode actually ran. */
   mode: SolveMode;
@@ -928,7 +928,7 @@ The four phases are each independently shippable (ADR "Build phases"), but they 
 **Stage 0 — Shared contracts (blocks everything).**
 `frontend/src/core/solver/types.ts` + `types.test.ts`, and the `export type`/`export` re-export block appended to `frontend/src/trainer/engine.ts`. Every other file imports the contract types from here. Pure types + a handful of guards, no engine dependency.
 
-**Stage 0.1 — Confirm ADR-0068 number + citations (F7).** ADR-0068 exists on this branch; its header flags the number as provisional (0063/0064 already collide). Fetch `origin/main`, reconcile the ADR number and every "ADR §N" citation against the file at merge (same discipline as migration 12). No new authoring needed — the ADR is written and Accepted (design).
+**Stage 0.1 — Confirm ADR-0069 number + citations (F7).** ADR-0069 exists on this branch; its header flags the number as provisional (0063/0064 already collide). Fetch `origin/main`, reconcile the ADR number and every "ADR §N" citation against the file at merge (same discipline as migration 12). No new authoring needed — the ADR is written and Accepted (design).
 
 **Stage 0.5 — Verify the trainer engine bundle output path (F3/ruling 7).**
 The verified answer is **`frontend/trainer-bundle/engine.mjs`** (`vite.trainer.config.js` `outDir:'trainer-bundle'`+`entryFileNames:'engine.mjs'`, `Dockerfile:22`, `train-worker.mjs:17` imports `../frontend/trainer-bundle/engine.mjs`). The stale `dist-trainer` config comment is wrong. Re-confirm before Phase 3 wires the worker import; every worker import + bundle-export test uses this path.

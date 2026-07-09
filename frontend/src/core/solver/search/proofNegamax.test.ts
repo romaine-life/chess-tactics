@@ -1,4 +1,4 @@
-// Phase-4 proof-tracking negamax tests (ADR-0068). Tiny hand-checkable boards, EXACT values
+// Phase-4 proof-tracking negamax tests (ADR-0069). Tiny hand-checkable boards, EXACT values
 // asserted (vitest v4 hides console.log for passing tests). The strongest guard is the
 // cross-check against Phase-1's retrograde ground truth on the SAME board — same Value, same DTM.
 

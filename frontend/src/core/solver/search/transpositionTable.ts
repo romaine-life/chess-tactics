@@ -1,4 +1,4 @@
-// Board solver — search-mode transposition table (ADR-0068 Phase 4, §3).
+// Board solver — search-mode transposition table (ADR-0069 Phase 4, §3).
 //
 // The TT is two things at once: the alpha-beta bound cache that makes iterative deepening
 // pay for itself (a proven or bounded position is not re-searched), AND the anytime

@@ -1,5 +1,5 @@
 // The solver stepper's stateful orchestrator (mirrors bender-world's engine/algorithm-runner.ts).
-// Wraps the PURE engine entrypoints — `solveStepWithPhases` (retrograde, ADR-0068 §7/F7) and
+// Wraps the PURE engine entrypoints — `solveStepWithPhases` (retrograde, ADR-0069 §7/F7) and
 // `stepSearchWithPhases` (search) — into the reference-repo runner shape the buffer/hook drive:
 // one micro-step per `runStepWithPhases()` call, coarse `runSweep()`/`runDepth()` batches,
 // lightweight index-based snapshots for undo/redo, and `reset(config)`.

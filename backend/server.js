@@ -344,7 +344,7 @@ const MIGRATIONS = [
   {
     version: 13,
     name: 'solve runs',
-    // Account-scoped headless BOARD-SOLVER runs (ADR-0068 §5), mirroring train_runs.
+    // Account-scoped headless BOARD-SOLVER runs (ADR-0069 §5), mirroring train_runs.
     // `spec` is the immutable SolveSpec (level + bounds + mode) the solver Job reads;
     // `body` is the progressively-patched result (feasibility, tightening rootBounds,
     // proven census, final rootValue + piece values + tablebase ref); `status` is
@@ -2774,7 +2774,7 @@ app.delete('/api/train-runs/:id', async (req, res) => {
 });
 
 // ── Board-solver runs: launch a headless bounded/anytime solve Job, read status,
-// cancel ─── Clone of /api/train-runs (ADR-0068 §5). POST persists the SolveSpec then
+// cancel ─── Clone of /api/train-runs (ADR-0069 §5). POST persists the SolveSpec then
 // creates a k8s Job on the trainer pool running `node backend/solve-worker.mjs` (the
 // worker reads its own solve_runs row via SOLVE_RUN_ID and JSONB-patches progress
 // back). In local dev (not in-cluster) the row persists as 'pending' and isn't launched.

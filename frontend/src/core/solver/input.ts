@@ -1,4 +1,4 @@
-// Board solver — the fixed frame for a level (ADR-0068 Phase 1). Bridges an
+// Board solver — the fixed frame for a level (ADR-0069 Phase 1). Bridges an
 // authored `Level` to the solver's working state, reusing `createFromLevel` so the
 // start is byte-identical to self-play / the store. Everything that never changes
 // across a game's plies (terrain env, victory rule set, the per-piece slot map, the

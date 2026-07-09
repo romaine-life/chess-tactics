@@ -1,4 +1,4 @@
-// Board solver — proof-tracking negamax (ADR-0068 Phase 4). A fork of ai.ts:negamax that turns the
+// Board solver — proof-tracking negamax (ADR-0069 Phase 4). A fork of ai.ts:negamax that turns the
 // heuristic search into an anytime WEAK-SOLVER: it distinguishes a game-theoretic PROOF
 // (win/loss/draw resolved within the horizon) from a depth-limited heuristic BOUND, accumulates
 // proofs in a transposition table, and marks path REPETITIONS as draws (F8).

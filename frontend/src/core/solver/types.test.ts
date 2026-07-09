@@ -1,4 +1,4 @@
-// Phase-1 CONTRACT-INVARIANT test for the solver wire types (ADR-0068, plan "Contract
+// Phase-1 CONTRACT-INVARIANT test for the solver wire types (ADR-0069, plan "Contract
 // deliverables"). Unlike retrograde.test.ts / feasibility.test.ts (which prove engine
 // OUTPUTS), this file proves the SHAPE contracts every phase relies on:
 //   1. JSON round-trip safety — the streamed SolveProgress / terminal SolveResult / posted

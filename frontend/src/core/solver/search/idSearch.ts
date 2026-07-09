@@ -1,4 +1,4 @@
-// Board solver — the iterative-deepening αβ weak-solver driver (ADR-0068 Phase 4, §1/§3).
+// Board solver — the iterative-deepening αβ weak-solver driver (ADR-0069 Phase 4, §1/§3).
 //
 // The ANYTIME weak-solver from the start: it deepens 1..∞ (bounded), and at every depth it
 // (a) yields progressively deeper PROVEN results, (b) carries a transposition table across

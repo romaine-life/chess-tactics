@@ -1,4 +1,4 @@
-// Board solver — the search-mode phase event vocabulary (ADR-0068 Phase 4 / §7).
+// Board solver — the search-mode phase event vocabulary (ADR-0069 Phase 4 / §7).
 //
 // The αβ decision at a node decomposes into five watchable phases the Phase-2 stepper renders
 // and the Phase-3 worker records: Generate → Order → Descend → Quiesce → BackUp (ADR §7). The

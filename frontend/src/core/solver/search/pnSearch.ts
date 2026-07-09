@@ -1,4 +1,4 @@
-// Board solver — Proof-Number Search (ADR-0068 §1 "PN/PN²"), the specialist prover for a
+// Board solver — Proof-Number Search (ADR-0069 §1 "PN/PN²"), the specialist prover for a
 // stubborn win/loss (its proof/disproof numbers double as a "how close to a proof" signal).
 //
 // OPTIONAL for Phase 4 (the plan ships αβ+TT+cycle first; PN is behind `bounds.prover`,

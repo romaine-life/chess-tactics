@@ -1,6 +1,6 @@
-# 0068 — Board solving is the front of the per-board AI pipeline (bounded, anytime, cluster-backed, with an interactive stepper)
+# 0069 — Board solving is the front of the per-board AI pipeline (bounded, anytime, cluster-backed, with an interactive stepper)
 
-_Status: Accepted (design). Author: agent, for the owner. Written 2026-07-05. Number provisional — reconcile against origin/main at merge (0063/0064 already collide from parallel branches; see the multi-worktree rule). Companion to [docs/per-board-ai-plan.md](../per-board-ai-plan.md)._
+_Status: Accepted (design). Author: agent, for the owner. Written 2026-07-05 as provisional 0068; renumbered to 0069 on 2026-07-08 after origin/main's 0068 (link-copy controls) merged first. Companion to [docs/per-board-ai-plan.md](../per-board-ai-plan.md)._
 
 ## Context
 

@@ -259,7 +259,7 @@ interface RootEntry {
   score: number;
 }
 
-// ─── Solver reuse surface (ADR-0068 Phase 4) ────────────────────────────────────────
+// ─── Solver reuse surface (ADR-0069 Phase 4) ────────────────────────────────────────
 // The board solver's search-mode weak-solver (core/solver/search) forks this file's
 // negamax/quiescence with proof tracking. To do so soundly it must reuse the EXACT
 // budget check, capture ordering, terminal scoring, leaf quiescence, and SearchState

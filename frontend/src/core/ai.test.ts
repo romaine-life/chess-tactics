@@ -178,10 +178,10 @@ describe('evaluateGameState', () => {
   });
 });
 
-// ─── Solver reuse surface (ADR-0068 Phase 4) — export stability ─────────────────────────
+// ─── Solver reuse surface (ADR-0069 Phase 4) — export stability ─────────────────────────
 // The board solver's proof-tracking fork reuses these exports; if a rename/signature drift
 // slips through, this pins the surface so the break shows here, not deep in the solver.
-describe('solver reuse surface exports (ADR-0068 Phase 4)', () => {
+describe('solver reuse surface exports (ADR-0069 Phase 4)', () => {
   it('the reused symbols exist with stable shapes', () => {
     expect(typeof makeSearchState).toBe('function');
     expect(typeof quiesce).toBe('function');

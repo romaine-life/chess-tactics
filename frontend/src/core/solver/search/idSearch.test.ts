@@ -1,4 +1,4 @@
-// Phase-4 iterative-deepening weak-solver tests (ADR-0068). Node-bounded (no wall clock) so the
+// Phase-4 iterative-deepening weak-solver tests (ADR-0069). Node-bounded (no wall clock) so the
 // search is deterministic. vitest v4 hides console.log for passing tests → every claim asserted.
 
 import { describe, it, expect } from 'vitest';

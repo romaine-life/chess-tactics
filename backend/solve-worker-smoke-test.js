@@ -1,4 +1,4 @@
-// Postgres-FREE, cluster-FREE smoke test for the board-solver worker (ADR-0068 Phase 3).
+// Postgres-FREE, cluster-FREE smoke test for the board-solver worker (ADR-0069 Phase 3).
 //
 // Like netplay-smoke-test.js, this runs ANYWHERE in seconds: it drives the real
 // solve-worker.mjs against a tiny hand-checkable level via SOLVE_SPEC (no SOLVE_RUN_ID,

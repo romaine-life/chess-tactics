@@ -1,4 +1,4 @@
-// Board solver — the public engine surface (ADR-0068 §6). The barrel Phase 2 (stepper),
+// Board solver — the public engine surface (ADR-0069 §6). The barrel Phase 2 (stepper),
 // Phase 3 (cluster worker + client), and Phase 4 (search mode) import. Exports all three
 // ADR §6 entrypoints: estimateFeasibility, runSolve, solveStepWithPhases.
 

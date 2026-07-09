@@ -1,4 +1,4 @@
-// Board solver — repetition / cycle detection over the search path (ADR-0068 Phase 4).
+// Board solver — repetition / cycle detection over the search path (ADR-0069 Phase 4).
 //
 // This is the mechanism that PROVES DRAWS in this loopy game (F8): there is no repetition
 // or 50-move rule, so "draw" means "neither side can force a king-capture in finite moves."

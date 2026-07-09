@@ -1,4 +1,4 @@
-// Phase-1 retrograde strong-solver tests (ADR-0068). Tiny, hand-checkable boards with the
+// Phase-1 retrograde strong-solver tests (ADR-0069). Tiny, hand-checkable boards with the
 // EXACT solved value asserted. Vitest v4 hides console.log for passing tests, so every claim
 // is an assertion. Ground truth was cross-checked against the solver's own enumeration and
 // the game rules (kings never adjacent; rival-kings wins on king elimination; the loopy game

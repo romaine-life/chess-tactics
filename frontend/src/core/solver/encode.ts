@@ -1,4 +1,4 @@
-// Board solver — position encoding, enumeration, and decode (ADR-0068 Phase 1, the crux).
+// Board solver — position encoding, enumeration, and decode (ADR-0069 Phase 1, the crux).
 //
 // The piece set is FIXED: a board only ever loses pieces or promotes a pawn (→ queen);
 // no piece is ever added. So a position is fully described by, per slot, either DEAD or

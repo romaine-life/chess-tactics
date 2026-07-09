@@ -1,4 +1,4 @@
-// Cluster board-solver client (ADR-0068 §5). Mirrors backend /api/solve-runs: POST
+// Cluster board-solver client (ADR-0069 §5). Mirrors backend /api/solve-runs: POST
 // persists a SolveSpec and launches a k8s Job on the trainer pool; the Job JSONB-patches
 // feasibility + progress + the final proven value into the row's `body`, which GET reads.
 // Account-scoped. Cloned from net/trainRuns.ts — contract types come from core/solver

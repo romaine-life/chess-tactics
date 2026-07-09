@@ -1,5 +1,5 @@
 // Board solver — retrograde (backward-induction) strong solver + the runSolve /
-// solveStepWithPhases orchestrators (ADR-0068 Phase 1, §1/§3/§4/§6/§7).
+// solveStepWithPhases orchestrators (ADR-0069 Phase 1, §1/§3/§4/§6/§7).
 //
 // Retrograde analysis computes the PERFECT value of every reachable position by seeding
 // terminals and propagating minimax values backward to a fixpoint. This is a LOOPY game

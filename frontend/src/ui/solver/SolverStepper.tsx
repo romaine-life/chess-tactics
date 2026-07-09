@@ -1,4 +1,4 @@
-// The Board Solver bench (ADR-0068 §7 / plan Phase 2) — the Studio viewer surface that lets
+// The Board Solver bench (ADR-0069 §7 / plan Phase 2) — the Studio viewer surface that lets
 // the owner DRIVE a solve and WATCH it think, one named phase at a time, in the exact idiom
 // of the bender-world / eight-queens visualizers: pure runner + producer buffer + rAF clock
 // (lab/solver/*), transport Controls with keyboard map, PhaseBar, per-phase math panels, and

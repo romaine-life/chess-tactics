@@ -1,4 +1,4 @@
-// Phase-4 cycle-detection tests (ADR-0068 F8). vitest v4 hides console.log for passing tests, so
+// Phase-4 cycle-detection tests (ADR-0069 F8). vitest v4 hides console.log for passing tests, so
 // every claim is an assertion. PathHistory is the mechanism that proves DRAWS in this loopy game.
 
 import { describe, it, expect } from 'vitest';
