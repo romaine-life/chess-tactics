@@ -46,11 +46,19 @@ describe('levelEditorDraftKey', () => {
 
 describe('level editor draft codec', () => {
   it('round-trips the board and edit metadata through a compact board code', () => {
-    const parsed = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft()))!;
+    const parsed = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft({ campaignId: 'off-c-crown' })))!;
     expect(parsed.levelName).toBe('Bridge sketch');
+    expect(parsed.campaignId).toBe('off-c-crown');
     expect(parsed.objective).toBe('reach');
     expect(parsed.surviveTurns).toBe(7);
     expect(encodeBoard(parsed.board)).toBe(encodeBoard(baseDraft().board));
+  });
+
+  it('round-trips an explicit unassigned campaign choice and ignores malformed values', () => {
+    expect(parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft({ campaignId: null })))!.campaignId).toBeNull();
+    const raw = JSON.parse(serializeLevelEditorDraft(baseDraft())) as Record<string, unknown>;
+    raw.campaignId = { nope: true };
+    expect(parseLevelEditorDraft(JSON.stringify(raw))!.campaignId).toBeUndefined();
   });
 
   it('round-trips an authored battle clock, and stays untimed when absent', () => {

@@ -6139,6 +6139,7 @@ h1 {
 /* The level's identity (name + OFFICIAL tag) lives with the save workflow. */
 .le-status-level { align-items: end; display: grid; gap: var(--ds-inline-tight); grid-template-columns: minmax(0, 1fr) auto; min-width: 0; }
 .le-status-name-field { display: grid; gap: 6px; min-width: 0; }
+.le-status-campaign-field .le-board-note { margin: 0; }
 .le-official-tag { align-self: end; color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; padding-bottom: 8px; }
 /* Drawn text boxes wear a kit line frame (ADR-0032/0034): the transparent-interior panel-line
    9-slice over the box's own navy surface (a border-box background layer, reaching the frame
@@ -14036,7 +14037,7 @@ button.tileset-relationship-cell {
   justify-content: center;
 }
 
-/* Pinned rail footer — the whole-workspace verbs (New / Import / Save / Publish / Sign-in). */
+/* Pinned rail footer — creation (New Level / New Campaign), then workspace verbs. */
 .ce-rail-actions {
   display: grid;
   gap: 8px;

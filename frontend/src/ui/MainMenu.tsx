@@ -36,11 +36,12 @@ interface MenuTab { slug: string; label: string; href: string; iconSlug: string 
 
 // Product-menu relabels applied over MENU_MODES (which stays the untouched design-catalog
 // source of truth — its widget assets keep their 'campaign-editor'/'level-editor' names).
-// The Editor (/editor) IS the app's single "Editor": level authoring is reached from inside
-// it (Edit Board / + New Board), so the rail presents it simply as "Editor" and no longer
-// carries a separate top-level "Level Editor" tab. The nested level editor (/editor/level)
-// still exists — it's just no longer a front door, only reached by drilling into a level.
-const MENU_TAB_LABELS: Record<string, string> = { 'campaign-editor': 'Editor' };
+// "Editor" remains the campaign/workspace organizer; its pinned actions include the
+// no-decisions shortcut into a blank standalone board.
+const MENU_TAB_LABELS: Record<string, string> = {
+  'campaign-editor': 'Editor',
+};
+
 const MENU_HIDDEN_SLUGS = new Set(['level-editor']);
 
 // The main-menu rail. The Campaign (play) mode is menu-only — not a design-catalog
@@ -107,7 +108,7 @@ function shellDest(path: string): ShellDest | null {
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
   if (path === '/campaign' || path.startsWith('/campaign/')) return 'campaign';
   // The Editor is a settings-twin now (ADR-0065): canonical /editor + legacy /campaigns-next·/campaigns.
-  // The NESTED level editor (/editor/level) is a separate heavy full screen — NOT a shell dest.
+  // The board editor (/editor/level) is a separate heavy full screen — NOT a shell dest.
   if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return 'editor';
   // Solo Skirmish is the map/mode PICKER (a settings-twin); the live board (/play) is full-screen.
   if (path === '/skirmish') return 'skirmish';

@@ -383,8 +383,9 @@ function renderRoute(path: string): ReactElement {
   if (path === '/scene-anim-lab') return <TilesetStudio initialCategory="sceneanim" />;
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
-  // The nested level editor keeps its own heavy full screen (canonical /editor/level; legacy /edit,
-  // /level-editor). Reached only by drilling into a level from the Editor.
+  // The board editor keeps its own heavy full screen (canonical /editor/level; legacy /edit,
+  // /level-editor). Existing levels drill in from the Editor; its pinned New Level action opens
+  // a blank standalone board directly.
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return <LevelEditor />;
   // /campaign (picker), /settings, AND the Editor (canonical /editor; legacy /campaigns-next,
   // /campaigns) all render INSIDE the persistent menu shell — they fall through to the MainMenu
