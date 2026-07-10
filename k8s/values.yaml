@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-3fe5ed97b89daf7f65617a0fff638ea40778ad97ae9bd97a93a3e837eed4b20a"
+  tag: "app-0986e8163214dbc0121bbeb62041341f407424355642350043844ff877713bcc"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add standalone level creation workflow"
-  prNumber: "463"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/463"
-  commit: "57b8543"
+  prTitle: "Fix wall and structure depth ordering"
+  prNumber: "464"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/464"
+  commit: "59a98a6"
 
 name: chess-tactics
 namespace: chess-tactics
