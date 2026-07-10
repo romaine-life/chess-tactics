@@ -40,29 +40,30 @@ block. Use the packs' full content: **displacement/height maps** for real surfac
 doodads. Source packs ship all of these; rendering only the base-color flat was the bug
 this contract corrects.
 
-## Composed terrain and multi-cell surfaces
+## Composed terrain and macrotiles
 
 The runtime board is one composed terrain canvas, but its source data remains layered:
 
 1. Exposed 1x1 tile sides.
-2. The complete 1x1 top bed, which always owns every playable cell.
-3. Visual-only multi-cell surface patches from `EditorBoard.surfacePatches`.
-4. Road and river feature overlays.
-5. Optional grid, cover, doodads, props, units, and tactical overlays.
+2. Exactly one terrain top for every playable cell: either its 1x1 top sprite or an opaque
+   macrotile from `EditorBoard.macroTiles` that owns the cell.
+3. Road and river feature overlays.
+4. Optional grid, cover, doodads, props, units, and tactical overlays.
 
-A surface patch never changes movement, collision, terrain family, or cell addressing. Its
-catalog entry declares a rectangular footprint and one board-space PNG. Generate may place it
-only when every footprint cell belongs to the same generated section and terrain family; patches
-cannot overlap or touch. Painting or resizing the underlying board invalidates a placement that
-no longer fits.
+A macrotile never changes movement, collision, terrain family, or cell addressing. Its catalog
+entry declares a rectangular footprint and one board-space PNG. Generate may place it only when
+every footprint cell belongs to the same generated section and terrain family. Macrotiles may
+touch but cannot overlap. Painting or resizing the underlying board invalidates a placement that
+no longer fits. The logical cells remain available to movement, selection, roads, cover, and
+objects even though their individual top sprites are suppressed.
 
 PixelLab owns the top-down material idea, not board geometry. Raw sources live in
-`docs/art/pixellab-runs/surface-patches/`; `frontend/scripts/build-surface-patches.py` crops and
-projects them into the canonical 96x54 cell plane. The bake seals projection misses, then gives
-each source a controlled palette tie to its production terrain family. The outer half-cell uses
-a deterministic, low-frequency contour and quantized alpha apron, so a patch blends into the
-complete 1x1 bed without exposing a perfect rectangular stamp or requiring a hand-authored
-transition atlas. The editor, play route, read-only viewers, and server thumbnail plan all consume
-the same persisted placements and catalog. The static patch catalog intentionally omits water:
-water joins only after multi-cell patches can animate in lockstep with the underlying family, so a
-continuity patch never turns a living water field into a frozen slab.
+`docs/art/pixellab-runs/macro-tiles/`; `frontend/scripts/build-macro-tiles.py` crops and
+projects them into the canonical 96x54 cell plane. The bake seals projection misses and requires
+every pixel in the projected footprint to be opaque, then gives each source a controlled palette
+tie to its production terrain family. There is no alpha apron and no 1x1 top art underneath: the
+macrotile is the terrain top for its whole footprint. The editor, play route, read-only viewers,
+and server thumbnail plan all consume the same persisted placements and catalog. The static
+macrotile catalog intentionally omits water: water joins only after macrotiles can animate in
+lockstep with the terrain family, so a larger tile never turns a living water field into a frozen
+slab.

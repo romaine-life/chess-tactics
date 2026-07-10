@@ -1,46 +1,45 @@
-import manifest from '../art/surfacePatches.json';
+import manifest from '../art/macroTiles.json';
 import { TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
 import type { TileFamilyId } from './tileSockets';
 
-export interface SurfacePatchAsset {
+export interface MacroTileAsset {
   id: string;
   label: string;
   family: TileFamilyId;
   columns: number;
   rows: number;
   src: string;
-  edgeBlendCells: number;
   weight: number;
 }
 
-export interface SurfacePatchPlacement {
+export interface MacroTilePlacement {
   assetId: string;
   x: number;
   y: number;
 }
 
-export interface SurfacePatchFrame {
+export interface MacroTileFrame {
   left: number;
   top: number;
   width: number;
   height: number;
 }
 
-export const DEFAULT_SURFACE_PATCH_DENSITY = 0.55;
+export const DEFAULT_MACRO_TILE_DENSITY = 0.55;
 
-export const surfacePatchAssets: readonly SurfacePatchAsset[] = manifest.assets.map((asset) => ({
+export const macroTileAssets: readonly MacroTileAsset[] = manifest.assets.map((asset) => ({
   ...asset,
   family: asset.family as TileFamilyId,
 }));
 
-const assetById = new Map(surfacePatchAssets.map((asset) => [asset.id, asset]));
+const assetById = new Map(macroTileAssets.map((asset) => [asset.id, asset]));
 
-export function surfacePatchAsset(id: string): SurfacePatchAsset | undefined {
+export function macroTileAsset(id: string): MacroTileAsset | undefined {
   return assetById.get(id);
 }
 
 /** Tight board-space frame for a projected rectangular cell footprint. */
-export function surfacePatchFrame(asset: Pick<SurfacePatchAsset, 'columns' | 'rows'>): SurfacePatchFrame {
+export function macroTileFrame(asset: Pick<MacroTileAsset, 'columns' | 'rows'>): MacroTileFrame {
   return {
     left: -asset.rows * TILE_STEP_X,
     top: -TILE_STEP_Y,
@@ -49,12 +48,12 @@ export function surfacePatchFrame(asset: Pick<SurfacePatchAsset, 'columns' | 'ro
   };
 }
 
-export function surfacePatchCellIndices(
-  placement: SurfacePatchPlacement,
+export function macroTileCellIndices(
+  placement: MacroTilePlacement,
   columns: number,
   rows: number,
 ): number[] {
-  const asset = surfacePatchAsset(placement.assetId);
+  const asset = macroTileAsset(placement.assetId);
   if (!asset) return [];
   const cells: number[] = [];
   for (let dy = 0; dy < asset.rows; dy += 1) {
@@ -68,7 +67,42 @@ export function surfacePatchCellIndices(
   return cells;
 }
 
-interface GenerateSurfacePatchesOptions {
+interface ResolveMacroTilePlacementsOptions {
+  placements: readonly MacroTilePlacement[] | undefined;
+  columns: number;
+  rows: number;
+  familyAt: (x: number, y: number) => TileFamilyId | undefined;
+}
+
+/**
+ * Resolve the ordered, known placements that may own terrain tops on this board.
+ * Invalid, out-of-bounds, overlapping, and mixed-family footprints are ignored.
+ */
+export function resolveMacroTilePlacements({
+  placements,
+  columns,
+  rows,
+  familyAt,
+}: ResolveMacroTilePlacementsOptions): MacroTilePlacement[] {
+  const occupied = new Set<number>();
+  const accepted: MacroTilePlacement[] = [];
+  const ordered = [...(placements ?? [])]
+    .sort((a, b) => a.y - b.y || a.x - b.x || a.assetId.localeCompare(b.assetId));
+
+  for (const placement of ordered) {
+    const asset = macroTileAsset(placement.assetId);
+    if (!asset || !Number.isInteger(placement.x) || !Number.isInteger(placement.y)) continue;
+    const cells = macroTileCellIndices(placement, columns, rows);
+    if (cells.length !== asset.columns * asset.rows || cells.some((index) => occupied.has(index))) continue;
+    if (cells.some((index) => familyAt(index % columns, Math.floor(index / columns)) !== asset.family)) continue;
+    accepted.push(placement);
+    cells.forEach((index) => occupied.add(index));
+  }
+
+  return accepted;
+}
+
+interface GenerateMacroTilesOptions {
   terrainMap: readonly TileFamilyId[];
   columns: number;
   rows: number;
@@ -76,11 +110,11 @@ interface GenerateSurfacePatchesOptions {
   density?: number;
   sectionOf?: ArrayLike<number>;
   region?: ReadonlySet<number>;
-  assets?: readonly SurfacePatchAsset[];
+  assets?: readonly MacroTileAsset[];
 }
 
 interface Candidate {
-  asset: SurfacePatchAsset;
+  asset: MacroTileAsset;
   x: number;
   y: number;
   cells: number[];
@@ -105,7 +139,7 @@ function shuffle<T>(items: T[], next: () => number): void {
   }
 }
 
-function weightedAsset(assets: readonly SurfacePatchAsset[], next: () => number): SurfacePatchAsset {
+function weightedAsset(assets: readonly MacroTileAsset[], next: () => number): MacroTileAsset {
   const total = assets.reduce((sum, asset) => sum + Math.max(0.05, asset.weight), 0);
   let cursor = next() * total;
   for (const asset of assets) {
@@ -121,19 +155,19 @@ function groupKey(index: number, family: TileFamilyId, sectionOf: ArrayLike<numb
 }
 
 /**
- * Place rare, non-touching macro surfaces inside same-family generated regions.
+ * Pack opaque macrotiles inside same-family generated regions without overlap.
  * The result is deterministic for the same board, seed, and density.
  */
-export function generateSurfacePatches({
+export function generateMacroTiles({
   terrainMap,
   columns,
   rows,
   seed,
-  density = DEFAULT_SURFACE_PATCH_DENSITY,
+  density = DEFAULT_MACRO_TILE_DENSITY,
   sectionOf,
   region,
-  assets = surfacePatchAssets,
-}: GenerateSurfacePatchesOptions): SurfacePatchPlacement[] {
+  assets = macroTileAssets,
+}: GenerateMacroTilesOptions): MacroTilePlacement[] {
   if (columns <= 0 || rows <= 0 || terrainMap.length < columns * rows || assets.length === 0) return [];
   const next = seededRandom((seed ^ 0xa511e9b3) >>> 0);
   const target = region ?? new Set(Array.from({ length: columns * rows }, (_, index) => index));
@@ -148,7 +182,7 @@ export function generateSurfacePatches({
     groups.set(key, group);
   }
 
-  const placements: SurfacePatchPlacement[] = [];
+  const placements: MacroTilePlacement[] = [];
   const reserved = new Set<number>();
   for (const group of groups.values()) {
     const familyAssets = assets.filter((asset) => asset.family === group.family);
@@ -196,7 +230,7 @@ export function generateSurfacePatches({
     const availableAssets = familyAssets.filter((asset) => (candidatesByAsset.get(asset.id)?.length ?? 0) > 0);
     if (availableAssets.length === 0) continue;
     const averageArea = availableAssets.reduce((sum, asset) => sum + asset.columns * asset.rows, 0) / availableAssets.length;
-    // Density is the requested macro-owned share of the region. Non-touching footprints cap
+    // Density is the requested macro-owned share of the region. Non-overlapping footprints cap
     // the achievable result naturally; do not silently damp the user's control a second time.
     const expected = group.cells.size * Math.max(0, Math.min(1, density)) / averageArea;
     let count = Math.floor(expected);
@@ -225,17 +259,7 @@ export function generateSurfacePatches({
 
       placements.push({ assetId: accepted.asset.id, x: accepted.x, y: accepted.y });
       usedAssetIds.add(accepted.asset.id);
-      for (const index of accepted.cells) {
-        const x = index % columns;
-        const y = Math.floor(index / columns);
-        for (let dy = -1; dy <= 1; dy += 1) {
-          for (let dx = -1; dx <= 1; dx += 1) {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx >= 0 && ny >= 0 && nx < columns && ny < rows) reserved.add(ny * columns + nx);
-          }
-        }
-      }
+      for (const index of accepted.cells) reserved.add(index);
     }
   }
 

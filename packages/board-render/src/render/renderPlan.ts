@@ -25,7 +25,7 @@ import { densityFieldAt, groundCoverSet, resolveGroundCover, type GroundCover } 
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
-import { surfacePatchAsset, surfacePatchFrame } from '../core/surfacePatches';
+import { macroTileAsset, macroTileCellIndices, macroTileFrame, resolveMacroTilePlacements } from '../core/macroTiles';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
 const TILE_FRAME_H = TILE_FRAME_HEIGHT;
@@ -40,7 +40,7 @@ const DOODAD_ANCHOR_Y = 69;
 const UNIT_SEAT_W = 72;
 const UNIT_SEAT_H = 86;
 const TERRAIN_TOP_DEPTH_OFFSET = 1000;
-const TERRAIN_PATCH_DEPTH_OFFSET = 2000;
+const TERRAIN_MACRO_TILE_DEPTH_OFFSET = 2000;
 const TERRAIN_FEATURE_DEPTH_OFFSET = 3000;
 export const UNIT_IMG_MAX_W = 78;
 export const UNIT_IMG_MAX_H = 92;
@@ -152,6 +152,18 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       .filter(([, id]) => !!resolveTile(id))
       .map(([key]) => key),
   );
+  const acceptedMacroTiles = resolveMacroTilePlacements({
+    placements: board.macroTiles,
+    columns: board.cols,
+    rows: board.rows,
+    familyAt: (x, y) => familyOfTile(board.cells[`${x},${y}`] ?? ''),
+  });
+  const macroOwnedTerrain = new Set<string>();
+  for (const placement of acceptedMacroTiles) {
+    for (const index of macroTileCellIndices(placement, board.cols, board.rows)) {
+      macroOwnedTerrain.add(`${index % board.cols},${Math.floor(index / board.cols)}`);
+    }
+  }
 
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
@@ -167,7 +179,9 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
         if (drawSide) {
           ops.push({ src: frameSrc.replace(/\.png$/, '-side.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
         }
-        ops.push({ src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
+        if (!macroOwnedTerrain.has(key)) {
+          ops.push({ src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
+        }
       }
 
       const feature = overlays[key];
@@ -225,18 +239,18 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     }
   }
 
-  for (const placement of board.surfacePatches ?? []) {
-    const asset = surfacePatchAsset(placement.assetId);
+  for (const placement of acceptedMacroTiles) {
+    const asset = macroTileAsset(placement.assetId);
     if (!asset) continue;
     const { left, top } = boardLabCellPosition(placement);
-    const frame = surfacePatchFrame(asset);
+    const frame = macroTileFrame(asset);
     ops.push({
       src: asset.src,
       dx: left + frame.left,
       dy: top + frame.top,
       dw: frame.width,
       dh: frame.height,
-      z: TERRAIN_PATCH_DEPTH_OFFSET,
+      z: TERRAIN_MACRO_TILE_DEPTH_OFFSET,
     });
   }
 
@@ -369,13 +383,13 @@ export function boardContentHash(board: RenderBoard): string {
       .sort()
       .map((key) => `${key}=${JSON.stringify(record[key])}`)
       .join(';');
-  const surfacePatches = [...(board.surfacePatches ?? [])]
+  const macroTiles = [...(board.macroTiles ?? [])]
     .sort((a, b) => a.y - b.y || a.x - b.x || a.assetId.localeCompare(b.assetId));
   const parts = [
     `c${board.cols}`,
     `r${board.rows}`,
     `t:${sortedEntries(board.cells)}`,
-    `sp:${JSON.stringify(surfacePatches)}`,
+    `mt:${JSON.stringify(macroTiles)}`,
     `u:${sortedEntries(board.units)}`,
     `d:${sortedEntries(board.doodads)}`,
     `p:${sortedEntries(board.props ?? {})}`,

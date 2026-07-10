@@ -5,7 +5,7 @@
 //
 // Wire shape (keys kept short): { c:cols, r:rows, pf?:playerFaction, fd?:{faction:defaultDir},
 //   f?:fillTileId, t?:{cell:tileId}, h?:[cell], u?:{cell:[unitId,dir,faction]},
-//   d?:{cell:doodadId}, p?:{anchorCell:propId}, sp?:[[patchId,x,y]], v?:{cell:density},
+//   d?:{cell:doodadId}, p?:{anchorCell:propId}, mt?:[[macroTileId,x,y]], v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fe?:{edgeKey:fenceMaterial},
 //   wl?:{edgeKey:wallMaterial}, wa?:{anchorEdgeKey:wallArtId},
 //   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
@@ -23,7 +23,7 @@
 // encodes byte-identically to a code that predates them, and an OLD code decodes them to empty.
 
 import type { GroundCoverDensity } from '../core/groundCover';
-import { surfacePatchAsset, type SurfacePatchPlacement } from '../core/surfacePatches';
+import { macroTileAsset, type MacroTilePlacement } from '../core/macroTiles';
 import { DEFAULT_WALL_MATERIAL, WALL_MATERIALS, type FeatureKind, type FeatureMaterial, type RoadMaterial, type RiverMaterial, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, type WallArtId } from '../core/wallArt';
 import { ZONE_COLORS, ZONE_TYPES, type ZoneColor, type ZoneType } from '../core/level';
@@ -73,8 +73,8 @@ export interface BoardGeneratedRegion {
   buffer: number;
   /** Edge roughness, 0..1. */
   wiggle: number;
-  /** Target density for seamless multi-cell surface variation, 0..1. */
-  surfacePatchDensity?: number;
+  /** Target share of generated terrain owned by opaque macrotiles, 0..1. */
+  macroTileDensity?: number;
 }
 
 export interface EditorBoard {
@@ -85,8 +85,8 @@ export interface EditorBoard {
   /** Per-faction default facing used when the level editor places new units. */
   factionDirections?: BoardFactionDirections;
   cells: Record<string, string>;
-  /** Visual-only top-surface patches spanning several same-family cells. */
-  surfacePatches?: SurfacePatchPlacement[];
+  /** Opaque multi-cell terrain tops that replace the covered 1x1 top sprites. */
+  macroTiles?: MacroTilePlacement[];
   units: Record<string, { unitId: string; direction: string; faction: string }>;
   doodads: Record<string, { doodadId: string }>;
   /** Multi-cell props (trees/houses), keyed by ANCHOR cell "x,y" -> {propId} (mirrors doodads). */
@@ -224,9 +224,9 @@ function isInBoundsCellKey(key: string, cols: number, rows: number): boolean {
   return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < cols && y < rows;
 }
 
-function cleanSurfacePatches(value: unknown, cols: number, rows: number): SurfacePatchPlacement[] {
+function cleanMacroTiles(value: unknown, cols: number, rows: number): MacroTilePlacement[] {
   if (!Array.isArray(value)) return [];
-  const out: SurfacePatchPlacement[] = [];
+  const out: MacroTilePlacement[] = [];
   const seen = new Set<string>();
   for (const raw of value) {
     if (!Array.isArray(raw) || typeof raw[0] !== 'string') continue;
@@ -234,7 +234,7 @@ function cleanSurfacePatches(value: unknown, cols: number, rows: number): Surfac
     const x = Number(raw[1]);
     const y = Number(raw[2]);
     if (!assetId || !Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= cols || y >= rows) continue;
-    const asset = surfacePatchAsset(assetId);
+    const asset = macroTileAsset(assetId);
     if (asset && (x + asset.columns > cols || y + asset.rows > rows)) continue;
     const key = `${assetId}:${x},${y}`;
     if (seen.has(key)) continue;
@@ -244,8 +244,8 @@ function cleanSurfacePatches(value: unknown, cols: number, rows: number): Surfac
   return out.sort((a, b) => a.y - b.y || a.x - b.x || a.assetId.localeCompare(b.assetId));
 }
 
-function encodeSurfacePatches(value: SurfacePatchPlacement[] | undefined, cols: number, rows: number): unknown[] {
-  return cleanSurfacePatches((value ?? []).map((placement) => [placement.assetId, placement.x, placement.y]), cols, rows)
+function encodeMacroTiles(value: MacroTilePlacement[] | undefined, cols: number, rows: number): unknown[] {
+  return cleanMacroTiles((value ?? []).map((placement) => [placement.assetId, placement.x, placement.y]), cols, rows)
     .map((placement) => [placement.assetId, placement.x, placement.y]);
 }
 
@@ -273,7 +273,7 @@ function encodeGeneratedRegions(regions: BoardGeneratedRegion[] | undefined, col
         ]),
         b: region.buffer,
         w: region.wiggle,
-        ...(typeof region.surfacePatchDensity === 'number' ? { m: clamp01(region.surfacePatchDensity) } : {}),
+        ...(typeof region.macroTileDensity === 'number' ? { m: clamp01(region.macroTileDensity) } : {}),
       };
     })
     .filter(Boolean) as unknown[];
@@ -326,7 +326,7 @@ function decodeGeneratedRegions(value: unknown, cols: number, rows: number): Boa
       sections: sections.length ? sections : [{ terrain: 'grass' as TileFamilyId, share: 100, covers: [] }],
       buffer: Math.round(clampNumber(rec.b, 0, 0, 60)),
       wiggle: clamp01(clampNumber(rec.w, 0.5, 0, 1)),
-      ...(typeof rec.m === 'number' ? { surfacePatchDensity: clamp01(rec.m) } : {}),
+      ...(typeof rec.m === 'number' ? { macroTileDensity: clamp01(rec.m) } : {}),
     });
   }
   return out;
@@ -358,8 +358,8 @@ export function encodeBoard(b: EditorBoard): string {
   // Props mirror doodads on the wire: anchor cell -> bare propId. Emitted only when nonEmpty so a
   // prop-free board encodes byte-identically to a pre-props board.
   if (b.props && nonEmpty(b.props)) wire.p = Object.fromEntries(Object.entries(b.props).map(([k, v]) => [k, v.propId]));
-  const surfacePatches = encodeSurfacePatches(b.surfacePatches, b.cols, b.rows);
-  if (surfacePatches.length) wire.sp = surfacePatches;
+  const macroTiles = encodeMacroTiles(b.macroTiles, b.cols, b.rows);
+  if (macroTiles.length) wire.mt = macroTiles;
   if (nonEmpty(b.cover)) wire.v = b.cover;
   // Cover-set overrides ride a separate channel, emitted only when non-empty so a board that never
   // decouples cover from terrain encodes byte-identically to a pre-override code.
@@ -415,7 +415,7 @@ export function decodeBoard(code: string): EditorBoard | null {
     if (w.d) for (const [k, id] of Object.entries(w.d as Record<string, string>)) doodads[k] = { doodadId: id };
     const props: EditorBoard['props'] = {};
     if (w.p) for (const [k, id] of Object.entries(w.p as Record<string, string>)) props[k] = { propId: id };
-    const surfacePatches = cleanSurfacePatches(w.sp, cols, rows);
+    const macroTiles = cleanMacroTiles(w.mt, cols, rows);
     const featureCuts: Record<string, true> = {};
     if (Array.isArray(w.rc)) for (const e of w.rc) featureCuts[e] = true;
     const featureExits: Record<string, true> = {};
@@ -472,7 +472,7 @@ export function decodeBoard(code: string): EditorBoard | null {
     const zones = zoneCellMapFromEntries(zoneEntries);
     const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows);
     return {
-      cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, surfacePatches, units, doodads, props,
+      cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, macroTiles, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
       features,

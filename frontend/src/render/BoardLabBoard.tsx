@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { boardLabCellPosition } from './boardProjection';
 import { BoardGridLayer } from './BoardGridLayer';
-import { BoardTerrainLayer, terrainCanvasPatches, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
+import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { TileGrid } from './TileGrid';
 import { BoardBarrierSceneLayer } from './BoardBarrierSceneLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
@@ -9,7 +9,7 @@ import type { TileSocketAsset } from '../core/tileSockets';
 import { featureFrameSrc } from '../art/tileset';
 import type { ResolvedFenceOverlay, ResolvedWallOverlay } from '../core/featureAutotile';
 import type { WallArtPlacementMap } from '../core/wallArt';
-import type { SurfacePatchPlacement } from '../core/surfacePatches';
+import { resolveMacroTilePlacements, type MacroTilePlacement } from '../core/macroTiles';
 
 // Re-export the projection so existing importers (SkirmishBoard, TilePreview, the
 // thumbnail bake) keep working; the math itself now lives in one place: boardProjection.
@@ -29,7 +29,7 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   className?: string;
   ariaLabel?: string;
   showGrid?: boolean;
-  surfacePatches?: readonly SurfacePatchPlacement[];
+  macroTiles?: readonly MacroTilePlacement[];
   renderCellOverlay?: (context: BoardLabBoardOverlayContext<TAsset>) => ReactNode;
   /**
    * Edge fences resolved to a per-cell rail overlay (E/S mask + material), keyed by "x,y".
@@ -58,7 +58,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   className = '',
   ariaLabel = 'Generated board',
   showGrid = false,
-  surfacePatches,
+  macroTiles,
   renderCellOverlay,
   fenceOverlays,
   wallOverlays,
@@ -70,6 +70,9 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   const sourceCells = board.cells;
   const byKey = new Map<string, SocketBoardCell<TAsset>>(
     sourceCells.map((cell): [string, SocketBoardCell<TAsset>] => [`${cell.x}-${cell.y}`, cell]),
+  );
+  const byCoordinate = new Map<string, SocketBoardCell<TAsset>>(
+    sourceCells.map((cell): [string, SocketBoardCell<TAsset>] => [`${cell.x},${cell.y}`, cell]),
   );
   const occupied = new Set(sourceCells.filter((cell) => cell.asset).map((cell) => `${cell.x}-${cell.y}`));
   const isSideExposed = (cell: SocketBoardCell<TAsset>): boolean => {
@@ -109,6 +112,17 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       children: cell.missing ? <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span> : null,
     };
   });
+  const columns = sourceCells.reduce((max, cell) => Math.max(max, cell.x + 1), 0);
+  const rows = sourceCells.reduce((max, cell) => Math.max(max, cell.y + 1), 0);
+  const resolvedMacroTiles = resolveMacroTilePlacements({
+    placements: macroTiles,
+    columns,
+    rows,
+    familyAt: (x, y) => {
+      const cell = byCoordinate.get(`${x},${y}`);
+      return cell?.asset ? cell.terrain : undefined;
+    },
+  });
 
   return (
     <TileGrid
@@ -119,7 +133,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       boardPan={boardPan}
       backgroundLayer={(
         <>
-          <BoardTerrainLayer cells={terrainCells} patches={terrainCanvasPatches(surfacePatches)} />
+          <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(resolvedMacroTiles)} />
           <BoardBarrierSceneLayer fenceOverlays={fenceOverlays} wallOverlays={wallOverlays} wallArt={wallArt} wallBounds={wallBounds} />
           {sceneLayer}
         </>

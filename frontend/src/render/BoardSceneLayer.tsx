@@ -9,7 +9,7 @@ import type { EditorBoard } from '../ui/boardCode';
 import { BoardCanvasLayer } from './BoardCanvasLayer';
 
 function isTerrainOp(op: BoardDrawOp): boolean {
-  return op.src.includes('/assets/tiles/surface/') || op.src.includes('/assets/tiles/surface-patches/');
+  return op.src.includes('/assets/tiles/surface/') || op.src.includes('/assets/tiles/macro-tiles/');
 }
 
 function isLinearFeatureOp(op: BoardDrawOp): boolean {

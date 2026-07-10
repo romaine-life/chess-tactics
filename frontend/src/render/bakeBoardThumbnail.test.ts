@@ -51,11 +51,11 @@ describe('boardContentHash — stability + sensitivity', () => {
     expect(boardContentHash(before)).not.toBe(boardContentHash(after));
   });
 
-  it('changes when a seamless surface patch is added', () => {
+  it('changes when a macrotile is added', () => {
     const before = { ...blank(), cells: { '0,0': TILE } };
     const after: EditorBoard = {
       ...before,
-      surfacePatches: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
     };
     expect(boardContentHash(before)).not.toBe(boardContentHash(after));
   });
@@ -167,12 +167,18 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
     expect(uniqueDrawSrcs(unknown)).toEqual([]);
   });
 
-  it('a seamless surface patch contributes its shared board-space source', () => {
+  it('a macrotile contributes its board-space source and replaces covered top sources', () => {
+    const cells = Object.fromEntries(
+      Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
+    );
     const board: EditorBoard = {
-      ...blank(),
-      surfacePatches: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
+      ...blank(3, 3),
+      cells,
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
     };
-    expect(uniqueDrawSrcs(board)).toContain('/assets/tiles/surface-patches/grass-soft-bands-3x3.png');
+    const sources = uniqueDrawSrcs(board);
+    expect(sources).toContain('/assets/tiles/macro-tiles/grass-soft-bands-3x3.png');
+    expect(sources.some((source) => source.endsWith('grass-0-top.png'))).toBe(false);
   });
 });
 
@@ -233,22 +239,25 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(back!.dh).toBe(300);
   });
 
-  it('places a shared surface patch above tile tops and below feature overlays', () => {
+  it('replaces every covered 1x1 top with one macrotile below feature overlays', () => {
+    const cells = Object.fromEntries(
+      Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
+    );
     const board: EditorBoard = {
-      ...blank(),
-      cells: { '1,1': TILE },
-      surfacePatches: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
+      ...blank(4, 4),
+      cells: { ...cells, '3,3': TILE },
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
       features: { '1,1': { kind: 'road', material: 'cobble' } },
     };
     const ops = boardDrawOps(board);
-    const tileOp = ops.find((op) => op.src.endsWith('grass-0-top.png'));
-    const patchOp = ops.find((op) => op.src.includes('surface-patches'));
+    const tileOps = ops.filter((op) => op.src.endsWith('grass-0-top.png'));
+    const macroTileOp = ops.find((op) => op.src.includes('macro-tiles'));
     const featureOp = ops.find((op) => op.src.includes('feature') || op.src.includes('road'));
-    expect(tileOp).toBeDefined();
-    expect(patchOp).toBeDefined();
+    expect(tileOps).toHaveLength(1);
+    expect(macroTileOp).toBeDefined();
     expect(featureOp).toBeDefined();
-    expect(patchOp!.z).toBeGreaterThan(tileOp!.z);
-    expect(featureOp!.z).toBeGreaterThan(patchOp!.z);
+    expect(macroTileOp!.z).toBeGreaterThan(tileOps[0].z);
+    expect(featureOp!.z).toBeGreaterThan(macroTileOp!.z);
     expect(featureOp!.z).toBeLessThan(20000);
   });
 

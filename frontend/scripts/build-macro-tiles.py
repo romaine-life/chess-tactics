@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-"""Bake top-down material art into exact multi-cell isometric surface patches.
+"""Bake top-down material art into opaque multi-cell isometric terrain tiles.
 
 Source art owns texture only. This script owns the board geometry, crops sources to the
 footprint aspect ratio, ties each source to its production terrain palette, projects it into
-the canonical 96x54 cell plane, seals projection holes, and applies an organic pixel-art
-apron where the patch blends into the 1x1 terrain bed.
+the canonical 96x54 cell plane, and seals every pixel in the owned top footprint. A macrotile
+replaces its covered 1x1 tops at runtime, so transparency inside the footprint is invalid.
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import math
 from functools import lru_cache
 from pathlib import Path
 
@@ -19,9 +17,9 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
-MANIFEST = ROOT / 'packages' / 'board-render' / 'src' / 'art' / 'surfacePatches.json'
-SOURCE_DIR = ROOT / 'docs' / 'art' / 'pixellab-runs' / 'surface-patches'
-OUTPUT_DIR = ROOT / 'frontend' / 'public' / 'assets' / 'tiles' / 'surface-patches'
+MANIFEST = ROOT / 'packages' / 'board-render' / 'src' / 'art' / 'macroTiles.json'
+SOURCE_DIR = ROOT / 'docs' / 'art' / 'pixellab-runs' / 'macro-tiles'
+OUTPUT_DIR = ROOT / 'frontend' / 'public' / 'assets' / 'tiles' / 'macro-tiles'
 SURFACE_DIR = ROOT / 'frontend' / 'public' / 'assets' / 'tiles' / 'surface'
 
 STEP_X = 48
@@ -36,7 +34,7 @@ REFERENCE_LEFT = (0, 68)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('ids', nargs='*', help='Optional patch ids; defaults to every manifest asset.')
+    parser.add_argument('ids', nargs='*', help='Optional macrotile ids; defaults to every manifest asset.')
     parser.add_argument('--check', action='store_true', help='Validate inputs and geometry without writing outputs.')
     return parser.parse_args()
 
@@ -49,7 +47,7 @@ def load_assets(ids: list[str]) -> list[dict]:
         assets = [asset for asset in assets if asset.get('id') in wanted]
         missing = wanted - {asset.get('id') for asset in assets}
         if missing:
-            raise SystemExit(f'Unknown surface patch ids: {", ".join(sorted(missing))}')
+            raise SystemExit(f'Unknown macrotile ids: {", ".join(sorted(missing))}')
     return assets
 
 
@@ -106,7 +104,7 @@ def tie_to_production_palette(source: Image.Image, family: str, strength: float)
     return Image.fromarray(arr, 'RGBA')
 
 
-def patch_mask(columns: int, rows: int) -> Image.Image:
+def macro_tile_mask(columns: int, rows: int) -> Image.Image:
     width = (columns + rows) * STEP_X
     height = (columns + rows) * STEP_Y
     points = [
@@ -170,89 +168,56 @@ def project(source: Image.Image, columns: int, rows: int) -> Image.Image:
         sy * rows / 2,
     )
     transformed = source.transform((width, height), Image.AFFINE, coefficients, resample=Image.NEAREST)
-    mask = patch_mask(columns, rows)
+    mask = macro_tile_mask(columns, rows)
     output = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     output.paste(transformed, (0, 0), mask)
     return seal_mask(output, mask)
 
 
-def apply_edge_blend(
-    image: Image.Image,
-    patch_id: str,
-    columns: int,
-    rows: int,
-    blend_cells: float,
-    wobble_cells: float,
-) -> Image.Image:
-    if blend_cells <= 0:
-        return image
-    arr = np.array(image).copy()
-    yy, xx = np.indices(arr.shape[:2], dtype=np.float32)
-    # Invert the isometric projection at each pixel centre. u/v are source-plane
-    # coordinates measured in board cells, so every footprint gets the same physical apron.
-    u = ((xx + 0.5) - rows * STEP_X) / CELL_WIDTH + (yy + 0.5) / CELL_HEIGHT
-    v = -((xx + 0.5) - rows * STEP_X) / CELL_WIDTH + (yy + 0.5) / CELL_HEIGHT
-    edge = np.minimum.reduce((u, v, columns - u, rows - v))
-
-    if wobble_cells > 0:
-        digest = hashlib.sha256(patch_id.encode('utf-8')).digest()
-        phase = int.from_bytes(digest[:4], 'big') / 2**32 * math.tau
-        contour = (
-            np.sin((u * 1.7 + v * 0.9) * math.tau + phase) * 0.58
-            + np.sin((u * 3.1 - v * 2.3) * math.tau + phase * 1.7) * 0.28
-            + np.sin((u * 5.3 + v * 4.1) * math.tau + phase * 0.7) * 0.14
+def validate_owned_top(image: Image.Image, columns: int, rows: int, tile_id: str) -> Image.Image:
+    alpha = np.array(image)[:, :, 3]
+    inside = np.array(macro_tile_mask(columns, rows)) > 0
+    missing = inside & (alpha != 255)
+    spill = ~inside & (alpha != 0)
+    if missing.any() or spill.any():
+        raise SystemExit(
+            f'{tile_id}: invalid owned top ({int(missing.sum())} non-opaque interior pixels, '
+            f'{int(spill.sum())} exterior pixels).'
         )
-        edge += contour * wobble_cells
-
-    coverage = np.clip(edge / blend_cells, 0.0, 1.0)
-    coverage = coverage * coverage * (3.0 - 2.0 * coverage)
-    # Sixteen stable opacity steps preserve deliberate pixel clusters without turning the
-    # apron into either a blurry filter or a noisy one-pixel stipple.
-    alpha = np.rint(np.rint(coverage * 15.0) * 255.0 / 15.0).astype(np.uint8)
-    arr[:, :, 3] = np.where(arr[:, :, 3] > 0, alpha, 0)
-    return Image.fromarray(arr, 'RGBA')
+    return image
 
 
 def main() -> None:
     args = parse_args()
     assets = load_assets(args.ids)
     if not assets:
-        raise SystemExit('No surface patch assets selected.')
+        raise SystemExit('No macrotile assets selected.')
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for asset in assets:
-        patch_id = asset['id']
+        tile_id = asset['id']
         columns = int(asset['columns'])
         rows = int(asset['rows'])
-        edge_blend_cells = float(asset.get('edgeBlendCells', 0.65))
-        edge_wobble_cells = float(asset.get('edgeWobbleCells', 0.08))
         palette_match = float(asset.get('paletteMatch', 0.8))
         if columns < 2 or rows < 2:
-            raise SystemExit(f'{patch_id}: surface patches must span at least 2x2 cells.')
-        source_path = SOURCE_DIR / f'{patch_id}.png'
+            raise SystemExit(f'{tile_id}: macrotiles must span at least 2x2 cells.')
+        source_path = SOURCE_DIR / f'{tile_id}.png'
         if not source_path.exists():
-            raise SystemExit(f'{patch_id}: missing source {source_path.relative_to(ROOT)}')
+            raise SystemExit(f'{tile_id}: missing source {source_path.relative_to(ROOT)}')
         with Image.open(source_path) as source_image:
             cropped = crop_to_footprint(source_image, columns, rows)
             palette_tied = tie_to_production_palette(cropped, asset['family'], palette_match)
-            baked = apply_edge_blend(
-                project(palette_tied, columns, rows),
-                patch_id,
-                columns,
-                rows,
-                edge_blend_cells,
-                edge_wobble_cells,
-            )
+            baked = validate_owned_top(project(palette_tied, columns, rows), columns, rows, tile_id)
         expected = ((columns + rows) * STEP_X, (columns + rows) * STEP_Y)
         if baked.size != expected:
-            raise SystemExit(f'{patch_id}: expected {expected}, got {baked.size}')
-        output_path = OUTPUT_DIR / f'{patch_id}.png'
+            raise SystemExit(f'{tile_id}: expected {expected}, got {baked.size}')
+        output_path = OUTPUT_DIR / f'{tile_id}.png'
         if args.check:
             if not output_path.exists():
-                raise SystemExit(f'{patch_id}: missing committed output {output_path.relative_to(ROOT)}')
+                raise SystemExit(f'{tile_id}: missing committed output {output_path.relative_to(ROOT)}')
             with Image.open(output_path) as committed_image:
                 committed = committed_image.convert('RGBA')
             if committed.size != baked.size or not np.array_equal(np.array(committed), np.array(baked)):
-                raise SystemExit(f'{patch_id}: committed output is stale; run npm run assets:build:surface-patches')
+                raise SystemExit(f'{tile_id}: committed output is stale; run npm run assets:build:macro-tiles')
         else:
             baked.save(output_path, optimize=True)
         mode = 'checked' if args.check else 'wrote'

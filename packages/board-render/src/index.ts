@@ -49,7 +49,7 @@ export * from './core/unitSpriteRegistry';
 export * from './core/playRoutePresentation';
 export * from './core/props';
 export * from './core/structureArt';
-export * from './core/surfacePatches';
+export * from './core/macroTiles';
 export * from './core/tileSockets';
 export * from './core/types';
 export * from './core/wallArt';

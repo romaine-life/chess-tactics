@@ -14,7 +14,7 @@
     "e2e:lobby": "node scripts/lobby-e2e.mjs",
     "vendor:ambience": "node scripts/vendor-ambience.mjs",
     "assets:diagnose:terrain": "node scripts/diagnose-terrain-assets.mjs",
-    "assets:build:surface-patches": "python scripts/build-surface-patches.py",
+    "assets:build:macro-tiles": "python scripts/build-macro-tiles.py",
     "optimize:assets": "node scripts/optimize-main-menu-assets.mjs",
     "units:sprites": "node scripts/generate-unit-sprites.mjs",
     "units:normalize-concepts": "node scripts/normalize-unit-direction-concepts.mjs",
