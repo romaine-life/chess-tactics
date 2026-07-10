@@ -1,4 +1,5 @@
 import { normalizeRoutePath } from './navigation';
+import { isPlaySelectorPath } from './playHubRoute';
 
 export type RouteSurface = 'heavy-board' | 'heavy-editor' | 'light-art' | 'light-plain';
 
@@ -18,9 +19,7 @@ export function routeSurface(pathname: string): RouteSurface {
     // must classify with '/' or leaving them skips the exit dissolve (ADR-0051).
     path === '/menu-next' ||
     path === '/main-menu' ||
-    path === '/skirmish' ||
-    path === '/campaign' ||
-    path.startsWith('/campaign/') ||
+    isPlaySelectorPath(path) ||
     path === '/editor' ||
     path === '/campaigns-next' ||
     path === '/campaigns' ||
@@ -56,7 +55,7 @@ export function isLightArtRoute(pathname: string): boolean {
 // chrome for those would blink a screen that never remounts.
 export function routeScreenKey(pathname: string): string {
   const path = normalizeRoutePath(pathname);
-  // /settings, /campaign, the Editor (/editor + legacy /campaigns-next·/campaigns), /skirmish, AND
+  // /settings, /play/select/*, the Editor (/editor + legacy /campaigns-next·/campaigns), AND
   // /lobbies all render INSIDE the persistent menu shell (MainMenu) — same 'menu' screen key as '/',
   // so React keeps the one MainMenu instance mounted across the home↔destination hop and the button
   // column never dissolves/remounts. MainMenu reads the path and fills its second column with that
@@ -64,8 +63,8 @@ export function routeScreenKey(pathname: string): string {
   // (/editor/level, legacy /edit·/level-editor) is its own heavy full screen and keeps its own key.
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return 'level-editor';
   if (path === '/studio' || path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return 'studio';
-  // Each remaining explicit renderRoute entry is its own screen… (/skirmish is NOT here: the Solo
-  // Skirmish PICKER is a shell dest now, falling through to 'menu'; only the live board /play is here.)
+  // Each remaining explicit renderRoute entry is its own screen… (the Play selector is NOT here:
+  // /play/select/* falls through to 'menu'; only the live board at exact /play is here.)
   if (
     path === '/play' ||
     path === '/portrait-editor' ||

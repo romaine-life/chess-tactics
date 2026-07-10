@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createBlankLevel, type Campaign } from '../core/level';
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
-import { createDefaultSkirmishProfileLevel } from './skirmishProfiles';
+import { SKIRMISH_PROFILE_ID_PREFIX } from './skirmishProfiles';
 
 describe('skirmish map selection', () => {
   it('lists saved levels that are not referenced by any campaign', () => {
     const campaignLevel = createBlankLevel('l-campaign', 'Campaign Level');
     const ruins = createBlankLevel('l-ruins', 'Ruins');
     const arena = createBlankLevel('l-arena', 'Arena');
-    const profile = createDefaultSkirmishProfileLevel();
+    const profile = createBlankLevel(`${SKIRMISH_PROFILE_ID_PREFIX}classic`, 'Classic Skirmish');
     const campaigns: Campaign[] = [{
       formatVersion: 1,
       id: 'c1',
@@ -27,6 +27,6 @@ describe('skirmish map selection', () => {
   });
 
   it('builds a non-campaign play link for saved maps', () => {
-    expect(playSkirmishLevelHref('map id')).toBe('/play?levelId=map%20id&mode=skirmish&returnTo=%2Fskirmish');
+    expect(playSkirmishLevelHref('map id')).toBe('/play?levelId=map%20id&mode=skirmish&returnTo=%2Fplay%2Fselect%2Fskirmish');
   });
 });

@@ -6,6 +6,7 @@
 // the cluster. Every shipping surface (Studio + dev/inspector tools included) is on
 // the shared bar; there is no opt-out set, and the function never returns null.
 import { playRouteScreenName } from '@chess-tactics/board-render';
+import { isPlaySelectorPath } from '../playHubRoute';
 
 export interface TitleBarConfig {
   screenName: string;
@@ -42,11 +43,13 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
   // Dev / inspector tools — the shared bar with just brand + account cluster.
   if (path === '/portrait-editor') return { screenName: 'Portrait Editor' };
 
-  if (path === '/play' || path === '/skirmish') {
+  if (path === '/play') {
     // studSlot lets a single-player battle turn the ornament diamond into a Retry button
-    // (the Skirmish screen portals it in, netplay omitted). The map-picker (/skirmish)
-    // simply never fills it, so its diamond stays the plain decoration.
+    // (the Skirmish screen portals it in, netplay omitted).
     return { screenName: playRouteScreenName({ path, search }), barClass: 'skirmish-topbar', centerSlot: true, studSlot: true };
+  }
+  if (isPlaySelectorPath(path)) {
+    return { screenName: 'Play', signInReturnTo: path, barClass: 'main-menu-twin-header' };
   }
   if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     return { screenName: 'Lobbies', signInReturnTo: '/lobbies' };
@@ -74,9 +77,6 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     // every return control sits with the account/settings cluster. settings-topbar adds the
     // 3rd grid column (brand · actions · cluster) that slot needs.
     return { screenName: 'Settings', signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled settings-topbar', actionsSlot: true };
-  }
-  if (path === '/campaign' || path.startsWith('/campaign/')) {
-    return { screenName: 'Campaign', signInReturnTo: '/campaign', barClass: 'main-menu-twin-header' };
   }
   // Fallback: the Main Menu — renderRoute's default for any unmatched path.
   return { screenName: 'Main Menu', signInReturnTo: '/', barClass: 'main-menu-twin-header' };

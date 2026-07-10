@@ -5,13 +5,13 @@
 // the click-time download.
 
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
+import { isPlaySelectorPath } from './playHubRoute';
 
 // The Pixi-heavy / larger surfaces are code-split so the menu, lobbies, etc. don't
 // pull the renderer bundle (preserving app.js's lazy-mount behaviour). The raw
 // import() thunks are named so the same chunk can be *prefetched* on hover/focus and
 // consumed by App's lazy() at click time.
 export const importSkirmish = () => import('./Skirmish');
-export const importSkirmishMapPicker = () => import('./SkirmishMapPicker');
 export const importCampaignEditor = () => import('./CampaignEditor');
 export const importTilePreview = () => import('./TilePreview');
 export const importLevelEditor = () => import('./LevelEditor');
@@ -22,7 +22,6 @@ export const importPortraitEditor = () => import('./PortraitEditor');
 // bundle, nothing to warm.
 function chunkForPath(path: string): (() => Promise<unknown>) | null {
   if (path === '/play') return importSkirmish;
-  if (path === '/skirmish') return importSkirmishMapPicker;
   if (path === '/studio' || path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return importTilePreview;
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return importLevelEditor;
   if (path === '/portrait-editor') return importPortraitEditor;
@@ -40,12 +39,11 @@ export function prefetchRoute(path: string): void {
     prefetched.add(thunk);
     void thunk();
   }
-  // Warm route DATA the same way (ADR-0051): the Campaign play screen holds its reveal
-  // on the campaign store hydrating, and the skirmish map picker's "Loading maps."
-  // window shrinks with it — so start that fetch at hover/focus intent; by click time
-  // the store is usually populated. ensureCampaignsHydrated is self-deduping, so
-  // repeat intent events are free.
-  if (path === '/campaign' || path.startsWith('/campaign/') || path === '/skirmish') {
+  // Warm the shared Play selector's DATA on intent (ADR-0051): its one hydration
+  // lifecycle supplies Skirmish, standalone Levels, and Campaigns. By click time the
+  // store is usually populated. ensureCampaignsHydrated is self-deduping, so repeat
+  // intent events are free.
+  if (isPlaySelectorPath(path)) {
     void ensureCampaignsHydrated();
   }
 }

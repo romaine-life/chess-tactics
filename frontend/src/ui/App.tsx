@@ -21,7 +21,6 @@ import {
   importLevelEditor,
   importPortraitEditor,
   importSkirmish,
-  importSkirmishMapPicker,
   importTilePreview,
   prefetchRoute,
 } from './routePrefetch';
@@ -32,7 +31,6 @@ import {
 // hover/focus warm-up) and are consumed by lazy() at click time — the module
 // registry dedupes, so warming === the click-time download.
 const Skirmish = lazy(() => importSkirmish().then((m) => ({ default: m.Skirmish })));
-const SkirmishMapPickerRoute = lazy(() => importSkirmishMapPicker().then((m) => ({ default: m.SkirmishMapPickerRoute })));
 const CampaignEditor = lazy(() => importCampaignEditor().then((m) => ({ default: m.CampaignEditor })));
 const TilesetStudio = lazy(() => importTilePreview().then((m) => ({ default: m.TilesetStudio })));
 const LevelEditor = lazy(() => importLevelEditor().then((m) => ({ default: m.LevelEditor })));
@@ -55,8 +53,8 @@ const EXIT_HOLD_FAILSAFE_MS = 4000;
 
 // React router replacing app.js's string-HTML router. Same-origin app links are
 // intercepted below so route changes keep the document, React tree, and BGM
-// audio element alive. Legacy paths (/skirmish, /level-editor, /campaigns,
-// /menu-next, /main-menu) resolve to React surfaces.
+// audio element alive. The selector lives at /play/select/* while exact /play stays
+// the live board; legacy editor/menu paths still resolve to their React surfaces.
 export function App(): ReactElement {
   const [path, setPath] = useState<string>(() => normalizeRoutePath(window.location.pathname));
   const [search, setSearch] = useState<string>(() => window.location.search);
@@ -358,8 +356,6 @@ export function App(): ReactElement {
 
 function renderRoute(path: string): ReactElement {
   if (path === '/play') return <Skirmish />;
-  // /skirmish (the Solo Skirmish picker) now renders INSIDE the persistent menu shell — it falls
-  // through to the MainMenu default below, sharing the 'menu' key so the button column stays mounted.
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   // /unit-studio is a deep-link alias into the Studio's embedded Unit Art
   // Viewer editor. The Studio canonicalises it to /studio after mount.
@@ -387,10 +383,10 @@ function renderRoute(path: string): ReactElement {
   // /level-editor). Existing levels drill in from the Editor; its pinned New Level action opens
   // a blank standalone board directly.
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return <LevelEditor />;
-  // /campaign (picker), /settings, AND the Editor (canonical /editor; legacy /campaigns-next,
+  // /play/select/*, /settings, AND the Editor (canonical /editor; legacy /campaigns-next,
   // /campaigns) all render INSIDE the persistent menu shell — they fall through to the MainMenu
   // default below, sharing the 'menu' screen key so the button column stays mounted. MainMenu fills
-  // its second column with each destination's own columns (Settings / Campaign / Editor).
+  // its second column with each destination's own columns (Play / Settings / Editor).
   // /lobbies now renders INSIDE the persistent menu shell (MainMenu fills its second column with the
   // lobbies action column). Falls through to the MainMenu default below, sharing the 'menu' key.
   if (path === '/party') return <Party />;

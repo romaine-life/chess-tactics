@@ -8,8 +8,8 @@ controls are backed by real behavior and real data.
 > The editor is now the app's single **"Editor"** at the route **`/editor`** (the level editor
 > nests at **`/editor/level`**), and it renders through the **shared menu/settings shell** — a
 > `.settings-shell` rail of campaign tabs + a single scrolling content column with the live
-> preview pinned on top — as a fourth settings-twin (menu · Settings · Campaign · Editor),
-> mirroring `Campaign.tsx`. This **supersedes the bespoke `campaign-editor/*` panel-art chrome
+> preview pinned on top — as a fourth settings-twin (menu · Settings · Play · Editor),
+> mirroring the Campaign section in `PlayMenu.tsx`. This **supersedes the bespoke `campaign-editor/*` panel-art chrome
 > direction below** (the `panel-large` / `row-campaign` / `preview-frame` / `footer-bar` /
 > `button-*` source-sheet program): the frames, tabs, rows, and buttons now come from the shared
 > 9-slice kit (`panel.png` / `panel-line.png` / `mode-button.png`). The **Non-Negotiables and the

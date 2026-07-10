@@ -122,7 +122,6 @@ import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf 
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
-import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
 import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 
@@ -2238,7 +2237,6 @@ export function LevelEditor(): ReactElement {
       if (!active) return;
       setUserWorkspaceHydration(userWorkspaceAvailable ? 'ready' : 'unavailable');
       setOfficialWorkspaceHydration(officialWorkspaceAvailable ? 'ready' : 'unavailable');
-      ensureDefaultSkirmishProfileLevel();
       if (routeParams.mapId) return;
       if (loadedBoard || !routeParams.levelId) {
         setEditorReady(true);

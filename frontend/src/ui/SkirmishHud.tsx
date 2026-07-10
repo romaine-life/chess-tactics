@@ -144,18 +144,18 @@ function CountPip({ side, count }: { side: Side; count: number }) {
 }
 
 type SkirmishHudProps = {
-  /** Show the (+) button — free skirmish or single-player test/attempt loops. */
+  /** Show the (+) button for authored non-campaign or single-player test/attempt loops. */
   canStartNewSkirmish?: boolean;
-  /** In-place restart of the CURRENT battle (campaign level or free skirmish). Non-null only
+  /** In-place restart of the CURRENT authored battle. Non-null only
    *  in single-player; shown as the ↻ Restart button. Same action as the title-bar diamond. */
   onRestart?: (() => void) | null;
   /** Accessible name for the Restart button (e.g. "Restart level" / "Restart skirmish"). */
   restartLabel?: string;
-  /** Start a new attempt for the CURRENT scenario. Defaults to a fresh free skirmish. */
+  /** Start a new attempt for the CURRENT authored scenario. */
   onNewSkirmish?: (() => void) | null;
   /** Accessible name for the New button (e.g. "New attempt" / "New skirmish"). */
   newSkirmishLabel?: string;
-  /** Show the battle-clock picker. Free skirmishes edit the saved pref; playtests edit this attempt. */
+  /** Show the battle-clock picker. Skirmish profiles edit the saved pref; playtests edit this attempt. */
   showClockControl?: boolean;
   clockControlValue?: TimeControl | null;
   onClockControlChange?: (value: TimeControl | null) => void;
@@ -469,7 +469,7 @@ export function SkirmishHud({
               </div>
               <p className="skirmish-grid-hint">Keys work any time during the match.</p>
             </div>
-            {/* Battle clock: free skirmishes edit the saved preference; editor/test boards edit
+            {/* Battle clock: skirmish profiles edit the saved preference; editor/test boards edit
                 the next attempt directly so the + button uses exactly what's visible here. */}
             {showClockControl && canStartNewSkirmish && !net ? (
               <div className="skirmish-view-group">

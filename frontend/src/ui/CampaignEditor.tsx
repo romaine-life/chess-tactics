@@ -17,7 +17,7 @@ import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { KitScroll } from './KitScroll';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
-import { editSkirmishProfileHref, ensureDefaultSkirmishProfileLevel, isSkirmishProfileLevel, skirmishProfileLevels } from './skirmishProfiles';
+import { editSkirmishProfileHref, isSkirmishProfileLevel, skirmishProfileLevels } from './skirmishProfiles';
 
 const CE_ICONS = {
   favorite: '/assets/ui/kit/icons/brand-shield.png',
@@ -28,7 +28,7 @@ const CE_ICONS = {
   pencil: '/assets/ui/kit/icons/pencil.png',
 } as const;
 
-// The carved rail-tab icon, shared with the play-side Campaign screen (Campaign.tsx) so a
+// The carved rail-tab icon, shared with the play-side Campaign section (PlayMenu.tsx) so a
 // campaign looks identical whether you're picking one to play or one to edit.
 const CAMPAIGN_TAB_ICON = '/assets/ui/main-menu/icons-carved/campaign-editor.png';
 
@@ -316,7 +316,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   const [selectedCollection, setSelectedCollection] = useState<CampaignCollection>('campaign');
   const { ask, dialog: confirmDialog } = useConfirm();
   // Entrance readiness (ADR-0051): the shared store may already hold campaigns from a
-  // /campaign or /skirmish visit this session — then there's real content at mount and
+  // /play/select visit this session — then there's real content at mount and
   // nothing holds; otherwise hold the fade until the officials merge settles.
   const [loaded, setLoaded] = useState(() => useCampaigns.getState().campaigns.length > 0);
   const [userWorkspaceHydration, setUserWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
@@ -392,7 +392,6 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       if (!active) return;
       setUserWorkspaceHydration(userReady ? 'ready' : 'unavailable');
       setOfficialWorkspaceHydration(officialReady ? 'ready' : 'unavailable');
-      if (userReady) ensureDefaultSkirmishProfileLevel();
       // Dev-only perf harness: `?stress=<n>` injects a throwaway campaign of N generated levels
       // (selecting it) so scroll/thumbnail perf can be measured on a long list. No-op without the
       // flag, so it never touches normal use; the levels live only in the in-memory store.
@@ -639,10 +638,9 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       setStatus('Your workspace is unavailable. Reopen the Editor to retry.');
       return;
     }
-    ensureDefaultSkirmishProfileLevel();
     setSelectedCollection('skirmish-profiles');
     const selectedIsStillProfile = selectedLevelId && profileLevels.some((level) => level.id === selectedLevelId);
-    const nextLevelId = selectedIsStillProfile ? selectedLevelId : profileLevels[0]?.id ?? ensureDefaultSkirmishProfileLevel().id;
+    const nextLevelId = selectedIsStillProfile ? selectedLevelId : profileLevels[0]?.id;
     if (nextLevelId) useCampaigns.getState().selectLevel(nextLevelId);
     else useCampaigns.setState({ selectedLevelId: null });
   };
@@ -785,6 +783,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                   {isSkirmishProfilesSelected ? (
                     <SettingsSection title="Skirmish Profiles">
                       <div className="ce-level-list" data-testid="skirmish-profiles">
+                        {profileLevelRefs.length === 0 ? <p className="ce-empty">No authored skirmish profiles.</p> : null}
                         {profileLevelRefs.map((ref, index) => (
                           <LevelRow
                             key={ref.levelId}
