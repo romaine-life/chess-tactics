@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { searchBestAction, searchEnemyMove, evaluateGameState, DEFAULT_EVAL_WEIGHTS, type SearchContext } from './ai';
+import {
+  searchBestAction, searchEnemyMove, evaluateGameState, DEFAULT_EVAL_WEIGHTS, type SearchContext,
+  makeSearchState, quiesce, captureValue, terminalScore, outOfBudget, WIN_SCORE, WIN_SCORE_PLY_SLACK,
+} from './ai';
 import { createRng } from './rng';
 import type { GameState, Piece, PieceType, Side } from './types';
 
@@ -172,6 +175,40 @@ describe('evaluateGameState', () => {
     // Normalize away the guard pawn's material + distance terms by comparing the
     // victim's safety directly: reconstruct both scores minus material.
     expect(hangingPenalty).toBeLessThan(evaluateGameState(defended, sctx(), w) - w.pieceValues.pawn + 0.5);
+  });
+});
+
+// ─── Solver reuse surface (ADR-0069 Phase 4) — export stability ─────────────────────────
+// The board solver's proof-tracking fork reuses these exports; if a rename/signature drift
+// slips through, this pins the surface so the break shows here, not deep in the solver.
+describe('solver reuse surface exports (ADR-0069 Phase 4)', () => {
+  it('the reused symbols exist with stable shapes', () => {
+    expect(typeof makeSearchState).toBe('function');
+    expect(typeof quiesce).toBe('function');
+    expect(typeof captureValue).toBe('function');
+    expect(typeof terminalScore).toBe('function');
+    expect(typeof outOfBudget).toBe('function');
+    expect(WIN_SCORE).toBe(10_000);
+    expect(WIN_SCORE_PLY_SLACK).toBe(1_000);
+    // terminalScore(winner, ply) === ±(WIN_SCORE - ply); draw === 0.
+    expect(terminalScore('player', 3)).toBe(WIN_SCORE - 3);
+    expect(terminalScore('enemy', 3)).toBe(-(WIN_SCORE - 3));
+    expect(terminalScore('draw', 3)).toBe(0);
+    // captureValue: victim value for a capture, -1 for a non-capture.
+    const pieces = [piece('victim', 'player', 'rook', 4, 4)];
+    expect(captureValue({ x: 4, y: 4, capture: 'victim' }, pieces, DEFAULT_EVAL_WEIGHTS.pieceValues)).toBe(5);
+    expect(captureValue({ x: 4, y: 4 }, pieces, DEFAULT_EVAL_WEIGHTS.pieceValues)).toBe(-1);
+  });
+
+  it('makeSearchState builds a state the budget check reads (Infinity deadline with no time budget)', () => {
+    const s = makeSearchState({}, sctx(), { maxNodes: 10 });
+    expect(s.nodes).toBe(0);
+    expect(s.maxNodes).toBe(10);
+    expect(s.deadline).toBe(Infinity);
+    expect(outOfBudget(s)).toBe(false);
+    s.nodes = 10;
+    expect(outOfBudget(s)).toBe(true); // nodes >= maxNodes trips the budget.
+    expect(s.aborted).toBe(true);
   });
 });
 

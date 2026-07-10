@@ -24,3 +24,18 @@ export { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
 export type { EvalWeights, SearchOptions } from '../core/ai';
 export { createBlankLevel } from '../core/level';
 export type { Level } from '../core/level';
+
+// Board solver shared contracts (ADR-0069). Only the `const` arrays/helpers are runtime;
+// everything else is `export type`, so nothing here pulls DOM into the SSR bundle.
+export type {
+  Value, Outcome, FeasibilityReport, SolveVerdict, SolveMode, SolveBounds, SolveSpec,
+  SolveProgress, ProvenCounts, RootBounds, SolveResult, PieceValueReport, PieceValueEntry,
+  TablebaseRef, SolveStep, RetrogradeStep, SearchStep, SolvePhaseName,
+} from '../core/solver/types';
+export { RETROGRADE_PHASES, SEARCH_PHASES, SOLVE_VERDICTS, SOLVE_MODES, flipOutcome, isRetrogradeStep, isSearchStep } from '../core/solver/types';
+
+// Board solver runtime (Phase 3, ADR-0069). The callable engine the cluster solve-worker
+// (backend/solve-worker.mjs) imports from the built bundle: estimateFeasibility gates the
+// mode, runSolve dispatches retrograde/search per SolveSpec.mode. Pure core/solver graph —
+// core/* + game/setup.ts only — so this stays DOM/pixi/react-free in the SSR bundle.
+export { estimateFeasibility, runSolve } from '../core/solver';

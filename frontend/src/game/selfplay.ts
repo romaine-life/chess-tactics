@@ -201,7 +201,7 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
  * first, so index 0 is the game position where recorded decisions began; index i
  * is the board after record.moves[i-1].
  */
-export function replayStates(level: Level, record: GameRecord, openingMoves: readonly RecordedMove[] = []): GameState[] {
+export function replayStates(level: Level, record: Pick<GameRecord, 'seed' | 'moves'>, openingMoves: readonly RecordedMove[] = []): GameState[] {
   let game = createFromLevel(level, record.seed);
   for (const m of openingMoves) {
     game = recordPosition(applyMove(game, m.pieceId, m.move).state);
