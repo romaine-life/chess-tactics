@@ -1,6 +1,7 @@
 # Tiaraed Queen (source)
 
-Source for the active queen unit (`frontend/public/assets/units/queen/blender-render-tiara/`).
+Source for the active queen design. Renders go to `.unit-art-output/queen/navy-blue/`
+before upload through Unit Art.
 
 - `queen_tiara.blend` — the **hand-assembled** source of truth: a navy Staunton queen
   (chess queen, axis-baked + normalized + navy-styled) wearing a jeweled gold **tiara**

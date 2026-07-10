@@ -101,10 +101,10 @@ serviceAccount: chess-tactics
 # itself still serves.
 serviceAccountClientId: "f9efb041-8b45-4cba-8f79-6a9546f73da1"
 
-# Azure Database for PostgreSQL — the durable game/design document store
-# (levels, campaigns, campaign workspaces, design portfolios). Art assets are
-# committed files, not database rows. Provisioned by tofu/ (postgres.tf +
-# identity.tf). host/database/user are deterministic from tofu and pre-filled;
+# Azure Database for PostgreSQL - the durable game/design store (levels,
+# campaigns, workspaces, portfolios, and live asset metadata). Asset bytes live
+# in Blob Storage. Provisioned by tofu/ (postgres.tf + identity.tf).
+# host/database/user are deterministic from tofu and pre-filled;
 # confirm against the outputs after apply:
 #   host     <- terraform output postgres_fqdn
 #   database <- terraform output postgres_database_name
@@ -128,6 +128,15 @@ postgres:
 # stream from <baseUrl>/<file>. Empty disables BGM (e.g. before it is populated).
 bgm:
   baseUrl: "https://chesstacticsmedia.blob.core.windows.net/bgm"
+
+# Private content-addressed PNG storage for live Unit Studio assets. The backend
+# reads/writes this container with workload identity and serves same-origin image
+# routes to the browser.
+unitAssets:
+  containerUrl: "https://chesstacticsmedia.blob.core.windows.net/unit-assets"
+  # Test slots copy the live catalog into their isolated Postgres + local blob
+  # directory at startup because slot service accounts never receive prod identity.
+  seedCatalogUrl: "https://chess.romaine.life/api/unit-catalog"
 
 ingress:
   gatewayName: main

@@ -3,16 +3,16 @@
 // the heavy library studios + manifests live in TilePreview.tsx and are never
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
-import { DoodadSprite } from '../render/BoardDoodad';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
-import { FenceOverlayLayer, WallOverlayLayer } from '../render/FenceOverlayLayer';
+import { BoardSceneLayer } from '../render/BoardSceneLayer';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
-import { BoardTerrainLayer, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
-import { studioBoardSprites, studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
+import { BoardGridLayer } from '../render/BoardGridLayer';
+import { BoardTerrainLayer, terrainCanvasMacroTiles, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
+import { studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
 import { NavButton } from './shared/NavButton';
@@ -55,6 +55,7 @@ import {
   rookDirectionLabel,
   rookDirections,
   unitAssets,
+  unitAssetById,
   type Direction,
   type Faction,
   type UnitAsset,
@@ -67,19 +68,35 @@ import {
   type StudioFamily,
 } from './studioBoard';
 import { featureThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
-import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
+import { resolveFeatureOverlays, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, wallArtBadge, wallArtItems, wallArtLabel, wallArtSpanEdges, wallArtSpanForId, type WallArtId } from '../core/wallArt';
 import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
 import { scatterTerrainDetailed } from '../core/terrainScatter';
 import { createRng } from '../core/rng';
+import {
+  DEFAULT_MACRO_TILE_BREAKUP,
+  DEFAULT_MACRO_TILE_DENSITY,
+  breakMacroTilesAtCell,
+  generateMacroTiles,
+  macroTileAsset,
+  macroTileAssets,
+  macroTileCellIndices,
+  macroTileFrame,
+  resolveMacroTilePlacements,
+  type MacroTileAsset,
+  type MacroTilePlacement,
+} from '../core/macroTiles';
 import { SliderRow } from './dressing/SliderRow';
-import { GroundCoverLayer } from '../render/GroundCoverLayer';
-import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
+import { objectBaseZIndex, structureFrontZIndex } from '../render/sceneDepth';
+import { groundCoverSet, type GroundCoverDensity } from '../core/groundCover';
 import { UNIT_PALETTE_LABELS, UNIT_PALETTES, isUnitPalette, type UnitPalette } from '../core/pieces';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
+import { createFromLevel } from '../game/setup';
+import { attackedSquares, blockedCandidateSquares, enemyThreats, gameEnv, legalMoves, type MoveEnv } from '../core/rules';
+import type { GameState, Move, Piece, Vec } from '../core/types';
 import { OBJECTIVE_LABEL } from '../core/objectives';
 import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
@@ -107,6 +124,7 @@ import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
 import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
+import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -117,6 +135,57 @@ type BoardUnitPlacement = {
 type MoveSubject =
   | { kind: 'unit'; x: number; y: number }
   | { kind: 'prop'; x: number; y: number; propId: string };
+
+type BoardViewOverlayFlags = {
+  showMoves: boolean;
+  showEnemyAttacks: boolean;
+  showBlocked: boolean;
+  showPromotionZones: boolean;
+};
+
+type BoardTacticalPreview = {
+  moveSet: Set<string>;
+  threatSet: Set<string>;
+  blockedSet: Set<string>;
+  promotionZoneSet: Set<string>;
+  focusKey: string | null;
+};
+
+const emptyTacticalPreview = (): BoardTacticalPreview => ({
+  moveSet: new Set(),
+  threatSet: new Set(),
+  blockedSet: new Set(),
+  promotionZoneSet: new Set(),
+  focusKey: null,
+});
+
+const vecKey = (vec: Vec): string => `${vec.x},${vec.y}`;
+const vecSet = (tiles: readonly Vec[]): Set<string> => new Set(tiles.map(vecKey));
+
+function tacticalPreviewForGame(
+  game: GameState | null,
+  env: MoveEnv | null,
+  focusPiece: Piece | null,
+  flags: BoardViewOverlayFlags,
+): BoardTacticalPreview {
+  if (!game || !env) return emptyTacticalPreview();
+  const focusMoves: Move[] = focusPiece ? legalMoves(focusPiece, game.pieces, game.size, env) : [];
+  const moveSet = flags.showMoves ? vecSet(focusMoves) : new Set<string>();
+  const threatSet = flags.showEnemyAttacks
+    ? vecSet(focusPiece?.side === 'enemy' ? attackedSquares(focusPiece, game.pieces, game.size, env) : enemyThreats(game.pieces, game.size, env))
+    : new Set<string>();
+  const legal = new Set(focusMoves.map(vecKey));
+  const blockedSet = flags.showBlocked && focusPiece
+    ? vecSet(blockedCandidateSquares(focusPiece, game.pieces, game.size, env).filter((tile) => !legal.has(vecKey(tile))))
+    : new Set<string>();
+  return {
+    moveSet,
+    threatSet,
+    blockedSet,
+    promotionZoneSet: flags.showPromotionZones ? vecSet(game.promotionZones ?? []) : new Set<string>(),
+    focusKey: focusPiece ? `${focusPiece.x},${focusPiece.y}` : null,
+  };
+}
 
 // Unified editable board: every Studio view renders through this. It's a full
 // clickable grid seeded from whatever was loaded (a tile, a transition, a
@@ -129,10 +198,14 @@ function StudioEditableBoard({
   units: placedUnits,
   doodads: placedDoodads,
   props: placedProps = {},
+  macroTiles: placedMacroTiles = [],
   features: placedFeatures = {},
   fences: placedFences = {},
   walls: placedWalls = {},
   wallArt: placedWallArt = {},
+  cover: placedCover = {},
+  coverTypes: placedCoverTypes = {},
+  coverSeed = 1234,
   fenceTool = false,
   wallTool = false,
   wallArtTool = false,
@@ -151,6 +224,8 @@ function StudioEditableBoard({
   selectedCell,
   boardZoom,
   boardPan,
+  showGrid = false,
+  tacticalPreview,
   animationFrame,
   onPaint,
   onErase,
@@ -158,7 +233,7 @@ function StudioEditableBoard({
   onMove,
   canMoveTo,
   propBrush,
-  overlay,
+  macroTileBrush,
   hidden,
   regionCells,
   onRegionStart,
@@ -170,6 +245,8 @@ function StudioEditableBoard({
   doodads: Record<string, { doodadId: string }>;
   /** Multi-cell props keyed by ANCHOR cell "x,y" -> {propId}. */
   props?: Record<string, { propId: string }>;
+  /** Opaque multi-cell terrain tops that replace the covered 1x1 top sprites. */
+  macroTiles?: readonly MacroTilePlacement[];
   /** Linear-feature overlays (roads + rivers) keyed by "x,y" -> {kind, material, mask}. */
   features?: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
   /** Edge fences keyed by shared-edge key (roadEdgeKey) -> fence material — drawn as edge rails. */
@@ -178,6 +255,12 @@ function StudioEditableBoard({
   walls?: Record<string, WallMaterial>;
   /** Wall art keyed by anchor edge; spans across N north/west perimeter wall edges. */
   wallArt?: Record<string, WallArtId>;
+  /** Painted ground-cover densities keyed by cell. */
+  cover?: Record<string, GroundCoverDensity>;
+  /** Optional per-cell ground-cover family overrides. */
+  coverTypes?: Record<string, TileFamilyId>;
+  /** Scatter seed for live ground-cover placement. */
+  coverSeed?: number;
   /** When true, the brush paints EDGES (fences) not cells: hover picks the nearest diamond edge. */
   fenceTool?: boolean;
   /** When true, the brush paints EDGES (walls) not cells: hover picks the nearest diamond edge. */
@@ -206,6 +289,8 @@ function StudioEditableBoard({
   selectedCell: { x: number; y: number } | null;
   boardZoom: number;
   boardPan: { x: number; y: number };
+  showGrid?: boolean;
+  tacticalPreview?: BoardTacticalPreview;
   animationFrame: number;
   onPaint: (x: number, y: number) => void;
   onErase: (x: number, y: number) => void;
@@ -216,7 +301,8 @@ function StudioEditableBoard({
   canMoveTo?: (subject: MoveSubject, to: { x: number; y: number }) => boolean;
   /** When the prop brush is armed: its def + a placeability test, used for the footprint hover. */
   propBrush?: { def: PropDef; canPlaceAt: (ax: number, ay: number) => boolean } | null;
-  overlay?: ReactNode;
+  /** When a composite terrain brush is armed, preview its full footprint at the hovered anchor. */
+  macroTileBrush?: MacroTileAsset | null;
   /** Per-layer visibility — a true value hides that layer's elements on the board. */
   hidden?: { tile: boolean; unit: boolean; doodad: boolean };
   /** Cells currently selected ("x,y" keys) — drawn as a tinted diamond overlay. */
@@ -232,9 +318,7 @@ function StudioEditableBoard({
   // Edge-fence painting: which diamond side is under the cursor (the rail will drop there).
   const [hoverEdge, setHoverEdge] = useState<{ x: number; y: number; edge: FeatureEdge } | null>(null);
   const edgeTool = fenceTool || wallTool || wallArtTool;
-  const fenceOverlayMap = resolveFenceOverlays(placedFences);
   const wallBounds = { cols, rows };
-  const wallOverlayMap = resolveWallOverlays(placedWalls, wallBounds);
   const applyTool = (x: number, y: number) => {
     if (tool === 'brush') onPaint(x, y);
     else if (tool === 'erase') onErase(x, y);
@@ -356,6 +440,13 @@ function StudioEditableBoard({
       const isMoveTo = tool === 'move' && !!movingFrom && !isMoveFrom && hoverCell?.x === x && hoverCell?.y === y;
       const moveDroppable = isMoveTo && movingFrom ? (canMoveTo ? canMoveTo(movingFrom, { x, y }) : true) : false;
       const fenceHere = edgeTool && hoverEdge?.x === x && hoverEdge?.y === y ? hoverEdge.edge : null;
+      const tacticalState = tacticalPreview ? [
+        tacticalPreview.promotionZoneSet.has(key) ? 'is-promotion-zone' : '',
+        tacticalPreview.moveSet.has(key) ? 'is-move' : '',
+        tacticalPreview.threatSet.has(key) ? 'is-threat' : '',
+        tacticalPreview.blockedSet.has(key) ? 'is-blocked-candidate' : '',
+        tacticalPreview.focusKey === key ? 'is-focused-piece' : '',
+      ].filter(Boolean).join(' ') : '';
       cells.push({
         key,
         x,
@@ -377,6 +468,7 @@ function StudioEditableBoard({
                 <line x1={EDGE_LINE[fenceHere][0]} y1={EDGE_LINE[fenceHere][1]} x2={EDGE_LINE[fenceHere][2]} y2={EDGE_LINE[fenceHere][3]} />
               </svg>
             ) : null}
+            {tacticalState ? <span className={`le-tactical-cell ${tacticalState}`} aria-hidden="true" /> : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             {isMoveFrom ? <span className="tileset-cell-ring is-move-from" aria-hidden="true" /> : null}
             {isMoveTo ? <span className={`tileset-cell-ring ${moveDroppable ? 'is-move-ok' : 'is-move-blocked'}`} aria-hidden="true" /> : null}
@@ -424,44 +516,37 @@ function StudioEditableBoard({
     }
   }
 
-  // Units + doodads render at GRID level via the SHARED seat (.board-unit-seat) and the
-  // shared <DoodadSprite> through `studioBoardSprites` — exactly the same seating the read-only
-  // viewer uses, so they can't drift. The editor injects a transparent doodad hit target
-  // alongside each prop: the doodad stands UP above its foot cell and the shared sprite is
-  // pointer-events:none, so clicking the visible body would otherwise fall through to the cell
-  // behind it. The hit routes the tool to the doodad's OWN cell; transparent in brush mode so
-  // painting still flows to the tiles underneath, catching clicks only while erasing/selecting.
-  const overlaySprites: ReactNode[] = studioBoardSprites({
-    units: placedUnits,
-    doodads: placedDoodads,
-    resolveUnit,
-    resolveDoodad,
-    hidden,
-    renderDoodadExtra: ({ x: cx, y: cy, left, top, zIndex }) => (
-      <span
-        key={`dd-hit-${cx},${cy}`}
-        className="tileset-doodad-hit"
-        style={{ position: 'absolute', left, top, zIndex: zIndex + 20002, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' || tool === 'move' || movingFrom ? 'none' : 'auto' }}
-        onPointerDown={(event) => {
-          if (event.button === 2) return;
-          event.stopPropagation();
-          if (tool !== 'select') paintingRef.current = true;
-          applyTool(cx, cy);
-        }}
-        onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
-      />
-    ),
-  });
+  // Board art now renders through BoardSceneLayer. These remaining DOM nodes are editor-only
+  // hit targets for tall bodies whose visible pixels extend beyond their owning tile.
+  const overlaySprites: ReactNode[] = [];
+  if (!hidden?.doodad) {
+    for (const key of Object.keys(placedDoodads)) {
+      const [cx, cy] = key.split(',').map(Number);
+      const { left, top } = boardLabCellPosition({ x: cx, y: cy });
+      overlaySprites.push(
+        <span
+          key={`dd-hit-${cx},${cy}`}
+          className="tileset-doodad-hit"
+          style={{ position: 'absolute', left, top, zIndex: objectBaseZIndex({ x: cx, y: cy }) + 2, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' || tool === 'move' || movingFrom ? 'none' : 'auto' }}
+          onPointerDown={(event) => {
+            if (event.button === 2) return;
+            event.stopPropagation();
+            if (tool !== 'select') paintingRef.current = true;
+            applyTool(cx, cy);
+          }}
+          onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
+        />,
+      );
+    }
+  }
 
-  // Multi-cell props: the tall PropSprite (back/front halves) seated over its footprint, plus a
-  // Studio-only hit target spanning the footprint's screen bbox so a click on the prop body routes
-  // select/erase to the OWNING ANCHOR (the shared sprite is pointer-events:none, so otherwise the
-  // click falls through to whatever cell is behind it).
+  // Multi-cell props use a Studio-only hit target spanning the footprint's screen bbox so a click
+  // on the prop body routes select/erase to the OWNING ANCHOR.
   for (const [key, placement] of Object.entries(placedProps)) {
+    if (hidden?.doodad) continue;
     const def = resolveProp(placement.propId);
     if (!def) continue; // unknown prop id — skip (matches the renderer/collision skip)
     const [ax, ay] = key.split(',').map(Number);
-    overlaySprites.push(<PropSprite key={`prop-${key}`} prop={{ x: ax, y: ay, propId: placement.propId }} def={def} />);
     // Footprint screen bbox: project all footprint cell centres, take their extent, pad to the
     // diamond half-width/height. zIndex above the front-most cell's sprite so clicks land on it.
     const cells = propCells(ax, ay, def);
@@ -470,7 +555,7 @@ function StudioEditableBoard({
     const maxLeft = Math.max(...pts.map((p) => p.left));
     const minTop = Math.min(...pts.map((p) => p.top));
     const maxTop = Math.max(...pts.map((p) => p.top));
-    const frontZ = (ax + def.w - 1) + (ay + def.h - 1) + 20000;
+    const frontZ = structureFrontZIndex({ x: ax + def.w - 1, y: ay + def.h - 1 });
     overlaySprites.push(
       <span
         key={`prop-hit-${key}`}
@@ -543,6 +628,79 @@ function StudioEditableBoard({
     );
   }
 
+  if (macroTileBrush && tool === 'brush' && hoverCell) {
+    const placeable = hoverCell.x + macroTileBrush.columns <= cols && hoverCell.y + macroTileBrush.rows <= rows;
+    for (let dy = 0; dy < macroTileBrush.rows; dy += 1) {
+      for (let dx = 0; dx < macroTileBrush.columns; dx += 1) {
+        const x = hoverCell.x + dx;
+        const y = hoverCell.y + dy;
+        if (x >= cols || y >= rows) continue;
+        const { left, top, zIndex } = boardLabCellPosition({ x, y });
+        overlaySprites.push(
+          <span
+            key={`macro-ghostcell-${x},${y}`}
+            className={`le-prop-ghost-cell ${placeable ? 'is-ok' : 'is-blocked'}`}
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left,
+              top,
+              zIndex: zIndex + 19000,
+              width: TILE_TEMPLATE.stepX * 2,
+              height: TILE_TEMPLATE.stepY * 2,
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              clipPath: 'polygon(50% 0, 100% 50%, 50% 100%, 0 50%)',
+              boxShadow: `inset 0 0 0 2px ${placeable ? 'rgba(80,220,140,.95)' : 'rgba(240,90,90,.95)'}`,
+              background: placeable ? 'rgba(80,220,140,.12)' : 'rgba(240,90,90,.18)',
+            }}
+          />,
+        );
+      }
+    }
+    const anchor = boardLabCellPosition(hoverCell);
+    const frame = macroTileFrame(macroTileBrush);
+    overlaySprites.push(
+      <img
+        key="macro-ghost-sprite"
+        src={macroTileBrush.src}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        style={{
+          position: 'absolute',
+          left: anchor.left + frame.left,
+          top: anchor.top + frame.top,
+          width: frame.width,
+          height: frame.height,
+          opacity: placeable ? 0.62 : 0.22,
+          imageRendering: 'pixelated',
+          pointerEvents: 'none',
+          zIndex: 19001,
+        }}
+      />,
+    );
+  }
+
+  const sceneBoard: EditorBoard = {
+    cols,
+    rows,
+    cells: placed,
+    macroTiles: [...placedMacroTiles],
+    units: placedUnits,
+    doodads: placedDoodads,
+    props: placedProps,
+    cover: placedCover,
+    coverTypes: placedCoverTypes,
+    features: placedFeatures as EditorBoard['features'],
+    fences: placedFences,
+    walls: placedWalls,
+    wallArt: placedWallArt,
+    featureCuts: {},
+    featureExits: {},
+    zones: {},
+  };
+
   return (
     <TileGrid
       cells={cells}
@@ -550,13 +708,19 @@ function StudioEditableBoard({
       ariaLabel="Editable tile board"
       boardZoom={boardZoom}
       boardPan={boardPan}
-      backgroundLayer={<BoardTerrainLayer cells={terrainCells} />}
+      backgroundLayer={(
+        <>
+          <BoardTerrainLayer
+            cells={terrainCells}
+            macroTiles={hidden?.tile ? [] : terrainCanvasMacroTiles(placedMacroTiles)}
+          />
+          <BoardSceneLayer board={sceneBoard} hidden={hidden} coverSeed={coverSeed} ambientCover={false} omitTerrain />
+        </>
+      )}
       onPointerUp={endInteraction}
       onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
     >
-      {overlay}
-      <WallOverlayLayer overlays={wallOverlayMap} wallArt={placedWallArt} bounds={wallBounds} />
-      <FenceOverlayLayer overlays={fenceOverlayMap} />
+      {showGrid ? <BoardGridLayer cells={cells} /> : null}
       {overlaySprites}
     </TileGrid>
   );
@@ -584,6 +748,28 @@ const leFamilyAssets = studioFamilies.reduce((acc, family) => {
 }, {} as Record<TileFamilyId, readonly StudioAsset[]>);
 const leAllTiles = studioFamilies.flatMap((family) => family.assets);
 const leFamilyOfTile = (id: string): StudioFamily | undefined => studioFamilies.find((family) => family.assets.some((asset) => asset.id === id));
+const leMacroTileFootprints = [...new Set(macroTileAssets.map((asset) => `${asset.columns}x${asset.rows}`))];
+const leMacroTilesFor = (family: TileFamilyId, footprint: string): readonly MacroTileAsset[] =>
+  macroTileAssets.filter((asset) => asset.family === family && `${asset.columns}x${asset.rows}` === footprint);
+const validMacroTilesForBoard = (board: EditorBoard): MacroTilePlacement[] => {
+  const known = resolveMacroTilePlacements({
+    placements: board.macroTiles,
+    columns: board.cols,
+    rows: board.rows,
+    familyAt: (x, y) => leFamilyOfTile(board.cells[`${x},${y}`] ?? '')?.id,
+  });
+  const unknown = (board.macroTiles ?? []).filter((placement) =>
+    !macroTileAsset(placement.assetId)
+    && Number.isInteger(placement.x)
+    && Number.isInteger(placement.y)
+    && placement.x >= 0
+    && placement.y >= 0
+    && placement.x < board.cols
+    && placement.y < board.rows,
+  );
+  return [...known, ...unknown]
+    .sort((a, b) => a.y - b.y || a.x - b.x || a.assetId.localeCompare(b.assetId));
+};
 // The terrain families the Generate (scatter) panel offers as toggles, in display order.
 const LE_SCATTER_FAMILIES: ReadonlyArray<{ id: TileFamilyId; label: string }> = [
   { id: 'grass', label: 'Grass' },
@@ -603,13 +789,21 @@ const DEFAULT_COVER: CoverKnobs = { amount: 0.6, amountRandom: 0.3, density: 0.4
 // SET (decoupled from terrain) plus its own scatter knobs. `expanded` is UI state. Per cell the
 // first listed entry whose Coverage roll hits wins, so several entries read as a MIX across the region.
 type CoverEntry = { id: number; type: GroundCoverId; expanded: boolean; knobs: CoverKnobs };
-type ScatterRow = { id: number; terrain: TileFamilyId; share: number; locked: boolean; covers: CoverEntry[] };
+type ScatterRow = {
+  id: number;
+  terrain: TileFamilyId;
+  share: number;
+  locked: boolean;
+  covers: CoverEntry[];
+  macroTileDensity: number;
+  macroTileBreakup: number;
+};
 // The three ground-cover sets that have art, offered on every region regardless of its terrain.
 const LE_COVER_TYPES = GROUND_COVER_ASSETS;
 const isGroundCoverId = (id: string): id is GroundCoverId => GROUND_COVER_ASSETS.some((asset) => asset.id === id);
 const defaultScatterRows = (): ScatterRow[] => [
-  { id: 0, terrain: 'grass', share: 60, locked: false, covers: [{ id: 1, type: 'grass', expanded: false, knobs: { ...DEFAULT_COVER } }] },
-  { id: 1, terrain: 'stone', share: 40, locked: false, covers: [] },
+  { id: 0, terrain: 'grass', share: 60, locked: false, covers: [{ id: 1, type: 'grass', expanded: false, knobs: { ...DEFAULT_COVER } }], macroTileDensity: DEFAULT_MACRO_TILE_DENSITY, macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP },
+  { id: 1, terrain: 'stone', share: 40, locked: false, covers: [], macroTileDensity: DEFAULT_MACRO_TILE_DENSITY, macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP },
 ];
 const regionCellSort = (a: string, b: string): number => {
   const [ax, ay] = a.split(',').map(Number);
@@ -625,6 +819,8 @@ const scatterRowsToGeneratedSections = (rows: ScatterRow[]): BoardGeneratedRegio
     share: row.share,
     locked: row.locked || undefined,
     covers: row.covers.map((cover) => ({ type: cover.type, knobs: { ...cover.knobs } })),
+    macroTileDensity: row.macroTileDensity,
+    macroTileBreakup: row.macroTileBreakup,
   }));
 const nextGeneratedRegionName = (regions: readonly BoardGeneratedRegion[]): string => {
   const used = new Set(regions.map((region) => region.name));
@@ -759,7 +955,7 @@ const CHESS_MATERIAL_POINT_VALUE: Record<PlayablePieceType, number> = {
 };
 const MATERIAL_VALUE_NOTE = 'P=1 / N,B=3 / R=5 / Q=9';
 const materialPointsForUnitId = (unitId: string): number => {
-  const type = (leUnitAssets.find((unit) => unit.id === unitId) ?? unitAssets.find((unit) => unit.id === unitId))?.family;
+  const type = unitAssetById(unitId)?.family;
   return type ? CHESS_MATERIAL_POINT_VALUE[type] : 0;
 };
 
@@ -1629,6 +1825,7 @@ export function LevelEditor(): ReactElement {
   const [adminAuditEvents, setAdminAuditEvents] = useState<EditorMapAuditEvent[]>([]);
   const [adminAuditLoading, setAdminAuditLoading] = useState(false);
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
+  const [boardMacroTiles, setBoardMacroTiles] = useState<MacroTilePlacement[]>(() => initialBoard ? validMacroTilesForBoard(initialBoard) : []);
   const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
   const [boardRows, setBoardRows] = useState(initialBoard?.rows ?? LE_ROWS);
   const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() =>
@@ -1637,6 +1834,8 @@ export function LevelEditor(): ReactElement {
   const [boardFactionDirections, setBoardFactionDirections] = useState<FactionDirections>(() => initialFactionDirections);
   const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move' | 'region'>(toolForLayer(initialLayer));
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
+  const [macroTileBrushId, setMacroTileBrushId] = useState<string | null>(null);
+  const [macroTileFootprint, setMacroTileFootprint] = useState(leMacroTileFootprints[0] ?? '2x2');
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   // Marquee region selection — the scope a Generate fills. "x,y" cell keys; empty ⇒ whole board.
   const [regionSelection, setRegionSelection] = useState<Set<string>>(() => new Set());
@@ -1652,6 +1851,11 @@ export function LevelEditor(): ReactElement {
   const [scatterWiggle, setScatterWiggle] = useState(0.5);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [showGrid, setShowGrid] = useState(false);
+  const [showMoves, setShowMoves] = useState(true);
+  const [showEnemyAttacks, setShowEnemyAttacks] = useState(true);
+  const [showBlocked, setShowBlocked] = useState(false);
+  const [showPromotionZones, setShowPromotionZones] = useState(false);
   const [brushKind, setBrushKind] = useState<BrushKind>(initialBrushKind);
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((initialBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
@@ -1742,26 +1946,26 @@ export function LevelEditor(): ReactElement {
   // skirmish runs the player's chess clock (the enemy is untimed). Seeded like the other RULES
   // fields: a restored draft (present ⇒ on, with its authored seconds) beats the campaign level.
   const initialTimeControl = localDraft?.timeControl ?? initialCampaignLevel?.timeControl ?? urlTimeControl;
-  const [clockEnabled, setClockEnabled] = useState<boolean>(
+  const [clockEnabled, setClockEnabledState] = useState<boolean>(
     localDraft ? localDraft.timeControl !== undefined : initialCampaignLevel ? initialCampaignLevel.timeControl !== undefined : urlTimeControl !== undefined,
   );
-  const [clockInitialSeconds, setClockInitialSeconds] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
-  const [clockIncrementSeconds, setClockIncrementSeconds] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
+  const [clockInitialSeconds, setClockInitialSecondsState] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
+  const [clockIncrementSeconds, setClockIncrementSecondsState] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
   // Victory conditions (ADR-0064): `victory` is the working win/lose lists — always the truth for
   // this level's outcome, edited in the RULES panel. Seeded from the objective preset for a level
   // that never customized them; a level stores `victory` only when the lists diverge from that
   // preset (see victoryForSave), which keeps preset levels' bodies clean and out of the dirty check.
-  const [victory, setVictory] = useState<VictoryRules>(
+  const [victory, setVictoryState] = useState<VictoryRules>(
     localDraft?.victory ?? initialCampaignLevel?.victory ?? urlVictory ?? victoryRulesForObjective(objective, { surviveTurns }),
   );
-  const [events, setEvents] = useState<LevelEvents>(() =>
+  const [events, setEventsState] = useState<LevelEvents>(() =>
     normalizeLevelEvents(localDraft?.events ?? (initialCampaignLevel ? effectiveLevelEvents(initialCampaignLevel) : urlEvents ?? [])),
   );
   // The victory-events editor opens as a full-size overlay over the board — the narrow control
   // panel can't give rule authoring room to breathe. The panel stays put; a button opens this.
   const [eventsOpen, setEventsOpen] = useState(false);
   // The template dropdown choices append event rows; Clear is the explicit page-local reset.
-  const [templateChoice, setTemplateChoice] = useState<ObjectiveType>(objective);
+  const [templateChoice, setTemplateChoiceState] = useState<ObjectiveType>(objective);
   const [otherTemplateChoice, setOtherTemplateChoice] = useState<OtherEventTemplateId>('pawn-promotion');
   // The events overlay's tab: victory rules (win/lose events) vs other events (spawn/promotion).
   const [eventsTab, setEventsTab] = useState<'victory' | 'other'>('victory');
@@ -1770,13 +1974,33 @@ export function LevelEditor(): ReactElement {
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name is edited in
   // Status, beside the save workflow; `savedSig` is the level signature at last save, the dirty basis.
   const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId);
-  const [levelName, setLevelName] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? 'Untitled level');
+  const [levelName, setLevelNameState] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? 'Untitled level');
   const levelNameForSave = useMemo(() => levelName.trim() || 'Untitled level', [levelName]);
   const [savedSig, setSavedSig] = useState<string | null>(localDraft?.savedSig ?? (initialCampaignLevel ? levelSignature(initialCampaignLevel) : null));
   // Set true once a campaign level has been hydrated into the board state; the baseline effect
   // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
   // clean even for a legacy level whose derived boardCode differs from its saved one).
   const needsBaselineRef = useRef(false);
+  // Which rules-panel fields the user has explicitly authored. The mount-time document
+  // loads resolve asynchronously, and the ADR-0046 entrance failsafe makes the editor
+  // interactive while they are still in flight — so every user-facing rules setter routes
+  // through an authoring wrapper below, and a late seed skips whatever the user already
+  // authored instead of silently clobbering it (see levelEditorRulesSeed.ts). The raw
+  // set*State setters stay reserved for document loads/seeds.
+  const authoredRulesRef = useRef<Set<AuthoredRulesField>>(new Set());
+  // Set when a seed withheld authored fields: the clean baseline below must then anchor on
+  // the seeded DOCUMENT's rules (via seededBaselineLevel), not the merged on-screen state,
+  // so the user's authored delta reads dirty and flows into drafts/saves.
+  const seedSkewRef = useRef<LevelRulesSeed | null>(null);
+  const authorRulesField = <T,>(field: AuthoredRulesField, set: Dispatch<SetStateAction<T>>) =>
+    (next: SetStateAction<T>): void => { authoredRulesRef.current.add(field); set(next); };
+  const setVictory = authorRulesField('victory', setVictoryState);
+  const setEvents = authorRulesField('events', setEventsState);
+  const setLevelName = authorRulesField('name', setLevelNameState);
+  const setClockEnabled = authorRulesField('clock', setClockEnabledState);
+  const setClockInitialSeconds = authorRulesField('clock', setClockInitialSecondsState);
+  const setClockIncrementSeconds = authorRulesField('clock', setClockIncrementSecondsState);
+  const setTemplateChoice = authorRulesField('templateChoice', setTemplateChoiceState);
   const [quietDraftRestore] = useState(() => consumeNewBuildReloadIntent());
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
@@ -1845,6 +2069,7 @@ export function LevelEditor(): ReactElement {
     setStatusLog((prev) => [entry, ...prev].slice(0, STATUS_LOG_LIMIT));
   };
   const readOnlyLiveMap = Boolean(remoteMapId && !remoteMapCanEdit);
+  const liveMapUnavailable = Boolean(routeParams.mapId && liveSyncState === 'error' && remoteMapRevision === null);
 
   const applyRemoteMapMetadata = (doc: EditorMapDocument): void => {
     setRemoteMapId(doc.public_id);
@@ -1857,11 +2082,36 @@ export function LevelEditor(): ReactElement {
     setRemoteMapCreator(doc.creator ?? null);
   };
 
-  const applyLevelDocument = (level: Level, options: { editingId?: string; clean?: boolean } = {}): void => {
+  // Apply a level document's rules-panel state. A LOAD is the user explicitly opening a
+  // document: it replaces everything and resets authorship. A SEED is a mount-time load
+  // resolving late (campaign hydrate / ?map= fetch): fields the user authored while it was
+  // in flight are kept — both orderings then converge on "loaded document + the user's
+  // edit" — and seedSkewRef records the seeded rules so the clean-baseline capture can
+  // still anchor on the document.
+  const applyLevelRules = (level: Level, mode: 'seed' | 'load'): void => {
+    if (mode === 'load') authoredRulesRef.current.clear();
+    const guarded = guardRulesSeed(levelRulesSeed(level), authoredRulesRef.current);
+    const seed = guarded.seed;
+    setObjective(seed.objective);
+    setSurviveTurns(seed.surviveTurns);
+    if (guarded.apply.templateChoice) setTemplateChoiceState(seed.objective);
+    if (guarded.apply.clock) {
+      setClockEnabledState(seed.clock.enabled);
+      setClockInitialSecondsState(seed.clock.initialSeconds);
+      setClockIncrementSecondsState(seed.clock.incrementSeconds);
+    }
+    if (guarded.apply.victory) setVictoryState(seed.victory);
+    if (guarded.apply.events) setEventsState(seed.events);
+    if (guarded.apply.name) setLevelNameState(seed.name);
+    seedSkewRef.current = mode === 'seed' && guarded.skippedAuthored ? seed : null;
+  };
+
+  const applyLevelDocument = (level: Level, options: { editingId?: string; clean?: boolean; seed?: boolean } = {}): void => {
     const board = levelToEditorBoard(level);
     setBoardCols(board.cols);
     setBoardRows(board.rows);
     setBoardCells(board.cells);
+    setBoardMacroTiles(validMacroTilesForBoard(board));
     setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
     setBoardDoodads(board.doodads);
     setBoardProps(board.props);
@@ -1881,16 +2131,8 @@ export function LevelEditor(): ReactElement {
     setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
     setUndoStack([]);
     setRedoStack([]);
-    setObjective(level.objective);
-    setTemplateChoice(level.objective);
-    setSurviveTurns(level.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
-    setClockEnabled(level.timeControl !== undefined);
-    setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
-    setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
-    setVictory(level.victory ?? victoryRulesForObjective(level.objective, { surviveTurns: level.surviveTurns ?? DEFAULT_SURVIVE_TURNS }));
-    setEvents(effectiveLevelEvents(level));
+    applyLevelRules(level, options.seed ? 'seed' : 'load');
     setEditingId(options.editingId);
-    setLevelName(level.name);
     if (options.clean !== false) {
       setSavedSig(levelSignature(level));
       needsBaselineRef.current = true;
@@ -1914,7 +2156,9 @@ export function LevelEditor(): ReactElement {
         applyRemoteMapMetadata(doc);
         setSourceMiscMapId(doc.is_misc ? doc.public_id : null);
         lastRemoteSyncedSigRef.current = levelSignature(doc.level);
-        applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: true });
+        // seed: this mount-time load resolves async — it must not clobber rules the user
+        // authored after the entrance failsafe made the editor interactive.
+        applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: true, seed: true });
         setLiveSyncState(doc.can_edit ? 'saved' : 'idle');
         setEditorReady(true);
         reportStatus(
@@ -1984,6 +2228,7 @@ export function LevelEditor(): ReactElement {
       setBoardCols(board.cols);
       setBoardRows(board.rows);
       setBoardCells(board.cells);
+      setBoardMacroTiles(validMacroTilesForBoard(board));
       setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
       setBoardDoodads(board.doodads);
       setBoardProps(board.props);
@@ -2004,17 +2249,10 @@ export function LevelEditor(): ReactElement {
       setUndoStack([]);
       setRedoStack([]);
       // Restore the rule fields from the Level so the Rules panel opens on what was authored.
-      // Defaults mirror createBlankLevel (capture-all, DEFAULT_SURVIVE_TURNS).
-      setObjective(level.objective);
-      setTemplateChoice(level.objective);
-      setSurviveTurns(level.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
-      setClockEnabled(level.timeControl !== undefined);
-      setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
-      setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
-      setVictory(level.victory ?? victoryRulesForObjective(level.objective, { surviveTurns: level.surviveTurns ?? DEFAULT_SURVIVE_TURNS }));
-      setEvents(effectiveLevelEvents(level));
+      // Seed, not load: this hydrate resolves async, and the entrance failsafe may have let
+      // the user author rules first — those must survive (the Rival Kings clobber bug).
+      applyLevelRules(level, 'seed');
       setEditingId(level.id);
-      setLevelName(level.name);
       // Defer the clean-baseline capture to the effect below: it reads the SETTLED signature, so a
       // legacy level (derived boardCode) doesn't spuriously read dirty the instant it loads.
       needsBaselineRef.current = true;
@@ -2028,8 +2266,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -2037,6 +2275,7 @@ export function LevelEditor(): ReactElement {
     setBoardCols(board.cols);
     setBoardRows(board.rows);
     setBoardCells(board.cells);
+    setBoardMacroTiles(validMacroTilesForBoard(board));
     setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
     setBoardDoodads(board.doodads);
     setBoardProps(board.props);
@@ -2060,11 +2299,12 @@ export function LevelEditor(): ReactElement {
   };
   const commitEditorBoard = (next: EditorBoard, selection?: { x: number; y: number } | null): boolean => {
     const current = currentEditorBoardRef.current;
-    if (boardSignature(next) === boardSignature(current)) return false;
+    const normalized = { ...next, macroTiles: validMacroTilesForBoard(next) };
+    if (boardSignature(normalized) === boardSignature(current)) return false;
     setUndoStack((prev) => [...prev, cloneEditorBoard(current)].slice(-HISTORY_LIMIT));
     setRedoStack([]);
-    currentEditorBoardRef.current = next;
-    applyEditorBoard(next);
+    currentEditorBoardRef.current = normalized;
+    applyEditorBoard(normalized);
     if (selection !== undefined) setSelectedCell(selection);
     return true;
   };
@@ -2101,7 +2341,8 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
   const brushAsset = resolveAsset(brushId) ?? leDefaultTile;
-  const resolveUnitAsset = (id: string): UnitAsset | undefined => leUnitAssets.find((unit) => unit.id === id) ?? unitAssets.find((unit) => unit.id === id);
+  const macroTileBrushAsset = macroTileBrushId ? macroTileAsset(macroTileBrushId) : undefined;
+  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssetById(id);
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? leUnitAssets[0];
   const directionForFaction = (faction: UnitPalette): Direction => factionDefaultDirection(faction, boardFactionDirections);
   const setUnitFaction = (faction: UnitPalette): void => {
@@ -2245,6 +2486,28 @@ export function LevelEditor(): ReactElement {
       commitEditorBoard(withZoneEntries(next, updated));
       return;
     }
+    if (macroTileBrushAsset) {
+      const placement = { assetId: macroTileBrushAsset.id, x, y };
+      const footprint = macroTileCellIndices(placement, boardCols, boardRows);
+      if (footprint.length !== macroTileBrushAsset.columns * macroTileBrushAsset.rows) return;
+      const footprintSet = new Set(footprint);
+      next.macroTiles = (next.macroTiles ?? []).filter((existing) =>
+        !macroTileCellIndices(existing, boardCols, boardRows).some((index) => footprintSet.has(index)),
+      );
+      const familyTiles = leFamilyAssets[macroTileBrushAsset.family];
+      if (!familyTiles?.length) return;
+      for (const index of footprint) {
+        const cellKey = `${index % boardCols},${Math.floor(index / boardCols)}`;
+        const existingFamily = leFamilyOfTile(next.cells[cellKey] ?? '')?.id;
+        if (existingFamily !== macroTileBrushAsset.family) {
+          next.cells[cellKey] = familyTiles[(index + x * 17 + y * 29) % familyTiles.length].id;
+        }
+      }
+      next.macroTiles.push(placement);
+      commitEditorBoard(next, { x, y });
+      return;
+    }
+    next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
     next.cells[key] = brushAsset.id;
     commitEditorBoard(next);
   };
@@ -2287,6 +2550,7 @@ export function LevelEditor(): ReactElement {
       commitEditorBoard(withZoneEntries(next, updated));
       return;
     }
+    next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
     delete next.cells[key];
     commitEditorBoard(next);
   };
@@ -2362,13 +2626,13 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, macroTiles: [], units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
     setActiveGeneratedRegionId(null);
     setRegionSelection(new Set());
   };
   const clearActiveLayer = (): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    if (brushKind === 'tile') next.cells = {};
+    if (brushKind === 'tile') { next.cells = {}; next.macroTiles = []; }
     else if (brushKind === 'unit') next.units = {};
     else if (brushKind === 'doodad') next.doodads = {};
     else if (brushKind === 'prop') next.props = {};
@@ -2397,10 +2661,13 @@ export function LevelEditor(): ReactElement {
   };
   const fillBoard = (mode: 'empty' | 'all'): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    if (mode === 'all') next.cells = {};
+    if (mode === 'all') { next.cells = {}; next.macroTiles = []; }
       for (let y = 0; y < boardRows; y += 1) for (let x = 0; x < boardCols; x += 1) {
         const key = `${x},${y}`;
-        if (mode === 'all' || !(key in next.cells)) next.cells[key] = brushAsset.id;
+        if (mode === 'all' || !(key in next.cells)) {
+          if (mode === 'empty') next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
+          next.cells[key] = brushAsset.id;
+        }
       }
     commitEditorBoard(next);
   };
@@ -2415,6 +2682,7 @@ export function LevelEditor(): ReactElement {
     });
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     next.cells = Object.fromEntries(generated.cells.map((cell) => [`${cell.x},${cell.y}`, cell.asset?.id ?? leDefaultTile.id]));
+    next.macroTiles = [];
     commitEditorBoard(next, null);
   };
   const activeGeneratedRegion = useMemo(
@@ -2425,7 +2693,8 @@ export function LevelEditor(): ReactElement {
     const [x, y] = key.split(',').map(Number);
     return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < cols && y < rows;
   };
-  const hydrateGeneratedRegionSections = (sections: BoardGeneratedRegionSection[]): ScatterRow[] => {
+  const hydrateGeneratedRegionSections = (sections: BoardGeneratedRegionSection[], legacyDensity?: number): ScatterRow[] => {
+    const existingSections = sections.length > 0;
     const source = sections.length ? sections : scatterRowsToGeneratedSections(defaultScatterRows());
     return source.map((section) => ({
       id: (scatterIdRef.current += 1),
@@ -2437,6 +2706,8 @@ export function LevelEditor(): ReactElement {
           ? [{ id: (coverIdRef.current += 1), type: cover.type, expanded: false, knobs: { ...cover.knobs } }]
           : []
       )),
+      macroTileDensity: section.macroTileDensity ?? legacyDensity ?? DEFAULT_MACRO_TILE_DENSITY,
+      macroTileBreakup: section.macroTileBreakup ?? (existingSections ? 0 : DEFAULT_MACRO_TILE_BREAKUP),
     }));
   };
   const makeGeneratedRegionUnit = (
@@ -2464,7 +2735,7 @@ export function LevelEditor(): ReactElement {
     setRegionSelection(new Set(cells));
     setScatterBuffer(region.buffer);
     setScatterWiggle(region.wiggle);
-    setScatterSections(normalizeToTotal(hydrateGeneratedRegionSections(region.sections), 100 - region.buffer));
+    setScatterSections(normalizeToTotal(hydrateGeneratedRegionSections(region.sections, region.macroTileDensity), 100 - region.buffer));
   };
   const removeGeneratedRegionUnit = (id: string): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -2531,7 +2802,15 @@ export function LevelEditor(): ReactElement {
     const id = (scatterIdRef.current += 1);
     const dct = defaultCoverType(terrain);
     const covers = dct ? [{ id: (coverIdRef.current += 1), type: dct, expanded: false, knobs: { ...DEFAULT_COVER } }] : [];
-    return [...normalizeToTotal(prev, Math.max(0, total - share)), { id, terrain, share, locked: false, covers }];
+    return [...normalizeToTotal(prev, Math.max(0, total - share)), {
+      id,
+      terrain,
+      share,
+      locked: false,
+      covers,
+      macroTileDensity: DEFAULT_MACRO_TILE_DENSITY,
+      macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP,
+    }];
   });
   const removeSection = (id: number): void =>
     setScatterSections((prev) => (prev.length <= 1 ? prev : normalizeToTotal(prev.filter((s) => s.id !== id), 100 - scatterBuffer)));
@@ -2555,6 +2834,14 @@ export function LevelEditor(): ReactElement {
     setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, type } : c)) } : s)));
   const setCoverKnob = (sectionId: number, coverId: number, knob: keyof CoverKnobs, value: number): void =>
     setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, knobs: { ...c.knobs, [knob]: Math.max(0, Math.min(1, value)) } } : c)) } : s)));
+  const setSectionMacroTileDensity = (sectionId: number, value: number): void =>
+    setScatterSections((prev) => prev.map((section) => section.id === sectionId
+      ? { ...section, macroTileDensity: Math.max(0, Math.min(1, value)) }
+      : section));
+  const setSectionMacroTileBreakup = (sectionId: number, value: number): void =>
+    setScatterSections((prev) => prev.map((section) => section.id === sectionId
+      ? { ...section, macroTileBreakup: Math.max(0, Math.min(1, value)) }
+      : section));
   // Fill the selected region (or the whole board when nothing is selected) by dividing the area
   // among the terrain regions by share, then autotile through the socket solver — the same solve
   // path Randomize uses. A region-scoped generate leaves every out-of-region cell untouched.
@@ -2588,6 +2875,23 @@ export function LevelEditor(): ReactElement {
     });
     const solved = solveSocketBoard({ assets: leTileAssets, terrainMap, seed, columns: cols, rows, familyAssets: leFamilyAssets });
     const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const generatedMacroTiles = generateMacroTiles({
+      terrainMap,
+      columns: cols,
+      rows,
+      seed,
+      sectionOf,
+      densityBySection: scatterSections.map((section) => section.macroTileDensity),
+      breakupBySection: scatterSections.map((section) => section.macroTileBreakup),
+      region,
+    });
+    const rewrittenCells = region ?? new Set(Array.from({ length: cols * rows }, (_, index) => index));
+    const preservedMacroTiles = (next.macroTiles ?? []).filter((placement) => {
+      const cells = macroTileCellIndices(placement, cols, rows);
+      if (cells.length > 0) return !cells.some((index) => rewrittenCells.has(index));
+      return !rewrittenCells.has(placement.y * cols + placement.x);
+    });
+    next.macroTiles = [...preservedMacroTiles, ...generatedMacroTiles];
     let savedRegion: BoardGeneratedRegion | null = null;
     if (selectedRegionCells.length > 0) {
       const regions = next.generatedRegions ?? [];
@@ -2671,6 +2975,57 @@ export function LevelEditor(): ReactElement {
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
   const playability = useMemo(() => validatePlayability(candidateLevel), [candidateLevel]);
+  const previewPlayerFaction = useMemo<UnitPalette | null>(() => {
+    if (playerFaction) return playerFaction;
+    for (let y = 0; y < boardRows; y += 1) {
+      for (let x = 0; x < boardCols; x += 1) {
+        const faction = boardUnits[`${x},${y}`]?.faction;
+        if (isUnitPalette(faction)) return faction;
+      }
+    }
+    return null;
+  }, [boardCols, boardRows, boardUnits, playerFaction]);
+  const tacticalPreviewLevel = useMemo<Level | null>(() => {
+    if (!previewPlayerFaction) return null;
+    return editorBoardToLevel(
+      { ...currentEditorBoard, playerFaction: previewPlayerFaction },
+      { id: editingId ?? 'draft-preview', name: levelNameForSave, ...modeMeta },
+    );
+  }, [currentEditorBoard, editingId, levelNameForSave, modeMeta, previewPlayerFaction]);
+  const tacticalPreviewGame = useMemo<GameState | null>(() => {
+    if (!tacticalPreviewLevel) return null;
+    const game = createFromLevel(tacticalPreviewLevel, 1);
+    const authoredPieceIds = new Set(tacticalPreviewLevel.layers.units.map((unit, index) => `${unit.side}-${unit.type}-${index}`));
+    return {
+      ...game,
+      pieces: game.pieces.filter((piece) => authoredPieceIds.has(piece.id) || piece.id.startsWith('prop-')),
+    };
+  }, [tacticalPreviewLevel]);
+  const tacticalPreviewEnv = useMemo<MoveEnv | null>(
+    () => tacticalPreviewGame ? { ...gameEnv(tacticalPreviewGame), lastMove: tacticalPreviewGame.lastMove } : null,
+    [tacticalPreviewGame],
+  );
+  const tacticalFocusPiece = useMemo<Piece | null>(() => {
+    if (!tacticalPreviewGame) return null;
+    const selected = selectedCell
+      ? tacticalPreviewGame.pieces.find((piece) =>
+          piece.alive &&
+          (piece.side === 'player' || piece.side === 'enemy') &&
+          piece.x === selectedCell.x &&
+          piece.y === selectedCell.y,
+        )
+      : null;
+    return selected ?? tacticalPreviewGame.pieces.find((piece) => piece.alive && piece.side === 'player') ?? null;
+  }, [selectedCell, tacticalPreviewGame]);
+  const tacticalPreview = useMemo(
+    () => tacticalPreviewForGame(tacticalPreviewGame, tacticalPreviewEnv, tacticalFocusPiece, {
+      showMoves,
+      showEnemyAttacks,
+      showBlocked,
+      showPromotionZones,
+    }),
+    [showBlocked, showEnemyAttacks, showMoves, showPromotionZones, tacticalFocusPiece, tacticalPreviewEnv, tacticalPreviewGame],
+  );
   const targetLevelId = editingId ?? routeParams.levelId;
   const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
   // Real dirty flag: the board has unsaved changes when its signature differs from the one
@@ -2689,7 +3044,16 @@ export function LevelEditor(): ReactElement {
   // board state (needsBaselineRef, captured from the live currentSig so it always matches). Depends
   // on currentSig so the post-hydrate capture fires once the seeded state has flowed through.
   useEffect(() => {
-    if (needsBaselineRef.current) { needsBaselineRef.current = false; setSavedSig(currentSig); return; }
+    if (needsBaselineRef.current) {
+      needsBaselineRef.current = false;
+      // A seed that withheld user-authored fields must not adopt the merged on-screen state
+      // as clean: anchor the baseline on the seeded DOCUMENT's rules instead, so exactly the
+      // user's authored delta reads dirty (and keeps flowing into drafts / the Save).
+      const skew = seedSkewRef.current;
+      seedSkewRef.current = null;
+      setSavedSig(skew ? levelSignature(seededBaselineLevel(candidateLevel, skew)) : currentSig);
+      return;
+    }
     if (savedSig === null && !routeParams.levelId) setSavedSig(standaloneBaselineSigRef.current ?? currentSig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSig]);
@@ -2720,7 +3084,8 @@ export function LevelEditor(): ReactElement {
     autoCreateMapRef.current = true;
     setLiveSyncState('creating');
     const levelAtCreate = candidateLevel;
-    void createEditorMap(levelAtCreate)
+    const headless = !routeParams.campaignId && !routeParams.levelId;
+    void createEditorMap(levelAtCreate, { headless })
       .then((doc) => {
         applyRemoteMapMetadata(doc);
         lastRemoteSyncedSigRef.current = levelSignature(levelAtCreate);
@@ -2907,7 +3272,7 @@ export function LevelEditor(): ReactElement {
     }
   };
 
-  const loadMiscMapIntoEditor = async (publicId: string): Promise<void> => {
+  const loadEditorMapIntoEditor = async (publicId: string): Promise<void> => {
     setLayer('status');
     setTool('select');
     try {
@@ -2921,17 +3286,30 @@ export function LevelEditor(): ReactElement {
       setRemoteMapSavedAt(null);
       setRemoteMapIsMisc(false);
       setRemoteMapCreator(null);
-      setSourceMiscMapId(publicId);
+      setSourceMiscMapId(doc.is_misc ? publicId : null);
       lastRemoteSyncedSigRef.current = null;
       applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: false });
-      setSavedSig(previousSig);
+      const loadedSig = levelSignature(doc.level);
+      // If the copy comes from the read-only map already on screen, force a dirty
+      // baseline so Save can adopt it immediately.
+      setSavedSig(
+        previousSig === loadedSig
+          ? JSON.stringify(['editor-map-copy-source', publicId, loadedSig])
+          : previousSig,
+      );
       const url = new URL(window.location.href);
       url.searchParams.delete('map');
       url.searchParams.delete('board');
       navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
-      reportStatus('Loaded misc map.', 'success', 'Save will adopt it into your workspace and clear its expiry.');
+      reportStatus(
+        doc.is_misc ? 'Loaded misc map copy.' : 'Loaded live map copy.',
+        'success',
+        doc.is_misc
+          ? 'Save will adopt it into your workspace and clear its expiry.'
+          : 'Save will adopt this board into your workspace without changing the source map.',
+      );
     } catch (error) {
-      reportStatus('Could not load misc map.', 'error', (error as Error).message);
+      reportStatus('Could not load map copy.', 'error', (error as Error).message);
     }
   };
 
@@ -3103,7 +3481,7 @@ export function LevelEditor(): ReactElement {
     const units: CastleTemplateUnit[] = [];
     for (const [key, placement] of Object.entries(board.units as Record<string, BoardUnitPlacement>)) {
       const [x, y] = key.split(',').map(Number);
-      const type = (leUnitAssets.find((u) => u.id === placement.unitId) ?? unitAssets.find((u) => u.id === placement.unitId))?.family;
+      const type = unitAssetById(placement.unitId)?.family;
       if (type !== 'king' && type !== 'rook') continue;
       units.push({ x, y, type, side: placement.faction === player ? 'player' : 'enemy' });
     }
@@ -3175,6 +3553,10 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next, to);
   };
   const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
+  const resetBoardView = (): void => {
+    setViewZoom(1);
+    setViewPan({ x: 0, y: 0 });
+  };
   // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
   // tiles/units — and a now-offboard selection — whose coordinates fall outside the new
   // bounds, so nothing keeps rendering or counting off the edge of the board.
@@ -3325,21 +3707,6 @@ export function LevelEditor(): ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCell, boardProps]);
   const coverCount = Object.keys(boardCover).length;
-  // Resolve the painted cover into concrete tufts (once, here — not per render). Re-roll
-  // bumps coverSeed to reshuffle every cell's scatter while keeping the same densities.
-  const coverCells = useMemo(() => {
-    const list: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover: GroundCover }> = [];
-    for (const [key, density] of Object.entries(boardCover)) {
-      const [x, y] = key.split(',').map(Number);
-      const tileId = boardCells[key];
-      const tileTerrain = tileId ? (leFamilyOfTile(tileId)?.id as TileFamilyId | undefined) : undefined;
-      // Cover set: the per-cell override if present (cover decoupled from terrain), else the tile's own terrain.
-      const coverType = boardCoverTypes[key] ?? tileTerrain;
-      if (!coverType || !groundCoverSet(coverType)) continue;
-      list.push({ x, y, terrain: coverType, groundCover: { density, tufts: rollGroundCover(coverType, x, y, coverSeed, density) } });
-    }
-    return list;
-  }, [boardCover, boardCoverTypes, boardCells, coverSeed]);
   const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedZones = selectedCell
     ? boardZoneEntries
@@ -3528,46 +3895,59 @@ export function LevelEditor(): ReactElement {
           <div className="skirmish-board-frame">
             <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
               <div className="tileset-view-board-content is-board">
-                <StudioEditableBoard
-                  cols={boardCols}
-                  rows={boardRows}
-                  cells={boardCells}
-                  units={boardUnits}
-                  doodads={boardDoodads}
-                  props={boardProps}
-                  features={featureOverlays}
-                  zones={visibleZones}
-                  resolveAsset={resolveAsset}
-                  resolveUnit={resolveUnitAsset}
-                  resolveDoodad={resolveDoodadAsset}
-                  resolveProp={resolvePropDef}
-                  tool={readOnlyLiveMap ? 'select' : tool}
-                  selectedCell={selectedCell}
-                  boardZoom={viewZoom}
-                  boardPan={viewPan}
-                  animationFrame={animationFrame}
-                  onPaint={readOnlyLiveMap ? (() => {}) : paintCell}
-                  onErase={readOnlyLiveMap ? (() => {}) : eraseCell}
-                  onSelect={selectCell}
-                  onMove={readOnlyLiveMap ? undefined : moveObject}
-                  canMoveTo={readOnlyLiveMap ? undefined : canMoveObjectTo}
-                  fences={boardFences}
-                  fenceTool={readOnlyLiveMap ? false : fenceTool}
-                  onPaintEdge={paintFenceEdge}
-                  onEraseEdge={eraseFenceEdge}
-                  walls={boardWalls}
-                  wallTool={readOnlyLiveMap ? false : wallTool}
-                  onPaintWallEdge={paintWallEdge}
-                  onEraseWallEdge={eraseWallEdge}
-                  wallArt={boardWallArt}
-                  wallArtTool={readOnlyLiveMap ? false : wallArtTool}
-                  onPaintWallArtEdge={paintWallArtEdge}
-                  onEraseWallArtEdge={eraseWallArtEdge}
-                  propBrush={!readOnlyLiveMap && brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
-                  overlay={<GroundCoverLayer cells={coverCells} />}
-                  regionCells={readOnlyLiveMap ? undefined : regionSelection}
-                  onRegionStart={readOnlyLiveMap ? undefined : regionSelectPatch}
-                />
+                {liveMapUnavailable ? (
+                  <div className="tileset-view-empty le-live-map-unavailable" role="status" aria-live="polite">
+                    <h2>Live map unavailable</h2>
+                    <p>This map link has expired, was pruned, or could not be reached. No fallback board is being shown.</p>
+                  </div>
+                ) : (
+                  <StudioEditableBoard
+                    cols={boardCols}
+                    rows={boardRows}
+                    cells={boardCells}
+                    macroTiles={boardMacroTiles}
+                    units={boardUnits}
+                    doodads={boardDoodads}
+                    props={boardProps}
+                    features={featureOverlays}
+                    zones={visibleZones}
+                    resolveAsset={resolveAsset}
+                    resolveUnit={resolveUnitAsset}
+                    resolveDoodad={resolveDoodadAsset}
+                    resolveProp={resolvePropDef}
+                    tool={readOnlyLiveMap ? 'select' : tool}
+                    selectedCell={selectedCell}
+                    boardZoom={viewZoom}
+                    boardPan={viewPan}
+                    showGrid={showGrid}
+                    tacticalPreview={tacticalPreview}
+                    animationFrame={animationFrame}
+                    onPaint={readOnlyLiveMap ? (() => {}) : paintCell}
+                    onErase={readOnlyLiveMap ? (() => {}) : eraseCell}
+                    onSelect={selectCell}
+                    onMove={readOnlyLiveMap ? undefined : moveObject}
+                    canMoveTo={readOnlyLiveMap ? undefined : canMoveObjectTo}
+                    fences={boardFences}
+                    cover={boardCover}
+                    coverTypes={boardCoverTypes}
+                    coverSeed={coverSeed}
+                    fenceTool={readOnlyLiveMap ? false : fenceTool}
+                    onPaintEdge={paintFenceEdge}
+                    onEraseEdge={eraseFenceEdge}
+                    walls={boardWalls}
+                    wallTool={readOnlyLiveMap ? false : wallTool}
+                    onPaintWallEdge={paintWallEdge}
+                    onEraseWallEdge={eraseWallEdge}
+                    wallArt={boardWallArt}
+                    wallArtTool={readOnlyLiveMap ? false : wallArtTool}
+                    onPaintWallArtEdge={paintWallArtEdge}
+                    onEraseWallArtEdge={eraseWallArtEdge}
+                    propBrush={!readOnlyLiveMap && brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
+                    macroTileBrush={!readOnlyLiveMap && brushKind === 'tile' ? macroTileBrushAsset : null}
+                    regionCells={readOnlyLiveMap ? undefined : regionSelection}
+                    onRegionStart={readOnlyLiveMap ? undefined : regionSelectPatch}
+                  />
+                )}
               </div>
             </ViewPane>
           </div>
@@ -3667,8 +4047,14 @@ export function LevelEditor(): ReactElement {
             <div><dt>Props</dt><dd>{propCount}</dd></div>
             <div><dt>Zones</dt><dd>{zoneCount}</dd></div>
           </dl>
-          {remoteMapIsMisc && remoteMapId ? (
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 10 }} onClick={() => void loadMiscMapIntoEditor(remoteMapId)} title="Load this misc map into your editor as a saveable copy.">Edit copy</button>
+          {remoteMapId ? (
+            <button
+              type="button"
+              className="le-seg-btn"
+              style={{ width: '100%', marginTop: 10 }}
+              onClick={() => void loadEditorMapIntoEditor(remoteMapId)}
+              title={remoteMapIsMisc ? 'Load this misc map into your editor as a saveable copy.' : 'Load this live map into your editor as a saveable copy.'}
+            >Edit copy</button>
           ) : null}
         </section>
         {playBoardHref ? (
@@ -3775,7 +4161,7 @@ export function LevelEditor(): ReactElement {
                   placeholder="Untitled level"
                   maxLength={80}
                   onChange={(event) => setLevelName(event.target.value)}
-                  onBlur={() => setLevelName(levelNameForSave)}
+                  onBlur={() => setLevelNameState(levelNameForSave)}
                 />
               </label>
               {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
@@ -3964,7 +4350,7 @@ export function LevelEditor(): ReactElement {
                       <strong>{map.name}</strong>
                       <span>{map.cols ?? '?'}×{map.rows ?? '?'} · expires {map.expires_at ? new Date(map.expires_at).toLocaleDateString() : 'later'}</span>
                     </div>
-                    <button type="button" className="le-seg-btn le-mini-btn" onClick={() => void loadMiscMapIntoEditor(map.public_id)} title="Load this backend map into the editor">Load</button>
+                    <button type="button" className="le-seg-btn le-mini-btn" onClick={() => void loadEditorMapIntoEditor(map.public_id)} title="Load this backend map into the editor">Load</button>
                   </article>
                 ))}
               </div>
@@ -4081,6 +4467,12 @@ export function LevelEditor(): ReactElement {
                     <button type="button" className={`le-gen-icon ${sec.locked ? 'active' : ''}`.trim()} onClick={() => toggleSectionLock(sec.id)} aria-pressed={sec.locked} title={sec.locked ? 'Unlock — let this region rebalance' : 'Lock — keep this region fixed while others move'}>{sec.locked ? '🔒' : '🔓'}</button>
                     <button type="button" className="le-gen-icon" onClick={() => removeSection(sec.id)} disabled={scatterSections.length <= 1} title="Remove this region">×</button>
                   </div>
+                  {macroTileAssets.some((asset) => asset.family === sec.terrain) ? (
+                    <div className="le-gen-macro">
+                      <SliderRow label={`Composite coverage · ${Math.round(sec.macroTileDensity * 100)}%`} value={sec.macroTileDensity} set={(value) => setSectionMacroTileDensity(sec.id, value)} min={0} max={1} step={0.05} nudge={0.05} dflt={DEFAULT_MACRO_TILE_DENSITY} />
+                      <SliderRow label={`Breakup randomness · ${Math.round(sec.macroTileBreakup * 100)}%`} value={sec.macroTileBreakup} set={(value) => setSectionMacroTileBreakup(sec.id, value)} min={0} max={1} step={0.05} nudge={0.05} dflt={DEFAULT_MACRO_TILE_BREAKUP} />
+                    </div>
+                  ) : null}
                   <div className="le-gen-cover">
                     {sec.covers.map((c) => (
                       <div className="le-gen-cover-entry" key={c.id}>
@@ -4201,11 +4593,13 @@ export function LevelEditor(): ReactElement {
                 ? <img src={fenceThumbSrc(fenceBrushMaterial)} alt="" draggable={false} />
                 : featureKind
                 ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
+                : macroTileBrushAsset
+                ? <img className="le-thumb-macro" src={macroTileBrushAsset.src} alt="" draggable={false} />
                 : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : wallTool ? `${WALL_MATERIAL_LABELS[wallBrushMaterial]} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : wallTool ? `${WALL_MATERIAL_LABELS[wallBrushMaterial]} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : macroTileBrushAsset?.label ?? brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : macroTileBrushAsset ? `composite tile · ${macroTileBrushAsset.columns}×${macroTileBrushAsset.rows}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -4516,7 +4910,44 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : brushKind === 'tile' ? (
           <section className="skirmish-card le-brush-panel">
-            <h2>Palette</h2>
+            <h2>Composite terrain</h2>
+            <SelectFrame>
+              <select
+                className="le-layer-select"
+                aria-label="Composite terrain footprint"
+                value={macroTileFootprint}
+                onChange={(event) => {
+                  setMacroTileFootprint(event.target.value);
+                  setMacroTileBrushId(null);
+                }}
+              >
+                {leMacroTileFootprints.map((footprint) => <option key={footprint} value={footprint}>{footprint}</option>)}
+              </select>
+            </SelectFrame>
+            {studioFamilies.map((family) => {
+              const assets = leMacroTilesFor(family.id, macroTileFootprint);
+              if (!assets.length) return null;
+              return (
+                <div className="le-pal-group" key={`macro-${family.id}`}>
+                  <span className="le-pal-grouplabel">{family.label}</span>
+                  <div className="le-swatches">
+                    {assets.map((asset) => (
+                      <button
+                        type="button"
+                        key={asset.id}
+                        className={`le-swatch le-macro-swatch ${macroTileBrushId === asset.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        title={`${asset.label} · ${asset.columns}×${asset.rows}`}
+                        onClick={() => { setMacroTileBrushId(asset.id); setTool('brush'); }}
+                      >
+                        <img src={asset.src} alt="" draggable={false} />
+                        <small>{asset.label.replace(` ${asset.columns}x${asset.rows}`, '')}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            <h2 className="le-card-subhead">Single tiles</h2>
               {leTileGroups.map(({ family, tiles }) => (
                 <div className="le-pal-group" key={family.id}>
                   <span className="le-pal-grouplabel">{family.label}</span>
@@ -4525,9 +4956,9 @@ export function LevelEditor(): ReactElement {
                       <button
                         type="button"
                         key={tile.id}
-                        className={`le-swatch ${brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        className={`le-swatch ${macroTileBrushId === null && brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
                         title={tile.label}
-                        onClick={() => { setBrushId(tile.id); setTool('brush'); }}
+                        onClick={() => { setMacroTileBrushId(null); setBrushId(tile.id); setTool('brush'); }}
                       >
                         <img src={tile.src} alt="" draggable={false} />
                         <small>{tile.label}</small>
@@ -4571,7 +5002,7 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : null}
 
-        {brushKind === 'tile' ? (
+        {brushKind === 'tile' && !macroTileBrushAsset ? (
           <section className="skirmish-card">
             <h2>Tile Fill</h2>
             <div className="le-seg">
@@ -4593,18 +5024,26 @@ export function LevelEditor(): ReactElement {
         {/* Board-page-only zoom readout — a whole-workspace setting, not per-brush. Zoom is also
             reachable anywhere via the mouse wheel over the board. */}
         {layer === 'board' ? (
-        <section className="skirmish-card">
-          <h2>Display</h2>
-          <div className="le-ctrlrow">
-            <span className="le-ctrllabel">Zoom</span>
-            <Stepper
-              value={Math.round(viewZoom * 100)}
-              suffix="%"
-              decreaseLabel="Zoom out"
-              increaseLabel="Zoom in"
-              onDecrease={() => adjustZoom(-0.2)}
-              onIncrease={() => adjustZoom(0.2)}
-            />
+        <section className="skirmish-card skirmish-view-card" aria-label="Board view">
+          <h2>Board View</h2>
+          <div className="skirmish-view-group">
+            <span className="skirmish-eyebrow">Zoom</span>
+            <div className="skirmish-view-row">
+              <button type="button" className="app-header-button" onClick={() => adjustZoom(-0.1)} aria-label="Zoom out">−</button>
+              <span className="skirmish-zoom-readout">{Math.round(viewZoom * 100)}%</span>
+              <button type="button" className="app-header-button" onClick={() => adjustZoom(0.1)} aria-label="Zoom in">+</button>
+              <button type="button" className="app-header-button" onClick={resetBoardView}>Reset</button>
+            </div>
+          </div>
+          <div className="skirmish-view-group">
+            <span className="skirmish-eyebrow">Overlays</span>
+            <div className="skirmish-view-row">
+              <button type="button" className={`app-header-button ${showMoves ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowMoves((value) => !value)} aria-pressed={showMoves}>Moves</button>
+              <button type="button" className={`app-header-button ${showEnemyAttacks ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowEnemyAttacks((value) => !value)} aria-pressed={showEnemyAttacks}>Attacks</button>
+              <button type="button" className={`app-header-button ${showBlocked ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowBlocked((value) => !value)} aria-pressed={showBlocked}>Blocks</button>
+              <button type="button" className={`app-header-button ${showPromotionZones ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowPromotionZones((value) => !value)} aria-pressed={showPromotionZones}>Promotion</button>
+              <button type="button" className={`app-header-button ${showGrid ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowGrid((value) => !value)} aria-pressed={showGrid}>Grid</button>
+            </div>
           </div>
         </section>
         ) : null}

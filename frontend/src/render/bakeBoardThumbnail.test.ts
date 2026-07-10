@@ -1,15 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import {
   boardContentHash,
   boardDrawOps,
   uniqueDrawSrcs,
   boardBounds,
+  boardSocialFramingBounds,
   largestSolidRect,
 } from './bakeBoardThumbnail';
 import { roadEdgeKey } from '../core/featureAutotile';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
+import { objectBaseZIndex, structureBackZIndex } from './sceneDepth';
 import type { EditorBoard } from '../ui/boardCode';
+import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
+import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
+
+beforeAll(() => applyLiveUnitCatalog(testLiveUnitCatalog()));
+afterAll(() => resetLiveUnitCatalog());
 
 // Coverage (opaque fraction) of a rect under an opacity predicate — the property object-fit:cover
 // relies on: a crop that's ~fully opaque cannot show a transparent corner as sky.
@@ -30,7 +37,7 @@ const blank = (cols = 4, rows = 4): EditorBoard => ({
 // Real registry ids so boardDrawOps actually emits ops (tile family `grass-surf-0`, a
 // production unit, a doodad).
 const TILE = 'grass-surf-0';
-const UNIT = { unitId: 'rook-blender-v4-calibrated', direction: 'south', faction: 'navy-blue' };
+const UNIT = { unitId: 'rook', direction: 'south', faction: 'navy-blue' };
 
 describe('boardContentHash — stability + sensitivity', () => {
   it('is stable across object-key insertion order (canonicalised)', () => {
@@ -46,6 +53,15 @@ describe('boardContentHash — stability + sensitivity', () => {
   it('changes when a tile changes', () => {
     const before = { ...blank(), cells: { '0,0': TILE } };
     const after = { ...blank(), cells: { '0,0': 'dirt-surf-0' } };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(after));
+  });
+
+  it('changes when a macrotile is added', () => {
+    const before = { ...blank(), cells: { '0,0': TILE } };
+    const after: EditorBoard = {
+      ...before,
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
+    };
     expect(boardContentHash(before)).not.toBe(boardContentHash(after));
   });
 
@@ -115,18 +131,29 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
   it('collapses a board tiled with one family to a single tile src', () => {
     const board: EditorBoard = { ...blank(2, 2), cells: { '0,0': TILE, '1,0': TILE, '0,1': TILE, '1,1': TILE } };
     const srcs = uniqueDrawSrcs(board);
-    // The TILE itself dedups to one src across all four cells — one op per cell, one decode…
+    // The composed renderer decodes one top and one exposed-side source for the family.
     const tileSrcs = srcs.filter((s) => s.includes('grass') && !s.includes('groundcover'));
-    expect(tileSrcs).toHaveLength(1);
-    expect(boardDrawOps(board).filter((op) => op.src === tileSrcs[0])).toHaveLength(4);
-    // …though grassland now ALSO scatters ground-cover tufts (the same vegetation the game draws),
-    // which contribute their own deduped sprite srcs on top of the bare tile.
-    expect(srcs.some((s) => s.includes('groundcover'))).toBe(true);
+    expect(tileSrcs).toHaveLength(2);
+    const topSrc = tileSrcs.find((src) => src.endsWith('-top.png'))!;
+    const sideSrc = tileSrcs.find((src) => src.endsWith('-side.png'))!;
+    expect(boardDrawOps(board).filter((op) => op.src === topSrc)).toHaveLength(4);
+    expect(boardDrawOps(board).filter((op) => op.src === sideSrc)).toHaveLength(3);
+    // Exact editor boards do not invent ambient cover when their authored cover map is empty.
+    expect(srcs.some((s) => s.includes('groundcover'))).toBe(false);
   });
 
   it('returns no srcs for a blank (untiled) board', () => {
     expect(uniqueDrawSrcs(blank())).toEqual([]);
     expect(boardDrawOps(blank())).toEqual([]);
+  });
+
+  it('includes ground-cover sprites only when the exact board authors cover', () => {
+    const board: EditorBoard = {
+      ...blank(),
+      cells: { '0,0': TILE },
+      cover: { '0,0': 'filled' },
+    };
+    expect(uniqueDrawSrcs(board).some((src) => src.includes('groundcover'))).toBe(true);
   });
 
   it('a doodad contributes its back AND front halves as distinct srcs', () => {
@@ -144,10 +171,24 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
     const unknown: EditorBoard = { ...blank(8, 6), props: { '3,2': { propId: 'not-a-prop' } } };
     expect(uniqueDrawSrcs(unknown)).toEqual([]);
   });
+
+  it('a macrotile contributes its board-space source and replaces covered top sources', () => {
+    const cells = Object.fromEntries(
+      Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
+    );
+    const board: EditorBoard = {
+      ...blank(3, 3),
+      cells,
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
+    };
+    const sources = uniqueDrawSrcs(board);
+    expect(sources).toContain('/assets/tiles/macro-tiles/grass-soft-bands-3x3.png');
+    expect(sources.some((source) => source.endsWith('grass-0-top.png'))).toBe(false);
+  });
 });
 
 describe('boardDrawOps — z-order matches the live DOM bands', () => {
-  it('sorts tiles by x+y, then brackets the unit/doodad in the +20000 band', () => {
+  it('sorts tiles by x+y, then brackets the unit/doodad in the object band', () => {
     const board: EditorBoard = {
       ...blank(),
       cells: { '0,0': TILE },
@@ -158,8 +199,8 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const z = ops.map((op) => op.z);
     // Non-decreasing (sorted) and the unit/doodad sit far above the tile band.
     expect([...z].sort((a, b) => a - b)).toEqual(z);
-    expect(Math.max(...z)).toBeGreaterThan(20000);
-    expect(Math.min(...z)).toBeLessThan(20000);
+    expect(Math.max(...z)).toBeGreaterThan(objectBaseZIndex({ x: 0, y: 0 }));
+    expect(Math.min(...z)).toBeLessThan(objectBaseZIndex({ x: 0, y: 0 }));
   });
 
   it('brackets a prop around a unit standing on its front-most footprint cell', () => {
@@ -203,44 +244,75 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(back!.dh).toBe(300);
   });
 
-  it('places a feature overlay just above its own tile (same cell band)', () => {
+  it('replaces every covered 1x1 top with one macrotile below feature overlays', () => {
+    const cells = Object.fromEntries(
+      Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
+    );
     const board: EditorBoard = {
-      ...blank(),
-      cells: { '1,1': TILE },
+      ...blank(4, 4),
+      cells: { ...cells, '3,3': TILE },
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
       features: { '1,1': { kind: 'road', material: 'cobble' } },
     };
     const ops = boardDrawOps(board);
-    const tileOp = ops.find((op) => op.src.includes('grass'));
+    const tileOps = ops.filter((op) => op.src.endsWith('grass-0-top.png'));
+    const macroTileOp = ops.find((op) => op.src.includes('macro-tiles'));
     const featureOp = ops.find((op) => op.src.includes('feature') || op.src.includes('road'));
-    expect(tileOp).toBeDefined();
+    expect(tileOps).toHaveLength(1);
+    expect(macroTileOp).toBeDefined();
     expect(featureOp).toBeDefined();
-    expect(featureOp!.z).toBeGreaterThan(tileOp!.z);
-    expect(featureOp!.z).toBeLessThan(tileOp!.z + 1); // within the same cell band
+    expect(macroTileOp!.z).toBeGreaterThan(tileOps[0].z);
+    expect(featureOp!.z).toBeGreaterThan(macroTileOp!.z);
+    expect(featureOp!.z).toBeLessThan(20000);
   });
 
-  it('draws edge fences above the owner unit and below the near unit/front-half draw order', () => {
+  it('restores broken 1x1 tops and clips the composite to its remaining owned cells', () => {
+    const cells = Object.fromEntries(
+      Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
+    );
     const board: EditorBoard = {
       ...blank(3, 3),
-      cells: { '1,1': TILE },
+      cells,
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0, breaks: [4] }],
+    };
+    const ops = boardDrawOps(board);
+    const tileOps = ops.filter((op) => op.src.endsWith('grass-0-top.png'));
+    const macroTileOp = ops.find((op) => op.src.includes('macro-tiles'));
+
+    expect(tileOps).toHaveLength(1);
+    expect(macroTileOp?.clipPolygons).toHaveLength(8);
+    expect(macroTileOp?.clipPolygons?.every((polygon) => polygon.length === 8)).toBe(true);
+  });
+
+  it('draws edge fences above ground cover and below object/unit draw order', () => {
+    const board: EditorBoard = {
+      ...blank(4, 4),
+      cells: { '1,1': TILE, '2,1': TILE, '2,2': TILE },
+      cover: { '1,1': 'filled', '2,1': 'filled', '2,2': 'filled' },
       fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' },
       units: { '1,1': UNIT, '2,1': UNIT },
       doodads: { '1,1': { doodadId: 'boulder' } },
     };
     const ops = boardDrawOps(board);
     const fence = ops.find((op) => op.src === '/assets/tiles/feature/fence-wood-2.png');
-    const ownerUnit = ops.find((op) => op.contain && op.z === 1 + 1 + 20000);
-    const nearUnit = ops.find((op) => op.contain && op.z === 2 + 1 + 20000);
+    const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 1, y: 1 }));
+    const nearUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 2, y: 1 }));
+    const coverOps = ops.filter((op) => op.src.includes('/assets/groundcover/'));
+    const doodadBack = ops.find((op) => op.src === '/assets/doodads/boulder/back.png');
     const doodadFront = ops.find((op) => op.src === '/assets/doodads/boulder/front.png');
     expect(fence).toBeDefined();
     expect(ownerUnit).toBeDefined();
     expect(nearUnit).toBeDefined();
+    expect(coverOps.length).toBeGreaterThan(0);
+    expect(doodadBack).toBeDefined();
     expect(doodadFront).toBeDefined();
     expect(fence!.z).toBe(fenceOverlayZIndex({ x: 1, y: 1 }));
-    expect(fence!.z).toBeGreaterThan(ownerUnit!.z);
-    expect(fence!.z).toBe(nearUnit!.z);
-    expect(fence!.z).toBe(doodadFront!.z);
-    expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(nearUnit!));
-    expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(doodadFront!));
+    expect(fence!.z).toBeGreaterThan(Math.max(...coverOps.map((op) => op.z)));
+    expect(fence!.z).toBeLessThan(ownerUnit!.z);
+    expect(fence!.z).toBeLessThan(nearUnit!.z);
+    expect(fence!.z).toBeLessThan(doodadBack!.z);
+    expect(fence!.z).toBeLessThan(doodadFront!.z);
+    expect(doodadBack!.z).toBe(structureBackZIndex({ x: 1, y: 1 }));
   });
 
   it('draws north/west perimeter walls with the wall frame anchor', () => {
@@ -252,7 +324,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     };
     const ops = boardDrawOps(board);
     const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-1.png');
-    const ownerUnit = ops.find((op) => op.contain && op.z === 1 + 0 + 20000);
+    const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 1, y: 0 }));
     expect(wall).toBeDefined();
     expect(ownerUnit).toBeDefined();
     expect(wall).toMatchObject({ dw: 128, dh: 240 });
@@ -274,7 +346,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const ops = boardDrawOps(board);
     const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-8.png');
     const art = ops.find((op) => op.src === '/assets/wall-decor/banner-tattered-west.png');
-    const ownerUnit = ops.find((op) => op.contain && op.z === 0 + 0 + 20000);
+    const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 0, y: 0 }));
 
     expect(wall).toBeDefined();
     expect(art).toBeDefined();
@@ -316,6 +388,20 @@ describe('boardBounds — dimension / scale math', () => {
     const bounds = boardBounds(board);
     expect(Number.isInteger(bounds.width)).toBe(true);
     expect(Number.isInteger(bounds.height)).toBe(true);
+  });
+});
+
+describe('boardSocialFramingBounds — board-first social-card framing', () => {
+  it('keeps the full board width and top headroom but stops front edge depth from owning scale', () => {
+    const board: EditorBoard = { ...blank(), cells: { '0,0': TILE } };
+    const draw = boardBounds(board);
+    const frame = boardSocialFramingBounds(board);
+
+    expect(frame.minX).toBe(draw.minX);
+    expect(frame.minY).toBe(draw.minY);
+    expect(frame.width).toBe(draw.width);
+    expect(frame.height).toBeGreaterThan(0);
+    expect(frame.height).toBeLessThan(draw.height);
   });
 });
 

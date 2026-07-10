@@ -23,7 +23,7 @@ while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 OBJ = (ROOT / "docs" / "art" / "unit-concepts" / "source-assets" / "knight" /
        "wooden-chess-knight-side-b" / "12936_Wooden_Chess_Knight_Side_B_V2_l3.obj")
-FRONTEND_KNIGHT = ROOT / "frontend" / "public" / "assets" / "units" / "knight"
+FRONTEND_KNIGHT = ROOT / ".unit-art-output" / "knight"
 CONTACT = HERE / "contact"
 CONTACT.mkdir(parents=True, exist_ok=True)
 

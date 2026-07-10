@@ -2,7 +2,7 @@
 
 Run with:  blender --background --python render_knight_fur.py
 
-Produces frontend/public/assets/units/knight/blender-render-fur/<direction>.png at the
+Produces .unit-art-output/knight/navy-blue/<direction>.png at the
 true-isometric contract angle (45 yaw / 35.264 elevation / orthographic, fixed camera,
 piece rotated per direction). The wood-grain diffuse is dropped and replaced with a
 procedural navy "hint of fur" coat (smooth muzzle, fur only on the coat — not the
@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent
 while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 OBJ = str(ROOT / "docs/art/unit-concepts/source-assets/knight/wooden-chess-knight-side-b/12936_Wooden_Chess_Knight_Side_B_V2_l3.obj")
-OUT = str(ROOT / "frontend/public/assets/units/knight/blender-render-fur")
+OUT = str(ROOT / ".unit-art-output/knight/navy-blue")
 os.makedirs(OUT, exist_ok=True)
 
 bpy.ops.object.select_all(action="SELECT"); bpy.ops.object.delete()

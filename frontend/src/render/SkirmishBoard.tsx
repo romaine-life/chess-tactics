@@ -1,19 +1,18 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
-import type { BoardSize, GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
-import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, livingPieces, pieceAt } from '../core/rules';
-import { canTraverse, elevationAt, haltsTravel } from '../core/terrain';
+import type { GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
+import { attackedSquares, blockedCandidateSquares, enemyThreats, legalMoves, livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
-import { GroundCoverLayer } from './GroundCoverLayer';
-import { PropSprite } from './BoardStructure';
+import { boundsForOps, drawBoardOps, isAnimatedGroundCoverOp, loadCanvasImage } from './BoardCanvasLayer';
+import { objectBaseZIndex } from './sceneDepth';
 import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardArtReveal } from './boardArtReady';
 import { groundCoverSet } from '../core/groundCover';
@@ -21,6 +20,8 @@ import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
 import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay, type ResolvedWallOverlay } from '../core/featureAutotile';
 import { wallArtSrcs } from '../core/wallArt';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
+import { unitAnchorFraction, unitAssetById } from '../ui/unitCatalog';
+import { boardBounds, boardDrawOps, type BakeBounds, type BoardDrawOp } from '@chess-tactics/board-render';
 
 const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
   grass: 'grass',
@@ -147,6 +148,69 @@ function resolveSkirmishGroundCover(
   return result;
 }
 
+function coverMapRecordForGame(game: GameState, exactBoard: EditorBoard | null): Record<string, 'sparse' | 'filled'> {
+  if (exactBoard) return { ...exactBoard.cover };
+  const cover: Record<string, 'sparse' | 'filled'> = {};
+  for (const cell of game.terrain ?? []) {
+    if (cell.cover) cover[`${cell.x},${cell.y}`] = cell.cover.density;
+  }
+  return cover;
+}
+
+function sceneBoardForSkirmish(
+  game: GameState,
+  board: SocketBoardResult<TileAsset>,
+  exactBoard: EditorBoard | null,
+): EditorBoard {
+  const cells: Record<string, string> = {};
+  const coverTypes: Record<string, TileFamilyId> = {};
+  for (const cell of board.cells) {
+    const key = `${cell.x},${cell.y}`;
+    if (cell.asset) cells[key] = cell.asset.id;
+    if (cell.terrain) coverTypes[key] = cell.terrain;
+  }
+
+  return {
+    cols: game.size.cols,
+    rows: game.size.rows,
+    playerFaction: exactBoard?.playerFaction,
+    factionDirections: exactBoard?.factionDirections ?? {},
+    cells,
+    macroTiles: exactBoard?.macroTiles,
+    units: {},
+    doodads: {},
+    props: Object.fromEntries((game.props ?? []).map((prop) => [`${prop.x},${prop.y}`, { propId: prop.propId }])),
+    cover: coverMapRecordForGame(game, exactBoard),
+    coverTypes: exactBoard?.coverTypes ?? coverTypes,
+    features: exactBoard?.features ?? {},
+    fences: exactBoard?.fences ?? {},
+    walls: exactBoard?.walls ?? {},
+    wallArt: exactBoard?.wallArt ?? {},
+    featureCuts: exactBoard?.featureCuts ?? {},
+    featureExits: exactBoard?.featureExits ?? {},
+    zoneEntries: exactBoard?.zoneEntries ?? [],
+    zones: exactBoard?.zones ?? {},
+    generatedRegions: exactBoard?.generatedRegions ?? [],
+  };
+}
+
+function sceneArtUrls(sceneBoard: EditorBoard, seed: number, ambientCover: boolean): string[] {
+  return [...new Set(boardDrawOps(sceneBoard, { coverSeed: seed, ambientCover }).map((op) => op.src))];
+}
+
+function isTerrainSceneOp(op: BoardDrawOp): boolean {
+  return op.src.includes('/assets/tiles/surface/') || op.src.includes('/assets/tiles/macro-tiles/');
+}
+
+function isLinearFeatureSceneOp(op: BoardDrawOp): boolean {
+  return op.src.includes('/assets/tiles/feature/road-') || op.src.includes('/assets/tiles/feature/river-');
+}
+
+function skirmishStaticSceneOps(sceneBoard: EditorBoard, seed: number, ambientCover: boolean): BoardDrawOp[] {
+  return boardDrawOps(sceneBoard, { coverSeed: seed, ambientCover })
+    .filter((op) => !isTerrainSceneOp(op) && !isLinearFeatureSceneOp(op));
+}
+
 function generatedSkirmishBoard(game: GameState, seed: number): SocketBoardResult<TileAsset> {
   return solveSocketBoard({
     assets: tileAssets,
@@ -204,75 +268,24 @@ export function buildSkirmishBoard(game: GameState, seed: number): SocketBoardRe
   return exactSkirmishBoard(game, seed, exactBoard, base);
 }
 
-function terrainBlocks(env: ReturnType<typeof useSkirmish.getState>['env'], piece: Piece, x: number, y: number): boolean {
-  return !!env.terrain && !canTraverse(env.terrain, elevationAt(env.terrain, piece.x, piece.y), x, y);
-}
-
-function addBlockedStep(
-  out: Map<string, Vec>,
-  piece: Piece,
-  pieces: readonly Piece[],
-  size: BoardSize,
-  env: ReturnType<typeof useSkirmish.getState>['env'],
-  x: number,
-  y: number,
-): boolean {
-  if (!inBounds(x, y, size)) return false;
-  const occ = pieceAt(pieces, x, y);
-  if (terrainBlocks(env, piece, x, y) || (occ && !isEnemy(piece, occ))) {
-    out.set(`${x},${y}`, { x, y });
-    return false;
-  }
-  // Mirror rules.ts rayMoves: water may be entered but ends the walk, so squares
-  // beyond it are neither reachable nor a "blocked by X" misattribution.
-  return !occ && !(env.terrain && haltsTravel(env.terrain, x, y));
-}
-
-function blockedCandidateSquares(piece: Piece, pieces: readonly Piece[], size: BoardSize, env: ReturnType<typeof useSkirmish.getState>['env']): Vec[] {
-  const blocked = new Map<string, Vec>();
-  if (piece.type === 'rock' || piece.type === 'random-rock') return [];
-  const ray = (dirs: ReadonlyArray<readonly [number, number]>) => {
-    for (const [dx, dy] of dirs) {
-      for (let step = 1; ; step += 1) {
-        if (!addBlockedStep(blocked, piece, pieces, size, env, piece.x + dx * step, piece.y + dy * step)) break;
-      }
-    }
-  };
-  const step = (deltas: ReadonlyArray<readonly [number, number]>) => {
-    for (const [dx, dy] of deltas) addBlockedStep(blocked, piece, pieces, size, env, piece.x + dx, piece.y + dy);
-  };
-  if (piece.type === 'pawn') {
-    const dir = piece.side === 'player' ? -1 : 1;
-    addBlockedStep(blocked, piece, pieces, size, env, piece.x, piece.y + dir);
-    for (const dx of [-1, 1]) addBlockedStep(blocked, piece, pieces, size, env, piece.x + dx, piece.y + dir);
-  } else if (piece.type === 'knight') {
-    step([[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]);
-  } else if (piece.type === 'king') {
-    step([[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]);
-  } else {
-    const diag: ReadonlyArray<readonly [number, number]> = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
-    const ortho: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    ray(piece.type === 'bishop' ? diag : piece.type === 'rook' ? ortho : [...ortho, ...diag]);
-  }
-  return [...blocked.values()];
-}
-
 // Every image URL the board will draw, split into the STABLE tile set (terrain/seed —
 // unchanged by play) and the live unit set (changes on capture). The reveal arms on the
 // tile signature so it fires once per board, not once per move; the full list is what we
-// preload so units don't popcorn in on the first paint either. The -top/-side derivation
-// mirrors BoardLabBoard exactly (one tile = a SIDE layer under a TOP layer, ADR-0039).
+// preload so units don't popcorn in on the first paint either. Terrain URLs match the
+// sources BoardTerrainLayer consumes: split top/side frames plus feature and edge art.
 function collectBoardArt(
   board: SocketBoardResult<TileAsset>,
   livePieces: readonly Piece[],
   fenceOverlays: ReadonlyMap<string, ResolvedFenceOverlay>,
   wallOverlays: ReadonlyMap<string, ResolvedWallOverlay>,
   wallArtUrls: readonly string[],
+  sceneUrls: readonly string[],
 ): { urls: string[]; signature: string } {
   const tiles = new Set<string>();
   for (const fence of fenceOverlays.values()) tiles.add(fenceFrameSrc(fence.material, fence.mask));
   for (const wall of wallOverlays.values()) tiles.add(wallFrameSrc(wall.material, wall.mask));
   for (const url of wallArtUrls) tiles.add(url);
+  for (const url of sceneUrls) tiles.add(url);
   for (const cell of board.cells) {
     if (cell.asset) {
       const top = tileFrameSrc(cell.asset);
@@ -339,95 +352,9 @@ function computeArrivalDelays(pieces: readonly Piece[]): Map<string, number> {
   return delays;
 }
 
-function UnitPiece({
-  piece,
-  selected = false,
-  focused = false,
-  arriving = false,
-  arrivalDelay = 0,
-  dragging = false,
-  suppressHop = false,
-  premoveOrigin = false,
-}: {
-  piece: Piece;
-  selected?: boolean;
-  focused?: boolean;
-  /** Play the one-shot deploy drop (board start), staggered by `arrivalDelay`. */
-  arriving?: boolean;
-  arrivalDelay?: number;
-  /** This piece is currently being picked up and dragged — fade it in place under the ghost. */
-  dragging?: boolean;
-  /** This piece just landed via a drop-move — snap into the seat with no pick-up/hop arc. */
-  suppressHop?: boolean;
-  /** This piece has a premove queued — dim it in place as the "before" ghost of its planned move. */
-  premoveOrigin?: boolean;
-}) {
-  const { left, top, zIndex } = boardLabCellPosition(piece);
-  const [displayPosition, setDisplayPosition] = useState({ left, top });
-  const [isMoving, setIsMoving] = useState(false);
-  const previousGridRef = useRef({ x: piece.x, y: piece.y });
-  const src = pieceImageSrc(piece);
-
-  useEffect(() => {
-    const previous = previousGridRef.current;
-    previousGridRef.current = { x: piece.x, y: piece.y };
-    if (previous.x === piece.x && previous.y === piece.y) {
-      setDisplayPosition({ left, top });
-      return undefined;
-    }
-    // A drop-move already showed the travel (the piece rode the cursor as a ghost),
-    // so it lands with no hop arc — jump straight into the destination seat.
-    if (suppressHop) {
-      setDisplayPosition({ left, top });
-      return undefined;
-    }
-
-    setIsMoving(true);
-    const frame = window.requestAnimationFrame(() => setDisplayPosition({ left, top }));
-    // Hold `is-moving` long enough to cover the full hop (lift → arc → settle),
-    // including the weightier enemy timing (--move-duration in style.css).
-    const done = window.setTimeout(() => setIsMoving(false), 520);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearTimeout(done);
-    };
-  }, [left, piece.x, piece.y, top, suppressHop]);
-
-  // On a drop-move render straight at the destination seat (no origin flash before the
-  // effect catches up); otherwise ride the animated displayPosition.
-  const seat = suppressHop ? { left, top } : displayPosition;
-
-  return (
-    <div
-      className={[
-        'board-unit-seat',
-        'skirmish-board-unit',
-        `is-${piece.side}`,
-        `is-${piece.type}`,
-        isMoving ? 'is-moving' : '',
-        arriving ? 'is-arriving' : '',
-        selected ? 'is-selected' : '',
-        focused ? 'is-focused' : '',
-        dragging ? 'is-dragging' : '',
-        premoveOrigin ? 'is-premove-origin' : '',
-      ].filter(Boolean).join(' ')}
-      style={{
-        left: seat.left,
-        top: seat.top,
-        zIndex: zIndex + 20000,
-        ...(suppressHop ? { transition: 'none' } : {}),
-        ...(arriving ? { ['--arrival-delay' as string]: `${arrivalDelay}ms` } : {}),
-      } as CSSProperties}
-      aria-label={`${piece.side} ${piece.type}`}
-    >
-      {src ? <img src={src} alt="" draggable={false} /> : <span>{PIECE_MARK[piece.type] ?? '?'}</span>}
-    </div>
-  );
-}
-
 // The queued premove chain, drawn chess.com-style: one arrow per step, from the piece's
 // provisional square to its destination. Rendered inside the board's transformed space
-// (the same coordinate system as the unit seats) so it tracks zoom/pan for free.
+// (the same board projection as the scene canvas) so it tracks zoom/pan for free.
 // Placeholder art — a flat stroked line + arrowhead — pending a richer treatment.
 function PremoveArrowLayer({ arrows }: { arrows: PremoveArrow[] }) {
   if (!arrows.length) return null;
@@ -471,24 +398,281 @@ const GHOST_SLOTS: Record<number, ReadonlyArray<{ dx: number; dy: number }>> = {
 };
 const ghostScaleFor = (count: number): number => (count >= 3 ? 0.5 : count === 2 ? 0.62 : 1);
 
-// The "after" ghost: a translucent copy of a premoved piece on a square it plans to land on, the
-// far end of a premove arrow. It's pointer-events:none (inherits from .board-unit-seat), so the
-// cell-hit button beneath owns the click. A single ghost can be picked from that square; shared
-// ghost stacks stay ambiguous, so the player uses an original-piece handle. `slot`/`count` place
-// ghosts symmetrically when several units share the tile.
-function PremoveGhost({ piece, slot = 0, count = 1 }: { piece: Piece; slot?: number; count?: number }) {
-  const { left, top, zIndex } = boardLabCellPosition(piece);
+const UNIT_SEAT_W = 72;
+const UNIT_SEAT_H = 86;
+const SCENE_BOUNDS_PAD = 96;
+const ARRIVAL_ANIM_MS = 620;
+
+type PieceMotion = {
+  gridX: number;
+  gridY: number;
+  startLeft: number;
+  startTop: number;
+  targetLeft: number;
+  targetTop: number;
+  startTime: number;
+  duration: number;
+};
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function easeOutCubic(t: number): number {
+  const u = 1 - clamp01(t);
+  return 1 - u * u * u;
+}
+
+function easeInQuad(t: number): number {
+  const v = clamp01(t);
+  return v * v;
+}
+
+function motionSeat(motion: PieceMotion, timeMs: number): { left: number; top: number; progress: number; active: boolean } {
+  if (motion.duration <= 0) return { left: motion.targetLeft, top: motion.targetTop, progress: 1, active: false };
+  const progress = clamp01((timeMs - motion.startTime) / motion.duration);
+  const eased = easeOutCubic(progress);
+  return {
+    left: lerp(motion.startLeft, motion.targetLeft, eased),
+    top: lerp(motion.startTop, motion.targetTop, eased),
+    progress,
+    active: progress < 1,
+  };
+}
+
+function moveHopOffset(progress: number, side: Piece['side']): number {
+  const peak = side === 'enemy' ? -12 : -16;
+  if (progress <= 0 || progress >= 1) return 0;
+  return Math.sin(progress * Math.PI) * peak;
+}
+
+function arrivalOffset(timeMs: number, startMs: number | null, delayMs: number | undefined): { dy: number; opacity: number } {
+  if (startMs == null || delayMs == null) return { dy: 0, opacity: 1 };
+  const elapsed = timeMs - startMs - delayMs;
+  if (elapsed < 0) return { dy: -60, opacity: 0 };
+  const progress = clamp01(elapsed / ARRIVAL_ANIM_MS);
+  if (progress < 0.26) return { dy: -60, opacity: progress / 0.26 };
+  if (progress < 0.46) return { dy: -60, opacity: 1 };
+  if (progress < 0.82) {
+    const fall = easeInQuad((progress - 0.46) / 0.36);
+    return { dy: lerp(-60, 0, fall), opacity: 1 };
+  }
+  return { dy: 0, opacity: 1 };
+}
+
+function pieceOp(
+  piece: Piece,
+  seat: { left: number; top: number },
+  options: { dy?: number; opacity?: number; scale?: number } = {},
+): BoardDrawOp | null {
   const src = pieceImageSrc(piece);
   if (!src) return null;
-  const off = (GHOST_SLOTS[count] ?? GHOST_SLOTS[1])[slot] ?? { dx: 0, dy: 0 };
+  const scale = options.scale ?? 1;
+  const dw = UNIT_SEAT_W * scale;
+  const dh = UNIT_SEAT_H * scale;
+  const unit = unitAssetById(piece.type);
+  if (!unit) throw new Error(`live unit metadata is missing: ${piece.type}`);
+  return {
+    src,
+    dx: seat.left - dw * unitAnchorFraction(unit.unitAnchorX),
+    dy: seat.top - dh * unitAnchorFraction(unit.unitAnchorY) + (options.dy ?? 0),
+    dw,
+    dh,
+    z: objectBaseZIndex(piece),
+    contain: true,
+    opacity: options.opacity,
+  };
+}
+
+function padBounds(bounds: BakeBounds): BakeBounds {
+  return {
+    minX: bounds.minX - SCENE_BOUNDS_PAD,
+    minY: bounds.minY - SCENE_BOUNDS_PAD,
+    width: bounds.width + SCENE_BOUNDS_PAD * 2,
+    height: bounds.height + SCENE_BOUNDS_PAD * 2,
+  };
+}
+
+function targetPieceOps(livePieces: readonly Piece[], afterGhosts: ReturnType<typeof premoveGhosts>): BoardDrawOp[] {
+  const ops: BoardDrawOp[] = [];
+  for (const piece of livePieces) {
+    const op = pieceOp(piece, boardLabCellPosition(piece));
+    if (op) ops.push(op);
+  }
+  for (const group of afterGhosts) {
+    group.pieces.forEach((piece, i) => {
+      const off = (GHOST_SLOTS[group.pieces.length] ?? GHOST_SLOTS[1])[i] ?? { dx: 0, dy: 0 };
+      const { left, top } = boardLabCellPosition(piece);
+      const op = pieceOp(piece, { left: left + off.dx, top: top + off.dy }, { scale: ghostScaleFor(group.pieces.length) });
+      if (op) ops.push(op);
+    });
+  }
+  return ops;
+}
+
+function SkirmishSceneLayer({
+  sceneBoard,
+  seed,
+  ambientCover,
+  livePieces,
+  arriving,
+  arrivalDelays,
+  draggingId,
+  noHopId,
+  premovedIds,
+  afterGhosts,
+}: {
+  sceneBoard: EditorBoard;
+  seed: number;
+  ambientCover: boolean;
+  livePieces: readonly Piece[];
+  arriving: boolean;
+  arrivalDelays: ReadonlyMap<string, number>;
+  draggingId: string | null;
+  noHopId: string | null;
+  premovedIds: ReadonlySet<string>;
+  afterGhosts: ReturnType<typeof premoveGhosts>;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const motionRef = useRef<Map<string, PieceMotion>>(new Map());
+  const arrivalStartRef = useRef<number | null>(null);
+  const staticOps = useMemo(() => skirmishStaticSceneOps(sceneBoard, seed, ambientCover), [ambientCover, sceneBoard, seed]);
+  const bounds = useMemo(() => {
+    const fallback = boardBounds(sceneBoard, { coverSeed: seed, ambientCover });
+    return padBounds(boundsForOps([...staticOps, ...targetPieceOps(livePieces, afterGhosts)], fallback));
+  }, [afterGhosts, ambientCover, livePieces, sceneBoard, seed, staticOps]);
+
+  useEffect(() => {
+    arrivalStartRef.current = arriving ? performance.now() : null;
+  }, [arriving]);
+
+  useEffect(() => {
+    const now = performance.now();
+    const nextIds = new Set(livePieces.map((piece) => piece.id));
+    for (const piece of livePieces) {
+      const target = boardLabCellPosition(piece);
+      const existing = motionRef.current.get(piece.id);
+      if (!existing) {
+        motionRef.current.set(piece.id, {
+          gridX: piece.x,
+          gridY: piece.y,
+          startLeft: target.left,
+          startTop: target.top,
+          targetLeft: target.left,
+          targetTop: target.top,
+          startTime: now,
+          duration: 0,
+        });
+        continue;
+      }
+      if (existing.gridX === piece.x && existing.gridY === piece.y) continue;
+      const current = motionSeat(existing, now);
+      const snap = noHopId === piece.id;
+      motionRef.current.set(piece.id, {
+        gridX: piece.x,
+        gridY: piece.y,
+        startLeft: snap ? target.left : current.left,
+        startTop: snap ? target.top : current.top,
+        targetLeft: target.left,
+        targetTop: target.top,
+        startTime: now,
+        duration: snap ? 0 : piece.side === 'enemy' ? 460 : 360,
+      });
+    }
+    for (const id of motionRef.current.keys()) {
+      if (!nextIds.has(id)) motionRef.current.delete(id);
+    }
+  }, [livePieces, noHopId]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return undefined;
+
+    let cancelled = false;
+    let raf = 0;
+    const unitSources = [
+      ...livePieces.map(pieceImageSrc),
+      ...afterGhosts.flatMap((group) => group.pieces.map(pieceImageSrc)),
+    ].filter((src): src is string => !!src);
+    const sources = [...new Set([...staticOps.map((op) => op.src), ...unitSources])];
+    const hasAnimatedGroundCover = staticOps.some(isAnimatedGroundCoverOp);
+
+    const frameOps = (timeMs: number): BoardDrawOp[] => {
+      const ops: BoardDrawOp[] = [...staticOps];
+      for (const piece of livePieces) {
+        const target = boardLabCellPosition(piece);
+        const motion = motionRef.current.get(piece.id) ?? {
+          gridX: piece.x,
+          gridY: piece.y,
+          startLeft: target.left,
+          startTop: target.top,
+          targetLeft: target.left,
+          targetTop: target.top,
+          startTime: timeMs,
+          duration: 0,
+        };
+        const seat = motionSeat(motion, timeMs);
+        const arrival = arrivalOffset(timeMs, arrivalStartRef.current, arrivalDelays.get(piece.id));
+        const baseOpacity = draggingId === piece.id ? 0.3 : premovedIds.has(piece.id) ? 0.4 : 1;
+        const op = pieceOp(piece, seat, {
+          dy: moveHopOffset(seat.progress, piece.side) + arrival.dy,
+          opacity: baseOpacity * arrival.opacity,
+        });
+        if (op) ops.push(op);
+      }
+      for (const group of afterGhosts) {
+        group.pieces.forEach((piece, i) => {
+          const off = (GHOST_SLOTS[group.pieces.length] ?? GHOST_SLOTS[1])[i] ?? { dx: 0, dy: 0 };
+          const { left, top } = boardLabCellPosition(piece);
+          const op = pieceOp(piece, { left: left + off.dx, top: top + off.dy }, {
+            opacity: 0.55,
+            scale: ghostScaleFor(group.pieces.length),
+          });
+          if (op) ops.push(op);
+        });
+      }
+      return ops.sort((a, b) => a.z - b.z);
+    };
+
+    const hasActiveMotion = (timeMs: number): boolean => {
+      for (const motion of motionRef.current.values()) {
+        if (motionSeat(motion, timeMs).active) return true;
+      }
+      return false;
+    };
+
+    void Promise.all(sources.map(async (src): Promise<[string, HTMLImageElement]> => [src, await loadCanvasImage(src)])).then((entries) => {
+      const images = new Map(entries);
+      const tick = (timeMs: number): void => {
+        if (cancelled) return;
+        drawBoardOps(ctx, frameOps(timeMs), bounds, images, timeMs);
+        if (hasAnimatedGroundCover || arriving || hasActiveMotion(timeMs)) {
+          raf = window.requestAnimationFrame(tick);
+        }
+      };
+      tick(performance.now());
+    });
+
+    return () => {
+      cancelled = true;
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, premovedIds, staticOps]);
+
   return (
-    <div
-      className={`board-unit-seat skirmish-board-unit is-${piece.side} is-${piece.type} is-premove-ghost`}
-      style={{ left: left + off.dx, top: top + off.dy, zIndex: zIndex + 20000, ['--ghost-scale' as string]: ghostScaleFor(count) } as CSSProperties}
+    <canvas
+      ref={canvasRef}
+      className="tileset-scene-layer"
+      width={bounds.width}
+      height={bounds.height}
+      style={{ left: `${bounds.minX}px`, top: `${bounds.minY}px`, width: `${bounds.width}px`, height: `${bounds.height}px` }}
       aria-hidden="true"
-    >
-      <img src={src} alt="" draggable={false} />
-    </div>
+    />
   );
 }
 
@@ -502,6 +686,7 @@ export function SkirmishBoard() {
   const showPlayerAttacks = useSkirmishView((s) => s.showPlayerAttacks);
   const showPlayerMoves = useSkirmishView((s) => s.showPlayerMoves);
   const showPromotionZones = useSkirmishView((s) => s.showPromotionZones);
+  const showGrid = useSkirmishView((s) => s.showGrid);
   const boardZoom = useSkirmishView((s) => s.zoom);
   const boardPan = useSkirmishView((s) => s.pan);
   const setZoom = useSkirmishView((s) => s.setZoom);
@@ -557,6 +742,7 @@ export function SkirmishBoard() {
     h: number;
   } | null>(null);
   const [dropHoverKey, setDropHoverKey] = useState<string | null>(null);
+  const [dropAimKey, setDropAimKey] = useState<string | null>(null);
   const [noHopId, setNoHopId] = useState<string | null>(null);
   // Single-player premove input is open while the enemy owns the turn AND for the short
   // post-reply landing beat before live player control resumes.
@@ -571,14 +757,16 @@ export function SkirmishBoard() {
       ghost.style.left = `${lastCursorRef.current.x}px`;
       ghost.style.top = `${lastCursorRef.current.y}px`;
     }
-  }, [drag, dropHoverKey]);
+  }, [drag, dropHoverKey, dropAimKey]);
   const selectedMoves = useMemo(() => {
     if (premoveMode || pendingPromotion || game.turn !== localSide || game.winner) return [];
     const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === localSide);
     return piece ? legalMoves(piece, game.pieces, game.size, env) : [];
   }, [env, game.pieces, game.size, game.turn, game.winner, pendingPromotion, premoveMode, selectedId, localSide]);
   const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
-  const exactBoard = useMemo(() => game.boardCode ? decodeBoard(game.boardCode) : null, [game.boardCode]);
+  const exactBoard = useMemo(() => resolveBoardCode(game), [game.boardCode, game.size.cols, game.size.rows]);
+  const ambientSceneCover = !exactBoard;
+  const sceneBoard = useMemo(() => sceneBoardForSkirmish(game, board, exactBoard), [board, exactBoard, game.props, game.size.cols, game.size.rows, game.terrain]);
   // Edge fences resolve from the authored board code (each shared edge → its upper-left cell's
   // E/S rail). Keyed "x,y" to match resolveFenceOverlays; empty for a generated/fence-free board.
   const fenceOverlays = useMemo<ReadonlyMap<string, ResolvedFenceOverlay>>(() => {
@@ -597,10 +785,11 @@ export function SkirmishBoard() {
     () => game.pieces.filter((piece) => piece.alive && !isPropCollider(piece)).sort((a, b) => a.x + a.y - (b.x + b.y)),
     [game.pieces],
   );
+  const sceneUrls = useMemo(() => sceneArtUrls(sceneBoard, seed, ambientSceneCover), [ambientSceneCover, sceneBoard, seed]);
   // Hold the board hidden until its whole art set has decoded, then fade it in as one
   // unit — no per-tile popcorn (see render/boardArtReady). The signature is the tile set
   // (stable across moves), so this arms once per board/seed, not on every move.
-  const boardArt = useMemo(() => collectBoardArt(board, livePieces, fenceOverlays, wallOverlays, wallArtUrls), [board, livePieces, fenceOverlays, wallOverlays, wallArtUrls]);
+  const boardArt = useMemo(() => collectBoardArt(board, livePieces, fenceOverlays, wallOverlays, wallArtUrls, sceneUrls), [board, livePieces, fenceOverlays, wallOverlays, wallArtUrls, sceneUrls]);
   const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
   // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
   // the tile signature so a new skirmish/replay re-arms it, but moves (signature stable) don't.
@@ -766,16 +955,32 @@ export function SkirmishBoard() {
     }
   };
 
-  // Map a viewport point to the board cell under it. elementFromPoint is transform-agnostic,
-  // so this stays correct under any board zoom/pan; the ghost is pointer-events:none and the
-  // unit seats are too, so the topmost hit is always the cell-hit button (which carries cx/cy).
+  // Map a viewport point to the board cell under it by testing the actual on-screen diamond
+  // geometry. `elementFromPoint` is too sensitive to overlapping isometric hit boxes: near a
+  // seam it can report a visually-front cell rather than the cell whose diamond contains the
+  // cursor. Picking the most central containing diamond makes the highlight and drop target
+  // stable under zoom, pan, and per-cell z-index.
   const cellFromPoint = (clientX: number, clientY: number): { x: number; y: number; btn: HTMLElement } | null => {
-    const el = document.elementFromPoint(clientX, clientY);
-    const btn = el?.closest<HTMLElement>('.skirmish-board-cell-hit');
-    if (!btn || btn.dataset.cx === undefined || btn.dataset.cy === undefined) return null;
-    const x = Number(btn.dataset.cx);
-    const y = Number(btn.dataset.cy);
-    return Number.isFinite(x) && Number.isFinite(y) ? { x, y, btn } : null;
+    let best: { x: number; y: number; btn: HTMLElement; score: number } | null = null;
+    const cells = document.querySelectorAll<HTMLElement>('[data-testid="skirmish-board"] .skirmish-board-cell-hit');
+    for (const btn of cells) {
+      if (btn.dataset.cx === undefined || btn.dataset.cy === undefined) continue;
+      const rect = btn.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      const dx = Math.abs(clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
+      const dy = Math.abs(clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
+      const score = dx + dy;
+      if (score > 1.08) continue;
+      if (best && score >= best.score) continue;
+      const x = Number(btn.dataset.cx);
+      const y = Number(btn.dataset.cy);
+      if (Number.isFinite(x) && Number.isFinite(y)) best = { x, y, btn, score };
+    }
+    return best ? { x: best.x, y: best.y, btn: best.btn } : null;
+  };
+  const setDropKeys = (aimKey: string | null, hoverKey: string | null): void => {
+    setDropAimKey((prev) => (prev === aimKey ? prev : aimKey));
+    setDropHoverKey((prev) => (prev === hoverKey ? prev : hoverKey));
   };
 
   const onCellPointerDown = (cx: number, cy: number, event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -829,23 +1034,21 @@ export function SkirmishBoard() {
     }
   };
 
-  const onCellPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const updateDragPointer = (event: { pointerId: number; clientX: number; clientY: number }) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== event.pointerId) return;
     lastCursorRef.current = { x: event.clientX, y: event.clientY };
     if (!d.active) {
       if (Math.hypot(event.clientX - d.startX, event.clientY - d.startY) < DRAG_THRESHOLD_PX) return;
       d.active = true;
-      // Size the ghost to the piece's actual on-screen sprite (already scaled by board zoom).
-      const img =
-        document.querySelector<HTMLImageElement>('[data-testid="skirmish-board"] .skirmish-board-unit.is-selected img');
-      const rect = img?.getBoundingClientRect();
+      // Board-space units now paint into the scene canvas; size the screen-space drag ghost
+      // from the same seat dimensions, scaled by the current board zoom.
       setDrag({
         pieceId: d.pieceId,
         src: d.src,
         side: d.side,
-        w: rect?.width ?? DEFAULT_GHOST_W,
-        h: rect?.height ?? DEFAULT_GHOST_H,
+        w: DEFAULT_GHOST_W * boardZoom,
+        h: DEFAULT_GHOST_H * boardZoom,
       });
     }
     // Follow the cursor imperatively (no board re-render per frame).
@@ -854,41 +1057,39 @@ export function SkirmishBoard() {
       ghost.style.left = `${event.clientX}px`;
       ghost.style.top = `${event.clientY}px`;
     }
-    // Ring the hovered cell only when it's a legal drop. This is React state (not an imperative
-    // class) so it survives the drag's own re-renders; only set it when the cell actually changes.
+    // Show the interpreted cell even when it is not a legal drop; the green drop ring then
+    // layers on top only for targets that will actually commit.
     const hit = cellFromPoint(event.clientX, event.clientY);
-    const key = hit && d.targets.has(`${hit.x},${hit.y}`) ? `${hit.x},${hit.y}` : null;
-    setDropHoverKey((prev) => (prev === key ? prev : key));
+    const aimKey = hit ? `${hit.x},${hit.y}` : null;
+    const dropKey = aimKey && d.targets.has(aimKey) ? aimKey : null;
+    setDropKeys(aimKey, dropKey);
   };
 
-  const onCellPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const finishDragPointer = (event: { pointerId: number; clientX: number; clientY: number }) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== event.pointerId) return;
     dragRef.current = null;
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      /* already released */
-    }
-    setDropHoverKey(null);
+    const releaseHit = cellFromPoint(event.clientX, event.clientY);
+    const releaseAimKey = releaseHit ? `${releaseHit.x},${releaseHit.y}` : null;
+    const releaseDropKey = releaseAimKey && d.targets.has(releaseAimKey) ? releaseAimKey : null;
+    setDropKeys(null, null);
     if (!d.active) return; // a tap, not a drag — let the native click handle select/move
     // A completed drag emits a trailing click; swallow it so it doesn't re-select the piece.
     suppressClickRef.current = true;
     window.setTimeout(() => {
       suppressClickRef.current = false;
     }, 0);
-    const hit = cellFromPoint(event.clientX, event.clientY);
-    if (hit && d.targets.has(`${hit.x},${hit.y}`)) {
+    if (releaseHit && releaseDropKey) {
       if (d.premove) {
         // Opponent's turn: the drop queues a premove step (no board move now).
-        queueMove(d.pieceId, hit.x, hit.y);
+        queueMove(d.pieceId, releaseHit.x, releaseHit.y);
       } else {
         // Legal drop: land with no hop (the drag already showed the travel). noHopId is set in
         // the same handler as tryMoveTo so the destination render carries the suppress flag.
         setNoHopId(d.pieceId);
         window.setTimeout(() => setNoHopId(null), 0);
         select(d.pieceId);
-        tryMoveTo(hit.x, hit.y);
+        tryMoveTo(releaseHit.x, releaseHit.y);
       }
     }
     // Illegal drop (or released off the board): keep the piece selected so its move dots
@@ -896,12 +1097,31 @@ export function SkirmishBoard() {
     setDrag(null);
   };
 
-  const onCellPointerCancel = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const cancelDragPointer = (event: { pointerId: number }) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== event.pointerId) return;
     dragRef.current = null;
-    setDropHoverKey(null);
+    setDropKeys(null, null);
     if (d.active) setDrag(null);
+  };
+
+  const onCellPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    updateDragPointer(event);
+  };
+
+  const onCellPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== event.pointerId) return;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* already released */
+    }
+    finishDragPointer(event);
+  };
+
+  const onCellPointerCancel = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    cancelDragPointer(event);
   };
 
   return (
@@ -919,14 +1139,26 @@ export function SkirmishBoard() {
         <BoardLabBoard
           board={board}
           assetFrameSrc={tileFrameSrc}
-          wallOverlays={wallOverlays}
-          wallArt={exactBoard?.wallArt}
-          wallBounds={{ cols: game.size.cols, rows: game.size.rows }}
-          fenceOverlays={fenceOverlays}
+          macroTiles={exactBoard?.macroTiles}
           boardZoom={boardZoom}
           boardPan={boardPan}
           className="skirmish-board-surface"
           ariaLabel="Skirmish board"
+          showGrid={showGrid}
+          sceneLayer={(
+            <SkirmishSceneLayer
+              sceneBoard={sceneBoard}
+              seed={seed}
+              ambientCover={ambientSceneCover}
+              livePieces={livePieces}
+              arriving={arriving}
+              arrivalDelays={arrivalDelays}
+              draggingId={drag?.pieceId ?? null}
+              noHopId={noHopId}
+              premovedIds={premovedIds}
+              afterGhosts={afterGhosts}
+            />
+          )}
           renderCellOverlay={({ cell }) => {
             if (!cell.asset && !cell.missing) return null;
             const key = `${cell.x},${cell.y}`;
@@ -940,6 +1172,7 @@ export function SkirmishBoard() {
               blockedSet.has(key) ? 'is-blocked-candidate' : '',
               premoveTargetSet.has(key) ? 'is-premove-target' : '',
               premoveDestSet.has(key) ? 'is-premove' : '',
+              dropAimKey === key ? 'is-drop-aim' : '',
               dropHoverKey === key ? 'is-drop-hover' : '',
               showStoreSelection && game.pieces.some((piece) => piece.id === selectedId && piece.alive && piece.x === cell.x && piece.y === cell.y) ? 'is-selected' : '',
               premoveSelKey === key ? 'is-selected' : '',
@@ -967,28 +1200,6 @@ export function SkirmishBoard() {
             );
           }}
         >
-          <GroundCoverLayer cells={board.cells} />
-          {(game.props ?? []).map((prop) => (
-            <PropSprite key={`prop-${prop.propId}-${prop.x}-${prop.y}`} prop={prop} />
-          ))}
-          {livePieces.map((piece) => (
-            <UnitPiece
-              key={piece.id}
-              piece={piece}
-              selected={piece.id === selectedId}
-              focused={piece.id === focusPiece?.id}
-              arriving={arriving && arrivalDelays.has(piece.id)}
-              arrivalDelay={arrivalDelays.get(piece.id) ?? 0}
-              dragging={drag?.pieceId === piece.id}
-              suppressHop={noHopId === piece.id}
-              premoveOrigin={premovedIds.has(piece.id)}
-            />
-          ))}
-          {afterGhosts.flatMap((group) =>
-            group.pieces.map((piece, i) => (
-              <PremoveGhost key={`premove-ghost-${group.key}-${piece.id}`} piece={piece} slot={i} count={group.pieces.length} />
-            )),
-          )}
           <PremoveArrowLayer arrows={premoveChain} />
         </BoardLabBoard>
       </ViewPane>

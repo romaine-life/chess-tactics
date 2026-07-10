@@ -1,4 +1,9 @@
-import { pieceSpritePath, type UnitPalette } from '../core/pieces';
+import { pieceSpritePath, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
+import {
+  applyAcceptedUnitSprites,
+  resetAcceptedUnitSprites,
+  type AcceptedUnitSpriteMap,
+} from '../core/unitSpriteRegistry';
 
 export type Faction = UnitPalette;
 export type PieceId = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king';
@@ -8,11 +13,14 @@ export type FootprintShape = 'square' | 'circle';
 export type UnitFootprint = {
   shape: FootprintShape;
   sourceCanvasPx: number;
+  sourceCanvasHeightPx: number;
   sourceFootprintPx: number;
 };
 
 export type UnitAsset = {
   id: string;
+  /** UUID of the editable DB candidate/art row; never serialized into gameplay. */
+  catalogAssetId?: string;
   family: PieceId;
   label: string;
   badge: string;
@@ -23,13 +31,64 @@ export type UnitAsset = {
   factionMode: 'fixed' | 'palette';
   defaultScale: number;
   footprint: UnitFootprint;
-  unitAnchorX?: string;
-  unitAnchorY?: string;
-  /** How this sprite was produced (e.g. "Blender", "Codex→Filter", "PixelLab"). */
+  unitAnchorX: string;
+  unitAnchorY: string;
+  /** How this sprite was produced (e.g. "Blender", "Codex Sheet"). */
   method?: string;
-  /** Non-production candidates: shown in the Studio catalog for comparison, held OUT of the shipped roster/game. */
+  /** Non-production candidates, when present, are held OUT of the shipped roster/game. */
   speculative?: boolean;
+  accepted?: boolean;
+  archived?: boolean;
+  complete?: boolean;
+  spriteCount?: number;
+  rowRevision?: number;
   sprite: (faction: Faction, direction: Direction) => string;
+};
+
+export type LiveUnitSprite = {
+  url: string;
+  sha256: string;
+  width: number;
+  height: number;
+  byteLength: number;
+};
+
+export type LiveUnitCatalogAsset = {
+  id: string;
+  family: PieceId;
+  label: string;
+  method: string;
+  notes: string;
+  status: 'candidate' | 'archived';
+  accepted: boolean;
+  footprint: {
+    shape: FootprintShape;
+    sourceCanvasWidth: number;
+    sourceCanvasHeight: number;
+    sourceFootprintPx: number;
+  };
+  anchor: { x: number; y: number };
+  rowRevision: number;
+  sprites: Partial<Record<Faction, Partial<Record<Direction, LiveUnitSprite>>>>;
+  spriteCount: number;
+  complete: boolean;
+};
+
+export type LiveUnitCatalogFamily = {
+  family: PieceId;
+  acceptedAssetId: string | null;
+  displayScalePercent: number;
+  rowRevision: number;
+  updatedAt?: string | null;
+  updatedBy?: string | null;
+};
+
+export type LiveUnitCatalog = {
+  schemaVersion: number;
+  revision: number;
+  updatedAt?: string | null;
+  families: LiveUnitCatalogFamily[];
+  assets: LiveUnitCatalogAsset[];
 };
 
 export const CANONICAL_CIRCLE_FOOTPRINT_PX = 96;
@@ -49,38 +108,14 @@ export const renderSizeForTileScale = (unit: UnitAsset, scale: number, tileScale
 export const footprintSizeFromScale = (unit: UnitAsset, scale: number) =>
   Math.round(canonicalFootprintSize(unit.footprint.shape) * (scale / 100));
 
-const circleFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
-  shape: 'circle',
-  sourceCanvasPx,
-  sourceFootprintPx,
-});
-
-const squareFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
-  shape: 'square',
-  sourceCanvasPx,
-  sourceFootprintPx,
-});
-
-const ROOK_KEEP_CANVAS_PX = 512;
-const ROOK_KEEP_CONTACT_FOOTPRINT_PX = 428;
-const ROOK_KEEP_CONTACT_ANCHOR_X = '50%';
-const ROOK_KEEP_CONTACT_ANCHOR_Y = '80.241%';
-const KNIGHT_FUR_CANVAS_PX = 512;
-const KNIGHT_FUR_CONTACT_FOOTPRINT_PX = 178;
-const KNIGHT_FUR_CONTACT_ANCHOR_X = '50%';
-const KNIGHT_FUR_CONTACT_ANCHOR_Y = '80.241%';
-const BISHOP_MITRE_CANVAS_PX = 512;
-const BISHOP_MITRE_CONTACT_FOOTPRINT_PX = 126;
-const BISHOP_MITRE_CONTACT_ANCHOR_X = '50%';
-const BISHOP_MITRE_CONTACT_ANCHOR_Y = '80.241%';
-const QUEEN_TIARA_CANVAS_PX = 512;
-const QUEEN_TIARA_CONTACT_FOOTPRINT_PX = 150;
-const QUEEN_TIARA_CONTACT_ANCHOR_X = '50%';
-const QUEEN_TIARA_CONTACT_ANCHOR_Y = '80.241%';
-const KING_CROWN_CANVAS_PX = 512;
-const KING_CROWN_CONTACT_FOOTPRINT_PX = 148;
-const KING_CROWN_CONTACT_ANCHOR_X = '50%';
-const KING_CROWN_CONTACT_ANCHOR_Y = '80.241%';
+export function unitAnchorFraction(value: string): number {
+  const parsed = Number.parseFloat(value);
+  const fraction = value.trim().endsWith('%') ? parsed / 100 : parsed;
+  if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) {
+    throw new Error(`invalid live unit anchor: ${value}`);
+  }
+  return fraction;
+}
 
 export const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
@@ -129,166 +164,240 @@ export const MISSING_DIRECTION_SPRITE =
 
 export const hasDirectionSprite = (unit: UnitAsset, dir: Direction) => (unit.directions ? unit.directions.includes(dir) : dir === 'south');
 
-const productionUnits: UnitAsset[] = [
-  {
-    id: 'rook-blender-v4-calibrated',
-    family: 'rook',
-    label: 'Rook',
-    badge: '8 directions · calibrated',
-    preview: pieceSpritePath('rook'),
-    read: 'Board-calibrated castle rook with exact eight-direction rotations',
-    status: 'active production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: squareFootprint(ROOK_KEEP_CANVAS_PX, ROOK_KEEP_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: ROOK_KEEP_CONTACT_ANCHOR_X,
-    unitAnchorY: ROOK_KEEP_CONTACT_ANCHOR_Y,
-    sprite: paletteSprite('rook'),
-  },
-  {
-    id: 'knight-fur',
-    family: 'knight',
-    label: 'Knight',
-    badge: '8 directions · calibrated',
-    preview: pieceSpritePath('knight'),
-    read: 'Carved warhorse with a procedural navy fur coat; true-isometric Blender render',
-    status: 'active production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(KNIGHT_FUR_CANVAS_PX, KNIGHT_FUR_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: KNIGHT_FUR_CONTACT_ANCHOR_X,
-    unitAnchorY: KNIGHT_FUR_CONTACT_ANCHOR_Y,
-    sprite: paletteSprite('knight'),
-  },
-  {
-    id: 'bishop-mitre',
-    family: 'bishop',
-    label: 'Bishop',
-    badge: '8 directions · calibrated',
-    preview: pieceSpritePath('bishop'),
-    read: 'Mitre bishop rendered as a true-isometric eight-direction production unit',
-    status: 'active production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(BISHOP_MITRE_CANVAS_PX, BISHOP_MITRE_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: BISHOP_MITRE_CONTACT_ANCHOR_X,
-    unitAnchorY: BISHOP_MITRE_CONTACT_ANCHOR_Y,
-    sprite: paletteSprite('bishop'),
-  },
-  {
-    id: 'queen-tiara',
-    family: 'queen',
-    label: 'Queen',
-    badge: '8 directions · calibrated',
-    preview: pieceSpritePath('queen'),
-    read: 'Coronet queen rendered as a true-isometric eight-direction production unit',
-    status: 'active production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(QUEEN_TIARA_CANVAS_PX, QUEEN_TIARA_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: QUEEN_TIARA_CONTACT_ANCHOR_X,
-    unitAnchorY: QUEEN_TIARA_CONTACT_ANCHOR_Y,
-    sprite: paletteSprite('queen'),
-  },
-  {
-    id: 'king-crown',
-    family: 'king',
-    label: 'King',
-    badge: '8 directions · calibrated',
-    preview: pieceSpritePath('king'),
-    read: 'Crowned king rendered as a true-isometric eight-direction production unit',
-    status: 'active production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(KING_CROWN_CANVAS_PX, KING_CROWN_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: KING_CROWN_CONTACT_ANCHOR_X,
-    unitAnchorY: KING_CROWN_CONTACT_ANCHOR_Y,
-    sprite: paletteSprite('king'),
-  },
-  {
-    id: 'pawn-codexsheet',
-    family: 'pawn',
-    label: 'Pawn',
-    badge: '8 directions · pixel art',
-    preview: pieceSpritePath('pawn'),
-    read: 'Helmeted pawn — Codex Sheet pixel-art production unit (true-isometric, 8 directions).',
-    status: 'active production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(512, 150),
-    unitAnchorX: '50%',
-    unitAnchorY: '80.241%',
-    sprite: paletteSprite('pawn'),
-  },
-];
-
-// --- Speculative pixel-art comparison libraries (the unit "bake-off") --------
-// The accepted PRODUCTION pixel-art set ("Codex Sheet") was promoted into the shipped
-// roster above — it renders from the canonical /assets/units/<piece>/<palette> path with
-// team colors. These remaining libraries stay in the Studio catalog ONLY for comparison
-// (held out of the game), each tagged `speculative` so they can be culled. Navy palette
-// only; sprites framed onto the same 512 canvas, seated via the per-piece footprints below.
-export type PixelLibraryKey = 'codexfilter' | 'filter2' | 'filter3';
-export const PIXEL_LIBRARIES: { key: PixelLibraryKey; label: string; dirs: Direction[] }[] = [
-  { key: 'codexfilter', label: 'Codex→Filter', dirs: rookDirections },
-  { key: 'filter2', label: 'Filter ×2', dirs: rookDirections },
-  { key: 'filter3', label: 'Filter ×3', dirs: rookDirections },
-];
-
-const PIXEL_PIECE_FOOTPRINT: Record<PieceId, { footprint: UnitFootprint; anchorX: string; anchorY: string }> = {
-  rook: { footprint: squareFootprint(ROOK_KEEP_CANVAS_PX, ROOK_KEEP_CONTACT_FOOTPRINT_PX), anchorX: ROOK_KEEP_CONTACT_ANCHOR_X, anchorY: ROOK_KEEP_CONTACT_ANCHOR_Y },
-  knight: { footprint: circleFootprint(KNIGHT_FUR_CANVAS_PX, KNIGHT_FUR_CONTACT_FOOTPRINT_PX), anchorX: KNIGHT_FUR_CONTACT_ANCHOR_X, anchorY: KNIGHT_FUR_CONTACT_ANCHOR_Y },
-  bishop: { footprint: circleFootprint(BISHOP_MITRE_CANVAS_PX, BISHOP_MITRE_CONTACT_FOOTPRINT_PX), anchorX: BISHOP_MITRE_CONTACT_ANCHOR_X, anchorY: BISHOP_MITRE_CONTACT_ANCHOR_Y },
-  queen: { footprint: circleFootprint(QUEEN_TIARA_CANVAS_PX, QUEEN_TIARA_CONTACT_FOOTPRINT_PX), anchorX: QUEEN_TIARA_CONTACT_ANCHOR_X, anchorY: QUEEN_TIARA_CONTACT_ANCHOR_Y },
-  king: { footprint: circleFootprint(KING_CROWN_CANVAS_PX, KING_CROWN_CONTACT_FOOTPRINT_PX), anchorX: KING_CROWN_CONTACT_ANCHOR_X, anchorY: KING_CROWN_CONTACT_ANCHOR_Y },
-  pawn: { footprint: circleFootprint(512, 150), anchorX: '50%', anchorY: '80.241%' },
-};
-
-const PIXEL_PIECES: PieceId[] = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'king'];
-
-const pixelLibrarySprite = (key: PixelLibraryKey, piece: PieceId) =>
-  (_faction: Faction, direction: Direction) => `/assets/units-pixel/${key}/${piece}/navy-blue/${direction}.png`;
-
-const pixelLibraryUnits: UnitAsset[] = PIXEL_PIECES.flatMap((piece) =>
-  PIXEL_LIBRARIES.map((lib): UnitAsset => {
-    const fp = PIXEL_PIECE_FOOTPRINT[piece];
-    return {
-      id: `${piece}-${lib.key}`,
-      family: piece,
-      label: `${familyLabels[piece]} · ${lib.label}`,
-      badge: lib.label,
-      preview: `/assets/units-pixel/${lib.key}/${piece}/navy-blue/south.png`,
-      read: `${familyLabels[piece]} — ${lib.label} pixel-art candidate (speculative; navy only).`,
-      status: 'speculative candidate',
-      directions: lib.dirs,
-      factionMode: 'fixed',
-      defaultScale: 100,
-      footprint: fp.footprint,
-      unitAnchorX: fp.anchorX,
-      unitAnchorY: fp.anchorY,
-      method: lib.label,
-      speculative: true,
-      sprite: pixelLibrarySprite(lib.key, piece),
-    };
-  }),
-);
-
-export const unitAssets: UnitAsset[] = [
-  ...productionUnits.map((unit) => ({ ...unit, method: unit.method ?? 'Production' })),
-  ...pixelLibraryUnits,
-];
-
-export const productionUnitAssets: UnitAsset[] = unitAssets.filter((unit) => unit.factionMode === 'palette' && !unit.speculative);
+const productionUnits: UnitAsset[] = [];
+export const unitAssets: UnitAsset[] = [];
+export const productionUnitAssets: UnitAsset[] = [];
+export const archivedUnitAssets: UnitAsset[] = [];
 
 export const UNIT_METHOD_OPTIONS: { id: string; label: string; sub: string }[] = [
   { id: 'Production', label: 'Production', sub: 'shipped' },
-  ...PIXEL_LIBRARIES.map((lib) => ({ id: lib.label, label: lib.label, sub: 'Speculative' })),
 ];
 
-export const activeUnitFamilies = [...new Set(unitAssets.map((unit) => unit.family))];
+export const activeUnitFamilies: PieceId[] = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'king'];
+
+let liveUnitCatalog: LiveUnitCatalog | null = null;
+
+const candidateSprite = (asset: LiveUnitCatalogAsset) => (faction: Faction, direction: Direction): string =>
+  asset.sprites[faction]?.[direction]?.url ?? MISSING_DIRECTION_SPRITE;
+
+const candidatePreview = (asset: LiveUnitCatalogAsset): string => {
+  const preferred = asset.sprites['navy-blue']?.south?.url;
+  if (preferred) return preferred;
+  for (const palette of Object.values(asset.sprites)) {
+    if (!palette) continue;
+    for (const sprite of Object.values(palette)) if (sprite?.url) return sprite.url;
+  }
+  return MISSING_DIRECTION_SPRITE;
+};
+
+function catalogAssetToUnit(asset: LiveUnitCatalogAsset, scale: number): UnitAsset {
+  const directions = rookDirections.filter((direction) =>
+    Object.values(asset.sprites).some((palette) => Boolean(palette?.[direction])));
+  return {
+    id: `candidate:${asset.id}`,
+    catalogAssetId: asset.id,
+    family: asset.family,
+    label: asset.label,
+    badge: `${asset.spriteCount}/48 frames${asset.complete ? ' · complete' : ''}`,
+    preview: candidatePreview(asset),
+    read: asset.notes || `${asset.method} ${familyLabels[asset.family].toLowerCase()} candidate`,
+    status: asset.status,
+    directions,
+    factionMode: 'palette',
+    defaultScale: scale,
+    footprint: {
+      shape: asset.footprint.shape,
+      sourceCanvasPx: asset.footprint.sourceCanvasWidth,
+      sourceCanvasHeightPx: asset.footprint.sourceCanvasHeight,
+      sourceFootprintPx: asset.footprint.sourceFootprintPx,
+    },
+    unitAnchorX: `${asset.anchor.x * 100}%`,
+    unitAnchorY: `${asset.anchor.y * 100}%`,
+    method: asset.method,
+    speculative: true,
+    accepted: false,
+    archived: asset.status === 'archived',
+    complete: asset.complete,
+    spriteCount: asset.spriteCount,
+    rowRevision: asset.rowRevision,
+    sprite: candidateSprite(asset),
+  };
+}
+
+const acceptedSpriteUrlPattern = /^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/;
+
+const catalogFailure = (message: string): Error => new Error(`invalid live unit catalog: ${message}`);
+
+export function assertLiveUnitCatalog(value: unknown): asserts value is LiveUnitCatalog {
+  if (!value || typeof value !== 'object') throw catalogFailure('response is not an object');
+  const raw = value as Partial<LiveUnitCatalog>;
+  if (raw.schemaVersion !== 1) throw catalogFailure(`unsupported schema version ${String(raw.schemaVersion)}`);
+  if (!Number.isFinite(raw.revision)) throw catalogFailure('revision is missing');
+  if (!Array.isArray(raw.families) || !Array.isArray(raw.assets)) throw catalogFailure('families or assets are missing');
+  if (raw.families.length !== activeUnitFamilies.length) throw catalogFailure('all six family rows are required');
+
+  const familyRows = new Map<PieceId, LiveUnitCatalogFamily>();
+  for (const family of raw.families) {
+    if (!activeUnitFamilies.includes(family.family)) throw catalogFailure(`unknown family ${String(family.family)}`);
+    if (familyRows.has(family.family)) throw catalogFailure(`duplicate family ${family.family}`);
+    if (!Number.isInteger(family.displayScalePercent) || family.displayScalePercent < 60 || family.displayScalePercent > 140) {
+      throw catalogFailure(`invalid display scale for ${family.family}`);
+    }
+    if (typeof family.acceptedAssetId !== 'string' || !family.acceptedAssetId) {
+      throw catalogFailure(`${family.family} has no accepted asset`);
+    }
+    familyRows.set(family.family, family);
+  }
+
+  const assetsById = new Map<string, LiveUnitCatalogAsset>();
+  for (const asset of raw.assets) {
+    if (!asset || typeof asset !== 'object' || typeof asset.id !== 'string' || !asset.id) {
+      throw catalogFailure('asset id is missing');
+    }
+    if (!activeUnitFamilies.includes(asset.family)) throw catalogFailure(`asset ${asset.id} has an unknown family`);
+    if (assetsById.has(asset.id)) throw catalogFailure(`duplicate asset ${asset.id}`);
+    assetsById.set(asset.id, asset);
+  }
+
+  for (const family of activeUnitFamilies) {
+    const familyRow = familyRows.get(family);
+    const accepted = familyRow ? assetsById.get(familyRow.acceptedAssetId!) : undefined;
+    if (!accepted) throw catalogFailure(`${family} accepted asset is absent`);
+    if (accepted.family !== family || accepted.accepted !== true || accepted.status === 'archived') {
+      throw catalogFailure(`${family} accepted pointer is invalid`);
+    }
+    if (!accepted.complete || accepted.spriteCount !== UNIT_PALETTES.length * rookDirections.length) {
+      throw catalogFailure(`${family} accepted asset is incomplete`);
+    }
+    const footprint = accepted.footprint;
+    if (
+      !footprint || !['circle', 'square'].includes(footprint.shape) ||
+      !Number.isFinite(footprint.sourceCanvasWidth) || footprint.sourceCanvasWidth <= 0 ||
+      !Number.isFinite(footprint.sourceCanvasHeight) || footprint.sourceCanvasHeight <= 0 ||
+      !Number.isFinite(footprint.sourceFootprintPx) || footprint.sourceFootprintPx <= 0
+    ) {
+      throw catalogFailure(`${family} has invalid footprint geometry`);
+    }
+    if (
+      !accepted.anchor || !Number.isFinite(accepted.anchor.x) || !Number.isFinite(accepted.anchor.y) ||
+      accepted.anchor.x < 0 || accepted.anchor.x > 1 || accepted.anchor.y < 0 || accepted.anchor.y > 1
+    ) {
+      throw catalogFailure(`${family} has an invalid contact anchor`);
+    }
+    for (const palette of UNIT_PALETTES) {
+      for (const direction of rookDirections) {
+        const sprite = accepted.sprites?.[palette]?.[direction];
+        const match = sprite && acceptedSpriteUrlPattern.exec(sprite.url);
+        if (!sprite || !match || sprite.sha256 !== match[1]) {
+          throw catalogFailure(`${family}/${palette}/${direction} is missing an immutable live sprite`);
+        }
+      }
+    }
+  }
+}
+
+function productionUnitFromCatalog(family: LiveUnitCatalogFamily, accepted: LiveUnitCatalogAsset): UnitAsset {
+  return {
+    id: family.family,
+    catalogAssetId: accepted.id,
+    family: family.family,
+    label: familyLabels[family.family],
+    badge: '8 directions · live',
+    preview: accepted.sprites['navy-blue']!.south!.url,
+    read: accepted.notes || `${accepted.method} production unit`,
+    status: 'active production unit',
+    directions: rookDirections,
+    factionMode: 'palette',
+    defaultScale: family.displayScalePercent,
+    footprint: {
+      shape: accepted.footprint.shape,
+      sourceCanvasPx: accepted.footprint.sourceCanvasWidth,
+      sourceCanvasHeightPx: accepted.footprint.sourceCanvasHeight,
+      sourceFootprintPx: accepted.footprint.sourceFootprintPx,
+    },
+    unitAnchorX: `${accepted.anchor.x * 100}%`,
+    unitAnchorY: `${accepted.anchor.y * 100}%`,
+    method: accepted.method,
+    accepted: true,
+    complete: true,
+    spriteCount: accepted.spriteCount,
+    rowRevision: accepted.rowRevision,
+    sprite: paletteSprite(family.family),
+  };
+}
+
+/** Apply one complete backend snapshot as the renderer's only unit-art source. */
+export function applyLiveUnitCatalog(value: unknown): boolean {
+  assertLiveUnitCatalog(value);
+  const before = JSON.stringify({
+    revision: liveUnitCatalog?.revision ?? 0,
+    ids: unitAssets.map((asset) => [asset.id, asset.catalogAssetId, asset.defaultScale, asset.rowRevision]),
+  });
+  const familyRows = new Map(value.families.map((family) => [family.family, family]));
+  const assetsById = new Map(value.assets.map((asset) => [asset.id, asset]));
+  const nextProduction = activeUnitFamilies.map((family) => {
+    const familyRow = familyRows.get(family)!;
+    return productionUnitFromCatalog(familyRow, assetsById.get(familyRow.acceptedAssetId!)!);
+  });
+  const acceptedSprites = Object.fromEntries(activeUnitFamilies.map((family) => {
+    const accepted = assetsById.get(familyRows.get(family)!.acceptedAssetId!)!;
+    return [family, Object.fromEntries(UNIT_PALETTES.map((palette) => [
+      palette,
+      Object.fromEntries(rookDirections.map((direction) => [direction, accepted.sprites[palette]![direction]!.url])),
+    ]))];
+  })) as AcceptedUnitSpriteMap;
+
+  const activeCandidates = value.assets
+    .filter((asset) => !asset.accepted && asset.status !== 'archived')
+    .map((asset) => catalogAssetToUnit(asset, familyRows.get(asset.family)!.displayScalePercent));
+  const archived = value.assets
+    .filter((asset) => asset.status === 'archived')
+    .map((asset) => catalogAssetToUnit(asset, familyRows.get(asset.family)!.displayScalePercent));
+
+  applyAcceptedUnitSprites(value.revision, acceptedSprites);
+  liveUnitCatalog = value;
+  productionUnits.splice(0, productionUnits.length, ...nextProduction);
+  unitAssets.splice(0, unitAssets.length, ...productionUnits, ...activeCandidates);
+  productionUnitAssets.splice(0, productionUnitAssets.length, ...productionUnits);
+  archivedUnitAssets.splice(0, archivedUnitAssets.length, ...archived);
+
+  const methods = [...new Set(activeCandidates.map((asset) => asset.method).filter(Boolean) as string[])];
+  UNIT_METHOD_OPTIONS.splice(
+    0,
+    UNIT_METHOD_OPTIONS.length,
+    { id: 'Production', label: 'Production', sub: 'shipped' },
+    ...methods.map((method) => ({ id: method, label: method, sub: 'candidate' })),
+  );
+  const after = JSON.stringify({
+    revision: liveUnitCatalog.revision,
+    ids: unitAssets.map((asset) => [asset.id, asset.catalogAssetId, asset.defaultScale, asset.rowRevision]),
+  });
+  return before !== after;
+}
+
+export function currentLiveUnitCatalog(): LiveUnitCatalog | null {
+  return liveUnitCatalog;
+}
+
+export function resetLiveUnitCatalog(): void {
+  liveUnitCatalog = null;
+  resetAcceptedUnitSprites();
+  productionUnits.splice(0, productionUnits.length);
+  unitAssets.splice(0, unitAssets.length);
+  productionUnitAssets.splice(0, productionUnitAssets.length);
+  archivedUnitAssets.splice(0, archivedUnitAssets.length);
+  UNIT_METHOD_OPTIONS.splice(0, UNIT_METHOD_OPTIONS.length, { id: 'Production', label: 'Production', sub: 'shipped' });
+}
+
+export function unitAssetById(id: string): UnitAsset | undefined {
+  return unitAssets.find((unit) => unit.id === id || unit.catalogAssetId === id);
+}
+
+export function productionUnitForFamily(family: string): UnitAsset | undefined {
+  return productionUnits.find((unit) => unit.family === family);
+}
+
+export function unitFamilyForId(id: string): PieceId | undefined {
+  if ((activeUnitFamilies as string[]).includes(id)) return id as PieceId;
+  return unitAssetById(id)?.family;
+}

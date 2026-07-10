@@ -1,17 +1,18 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { fetchMe, goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
 import { normalizeRoutePath } from '../navigation';
-import { TitleBarButton, TitleBarIconButton } from '../shell/TitleBarControls';
+import { TitleBarIconButton } from '../shell/TitleBarControls';
 import { AccountMenu } from './AccountMenu';
 
 // The shared trailing-edge "settings + user" cluster for the standard app title
 // bar (ADR-0023/0036): an icon-only Settings gear next to the account control —
-// the avatar menu when signed in, a Sign In button when not. One source so the
+// the avatar menu when signed in, an entry-door sign-in icon when not. One source so the
 // cluster can't drift between screens; every menu/studio bar mounts THIS, never a
 // hand-rolled copy. (Settings and Campaign keep their own bespoke account readout
 // for now; this is the canonical cluster for everything else.)
 
 const SETTINGS_ICON = '/assets/ui/main-menu/icons-carved/settings.png';
+const SIGN_IN_ICON = '/assets/ui/kit/icons/sign-in.png';
 
 // The gear's target: send the CURRENT location along as ?returnTo so Settings can
 // offer a real "‹ Back" to the screen the user left (validated via readValidatedReturnTo
@@ -120,7 +121,13 @@ export function HeaderAccountCluster({
       ) : (
         // A button, not an anchor (ADR-0052): the sign-in is still a full-page trip to
         // the auth backend — goSignIn sets window.location — it just shows no URL.
-        <TitleBarButton active onClick={() => goSignIn(signInReturnTo)}>Sign In</TitleBarButton>
+        <TitleBarIconButton
+          active
+          className="cluster-icon-button account-sign-in-button"
+          label="Sign in"
+          iconSrc={SIGN_IN_ICON}
+          onClick={() => goSignIn(signInReturnTo)}
+        />
       )}
     </div>
   );

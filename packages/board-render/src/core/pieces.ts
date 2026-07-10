@@ -1,4 +1,5 @@
 import type { PieceType, Side, UnitFacing } from './types';
+import { resolvedUnitSpritePath } from './unitSpriteRegistry';
 
 export const PLAYABLE_PIECE_TYPES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const satisfies readonly PieceType[];
 export type PlayablePieceType = typeof PLAYABLE_PIECE_TYPES[number];
@@ -28,9 +29,8 @@ export const PIECE_MARK: Record<PieceType, string> = {
   'random-rock': '?',
 };
 
-// Team-color palettes. Each unit ships its 8 directions rendered in every palette;
-// a board side is assigned a palette (default player navy-blue / enemy crimson). The
-// roster sprites live at /assets/units/<type>/<palette>/<direction>.png.
+// Team-color palettes. Every accepted live asset has 8 directions in each palette;
+// a board side is assigned a palette (default player navy-blue / enemy crimson).
 export const UNIT_PALETTES = ['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white'] as const;
 export type UnitPalette = typeof UNIT_PALETTES[number];
 export const DEFAULT_PALETTE: UnitPalette = 'navy-blue';
@@ -67,7 +67,7 @@ export const facingFromDelta = (dx: number, dy: number): UnitFacing | null => {
 };
 
 export const pieceSpritePath = (type: PlayablePieceType, palette: UnitPalette = DEFAULT_PALETTE, direction: UnitFacing = 'south') =>
-  `/assets/units/${type}/${palette}/${direction}.png`;
+  resolvedUnitSpritePath(type, palette, direction);
 
 // Which palette a board side wears. Shared by the board and the HUD portrait.
 export const PALETTE_FOR_SIDE: Record<Side, UnitPalette> = {

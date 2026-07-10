@@ -319,6 +319,25 @@ button:disabled {
   padding: 14px;
 }
 
+.app-startup-status {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.app-startup-status.is-error h1 {
+  color: var(--danger);
+}
+
+.app-startup-status button {
+  min-width: 112px;
+}
+
 /* #root host. Fills the shell's content row; tall pages scroll here while the
    catalog (height:100%) manages its own internal content-pane scroll so its
    tree rail stays locked in place. */
@@ -4210,6 +4229,23 @@ h1 {
   box-shadow: inset 0 0 0 2px rgba(245, 252, 255, .82);
 }
 
+/* Drag-to-move diagnostic: the square hit-testing thinks the cursor is over, even when
+   that square is not a legal destination. The green valid-drop style below overrides it. */
+.skirmish-board-cell-hit.is-drop-aim::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 223, 128, .32), transparent 62%),
+    rgba(255, 173, 64, .22);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-drop-aim::after {
+  opacity: 1;
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 232, 166, .92),
+    inset 0 0 0 4px rgba(144, 78, 20, .36),
+    0 0 12px rgba(255, 176, 66, .46);
+}
+
 /* Drag-to-move: the legal square the held piece is hovering over. Declared last so it wins
    over .is-move / :hover on the same cell — a bright green "drop here" fill + ring. */
 .skirmish-board-cell-hit.is-drop-hover::before {
@@ -4233,18 +4269,26 @@ h1 {
    the seat geometry lives nowhere else. Do not re-derive it per board. */
 .board-unit-seat {
   position: absolute;
-  width: 72px;
-  height: 86px;
+  width: calc(72px * var(--unit-scale));
+  height: calc(86px * var(--unit-scale));
   display: grid;
   align-items: center;
   justify-items: center;
-  transform: translate(-50%, -78%);
+  transform: translate(var(--unit-anchor-x), var(--unit-anchor-y));
   pointer-events: none;
 }
+
+.board-unit-seat.is-pawn { --unit-scale: var(--unit-scale-pawn); --unit-anchor-x: var(--unit-anchor-x-pawn); --unit-anchor-y: var(--unit-anchor-y-pawn); }
+.board-unit-seat.is-knight { --unit-scale: var(--unit-scale-knight); --unit-anchor-x: var(--unit-anchor-x-knight); --unit-anchor-y: var(--unit-anchor-y-knight); }
+.board-unit-seat.is-bishop { --unit-scale: var(--unit-scale-bishop); --unit-anchor-x: var(--unit-anchor-x-bishop); --unit-anchor-y: var(--unit-anchor-y-bishop); }
+.board-unit-seat.is-rook { --unit-scale: var(--unit-scale-rook); --unit-anchor-x: var(--unit-anchor-x-rook); --unit-anchor-y: var(--unit-anchor-y-rook); }
+.board-unit-seat.is-queen { --unit-scale: var(--unit-scale-queen); --unit-anchor-x: var(--unit-anchor-x-queen); --unit-anchor-y: var(--unit-anchor-y-queen); }
+.board-unit-seat.is-king { --unit-scale: var(--unit-scale-king); --unit-anchor-x: var(--unit-anchor-x-king); --unit-anchor-y: var(--unit-anchor-y-king); }
+
 .board-unit-seat img {
   display: block;
-  max-height: 92px;
-  max-width: 78px;
+  max-height: calc(92px * var(--unit-scale));
+  max-width: calc(78px * var(--unit-scale));
   object-fit: contain;
   image-rendering: auto;
 }
@@ -5533,6 +5577,56 @@ h1 {
   z-index: 2;
 }
 
+.le-tactical-cell {
+  position: absolute;
+  left: 0;
+  top: var(--iso-tile-surface-top);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.le-tactical-cell::before,
+.le-tactical-cell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+.le-tactical-cell.is-promotion-zone::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 236, 150, .40), transparent 62%),
+    rgba(246, 198, 80, .26);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-threat::before {
+  background: rgba(255, 105, 64, .38);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-move::before {
+  background: rgba(61, 210, 255, .42);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-blocked-candidate::before {
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 214, 97, .42) 0 7px, rgba(81, 43, 14, .38) 7px 14px);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-focused-piece::after {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 221, 112, .96),
+    inset 0 0 0 4px rgba(128, 55, 25, .42),
+    0 0 12px rgba(255, 151, 68, .54);
+  opacity: 1;
+}
+
 /* Marquee selection highlight for the Generate scope — same diamond seating as the zone tint, in
    a distinct cyan so it reads as "these cells will be generated", not a gameplay zone. Painted
    before the selection ring in the DOM so a single-cell ring still shows on top at equal z. */
@@ -5648,6 +5742,14 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.le-generate .le-gen-macro {
+  margin: 0 0 4px 12px;
+  padding: 2px 0 3px 8px;
+  border-left: 2px solid rgba(245, 196, 92, .34);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 /* Ground cover for a region: a compact list of collapsible cover rows, indented under the region. */
 .le-generate .le-gen-cover {
@@ -5838,6 +5940,8 @@ h1 {
   padding: 5px 2px;
 }
 .le-swatch img { height: 46px; image-rendering: pixelated; object-fit: contain; width: 46px; }
+.le-macro-swatch img { width: 100%; max-width: 58px; }
+.le-brush-thumb .le-thumb-macro { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
 .le-swatch small { font-size: var(--ds-text-2xs); line-height: 1; text-align: center; }
 .le-cover-swatches {
   grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
@@ -8739,6 +8843,15 @@ body { font-size: 17px; }
   font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
 
+.le-live-map-unavailable {
+  left: 50%;
+  max-width: min(560px, 82vw);
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, 82%);
+}
+
 .tileset-view-board-content {
   position: relative;
   width: 100%;
@@ -9575,6 +9688,251 @@ body { font-size: 17px; }
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.unit-size-controls {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(67, 127, 179, 0.28);
+}
+
+.unit-size-controls-head,
+.unit-size-spec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.unit-size-controls-actions,
+.unit-asset-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.unit-size-controls button:disabled,
+.unit-asset-manager button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.unit-size-controls-head strong,
+.unit-size-spec-head strong {
+  color: #9eb1c5;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.unit-size-list {
+  display: grid;
+  gap: 9px;
+}
+
+.unit-size-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px 28px;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.unit-size-row > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.unit-size-row strong {
+  color: #dcecff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.unit-size-row em {
+  color: #79d3ff;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.unit-size-row input[type='number'] {
+  box-sizing: border-box;
+  width: 58px;
+  height: 28px;
+  min-width: 0;
+  padding: 0 5px;
+  color: #f3fbff;
+  text-align: center;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-size-row input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  accent-color: #5bc8ff;
+}
+
+.unit-size-reset {
+  width: 28px;
+  min-width: 28px;
+}
+
+.unit-art-lab-main {
+  padding: 0;
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+  overflow: hidden;
+}
+
+.unit-size-spec {
+  display: grid;
+  gap: 6px;
+}
+
+.unit-size-spec textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  max-height: 120px;
+  resize: vertical;
+  padding: 8px;
+  color: #cfe3ef;
+  background: rgba(2, 8, 13, 0.62);
+  border: 1px solid rgba(67, 127, 179, 0.28);
+  border-radius: 4px;
+  font: 600 10px/1.35 ui-monospace, Cascadia Mono, monospace;
+}
+
+.unit-asset-manager {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(67, 127, 179, 0.28);
+}
+
+.unit-asset-editor {
+  display: grid;
+  gap: 9px;
+}
+
+.unit-asset-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.unit-asset-fields label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.unit-asset-fields label.is-wide {
+  grid-column: 1 / -1;
+}
+
+.unit-asset-fields label > span {
+  color: #91a9bf;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.unit-asset-fields input,
+.unit-asset-fields select,
+.unit-asset-actions select,
+.unit-asset-archive-row select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 29px;
+  padding: 0 6px;
+  color: #eef8ff;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-asset-actions select {
+  flex: 1 1 88px;
+}
+
+.unit-asset-upload {
+  position: relative;
+  flex: 1 1 104px;
+  min-height: 29px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #dcecff;
+  background: rgba(17, 49, 72, 0.88);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.unit-asset-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.unit-asset-completeness {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+
+.unit-asset-completeness span {
+  color: #8fa5b8;
+  font: 700 10px/1.25 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-asset-completeness span.is-complete {
+  color: #76d9a5;
+}
+
+.unit-asset-current {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: #91a9bf;
+  font-size: 11px;
+}
+
+.unit-asset-current strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #dcecff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unit-asset-archive-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.unit-asset-status {
+  min-height: 14px;
+  color: #79d3ff;
+  font: 800 10px/1.3 var(--ds-font-sans, system-ui, sans-serif);
+  text-align: right;
 }
 
 .tileset-collection-select {
@@ -10790,14 +11148,50 @@ button.tileset-relationship-cell {
   --board-origin-top: 0px;
 }
 
-.tileset-terrain-layer {
+.tileset-terrain-layer,
+.tileset-scene-layer {
   display: block;
   image-rendering: pixelated;
   pointer-events: none;
   position: absolute;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.tileset-terrain-layer {
   z-index: 0;
+}
+
+.tileset-scene-layer {
+  z-index: 0;
+}
+
+.tileset-board-grid-layer {
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 8500;
+}
+
+.tileset-placement-board .tileset-board-grid-layer {
+  z-index: 1;
+}
+
+.tileset-board-grid-layer path {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.36);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.15;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
+}
+
+.tileset-placement-board .tileset-board-grid-layer path {
+  stroke: rgba(0, 0, 0, 0.42);
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.16));
 }
 
 .tileset-generated-board-tile {
@@ -12708,8 +13102,14 @@ button.tileset-relationship-cell {
 .account-menu-root {
   align-items: center;
   display: flex;
+  flex: 0 0 var(--titlebar-control-size, 52px);
   gap: 10px;
+  inline-size: var(--titlebar-control-size, 52px);
   position: relative;
+}
+
+.account-sign-in-button {
+  flex: 0 0 var(--titlebar-control-size, 52px);
 }
 
 /* Account menu — small kit panel-framed popover anchored under the avatar. A

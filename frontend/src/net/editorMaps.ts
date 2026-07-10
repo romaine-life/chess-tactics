@@ -56,6 +56,11 @@ export interface EditorMapCreator {
   label: string;
 }
 
+export interface CreateEditorMapOptions {
+  misc?: boolean;
+  headless?: boolean;
+}
+
 const localStore = (): Storage | null => {
   if (typeof window === 'undefined') return null;
   try {
@@ -114,12 +119,14 @@ function editorMapIdentityHeaders(): HeadersInit {
   return { 'x-editor-anonymous-id': editorAnonymousId() };
 }
 
-export async function createEditorMap(level: Level, misc = false): Promise<EditorMapDocument> {
+export async function createEditorMap(level: Level, options: boolean | CreateEditorMapOptions = false): Promise<EditorMapDocument> {
+  const misc = typeof options === 'boolean' ? options : options.misc === true;
+  const headless = typeof options === 'object' && options.headless === true;
   const res = await fetch('/api/editor-maps', {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...editorMapIdentityHeaders() },
     credentials: 'include',
-    body: JSON.stringify({ level, misc }),
+    body: JSON.stringify({ level, misc, headless }),
   });
   if (!res.ok) throw await HttpError.fromResponse('create-editor-map', res);
   const doc = (await res.json()) as EditorMapDocument;

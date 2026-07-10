@@ -4,7 +4,7 @@
 // (control sets that share that board), NOT separate views; the frame never moves; a new
 // board-placeable thing is a catalogCategories entry + a focus, never a bespoke view or a
 // `category === '…'` branch.
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { tileFamilies, edgeTiles, wallThumbSrc } from '../art/tileset';
 import { WALL_MATERIALS, WALL_MATERIAL_LABELS, type WallMaterial } from '../core/featureAutotile';
 import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
@@ -38,6 +38,7 @@ import { PAGE_ENTRIES } from './pagesCatalog';
 import { SliderRow } from './dressing/SliderRow';
 import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
 import { SfxLibraryStudio, SfxViewer } from './SfxLibraryStudio';
+import { UnitArtLab } from './UnitArtLab';
 import { PortraitLab } from './PortraitEditor';
 import { NineSliceLab, DEFAULT_NINE_SLICE_ASSET } from './NineSliceEditor';
 import { PropSeatLab, type StructureEditorDraft } from './PropSeatLab';
@@ -63,6 +64,7 @@ import {
   hasDirectionSprite,
   rookDirections,
   unitAssets,
+  unitAssetById,
   UNIT_METHOD_OPTIONS,
   type Direction,
   type PieceId,
@@ -97,7 +99,7 @@ type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'g
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
 // 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
 // in full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'divider' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscene' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'walldecor' | 'wallart' | 'sfx' | 'gamelab' | 'gym' | 'solver';
+type ViewerKind = 'asset' | 'artwork' | 'unitart' | 'portrait' | 'nineslice' | 'divider' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscene' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'walldecor' | 'wallart' | 'sfx' | 'gamelab' | 'gym' | 'solver';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -244,7 +246,9 @@ const isLabMode = (value: string | null): value is LabMode => value === 'board' 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
 
 const isTerrainPairId = (value: string | null): value is TerrainPairId => value === 'grass-stone' || value === 'grass-water' || value === 'stone-water';
-const isUnitAssetId = (value: string | null): value is string => unitAssets.some((unit) => unit.id === value);
+const isUnitAssetId = (value: string | null): value is string => Boolean(
+  value && (unitAssetById(value) || /^candidate:[0-9a-f-]{36}$/i.test(value)),
+);
 
 const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const params = new URLSearchParams(window.location.search);
@@ -271,6 +275,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const unit = params.get('unit');
   const slot = Number(params.get('slot'));
   const seed = Number(params.get('seed'));
+  // /unit-studio is a deep-link alias into the embedded Unit Art editor.
+  const isUnitStudioAlias = window.location.pathname === '/unit-studio';
   // /nine-slice-editor is a deep-link ALIAS into this one studio (like /unit-studio):
   // it opens the embedded 9-slice surface (Assets category, Viewer mode, 'nineslice'
   // kind) with ?asset=<frame>. The studio's own route writer then canonicalises the
@@ -303,8 +309,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const frame = params.get('frame') || (isNineSliceAlias ? asset : null);
   // Destination is decoupled from category — any mode is valid with any category,
   // so the URL is taken at face value (no normalization).
-  const studioMode = isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
-  const routeCategory = isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isStudioCategory(normalizedCat) ? normalizedCat : undefined;
+  const studioMode = isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
+  const routeCategory = isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isStudioCategory(normalizedCat) ? normalizedCat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushParam = params.get('brush');
@@ -338,8 +344,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedWallArtId: wallArt(wart ?? undefined)?.id,
     selectedSurfaceFamily: sfamily || undefined,
     selectedRegionId: regionParam || undefined,
-    viewerKind: isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
-      : normalizedVk === 'asset' || normalizedVk === 'artwork' || normalizedVk === 'portrait' || normalizedVk === 'nineslice' || normalizedVk === 'divider' || normalizedVk === 'propseat' || normalizedVk === 'tilecompare' || normalizedVk === 'surfacetiles' || normalizedVk === 'sceneanim' || normalizedVk === 'animscene' || normalizedVk === 'artworkcompare' || normalizedVk === 'glossary' || normalizedVk === 'surface' || normalizedVk === 'scrollbar' || normalizedVk === 'slider' || normalizedVk === 'page' || normalizedVk === 'tileside' || normalizedVk === 'walldecor' || normalizedVk === 'wallart' || normalizedVk === 'sfx' || normalizedVk === 'gamelab' || normalizedVk === 'gym' || normalizedVk === 'solver' ? normalizedVk : undefined,
+    viewerKind: isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
+      : normalizedVk === 'asset' || normalizedVk === 'artwork' || normalizedVk === 'unitart' || normalizedVk === 'portrait' || normalizedVk === 'nineslice' || normalizedVk === 'divider' || normalizedVk === 'propseat' || normalizedVk === 'tilecompare' || normalizedVk === 'surfacetiles' || normalizedVk === 'sceneanim' || normalizedVk === 'animscene' || normalizedVk === 'artworkcompare' || normalizedVk === 'glossary' || normalizedVk === 'surface' || normalizedVk === 'scrollbar' || normalizedVk === 'slider' || normalizedVk === 'page' || normalizedVk === 'tileside' || normalizedVk === 'walldecor' || normalizedVk === 'wallart' || normalizedVk === 'sfx' || normalizedVk === 'gamelab' || normalizedVk === 'gym' || normalizedVk === 'solver' ? normalizedVk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -360,7 +366,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   // Canonicalise to /studio even when entered via the /nine-slice-editor
   // alias, so the alias is a pure entry point and all subsequent state rides the
   // one studio URL (the embedded 9-slice surface is not its own route).
-  if (window.location.pathname !== STUDIO_PATH && window.location.pathname !== '/nine-slice-editor' && window.location.pathname !== '/prop-lab' && window.location.pathname !== '/tile-compare' && window.location.pathname !== '/surface-lab' && window.location.pathname !== '/scene-anim-lab' && window.location.pathname !== '/doodad-editor' && window.location.pathname !== '/artwork-compare') return;
+  if (window.location.pathname !== STUDIO_PATH && window.location.pathname !== '/unit-studio' && window.location.pathname !== '/nine-slice-editor' && window.location.pathname !== '/prop-lab' && window.location.pathname !== '/tile-compare' && window.location.pathname !== '/surface-lab' && window.location.pathname !== '/scene-anim-lab' && window.location.pathname !== '/doodad-editor' && window.location.pathname !== '/artwork-compare') return;
   if (route.studioMode === 'catalog') {
     // Tiles is the default, so it stays a clean bare URL; Units/Assets get a
     // ?cat= so the chosen catalog survives a reload and is directly linkable.
@@ -445,6 +451,8 @@ const defaultTransitionViewModeForRoute = (route: TilesetStudioRouteState): Tran
 
 export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?: StudioCategory } = {}): ReactElement {
   const initialRoute = useMemo(() => readTilesetStudioRoute(), []);
+  const [unitCatalogEpoch, setUnitCatalogEpoch] = useState(0);
+  const handleUnitCatalogChanged = useCallback(() => setUnitCatalogEpoch((value) => value + 1), []);
   const initialHasViewTarget = Boolean(initialRoute.selectedAssetId || initialRoute.selectedSlotMask || initialRoute.tileFilter === 'board');
   const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
@@ -523,6 +531,13 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [viewerKind, setViewerKind] = useState<ViewerKind>(initialRoute.viewerKind ?? 'artwork');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
   const [selectedUnitMethods, setSelectedUnitMethods] = useState<string[]>(UNIT_METHOD_OPTIONS.map((m) => m.id));
+  const knownUnitMethodsRef = useRef(new Set(UNIT_METHOD_OPTIONS.map((method) => method.id)));
+  useEffect(() => {
+    const available = UNIT_METHOD_OPTIONS.map((method) => method.id);
+    const added = available.filter((method) => !knownUnitMethodsRef.current.has(method));
+    knownUnitMethodsRef.current = new Set(available);
+    if (added.length) setSelectedUnitMethods((current) => [...new Set([...current, ...added])]);
+  }, [unitCatalogEpoch]);
   // Facing for the Units catalog preview — the compass in the rail rotates every unit card.
   const [catalogFacing, setCatalogFacing] = useState<Direction>('south');
   const rotateCatalogFacingCw = (): void => {
@@ -576,7 +591,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const selectedPair = familyTransitionPairs.find((pair) => pair.id === selectedPairId) ?? familyTransitionPairs[0] ?? transitionPairs[0];
   const allStudioAssets = useMemo(() => [...studioFamilies.flatMap((item) => item.assets), ...transitionAssets], []);
   const selectedAsset = allStudioAssets.find((asset) => asset.id === selectedAssetId) ?? family.assets[0];
-  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
+  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssetById(id);
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
   const catalogBaseAssets = activeFamilies.flatMap((item) => item.assets.filter((asset) => asset.kind === 'tile'));
   const normalizedCatalogQuery = catalogQuery.trim().toLowerCase();
@@ -878,13 +893,13 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       const spec = visible.filter((u) => u.speculative);
       const out: { id: string; label: string; assets: UnitAsset[] }[] = [];
       if (prod.length) out.push({ id: 'production', label: 'Production Units', assets: prod });
-      if (spec.length) out.push({ id: 'speculative', label: 'Speculative — pixel-art candidate libraries (navy only)', assets: spec });
+      if (spec.length) out.push({ id: 'speculative', label: 'Candidates', assets: spec });
       return out;
     },
     query: {
       value: catalogQuery,
       set: setCatalogQuery,
-      placeholder: 'piece, library, read...',
+      placeholder: 'piece, read...',
       match: (u, q) => [u.label, u.badge, u.family, u.read, u.status, u.method ?? '', u.speculative ? 'speculative' : 'production'].join(' ').toLowerCase().includes(q),
     },
     zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
@@ -902,23 +917,23 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         selectAll: () => setSelectedUnitFamilies(activeUnitFamilies),
         clear: () => setSelectedUnitFamilies([]),
       },
-      {
+      ...(UNIT_METHOD_OPTIONS.length > 1 ? [{
         id: 'method',
         label: 'Library',
         options: UNIT_METHOD_OPTIONS.map((m) => {
           const n = unitAssets.filter((u) => (u.method ?? 'Production') === m.id).length;
           return { id: m.id, label: m.label, sub: `${m.sub} · ${n}` };
         }),
-        memberOf: (u) => [u.method ?? 'Production'],
+        memberOf: (u: UnitAsset) => [u.method ?? 'Production'],
         selected: selectedUnitMethods,
-        toggle: (id) => setSelectedUnitMethods((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])),
+        toggle: (id: string) => setSelectedUnitMethods((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])),
         selectAll: () => setSelectedUnitMethods(UNIT_METHOD_OPTIONS.map((m) => m.id)),
         clear: () => setSelectedUnitMethods([]),
-      },
+      }] : []),
     ],
     onSelect: (u) => selectUnitInCatalog(u.id),
-    onView: (u) => openInLevelEditor('unit', u.id),
-    onArm: (u) => openInLevelEditor('unit', u.id),
+    onView: (u) => { setUnitBrushId(u.id); openViewer('unitart'); },
+    onArm: (u) => openInLevelEditor('unit', u.speculative ? u.family : u.id),
     selectedId: unitBrushId,
     extra: (
       <div className="tileset-catalog-facing">
@@ -926,7 +941,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <FacingCompass direction={catalogFacing} onSelect={setCatalogFacing} onRotate={rotateCatalogFacingCw} />
       </div>
     ),
-    note: 'Select a unit card to place it in the shared lab board.',
+    note: 'Select a unit.',
   };
   const doodadAssets = currentDoodadAssets();
   const doodadsCatalogType: CatalogType<DoodadAsset> = {
@@ -1676,6 +1691,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <select value={viewerKind} onChange={(event) => setViewerKind(event.target.value as ViewerKind)} aria-label="Viewer kind">
         <option value="asset">Asset</option>
         <option value="artwork">Artwork</option>
+        <option value="unitart">Unit Art</option>
         <option value="portrait">Portrait</option>
         <option value="nineslice">9-Slice</option>
         <option value="propseat">Prop Seat</option>
@@ -1771,7 +1787,18 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </aside>
         </>
         ) : studioMode === 'viewer' ? (
-          viewerKind === 'portrait'
+          viewerKind === 'unitart'
+            ? <UnitArtLab
+                selectedUnit={unitBrushAsset}
+                direction={catalogFacing}
+                zoom={viewerZoom}
+                onDirection={setCatalogFacing}
+                onZoom={setViewerZoom}
+                onSelectUnit={setUnitBrushId}
+                onCatalogChanged={handleUnitCatalogChanged}
+                header={studioViewerHeader}
+              />
+            : viewerKind === 'portrait'
             ? <PortraitLab header={studioViewerHeader} />
             : viewerKind === 'divider'
             ? <DividerLab header={studioViewerHeader} />

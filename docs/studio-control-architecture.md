@@ -66,10 +66,10 @@ modes, it is wrong**, no matter how correct the contents are.
   is the cascading control unit: in Catalog its tier selector is the category;
   in Lab, the Board/Tile/Unit focus; in the Viewer, the **kind** selector
   (Asset, Artwork, Portrait, 9-Slice, …). Asset/Artwork are read-only (a Details
-  readout); **Portrait** and **9-Slice** are the embedded light-editing kinds — the
-  unit-portrait crop editor and the kit 9-slice frame editor — reached from their
-  catalog's edit affordance, never from a separate route. The heading and panel
-  never move.
+  readout); **Unit Art**, **Portrait**, and **9-Slice** are embedded editing kinds —
+  the board-unit art/size editor, unit-portrait crop editor, and kit 9-slice frame
+  editor — reached from their catalog's Inspect/Edit affordance, never hosted in
+  Catalog and never given a separate layout. The heading and panel never move.
 - **Main pane:** content only. The catalog grid, the lab surface, or the Viewer
   stage.
 - **No sub-headers, no per-pane titles, no "Back" button.** The breadcrumb
@@ -101,9 +101,10 @@ mode  (Catalog · Lab · Viewer)                 ← topbar · tier-1 · 3 persi
 │           └─ Unit focus  → unit controls (brush, facing, …)
 │
 └─ Viewer  (single-item stage — holds the last item it opened)
-    └─ kind (Asset | Artwork | Portrait | 9-Slice | …)  ← tier-2 · top of Controls
+    └─ kind (Asset | Artwork | Unit Art | Portrait | 9-Slice | …)  ← tier-2 · top of Controls
         ├─ Asset    → preview-in-context stage + gate/provenance details (read-only)
         ├─ Artwork  → full-art preview stage + group/size/path details (read-only)
+        ├─ Unit Art → board-context unit art/size editor (live publish + candidates)
         ├─ Portrait → embedded unit-portrait crop editor (pan/zoom, per-piece)
         └─ 9-Slice  → embedded kit 9-slice frame editor (nudge/align, dev-save)
 
@@ -134,12 +135,13 @@ they are standing destinations.
 - **Viewer** — the single-item destination for finished things with no board
   workbench. Its panel carries one tier selector — the **kind** (Asset, Artwork,
   Portrait, 9-Slice, …). Asset and Artwork are read-only (a Details readout);
-  **Portrait** and **9-Slice** are the embedded editing kinds — the unit-portrait
-  crop editor and the kit 9-slice frame editor — light, single-item work, not board
-  manipulation, which is why they live here rather than in the Lab. They are reached
-  from their catalog's edit affordance (a pencil / "✎ Edit" button that switches the
-  Viewer kind in place), **never** a separate route or page. Any future finished-art
-  library (lore plates, a cutscene gallery) becomes another kind here.
+  **Unit Art**, **Portrait**, and **9-Slice** are embedded editing kinds — unit art
+  and size, unit-portrait crops, and kit frame calibration. This is light,
+  single-item definition work rather than board authoring, so it lives here instead
+  of in the Lab. A placeable item's **Use** action still opens the Lab/Level Editor;
+  its **Inspect/Edit** action may open its embedded Viewer editor. The Catalog itself
+  remains browse-only. These editors switch the Viewer kind in place and are
+  **never** separate routes or pages; legacy deep links only enter this Viewer state.
 
 ## Visual standard — instrument-grade, not boxes
 

@@ -21,8 +21,9 @@ import { titleBarConfig } from './titleBarConfig';
 // per ADR-0036), NOT before the brand. The brand lockup is a fixed leading anchor and
 // never moves. Both the Settings back and the Level Editor's ‹ Back/‹ Catalog portal into
 // the SAME actions slot, so every return control sits in one consistent place.
-export function AppTitleBar({ path, onCenterNode, onActionsNode, onStudNode, revealTitle }: {
+export function AppTitleBar({ path, search, onCenterNode, onActionsNode, onStudNode, revealTitle }: {
   path: string;
+  search?: string;
   onCenterNode: (el: HTMLElement | null) => void;
   onActionsNode: (el: HTMLElement | null) => void;
   onStudNode: (el: HTMLElement | null) => void;
@@ -31,7 +32,7 @@ export function AppTitleBar({ path, onCenterNode, onActionsNode, onStudNode, rev
   // so this can never blink the persistent bar on a normal route or a later navigation.
   revealTitle?: boolean;
 }): ReactElement | null {
-  const config = titleBarConfig(path);
+  const config = titleBarConfig(path, search);
   if (!config) return null;
 
   const barClass = config.barClass ? ` ${config.barClass}` : '';

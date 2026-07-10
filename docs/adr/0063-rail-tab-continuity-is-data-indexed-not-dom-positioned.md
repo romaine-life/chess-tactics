@@ -120,5 +120,5 @@ order, tab count, viewport) instead of from data the control owns.
   same control, same structural-lock rule, the placement axis),
   [ADR-0034](0034-nine-slice-line-frames-for-surface-fill.md) (the line-frame + separate
   surface-fill model these tabs use),
-  [ADR-0057](0057-studio-tuning-surfaces-reset-to-committed-baseline.md) (the same "derive
+  [ADR-0057](0057-studio-tuning-surfaces-reset-to-authoritative-baseline.md) (the same "derive
   from the source of truth, never a hand-copied literal that rots" instinct).

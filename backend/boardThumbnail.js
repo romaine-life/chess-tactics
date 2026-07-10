@@ -5,13 +5,14 @@
 const path = require('path');
 const fs = require('fs');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
-const { UNIT_IMG_MAX_W, UNIT_IMG_MAX_H } = require('@chess-tactics/board-render');
 
 const CARD_W = 1200;
 const CARD_H = 630;
 const PAD = 56;
-const HERO_TOP = 100;
-const HERO_BOTTOM = 500;
+const TITLEBAR_H = 84;
+const TITLEBAR_RULE_H = 14;
+const HERO_TOP = TITLEBAR_H;
+const HERO_BOTTOM = CARD_H;
 
 let fontFamily = 'sans-serif';
 let fontRegistered = false;
@@ -27,13 +28,34 @@ function ensureFont(frontendDir) {
 }
 
 const spriteCache = new Map();
-async function loadSprite(frontendDir, src) {
+const SPRITE_CACHE_MAX = 64;
+function setCachedSprite(key, image) {
+  if (spriteCache.has(key)) spriteCache.delete(key);
+  spriteCache.set(key, image);
+  while (spriteCache.size > SPRITE_CACHE_MAX) spriteCache.delete(spriteCache.keys().next().value);
+}
+
+async function loadSprite(frontendDir, src, loadDynamicSprite) {
   const rel = String(src).replace(/^\/+/, '').split('/');
   const abs = path.join(frontendDir, ...rel);
-  if (spriteCache.has(abs)) return spriteCache.get(abs);
+  const dynamic = String(src).startsWith('/api/unit-sprites/');
+  const cacheKey = dynamic ? String(src) : abs;
+  if (spriteCache.has(cacheKey)) {
+    const image = spriteCache.get(cacheKey);
+    spriteCache.delete(cacheKey);
+    spriteCache.set(cacheKey, image);
+    return image;
+  }
   let img = null;
-  try { img = await loadImage(abs); } catch { img = null; }
-  spriteCache.set(abs, img);
+  try {
+    if (dynamic && typeof loadDynamicSprite === 'function') {
+      const bytes = await loadDynamicSprite(src);
+      if (bytes) img = await loadImage(bytes);
+    } else {
+      img = await loadImage(abs);
+    }
+  } catch { img = null; }
+  if (img || !dynamic) setCachedSprite(cacheKey, img);
   return img;
 }
 
@@ -44,10 +66,24 @@ function truncate(ctx, text, maxWidth) {
   return `${s}...`;
 }
 
-async function paintBackground(ctx, frontendDir, backgroundSrc) {
+function drawTiledImage(ctx, img, x, y, width, height, tileWidth, tileHeight) {
+  if (!img || !img.width || !img.height) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, width, height);
+  ctx.clip();
+  for (let yy = y; yy < y + height; yy += tileHeight) {
+    for (let xx = x; xx < x + width; xx += tileWidth) {
+      ctx.drawImage(img, xx, yy, tileWidth, tileHeight);
+    }
+  }
+  ctx.restore();
+}
+
+async function paintBackground(ctx, frontendDir, backgroundSrc, loadDynamicSprite) {
   let drewWorld = false;
   if (backgroundSrc) {
-    const world = await loadSprite(frontendDir, backgroundSrc);
+    const world = await loadSprite(frontendDir, backgroundSrc, loadDynamicSprite);
     if (world && world.width && world.height) {
       const cover = Math.max(CARD_W / world.width, CARD_H / world.height);
       const w = world.width * cover;
@@ -80,57 +116,125 @@ async function paintBackground(ctx, frontendDir, backgroundSrc) {
   ctx.fillRect(0, 0, CARD_W, CARD_H);
 }
 
-async function renderLevelCard({ plan, frontendDir, title, subtitle, backgroundSrc }) {
+async function paintTitleBar(ctx, frontendDir, screenName, loadDynamicSprite) {
+  const [wood, band, diamond, shield] = await Promise.all([
+    loadSprite(frontendDir, '/assets/ui/surfaces/hybrid-wood-oak.png', loadDynamicSprite),
+    loadSprite(frontendDir, '/assets/ui/titlebar/band-forged.png', loadDynamicSprite),
+    loadSprite(frontendDir, '/assets/ui/titlebar/joint-diamond-forged.png', loadDynamicSprite),
+    loadSprite(frontendDir, '/assets/ui/kit/icons/brand-shield.png', loadDynamicSprite),
+  ]);
+
+  ctx.imageSmoothingEnabled = false;
+  if (wood) drawTiledImage(ctx, wood, 0, 0, CARD_W, TITLEBAR_H, 1024, 1024);
+  else {
+    ctx.fillStyle = '#22170e';
+    ctx.fillRect(0, 0, CARD_W, TITLEBAR_H);
+  }
+  if (band) drawTiledImage(ctx, band, 0, TITLEBAR_H - TITLEBAR_RULE_H, CARD_W, TITLEBAR_RULE_H, 16, TITLEBAR_RULE_H);
+  if (diamond) {
+    const dh = 26;
+    const dw = diamond.width * (dh / diamond.height);
+    ctx.drawImage(diamond, (CARD_W - dw) / 2, TITLEBAR_H - dh, dw, dh);
+  }
+
+  const mark = 54;
+  const markX = 32;
+  const markY = 8;
+  ctx.imageSmoothingEnabled = true;
+  if (shield) ctx.drawImage(shield, markX, markY, mark, mark);
+
+  const textX = markX + mark + 14;
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowColor = '#02070b';
+  ctx.shadowOffsetY = 2;
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#f0eadb';
+  ctx.font = `25px "${fontFamily}"`;
+  ctx.fillText('CHESS TACTICS', textX, 35);
+  ctx.fillStyle = '#79d3ff';
+  ctx.font = `15px "${fontFamily}"`;
+  ctx.fillText(String(screenName || 'SKIRMISH').toUpperCase(), textX, 57);
+  ctx.shadowColor = 'transparent';
+  ctx.shadowOffsetY = 0;
+}
+
+async function renderLevelCard({ plan, frontendDir, title, subtitle, screenName, backgroundSrc, loadDynamicSprite }) {
   ensureFont(frontendDir);
   const canvas = createCanvas(CARD_W, CARD_H);
   const ctx = canvas.getContext('2d');
 
-  await paintBackground(ctx, frontendDir, backgroundSrc);
+  await paintBackground(ctx, frontendDir, backgroundSrc, loadDynamicSprite);
 
   const { ops, bounds } = plan;
+  const fitBounds = plan.framingBounds || bounds;
   const heroW = CARD_W - PAD * 2;
   const heroH = HERO_BOTTOM - HERO_TOP;
-  const scale = Math.min(heroW / Math.max(1, bounds.width), heroH / Math.max(1, bounds.height));
-  const drawnW = bounds.width * scale;
-  const drawnH = bounds.height * scale;
+  const scale = Math.min(heroW / Math.max(1, fitBounds.width), heroH / Math.max(1, fitBounds.height));
+  const drawnW = fitBounds.width * scale;
+  const drawnH = fitBounds.height * scale;
   const originX = PAD + (heroW - drawnW) / 2;
   const originY = HERO_TOP + (heroH - drawnH) / 2;
   ctx.imageSmoothingEnabled = false;
 
   const images = new Map();
   await Promise.all([...new Set(ops.map((op) => op.src))].map(async (src) => {
-    images.set(src, await loadSprite(frontendDir, src));
+    images.set(src, await loadSprite(frontendDir, src, loadDynamicSprite));
   }));
 
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, HERO_TOP, CARD_W, heroH);
+  ctx.clip();
   for (const op of ops) {
     const img = images.get(op.src);
     if (!img) continue;
-    const dx = originX + (op.dx - bounds.minX) * scale;
-    const dy = originY + (op.dy - bounds.minY) * scale;
-    if (op.contain) {
-      const boxW = Math.min(op.dw, UNIT_IMG_MAX_W);
-      const boxH = Math.min(op.dh, UNIT_IMG_MAX_H);
-      const natW = img.width || boxW;
-      const natH = img.height || boxH;
-      const fit = Math.min(boxW / natW, boxH / natH);
-      const w = natW * fit;
-      const h = natH * fit;
-      const cx = op.dx + (op.dw - w) / 2;
-      const cy = op.dy + (op.dh - h) / 2;
-      ctx.drawImage(img, originX + (cx - bounds.minX) * scale, originY + (cy - bounds.minY) * scale, w * scale, h * scale);
-    } else if (op.sw != null) {
-      ctx.drawImage(img, op.sx || 0, op.sy || 0, op.sw, op.sh || op.dh, dx, dy, op.dw * scale, op.dh * scale);
-    } else {
-      ctx.drawImage(img, dx, dy, op.dw * scale, op.dh * scale);
+    const dx = originX + (op.dx - fitBounds.minX) * scale;
+    const dy = originY + (op.dy - fitBounds.minY) * scale;
+    const clipped = Array.isArray(op.clipPolygons) && op.clipPolygons.length > 0;
+    if (clipped) {
+      ctx.save();
+      ctx.beginPath();
+      for (const polygon of op.clipPolygons) {
+        if (!Array.isArray(polygon) || polygon.length < 6) continue;
+        ctx.moveTo(originX + (polygon[0] - fitBounds.minX) * scale, originY + (polygon[1] - fitBounds.minY) * scale);
+        for (let index = 2; index + 1 < polygon.length; index += 2) {
+          ctx.lineTo(originX + (polygon[index] - fitBounds.minX) * scale, originY + (polygon[index + 1] - fitBounds.minY) * scale);
+        }
+        ctx.closePath();
+      }
+      ctx.clip();
+    }
+    try {
+      if (op.contain) {
+        const boxW = op.dw;
+        const boxH = op.dh;
+        const natW = img.width || boxW;
+        const natH = img.height || boxH;
+        const fit = Math.min(boxW / natW, boxH / natH);
+        const w = natW * fit;
+        const h = natH * fit;
+        const cx = op.dx + (op.dw - w) / 2;
+        const cy = op.dy + (op.dh - h) / 2;
+        ctx.drawImage(img, originX + (cx - fitBounds.minX) * scale, originY + (cy - fitBounds.minY) * scale, w * scale, h * scale);
+      } else if (op.sw != null) {
+        ctx.drawImage(img, op.sx || 0, op.sy || 0, op.sw, op.sh || op.dh, dx, dy, op.dw * scale, op.dh * scale);
+      } else {
+        ctx.drawImage(img, dx, dy, op.dw * scale, op.dh * scale);
+      }
+    } finally {
+      if (clipped) ctx.restore();
     }
   }
+  ctx.restore();
 
-  ctx.fillStyle = '#e8c86a';
-  ctx.fillRect(PAD, 44, 22, 22);
-  ctx.fillStyle = '#7fd4c8';
-  ctx.font = `22px "${fontFamily}"`;
-  ctx.textBaseline = 'middle';
-  ctx.fillText('CHESS TACTICS', PAD + 34, 56);
+  const titleScrim = ctx.createLinearGradient(0, 420, 0, CARD_H);
+  titleScrim.addColorStop(0, 'rgba(2,7,12,0)');
+  titleScrim.addColorStop(0.58, 'rgba(2,7,12,0.58)');
+  titleScrim.addColorStop(1, 'rgba(2,7,12,0.9)');
+  ctx.fillStyle = titleScrim;
+  ctx.fillRect(0, 420, CARD_W, CARD_H - 420);
+
+  await paintTitleBar(ctx, frontendDir, screenName || 'Level', loadDynamicSprite);
 
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#f2f6f7';

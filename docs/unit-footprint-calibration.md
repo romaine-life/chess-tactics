@@ -27,7 +27,7 @@ The current canonical circular footprint target is `96px`, so the equal-area squ
 
 Asset:
 
-- `frontend/public/assets/units/rook/blender-render-v4-calibrated/*.png`
+- `.unit-art-output/rook/navy-blue/*.png` (local rerender output; accepted frames live in Unit Art storage)
 
 Measured south-render source:
 
@@ -51,7 +51,7 @@ At `100%` unit scale, the game renders the source image so the measured `236px` 
 
 Asset:
 
-- `frontend/public/assets/units/knight/blender-render-fur/*.png` (procedural navy fur coat; render recipe: `docs/art/unit-concepts/blender-units/knight-fur/render_knight_fur.py`)
+- `.unit-art-output/knight/navy-blue/*.png` (procedural navy fur coat; render recipe: `docs/art/unit-concepts/blender-units/knight-fur/render_knight_fur.py`)
 - Supersedes the earlier `candidate-wooden` render (same OBJ, raw wood-grain diffuse — kept as historical candidate).
 
 - Source canvas: `512x512px`
@@ -74,7 +74,7 @@ At `100%` unit scale, the game renders the source image so the measured `178px` 
 
 Asset:
 
-- `frontend/public/assets/units/pawn/blender-render-helmet/*.png` (classic Staunton pawn + medieval archer's helmet, navy). Recipe: `docs/art/unit-concepts/blender-units/pawn-helmet/render_pawn_helmet.py`. Source models: `docs/art/unit-concepts/source-assets/pawn-helmet/`.
+- `.unit-art-output/pawn/navy-blue/*.png` (classic Staunton pawn + medieval archer's helmet, navy). Recipe: `docs/art/unit-concepts/blender-units/pawn-helmet/render_pawn_helmet.py`. Source models: `docs/art/unit-concepts/source-assets/pawn-helmet/`.
 
 Calibration (same camera + base-at-origin normalization as the knight):
 
@@ -94,7 +94,7 @@ The pawn body is rotationally symmetric; the helmet's visor provides the per-dir
 
 Asset:
 
-- `frontend/public/assets/units/king/blender-render-crown/*.png` (navy Staunton king + gold/jewel crown, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/king-crown/` (`king_crown.blend` is the hand-assembled source of truth; `render_king_crown.py` re-renders it).
+- `.unit-art-output/king/navy-blue/*.png` (navy Staunton king + gold/jewel crown, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/king-crown/` (`king_crown.blend` is the hand-assembled source of truth; `render_king_crown.py` re-renders it).
 
 Calibration (same camera + base-at-origin normalization as the rest of the roster):
 
@@ -114,7 +114,7 @@ The crown was hand-fitted in Blender (not scripted), so unlike the pawn/knight t
 
 Asset:
 
-- `frontend/public/assets/units/bishop/blender-render-mitre/*.png` (navy Staunton bishop + navy mitre, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/bishop-mitre/` (`bishop_mitre.blend` is the hand-assembled source of truth; `render_bishop_mitre.py` re-renders it).
+- `.unit-art-output/bishop/navy-blue/*.png` (navy Staunton bishop + navy mitre, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/bishop-mitre/` (`bishop_mitre.blend` is the hand-assembled source of truth; `render_bishop_mitre.py` re-renders it).
 
 Calibration (same camera + base-at-origin normalization as the rest of the roster):
 
@@ -134,7 +134,7 @@ The mitre was hand-fitted in Blender (not scripted) — the assembled `.blend` i
 
 Asset:
 
-- `frontend/public/assets/units/queen/blender-render-tiara/*.png` (navy Staunton queen + jeweled gold tiara, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/queen-tiara/` (`queen_tiara.blend` is the hand-assembled source of truth; `render_queen_tiara.py` re-renders it).
+- `.unit-art-output/queen/navy-blue/*.png` (navy Staunton queen + jeweled gold tiara, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/queen-tiara/` (`queen_tiara.blend` is the hand-assembled source of truth; `render_queen_tiara.py` re-renders it).
 
 Calibration (same camera + base-at-origin normalization as the rest of the roster):
 

@@ -5,6 +5,7 @@ import {
   boardBounds,
   boardContentHash,
   boardDrawOps,
+  boardSocialFramingBounds,
   uniqueDrawSrcs,
   type BakeBounds,
   type BoardDrawOp,
@@ -16,6 +17,7 @@ export {
   boardBounds,
   boardContentHash,
   boardDrawOps,
+  boardSocialFramingBounds,
   uniqueDrawSrcs,
 };
 
@@ -90,34 +92,52 @@ function paintOp(
   bounds: BakeBounds,
   scale: number,
 ): void {
-  if (op.contain) {
-    const boxW = Math.min(op.dw, UNIT_IMG_MAX_W);
-    const boxH = Math.min(op.dh, UNIT_IMG_MAX_H);
-    const natW = img.naturalWidth || boxW;
-    const natH = img.naturalHeight || boxH;
-    const fit = Math.min(boxW / natW, boxH / natH);
-    const w = natW * fit;
-    const h = natH * fit;
-    const cx = op.dx + (op.dw - w) / 2;
-    const cy = op.dy + (op.dh - h) / 2;
-    ctx.drawImage(img, (cx - bounds.minX) * scale, (cy - bounds.minY) * scale, w * scale, h * scale);
-    return;
+  const clipped = Boolean(op.clipPolygons?.length);
+  if (clipped) {
+    ctx.save();
+    ctx.beginPath();
+    for (const polygon of op.clipPolygons ?? []) {
+      if (polygon.length < 6) continue;
+      ctx.moveTo((polygon[0] - bounds.minX) * scale, (polygon[1] - bounds.minY) * scale);
+      for (let index = 2; index + 1 < polygon.length; index += 2) {
+        ctx.lineTo((polygon[index] - bounds.minX) * scale, (polygon[index + 1] - bounds.minY) * scale);
+      }
+      ctx.closePath();
+    }
+    ctx.clip();
   }
-  if (op.sw != null) {
-    ctx.drawImage(
-      img,
-      op.sx ?? 0,
-      op.sy ?? 0,
-      op.sw,
-      op.sh ?? op.dh,
-      (op.dx - bounds.minX) * scale,
-      (op.dy - bounds.minY) * scale,
-      op.dw * scale,
-      op.dh * scale,
-    );
-    return;
+  try {
+    if (op.contain) {
+      const boxW = Math.min(op.dw, UNIT_IMG_MAX_W);
+      const boxH = Math.min(op.dh, UNIT_IMG_MAX_H);
+      const natW = img.naturalWidth || boxW;
+      const natH = img.naturalHeight || boxH;
+      const fit = Math.min(boxW / natW, boxH / natH);
+      const w = natW * fit;
+      const h = natH * fit;
+      const cx = op.dx + (op.dw - w) / 2;
+      const cy = op.dy + (op.dh - h) / 2;
+      ctx.drawImage(img, (cx - bounds.minX) * scale, (cy - bounds.minY) * scale, w * scale, h * scale);
+      return;
+    }
+    if (op.sw != null) {
+      ctx.drawImage(
+        img,
+        op.sx ?? 0,
+        op.sy ?? 0,
+        op.sw,
+        op.sh ?? op.dh,
+        (op.dx - bounds.minX) * scale,
+        (op.dy - bounds.minY) * scale,
+        op.dw * scale,
+        op.dh * scale,
+      );
+      return;
+    }
+    ctx.drawImage(img, (op.dx - bounds.minX) * scale, (op.dy - bounds.minY) * scale, op.dw * scale, op.dh * scale);
+  } finally {
+    if (clipped) ctx.restore();
   }
-  ctx.drawImage(img, (op.dx - bounds.minX) * scale, (op.dy - bounds.minY) * scale, op.dw * scale, op.dh * scale);
 }
 
 export async function bakeBoardThumbnail(board: EditorBoard, opts?: { scale?: number }): Promise<Blob> {
