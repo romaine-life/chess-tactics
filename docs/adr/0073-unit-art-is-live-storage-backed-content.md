@@ -14,16 +14,16 @@ deploy, while candidate libraries accumulated in Git. Unit Studio now also provi
 per-piece display-size tuning and a generation handoff, so the accepted size and the
 replacement image need one live source of truth.
 
-Levels currently contain art-derived ids such as `pawn-codexsheet`. That is an
-implementation detail, not game meaning: changing pawn pixels must not change or
-invalidate a level. The browser game, editor renderer, and server-side thumbnail
-renderer also need to resolve the same accepted pixels and geometry.
+Gameplay data previously contained art-derived ids. The cutover normalized board
+data to piece-family ids so changing pawn pixels cannot change or invalidate a
+level. The browser game, editor renderer, and server-side thumbnail renderer also
+need to resolve the same accepted pixels and geometry.
 
 ## Decision
 
 There are exactly six stable board-unit identities: `pawn`, `rook`, `knight`,
-`bishop`, `queen`, and `king`. New board data stores those family ids. Existing
-art-derived ids remain permanent read aliases.
+`bishop`, `queen`, and `king`. Board data stores only those family ids. Art-record
+UUIDs and former art-derived ids are not gameplay identities or read aliases.
 
 Postgres owns the live catalog:
 
@@ -58,20 +58,24 @@ Published scale and anchor are applied to both DOM seats and thumbnail draw plan
 
 ## Cutover
 
-The current accepted PNGs remain a synchronous fallback through the migration:
+The cutover completed as one migration:
 
-1. Apply storage infrastructure and migration 14.
-2. Run `npm --prefix backend run units:import` with the storage and database
-   environment configured. The importer is idempotent and skips already-accepted
-   families unless passed `--force`.
-3. Verify Unit Studio, gameplay, editor boards, and server thumbnails resolve the
-   live catalog.
-4. Remove accepted board PNGs from Git in a later cutover change. Portraits and
-   neutral rocks are separate contracts and are not moved by this decision.
+1. Storage infrastructure and migration 14 created the live model.
+2. The six accepted families and all 288 frames were imported and verified in
+   production.
+3. The one-time importer, Git-backed board frames, retired generators, static
+   runtime URLs, and art-derived read aliases were deleted.
+4. A repository guard rejects reintroduction of the removed board-art path.
 
-An unavailable or empty catalog retains the committed/last-good registry during the
-cutover. Once committed board sprites are retired, cached live content plus a generic
-missing-sprite fallback replace that temporary baseline.
+The live catalog is required. The browser does not render the application until a
+valid snapshot contains one complete accepted asset for every family. Server-side
+board rendering aborts when that same contract cannot be hydrated. Neither path
+selects cached prior art, committed art, or a generic substitute. Portraits and
+neutral rocks remain separate contracts.
+
+Ephemeral test slots seed their isolated Postgres and local blob directory from the
+current production live catalog. This exercises the same storage-backed model
+without granting test-slot service accounts production identity.
 
 ## Consequences
 
@@ -81,5 +85,5 @@ missing-sprite fallback replace that temporary baseline.
 - A changed image cannot invalidate a level because levels identify chess pieces,
   not art records.
 - Candidate history leaves Git while remaining recoverable in storage and the DB.
-- Infrastructure and migration 14 must land before live authoring becomes available;
-  older backends return the committed fallback.
+- A missing or incomplete catalog is an explicit availability failure, not a request
+  to render another source.

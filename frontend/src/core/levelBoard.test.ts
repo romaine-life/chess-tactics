@@ -87,8 +87,8 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
     const board = filledBoard(4, 4);
     board.playerFaction = 'white';
     board.units = {
-      '0,0': { unitId: 'rook-blender-v4-calibrated', direction: 'south', faction: 'white' },
-      '1,0': { unitId: 'knight-fur', direction: 'south', faction: 'black' },
+      '0,0': { unitId: 'rook', direction: 'south', faction: 'white' },
+      '1,0': { unitId: 'knight', direction: 'south', faction: 'black' },
     };
     const assigned = editorBoardToLevel(board, { id: 'l6', name: 'Faction' });
     expect(assigned.layers.units.find((unit) => unit.x === 0)?.side).toBe('player');

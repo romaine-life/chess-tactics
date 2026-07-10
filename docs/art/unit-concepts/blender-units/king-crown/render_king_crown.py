@@ -6,7 +6,7 @@ Unlike the procedural pieces, the crown was hand-fitted onto the king's head in
 Blender, so the source of truth is the assembled `king_crown.blend` (navy Staunton
 king OBJ + gold/jewel crown FBX, positioned). This script opens it, renders the 8
 true-isometric directions, and prints the seating anchor.
-Output -> frontend/public/assets/units/king/blender-render-crown/<direction>.png
+Output -> .unit-art-output/king/navy-blue/<direction>.png
 
 The king + crown are rotationally symmetric, so the 8 directions are near-identical
 (a king has no facing); they're rendered for pipeline consistency.
@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent
 while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 BLEND = str(ROOT / "docs/art/unit-concepts/blender-units/king-crown/king_crown.blend")
-OUT = str(ROOT / "frontend/public/assets/units/king/blender-render-crown")
+OUT = str(ROOT / ".unit-art-output/king/navy-blue")
 os.makedirs(OUT, exist_ok=True)
 
 bpy.ops.wm.open_mainfile(filepath=BLEND)

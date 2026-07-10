@@ -2,37 +2,38 @@ export type RegistryPieceId = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 
 export type RegistryPalette = 'navy-blue' | 'crimson' | 'golden' | 'emerald' | 'black' | 'white';
 export type RegistryDirection = 'south' | 'south-east' | 'east' | 'north-east' | 'north' | 'north-west' | 'west' | 'south-west';
 
-export type AcceptedUnitSpriteMap = Partial<
-  Record<RegistryPieceId, Partial<Record<RegistryPalette, Partial<Record<RegistryDirection, string>>>>>
+export type AcceptedUnitSpriteMap = Record<
+  RegistryPieceId,
+  Record<RegistryPalette, Record<RegistryDirection, string>>
 >;
 
-const acceptedSprites: AcceptedUnitSpriteMap = {};
+let acceptedSprites: AcceptedUnitSpriteMap | null = null;
 let acceptedCatalogRevision = 0;
 
-const committedSpritePath = (piece: RegistryPieceId, palette: RegistryPalette, direction: RegistryDirection): string =>
-  `/assets/units/${piece}/${palette}/${direction}.png`;
-
-/** Resolve the currently accepted sprite, falling back to the cutover-safe committed file. */
+/** Resolve a sprite from the required live catalog. */
 export function resolvedUnitSpritePath(
   piece: RegistryPieceId,
   palette: RegistryPalette,
   direction: RegistryDirection,
 ): string {
-  return acceptedSprites[piece]?.[palette]?.[direction] ?? committedSpritePath(piece, palette, direction);
+  const sprite = acceptedSprites?.[piece]?.[palette]?.[direction];
+  if (!sprite) {
+    throw new Error(`unit sprite catalog is not hydrated: ${piece}/${palette}/${direction}`);
+  }
+  return sprite;
 }
 
-/** Atomically replace all live URL overrides after a complete catalog hydrate. */
+/** Atomically replace the complete live sprite registry. */
 export function applyAcceptedUnitSprites(revision: number, next: AcceptedUnitSpriteMap): boolean {
   const serializedBefore = JSON.stringify([acceptedCatalogRevision, acceptedSprites]);
-  for (const key of Object.keys(acceptedSprites) as RegistryPieceId[]) delete acceptedSprites[key];
-  for (const piece of Object.keys(next) as RegistryPieceId[]) {
-    const palettes = next[piece];
-    if (!palettes) continue;
-    acceptedSprites[piece] = {};
-    for (const palette of Object.keys(palettes) as RegistryPalette[]) {
-      acceptedSprites[piece]![palette] = { ...palettes[palette] };
-    }
-  }
+  acceptedSprites = Object.fromEntries(
+    Object.entries(next).map(([piece, palettes]) => [
+      piece,
+      Object.fromEntries(
+        Object.entries(palettes).map(([palette, directions]) => [palette, { ...directions }]),
+      ),
+    ]),
+  ) as AcceptedUnitSpriteMap;
   acceptedCatalogRevision = Number.isFinite(revision) ? revision : 0;
   return serializedBefore !== JSON.stringify([acceptedCatalogRevision, acceptedSprites]);
 }
@@ -42,6 +43,6 @@ export function acceptedUnitCatalogRevision(): number {
 }
 
 export function resetAcceptedUnitSprites(): void {
-  for (const key of Object.keys(acceptedSprites) as RegistryPieceId[]) delete acceptedSprites[key];
+  acceptedSprites = null;
   acceptedCatalogRevision = 0;
 }

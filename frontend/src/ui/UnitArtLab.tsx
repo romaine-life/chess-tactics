@@ -35,9 +35,10 @@ type UnitSeatStyle = CSSProperties & {
 
 const cap = (value: string): string => value.charAt(0).toUpperCase() + value.slice(1);
 
-function negativeAnchor(value: string | undefined, fallback: number): string {
-  const parsed = Number.parseFloat(value ?? '');
-  return `${-(Number.isFinite(parsed) ? parsed : fallback)}%`;
+function negativeAnchor(value: string): string {
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) throw new Error(`invalid live unit anchor: ${value}`);
+  return `${-parsed}%`;
 }
 
 export function UnitArtLab({
@@ -113,8 +114,8 @@ export function UnitArtLab({
                 left,
                 top,
                 zIndex: x + y + 20000,
-                '--unit-anchor-x': negativeAnchor(selectedUnit.unitAnchorX, 50),
-                '--unit-anchor-y': negativeAnchor(selectedUnit.unitAnchorY, 78),
+                '--unit-anchor-x': negativeAnchor(selectedUnit.unitAnchorX),
+                '--unit-anchor-y': negativeAnchor(selectedUnit.unitAnchorY),
               };
               return (
                 <span key={palette} className={`board-unit-seat is-${selectedUnit.family}`} style={style}>

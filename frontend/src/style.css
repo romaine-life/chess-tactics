@@ -319,6 +319,25 @@ button:disabled {
   padding: 14px;
 }
 
+.app-startup-status {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.app-startup-status.is-error h1 {
+  color: var(--danger);
+}
+
+.app-startup-status button {
+  min-width: 112px;
+}
+
 /* #root host. Fills the shell's content row; tall pages scroll here while the
    catalog (height:100%) manages its own internal content-pane scroll so its
    tree rail stays locked in place. */
@@ -4248,9 +4267,6 @@ h1 {
    Each board adds only its own chrome (move animation, or selection/hit) around this;
    the seat geometry lives nowhere else. Do not re-derive it per board. */
 .board-unit-seat {
-  --unit-scale: 1;
-  --unit-anchor-x: -50%;
-  --unit-anchor-y: -78%;
   position: absolute;
   width: calc(72px * var(--unit-scale));
   height: calc(86px * var(--unit-scale));
@@ -4261,12 +4277,12 @@ h1 {
   pointer-events: none;
 }
 
-.board-unit-seat.is-pawn { --unit-scale: var(--unit-scale-pawn, 1); --unit-anchor-x: var(--unit-anchor-x-pawn, -50%); --unit-anchor-y: var(--unit-anchor-y-pawn, -78%); }
-.board-unit-seat.is-knight { --unit-scale: var(--unit-scale-knight, 1); --unit-anchor-x: var(--unit-anchor-x-knight, -50%); --unit-anchor-y: var(--unit-anchor-y-knight, -78%); }
-.board-unit-seat.is-bishop { --unit-scale: var(--unit-scale-bishop, 1); --unit-anchor-x: var(--unit-anchor-x-bishop, -50%); --unit-anchor-y: var(--unit-anchor-y-bishop, -78%); }
-.board-unit-seat.is-rook { --unit-scale: var(--unit-scale-rook, 1); --unit-anchor-x: var(--unit-anchor-x-rook, -50%); --unit-anchor-y: var(--unit-anchor-y-rook, -78%); }
-.board-unit-seat.is-queen { --unit-scale: var(--unit-scale-queen, 1); --unit-anchor-x: var(--unit-anchor-x-queen, -50%); --unit-anchor-y: var(--unit-anchor-y-queen, -78%); }
-.board-unit-seat.is-king { --unit-scale: var(--unit-scale-king, 1); --unit-anchor-x: var(--unit-anchor-x-king, -50%); --unit-anchor-y: var(--unit-anchor-y-king, -78%); }
+.board-unit-seat.is-pawn { --unit-scale: var(--unit-scale-pawn); --unit-anchor-x: var(--unit-anchor-x-pawn); --unit-anchor-y: var(--unit-anchor-y-pawn); }
+.board-unit-seat.is-knight { --unit-scale: var(--unit-scale-knight); --unit-anchor-x: var(--unit-anchor-x-knight); --unit-anchor-y: var(--unit-anchor-y-knight); }
+.board-unit-seat.is-bishop { --unit-scale: var(--unit-scale-bishop); --unit-anchor-x: var(--unit-anchor-x-bishop); --unit-anchor-y: var(--unit-anchor-y-bishop); }
+.board-unit-seat.is-rook { --unit-scale: var(--unit-scale-rook); --unit-anchor-x: var(--unit-anchor-x-rook); --unit-anchor-y: var(--unit-anchor-y-rook); }
+.board-unit-seat.is-queen { --unit-scale: var(--unit-scale-queen); --unit-anchor-x: var(--unit-anchor-x-queen); --unit-anchor-y: var(--unit-anchor-y-queen); }
+.board-unit-seat.is-king { --unit-scale: var(--unit-scale-king); --unit-anchor-x: var(--unit-anchor-x-king); --unit-anchor-y: var(--unit-anchor-y-king); }
 
 .board-unit-seat img {
   display: block;

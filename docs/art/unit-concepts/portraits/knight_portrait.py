@@ -2,7 +2,7 @@
 
 Run with:  blender --background --python render_knight_fur.py
 
-Produces frontend/public/assets/units/knight/blender-render-fur/<direction>.png at the
+Produces local Unit Art handoff frames at the
 true-isometric contract angle (45 yaw / 35.264 elevation / orthographic, fixed camera,
 piece rotated per direction). The wood-grain diffuse is dropped and replaced with a
 procedural navy "hint of fur" coat (smooth muzzle, fur only on the coat — not the

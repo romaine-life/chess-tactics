@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import {
   boardContentHash,
   boardDrawOps,
@@ -12,6 +12,11 @@ import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
 import { objectBaseZIndex, structureBackZIndex } from './sceneDepth';
 import type { EditorBoard } from '../ui/boardCode';
+import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
+import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
+
+beforeAll(() => applyLiveUnitCatalog(testLiveUnitCatalog()));
+afterAll(() => resetLiveUnitCatalog());
 
 // Coverage (opaque fraction) of a rect under an opacity predicate — the property object-fit:cover
 // relies on: a crop that's ~fully opaque cannot show a transparent corner as sky.
@@ -32,7 +37,7 @@ const blank = (cols = 4, rows = 4): EditorBoard => ({
 // Real registry ids so boardDrawOps actually emits ops (tile family `grass-surf-0`, a
 // production unit, a doodad).
 const TILE = 'grass-surf-0';
-const UNIT = { unitId: 'rook-blender-v4-calibrated', direction: 'south', faction: 'navy-blue' };
+const UNIT = { unitId: 'rook', direction: 'south', faction: 'navy-blue' };
 
 describe('boardContentHash — stability + sensitivity', () => {
   it('is stable across object-key insertion order (canonicalised)', () => {

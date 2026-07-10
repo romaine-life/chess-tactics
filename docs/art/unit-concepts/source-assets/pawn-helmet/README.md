@@ -1,6 +1,7 @@
 # Helmeted Pawn (source)
 
-Source models for the active pawn unit (`frontend/public/assets/units/pawn/blender-render-helmet/`).
+Source models for the active pawn design. Renders go to
+`.unit-art-output/pawn/navy-blue/` before upload through Unit Art.
 
 - `Pawn.stl` — classic Staunton pawn (from `chess-pawn.zip`).
 - `helmet.dae` — medieval archer's helmet, COLLADA (from `helmet-archery.zip`). Its PBR

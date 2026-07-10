@@ -134,6 +134,9 @@ bgm:
 # routes to the browser.
 unitAssets:
   containerUrl: "https://chesstacticsmedia.blob.core.windows.net/unit-assets"
+  # Test slots copy the live catalog into their isolated Postgres + local blob
+  # directory at startup because slot service accounts never receive prod identity.
+  seedCatalogUrl: "https://chess.romaine.life/api/unit-catalog"
 
 ingress:
   gatewayName: main

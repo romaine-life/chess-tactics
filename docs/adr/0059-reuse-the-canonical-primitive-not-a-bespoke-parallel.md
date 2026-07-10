@@ -78,7 +78,7 @@ Rules:
   `frontend/src/ui/TilePreview.tsx`; the shell is `.al-lab-main` + one `.tileset-view-controls`
   + a `header` slot. Editors are Viewer kinds; browsing is a catalog category (ADR-0058).
 - **Tuning / dressing controls:** `SliderRow` (built-in ↺ via `dflt`) + `ctlReset` —
-  `frontend/src/ui/dressing/SliderRow.tsx`; Reset-to-committed per ADR-0057.
+  `frontend/src/ui/dressing/SliderRow.tsx`; Reset-to-authoritative per ADR-0057.
 - **Chrome (frames/buttons/panels):** the single 9-slice registry (`config/nine-slice-registry.json`)
   rendered via `border-image` (ADR-0002, ADR-0012, ADR-0016, ADR-0034). Never hand-rolled
   `background`/`border` CSS for a framed surface (ADR-0032).
@@ -100,7 +100,7 @@ Rules:
 
 - Per-domain instances of this same rule: [ADR-0058](0058-studio-editors-are-viewer-kinds-not-routes.md)
   (Studio navigation), [ADR-0032](0032-no-bland-html-css-every-surface-is-kit.md) (chrome is kit),
-  [ADR-0057](0057-studio-tuning-surfaces-ship-reset-to-baseline.md) (Reset via shared control
+  [ADR-0057](0057-studio-tuning-surfaces-reset-to-authoritative-baseline.md) (Reset via shared control
   primitives), [ADR-0042](0042-title-bar-is-an-invariant-screens-add-slots.md) (one title bar),
   [ADR-0016](0016-single-source-nine-slice-registry.md) (single nine-slice registry). This ADR
   is the general principle they are each an instance of, plus the findable index.

@@ -1,7 +1,7 @@
 """Promote portrait masters to team palettes.
 
-Recolors the navy codex-stone portrait masters into the production team palettes using the
-SAME selective band strategy as the board roster (scripts/codexsheet/4-recolor-teams.py):
+Recolors the navy codex-stone portrait masters into the production team palettes using a
+selective color-band strategy:
 shift only the navy stone band, preserve warm accents (king's gold crown, rook gate wood).
 Black/white are value ramps so the portraits keep sculptural detail.
 
