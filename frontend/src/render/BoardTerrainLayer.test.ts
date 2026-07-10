@@ -20,4 +20,12 @@ describe('macroTileOwnedCellKeys', () => {
 
     expect(macroTileOwnedCellKeys(macroTiles).size).toBe(8);
   });
+
+  it('leaves explicitly broken cells owned by their normal 1x1 terrain top', () => {
+    const macroTiles: TerrainCanvasMacroTile[] = [
+      { key: 'broken', x: 2, y: 3, columns: 3, rows: 2, breaks: [1, 5], src: '/grass.png' },
+    ];
+
+    expect([...macroTileOwnedCellKeys(macroTiles)].sort()).toEqual(['2,3', '2,4', '3,4', '4,3']);
+  });
 });

@@ -95,8 +95,10 @@ describe('boardCode round-trip', () => {
           share: 70,
           locked: true,
           covers: [{ type: 'water', knobs: { amount: 0.8, amountRandom: 0.1, density: 0.5, densityRandom: 0.2 } }],
+          macroTileDensity: 0,
+          macroTileBreakup: 0,
         },
-        { terrain: 'sand', share: 30, covers: [] },
+        { terrain: 'sand', share: 30, covers: [], macroTileDensity: 0.8, macroTileBreakup: 0.25 },
       ],
     }];
     expect(decodeBoard(encodeBoard(emptyBoard({ generatedRegions })))!.generatedRegions).toEqual(generatedRegions);
@@ -104,8 +106,8 @@ describe('boardCode round-trip', () => {
 
   it('round-trips macrotile placements', () => {
     const macroTiles = [
-      { assetId: 'grass-soft-bands-3x3', x: 1, y: 1 },
-      { assetId: 'future-macrotile', x: 4, y: 3 },
+      { assetId: 'grass-soft-bands-3x3', x: 1, y: 1, breaks: [1, 4, 7] },
+      { assetId: 'future-macrotile', x: 4, y: 3, breaks: [2, 8] },
     ];
     const decoded = decodeBoard(encodeBoard(emptyBoard({ macroTiles })))!;
     expect(decoded.macroTiles).toEqual(macroTiles);

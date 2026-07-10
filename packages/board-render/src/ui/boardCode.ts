@@ -5,7 +5,7 @@
 //
 // Wire shape (keys kept short): { c:cols, r:rows, pf?:playerFaction, fd?:{faction:defaultDir},
 //   f?:fillTileId, t?:{cell:tileId}, h?:[cell], u?:{cell:[unitId,dir,faction]},
-//   d?:{cell:doodadId}, p?:{anchorCell:propId}, mt?:[[macroTileId,x,y]], v?:{cell:density},
+//   d?:{cell:doodadId}, p?:{anchorCell:propId}, mt?:[[macroTileId,x,y,breakMask?]], v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fe?:{edgeKey:fenceMaterial},
 //   wl?:{edgeKey:wallMaterial}, wa?:{anchorEdgeKey:wallArtId},
 //   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
@@ -23,7 +23,7 @@
 // encodes byte-identically to a code that predates them, and an OLD code decodes them to empty.
 
 import type { GroundCoverDensity } from '../core/groundCover';
-import { macroTileAsset, type MacroTilePlacement } from '../core/macroTiles';
+import { macroTileAsset, macroTileBreakIndices, type MacroTilePlacement } from '../core/macroTiles';
 import { DEFAULT_WALL_MATERIAL, WALL_MATERIALS, type FeatureKind, type FeatureMaterial, type RoadMaterial, type RiverMaterial, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, type WallArtId } from '../core/wallArt';
 import { ZONE_COLORS, ZONE_TYPES, type ZoneColor, type ZoneType } from '../core/level';
@@ -60,6 +60,10 @@ export type BoardGeneratedRegionSection = {
   share: number;
   locked?: boolean;
   covers?: BoardGeneratedRegionCover[];
+  /** Share of this terrain section covered by composite terrain art, 0..1. */
+  macroTileDensity?: number;
+  /** Per-cell chance that generated composite art exposes its normal 1x1 tile, 0..1. */
+  macroTileBreakup?: number;
 };
 
 export interface BoardGeneratedRegion {
@@ -73,7 +77,7 @@ export interface BoardGeneratedRegion {
   buffer: number;
   /** Edge roughness, 0..1. */
   wiggle: number;
-  /** Target share of generated terrain owned by opaque macrotiles, 0..1. */
+  /** Legacy region-wide density; new regions store this per section. */
   macroTileDensity?: number;
 }
 
@@ -236,17 +240,38 @@ function cleanMacroTiles(value: unknown, cols: number, rows: number): MacroTileP
     if (!assetId || !Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= cols || y >= rows) continue;
     const asset = macroTileAsset(assetId);
     if (asset && (x + asset.columns > cols || y + asset.rows > rows)) continue;
+    const area = asset ? asset.columns * asset.rows : 31;
+    const rawBreaks = raw[3];
+    const breaks = Array.isArray(rawBreaks)
+      ? [...new Set(rawBreaks.map(Number).filter((index) => Number.isInteger(index) && index >= 0 && index < area))].sort((a, b) => a - b)
+      : typeof rawBreaks === 'number' && Number.isSafeInteger(rawBreaks) && rawBreaks > 0
+        ? Array.from({ length: area }, (_, index) => index).filter((index) => Math.floor(Number(rawBreaks) / (2 ** index)) % 2 === 1)
+        : [];
+    if (asset && breaks.length >= area) continue;
     const key = `${assetId}:${x},${y}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ assetId, x, y });
+    out.push({ assetId, x, y, ...(breaks.length ? { breaks } : {}) });
   }
   return out.sort((a, b) => a.y - b.y || a.x - b.x || a.assetId.localeCompare(b.assetId));
 }
 
 function encodeMacroTiles(value: MacroTilePlacement[] | undefined, cols: number, rows: number): unknown[] {
-  return cleanMacroTiles((value ?? []).map((placement) => [placement.assetId, placement.x, placement.y]), cols, rows)
-    .map((placement) => [placement.assetId, placement.x, placement.y]);
+  return cleanMacroTiles((value ?? []).map((placement) => [
+    placement.assetId,
+    placement.x,
+    placement.y,
+    macroTileBreakIndices(placement),
+  ]), cols, rows).map((placement) => {
+    const breaks = macroTileBreakIndices(placement);
+    if (!macroTileAsset(placement.assetId) && breaks.length > 0) {
+      return [placement.assetId, placement.x, placement.y, breaks];
+    }
+    const breakMask = breaks.reduce((mask, index) => mask + (2 ** index), 0);
+    return breakMask > 0
+      ? [placement.assetId, placement.x, placement.y, breakMask]
+      : [placement.assetId, placement.x, placement.y];
+  });
 }
 
 function encodeGeneratedRegions(regions: BoardGeneratedRegion[] | undefined, cols: number, rows: number): unknown[] {
@@ -270,6 +295,8 @@ function encodeGeneratedRegions(regions: BoardGeneratedRegion[] | undefined, col
             cover.knobs.density,
             cover.knobs.densityRandom,
           ]),
+          typeof section.macroTileDensity === 'number' ? clamp01(section.macroTileDensity) : null,
+          typeof section.macroTileBreakup === 'number' ? clamp01(section.macroTileBreakup) : null,
         ]),
         b: region.buffer,
         w: region.wiggle,
@@ -314,6 +341,8 @@ function decodeGeneratedRegions(value: unknown, cols: number, rows: number): Boa
           terrain: String(rawSection[0]) as TileFamilyId,
           share: Math.max(0, Math.min(100, Math.round(Number(rawSection[1]) || 0))),
           covers,
+          ...(typeof rawSection[4] === 'number' ? { macroTileDensity: clamp01(rawSection[4]) } : {}),
+          ...(typeof rawSection[5] === 'number' ? { macroTileBreakup: clamp01(rawSection[5]) } : {}),
         };
         if (rawSection[2] === 1 || rawSection[2] === true) section.locked = true;
         sections.push(section);

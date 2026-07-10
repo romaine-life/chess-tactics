@@ -26,7 +26,7 @@ import { densityFieldAt, groundCoverSet, resolveGroundCover, type GroundCover } 
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
-import { macroTileAsset, macroTileCellIndices, macroTileFrame, resolveMacroTilePlacements } from '../core/macroTiles';
+import { macroTileAsset, macroTileBreakIndices, macroTileFrame, macroTileOwnedCellIndices, resolveMacroTilePlacements } from '../core/macroTiles';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
 const TILE_FRAME_H = TILE_FRAME_HEIGHT;
@@ -60,6 +60,8 @@ export interface BoardDrawOp {
   sy?: number;
   sw?: number;
   sh?: number;
+  /** Board-space polygon paths used to expose broken cells inside a composite terrain image. */
+  clipPolygons?: number[][];
 }
 
 export interface BakeBounds {
@@ -80,6 +82,18 @@ const studioTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.ass
 const resolveTile = (id: string): StudioAsset | undefined => studioTiles.find((asset) => asset.id === id);
 const resolveUnit = (id: string): UnitAsset | undefined => unitAssetById(id);
 const resolveDoodad = (id: string): DoodadAsset | undefined => doodadAsset(id);
+
+function terrainCellClipPolygon(index: number, columns: number): number[] {
+  const x = index % columns;
+  const y = Math.floor(index / columns);
+  const { left, top } = boardLabCellPosition({ x, y });
+  return [
+    left, top - TILE_STEP_Y,
+    left + TILE_STEP_X, top,
+    left, top + TILE_STEP_Y,
+    left - TILE_STEP_X, top,
+  ];
+}
 
 function pushStructureDrawOps(
   ops: BoardDrawOp[],
@@ -154,7 +168,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   });
   const macroOwnedTerrain = new Set<string>();
   for (const placement of acceptedMacroTiles) {
-    for (const index of macroTileCellIndices(placement, board.cols, board.rows)) {
+    for (const index of macroTileOwnedCellIndices(placement, board.cols, board.rows)) {
       macroOwnedTerrain.add(`${index % board.cols},${Math.floor(index / board.cols)}`);
     }
   }
@@ -238,6 +252,10 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     if (!asset) continue;
     const { left, top } = boardLabCellPosition(placement);
     const frame = macroTileFrame(asset);
+    const breaks = macroTileBreakIndices(placement);
+    const clipPolygons = breaks.length > 0
+      ? macroTileOwnedCellIndices(placement, board.cols, board.rows).map((index) => terrainCellClipPolygon(index, board.cols))
+      : undefined;
     ops.push({
       src: asset.src,
       dx: left + frame.left,
@@ -245,6 +263,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       dw: frame.width,
       dh: frame.height,
       z: TERRAIN_MACRO_TILE_DEPTH_OFFSET,
+      ...(clipPolygons ? { clipPolygons } : {}),
     });
   }
 

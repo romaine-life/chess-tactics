@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactElement } from 'react';
-import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X } from '../art/projectionContract';
-import { macroTileAsset, macroTileFrame, type MacroTilePlacement } from '../core/macroTiles';
+import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
+import { macroTileAsset, macroTileBreakIndices, macroTileFrame, type MacroTilePlacement } from '../core/macroTiles';
 import { boardLabCellPosition } from './boardProjection';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
@@ -27,6 +27,7 @@ export interface TerrainCanvasMacroTile {
   src: string;
   columns: number;
   rows: number;
+  breaks?: readonly number[];
 }
 
 export function terrainCanvasMacroTiles(placements: readonly MacroTilePlacement[] | undefined): TerrainCanvasMacroTile[] {
@@ -39,6 +40,7 @@ export function terrainCanvasMacroTiles(placements: readonly MacroTilePlacement[
       src: asset.src,
       columns: asset.columns,
       rows: asset.rows,
+      breaks: macroTileBreakIndices(placement),
     }] : [];
   });
 }
@@ -126,7 +128,7 @@ function terrainSignature(cells: readonly TerrainCanvasCell[], macroTiles: reado
     ].join(':'))
     .join('|');
   const macroTileSignature = macroTiles
-    .map((macroTile) => [macroTile.key, macroTile.x, macroTile.y, macroTile.src, macroTile.columns, macroTile.rows].join(':'))
+    .map((macroTile) => [macroTile.key, macroTile.x, macroTile.y, macroTile.src, macroTile.columns, macroTile.rows, (macroTile.breaks ?? []).join(',')].join(':'))
     .join('|');
   return `${cellSignature}||${macroTileSignature}`;
 }
@@ -134,8 +136,10 @@ function terrainSignature(cells: readonly TerrainCanvasCell[], macroTiles: reado
 export function macroTileOwnedCellKeys(macroTiles: readonly TerrainCanvasMacroTile[]): Set<string> {
   const owned = new Set<string>();
   for (const macroTile of macroTiles) {
+    const breaks = new Set(macroTile.breaks ?? []);
     for (let dy = 0; dy < macroTile.rows; dy += 1) {
       for (let dx = 0; dx < macroTile.columns; dx += 1) {
+        if (breaks.has(dy * macroTile.columns + dx)) continue;
         owned.add(`${macroTile.x + dx},${macroTile.y + dy}`);
       }
     }
@@ -330,6 +334,26 @@ function drawMacroTile(
   if (!imageReady(image)) return;
   const { left, top } = boardLabCellPosition(macroTile);
   const frame = macroTileFrame(macroTile);
+  const breaks = macroTile.breaks ?? [];
+  if (breaks.length > 0) {
+    const broken = new Set(breaks);
+    ctx.save();
+    ctx.beginPath();
+    for (let dy = 0; dy < macroTile.rows; dy += 1) {
+      for (let dx = 0; dx < macroTile.columns; dx += 1) {
+        if (broken.has(dy * macroTile.columns + dx)) continue;
+        const center = boardLabCellPosition({ x: macroTile.x + dx, y: macroTile.y + dy });
+        const cx = center.left - bounds.left;
+        const cy = center.top - bounds.top;
+        ctx.moveTo(cx, cy - TILE_STEP_Y);
+        ctx.lineTo(cx + TILE_STEP_X, cy);
+        ctx.lineTo(cx, cy + TILE_STEP_Y);
+        ctx.lineTo(cx - TILE_STEP_X, cy);
+        ctx.closePath();
+      }
+    }
+    ctx.clip();
+  }
   ctx.drawImage(
     image,
     left + frame.left - bounds.left,
@@ -337,6 +361,7 @@ function drawMacroTile(
     frame.width,
     frame.height,
   );
+  if (breaks.length > 0) ctx.restore();
 }
 
 function drawFrame(

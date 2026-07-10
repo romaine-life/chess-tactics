@@ -75,11 +75,16 @@ import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerato
 import { scatterTerrainDetailed } from '../core/terrainScatter';
 import { createRng } from '../core/rng';
 import {
+  DEFAULT_MACRO_TILE_BREAKUP,
   DEFAULT_MACRO_TILE_DENSITY,
+  breakMacroTilesAtCell,
   generateMacroTiles,
   macroTileAsset,
+  macroTileAssets,
   macroTileCellIndices,
+  macroTileFrame,
   resolveMacroTilePlacements,
+  type MacroTileAsset,
   type MacroTilePlacement,
 } from '../core/macroTiles';
 import { SliderRow } from './dressing/SliderRow';
@@ -228,6 +233,7 @@ function StudioEditableBoard({
   onMove,
   canMoveTo,
   propBrush,
+  macroTileBrush,
   hidden,
   regionCells,
   onRegionStart,
@@ -295,6 +301,8 @@ function StudioEditableBoard({
   canMoveTo?: (subject: MoveSubject, to: { x: number; y: number }) => boolean;
   /** When the prop brush is armed: its def + a placeability test, used for the footprint hover. */
   propBrush?: { def: PropDef; canPlaceAt: (ax: number, ay: number) => boolean } | null;
+  /** When a composite terrain brush is armed, preview its full footprint at the hovered anchor. */
+  macroTileBrush?: MacroTileAsset | null;
   /** Per-layer visibility — a true value hides that layer's elements on the board. */
   hidden?: { tile: boolean; unit: boolean; doodad: boolean };
   /** Cells currently selected ("x,y" keys) — drawn as a tinted diamond overlay. */
@@ -620,6 +628,60 @@ function StudioEditableBoard({
     );
   }
 
+  if (macroTileBrush && tool === 'brush' && hoverCell) {
+    const placeable = hoverCell.x + macroTileBrush.columns <= cols && hoverCell.y + macroTileBrush.rows <= rows;
+    for (let dy = 0; dy < macroTileBrush.rows; dy += 1) {
+      for (let dx = 0; dx < macroTileBrush.columns; dx += 1) {
+        const x = hoverCell.x + dx;
+        const y = hoverCell.y + dy;
+        if (x >= cols || y >= rows) continue;
+        const { left, top, zIndex } = boardLabCellPosition({ x, y });
+        overlaySprites.push(
+          <span
+            key={`macro-ghostcell-${x},${y}`}
+            className={`le-prop-ghost-cell ${placeable ? 'is-ok' : 'is-blocked'}`}
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left,
+              top,
+              zIndex: zIndex + 19000,
+              width: TILE_TEMPLATE.stepX * 2,
+              height: TILE_TEMPLATE.stepY * 2,
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              clipPath: 'polygon(50% 0, 100% 50%, 50% 100%, 0 50%)',
+              boxShadow: `inset 0 0 0 2px ${placeable ? 'rgba(80,220,140,.95)' : 'rgba(240,90,90,.95)'}`,
+              background: placeable ? 'rgba(80,220,140,.12)' : 'rgba(240,90,90,.18)',
+            }}
+          />,
+        );
+      }
+    }
+    const anchor = boardLabCellPosition(hoverCell);
+    const frame = macroTileFrame(macroTileBrush);
+    overlaySprites.push(
+      <img
+        key="macro-ghost-sprite"
+        src={macroTileBrush.src}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        style={{
+          position: 'absolute',
+          left: anchor.left + frame.left,
+          top: anchor.top + frame.top,
+          width: frame.width,
+          height: frame.height,
+          opacity: placeable ? 0.62 : 0.22,
+          imageRendering: 'pixelated',
+          pointerEvents: 'none',
+          zIndex: 19001,
+        }}
+      />,
+    );
+  }
+
   const sceneBoard: EditorBoard = {
     cols,
     rows,
@@ -686,6 +748,9 @@ const leFamilyAssets = studioFamilies.reduce((acc, family) => {
 }, {} as Record<TileFamilyId, readonly StudioAsset[]>);
 const leAllTiles = studioFamilies.flatMap((family) => family.assets);
 const leFamilyOfTile = (id: string): StudioFamily | undefined => studioFamilies.find((family) => family.assets.some((asset) => asset.id === id));
+const leMacroTileFootprints = [...new Set(macroTileAssets.map((asset) => `${asset.columns}x${asset.rows}`))];
+const leMacroTilesFor = (family: TileFamilyId, footprint: string): readonly MacroTileAsset[] =>
+  macroTileAssets.filter((asset) => asset.family === family && `${asset.columns}x${asset.rows}` === footprint);
 const validMacroTilesForBoard = (board: EditorBoard): MacroTilePlacement[] => {
   const known = resolveMacroTilePlacements({
     placements: board.macroTiles,
@@ -724,13 +789,21 @@ const DEFAULT_COVER: CoverKnobs = { amount: 0.6, amountRandom: 0.3, density: 0.4
 // SET (decoupled from terrain) plus its own scatter knobs. `expanded` is UI state. Per cell the
 // first listed entry whose Coverage roll hits wins, so several entries read as a MIX across the region.
 type CoverEntry = { id: number; type: GroundCoverId; expanded: boolean; knobs: CoverKnobs };
-type ScatterRow = { id: number; terrain: TileFamilyId; share: number; locked: boolean; covers: CoverEntry[] };
+type ScatterRow = {
+  id: number;
+  terrain: TileFamilyId;
+  share: number;
+  locked: boolean;
+  covers: CoverEntry[];
+  macroTileDensity: number;
+  macroTileBreakup: number;
+};
 // The three ground-cover sets that have art, offered on every region regardless of its terrain.
 const LE_COVER_TYPES = GROUND_COVER_ASSETS;
 const isGroundCoverId = (id: string): id is GroundCoverId => GROUND_COVER_ASSETS.some((asset) => asset.id === id);
 const defaultScatterRows = (): ScatterRow[] => [
-  { id: 0, terrain: 'grass', share: 60, locked: false, covers: [{ id: 1, type: 'grass', expanded: false, knobs: { ...DEFAULT_COVER } }] },
-  { id: 1, terrain: 'stone', share: 40, locked: false, covers: [] },
+  { id: 0, terrain: 'grass', share: 60, locked: false, covers: [{ id: 1, type: 'grass', expanded: false, knobs: { ...DEFAULT_COVER } }], macroTileDensity: DEFAULT_MACRO_TILE_DENSITY, macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP },
+  { id: 1, terrain: 'stone', share: 40, locked: false, covers: [], macroTileDensity: DEFAULT_MACRO_TILE_DENSITY, macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP },
 ];
 const regionCellSort = (a: string, b: string): number => {
   const [ax, ay] = a.split(',').map(Number);
@@ -746,6 +819,8 @@ const scatterRowsToGeneratedSections = (rows: ScatterRow[]): BoardGeneratedRegio
     share: row.share,
     locked: row.locked || undefined,
     covers: row.covers.map((cover) => ({ type: cover.type, knobs: { ...cover.knobs } })),
+    macroTileDensity: row.macroTileDensity,
+    macroTileBreakup: row.macroTileBreakup,
   }));
 const nextGeneratedRegionName = (regions: readonly BoardGeneratedRegion[]): string => {
   const used = new Set(regions.map((region) => region.name));
@@ -1759,6 +1834,8 @@ export function LevelEditor(): ReactElement {
   const [boardFactionDirections, setBoardFactionDirections] = useState<FactionDirections>(() => initialFactionDirections);
   const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move' | 'region'>(toolForLayer(initialLayer));
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
+  const [macroTileBrushId, setMacroTileBrushId] = useState<string | null>(null);
+  const [macroTileFootprint, setMacroTileFootprint] = useState(leMacroTileFootprints[0] ?? '2x2');
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   // Marquee region selection — the scope a Generate fills. "x,y" cell keys; empty ⇒ whole board.
   const [regionSelection, setRegionSelection] = useState<Set<string>>(() => new Set());
@@ -1772,7 +1849,6 @@ export function LevelEditor(): ReactElement {
   const generatedRegionIdRef = useRef(initialGeneratedRegions.length);
   const [scatterBuffer, setScatterBuffer] = useState(0);
   const [scatterWiggle, setScatterWiggle] = useState(0.5);
-  const [scatterSurfaceDensity, setScatterSurfaceDensity] = useState(DEFAULT_MACRO_TILE_DENSITY);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [showGrid, setShowGrid] = useState(false);
@@ -2265,6 +2341,7 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
   const brushAsset = resolveAsset(brushId) ?? leDefaultTile;
+  const macroTileBrushAsset = macroTileBrushId ? macroTileAsset(macroTileBrushId) : undefined;
   const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssetById(id);
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? leUnitAssets[0];
   const directionForFaction = (faction: UnitPalette): Direction => factionDefaultDirection(faction, boardFactionDirections);
@@ -2409,6 +2486,28 @@ export function LevelEditor(): ReactElement {
       commitEditorBoard(withZoneEntries(next, updated));
       return;
     }
+    if (macroTileBrushAsset) {
+      const placement = { assetId: macroTileBrushAsset.id, x, y };
+      const footprint = macroTileCellIndices(placement, boardCols, boardRows);
+      if (footprint.length !== macroTileBrushAsset.columns * macroTileBrushAsset.rows) return;
+      const footprintSet = new Set(footprint);
+      next.macroTiles = (next.macroTiles ?? []).filter((existing) =>
+        !macroTileCellIndices(existing, boardCols, boardRows).some((index) => footprintSet.has(index)),
+      );
+      const familyTiles = leFamilyAssets[macroTileBrushAsset.family];
+      if (!familyTiles?.length) return;
+      for (const index of footprint) {
+        const cellKey = `${index % boardCols},${Math.floor(index / boardCols)}`;
+        const existingFamily = leFamilyOfTile(next.cells[cellKey] ?? '')?.id;
+        if (existingFamily !== macroTileBrushAsset.family) {
+          next.cells[cellKey] = familyTiles[(index + x * 17 + y * 29) % familyTiles.length].id;
+        }
+      }
+      next.macroTiles.push(placement);
+      commitEditorBoard(next, { x, y });
+      return;
+    }
+    next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
     next.cells[key] = brushAsset.id;
     commitEditorBoard(next);
   };
@@ -2451,6 +2550,7 @@ export function LevelEditor(): ReactElement {
       commitEditorBoard(withZoneEntries(next, updated));
       return;
     }
+    next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
     delete next.cells[key];
     commitEditorBoard(next);
   };
@@ -2532,7 +2632,7 @@ export function LevelEditor(): ReactElement {
   };
   const clearActiveLayer = (): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    if (brushKind === 'tile') next.cells = {};
+    if (brushKind === 'tile') { next.cells = {}; next.macroTiles = []; }
     else if (brushKind === 'unit') next.units = {};
     else if (brushKind === 'doodad') next.doodads = {};
     else if (brushKind === 'prop') next.props = {};
@@ -2561,10 +2661,13 @@ export function LevelEditor(): ReactElement {
   };
   const fillBoard = (mode: 'empty' | 'all'): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    if (mode === 'all') next.cells = {};
+    if (mode === 'all') { next.cells = {}; next.macroTiles = []; }
       for (let y = 0; y < boardRows; y += 1) for (let x = 0; x < boardCols; x += 1) {
         const key = `${x},${y}`;
-        if (mode === 'all' || !(key in next.cells)) next.cells[key] = brushAsset.id;
+        if (mode === 'all' || !(key in next.cells)) {
+          if (mode === 'empty') next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
+          next.cells[key] = brushAsset.id;
+        }
       }
     commitEditorBoard(next);
   };
@@ -2579,6 +2682,7 @@ export function LevelEditor(): ReactElement {
     });
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     next.cells = Object.fromEntries(generated.cells.map((cell) => [`${cell.x},${cell.y}`, cell.asset?.id ?? leDefaultTile.id]));
+    next.macroTiles = [];
     commitEditorBoard(next, null);
   };
   const activeGeneratedRegion = useMemo(
@@ -2589,7 +2693,8 @@ export function LevelEditor(): ReactElement {
     const [x, y] = key.split(',').map(Number);
     return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < cols && y < rows;
   };
-  const hydrateGeneratedRegionSections = (sections: BoardGeneratedRegionSection[]): ScatterRow[] => {
+  const hydrateGeneratedRegionSections = (sections: BoardGeneratedRegionSection[], legacyDensity?: number): ScatterRow[] => {
+    const existingSections = sections.length > 0;
     const source = sections.length ? sections : scatterRowsToGeneratedSections(defaultScatterRows());
     return source.map((section) => ({
       id: (scatterIdRef.current += 1),
@@ -2601,6 +2706,8 @@ export function LevelEditor(): ReactElement {
           ? [{ id: (coverIdRef.current += 1), type: cover.type, expanded: false, knobs: { ...cover.knobs } }]
           : []
       )),
+      macroTileDensity: section.macroTileDensity ?? legacyDensity ?? DEFAULT_MACRO_TILE_DENSITY,
+      macroTileBreakup: section.macroTileBreakup ?? (existingSections ? 0 : DEFAULT_MACRO_TILE_BREAKUP),
     }));
   };
   const makeGeneratedRegionUnit = (
@@ -2614,7 +2721,6 @@ export function LevelEditor(): ReactElement {
     sections: scatterRowsToGeneratedSections(scatterSections),
     buffer: scatterBuffer,
     wiggle: scatterWiggle,
-    macroTileDensity: scatterSurfaceDensity,
   });
   const selectGeneratedRegionUnit = (id: string): void => {
     if (!id) {
@@ -2629,8 +2735,7 @@ export function LevelEditor(): ReactElement {
     setRegionSelection(new Set(cells));
     setScatterBuffer(region.buffer);
     setScatterWiggle(region.wiggle);
-    setScatterSurfaceDensity(region.macroTileDensity ?? DEFAULT_MACRO_TILE_DENSITY);
-    setScatterSections(normalizeToTotal(hydrateGeneratedRegionSections(region.sections), 100 - region.buffer));
+    setScatterSections(normalizeToTotal(hydrateGeneratedRegionSections(region.sections, region.macroTileDensity), 100 - region.buffer));
   };
   const removeGeneratedRegionUnit = (id: string): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -2697,7 +2802,15 @@ export function LevelEditor(): ReactElement {
     const id = (scatterIdRef.current += 1);
     const dct = defaultCoverType(terrain);
     const covers = dct ? [{ id: (coverIdRef.current += 1), type: dct, expanded: false, knobs: { ...DEFAULT_COVER } }] : [];
-    return [...normalizeToTotal(prev, Math.max(0, total - share)), { id, terrain, share, locked: false, covers }];
+    return [...normalizeToTotal(prev, Math.max(0, total - share)), {
+      id,
+      terrain,
+      share,
+      locked: false,
+      covers,
+      macroTileDensity: DEFAULT_MACRO_TILE_DENSITY,
+      macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP,
+    }];
   });
   const removeSection = (id: number): void =>
     setScatterSections((prev) => (prev.length <= 1 ? prev : normalizeToTotal(prev.filter((s) => s.id !== id), 100 - scatterBuffer)));
@@ -2721,6 +2834,14 @@ export function LevelEditor(): ReactElement {
     setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, type } : c)) } : s)));
   const setCoverKnob = (sectionId: number, coverId: number, knob: keyof CoverKnobs, value: number): void =>
     setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, knobs: { ...c.knobs, [knob]: Math.max(0, Math.min(1, value)) } } : c)) } : s)));
+  const setSectionMacroTileDensity = (sectionId: number, value: number): void =>
+    setScatterSections((prev) => prev.map((section) => section.id === sectionId
+      ? { ...section, macroTileDensity: Math.max(0, Math.min(1, value)) }
+      : section));
+  const setSectionMacroTileBreakup = (sectionId: number, value: number): void =>
+    setScatterSections((prev) => prev.map((section) => section.id === sectionId
+      ? { ...section, macroTileBreakup: Math.max(0, Math.min(1, value)) }
+      : section));
   // Fill the selected region (or the whole board when nothing is selected) by dividing the area
   // among the terrain regions by share, then autotile through the socket solver — the same solve
   // path Randomize uses. A region-scoped generate leaves every out-of-region cell untouched.
@@ -2759,8 +2880,9 @@ export function LevelEditor(): ReactElement {
       columns: cols,
       rows,
       seed,
-      density: scatterSurfaceDensity,
       sectionOf,
+      densityBySection: scatterSections.map((section) => section.macroTileDensity),
+      breakupBySection: scatterSections.map((section) => section.macroTileBreakup),
       region,
     });
     const rewrittenCells = region ?? new Set(Array.from({ length: cols * rows }, (_, index) => index));
@@ -3821,6 +3943,7 @@ export function LevelEditor(): ReactElement {
                     onPaintWallArtEdge={paintWallArtEdge}
                     onEraseWallArtEdge={eraseWallArtEdge}
                     propBrush={!readOnlyLiveMap && brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
+                    macroTileBrush={!readOnlyLiveMap && brushKind === 'tile' ? macroTileBrushAsset : null}
                     regionCells={readOnlyLiveMap ? undefined : regionSelection}
                     onRegionStart={readOnlyLiveMap ? undefined : regionSelectPatch}
                   />
@@ -4344,6 +4467,12 @@ export function LevelEditor(): ReactElement {
                     <button type="button" className={`le-gen-icon ${sec.locked ? 'active' : ''}`.trim()} onClick={() => toggleSectionLock(sec.id)} aria-pressed={sec.locked} title={sec.locked ? 'Unlock — let this region rebalance' : 'Lock — keep this region fixed while others move'}>{sec.locked ? '🔒' : '🔓'}</button>
                     <button type="button" className="le-gen-icon" onClick={() => removeSection(sec.id)} disabled={scatterSections.length <= 1} title="Remove this region">×</button>
                   </div>
+                  {macroTileAssets.some((asset) => asset.family === sec.terrain) ? (
+                    <div className="le-gen-macro">
+                      <SliderRow label={`Composite coverage · ${Math.round(sec.macroTileDensity * 100)}%`} value={sec.macroTileDensity} set={(value) => setSectionMacroTileDensity(sec.id, value)} min={0} max={1} step={0.05} nudge={0.05} dflt={DEFAULT_MACRO_TILE_DENSITY} />
+                      <SliderRow label={`Breakup randomness · ${Math.round(sec.macroTileBreakup * 100)}%`} value={sec.macroTileBreakup} set={(value) => setSectionMacroTileBreakup(sec.id, value)} min={0} max={1} step={0.05} nudge={0.05} dflt={DEFAULT_MACRO_TILE_BREAKUP} />
+                    </div>
+                  ) : null}
                   <div className="le-gen-cover">
                     {sec.covers.map((c) => (
                       <div className="le-gen-cover-entry" key={c.id}>
@@ -4374,7 +4503,6 @@ export function LevelEditor(): ReactElement {
             <button type="button" className="le-seg-btn le-gen-add" onClick={addSection} title="Add another terrain region and rebalance the shares.">+ Add terrain region</button>
             <SliderRow label={`Randomness buffer · ${scatterBuffer}%`} value={scatterBuffer} set={setScatterBufferBalanced} min={0} max={60} step={1} nudge={1} dflt={0} />
             <SliderRow label="Edge roughness" value={scatterWiggle} set={setScatterWiggle} min={0} max={1} step={0.05} nudge={0.05} dflt={0.5} />
-            <SliderRow label={`Macrotile coverage · ${Math.round(scatterSurfaceDensity * 100)}%`} value={scatterSurfaceDensity} set={setScatterSurfaceDensity} min={0} max={1} step={0.05} nudge={0.05} dflt={DEFAULT_MACRO_TILE_DENSITY} />
             <button type="button" className="le-seg-btn le-gen-run" style={{ width: '100%', marginTop: 8 }} onClick={generateScatter} title="Roll a fresh layout into the selection (or the whole board) and autotile it.">Generate</button>
           </section>
         </>) : layer === 'rules' ? (<>
@@ -4465,11 +4593,13 @@ export function LevelEditor(): ReactElement {
                 ? <img src={fenceThumbSrc(fenceBrushMaterial)} alt="" draggable={false} />
                 : featureKind
                 ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
+                : macroTileBrushAsset
+                ? <img className="le-thumb-macro" src={macroTileBrushAsset.src} alt="" draggable={false} />
                 : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : wallTool ? `${WALL_MATERIAL_LABELS[wallBrushMaterial]} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : wallTool ? `${WALL_MATERIAL_LABELS[wallBrushMaterial]} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : macroTileBrushAsset?.label ?? brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : macroTileBrushAsset ? `composite tile · ${macroTileBrushAsset.columns}×${macroTileBrushAsset.rows}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -4780,7 +4910,44 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : brushKind === 'tile' ? (
           <section className="skirmish-card le-brush-panel">
-            <h2>Palette</h2>
+            <h2>Composite terrain</h2>
+            <SelectFrame>
+              <select
+                className="le-layer-select"
+                aria-label="Composite terrain footprint"
+                value={macroTileFootprint}
+                onChange={(event) => {
+                  setMacroTileFootprint(event.target.value);
+                  setMacroTileBrushId(null);
+                }}
+              >
+                {leMacroTileFootprints.map((footprint) => <option key={footprint} value={footprint}>{footprint}</option>)}
+              </select>
+            </SelectFrame>
+            {studioFamilies.map((family) => {
+              const assets = leMacroTilesFor(family.id, macroTileFootprint);
+              if (!assets.length) return null;
+              return (
+                <div className="le-pal-group" key={`macro-${family.id}`}>
+                  <span className="le-pal-grouplabel">{family.label}</span>
+                  <div className="le-swatches">
+                    {assets.map((asset) => (
+                      <button
+                        type="button"
+                        key={asset.id}
+                        className={`le-swatch le-macro-swatch ${macroTileBrushId === asset.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        title={`${asset.label} · ${asset.columns}×${asset.rows}`}
+                        onClick={() => { setMacroTileBrushId(asset.id); setTool('brush'); }}
+                      >
+                        <img src={asset.src} alt="" draggable={false} />
+                        <small>{asset.label.replace(` ${asset.columns}x${asset.rows}`, '')}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            <h2 className="le-card-subhead">Single tiles</h2>
               {leTileGroups.map(({ family, tiles }) => (
                 <div className="le-pal-group" key={family.id}>
                   <span className="le-pal-grouplabel">{family.label}</span>
@@ -4789,9 +4956,9 @@ export function LevelEditor(): ReactElement {
                       <button
                         type="button"
                         key={tile.id}
-                        className={`le-swatch ${brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        className={`le-swatch ${macroTileBrushId === null && brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
                         title={tile.label}
-                        onClick={() => { setBrushId(tile.id); setTool('brush'); }}
+                        onClick={() => { setMacroTileBrushId(null); setBrushId(tile.id); setTool('brush'); }}
                       >
                         <img src={tile.src} alt="" draggable={false} />
                         <small>{tile.label}</small>
@@ -4835,7 +5002,7 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : null}
 
-        {brushKind === 'tile' ? (
+        {brushKind === 'tile' && !macroTileBrushAsset ? (
           <section className="skirmish-card">
             <h2>Tile Fill</h2>
             <div className="le-seg">

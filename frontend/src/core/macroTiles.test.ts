@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  breakMacroTilesAtCell,
   generateMacroTiles,
   macroTileAsset,
   macroTileAssets,
+  macroTileBreakIndices,
   macroTileCellIndices,
   macroTileFrame,
+  macroTileOwnedCellIndices,
   resolveMacroTilePlacements,
   type MacroTileAsset,
 } from './macroTiles';
@@ -62,6 +65,30 @@ describe('resolveMacroTilePlacements', () => {
       rows: 3,
       familyAt: (x, y) => x === 1 && y === 1 ? 'dirt' : 'grass',
     })).toEqual([]);
+  });
+
+  it('keeps a mixed-family cell when that cell explicitly breaks through the composite', () => {
+    const placement = { assetId: 'grass-soft-bands-3x3', x: 0, y: 0, breaks: [4] };
+    expect(resolveMacroTilePlacements({
+      placements: [placement],
+      columns: 3,
+      rows: 3,
+      familyAt: (x, y) => x === 1 && y === 1 ? 'dirt' : 'grass',
+    })).toEqual([placement]);
+    expect(macroTileOwnedCellIndices(placement, 3, 3)).not.toContain(4);
+  });
+
+  it('breaks only the painted local cell and removes a fully broken placement', () => {
+    const placement = { assetId: 'grass-soft-bands-3x3', x: 2, y: 1 };
+    const once = breakMacroTilesAtCell([placement], 3, 2);
+    expect(macroTileBreakIndices(once[0])).toEqual([4]);
+    expect(breakMacroTilesAtCell(once, 0, 0)).toEqual(once);
+
+    let placements = [placement];
+    for (let y = 1; y < 4; y += 1) for (let x = 2; x < 5; x += 1) {
+      placements = breakMacroTilesAtCell(placements, x, y);
+    }
+    expect(placements).toEqual([]);
   });
 });
 
@@ -130,6 +157,36 @@ describe('generateMacroTiles', () => {
     const placements = generateMacroTiles({ terrainMap, columns, rows, sectionOf, seed: 91, density: 1, assets: [asset] });
     expect(placements.length).toBeGreaterThanOrEqual(2);
     expect(placements.every((placement) => placement.x + asset.columns <= 4 || placement.x >= 4)).toBe(true);
+  });
+
+  it('applies composite coverage and breakup independently per generated section', () => {
+    const columns = 8;
+    const rows = 4;
+    const terrainMap = Array<TileFamilyId>(columns * rows).fill('grass');
+    const sectionOf = Int32Array.from({ length: columns * rows }, (_, index) => (index % columns < 4 ? 0 : 1));
+    const asset: MacroTileAsset = {
+      id: 'test-grass-2x2',
+      label: 'Test grass',
+      family: 'grass',
+      columns: 2,
+      rows: 2,
+      src: '/test.png',
+      weight: 1,
+    };
+    const placements = generateMacroTiles({
+      terrainMap,
+      columns,
+      rows,
+      sectionOf,
+      densityBySection: [0, 1],
+      breakupBySection: [0, 1],
+      seed: 91,
+      assets: [asset],
+    });
+
+    expect(placements.length).toBeGreaterThan(0);
+    expect(placements.every((placement) => placement.x >= 4)).toBe(true);
+    expect(placements.every((placement) => macroTileBreakIndices(placement).length === 3)).toBe(true);
   });
 
   it('places nothing when macrotile coverage is disabled', () => {

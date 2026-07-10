@@ -18,6 +18,8 @@ export interface MacroTilePlacement {
   assetId: string;
   x: number;
   y: number;
+  /** Local row-major footprint cells whose normal 1x1 terrain top remains visible. */
+  breaks?: number[];
 }
 
 export interface MacroTileFrame {
@@ -28,6 +30,7 @@ export interface MacroTileFrame {
 }
 
 export const DEFAULT_MACRO_TILE_DENSITY = 0.55;
+export const DEFAULT_MACRO_TILE_BREAKUP = 0.15;
 
 interface MacroTileManifest {
   footprints: Array<{ columns: number; rows: number }>;
@@ -107,6 +110,45 @@ export function macroTileCellIndices(
   return cells;
 }
 
+export function macroTileBreakIndices(
+  placement: Pick<MacroTilePlacement, 'assetId' | 'breaks'>,
+): number[] {
+  const asset = macroTileAsset(placement.assetId);
+  const area = asset ? asset.columns * asset.rows : Number.MAX_SAFE_INTEGER;
+  return [...new Set((placement.breaks ?? []).filter((index) =>
+    Number.isInteger(index) && index >= 0 && index < area,
+  ))].sort((a, b) => a - b);
+}
+
+export function macroTileOwnedCellIndices(
+  placement: MacroTilePlacement,
+  columns: number,
+  rows: number,
+): number[] {
+  const cells = macroTileCellIndices(placement, columns, rows);
+  if (cells.length === 0) return [];
+  const breaks = new Set(macroTileBreakIndices(placement));
+  return cells.filter((_, localIndex) => !breaks.has(localIndex));
+}
+
+/** Reveal one ordinary terrain cell while preserving the rest of every macrotile it touches. */
+export function breakMacroTilesAtCell(
+  placements: readonly MacroTilePlacement[] | undefined,
+  x: number,
+  y: number,
+): MacroTilePlacement[] {
+  return (placements ?? []).flatMap((placement) => {
+    const asset = macroTileAsset(placement.assetId);
+    if (!asset || x < placement.x || y < placement.y
+      || x >= placement.x + asset.columns || y >= placement.y + asset.rows) {
+      return [{ ...placement, ...(placement.breaks ? { breaks: [...placement.breaks] } : {}) }];
+    }
+    const localIndex = (y - placement.y) * asset.columns + x - placement.x;
+    const breaks = [...new Set([...macroTileBreakIndices(placement), localIndex])].sort((a, b) => a - b);
+    return breaks.length < asset.columns * asset.rows ? [{ ...placement, breaks }] : [];
+  });
+}
+
 interface ResolveMacroTilePlacementsOptions {
   placements: readonly MacroTilePlacement[] | undefined;
   columns: number;
@@ -133,9 +175,12 @@ export function resolveMacroTilePlacements({
     const asset = macroTileAsset(placement.assetId);
     if (!asset || !Number.isInteger(placement.x) || !Number.isInteger(placement.y)) continue;
     const cells = macroTileCellIndices(placement, columns, rows);
-    if (cells.length !== asset.columns * asset.rows || cells.some((index) => occupied.has(index))) continue;
-    if (cells.some((index) => familyAt(index % columns, Math.floor(index / columns)) !== asset.family)) continue;
-    accepted.push(placement);
+    const ownedCells = macroTileOwnedCellIndices(placement, columns, rows);
+    if (cells.length !== asset.columns * asset.rows || ownedCells.length === 0 || cells.some((index) => occupied.has(index))) continue;
+    if (ownedCells.some((index) => familyAt(index % columns, Math.floor(index / columns)) !== asset.family)) continue;
+    const breaks = macroTileBreakIndices(placement);
+    if (breaks.length) accepted.push({ ...placement, breaks });
+    else accepted.push({ assetId: placement.assetId, x: placement.x, y: placement.y });
     cells.forEach((index) => occupied.add(index));
   }
 
@@ -148,7 +193,10 @@ interface GenerateMacroTilesOptions {
   rows: number;
   seed: number;
   density?: number;
+  breakup?: number;
   sectionOf?: ArrayLike<number>;
+  densityBySection?: ArrayLike<number>;
+  breakupBySection?: ArrayLike<number>;
   region?: ReadonlySet<number>;
   assets?: readonly MacroTileAsset[];
 }
@@ -198,6 +246,19 @@ function groupKey(index: number, family: TileFamilyId, sectionOf: ArrayLike<numb
   return typeof section === 'number' && section >= 0 ? `section:${section}` : `family:${family}`;
 }
 
+function sectionValue(values: ArrayLike<number> | undefined, section: number | undefined, fallback: number): number {
+  const value = section === undefined ? undefined : values?.[section];
+  return Math.max(0, Math.min(1, typeof value === 'number' && Number.isFinite(value) ? value : fallback));
+}
+
+function randomBreaks(asset: MacroTileAsset, amount: number, next: () => number): number[] {
+  const area = asset.columns * asset.rows;
+  if (area <= 1 || amount <= 0) return [];
+  const breaks = Array.from({ length: area }, (_, index) => index).filter(() => next() < amount);
+  if (breaks.length >= area) breaks.splice(Math.floor(next() * breaks.length), 1);
+  return breaks.sort((a, b) => a - b);
+}
+
 /**
  * Pack opaque macrotiles inside same-family generated regions without overlap.
  * The result is deterministic for the same board, seed, and density.
@@ -208,20 +269,25 @@ export function generateMacroTiles({
   rows,
   seed,
   density = DEFAULT_MACRO_TILE_DENSITY,
+  breakup = 0,
   sectionOf,
+  densityBySection,
+  breakupBySection,
   region,
   assets = macroTileAssets,
 }: GenerateMacroTilesOptions): MacroTilePlacement[] {
   if (columns <= 0 || rows <= 0 || terrainMap.length < columns * rows || assets.length === 0) return [];
   const next = seededRandom((seed ^ 0xa511e9b3) >>> 0);
   const target = region ?? new Set(Array.from({ length: columns * rows }, (_, index) => index));
-  const groups = new Map<string, { family: TileFamilyId; cells: Set<number> }>();
+  const groups = new Map<string, { family: TileFamilyId; cells: Set<number>; section?: number }>();
 
   for (const index of target) {
     if (index < 0 || index >= columns * rows) continue;
     const family = terrainMap[index];
+    const rawSection = sectionOf?.[index];
+    const section = typeof rawSection === 'number' && rawSection >= 0 ? rawSection : undefined;
     const key = groupKey(index, family, sectionOf);
-    const group = groups.get(key) ?? { family, cells: new Set<number>() };
+    const group = groups.get(key) ?? { family, cells: new Set<number>(), section };
     group.cells.add(index);
     groups.set(key, group);
   }
@@ -275,7 +341,9 @@ export function generateMacroTiles({
     if (availableAssets.length === 0) continue;
     // Density is the requested macro-owned share of the region. Non-overlapping footprints cap
     // the achievable result naturally; do not silently damp the user's control a second time.
-    const targetArea = group.cells.size * Math.max(0, Math.min(1, density));
+    const groupDensity = sectionValue(densityBySection, group.section, density);
+    const groupBreakup = sectionValue(breakupBySection, group.section, breakup);
+    const targetArea = group.cells.size * groupDensity;
     let ownedArea = 0;
     const usedVariantIds = new Set<string>();
     let footprintCycle: string[] = [];
@@ -306,9 +374,15 @@ export function generateMacroTiles({
       }
       if (!accepted) break;
 
-      placements.push({ assetId: accepted.asset.id, x: accepted.x, y: accepted.y });
+      const breaks = randomBreaks(accepted.asset, groupBreakup, next);
+      placements.push({
+        assetId: accepted.asset.id,
+        x: accepted.x,
+        y: accepted.y,
+        ...(breaks.length ? { breaks } : {}),
+      });
       usedVariantIds.add(accepted.asset.variantId ?? accepted.asset.id);
-      ownedArea += accepted.cells.length;
+      ownedArea += accepted.cells.length - breaks.length;
       for (const index of accepted.cells) reserved.add(index);
     }
   }

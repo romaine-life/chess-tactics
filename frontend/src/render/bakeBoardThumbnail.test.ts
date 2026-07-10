@@ -266,6 +266,24 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(featureOp!.z).toBeLessThan(20000);
   });
 
+  it('restores broken 1x1 tops and clips the composite to its remaining owned cells', () => {
+    const cells = Object.fromEntries(
+      Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
+    );
+    const board: EditorBoard = {
+      ...blank(3, 3),
+      cells,
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0, breaks: [4] }],
+    };
+    const ops = boardDrawOps(board);
+    const tileOps = ops.filter((op) => op.src.endsWith('grass-0-top.png'));
+    const macroTileOp = ops.find((op) => op.src.includes('macro-tiles'));
+
+    expect(tileOps).toHaveLength(1);
+    expect(macroTileOp?.clipPolygons).toHaveLength(8);
+    expect(macroTileOp?.clipPolygons?.every((polygon) => polygon.length === 8)).toBe(true);
+  });
+
   it('draws edge fences above ground cover and below object/unit draw order', () => {
     const board: EditorBoard = {
       ...blank(4, 4),
