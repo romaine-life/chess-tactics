@@ -14671,7 +14671,9 @@ button.tileset-relationship-cell {
    scrolling Studio rails. */
 .infotip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
 .infotip-dot {
-  appearance: none; cursor: help; inline-size: 14px; block-size: 14px; padding: 0;
+  /* min-block-size beats the global button { min-height:44px } touch-target rule,
+     which otherwise stretches this 14px circle into a tall oval. */
+  appearance: none; cursor: help; inline-size: 14px; block-size: 14px; min-block-size: 0; padding: 0;
   border-radius: 50%; border: 1px solid #3a4657; background: #0c1116; color: #93a0b0;
   font: 700 9px/1 system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center;
 }
