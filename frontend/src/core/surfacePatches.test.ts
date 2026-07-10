@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   generateSurfacePatches,
   surfacePatchAsset,
+  surfacePatchAssets,
   surfacePatchCellIndices,
   surfacePatchFrame,
   type SurfacePatchAsset,
@@ -16,6 +17,11 @@ describe('surface patch geometry', () => {
       width: 336,
       height: 189,
     });
+  });
+
+  it('covers every static terrain family while animated water remains opt-in later', () => {
+    const families = [...new Set(surfacePatchAssets.map((asset) => asset.family))].sort();
+    expect(families).toEqual(['dirt', 'grass', 'pebble', 'sand', 'stone']);
   });
 });
 
@@ -76,5 +82,39 @@ describe('generateSurfacePatches', () => {
   it('places nothing when surface continuity is disabled', () => {
     const terrainMap = Array<TileFamilyId>(100).fill('grass');
     expect(generateSurfacePatches({ terrainMap, columns: 10, rows: 10, seed: 7, density: 0 })).toEqual([]);
+  });
+
+  it('uses the continuity percentage directly instead of silently damping coverage', () => {
+    const columns = 20;
+    const rows = 20;
+    const terrainMap = Array<TileFamilyId>(columns * rows).fill('grass');
+    const low = generateSurfacePatches({ terrainMap, columns, rows, seed: 77, density: 0.2 });
+    const high = generateSurfacePatches({ terrainMap, columns, rows, seed: 77, density: 0.8 });
+
+    const area = (placements: typeof low): number => placements.reduce((sum, placement) => {
+      const asset = surfacePatchAsset(placement.assetId)!;
+      return sum + asset.columns * asset.rows;
+    }, 0);
+
+    expect(area(high)).toBeGreaterThan(area(low));
+  });
+
+  it('uses every fitting family variant before repeating one', () => {
+    const columns = 12;
+    const rows = 12;
+    const terrainMap = Array<TileFamilyId>(columns * rows).fill('grass');
+    const assets: SurfacePatchAsset[] = ['a', 'b', 'c'].map((id) => ({
+      id,
+      label: id,
+      family: 'grass',
+      columns: 2,
+      rows: 2,
+      src: `/${id}.png`,
+      edgeBlendCells: 0.65,
+      weight: 1,
+    }));
+
+    const placements = generateSurfacePatches({ terrainMap, columns, rows, seed: 19, density: 1, assets });
+    expect(new Set(placements.map((placement) => placement.assetId))).toEqual(new Set(['a', 'b', 'c']));
   });
 });

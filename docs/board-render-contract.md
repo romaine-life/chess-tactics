@@ -63,4 +63,6 @@ each source a controlled palette tie to its production terrain family. The outer
 a deterministic, low-frequency contour and quantized alpha apron, so a patch blends into the
 complete 1x1 bed without exposing a perfect rectangular stamp or requiring a hand-authored
 transition atlas. The editor, play route, read-only viewers, and server thumbnail plan all consume
-the same persisted placements and catalog.
+the same persisted placements and catalog. The static patch catalog intentionally omits water:
+water joins only after multi-cell patches can animate in lockstep with the underlying family, so a
+continuity patch never turns a living water field into a frozen slab.

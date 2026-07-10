@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import math
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -70,6 +71,7 @@ def crop_to_footprint(source: Image.Image, columns: int, rows: int) -> Image.Ima
     return image
 
 
+@lru_cache(maxsize=None)
 def production_palette(family: str) -> np.ndarray:
     reference_paths = sorted(SURFACE_DIR.glob(f'{family}-[0-9]-top.png'))
     if not reference_paths:

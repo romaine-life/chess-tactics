@@ -84,6 +84,7 @@ interface Candidate {
   x: number;
   y: number;
   cells: number[];
+  boundaryScore: number;
 }
 
 function seededRandom(seed: number): () => number {
@@ -170,25 +171,47 @@ export function generateSurfacePatches({
               cells.push(index);
             }
           }
-          if (fits) candidates.push({ asset, x, y, cells });
+          if (fits) {
+            let boundaryScore = 0;
+            for (let hy = y - 1; hy <= y + asset.rows; hy += 1) {
+              for (let hx = x - 1; hx <= x + asset.columns; hx += 1) {
+                const insideFootprint = hx >= x && hx < x + asset.columns && hy >= y && hy < y + asset.rows;
+                if (insideFootprint) continue;
+                if (hx < 0 || hy < 0 || hx >= columns || hy >= rows || !group.cells.has(hy * columns + hx)) {
+                  boundaryScore += 1;
+                }
+              }
+            }
+            candidates.push({ asset, x, y, cells, boundaryScore });
+          }
         }
       }
       shuffle(candidates, next);
+      // Stable sort after shuffling keeps equal-score positions random while larger scores
+      // pop first. Hugging section edges leaves a coherent interior for later fresh variants.
+      candidates.sort((a, b) => a.boundaryScore - b.boundaryScore);
       candidatesByAsset.set(asset.id, candidates);
     }
 
     const availableAssets = familyAssets.filter((asset) => (candidatesByAsset.get(asset.id)?.length ?? 0) > 0);
     if (availableAssets.length === 0) continue;
     const averageArea = availableAssets.reduce((sum, asset) => sum + asset.columns * asset.rows, 0) / availableAssets.length;
-    const expected = group.cells.size * Math.max(0, Math.min(1, density)) * 0.45 / averageArea;
+    // Density is the requested macro-owned share of the region. Non-touching footprints cap
+    // the achievable result naturally; do not silently damp the user's control a second time.
+    const expected = group.cells.size * Math.max(0, Math.min(1, density)) / averageArea;
     let count = Math.floor(expected);
     if (next() < expected - count) count += 1;
+    const usedAssetIds = new Set<string>();
 
     for (let placed = 0; placed < count; placed += 1) {
       const choices = availableAssets.filter((asset) => (candidatesByAsset.get(asset.id)?.length ?? 0) > 0);
       let accepted: Candidate | undefined;
       while (choices.length > 0 && !accepted) {
-        const asset = weightedAsset(choices, next);
+        const freshChoices = choices.filter((asset) => !usedAssetIds.has(asset.id));
+        const preferredChoices = freshChoices.length > 0 ? freshChoices : choices;
+        const largestArea = Math.max(...preferredChoices.map((asset) => asset.columns * asset.rows));
+        const largestChoices = preferredChoices.filter((asset) => asset.columns * asset.rows === largestArea);
+        const asset = weightedAsset(largestChoices, next);
         const candidates = candidatesByAsset.get(asset.id)!;
         while (candidates.length > 0) {
           const candidate = candidates.pop()!;
@@ -201,6 +224,7 @@ export function generateSurfacePatches({
       if (!accepted) break;
 
       placements.push({ assetId: accepted.asset.id, x: accepted.x, y: accepted.y });
+      usedAssetIds.add(accepted.asset.id);
       for (const index of accepted.cells) {
         const x = index % columns;
         const y = Math.floor(index / columns);

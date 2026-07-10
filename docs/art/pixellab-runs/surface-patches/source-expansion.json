@@ -1,0 +1,37 @@
+{
+  "provider": "PixelLab Tiles Pro",
+  "settings": {
+    "tileType": "square_topdown",
+    "tileSize": 128,
+    "tileHeight": 128,
+    "view": "top-down",
+    "viewAngle": 90,
+    "depthRatio": 0,
+    "outlineMode": "segmentation"
+  },
+  "runs": [
+    {
+      "jobId": "ad096b2a-63bc-4fc5-b9a8-151972891965",
+      "seed": 2861,
+      "result": "rejected",
+      "reason": "Every nonblank candidate contained 32-136 transparent source pixels; two candidates were fully transparent."
+    },
+    {
+      "jobId": "726cfe3b-b98c-494a-bde1-a052ac31bc05",
+      "seed": 3917,
+      "selected": {
+        "tile_0.png": "sand-wind-ripples-4x3.png",
+        "tile_1.png": "sand-soft-bands-3x3.png",
+        "tile_2.png": "pebble-fine-drift-3x3.png",
+        "tile_3.png": "pebble-alluvial-field-4x4.png",
+        "tile_5.png": "dirt-compacted-drift-3x3.png"
+      },
+      "notes": {
+        "tile_0.png": "Its one transparent pixel is at 127,127, outside the centered 4x3 crop consumed by the bake."
+      },
+      "rejected": {
+        "tile_4.png": "The courtyard source contained 31 transparent pixels in slab gaps."
+      }
+    }
+  ]
+}

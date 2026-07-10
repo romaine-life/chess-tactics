@@ -50,6 +50,18 @@
       "weight": 1.15
     },
     {
+      "id": "dirt-compacted-drift-3x3",
+      "label": "Compacted earth drift",
+      "family": "dirt",
+      "columns": 3,
+      "rows": 3,
+      "src": "/assets/tiles/surface-patches/dirt-compacted-drift-3x3.png",
+      "edgeBlendCells": 0.65,
+      "edgeWobbleCells": 0.08,
+      "paletteMatch": 0.8,
+      "weight": 1.1
+    },
+    {
       "id": "stone-moss-field-3x3",
       "label": "Mossy paving",
       "family": "stone",
@@ -59,6 +71,54 @@
       "edgeBlendCells": 0.65,
       "edgeWobbleCells": 0.08,
       "paletteMatch": 0.6,
+      "weight": 1
+    },
+    {
+      "id": "pebble-fine-drift-3x3",
+      "label": "Fine pebble drift",
+      "family": "pebble",
+      "columns": 3,
+      "rows": 3,
+      "src": "/assets/tiles/surface-patches/pebble-fine-drift-3x3.png",
+      "edgeBlendCells": 0.65,
+      "edgeWobbleCells": 0.08,
+      "paletteMatch": 0.75,
+      "weight": 1.1
+    },
+    {
+      "id": "pebble-alluvial-field-4x4",
+      "label": "Alluvial pebble field",
+      "family": "pebble",
+      "columns": 4,
+      "rows": 4,
+      "src": "/assets/tiles/surface-patches/pebble-alluvial-field-4x4.png",
+      "edgeBlendCells": 0.65,
+      "edgeWobbleCells": 0.08,
+      "paletteMatch": 0.75,
+      "weight": 1
+    },
+    {
+      "id": "sand-soft-bands-3x3",
+      "label": "Soft sand bands",
+      "family": "sand",
+      "columns": 3,
+      "rows": 3,
+      "src": "/assets/tiles/surface-patches/sand-soft-bands-3x3.png",
+      "edgeBlendCells": 0.65,
+      "edgeWobbleCells": 0.08,
+      "paletteMatch": 0.75,
+      "weight": 1.15
+    },
+    {
+      "id": "sand-wind-ripples-4x3",
+      "label": "Wind-rippled sand",
+      "family": "sand",
+      "columns": 4,
+      "rows": 3,
+      "src": "/assets/tiles/surface-patches/sand-wind-ripples-4x3.png",
+      "edgeBlendCells": 0.65,
+      "edgeWobbleCells": 0.08,
+      "paletteMatch": 0.75,
       "weight": 1
     }
   ]
