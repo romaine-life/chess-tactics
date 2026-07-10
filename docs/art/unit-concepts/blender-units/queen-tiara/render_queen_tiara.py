@@ -6,7 +6,7 @@ The tiara was hand-fitted onto the queen's crown collar in Blender, so the sourc
 is the assembled `queen_tiara.blend` (navy Staunton queen + jeweled gold tiara FBX,
 positioned, rigged to an empty, true-isometric contract camera baked in). This opens it,
 renders the 8 directions, and prints the seating anchor.
-Output -> frontend/public/assets/units/queen/blender-render-tiara/<direction>.png
+Output -> .unit-art-output/queen/navy-blue/<direction>.png
 
 The tiara's front gives the queen a per-direction facing (front -> game-south at yaw 0).
 """
@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent
 while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 BLEND = str(ROOT / "docs/art/unit-concepts/blender-units/queen-tiara/queen_tiara.blend")
-OUT = str(ROOT / "frontend/public/assets/units/queen/blender-render-tiara")
+OUT = str(ROOT / ".unit-art-output/queen/navy-blue")
 os.makedirs(OUT, exist_ok=True)
 
 bpy.ops.wm.open_mainfile(filepath=BLEND)

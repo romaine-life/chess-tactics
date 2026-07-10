@@ -9,6 +9,7 @@ import { studioFamilies, assetFrameSrc, type StudioAsset } from '../ui/studioBoa
 import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
 import {
   unitAssetById,
+  unitAnchorFraction,
   hasDirectionSprite,
   MISSING_DIRECTION_SPRITE,
   type UnitAsset,
@@ -40,13 +41,6 @@ const UNIT_SEAT_W = 72;
 const UNIT_SEAT_H = 86;
 export const UNIT_IMG_MAX_W = 78;
 export const UNIT_IMG_MAX_H = 92;
-
-const unitAnchorFraction = (value: string | undefined, fallback: number): number => {
-  if (!value) return fallback;
-  const parsed = Number.parseFloat(value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return value.trim().endsWith('%') ? parsed / 100 : parsed;
-};
 
 export interface BoardDrawOp {
   src: string;
@@ -252,8 +246,8 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       const seatH = UNIT_SEAT_H * scale;
       const imageW = UNIT_IMG_MAX_W * scale;
       const imageH = UNIT_IMG_MAX_H * scale;
-      const seatX = left - unitAnchorFraction(unit.unitAnchorX, 0.5) * seatW;
-      const seatY = top - unitAnchorFraction(unit.unitAnchorY, 0.78) * seatH;
+      const seatX = left - unitAnchorFraction(unit.unitAnchorX) * seatW;
+      const seatY = top - unitAnchorFraction(unit.unitAnchorY) * seatH;
       ops.push({
         src,
         dx: seatX + (seatW - imageW) / 2,

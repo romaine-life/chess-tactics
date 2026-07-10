@@ -5,7 +5,6 @@ import { isPassableTerrain } from '../core/terrain';
 import { createBlankLevel, type Level } from '../core/level';
 import { levelToEditorBoard, editorBoardToLevel } from '../core/levelBoard';
 import { encodeBoard, decodeBoard, type EditorBoard } from '../ui/boardCode';
-import { unitAssets } from '../ui/unitCatalog';
 import { applyMove, sideInCheck } from '../core/rules';
 import { tileAssets, tileFamilies } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
@@ -334,8 +333,7 @@ describe('createFromLevel — random placement', () => {
 // fixed-placement level that createSkirmish plays. This guards that whole data path
 // (encode → decode → editorBoardToLevel → createSkirmish) with a concrete mate position.
 describe('play a board-code link', () => {
-  const unitIdFor = (family: string): string =>
-    (unitAssets.find((u) => u.family === family && !u.speculative) ?? unitAssets.find((u) => u.family === family))!.id;
+  const unitIdFor = (family: string): string => family;
 
   it('decodes an authored mate-in-1 board into a playable, correctly-sided level', () => {
     const king = unitIdFor('king');

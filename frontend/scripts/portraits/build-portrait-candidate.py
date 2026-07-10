@@ -2,9 +2,8 @@
 PORTRAIT master, so the Studio can show every method side by side (navy only,
 held out of the game) and the user picks one.
 
-Mirrors the board-unit "bake-off" libraries (units-pixel/{codexsheet,codexfilter,
-filter2,filter3}) but for the eye-level portrait master. Every candidate is a
-768x768 master normalized to the SMOOTH master's alpha bbox, so the ONE shared
+Every candidate is a 768x768 master normalized to the SMOOTH master's alpha bbox,
+so the ONE shared
 portrait crop (frontend/src/art/portraitCrops.json) frames every method
 identically — an honest comparison, no per-method zoom drift.
 

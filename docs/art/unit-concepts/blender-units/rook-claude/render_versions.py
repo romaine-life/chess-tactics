@@ -32,7 +32,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 ROOT = HERE
 while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
-FRONTEND_ROOK = ROOT / "frontend" / "public" / "assets" / "units" / "rook"
+FRONTEND_ROOK = ROOT / ".unit-art-output" / "rook"
 
 # Board-calibrated camera (true-isometric projection contract).
 BOARD_TARGET = Vector((0, 0, 0.92))

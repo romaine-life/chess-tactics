@@ -32,19 +32,14 @@ async function jsonResponse<T>(action: string, response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function fetchLiveUnitCatalog(): Promise<LiveUnitCatalog | null> {
-  try {
-    const response = await fetch('/api/unit-catalog', { cache: 'no-cache' });
-    if (!response.ok) return null;
-    return (await response.json()) as LiveUnitCatalog;
-  } catch {
-    return null;
-  }
+export async function fetchLiveUnitCatalog(): Promise<LiveUnitCatalog> {
+  const response = await fetch('/api/unit-catalog', { cache: 'no-cache' });
+  return jsonResponse<LiveUnitCatalog>('load-unit-catalog', response);
 }
 
 export async function loadLiveUnitCatalog(): Promise<boolean> {
   const catalog = await fetchLiveUnitCatalog();
-  return catalog ? applyCatalog(catalog) : false;
+  return applyCatalog(catalog);
 }
 
 export async function fetchAdminUnitCatalog(): Promise<LiveUnitCatalog> {

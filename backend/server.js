@@ -60,6 +60,7 @@ let bgmContainerClient = null; // lazily built Azure ContainerClient (list mode 
 // is the deterministic local/CI implementation of the same blob-key contract.
 const unitAssetContainerUrl = (process.env.UNIT_ASSET_CONTAINER_URL || '').replace(/\/+$/, '');
 const unitAssetStorageDir = String(process.env.UNIT_ASSET_STORAGE_DIR || '').trim();
+const unitAssetSeedCatalogUrl = String(process.env.UNIT_ASSET_SEED_CATALOG_URL || '').trim();
 const UNIT_ASSET_MAX_BYTES = 10 * 1024 * 1024;
 const UNIT_SPRITE_CACHE_MAX_BYTES = Math.max(
   0,
@@ -590,15 +591,13 @@ async function checkMigrations() {
 
 async function prepareDbSchema() {
   if (schemaMigrationMode === 'off') {
-    dbReady = true;
-    return;
-  }
-  if (schemaMigrationMode === 'auto') {
+    // The caller explicitly owns schema readiness.
+  } else if (schemaMigrationMode === 'auto') {
     await runMigrations();
-    dbReady = true;
-    return;
+  } else {
+    await checkMigrations();
   }
-  await checkMigrations();
+  if (unitAssetSeedCatalogUrl) await seedUnitCatalogFromLiveSource();
   dbReady = true;
 }
 
@@ -3918,6 +3917,111 @@ function cacheUnitSprite(sha256, buffer) {
   }
 }
 
+async function seedUnitCatalogFromLiveSource() {
+  if (!unitAssetStorageDir) {
+    throw new Error('UNIT_ASSET_SEED_CATALOG_URL requires ephemeral UNIT_ASSET_STORAGE_DIR');
+  }
+  if (!serverRender || typeof serverRender.assertLiveUnitCatalog !== 'function') {
+    throw new Error('board-render catalog validator is unavailable');
+  }
+
+  const catalogUrl = new URL(unitAssetSeedCatalogUrl);
+  const response = await fetch(catalogUrl, { signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error(`unit catalog seed returned ${response.status}`);
+  const catalog = await response.json();
+  serverRender.assertLiveUnitCatalog(catalog);
+
+  const assetsById = new Map(catalog.assets.map((asset) => [asset.id, asset]));
+  const accepted = catalog.families.map((family) => ({
+    family,
+    asset: assetsById.get(family.acceptedAssetId),
+  }));
+  const spritesBySha = new Map();
+  for (const { asset } of accepted) {
+    for (const palette of UNIT_PALETTE_IDS) for (const direction of UNIT_DIRECTION_IDS) {
+      const sprite = asset.sprites[palette][direction];
+      spritesBySha.set(sprite.sha256, sprite);
+    }
+  }
+
+  const downloads = [...spritesBySha.values()];
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < downloads.length) {
+      const sprite = downloads[cursor++];
+      const blobKey = unitBlobKey(sprite.sha256);
+      if (fs.existsSync(unitBlobLocalPath(blobKey))) continue;
+      const spriteUrl = new URL(sprite.url, catalogUrl);
+      if (spriteUrl.origin !== catalogUrl.origin) throw new Error('unit catalog seed sprite changed origin');
+      const spriteResponse = await fetch(spriteUrl, { signal: AbortSignal.timeout(30_000) });
+      if (!spriteResponse.ok) throw new Error(`unit sprite seed returned ${spriteResponse.status}`);
+      const png = Buffer.from(await spriteResponse.arrayBuffer());
+      const inspected = inspectUnitPng(png);
+      if (inspected.error) throw new Error(`unit sprite seed is invalid: ${inspected.error}`);
+      const digest = crypto.createHash('sha256').update(png).digest('hex');
+      if (digest !== sprite.sha256) throw new Error('unit sprite seed hash mismatch');
+      await writeUnitBlob(blobKey, png, digest);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(12, downloads.length) }, () => worker()));
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const { family, asset } of accepted) {
+      await client.query(
+        `INSERT INTO unit_assets (
+           id, family, label, method, notes, status, footprint_shape,
+           source_canvas_width, source_canvas_height, source_footprint_px,
+           anchor_x, anchor_y, row_revision, updated_by
+         ) VALUES ($1, $2, $3, $4, $5, 'candidate', $6, $7, $8, $9, $10, $11, $12, 'live-catalog-seed')
+         ON CONFLICT (id) DO UPDATE SET
+           family = EXCLUDED.family, label = EXCLUDED.label, method = EXCLUDED.method,
+           notes = EXCLUDED.notes, status = 'candidate', footprint_shape = EXCLUDED.footprint_shape,
+           source_canvas_width = EXCLUDED.source_canvas_width,
+           source_canvas_height = EXCLUDED.source_canvas_height,
+           source_footprint_px = EXCLUDED.source_footprint_px,
+           anchor_x = EXCLUDED.anchor_x, anchor_y = EXCLUDED.anchor_y,
+           row_revision = EXCLUDED.row_revision, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+        [asset.id, asset.family, asset.label, asset.method, asset.notes, asset.footprint.shape,
+          asset.footprint.sourceCanvasWidth, asset.footprint.sourceCanvasHeight,
+          asset.footprint.sourceFootprintPx, asset.anchor.x, asset.anchor.y, asset.rowRevision],
+      );
+      for (const palette of UNIT_PALETTE_IDS) for (const direction of UNIT_DIRECTION_IDS) {
+        const sprite = asset.sprites[palette][direction];
+        await client.query(
+          `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (asset_id, palette, direction) DO UPDATE SET
+             sha256 = EXCLUDED.sha256, blob_key = EXCLUDED.blob_key,
+             width = EXCLUDED.width, height = EXCLUDED.height,
+             byte_length = EXCLUDED.byte_length, updated_at = now()`,
+          [asset.id, palette, direction, sprite.sha256, unitBlobKey(sprite.sha256),
+            sprite.width, sprite.height, sprite.byteLength],
+        );
+      }
+      await client.query(
+        `UPDATE unit_families SET accepted_asset_id = $2, display_scale_percent = $3,
+           row_revision = $4, updated_at = now(), updated_by = 'live-catalog-seed'
+         WHERE family = $1`,
+        [family.family, asset.id, family.displayScalePercent, family.rowRevision],
+      );
+    }
+    await client.query(
+      'UPDATE unit_catalog_state SET revision = GREATEST(revision, $1), updated_at = now() WHERE singleton = true',
+      [catalog.revision],
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  invalidateUnitCatalogCache();
+  console.log(`seeded ${accepted.length} live unit families into ephemeral storage`);
+}
+
 function invalidateUnitCatalogCache() {
   unitCatalogCache = { at: 0, body: null };
 }
@@ -4063,14 +4167,9 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
 async function publicUnitCatalog() {
   const now = Date.now();
   if (unitCatalogCache.body && now - unitCatalogCache.at < UNIT_CATALOG_CACHE_TTL_MS) return unitCatalogCache.body;
-  try {
-    const body = await dbReadUnitCatalog();
-    unitCatalogCache = { at: now, body };
-    return body;
-  } catch (error) {
-    if (unitCatalogCache.body) return unitCatalogCache.body;
-    throw error;
-  }
+  const body = await dbReadUnitCatalog();
+  unitCatalogCache = { at: now, body };
+  return body;
 }
 
 async function sendFreshUnitCatalog(res, status = 200, includeArchived = false) {
@@ -4688,14 +4787,12 @@ async function applyThumbnailRenderInputs() {
   if (serverRender && typeof serverRender.applyPropSeatOverrides === 'function') {
     try { serverRender.applyPropSeatOverrides(seats.data); } catch { /* keep the renderer's last-good seats */ }
   }
-  let unitCatalogRevision = 0;
-  if (serverRender && typeof serverRender.applyLiveUnitCatalog === 'function') {
-    try {
-      const catalog = await publicUnitCatalog();
-      serverRender.applyLiveUnitCatalog(catalog);
-      unitCatalogRevision = catalog.revision || 0;
-    } catch { /* keep the renderer's committed or last-good unit catalog */ }
+  if (!serverRender || typeof serverRender.applyLiveUnitCatalog !== 'function') {
+    throw new Error('unit catalog renderer is unavailable');
   }
+  const catalog = await publicUnitCatalog();
+  serverRender.applyLiveUnitCatalog(catalog);
+  const unitCatalogRevision = catalog.revision || 0;
   return { propSeatsRevision: seats.revision || 0, unitCatalogRevision };
 }
 function thumbnailVersion(boardHash, renderInputs) {

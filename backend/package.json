@@ -6,7 +6,6 @@
   "main": "server.js",
   "scripts": {
     "start": "node supervisor.js",
-    "units:import": "node scripts/import-unit-assets.mjs",
     "test": "npm --prefix ../frontend ci && npm --prefix ../frontend run check && npm --prefix ../frontend run build && npm --prefix ../packages/board-render run build && node --check server.js && node --check supervisor.js && node --check smoke-test.js && node --check netplay-smoke-test.js && node --check train-worker.mjs && node --check train/restart-thread.mjs && node --check train/db.mjs && node --check train/k8s.mjs && node check-sse-route.js && node netplay-smoke-test.js && node smoke-test.js"
   },
   "dependencies": {

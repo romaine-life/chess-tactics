@@ -6,8 +6,8 @@ candidate sprites, restyled navy so it sits alongside the other blue pieces.
 - Source mesh: `docs/art/unit-concepts/source-assets/knight/wooden-chess-knight-side-b/`
   (OBJ + MTL + diffuse; ~78.9k tris). License/origin still unconfirmed, so this is
   a **Unit Studio candidate for review only**, not a production swap.
-- Output: `frontend/public/assets/units/knight/candidate-wooden/{direction}.png`
-  (8 × 512px, transparent), registered in `UnitStudio.tsx` as `knight-wooden`.
+- Output: `.unit-art-output/knight/candidate-wooden/{direction}.png`
+  (8 × 512px, transparent), ready for a Unit Art candidate upload.
 
 ## Facing convention (this is the part that must not drift per-unit)
 

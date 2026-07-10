@@ -1,85 +1,49 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { pieceSpritePath, UNIT_PALETTES } from '../core/pieces';
+import { pieceSpritePath } from '../core/pieces';
+import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 import {
   applyLiveUnitCatalog,
   productionUnitAssets,
   resetLiveUnitCatalog,
-  rookDirections,
   unitAssetById,
   unitAssets,
-  type LiveUnitCatalog,
 } from './unitCatalog';
 
 afterEach(() => resetLiveUnitCatalog());
 
-describe('unit catalog production subset', () => {
-  it('ships only the accepted production unit set', () => {
-    expect(unitAssets.length).toBe(6);
-    expect(unitAssets.map((unit) => unit.id).sort()).toEqual(['bishop', 'king', 'knight', 'pawn', 'queen', 'rook']);
-    expect(productionUnitAssets).toHaveLength(unitAssets.length);
-    expect(productionUnitAssets.every((unit) => unit.factionMode === 'palette' && !unit.speculative)).toBe(true);
-    expect(unitAssetById('pawn-codexsheet')?.id).toBe('pawn');
-    expect(unitAssetById('rook-blender-v4-calibrated')?.id).toBe('rook');
+describe('live unit catalog', () => {
+  it('has no board-art source before the required catalog is hydrated', () => {
+    expect(unitAssets).toEqual([]);
+    expect(() => pieceSpritePath('pawn', 'crimson', 'north-east')).toThrow(/not hydrated/);
   });
 
-  it('swaps accepted sprite URLs without changing the stable piece id', () => {
-    const sprites = Object.fromEntries(UNIT_PALETTES.map((palette) => [
-      palette,
-      Object.fromEntries(rookDirections.map((direction) => [direction, {
-        url: `/api/unit-sprites/${'a'.repeat(64)}.png`,
-        sha256: 'a'.repeat(64),
-        width: 96,
-        height: 96,
-        byteLength: 100,
-      }])),
-    ]));
-    const catalog: LiveUnitCatalog = {
-      schemaVersion: 1,
-      revision: 7,
-      families: [
-        { family: 'pawn', acceptedAssetId: 'asset-pawn', displayScalePercent: 87, rowRevision: 2 },
-        ...(['rook', 'knight', 'bishop', 'queen', 'king'] as const).map((family) => ({
-          family,
-          acceptedAssetId: null,
-          displayScalePercent: 100,
-          rowRevision: 0,
-        })),
-      ],
-      assets: [{
-        id: 'asset-pawn',
-        family: 'pawn',
-        label: 'Pawn art',
-        method: 'Native',
-        notes: '',
-        status: 'candidate',
-        accepted: true,
-        footprint: { shape: 'circle', sourceCanvasWidth: 96, sourceCanvasHeight: 96, sourceFootprintPx: 40 },
-        anchor: { x: 0.5, y: 0.78 },
-        rowRevision: 4,
-        sprites,
-        spriteCount: 48,
-        complete: true,
-      }],
-    };
+  it('hydrates all six stable production identities from live assets', () => {
+    const catalog = testLiveUnitCatalog({ revision: 7, scales: { pawn: 87 } });
 
     expect(applyLiveUnitCatalog(catalog)).toBe(true);
-    expect(unitAssetById('pawn')?.id).toBe('pawn');
-    expect(unitAssetById('pawn-codexsheet')?.id).toBe('pawn');
+    expect(unitAssets.map((unit) => unit.id).sort()).toEqual(['bishop', 'king', 'knight', 'pawn', 'queen', 'rook']);
+    expect(productionUnitAssets).toHaveLength(6);
+    expect(productionUnitAssets.every((unit) => unit.accepted && unit.complete && !unit.speculative)).toBe(true);
     expect(unitAssetById('pawn')?.defaultScale).toBe(87);
+    expect(unitAssetById('pawn-vintage')).toBeUndefined();
     expect(pieceSpritePath('pawn', 'crimson', 'north-east')).toBe(`/api/unit-sprites/${'a'.repeat(64)}.png`);
+  });
 
-    expect(applyLiveUnitCatalog({
-      ...catalog,
-      revision: 8,
-      families: catalog.families.map((family) => ({
-        ...family,
-        acceptedAssetId: null,
-        displayScalePercent: 100,
-      })),
-      assets: [],
-    })).toBe(true);
-    expect(unitAssetById('pawn')?.catalogAssetId).toBeUndefined();
-    expect(unitAssetById('pawn')?.defaultScale).toBe(100);
-    expect(pieceSpritePath('pawn', 'crimson', 'north-east')).toBe('/assets/units/pawn/crimson/north-east.png');
+  it('rejects an incomplete catalog instead of selecting another art source', () => {
+    const catalog = testLiveUnitCatalog();
+    catalog.families[0] = { ...catalog.families[0], acceptedAssetId: null };
+
+    expect(() => applyLiveUnitCatalog(catalog)).toThrow(/has no accepted asset/);
+    expect(unitAssets).toEqual([]);
+    expect(() => pieceSpritePath('pawn')).toThrow(/not hydrated/);
+  });
+
+  it('atomically swaps immutable URLs without changing gameplay ids', () => {
+    applyLiveUnitCatalog(testLiveUnitCatalog({ revision: 1, sha256: 'a'.repeat(64) }));
+    expect(pieceSpritePath('rook')).toContain('a'.repeat(64));
+
+    applyLiveUnitCatalog(testLiveUnitCatalog({ revision: 2, sha256: 'b'.repeat(64) }));
+    expect(unitAssetById('rook')?.id).toBe('rook');
+    expect(pieceSpritePath('rook')).toContain('b'.repeat(64));
   });
 });

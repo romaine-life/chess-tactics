@@ -74,12 +74,13 @@ runtime wiring are exercised from the same image that PR CI proved.
 ## Persistence
 
 Durable game/design data (levels, campaigns, campaign workspaces, design
-portfolios) lives in **Azure Database for PostgreSQL**, reached passwordless via
-Entra workload identity. Art assets remain committed files under
-`frontend/public/assets`; they are not database records. The database is
-self-provisioned by this repo's `tofu/`. Local backend startup defaults to
-read-only schema checks; set `SCHEMA_MIGRATIONS=auto` when you intentionally want
-to apply missing migrations to a local database. See
+portfolios, and live Unit Art metadata) lives in **Azure Database for
+PostgreSQL**, reached passwordless via Entra workload identity. Unit Art PNGs are
+content-addressed in the private `unit-assets` Blob container; other code-owned
+assets remain under `frontend/public/assets`. The database is self-provisioned by
+this repo's `tofu/`. Local backend startup defaults to read-only schema checks;
+set `SCHEMA_MIGRATIONS=auto` when you intentionally want to apply missing
+migrations to a local database. See
 [docs/persistence.md](docs/persistence.md) for the schema, auth model, backups,
 failure behavior, and the one post-`tofu apply` value to pin.
 

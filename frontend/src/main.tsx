@@ -60,25 +60,34 @@ try { initBgm(); } catch { /* background music is decorative */ }
 // Arm the procedural terrain SFX on the first user gesture (mirrors initBgm). Only
 // attaches listeners — no AudioContext until a gesture, so it's cheap + autoplay-safe.
 try { primeSfx(); } catch { /* sound effects are decorative */ }
-try { initUnitSizeTuning(); } catch { /* unit-size tuning is local-only */ }
 
 const root = document.getElementById('root');
 if (root) {
   const reactRoot = createRoot(root);
-  reactRoot.render(<App />);
-  // Overlay the live prop-seat overrides on the committed baseline (ADR-0061). Props render
-  // immediately from the baseline (sync import in core/props); when the DB overlay lands we
-  // re-render so board views pick up the tuned seats. Fail-soft: outage/empty is a no-op and the
-  // baseline stands — this never blocks or breaks the render above.
-  void loadLiveSeats()
-    .then((changed) => { if (changed) reactRoot.render(<App />); })
-    .catch(() => { /* prop seats are decorative tuning — baseline always renders */ });
-  void loadLiveWallArt()
-    .then((changed) => { if (changed) reactRoot.render(<App />); })
-    .catch(() => { /* wall art is decorative tuning — baseline always renders */ });
+  reactRoot.render(<main className="app-startup-status" role="status">Loading unit art...</main>);
+
   void loadLiveUnitCatalog()
-    .then((changed) => { if (changed) reactRoot.render(<App />); })
-    .catch(() => { /* unit art keeps the committed cutover baseline */ });
+    .then(() => {
+      initUnitSizeTuning();
+      reactRoot.render(<App />);
+      // Prop seats and wall art remain independent decorative overlays. Unit art is
+      // deliberately absent from this fail-soft group: the app does not render without it.
+      void loadLiveSeats()
+        .then((changed) => { if (changed) reactRoot.render(<App />); })
+        .catch(() => { /* prop seats retain their ADR-0061 baseline */ });
+      void loadLiveWallArt()
+        .then((changed) => { if (changed) reactRoot.render(<App />); })
+        .catch(() => { /* wall art is decorative */ });
+    })
+    .catch((error) => {
+      console.error('unit catalog startup failed:', error);
+      reactRoot.render(
+        <main className="app-startup-status is-error" role="alert">
+          <h1>Unit art unavailable</h1>
+          <button type="button" onClick={() => window.location.reload()}>Retry</button>
+        </main>,
+      );
+    });
 }
 
 // Fold this browser's campaign progress together with the signed-in account's, so clears follow
