@@ -79,6 +79,31 @@ function pieceImageSrc(piece: Piece): string | null {
   return pieceSpritePath(piece.type, paletteForSide(piece.side, piece.palette), piece.facing ?? defaultFacingForSide(piece.side));
 }
 
+export type SkirmishTileClickIntent =
+  | { kind: 'move' }
+  | { kind: 'select'; pieceId: string }
+  | { kind: 'focus'; pieceId: string }
+  | { kind: 'clear-selection' };
+
+/**
+ * Resolve a live-board click before applying store actions. A legal destination still
+ * wins over the occupant at that square (captures), and friendly pieces remain directly
+ * selectable. Empty and neutral squares dismiss the current movement selection, while an
+ * opponent remains an independent inspection focus.
+ */
+export function skirmishTileClickIntent(
+  x: number,
+  y: number,
+  selectedMoves: readonly Pick<Move, 'x' | 'y'>[],
+  occupant: Pick<Piece, 'id' | 'side'> | undefined,
+  localSide: Side,
+): SkirmishTileClickIntent {
+  if (selectedMoves.some((move) => move.x === x && move.y === y)) return { kind: 'move' };
+  if (occupant?.side === localSide) return { kind: 'select', pieceId: occupant.id };
+  if (occupant && occupant.side !== 'neutral') return { kind: 'focus', pieceId: occupant.id };
+  return { kind: 'clear-selection' };
+}
+
 function terrainMapForGame(game: GameState): TileFamilyId[] {
   const byKey = new Map((game.terrain ?? []).map((cell) => [`${cell.x},${cell.y}`, terrainFamilyForGame(cell.terrain)]));
   const map: TileFamilyId[] = [];
@@ -400,6 +425,10 @@ const ghostScaleFor = (count: number): number => (count >= 3 ? 0.5 : count === 2
 
 const UNIT_SEAT_W = 72;
 const UNIT_SEAT_H = 86;
+// Neutral rocks are local obstacle art, not one of the six live-catalog chess families.
+// Keep the legacy board-seat contact point that positioned them before live unit anchors.
+const ROCK_ANCHOR_X = 0.5;
+const ROCK_ANCHOR_Y = 0.78;
 const SCENE_BOUNDS_PAD = 96;
 const ARRIVAL_ANIM_MS = 620;
 
@@ -464,7 +493,7 @@ function arrivalOffset(timeMs: number, startMs: number | null, delayMs: number |
   return { dy: 0, opacity: 1 };
 }
 
-function pieceOp(
+export function pieceOp(
   piece: Piece,
   seat: { left: number; top: number },
   options: { dy?: number; opacity?: number; scale?: number } = {},
@@ -475,11 +504,14 @@ function pieceOp(
   const dw = UNIT_SEAT_W * scale;
   const dh = UNIT_SEAT_H * scale;
   const unit = unitAssetById(piece.type);
-  if (!unit) throw new Error(`live unit metadata is missing: ${piece.type}`);
+  const isRock = piece.type === 'rock' || piece.type === 'random-rock';
+  if (!unit && !isRock) throw new Error(`live unit metadata is missing: ${piece.type}`);
+  const anchorX = unit ? unitAnchorFraction(unit.unitAnchorX) : ROCK_ANCHOR_X;
+  const anchorY = unit ? unitAnchorFraction(unit.unitAnchorY) : ROCK_ANCHOR_Y;
   return {
     src,
-    dx: seat.left - dw * unitAnchorFraction(unit.unitAnchorX),
-    dy: seat.top - dh * unitAnchorFraction(unit.unitAnchorY) + (options.dy ?? 0),
+    dx: seat.left - dw * anchorX,
+    dy: seat.top - dh * anchorY + (options.dy ?? 0),
     dw,
     dh,
     z: objectBaseZIndex(piece),
@@ -713,6 +745,10 @@ export function SkirmishBoard() {
   // netplay (host='player', guest='enemy'). Interaction (selecting, move highlights,
   // committing) is gated to this side, not the literal 'player'.
   const localSide: Side = net ? net.localSide : 'player';
+  // Selection can also be cleared outside this component (for example, the HUD's R shortcut).
+  // Mirror that into the provisional premove selection so "Deselect all" removes every ring and
+  // target set without discarding premove steps that are already queued.
+  useEffect(() => { if (selectedId === null) setPremoveSelectedId(null); }, [selectedId]);
   // Drag-to-move (coexists with click-select → click-move). The live gesture is tracked in a
   // ref (mutated freely without re-rendering the board every pointer frame); `drag` state only
   // flips on/off at pick-up/drop so the ghost mounts and the origin piece fades. Only ONE drag
@@ -937,21 +973,34 @@ export function SkirmishBoard() {
       if (here) {
         setPremoveSelectedId(here.id);
         select(here.id);
+        return;
       }
+      // Clicking away from a unit or one of its legal premove targets dismisses the
+      // active premove selection without throwing away moves that are already queued.
+      setPremoveSelectedId(null);
+      select(null);
       return;
     }
     const here = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
-    if (selectedMoves.some((move) => move.x === x && move.y === y)) {
-      tryMoveTo(x, y);
-    } else if (here && here.side === localSide) {
-      // A piece THIS client commands — select it (own side; 'player' in single-player).
-      select(here.id);
-    } else if (here && here.side !== 'neutral') {
-      // The opponent's living piece — inspect (focus) it, never select. Neutral obstacles
-      // (rocks) fall through to the inert tryMoveTo no-op, as before.
-      focus(here.id);
-    } else {
-      tryMoveTo(x, y);
+    const intent = skirmishTileClickIntent(x, y, selectedMoves, here, localSide);
+    switch (intent.kind) {
+      case 'move':
+        tryMoveTo(x, y);
+        break;
+      case 'select':
+        // A piece THIS client commands — select it (own side; 'player' in single-player).
+        select(intent.pieceId);
+        break;
+      case 'focus':
+        // The opponent's living piece is an inspection focus; the player's movement
+        // selection remains independent so returning focus can restore that context.
+        focus(intent.pieceId);
+        break;
+      case 'clear-selection':
+        // Chess-style cancellation: an invalid/empty destination removes the move dots and
+        // focus instead of leaving the player locked onto a unit they no longer care about.
+        select(null);
+        break;
     }
   };
 

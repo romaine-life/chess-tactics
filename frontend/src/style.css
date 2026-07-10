@@ -11163,7 +11163,9 @@ button.tileset-relationship-cell {
 }
 
 .tileset-scene-layer {
-  z-index: 0;
+  /* Must match OBJECT_DEPTH_OFFSET in render/sceneDepth.ts. The canvas is one
+     atomic layer, so its CSS stack belongs above the per-tile ground overlays. */
+  z-index: 20000;
 }
 
 .tileset-board-grid-layer {
