@@ -13,8 +13,10 @@ export const GROUND_COVER_FRONT_DEPTH_OFFSET = OBJECT_DEPTH_OFFSET - 11;
 // tufts from the nearby foreground rows can still visually overlap the rail.
 export const FENCE_OVERLAY_DEPTH_OFFSET = OBJECT_DEPTH_OFFSET - 2;
 
-// Perimeter walls are large scenery, so they stay tied to the owner object's band.
-export const WALL_OVERLAY_DEPTH_OFFSET = OBJECT_DEPTH_OFFSET;
+// Perimeter walls sit on the back edges of their owner cells. Keep the entire wall below
+// same-cell structure art; otherwise a split prop/doodad is painted back-half, wall, front-half
+// and the wall appears to cut through it. This is the same background-barrier lane as fences.
+export const WALL_OVERLAY_DEPTH_OFFSET = OBJECT_DEPTH_OFFSET - 2;
 
 export function cellDepth(cell: { x: number; y: number }): number {
   return cell.x + cell.y;
