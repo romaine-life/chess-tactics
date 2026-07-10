@@ -88,17 +88,34 @@ describe('boardCode round-trip', () => {
       cells: ['1,1', '2,1', '1,2'],
       buffer: 12,
       wiggle: 0.35,
+      macroTileDensity: 0.65,
       sections: [
         {
           terrain: 'water',
           share: 70,
           locked: true,
           covers: [{ type: 'water', knobs: { amount: 0.8, amountRandom: 0.1, density: 0.5, densityRandom: 0.2 } }],
+          macroTileDensity: 0,
+          macroTileBreakup: 0,
         },
-        { terrain: 'sand', share: 30, covers: [] },
+        { terrain: 'sand', share: 30, covers: [], macroTileDensity: 0.8, macroTileBreakup: 0.25 },
       ],
     }];
     expect(decodeBoard(encodeBoard(emptyBoard({ generatedRegions })))!.generatedRegions).toEqual(generatedRegions);
+  });
+
+  it('round-trips macrotile placements', () => {
+    const macroTiles = [
+      { assetId: 'grass-soft-bands-3x3', x: 1, y: 1, breaks: [1, 4, 7] },
+      { assetId: 'future-macrotile', x: 4, y: 3, breaks: [2, 8] },
+    ];
+    const decoded = decodeBoard(encodeBoard(emptyBoard({ macroTiles })))!;
+    expect(decoded.macroTiles).toEqual(macroTiles);
+  });
+
+  it('encodes a macrotile-free board byte-identically to a code that predates macrotiles', () => {
+    expect(encodeBoard(emptyBoard({ macroTiles: [] }))).toBe(encodeBoard(emptyBoard()));
+    expect(decodeBoard(encodeBoard(emptyBoard()))!.macroTiles).toEqual([]);
   });
 
   it('round-trips cover type overrides for grass painted on non-grass tiles', () => {

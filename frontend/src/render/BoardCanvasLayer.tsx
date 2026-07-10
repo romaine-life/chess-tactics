@@ -71,6 +71,31 @@ function withFlipX(
   ctx.restore();
 }
 
+function withClipPolygons(
+  ctx: CanvasRenderingContext2D,
+  op: BoardDrawOp,
+  bounds: BakeBounds,
+  draw: () => void,
+): void {
+  if (!op.clipPolygons?.length) {
+    draw();
+    return;
+  }
+  ctx.save();
+  ctx.beginPath();
+  for (const polygon of op.clipPolygons) {
+    if (polygon.length < 6) continue;
+    ctx.moveTo(polygon[0] - bounds.minX, polygon[1] - bounds.minY);
+    for (let index = 2; index + 1 < polygon.length; index += 2) {
+      ctx.lineTo(polygon[index] - bounds.minX, polygon[index + 1] - bounds.minY);
+    }
+    ctx.closePath();
+  }
+  ctx.clip();
+  draw();
+  ctx.restore();
+}
+
 function paintOp(
   ctx: CanvasRenderingContext2D,
   img: CanvasImage,
@@ -79,35 +104,37 @@ function paintOp(
   timeMs: number,
 ): void {
   withOpacity(ctx, op.opacity, () => {
-    withFlipX(ctx, op, bounds, (dx, dy) => {
-      if (op.contain) {
-        const boxW = op.dw;
-        const boxH = op.dh;
-        const natW = img.naturalWidth || boxW;
-        const natH = img.naturalHeight || boxH;
-        const fit = Math.min(boxW / natW, boxH / natH);
-        const w = natW * fit;
-        const h = natH * fit;
-        const cx = dx + (op.dw - w) / 2;
-        const cy = dy + (op.dh - h) / 2;
-        ctx.drawImage(img, cx, cy, w, h);
-        return;
-      }
-      if (op.sw != null) {
-        ctx.drawImage(
-          img,
-          liveSx(op, img, timeMs),
-          op.sy ?? 0,
-          op.sw,
-          op.sh ?? op.dh,
-          dx,
-          dy,
-          op.dw,
-          op.dh,
-        );
-        return;
-      }
-      ctx.drawImage(img, dx, dy, op.dw, op.dh);
+    withClipPolygons(ctx, op, bounds, () => {
+      withFlipX(ctx, op, bounds, (dx, dy) => {
+        if (op.contain) {
+          const boxW = op.dw;
+          const boxH = op.dh;
+          const natW = img.naturalWidth || boxW;
+          const natH = img.naturalHeight || boxH;
+          const fit = Math.min(boxW / natW, boxH / natH);
+          const w = natW * fit;
+          const h = natH * fit;
+          const cx = dx + (op.dw - w) / 2;
+          const cy = dy + (op.dh - h) / 2;
+          ctx.drawImage(img, cx, cy, w, h);
+          return;
+        }
+        if (op.sw != null) {
+          ctx.drawImage(
+            img,
+            liveSx(op, img, timeMs),
+            op.sy ?? 0,
+            op.sw,
+            op.sh ?? op.dh,
+            dx,
+            dy,
+            op.dw,
+            op.dh,
+          );
+          return;
+        }
+        ctx.drawImage(img, dx, dy, op.dw, op.dh);
+      });
     });
   });
 }
@@ -163,6 +190,7 @@ function opSignature(op: BoardDrawOp): string {
     op.contain ? 1 : 0,
     op.flipX ? 1 : 0,
     op.opacity ?? '',
+    op.clipPolygons?.map((polygon) => polygon.join(',')).join(';') ?? '',
   ].join(':');
 }
 

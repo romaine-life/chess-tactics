@@ -190,21 +190,39 @@ async function renderLevelCard({ plan, frontendDir, title, subtitle, screenName,
     if (!img) continue;
     const dx = originX + (op.dx - fitBounds.minX) * scale;
     const dy = originY + (op.dy - fitBounds.minY) * scale;
-    if (op.contain) {
-      const boxW = op.dw;
-      const boxH = op.dh;
-      const natW = img.width || boxW;
-      const natH = img.height || boxH;
-      const fit = Math.min(boxW / natW, boxH / natH);
-      const w = natW * fit;
-      const h = natH * fit;
-      const cx = op.dx + (op.dw - w) / 2;
-      const cy = op.dy + (op.dh - h) / 2;
-      ctx.drawImage(img, originX + (cx - fitBounds.minX) * scale, originY + (cy - fitBounds.minY) * scale, w * scale, h * scale);
-    } else if (op.sw != null) {
-      ctx.drawImage(img, op.sx || 0, op.sy || 0, op.sw, op.sh || op.dh, dx, dy, op.dw * scale, op.dh * scale);
-    } else {
-      ctx.drawImage(img, dx, dy, op.dw * scale, op.dh * scale);
+    const clipped = Array.isArray(op.clipPolygons) && op.clipPolygons.length > 0;
+    if (clipped) {
+      ctx.save();
+      ctx.beginPath();
+      for (const polygon of op.clipPolygons) {
+        if (!Array.isArray(polygon) || polygon.length < 6) continue;
+        ctx.moveTo(originX + (polygon[0] - fitBounds.minX) * scale, originY + (polygon[1] - fitBounds.minY) * scale);
+        for (let index = 2; index + 1 < polygon.length; index += 2) {
+          ctx.lineTo(originX + (polygon[index] - fitBounds.minX) * scale, originY + (polygon[index + 1] - fitBounds.minY) * scale);
+        }
+        ctx.closePath();
+      }
+      ctx.clip();
+    }
+    try {
+      if (op.contain) {
+        const boxW = op.dw;
+        const boxH = op.dh;
+        const natW = img.width || boxW;
+        const natH = img.height || boxH;
+        const fit = Math.min(boxW / natW, boxH / natH);
+        const w = natW * fit;
+        const h = natH * fit;
+        const cx = op.dx + (op.dw - w) / 2;
+        const cy = op.dy + (op.dh - h) / 2;
+        ctx.drawImage(img, originX + (cx - fitBounds.minX) * scale, originY + (cy - fitBounds.minY) * scale, w * scale, h * scale);
+      } else if (op.sw != null) {
+        ctx.drawImage(img, op.sx || 0, op.sy || 0, op.sw, op.sh || op.dh, dx, dy, op.dw * scale, op.dh * scale);
+      } else {
+        ctx.drawImage(img, dx, dy, op.dw * scale, op.dh * scale);
+      }
+    } finally {
+      if (clipped) ctx.restore();
     }
   }
   ctx.restore();

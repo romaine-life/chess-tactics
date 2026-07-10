@@ -1,0 +1,24 @@
+{
+  "provider": "PixelLab Tiles Pro",
+  "jobId": "6b0b3f62-015e-43e1-a9b4-9b7acfbeb836",
+  "seed": 1724,
+  "settings": {
+    "tileType": "square_topdown",
+    "tileSize": 128,
+    "tileHeight": 128,
+    "view": "top-down",
+    "viewAngle": 90,
+    "depthRatio": 0,
+    "outlineMode": "segmentation"
+  },
+  "selected": {
+    "tile_4.png": "grass-meadow-drift-4x4.png",
+    "tile_1.png": "grass-soft-bands-3x3.png",
+    "tile_2.png": "dirt-worn-field-4x3.png",
+    "tile_3.png": "stone-moss-field-3x3.png",
+    "tile_5.png": "dirt-soft-wear-2x3.png"
+  },
+  "rejected": {
+    "tile_0.png": "Five transparent source pixels violated the fully-owned material-source contract."
+  }
+}

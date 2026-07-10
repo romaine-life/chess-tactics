@@ -5742,6 +5742,14 @@ h1 {
   flex-direction: column;
   gap: 4px;
 }
+.le-generate .le-gen-macro {
+  margin: 0 0 4px 12px;
+  padding: 2px 0 3px 8px;
+  border-left: 2px solid rgba(245, 196, 92, .34);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 /* Ground cover for a region: a compact list of collapsible cover rows, indented under the region. */
 .le-generate .le-gen-cover {
   margin: 0 0 6px 12px;
@@ -5931,6 +5939,8 @@ h1 {
   padding: 5px 2px;
 }
 .le-swatch img { height: 46px; image-rendering: pixelated; object-fit: contain; width: 46px; }
+.le-macro-swatch img { width: 100%; max-width: 58px; }
+.le-brush-thumb .le-thumb-macro { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
 .le-swatch small { font-size: var(--ds-text-2xs); line-height: 1; text-align: center; }
 .le-cover-swatches {
   grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));

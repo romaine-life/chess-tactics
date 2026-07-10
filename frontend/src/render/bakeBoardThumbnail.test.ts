@@ -56,6 +56,15 @@ describe('boardContentHash — stability + sensitivity', () => {
     expect(boardContentHash(before)).not.toBe(boardContentHash(after));
   });
 
+  it('changes when a macrotile is added', () => {
+    const before = { ...blank(), cells: { '0,0': TILE } };
+    const after: EditorBoard = {
+      ...before,
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
+    };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(after));
+  });
+
   it('changes when a unit moves', () => {
     const before = { ...blank(), units: { '0,0': UNIT } };
     const after = { ...blank(), units: { '1,0': UNIT } };
@@ -122,18 +131,29 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
   it('collapses a board tiled with one family to a single tile src', () => {
     const board: EditorBoard = { ...blank(2, 2), cells: { '0,0': TILE, '1,0': TILE, '0,1': TILE, '1,1': TILE } };
     const srcs = uniqueDrawSrcs(board);
-    // The TILE itself dedups to one src across all four cells — one op per cell, one decode…
+    // The composed renderer decodes one top and one exposed-side source for the family.
     const tileSrcs = srcs.filter((s) => s.includes('grass') && !s.includes('groundcover'));
-    expect(tileSrcs).toHaveLength(1);
-    expect(boardDrawOps(board).filter((op) => op.src === tileSrcs[0])).toHaveLength(4);
-    // …though grassland now ALSO scatters ground-cover tufts (the same vegetation the game draws),
-    // which contribute their own deduped sprite srcs on top of the bare tile.
-    expect(srcs.some((s) => s.includes('groundcover'))).toBe(true);
+    expect(tileSrcs).toHaveLength(2);
+    const topSrc = tileSrcs.find((src) => src.endsWith('-top.png'))!;
+    const sideSrc = tileSrcs.find((src) => src.endsWith('-side.png'))!;
+    expect(boardDrawOps(board).filter((op) => op.src === topSrc)).toHaveLength(4);
+    expect(boardDrawOps(board).filter((op) => op.src === sideSrc)).toHaveLength(3);
+    // Exact editor boards do not invent ambient cover when their authored cover map is empty.
+    expect(srcs.some((s) => s.includes('groundcover'))).toBe(false);
   });
 
   it('returns no srcs for a blank (untiled) board', () => {
     expect(uniqueDrawSrcs(blank())).toEqual([]);
     expect(boardDrawOps(blank())).toEqual([]);
+  });
+
+  it('includes ground-cover sprites only when the exact board authors cover', () => {
+    const board: EditorBoard = {
+      ...blank(),
+      cells: { '0,0': TILE },
+      cover: { '0,0': 'filled' },
+    };
+    expect(uniqueDrawSrcs(board).some((src) => src.includes('groundcover'))).toBe(true);
   });
 
   it('a doodad contributes its back AND front halves as distinct srcs', () => {
@@ -150,6 +170,20 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
     expect(srcs).toContain('/assets/props/cottage/front.png');
     const unknown: EditorBoard = { ...blank(8, 6), props: { '3,2': { propId: 'not-a-prop' } } };
     expect(uniqueDrawSrcs(unknown)).toEqual([]);
+  });
+
+  it('a macrotile contributes its board-space source and replaces covered top sources', () => {
+    const cells = Object.fromEntries(
+      Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
+    );
+    const board: EditorBoard = {
+      ...blank(3, 3),
+      cells,
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
+    };
+    const sources = uniqueDrawSrcs(board);
+    expect(sources).toContain('/assets/tiles/macro-tiles/grass-soft-bands-3x3.png');
+    expect(sources.some((source) => source.endsWith('grass-0-top.png'))).toBe(false);
   });
 });
 
@@ -210,19 +244,44 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(back!.dh).toBe(300);
   });
 
-  it('places a feature overlay just above its own tile (same cell band)', () => {
+  it('replaces every covered 1x1 top with one macrotile below feature overlays', () => {
+    const cells = Object.fromEntries(
+      Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
+    );
     const board: EditorBoard = {
-      ...blank(),
-      cells: { '1,1': TILE },
+      ...blank(4, 4),
+      cells: { ...cells, '3,3': TILE },
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
       features: { '1,1': { kind: 'road', material: 'cobble' } },
     };
     const ops = boardDrawOps(board);
-    const tileOp = ops.find((op) => op.src.includes('grass'));
+    const tileOps = ops.filter((op) => op.src.endsWith('grass-0-top.png'));
+    const macroTileOp = ops.find((op) => op.src.includes('macro-tiles'));
     const featureOp = ops.find((op) => op.src.includes('feature') || op.src.includes('road'));
-    expect(tileOp).toBeDefined();
+    expect(tileOps).toHaveLength(1);
+    expect(macroTileOp).toBeDefined();
     expect(featureOp).toBeDefined();
-    expect(featureOp!.z).toBeGreaterThan(tileOp!.z);
-    expect(featureOp!.z).toBeLessThan(tileOp!.z + 1); // within the same cell band
+    expect(macroTileOp!.z).toBeGreaterThan(tileOps[0].z);
+    expect(featureOp!.z).toBeGreaterThan(macroTileOp!.z);
+    expect(featureOp!.z).toBeLessThan(20000);
+  });
+
+  it('restores broken 1x1 tops and clips the composite to its remaining owned cells', () => {
+    const cells = Object.fromEntries(
+      Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
+    );
+    const board: EditorBoard = {
+      ...blank(3, 3),
+      cells,
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0, breaks: [4] }],
+    };
+    const ops = boardDrawOps(board);
+    const tileOps = ops.filter((op) => op.src.endsWith('grass-0-top.png'));
+    const macroTileOp = ops.find((op) => op.src.includes('macro-tiles'));
+
+    expect(tileOps).toHaveLength(1);
+    expect(macroTileOp?.clipPolygons).toHaveLength(8);
+    expect(macroTileOp?.clipPolygons?.every((polygon) => polygon.length === 8)).toBe(true);
   });
 
   it('draws edge fences above ground cover and below object/unit draw order', () => {

@@ -176,6 +176,7 @@ function sceneBoardForSkirmish(
     playerFaction: exactBoard?.playerFaction,
     factionDirections: exactBoard?.factionDirections ?? {},
     cells,
+    macroTiles: exactBoard?.macroTiles,
     units: {},
     doodads: {},
     props: Object.fromEntries((game.props ?? []).map((prop) => [`${prop.x},${prop.y}`, { propId: prop.propId }])),
@@ -198,7 +199,7 @@ function sceneArtUrls(sceneBoard: EditorBoard, seed: number, ambientCover: boole
 }
 
 function isTerrainSceneOp(op: BoardDrawOp): boolean {
-  return op.src.includes('/assets/tiles/surface/');
+  return op.src.includes('/assets/tiles/surface/') || op.src.includes('/assets/tiles/macro-tiles/');
 }
 
 function isLinearFeatureSceneOp(op: BoardDrawOp): boolean {
@@ -1138,6 +1139,7 @@ export function SkirmishBoard() {
         <BoardLabBoard
           board={board}
           assetFrameSrc={tileFrameSrc}
+          macroTiles={exactBoard?.macroTiles}
           boardZoom={boardZoom}
           boardPan={boardPan}
           className="skirmish-board-surface"

@@ -9,7 +9,7 @@ import type { EditorBoard } from '../ui/boardCode';
 import { BoardCanvasLayer } from './BoardCanvasLayer';
 
 function isTerrainOp(op: BoardDrawOp): boolean {
-  return op.src.includes('/assets/tiles/surface/');
+  return op.src.includes('/assets/tiles/surface/') || op.src.includes('/assets/tiles/macro-tiles/');
 }
 
 function isLinearFeatureOp(op: BoardDrawOp): boolean {
@@ -30,7 +30,7 @@ export function BoardSceneLayer({
   board,
   hidden,
   coverSeed = 1234,
-  ambientCover = true,
+  ambientCover = false,
   omitTerrain = true,
 }: {
   board: EditorBoard;

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactElement } from 'react';
-import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X } from '../art/projectionContract';
+import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
+import { macroTileAsset, macroTileBreakIndices, macroTileFrame, type MacroTilePlacement } from '../core/macroTiles';
 import { boardLabCellPosition } from './boardProjection';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
@@ -17,6 +18,31 @@ export interface TerrainCanvasCell {
   featureSrc?: string;
   topAnimFrames?: number;
   drawSide?: boolean;
+}
+
+export interface TerrainCanvasMacroTile {
+  key: string;
+  x: number;
+  y: number;
+  src: string;
+  columns: number;
+  rows: number;
+  breaks?: readonly number[];
+}
+
+export function terrainCanvasMacroTiles(placements: readonly MacroTilePlacement[] | undefined): TerrainCanvasMacroTile[] {
+  return (placements ?? []).flatMap((placement, index) => {
+    const asset = macroTileAsset(placement.assetId);
+    return asset ? [{
+      key: `${placement.assetId}:${placement.x},${placement.y}:${index}`,
+      x: placement.x,
+      y: placement.y,
+      src: asset.src,
+      columns: asset.columns,
+      rows: asset.rows,
+      breaks: macroTileBreakIndices(placement),
+    }] : [];
+  });
 }
 
 interface TerrainBounds {
@@ -60,8 +86,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return promise;
 }
 
-function terrainBounds(cells: readonly TerrainCanvasCell[]): TerrainBounds {
-  if (cells.length === 0) return { left: 0, top: 0, width: 1, height: 1 };
+function terrainBounds(cells: readonly TerrainCanvasCell[], macroTiles: readonly TerrainCanvasMacroTile[]): TerrainBounds {
+  if (cells.length === 0 && macroTiles.length === 0) return { left: 0, top: 0, width: 1, height: 1 };
   const frames = cells.map((cell) => {
     const { left, top } = boardLabCellPosition(cell);
     return {
@@ -71,6 +97,16 @@ function terrainBounds(cells: readonly TerrainCanvasCell[]): TerrainBounds {
       bottom: top - TILE_EQUATOR + TILE_FRAME_H,
     };
   });
+  for (const macroTile of macroTiles) {
+    const { left, top } = boardLabCellPosition(macroTile);
+    const frame = macroTileFrame(macroTile);
+    frames.push({
+      left: left + frame.left,
+      top: top + frame.top,
+      right: left + frame.left + frame.width,
+      bottom: top + frame.top + frame.height,
+    });
+  }
   const left = Math.floor(Math.min(...frames.map((frame) => frame.left)));
   const top = Math.floor(Math.min(...frames.map((frame) => frame.top)));
   const right = Math.ceil(Math.max(...frames.map((frame) => frame.right)));
@@ -78,8 +114,8 @@ function terrainBounds(cells: readonly TerrainCanvasCell[]): TerrainBounds {
   return { left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
 }
 
-function terrainSignature(cells: readonly TerrainCanvasCell[]): string {
-  return cells
+function terrainSignature(cells: readonly TerrainCanvasCell[], macroTiles: readonly TerrainCanvasMacroTile[]): string {
+  const cellSignature = cells
     .map((cell) => [
       cell.key,
       cell.x,
@@ -91,15 +127,35 @@ function terrainSignature(cells: readonly TerrainCanvasCell[]): string {
       cell.drawSide ? 1 : 0,
     ].join(':'))
     .join('|');
+  const macroTileSignature = macroTiles
+    .map((macroTile) => [macroTile.key, macroTile.x, macroTile.y, macroTile.src, macroTile.columns, macroTile.rows, (macroTile.breaks ?? []).join(',')].join(':'))
+    .join('|');
+  return `${cellSignature}||${macroTileSignature}`;
 }
 
-function uniqueSources(cells: readonly TerrainCanvasCell[]): string[] {
+export function macroTileOwnedCellKeys(macroTiles: readonly TerrainCanvasMacroTile[]): Set<string> {
+  const owned = new Set<string>();
+  for (const macroTile of macroTiles) {
+    const breaks = new Set(macroTile.breaks ?? []);
+    for (let dy = 0; dy < macroTile.rows; dy += 1) {
+      for (let dx = 0; dx < macroTile.columns; dx += 1) {
+        if (breaks.has(dy * macroTile.columns + dx)) continue;
+        owned.add(`${macroTile.x + dx},${macroTile.y + dy}`);
+      }
+    }
+  }
+  return owned;
+}
+
+function uniqueSources(cells: readonly TerrainCanvasCell[], macroTiles: readonly TerrainCanvasMacroTile[]): string[] {
   const urls = new Set<string>();
+  const macroOwned = macroTileOwnedCellKeys(macroTiles);
   for (const cell of cells) {
-    if (cell.topSrc) urls.add(cell.topSrc);
+    if (cell.topSrc && !macroOwned.has(`${cell.x},${cell.y}`)) urls.add(cell.topSrc);
     if (cell.sideSrc && cell.drawSide !== false) urls.add(cell.sideSrc);
     if (cell.featureSrc) urls.add(cell.featureSrc);
   }
+  for (const macroTile of macroTiles) urls.add(macroTile.src);
   return [...urls];
 }
 
@@ -268,9 +324,50 @@ function drawCellFeature(
   ctx.drawImage(feature, dx, dy, TILE_FRAME_W, TILE_FRAME_H);
 }
 
+function drawMacroTile(
+  ctx: CanvasRenderingContext2D,
+  macroTile: TerrainCanvasMacroTile,
+  bounds: TerrainBounds,
+  images: ReadonlyMap<string, HTMLImageElement>,
+): void {
+  const image = images.get(macroTile.src);
+  if (!imageReady(image)) return;
+  const { left, top } = boardLabCellPosition(macroTile);
+  const frame = macroTileFrame(macroTile);
+  const breaks = macroTile.breaks ?? [];
+  if (breaks.length > 0) {
+    const broken = new Set(breaks);
+    ctx.save();
+    ctx.beginPath();
+    for (let dy = 0; dy < macroTile.rows; dy += 1) {
+      for (let dx = 0; dx < macroTile.columns; dx += 1) {
+        if (broken.has(dy * macroTile.columns + dx)) continue;
+        const center = boardLabCellPosition({ x: macroTile.x + dx, y: macroTile.y + dy });
+        const cx = center.left - bounds.left;
+        const cy = center.top - bounds.top;
+        ctx.moveTo(cx, cy - TILE_STEP_Y);
+        ctx.lineTo(cx + TILE_STEP_X, cy);
+        ctx.lineTo(cx, cy + TILE_STEP_Y);
+        ctx.lineTo(cx - TILE_STEP_X, cy);
+        ctx.closePath();
+      }
+    }
+    ctx.clip();
+  }
+  ctx.drawImage(
+    image,
+    left + frame.left - bounds.left,
+    top + frame.top - bounds.top,
+    frame.width,
+    frame.height,
+  );
+  if (breaks.length > 0) ctx.restore();
+}
+
 function drawFrame(
   ctx: CanvasRenderingContext2D,
   cells: readonly TerrainCanvasCell[],
+  macroTiles: readonly TerrainCanvasMacroTile[],
   bounds: TerrainBounds,
   images: ReadonlyMap<string, HTMLImageElement>,
   timeMs: number,
@@ -283,25 +380,34 @@ function drawFrame(
     const zb = b.x + b.y;
     return za === zb ? a.x - b.x : za - zb;
   });
+  const macroOwned = macroTileOwnedCellKeys(macroTiles);
 
   for (const cell of ordered) {
     drawCellSide(ctx, cell, bounds, images);
   }
 
   for (const cell of ordered) {
-    drawCellTop(ctx, cell, bounds, images, timeMs, true);
+    if (!macroOwned.has(`${cell.x},${cell.y}`)) drawCellTop(ctx, cell, bounds, images, timeMs, true);
   }
 
   for (const cell of ordered) {
-    drawCellTop(ctx, cell, bounds, images, timeMs, false);
-    drawCellFeature(ctx, cell, bounds, images);
+    if (!macroOwned.has(`${cell.x},${cell.y}`)) drawCellTop(ctx, cell, bounds, images, timeMs, false);
   }
+
+  for (const macroTile of macroTiles) drawMacroTile(ctx, macroTile, bounds, images);
+  for (const cell of ordered) drawCellFeature(ctx, cell, bounds, images);
 }
 
-export function BoardTerrainLayer({ cells }: { cells: readonly TerrainCanvasCell[] }): ReactElement {
+export function BoardTerrainLayer({
+  cells,
+  macroTiles = [],
+}: {
+  cells: readonly TerrainCanvasCell[];
+  macroTiles?: readonly TerrainCanvasMacroTile[];
+}): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const signature = useMemo(() => terrainSignature(cells), [cells]);
-  const bounds = useMemo(() => terrainBounds(cells), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+  const signature = useMemo(() => terrainSignature(cells, macroTiles), [cells, macroTiles]);
+  const bounds = useMemo(() => terrainBounds(cells, macroTiles), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -310,12 +416,13 @@ export function BoardTerrainLayer({ cells }: { cells: readonly TerrainCanvasCell
 
     let cancelled = false;
     let raf = 0;
-    const sources = uniqueSources(cells);
-    const animated = cells.some((cell) => (cell.topAnimFrames ?? 0) > 1);
+    const sources = uniqueSources(cells, macroTiles);
+    const macroOwned = macroTileOwnedCellKeys(macroTiles);
+    const animated = cells.some((cell) => !macroOwned.has(`${cell.x},${cell.y}`) && (cell.topAnimFrames ?? 0) > 1);
 
     const paint = (images: ReadonlyMap<string, HTMLImageElement>, timeMs = performance.now()): void => {
       if (cancelled) return;
-      drawFrame(ctx, cells, bounds, images, timeMs);
+      drawFrame(ctx, cells, macroTiles, bounds, images, timeMs);
     };
 
     void Promise.all(sources.map(async (src): Promise<[string, HTMLImageElement]> => [src, await loadImage(src)])).then((entries) => {
@@ -333,7 +440,7 @@ export function BoardTerrainLayer({ cells }: { cells: readonly TerrainCanvasCell
       cancelled = true;
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [bounds, cells, signature]);
+  }, [bounds, cells, macroTiles, signature]);
 
   const style = {
     left: `${bounds.left}px`,

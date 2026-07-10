@@ -14,6 +14,7 @@
     "e2e:lobby": "node scripts/lobby-e2e.mjs",
     "vendor:ambience": "node scripts/vendor-ambience.mjs",
     "assets:diagnose:terrain": "node scripts/diagnose-terrain-assets.mjs",
+    "assets:build:macro-tiles": "python scripts/build-macro-tiles.py",
     "optimize:assets": "node scripts/optimize-main-menu-assets.mjs",
     "campaign:assets": "node scripts/generate-campaign-editor-ui-assets.mjs",
     "visual:screenshot": "node scripts/screenshot-local-page.mjs",

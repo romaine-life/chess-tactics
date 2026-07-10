@@ -22,10 +22,11 @@ import { resolveWallArtFaces, slotSource, wallArtSlotsForFace } from '../core/wa
 import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './structureGeometry';
 import { fenceOverlayZIndex, groundCoverZIndex, objectBaseZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
 import { propDef, type StructureSourceRef } from '../core/props';
-import { groundCoverSet, resolveGroundCover, densityFieldAt, type GroundCover } from '../core/groundCover';
+import { densityFieldAt, groundCoverSet, resolveGroundCover, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
+import { macroTileAsset, macroTileBreakIndices, macroTileFrame, macroTileOwnedCellIndices, resolveMacroTilePlacements } from '../core/macroTiles';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
 const TILE_FRAME_H = TILE_FRAME_HEIGHT;
@@ -39,6 +40,9 @@ const DOODAD_FRAME_H = TILE_FRAME_H;
 const DOODAD_ANCHOR_Y = 69;
 const UNIT_SEAT_W = 72;
 const UNIT_SEAT_H = 86;
+const TERRAIN_TOP_DEPTH_OFFSET = 1000;
+const TERRAIN_MACRO_TILE_DEPTH_OFFSET = 2000;
+const TERRAIN_FEATURE_DEPTH_OFFSET = 3000;
 export const UNIT_IMG_MAX_W = 78;
 export const UNIT_IMG_MAX_H = 92;
 
@@ -56,6 +60,8 @@ export interface BoardDrawOp {
   sy?: number;
   sw?: number;
   sh?: number;
+  /** Board-space polygon paths used to expose broken cells inside a composite terrain image. */
+  clipPolygons?: number[][];
 }
 
 export interface BakeBounds {
@@ -76,6 +82,18 @@ const studioTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.ass
 const resolveTile = (id: string): StudioAsset | undefined => studioTiles.find((asset) => asset.id === id);
 const resolveUnit = (id: string): UnitAsset | undefined => unitAssetById(id);
 const resolveDoodad = (id: string): DoodadAsset | undefined => doodadAsset(id);
+
+function terrainCellClipPolygon(index: number, columns: number): number[] {
+  const x = index % columns;
+  const y = Math.floor(index / columns);
+  const { left, top } = boardLabCellPosition({ x, y });
+  return [
+    left, top - TILE_STEP_Y,
+    left + TILE_STEP_X, top,
+    left, top + TILE_STEP_Y,
+    left - TILE_STEP_X, top,
+  ];
+}
 
 function pushStructureDrawOps(
   ops: BoardDrawOp[],
@@ -137,6 +155,23 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   const wallBounds = { cols: board.cols, rows: board.rows };
   const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
   const wallFaceStyles = resolveWallArtFaces(board.wallArt, wallBounds);
+  const occupiedTerrain = new Set(
+    Object.entries(board.cells)
+      .filter(([, id]) => !!resolveTile(id))
+      .map(([key]) => key),
+  );
+  const acceptedMacroTiles = resolveMacroTilePlacements({
+    placements: board.macroTiles,
+    columns: board.cols,
+    rows: board.rows,
+    familyAt: (x, y) => familyOfTile(board.cells[`${x},${y}`] ?? ''),
+  });
+  const macroOwnedTerrain = new Set<string>();
+  for (const placement of acceptedMacroTiles) {
+    for (const index of macroTileOwnedCellIndices(placement, board.cols, board.rows)) {
+      macroOwnedTerrain.add(`${index % board.cols},${Math.floor(index / board.cols)}`);
+    }
+  }
 
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
@@ -147,7 +182,14 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
 
       const tile = board.cells[key] ? resolveTile(board.cells[key]) : undefined;
       if (tile) {
-        ops.push({ src: assetFrameSrc(tile, 0), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
+        const frameSrc = assetFrameSrc(tile, 0);
+        const drawSide = !occupiedTerrain.has(`${x + 1},${y}`) || !occupiedTerrain.has(`${x},${y + 1}`);
+        if (drawSide) {
+          ops.push({ src: frameSrc.replace(/\.png$/, '-side.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
+        }
+        if (!macroOwnedTerrain.has(key)) {
+          ops.push({ src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
+        }
       }
 
       const feature = overlays[key];
@@ -158,7 +200,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
           dy: frameY,
           dw: TILE_FRAME_W,
           dh: TILE_FRAME_H,
-          z: zIndex + 0.5,
+          z: TERRAIN_FEATURE_DEPTH_OFFSET + zIndex,
         });
       }
 
@@ -203,6 +245,26 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
         });
       }
     }
+  }
+
+  for (const placement of acceptedMacroTiles) {
+    const asset = macroTileAsset(placement.assetId);
+    if (!asset) continue;
+    const { left, top } = boardLabCellPosition(placement);
+    const frame = macroTileFrame(asset);
+    const breaks = macroTileBreakIndices(placement);
+    const clipPolygons = breaks.length > 0
+      ? macroTileOwnedCellIndices(placement, board.cols, board.rows).map((index) => terrainCellClipPolygon(index, board.cols))
+      : undefined;
+    ops.push({
+      src: asset.src,
+      dx: left + frame.left,
+      dy: top + frame.top,
+      dw: frame.width,
+      dh: frame.height,
+      z: TERRAIN_MACRO_TILE_DEPTH_OFFSET,
+      ...(clipPolygons ? { clipPolygons } : {}),
+    });
   }
 
   for (const key of new Set([...Object.keys(board.units), ...Object.keys(board.doodads)])) {
@@ -289,8 +351,11 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       if (terrain && groundCoverSet(terrain)) coverCells.push({ x, y, terrain });
     }
   }
+  // An EditorBoard is exact authoring data: an empty cover map means bare terrain, just as it
+  // does in the live editor and exact-board play path. Legacy generated game states can opt
+  // into ambient fallback explicitly while they are being adapted for the shared renderer.
   const hasPaintedCover = Object.keys(board.cover ?? {}).length > 0;
-  const ambientCover = options.ambientCover ?? true;
+  const ambientCover = options.ambientCover ?? false;
   resolveGroundCover(coverCells, COVER_SEED, (cell) =>
     board.cover?.[`${cell.x},${cell.y}`] ?? (hasPaintedCover || !ambientCover ? null : densityFieldAt(cell.x, cell.y, COVER_SEED)));
   for (const cell of coverCells) {
@@ -331,10 +396,13 @@ export function boardContentHash(board: RenderBoard): string {
       .sort()
       .map((key) => `${key}=${JSON.stringify(record[key])}`)
       .join(';');
+  const macroTiles = [...(board.macroTiles ?? [])]
+    .sort((a, b) => a.y - b.y || a.x - b.x || a.assetId.localeCompare(b.assetId));
   const parts = [
     `c${board.cols}`,
     `r${board.rows}`,
     `t:${sortedEntries(board.cells)}`,
+    `mt:${JSON.stringify(macroTiles)}`,
     `u:${sortedEntries(board.units)}`,
     `d:${sortedEntries(board.doodads)}`,
     `p:${sortedEntries(board.props ?? {})}`,

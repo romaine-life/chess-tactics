@@ -1,13 +1,14 @@
 import type { ReactElement } from 'react';
 import { BoardSceneLayer } from './BoardSceneLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
-import { BoardTerrainLayer, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
+import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
 import { featureFrameSrc } from '../art/tileset';
 import { resolveFeatureOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
+import { resolveMacroTilePlacements } from '../core/macroTiles';
 
 // THE shared, non-interactive board renderer — one source of truth for how an EditorBoard
 // draws (terrain through one composed canvas layer; units, doodads, props, fences, walls, wall art,
@@ -145,6 +146,12 @@ export function StudioReadOnlyBoard({
       });
     }
   }
+  const macroTiles = resolveMacroTilePlacements({
+    placements: board.macroTiles,
+    columns: board.cols,
+    rows: board.rows,
+    familyAt: (x, y) => familyOfTile(board.cells[`${x},${y}`] ?? ''),
+  });
 
   return (
     <TileGrid
@@ -155,8 +162,8 @@ export function StudioReadOnlyBoard({
       boardPan={boardPan}
       backgroundLayer={(
         <>
-          <BoardTerrainLayer cells={terrainCells} />
-          <BoardSceneLayer board={board} coverSeed={coverSeed} omitTerrain />
+          <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(macroTiles)} />
+          <BoardSceneLayer board={board} coverSeed={coverSeed} ambientCover={false} omitTerrain />
         </>
       )}
     />
