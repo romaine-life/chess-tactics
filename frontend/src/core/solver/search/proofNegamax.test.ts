@@ -87,7 +87,9 @@ describe('proofNegamax — proof AGREES with retrograde ground truth', () => {
     expect(sv.distancePlies).toBe(gt.distancePlies); // exact DTM agreement
   });
 
-  it('K+P vs K blockade (3×5): both prove a draw', () => {
+  // Proof search over the 3×5 K+P space runs ~3s on a fast machine — CI runners need
+  // headroom past vitest's 5s default (timed out there at exactly 5000ms once).
+  it('K+P vs K blockade (3×5): both prove a draw', { timeout: 30000 }, () => {
     const lvl = withPromoRow(tinyLevel([
       { x: 0, y: 0, side: 'enemy', type: 'king', facing: 'south' },
       { x: 2, y: 4, side: 'player', type: 'king', facing: 'north' },
