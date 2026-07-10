@@ -95,6 +95,13 @@ spec:
             - name: BGM_BASE_URL
               value: {{ .Values.bgm.baseUrl | quote }}
             {{- end }}
+            {{- if .Values.unitAssets.containerUrl }}
+            # Private content-addressed unit PNGs. The backend serves them through
+            # same-origin immutable routes and writes Unit Studio changes using
+            # the pod's workload identity.
+            - name: UNIT_ASSET_CONTAINER_URL
+              value: {{ .Values.unitAssets.containerUrl | quote }}
+            {{- end }}
             # Deployed backends intentionally own schema rollout. Local backend
             # defaults to read-only schema checks unless explicitly opted into auto.
             - name: SCHEMA_MIGRATIONS

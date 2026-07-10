@@ -45,6 +45,7 @@ export * from './core/groundCover';
 export * from './core/level';
 export * from './core/levelBoard';
 export * from './core/pieces';
+export * from './core/unitSpriteRegistry';
 export * from './core/playRoutePresentation';
 export * from './core/props';
 export * from './core/structureArt';

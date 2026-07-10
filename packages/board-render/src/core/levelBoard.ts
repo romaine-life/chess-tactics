@@ -19,7 +19,7 @@ import { decodeBoard, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMa
 import { parseEdgeKey, isOrthogonalPair, isNorthWestBoundaryWallEdge, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
 import { studioFamilies } from '../ui/studioBoard';
 import { isUnitPalette } from './pieces';
-import { unitAssets, type Faction } from '../ui/unitCatalog';
+import { productionUnitForFamily, unitFamilyForId, type Faction } from '../ui/unitCatalog';
 
 // Family → terrain material, mirroring game/setup.ts. The six tile families map 1:1 onto
 // the playable terrain materials; any unmapped (decorative) family falls back to grass.
@@ -137,15 +137,11 @@ const tileIdForTerrain = (terrain: TerrainType): string | undefined => {
   return defaultTileOfFamily(family);
 };
 
-// Piece type → a production unit id (the first non-speculative asset of that family), so a
-// level derived from `layers` paints a real, shippable sprite.
-const unitIdForType = (type: string): string | undefined => {
-  const asset = unitAssets.find((u) => u.family === type && !u.speculative) ?? unitAssets.find((u) => u.family === type);
-  return asset?.id;
-};
-// Unit id → its piece type (the asset's family), so a painted unit serializes to a PieceType.
+// Board data stores the stable family id. Legacy art-derived ids still resolve
+// through unitFamilyForId so old board codes remain editable indefinitely.
+const unitIdForType = (type: string): string | undefined => productionUnitForFamily(type)?.family;
 const typeOfUnitId = (unitId: string): LevelUnit['type'] | undefined =>
-  unitAssets.find((u) => u.id === unitId)?.family as LevelUnit['type'] | undefined;
+  unitFamilyForId(unitId) as LevelUnit['type'] | undefined;
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 

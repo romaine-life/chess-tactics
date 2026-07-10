@@ -1,4 +1,5 @@
 import type { PieceType, Side, UnitFacing } from './types';
+import { resolvedUnitSpritePath } from './unitSpriteRegistry';
 
 export const PLAYABLE_PIECE_TYPES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const satisfies readonly PieceType[];
 export type PlayablePieceType = typeof PLAYABLE_PIECE_TYPES[number];
@@ -67,7 +68,7 @@ export const facingFromDelta = (dx: number, dy: number): UnitFacing | null => {
 };
 
 export const pieceSpritePath = (type: PlayablePieceType, palette: UnitPalette = DEFAULT_PALETTE, direction: UnitFacing = 'south') =>
-  `/assets/units/${type}/${palette}/${direction}.png`;
+  resolvedUnitSpritePath(type, palette, direction);
 
 // Which palette a board side wears. Shared by the board and the HUD portrait.
 export const PALETTE_FOR_SIDE: Record<Side, UnitPalette> = {

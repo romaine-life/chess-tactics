@@ -361,9 +361,8 @@ function renderRoute(path: string): ReactElement {
   // /skirmish (the Solo Skirmish picker) now renders INSIDE the persistent menu shell — it falls
   // through to the MainMenu default below, sharing the 'menu' key so the button column stays mounted.
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
-  // /unit-studio is a deep-link into the one Studio with the Units shelf
-  // preselected — not a separate surface. Keeps old links working while the
-  // catalog/lab/brush flow stays a single mounted component (no route swaps).
+  // /unit-studio is a deep-link alias into the Studio's embedded Unit Art
+  // Viewer editor. The Studio canonicalises it to /studio after mount.
   if (path === '/unit-studio') return <TilesetStudio initialCategory="units" />;
   if (path === '/portrait-editor') return <PortraitEditor />;
   // /doodad-editor: legacy alias into the Studio's Doodads category, opening the
