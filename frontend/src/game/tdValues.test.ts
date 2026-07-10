@@ -14,6 +14,7 @@ import {
   evaluateVsRandom,
   pawnRelativeValues,
   playGreedyGame,
+  previewNextGame,
   runSeeds,
   runTrainingGames,
   scheduleAt,
@@ -210,6 +211,25 @@ describe('stepping session (createTrainingSession / runTrainingGames)', () => {
     expect(outcomes).toEqual(recorded.outcomes);
     // JSON-safe (the worker-transport contract for session.lastGame).
     expect(JSON.parse(JSON.stringify(records))).toEqual(records);
+  });
+
+  it('previewNextGame deals EXACTLY the game the commit then plays, without advancing anything', { timeout: 120_000 }, () => {
+    const lvl = kqk3();
+    const opts = { games: 20, seed: 9, maxPlies: 40 };
+    let state = createTrainingSession(opts);
+    for (let i = 0; i < 3; i += 1) {
+      const preview = previewNextGame(lvl, opts, state);
+      const before = JSON.parse(JSON.stringify(state));
+      let committed: TdGameRecord | undefined;
+      state = runTrainingGames(lvl, opts, state, 1, (r) => { committed = r; });
+      // The dealt game IS the game the learner then learns from — same moves, same
+      // winner, same seed (the deal-then-walk surface's load-bearing equivalence).
+      expect(preview).toEqual(committed);
+      // Pure: previewing changed nothing (the commit advanced by exactly one game).
+      expect(state.game).toBe(before.game + 1);
+    }
+    const done = runTrainingGames(lvl, opts, state, 999);
+    expect(previewNextGame(lvl, opts, done)).toBeNull();
   });
 
   it('the exported DEFAULT_TRAIN_OPTIONS are the engine baseline (explicit === implicit)', { timeout: 120_000 }, () => {
