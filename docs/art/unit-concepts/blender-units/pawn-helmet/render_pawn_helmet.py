@@ -7,7 +7,7 @@ archer's helmet (helmet.dae, COLLADA parsed by hand since Blender 5.x has no
 COLLADA importer). Both navy-styled, rendered at the true-isometric contract
 angle (45 yaw / 35.264 elevation / ortho). The pawn body is symmetric; the helmet
 visor gives each direction a real facing (visor -> game-south at yaw 0).
-Output -> frontend/public/assets/units/pawn/blender-render-helmet/<direction>.png
+Output -> .unit-art-output/pawn/navy-blue/<direction>.png
 """
 import bpy, os, math, mathutils, numpy as np
 import xml.etree.ElementTree as ET
@@ -19,7 +19,7 @@ while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 SRC = ROOT / "docs/art/unit-concepts/source-assets/pawn-helmet"
 STL = str(SRC / "Pawn.stl"); DAE = str(SRC / "helmet.dae")
-OUT = str(ROOT / "frontend/public/assets/units/pawn/blender-render-helmet")
+OUT = str(ROOT / ".unit-art-output/pawn/navy-blue")
 os.makedirs(OUT, exist_ok=True)
 WIDTH_FACTOR = 3.0; Z_OFFSET = 0.04
 

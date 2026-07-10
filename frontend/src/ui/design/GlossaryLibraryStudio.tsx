@@ -5,6 +5,7 @@
 // the reviewable in-app home for "how our chrome actually renders" — a glossary
 // TYPE, not a fake meta-asset inside an asset category.
 import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react';
+import { pieceSpritePath } from '../../core/pieces';
 import { GLOSSARY } from './catalogData';
 
 // Stop a card-action icon's click from also triggering the card's select.
@@ -20,6 +21,10 @@ const ViewIcon = (): ReactElement => (
     <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
     <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
+);
+
+const LiveKnightSprite = (): ReactElement => (
+  <img src={pieceSpritePath('knight')} alt="" aria-hidden="true" />
 );
 
 // Long-form docs keyed by glossary term. Terse `def` lives in catalogData; the
@@ -60,7 +65,7 @@ const GLOSSARY_DETAILS: Record<string, ReactNode> = {
             <span className="doodad-layer-stage">
               <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
               <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
-              <span className="board-unit-seat is-knight" style={{ left: 0, top: 0 }}><img src="/assets/units/knight/navy-blue/south.png" alt="" aria-hidden="true" /></span>
+              <span className="board-unit-seat is-knight" style={{ left: 0, top: 0 }}><LiveKnightSprite /></span>
             </span>
           </span>
           <figcaption className="doodad-layer-cap"><strong>Back layer only.</strong> The whole tuft is behind the unit — it just stands in front of it.</figcaption>
@@ -70,7 +75,7 @@ const GLOSSARY_DETAILS: Record<string, ReactNode> = {
             <span className="doodad-layer-stage">
               <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
               <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
-              <span className="board-unit-seat is-knight" style={{ left: 0, top: 0 }}><img src="/assets/units/knight/navy-blue/south.png" alt="" aria-hidden="true" /></span>
+              <span className="board-unit-seat is-knight" style={{ left: 0, top: 0 }}><LiveKnightSprite /></span>
               <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/front.png" alt="" aria-hidden="true" /></span>
             </span>
           </span>

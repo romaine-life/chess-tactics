@@ -16,7 +16,7 @@ ROOT = HERE
 while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 
-OUT = ROOT / "frontend" / "public" / "assets" / "units" / "rook" / "blender-render-v4-calibrated"
+OUT = ROOT / ".unit-art-output" / "rook" / "navy-blue"
 OUT.mkdir(parents=True, exist_ok=True)
 
 BOARD_TARGET = Vector((0, 0, 0.92))

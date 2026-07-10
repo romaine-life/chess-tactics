@@ -1,14 +1,8 @@
 # Unit Concepts
 
-## South Direction Lock
+## Identity Lock
 
-Accepted previews:
-- `pawn-helmet-south-concept.png`
-- `rook-south-concept.png`
-- `knight-south-concept.png`
-- `bishop-south-concept.png`
-- `queen-south-concept.png`
-- `king-south-concept.png`
+The six production identities are pawn, rook, knight, bishop, queen, and king.
 
 Direction:
 - Normal chess piece first, squad unit second.
@@ -30,46 +24,13 @@ Open polish pass:
 - Reduce ornament if it starts reading too royal, ceremonial, or character-like.
 - Keep the facing mark readable without turning pieces into full character poses.
 
-## Generated First-Pass Sprites
+## Live Asset Contract
 
-Deterministic south-facing sprites for all six pieces are generated from the
-accepted public concept copies:
+Board-unit candidates and accepted frames are uploaded through Unit Art. Postgres
+owns metadata and accepted pointers; immutable PNG bytes live in the unit-assets
+storage container. Authoring tools may create local review outputs, but they do not
+write board sprites into `frontend/public`.
 
-```sh
-cd frontend
-npm run units:sprites
-```
-
-Outputs for each piece:
-- `frontend/public/assets/units/{piece}/blue/south.png`
-- `frontend/public/assets/units/{piece}/red/south.png`
-- `frontend/public/assets/units/{piece}/neutral/south.png`
-- `frontend/public/assets/units/{piece}/extraction-report.json`
-- `frontend/public/assets/units/extraction-report.json`
-
-The extraction is a first-pass matte, not hand cleanup: it uses color salience
-and edge-connected dark-background removal. Dark outer shadow pixels can be
-lost, and small dark halo pixels near protected sprite colors can remain. Team
-variants recolor saturated blue/cyan sprite pixels while preserving gold, white,
-black, red, and steel trim.
-
-## Directional Production Pass
-
-The current production fan-out writes concept candidates to:
-
-- `docs/art/unit-concepts/directions/{piece}/{direction}.png`
-- `frontend/public/assets/units/direction-concepts/{piece}/{direction}.png`
-
-Directions are:
-
-- `north`
-- `north-east`
-- `east`
-- `south-east`
-- `south`
-- `south-west`
-- `west`
-- `north-west`
-
-The south concept remains the source of truth for identity. Directional concepts
-are reviewed as contact sheets before any runtime sprite pipeline consumes them.
+Every candidate requires six palettes and eight directions. Acceptance publishes
+the complete asset atomically while the stable piece-family identity remains the
+same.

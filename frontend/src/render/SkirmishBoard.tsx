@@ -20,6 +20,7 @@ import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
 import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay, type ResolvedWallOverlay } from '../core/featureAutotile';
 import { wallArtSrcs } from '../core/wallArt';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
+import { unitAnchorFraction, unitAssetById } from '../ui/unitCatalog';
 import { boardBounds, boardDrawOps, type BakeBounds, type BoardDrawOp } from '@chess-tactics/board-render';
 
 const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
@@ -399,7 +400,6 @@ const ghostScaleFor = (count: number): number => (count >= 3 ? 0.5 : count === 2
 
 const UNIT_SEAT_W = 72;
 const UNIT_SEAT_H = 86;
-const UNIT_SEAT_OFFSET_Y = 0.78;
 const SCENE_BOUNDS_PAD = 96;
 const ARRIVAL_ANIM_MS = 620;
 
@@ -474,10 +474,12 @@ function pieceOp(
   const scale = options.scale ?? 1;
   const dw = UNIT_SEAT_W * scale;
   const dh = UNIT_SEAT_H * scale;
+  const unit = unitAssetById(piece.type);
+  if (!unit) throw new Error(`live unit metadata is missing: ${piece.type}`);
   return {
     src,
-    dx: seat.left - dw / 2,
-    dy: seat.top - UNIT_SEAT_H * UNIT_SEAT_OFFSET_Y + (options.dy ?? 0),
+    dx: seat.left - dw * unitAnchorFraction(unit.unitAnchorX),
+    dy: seat.top - dh * unitAnchorFraction(unit.unitAnchorY) + (options.dy ?? 0),
     dw,
     dh,
     z: objectBaseZIndex(piece),

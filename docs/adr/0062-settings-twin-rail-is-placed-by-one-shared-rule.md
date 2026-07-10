@@ -119,7 +119,7 @@ sets `margin-inline-start` — so the #339 class of per-surface rail fork cannot
 - Instance of [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md); relates to
   the rail↔rows alignment intent of [ADR-0028](0028-settings-row-symmetric-side-padding.md) /
   [ADR-0031](0031-ui-spacing-system.md) and the reset-to-baseline discipline of
-  [ADR-0057](0057-studio-tuning-surfaces-reset-to-committed-baseline.md).
+  [ADR-0057](0057-studio-tuning-surfaces-reset-to-authoritative-baseline.md).
 - Tuner contract: `frontend/src/ui/dressing/mmLive.ts` (`MM_LIVE`) + `mmLive.test.ts`.
 - Shared rule: `.settings-shell` in `frontend/src/style.css`; consumers `MainMenu.tsx`,
   `Settings.tsx`, `Campaign.tsx`.

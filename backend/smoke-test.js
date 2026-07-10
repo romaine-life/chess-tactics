@@ -475,7 +475,7 @@ async function main() {
   const createdUnit = await request('POST', '/api/admin/unit-assets', adminJson, JSON.stringify(unitMetadata), 5000);
   if (createdUnit.statusCode !== 201) throw new Error(`Unit candidate create failed: ${createdUnit.statusCode} ${createdUnit.body}`);
   const firstUnitId = JSON.parse(createdUnit.body).assetId;
-  const pawnPng = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'public', 'assets', 'units', 'pawn', 'navy-blue', 'south.png'));
+  const pawnPng = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'public', 'assets', 'units', 'pawn', 'portrait', 'navy-blue.png'));
   const uploadedUnit = await request(
     'PUT',
     `/api/admin/unit-assets/${firstUnitId}/sprites/navy-blue/south`,
@@ -540,9 +540,42 @@ async function main() {
     'POST', `/api/admin/unit-assets/${secondUnitId}/accept`, { ...adminJson, 'if-match': '"0"' }, '{}', 5000,
   );
   if (acceptedUnit.statusCode !== 200) throw new Error(`Complete unit acceptance failed: ${acceptedUnit.statusCode} ${acceptedUnit.body}`);
+  // A renderer catalog is an all-six contract. Seed the other five accepted
+  // families directly in this disposable database using the same immutable PNG.
+  for (const family of ['rook', 'knight', 'bishop', 'queen', 'king']) {
+    const assetId = crypto.randomUUID();
+    await queryDb(
+      `INSERT INTO unit_assets (
+         id, family, label, method, notes, status, footprint_shape,
+         source_canvas_width, source_canvas_height, source_footprint_px,
+         anchor_x, anchor_y, row_revision, updated_by
+       ) SELECT $1, $2, initcap($2), 'Smoke seed', '', 'candidate', footprint_shape,
+                source_canvas_width, source_canvas_height, source_footprint_px,
+                anchor_x, anchor_y, 1, 'smoke-test'
+           FROM unit_assets WHERE id = $3`,
+      [assetId, family, secondUnitId],
+    );
+    await queryDb(
+      `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
+       SELECT $1, palette, direction, sha256, blob_key, width, height, byte_length
+         FROM unit_sprites WHERE asset_id = $2`,
+      [assetId, secondUnitId],
+    );
+    await queryDb(
+      `UPDATE unit_families SET accepted_asset_id = $2, row_revision = row_revision + 1,
+         updated_at = now(), updated_by = 'smoke-test' WHERE family = $1`,
+      [family, assetId],
+    );
+  }
+  await queryDb('UPDATE unit_catalog_state SET revision = revision + 1, updated_at = now() WHERE singleton = true');
   const acceptedCatalog = JSON.parse((await get('/api/unit-catalog')).body);
   const acceptedPawn = acceptedCatalog.families.find((family) => family.family === 'pawn');
-  if (acceptedPawn.acceptedAssetId !== secondUnitId || acceptedPawn.displayScalePercent !== 112) {
+  if (
+    acceptedPawn.acceptedAssetId !== secondUnitId ||
+    acceptedPawn.displayScalePercent !== 112 ||
+    acceptedCatalog.families.some((family) => !family.acceptedAssetId) ||
+    acceptedCatalog.assets.filter((asset) => asset.accepted && asset.complete).length !== 6
+  ) {
     throw new Error(`Accepted pawn pointer/scale mismatch: ${JSON.stringify(acceptedPawn)}`);
   }
   const rejectAcceptedArchive = await request(

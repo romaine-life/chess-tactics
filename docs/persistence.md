@@ -8,9 +8,8 @@ wiped on every restart/rollout — a latent data-loss bug, now fixed).
 
 ## What is stored
 
-Four document stores, each a Postgres table with relational metadata columns
-plus a `jsonb` `body`/`data` column (the migration lives inline in
-`backend/server.js`, `MIGRATIONS`):
+Durable document and live-content tables are created by the inline migrations in
+`backend/server.js`:
 
 | Table | Scope | Endpoint | Auth |
 | --- | --- | --- | --- |
@@ -18,15 +17,19 @@ plus a `jsonb` `body`/`data` column (the migration lives inline in
 | `campaign_workspaces` | one row per signed-in owner | `/api/campaign-workspace` | sign-in required |
 | `campaigns` | per signed-in owner (`PK (owner_email, id)`) | `/api/campaigns`, `/api/campaigns/:id`, `/api/campaigns/:id/levels` | sign-in required |
 | `design_portfolios` | global, by id | `/api/design-portfolios/:id` | GET public, PUT requires sign-in (designer) |
+| `unit_families` / `unit_assets` / `unit_sprites` | global live Unit Art catalog | `/api/unit-catalog`, `/api/admin/unit-assets` | GET public, mutations require admin |
+| `unit_catalog_state` / `unit_asset_events` | Unit Art revision and audit history | internal | admin mutations write them |
 
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or
 overwrite the other's. Writes upsert and bump a `revision`.
 
-Art assets are **not** database records. PNG/WebP/AVIF/font files belong in the
-repo under `frontend/public/assets`, with catalog metadata in the committed
-`frontend/src/asset-catalog.json`. Postgres stores game/design data documents,
-not image bytes.
+Most code-owned PNG/WebP/AVIF/font files remain in the repo under
+`frontend/public/assets`. Board-unit art is the deliberate live-content exception:
+Postgres stores its accepted pointers, candidate metadata, geometry, revisions,
+and sprite hashes; the private `unit-assets` Blob container stores the immutable
+PNG bytes. The backend serves those bytes through same-origin content-addressed
+routes. Postgres does not store image bytes.
 
 What is **not** in Postgres (deliberate, see "Boundaries"): the `lobbies`
 matchmaking map.

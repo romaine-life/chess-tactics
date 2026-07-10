@@ -26,7 +26,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 ROOT = HERE
 while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
-FRONTEND_UNITS = ROOT / "frontend" / "public" / "assets" / "units"
+FRONTEND_UNITS = ROOT / ".unit-art-output"
 
 # Board-calibrated camera (same angle as the production rook / tile view).
 BOARD_DISTANCE = 5.0

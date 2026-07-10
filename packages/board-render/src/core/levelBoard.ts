@@ -19,7 +19,7 @@ import { decodeBoard, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMa
 import { parseEdgeKey, isOrthogonalPair, isNorthWestBoundaryWallEdge, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
 import { studioFamilies } from '../ui/studioBoard';
 import { isUnitPalette } from './pieces';
-import { productionUnitForFamily, unitFamilyForId, type Faction } from '../ui/unitCatalog';
+import { unitFamilyForId, type Faction } from '../ui/unitCatalog';
 
 // Family → terrain material, mirroring game/setup.ts. The six tile families map 1:1 onto
 // the playable terrain materials; any unmapped (decorative) family falls back to grass.
@@ -137,9 +137,8 @@ const tileIdForTerrain = (terrain: TerrainType): string | undefined => {
   return defaultTileOfFamily(family);
 };
 
-// Board data stores the stable family id. Legacy art-derived ids still resolve
-// through unitFamilyForId so old board codes remain editable indefinitely.
-const unitIdForType = (type: string): string | undefined => productionUnitForFamily(type)?.family;
+// Board data stores the stable family id; art records never enter gameplay data.
+const unitIdForType = (type: string): string | undefined => unitFamilyForId(type);
 const typeOfUnitId = (unitId: string): LevelUnit['type'] | undefined =>
   unitFamilyForId(unitId) as LevelUnit['type'] | undefined;
 

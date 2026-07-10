@@ -6,7 +6,7 @@ The mitre was hand-fitted onto the bishop's head in Blender, so the source of tr
 the assembled `bishop_mitre.blend` (navy Staunton bishop FBX + mitre OBJ, positioned,
 rigged to an empty, true-isometric contract camera baked in). This opens it, renders
 the 8 directions, and prints the seating anchor.
-Output -> frontend/public/assets/units/bishop/blender-render-mitre/<direction>.png
+Output -> .unit-art-output/bishop/navy-blue/<direction>.png
 
 The mitre's front peak gives the bishop a per-direction facing (peak -> game-south at yaw 0).
 """
@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent
 while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 BLEND = str(ROOT / "docs/art/unit-concepts/blender-units/bishop-mitre/bishop_mitre.blend")
-OUT = str(ROOT / "frontend/public/assets/units/bishop/blender-render-mitre")
+OUT = str(ROOT / ".unit-art-output/bishop/navy-blue")
 os.makedirs(OUT, exist_ok=True)
 
 bpy.ops.wm.open_mainfile(filepath=BLEND)

@@ -99,17 +99,18 @@ export function UnitAssetManager({
     setStatus('Creating');
     try {
       const base = source;
+      if (!base) throw new Error(`accepted live asset is missing for ${selectedUnit.family}`);
       const input: UnitAssetMetadataInput = {
         family: selectedUnit.family,
         label: `${familyLabels[selectedUnit.family]} candidate`,
         method: 'Generated',
         notes: '',
-        footprintShape: base?.footprint.shape ?? selectedUnit.footprint.shape,
-        sourceCanvasWidth: base?.footprint.sourceCanvasWidth ?? selectedUnit.footprint.sourceCanvasPx,
-        sourceCanvasHeight: base?.footprint.sourceCanvasHeight ?? selectedUnit.footprint.sourceCanvasHeightPx ?? selectedUnit.footprint.sourceCanvasPx,
-        sourceFootprintPx: base?.footprint.sourceFootprintPx ?? selectedUnit.footprint.sourceFootprintPx,
-        anchorX: base?.anchor.x ?? Number.parseFloat(selectedUnit.unitAnchorX || '50') / 100,
-        anchorY: base?.anchor.y ?? Number.parseFloat(selectedUnit.unitAnchorY || '78') / 100,
+        footprintShape: base.footprint.shape,
+        sourceCanvasWidth: base.footprint.sourceCanvasWidth,
+        sourceCanvasHeight: base.footprint.sourceCanvasHeight,
+        sourceFootprintPx: base.footprint.sourceFootprintPx,
+        anchorX: base.anchor.x,
+        anchorY: base.anchor.y,
       };
       const created = await createUnitAsset(input);
       commitCatalog(created.catalog);
