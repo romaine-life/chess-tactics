@@ -10,6 +10,8 @@ export interface MacroTileAsset {
   rows: number;
   src: string;
   weight: number;
+  /** Shared material motif across footprint sizes; generation exhausts these before repeating. */
+  variantId?: string;
 }
 
 export interface MacroTilePlacement {
@@ -27,10 +29,48 @@ export interface MacroTileFrame {
 
 export const DEFAULT_MACRO_TILE_DENSITY = 0.55;
 
-export const macroTileAssets: readonly MacroTileAsset[] = manifest.assets.map((asset) => ({
-  ...asset,
-  family: asset.family as TileFamilyId,
-}));
+interface MacroTileManifest {
+  footprints: Array<{ columns: number; rows: number }>;
+  families: Array<{
+    id: TileFamilyId;
+    variants: Array<{ id: string; label: string; source: string; weight?: number }>;
+  }>;
+  extras?: Array<{
+    id: string;
+    label: string;
+    family: TileFamilyId;
+    columns: number;
+    rows: number;
+    weight?: number;
+  }>;
+}
+
+const catalog = manifest as MacroTileManifest;
+
+export const macroTileAssets: readonly MacroTileAsset[] = [
+  ...catalog.families.flatMap((family) => catalog.footprints.flatMap((footprint) =>
+    family.variants.map((variant) => ({
+      id: `${family.id}-${variant.id}-${footprint.columns}x${footprint.rows}`,
+      label: `${variant.label} ${footprint.columns}x${footprint.rows}`,
+      family: family.id,
+      columns: footprint.columns,
+      rows: footprint.rows,
+      src: `/assets/tiles/macro-tiles/${family.id}-${variant.id}-${footprint.columns}x${footprint.rows}.png`,
+      weight: variant.weight ?? 1,
+      variantId: variant.id,
+    })),
+  )),
+  ...(catalog.extras ?? []).map((extra) => ({
+    id: extra.id,
+    label: extra.label,
+    family: extra.family,
+    columns: extra.columns,
+    rows: extra.rows,
+    src: `/assets/tiles/macro-tiles/${extra.id}.png`,
+    weight: extra.weight ?? 1,
+    variantId: extra.id,
+  })),
+];
 
 const assetById = new Map(macroTileAssets.map((asset) => [asset.id, asset]));
 
@@ -149,6 +189,10 @@ function weightedAsset(assets: readonly MacroTileAsset[], next: () => number): M
   return assets[assets.length - 1];
 }
 
+function footprintKey(asset: Pick<MacroTileAsset, 'columns' | 'rows'>): string {
+  return `${asset.columns}x${asset.rows}`;
+}
+
 function groupKey(index: number, family: TileFamilyId, sectionOf: ArrayLike<number> | undefined): string {
   const section = sectionOf?.[index];
   return typeof section === 'number' && section >= 0 ? `section:${section}` : `family:${family}`;
@@ -229,23 +273,28 @@ export function generateMacroTiles({
 
     const availableAssets = familyAssets.filter((asset) => (candidatesByAsset.get(asset.id)?.length ?? 0) > 0);
     if (availableAssets.length === 0) continue;
-    const averageArea = availableAssets.reduce((sum, asset) => sum + asset.columns * asset.rows, 0) / availableAssets.length;
     // Density is the requested macro-owned share of the region. Non-overlapping footprints cap
     // the achievable result naturally; do not silently damp the user's control a second time.
-    const expected = group.cells.size * Math.max(0, Math.min(1, density)) / averageArea;
-    let count = Math.floor(expected);
-    if (next() < expected - count) count += 1;
-    const usedAssetIds = new Set<string>();
+    const targetArea = group.cells.size * Math.max(0, Math.min(1, density));
+    let ownedArea = 0;
+    const usedVariantIds = new Set<string>();
+    let footprintCycle: string[] = [];
 
-    for (let placed = 0; placed < count; placed += 1) {
+    while (ownedArea < targetArea) {
       const choices = availableAssets.filter((asset) => (candidatesByAsset.get(asset.id)?.length ?? 0) > 0);
       let accepted: Candidate | undefined;
       while (choices.length > 0 && !accepted) {
-        const freshChoices = choices.filter((asset) => !usedAssetIds.has(asset.id));
-        const preferredChoices = freshChoices.length > 0 ? freshChoices : choices;
-        const largestArea = Math.max(...preferredChoices.map((asset) => asset.columns * asset.rows));
-        const largestChoices = preferredChoices.filter((asset) => asset.columns * asset.rows === largestArea);
-        const asset = weightedAsset(largestChoices, next);
+        const availableFootprints = [...new Set(choices.map(footprintKey))];
+        footprintCycle = footprintCycle.filter((key) => availableFootprints.includes(key));
+        if (footprintCycle.length === 0) {
+          footprintCycle = [...availableFootprints];
+          shuffle(footprintCycle, next);
+        }
+        const selectedFootprint = footprintCycle.pop()!;
+        const sameFootprint = choices.filter((asset) => footprintKey(asset) === selectedFootprint);
+        const freshChoices = sameFootprint.filter((asset) => !usedVariantIds.has(asset.variantId ?? asset.id));
+        const preferredChoices = freshChoices.length > 0 ? freshChoices : sameFootprint;
+        const asset = weightedAsset(preferredChoices, next);
         const candidates = candidatesByAsset.get(asset.id)!;
         while (candidates.length > 0) {
           const candidate = candidates.pop()!;
@@ -258,7 +307,8 @@ export function generateMacroTiles({
       if (!accepted) break;
 
       placements.push({ assetId: accepted.asset.id, x: accepted.x, y: accepted.y });
-      usedAssetIds.add(accepted.asset.id);
+      usedVariantIds.add(accepted.asset.variantId ?? accepted.asset.id);
+      ownedArea += accepted.cells.length;
       for (const index of accepted.cells) reserved.add(index);
     }
   }

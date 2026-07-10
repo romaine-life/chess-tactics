@@ -1,103 +1,72 @@
 {
-  "version": 1,
-  "assets": [
+  "version": 2,
+  "footprints": [
+    { "columns": 2, "rows": 2 },
+    { "columns": 2, "rows": 3 },
+    { "columns": 3, "rows": 3 },
+    { "columns": 4, "rows": 3 },
+    { "columns": 4, "rows": 4 }
+  ],
+  "families": [
     {
-      "id": "grass-meadow-drift-4x4",
-      "label": "Meadow drift",
-      "family": "grass",
-      "columns": 4,
-      "rows": 4,
-      "src": "/assets/tiles/macro-tiles/grass-meadow-drift-4x4.png",
+      "id": "grass",
       "paletteMatch": 0.8,
-      "weight": 1
+      "variants": [
+        { "id": "meadow-drift", "label": "Meadow drift", "source": "grass-meadow-drift-4x4" },
+        { "id": "soft-bands", "label": "Soft grass bands", "source": "grass-soft-bands-3x3" },
+        { "id": "clover-field", "label": "Clover field", "source": "grass-clover-field" },
+        { "id": "damp-drift", "label": "Damp grass drift", "source": "grass-damp-drift" }
+      ]
     },
     {
-      "id": "grass-soft-bands-3x3",
-      "label": "Soft grass bands",
-      "family": "grass",
-      "columns": 3,
-      "rows": 3,
-      "src": "/assets/tiles/macro-tiles/grass-soft-bands-3x3.png",
+      "id": "dirt",
       "paletteMatch": 0.8,
-      "weight": 1.15
+      "variants": [
+        { "id": "worn-field", "label": "Worn earth", "source": "dirt-worn-field-4x3" },
+        { "id": "soft-wear", "label": "Soft earth wear", "source": "dirt-soft-wear-2x3" },
+        { "id": "compacted-drift", "label": "Compacted earth drift", "source": "dirt-compacted-drift-3x3" },
+        { "id": "cracked-earth", "label": "Cracked earth", "source": "dirt-cracked-earth" }
+      ]
     },
     {
-      "id": "dirt-worn-field-4x3",
-      "label": "Worn earth",
-      "family": "dirt",
-      "columns": 4,
-      "rows": 3,
-      "src": "/assets/tiles/macro-tiles/dirt-worn-field-4x3.png",
-      "paletteMatch": 0.8,
-      "weight": 1
-    },
-    {
-      "id": "dirt-soft-wear-2x3",
-      "label": "Soft earth wear",
-      "family": "dirt",
-      "columns": 2,
-      "rows": 3,
-      "src": "/assets/tiles/macro-tiles/dirt-soft-wear-2x3.png",
-      "paletteMatch": 0.8,
-      "weight": 1.15
-    },
-    {
-      "id": "dirt-compacted-drift-3x3",
-      "label": "Compacted earth drift",
-      "family": "dirt",
-      "columns": 3,
-      "rows": 3,
-      "src": "/assets/tiles/macro-tiles/dirt-compacted-drift-3x3.png",
-      "paletteMatch": 0.8,
-      "weight": 1.1
-    },
-    {
-      "id": "stone-moss-field-3x3",
-      "label": "Mossy paving",
-      "family": "stone",
-      "columns": 3,
-      "rows": 3,
-      "src": "/assets/tiles/macro-tiles/stone-moss-field-3x3.png",
+      "id": "stone",
       "paletteMatch": 0.6,
-      "weight": 1
+      "variants": [
+        { "id": "moss-field", "label": "Mossy paving", "source": "stone-moss-field-3x3" },
+        { "id": "weathered-flagstone", "label": "Weathered flagstone", "source": "stone-weathered-flagstone" },
+        { "id": "old-cobble", "label": "Old cobblestone", "source": "stone-old-cobble" },
+        { "id": "dark-slate", "label": "Dark slate", "source": "stone-dark-slate" }
+      ]
     },
     {
-      "id": "pebble-fine-drift-3x3",
-      "label": "Fine pebble drift",
-      "family": "pebble",
-      "columns": 3,
-      "rows": 3,
-      "src": "/assets/tiles/macro-tiles/pebble-fine-drift-3x3.png",
+      "id": "pebble",
       "paletteMatch": 0.75,
-      "weight": 1.1
+      "variants": [
+        { "id": "fine-drift", "label": "Fine pebble drift", "source": "pebble-fine-drift-3x3" },
+        { "id": "alluvial-field", "label": "Alluvial pebble field", "source": "pebble-alluvial-field-4x4" },
+        { "id": "warm-gravel", "label": "Warm gravel", "source": "pebble-warm-gravel" },
+        { "id": "moss-gravel", "label": "Moss-flecked gravel", "source": "pebble-moss-gravel" }
+      ]
     },
     {
-      "id": "pebble-alluvial-field-4x4",
-      "label": "Alluvial pebble field",
-      "family": "pebble",
-      "columns": 4,
-      "rows": 4,
-      "src": "/assets/tiles/macro-tiles/pebble-alluvial-field-4x4.png",
+      "id": "sand",
       "paletteMatch": 0.75,
-      "weight": 1
-    },
-    {
-      "id": "sand-soft-bands-3x3",
-      "label": "Soft sand bands",
-      "family": "sand",
-      "columns": 3,
-      "rows": 3,
-      "src": "/assets/tiles/macro-tiles/sand-soft-bands-3x3.png",
-      "paletteMatch": 0.75,
-      "weight": 1.15
-    },
+      "variants": [
+        { "id": "soft-bands", "label": "Soft sand bands", "source": "sand-soft-bands-3x3" },
+        { "id": "golden-ripples", "label": "Golden ripples", "source": "sand-golden-ripples" },
+        { "id": "pale-dune", "label": "Pale dune", "source": "sand-pale-dune" },
+        { "id": "crosswind-ripples", "label": "Crosswind ripples", "source": "sand-crosswind-ripples" }
+      ]
+    }
+  ],
+  "extras": [
     {
       "id": "sand-wind-ripples-4x3",
       "label": "Wind-rippled sand",
       "family": "sand",
       "columns": 4,
       "rows": 3,
-      "src": "/assets/tiles/macro-tiles/sand-wind-ripples-4x3.png",
+      "source": "sand-wind-ripples-4x3",
       "paletteMatch": 0.75,
       "weight": 1
     }

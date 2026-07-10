@@ -67,3 +67,9 @@ and server thumbnail plan all consume the same persisted placements and catalog.
 macrotile catalog intentionally omits water: water joins only after macrotiles can animate in
 lockstep with the terrain family, so a larger tile never turns a living water field into a frozen
 slab.
+
+The static catalog is a declared matrix, not a hand-maintained flat list. Grass, dirt, stone,
+pebble, and sand each provide four curated material motifs at `2x2`, `2x3`, `3x3`, `4x3`, and
+`4x4`; the runtime and bake expand that matrix into concrete asset IDs. Generate cycles through
+the footprint sizes that fit a region and uses each motif before repeating it, so adding catalog
+depth produces visible board variety instead of repeatedly selecting the largest available tile.

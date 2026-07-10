@@ -1,0 +1,83 @@
+{
+  "provider": "PixelLab Tiles Pro",
+  "settings": {
+    "tileType": "square_topdown",
+    "tileSize": 128,
+    "tileHeight": 128,
+    "view": "top-down",
+    "viewAngle": 90,
+    "depthRatio": 0,
+    "outlineMode": "segmentation"
+  },
+  "runs": [
+    {
+      "family": "grass",
+      "jobId": "66de4837-ed2c-4b06-bce4-e3d378d1f003",
+      "seed": 8473,
+      "selected": {
+        "tile_2.png": "grass-clover-field.png",
+        "tile_4.png": "grass-damp-drift.png"
+      }
+    },
+    {
+      "family": "dirt",
+      "jobId": "01b3428c-ba1b-4a9f-bdc1-f0399288191b",
+      "seed": 8431,
+      "selected": {
+        "tile_2.png": "dirt-cracked-earth.png"
+      }
+    },
+    {
+      "family": "stone",
+      "jobId": "13b30cb5-d5fb-4b45-880e-afd0f73bad3e",
+      "seed": 8443,
+      "selected": {
+        "tile_0.png": "stone-weathered-flagstone.png",
+        "tile_1.png": "stone-old-cobble.png",
+        "tile_3.png": "stone-dark-slate.png"
+      },
+      "rejected": {
+        "tile_4.png": "Fourteen transparent source pixels violated the fully-owned material-source contract."
+      }
+    },
+    {
+      "family": "pebble",
+      "jobId": "e03b338e-5ec7-463e-b2cc-aa197e28e7d2",
+      "seed": 8491,
+      "selected": {
+        "tile_3.png": "pebble-warm-gravel.png",
+        "tile_5.png": "pebble-moss-gravel.png"
+      },
+      "notes": "This reroll explicitly requested an opaque ground matrix between stones."
+    },
+    {
+      "family": "sand",
+      "jobId": "ca2ae6ad-7e21-493c-8a81-f1746bcc5fd4",
+      "seed": 8467,
+      "selected": {
+        "tile_0.png": "sand-golden-ripples.png",
+        "tile_1.png": "sand-pale-dune.png",
+        "tile_4.png": "sand-crosswind-ripples.png"
+      },
+      "rejected": {
+        "tile_2.png": "Fully transparent candidate.",
+        "tile_3.png": "Fully transparent candidate.",
+        "tile_5.png": "Fully transparent candidate."
+      }
+    }
+  ],
+  "rejectedRuns": [
+    {
+      "family": "grass",
+      "jobId": "f01b33d1-df05-4d94-922d-6c00438a93e3",
+      "seed": 8422,
+      "reason": "Style-image mode unexpectedly returned 32x32 isometric metadata instead of the requested 128x128 top-down material source."
+    },
+    {
+      "family": "pebble",
+      "jobId": "04466d5b-1e33-4fa7-9305-2a5424cfc340",
+      "seed": 8459,
+      "reason": "Every candidate contained transparent pixels, so the batch was replaced rather than repaired after generation."
+    }
+  ]
+}

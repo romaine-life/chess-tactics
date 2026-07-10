@@ -41,7 +41,27 @@ def parse_args() -> argparse.Namespace:
 
 def load_assets(ids: list[str]) -> list[dict]:
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
-    assets = manifest.get('assets', [])
+    footprints = manifest.get('footprints', [])
+    assets = []
+    for family in manifest.get('families', []):
+        family_id = family['id']
+        for footprint in footprints:
+            columns = int(footprint['columns'])
+            rows = int(footprint['rows'])
+            for variant in family.get('variants', []):
+                tile_id = f"{family_id}-{variant['id']}-{columns}x{rows}"
+                assets.append({
+                    'id': tile_id,
+                    'family': family_id,
+                    'columns': columns,
+                    'rows': rows,
+                    'source': variant['source'],
+                    'paletteMatch': family.get('paletteMatch', 0.8),
+                })
+    assets.extend(manifest.get('extras', []))
+    asset_ids = [asset.get('id') for asset in assets]
+    if len(asset_ids) != len(set(asset_ids)):
+        raise SystemExit('Macrotile manifest expands to duplicate asset ids.')
     if ids:
         wanted = set(ids)
         assets = [asset for asset in assets if asset.get('id') in wanted]
@@ -200,7 +220,7 @@ def main() -> None:
         palette_match = float(asset.get('paletteMatch', 0.8))
         if columns < 2 or rows < 2:
             raise SystemExit(f'{tile_id}: macrotiles must span at least 2x2 cells.')
-        source_path = SOURCE_DIR / f'{tile_id}.png'
+        source_path = SOURCE_DIR / f"{asset.get('source', tile_id)}.png"
         if not source_path.exists():
             raise SystemExit(f'{tile_id}: missing source {source_path.relative_to(ROOT)}')
         with Image.open(source_path) as source_image:

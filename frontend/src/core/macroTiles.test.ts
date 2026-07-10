@@ -24,6 +24,19 @@ describe('macrotile geometry', () => {
     const families = [...new Set(macroTileAssets.map((asset) => asset.family))].sort();
     expect(families).toEqual(['dirt', 'grass', 'pebble', 'sand', 'stone']);
   });
+
+  it('provides at least four variants for every family and supported footprint', () => {
+    const families: TileFamilyId[] = ['dirt', 'grass', 'pebble', 'sand', 'stone'];
+    const footprints = ['2x2', '2x3', '3x3', '4x3', '4x4'];
+    for (const family of families) {
+      for (const footprint of footprints) {
+        expect(macroTileAssets.filter((asset) =>
+          asset.family === family && `${asset.columns}x${asset.rows}` === footprint,
+        ).length).toBeGreaterThanOrEqual(4);
+      }
+    }
+    expect(new Set(macroTileAssets.map((asset) => asset.id)).size).toBe(macroTileAssets.length);
+  });
 });
 
 describe('resolveMacroTilePlacements', () => {
@@ -137,6 +150,59 @@ describe('generateMacroTiles', () => {
     }, 0);
 
     expect(area(high)).toBeGreaterThan(area(low));
+  });
+
+  it('cycles through fitting footprint sizes instead of repeatedly taking the largest', () => {
+    const dimensions = [[2, 2], [2, 3], [3, 3], [4, 3], [4, 4]] as const;
+    const assets: MacroTileAsset[] = dimensions.map(([columns, rows]) => ({
+      id: `grass-${columns}x${rows}`,
+      label: `${columns}x${rows}`,
+      family: 'grass',
+      columns,
+      rows,
+      src: `/${columns}x${rows}.png`,
+      weight: 1,
+    }));
+    const placements = generateMacroTiles({
+      terrainMap: Array<TileFamilyId>(20 * 20).fill('grass'),
+      columns: 20,
+      rows: 20,
+      seed: 117,
+      density: 0.35,
+      assets,
+    });
+
+    expect(new Set(placements.map((placement) => {
+      const asset = assets.find((candidate) => candidate.id === placement.assetId)!;
+      return `${asset.columns}x${asset.rows}`;
+    }))).toEqual(new Set(['2x2', '2x3', '3x3', '4x3', '4x4']));
+  });
+
+  it('uses every material motif across footprint sizes before repeating one', () => {
+    const dimensions = [[2, 2], [2, 3], [3, 3], [4, 3], [4, 4]] as const;
+    const variants = ['a', 'b', 'c', 'd'];
+    const assets: MacroTileAsset[] = dimensions.flatMap(([columns, rows]) => variants.map((variantId) => ({
+      id: `grass-${variantId}-${columns}x${rows}`,
+      label: variantId,
+      family: 'grass',
+      columns,
+      rows,
+      src: `/${variantId}-${columns}x${rows}.png`,
+      weight: 1,
+      variantId,
+    })));
+    const placements = generateMacroTiles({
+      terrainMap: Array<TileFamilyId>(20 * 20).fill('grass'),
+      columns: 20,
+      rows: 20,
+      seed: 221,
+      density: 0.2,
+      assets,
+    });
+
+    expect(new Set(placements.map((placement) =>
+      assets.find((asset) => asset.id === placement.assetId)!.variantId,
+    ))).toEqual(new Set(variants));
   });
 
   it('uses every fitting family variant before repeating one', () => {
