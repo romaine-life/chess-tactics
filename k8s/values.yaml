@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-088415b70cd3bf8d3975de4aeae2361483c4774dd6efcd5dd545a19031272e66"
+  tag: "app-8b76dca87aa6ba20f128390fc48d22aa029edc2afb73aea15ead19cf55eed043"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Require live unit art catalog"
-  prNumber: "458"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/458"
-  commit: "c0e15de"
+  prTitle: "Add editable multi-cell terrain composites"
+  prNumber: "459"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/459"
+  commit: "0d7670e"
 
 name: chess-tactics
 namespace: chess-tactics
