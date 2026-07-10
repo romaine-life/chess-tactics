@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
+import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
 import { MODE_NAME } from '../core/objectives';
-import { loadWorkspace, loadOfficialCampaigns } from '../net/campaignWorkspace';
-import { fetchMe, goSignIn, isUnauthorized, type AuthUser } from '../net/auth';
+import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { injectStressLevels } from '../campaign/stressFixture';
@@ -319,6 +319,10 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   // /campaign or /skirmish visit this session — then there's real content at mount and
   // nothing holds; otherwise hold the fade until the officials merge settles.
   const [loaded, setLoaded] = useState(() => useCampaigns.getState().campaigns.length > 0);
+  const [userWorkspaceHydration, setUserWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [officialWorkspaceHydration, setOfficialWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const userWorkspaceReady = userWorkspaceHydration === 'ready';
+  const officialWorkspaceReady = officialWorkspaceHydration === 'ready';
   const currentWorkspace = useMemo(() => ({ campaigns, levels }), [campaigns, levels]);
   // Two tier-scoped dirty signals: a private "Save" and an official "Publish" are
   // independent acts, each with its own last-saved signature.
@@ -356,27 +360,39 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
 
   useEffect(() => {
     let active = true;
-    fetchMe().then((user) => { if (active) setMe(user); });
-    (async () => {
-      const store = useCampaigns.getState();
+    fetchMe().then((user) => {
+      if (!active) return;
+      setMe(user);
+      if (!user.signed_in) setStatus('Official campaigns shown. Sign in to author your own.');
+    }).catch(() => {});
+    void (async () => {
+      let userReady = false;
+      let officialReady = false;
       try {
-        // Officials always (for everyone), then the signed-in user's own on top.
-        store.mergeOfficial(await loadOfficialCampaigns());
+        // One shared hydration spine loads officials first and the signed-in user's workspace
+        // second. Joining it keeps a quick New Level navigation from observing the half-merged
+        // official-only store and saving over a still-loading private workspace.
+        const hydration = await ensureCampaignsHydrated();
+        userReady = hydration.userWorkspace !== 'unavailable';
+        officialReady = hydration.officialAvailable;
+        if (active && !userReady) {
+          setStatus('Your workspace could not be loaded. Reopen the Editor to retry before saving.');
+        }
+        if (active && !officialReady) {
+          setStatus('Official campaigns could not be loaded. Private editing is still available.');
+        }
+      } catch {
+        if (active) setStatus('Campaigns could not be loaded. Try again in a moment.');
       } finally {
         // The entrance holds on this flag (ADR-0051): without it the chrome fades in
         // over a false "No campaigns yet." and the list pops in when the fetch lands.
-        // Flip it as soon as the primary content is settled — the user merge below
-        // only layers rows on top.
+        // Flip it once the shared official + user hydration attempt has settled.
         if (active) setLoaded(true);
       }
       if (!active) return;
-      try {
-        store.mergeUser(await loadWorkspace());
-      } catch (e) {
-        if (active && isUnauthorized(e)) setStatus('Official campaigns shown. Sign in to author your own.');
-      }
-      if (!active) return;
-      ensureDefaultSkirmishProfileLevel();
+      setUserWorkspaceHydration(userReady ? 'ready' : 'unavailable');
+      setOfficialWorkspaceHydration(officialReady ? 'ready' : 'unavailable');
+      if (userReady) ensureDefaultSkirmishProfileLevel();
       // Dev-only perf harness: `?stress=<n>` injects a throwaway campaign of N generated levels
       // (selecting it) so scroll/thumbnail perf can be measured on a long list. No-op without the
       // flag, so it never touches normal use; the levels live only in the in-memory store.
@@ -400,6 +416,10 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
 
   // Private "Save": frictionless, writes only the user slice (officials never enter it).
   const saveUserNow = async () => {
+    if (!userWorkspaceReady) {
+      setStatus('Your workspace is unavailable. Reopen the Editor to retry before saving.');
+      return;
+    }
     try {
       await saveUserWorkspace();
       setSavedUserSig(userSliceSignature());
@@ -414,6 +434,10 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   // "Publish to all players": a distinct, confirmed, admin-gated write of ONLY the
   // official slice. The server's requireAdmin is the real gate (403 surfaces here).
   const publishOfficialNow = async () => {
+    if (!officialWorkspaceReady) {
+      setStatus('Official campaigns are unavailable. Reopen the Editor to retry before publishing.');
+      return;
+    }
     if (!(await ask({
       title: 'Publish to all players?',
       message: 'This updates the official campaigns. Every player will receive these changes the next time they play.',
@@ -433,6 +457,10 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
 
   const importCampaignFile = async (file: File | undefined) => {
     if (!file) return;
+    if (!userWorkspaceReady) {
+      setStatus('Your workspace is unavailable. Reopen the Editor to retry before importing.');
+      return;
+    }
     try {
       const parsed = JSON.parse(await file.text()) as Partial<{ campaigns: Campaign[]; levels: Record<string, Level> }>;
       const validationError = validateWorkspaceImport(parsed);
@@ -522,9 +550,10 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   const camp = isMetaCollectionSelected ? null : campaigns.find((c) => c.id === selectedCampaignId) ?? null;
   const campIsOfficial = camp?.origin === 'official';
   // readOnly is UI-derived, never trusted from a baked tag: an official campaign is
-  // read-only ONLY for non-admins. Admins edit officials in place. This drives every
-  // mutation control below.
-  const readOnly = campIsOfficial && !isAdmin;
+  // read-only for non-admins. A tier whose remote source is unavailable is also locked:
+  // retrying hydration later must never merge over interim edits made against partial data.
+  const selectedTierReady = campIsOfficial ? officialWorkspaceReady : userWorkspaceReady;
+  const readOnly = !selectedTierReady || (campIsOfficial && !isAdmin);
   const officialCampaigns = campaigns.filter((c) => c.origin === 'official');
   const userCampaigns = campaigns.filter((c) => c.origin !== 'official');
   const ownCount = userCampaigns.length;
@@ -568,9 +597,12 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
     : '/play';
   const editableCampaignsForLevel = useMemo(
     () => (isUnassignedSelected && !isSkirmishProfilesSelected && levelDoc
-      ? campaigns.filter((campaign) => !(campaign.origin === 'official' && !isAdmin) && tierOf(levelDoc.id) === tierOf(campaign.id))
+      ? campaigns.filter((campaign) => (
+        (campaign.origin === 'official' ? officialWorkspaceReady && isAdmin : userWorkspaceReady)
+        && tierOf(levelDoc.id) === tierOf(campaign.id)
+      ))
       : []),
-    [campaigns, isAdmin, isSkirmishProfilesSelected, isUnassignedSelected, levelDoc],
+    [campaigns, isAdmin, isSkirmishProfilesSelected, isUnassignedSelected, levelDoc, officialWorkspaceReady, userWorkspaceReady],
   );
 
   useEffect(() => {
@@ -603,6 +635,10 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   };
 
   const selectSkirmishProfilesCollection = () => {
+    if (!userWorkspaceReady) {
+      setStatus('Your workspace is unavailable. Reopen the Editor to retry.');
+      return;
+    }
     ensureDefaultSkirmishProfileLevel();
     setSelectedCollection('skirmish-profiles');
     const selectedIsStillProfile = selectedLevelId && profileLevels.some((level) => level.id === selectedLevelId);
@@ -615,6 +651,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
     if (!levelDoc) return;
     const target = campaigns.find((campaign) => campaign.id === campaignId);
     if (!target) return;
+    if (target.origin === 'official' ? !officialWorkspaceReady || !isAdmin : !userWorkspaceReady) return;
     useCampaigns.getState().attachLevelToCampaign(campaignId, levelDoc.id);
     setSelectedCollection('campaign');
     setStatus(`Attached "${levelDoc.name}" to ${target.name}. Save to keep this change.`);
@@ -650,6 +687,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                         onSelect={() => selectCampaignCollection(campaign.id)}
                         onFavorite={(event) => {
                           event.stopPropagation();
+                          if (!officialWorkspaceReady || !isAdmin) return;
                           useCampaigns.getState().toggleCampaignFavorite(campaign.id);
                         }}
                       />
@@ -672,6 +710,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                         onSelect={() => selectCampaignCollection(campaign.id)}
                         onFavorite={(event) => {
                           event.stopPropagation();
+                          if (!userWorkspaceReady) return;
                           useCampaigns.getState().toggleCampaignFavorite(campaign.id);
                         }}
                       />
@@ -696,19 +735,26 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                 />
               </div>
             </KitScroll>
-            {/* Pinned rail footer — the workspace verbs (whole-workspace / collection scope):
-                New · Import · Save · Publish · Sign-in · status. Save keeps its exact gating. */}
+            {/* Pinned rail footer — creation first, then workspace verbs (whole-workspace /
+                collection scope): New Level · New Campaign · Import · Save · Publish · Sign-in ·
+                status. Starting a standalone level never requires a hydrated user workspace. */}
             <div className="ce-rail-actions">
               <SettingsButton
+                data-testid="new-level-shortcut"
+                href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`}
+              >+ New Level</SettingsButton>
+              <SettingsButton
                 data-testid="new-campaign"
+                disabled={!userWorkspaceReady}
                 onClick={() => {
+                  if (!userWorkspaceReady) return;
                   useCampaigns.getState().newCampaign();
                   setSelectedCollection('campaign');
                 }}
               >+ New Campaign</SettingsButton>
-              <SettingsButton onClick={() => importInputRef.current?.click()}>Import</SettingsButton>
-              <SettingsButton tone="primary" data-testid="save-workspace" disabled={!userDirty} onClick={() => void saveUserNow()}>Save</SettingsButton>
-              {isAdmin && officialDirty ? (
+              <SettingsButton disabled={!userWorkspaceReady} onClick={() => importInputRef.current?.click()}>Import</SettingsButton>
+              <SettingsButton tone="primary" data-testid="save-workspace" disabled={!userWorkspaceReady || !userDirty} onClick={() => void saveUserNow()}>Save</SettingsButton>
+              {isAdmin && officialWorkspaceReady && officialDirty ? (
                 <SettingsButton tone="primary" data-testid="publish-officials" onClick={() => void publishOfficialNow()}>Publish to all players</SettingsButton>
               ) : null}
               {me && !me.signed_in ? (
@@ -774,9 +820,6 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                           />
                         ))}
                       </div>
-                      <div className="ce-section-action">
-                        <SettingsButton href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`}>+ New Board</SettingsButton>
-                      </div>
                     </SettingsSection>
                   ) : camp ? (
                     <>
@@ -832,7 +875,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                       <SettingsSection title="Campaign Actions">
                         <SettingsRow title="Duplicate" description="Copy this campaign and its levels into a new private campaign.">
                           <SettingsButton
-                            disabled={camp.origin === 'official'}
+                            disabled={camp.origin === 'official' || readOnly}
                             onClick={() => {
                               useCampaigns.getState().duplicateCampaign(camp.id);
                               setSelectedCollection('campaign');
@@ -840,7 +883,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                           >Duplicate</SettingsButton>
                         </SettingsRow>
                         <SettingsRow title="Export" description="Download the workspace (your campaigns + levels) as JSON.">
-                          <SettingsButton disabled={!campaigns.length} onClick={exportWorkspace}>Export</SettingsButton>
+                          <SettingsButton disabled={!userWorkspaceReady || !campaigns.length} onClick={exportWorkspace}>Export</SettingsButton>
                         </SettingsRow>
                         <SettingsRow title="Delete campaign" description="Remove this campaign from the workspace on the next save.">
                           <SettingsButton tone="danger" disabled={readOnly} onClick={() => confirmDeleteCampaign(camp)}>Delete</SettingsButton>
