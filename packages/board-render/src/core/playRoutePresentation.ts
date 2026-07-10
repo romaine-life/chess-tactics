@@ -26,7 +26,6 @@ function firstValue(...values: Array<string | null | undefined>): string | null 
 
 export function playRouteScreenName(input: PlayRouteScreenNameInput = {}): string {
   const path = input.path || '/play';
-  if (path === '/skirmish') return 'Skirmish';
   if (path !== '/play') return 'Skirmish';
 
   const search = input.search ?? null;

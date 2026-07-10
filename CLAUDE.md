@@ -41,8 +41,8 @@ and don't tell the user screenshots are impossible. Use the helper below.
    Examples:
    ```
    # one element off a REAL screen — small, exact, no fixture needed:
-   npm run shot -- <vite-url>/skirmish --select '[data-testid=skirmish-board]'
-   npm run shot -- <vite-url>/skirmish --select '.skirmish-board-unit' --out tmp-shots/unit.png
+   npm run shot -- <vite-url>/play/select/skirmish --select '.menu-dest'
+   npm run shot -- '<vite-url>/play?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge' --select '.skirmish-board-unit' --out tmp-shots/unit.png
    # whole viewport / a small fixture page:
    npm run shot -- <vite-url>/unit-studio --size 1200x800
    ```

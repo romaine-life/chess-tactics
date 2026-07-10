@@ -1,13 +1,13 @@
 # Art-Backed UI Bridge
 
-This document describes the current bridge between the approved screen renders
-and the production web app.
+This document records the historical bridge between the approved screen renders
+and the production web app. The live app has since moved to the shared DOM/9-slice
+kit governed by the current UI ADRs. The concept renders remain explicit visual
+references; they are not the production screen architecture.
 
-The UI overhaul is intentionally using live bridge screens as the normal app
-surface while approved renders remain available as explicit references. This
-keeps the work browser-first, lets reviewers see unfinished slots clearly, and
-prevents the old utility UI from being mistaken for the target experience. It is
-not the final component system.
+Current player navigation is recorded in ADR-0074: one main-menu **Play** control
+opens `/play/select/skirmish`, `/play/select/levels`, or
+`/play/select/campaign/<id>`, while exact `/play?...` remains the live board.
 
 ## Contract
 
@@ -54,10 +54,10 @@ rectangles over the 16:10 artboard.
 
 ## Review URLs
 
-- `/` and `/main-menu` show the live DOM main menu bridge, with accepted button
-  row assets, the accepted title artwork, the generated no-board scenic
-  background, a
-  real art-backed account/settings shell. The live route does not show a
+- `/` and `/main-menu` show the live DOM main menu with the four-entry
+  Play / Editor / Lobbies / Settings rail, the accepted title treatment, the
+  generated no-board scenic background, and the shared account/settings shell.
+  The live route does not show a
   daily/news area, bottom dock, fake dock actions, a baked board in the
   background, or a separate battlefield preview panel.
 - `/main-menu/skeleton` also opens the live DOM main menu bridge.
@@ -65,9 +65,9 @@ rectangles over the 16:10 artboard.
 - `/design/main-menu` opens the main menu chrome review board. It renders each
   converted slot's live component as a specimen next to its approved render
   crop, rather than comparing a candidate bitmap.
-- `/campaigns` opens the art-backed campaign editor (concept render + live hotspots).
-- `/level-editor` opens the art-backed level editor (concept render + live hotspots).
-- `/skirmish` opens the art-backed skirmish screen (concept render + live hotspots).
+- `/editor` opens the live campaign/content editor.
+- `/editor/level` opens the live level editor.
+- `/play/select/*` opens the shared live Play selector; exact `/play?...` opens a selected board.
 - `/design/campaigns/render` opens the campaign editor concept render.
 - `/design/level-editor/render` opens the level editor concept render.
 - `/design/skirmish/render` opens the skirmish concept render.
@@ -78,21 +78,16 @@ map. For example, use `/design/main-menu/render/hotspots` or
 
 ## What Is Live
 
-The main menu, campaign editor, level editor, and skirmish now use live bridge
-surfaces by default. The main menu uses a generated no-board scenic background image
-behind the live bridge. The mode button family uses accepted production row
-assets with live HTML labels overlaid; the brand lockup uses the accepted title
-artwork; the profile area is a real account/settings shell backed by generated
-chrome. Daily/news has been removed from the current main-menu target. The
-bottom dock has also been removed for now because it duplicated the primary
-mode buttons without a distinct product purpose. There is no
-separate battlefield preview panel on the main menu route. Other labeled slots on the editor and
-skirmish screens are intentionally unfinished.
+The main menu, Play selector, editor, level editor, and live board are real DOM
+surfaces backed by the shared kit. The main menu uses the generated no-board scenic
+background behind its four-entry rail. Play reuses that shell and keeps Skirmish and
+Levels pinned above the scrolling Campaign collection. Daily/news and the duplicate
+bottom dock remain removed. There is no separate battlefield preview panel on the
+main-menu route.
 
 Current main menu acceptance state is tracked in
-[main-menu-acceptance.md](main-menu-acceptance.md). In short: the generated mode
-button asset family, upper-left brand/title artwork, and art-backed live bridge
-approach are settled; the scenic background is accepted; daily/news is removed;
+[main-menu-acceptance.md](main-menu-acceptance.md). In short: the four-entry mode
+rail, invariant title bar, shared kit, and scenic background are settled; daily/news is removed;
 the battlefield layer is out of scope for this pass; profile/account and the
 desktop composition still need production review.
 
@@ -115,7 +110,7 @@ loop when adjusting them:
 
 Keep hotspot labels short because they are also used as accessibility labels.
 
-## Decomposition Roadmap
+## Historical Decomposition Roadmap
 
 Replace the bridge from the inside out:
 

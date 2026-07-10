@@ -9,7 +9,7 @@ const campaignEditorSource = readFileSync(new URL('./CampaignEditor.tsx', import
 
 describe('new-level shortcut and campaign assignment controls', () => {
   it('pins one New Level shortcut above New Campaign in the Editor rail', () => {
-    expect(menuSource).toContain("new Set(['level-editor'])");
+    expect(menuSource).toContain("new Set(['solo-skirmish', 'level-editor'])");
     expect(menuSource).not.toContain("'level-editor': '/editor/level?returnTo=%2F'");
     expect(menuSource).not.toContain("'level-editor': 'New Level'");
 

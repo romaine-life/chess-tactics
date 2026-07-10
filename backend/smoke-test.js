@@ -389,8 +389,9 @@ async function main() {
     '/level-editor/skeleton',
     '/design/level-editor/render',
     '/design/level-editor/render/hotspots',
-    '/skirmish',
-    '/skirmish/skeleton',
+    '/play/select/skirmish',
+    '/play/select/levels',
+    '/play/select/campaign/off-c-crown-valoria',
     '/design/skirmish/render',
     '/design/skirmish/render/hotspots',
   ];
