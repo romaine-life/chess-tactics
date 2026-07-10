@@ -53,7 +53,7 @@
 // thread it — but the shared extraction (a policy-pluggable turn loop / an
 // env-parameterized terminalOutcome) is owed, not waived.
 
-import type { GameState, Move, Side, Winner } from '../core/types';
+import type { GameState, Move, Side, Vec, Winner } from '../core/types';
 import type { Level, VictoryRules } from '../core/level';
 import type { MoveEnv } from '../core/rules';
 import { applyMove, gameEnv, legalMoves, livingPieces, recordPosition, ruleDraw, sideInCheck } from '../core/rules';
@@ -61,6 +61,7 @@ import { kingSideOf, objectiveContextForLevel, resolveVictory, victoryRulesForOb
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { createFromLevel } from './setup';
 import { createRng, type Rng } from '../core/rng';
+import type { RecordedMove } from './selfplay';
 
 /** Per-type value weights, JSON-safe. Logit units (see the gauge note above): ratios are
  * the piece-value reading, `pawnRelativeValues` gives the pawn = 1 display. */
@@ -312,6 +313,11 @@ interface PlayedGame {
    * sequence TD(λ) learns on (terminal position included). */
   afterstates: Float64Array[];
   plies: number;
+  /** Every committed move, selfplay's RecordedMove shape — replayStates(level,
+   * { seed, moves }) reconstructs the exact per-ply positions (the game starts
+   * from createFromLevel(level, seed), same as replayStates). Pure observation:
+   * recording consumes no rng, so it cannot perturb the learning. */
+  moves: RecordedMove[];
 }
 
 /**
@@ -324,6 +330,7 @@ function playGame(level: Level, seed: number, policy: Record<'player' | 'enemy',
   const rng = createRng(seed);
   let game = frame.start;
   const afterstates: Float64Array[] = [];
+  const moves: RecordedMove[] = [];
   let turnsElapsed = 0;
   let plies = 0;
 
@@ -342,11 +349,15 @@ function playGame(level: Level, seed: number, policy: Record<'player' | 'enemy',
     const actions = actionsFor(game, side, env);
     const chosen = chooseAction(game, side, actions, policy[side], rng, frame, turnsElapsed);
 
+    // Record before applying (selfplay's shape): `from` is the mover's pre-move square.
+    const mover = game.pieces.find((p) => p.id === chosen.pieceId);
+    const from: Vec = mover ? { x: mover.x, y: mover.y } : { x: chosen.move.x, y: chosen.move.y };
     const prevTurn = game.turn;
     const res = applyMove(game, chosen.pieceId, chosen.move);
     game = recordPosition(res.state, { ...frame.baseEnv, lastMove: res.state.lastMove });
     plies += 1;
     afterstates.push(featuresOf(game));
+    moves.push({ pieceId: chosen.pieceId, side, from, move: chosen.move });
     // A full player→enemy round completes when the enemy's move ends its half (the
     // selfplay bookkeeping, counted even when that move decides the game).
     if (prevTurn === 'enemy' && game.turn !== 'enemy') turnsElapsed += 1;
@@ -359,7 +370,7 @@ function playGame(level: Level, seed: number, policy: Record<'player' | 'enemy',
   }
 
   // Ply cap reached with no decision: a draw, exactly like selfplay.
-  return { winner: winner ?? 'draw', afterstates, plies };
+  return { winner: winner ?? 'draw', afterstates, plies, moves };
 }
 
 /**
@@ -427,8 +438,9 @@ function trainConfigOf(opts: TrainOptions): TrainConfig {
  * annealed schedules, then the TD(λ)/MC update on `w`. THE per-game body —
  * trainValues and runTrainingGames both run exactly this, which is what makes
  * game-granular stepping reproduce the batch run bit-for-bit (each game's rng
- * derives from (seed, gameIndex) alone; no random stream crosses games). */
-function runOneGame(level: Level, cfg: TrainConfig, w: Float64Array, g: number, outcomes: TrainResult['outcomes']): void {
+ * derives from (seed, gameIndex) alone; no random stream crosses games).
+ * Returns the played game so a driving surface can inspect how it went. */
+function runOneGame(level: Level, cfg: TrainConfig, w: Float64Array, g: number, outcomes: TrainResult['outcomes']): PlayedGame {
   const t = cfg.games > 1 ? g / (cfg.games - 1) : 0;
   const pol: SidePolicy = { weights: w, epsilon: lerp(cfg.epsilon, t) };
   const played = playGame(level, gameSeed(cfg.seed, g), { player: pol, enemy: pol }, cfg.maxPlies);
@@ -439,6 +451,21 @@ function runOneGame(level: Level, cfg: TrainConfig, w: Float64Array, g: number, 
   const alpha = lerp(cfg.alpha, t);
   if (cfg.monteCarlo) mcUpdate(w, played.afterstates, z, alpha);
   else tdUpdate(w, played.afterstates, z, alpha, cfg.lambda);
+  return played;
+}
+
+/** One training game as an inspectable record — how the game was actually played.
+ * `replayStates(level, { seed, moves })` reconstructs the exact per-ply positions
+ * (a training game starts from createFromLevel(level, seed), replayStates' own
+ * convention). JSON-safe, worker-transportable. */
+export interface TdGameRecord {
+  /** 1-based index in the run — equals `state.game` right after this game. */
+  game: number;
+  /** The game's own rng seed (gameSeed(master, game−1)) — replayStates' seed. */
+  seed: number;
+  winner: Side | 'draw';
+  plies: number;
+  moves: RecordedMove[];
 }
 
 /** The annealed (ε, α) at `game` games completed — what the NEXT game will use,
@@ -563,15 +590,25 @@ export function createTrainingSession(opts: TrainOptions): TrainSessionState {
  * return the new state. Chunking is INVISIBLE to the learning: stepping 1 + 7 + rest
  * reproduces trainValues({games}) bit-for-bit — each game's rng derives from
  * (seed, gameIndex) alone and the weights round-trip losslessly through the record.
- * Asserted in tdValues.test.ts (the load-bearing equivalence).
+ * Asserted in tdValues.test.ts (the load-bearing equivalence). `onGame` observes each
+ * game's record as it completes (pure observation — it cannot change the learning).
  */
-export function runTrainingGames(level: Level, opts: TrainOptions, state: TrainSessionState, n: number): TrainSessionState {
+export function runTrainingGames(
+  level: Level,
+  opts: TrainOptions,
+  state: TrainSessionState,
+  n: number,
+  onGame?: (record: TdGameRecord) => void,
+): TrainSessionState {
   const cfg = trainConfigOf(opts);
   const w = fromRecord(state.weights);
   const outcomes = { ...state.outcomes };
   const end = Math.min(cfg.games, state.game + Math.max(0, Math.floor(n)));
   let g = state.game;
-  for (; g < end; g += 1) runOneGame(level, cfg, w, g, outcomes);
+  for (; g < end; g += 1) {
+    const played = runOneGame(level, cfg, w, g, outcomes);
+    onGame?.({ game: g + 1, seed: gameSeed(cfg.seed, g), winner: played.winner, plies: played.plies, moves: played.moves });
+  }
   return { game: g, weights: toRecord(w), outcomes };
 }
 

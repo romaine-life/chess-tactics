@@ -45,6 +45,20 @@ describe('advanceTd — the owner grammar over the engine', () => {
     expect(end.session.train.outcomes).toEqual(batch.outcomes);
   });
 
+  it('every advanced game carries its replayable record in session.lastGame', { timeout: 120_000 }, async () => {
+    const lvl = kqk3();
+    const fresh = freshTdSession(OPTS);
+    expect(fresh.lastGame).toBeNull();
+    const games: number[] = [];
+    const { session } = await advanceTd(lvl, CFG, fresh, 5, (s) => { games.push(s.lastGame?.game ?? -1); });
+    // Each progress frame's lastGame IS the game that just ran.
+    expect(games).toEqual([1, 2, 3, 4, 5]);
+    expect(session.lastGame?.game).toBe(5);
+    expect(session.lastGame?.moves.length).toBe(session.lastGame?.plies);
+    // Transport-safe (rides the worker's progress/done messages).
+    expect(JSON.parse(JSON.stringify(session))).toEqual(session);
+  });
+
   it('progress is per game and monotonic, and the probe lands on its cadence', { timeout: 120_000 }, async () => {
     const lvl = kqk3();
     const seen: number[] = [];

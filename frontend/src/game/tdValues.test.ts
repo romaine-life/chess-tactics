@@ -18,7 +18,9 @@ import {
   runTrainingGames,
   scheduleAt,
   trainValues,
+  type TdGameRecord,
 } from './tdValues';
+import { replayStates } from './selfplay';
 
 function tinyLevel(units: LevelUnit[], opts: { cols: number; rows: number; objective: ObjectiveType }): Level {
   const lvl = createBlankLevel('tiny', 'Tiny', opts.cols, opts.rows);
@@ -181,6 +183,33 @@ describe('stepping session (createTrainingSession / runTrainingGames)', () => {
     expect(s.outcomes).toEqual(batch.outcomes);
     // JSON-safe (the worker-transport contract).
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
+  });
+
+  it('onGame records every game, replayable through replayStates, without touching the learning', { timeout: 120_000 }, () => {
+    const lvl = kqk3();
+    const opts = { games: 12, seed: 9, maxPlies: 40 };
+
+    const records: TdGameRecord[] = [];
+    const recorded = runTrainingGames(lvl, opts, createTrainingSession(opts), 12, (r) => records.push(r));
+    const plain = runTrainingGames(lvl, opts, createTrainingSession(opts), 12);
+    // Observation only: recording changes nothing about the learning.
+    expect(recorded).toEqual(plain);
+
+    expect(records.map((r) => r.game)).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
+    const outcomes = { playerWins: 0, draws: 0, enemyWins: 0 };
+    for (const r of records) {
+      // The record replays through the real applyMove into plies+1 positions.
+      const states = replayStates(lvl, r);
+      expect(states.length).toBe(r.plies + 1);
+      expect(r.moves.length).toBe(r.plies);
+      if (r.winner === 'player') outcomes.playerWins += 1;
+      else if (r.winner === 'draw') outcomes.draws += 1;
+      else outcomes.enemyWins += 1;
+    }
+    // The per-record winners ARE the session's outcome tally.
+    expect(outcomes).toEqual(recorded.outcomes);
+    // JSON-safe (the worker-transport contract for session.lastGame).
+    expect(JSON.parse(JSON.stringify(records))).toEqual(records);
   });
 
   it('the exported DEFAULT_TRAIN_OPTIONS are the engine baseline (explicit === implicit)', { timeout: 120_000 }, () => {

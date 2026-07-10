@@ -12,7 +12,7 @@ import type { Level } from '../core/level';
 import {
   DEFAULT_PROBE_GAMES,
   createTrainingSession, derivedSeeds, evaluateVsRandom, runTrainingGames, summarizeSeeds,
-  type SeedSummary, type TrainOptions, type TrainSessionState, type ValueWeights,
+  type SeedSummary, type TdGameRecord, type TrainOptions, type TrainSessionState, type ValueWeights,
 } from '../game/tdValues';
 
 /** Everything a command needs beside the level: the engine options plus how many
@@ -39,6 +39,10 @@ export interface TdSession {
   /** Latest probe vs the frozen-random opponent (refreshed every probeEvery games,
    * plus once at budget completion). */
   probe: TdProbe | null;
+  /** How the most recently completed training game was played — the step-replay's
+   * data (ply-by-ply via replayStates). Observation only: never read back by the
+   * learning, so its presence cannot perturb the chunked === batch equivalence. */
+  lastGame?: TdGameRecord | null;
 }
 
 /** Cooperation hooks: the worker yields between games so a STOP message can land;
@@ -49,7 +53,7 @@ export interface TdControl {
 }
 
 export function freshTdSession(opts: TrainOptions): TdSession {
-  return { train: createTrainingSession(opts), probe: null };
+  return { train: createTrainingSession(opts), probe: null, lastGame: null };
 }
 
 /** trainValues' probe defaulting (shared constant, not a re-stated literal):
@@ -80,7 +84,8 @@ export async function advanceTd(
   let cur = session;
   while (cur.train.game < target) {
     if (control?.shouldStop?.()) return { session: cur, stopped: true };
-    const train = runTrainingGames(level, opts, cur.train, 1);
+    let lastGame = cur.lastGame ?? null;
+    const train = runTrainingGames(level, opts, cur.train, 1, (record) => { lastGame = record; });
     let latest = cur.probe;
     // trainValues' probe story exactly: on the cadence when one is set, and ALWAYS once
     // at budget completion while probeGames > 0 (its final snapshot probes even with
@@ -88,7 +93,7 @@ export async function advanceTd(
     if (probe.games > 0 && ((probe.every > 0 && train.game % probe.every === 0) || train.game === opts.games)) {
       latest = { game: train.game, winRate: evaluateVsRandom(level, train.weights, probe.games, { maxPlies: opts.maxPlies }) };
     }
-    cur = { train, probe: latest };
+    cur = { train, probe: latest, lastGame };
     onProgress?.(cur);
     if (control?.afterGame) await control.afterGame();
   }

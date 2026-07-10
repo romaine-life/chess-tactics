@@ -357,7 +357,7 @@ function movesLabel(moves: BookPosition['moves']): string {
   return moves.map((m) => `${pieceLabel(m.pieceId)} (${m.from.x},${m.from.y})->(${m.move.x},${m.move.y})`).join(', ');
 }
 
-function gameMoveLabel(record: GameRecord, index: number): string {
+function gameMoveLabel(record: Pick<GameRecord, 'moves'>, index: number): string {
   const m = record.moves[index];
   if (!m) return 'Book position';
   const capture = m.move.capture ? ` x${m.move.capture}` : '';
@@ -565,6 +565,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const [tdReady, setTdReady] = useState(false);
   const [tdKnobs, setTdKnobs] = useState<TdKnobs>(TD_KNOB_DEFAULTS);
   const [tdStepN, setTdStepN] = useState(25);
+  // Ply cursor into the LAST stepped game's replay (rewound whenever a new game lands).
+  const [tdReplayPly, setTdReplayPly] = useState(0);
   const [tdSession, setTdSession] = useState<TdSession | null>(null);
   const [tdBusy, setTdBusy] = useState(false);
   const [tdSummarizing, setTdSummarizing] = useState<{ done: number; total: number } | null>(null);
@@ -590,7 +592,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const tdReset = useCallback(() => {
     setTdSession(null); setTdSummary(null); setTdKept(false); setTdDiscarded(false);
     setTdStopped(false); setTdError(null); setTdSummarizing(null); setTdBusy(false);
-    setTdDelta(null); tdShownRef.current = null;
+    setTdDelta(null); tdShownRef.current = null; setTdReplayPly(0);
   }, []);
 
   // The learner's OWN worker — never gymWorker (that one is shared by generate/step/
@@ -898,9 +900,11 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     if (!replayFocus) setViewZoom((zoom) => Math.max(zoom, 1));
     setReplayFocus((focus) => !focus);
   }, [replayFocus]);
+  const tdLastGame = tdSess.lastGame ?? null;
   useEffect(() => {
-    if (mode !== 'train' || !selectedLatestGame) setReplayFocus(false);
-  }, [mode, selectedLatestGame]);
+    const hasReplay = mode === 'train' ? !!selectedLatestGame : mode === 'values' ? !!tdLastGame : false;
+    if (!hasReplay) setReplayFocus(false);
+  }, [mode, selectedLatestGame, tdLastGame]);
   const latestReplayMoveLabel = selectedLatestGame
     ? clampedLatestReplayPly === 0
       ? `Book position after ${selectedLatestGame.openingMoves.length} opening plies`
@@ -950,6 +954,68 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     </div>
   ) : null;
   const replayFocusActive = replayFocus && replayPanel !== null;
+
+  // --- Stepped-game replay (`values` mode) — the same inspect stage, fed by the TD
+  // session's lastGame record. Both self-play sides share one policy, so the outcome
+  // chip reads from the PLAYER's side (matching the W/D/L line's labels).
+  useEffect(() => { setTdReplayPly(0); }, [tdLastGame?.game]);
+  const tdReplayStates = useMemo(
+    () => (level && tdLastGame ? replayStates(level, tdLastGame) : null),
+    [level, tdLastGame],
+  );
+  const tdReplayMax = tdReplayStates ? tdReplayStates.length - 1 : 0;
+  const tdClampedReplayPly = Math.max(0, Math.min(tdReplayPly, tdReplayMax));
+  const tdReplayBoard = useMemo(() => {
+    if (!level || !tdReplayStates) return null;
+    const state = tdReplayStates[tdClampedReplayPly];
+    if (!state) return null;
+    return { ...levelToEditorBoard(level), units: unitsForGamePieces(state.pieces) };
+  }, [level, tdReplayStates, tdClampedReplayPly]);
+  const tdReplayMoveLabel = tdLastGame
+    ? tdClampedReplayPly === 0 ? 'Start position' : gameMoveLabel(tdLastGame, tdClampedReplayPly - 1)
+    : '';
+  const tdReplayEpsilon = tdLastGame ? scheduleAt(tdOpts, tdLastGame.game - 1).epsilon : 0;
+  const tdReplayPanel: ReactElement | null = tdLastGame && tdReplayStates && tdReplayBoard ? (
+    <div className={`gym-replay-stage ${replayFocus ? 'is-focused' : ''}`} aria-label="Stepped training game replay">
+      <div className="gym-replay-head">
+        <div className="gym-replay-title">
+          <h3>Inspect game</h3>
+          <span className="gym-replay-move" title={tdReplayMoveLabel}>{tdReplayMoveLabel}</span>
+        </div>
+        <span className={`outcome ${tdLastGame.winner === 'player' ? 'win' : tdLastGame.winner === 'draw' ? 'draw' : 'loss'}`}>
+          {tdLastGame.winner === 'player' ? 'player win' : tdLastGame.winner === 'draw' ? 'draw' : 'enemy win'}
+        </span>
+        <span>game <b className="gym-num">{tdLastGame.game}</b></span>
+        <span>ε <b className="gym-num">{tdReplayEpsilon.toFixed(3)}</b></span>
+        <span>plies <b className="gym-num">{tdLastGame.plies}</b></span>
+        <span>seed <b className="gym-num">{tdLastGame.seed}</b></span>
+        <div className="gym-replay-controls is-inline">
+          <button type="button" onClick={() => setTdReplayPly(Math.max(0, tdClampedReplayPly - 1))} disabled={tdClampedReplayPly === 0}>Prev</button>
+          <input type="range" min={0} max={tdReplayMax} value={tdClampedReplayPly} onChange={(e) => setTdReplayPly(Number(e.target.value))} aria-label="Replay ply" />
+          <button type="button" onClick={() => setTdReplayPly(Math.min(tdReplayMax, tdClampedReplayPly + 1))} disabled={tdClampedReplayPly >= tdReplayMax}>Next</button>
+          <span className="gym-replay-ply">Ply {tdClampedReplayPly}/{tdReplayMax}</span>
+        </div>
+        <button
+          type="button"
+          className="gym-replay-focus-btn"
+          onClick={toggleReplayFocus}
+          aria-pressed={replayFocus}
+          aria-label={replayFocus ? 'Restore replay layout' : 'Focus replay board'}
+          title={replayFocus ? 'Restore replay layout' : 'Focus replay board'}
+        >
+          {replayFocus ? 'X' : 'Focus'}
+        </button>
+      </div>
+      <div className="gym-replay-board">
+        <ViewPane kind="board" ariaLabel="Stepped training game replay board" zoom={viewZoom} pan={viewPan} minZoom={0.3} maxZoom={2} onZoomChange={setViewZoom} onPanChange={setViewPan}>
+          <div className="tileset-view-board-content is-board">
+            <StudioReadOnlyBoard board={tdReplayBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel="Stepped training game replay board" />
+          </div>
+        </ViewPane>
+      </div>
+    </div>
+  ) : null;
+  const tdReplayFocusActive = replayFocus && tdReplayPanel !== null;
 
   // SPRT view derivation: map the live LLR onto the [lower, upper] bar (0 => reject
   // edge, 1 => accept edge, .5 => the zero line). The fill grows from center toward
@@ -1207,7 +1273,11 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                 )}
               </div>
             ) : mode === 'values' ? (
-              <div className="gym-run" aria-label="Piece-value learner">
+              <div className={`gym-run ${tdReplayFocusActive ? 'is-replay-focus' : ''}`.trim()} aria-label="Piece-value learner">
+                {tdReplayFocusActive ? (
+                  <div className="gym-replay-focus-view">{tdReplayPanel}</div>
+                ) : (
+                  <>
                 <div className="gym-run-head">
                   <span className={`gym-run-state ${tdBusy ? 'live' : ''}`}>
                     {tdSummarizing ? `▶ folding seeds — ${tdSummarizing.done}/${tdSummarizing.total} done`
@@ -1260,6 +1330,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   ) : null}
                 </div>
 
+                {tdReplayPanel}
+
                 {tdSummary ? (
                   <div className="gym-td-results" aria-label="Learned values vs chess defaults">
                     <h3>Result — learned mean ± spread over {tdSummary.perSeed.length} seed{tdSummary.perSeed.length === 1 ? '' : 's'}, next to the chess defaults{tdKept ? ' · KEPT' : ''}</h3>
@@ -1302,6 +1374,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
 
                 {tdError ? <p className="gym-error">Value learner failed: {tdError}</p> : null}
                 {!tdStarted && !tdBusy ? <p className="gym-hint">Every piece starts at the same weight. Step plays ONE training game and updates them — watch the numbers move. Set the budget in the rail, then Run plays it out.</p> : null}
+                  </>
+                )}
               </div>
             ) : null}
           </>
