@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { editorBoardToLevel } from '../core/levelBoard';
+import type { Piece } from '../core/types';
 import type { EditorBoard } from '../ui/boardCode';
 import { tileFamilies } from '../art/tileset';
 import { createSkirmish } from '../game/setup';
-import { buildSkirmishBoard } from './SkirmishBoard';
+import { buildSkirmishBoard, pieceOp, skirmishTileClickIntent } from './SkirmishBoard';
 
 const exactBoard = (): EditorBoard => {
   const grass0 = tileFamilies.grass[0].id;
@@ -55,5 +56,40 @@ describe('buildSkirmishBoard', () => {
     expect(boardA.cells.find((cell) => cell.x === 1 && cell.y === 0)?.feature?.mask).toBe(4);
     expect(boardA.cells.find((cell) => cell.x === 1 && cell.y === 1)?.feature?.mask).toBe(1);
     expect(boardA.cells.every((cell) => !cell.groundCover)).toBe(true);
+  });
+});
+
+describe('pieceOp', () => {
+  it.each(['rock', 'random-rock'] as const)('renders %s obstacle art without live unit metadata', (type) => {
+    const rock: Piece = { id: `${type}-1`, side: 'neutral', type, x: 0, y: 0, startY: 0, alive: true };
+    const op = pieceOp(rock, { left: 36, top: 86 * 0.78 });
+
+    expect(op?.src).toContain('/assets/units/rock/');
+    expect(op?.dx).toBe(0);
+    expect(op?.dy).toBe(0);
+  });
+});
+
+describe('skirmishTileClickIntent', () => {
+  it('clears the current selection when the player clicks an unrelated board tile', () => {
+    expect(skirmishTileClickIntent(4, 3, [{ x: 2, y: 2 }], undefined, 'player')).toEqual({
+      kind: 'clear-selection',
+    });
+
+    expect(skirmishTileClickIntent(4, 3, [{ x: 2, y: 2 }], { id: 'rock-1', side: 'neutral' }, 'player')).toEqual({
+      kind: 'clear-selection',
+    });
+  });
+
+  it('keeps moves, friendly selection, and opponent focus ahead of cancellation', () => {
+    expect(skirmishTileClickIntent(2, 2, [{ x: 2, y: 2 }], { id: 'enemy-1', side: 'enemy' }, 'player')).toEqual({ kind: 'move' });
+    expect(skirmishTileClickIntent(1, 1, [], { id: 'player-2', side: 'player' }, 'player')).toEqual({
+      kind: 'select',
+      pieceId: 'player-2',
+    });
+    expect(skirmishTileClickIntent(6, 6, [], { id: 'enemy-1', side: 'enemy' }, 'player')).toEqual({
+      kind: 'focus',
+      pieceId: 'enemy-1',
+    });
   });
 });
