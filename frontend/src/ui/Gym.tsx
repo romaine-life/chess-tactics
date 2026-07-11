@@ -24,7 +24,7 @@ import type { GymRequest, GymResponse } from '../lab/gymWorker';
 import type { StepProgress } from '../lab/gymStep';
 import type { ValState } from '../lab/validate';
 import type { TdProbe, TdRequest, TdResponse, TdRunConfig, TdSession } from '../lab/tdWorker';
-import { freshTdSession } from '../lab/tdSession';
+import { freshTdSession, type TdAdoptionRecord, type TdSessionDoc } from '../lab/tdSession';
 import {
   DEFAULT_PROBE_GAMES, DEFAULT_TRAIN_OPTIONS, pawnRelativeValues, previewNextGame, scheduleAt,
   type SeedSummary, type TdGameRecord, type TrainOptions, type ValueWeights,
@@ -32,7 +32,7 @@ import {
 import { sanForGame, sanFullMoves } from '../game/sanNotation';
 import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
 import { drawRulesForLevel } from '../core/levelEvents';
-import { setAdoptedWeights, readAdoptedVector } from '../game/adoptedWeights';
+import { setAdoptedWeights, readAdoptedVector, readShippedVector } from '../game/adoptedWeights';
 import { ClusterRuns } from './ClusterRuns';
 import {
   emptyBlob, makeNewBook, deleteBook, updateBook,
@@ -196,6 +196,13 @@ const GYM_CSS = `
 .gym-score-row .n { color:#5c6875; font:12px ui-monospace,monospace; text-align:right; padding-right:4px; }
 .gym-score-row .gap { color:#5c6875; font:12px ui-monospace,monospace; padding:3px 6px; }
 .gym-score-start { margin-bottom:2px; }
+/* Adopt + live-AI audit blocks. */
+.gym-td-adopt, .gym-td-liveai { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; }
+.gym-td-liveai { border-top:1px solid #29323f; padding-top:10px; }
+.gym-td-liveai-tier { margin:0; font-size:12px; color:#93a0b0; }
+.gym-td-liveai-tier b { color:#8ff0dc; }
+.gym-td-liveai-vals { margin:0; font:12px ui-monospace,monospace; color:#e7ebf0; }
+.gym-td-liveai-vals.dim { color:#5c6875; }
 /* Probe history: the learning curve as running numbers. */
 .gym-td-probelog { display:flex; flex-direction:column; gap:4px; font-size:11px; color:#93a0b0; }
 .gym-td-probelog .h { color:#5c6875; }
@@ -383,6 +390,17 @@ const tdOptionsOf = (k: TdKnobs): TrainOptions => ({
   initialWeight: k.initialWeight, monteCarlo: k.monteCarlo,
   probeEvery: k.probeEvery, probeGames: k.probeGames,
 });
+/** tdOptionsOf's inverse — a restored session document carries its exact schedule. */
+const tdKnobsOfDoc = (opts: TrainOptions, seedCount: number): TdKnobs => ({
+  games: opts.games, seed: opts.seed,
+  seedCount: Number.isInteger(seedCount) && seedCount >= 1 ? seedCount : TD_KNOB_DEFAULTS.seedCount,
+  lambda: opts.lambda ?? TD_KNOB_DEFAULTS.lambda,
+  epsStart: opts.epsilon?.start ?? TD_KNOB_DEFAULTS.epsStart, epsEnd: opts.epsilon?.end ?? TD_KNOB_DEFAULTS.epsEnd,
+  alphaStart: opts.alpha?.start ?? TD_KNOB_DEFAULTS.alphaStart, alphaEnd: opts.alpha?.end ?? TD_KNOB_DEFAULTS.alphaEnd,
+  maxPlies: opts.maxPlies ?? TD_KNOB_DEFAULTS.maxPlies, initialWeight: opts.initialWeight ?? TD_KNOB_DEFAULTS.initialWeight,
+  monteCarlo: opts.monteCarlo === true,
+  probeEvery: opts.probeEvery ?? TD_KNOB_DEFAULTS.probeEvery, probeGames: opts.probeGames ?? TD_KNOB_DEFAULTS.probeGames,
+});
 
 /** Per-type `next − prev` — the live table's Δ column (running NUMBERS, the SPSA
  * rail's ▲/▼ idiom — not a chart). */
@@ -527,6 +545,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setLatestReplayPly(0);
     setMode(deepLinkModeRef.current ?? 'book');
     deepLinkModeRef.current = undefined;
+    tdDocRef.current = null;
     if (!levelId) { setLoadingBooks(false); setAdoptedVec(null); return undefined; }
     // Reflect the local cache immediately (the live AI's synchronous source); the
     // account blob below can overwrite it once it resolves.
@@ -545,6 +564,17 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
         if (loaded.adoptedWeights) {
           setAdoptedWeights(levelId, loaded.adoptedWeights);
           setAdoptedVec(loaded.adoptedWeights);
+        }
+        // Restore the Piece-values session document — the run continues exactly where
+        // it stood (its OPTS restore with it: a session is a position inside a fixed
+        // schedule, so the knobs must be the ones it was trained under). The doc also
+        // parks in a ref: the TD worker-init effect keys on the LEVEL object, which
+        // often resolves after this blob, and its reset would wipe the restore — it
+        // re-applies from the ref instead.
+        const doc = loaded.tdSession;
+        if (doc && doc.session?.train && doc.opts && typeof doc.opts.games === 'number') {
+          tdDocRef.current = doc;
+          tdApplyDoc(doc);
         }
       })
       .catch((error) => {
@@ -669,6 +699,17 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const tdWorkerRef = useRef<Worker | null>(null);
   // Freshest session for the send handlers (the ref pattern the SPSA wiring uses).
   const tdSessionRef = useRef<TdSession | null>(tdSession); tdSessionRef.current = tdSession;
+  // The level's restored/last-saved session document. The books load and the worker
+  // init race (blob vs level fetch); whichever runs last re-applies from here.
+  const tdDocRef = useRef<TdSessionDoc | null>(null);
+  const tdApplyDoc = useCallback((doc: TdSessionDoc) => {
+    setTdKnobs(tdKnobsOfDoc(doc.opts, doc.seedCount));
+    setTdSession(doc.session);
+    setTdProbeLog(Array.isArray(doc.probeLog) ? doc.probeLog : []);
+    setTdSummary(doc.summary ?? null);
+    setTdKept(doc.kept === true);
+    tdShownRef.current = { game: doc.session.train.game, weights: doc.session.train.weights };
+  }, []);
 
   // RESET: back to a fresh session derived from the engine baseline (ADR-0057) — the
   // weights return to the all-equal start and the knobs unfreeze. Knob VALUES are kept
@@ -689,6 +730,10 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   useEffect(() => {
     setTdReady(false);
     tdReset();
+    // Re-apply the level's saved session if the books blob restored it first — this
+    // effect keys on the LEVEL object, which usually resolves after the blob, and the
+    // reset above would otherwise wipe the restore.
+    if (tdDocRef.current) tdApplyDoc(tdDocRef.current);
     if (!level) return undefined;
     const worker = new Worker(new URL('../lab/tdWorker.ts', import.meta.url), { type: 'module' });
     tdWorkerRef.current = worker;
@@ -783,6 +828,37 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   // previewed, and the game derives from (seed, budget-schedule, weights) — changing a
   // knob mid-walk would silently make the walked game and the learned game differ.
   const tdKnobsFrozen = tdStarted || tdBusy || tdSummary !== null || tdPending !== null;
+
+  // --- The session as a web-backed document -----------------------------------
+  // Every meaningful change autosaves (debounced) into the level's account blob via
+  // the same commit path the opening books use; the load effect above restores it.
+  // Closing the tab never discards learning — only the Reset button does.
+  const tdKnobsRef = useRef(tdKnobs); tdKnobsRef.current = tdKnobs;
+  useEffect(() => {
+    if (!levelId || !tdSession) return undefined;
+    const id = setTimeout(() => {
+      const prior = blobRef.current.tdSession;
+      const doc: TdSessionDoc = {
+        opts: tdOptionsOf(tdKnobsRef.current), seedCount: tdKnobsRef.current.seedCount,
+        session: tdSession, probeLog: tdProbeLog, summary: tdSummary, kept: tdKept,
+        ...(prior?.adoption ? { adoption: prior.adoption } : {}),
+      };
+      tdDocRef.current = doc;
+      commit({ ...blobRef.current, tdSession: doc });
+    }, 1200);
+    return () => clearTimeout(id);
+  }, [levelId, tdSession, tdProbeLog, tdSummary, tdKept, commit]);
+
+  // Reset = discard the run, including its stored document (the level's ADOPTION is
+  // separate and survives — clearing that is the audit box's explicit button).
+  const tdDiscardRun = useCallback(() => {
+    tdDocRef.current = null;
+    tdReset();
+    if (blobRef.current.tdSession) {
+      const { tdSession: _dropped, ...rest } = blobRef.current;
+      commit(rest);
+    }
+  }, [tdReset, commit]);
 
   // STEP deals the next game (start position, learning NOT yet applied). Pure main-thread
   // preview — the worker only gets involved at the commit, and replays bit-identically.
@@ -1166,6 +1242,74 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   useEffect(() => {
     if (tdWatching && tdComplete && !tdPending) setTdWatching(false);
   }, [tdWatching, tdComplete, tdPending]);
+  // --- Setting and auditing the level's live AI --------------------------------
+  // Adoption converts the learned pawn-relative values into the eval vector's piece
+  // values (touched types only; untouched types keep the shipped default — a weight
+  // that never received signal is noise, not a value) and sets them through the SAME
+  // per-level slot the Training tab's champion uses. Requires the pawn gauge.
+  const tdAdoptSource = tdSummary ? tdSummary.mean : tdSess.train.weights;
+  const tdAdoptRel = useMemo(
+    () => (tdHasPawns ? pawnRelativeValues(tdAdoptSource) : null),
+    [tdHasPawns, tdAdoptSource],
+  );
+  const tdAdoptPreview = useMemo(() => {
+    if (!tdAdoptRel || !tdStarted) return null;
+    return PLAYABLE_PIECE_TYPES.map((t) => {
+      const untouched = tdSummary
+        ? tdUntouched(tdSummary.mean[t]) && tdSummary.spread[t] === 0
+        : tdUntouched(tdSess.train.weights[t]);
+      return {
+        type: t,
+        learned: tdAdoptRel[t],
+        adopted: untouched ? DEFAULT_EVAL_WEIGHTS.pieceValues[t] : Math.round(tdAdoptRel[t] * 100) / 100,
+        untouched,
+      };
+    });
+  }, [tdAdoptRel, tdStarted, tdSummary, tdSess, tdUntouched]);
+  const tdAdopt = useCallback(() => {
+    if (!levelId || !tdAdoptPreview) return;
+    const pieceValues = { ...DEFAULT_EVAL_WEIGHTS.pieceValues };
+    for (const row of tdAdoptPreview) pieceValues[row.type] = row.adopted;
+    const vec = encodeWeights({ ...DEFAULT_EVAL_WEIGHTS, pieceValues });
+    setAdoptedWeights(levelId, vec);
+    setAdoptedVec(vec);
+    const adopted = {} as ValueWeights;
+    for (const row of tdAdoptPreview) adopted[row.type] = row.adopted;
+    const adoption: TdAdoptionRecord = {
+      at: new Date().toISOString(), vector: vec, pieceValues: adopted,
+      fromGames: tdGamesDone,
+      seeds: tdSummary ? tdSummary.seeds : [tdKnobsRef.current.seed],
+      source: tdSummary ? 'seed-mean' : 'live-weights',
+    };
+    const doc: TdSessionDoc = {
+      opts: tdOptionsOf(tdKnobsRef.current), seedCount: tdKnobsRef.current.seedCount,
+      session: tdSess, probeLog: tdProbeLog, summary: tdSummary, kept: tdKept, adoption,
+    };
+    tdDocRef.current = doc;
+    commit({ ...blobRef.current, adoptedWeights: vec, tdSession: doc });
+  }, [levelId, tdAdoptPreview, tdGamesDone, tdSummary, tdSess, tdProbeLog, tdKept, commit]);
+  const tdClearAdoption = useCallback(() => {
+    if (!levelId) return;
+    setAdoptedWeights(levelId, null);
+    setAdoptedVec(null);
+    const { adoptedWeights: _cleared, ...rest } = blobRef.current;
+    const doc = rest.tdSession ? { ...rest.tdSession } : undefined;
+    if (doc) delete doc.adoption;
+    commit({ ...rest, ...(doc ? { tdSession: doc } : {}) });
+  }, [levelId, commit]);
+  // What the live opponent will actually use on this level, resolved tier by tier —
+  // the audit read. `adoptedVec` mirrors localStorage + the account blob.
+  const tdLiveAi = useMemo(() => {
+    const shipped = levelId ? readShippedVector(levelId) : null;
+    const vec = adoptedVec ?? shipped;
+    const tier = adoptedVec
+      ? (blob.tdSession?.adoption ? 'adopted — from this pane' : 'adopted — from the Training tab')
+      : shipped ? 'globally shipped' : 'built-in defaults';
+    let pieceValues = DEFAULT_EVAL_WEIGHTS.pieceValues;
+    if (vec) { try { pieceValues = decodeWeights(vec).pieceValues; } catch { /* fall back to defaults */ } }
+    return { tier, pieceValues, adoption: blob.tdSession?.adoption ?? null, hasAdoption: !!adoptedVec };
+  }, [levelId, adoptedVec, blob.tdSession]);
+
   // The board renders pixel art 1:1 whenever the stage has content — the shared
   // read-only renderer is the Level Editor's render core, and its art is authored for
   // integer scale (0.72 nearest-neighbour was the "extra pixelated" look).
@@ -1605,22 +1749,26 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
 
                     <h4>What is saved</h4>
                     <p>
-                      Plainly: <b>this session lives in this page</b>. Pause and Stop hold it while the tab stays open; Reset, switching
-                      level, or closing the tab discards it. &ldquo;Keep result&rdquo; pins the completed table for this session only —
-                      <b> nothing is written to your account yet</b>, and there is no named run record for this pane (the Cluster tab&apos;s
-                      runs are persisted; these are not). The consolation is determinism: a run&apos;s whole identity is
-                      (board, master seed, settings) — re-running the same seed replays the same games to the same values, so nothing
-                      here is unrecoverable, only un-stored.
+                      <b>The run is a document on your account.</b> Everything that matters — games played, the weights, the probe
+                      history, the result table and its Kept mark, and any adoption you made — autosaves (about a second after each
+                      change) into this level&apos;s account storage, and is restored when you return, on any device. <b>Reset is the
+                      only discard</b>: it deletes the run&apos;s document (the level&apos;s adopted AI, if any, survives until you clear
+                      it in the audit box). One deliberate exception: a dealt-but-unfinished game is not stored — it re-deals
+                      identically from the same seed, so nothing is lost. And determinism still holds underneath: a run&apos;s whole
+                      identity is (board, master seed, settings); the same seed replays the same games to the same values.
                     </p>
 
-                    <h4>Becoming a level&apos;s AI</h4>
+                    <h4>Becoming a level&apos;s AI — setting and auditing it</h4>
                     <p>
                       The live opponent resolves its evaluation weights per level in three tiers, checked before every enemy reply:
-                      your personally <b>adopted</b> champion → the globally <b>shipped</b> weights → the built-in defaults. Today that
-                      path is fed from the <b>Training</b> tab: an SPRT-validated champion is adopted there, and audited under
-                      &ldquo;Live enemy weights (this level)&rdquo;. <b>This pane&apos;s learned values do not flow into that path yet</b> —
-                      the bridge (learned piece values → the evaluation vector&apos;s piece-value terms → the same Adopt) is the next
-                      piece of the pipeline. Until it lands, treat this pane as the measuring instrument, not the assignment.
+                      your personally <b>adopted</b> weights → the globally <b>shipped</b> weights → the built-in defaults.
+                      <b> Setting:</b> the &ldquo;Make it this level&apos;s AI&rdquo; table shows exactly what will be set — the learned
+                      pawn&nbsp;=&nbsp;1 values become the evaluation&apos;s piece values (types that never received signal keep the
+                      default, marked), and Adopt writes them into the same per-level slot the Training tab&apos;s champion uses — the
+                      very next enemy reply plays under them. <b>Auditing:</b> the &ldquo;This level&apos;s live AI&rdquo; box always
+                      shows which tier is active, the exact piece values in force next to the defaults, and the adoption record
+                      (when, from which seeds, at how many games). &ldquo;clear adoption&rdquo; returns the level to shipped weights
+                      or defaults.
                     </p>
 
                     <h4>Keys</h4>
@@ -1729,11 +1877,61 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                       <div className="gym-td-keep">
                         <button type="button" className="keep" onClick={() => setTdKept(true)}>Keep result</button>
                         <button type="button" className="discard" onClick={() => { setTdSummary(null); setTdKept(false); setTdDiscarded(true); }}>Discard</button>
-                        <span className="gym-hint">Keep pins this table until Reset (this session only — it is not saved to your account); Discard clears it (the run&apos;s numbers stay).</span>
+                        <span className="gym-hint">Keep marks this result in the saved run; Discard clears the table (the run&apos;s numbers stay). The whole run autosaves to your account either way.</span>
                       </div>
                     ) : (
-                      <p className="gym-hint">Kept — this table stays until Reset (this session only; it is not saved to your account).</p>
+                      <p className="gym-hint">Kept — saved with the run on your account; Reset discards the run.</p>
                     )}
+                  </div>
+                ) : null}
+
+                {tdAdoptPreview ? (
+                  <div className="gym-td-adopt" aria-label="Make it this level's AI">
+                    <h3>Make it this level&apos;s AI</h3>
+                    <div className="gym-td-table-wrap">
+                      <table className="gym-td-table">
+                        <thead><tr><th>piece</th><th>learned (pawn = 1)</th><th>will set</th><th>current default</th></tr></thead>
+                        <tbody>
+                          {tdAdoptPreview.map((row) => (
+                            <tr key={row.type} className={row.untouched ? 'na' : ''}>
+                              <td>{row.type}</td>
+                              <td>{row.learned.toFixed(2)}</td>
+                              <td>{row.adopted}{row.untouched ? ' (kept — no signal)' : ''}</td>
+                              <td>{DEFAULT_EVAL_WEIGHTS.pieceValues[row.type]}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="gym-hint">source: {tdSummary
+                      ? <>mean of {tdSummary.perSeed.length} seeds at {tdGamesDone} games</>
+                      : <>live weights at game {tdGamesDone} (the seed fold at budget completion is the steadier read)</>}. Adopting replaces any previous adoption on this level, including one from the Training tab.</p>
+                    <div className="gym-td-keep">
+                      <button type="button" className="keep" onClick={tdAdopt}>Adopt as this level&apos;s AI</button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {level ? (
+                  <div className="gym-td-liveai" aria-label="This level's live AI">
+                    <h3>This level&apos;s live AI</h3>
+                    <p className="gym-hint">resolved before every enemy reply: your adoption → globally shipped → built-in defaults</p>
+                    <p className="gym-td-liveai-tier">active: <b>{tdLiveAi.tier}</b></p>
+                    <p className="gym-td-liveai-vals">
+                      {PLAYABLE_PIECE_TYPES.map((t) => `${t.charAt(0).toUpperCase()} ${Math.round(tdLiveAi.pieceValues[t] * 100) / 100}`).join(' · ')}
+                    </p>
+                    {tdLiveAi.tier !== 'built-in defaults' ? (
+                      <p className="gym-td-liveai-vals dim">defaults: {PLAYABLE_PIECE_TYPES.map((t) => `${t.charAt(0).toUpperCase()} ${DEFAULT_EVAL_WEIGHTS.pieceValues[t]}`).join(' · ')}</p>
+                    ) : null}
+                    {tdLiveAi.adoption ? (
+                      <p className="gym-hint">adopted {new Date(tdLiveAi.adoption.at).toLocaleString()} — {tdLiveAi.adoption.source === 'seed-mean' ? `mean of seeds ${tdLiveAi.adoption.seeds.join(', ')}` : `live weights (seed ${tdLiveAi.adoption.seeds.join(', ')})`} at {tdLiveAi.adoption.fromGames} games</p>
+                    ) : null}
+                    {tdLiveAi.hasAdoption ? (
+                      <div className="gym-adopt-row">
+                        <button type="button" onClick={tdClearAdoption}>clear adoption</button>
+                        <span className="gym-hint">the level falls back to shipped weights or defaults</span>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -1945,7 +2143,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   <button type="button" onClick={() => { setTdWatching(false); tdSend('run'); }} disabled={!tdReady || tdBusy || (tdComplete && tdSummary !== null)}
                     title="Full speed, no animation — plays the remaining budget in seconds; same numbers, bit for bit">▶ run</button>
                   <button type="button" onClick={() => { setTdWatching(false); tdStop(); }} disabled={!tdBusy && !tdWatching}>⏹ stop</button>
-                  <button type="button" onClick={tdReset} disabled={tdBusy || (!tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)}>↺ reset</button>
+                  <button type="button" onClick={tdDiscardRun} disabled={tdBusy || (!tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)}
+                    title="Discard this run and its saved document (the level's adopted AI, if any, stays until cleared in the audit box)">↺ reset</button>
                 </div>
                 <label className="gym-td-speed" title="Watch tempo — steps per second; Max is a step every frame">
                   <span>speed</span>

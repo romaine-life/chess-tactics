@@ -15,6 +15,34 @@ import {
   type SeedSummary, type TdGameRecord, type TrainOptions, type TrainSessionState, type ValueWeights,
 } from '../game/tdValues';
 
+/** One adoption event: the learned values that were made this level's live AI. */
+export interface TdAdoptionRecord {
+  /** ISO timestamp of the adoption. */
+  at: string;
+  /** The full encoded eval vector that went live (encodeWeights order). */
+  vector: number[];
+  /** The pawn = 1 piece values that were adopted, for display/audit. */
+  pieceValues: ValueWeights;
+  /** Games trained when adopted, and the seeds behind the numbers. */
+  fromGames: number;
+  seeds: number[];
+  source: 'seed-mean' | 'live-weights';
+}
+
+/** The values pane's session as a durable, account-scoped document — saved into the
+ * level's opening-books blob (one JSONB per owner+level; the backend passes it
+ * through). The OPTS travel with the state: a session is a position inside a fixed
+ * schedule, so restoring one without its exact options would corrupt the run. */
+export interface TdSessionDoc {
+  opts: TrainOptions;
+  seedCount: number;
+  session: TdSession;
+  probeLog: TdProbe[];
+  summary: SeedSummary | null;
+  kept: boolean;
+  adoption?: TdAdoptionRecord;
+}
+
 /** Everything a command needs beside the level: the engine options plus how many
  * independent seeds the completion mean ± spread folds. The anneal schedules lerp
  * on the TOTAL `opts.games`, so the budget is part of the schedule — fixed per run

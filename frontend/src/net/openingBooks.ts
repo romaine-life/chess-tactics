@@ -29,6 +29,7 @@ export async function loadOpeningBooks(levelId: string): Promise<BooksBlob> {
     nextId: typeof blob.nextId === 'number' ? blob.nextId : 1,
     books: blob.books,
     ...(Array.isArray(blob.adoptedWeights) ? { adoptedWeights: blob.adoptedWeights } : {}),
+    ...(blob.tdSession && typeof blob.tdSession === 'object' ? { tdSession: blob.tdSession } : {}),
   };
 }
 
@@ -39,6 +40,9 @@ export async function saveOpeningBooks(levelId: string, blob: BooksBlob): Promis
     nextId: blob.nextId,
     books: blob.books.map((b) => ({ ...b, session: capSessionForStorage(b.session) })),
     ...(blob.adoptedWeights ? { adoptedWeights: blob.adoptedWeights } : {}),
+    // Bound the TD document too: the probe log is its only unbounded part (one entry
+    // per probe cadence) — keep the newest window.
+    ...(blob.tdSession ? { tdSession: { ...blob.tdSession, probeLog: blob.tdSession.probeLog.slice(-400) } } : {}),
   };
   await request<{ ok: boolean }>('PUT', `/api/opening-books/${encodeURIComponent(levelId)}`, { data: capped });
 }

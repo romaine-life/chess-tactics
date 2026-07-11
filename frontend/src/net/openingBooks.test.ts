@@ -110,6 +110,25 @@ describe('saveOpeningBooks', () => {
     expect(traj[399].step).toBe(499); // newest kept
   });
 
+  it('round-trips the TD session document and caps its probe log', async () => {
+    const doc = {
+      opts: { games: 600, seed: 1 }, seedCount: 3,
+      session: { train: { game: 50, weights: { pawn: 0.1 }, outcomes: { playerWins: 1, draws: 49, enemyWins: 0 } }, probe: null, lastGame: null },
+      probeLog: Array.from({ length: 450 }, (_, i) => ({ game: (i + 1) * 25, winRate: 0.5 })),
+      summary: null, kept: false,
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: true }));
+    await saveOpeningBooks('lvl-td', { nextId: 1, books: [], tdSession: doc } as never);
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sent.data.tdSession.session.train.game).toBe(50);
+    expect(sent.data.tdSession.probeLog).toHaveLength(400);      // newest window kept
+    expect(sent.data.tdSession.probeLog[0].game).toBe(51 * 25);  // oldest 50 dropped
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], tdSession: doc } }));
+    const loaded = await loadOpeningBooks('lvl-td');
+    expect(loaded.tdSession?.session.train.game).toBe(50);
+  });
+
   it('throws HttpError on a non-ok response', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(401, { error: 'sign_in_required' }));
     await expect(saveOpeningBooks('lvl-b', { nextId: 1, books: [] })).rejects.toMatchObject({ status: 401 });

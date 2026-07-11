@@ -66,10 +66,13 @@ export interface BooksBlob {
   nextId: number;
   books: OpeningBook[];
   /** The eval-weight vector the owner ADOPTED for this level's live enemy AI (from a
-   * gym champion that passed SPRT validation), or absent if none is adopted. This is
-   * the durable, account-scoped copy; game/adoptedWeights mirrors it into a local
-   * cache the live AI reads synchronously. */
+   * gym champion that passed SPRT validation, or the Piece-values pane's learned
+   * values), or absent if none is adopted. This is the durable, account-scoped copy;
+   * game/adoptedWeights mirrors it into a local cache the live AI reads synchronously. */
   adoptedWeights?: number[];
+  /** The Piece-values learner's session as a durable document (lab/tdSession.ts):
+   * the run autosaves here so closing the tab never discards learning. */
+  tdSession?: import('./tdSession').TdSessionDoc;
 }
 
 /** Default generation settings for a brand-new book (small, so a step lands fast). */
