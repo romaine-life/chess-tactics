@@ -8,6 +8,11 @@ inside a dark low-glare app shell.
 For task-level instructions that prevent agents from replacing pixel art with
 CSS approximations, see `docs/asset-generation-contract.md`.
 
+Storage and promotion in this early proposal are superseded by
+[ADR-0081](adr/0081-runtime-assets-are-live-storage-backed.md). Media enters the
+backend as a candidate and is reviewed/promoted from live storage; it is never
+published into Git.
+
 The recommendation is to keep the first visual implementation code-rendered
 until the board, pieces, and HUD prove the style at gameplay scale. When sprite
 assets become useful, generated art should enter a normalization pipeline before
@@ -20,8 +25,7 @@ material only, never as direct gameplay assets.
 - Keep the canvas renderer browser-safe, deterministic, and low bandwidth.
 - Make generated art repeatable through documented prompts, manifests, and
   cleanup checks.
-- Keep production assets small enough to inspect, replace, and review in pull
-  requests.
+- Keep production assets small enough to inspect, replace, and review in Studio.
 - Avoid a heavy native engine or opaque art pipeline.
 
 ## Source Art Contract
@@ -38,35 +42,26 @@ composed board screenshots. Every generation batch should specify:
 - no UI, labels, glow overlays, cursor states, or board coordinates
 - one biome, faction, and scale target per sheet
 
-Generated art should be saved as raw source under a future ignored or
-large-file-managed source directory. The game should consume only normalized
-exports.
+Generated source and normalized exports are uploaded as private live versions
+with provenance. Local files are temporary workspace material only.
 
 ## Recommended File Organization
 
-Use a small manifest-driven layout when production assets are introduced:
+Use one database-owned semantic catalog over content-addressed private objects:
 
 ```text
-frontend/public/assets/
-  manifest.json
-  tiles/
-    moonlit-grassland.png
-    moonlit-grassland.json
-  pieces/
-    chess-tokens.png
-    chess-tokens.json
-  props/
-    moonlit-grassland-props.png
-    moonlit-grassland-props.json
-  previews/
-    moonlit-grassland-contact-sheet.png
-docs/
-  asset-pipeline-proposal.md
+Postgres
+  semantic slots + typed geometry/provenance
+  candidate versions + active pointers + audit events
+Private Blob Storage
+  immutable objects keyed by SHA-256
+Backend
+  /assets/<semantic-slot> -> /api/media/<sha256>
 ```
 
-The PNG files should be the browser-loaded sprite sheets. The JSON files should
-define frame rectangles, anchors, collision/occupancy hints, terrain tags, and
-optional palette metadata. The manifest should map semantic IDs such as
+The immutable objects are the browser-loaded sprite sheets. Typed catalog
+metadata defines frame rectangles, anchors, collision/occupancy hints, terrain
+tags, and optional palette metadata. Stable slots map semantic IDs such as
 `terrain.grass.a`, `piece.player.knight.idle`, or `prop.rock.small` to a sheet
 and frame, so game code does not rely on hard-coded sheet coordinates.
 

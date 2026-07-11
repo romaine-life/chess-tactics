@@ -2,8 +2,8 @@
 """Bake the animated water-top ripple sheets (water-<n>-top-anim.png).
 
 Input: PixelLab v3 animation frames generated at the NATIVE 96x180 tile frame
-(custom_start_frame = the variant's static `water-<n>-top.png`), downloaded to
-a run directory (see docs/art/pixellab-runs/) laid out as `v<n>/<i>.png`.
+(custom_start_frame = the variant's static `water-<n>-top.png`), fetched from
+live media into a temporary source directory laid out as `v<n>/<i>.png`.
 
 The generated frames are CANDIDATES, not authority (docs/pixellab-api-notes.md):
 this script owns acceptance of the geometry.
@@ -15,15 +15,15 @@ Per variant:
      only where the static top is opaque, and any pixel the model erased falls
      back to the static RGB. Nothing can move outside the diamond and the
      tile's footprint is bit-identical across frames (no wobble);
-  3. assemble the kept frames left-to-right into one horizontal sheet at
-     frontend/public/assets/tiles/surface/water-<n>-top-anim.png.
+  3. assemble the kept frames left-to-right into one horizontal candidate sheet.
 
 Frame selection: PixelLab v3 stores 9 frames — index 0 is the input reference
 (the static top itself) and 1..8 are generated. We keep 0..7 so the loop's
 wrap lands back on the real static art (frame 8 is usually ~= frame 0 anyway).
 
 Usage:
-  python scripts/build-water-anim.py <runDir> [--variants 0,1,...] [--frames 8]
+  python scripts/build-water-anim.py --static-dir <fetched> --out-dir <temp> \
+    <temporary-frame-dir> [--variants 0,1,...] [--frames 8]
 
 The frame count baked here must match WATER_TOP_ANIM_FRAMES in src/art/tileset.ts.
 """
@@ -34,8 +34,6 @@ from pathlib import Path
 
 from PIL import Image
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-SURFACE_DIR = SCRIPT_DIR.parent / "public" / "assets" / "tiles" / "surface"
 FRAME_W, FRAME_H = 96, 180
 
 
@@ -65,8 +63,8 @@ def lock_frame(frame: Image.Image, static: Image.Image) -> tuple[Image.Image, in
     return out, changed
 
 
-def bake_variant(run_dir: Path, n: int, frames: int) -> None:
-    static_path = SURFACE_DIR / f"water-{n}-top.png"
+def bake_variant(run_dir: Path, static_dir: Path, output_dir: Path, n: int, frames: int) -> None:
+    static_path = static_dir / f"water-{n}-top.png"
     static = Image.open(static_path).convert("RGBA")
     if static.size != (FRAME_W, FRAME_H):
         sys.exit(f"{static_path}: static top is {static.size}, expected {(FRAME_W, FRAME_H)}")
@@ -83,19 +81,22 @@ def bake_variant(run_dir: Path, n: int, frames: int) -> None:
         sheet.paste(locked, (FRAME_W * i, 0))
         report.append(f"{changed * 100 // max(opaque, 1)}%")
 
-    out_path = SURFACE_DIR / f"water-{n}-top-anim.png"
+    out_path = output_dir / f"water-{n}-top-anim.png"
     sheet.save(out_path, optimize=True)
     print(f"water-{n}: {out_path.name} ({sheet.size[0]}x{sheet.size[1]}), moved-vs-static per frame: {' '.join(report)}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("run_dir", type=Path, help="downloaded PixelLab frames, laid out v<n>/<i>.png")
+    parser.add_argument("run_dir", type=Path, help="temporary fetched PixelLab frames, laid out v<n>/<i>.png")
+    parser.add_argument("--static-dir", required=True, type=Path, help="Fetched active water top candidates")
+    parser.add_argument("--out-dir", required=True, type=Path, help="Temporary output directory; upload each sheet as a live-media candidate")
     parser.add_argument("--variants", default="0,1,2,3,4,5,6,7")
     parser.add_argument("--frames", type=int, default=8)
     args = parser.parse_args()
+    args.out_dir.mkdir(parents=True, exist_ok=True)
     for n in (int(v) for v in args.variants.split(",")):
-        bake_variant(args.run_dir, n, args.frames)
+        bake_variant(args.run_dir, args.static_dir, args.out_dir, n, args.frames)
 
 
 if __name__ == "__main__":

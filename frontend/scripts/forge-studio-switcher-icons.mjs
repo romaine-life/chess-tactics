@@ -1,4 +1,4 @@
-// forge-studio-switcher-icons.mjs — one-off: forge the three Studio workspace-switcher
+// Forge the three Studio workspace-switcher
 // glyphs (open book = Catalog, alchemical flask = Lab, magnifying glass = Viewer) as
 // indie game-art icons of general, period-plausible objects (~0–1750 AD). They are NOT
 // anchored to the anti-story lore (ADR-0035) — the owner's call (2026-07-03): they read as
@@ -14,19 +14,18 @@
 //   (image_generation_call, never stdout) -> despill to alpha -> low-fi downscale/quantize
 //   -> trim to the glyph -> pad to the 64x64 icon canvas -> dimension assert.
 //
-//   node scripts/forge-studio-switcher-icons.mjs [catalog lab viewer]
+//   node scripts/forge-studio-switcher-icons.mjs [catalog lab viewer] --slot-prefix <slot> -- <upload options>
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 import { runCodex, imageGenVerdict, sessionImage } from './codex-imagegen.mjs';
 import { trimToEdge, padToCanvas } from './forge-atom.mjs'; // pure pngjs helpers — no machine paths
+import { optionValue, splitGeneratorArgs, uploadGeneratedCandidate } from './upload-generated-candidate.mjs';
 
-const FRONTEND = fileURLToPath(new URL('..', import.meta.url));
-const OUT_DIR = join(FRONTEND, 'public/assets/ui/kit/icons');
-const TMP = join(FRONTEND, 'tmp-forge-studio'); // evidence + intermediates (raw plate, smooth cutout, rollout jsonl)
+const TMP = mkdtempSync(join(tmpdir(), 'forge-studio-run-'));
+const OUT_DIR = join(TMP, 'out');
 
 // This laptop ships no PIL-python on PATH, and forge-atom/codex-imagegen call bare `python`.
 // So both python steps (codex's chroma-key script + the low-fi downscale) run through a
@@ -131,14 +130,6 @@ function finish(name, spec, rawCopy) {
 async function forgeOne(name, spec, maxTries) {
   const rawCopy = join(TMP, `${name}-raw.png`);
   mkdirSync(TMP, { recursive: true });
-  // REUSE_RAW: reprocess an already-generated plate (keep a good roll, iterate post-processing free).
-  if (process.env.REUSE_RAW === '1' && existsSync(rawCopy)) {
-    process.stdout.write(`\n[${name}] REUSE_RAW — reprocessing saved ${name}-raw.png (no generation)\n`);
-    const r = finish(name, spec, rawCopy);
-    if (r.ok) { console.log(`  ✓ ${spec.out} — 64×64, ${Math.round(r.frac * 100)}% transparent (reused raw)`); return { name, ok: true, out: r.out }; }
-    console.log(`  ✗ ${r.reason}`);
-    return { name, ok: false };
-  }
   const keys = ['#ff00ff', '#00ff00']; // magenta first (subjects carry greens/ambers); alternate if it collides
   let prior = '';
   for (let attempt = 1; attempt <= maxTries; attempt++) {
@@ -157,7 +148,13 @@ async function forgeOne(name, spec, maxTries) {
     if (!raw) { console.log('  no generated image in the session dir; retrying'); continue; }
     copyFileSync(raw, rawCopy);
     const r = finish(name, spec, rawCopy);
-    if (r.ok) { console.log(`  ✓ ${spec.out} — 64×64, ${Math.round(r.frac * 100)}% transparent (image_generation_call verified)`); return { name, ok: true, out: r.out }; }
+    if (r.ok) {
+      const provenance = join(TMP, `${name}-provenance.json`);
+      writeFileSync(provenance, `${JSON.stringify({ generator: 'forge-studio-switcher-icons', threadId: verdict.tid, icon: name }, null, 2)}\n`);
+      uploadGeneratedCandidate(r.out, [...uploadArgs, '--provenance-json', provenance], `${slotPrefix}/${spec.out}`);
+      console.log(`  ✓ ${spec.out} — 64×64, ${Math.round(r.frac * 100)}% transparent (uploaded)`);
+      return { name, ok: true, out: `${slotPrefix}/${spec.out}` };
+    }
     if (r.collision) {
       console.log(`  transparency ${Math.round(r.frac * 100)}% out of range — key ${key} likely collided; switching key & retrying`);
       prior = `the previous cutout came out ${Math.round(r.frac * 100)}% transparent — the ${key} chroma color probably also appeared in the object and punched holes. Keep the object completely free of ${key}.`;
@@ -169,11 +166,16 @@ async function forgeOne(name, spec, maxTries) {
   return { name, ok: false };
 }
 
-const argv = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const { toolArgs, uploadArgs } = splitGeneratorArgs(process.argv.slice(2));
+const slotPrefix = optionValue(toolArgs, '--slot-prefix').replace(/\/+$/, '');
+if (!slotPrefix || !uploadArgs.length) throw new Error('forge-studio-switcher-icons requires --slot-prefix and live-media options after --');
+const prefixIndex = toolArgs.indexOf('--slot-prefix');
+const argv = toolArgs.filter((_, index) => index !== prefixIndex && index !== prefixIndex + 1).filter((a) => !a.startsWith('--'));
 const names = argv.length ? argv.filter((a) => SPECS[a]) : Object.keys(SPECS);
 console.log(`forge-studio-switcher-icons: ${names.join(', ')}`);
 const results = [];
 for (const n of names) results.push(await forgeOne(n, SPECS[n], 3)); // SEQUENTIAL: bail-friendly + avoids the concurrent image cross-grab
 console.log(`\n==== ${results.filter((r) => r.ok).length}/${results.length} forged ====`);
 for (const r of results) console.log(`  ${r.ok ? '✓' : '✗'} ${r.name}${r.ok ? ` -> ${r.out}` : ''}`);
+rmSync(TMP, { recursive: true, force: true });
 process.exit(results.every((r) => r.ok) ? 0 : 1);

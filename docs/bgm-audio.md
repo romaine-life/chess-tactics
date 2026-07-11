@@ -53,7 +53,9 @@ No git, no build, no redeploy.
   It joins the shuffle within the cache TTL. To give it a clean title without
   typing, run **Sync BGM metadata** (below) — it reads the mp3's ID3 tag and writes
   the `title`/`artist`/`album` metadata. Or set that metadata by hand.
-- **Remove a song** — delete the blob. It leaves the shuffle within the cache TTL.
+- **Remove a song** — an operator identity with explicit delete scope removes the
+  blob through the portal or Storage Explorer. The app and metadata-sync identity
+  intentionally cannot delete. The song leaves the shuffle within the cache TTL.
 - **Rename a title** — edit the blob's `title` metadata in the portal. That's the
   source of truth; the sync tool won't overwrite a title you've set.
 
@@ -66,7 +68,8 @@ it — and **non-clobbering**: it only fills blobs whose `title` metadata is emp
 
 - **From CI (one click):** run the **Sync BGM metadata** workflow
   (`.github/workflows/sync-bgm-metadata.yml`, `workflow_dispatch`). It authenticates
-  with the CI service principal (`Storage Blob Data Contributor`).
+  with the CI service principal and the custom `Chess Tactics Immutable Media
+  Writer` role scoped only to the `bgm` container.
 - **Locally:** `az login`, then
   `npm --prefix tools/bgm install && node tools/bgm/sync-metadata.mjs [--force] [--dry-run]`.
 
@@ -80,14 +83,16 @@ provisioned by this repo's OpenTofu (`tofu/storage.tf`):
   not list)
 - role assignments: the app's workload identity gets `Storage Blob Data Reader`
   (list + read, for `/api/bgm`); the CI service principal gets
-  `Storage Blob Data Contributor` (for the metadata-sync workflow)
+  the custom immutable-media read/write role without delete or container-policy
+  permissions (for the metadata-sync workflow)
 - the backend's `BGM_BASE_URL` (`k8s/values.yaml`) is this container's public base
 
 > Historical note: the soundtrack mp3s were originally uploaded from a long-lived
 > `nelson/songs` git branch via an `upload-bgm` pipeline that also wrote an
 > `index.json` manifest. That branch + pipeline + manifest are retired — the
-> container is now self-describing. The branch may be kept as a cold backstop, but
-> nothing reads from it.
+> container is now self-describing. Any surviving media branch is migration debt
+> and should be deleted after the backend/object-store inventory is verified; Git
+> is not a media backup tier.
 
 ## Provisioning runbook (one time)
 
@@ -99,7 +104,7 @@ CI lives in `.github/workflows/`: `tofu.yaml` (plan/apply) and `sync-bgm-metadat
 2. **Apply this repo's tofu** — the `Infrastructure` workflow plans on PR and
    applies on merge to `main`, creating the storage account, the `bgm` container,
    the app identity's `Storage Blob Data Reader` role, and CI's
-   `Storage Blob Data Contributor` role.
+   custom immutable-media writer role scoped to that container.
 3. **Add the tracks** — upload `.mp3`s into the `bgm` container (portal / Storage
    Explorer), then run **Sync BGM metadata** to seed titles from their ID3 tags.
 

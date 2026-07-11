@@ -7,7 +7,7 @@ This manifest defines the next production art batch for the Tileset Studio board
 - Canonical canvas: `96x140px`
 - Top diamond: `96x55.426px`
 - Grid step: `stepX 48`, `stepY 27.713`
-- Style target: `frontend/public/assets/art/skirmish-style-target.png`
+- Style target: live slot `/assets/art/skirmish-style-target.png`
 - Current base families: Grass, Stone, Water
 - Current transition pairs: Grass-Stone, Grass-Water, Stone-Water
 
@@ -106,4 +106,4 @@ The batch is accepted when:
 - Batch C covers all supported pairs with at least the single-edge and adjacent-corner masks accepted.
 - Missing lower-priority masks are documented as explicit open slots, not silent gaps.
 - Generated board previews show legal sockets and no visible geometry drift.
-- The board reads as one tactics surface matching `frontend/public/assets/art/skirmish-style-target.png`.
+- The board reads as one tactics surface matching live slot `/assets/art/skirmish-style-target.png`.

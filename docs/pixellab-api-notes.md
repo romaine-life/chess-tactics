@@ -85,9 +85,9 @@ Do not accept generated tile art directly.
 The pipeline should be:
 
 1. Generate candidate art with PixelLab or another image tool.
-2. Download outputs into `docs/art/...` for auditability.
-3. Normalize candidates into `frontend/public/assets/tiles/...` only when they
-   are worth testing in the app.
+2. Upload raw outputs as private source versions with provenance.
+3. Upload normalized outputs as live terrain candidates when they are worth
+   testing in the app.
 4. Verify canonical footprint, edge angle, side height, and socket legality.
 5. Review in Tileset Studio at tile scale and board scale.
 6. Promote only accepted assets into the main catalog.

@@ -24,7 +24,7 @@ export type UnitAsset = {
   family: PieceId;
   label: string;
   badge: string;
-  preview: string;
+  preview: string | null;
   read: string;
   status: string;
   directions?: Direction[];
@@ -44,7 +44,7 @@ export type UnitAsset = {
   complete?: boolean;
   spriteCount?: number;
   rowRevision?: number;
-  sprite: (faction: Faction, direction: Direction) => string;
+  sprite: (faction: Faction, direction: Direction) => string | null;
 };
 
 export type LiveUnitSprite = {
@@ -197,15 +197,6 @@ export const directionCompassCells: Array<Direction | 'center'> = [
 
 const paletteSprite = (piece: PieceId) => (faction: Faction, direction: Direction) => pieceSpritePath(piece, faction, direction);
 
-export const MISSING_DIRECTION_SPRITE =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'>" +
-      "<path d='M80 26 L144 80 L80 134 L16 80 Z' fill='none' stroke='#8fb8ff' stroke-width='3' stroke-dasharray='6 6' opacity='0.4'/>" +
-      "<text x='80' y='96' font-size='42' text-anchor='middle' fill='#8fb8ff' opacity='0.5' font-family='sans-serif'>?</text>" +
-      '</svg>',
-  );
-
 export const hasDirectionSprite = (unit: UnitAsset, dir: Direction) => (unit.directions ? unit.directions.includes(dir) : dir === 'south');
 
 const productionUnits: UnitAsset[] = [];
@@ -221,17 +212,17 @@ export const activeUnitFamilies: PieceId[] = ['pawn', 'rook', 'knight', 'bishop'
 
 let liveUnitCatalog: LiveUnitCatalog | null = null;
 
-const candidateSprite = (asset: LiveUnitCatalogAsset) => (faction: Faction, direction: Direction): string =>
-  asset.sprites[faction]?.[direction]?.url ?? MISSING_DIRECTION_SPRITE;
+const candidateSprite = (asset: LiveUnitCatalogAsset) => (faction: Faction, direction: Direction): string | null =>
+  asset.sprites[faction]?.[direction]?.url ?? null;
 
-const candidatePreview = (asset: LiveUnitCatalogAsset): string => {
+const candidatePreview = (asset: LiveUnitCatalogAsset): string | null => {
   const preferred = asset.sprites['navy-blue']?.south?.url;
   if (preferred) return preferred;
   for (const palette of Object.values(asset.sprites)) {
     if (!palette) continue;
     for (const sprite of Object.values(palette)) if (sprite?.url) return sprite.url;
   }
-  return MISSING_DIRECTION_SPRITE;
+  return null;
 };
 
 const effectiveScalePercent = (familyScalePercent: number, nativeScalePercent: number): number =>

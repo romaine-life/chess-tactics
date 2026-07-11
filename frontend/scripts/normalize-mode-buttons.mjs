@@ -1,5 +1,6 @@
-// Phase-1 asset normalizer for the main-menu button family, aligned to the
-// asset catalog (frontend/src/asset-catalog.json).
+// Phase-1 candidate normalizer for the main-menu button family. Runtime media
+// identity and active pointers live in the backend catalog; Git owns only the
+// deterministic slot geometry consumed by this tool.
 //
 // Hybrid pipeline (method "c"): generated concept art -> mechanical cleanup ->
 // reusable, swappable game assets in the DECOMPOSED catalog model.
@@ -15,22 +16,30 @@
 //
 // Frame + icons come from the same sheet and the same badge geometry, so the
 // punched hole and the icon asset line up by construction (no hand-measured
-// coordinates to drift). The script PRINTS the slot rects to paste into the
-// catalog. Background keying uses a low flood tolerance because the dark plate
+// coordinates to drift). The script PRINTS the slot rects as candidate metadata
+// for review. Background keying uses a low flood tolerance because the dark plate
 // sits only ~14-20 units from the near-black background while the bright frame
 // edge is 60+ away.
 //
-// Deterministic and re-runnable. Run: node scripts/normalize-mode-buttons.mjs
+// Deterministic and re-runnable. The source must be fetched from live media and
+// outputs must be written to a temporary directory, then uploaded as candidates.
 
 import { PNG } from 'pngjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const UI_DIR = path.resolve(__dirname, '../public/assets/ui');
-const OUT_DIR = path.join(UI_DIR, 'main-menu');
-const FIVE = path.join(UI_DIR, 'main-menu-button-art-five-mode.png');
+const argv = process.argv.slice(2);
+const option = (name) => {
+  const index = argv.indexOf(`--${name}`);
+  return index >= 0 ? argv[index + 1] : undefined;
+};
+const sourceOption = option('source');
+const outputOption = option('out-dir');
+if (!sourceOption || !outputOption) {
+  console.error('Usage: node scripts/normalize-mode-buttons.mjs --source <fetched.png> --out-dir <temp-output>');
+  process.exit(2);
+}
+const OUT_DIR = path.resolve(outputOption);
+const FIVE = path.resolve(sourceOption);
 
 const FLOOD_TOL = 10;
 const ICON_KEY_TOL = 60; // keying the navy plate from around the icon badge
@@ -378,7 +387,7 @@ function main() {
   ICON_IDS.forEach((id, i) => over(cs, resize(readPNG(path.join(OUT_DIR, `icon-${id}.png`)), isz, isz), pad + i * (isz + 8), pad * 3 + plateH * 2));
   writePNG(cs, path.join(OUT_DIR, 'contact-sheet.png'));
 
-  console.log('\n=== paste into asset-catalog.json (button-9slice.main-menu) ===');
+  console.log('\n=== code-owned button geometry for candidate review ===');
   console.log(`sheet: { image: "/assets/ui/main-menu/button-9slice.png", width: ${plateW}, height: ${plateH * 2} }`);
   console.log(`states.normal.rect: { x: 0, y: 0, w: ${plateW}, h: ${plateH} }`);
   console.log(`states.pressed.rect:   { x: 0, y: ${plateH}, w: ${plateW}, h: ${plateH} }`);
@@ -386,6 +395,7 @@ function main() {
   console.log(`rules.textInset: ${JSON.stringify(textInset)}`);
   console.log(`rules.arrowSlot: ${JSON.stringify(arrowSlot)}`);
   console.log(`done -> ${path.relative(process.cwd(), OUT_DIR)} (frame + ${ICON_IDS.length} icons + contact sheet)`);
+  console.log('Upload the output files and their geometry as live-media candidates; this script does not publish repository media.');
 }
 
 main();

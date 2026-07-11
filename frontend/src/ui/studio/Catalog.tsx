@@ -17,7 +17,7 @@ export interface CatalogFilterDim<A> {
 }
 
 export interface CatalogCardModel {
-  img: string;
+  img: string | null;
   title: string;
   badge: string;
   /** Adds the unit card-image styling (taller, non-iso). */
@@ -113,7 +113,11 @@ function CatalogCard<A extends { id: string }>({ type, asset }: { type: CatalogT
       aria-pressed={selected}
     >
       <span className={`tileset-studio-card-image ${model.isUnit ? 'unit-card-image' : ''}`.trim()} style={zoomStyle}>
-        {type.cardMedia ? type.cardMedia(asset) : <img src={model.img} alt="" draggable={false} loading="eager" decoding="sync" />}
+        {type.cardMedia
+          ? type.cardMedia(asset)
+          : model.img
+            ? <img src={model.img} alt="" draggable={false} loading="eager" decoding="sync" />
+            : <span className="tileset-card-missing-media">Missing media</span>}
       </span>
       <span className="tileset-studio-card-meta">
         <span className="tileset-studio-card-text">

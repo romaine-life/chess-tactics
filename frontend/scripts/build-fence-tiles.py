@@ -7,49 +7,29 @@ alpha-only geometry masks to project the documented wood/stone sources into the
 canonical 96x180 fence frame, and seats generated post cutouts on the same
 anchor.
 
-PRODUCTION STATUS: calibration bridge only. This script spatially resizes its
+STATUS: calibration candidate only. This script spatially resizes its
 material and post sources, so ADR-0075 forbids treating its output as accepted
 production art. Keep it for footprint/anchor review until the sources are
 regenerated at their required pixels and the resize stages are removed.
 
-Inputs:
-  docs/art/wall-concepts/materials/pixellab/wood-palisade.png
-  docs/art/wall-concepts/materials/source/stone-photoscan.png
-  docs/art/fence-concepts/endings/codex/{wood,stone}-terminal-alpha.png
-
-Outputs:
-  frontend/public/assets/tiles/feature/fence-<material>-{2,4,6}.png
-  frontend/public/assets/tiles/feature/fence-<material>-post.png
-  frontend/public/assets/tiles/feature/fence-<material>-{post-,}thumb.png
-  docs/art/fence-concepts/proofs/fence-<material>-runtime-proof.png
-  docs/art/fence-concepts/fence-bake-contact-sheet.png
-
-Run from the repository root or frontend/:
-
-  python frontend/scripts/build-fence-tiles.py
+Inputs are fetched into an explicit source bundle; outputs and proofs are written
+to explicit temporary directories and then uploaded through the live-media admin
+workflow. This script never publishes or promotes.
 """
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance
 
 
-ROOT = Path(__file__).resolve().parents[2]
-OUT_DIR = ROOT / "frontend" / "public" / "assets" / "tiles" / "feature"
-FENCE_DOCS = ROOT / "docs" / "art" / "fence-concepts"
-PROOF_DIR = FENCE_DOCS / "proofs"
-RUNTIME_TILE = ROOT / "frontend" / "public" / "assets" / "tiles" / "surface" / "grass-0.png"
-
-MATERIAL_INPUTS = {
-    "wood": ROOT / "docs" / "art" / "wall-concepts" / "materials" / "pixellab" / "wood-palisade.png",
-    "stone": ROOT / "docs" / "art" / "wall-concepts" / "materials" / "source" / "stone-photoscan.png",
-}
-POST_INPUTS = {
-    "wood": FENCE_DOCS / "endings" / "codex" / "wood-terminal-alpha.png",
-    "stone": FENCE_DOCS / "endings" / "codex" / "stone-terminal-alpha.png",
-}
+OUT_DIR: Path
+PROOF_DIR: Path
+RUNTIME_TILE: Path
+MATERIAL_INPUTS: dict[str, Path]
+POST_INPUTS: dict[str, Path]
 
 FRAME_W = 96
 FRAME_H = 180
@@ -268,10 +248,22 @@ def write_contact_sheet(proofs: dict[str, Image.Image]) -> None:
     sheet = Image.new("RGBA", (cell_w * len(proofs), cell_h), (10, 16, 22, 255))
     for index, proof in enumerate(proofs.values()):
         sheet.alpha_composite(proof, (index * cell_w, 0))
-    sheet.save(FENCE_DOCS / "fence-bake-contact-sheet.png")
+    sheet.save(PROOF_DIR / "fence-bake-contact-sheet.png")
 
 
 def main() -> None:
+    global OUT_DIR, PROOF_DIR, RUNTIME_TILE, MATERIAL_INPUTS, POST_INPUTS
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source-dir', required=True, type=Path, help='Temporary bundle containing wood-material.png, stone-material.png, wood-post.png, stone-post.png, runtime-tile.png')
+    parser.add_argument('--out-dir', required=True, type=Path, help='Temporary candidate output directory')
+    parser.add_argument('--proof-dir', required=True, type=Path, help='Temporary supplementary proof directory')
+    args = parser.parse_args()
+    source_dir = args.source_dir.resolve()
+    OUT_DIR = args.out_dir.resolve()
+    PROOF_DIR = args.proof_dir.resolve()
+    RUNTIME_TILE = source_dir / 'runtime-tile.png'
+    MATERIAL_INPUTS = {'wood': source_dir / 'wood-material.png', 'stone': source_dir / 'stone-material.png'}
+    POST_INPUTS = {'wood': source_dir / 'wood-post.png', 'stone': source_dir / 'stone-post.png'}
     missing = [path for path in [*MATERIAL_INPUTS.values(), *POST_INPUTS.values(), RUNTIME_TILE] if not path.exists()]
     if missing:
         raise FileNotFoundError("missing fence source art:\n  " + "\n  ".join(str(path) for path in missing))

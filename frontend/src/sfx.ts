@@ -23,6 +23,7 @@
 //   - Bounded: a polyphony cap drops (or steals) voices so a flurry of rapid moves
 //     can never pile up an unbounded graph of nodes.
 
+import { liveMediaSlotsWithPrefix } from '@chess-tactics/board-render';
 import type { TerrainType } from './core/types';
 
 // ---- settings contract (shared with Settings.tsx) --------------------------
@@ -303,8 +304,9 @@ function registerVoice(node: GainNode, duration: number): void {
 }
 
 // ---- authored sample sets --------------------------------------------------
-// Terrains are voiced by recorded foley: a set of one-shot take variants under
-// /assets/sfx/<key>/ (sliced from the raw recordings; see tools/sfx/slice-sfx.sh).
+// Terrains are voiced by recorded foley: a set of one-shot take variants whose
+// live semantic slots share the `sfx/<key>/` prefix. The backend catalog, not a
+// packaged manifest or directory listing, owns which takes currently exist.
 // When a set is decoded we play a RANDOM take per landing so repeated moves never
 // fatigue. Until a set is decoded (or if it fails to load) that terrain is briefly
 // silent; a terrain with no entry at all (only the impassable cliff/rock) is always
@@ -312,8 +314,6 @@ function registerVoice(node: GainNode, duration: number): void {
 //
 // 'arrival' is not a terrain — it's the "unit lands on the board" thump, layered on
 // top of the per-terrain spawn sound (see store.ts deploy roll-call) via playArrival.
-
-const SAMPLE_BASE = '/assets/sfx';
 
 // Per-set level trim. The recordings are peak-normalised (hot, ~-1.5 dBFS), so they
 // play attenuated; tune per set to balance the terrains against each other by ear.
@@ -351,7 +351,25 @@ interface SampleSet {
 
 const sampleSets: Partial<Record<SampleKey, SampleSet>> = {};
 
-// Fetch a set's manifest + decode every take into an AudioBuffer. Idempotent: a set
+const sampleVariantPattern = /^v(\d+)\.(?:aac|flac|m4a|mp3|oga|ogg|wav|webm)$/i;
+
+/** Resolve one authored set from the required live catalog, never a packaged manifest. */
+export function authoredSampleUrls(key: SampleKey): string[] {
+  const prefix = `sfx/${key}/`;
+  return liveMediaSlotsWithPrefix(prefix)
+    .flatMap((entry) => {
+      const filename = entry.slot.slice(prefix.length);
+      const match = sampleVariantPattern.exec(filename);
+      return match && entry.media.mediaType.startsWith('audio/')
+        ? [{ url: entry.media.immutableUrl, index: Number(match[1]), filename }]
+        : [];
+    })
+    .sort((left, right) => left.index - right.index || left.filename.localeCompare(right.filename))
+    .map((entry) => entry.url);
+}
+
+// Resolve a set from the hydrated backend catalog + decode every take into an
+// AudioBuffer. Idempotent: a set
 // already loading/loaded is left alone. Safe to call before any gesture — decoding
 // works on a suspended context; only *playback* needs the resume.
 async function loadSampleSet(key: SampleKey): Promise<void> {
@@ -365,18 +383,14 @@ async function loadSampleSet(key: SampleKey): Promise<void> {
   set.state = 'loading';
   set.promise = (async () => {
     try {
-      const res = await w.fetch(`${SAMPLE_BASE}/${key}/manifest.json`);
-      if (!res.ok) throw new Error(`manifest ${res.status}`);
-      const man = (await res.json()) as { variants?: unknown };
-      const variants = Array.isArray(man.variants)
-        ? man.variants.filter((v): v is string => typeof v === 'string')
-        : [];
+      const variants = authoredSampleUrls(key);
+      if (!variants.length) throw new Error(`live media catalog has no authored ${key} samples`);
       set.variants = variants;
       set.buffers = new Array(variants.length).fill(null);
       await Promise.all(
-        variants.map(async (name, i) => {
+        variants.map(async (url, i) => {
           try {
-            const r = await w.fetch(`${SAMPLE_BASE}/${key}/${name}`);
+            const r = await w.fetch(url);
             if (!r.ok) return;
             const ab = await r.arrayBuffer();
             set.buffers[i] = await context.decodeAudioData(ab);

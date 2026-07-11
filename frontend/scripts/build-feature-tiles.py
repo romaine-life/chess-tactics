@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Bake the linear-FEATURE overlay sets (roads + rivers) — 16 transparent tiles per
-material, one per 4-bit connection mask — into
-public/assets/tiles/feature/<kind>-<material>-<mask>.png (+ a square -thumb.png).
+"""Bake linear-feature candidate sets (roads + rivers), one transparent tile per
+4-bit connection mask, in an explicit temporary workspace.
 
 Per ADR-0040 (own the geometry, generate the material): the connection FOOTPRINT is
 ours (so pieces always tessellate), the painted SURFACE is GENERATED art. NO code-drawn
@@ -9,33 +8,30 @@ fills.
 
 THE METHOD (authored + seamless), same for every material:
   A code-drawn GUIDE map of all connection cases on a grid
-  (docs/art/codex-runs/roads/dirt-base-guide.png) is repainted by codex in ONE pass as
-  authored pixel art (committed sources: docs/art/codex-runs/<kind>s/<material>-network.png).
+  is repainted by an image model in one pass as authored pixel art.
   We slice each case cell out of that single drawing, EDGE-HEAL it (clamp the ribbon to a
   consistent width so it can't bulge/pinch, force the path to cross every tile edge at one
   canonical centred band, fade non-connected edges to grass) so REUSED tiles tessellate,
   rotate the base cases to cover all 16 masks, and project into the iso diamond. Organic
   interior, seam-clean edges. Roads = dirt/cobble; rivers = water (water body + bank), all
-  via this one pipeline. To add a material: codex-repaint the guide, drop the result under
-  docs/art/codex-runs/<kind>s/, add it to FEATURES, re-run.
+  via this one pipeline. Sources are fetched from live storage and outputs are
+  uploaded as typed candidates; this script does not publish or promote.
 
 Geometry pinned to the canonical iso frame (matches build-surface-tiles.py and the
 .tileset-generated-board-tile / boardProjection contract):
   frame 96x180; top diamond APEX(48,41) RIGHT(96,68) FRONT(48,95) LEFT(0,68)
 Bit order N,E,S,W = 1,2,4,8, matching featureAutotile.FEATURE_DIRS.
 
-Usage (from frontend/):  python scripts/build-feature-tiles.py
+Usage: python scripts/build-feature-tiles.py --source-dir <temp> --out-dir <temp>
 """
 import math
+import argparse
 import os
-import sys
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.normpath(os.path.join(HERE, '..'))
-CODEX = os.path.normpath(os.path.join(ROOT, '..', 'docs', 'art', 'codex-runs'))  # /<kind>s/<material>-network.png
-OUT = os.path.join(ROOT, 'public', 'assets', 'tiles', 'feature')
+CODEX: str
+OUT: str
 
 W, H = 96, 180
 APEX, RIGHT, FRONT, LEFT = (48, 41), (96, 68), (48, 95), (0, 68)
@@ -271,7 +267,15 @@ COMPARE = [('river', 'waternb', 'water', 0), ('river', 'waterwide', 'water', 11)
 
 
 def main():
-    compare = '--compare' in sys.argv
+    global CODEX, OUT
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source-dir', required=True, help='Fetched network sources arranged as <kind>s/<material>-network.png')
+    parser.add_argument('--out-dir', required=True, help='Temporary candidate output directory')
+    parser.add_argument('--compare', action='store_true')
+    args = parser.parse_args()
+    CODEX = os.path.abspath(args.source_dir)
+    OUT = os.path.abspath(args.out_dir)
+    compare = args.compare
     os.makedirs(OUT, exist_ok=True)
     for stale in os.listdir(OUT):
         if stale.endswith('.png') and (stale.startswith('road-') or stale.startswith('river-') or stale.startswith('bridge-')):

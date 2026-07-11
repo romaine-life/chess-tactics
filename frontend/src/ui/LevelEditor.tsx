@@ -14,9 +14,10 @@ import {
   transformFenceArtReviewOps,
 } from './fenceArtReview';
 import {
-  FENCE_ART_KITS,
   cycleFenceArtKit,
   fenceArtKit,
+  fenceArtKits as projectFenceArtKits,
+  fenceArtworkBackendReview,
   type FenceArtKit,
 } from './fenceCandidateProfiles';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
@@ -118,6 +119,7 @@ import { OBJECTIVE_LABEL } from '../core/objectives';
 import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, mapSaveError } from '../campaign/save';
 import { fetchMeStatus, goSignIn, signInHref, type AuthUser } from '../net/auth';
+import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
   autosaveEditorDocument,
   autosaveEditorDocumentOnPageHide,
@@ -1974,7 +1976,7 @@ export function LevelEditor(): ReactElement {
   const loadedBoard = useMemo(() => readBoardParam(), []);
   const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const fenceArtReviewEnabled = urlParams.get('artReview') === FENCE_ART_REVIEW_ID;
-  const initialFenceArtwork = fenceArtKit(urlParams.get('fenceArt')) ?? FENCE_ART_KITS[0];
+  const initialFenceArtworkId = urlParams.get('fenceArt') ?? '';
   const urlTimeControl = useMemo(() => readTimeControlParams(urlParams), [urlParams]);
   const urlEvents = useMemo(() => readLevelEventsParam(urlParams), [urlParams]);
   const urlVictory = useMemo(() => readVictoryRulesParam(urlParams), [urlParams]);
@@ -2126,11 +2128,38 @@ export function LevelEditor(): ReactElement {
   // Positive authored posts live at logical grid vertices. Automatic degree-one open-end posts are
   // still derived from the rails; these entries only add/override posts and may stand alone.
   const [boardFencePosts, setBoardFencePosts] = useState<Record<string, FenceMaterial>>(initialBoard?.fencePosts ?? {});
-  const [selectedFenceArtworkId, setSelectedFenceArtworkId] = useState(initialFenceArtwork.id);
-  const activeFenceArtwork = fenceArtReviewEnabled ? (fenceArtKit(selectedFenceArtworkId) ?? initialFenceArtwork) : undefined;
-  const [fenceBrushMaterial, setFenceBrushMaterial] = useState<FenceMaterial>(() =>
-    fenceArtReviewEnabled ? initialFenceArtwork.material : DEFAULT_FENCE_MATERIAL);
+  const [fenceAdminCatalog, setFenceAdminCatalog] = useState<AdminLiveMediaCatalog | null>(null);
+  const [fenceCatalogError, setFenceCatalogError] = useState<string | null>(null);
+  const fenceArtCatalog = useMemo(() => projectFenceArtKits(fenceAdminCatalog), [fenceAdminCatalog]);
+  const [selectedFenceArtworkId, setSelectedFenceArtworkId] = useState(initialFenceArtworkId);
+  const activeFenceArtwork = fenceArtReviewEnabled
+    ? (fenceArtKit(fenceArtCatalog, selectedFenceArtworkId) ?? fenceArtCatalog[0])
+    : undefined;
+  const activeFenceArtworkReview = activeFenceArtwork ? fenceArtworkBackendReview(activeFenceArtwork) : undefined;
+  const fenceReviewCatalogMessage = fenceCatalogError
+    ?? (fenceAdminCatalog ? 'No complete E/S fence review kit exists in the backend catalog.' : 'Loading backend fence review media…');
+  const [fenceBrushMaterial, setFenceBrushMaterial] = useState<FenceMaterial>(DEFAULT_FENCE_MATERIAL);
   const [fencePaintTarget, setFencePaintTarget] = useState<FencePaintTarget>('rail');
+  useEffect(() => {
+    if (!fenceArtReviewEnabled) return undefined;
+    let cancelled = false;
+    void fetchAdminLiveMediaCatalog().then((catalog) => {
+      if (cancelled) return;
+      setFenceAdminCatalog(catalog);
+      setFenceCatalogError(null);
+    }).catch((error: unknown) => {
+      if (cancelled) return;
+      setFenceAdminCatalog(null);
+      setFenceCatalogError(error instanceof Error ? error.message : String(error));
+    });
+    return () => { cancelled = true; };
+  }, [fenceArtReviewEnabled]);
+  useEffect(() => {
+    if (!activeFenceArtwork) return;
+    setSelectedFenceArtworkId(activeFenceArtwork.id);
+    setFenceBrushMaterial(activeFenceArtwork.material);
+    if (!activeFenceArtwork.post) setFencePaintTarget('rail');
+  }, [activeFenceArtwork]);
   // Edge walls use fence-style edge keys, but the editor accepts only the map's northmost
   // and westmost perimeter edges.
   const [boardWalls, setBoardWalls] = useState<Record<string, WallMaterial>>(() =>
@@ -2302,7 +2331,7 @@ export function LevelEditor(): ReactElement {
       setBrushKind(brushKindForRouteState(nextLayer, routeState.brushKind));
       const params = new URLSearchParams(window.location.search);
       if (params.get('artReview') === FENCE_ART_REVIEW_ID) {
-        const nextArtwork = fenceArtKit(params.get('fenceArt'));
+        const nextArtwork = fenceArtKit(fenceArtCatalog, params.get('fenceArt'));
         if (nextArtwork) {
           setSelectedFenceArtworkId(nextArtwork.id);
           setFenceBrushMaterial(nextArtwork.material);
@@ -2316,7 +2345,7 @@ export function LevelEditor(): ReactElement {
       window.removeEventListener('popstate', syncFromRoute);
       window.removeEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
     };
-  }, []);
+  }, [fenceArtCatalog]);
 
   // DEV-only preview of the in-game confirm dialog, so its look can be judged live without the
   // admin + official-target gating that guards the real Publish flow. Stripped from prod builds
@@ -2704,7 +2733,7 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
   const selectFenceArtwork = (id: string): void => {
-    const artwork = fenceArtKit(id);
+    const artwork = fenceArtKit(fenceArtCatalog, id);
     if (!artwork) return;
     setSelectedFenceArtworkId(artwork.id);
     setFenceBrushMaterial(artwork.material);
@@ -2718,7 +2747,8 @@ export function LevelEditor(): ReactElement {
     navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
   };
   const stepFenceArtwork = (delta: -1 | 1): void => {
-    selectFenceArtwork(cycleFenceArtKit(selectedFenceArtworkId, delta).id);
+    const artwork = cycleFenceArtKit(fenceArtCatalog, selectedFenceArtworkId, delta);
+    if (artwork) selectFenceArtwork(artwork.id);
   };
 
   // Edge-fence paint/erase — the fence tool targets the shared edge under the cursor (roadEdgeKey),
@@ -4763,7 +4793,12 @@ export function LevelEditor(): ReactElement {
             {activeFenceArtwork ? (
               <div className="le-fence-review-banner" data-testid="fence-candidate-editor-review">
                 <strong>Fence artwork drawing · {activeFenceArtwork.label}</strong>
-                <span>{activeFenceArtwork.statusLabel} · {activeFenceArtwork.post ? 'draw rails/posts anywhere' : 'rail-only artwork'} · cycle artwork in Fence controls</span>
+                <span>{activeFenceArtworkReview?.statusLabel} · {activeFenceArtwork.post ? 'draw rails/posts anywhere' : 'rail-only artwork'} · cycle artwork in Fence controls</span>
+              </div>
+            ) : fenceArtReviewEnabled ? (
+              <div className="le-fence-review-banner" data-testid="fence-candidate-editor-review" role="status">
+                <strong>Fence review media unavailable</strong>
+                <span>{fenceReviewCatalogMessage}</span>
               </div>
             ) : null}
             <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
@@ -4778,6 +4813,11 @@ export function LevelEditor(): ReactElement {
                     {editorLoadError.retry ? (
                       <button type="button" className="le-seg-btn" onClick={retryCloudDocument}>Retry</button>
                     ) : null}
+                  </div>
+                ) : fenceArtReviewEnabled && !activeFenceArtwork ? (
+                  <div className="tileset-view-empty" role="status" aria-live="polite">
+                    <h2>Fence review media unavailable</h2>
+                    <p>{fenceReviewCatalogMessage}</p>
                   </div>
                 ) : (
                   <StudioEditableBoard
@@ -5353,7 +5393,7 @@ export function LevelEditor(): ReactElement {
           <div className="le-brush-pick">
             <span className="le-brush-thumb">
               {brushKind === 'unit'
-                ? <img src={unitBrushAsset.sprite(unitFaction, unitBrushDirection)} alt="" draggable={false} />
+                ? <img src={unitBrushAsset.sprite(unitFaction, unitBrushDirection) ?? undefined} alt="" draggable={false} />
                 : brushKind === 'doodad'
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : brushKind === 'prop'
@@ -5517,7 +5557,7 @@ export function LevelEditor(): ReactElement {
                   onClick={() => { setUnitBrushId(unit.id); setBrushKind('unit'); setTool('brush'); }}
                 >
                   <img
-                    src={unit.sprite(unitFaction, hasDirectionSprite(unit, unitBrushDirection) ? unitBrushDirection : 'south')}
+                    src={unit.sprite(unitFaction, hasDirectionSprite(unit, unitBrushDirection) ? unitBrushDirection : 'south') ?? undefined}
                     alt=""
                     draggable={false}
                   />
@@ -5632,7 +5672,7 @@ export function LevelEditor(): ReactElement {
                   </button>
                   <SelectFrame>
                     <select className="le-layer-select" value={activeFenceArtwork.id} onChange={(event) => selectFenceArtwork(event.target.value)} aria-label="Fence artwork">
-                      {FENCE_ART_KITS.map((artwork) => <option key={artwork.id} value={artwork.id}>{artwork.label}</option>)}
+                      {fenceArtCatalog.map((artwork) => <option key={artwork.id} value={artwork.id}>{artwork.label}</option>)}
                     </select>
                   </SelectFrame>
                   <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Next fence artwork" title="Next fence artwork" onClick={() => stepFenceArtwork(1)}>
@@ -5644,9 +5684,9 @@ export function LevelEditor(): ReactElement {
                   <img src={activeFenceArtwork.railS} alt="South rail" draggable={false} />
                   {activeFenceArtwork.post ? <img src={activeFenceArtwork.post} alt="Post" draggable={false} /> : null}
                 </div>
-                <div className={`le-fence-artwork-status is-${activeFenceArtwork.status}`}>
-                  <strong>{activeFenceArtwork.statusLabel}</strong>
-                  <span>{activeFenceArtwork.note}</span>
+                <div className={`le-fence-artwork-status is-${activeFenceArtworkReview?.status ?? 'unavailable'}`}>
+                  <strong>{activeFenceArtworkReview?.statusLabel}</strong>
+                  <span>{activeFenceArtworkReview?.note}</span>
                 </div>
               </div>
             ) : null}
@@ -5703,7 +5743,7 @@ export function LevelEditor(): ReactElement {
               <p className="le-board-note">
                 {activeFenceArtwork.post
                   ? 'Artwork cycling restyles the same authored rails and posts without changing their saved collision geometry or production status.'
-                  : 'This accepted artwork is rail-only. Saved post geometry is left unchanged but intentionally hidden, and post authoring is unavailable while this kit is selected.'}
+                  : 'This backend review kit is rail-only. Saved post geometry is left unchanged but intentionally hidden, and post authoring is unavailable while this kit is selected.'}
               </p>
             ) : null}
           </section>

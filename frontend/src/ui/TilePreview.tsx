@@ -5,6 +5,7 @@
 // board-placeable thing is a catalogCategories entry + a focus, never a bespoke view or a
 // `category === '…'` branch.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { currentLiveMediaCatalog, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { tileFamilies, edgeTiles, wallThumbSrc } from '../art/tileset';
 import { WALL_MATERIALS, WALL_MATERIAL_LABELS, type WallMaterial } from '../core/featureAutotile';
 import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
@@ -22,7 +23,8 @@ import {
 import { CatalogGrid, CatalogControls, CatalogFilters, type CatalogType, type CatalogFilterDim } from './studio/Catalog';
 import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } from './design/AssetLibraryStudio';
 import { DividerLab } from './DividerViewer';
-import { ArtworkLibraryStudio, ArtworkLab, ARTWORK_GROUPS } from './design/ArtworkLibraryStudio';
+import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
+import { buildStudioArtworkLibrary, buildStudioAssetLibrary } from './design/studioLiveMediaLibrary';
 import { CroppedView, loadCrops, type Piece as PortraitPiece } from './PortraitEditor';
 import { PORTRAIT_METHODS, PORTRAIT_PIECES, portraitMasterSrc, type PortraitMethod } from './portraitCandidates';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
@@ -51,7 +53,12 @@ import { wallArt, wallArtBadge, wallArtItems, type WallArt } from '../core/wallA
 import { WallArtLab, WallArtPreview } from './WallArtLab';
 import { SceneAnimLab, SceneRegionPicker, SCENE_ANIM_REGIONS, SCENE_ANIM_SCENES, SceneRegionThumb, type SceneRegion, type SceneAnimScene } from './SceneAnimLab';
 import { ArtworkCompareLab } from './ArtworkCompareLab';
-import { FENCE_ART_KITS, fenceArtKit, type FenceArtKit } from './fenceCandidateProfiles';
+import {
+  fenceArtKit,
+  fenceArtKits as projectFenceArtKits,
+  fenceArtworkBackendReview,
+  type FenceArtKit,
+} from './fenceCandidateProfiles';
 import {
   FENCE_ART_REVIEW_LEVEL_NAME,
   fenceArtReviewEditorHref,
@@ -59,11 +66,10 @@ import {
 } from './fenceArtReview';
 import { currentDoodadAssets, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { structureSourceHalfSrc } from '../render/BoardStructure';
-import kitManifest from './design/kitManifest.json';
-import artworkManifest from './design/artworkManifest.json';
 import { navigateApp } from './navigation';
 import { STUDIO_VIEWER_KIND_OPTIONS, isViewerKind, type ViewerKind } from './studioViewerKinds';
 import { listEditorDocuments } from '../net/editorDocuments';
+import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton, TitleBarIconButton } from './shell/TitleBarControls';
 import {
@@ -120,9 +126,6 @@ const CopyFromIcon = (): ReactElement => (
 const sourceFromDoodad = (doodad: DoodadAsset) => doodad.parts?.[0]?.source ?? doodad.source ?? { kind: 'asset' as const, id: doodad.id };
 const sourceFromProp = (prop: PropDef) => prop.spriteParts?.[0]?.source ?? prop.spriteSource ?? { kind: 'asset' as const, id: prop.spriteId };
 
-// Default selection for the Artwork viewer, so the Viewer shows a real piece
-// instead of an empty stage before anything is opened.
-const FIRST_ARTWORK_ID: string = artworkManifest.groups[0]?.items[0]?.id ?? '';
 const compareByLabel = <T extends { label: string }>(a: T, b: T): number => (
   a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
 );
@@ -347,7 +350,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedGroundCoverId: GROUND_COVER_ASSETS.some((asset) => asset.id === cover) ? cover ?? undefined : undefined,
     selectedWallDecorId: WALL_DECOR_ASSETS.some((asset) => asset.id === wdecor) ? wdecor ?? undefined : undefined,
     selectedWallArtId: wallArt(wart ?? undefined)?.id,
-    selectedFenceArtworkId: fenceArtKit(fenceArt)?.id,
+    selectedFenceArtworkId: fenceArt || undefined,
     selectedSurfaceFamily: sfamily || undefined,
     selectedRegionId: regionParam || undefined,
     viewerKind: isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
@@ -458,6 +461,17 @@ const defaultTransitionViewModeForRoute = (route: TilesetStudioRouteState): Tran
 
 export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?: StudioCategory } = {}): ReactElement {
   const initialRoute = useMemo(() => readTilesetStudioRoute(), []);
+  // App startup hydrates this before mounting. Freeze both Studio libraries to
+  // this one snapshot so a card, its dimensions, and its immutable pointer can
+  // never straddle catalog revisions during a render.
+  const studioMedia = useMemo(() => {
+    const snapshot = currentLiveMediaCatalog();
+    if (!snapshot) throw new Error('Studio requires the hydrated live media catalog');
+    return {
+      assets: buildStudioAssetLibrary(snapshot),
+      artwork: buildStudioArtworkLibrary(snapshot),
+    };
+  }, []);
   const [unitCatalogEpoch, setUnitCatalogEpoch] = useState(0);
   const handleUnitCatalogChanged = useCallback(() => setUnitCatalogEpoch((value) => value + 1), []);
   const initialHasViewTarget = Boolean(initialRoute.selectedAssetId || initialRoute.selectedSlotMask || initialRoute.tileFilter === 'board');
@@ -473,12 +487,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     initialRoute.tileFilter === 'board' ? ['base'] : [initialRoute.tileFilter],
   );
   const [catalogQuery, setCatalogQuery] = useState('');
-  const [assetFilters, setAssetFilters] = useState<AssetFilters>({ type: 'all', prov: 'all', gate: 'all' });
+  const [assetFilters, setAssetFilters] = useState<AssetFilters>({ type: 'all', status: 'all' });
   const [assetSearch, setAssetSearch] = useState('');
   const [artworkSearch, setArtworkSearch] = useState('');
   const [wallDecorSearch, setWallDecorSearch] = useState('');
   const [wallArtSearch, setWallArtSearch] = useState('');
-  const [selectedArtworkGroups, setSelectedArtworkGroups] = useState<string[]>(ARTWORK_GROUPS.map((g) => g.id));
+  const [selectedArtworkGroups, setSelectedArtworkGroups] = useState<string[]>(studioMedia.artwork.groups.map((group) => group.id));
   const [selectedPortraitPieces, setSelectedPortraitPieces] = useState<PortraitPiece[]>([...PORTRAIT_PIECES]);
   const [selectedPortraitMethods, setSelectedPortraitMethods] = useState<PortraitMethod[]>(PORTRAIT_METHODS.map((m) => m.key));
   const [selectedPortraitId, setSelectedPortraitId] = useState<string | undefined>(undefined);
@@ -514,8 +528,15 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [glossarySearch, setGlossarySearch] = useState('');
   // Assets and artwork each own their own selection — never one shared field
   // (that's how an Assets id like 'gear' used to leak into the Artwork stage).
-  const [selectedAssetName, setSelectedAssetName] = useState(initialRoute.selectedAssetName ?? 'gear');
-  const [selectedArtworkName, setSelectedArtworkName] = useState(initialRoute.selectedArtworkName ?? FIRST_ARTWORK_ID);
+  const [selectedAssetName, setSelectedAssetName] = useState(() => {
+    const requested = initialRoute.selectedAssetName;
+    return studioMedia.assets.items.find((item) => item.id === requested || item.name === requested)?.id
+      ?? studioMedia.assets.items[0]?.id
+      ?? '';
+  });
+  const [selectedArtworkName, setSelectedArtworkName] = useState(
+    initialRoute.selectedArtworkName ?? studioMedia.artwork.items[0]?.id ?? '',
+  );
   const [selectedGlossaryName, setSelectedGlossaryName] = useState(initialRoute.selectedGlossaryName ?? '9-slice');
   // Which kit frame the embedded 9-slice editor (Viewer 'nineslice' kind) is aligning.
   const [selectedFrameName, setSelectedFrameName] = useState(initialRoute.selectedFrameName ?? DEFAULT_NINE_SLICE_ASSET);
@@ -526,7 +547,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedGroundCoverId, setSelectedGroundCoverId] = useState<GroundCoverId>(groundCoverAsset(initialRoute.selectedGroundCoverId).id);
   const [selectedWallDecorId, setSelectedWallDecorId] = useState<string>(wallDecorAsset(initialRoute.selectedWallDecorId).id);
   const [selectedWallArtId, setSelectedWallArtId] = useState<string>(wallArt(initialRoute.selectedWallArtId)?.id ?? wallArtItems()[0].id);
-  const [selectedFenceArtworkId, setSelectedFenceArtworkId] = useState<string>(fenceArtKit(initialRoute.selectedFenceArtworkId)?.id ?? FENCE_ART_KITS[0].id);
+  const [fenceAdminCatalog, setFenceAdminCatalog] = useState<AdminLiveMediaCatalog | null>(null);
+  const [fenceCatalogError, setFenceCatalogError] = useState<string | null>(null);
+  const fenceArtCatalog = useMemo(() => projectFenceArtKits(fenceAdminCatalog), [fenceAdminCatalog]);
+  const [selectedFenceArtworkId, setSelectedFenceArtworkId] = useState<string>(initialRoute.selectedFenceArtworkId ?? '');
   const [fenceEditorLaunchError, setFenceEditorLaunchError] = useState<string | null>(null);
   const [wallArtDraftSourceId, setWallArtDraftSourceId] = useState<string | null>(null);
   const [selectedWallId, setSelectedWallId] = useState<string>(WALL_CATALOG_ASSETS[0].id);
@@ -644,6 +668,26 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   }, []);
 
   useEffect(() => {
+    if (category !== 'fences') return undefined;
+    let cancelled = false;
+    void fetchAdminLiveMediaCatalog().then((catalog) => {
+      if (cancelled) return;
+      setFenceAdminCatalog(catalog);
+      setFenceCatalogError(null);
+    }).catch((error: unknown) => {
+      if (cancelled) return;
+      setFenceAdminCatalog(null);
+      setFenceCatalogError(error instanceof Error ? error.message : String(error));
+    });
+    return () => { cancelled = true; };
+  }, [category]);
+
+  useEffect(() => {
+    if (!fenceArtCatalog.length) return;
+    setSelectedFenceArtworkId((current) => fenceArtKit(fenceArtCatalog, current)?.id ?? fenceArtCatalog[0].id);
+  }, [fenceArtCatalog]);
+
+  useEffect(() => {
     const assetSources = allStudioAssets.flatMap((asset) => [asset.src, ...(asset.animation?.frames ?? [])]);
     const preloadedImages = Array.from(new Set(assetSources)).map((src) => {
       const image = new Image();
@@ -674,7 +718,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.selectedGroundCoverId) setSelectedGroundCoverId(groundCoverAsset(route.selectedGroundCoverId).id);
       if (route.selectedWallDecorId) setSelectedWallDecorId(wallDecorAsset(route.selectedWallDecorId).id);
       if (route.selectedWallArtId) setSelectedWallArtId(wallArt(route.selectedWallArtId)?.id ?? wallArtItems()[0].id);
-      if (route.selectedFenceArtworkId) setSelectedFenceArtworkId(fenceArtKit(route.selectedFenceArtworkId)?.id ?? FENCE_ART_KITS[0].id);
+      if (route.selectedFenceArtworkId) setSelectedFenceArtworkId(route.selectedFenceArtworkId);
       if (route.selectedGameLabLevelId) setSelectedGameLabLevelId(route.selectedGameLabLevelId);
       if (route.selectedGymLevelId) setSelectedGymLevelId(route.selectedGymLevelId);
       if (route.selectedSolverLevelId) setSelectedSolverLevelId(route.selectedSolverLevelId);
@@ -1279,7 +1323,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     id: 'animscenes',
     label: 'Animated Scenes',
     assets: SCENE_ANIM_SCENES,
-    card: (s) => ({ img: s.url, title: s.label, badge: `${s.regionIds.length} waterfalls` }),
+    card: (s) => ({ img: resolvedLiveMediaUrl(s.slot), title: s.label, badge: `${s.regionIds.length} waterfalls` }),
     sections: (visible) => [{ id: 'scenes', label: 'Scenes', assets: [...visible] }],
     query: {
       value: catalogQuery,
@@ -1295,16 +1339,20 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   };
 
   // Artwork browses via a bespoke library component (not a CatalogType), so it wires the
-  // shared Filters dropdown directly: one dimension, the manifest Group. memberOf is unused
+  // shared Filters dropdown directly: one dimension, the catalog-derived Group. memberOf is unused
   // here (CatalogFilters only reads options/selected/toggle); the grid filters in the component.
   const artworkGroupFilter: CatalogFilterDim<{ id: string }> = {
     id: 'group',
     label: 'Group',
-    options: ARTWORK_GROUPS.map((g) => ({ id: g.id, label: g.label, sub: `${g.count} ${g.count === 1 ? 'piece' : 'pieces'}` })),
+    options: studioMedia.artwork.groups.map((group) => ({
+      id: group.id,
+      label: group.label,
+      sub: `${group.items.length} ${group.items.length === 1 ? 'piece' : 'pieces'}`,
+    })),
     memberOf: () => [],
     selected: selectedArtworkGroups,
     toggle: (id) => setSelectedArtworkGroups((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])),
-    selectAll: () => setSelectedArtworkGroups(ARTWORK_GROUPS.map((g) => g.id)),
+    selectAll: () => setSelectedArtworkGroups(studioMedia.artwork.groups.map((group) => group.id)),
     clear: () => setSelectedArtworkGroups([]),
   };
 
@@ -1410,8 +1458,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const fencesCatalogType: CatalogType<FenceArtKit> = {
     id: 'fences',
     label: 'Fences',
-    assets: FENCE_ART_KITS,
-    card: (artwork) => ({ img: artwork.thumb, title: artwork.label, badge: artwork.statusLabel }),
+    assets: fenceArtCatalog,
+    card: (artwork) => ({ img: artwork.thumb, title: artwork.label, badge: fenceArtworkBackendReview(artwork).statusLabel }),
     cardMedia: (artwork) => (
       <span className={`fence-art-card-media ${artwork.post ? '' : 'is-rail-only'}`.trim()}>
         <img src={artwork.railE} alt="" draggable={false} />
@@ -1420,13 +1468,19 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       </span>
     ),
     sections: (visible) => [
-      { id: 'candidates', label: 'Generated candidates', assets: visible.filter((artwork) => artwork.category === 'candidate') },
+      { id: 'candidates', label: 'Backend candidates', assets: visible.filter((artwork) => artwork.lifecycle === 'candidate') },
+      { id: 'bridges', label: 'Legacy bridges · not accepted', assets: visible.filter((artwork) => artwork.lifecycle === 'legacy-bridge') },
+      { id: 'accepted', label: 'Backend accepted', assets: visible.filter((artwork) => artwork.lifecycle === 'accepted') },
+      { id: 'archived', label: 'Backend archive', assets: visible.filter((artwork) => artwork.lifecycle === 'archived') },
     ],
     query: {
       value: catalogQuery,
       set: setCatalogQuery,
       placeholder: 'fence artwork, method, status…',
-      match: (artwork, query) => [artwork.label, artwork.statusLabel, artwork.note, artwork.material].join(' ').toLowerCase().includes(query),
+      match: (artwork, query) => {
+        const review = fenceArtworkBackendReview(artwork);
+        return [artwork.label, review.statusLabel, review.note, artwork.material].join(' ').toLowerCase().includes(query);
+      },
     },
     zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
     onSelect: (artwork) => {
@@ -1436,10 +1490,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     onView: (artwork) => { void openFenceArtworkInEditor(artwork); },
     onArm: (artwork) => { void openFenceArtworkInEditor(artwork); },
     selectedId: selectedFenceArtworkId,
-    extra: fenceEditorLaunchError ? (
-      <p className="tileset-catalog-note" role="alert">{fenceEditorLaunchError}</p>
+    extra: fenceEditorLaunchError || fenceCatalogError ? (
+      <p className="tileset-catalog-note" role="alert">{fenceEditorLaunchError ?? fenceCatalogError}</p>
     ) : null,
-    note: 'Select a generated candidate, then open the same pre-drawn Level Editor board to draw rails and posts and cycle the review set without changing production status.',
+    note: 'Review membership and lifecycle come from the backend catalog. Migrated fence kits remain bridge-only until a typed fence acceptance contract is registered.',
   };
   const catalogCategories: { id: StudioCategory; label: string; hint: string; main: ReactElement; controls: ReactElement }[] = [
     {
@@ -1504,7 +1558,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     },
     {
       id: 'assets', label: 'Assets', hint: 'Browse the UI-kit asset library.',
-      main: <AssetLibraryStudio filters={assetFilters} search={assetSearch} zoom={zoom} selected={selectedAssetName} onSelect={setSelectedAssetName} />,
+      main: <AssetLibraryStudio library={studioMedia.assets} filters={assetFilters} search={assetSearch} zoom={zoom} selected={selectedAssetName} onSelect={setSelectedAssetName} />,
       controls: (
         <>
           <label className="tileset-catalog-search">
@@ -1524,21 +1578,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             </div>
           </div>
           <div className="tileset-filter-field">
-            <span>Provenance</span>
-            <div className="tileset-tier-seg" aria-label="Filter by provenance">
-              {(['all', 'forged', 'original'] as const).map((option) => (
-                <button key={option} type="button" className={assetFilters.prov === option ? 'is-active' : ''} onClick={() => setAssetFilters((s) => ({ ...s, prov: option }))}>
-                  {option === 'all' ? 'All' : option === 'forged' ? 'Forged' : 'Original'}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="tileset-filter-field">
-            <span>Gate</span>
-            <div className="tileset-tier-seg" aria-label="Filter by gate result">
-              {(['all', 'pass', 'fail'] as const).map((option) => (
-                <button key={option} type="button" className={assetFilters.gate === option ? 'is-active' : ''} onClick={() => setAssetFilters((s) => ({ ...s, gate: option }))}>
-                  {option === 'all' ? 'All' : option === 'pass' ? 'Pass' : 'Fail'}
+            <span>Status</span>
+            <div className="tileset-tier-seg" aria-label="Filter by live media status">
+              {(['all', 'accepted', 'bridge'] as const).map((option) => (
+                <button key={option} type="button" className={assetFilters.status === option ? 'is-active' : ''} onClick={() => setAssetFilters((s) => ({ ...s, status: option }))}>
+                  {option === 'all' ? 'All' : option === 'accepted' ? 'Accepted' : 'Legacy bridge'}
                 </button>
               ))}
             </div>
@@ -1551,6 +1595,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'artwork', label: 'Artwork', hint: 'Browse the artwork library — scenes, portraits, key art, concepts.',
       main: (
         <ArtworkLibraryStudio
+          library={studioMedia.artwork}
           search={artworkSearch}
           zoom={zoom}
           groups={selectedArtworkGroups}
@@ -1851,7 +1896,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             : viewerKind === 'artworkcompare'
             ? <ArtworkCompareLab header={studioViewerHeader} />
             : viewerKind === 'artwork'
-              ? <ArtworkLab name={selectedArtworkName} header={studioViewerHeader} />
+              ? <ArtworkLab library={studioMedia.artwork} name={selectedArtworkName} header={studioViewerHeader} />
               : viewerKind === 'glossary'
                 ? <GlossaryLab name={selectedGlossaryName} header={studioViewerHeader} />
                 : viewerKind === 'surface'
@@ -1882,7 +1927,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                               />
                           : viewerKind === 'sfx'
                             ? <SfxViewer header={studioViewerHeader} />
-                            : <AssetLab name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} onOpenDivider={() => openViewer('divider')} />
+                            : <AssetLab library={studioMedia.assets} name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} onOpenDivider={() => openViewer('divider')} />
         ) : null}
       </section>
     </main>

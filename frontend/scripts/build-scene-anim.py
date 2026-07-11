@@ -28,7 +28,8 @@ just enough to breach the diff threshold; zoning the mask to the actual water
 columns is more robust than chasing per-region thresholds.
 
 <runDir> holds PixelLab v3 frames as v0/<i>.png (i=0..frames-1 used).
-Output: frontend/public/assets/ui/main-menu/scene-anim/<name>.png
+Output: an explicit temporary candidate directory; upload the exact sheet through
+the live-media admin workflow.
 Region + frame data must match SCENE_ANIMS in src/ui/sceneBackdrop.tsx.
 """
 
@@ -37,11 +38,6 @@ import sys
 from pathlib import Path
 
 from PIL import Image
-
-SCRIPT_DIR = Path(__file__).resolve().parent
-SCENE_PATH = SCRIPT_DIR.parent / "public" / "assets" / "ui" / "main-menu" / "background-scene-v1.png"
-OUT_DIR = SCRIPT_DIR.parent / "public" / "assets" / "ui" / "main-menu" / "scene-anim"
-
 
 def build_mask(static: Image.Image, frames: list[Image.Image], w: int, h: int,
                edge: int, diff_thresh: int, bright_thresh: int,
@@ -202,6 +198,8 @@ def main() -> None:
     parser.add_argument("run_dir", type=Path, nargs="?", default=None,
                         help="PixelLab frames (v0/<i>.png) for AI-frame mode and frame-diff masking. Optional in --scroll mode: without it the mask comes from the static art alone (zones ∧ brightness ∧ despeckle) — no generation involved.")
     parser.add_argument("--rect", required=True, help="X,Y,W,H crop in scene pixels")
+    parser.add_argument("--scene", required=True, type=Path, help="Fetched active scene image")
+    parser.add_argument("--out-dir", required=True, type=Path, help="Temporary candidate output directory")
     parser.add_argument("--out", required=True, help="output sheet name (no extension)")
     parser.add_argument("--zones", default="", help="crop-relative x,y,w,h rects (';'-separated) where motion is allowed")
     parser.add_argument("--skip", default="", help="comma-separated source frame indices to drop (generator fumbles: a frame whose exposure gain is an outlier has usually lost its streak texture — amplifying it doesn't help, dropping it does)")
@@ -212,9 +210,11 @@ def main() -> None:
     parser.add_argument("--diff", type=int, default=26)
     parser.add_argument("--bright", type=int, default=64)
     args = parser.parse_args()
+    output_dir = args.out_dir.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     x0, y0, w, h = (int(v) for v in args.rect.split(","))
-    static = Image.open(SCENE_PATH).convert("RGBA").crop((x0, y0, x0 + w, y0 + h))
+    static = Image.open(args.scene).convert("RGBA").crop((x0, y0, x0 + w, y0 + h))
 
     skip = {int(v) for v in args.skip.split(",") if v}
     frames: list[Image.Image] = []
@@ -234,7 +234,7 @@ def main() -> None:
     zones = [tuple(int(v) for v in z.split(",")) for z in args.zones.split(";") if z]
     mask = build_mask(static, frames[1:], w, h, args.edge, args.diff, args.bright, zones)
     if args.scroll:
-        bake_scroll(static, mask, w, h, args.scroll, args.out_frames, OUT_DIR / f"{args.out}.png")
+        bake_scroll(static, mask, w, h, args.scroll, args.out_frames, output_dir / f"{args.out}.png")
         return
     moving = sum(1 for row in mask for v in row if v)
     print(f"mask: {moving} moving px ({moving * 100 // (w * h)}% of crop)")
@@ -291,8 +291,7 @@ def main() -> None:
         sheet.paste(out, (w * i, 0))
         report.append(f"{changed * 100 // max(moving, 1)}%")
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = OUT_DIR / f"{args.out}.png"
+    out_path = output_dir / f"{args.out}.png"
     sheet.save(out_path, optimize=True)
     print(f"{out_path.name}: {sheet.size[0]}x{sheet.size[1]}, moved-vs-static per frame: {' '.join(report)}")
 

@@ -15,15 +15,16 @@
 // failure (ADR-0013) is designed out, not left to the prompt author.
 //
 // Use:
-//   node scripts/forge-atom.mjs --ref <ref.png> --out public/assets/ui/kit/atoms/<name>.png --desc "..."
+//   node scripts/forge-atom.mjs --ref <fetched.png> --slot <semantic-slot> --desc "..." -- <upload options>
 //   import { forgeAtom } from './forge-atom.mjs'   // for per-element generators
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, copyFileSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { existsSync, copyFileSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, statSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, basename } from 'node:path';
+import { dirname, join, basename, resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 import { CODEX } from './codex-imagegen.mjs'; // resolves codex.exe dynamically (CODEX_BIN / newest build / PATH) — the bin/<hash>/ dir changes every update
+import { splitGeneratorArgs, uploadGeneratedCandidate } from './upload-generated-candidate.mjs';
 
 const PY = 'D:/automation/python312/python.exe';
 const REMOVE = 'C:/Users/Nelson/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py';
@@ -159,6 +160,8 @@ export function padToCanvas(file, cw, ch, margin = 2) {
 
 export async function forgeAtom({ ref, out, desc, key = '#00ff00', footprint = 48, colors = 64, canvas = null, margin = 2 }) {
   if (!existsSync(ref)) throw new Error(`forge-atom: ref not found: ${ref}`);
+  const rel = relative(resolve(tmpdir()), resolve(out));
+  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('forge-atom: output must stay in an OS temporary workspace and be uploaded as a live-media candidate');
   banner(key);
   const started = Date.now();
   const { log, work } = await run(buildPrompt(desc, key), ref);
@@ -201,9 +204,9 @@ export async function forgeAtom({ ref, out, desc, key = '#00ff00', footprint = 4
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const args = process.argv.slice(2);
+  const { toolArgs: args, uploadArgs } = splitGeneratorArgs(process.argv.slice(2));
   const get = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
-  const ref = get('--ref'); const out = get('--out'); const key = get('--key') || '#00ff00';
+  const ref = get('--ref'); const slot = get('--slot'); const key = get('--key') || '#00ff00';
   const footprint = Number(get('--footprint')) || 48;
   const colors = Number(get('--colors')) || 64;
   const canvasArg = get('--canvas');                     // ADR-0026 glyph mode: "64" -> 64x64, "64x80" -> 64x80
@@ -212,10 +215,16 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const margin = Number(get('--margin')) || 2;
   let desc = get('--desc');
   if (get('--desc-file')) desc = readFileSync(get('--desc-file'), 'utf8');
-  if (!ref || !out || !desc) {
-    console.error('usage: forge-atom.mjs --ref <png> --out <atoms/x.png> --desc "..." [--key #00ff00] [--footprint 48] [--colors 64] [--canvas 64|64x80] [--margin 2]');
+  if (!ref || !slot || !desc || !uploadArgs.length) {
+    console.error('usage: forge-atom.mjs --ref <png> --slot <semantic-slot> --desc "..." [options] -- <live-media upload options>');
     process.exit(2);
   }
-  try { await forgeAtom({ ref, out, desc, key, footprint, colors, canvas, margin }); }
-  catch (e) { console.error(String(e.message || e)); process.exit(1); }
+  const cliWork = mkdtempSync(join(tmpdir(), 'forge-atom-upload-'));
+  const out = join(cliWork, 'candidate.png');
+  try {
+    await forgeAtom({ ref, out, desc, key, footprint, colors, canvas, margin });
+    uploadGeneratedCandidate(out, uploadArgs, slot);
+  }
+  catch (e) { console.error(String(e.message || e)); process.exitCode = 1; }
+  finally { rmSync(cliWork, { recursive: true, force: true }); }
 }

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { liveMediaForSlot } from '@chess-tactics/board-render';
 import { boardLabCellPosition } from './boardProjection';
 import { BoardGridLayer } from './BoardGridLayer';
 import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
@@ -21,9 +22,60 @@ export interface BoardLabBoardOverlayContext<TAsset extends TileSocketAsset> {
   top: number;
 }
 
+export type BoardLabTerrainRole = 'top' | 'side';
+
+export interface BoardLabTerrainSourceContext<TAsset extends TileSocketAsset> {
+  role: BoardLabTerrainRole;
+  cell: SocketBoardCell<TAsset>;
+  asset: TAsset;
+}
+
+export type BoardLabTerrainSourceOverride<TAsset extends TileSocketAsset> = (
+  stableSrc: string,
+  context: BoardLabTerrainSourceContext<TAsset>,
+) => string | undefined;
+
+/** Pin one stable semantic face URL to the immutable object in one hydrated catalog snapshot. */
+export function immutableBoardLabTerrainSrc(stableSrc: string): string {
+  if (!stableSrc.startsWith('/assets/') || stableSrc.includes('?') || stableSrc.includes('#')) {
+    throw new Error(`Board terrain source is not a stable semantic asset URL: ${stableSrc}`);
+  }
+  let slot: string;
+  try {
+    slot = stableSrc.slice('/assets/'.length).split('/').map(decodeURIComponent).join('/');
+  } catch {
+    throw new Error(`Board terrain source contains an invalid encoded slot: ${stableSrc}`);
+  }
+  const media = liveMediaForSlot(slot).media;
+  if (media.url !== stableSrc) {
+    throw new Error(`Hydrated media slot ${slot} does not match its board URL.`);
+  }
+  return media.immutableUrl;
+}
+
+/** Apply a review override only after the runtime frame has become its exact top/side slot. */
+export function resolveBoardLabTerrainSrc<TAsset extends TileSocketAsset>(
+  stableFrameSrc: string,
+  role: BoardLabTerrainRole,
+  context: Omit<BoardLabTerrainSourceContext<TAsset>, 'role'>,
+  override?: BoardLabTerrainSourceOverride<TAsset>,
+): string {
+  const stableSrc = role === 'top'
+    ? terrainTopSrc(stableFrameSrc, context.cell.asset?.topAnimFrames)
+    : terrainSideSrc(stableFrameSrc);
+  const candidateSrc = override?.(stableSrc, { ...context, role });
+  return candidateSrc ?? immutableBoardLabTerrainSrc(stableSrc);
+}
+
 export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   board: SocketBoardResult<TAsset>;
   assetFrameSrc: (asset: TAsset) => string;
+  /**
+   * Review-only resolver for an exact transformed semantic slot. It receives
+   * `/assets/...-top[-anim].png` or `/assets/...-side.png`, never the combined
+   * source frame, so candidate bytes cannot accidentally replace a sibling role.
+   */
+  terrainSrcOverride?: BoardLabTerrainSourceOverride<TAsset>;
   boardZoom?: number;
   boardPan?: { x: number; y: number };
   className?: string;
@@ -55,6 +107,7 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
 export function BoardLabBoard<TAsset extends TileSocketAsset>({
   board,
   assetFrameSrc,
+  terrainSrcOverride,
   boardZoom = 1,
   boardPan = { x: 0, y: 0 },
   className = '',
@@ -84,14 +137,20 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
     return !occupied.has(`${cell.x + 1}-${cell.y}`) || !occupied.has(`${cell.x}-${cell.y + 1}`);
   };
   const terrainCells: TerrainCanvasCell[] = sourceCells.map((cell) => {
-    const topSrc = cell.asset ? assetFrameSrc(cell.asset) : undefined;
-    const sideSrc = cell.asset ? assetFrameSrc(cell.sideAsset ?? cell.asset) : undefined;
+    const topAsset = cell.asset;
+    const sideAsset = cell.sideAsset ?? cell.asset;
+    const topSrc = topAsset ? assetFrameSrc(topAsset) : undefined;
+    const sideSrc = sideAsset ? assetFrameSrc(sideAsset) : undefined;
     return {
       key: `${cell.x}-${cell.y}`,
       x: cell.x,
       y: cell.y,
-      topSrc: topSrc ? terrainTopSrc(topSrc, cell.asset?.topAnimFrames) : undefined,
-      sideSrc: sideSrc ? terrainSideSrc(sideSrc) : undefined,
+      topSrc: topSrc && topAsset
+        ? resolveBoardLabTerrainSrc(topSrc, 'top', { cell, asset: topAsset }, terrainSrcOverride)
+        : undefined,
+      sideSrc: sideSrc && sideAsset
+        ? resolveBoardLabTerrainSrc(sideSrc, 'side', { cell, asset: sideAsset }, terrainSrcOverride)
+        : undefined,
       featureSrc: cell.feature ? featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask) : undefined,
       topAnimFrames: cell.asset?.topAnimFrames,
       drawSide: isSideExposed(cell),

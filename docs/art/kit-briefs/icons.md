@@ -1,55 +1,18 @@
-> ⚠ **SUPERSEDED — do not follow the extraction method below.** Kit icons are
-> **generated** by the forge (codex img2img, method-verified — see kit-forge.md),
-> not extracted from concept crops. See [ADR-0011](../../adr/0011-chrome-art-generated-not-extracted.md).
-> The canvas geometry once specified here (the "uniform 64×64, centered" rule) is
-> now governed by [ADR-0026](../../adr/0026-ui-kit-icon-canvas.md) — a 64×64 canvas
-> with a normalized ~40×40 safe area, forge-enforced. Kept for history.
+# Historical kit brief — icons
 
-# Kit Art Brief — Icon set (extract from the concept, clean to transparent)
+This file is retained only because ADR-0011 and ADR-0026 cite the original
+extraction brief. That workflow is superseded and is not production authority.
 
-Produce a uniform, transparent-background icon set into
-`frontend/public/assets/ui/kit/icons/`. Extract the real glyphs from the
-attached settings concept screens — do NOT redraw. Verify each result visually
-(you have vision): no background remnants, correct glyph, nothing clipped.
+Current contract:
 
-## Source screens (attached)
+- icon pixels are generated through the method-verified forge;
+- the 64×64 canvas and safe-area geometry are governed by ADR-0026;
+- source pixels are fetched from private backend versions into an OS temporary
+  workspace;
+- generated pixels are uploaded as private candidates for semantic
+  `ui/kit/icons/<name>.png` slots;
+- owner review and backend acceptance move the active pointer; and
+- no source, candidate, gate result, accepted pointer, or runtime media file is
+  written to Git.
 
-- `settings-general-concept-v1.png`, `settings-audio-concept-v1.png`,
-  `settings-gameplay-concept-v1.png`, `settings-creator-tools-concept-v1.png`
-
-## The one trick that matters
-
-The left **rail** tab icons sit inside tab frames. The **active** tab has a
-bright blue glow background that will NOT clean to transparent; the **inactive**
-tabs have a dark background that will. So extract each rail icon from a screen
-where ITS tab is **inactive**:
-
-| icon | take from a screen where this tab is inactive |
-|---|---|
-| gear (General) | audio / gameplay / creator-tools |
-| speaker (Audio) | general / gameplay / creator-tools |
-| knight (Gameplay) | general / audio / creator-tools |
-| wrench (Creator Tools) | general / audio |
-
-## Icons to produce
-
-- Rail: `gear`, `speaker`, `knight`, `wrench`
-- Inline row icons (remove the dark plate behind them too): `monitor`, `reset`,
-  `save`, `music`, `effects`, `interface-sounds`, `info`
-- Creator-tools row icons: `design-index`, `tileset-studio`, `unit-studio`,
-  `tileset-review`
-- Brand: `brand-shield` (the rook shield in the header)
-
-## Output spec
-
-- One transparent PNG per icon in `frontend/public/assets/ui/kit/icons/`.
-- Crop tight to the glyph, then pad to a **uniform 64×64** canvas, centered.
-- Fully transparent everywhere except the glyph (flood-fill the connected dark
-  background from the edges; keep dark pixels that are INSIDE the glyph).
-- No tab frame, no corner accents, no plate — glyph only.
-
-## Constraints
-
-Write ONLY into `frontend/public/assets/ui/kit/icons/` (plus, if you use one, a
-single `frontend/scripts/generate-kit-icons.mjs`). Do NOT modify any other file,
-start servers, or install packages. List the files you created when done.
+See `docs/kit-forge.md`, `docs/runtime-asset-contract.md`, and ADR-0081.

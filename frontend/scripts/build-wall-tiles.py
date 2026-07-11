@@ -5,45 +5,21 @@ the geometry: every wall bottom must land exactly on the shipped tile's back
 edge pixels. Generated/source tools own only the material images that get
 projected into that deterministic footprint.
 
-Run from the repo root or frontend/:
-
-  python frontend/scripts/build-wall-tiles.py
-
-Default material inputs:
-
-  docs/art/wall-concepts/materials/source/stone-photoscan.png
-  docs/art/wall-concepts/materials/codex/brick-img2img.png
-  docs/art/wall-concepts/materials/pixellab/mossy-stone.png
-  docs/art/wall-concepts/materials/pixellab/dark-basalt.png
-  docs/art/wall-concepts/materials/pixellab/wood-palisade.png
-
-Outputs:
-
-  frontend/public/assets/tiles/feature/wall-<material>-{1,8,9}.png  (128x240, anchor 64,96)
-  frontend/public/assets/tiles/feature/wall-<material>-thumb.png
-  docs/art/wall-concepts/proofs/wall-<material>-proof.png
-  docs/art/wall-concepts/proofs/wall-<material>-runtime-seat-proof.png
+Fetch material and runtime-tile inputs into a temporary bundle and pass explicit
+output/proof directories. Upload exact results through the live-media admin
+workflow; this algorithm does not publish or promote.
 """
 
 from __future__ import annotations
 
 import argparse
 import os
-import tempfile
-import zipfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance
 
 
-ROOT = Path(__file__).resolve().parents[2]
-OUT_DIR = ROOT / "frontend" / "public" / "assets" / "tiles" / "feature"
-WALL_DOCS = ROOT / "docs" / "art" / "wall-concepts"
-MATERIAL_DIR = WALL_DOCS / "materials"
-PROOF_DIR = WALL_DOCS / "proofs"
-DEFAULT_ZIP = "photoscanned-old-stone-wall-2x4m.zip"
-TILE_REFERENCE = ROOT / "docs" / "art" / "pixellab-runs" / "surfaces" / "grass" / "tile_0.png"
-RUNTIME_TILE_REFERENCE = ROOT / "frontend" / "public" / "assets" / "tiles" / "surface" / "grass-0.png"
+RUNTIME_TILE_REFERENCE: Path
 WALL_FRAME_W = 128
 WALL_FRAME_H = 240
 WALL_ANCHOR_X = 64
@@ -57,83 +33,7 @@ WALL_BASE_APEX = (64, 68)
 WALL_BASE_LEFT = (16, 95)
 WALL_BASE_RIGHT = (112, 95)
 
-MATERIAL_INPUTS = {
-    "stone": MATERIAL_DIR / "source" / "stone-photoscan.png",
-    "brick": MATERIAL_DIR / "codex" / "brick-img2img.png",
-    "mossy": MATERIAL_DIR / "pixellab" / "mossy-stone.png",
-    "basalt": MATERIAL_DIR / "pixellab" / "dark-basalt.png",
-    "palisade": MATERIAL_DIR / "pixellab" / "wood-palisade.png",
-}
-
-
-def candidate_zips() -> list[Path]:
-    return [
-        ROOT / "walls" / DEFAULT_ZIP,
-        ROOT.parent / "chess-tactics" / "walls" / DEFAULT_ZIP,
-    ]
-
-
-def resolve_zip(explicit: str | None) -> Path:
-    if explicit:
-        p = Path(explicit)
-        if not p.exists():
-            raise FileNotFoundError(f"wall source zip not found: {p}")
-        return p
-    for p in candidate_zips():
-        if p.exists():
-            return p
-    tried = "\n  ".join(str(p) for p in candidate_zips())
-    raise FileNotFoundError(f"could not find {DEFAULT_ZIP}; tried:\n  {tried}")
-
-
-def extract_photoscan_textures(zip_path: Path, work: Path) -> tuple[Path, Path | None]:
-    extracted: list[Path] = []
-    with zipfile.ZipFile(zip_path) as z:
-        infos = [
-            info for info in z.infolist()
-            if not info.is_dir() and info.filename.lower().endswith((".png", ".jpg", ".jpeg"))
-        ]
-        if not infos:
-            raise FileNotFoundError(f"no image textures found in {zip_path}")
-        # The photoscanned pack contains two same-named images: albedo, then normal.
-        infos.sort(key=lambda info: (0 if "photoscannedstonewall01_final_photoscanned" in info.filename.lower() else 1, info.filename))
-        for idx, info in enumerate(infos[:2], start=1):
-            suffix = Path(info.filename).suffix or ".png"
-            out = work / f"photoscanned-wall-{idx}{suffix}"
-            with z.open(info) as src, out.open("wb") as dst:
-                dst.write(src.read())
-            extracted.append(out)
-    albedo = extracted[0]
-    normal = extracted[1] if len(extracted) > 1 else None
-    return albedo, normal
-
-
-def prepare_texture(src: Path, dst: Path, max_side: int = 1024) -> Path:
-    img = Image.open(src).convert("RGBA")
-    w, h = img.size
-    # Material textures are projected into a small wall face; center-crop avoids a
-    # huge photoscan panorama stretching into muddy vertical bands.
-    side = min(w, h)
-    left = (w - side) // 2
-    top = (h - side) // 2
-    img = img.crop((left, top, left + side, top + side))
-    if side > max_side:
-        img = img.resize((max_side, max_side), Image.Resampling.LANCZOS)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    img.save(dst)
-    return dst
-
-
-def ensure_source_materials(source_zip: Path) -> None:
-    stone = MATERIAL_INPUTS["stone"]
-    normal = MATERIAL_DIR / "source" / "stone-photoscan-normal.png"
-    if stone.exists() and normal.exists():
-        return
-    with tempfile.TemporaryDirectory(prefix="chess-tactics-wall-src-") as td:
-        raw_albedo, raw_normal = extract_photoscan_textures(source_zip, Path(td))
-        prepare_texture(raw_albedo, stone)
-        if raw_normal:
-            prepare_texture(raw_normal, normal)
+MATERIAL_INPUTS: dict[str, Path]
 
 
 def selected_materials(raw: str | None) -> list[str]:
@@ -285,24 +185,25 @@ def write_contact_sheet(out_dir: Path, proof_dir: Path, materials: list[str]) ->
         proof_small = proof.resize((156, 180), Image.Resampling.NEAREST)
         sheet.alpha_composite(proof_small, (x0 + (cell_w - proof_small.width) // 2, 170))
         draw.text((x0 + 12, 8), material, fill=(230, 242, 255, 255))
-    sheet.save(WALL_DOCS / "wall-bake-contact-sheet.png")
+    sheet.save(proof_dir / "wall-bake-contact-sheet.png")
 
 
 def main() -> None:
+    global MATERIAL_INPUTS, RUNTIME_TILE_REFERENCE
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source-zip", help="Path to photoscanned-old-stone-wall-2x4m.zip")
-    parser.add_argument("--blender", help="Deprecated; ignored. Wall fit is baked from the runtime tile diamond.")
-    parser.add_argument("--out", default=str(OUT_DIR), help="Output asset directory")
-    parser.add_argument("--proofs", default=str(PROOF_DIR), help="Output proof directory")
+    parser.add_argument("--source-dir", required=True, type=Path, help="Temporary bundle with stone.png, brick.png, mossy.png, basalt.png, palisade.png, runtime-tile.png")
+    parser.add_argument("--out", required=True, type=Path, help="Temporary candidate output directory")
+    parser.add_argument("--proofs", required=True, type=Path, help="Temporary supplementary proof directory")
     parser.add_argument("--materials", help="Comma-separated material ids to bake; default: all existing inputs")
     args = parser.parse_args()
 
-    source_zip = resolve_zip(args.source_zip)
-    ensure_source_materials(source_zip)
+    source_dir = args.source_dir.resolve()
+    MATERIAL_INPUTS = {name: source_dir / f"{name}.png" for name in ("stone", "brick", "mossy", "basalt", "palisade")}
+    RUNTIME_TILE_REFERENCE = source_dir / "runtime-tile.png"
     material_names = selected_materials(args.materials)
 
-    out_dir = Path(args.out)
-    proof_dir = Path(args.proofs)
+    out_dir = args.out.resolve()
+    proof_dir = args.proofs.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     proof_dir.mkdir(parents=True, exist_ok=True)
 

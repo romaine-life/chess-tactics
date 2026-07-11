@@ -1,4 +1,6 @@
 {
+  "authority": "historical-provenance-only",
+  "runtime_authority": "backend-live-media-catalog",
   "schema_version": 1,
   "date": "2026-07-10",
   "run_id": "fence-realignment-2026-07-10",

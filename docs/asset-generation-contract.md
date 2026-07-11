@@ -7,7 +7,8 @@ roughly gestures at it.
 
 Use this contract together with `docs/asset-terminology.md` (the vocabulary:
 asset, frame, part, slot, state, assembly), `docs/ui-art-direction.md`, and
-`docs/asset-pipeline-proposal.md`. For scenic backgrounds and unit portrait
+`docs/asset-pipeline-proposal.md`, plus the live-storage rules in
+[`runtime-asset-contract.md`](runtime-asset-contract.md). For scenic backgrounds and unit portrait
 backdrops, also use `docs/lore-anti-story.md` and
 `docs/background-art-contract.md`.
 
@@ -16,6 +17,12 @@ Production raster sizing is governed by
 scaling may calibrate a candidate, but acceptance requires regenerated native
 pixels and a 1:1 canonical runtime path.
 
+Storage and promotion are governed by
+[ADR-0081](adr/0081-runtime-assets-are-live-storage-backed.md): generated media
+is uploaded as a live candidate, accepted pointers live in Postgres, immutable
+bytes live in private Blob Storage, and no production/review/source media is
+published into Git.
+
 ## Core Decision
 
 The playable game should be assembled from real pixel-art assets and live game
@@ -23,8 +30,9 @@ state. Generated concept renders are the style source and review reference;
 they are not the final renderer for interactive systems.
 
 Do not ask an agent to "make the UI look like the art" by inventing CSS. Ask it
-to produce named bitmap assets, manifests, contact sheets, and in-game previews
-that can be reviewed against the approved art.
+to produce named live-storage candidates, provenance, contact sheets, and
+in-game previews that can be reviewed against the approved art. A filesystem
+export is temporary handoff material, never promotion.
 
 ## Hard Rule
 

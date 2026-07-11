@@ -1,5 +1,5 @@
 ---
-status: "accepted"
+status: "accepted; Git-source and runtime-asset storage clauses superseded by ADR-0081"
 date: 2026-06-29
 deciders: Nelson, Claude
 ---

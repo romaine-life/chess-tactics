@@ -1,7 +1,8 @@
 # Blender stone-fence native candidates
 
-This directory is the Blender lane for the 2026-07-10 wood/stone fence comparison.
-It is isolated review art and does not replace the live fence assets.
+This directory records the historical Blender lane for the 2026-07-10
+wood/stone fence comparison. Its source and rendered media moved to private live
+storage; this text is not a rebuild path.
 
 ## Pixel contract
 
@@ -32,9 +33,8 @@ resize before or after rendering.
 
 - ADR-0040 geometry: the reusable Blender source owns the modular wall, five
   capstone joints, post shaft, cap, camera projection, and seating.
-- ADR-0040 material: all stone albedo pixels come from the sourced photoscan at
-  `docs/art/wall-concepts/materials/source/stone-photoscan.png`. The Blender file
-  packs that image so the source remains reproducible.
+- ADR-0040 material: all stone albedo pixels came from the sourced photoscan
+  recorded with the private source version.
 - ADR-0076: Blender renders directly to the final `96x180` frame. The only
   post-lighting compositor operation is permitted alpha hardening. The script
   has no bitmap resize, render-percentage correction, compositor scale, or
@@ -44,15 +44,9 @@ These are candidates, not accepted runtime art. Promotion still requires an
 in-app 1x proof, family acceptance record, and the runtime native-size guard
 required by ADR-0076.
 
-## Rebuild
+## Replacement workflow
 
-From the repository root with Blender 5.1:
-
-```powershell
-& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' `
-  --background --factory-startup `
-  --python 'docs/art/fence-concepts/candidates/2026-07-10/blender-stone/render_blender_stone.py'
-```
-
-The script rewrites the three native PNG candidates and
-`stone-fence-native-source.blend`.
+Any new Blender pass fetches its private source version into a temporary
+workspace, renders directly at the delivery raster, uploads the exact candidate
+bytes and evidence, and removes the workspace after board review. It must not
+rewrite files in this directory.

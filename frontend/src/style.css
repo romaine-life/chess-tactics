@@ -929,7 +929,8 @@ h1 {
    track the baked asset: cap = barCapWidth('panel-divider') = round(tee 24px × junction-size), and
    the bar's height = the (scaled) tee's own height, so the consumer renders it 1:1 (no downscale).
    The tuned junction size + nudge live in config/nine-slice/panel-divider.json (scale 1.2, jy 1)
-   -> cap 29px, height 30px. Re-run apply-nine-slice + kit-manifest after changing them. */
+   -> cap 29px, height 30px. Regenerate in an OS temporary workspace and upload
+   the result as a reviewed live-media candidate after changing this geometry. */
 .kit-divider {
   height: 30px;
   border: 0 solid transparent;
@@ -2576,7 +2577,7 @@ h1 {
 .skirmish-end { left: 83.6%; top: 92.5%; width: 14.2%; height: 5.3%; }
 
 /* Utility screens (/lobbies, /party, /settings) - asset-backed operational UI.
-   Bitmap skins live in public/assets/ui/utility; labels and behavior stay live. */
+   Bitmap skins resolve through backend-owned semantic slots; labels and behavior stay live. */
 .utility-screen {
   --utility-max: 1040px;
   align-content: start;
@@ -4293,6 +4294,20 @@ h1 {
   image-rendering: auto;
 }
 
+.unit-art-missing-frame {
+  align-items: center;
+  border: 1px dashed rgba(143, 184, 255, .48);
+  color: rgba(207, 230, 241, .78);
+  display: flex;
+  font-size: 9px;
+  height: calc(52px * var(--unit-scale));
+  justify-content: center;
+  line-height: 1.2;
+  padding: 4px;
+  text-align: center;
+  width: calc(52px * var(--unit-scale));
+}
+
 /* Game-only chrome layered on .board-unit-seat: the move glide. One knob for the whole
    move (travel + hop); the enemy override below makes its reply weightier. */
 .skirmish-board-unit {
@@ -5123,10 +5138,13 @@ h1 {
   width: 100%;
 }
 .palette-select-trigger::after {
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23cfe6f1' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain;
+  border: solid #cfe6f1;
+  border-width: 0 2px 2px 0;
+  box-sizing: border-box;
   content: "";
   height: 8px;
-  width: 12px;
+  transform: rotate(45deg) translate(-1px, -1px);
+  width: 8px;
 }
 .palette-select-trigger:focus-visible {
   outline: 2px solid rgba(101, 184, 255, .72);
@@ -5268,14 +5286,16 @@ h1 {
 .le-select-wrap::after,
 .le-layer-select-wrap::after,
 .le-event-select-wrap::after {
+  border: solid #cfe6f1;
+  border-width: 0 2px 2px 0;
+  box-sizing: border-box;
   content: "";
   position: absolute;
   top: 50%;
-  right: 14px;
-  width: 12px;
+  right: 16px;
+  width: 8px;
   height: 8px;
-  transform: translateY(-50%);
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23cfe6f1' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain;
+  transform: translateY(-65%) rotate(45deg);
   pointer-events: none;
 }
 .le-select-wrap .le-layer-select,
@@ -10677,6 +10697,13 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
+.tileset-card-missing-media {
+  color: rgba(207, 230, 241, .72);
+  font-size: var(--ds-text-xs);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
 .ground-cover-preview {
   position: relative;
   display: block;
@@ -11534,11 +11561,11 @@ button.tileset-relationship-cell {
 .tileset-placement-board.is-tool-select .tileset-doodad-hit {
   cursor: pointer;
 }
-/* An eraser-shaped cursor (mirrors the Erase toolbar icon). NOT `not-allowed` — the
-   circle-slash reads as "you can't do this" even though erasing is the active action. */
+/* The platform cell cursor distinguishes erase from brush without embedding another
+   media asset. NOT `not-allowed`: erasing is an available action, not a prohibition. */
 .tileset-placement-board.is-tool-erase .tileset-cell-hit,
 .tileset-placement-board.is-tool-erase .tileset-doodad-hit {
-  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 16 16'%3E%3Crect x='2.6' y='7.6' width='9.4' height='5' rx='1.2' transform='rotate(-40 7.3 10.1)' fill='%231a3550' stroke='%23eaf2fb' stroke-width='1.4'/%3E%3Cline x1='6' y1='13.6' x2='13.6' y2='13.6' stroke='%23eaf2fb' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 6 18, cell;
+  cursor: cell;
 }
 .tileset-placement-board.is-tool-select .tileset-cell-hit {
   cursor: pointer;
@@ -15341,11 +15368,11 @@ button.tileset-relationship-cell {
   line-height: 1.4;
 }
 
-.le-fence-artwork-status.is-native-pass {
+.le-fence-artwork-status.is-backend-accepted {
   border-left-color: #58d68d;
 }
 
-.le-fence-artwork-status.is-native-pass strong {
+.le-fence-artwork-status.is-backend-accepted strong {
   color: #58d68d;
 }
 

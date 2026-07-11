@@ -49,8 +49,8 @@ export interface CoverSet {
   count?: Record<GroundCoverDensity, number>;
 }
 
-// Registry keyed by terrain family. Grass is the first set; add stone/water/etc.
-// by committing sources + re-running the bake and registering the manifest here.
+// Registry keyed by terrain family. Add a set by registering its deterministic
+// geometry here, then generate and upload its pixels as backend-owned candidates.
 const SETS: Partial<Record<TileFamilyId, CoverSet>> = {
   grass: { ...grassManifest, basePath: '/assets/groundcover/grass' } as unknown as CoverSet,
   water: { ...waterManifest, basePath: '/assets/groundcover/water', edgeOnly: true, count: { sparse: 2, filled: 3 } } as unknown as CoverSet,

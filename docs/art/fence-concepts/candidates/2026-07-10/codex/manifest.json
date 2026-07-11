@@ -1,4 +1,6 @@
 {
+  "authority": "historical-provenance-only",
+  "runtime_authority": "backend-live-media-catalog",
   "schema_version": 1,
   "run_date": "2026-07-10",
   "provider": "OpenAI Codex built-in image generation",

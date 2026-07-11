@@ -3,8 +3,8 @@
 Run through scripts/generate-unit-art.py. The assembled Blender source is the
 accepted Ruinwall model, not one of the retired rook experiments.
 
-Output defaults to .unit-art-output/rook/navy-blue/<direction>.png. The canonical
-pipeline supplies UNIT_ART_OUTPUT_DIR plus UNIT_ART_FRAME_WIDTH/HEIGHT and Blender
+The canonical pipeline fetches the private blend into a temporary directory and
+supplies UNIT_ART_BLEND, UNIT_ART_OUTPUT_DIR, and frame dimensions. Blender
 writes that exact delivery raster without a resize stage.
 """
 
@@ -17,14 +17,13 @@ import mathutils
 from bpy_extras.object_utils import world_to_camera_view
 
 
-ROOT = Path(__file__).resolve().parent
-while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
-    ROOT = ROOT.parent
-
-BLEND = ROOT / "docs/art/unit-concepts/blender-units/rook-claude/units/rook-ruinwall/model.blend"
-OUT = Path(os.environ.get("UNIT_ART_OUTPUT_DIR", str(ROOT / ".unit-art-output/rook/navy-blue")))
-FRAME_WIDTH = int(os.environ.get("UNIT_ART_FRAME_WIDTH", "512"))
-FRAME_HEIGHT = int(os.environ.get("UNIT_ART_FRAME_HEIGHT", "512"))
+BLEND = os.environ.get("UNIT_ART_BLEND")
+output = os.environ.get("UNIT_ART_OUTPUT_DIR")
+if not BLEND or not output:
+    raise RuntimeError("run through generate-unit-art.py; private rook source and output are required")
+OUT = Path(output)
+FRAME_WIDTH = int(os.environ["UNIT_ART_FRAME_WIDTH"])
+FRAME_HEIGHT = int(os.environ["UNIT_ART_FRAME_HEIGHT"])
 if not (1 <= FRAME_WIDTH <= 4096 and 1 <= FRAME_HEIGHT <= 4096):
     raise RuntimeError("UNIT_ART_FRAME_WIDTH/HEIGHT must be between 1 and 4096")
 OUT.mkdir(parents=True, exist_ok=True)

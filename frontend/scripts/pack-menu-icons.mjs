@@ -10,13 +10,27 @@
 // IS the pixelation), then MEDIANCUT-quantized to a limited palette and snapped onto
 // the canvas on whole pixels.
 //
-//   node scripts/pack-menu-icons.mjs
+// Sources must be fetched from live media. Outputs are temporary candidates:
+//   node scripts/pack-menu-icons.mjs --source-dir <fetched> --out-dir <temp>
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
-const PY = 'D:/automation/python312/python.exe';
-const DIR = 'public/assets/ui/main-menu/icons-carved';
+const argv = process.argv.slice(2);
+const option = (name) => {
+  const index = argv.indexOf(`--${name}`);
+  return index >= 0 ? argv[index + 1] : undefined;
+};
+const sourceOption = option('source-dir');
+const outputOption = option('out-dir');
+if (!sourceOption || !outputOption) {
+  console.error('Usage: node scripts/pack-menu-icons.mjs --source-dir <fetched> --out-dir <temp-output>');
+  process.exit(2);
+}
+const PY = process.env.FORGE_PY || process.env.PYTHON || 'python';
+const SOURCE_DIR = resolve(sourceOption);
+const OUT_DIR = resolve(outputOption);
+mkdirSync(OUT_DIR, { recursive: true });
 const CANVAS = 64, LIVE = 40, COLORS = 48;
 
 // Per-shape-class keylines (ADR-0027 §C), in px on the 64 canvas. This is the HERO
@@ -61,12 +75,13 @@ print(f'{out.split("/")[-1]} {canvas}x{canvas} | content {nw}x{nh} @ ({x},{y}) |
 
 let failed = 0;
 for (const ic of ICONS) {
-  const src = join(DIR, `${ic.slug}-smooth.png`);
-  const out = join(DIR, `${ic.slug}.png`);
+  const src = join(SOURCE_DIR, `${ic.slug}-smooth.png`);
+  const out = join(OUT_DIR, `${ic.slug}.png`);
   if (!existsSync(src)) { console.error(`MISSING smooth source: ${src}`); failed++; continue; }
   const r = spawnSync(PY, ['-c', PYSRC, src, ic.axis, String(ic.target), String(ic.nudgeY), String(CANVAS), String(COLORS), out.replace(/\\/g, '/')], { encoding: 'utf8' });
   if (r.status !== 0) { console.error(`FAIL ${ic.slug}: ${r.stderr || r.error}`); failed++; continue; }
   process.stdout.write(`  [${ic.cls.padEnd(12)}] ${r.stdout.trim()}\n`);
 }
 console.log(failed ? `\n${failed} icon(s) failed.` : `\nAll ${ICONS.length} packed to ${CANVAS}x${CANVAS} (live ${LIVE}, ${COLORS}-color).`);
+if (!failed) console.log('Upload the packed files as live-media candidates; this script does not publish repository media.');
 process.exit(failed ? 1 : 0);

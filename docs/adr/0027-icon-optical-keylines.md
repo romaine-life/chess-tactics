@@ -1,5 +1,5 @@
 ---
-status: "accepted; downscale-without-reforge clauses superseded by ADR-0076"
+status: "accepted; downscale-without-reforge clauses superseded by ADR-0076; asset-storage clauses superseded by ADR-0081"
 date: 2026-06-27
 deciders: Nelson, Claude
 ---

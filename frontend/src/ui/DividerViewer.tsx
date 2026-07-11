@@ -20,7 +20,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactElement, typ
 import { SURFACE_ASSETS } from './surfaceCatalog';
 import { ViewPane } from './shared/ViewPane';
 
-const CODEX_URL = '/kit-portfolio/cand3-codex.png';    // the standalone codex ornament (source: codex)
+const CODEX_URL = '/assets/ui/kit/dividers/codex-ornament.png'; // live semantic slot; source: codex
 const ATOM_URL = '/assets/ui/kit/atoms/corner-t.png';  // the authored 3-way T atom (source: atom)
 const PANEL = '/assets/ui/kit/panel.png';
 const PANEL_LINE = '/assets/ui/explore/frames/panel-line.png';

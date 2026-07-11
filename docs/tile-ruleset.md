@@ -29,7 +29,7 @@ Source of truth:
 
 - `frontend/src/art/tileTemplate.ts`
 - `frontend/scripts/generate-tile-template.mjs`
-- `frontend/public/assets/tiles/canonical-template/`
+- backend terrain-template slots under `/assets/tiles/canonical-template/`
 
 ## Base Tiles
 

@@ -6,9 +6,7 @@
 // widgets. Rendering reuses the original CSS (still in style.css), so the React
 // surface is pixel-faithful to what was built.
 import type { CSSProperties } from 'react';
-import assetCatalogRaw from '../../asset-catalog.json';
 import optimizedImagesRaw from './optimized-images.json';
-import kitManifest from './kitManifest.json';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface AssetState { label?: string; rect: Rect }
@@ -40,24 +38,11 @@ export interface Asset {
   rect?: Rect;
   rules?: AssetRules;
 }
-interface AssetCatalogFile { schemaVersion: number; assets: Asset[] }
-
-// The committed catalog and the files under frontend/public/assets are the
-// source of truth for art assets. Do not route image bytes through Postgres;
-// the database is reserved for gameplay/design data documents.
-export const assetCatalog = assetCatalogRaw as unknown as AssetCatalogFile;
-
-export function assetById(id: string): Asset | undefined {
-  return (assetCatalog.assets || []).find((asset) => asset.id === id);
-}
-
 // ---------------------------------------------------------------------------
-// Optimized runtime image formats (first-visit load). PNG sources stay
-// authoritative on disk; the optimizer (scripts/optimize-main-menu-assets.mjs)
-// emits AVIF + WebP siblings for the paths listed in optimized-images.json.
-// imageCssValue() upgrades those specific paths to a CSS image-set() so the
-// browser picks AVIF -> WebP -> PNG, while every other asset path is emitted
-// as a plain url() exactly as before. The PNG remains the universal fallback.
+// Optimized runtime image formats (first-visit load). The live-media catalog
+// owns every format-specific slot; optimized-images.json is only the renderer's
+// deterministic preference list. imageCssValue() emits the known semantic slots
+// as an image-set, and the backend resolves each request to its active version.
 // ---------------------------------------------------------------------------
 interface OptimizedImagesFile { schemaVersion: number; targets: { path: string }[] }
 const optimizedImages = optimizedImagesRaw as unknown as OptimizedImagesFile;
@@ -70,8 +55,8 @@ function sanitizeCssUrl(raw: string): string {
 }
 
 // Returns a CSS <image> value for an asset image URL: an image-set() with
-// AVIF/WebP/PNG candidates when the path has committed derivatives, otherwise a
-// plain url(). Exported for the runtime asset surfaces and tests.
+// AVIF/WebP/PNG semantic slots when variants are declared, otherwise a plain
+// live slot URL. Exported for the runtime asset surfaces and tests.
 export function imageCssValue(imageUrl: string): string {
   const clean = sanitizeCssUrl(imageUrl);
   if (!clean) return 'none';
@@ -103,23 +88,18 @@ export function bestImageUrl(imageUrl: string): string {
 // ---------------------------------------------------------------------------
 export interface TreeNode { label: string; href: string; planned?: boolean; children?: TreeNode[] }
 
-// The kit branch is generated from the manifest so the tree drills down to every
-// individual glyph/frame (like `icon › Sword`), not just group nodes. Each leaf
-// links to that one asset's detail view.
+// This tree is taxonomy, not a media roster. Individual live kit records belong
+// to the backend catalog and are browsed in Studio; Git keeps only the stable
+// classification nodes used by the glossary.
 const KIT_TREE: TreeNode = {
   label: 'kit',
   href: '/design/catalog/kit',
   children: [
-    ...kitManifest.groups.map((g) => ({
-      label: g.label.split(' ·')[0],
-      href: '/design/catalog/kit',
-      children: g.items.map((it) => ({ label: it.name, href: `/design/catalog/kit/${it.name}` })),
-    })),
-    {
-      label: 'Frames & components',
-      href: '/design/catalog/kit',
-      children: kitManifest.frames.map((f) => ({ label: f.name, href: `/design/catalog/kit/${f.name}` })),
-    },
+    { label: 'Settings icons', href: '/design/catalog/kit' },
+    { label: 'Game icons', href: '/design/catalog/kit' },
+    { label: 'Faction shields', href: '/design/catalog/kit' },
+    { label: 'Frames & components', href: '/design/catalog/kit' },
+    { label: 'Structure art', href: '/design/catalog/kit' },
   ],
 };
 

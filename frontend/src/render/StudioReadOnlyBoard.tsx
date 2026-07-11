@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { BoardSceneLayer } from './BoardSceneLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
 import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
+import { immutableBoardLabTerrainSrc } from './BoardLabBoard';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
 import { featureFrameSrc } from '../art/tileset';
 import { resolveFeatureOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
@@ -58,8 +59,8 @@ export function studioTerrainCanvasCell({
     key,
     x,
     y,
-    topSrc: frameSrc ? terrainTopSrc(frameSrc, tileAsset?.topAnimFrames) : undefined,
-    sideSrc: frameSrc ? terrainSideSrc(frameSrc) : undefined,
+    topSrc: frameSrc ? immutableBoardLabTerrainSrc(terrainTopSrc(frameSrc, tileAsset?.topAnimFrames)) : undefined,
+    sideSrc: frameSrc ? immutableBoardLabTerrainSrc(terrainSideSrc(frameSrc)) : undefined,
     featureSrc: feature ? featureFrameSrc(feature.kind, feature.material, feature.mask) : undefined,
     topAnimFrames: tileAsset?.topAnimFrames,
     drawSide,

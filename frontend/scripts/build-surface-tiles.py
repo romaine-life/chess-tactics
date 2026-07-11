@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Build the PRODUCTION surface-swap tileset from committed inputs — self-contained,
-re-runnable, the single source of truth for /assets/tiles/surface/<fam>-<n>.png.
+"""Build surface-tile candidates from explicitly fetched live-media inputs.
 
 NOTE (ADR-0039): the board now renders tiles as LAYERED top/side. After this script,
 `split-tiles.py` derives <fam>-<n>-top.png / -side.png from each combined tile here; the
@@ -8,23 +7,19 @@ board composes those halves, while this combined PNG stays the split source and 
 catalog/inspector image. Re-run split-tiles.py whenever this output changes.
 
 Pipeline per tile (see scripts/TILE_PIPELINE.md for the full flow incl. generation):
-  1. take a curated flat top-down PixelLab surface  (docs/art/pixellab-runs/surfaces/)
+  1. take a curated flat top-down generated surface
   2. PROJECT it into the exact iso top-diamond        (square -> rhombus affine, NEAREST)
-  3. COMPOSITE over the Blender-derived edge          (public/.../pixel/<fam>-codexfilter.png)
+  3. COMPOSITE over the Blender-derived edge
   4. PALETTE-TIE the side faces to a darker tone of    (the approved seam treatment)
      that tile's own top so top + side read as one material
 
-To add/replace variants: generate a new pool (TILE_PIPELINE.md), drop it under the
-archive, edit CURATION_MAP, re-run. Nothing here depends on a temp/scratch dir.
+Inputs and outputs must live in a temporary workspace. Upload each exact output
+with live-media-admin-client.mjs; this algorithm does not publish or promote.
 """
-import os
+import argparse
+from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-TILES = os.path.normpath(os.path.join(HERE, '..', 'public', 'assets', 'tiles'))
-RAW = os.path.normpath(os.path.join(HERE, '..', '..', 'docs', 'art', 'pixellab-runs', 'surfaces'))
-OUT = os.path.join(TILES, 'surface')
 
 W, H = 96, 180
 APEX, RIGHT, FRONT, LEFT = (48, 41), (96, 68), (48, 95), (0, 68)
@@ -116,14 +111,20 @@ def build_tile(edge, side, raw_path):
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), 'RGBA')
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--raw-dir', required=True, type=Path, help='Fetched raw pools arranged as <family>/tile_<index>.png')
+    parser.add_argument('--edge-dir', required=True, type=Path, help='Fetched Blender-derived <family>-codexfilter.png edges')
+    parser.add_argument('--out-dir', required=True, type=Path, help='Temporary candidate output directory')
+    args = parser.parse_args()
+    args.out_dir.mkdir(parents=True, exist_ok=True)
     count = 0
     for fam, pool in CURATION_MAP.items():
-        edge = Image.open(f'{TILES}/pixel/{fam}-codexfilter.png').convert('RGBA')
+        edge = Image.open(args.edge_dir / f'{fam}-codexfilter.png').convert('RGBA')
         side = (np.array(edge)[:, :, 3] > 20) & ~DIA
         for n, idx in enumerate(pool):
-            build_tile(edge, side, f'{RAW}/{fam}/tile_{idx}.png').save(f'{OUT}/{fam}-{n}.png')
+            build_tile(edge, side, args.raw_dir / fam / f'tile_{idx}.png').save(args.out_dir / f'{fam}-{n}.png')
             count += 1
-    print(f'wrote {count} production tiles to {OUT}')
+    print(f'wrote {count} candidate tiles to {args.out_dir}; upload them through the live-media admin workflow')
 
 if __name__ == '__main__':
     main()

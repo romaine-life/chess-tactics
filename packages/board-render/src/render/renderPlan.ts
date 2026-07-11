@@ -11,7 +11,6 @@ import {
   unitArtForId,
   unitAnchorFraction,
   hasDirectionSprite,
-  MISSING_DIRECTION_SPRITE,
   type UnitAsset,
   type Direction,
   type Faction,
@@ -340,24 +339,26 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       const direction = placement.direction as Direction;
       const src = hasDirectionSprite(unit, direction)
         ? unit.sprite(placement.faction as Faction, direction)
-        : MISSING_DIRECTION_SPRITE;
-      const scale = unit.defaultScale / 100;
-      const nativeScale = unit.nativeScalePercent / 100;
-      const seatW = UNIT_SEAT_W * nativeScale * scale;
-      const seatH = UNIT_SEAT_H * nativeScale * scale;
-      const imageW = Math.min(UNIT_IMG_MAX_W, unit.footprint.sourceCanvasPx) * scale;
-      const imageH = Math.min(UNIT_IMG_MAX_H, unit.footprint.sourceCanvasHeightPx) * scale;
-      const seatX = left - unitAnchorFraction(unit.unitAnchorX) * seatW;
-      const seatY = top - unitAnchorFraction(unit.unitAnchorY) * seatH;
-      ops.push({
-        src,
-        dx: seatX + (seatW - imageW) / 2,
-        dy: seatY + (seatH - imageH) / 2,
-        dw: imageW,
-        dh: imageH,
-        z: base,
-        contain: true,
-      });
+        : null;
+      if (src) {
+        const scale = unit.defaultScale / 100;
+        const nativeScale = unit.nativeScalePercent / 100;
+        const seatW = UNIT_SEAT_W * nativeScale * scale;
+        const seatH = UNIT_SEAT_H * nativeScale * scale;
+        const imageW = Math.min(UNIT_IMG_MAX_W, unit.footprint.sourceCanvasPx) * scale;
+        const imageH = Math.min(UNIT_IMG_MAX_H, unit.footprint.sourceCanvasHeightPx) * scale;
+        const seatX = left - unitAnchorFraction(unit.unitAnchorX) * seatW;
+        const seatY = top - unitAnchorFraction(unit.unitAnchorY) * seatH;
+        ops.push({
+          src,
+          dx: seatX + (seatW - imageW) / 2,
+          dy: seatY + (seatH - imageH) / 2,
+          dw: imageW,
+          dh: imageH,
+          z: base,
+          contain: true,
+        });
+      }
     }
   }
 

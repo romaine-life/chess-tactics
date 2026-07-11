@@ -2,41 +2,36 @@
 // shared imagegen rollout check. Output here is source material: build-wall-decor.py
 // trims and normalizes the transparent sprites into runtime assets.
 //
-//   node frontend/scripts/forge-wall-decor.mjs [asset-id...] [--tries 2]
+//   node frontend/scripts/forge-wall-decor.mjs [asset-id...] --ref-dir <temp> --slot-prefix <slot> -- <upload options>
 
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { CODEX, imageGenVerdict, removeChromaKey, runCodex, sessionImage } from './codex-imagegen.mjs';
-
-const ROOT = fileURLToPath(new URL('../..', import.meta.url));
-const DOCS = join(ROOT, 'docs/art/wall-art-concepts');
-const RAW_DIR = join(DOCS, 'codex');
-const EVIDENCE_DIR = join(DOCS, 'runs/evidence');
+import { optionValue, splitGeneratorArgs, uploadGeneratedCandidate } from './upload-generated-candidate.mjs';
 
 const SPECS = [
   {
     id: 'banner-tattered',
-    ref: join(ROOT, 'docs/art/wall-art-concepts/refs/banner-stone.png'),
+    ref: 'banner-stone.png',
     prompt: 'a single tattered hanging medieval banner for a stone castle wall, faded burgundy cloth with muted gold trim, torn lower points, small top hanging bar, no emblem letters',
     sizeHint: 'tall narrow sprite, about 2:3',
   },
   {
     id: 'relief-pawn',
-    ref: join(ROOT, 'docs/art/wall-art-concepts/refs/relief-stone.png'),
+    ref: 'relief-stone.png',
     prompt: 'a square carved stone wall relief plaque with a simple pawn silhouette recessed into cool gray stone, chipped bevel, no letters',
     sizeHint: 'compact square sprite',
   },
   {
     id: 'relief-rook',
-    ref: join(ROOT, 'docs/art/wall-art-concepts/refs/relief-stone.png'),
+    ref: 'relief-stone.png',
     prompt: 'a square carved stone wall relief plaque with a simple rook tower silhouette recessed into cool gray stone, chipped bevel, no letters',
     sizeHint: 'compact square sprite',
   },
   {
     id: 'lantern-brass',
-    ref: join(ROOT, 'docs/art/wall-art-concepts/refs/lantern-wall-reference.png'),
+    ref: 'lantern-wall-reference.png',
     prompt: 'a small brass ring lantern bracket for mounting on a stone wall, unlit, soot-darkened top plate, warm aged metal, no wall texture included',
     sizeHint: 'narrow hanging sprite, about 1:2',
   },
@@ -60,16 +55,15 @@ Save the generated PNG in the current working directory, then stop.`;
 }
 
 async function forgeOne(spec, maxTries) {
-  if (!existsSync(spec.ref)) throw new Error(`missing reference for ${spec.id}: ${spec.ref}`);
+  const sourceReference = join(referenceDir, spec.ref);
+  if (!existsSync(sourceReference)) throw new Error(`missing fetched reference for ${spec.id}: ${sourceReference}`);
   let prior = '';
   for (let attempt = 1; attempt <= maxTries; attempt += 1) {
     const work = mkdtempSync(join(tmpdir(), `wall-decor-${spec.id}-`));
     try {
       const ref = join(work, 'reference.png');
-      copyFileSync(spec.ref, ref);
+      copyFileSync(sourceReference, ref);
       const { code, out } = await runCodex(work, promptFor(spec, prior), ref);
-      mkdirSync(EVIDENCE_DIR, { recursive: true });
-      writeFileSync(join(EVIDENCE_DIR, `${spec.id}-try${attempt}.jsonl`), out);
       const verdict = imageGenVerdict(out);
       console.log(`${spec.id} attempt ${attempt}: exit=${code} gate.ok=${verdict.ok} reason=${verdict.reason}`);
       if (!verdict.ok) {
@@ -81,16 +75,19 @@ async function forgeOne(spec, maxTries) {
         prior = `no ig_*.png in session output for thread ${verdict.tid}`;
         continue;
       }
-      mkdirSync(RAW_DIR, { recursive: true });
-      const rawOut = join(RAW_DIR, `${spec.id}-raw.png`);
-      const alphaOut = join(RAW_DIR, `${spec.id}-alpha.png`);
+      const rawOut = join(work, `${spec.id}-raw.png`);
+      const alphaOut = join(work, `${spec.id}-alpha.png`);
       copyFileSync(raw, rawOut);
       const keyed = removeChromaKey(rawOut, alphaOut);
       if (!keyed.ok) {
         prior = `chroma-key removal failed: ${keyed.reason}`;
         continue;
       }
-      return { id: spec.id, ok: true, threadId: verdict.tid, raw: rawOut, alpha: alphaOut, attempts: attempt };
+      const provenance = join(work, 'provenance.json');
+      writeFileSync(provenance, `${JSON.stringify({ generator: 'forge-wall-decor', threadId: verdict.tid, asset: spec.id, chromaKey: '#00ff00' }, null, 2)}\n`);
+      uploadGeneratedCandidate(rawOut, [...uploadArgs, '--provenance-json', provenance], `${slotPrefix}/source/${spec.id}-raw.png`);
+      uploadGeneratedCandidate(alphaOut, [...uploadArgs, '--provenance-json', provenance], `${slotPrefix}/${spec.id}-alpha.png`);
+      return { id: spec.id, ok: true, threadId: verdict.tid, attempts: attempt };
     } finally {
       rmSync(work, { recursive: true, force: true });
     }
@@ -98,7 +95,13 @@ async function forgeOne(spec, maxTries) {
   return { id: spec.id, ok: false, attempts: maxTries };
 }
 
-const argv = process.argv.slice(2);
+const { toolArgs, uploadArgs } = splitGeneratorArgs(process.argv.slice(2));
+const slotPrefix = optionValue(toolArgs, '--slot-prefix').replace(/\/+$/, '');
+const referenceDir = optionValue(toolArgs, '--ref-dir');
+if (!slotPrefix || !referenceDir || !uploadArgs.length) throw new Error('forge-wall-decor requires --ref-dir, --slot-prefix, and live-media options after --');
+const valueIndexes = new Set();
+for (const name of ['--slot-prefix', '--ref-dir']) { const index = toolArgs.indexOf(name); valueIndexes.add(index); valueIndexes.add(index + 1); }
+const argv = toolArgs.filter((_, index) => !valueIndexes.has(index));
 const flag = (name, fallback) => {
   const i = argv.indexOf(name);
   return i >= 0 ? argv[i + 1] : fallback;
@@ -115,9 +118,6 @@ if (!queue.length) {
 console.log(`forge-wall-decor: ${queue.length} asset(s), up to ${maxTries} tries\n  codex: ${CODEX}\n`);
 const results = [];
 for (const spec of queue) results.push(await forgeOne(spec, maxTries));
-
-mkdirSync(dirname(join(DOCS, 'runs/wall-decor-img2img-latest.json')), { recursive: true });
-writeFileSync(join(DOCS, 'runs/wall-decor-img2img-latest.json'), JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2));
 
 const ok = results.filter((item) => item.ok);
 console.log(`\n==== ${ok.length}/${results.length} forged ====`);

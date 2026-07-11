@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
+import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 
 // The main-menu background scene as REAL elements instead of a `::after`
 // background — so animated regions can anchor to scene coordinates.
@@ -38,14 +39,16 @@ export interface SceneAnim {
   h: number;
   frames: number;
   frameMs: number;
-  sheet: string;
+  /** Backend-owned semantic slot; resolve it from one hydrated catalog snapshot at render time. */
+  slot: string;
 }
 
 // Every animated region of the menu scene — six waterfalls, scroll-baked
 // (build-scene-anim.py --scroll, from the static art alone; no run dir). Per the
 // color-cycling canon (Mark Ferrari), each region runs its OWN loop tempo
 // (1.44s / 1.56s / 1.68s / 1.80s / 1.92s / 2.16s) so the scene never pulses in
-// unison. Exact bake commands live in git (see the commit that added each sheet).
+// unison. Git owns this deterministic placement/timing geometry; generated sheet
+// pixels and their active pointers are backend-owned live-media versions.
 export const SCENE_ANIMS: SceneAnim[] = [
   {
     id: 'waterfall-right',
@@ -55,7 +58,7 @@ export const SCENE_ANIMS: SceneAnim[] = [
     h: 256,
     frames: 12,
     frameMs: 140,
-    sheet: '/assets/ui/main-menu/scene-anim/waterfall-right.png',
+    slot: 'ui/main-menu/scene-anim/waterfall-right.png',
   },
   {
     id: 'waterfall-right-lower',
@@ -65,7 +68,7 @@ export const SCENE_ANIMS: SceneAnim[] = [
     h: 130,
     frames: 12,
     frameMs: 120,
-    sheet: '/assets/ui/main-menu/scene-anim/waterfall-right-lower.png',
+    slot: 'ui/main-menu/scene-anim/waterfall-right-lower.png',
   },
   {
     id: 'waterfall-right-mid',
@@ -75,7 +78,7 @@ export const SCENE_ANIMS: SceneAnim[] = [
     h: 120,
     frames: 12,
     frameMs: 150,
-    sheet: '/assets/ui/main-menu/scene-anim/waterfall-right-mid.png',
+    slot: 'ui/main-menu/scene-anim/waterfall-right-mid.png',
   },
   {
     id: 'waterfall-left',
@@ -85,7 +88,7 @@ export const SCENE_ANIMS: SceneAnim[] = [
     h: 195,
     frames: 12,
     frameMs: 160,
-    sheet: '/assets/ui/main-menu/scene-anim/waterfall-left.png',
+    slot: 'ui/main-menu/scene-anim/waterfall-left.png',
   },
   {
     // The thin cliff fall right of waterfall-left — its water column is dimmer
@@ -99,7 +102,7 @@ export const SCENE_ANIMS: SceneAnim[] = [
     h: 115,
     frames: 12,
     frameMs: 130,
-    sheet: '/assets/ui/main-menu/scene-anim/waterfall-upperright.png',
+    slot: 'ui/main-menu/scene-anim/waterfall-upperright.png',
   },
   {
     // Two lower falls + the cascade into the lake. The dim moonlit water sat
@@ -113,7 +116,7 @@ export const SCENE_ANIMS: SceneAnim[] = [
     h: 170,
     frames: 12,
     frameMs: 180,
-    sheet: '/assets/ui/main-menu/scene-anim/waterfall-lowerleft.png',
+    slot: 'ui/main-menu/scene-anim/waterfall-lowerleft.png',
   },
 ];
 
@@ -139,7 +142,7 @@ export function buildSceneBackdropNode(): HTMLDivElement {
     s.top = `${(a.y / SCENE_H) * 100}%`;
     s.width = `${(a.w / SCENE_W) * 100}%`;
     s.height = `${(a.h / SCENE_H) * 100}%`;
-    s.backgroundImage = `url("${a.sheet}")`;
+    s.backgroundImage = `url("${resolvedLiveMediaUrl(a.slot)}")`;
     s.setProperty('--scene-anim-frames', `${a.frames}`);
     // steps(N) over [0, N/(N-1) * 100%] lands step k on frame k of an N-frame
     // sheet sized in percent (bg-pos % maps k/(N-1) -> -k*boxW).

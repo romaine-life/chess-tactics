@@ -1,31 +1,16 @@
-"""Promote portrait masters to team palettes.
+"""Recolor fetched navy portrait masters into team-palette candidates.
 
-Recolors the navy codex-stone portrait masters into the production team palettes using a
-selective color-band strategy:
-shift only the navy stone band, preserve warm accents (king's gold crown, rook gate wood).
-Black/white are value ramps so the portraits keep sculptural detail.
-
-In:  frontend/public/assets/portrait-candidates/codex-stone/<piece>/navy-blue.png
-Out: frontend/public/assets/portrait-candidates/codex-stone/<piece>/<palette>.png
-
-Also writes black/white smooth preview masters to:
-  frontend/public/assets/portrait-editor/<piece>/<palette>.png
-and crops those to the superseded-but-catalogued reference portraits at:
-  frontend/public/assets/units/<piece>/portrait/<palette>.png
+The reusable color-band algorithm has no publication authority. Sources must be
+fetched from live media, outputs must be beneath the OS temporary directory, and
+the caller uploads any desired result as a backend candidate.
 """
+import argparse
 import colorsys
 import json
+import tempfile
 from pathlib import Path
 from PIL import Image
 
-ROOT = Path(__file__).resolve()
-while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
-    ROOT = ROOT.parent
-PUBLIC = ROOT / "frontend" / "public"
-BASE = PUBLIC / "assets" / "portrait-candidates" / "codex-stone"
-EDITOR = PUBLIC / "assets" / "portrait-editor"
-UNITS = PUBLIC / "assets" / "units"
-CROPS = ROOT / "frontend" / "src" / "art" / "portraitCrops.json"
 PIECES = ["pawn", "knight", "bishop", "rook", "queen", "king"]
 # palette -> spec. Hue specs shift the navy stone band; ramp specs remap that band's
 # image-local lightness range into a curated neutral ramp.
@@ -127,6 +112,7 @@ def crop_reference(im, crop, final=512):
 
 
 def save_if_changed(im, path):
+    path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         old = Image.open(path).convert("RGBA")
         if old.size == im.size and old.tobytes() == im.tobytes():
@@ -135,29 +121,72 @@ def save_if_changed(im, path):
     return True
 
 
-n = 0
-w = 0
-for piece in PIECES:
-    navy = Image.open(BASE / piece / "navy-blue.png").convert("RGBA")
-    for pal, spec in PALETTES.items():
-        n += 1
-        if save_if_changed(apply_palette(navy.copy(), spec), BASE / piece / f"{pal}.png"):
-            w += 1
-    print("recolored codex-stone", piece)
+def require_temp_dir(path):
+    resolved = path.resolve()
+    temp_root = Path(tempfile.gettempdir()).resolve()
+    try:
+        resolved.relative_to(temp_root)
+    except ValueError as error:
+        raise ValueError(f"--out-dir must be beneath the OS temporary directory {temp_root}: {resolved}") from error
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved
 
-crops = json.load(open(CROPS, encoding="utf-8"))
-for piece in PIECES:
-    navy = Image.open(EDITOR / piece / "navy-blue.png").convert("RGBA")
-    for pal in ["black", "white"]:
-        im = apply_palette(navy.copy(), PALETTES[pal])
-        n += 1
-        if save_if_changed(im, EDITOR / piece / f"{pal}.png"):
-            w += 1
-        out = UNITS / piece / "portrait" / f"{pal}.png"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        n += 1
-        if save_if_changed(crop_reference(im, crops[piece]), out):
-            w += 1
-    print("recolored portrait-editor", piece)
 
-print(f"DONE — checked {n} palette portraits, wrote {w}")
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source-dir", type=Path, required=True,
+                        help="Fetched sources laid out as <piece>/navy-blue.png")
+    parser.add_argument("--out-dir", type=Path, required=True,
+                        help="Temporary output root")
+    parser.add_argument("--smooth-source-dir", type=Path,
+                        help="Optional fetched smooth masters for neutral black/white recolors")
+    parser.add_argument("--crop-config", type=Path,
+                        help="Optional deterministic crop JSON; required with --smooth-source-dir")
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    if bool(args.smooth_source_dir) != bool(args.crop_config):
+        raise ValueError("--smooth-source-dir and --crop-config must be supplied together")
+    source_dir = args.source_dir.resolve()
+    out_dir = require_temp_dir(args.out_dir)
+    checked = 0
+    written = 0
+
+    for piece in PIECES:
+        source = source_dir / piece / "navy-blue.png"
+        if not source.is_file():
+            raise FileNotFoundError(f"missing fetched navy master: {source}")
+        navy = Image.open(source).convert("RGBA")
+        for palette, spec in PALETTES.items():
+            checked += 1
+            if save_if_changed(apply_palette(navy.copy(), spec), out_dir / "recolored" / piece / f"{palette}.png"):
+                written += 1
+        print("recolored", piece)
+
+    if args.smooth_source_dir:
+        with args.crop_config.open(encoding="utf-8") as handle:
+            crops = json.load(handle)
+        smooth_dir = args.smooth_source_dir.resolve()
+        for piece in PIECES:
+            source = smooth_dir / piece / "navy-blue.png"
+            if not source.is_file():
+                raise FileNotFoundError(f"missing fetched smooth navy master: {source}")
+            navy = Image.open(source).convert("RGBA")
+            for palette in ["black", "white"]:
+                image = apply_palette(navy.copy(), PALETTES[palette])
+                checked += 1
+                if save_if_changed(image, out_dir / "smooth" / piece / f"{palette}.png"):
+                    written += 1
+                checked += 1
+                if save_if_changed(crop_reference(image, crops[piece]), out_dir / "cropped" / piece / f"{palette}.png"):
+                    written += 1
+            print("recolored smooth source", piece)
+
+    print(f"DONE — checked {checked} palette candidates, wrote {written} beneath {out_dir}")
+    print("Upload selected files with scripts/live-media-admin-client.mjs upload-candidate.")
+
+
+if __name__ == "__main__":
+    main()

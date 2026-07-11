@@ -1,5 +1,5 @@
 ---
-status: "accepted"
+status: "accepted; broad code-owned/no-DB asset premise superseded by ADR-0081"
 date: 2026-06-28
 deciders: Nelson, Claude
 ---

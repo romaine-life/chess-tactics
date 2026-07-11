@@ -2,23 +2,19 @@
 // grid of art cards in the browser pane (world scenes, portrait backgrounds, unit
 // portraits, portrait-editor sources, brand/key art, concept art, inspiration).
 // Search + zoom live in the studio's Controls panel (passed in as props). The
-// per-piece viewer is the Lab's job. Data: the build-time manifest from
-// scripts/artwork-manifest.mjs (parallel to Assets' kit-manifest). No forge/gate
-// here — these are authored artworks, not generated hard-alpha glyphs.
+// per-piece viewer is the Lab's job. The roster and every displayed media fact
+// come from one hydrated backend catalog snapshot; this file owns presentation,
+// not an alternate media inventory.
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react';
-import manifest from './artworkManifest.json';
+import {
+  mediaDimensions,
+  studioProductionLabel,
+  type StudioArtworkGroup,
+  type StudioArtworkLibrary,
+  type StudioArtworkRecord,
+} from './studioLiveMediaLibrary';
 
-interface ArtworkItem { id: string; label: string; url: string; w: number; h: number; sub: string }
-interface ArtworkGroup { id: string; label: string; items: ArtworkItem[] }
-interface ArtworkManifest { generated: string; summary: { total: number; groups: number }; groups: ArtworkGroup[] }
-
-const ART = manifest as ArtworkManifest;
 const PORTRAIT_GROUP = 'unit-portraits';
-
-// The manifest groups, surfaced for the catalog's Group filter (the studio builds a
-// CatalogFilters dropdown from these). Kept here so the manifest is the one owner.
-export const ARTWORK_GROUPS: { id: string; label: string; count: number }[] = ART.groups.map((g) => ({ id: g.id, label: g.label, count: g.items.length }));
-const dimOf = (it: ArtworkItem): string => (it.w && it.h ? `${it.w}×${it.h}` : '');
 
 // Stop a card-action icon's click from also triggering the card's select.
 const cardAction = (run: () => void) => ({
@@ -43,13 +39,13 @@ const EditIcon = (): ReactElement => (
 );
 
 function Card({ item, selected, onSelect, onView, onEdit }: {
-  item: ArtworkItem;
+  item: StudioArtworkRecord;
   selected: boolean;
   onSelect: (id: string) => void;
   onView: (id: string) => void;
   onEdit?: (id: string) => void;
 }): ReactElement {
-  const dim = dimOf(item);
+  const dim = mediaDimensions(item);
   return (
     <button
       type="button"
@@ -58,10 +54,11 @@ function Card({ item, selected, onSelect, onView, onEdit }: {
       aria-pressed={selected}
       title={`Select ${item.label}`}
     >
-      <span className="tileset-studio-card-image"><img src={item.url} alt="" loading="lazy" draggable={false} /></span>
+      <span className="tileset-studio-card-image"><img src={item.immutableUrl} alt="" loading="lazy" draggable={false} /></span>
       <span className="tileset-studio-card-meta">
         <span className="tileset-studio-card-text"><strong>{item.label}</strong><em>{[item.sub, dim].filter(Boolean).join(' · ')}</em></span>
         <span className="tileset-card-actions">
+          <span className={`asset-prov ${item.productionEligible ? 'is-forged' : 'is-original'}`}>{studioProductionLabel(item.productionStatus)}</span>
           {onEdit ? (
             <span className="tileset-card-action" title={`Edit ${item.label} portrait crop`} aria-label={`Edit ${item.label} portrait crop`} {...cardAction(() => onEdit(item.id))}>
               <EditIcon />
@@ -76,7 +73,8 @@ function Card({ item, selected, onSelect, onView, onEdit }: {
   );
 }
 
-export function ArtworkLibraryStudio({ search, zoom, selected, onSelect, onView, onEditPortrait, groups }: {
+export function ArtworkLibraryStudio({ library, search, zoom, selected, onSelect, onView, onEditPortrait, groups }: {
+  library: StudioArtworkLibrary;
   search: string;
   zoom: number;
   selected: string;
@@ -88,7 +86,7 @@ export function ArtworkLibraryStudio({ search, zoom, selected, onSelect, onView,
 }): ReactElement {
   const q = search.trim().toLowerCase();
   const groupSet = groups ? new Set(groups) : null;
-  const sections = ART.groups
+  const sections = library.groups
     .filter((g) => !groupSet || groupSet.has(g.id))
     .map((g) => ({
       ...g,
@@ -124,8 +122,8 @@ export function ArtworkLibraryStudio({ search, zoom, selected, onSelect, onView,
   );
 }
 
-function findArtwork(id: string): { group: ArtworkGroup; item: ArtworkItem } | null {
-  for (const g of ART.groups) {
+function findArtwork(library: StudioArtworkLibrary, id: string): { group: StudioArtworkGroup; item: StudioArtworkRecord } | null {
+  for (const g of library.groups) {
     const item = g.items.find((i) => i.id === id);
     if (item) return { group: g, item };
   }
@@ -137,8 +135,13 @@ function findArtwork(id: string): { group: ArtworkGroup; item: ArtworkItem } | n
 // [main][aside] straight into the shell so the frame matches every other mode. The
 // `header` slot carries the Viewer's Asset|Artwork kind selector (the Viewer's tier
 // control), supplied by the host so both Viewer surfaces share one selector.
-export function ArtworkLab({ name, header }: { name: string; header?: ReactNode }): ReactElement {
-  const found = name ? findArtwork(name) : null;
+function runtimeValue(value: unknown): string {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
+}
+
+export function ArtworkLab({ library, name, header }: { library: StudioArtworkLibrary; name: string; header?: ReactNode }): ReactElement {
+  const found = name ? findArtwork(library, name) : null;
   return (
     <>
       <section className="al-lab-main" aria-label="Artwork preview">
@@ -147,7 +150,7 @@ export function ArtworkLab({ name, header }: { name: string; header?: ReactNode 
         ) : (
           <div className="al-lab-stages">
             <figure className="al-stage">
-              <span className="al-checker al-artwork-stage"><img src={found.item.url} alt={found.item.label} className="al-artwork-lg" /></span>
+              <span className="al-checker al-artwork-stage"><img src={found.item.immutableUrl} alt={found.item.label} className="al-artwork-lg" /></span>
               <figcaption>{found.item.label}</figcaption>
             </figure>
           </div>
@@ -161,8 +164,16 @@ export function ArtworkLab({ name, header }: { name: string; header?: ReactNode 
             {found ? (
               <dl className="al-meta">
                 <div><dt>Group</dt><dd>{found.group.label}</dd></div>
-                <div><dt>Size</dt><dd>{found.item.w && found.item.h ? `${found.item.w}×${found.item.h}` : '—'}</dd></div>
-                <div><dt>Path</dt><dd>{found.item.url}</dd></div>
+                <div><dt>Size</dt><dd>{mediaDimensions(found.item)}</dd></div>
+                <div><dt>Slot</dt><dd>{found.item.primary.slot}</dd></div>
+                <div><dt>Active URL</dt><dd>{found.item.immutableUrl}</dd></div>
+                <div><dt>Status</dt><dd className={found.item.productionEligible ? 'al-ok' : ''}>{studioProductionLabel(found.item.productionStatus)}</dd></div>
+                <div><dt>Production</dt><dd>{found.item.productionEligible ? 'eligible' : 'bridge only'}</dd></div>
+                <div><dt>Revision</dt><dd>{found.item.primary.rowRevision}</dd></div>
+                <div><dt>SHA-256</dt><dd>{found.item.primary.media.sha256}</dd></div>
+                {Object.entries(found.item.runtime).map(([key, value]) => (
+                  <div key={key}><dt>{key}</dt><dd>{runtimeValue(value)}</dd></div>
+                ))}
               </dl>
             ) : (
               <p className="tileset-catalog-note">No artwork selected — pick a card in the Artwork catalog.</p>

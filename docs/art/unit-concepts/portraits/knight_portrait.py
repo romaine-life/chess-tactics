@@ -16,7 +16,6 @@ Orientation gotchas this script handles (each cost an iteration to find):
   - bake the centering translation so the turntable pivots on the vertical axis.
 """
 import bpy, sys, math, mathutils, os, numpy as np
-from pathlib import Path
 
 # args after '--': PALETTE OUTDIR
 _a = sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv else ["navy-blue", ""]
@@ -31,8 +30,9 @@ PALETTES = {
 }
 P_DARK, P_MID, P_FLAT, P_METAL = PALETTES[PALETTE]
 
-ROOT = Path(__file__).resolve().parents[4]  # repo root (docs/art/unit-concepts/portraits/..)
-OBJ = str(ROOT / "docs/art/unit-concepts/source-assets/knight/wooden-chess-knight-side-b/12936_Wooden_Chess_Knight_Side_B_V2_l3.obj")
+OBJ = os.environ.get("PORTRAIT_KNIGHT_OBJ")
+if not OBJ or not os.path.isfile(OBJ):
+    raise RuntimeError("PORTRAIT_KNIGHT_OBJ must point to an explicitly fetched live-media source")
 os.makedirs(os.path.dirname(OUTFILE), exist_ok=True)
 
 bpy.ops.object.select_all(action="SELECT"); bpy.ops.object.delete()

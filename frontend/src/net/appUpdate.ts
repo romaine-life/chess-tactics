@@ -1,5 +1,5 @@
 // Proactive new-build detection. index.html is served no-cache and references a
-// content-hashed entry chunk (e.g. /assets/index-<hash>.js); a deploy changes
+// content-hashed entry chunk (e.g. /app-code/index-<hash>.js); a deploy changes
 // that hash. This tab knows the hash it booted with, so polling the live
 // index.html (no-store) and comparing tells us a newer build is live — letting us
 // offer a refresh BEFORE the user navigates into a now-missing chunk (the
@@ -12,14 +12,14 @@ const APP_UPDATE_RELOAD_WINDOW_MS = 30_000;
 // Pull the content hash out of a Vite entry-chunk reference, given either a
 // <script> src or the raw index.html. Exported for tests.
 export function extractEntryHash(htmlOrUrl: string): string {
-  const m = String(htmlOrUrl).match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/);
+  const m = String(htmlOrUrl).match(/\/app-code\/index-([A-Za-z0-9_-]+)\.js/);
   return m ? m[1] : '';
 }
 
 // The entry chunk this tab is currently running. Empty in dev (no hashed entry),
 // which makes every check below a no-op there.
 function bootedEntryHash(): string {
-  const el = document.querySelector('script[type="module"][src*="/assets/index-"]') as HTMLScriptElement | null;
+  const el = document.querySelector('script[type="module"][src*="/app-code/index-"]') as HTMLScriptElement | null;
   return extractEntryHash(el?.src || '');
 }
 

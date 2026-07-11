@@ -20,6 +20,8 @@ Durable document and live-content tables are created by the inline migrations in
 | `design_portfolios` | global, by id | `/api/design-portfolios/:id` | GET public, PUT requires sign-in (designer) |
 | `unit_families` / `unit_assets` / `unit_sprites` | global live Unit Art catalog | `/api/unit-catalog`, `/api/admin/unit-assets` | GET public, mutations require admin |
 | `unit_catalog_state` / `unit_asset_events` | Unit Art revision and audit history | internal | admin mutations write them |
+| `media_slots` / `media_versions` / `media_blobs` | shared live-media substrate and active pointers | `/api/asset-catalog`, `/api/media/:sha`, `/assets/:slot`, `/api/admin/media-assets` | GET public, mutations require admin |
+| `media_catalog_state` / `media_asset_events` | shared asset revision and audit history | internal | admin mutations write them |
 
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or
@@ -124,12 +126,16 @@ separate from `public_maps`, the explicit published
 snapshot store used by the existing public `/play?map=...` subsystem; migration
 16 deliberately leaves that store intact.
 
-Most code-owned PNG/WebP/AVIF/font files remain in the repo under
-`frontend/public/assets`. Board-unit art is the deliberate live-content exception:
-Postgres stores its accepted pointers, candidate metadata, geometry, revisions,
-and sprite hashes; the private `unit-assets` Blob container stores the immutable
-PNG bytes. The backend serves those bytes through same-origin content-addressed
-routes. Postgres does not store image bytes.
+Per [ADR-0081](adr/0081-runtime-assets-are-live-storage-backed.md), media is live
+content. Postgres stores stable slots, active pointers, accepted status, candidate metadata,
+geometry/provenance, revisions, and content hashes. Private Blob Storage stores
+immutable content-addressed bytes. The backend resolves stable `/assets/<slot>`
+addresses and immutable same-origin object routes. It never reads a packaged
+`frontend/public/assets` fallback, and Postgres does not store large media bytes.
+
+Unit Art remains a typed catalog over the same ownership model. BGM retains its
+existing Blob-index/range-streaming projection. See
+[`runtime-asset-contract.md`](runtime-asset-contract.md).
 
 What is **not** in Postgres (deliberate, see "Boundaries"): the `lobbies`
 matchmaking map.
@@ -248,8 +254,8 @@ so it is idempotent against the intended throwaway database.
 
 ## Boundaries
 
-- **Game art/assets** remain code-owned files. The retired `design_assets`
-  table and `/api/design-assets` binary upload/image routes are intentionally
-  absent; migration version 3 drops the table if an earlier session created it.
+- **Game art/assets** are live storage-backed. The retired `design_assets`
+  `bytea` table and its Git-seeded fallback routes remain absent; the replacement
+  is the content-addressed live-media substrate governed by ADR-0081.
 - **`lobbies`** remain process-memory matchmaking state. They are transient room
   coordination, not authored game content.

@@ -27,10 +27,10 @@ The current canonical circular footprint target is `96px`, so the equal-area squ
 
 Asset:
 
-- Accepted frames live in Unit Art storage. The authored Blender source is
-  `docs/art/unit-concepts/blender-units/rook-claude/units/rook-ruinwall/model.blend`;
-  `python scripts/generate-unit-art.py render rook ...` renders its exact
-  eight-direction turntable through the accepted-only Ruinwall renderer.
+- Accepted frames and the authored Blender source live in Unit Art storage.
+  `python scripts/generate-unit-art.py render rook ...` fetches that private
+  source through its explicit temporary source manifest and renders the exact
+  eight-direction turntable through the Git-owned Ruinwall algorithm.
 
 Measured south-render source:
 

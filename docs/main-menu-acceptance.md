@@ -8,9 +8,10 @@ The browser-facing visual ledger lives at
 `/design/main-menu`. Its `Accept`, `Needs Review`, and
 `Reject` controls save a design-portfolio draft through
 `/api/design-portfolios/main-menu-acceptance` when that endpoint is available,
-with browser-local storage as a fallback. A decision is only committed to git
-when this file is updated. See `docs/design-portfolio-persistence.md` for the
-draft endpoint contract.
+with browser-local storage limited to an editing draft. Asset acceptance is an
+admin backend transaction; this document records visual criteria but cannot
+promote media. See `docs/design-portfolio-persistence.md` for the draft endpoint
+contract and `docs/runtime-asset-contract.md` for promotion.
 
 ## Settled / Locked
 
@@ -27,7 +28,7 @@ draft endpoint contract.
   The main menu should continue using art-backed chrome with real DOM labels,
   controls, and hotspots instead of reverting to generic browser cards.
 - Main menu scenic background placement.
-  The live menu uses `frontend/public/assets/ui/main-menu/background-scene-v1.png`
+  The live menu uses slot `/assets/ui/main-menu/background-scene-v1.png`
   as a full-screen art-backed background layer with no baked UI, labels, panels,
   menu chrome, board, grid, platform, or pieces. This background-only scene is
   accepted.
@@ -48,12 +49,11 @@ draft endpoint contract.
   refinement is intentionally deferred unless a desktop change breaks basic
   rendering.
 - Optimized runtime delivery of the accepted art (no visual change).
-  The accepted background, shared rail surfaces/icons, and title are delivered with
-  optimized derivatives where registered, with the original PNG kept as the universal fallback.
-  The PNG sources stay checked in and authoritative; derivatives are
-  regenerated deterministically with `npm --prefix frontend run optimize:assets`
-  (sharp, dev-only `--no-save`), driven by
-  `frontend/src/ui/design/optimized-images.json`. The runtime prefers AVIF →
+  The accepted background, shared rail surfaces/icons, and title may have
+  independently versioned optimized-format slots. Their active pointers and
+  immutable bytes are live-storage-backed, with no checked-in original or
+  fallback. The renderer preference list is
+  `frontend/src/ui/design/optimized-images.json`; the runtime prefers AVIF →
   WebP → PNG via CSS `image-set()` and a `<picture>` element where applicable.
   This is a delivery-format change only; the source pixels remain authoritative.
 

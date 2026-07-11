@@ -109,6 +109,35 @@ spec:
             - name: UNIT_ASSET_CONTAINER_URL
               value: {{ .Values.unitAssets.containerUrl | quote }}
             {{- end }}
+            {{- if eq (include "chess-tactics.isTestEnv" .) "true" }}
+            # Test slots own isolated catalog rows and an ephemeral object store.
+            # Accepted immutable bytes are fetched lazily from the production
+            # same-origin media route; the slot never receives Azure identity.
+            - name: LIVE_MEDIA_STORAGE_DIR
+              value: "/tmp/chess-tactics-live-media"
+            - name: LIVE_MEDIA_ISOLATED_DATABASE
+              value: "test-slot"
+            - name: LIVE_MEDIA_SEED_CATALOG_URL
+              value: {{ required "liveMedia.seedCatalogUrl is required for test slots" .Values.liveMedia.seedCatalogUrl | quote }}
+            - name: LIVE_MEDIA_SEED_MEDIA_BASE_URL
+              value: {{ required "liveMedia.seedMediaBaseUrl is required for test slots" .Values.liveMedia.seedMediaBaseUrl | quote }}
+            {{- else }}
+            # Private generic runtime/review/source media. The backend resolves
+            # stable same-origin slots and writes immutable objects using the
+            # pod's workload identity.
+            - name: LIVE_MEDIA_CONTAINER_URL
+              value: {{ required "liveMedia.containerUrl is required for production" .Values.liveMedia.containerUrl | quote }}
+            {{- end }}
+            # Temporary stage-1 cutover gate. The final no-media commit deletes
+            # this variable and the backend's legacy branch together.
+            - name: LIVE_MEDIA_SERVING_ENABLED
+              value: "false"
+            {{- if ne (include "chess-tactics.isTestEnv" .) "true" }}
+            # Temporary stage-1 importer capability. Final cutover deletes this
+            # flag and the backend bridge mutation route.
+            - name: LIVE_MEDIA_IMPORT_ENABLED
+              value: "true"
+            {{- end }}
             # Deployed backends intentionally own schema rollout. Local backend
             # defaults to read-only schema checks unless explicitly opted into auto.
             - name: SCHEMA_MIGRATIONS
@@ -140,10 +169,10 @@ spec:
           resources:
             requests:
               cpu: 10m
-              memory: 64Mi
+              memory: 96Mi
             limits:
               cpu: 100m
-              memory: 128Mi
+              memory: 256Mi
           startupProbe:
             httpGet:
               path: /health
@@ -152,8 +181,12 @@ spec:
             failureThreshold: 10
           readinessProbe:
             httpGet:
-              path: /health
+              # `/health` is process liveness only. `/ready` fails closed until
+              # Postgres schema/catalog and live object storage are usable, so a
+              # broken rollout cannot evict the last serving pod.
+              path: /ready
               port: {{ include "chess-tactics.appPortName" . }}
+            timeoutSeconds: 12
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:

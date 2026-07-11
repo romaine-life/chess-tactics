@@ -43,8 +43,8 @@ import { OBJECTIVE_TYPES, type ObjectiveType } from '../core/level';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import { isPlayablePieceType, paletteForSide } from '../core/pieces';
-import { masterSrc, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
-import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
+import { type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
+import { runtimePortraitMasterSrc } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
 import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
 import { navigateApp, readValidatedReturnTo } from './navigation';
@@ -329,7 +329,10 @@ export function Skirmish() {
     const urls: string[] = [];
     for (const piece of game.pieces) {
       if (!isPlayablePieceType(piece.type)) continue;
-      urls.push(masterSrc(piece.type as PortraitPiece, paletteForSide(piece.side, piece.palette) as PortraitPalette, PRODUCTION_PORTRAIT_METHOD));
+      urls.push(runtimePortraitMasterSrc(
+        piece.type as PortraitPiece,
+        paletteForSide(piece.side, piece.palette) as PortraitPalette,
+      ));
       urls.push(DEFAULT_BACKGROUND_SET.portraits[piece.type]);
     }
     preloadImages(urls);

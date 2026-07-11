@@ -1,5 +1,5 @@
 ---
-status: "accepted; production display-scale clause superseded by ADR-0076"
+status: "accepted; production display-scale clause superseded by ADR-0076; storage substrate generalized by ADR-0081"
 date: 2026-07-09
 deciders: Nelson, Codex
 ---

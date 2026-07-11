@@ -1,5 +1,5 @@
 ---
-status: "accepted"
+status: "accepted; committed asset-baseline clause superseded by ADR-0081"
 date: 2026-07-03
 deciders: Nelson, Claude
 ---

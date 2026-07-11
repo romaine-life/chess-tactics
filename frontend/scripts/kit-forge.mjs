@@ -12,22 +12,18 @@
 // because it passed the gate; the gate certifies clean transparency, not a good
 // drawing. The human eyeball is still the required backstop before onboarding.
 //
-//   node frontend/scripts/kit-forge.mjs <name...> | --group <id> | --all  [--n 8] [--tries 3]
+//   node frontend/scripts/kit-forge.mjs <name...> | --group <id> | --all --ref-dir <temp> --slot-prefix <slot> -- <upload options>
 //
 // Each asset is forged in its OWN throwaway temp dir with --skip-git-repo-check,
 // so N codex sessions run concurrently with zero git checkpoint/restore — that
 // checkpointing (in the worktree) is what clobbered the parallel batch earlier.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync, copyFileSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { tmpdir, homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { verifyGlyph } from './verify-kit-asset.mjs';
+import { optionValue, splitGeneratorArgs, uploadGeneratedCandidate } from './upload-generated-candidate.mjs';
 
-const FRONTEND = fileURLToPath(new URL('..', import.meta.url));
-const REPO = resolve(FRONTEND, '..');
-const KIT = join(FRONTEND, 'public/assets/ui/kit');
-const PROV = join(FRONTEND, 'src/ui/design/kitProvenance.json');
 // Resolve the codex binary without hardcoding a machine-specific, hash-named path:
 // the bin/<hash>/ folder changes on every codex update and is unique per machine.
 // Prefer an explicit CODEX_BIN override, else the newest installed build under the
@@ -48,15 +44,13 @@ function resolveCodex() {
   return exe; // trust PATH
 }
 const CODEX = resolveCodex();
-const SESSIONS = 'C:/Users/Nelson/.codex/sessions';
+const SESSIONS = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'sessions');
 const TODAY = new Date().toISOString().slice(0, 10);
 
-const GEN = 'docs/art/ui-screen-concepts/generated';
-const SCN = 'docs/art/ui-screen-concepts';
 const ref = {
-  general: `${GEN}/settings-general-concept-v1.png`, audio: `${GEN}/settings-audio-concept-v1.png`,
-  gameplay: `${GEN}/settings-gameplay-concept-v1.png`, creator: `${GEN}/settings-creator-tools-concept-v1.png`,
-  skirmish: `${SCN}/04-skirmish.png`, campaign: `${SCN}/02-campaign-editor.png`,
+  general: 'settings-general-concept-v1.png', audio: 'settings-audio-concept-v1.png',
+  gameplay: 'settings-gameplay-concept-v1.png', creator: 'settings-creator-tools-concept-v1.png',
+  skirmish: '04-skirmish.png', campaign: '02-campaign-editor.png',
 };
 
 // One spec per asset: the single subject codex must paint, its style ref + size.
@@ -120,7 +114,7 @@ const SPECS = [
 ].map(([group, name, r, desc]) => {
   const dir = group === 'settings' ? 'icons' : `icons/${group}`;
   const [w, h] = group === 'shields' ? [64, 80] : [64, 64];
-  return { group, name, desc, w, h, outDir: join(KIT, dir), refAbs: resolve(REPO, r) };
+  return { group, name, desc, w, h, dir, refName: r };
 });
 
 function prompt(spec, prior) {
@@ -189,13 +183,13 @@ async function forgeOne(spec, maxTries) {
   for (let attempt = 1; attempt <= maxTries; attempt += 1) {
     const work = mkdtempSync(join(tmpdir(), `forge-${spec.name}-`));
     try {
-      const { code, out: codexJsonl } = await runCodex(spec.refAbs, work, prompt(spec, prior));
+      const refAbs = resolve(referenceDir, spec.refName);
+      if (!existsSync(refAbs)) throw new Error(`missing fetched reference ${refAbs}`);
+      const { code, out: codexJsonl } = await runCodex(refAbs, work, prompt(spec, prior));
       // Persist codex's full event stream so the method check is AUDITABLE (not a
       // black box): afterward we can prove it GENERATED the image from the style
       // ref (image_generation_call) rather than hand-drawing it in PIL/SVG/canvas.
-      const evidDir = join(FRONTEND, 'tmp-forge-evidence');
-      mkdirSync(evidDir, { recursive: true });
-      const evidPath = join(evidDir, `${spec.name}-try${attempt}.jsonl`);
+      const evidPath = join(work, `${spec.name}-try${attempt}.jsonl`);
       writeFileSync(evidPath, codexJsonl);
       const eventTypes = [...new Set(codexJsonl.split('\n').map((l) => { try { const j = JSON.parse(l); return (j.payload && j.payload.type) || j.type; } catch { return null; } }).filter(Boolean))];
       console.log(`        try ${attempt} METHOD: ${usedImageGenerator(codexJsonl) ? 'image_generation_call ✓ (GENERATED)' : 'no image-gen — CODE-DRAWN ✗'} | events: ${eventTypes.join(', ')}`);
@@ -210,7 +204,9 @@ async function forgeOne(spec, maxTries) {
       try {
         // GATE 2 (pixels): magenta / hard-alpha / edge bleed.
         verifyGlyph(outPng, { label: spec.name });
-        copyFileSync(outPng, join(spec.outDir, `${spec.name}.png`));
+        const provenance = join(work, 'provenance.json');
+        writeFileSync(provenance, `${JSON.stringify({ generator: 'kit-forge', method: 'image-generator', methodVerified: true, asset: spec.name, group: spec.group, generatedAt: TODAY }, null, 2)}\n`);
+        uploadGeneratedCandidate(outPng, [...uploadArgs, '--provenance-json', provenance], `${slotPrefix}/${spec.dir}/${spec.name}.png`);
         return { name: spec.name, group: spec.group, pass: true, tries: attempt };
       } catch (e) {
         prior = String(e.message).split('\n').slice(1).join(' ').replace(/\s+/g, ' ').trim();
@@ -237,19 +233,14 @@ async function pool(specs, n, maxTries) {
   return results;
 }
 
-function recordProvenance(results) {
-  let prov = { process: 'kit-forge single-shot + gate', lastRun: TODAY, assets: {} };
-  try { prov = { ...prov, ...JSON.parse(readFileSync(PROV, 'utf8')) }; } catch { /* first run */ }
-  prov.lastRun = TODAY;
-  for (const r of results) {
-    if (r.pass) prov.assets[r.name] = { group: r.group, forged: TODAY, tries: r.tries, method: 'image-generator (verified)', gate: 'pass' };
-  }
-  mkdirSync(join(FRONTEND, 'src/ui/design'), { recursive: true });
-  writeFileSync(PROV, `${JSON.stringify(prov, null, 2)}\n`);
-}
-
 // ---- CLI ----
-const argv = process.argv.slice(2);
+const { toolArgs, uploadArgs } = splitGeneratorArgs(process.argv.slice(2));
+const slotPrefix = optionValue(toolArgs, '--slot-prefix').replace(/\/+$/, '');
+const referenceDir = optionValue(toolArgs, '--ref-dir');
+if (!slotPrefix || !referenceDir || !uploadArgs.length) throw new Error('kit-forge requires --ref-dir, --slot-prefix, and live-media options after --');
+const valueIndexes = new Set();
+for (const name of ['--slot-prefix', '--ref-dir']) { const index = toolArgs.indexOf(name); valueIndexes.add(index); valueIndexes.add(index + 1); }
+const argv = toolArgs.filter((_, index) => !valueIndexes.has(index));
 const flag = (name, def) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : def; };
 const n = Math.max(1, parseInt(flag('--n', '8'), 10));
 const maxTries = Math.max(1, parseInt(flag('--tries', '3'), 10));
@@ -264,7 +255,6 @@ else { console.error('select assets: <name...> | --group <settings|game|shields>
 
 console.log(`forge: ${queue.length} asset(s), concurrency ${n}, up to ${maxTries} tries each\n`);
 const results = await pool(queue, n, maxTries);
-recordProvenance(results);
 const ok = results.filter((r) => r.pass).length;
-console.log(`\n==== ${ok}/${results.length} forged + gated. provenance -> ${PROV} ====`);
+console.log(`\n==== ${ok}/${results.length} forged, gated, and uploaded ====`);
 if (ok < results.length) { console.log('FAILED:', results.filter((r) => !r.pass).map((r) => r.name).join(', ')); process.exit(1); }

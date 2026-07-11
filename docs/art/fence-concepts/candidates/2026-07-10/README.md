@@ -1,7 +1,7 @@
 # Fence native-art candidate bake-off — 2026-07-10
 
-This directory contains review candidates only. It does not replace the live
-fence assets.
+This directory is text provenance for a historical review batch. Its media was
+migrated to private live storage; it is not a candidate source or rebuild path.
 
 ## Candidate matrix
 
@@ -32,15 +32,12 @@ only and does not make their high-resolution subjects native gameplay art.
 > current realignment run and `docs/art/fence-concepts/SOURCES.md`.
 
 - Primary live Level Editor drawing document: `/editor/level?document=5d04d83f-474e-4d76-a49e-094bbe26ec0d&levelId=l6&from=studio&layer=fence&kind=fence&artReview=fence-native-candidates-2026-07-10&fenceArt=blender-stone`
-- Focused editor-board capture: `../../proofs/fence-art-drawing-editor-proof.png`
 - Supplementary Studio gallery: `/studio?mode=catalog&cat=fences`
-- Supplementary Studio capture: `../../proofs/fence-native-candidate-map-proof.png`
-- Supplementary contact sheet: `fence-native-candidate-contact-sheet.png`
-- Rebuild: `python docs/art/fence-concepts/candidates/2026-07-10/build_contact_sheet.py`
-- Rebuild game-surface frames: `python docs/art/fence-concepts/candidates/2026-07-10/build_game_surface_previews.py`
-- Blender source and evidence: `blender-stone/README.md`
-- PixelLab prompts, IDs, hashes, and bounds: `pixellab/manifest.json`
-- Codex prompts, references, hashes, and production label: `codex/manifest.json`
+- Historical PixelLab and Codex prompt/provenance metadata remains as text.
+
+The deleted contact-sheet, preview-builder, and repository-output scripts are
+not supported regeneration paths. A new pass must upload candidates through the
+live-media admin workflow and mount those exact versions in the board review.
 
 The primary route is one pre-drawn private working copy served from the durable
 editor-document database and opened in the real Level Editor. Its Fence panel offers seven

@@ -75,11 +75,15 @@ livePreview:
     url: "http://127.0.0.1:3000"
   # Request path prefixes always reverse-proxied to the backend (the stable API
   # + health stay reachable through the edge regardless of override state).
-  # chess-tactics' backend serves /api/* and /health; everything else is
+  # chess-tactics' backend serves /api/* plus liveness/readiness; everything else is
   # frontend served override-first / fresh-passthrough.
   backendPrefixes:
     - /api
+    # Stable semantic media slots are backend routes, never frontend override
+    # files. Keep them on the same backend lane in live-preview sessions too.
+    - /assets
     - /health
+    - /ready
   authorizedSubject: ""
   override:
     volumeName: live-preview-override
@@ -137,6 +141,16 @@ unitAssets:
   # Test slots copy the live catalog into their isolated Postgres + local blob
   # directory at startup because slot service accounts never receive prod identity.
   seedCatalogUrl: "https://chess.romaine.life/api/unit-catalog"
+
+# Private content-addressed storage for the generic live-media catalog. Stable
+# browser URLs stay same-origin; only the backend talks to Blob Storage.
+liveMedia:
+  containerUrl: "https://chesstacticsmedia.blob.core.windows.net/live-media"
+  # Test slots seed metadata into their isolated Postgres, then fetch immutable
+  # bytes by hash only when requested. Neither source grants the slot Azure
+  # credentials or makes production writable.
+  seedCatalogUrl: "https://chess.romaine.life/api/asset-catalog"
+  seedMediaBaseUrl: "https://chess.romaine.life/api/media"
 
 ingress:
   gatewayName: main

@@ -11,7 +11,8 @@ import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
 import { clientSide, opponentSide } from '../game/clientPerspective';
-import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
+import { BoardLabBoard, boardLabCellPosition, immutableBoardLabTerrainSrc } from './BoardLabBoard';
+import { terrainSideSrc, terrainTopSrc } from './BoardTerrainLayer';
 import { boundsForOps, drawBoardOps, isAnimatedGroundCoverOp, loadCanvasImage } from './BoardCanvasLayer';
 import { objectBaseZIndex } from './sceneDepth';
 import { ViewPane } from '../ui/shared/ViewPane';
@@ -331,9 +332,9 @@ function collectBoardArt(
   for (const cell of board.cells) {
     if (cell.asset) {
       const top = tileFrameSrc(cell.asset);
-      tiles.add(top.replace(/\.png$/, '-top.png'));
+      tiles.add(immutableBoardLabTerrainSrc(terrainTopSrc(top, cell.asset.topAnimFrames)));
       const side = cell.sideAsset ? tileFrameSrc(cell.sideAsset) : top;
-      tiles.add(side.replace(/\.png$/, '-side.png'));
+      tiles.add(immutableBoardLabTerrainSrc(terrainSideSrc(side)));
     }
     if (cell.feature) tiles.add(featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask));
     const cover = cell.groundCover;

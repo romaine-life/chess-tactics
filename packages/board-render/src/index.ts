@@ -37,6 +37,7 @@ export function worldBackgroundSrc(): string {
 }
 
 export * from './art/backgroundSets';
+export * from './art/liveMediaCatalog';
 export * from './art/projectionContract';
 export * from './art/tileset';
 export * from './art/tileTemplate';

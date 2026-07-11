@@ -1,59 +1,11 @@
-# Wall Concept Sources
+# Wall art provenance
 
-Wall sprites follow ADR-0040: deterministic geometry is allowed to own the
-isometric footprint, but the visible material must come from generated/source art.
+Wall footprint masks, north/west placement rules, and the `(64,96)` anchor are
+deterministic geometry. Source materials, generated candidates, wall frames,
+thumbnails, and proofs are live-media records in private object storage.
 
-## Active Bake
-
-- Source staging: `walls/photoscanned-old-stone-wall-2x4m.zip`
-- Run record: `docs/art/wall-concepts/runs/wall-material-runs-2026-07-06.json`
-- Contact sheet: `docs/art/wall-concepts/wall-bake-contact-sheet.png`
-- Current baked materials:
-  - `stone` — photoscanned wall texture, runtime-diamond geometry bake
-  - `brick` — Codex img2img material, runtime-diamond geometry bake
-  - `mossy` — PixelLab material, runtime-diamond geometry bake
-  - `basalt` — PixelLab material, runtime-diamond geometry bake
-  - `palisade` — PixelLab material, runtime-diamond geometry bake
-- Current baked assets:
-  - `frontend/public/assets/tiles/feature/wall-<material>-1.png`
-  - `frontend/public/assets/tiles/feature/wall-<material>-8.png`
-  - `frontend/public/assets/tiles/feature/wall-<material>-9.png`
-  - `frontend/public/assets/tiles/feature/wall-<material>-thumb.png`
-- Runtime tile proof renders:
-  - `docs/art/wall-concepts/proofs/wall-<material>-proof.png`
-- Runtime seat proof renders:
-  - `docs/art/wall-concepts/proofs/wall-<material>-runtime-seat-proof.png`
-- Script: `frontend/scripts/build-wall-tiles.py`
-- Command:
-
-```powershell
-python frontend/scripts/build-wall-tiles.py
-```
-
-The script prepares material images, projects them into the exact shipped tile
-back-edge geometry, writes 128x240 anchored wall frames, composites proofs
-against the shipped grass tile, then crops square palette thumbnails. The wall
-frame is intentionally taller than the 96x180 tile/fence frame; runtime seats it
-at anchor `(64,96)`. In wall-frame pixels the back-edge base is fixed at
-`(16,95) -> (64,68) -> (112,95)`, matching the grass tile diamond after anchor
-translation.
-
-Gameplay/editor placement is narrower than the baked masks: walls are authored
-only on the board's northmost and westmost perimeter edges. Interior, south, and
-east edges are ignored and are dropped on save.
-
-## Three-Lane Bake-Off Shape
-
-- Photoscan lane: the staged photoscan supplies generated/source material; the
-  runtime tile diamond owns the N/W masks and seating.
-- Codex img2img lane: `frontend/scripts/forge-wall-material.mjs` generates a
-  method-gated flat material from the photoscan reference; the wall bake projects
-  it into the same runtime-diamond wall geometry. This is active for `brick`.
-- PixelLab lane: PixelLab `create_tiles_pro` generates flat material candidates;
-  selected candidates are archived and then projected into the same
-  runtime-diamond wall geometry. This is active for `mossy`, `basalt`, and
-  `palisade`.
-
-No PixelLab or img2img output is treated as the final isometric authority. Those
-tools generate material only; the shipped tile diamond owns the wall angle, mask
-frame, and tile seating proof.
+The retired wall bake read media from this directory and wrote frames into
+`frontend/public`; both sides of that filesystem pipeline were deleted at the
+ADR-0081 cutover. New material candidates are projected in a temporary
+workspace, uploaded to typed wall slots, and reviewed through the game-owned
+wall instrument before backend acceptance.
