@@ -421,5 +421,25 @@ export function productionUnitForFamily(family: string): UnitAsset | undefined {
 
 export function unitFamilyForId(id: string): PieceId | undefined {
   if ((activeUnitFamilies as string[]).includes(id)) return id as PieceId;
-  return unitAssetById(id)?.family;
+  const byAsset = unitAssetById(id)?.family;
+  if (byAsset) return byAsset;
+  // Legacy art-record ids ('pawn-codexsheet', 'rook-blender-v4-calibrated', ...) live on
+  // in boards saved before the live catalog. They were always family-prefixed, so
+  // resolve the prefix: the board keeps MEANING pawn/rook/etc., and the family's
+  // currently ACCEPTED art renders (art records never enter gameplay data). Without
+  // this, pre-catalog boards silently drop every unit.
+  const prefix = id.split('-', 1)[0];
+  if ((activeUnitFamilies as string[]).includes(prefix)) return prefix as PieceId;
+  return undefined;
+}
+
+/** THE unit-art resolver for board placements: the exact asset when the id names one,
+ * else the id's family's accepted production art. Every board surface (render plan,
+ * editor, studio previews) resolves through here so a legacy-id board never loses
+ * its units. */
+export function unitArtForId(id: string): UnitAsset | undefined {
+  const direct = unitAssetById(id);
+  if (direct) return direct;
+  const family = unitFamilyForId(id);
+  return family ? productionUnitForFamily(family) : undefined;
 }

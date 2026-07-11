@@ -66,6 +66,7 @@ import {
   rookDirections,
   unitAssets,
   unitAssetById,
+  unitArtForId,
   UNIT_METHOD_OPTIONS,
   type Direction,
   type PieceId,
@@ -586,7 +587,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const selectedPair = familyTransitionPairs.find((pair) => pair.id === selectedPairId) ?? familyTransitionPairs[0] ?? transitionPairs[0];
   const allStudioAssets = useMemo(() => [...studioFamilies.flatMap((item) => item.assets), ...transitionAssets], []);
   const selectedAsset = allStudioAssets.find((asset) => asset.id === selectedAssetId) ?? family.assets[0];
-  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssetById(id);
+  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitArtForId(id);
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
   const catalogBaseAssets = activeFamilies.flatMap((item) => item.assets.filter((asset) => asset.kind === 'tile'));
   const normalizedCatalogQuery = catalogQuery.trim().toLowerCase();

@@ -5,8 +5,10 @@ import {
   applyLiveUnitCatalog,
   productionUnitAssets,
   resetLiveUnitCatalog,
+  unitArtForId,
   unitAssetById,
   unitAssets,
+  unitFamilyForId,
 } from './unitCatalog';
 
 afterEach(() => resetLiveUnitCatalog());
@@ -27,6 +29,29 @@ describe('live unit catalog', () => {
     expect(unitAssetById('pawn')?.defaultScale).toBe(87);
     expect(unitAssetById('pawn-vintage')).toBeUndefined();
     expect(pieceSpritePath('pawn', 'crimson', 'north-east')).toBe(`/api/unit-sprites/${'a'.repeat(64)}.png`);
+  });
+
+  it('resolves legacy family-prefixed board ids to the family and its accepted art', () => {
+    applyLiveUnitCatalog(testLiveUnitCatalog());
+
+    // Boards saved before the live catalog carry art-record ids like these; they keep
+    // MEANING their family and render its currently accepted production art.
+    for (const [legacy, family] of [
+      ['pawn-codexsheet', 'pawn'],
+      ['rook-blender-v4-calibrated', 'rook'],
+      ['knight-fur', 'knight'],
+      ['king-crown', 'king'],
+      ['queen-tiara', 'queen'],
+      ['bishop-mitre', 'bishop'],
+    ] as const) {
+      expect(unitFamilyForId(legacy)).toBe(family);
+      expect(unitArtForId(legacy)?.id).toBe(family);
+      expect(unitArtForId(legacy)?.accepted).toBe(true);
+    }
+    // Exact ids still win over the prefix fallback, and junk stays unresolved.
+    expect(unitArtForId('pawn')?.id).toBe('pawn');
+    expect(unitFamilyForId('gargoyle-fancy')).toBeUndefined();
+    expect(unitArtForId('gargoyle-fancy')).toBeUndefined();
   });
 
   it('rejects an incomplete catalog instead of selecting another art source', () => {

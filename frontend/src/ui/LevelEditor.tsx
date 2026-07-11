@@ -61,6 +61,8 @@ import {
   rookDirections,
   unitAssets,
   unitAssetById,
+  unitArtForId,
+  unitFamilyForId,
   type Direction,
   type Faction,
   type UnitAsset,
@@ -957,7 +959,7 @@ const CHESS_MATERIAL_POINT_VALUE: Record<PlayablePieceType, number> = {
 };
 const MATERIAL_VALUE_NOTE = 'P=1 / N,B=3 / R=5 / Q=9';
 const materialPointsForUnitId = (unitId: string): number => {
-  const type = unitAssetById(unitId)?.family;
+  const type = unitFamilyForId(unitId);
   return type ? CHESS_MATERIAL_POINT_VALUE[type] : 0;
 };
 
@@ -2317,7 +2319,7 @@ export function LevelEditor(): ReactElement {
   };
   const brushAsset = resolveAsset(brushId) ?? leDefaultTile;
   const macroTileBrushAsset = macroTileBrushId ? macroTileAsset(macroTileBrushId) : undefined;
-  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssetById(id);
+  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitArtForId(id);
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? leUnitAssets[0];
   const directionForFaction = (faction: UnitPalette): Direction => factionDefaultDirection(faction, boardFactionDirections);
   const setUnitFaction = (faction: UnitPalette): void => {
@@ -4090,7 +4092,7 @@ export function LevelEditor(): ReactElement {
     const units: CastleTemplateUnit[] = [];
     for (const [key, placement] of Object.entries(board.units as Record<string, BoardUnitPlacement>)) {
       const [x, y] = key.split(',').map(Number);
-      const type = unitAssetById(placement.unitId)?.family;
+      const type = unitFamilyForId(placement.unitId);
       if (type !== 'king' && type !== 'rook') continue;
       units.push({ x, y, type, side: placement.faction === player ? 'player' : 'enemy' });
     }
