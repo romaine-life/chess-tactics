@@ -29,6 +29,7 @@ import {
   DEFAULT_PROBE_GAMES, DEFAULT_TRAIN_OPTIONS, pawnRelativeValues, previewNextGame, scheduleAt,
   type SeedSummary, type TdGameRecord, type TrainOptions, type ValueWeights,
 } from '../game/tdValues';
+import { sanForGame, sanFullMoves } from '../game/sanNotation';
 import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
 import { drawRulesForLevel } from '../core/levelEvents';
 import { setAdoptedWeights, readAdoptedVector } from '../game/adoptedWeights';
@@ -187,9 +188,18 @@ const GYM_CSS = `
 /* Focus mode's move list: every played ply, clickable, current highlighted. */
 .gym-replay-focus-view.is-values { grid-template-columns:minmax(0,1fr) 250px; grid-template-rows:minmax(0,1fr); gap:10px; }
 .gym-replay-movelist { min-height:0; overflow-y:auto; border:1px solid #29323f; border-radius:8px; background:#0b1016; padding:6px; display:flex; flex-direction:column; gap:1px; }
-.gym-replay-movelist button { text-align:left; border:0; background:none; color:#93a0b0; font:11px ui-monospace,monospace; padding:3px 6px; border-radius:4px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gym-replay-movelist button { text-align:left; border:0; background:none; color:#93a0b0; font:12px ui-monospace,monospace; padding:3px 6px; border-radius:4px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .gym-replay-movelist button:hover { background:#161d26; color:#c6d0dc; }
 .gym-replay-movelist button.is-current { background:#212b37; color:#e7ebf0; }
+/* Score sheet: numbered full moves, each half-move a jump target. */
+.gym-score-row { display:grid; grid-template-columns:34px minmax(0,1fr) minmax(0,1fr); align-items:center; gap:2px; }
+.gym-score-row .n { color:#5c6875; font:12px ui-monospace,monospace; text-align:right; padding-right:4px; }
+.gym-score-row .gap { color:#5c6875; font:12px ui-monospace,monospace; padding:3px 6px; }
+.gym-score-start { margin-bottom:2px; }
+/* Watch tempo. */
+.gym-td-speed { display:flex; align-items:center; gap:8px; font-size:12px; color:#93a0b0; margin-top:2px; }
+.gym-td-speed input[type=range] { flex:1 1 auto; min-width:0; }
+.gym-td-speed .gym-num { min-width:34px; text-align:right; }
 @media (max-width:1180px) { .gym-td-split.has-stage { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(320px,1fr); } }
 @media (max-width:980px) {
   .gym-run-detail.has-replay { grid-template-columns:1fr; grid-template-rows:minmax(180px,.45fr) minmax(300px,1fr); }
@@ -372,6 +382,17 @@ function movesLabel(moves: BookPosition['moves']): string {
   if (moves.length === 0) return '(start — no plies)';
   return moves.map((m) => `${pieceLabel(m.pieceId)} (${m.from.x},${m.from.y})->(${m.move.x},${m.move.y})`).join(', ');
 }
+
+// Watch-tempo mapping — log scale from 1 step/second down to a step every frame
+// ("Max"), eight-queens' slider idiom.
+const TD_BEAT_MAX_MS = 1000;
+const TD_BEAT_MIN_MS = 16;
+const tdBeatToSlider = (ms: number): number =>
+  Math.round(100 * Math.log(ms / TD_BEAT_MAX_MS) / Math.log(TD_BEAT_MIN_MS / TD_BEAT_MAX_MS));
+const tdSliderToBeat = (v: number): number =>
+  Math.round(TD_BEAT_MAX_MS * Math.pow(TD_BEAT_MIN_MS / TD_BEAT_MAX_MS, v / 100));
+const tdBeatReadout = (ms: number): string =>
+  ms <= TD_BEAT_MIN_MS ? 'Max' : `${(1000 / ms).toFixed(1000 / ms < 10 ? 1 : 0)}/s`;
 
 function gameMoveLabel(record: Pick<GameRecord, 'moves'>, index: number): string {
   const m = record.moves[index];
@@ -592,6 +613,11 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const [tdReplayPly, setTdReplayPly] = useState(0);
   // WATCH mode: an autoplay clock presses the universal advance one beat at a time.
   const [tdWatching, setTdWatching] = useState(false);
+  // Watch tempo — the delay between beats, on a log scale down to one beat per frame.
+  const [tdBeatMs, setTdBeatMs] = useState(250);
+  // Watch scope: 'run' keeps dealing new games; 'game' (the stage's ▶ play out) stops
+  // when THIS game concludes so the finished game can be inspected in place.
+  const tdWatchScopeRef = useRef<'run' | 'game'>('run');
   const [tdSession, setTdSession] = useState<TdSession | null>(null);
   const [tdBusy, setTdBusy] = useState(false);
   const [tdSummarizing, setTdSummarizing] = useState<{ done: number; total: number } | null>(null);
@@ -1015,7 +1041,12 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   // Run the games fly past at their conclusions).
   useEffect(() => {
     if (tdPending) {
-      if (tdGamesDone >= tdPending.game) { setTdPending(null); setTdFrontier(0); }
+      if (tdGamesDone >= tdPending.game) {
+        setTdPending(null); setTdFrontier(0);
+        // ▶ play out watches only THIS game: its conclusion ends the show, leaving the
+        // finished game on the stage for inspection instead of dealing the next.
+        if (tdWatchScopeRef.current === 'game') setTdWatching(false);
+      }
       return;
     }
     setTdReplayPly(tdLastGame?.plies ?? 0);
@@ -1033,9 +1064,23 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     if (!state) return null;
     return { ...levelToEditorBoard(level), units: unitsForGamePieces(state.pieces) };
   }, [level, tdReplayStates, tdClampedReplayPly]);
+  // Standard algebraic notation for the inspected game — the accepted chess score.
+  const tdReplaySan = useMemo(
+    () => (tdInspect && tdReplayStates ? sanForGame(tdReplayStates, tdInspect.moves) : null),
+    [tdInspect, tdReplayStates],
+  );
+  const tdSanAt = useCallback((ply: number): string => {
+    if (!tdInspect || !tdReplaySan || ply < 1) return '';
+    const i = ply - 1;
+    const opensWithReply = tdInspect.moves[0]?.side === 'enemy';
+    const num = Math.floor((i + (opensWithReply ? 1 : 0)) / 2) + 1;
+    return `${num}${tdInspect.moves[i]?.side === 'player' ? '.' : '…'} ${tdReplaySan[i] ?? ''}`;
+  }, [tdInspect, tdReplaySan]);
   const tdReplayMoveLabel = tdInspect
-    ? tdClampedReplayPly === 0 ? 'Start position' : gameMoveLabel(tdInspect, tdClampedReplayPly - 1)
+    ? tdClampedReplayPly === 0 ? 'Start position' : tdSanAt(tdClampedReplayPly)
     : '';
+  // The coordinate form rides the tooltip for exactness.
+  const tdReplayMoveTitle = tdInspect && tdClampedReplayPly > 0 ? gameMoveLabel(tdInspect, tdClampedReplayPly - 1) : '';
   const tdReplayEpsilon = tdInspect ? scheduleAt(tdOpts, tdInspect.game - 1).epsilon : 0;
   // THE universal advance — one button that always moves the algorithm one step: no game
   // in play → deal the next one; game in play → play its next ply (the final ply lands
@@ -1054,18 +1099,33 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setTdFrontier(tdPending.plies); setTdReplayPly(tdPending.plies);
     tdConclude();
   }, [tdPending, tdConclude]);
+  // Advance up to n plies of the game in play in one gesture (Shift+→); the final ply
+  // still concludes and lands the update. With no game in play it deals one.
+  const tdAdvanceN = useCallback((n: number) => {
+    if (tdBusy) return;
+    if (!tdPending) { tdDeal(); return; }
+    const nf = Math.min(tdPending.plies, tdFrontier + n);
+    setTdFrontier(nf); setTdReplayPly(nf);
+    if (nf >= tdPending.plies) tdConclude();
+  }, [tdBusy, tdPending, tdFrontier, tdDeal, tdConclude]);
+  // "Step forward once" for the keyboard: review forward when the cursor is behind
+  // what's been played, else advance the algorithm — the natural single-key reading.
+  const tdForward = useCallback(() => {
+    if (tdClampedReplayPly < tdReplayMax) { setTdReplayPly(tdClampedReplayPly + 1); return; }
+    tdAdvance();
+  }, [tdClampedReplayPly, tdReplayMax, tdAdvance]);
+  const tdBack = useCallback(() => { setTdReplayPly(Math.max(0, tdClampedReplayPly - 1)); }, [tdClampedReplayPly]);
   // WATCH — the system presses ⏭ step for you, one beat at a time (bender-world's
   // watchable full play): deal, play each ply, land the update at the game's end, deal
   // the next, until the budget completes or he pauses. Same provably-inert advance as
   // manual stepping — the clock is the ONLY new thing. During a commit (tdBusy) the
   // beat no-ops, so game boundaries breathe naturally.
-  const TD_WATCH_BEAT_MS = 250;
   const tdAdvanceRef = useRef(tdAdvance); tdAdvanceRef.current = tdAdvance;
   useEffect(() => {
     if (!tdWatching) return undefined;
-    const id = setInterval(() => { tdAdvanceRef.current(); }, TD_WATCH_BEAT_MS);
+    const id = setInterval(() => { tdAdvanceRef.current(); }, Math.max(16, tdBeatMs));
     return () => clearInterval(id);
-  }, [tdWatching]);
+  }, [tdWatching, tdBeatMs]);
   // Budget done and nothing left in play: the show is over — stop the clock.
   useEffect(() => {
     if (tdWatching && tdComplete && !tdPending) setTdWatching(false);
@@ -1082,7 +1142,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
       <div className="gym-replay-head">
         <div className="gym-replay-title">
           <h3>{tdWalking ? 'Game in play' : 'Inspect game'}</h3>
-          <span className="gym-replay-move" title={tdReplayMoveLabel}>{tdReplayMoveLabel}</span>
+          <span className="gym-replay-move" title={tdReplayMoveTitle}>{tdReplayMoveLabel}</span>
         </div>
         {tdWalking ? (
           // No outcome, no total plies: the game has not happened past the frontier yet.
@@ -1104,7 +1164,11 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
           <button type="button" onClick={() => setTdReplayPly(tdReplayMax)} disabled={tdClampedReplayPly >= tdReplayMax} title={tdWalking ? 'Latest played ply' : 'Final position'} aria-label={tdWalking ? 'Latest played ply' : 'Final position'}>⏭</button>
           <span className="gym-replay-ply">{tdWalking ? `Ply ${tdClampedReplayPly} · in play` : `Ply ${tdClampedReplayPly}/${tdReplayMax}`}</span>
         </div>
-        {tdWalking ? <button type="button" className="gym-replay-focus-btn" onClick={tdWalkToEnd} disabled={tdBusy} title="Play the dealt game out and land its update">⏩ to end</button> : null}
+        {tdWalking && !tdWatching ? (
+          <button type="button" className="gym-replay-focus-btn" onClick={() => { tdWatchScopeRef.current = 'game'; setTdWatching(true); }} disabled={tdBusy}
+            title="Watch THIS game play out at the tempo, then hold at its end for inspection — the next game is not dealt">▶ play out</button>
+        ) : null}
+        {tdWalking ? <button type="button" className="gym-replay-focus-btn" onClick={tdWalkToEnd} disabled={tdBusy} title="Jump the dealt game to its end instantly and land its update">⏩ to end</button> : null}
         <button
           type="button"
           className="gym-replay-focus-btn"
@@ -1126,32 +1190,58 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     </div>
   ) : null;
   const tdReplayFocusActive = replayFocus && tdReplayPanel !== null;
-  // Focus mode is a real chess-game viewer: keyboard navigation (← → Home End) plus a
-  // clickable move list beside the board. Navigation only — the frontier never moves.
+  // Keyboard transport on the whole pane (bender-world's bindings): Space watch/pause,
+  // → step forward (review first, then advance), Shift+→ ten plies, ← back one position
+  // (view only — nothing un-learns), Home/End first/latest. Skips form controls so
+  // typing in knobs never drives the board.
+  const tdKeysRef = useRef({ tdForward, tdAdvanceN, tdBack, tdReplayMax });
+  tdKeysRef.current = { tdForward, tdAdvanceN, tdBack, tdReplayMax };
   useEffect(() => {
-    if (!tdReplayFocusActive) return undefined;
+    if (mode !== 'values') return undefined;
     const onKey = (e: KeyboardEvent): void => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
-      if (e.key === 'ArrowLeft') { e.preventDefault(); setTdReplayPly((p) => Math.max(0, Math.min(p, tdReplayMax) - 1)); }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); setTdReplayPly((p) => Math.min(tdReplayMax, p + 1)); }
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.tagName === 'BUTTON')) return;
+      if (e.key === ' ') { e.preventDefault(); tdWatchScopeRef.current = 'run'; setTdWatching((w) => !w); }
+      else if (e.key === 'ArrowRight' && e.shiftKey) { e.preventDefault(); tdKeysRef.current.tdAdvanceN(10); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); tdKeysRef.current.tdForward(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); tdKeysRef.current.tdBack(); }
       else if (e.key === 'Home') { e.preventDefault(); setTdReplayPly(0); }
-      else if (e.key === 'End') { e.preventDefault(); setTdReplayPly(tdReplayMax); }
+      else if (e.key === 'End') { e.preventDefault(); setTdReplayPly(tdKeysRef.current.tdReplayMax); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [tdReplayFocusActive, tdReplayMax]);
+  }, [mode]);
   const tdMoveListRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     tdMoveListRef.current?.querySelector('.is-current')?.scrollIntoView({ block: 'nearest' });
   }, [tdReplayFocusActive, tdClampedReplayPly]);
-  const tdMoveList: ReactElement | null = tdReplayFocusActive && tdInspect ? (
-    <div className="gym-replay-movelist" ref={tdMoveListRef} aria-label="Move list">
-      <button type="button" className={tdClampedReplayPly === 0 ? 'is-current' : ''} onClick={() => setTdReplayPly(0)}>Start position</button>
-      {Array.from({ length: tdReplayMax }, (_, i) => (
-        <button key={i} type="button" className={tdClampedReplayPly === i + 1 ? 'is-current' : ''} onClick={() => setTdReplayPly(i + 1)}>
-          {gameMoveLabel(tdInspect, i)}
-        </button>
+  // The score sheet: numbered full moves in standard notation, every half-move a jump
+  // target. While a game is in play only the PLAYED plies appear (the frontier again).
+  const tdScoreRows = useMemo(
+    () => (tdReplayFocusActive && tdInspect && tdReplayStates
+      ? sanFullMoves(tdReplayStates, tdInspect.moves.slice(0, tdReplayMax))
+      : null),
+    [tdReplayFocusActive, tdInspect, tdReplayStates, tdReplayMax],
+  );
+  const tdScoreCell = (half: { ply: number; san: string } | null): ReactElement | null => half ? (
+    <button
+      type="button"
+      className={tdClampedReplayPly === half.ply ? 'is-current' : ''}
+      onClick={() => setTdReplayPly(half.ply)}
+      title={tdInspect ? gameMoveLabel(tdInspect, half.ply - 1) : ''}
+    >
+      {half.san}
+    </button>
+  ) : null;
+  const tdMoveList: ReactElement | null = tdScoreRows ? (
+    <div className="gym-replay-movelist" ref={tdMoveListRef} aria-label="Score sheet">
+      <button type="button" className={`gym-score-start ${tdClampedReplayPly === 0 ? 'is-current' : ''}`.trim()} onClick={() => setTdReplayPly(0)}>Start position</button>
+      {tdScoreRows.map((row) => (
+        <div className="gym-score-row" key={row.number}>
+          <span className="n">{row.number}.</span>
+          {row.first ? tdScoreCell(row.first) : <span className="gap">…</span>}
+          {tdScoreCell(row.second)}
+        </div>
       ))}
     </div>
   ) : null;
@@ -1706,11 +1796,14 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                     title={tdWalking ? 'Play the next ply — the update lands on the final one' : 'Deal the next training game; each press after plays one ply'}>⏭ step</button>
                   <button type="button" onClick={() => tdSend(Math.max(1, tdStepN))} disabled={!tdReady || tdBusy || tdComplete}
                     title="Play N whole games at full speed">⏭ games</button>
-                  <input className="gym-td-stepn-input" type="number" min={1} max={100000} value={tdStepN}
+                  <input className="gym-td-stepn-input" type="number" min={1} max={100000} value={tdStepN} list="gym-td-step-presets"
                     onChange={(e) => setTdStepN(Math.max(1, Math.floor(Number(e.target.value) || 1)))} aria-label="Games per batch step" />
+                  <datalist id="gym-td-step-presets">
+                    {[1, 2, 5, 10, 25, 50, 100, 1000].map((n) => <option key={n} value={n} />)}
+                  </datalist>
                 </div>
                 <div className="gym-run-row">
-                  <button type="button" className="play" onClick={() => setTdWatching((w) => !w)} disabled={!tdReady || (tdComplete && !tdWalking)}
+                  <button type="button" className="play" onClick={() => { tdWatchScopeRef.current = 'run'; setTdWatching((w) => !w); }} disabled={!tdReady || (tdComplete && !tdWalking)}
                     title={tdWatching ? 'Pause — the game in play keeps its place' : 'The system plays by itself, one step per beat: each ply on the board, the update landing at every game’s end, game after game, until you pause'}>
                     {tdWatching ? '⏸ pause' : '▶ watch'}
                   </button>
@@ -1719,6 +1812,12 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   <button type="button" onClick={() => { setTdWatching(false); tdStop(); }} disabled={!tdBusy && !tdWatching}>⏹ stop</button>
                   <button type="button" onClick={tdReset} disabled={tdBusy || (!tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)}>↺ reset</button>
                 </div>
+                <label className="gym-td-speed" title="Watch tempo — steps per second; Max is a step every frame">
+                  <span>speed</span>
+                  <input type="range" min={0} max={100} value={tdBeatToSlider(tdBeatMs)}
+                    onChange={(e) => setTdBeatMs(tdSliderToBeat(Number(e.target.value)))} aria-label="Watch tempo" />
+                  <b className="gym-num">{tdBeatReadout(tdBeatMs)}</b>
+                </label>
                 {!tdReady ? <p className="gym-hint">Preparing learner…</p>
                   : tdWatching ? <p className="gym-hint">Watching — the system plays by itself, one step per beat; each game&apos;s update lands as it ends. Pause (or ⏹) any time; nothing is ever half-applied.</p>
                   : tdBusy ? <p className="gym-hint">{tdSummarizing ? 'Folding sibling seeds into the mean ± spread table…' : 'Playing training games — Stop lands between games, nothing half-applied.'}</p>
