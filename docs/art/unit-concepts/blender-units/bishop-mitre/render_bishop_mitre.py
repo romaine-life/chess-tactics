@@ -6,7 +6,9 @@ The mitre was hand-fitted onto the bishop's head in Blender, so the source of tr
 the assembled `bishop_mitre.blend` (navy Staunton bishop FBX + mitre OBJ, positioned,
 rigged to an empty, true-isometric contract camera baked in). This opens it, renders
 the 8 directions, and prints the seating anchor.
-Output -> .unit-art-output/bishop/navy-blue/<direction>.png
+Output defaults to .unit-art-output/bishop/navy-blue/<direction>.png. The canonical
+pipeline supplies UNIT_ART_OUTPUT_DIR plus UNIT_ART_FRAME_WIDTH/HEIGHT and Blender
+writes that exact delivery raster without a resize stage.
 
 The mitre's front peak gives the bishop a per-direction facing (peak -> game-south at yaw 0).
 """
@@ -18,7 +20,11 @@ ROOT = Path(__file__).resolve().parent
 while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 BLEND = str(ROOT / "docs/art/unit-concepts/blender-units/bishop-mitre/bishop_mitre.blend")
-OUT = str(ROOT / ".unit-art-output/bishop/navy-blue")
+OUT = os.environ.get("UNIT_ART_OUTPUT_DIR", str(ROOT / ".unit-art-output/bishop/navy-blue"))
+FRAME_WIDTH = int(os.environ.get("UNIT_ART_FRAME_WIDTH", "512"))
+FRAME_HEIGHT = int(os.environ.get("UNIT_ART_FRAME_HEIGHT", "512"))
+if not (1 <= FRAME_WIDTH <= 4096 and 1 <= FRAME_HEIGHT <= 4096):
+    raise RuntimeError("UNIT_ART_FRAME_WIDTH/HEIGHT must be between 1 and 4096")
 os.makedirs(OUT, exist_ok=True)
 
 bpy.ops.wm.open_mainfile(filepath=BLEND)
@@ -32,8 +38,9 @@ if rig is None:
 
 scene.render.engine = "CYCLES"; scene.cycles.samples = 48; scene.cycles.use_denoising = True
 scene.view_settings.view_transform = "Standard"
-scene.render.resolution_x = scene.render.resolution_y = 512; scene.render.film_transparent = True
-scene.render.image_settings.file_format = "PNG"
+scene.render.resolution_x = FRAME_WIDTH; scene.render.resolution_y = FRAME_HEIGHT; scene.render.resolution_percentage = 100
+scene.render.film_transparent = True
+scene.render.image_settings.file_format = "PNG"; scene.render.image_settings.color_mode = "RGBA"
 DIRECTIONS = {"south":0,"south-west":-45,"west":-90,"north-west":-135,"north":180,"north-east":135,"east":90,"south-east":45}
 for name, angle in DIRECTIONS.items():
     rig.rotation_euler = (0, 0, math.radians(angle))

@@ -726,11 +726,11 @@ async function main() {
   const acceptedPawn = acceptedCatalog.families.find((family) => family.family === 'pawn');
   if (
     acceptedPawn.acceptedAssetId !== secondUnitId ||
-    acceptedPawn.displayScalePercent !== 112 ||
+    acceptedPawn.displayScalePercent !== 100 ||
     acceptedCatalog.families.some((family) => !family.acceptedAssetId) ||
     acceptedCatalog.assets.filter((asset) => asset.accepted && asset.complete).length !== 6
   ) {
-    throw new Error(`Accepted pawn pointer/scale mismatch: ${JSON.stringify(acceptedPawn)}`);
+    throw new Error(`Accepted pawn pointer/native-scale mismatch: ${JSON.stringify(acceptedPawn)}`);
   }
   const rejectAcceptedArchive = await request(
     'POST', `/api/admin/unit-assets/${secondUnitId}/archive`, { ...adminJson, 'if-match': '"1"' }, '{}', 5000,

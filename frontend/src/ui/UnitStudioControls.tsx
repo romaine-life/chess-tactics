@@ -2,16 +2,19 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { fetchAdminUnitCatalog } from '../net/unitAssets';
 import { currentLiveUnitCatalog, type LiveUnitCatalog, type UnitAsset } from './unitCatalog';
 import { UnitAssetManager } from './UnitAssetManager';
+import type { UnitArtPreview } from './UnitRecaptureEditor';
 import { UnitSizeControls } from './UnitSizeControls';
 
 export function UnitStudioControls({
   selectedUnit,
   onSelectUnit,
   onCatalogChanged,
+  onArtPreview,
 }: {
   selectedUnit: UnitAsset;
   onSelectUnit: (unitId: string) => void;
   onCatalogChanged: () => void;
+  onArtPreview: (preview: UnitArtPreview | null) => void;
 }): ReactElement {
   const [catalog, setCatalog] = useState<LiveUnitCatalog | null>(() => currentLiveUnitCatalog());
   const [canAdminister, setCanAdminister] = useState(false);
@@ -38,7 +41,7 @@ export function UnitStudioControls({
     <>
       <UnitSizeControls
         catalog={canAdminister ? catalog : null}
-        focusFamily={selectedUnit.family}
+        unit={selectedUnit}
         onCatalogChange={commitCatalog}
       />
       {canAdminister && catalog ? (
@@ -47,6 +50,7 @@ export function UnitStudioControls({
           selectedUnit={selectedUnit}
           onCatalogChange={commitCatalog}
           onSelectUnit={onSelectUnit}
+          onArtPreview={onArtPreview}
         />
       ) : null}
     </>

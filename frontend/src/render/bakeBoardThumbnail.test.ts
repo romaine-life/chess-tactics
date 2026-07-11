@@ -188,6 +188,26 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
 });
 
 describe('boardDrawOps — z-order matches the live DOM bands', () => {
+  it('keeps accepted native unit rasters at their authored dimensions', () => {
+    const catalog = testLiveUnitCatalog({ scales: { pawn: 66 }, nativeScales: { pawn: 66 } });
+    const pawn = catalog.assets.find((asset) => asset.family === 'pawn')!;
+    pawn.footprint.sourceCanvasWidth = 51;
+    pawn.footprint.sourceCanvasHeight = 61;
+    pawn.footprint.sourceFootprintPx = 15;
+    applyLiveUnitCatalog(catalog);
+    try {
+      const board: EditorBoard = {
+        ...blank(),
+        units: { '0,0': { unitId: 'pawn', direction: 'south', faction: 'navy-blue' } },
+      };
+      const unit = boardDrawOps(board).find((op) => op.contain);
+      expect(unit?.dw).toBe(51);
+      expect(unit?.dh).toBe(61);
+    } finally {
+      applyLiveUnitCatalog(testLiveUnitCatalog());
+    }
+  });
+
   it('sorts tiles by x+y, then brackets the unit/doodad in the object band', () => {
     const board: EditorBoard = {
       ...blank(),

@@ -15,6 +15,7 @@
     "vendor:ambience": "node scripts/vendor-ambience.mjs",
     "assets:diagnose:terrain": "node scripts/diagnose-terrain-assets.mjs",
     "assets:build:macro-tiles": "python scripts/build-macro-tiles.py",
+    "units:native": "python ../scripts/generate-unit-art.py",
     "optimize:assets": "node scripts/optimize-main-menu-assets.mjs",
     "campaign:assets": "node scripts/generate-campaign-editor-ui-assets.mjs",
     "visual:screenshot": "node scripts/screenshot-local-page.mjs",

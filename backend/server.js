@@ -4475,6 +4475,13 @@ function integerUnitNumber(raw, fallback, min, max) {
   return Number.isInteger(value) && value >= min && value <= max ? value : null;
 }
 
+function nativeUnitScalePercent(sourceCanvasWidth, sourceCanvasHeight) {
+  if (!serverRender || typeof serverRender.nativeScalePercentFromCanvas !== 'function') {
+    throw new Error('board-render native scale contract is unavailable');
+  }
+  return serverRender.nativeScalePercentFromCanvas(Number(sourceCanvasWidth), Number(sourceCanvasHeight));
+}
+
 function validateUnitAssetInput(raw, current = null) {
   if (!isObjectRecord(raw)) return { error: 'unit asset metadata must be an object' };
   const family = current ? current.family : unitFamilyId(raw.family);
@@ -4850,6 +4857,7 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
       sourceCanvasHeight: Number(row.source_canvas_height),
       sourceFootprintPx: Number(row.source_footprint_px),
     },
+    nativeScalePercent: nativeUnitScalePercent(row.source_canvas_width, row.source_canvas_height),
     anchor: { x: Number(row.anchor_x), y: Number(row.anchor_y) },
     rowRevision: Number(row.row_revision),
     createdAt: row.created_at,
@@ -5066,6 +5074,12 @@ app.put('/api/admin/unit-assets/:id/sprites/:palette/:direction', async (req, re
     const before = await dbUnitAssetRow(id);
     if (!before) throw unitMutationError('unit_asset_not_found', 404);
     assertUnitRevision(before, expected);
+    if (inspected.width !== Number(before.source_canvas_width) || inspected.height !== Number(before.source_canvas_height)) {
+      throw unitMutationError('unit_sprite_canvas_mismatch', 400, {
+        expected: { width: Number(before.source_canvas_width), height: Number(before.source_canvas_height) },
+        actual: { width: inspected.width, height: inspected.height },
+      });
+    }
     const familyRow = await pool.query('SELECT accepted_asset_id FROM unit_families WHERE family = $1', [before.family]);
     if (String(familyRow.rows[0]?.accepted_asset_id || '') === id) {
       throw unitMutationError('accepted_unit_asset_locked', 409, 'Create a candidate before replacing accepted sprite frames.');
@@ -5172,6 +5186,7 @@ app.post('/api/admin/unit-assets/:id/accept', async (req, res) => {
         'SELECT accepted_asset_id, row_revision FROM unit_families WHERE family = $1 FOR UPDATE',
         [asset.family],
       );
+      const nativeScalePercent = nativeUnitScalePercent(asset.source_canvas_width, asset.source_canvas_height);
       const previousId = familyResult.rows[0]?.accepted_asset_id ? String(familyResult.rows[0].accepted_asset_id) : null;
       if (previousId && previousId !== id) {
         await client.query(
@@ -5186,11 +5201,14 @@ app.post('/api/admin/unit-assets/:id/accept', async (req, res) => {
         [id, user.email],
       );
       await client.query(
-        `UPDATE unit_families SET accepted_asset_id = $2, row_revision = row_revision + 1,
-           updated_at = now(), updated_by = $3 WHERE family = $1`,
-        [asset.family, id, user.email],
+        `UPDATE unit_families SET accepted_asset_id = $2, display_scale_percent = $3,
+           row_revision = row_revision + 1, updated_at = now(), updated_by = $4 WHERE family = $1`,
+        [asset.family, id, nativeScalePercent, user.email],
       );
-      await logUnitAssetEvent(client, asset.family, id, 'accepted', user.email, { previousAssetId: previousId });
+      await logUnitAssetEvent(client, asset.family, id, 'accepted', user.email, {
+        previousAssetId: previousId,
+        displayScalePercent: nativeScalePercent,
+      });
       await bumpUnitCatalog(client);
     });
     const catalog = await dbReadUnitCatalog({ includeArchived: true });

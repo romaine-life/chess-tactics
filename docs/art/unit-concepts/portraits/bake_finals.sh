@@ -19,7 +19,7 @@ TMP="$HERE/_master_hires"; RES=1536; YAW=30
 mkdir -p "$TMP"
 
 declare -A BLEND=(
-  [pawn]="$ROOT/docs/art/archive/units/pawn/pawn_helmet.blend"
+  [pawn]="$BU/pawn-helmet/pawn_helmet.blend"
   [bishop]="$BU/bishop-mitre/bishop_mitre.blend"
   [rook]="$BU/rook-claude/units/rook-ruinwall/model.blend"  # accepted ruinwall keep (NOT the retired badass-keep)
   [queen]="$BU/queen-tiara/queen_tiara.blend"
