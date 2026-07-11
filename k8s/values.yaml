@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-44af9fe8f42fc42e716b5b952f81c7922ff978388112b3a33350c0a72c97d6cb"
+  tag: "app-9fa784b1c18965c8bc8dc7ab75150d5e14a840854fcbd6f040212e334f78d4f5"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Reuse level tiles for recent drafts"
-  prNumber: "469"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/469"
-  commit: "3b4fef9"
+  prTitle: "Move unit art to live recapture workflow"
+  prNumber: "470"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/470"
+  commit: "54dabd8"
 
 name: chess-tactics
 namespace: chess-tactics
