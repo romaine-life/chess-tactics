@@ -1,4 +1,5 @@
 import type { EditorDocumentSummary } from '../net/editorDocuments';
+import type { Level } from '../core/level';
 
 export const CAMPAIGN_EDITOR_RECENT_DRAFT_LIMIT = 8;
 
@@ -30,4 +31,16 @@ export function editorDocumentContinueHref(document: Pick<EditorDocumentSummary,
 
 export function editorDocumentDisplayName(document: Pick<EditorDocumentSummary, 'name'>): string {
   return document.name.trim() || 'Untitled level';
+}
+
+/**
+ * Draft discovery never supplies the private working body. A list thumbnail may only use the
+ * canonical level that backs Discard/Save; a never-saved document deliberately has no board
+ * thumbnail yet rather than leaking its unsaved working position into canonical UI.
+ */
+export function savedLevelForEditorDocument(
+  document: Pick<EditorDocumentSummary, 'has_saved_baseline' | 'level_id'>,
+  levels: Readonly<Record<string, Level>>,
+): Level | undefined {
+  return document.has_saved_baseline ? levels[document.level_id] : undefined;
 }

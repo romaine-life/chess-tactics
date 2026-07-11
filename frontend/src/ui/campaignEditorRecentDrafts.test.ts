@@ -4,7 +4,9 @@ import {
   editorDocumentContinueHref,
   editorDocumentDisplayName,
   resumableUserEditorDocuments,
+  savedLevelForEditorDocument,
 } from './campaignEditorRecentDrafts';
+import { createBlankLevel } from '../core/level';
 
 const summary = (over: Partial<EditorDocumentSummary> = {}): EditorDocumentSummary => ({
   document_id: 'doc-a',
@@ -48,5 +50,16 @@ describe('Campaign Editor recent drafts', () => {
 
   it('gives an unnamed draft a stable human label', () => {
     expect(editorDocumentDisplayName(summary({ name: '  ' }))).toBe('Untitled level');
+  });
+
+  it('uses only the canonical saved position for a draft thumbnail', () => {
+    const savedLevel = createBlankLevel('l1', 'Saved position');
+    const levels = { l1: savedLevel };
+
+    expect(savedLevelForEditorDocument(summary(), levels)).toBe(savedLevel);
+    expect(savedLevelForEditorDocument(summary({
+      has_saved_baseline: false,
+      never_saved: true,
+    }), levels)).toBeUndefined();
   });
 });

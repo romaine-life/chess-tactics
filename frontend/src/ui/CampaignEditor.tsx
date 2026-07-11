@@ -24,6 +24,7 @@ import {
   editorDocumentContinueHref,
   editorDocumentDisplayName,
   resumableUserEditorDocuments,
+  savedLevelForEditorDocument,
 } from './campaignEditorRecentDrafts';
 
 const CE_ICONS = {
@@ -318,6 +319,40 @@ function LevelRow({
         </div>
       )}
     </div>
+  );
+}
+
+export function RecentDraftLevelRow({
+  document,
+  savedLevel,
+}: {
+  document: EditorDocumentSummary;
+  savedLevel: Level | undefined;
+}): ReactElement {
+  const name = editorDocumentDisplayName(document);
+  return (
+    <NavButton
+      className="settings-row ce-editor-level-row ce-editor-draft-row"
+      data-testid="recent-editor-document"
+      to={editorDocumentContinueHref(document)}
+      aria-label={`Continue editing ${name}`}
+      title={`Continue editing ${name}`}
+    >
+      <span className="settings-row-thumb" aria-hidden="true">
+        {savedLevel ? (
+          <LevelThumbnail level={savedLevel} width={68} height={44} />
+        ) : (
+          <span className="settings-row-thumb-empty ce-draft-thumb-empty"><small>Not saved</small></span>
+        )}
+      </span>
+      <span className="settings-row-copy ce-editor-level-copy">
+        <span className="ce-editor-level-heading">
+          <h4>{name}</h4>
+        </span>
+        <p>{recentDraftDescription(document)}</p>
+      </span>
+      <span className="ce-draft-continue" aria-hidden="true">Continue</span>
+    </NavButton>
   );
 }
 
@@ -855,13 +890,11 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                     <SettingsSection title="Continue editing">
                       <div className="ce-recent-drafts" data-testid="recent-editor-documents">
                         {recentDrafts.map((document) => (
-                          <SettingsRow
+                          <RecentDraftLevelRow
                             key={document.document_id}
-                            title={editorDocumentDisplayName(document)}
-                            description={recentDraftDescription(document)}
-                          >
-                            <SettingsButton href={editorDocumentContinueHref(document)}>Continue</SettingsButton>
-                          </SettingsRow>
+                            document={document}
+                            savedLevel={savedLevelForEditorDocument(document, levels)}
+                          />
                         ))}
                       </div>
                     </SettingsSection>
