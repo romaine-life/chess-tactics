@@ -1281,11 +1281,18 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
       const untouched = tdSummary
         ? tdUntouched(tdSummary.mean[t]) && tdSummary.spread[t] === 0
         : tdUntouched(tdSess.train.weights[t]);
+      // The king never adopts: classically kings have no trade value, and the two
+      // numbers mean different things — the eval's king "value" is its king-DANGER
+      // coefficient (the hanging-piece safety term), while the learner's king weight
+      // is a mate indicator (its count feature is nonzero only once a king is dead).
+      // Pouring one into the other would be a category error.
+      const kept = t === 'king' || untouched;
       return {
         type: t,
         learned: tdAdoptRel[t],
-        adopted: untouched ? DEFAULT_EVAL_WEIGHTS.pieceValues[t] : Math.round(tdAdoptRel[t] * 100) / 100,
+        adopted: kept ? DEFAULT_EVAL_WEIGHTS.pieceValues[t] : Math.round(tdAdoptRel[t] * 100) / 100,
         untouched,
+        keptReason: t === 'king' ? 'kept — king-safety coefficient, not material' : untouched ? 'kept — no signal' : null,
       };
     });
   }, [tdAdoptRel, tdStarted, tdSummary, tdSess, tdUntouched]);
@@ -1916,10 +1923,10 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                         <thead><tr><th>piece</th><th>learned (pawn = 1)</th><th>will set</th><th>current default</th></tr></thead>
                         <tbody>
                           {tdAdoptPreview.map((row) => (
-                            <tr key={row.type} className={row.untouched ? 'na' : ''}>
+                            <tr key={row.type} className={row.keptReason ? 'na' : ''}>
                               <td>{row.type}</td>
                               <td>{row.learned.toFixed(2)}</td>
-                              <td>{row.adopted}{row.untouched ? ' (kept — no signal)' : ''}</td>
+                              <td>{row.adopted}{row.keptReason ? ` (${row.keptReason})` : ''}</td>
                               <td>{DEFAULT_EVAL_WEIGHTS.pieceValues[row.type]}</td>
                             </tr>
                           ))}
