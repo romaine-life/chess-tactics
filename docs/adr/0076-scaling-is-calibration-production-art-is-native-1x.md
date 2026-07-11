@@ -201,6 +201,16 @@ accepted production art. The migration inventory also includes multi-context
 `64px` icons, unit/prop/doodad families with asset-local production scales, and any
 other bake that spatially resizes generated pixels.
 
+Adoption ships with one explicit enforcement debt. Unit-art migration 17 records a
+server-owned, monotonic `spatial-resampling` block for accepted-sprite recaptures;
+the backend refuses to accept or restore those candidates even if their editable
+method/notes are later changed. The positive native-evidence schema for arbitrary
+manual unit uploads is not yet first-class, so absence of that block is not by
+itself proof of ADR-0076 compliance. Until that schema and generator handoff land,
+an admin acceptance action still requires the external native render manifest and
+1× proof; it cannot legitimize a resampled raster. This debt does not reinstate
+ADR-0075's recapture-acceptance allowance.
+
 ### Consequences
 
 - Good: the reviewed 1× preview and shipped pixels are the same pixel decisions.

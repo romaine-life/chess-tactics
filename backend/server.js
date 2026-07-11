@@ -619,6 +619,30 @@ const MIGRATIONS = [
       DROP TABLE IF EXISTS editor_maps;
     `,
   },
+  {
+    version: 17,
+    name: 'block spatially resampled unit acceptance',
+    // ADR-0076 keeps accepted-sprite recapture as a calibration instrument but forbids
+    // promoting its resized pixels. This server-owned flag is monotonic: editing the human
+    // method/notes later cannot erase the reason a candidate is ineligible for production.
+    sql: `
+      ALTER TABLE unit_assets
+        ADD COLUMN IF NOT EXISTS acceptance_block_reason text;
+
+      UPDATE unit_assets
+         SET acceptance_block_reason = 'spatial-resampling'
+       WHERE acceptance_block_reason IS NULL
+         AND (
+           method = 'Accepted sprite smooth recapture'
+           OR notes ~ '"pipeline"[[:space:]]*:[[:space:]]*"accepted-sprite-recapture"'
+           OR notes ~ '"spatialResampling"[[:space:]]*:[[:space:]]*true'
+         );
+
+      ALTER TABLE unit_assets
+        ADD CONSTRAINT unit_assets_acceptance_block_reason_check
+        CHECK (acceptance_block_reason IS NULL OR acceptance_block_reason = 'spatial-resampling');
+    `,
+  },
 ];
 
 let pool = null;
@@ -4482,6 +4506,15 @@ function nativeUnitScalePercent(sourceCanvasWidth, sourceCanvasHeight) {
   return serverRender.nativeScalePercentFromCanvas(Number(sourceCanvasWidth), Number(sourceCanvasHeight));
 }
 
+function unitAssetAcceptanceBlockReason(asset, currentReason = null) {
+  if (currentReason) return currentReason;
+  if (!serverRender || typeof serverRender.unitAssetProductionEligibility !== 'function') {
+    throw new Error('board-render unit production eligibility contract is unavailable');
+  }
+  const eligibility = serverRender.unitAssetProductionEligibility(asset);
+  return eligibility.eligible ? null : eligibility.reason;
+}
+
 function validateUnitAssetInput(raw, current = null) {
   if (!isObjectRecord(raw)) return { error: 'unit asset metadata must be an object' };
   const family = current ? current.family : unitFamilyId(raw.family);
@@ -4706,21 +4739,23 @@ async function seedUnitCatalogFromLiveSource() {
   try {
     await client.query('BEGIN');
     for (const { family, asset } of accepted) {
+      const acceptanceBlockReason = unitAssetAcceptanceBlockReason(asset, asset.acceptanceBlockReason);
       await client.query(
         `INSERT INTO unit_assets (
-           id, family, label, method, notes, status, footprint_shape,
+           id, family, label, method, notes, acceptance_block_reason, status, footprint_shape,
            source_canvas_width, source_canvas_height, source_footprint_px,
            anchor_x, anchor_y, row_revision, updated_by
-         ) VALUES ($1, $2, $3, $4, $5, 'candidate', $6, $7, $8, $9, $10, $11, $12, 'live-catalog-seed')
+         ) VALUES ($1, $2, $3, $4, $5, $6, 'candidate', $7, $8, $9, $10, $11, $12, $13, 'live-catalog-seed')
          ON CONFLICT (id) DO UPDATE SET
            family = EXCLUDED.family, label = EXCLUDED.label, method = EXCLUDED.method,
            notes = EXCLUDED.notes, status = 'candidate', footprint_shape = EXCLUDED.footprint_shape,
+           acceptance_block_reason = COALESCE(unit_assets.acceptance_block_reason, EXCLUDED.acceptance_block_reason),
            source_canvas_width = EXCLUDED.source_canvas_width,
            source_canvas_height = EXCLUDED.source_canvas_height,
            source_footprint_px = EXCLUDED.source_footprint_px,
            anchor_x = EXCLUDED.anchor_x, anchor_y = EXCLUDED.anchor_y,
            row_revision = EXCLUDED.row_revision, updated_at = now(), updated_by = EXCLUDED.updated_by`,
-        [asset.id, asset.family, asset.label, asset.method, asset.notes, asset.footprint.shape,
+        [asset.id, asset.family, asset.label, asset.method, asset.notes, acceptanceBlockReason, asset.footprint.shape,
           asset.footprint.sourceCanvasWidth, asset.footprint.sourceCanvasHeight,
           asset.footprint.sourceFootprintPx, asset.anchor.x, asset.anchor.y, asset.rowRevision],
       );
@@ -4797,7 +4832,7 @@ async function logUnitAssetEvent(client, family, assetIdValue, action, actorEmai
 
 async function dbUnitAssetRow(id, queryable = pool, lock = false) {
   const { rows } = await queryable.query(
-    `SELECT id, family, label, method, notes, status, footprint_shape,
+    `SELECT id, family, label, method, notes, acceptance_block_reason, status, footprint_shape,
             source_canvas_width, source_canvas_height, source_footprint_px,
             anchor_x, anchor_y, row_revision, created_at, updated_at, updated_by
        FROM unit_assets WHERE id = $1${lock ? ' FOR UPDATE' : ''}`,
@@ -4824,7 +4859,7 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
       [UNIT_FAMILY_IDS],
     ),
     db.query(
-      `SELECT id, family, label, method, notes, status, footprint_shape,
+      `SELECT id, family, label, method, notes, acceptance_block_reason, status, footprint_shape,
               source_canvas_width, source_canvas_height, source_footprint_px,
               anchor_x, anchor_y, row_revision, created_at, updated_at, updated_by
          FROM unit_assets
@@ -4849,6 +4884,7 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
     label: row.label,
     method: row.method,
     notes: row.notes,
+    acceptanceBlockReason: row.acceptance_block_reason,
     status: row.status,
     accepted: acceptedIds.has(String(row.id)),
     footprint: {
@@ -5002,17 +5038,18 @@ app.post('/api/admin/unit-assets', async (req, res) => {
   const id = crypto.randomUUID();
   const asset = validated.value;
   try {
+    const acceptanceBlockReason = unitAssetAcceptanceBlockReason(asset);
     await withUnitCatalogTransaction(async (client) => {
       await client.query(
         `INSERT INTO unit_assets (
-           id, family, label, method, notes, footprint_shape, source_canvas_width,
+           id, family, label, method, notes, acceptance_block_reason, footprint_shape, source_canvas_width,
            source_canvas_height, source_footprint_px, anchor_x, anchor_y, updated_by
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-        [id, asset.family, asset.label, asset.method, asset.notes, asset.footprintShape,
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [id, asset.family, asset.label, asset.method, asset.notes, acceptanceBlockReason, asset.footprintShape,
           asset.sourceCanvasWidth, asset.sourceCanvasHeight, asset.sourceFootprintPx,
           asset.anchorX, asset.anchorY, user.email],
       );
-      await logUnitAssetEvent(client, asset.family, id, 'created', user.email);
+      await logUnitAssetEvent(client, asset.family, id, 'created', user.email, { acceptanceBlockReason });
       await bumpUnitCatalog(client);
     });
     res.setHeader('Location', `/api/admin/unit-assets/${id}`);
@@ -5037,18 +5074,19 @@ app.patch('/api/admin/unit-assets/:id', async (req, res) => {
       const validated = validateUnitAssetInput(isObjectRecord(req.body) ? req.body : {}, current);
       if (validated.error) throw unitMutationError('invalid_unit_asset', 400, validated.error);
       const asset = validated.value;
+      const acceptanceBlockReason = unitAssetAcceptanceBlockReason(asset, current.acceptance_block_reason);
       await client.query(
         `UPDATE unit_assets SET
-           label = $2, method = $3, notes = $4, footprint_shape = $5,
-           source_canvas_width = $6, source_canvas_height = $7,
-           source_footprint_px = $8, anchor_x = $9, anchor_y = $10,
-           row_revision = row_revision + 1, updated_at = now(), updated_by = $11
+           label = $2, method = $3, notes = $4, acceptance_block_reason = $5, footprint_shape = $6,
+           source_canvas_width = $7, source_canvas_height = $8,
+           source_footprint_px = $9, anchor_x = $10, anchor_y = $11,
+           row_revision = row_revision + 1, updated_at = now(), updated_by = $12
          WHERE id = $1`,
-        [id, asset.label, asset.method, asset.notes, asset.footprintShape,
+        [id, asset.label, asset.method, asset.notes, acceptanceBlockReason, asset.footprintShape,
           asset.sourceCanvasWidth, asset.sourceCanvasHeight, asset.sourceFootprintPx,
           asset.anchorX, asset.anchorY, user.email],
       );
-      await logUnitAssetEvent(client, current.family, id, 'metadata-updated', user.email);
+      await logUnitAssetEvent(client, current.family, id, 'metadata-updated', user.email, { acceptanceBlockReason });
       await bumpUnitCatalog(client);
     });
     const catalog = await dbReadUnitCatalog({ includeArchived: true });
@@ -5172,6 +5210,12 @@ app.post('/api/admin/unit-assets/:id/accept', async (req, res) => {
       const asset = await dbUnitAssetRow(id, client, true);
       if (!asset) throw unitMutationError('unit_asset_not_found', 404);
       assertUnitRevision(asset, expected);
+      if (asset.acceptance_block_reason) {
+        throw unitMutationError('unit_asset_calibration_only', 409, {
+          reason: asset.acceptance_block_reason,
+          adr: 'ADR-0076',
+        });
+      }
       const { rows: spriteRows } = await client.query(
         'SELECT palette, direction FROM unit_sprites WHERE asset_id = $1',
         [id],

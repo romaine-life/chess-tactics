@@ -9842,6 +9842,12 @@ body { font-size: 17px; }
   color: #76d9a5;
 }
 
+.unit-asset-production-gate {
+  margin: 0;
+  color: #f0be72;
+  font: 800 10px/1.35 var(--ds-font-sans, system-ui, sans-serif);
+}
+
 .unit-asset-current {
   display: flex;
   align-items: baseline;

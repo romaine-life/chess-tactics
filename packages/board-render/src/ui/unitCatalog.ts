@@ -75,7 +75,43 @@ export type LiveUnitCatalogAsset = {
   sprites: Partial<Record<Faction, Partial<Record<Direction, LiveUnitSprite>>>>;
   spriteCount: number;
   complete: boolean;
+  /** Server-owned monotonic acceptance gate. Resampled calibration candidates cannot clear it. */
+  acceptanceBlockReason?: 'spatial-resampling' | null;
 };
+
+export type UnitAssetProductionEligibility =
+  | { eligible: true }
+  | { eligible: false; reason: 'spatial-resampling'; adr: 'ADR-0076' };
+
+/**
+ * Shared UI/server interpretation of the durable production gate. The catalog field is
+ * authoritative; parsing provenance keeps older snapshots and freshly-authored metadata honest
+ * until the backend has persisted its monotonic block.
+ */
+export function unitAssetProductionEligibility(
+  asset: Pick<LiveUnitCatalogAsset, 'method' | 'notes' | 'acceptanceBlockReason'>,
+): UnitAssetProductionEligibility {
+  if (asset.acceptanceBlockReason === 'spatial-resampling') {
+    return { eligible: false, reason: 'spatial-resampling', adr: 'ADR-0076' };
+  }
+  let provenance: { pipeline?: unknown; spatialResampling?: unknown } | null = null;
+  try {
+    const parsed = JSON.parse(asset.notes || 'null') as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      provenance = parsed as { pipeline?: unknown; spatialResampling?: unknown };
+    }
+  } catch {
+    // Human notes are valid for native candidates; only structured resampling evidence blocks.
+  }
+  if (
+    asset.method === 'Accepted sprite smooth recapture'
+    || provenance?.pipeline === 'accepted-sprite-recapture'
+    || provenance?.spatialResampling === true
+  ) {
+    return { eligible: false, reason: 'spatial-resampling', adr: 'ADR-0076' };
+  }
+  return { eligible: true };
+}
 
 export type LiveUnitCatalogFamily = {
   family: PieceId;

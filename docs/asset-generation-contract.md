@@ -303,6 +303,12 @@ Before an asset family is wired into production routes, require:
 
 Mechanical checks can reject broken assets. Human review accepts the style.
 
+The live unit catalog already persists a monotonic `spatial-resampling` block and
+refuses acceptance/restoration for recapture candidates. Its positive native-render
+evidence is still named ADR-0076 debt: a missing block is not proof that an arbitrary
+manual upload is native, so the external render manifest and 1× proof remain required
+until that evidence becomes first-class catalog schema.
+
 ## Migration Posture
 
 Art-backed screens and crops are allowed as bridges when they preserve approved
