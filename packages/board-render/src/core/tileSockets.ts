@@ -1,7 +1,7 @@
 export type TileFamilyId = 'grass' | 'stone' | 'water' | 'dirt' | 'pebble' | 'sand';
 export type TerrainPairId = 'grass-stone' | 'grass-water' | 'stone-water';
 export type EdgeName = 'north' | 'east' | 'south' | 'west';
-export type TileAssetKind = 'tile' | 'reference';
+export type TileAssetKind = 'tile';
 
 export interface TransitionPair {
   id: TerrainPairId;
@@ -16,17 +16,44 @@ export interface TileSocketAsset {
   kind: TileAssetKind;
   role: string;
   probability: number;
+  /** Static walkable-surface layer. Side-only edge assets intentionally omit this. */
+  topSrc?: string;
+  /** Cliff/edge layer. Top-only assets intentionally omit this. */
+  sideSrc?: string;
+  /** Optional horizontal sprite sheet for an animated walkable surface. */
+  topAnimSrc?: string;
   edgeSockets?: EdgeSockets;
   terrains?: TileFamilyId[];
   pairId?: TerrainPairId;
   socketMask?: number;
   /**
-   * Animated walkable surface: alongside the static `-top` half, the tile ships an
-   * N-frame horizontal sheet (`<src base>-top-anim.png`, frames left-to-right, each at
-   * the same 96x180 tile frame). The board renders the top layer from the sheet via a
-   * steps() background animation. Absent = static top.
+   * Frame count for `topAnimSrc`. Frames run left-to-right at the same 96x180 tile
+   * footprint. Absent (or fewer than two frames) means the static `topSrc` is used.
    */
   topAnimFrames?: number;
+}
+
+export interface ResolvedTileLayerSources {
+  topSrc?: string;
+  sideSrc?: string;
+  topAnimFrames?: number;
+}
+
+/**
+ * Resolve the independently-authored layers a renderer should load for one tile.
+ * Callers that need a deterministic still (for example thumbnail baking) can opt out
+ * of the animated sheet without reconstructing either source from a filename stem.
+ */
+export function resolveTileLayerSources<TAsset extends TileSocketAsset>(
+  asset: TAsset,
+  animateTop = true,
+): ResolvedTileLayerSources {
+  const animated = animateTop && !!asset.topAnimSrc && (asset.topAnimFrames ?? 0) > 1;
+  return {
+    topSrc: animated ? asset.topAnimSrc : asset.topSrc,
+    sideSrc: asset.sideSrc,
+    ...(animated ? { topAnimFrames: asset.topAnimFrames } : {}),
+  };
 }
 
 export interface TransitionSlot<TAsset extends TileSocketAsset = TileSocketAsset> {

@@ -7,14 +7,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { tileFamilies, edgeTiles, wallThumbSrc } from '../art/tileset';
 import { WALL_MATERIALS, WALL_MATERIAL_LABELS, type WallMaterial } from '../core/featureAutotile';
-import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
 import {
   terrainLabels,
   transitionPairs,
   transitionPairById,
   transitionPairsForFamily,
   transitionSlotsForPair,
-  type TileAssetKind,
   type TileFamilyId,
   type TileSocketAsset,
   type TerrainPairId,
@@ -43,7 +41,6 @@ import { PortraitLab } from './PortraitEditor';
 import { NineSliceLab, DEFAULT_NINE_SLICE_ASSET } from './NineSliceEditor';
 import { PropSeatLab, type StructureEditorDraft } from './PropSeatLab';
 import { PROP_DEFS, type PropDef, type PropKind } from '../core/props';
-import { TileCompareLab, COMPARE_TILES, COMPARE_TILE_FAMILIES, compareTileCap, type CompareTile } from './TileCompareLab';
 import { SurfaceTilesLab, SURFACE_TILE_FAMILIES, surfaceTileCap } from './SurfaceTilesLab';
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverCatalogAsset, type GroundCoverId } from './groundCoverCatalog';
 import { WALL_DECOR_ASSETS, WALL_DECOR_KIND_LABELS, WALL_DECOR_KINDS, WallDecorLab, WallDecorPreview, wallDecorAsset, type WallDecorAsset, type WallDecorKind } from './wallDecorCatalog';
@@ -73,7 +70,6 @@ import {
 import {
   useAnimationClock,
   FacingCompass,
-  assetFrameSrc,
   studioFamilies,
   type StudioAsset,
   type StudioFamily,
@@ -93,13 +89,13 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym' | 'solver';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'groundcover' | 'walldecor' | 'wallart' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym' | 'solver';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
 // 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
 // in full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'unitart' | 'portrait' | 'nineslice' | 'divider' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscene' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'walldecor' | 'wallart' | 'sfx' | 'gamelab' | 'gym' | 'solver';
+type ViewerKind = 'asset' | 'artwork' | 'unitart' | 'portrait' | 'nineslice' | 'divider' | 'propseat' | 'surfacetiles' | 'sceneanim' | 'animscene' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'walldecor' | 'wallart' | 'sfx' | 'gamelab' | 'gym' | 'solver';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -183,7 +179,6 @@ interface TilesetStudioRouteState {
   selectedTileSideId?: string;
   selectedFrameName?: string;
   selectedPropName?: string;
-  selectedTileCompareId?: string;
   selectedGroundCoverId?: string;
   selectedWallDecorId?: string;
   selectedWallArtId?: string;
@@ -221,11 +216,55 @@ const studioDefaults: TilesetStudioRouteState = {
 
 const transitionAssets: StudioAsset[] = [];
 
+const requiredTopSrc = (asset: StudioAsset): string => {
+  if (!asset.topSrc) throw new Error(`Tile ${asset.id} has no top layer`);
+  return asset.topSrc;
+};
 
-// Non-production reference tiles (legacy textured, codex→filter, rejected bake-off methods).
-// Injected into the Tiles CATALOG only (below) — deliberately NOT in studioFamilies, so they
-// never reach board generation or the Level Editor brush. See art/nonProductionTiles.ts.
-const nonProductionStudioTiles: StudioAsset[] = nonProductionTileAssets.map((asset): StudioAsset => ({ ...asset }));
+function TileLayerCard({ asset, animationFrame }: { asset: StudioAsset; animationFrame: number }): ReactElement {
+  const frameCount = Math.max(1, asset.topAnimFrames ?? 1);
+  const animated = Boolean(asset.topAnimSrc && frameCount > 1);
+  const frame = animationFrame % frameCount;
+  const layerStyle: CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    maxWidth: 'none',
+    objectFit: 'contain',
+    imageRendering: 'pixelated',
+  };
+  return (
+    <span
+      className="tile-layer-card"
+      style={{
+        position: 'relative',
+        display: 'block',
+        width: 'calc(var(--iso-tile-width) * var(--tile-zoom, 1))',
+        height: 'calc(180px * var(--tile-zoom, 1))',
+        overflow: 'hidden',
+      }}
+    >
+      {asset.sideSrc ? <img src={asset.sideSrc} alt="" draggable={false} style={layerStyle} /> : null}
+      {animated ? (
+        <span style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+          <img
+            src={asset.topAnimSrc}
+            alt=""
+            draggable={false}
+            style={{
+              ...layerStyle,
+              width: `${frameCount * 100}%`,
+              objectFit: 'fill',
+              transform: `translateX(-${(frame * 100) / frameCount}%)`,
+            }}
+          />
+        </span>
+      ) : <img src={asset.topSrc} alt="" draggable={false} style={layerStyle} />}
+    </span>
+  );
+}
+
 
 const familyCounts = (family: StudioFamily): string => {
   const variants = family.assets.filter((asset) => asset.kind === 'tile').length;
@@ -237,13 +276,14 @@ const familySample = (family: StudioFamily): StudioAsset => family.assets.find((
 const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
   studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
 
-const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
+const isStudioFamilyId = (value: string | null): value is StudioFamilyId =>
+  value !== null && studioFamilies.some((family) => family.id === value);
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
-const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
+const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'board';
 
 const isTerrainPairId = (value: string | null): value is TerrainPairId => value === 'grass-stone' || value === 'grass-water' || value === 'stone-water';
 const isUnitAssetId = (value: string | null): value is string => Boolean(
@@ -287,9 +327,6 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   // ?prop=<id>. The route writer then canonicalises the URL to /studio. No separate
   // route, no bespoke toolbar (docs/studio-control-architecture.md, ADR-0058).
   const isPropLabAlias = window.location.pathname === '/prop-lab';
-  // /tile-compare is another deep-link alias into the studio (ADR-0058): the Tile Pipeline
-  // category, Viewer mode, 'tilecompare' kind, ?tile=<id>.
-  const isTileCompareAlias = window.location.pathname === '/tile-compare';
   // /surface-lab: alias into the Tileset Surfaces category, 'surfacetiles' viewer, ?sfamily=<f>.
   const isSurfaceLabAlias = window.location.pathname === '/surface-lab';
   // /scene-anim-lab: alias into the Scene Animations category, 'sceneanim' viewer, ?region=<id>.
@@ -300,7 +337,6 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   // own ?opts/l/r/lcss/rcss on mount, so those deep links still load.
   const isArtworkCompareAlias = window.location.pathname === '/artwork-compare';
   const prop = params.get('prop') || (isPropLabAlias ? params.get('prop') : null);
-  const tile = params.get('tile');
   const cover = params.get('cover');
   const wdecor = params.get('wdecor');
   const wart = params.get('wart') ?? params.get('wasset');
@@ -309,8 +345,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const frame = params.get('frame') || (isNineSliceAlias ? asset : null);
   // Destination is decoupled from category — any mode is valid with any category,
   // so the URL is taken at face value (no normalization).
-  const studioMode = isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
-  const routeCategory = isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isStudioCategory(normalizedCat) ? normalizedCat : undefined;
+  const studioMode = isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
+  const routeCategory = isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isStudioCategory(normalizedCat) ? normalizedCat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushParam = params.get('brush');
@@ -338,14 +374,13 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedTileSideId: side || undefined,
     selectedFrameName: frame || undefined,
     selectedPropName: prop || undefined,
-    selectedTileCompareId: tile || undefined,
     selectedGroundCoverId: GROUND_COVER_ASSETS.some((asset) => asset.id === cover) ? cover ?? undefined : undefined,
     selectedWallDecorId: WALL_DECOR_ASSETS.some((asset) => asset.id === wdecor) ? wdecor ?? undefined : undefined,
     selectedWallArtId: wallArt(wart ?? undefined)?.id,
     selectedSurfaceFamily: sfamily || undefined,
     selectedRegionId: regionParam || undefined,
-    viewerKind: isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
-      : normalizedVk === 'asset' || normalizedVk === 'artwork' || normalizedVk === 'unitart' || normalizedVk === 'portrait' || normalizedVk === 'nineslice' || normalizedVk === 'divider' || normalizedVk === 'propseat' || normalizedVk === 'tilecompare' || normalizedVk === 'surfacetiles' || normalizedVk === 'sceneanim' || normalizedVk === 'animscene' || normalizedVk === 'artworkcompare' || normalizedVk === 'glossary' || normalizedVk === 'surface' || normalizedVk === 'scrollbar' || normalizedVk === 'slider' || normalizedVk === 'page' || normalizedVk === 'tileside' || normalizedVk === 'walldecor' || normalizedVk === 'wallart' || normalizedVk === 'sfx' || normalizedVk === 'gamelab' || normalizedVk === 'gym' || normalizedVk === 'solver' ? normalizedVk : undefined,
+    viewerKind: isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
+      : normalizedVk === 'asset' || normalizedVk === 'artwork' || normalizedVk === 'unitart' || normalizedVk === 'portrait' || normalizedVk === 'nineslice' || normalizedVk === 'divider' || normalizedVk === 'propseat' || normalizedVk === 'surfacetiles' || normalizedVk === 'sceneanim' || normalizedVk === 'animscene' || normalizedVk === 'artworkcompare' || normalizedVk === 'glossary' || normalizedVk === 'surface' || normalizedVk === 'scrollbar' || normalizedVk === 'slider' || normalizedVk === 'page' || normalizedVk === 'tileside' || normalizedVk === 'walldecor' || normalizedVk === 'wallart' || normalizedVk === 'sfx' || normalizedVk === 'gamelab' || normalizedVk === 'gym' || normalizedVk === 'solver' ? normalizedVk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -366,7 +401,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   // Canonicalise to /studio even when entered via the /nine-slice-editor
   // alias, so the alias is a pure entry point and all subsequent state rides the
   // one studio URL (the embedded 9-slice surface is not its own route).
-  if (window.location.pathname !== STUDIO_PATH && window.location.pathname !== '/unit-studio' && window.location.pathname !== '/nine-slice-editor' && window.location.pathname !== '/prop-lab' && window.location.pathname !== '/tile-compare' && window.location.pathname !== '/surface-lab' && window.location.pathname !== '/scene-anim-lab' && window.location.pathname !== '/doodad-editor' && window.location.pathname !== '/artwork-compare') return;
+  if (window.location.pathname !== STUDIO_PATH && window.location.pathname !== '/unit-studio' && window.location.pathname !== '/nine-slice-editor' && window.location.pathname !== '/prop-lab' && window.location.pathname !== '/surface-lab' && window.location.pathname !== '/scene-anim-lab' && window.location.pathname !== '/doodad-editor' && window.location.pathname !== '/artwork-compare') return;
   if (route.studioMode === 'catalog') {
     // Tiles is the default, so it stays a clean bare URL; Units/Assets get a
     // ?cat= so the chosen catalog survives a reload and is directly linkable.
@@ -409,7 +444,6 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     else if (route.viewerKind === 'tileside' && route.selectedTileSideId) params.set('side', route.selectedTileSideId);
     else if (route.viewerKind === 'nineslice' && route.selectedFrameName) params.set('frame', route.selectedFrameName);
     else if (route.viewerKind === 'propseat' && route.selectedPropName) params.set('prop', route.selectedPropName);
-    else if (route.viewerKind === 'tilecompare' && route.selectedTileCompareId) params.set('tile', route.selectedTileCompareId);
     else if (route.viewerKind === 'surfacetiles' && route.selectedSurfaceFamily) params.set('sfamily', route.selectedSurfaceFamily);
     else if (route.viewerKind === 'sceneanim' && route.selectedRegionId) params.set('region', route.selectedRegionId);
     else if (route.viewerKind === 'walldecor' && route.selectedWallDecorId) params.set('wdecor', route.selectedWallDecorId);
@@ -514,8 +548,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedFrameName, setSelectedFrameName] = useState(initialRoute.selectedFrameName ?? DEFAULT_NINE_SLICE_ASSET);
   // Which prop the embedded prop-seat editor (Viewer 'propseat' kind) is tuning.
   const [selectedPropName, setSelectedPropName] = useState(initialRoute.selectedPropName ?? PROP_DEFS[0].id);
-  // Which pipeline tile the embedded Tile Pipeline compare (Viewer 'tilecompare' kind) shows.
-  const [selectedTileCompareId, setSelectedTileCompareId] = useState(initialRoute.selectedTileCompareId ?? COMPARE_TILES[0].id);
   const [selectedGroundCoverId, setSelectedGroundCoverId] = useState<GroundCoverId>(groundCoverAsset(initialRoute.selectedGroundCoverId).id);
   const [selectedWallDecorId, setSelectedWallDecorId] = useState<string>(wallDecorAsset(initialRoute.selectedWallDecorId).id);
   const [selectedWallArtId, setSelectedWallArtId] = useState<string>(wallArt(initialRoute.selectedWallArtId)?.id ?? wallArtItems()[0].id);
@@ -546,7 +578,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   };
   const [selectedDoodadTerrains, setSelectedDoodadTerrains] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
   const [selectedPropKinds, setSelectedPropKinds] = useState<PropKind[]>([...ALL_PROP_KINDS]);
-  const [selectedCompareFamilies, setSelectedCompareFamilies] = useState<string[]>([...COMPARE_TILE_FAMILIES]);
   const [selectedGroundCoverTerrains, setSelectedGroundCoverTerrains] = useState<GroundCoverId[]>(GROUND_COVER_ASSETS.map((asset) => asset.id));
   const [selectedWallDecorKinds, setSelectedWallDecorKinds] = useState<WallDecorKind[]>([...WALL_DECOR_KINDS]);
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
@@ -558,16 +589,13 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [boardScope, setBoardScope] = useState<'family' | 'mixed'>(initialRoute.boardScope);
   const [boardSize, setBoardSize] = useState<'small' | 'wide'>(initialRoute.boardSize);
   const [boardSeed, setBoardSeed] = useState(initialRoute.boardSeed);
-  const [animationPlaying] = useState(true);
-  const [manualAnimationFrame, setManualAnimationFrame] = useState(0);
   // Unified editable board (temporary, in-memory only — re-seeds when a new view loads).
   const [, setTool] = useState<'select' | 'brush' | 'erase'>(initialRoute.brushKind === 'unit' ? 'brush' : 'select');
   const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad'>(initialRoute.brushKind);
   const [unitBrushId, setUnitBrushId] = useState<string>(initialRoute.selectedUnitId ?? unitAssets[0].id);
 
   const family = studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
-  // The Blender textured tileset is hard-edged: only base tiles, no transition or
-  // reference collections. (The transition/reference code paths are now unreachable.)
+  // The production catalog currently contains only registered base layers.
   const collectionFilters: Array<[CollectionFilter, string]> = [
     ['base', 'Base'],
   ];
@@ -614,19 +642,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       : undefined;
   const viewTransitionSlot = selectedTransitionSlot ?? selectedAssetTransitionSlot;
   const viewTransitionPair = selectedTransitionSlot ? selectedPair : selectedAssetPair;
-  const viewTransitionAsset = selectedTransitionSlot ? selectedTransitionSlot.assets[0] : selectedAssetTransitionSlot ? selectedAsset : undefined;
   const viewKind = tileFilter === 'board' ? 'board' : viewTransitionSlot ? 'transition' : 'tile';
   const viewVisualKind = viewKind === 'transition' && transitionViewMode === 'tile' ? 'tile' : viewKind;
-  const inspectedAnimatedAsset =
-    viewKind === 'transition' && viewTransitionAsset?.animation
-      ? viewTransitionAsset
-      : viewKind === 'tile' && selectedAsset.animation
-        ? selectedAsset
-        : undefined;
-  const inspectedAnimation = inspectedAnimatedAsset?.animation;
-  const animationFrameCount = inspectedAnimation?.frames.length ?? 8;
-  const autoAnimationFrame = useAnimationClock(animationPlaying, animationFrameCount, inspectedAnimation?.frameMs ?? 150);
-  const animationFrame = inspectedAnimation ? (animationPlaying ? autoAnimationFrame : manualAnimationFrame) : autoAnimationFrame;
+  const animationFrameCount = Math.max(1, ...allStudioAssets.map((asset) => asset.topAnimFrames ?? 1));
+  const animationFrame = useAnimationClock(true, animationFrameCount, 150);
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
@@ -635,7 +654,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   }, []);
 
   useEffect(() => {
-    const assetSources = allStudioAssets.flatMap((asset) => [asset.src, ...(asset.animation?.frames ?? [])]);
+    const assetSources = allStudioAssets.flatMap((asset) => [asset.topSrc, asset.sideSrc, asset.topAnimSrc].filter((src): src is string => Boolean(src)));
     const preloadedImages = Array.from(new Set(assetSources)).map((src) => {
       const image = new Image();
       image.decoding = 'sync';
@@ -719,10 +738,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   }, [tileFilter]);
 
   useEffect(() => {
-    setManualAnimationFrame((frame) => frame % animationFrameCount);
-  }, [animationFrameCount, inspectedAnimatedAsset?.id]);
-
-  useEffect(() => {
     setViewPan({ x: 0, y: 0 });
     setViewZoom(defaultViewZoom(viewVisualKind));
   }, [boardMode, boardScope, boardSeed, boardSize, selectedAsset.id, selectedSlotMask, viewVisualKind]);
@@ -743,7 +758,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedTileSideId,
       selectedFrameName,
       selectedPropName,
-      selectedTileCompareId,
       selectedGroundCoverId,
       selectedWallDecorId,
       selectedWallArtId,
@@ -762,7 +776,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, solverTab, selectedTileSideId, selectedFrameName, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, solverTab, selectedTileSideId, selectedFrameName, selectedPropName, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
   // the card you came from — not the top of the grid. The selection is already kept
@@ -843,26 +857,23 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // render either of these; a new asset type is just another descriptor.
   const tileFamilyOf = new Map<string, StudioFamilyId>();
   for (const fam of studioFamilies) for (const a of fam.assets) tileFamilyOf.set(a.id, fam.id);
-  for (const a of nonProductionStudioTiles) tileFamilyOf.set(a.id, nonProductionTileFamilyOf.get(a.id) ?? 'grass');
   const tilesCatalogType: CatalogType<StudioAsset> = {
     id: 'tiles',
     label: 'Tiles',
-    assets: [...studioFamilies.flatMap((fam) => fam.assets), ...nonProductionStudioTiles],
-    card: (a) => ({ img: assetFrameSrc(a, animationFrame), title: a.label, badge: a.role }),
+    assets: studioFamilies.flatMap((fam) => fam.assets),
+    card: (a) => ({ img: requiredTopSrc(a), title: a.label, badge: a.role }),
+    cardMedia: (a) => <TileLayerCard asset={a} animationFrame={animationFrame} />,
     sections: (visible) => {
       const tiles = visible.filter((a) => a.kind === 'tile');
-      const prod = tiles.filter((a) => !a.speculative);
-      const spec = tiles.filter((a) => a.speculative);
       const out: { id: string; label: string; assets: StudioAsset[] }[] = [];
-      if (prod.length) out.push({ id: 'base', label: 'Base Tiles', assets: prod });
-      if (spec.length) out.push({ id: 'non-production', label: 'Non-production — reference & rejected bake-off methods', assets: spec });
+      if (tiles.length) out.push({ id: 'base', label: 'Base Tiles', assets: tiles });
       return out;
     },
     query: {
       value: catalogQuery,
       set: setCatalogQuery,
       placeholder: 'label, source, socket...',
-      match: (a, q) => [a.label, a.role, a.source, a.notes, a.method ?? '', a.speculative ? 'non-production speculative' : '', ...(a.terrains ?? [])].join(' ').toLowerCase().includes(q),
+      match: (a, q) => [a.label, a.role, a.source, a.notes, a.method ?? '', ...(a.terrains ?? [])].join(' ').toLowerCase().includes(q),
     },
     zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
     filters: [
@@ -1158,48 +1169,19 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     note: 'Walls are tall blockers for the map north and west perimeter edges.',
   };
 
-  // Tile Pipeline — the 36 QA tiles (raw PixelLab vs snapped-to-grid). Read-only; Inspect
-  // opens the before/after compare (Viewer 'tilecompare' kind). A distinct QA asset set, NOT
-  // the shipped Tiles catalog — so it never leaks into board generation or the brush.
-  const tileCompareCatalogType: CatalogType<CompareTile> = {
-    id: 'tilecompare',
-    label: 'Tile Pipeline',
-    assets: COMPARE_TILES,
-    card: (t) => ({ img: t.proc, title: t.label, badge: t.id }),
-    sections: (visible) => [{ id: 'tilecompare', label: 'Pipeline tiles', assets: [...visible] }],
-    query: {
-      value: catalogQuery,
-      set: setCatalogQuery,
-      placeholder: 'tile, family...',
-      match: (t, q) => [t.label, t.family, t.id].join(' ').toLowerCase().includes(q),
-    },
-    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
-    filters: [
-      {
-        id: 'family',
-        label: 'Family',
-        options: COMPARE_TILE_FAMILIES.map((f) => ({ id: f, label: compareTileCap(f), sub: `${COMPARE_TILES.filter((t) => t.family === f).length}` })),
-        memberOf: (t) => [t.family],
-        selected: selectedCompareFamilies,
-        toggle: (id) => setSelectedCompareFamilies((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])),
-        selectAll: () => setSelectedCompareFamilies([...COMPARE_TILE_FAMILIES]),
-        clear: () => setSelectedCompareFamilies([]),
-      },
-    ],
-    onSelect: (t) => setSelectedTileCompareId(t.id),
-    onView: (t) => { setSelectedTileCompareId(t.id); openViewer('tilecompare'); },
-    selectedId: selectedTileCompareId,
-    note: 'Inspect a tile to see the raw PixelLab vs the snapped-to-grid result side by side.',
-  };
-
   // Tileset Surfaces — the production board tileset by family (distinct from the `surface`
   // UI-texture kind). Inspect opens the board/tiles inspector (Viewer 'surfacetiles' kind).
-  const surfaceFamilyAssets = SURFACE_TILE_FAMILIES.map((f) => ({ id: f, label: surfaceTileCap(f) }));
-  const surfaceTilesCatalogType: CatalogType<{ id: string; label: string }> = {
+  const surfaceFamilyAssets = SURFACE_TILE_FAMILIES.map((id) => {
+    const asset = studioFamilies.find((family) => family.id === id)?.assets.find((item) => item.kind === 'tile');
+    if (!asset) throw new Error(`Missing production surface tile for ${id}`);
+    return { id, label: surfaceTileCap(id), asset };
+  });
+  const surfaceTilesCatalogType: CatalogType<{ id: string; label: string; asset: StudioAsset }> = {
     id: 'surfacetiles',
     label: 'Tileset Surfaces',
     assets: surfaceFamilyAssets,
-    card: (f) => ({ img: `/assets/tiles/surface/${f.id}-0.png`, title: f.label, badge: 'board tileset' }),
+    card: (family) => ({ img: requiredTopSrc(family.asset), title: family.label, badge: 'board tile layers' }),
+    cardMedia: (family) => <TileLayerCard asset={family.asset} animationFrame={animationFrame} />,
     sections: (visible) => [{ id: 'surfacetiles', label: 'Families', assets: [...visible] }],
     query: {
       value: catalogQuery,
@@ -1211,7 +1193,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     onSelect: (f) => setSelectedSurfaceFamily(f.id),
     onView: (f) => { setSelectedSurfaceFamily(f.id); openViewer('surfacetiles'); },
     selectedId: selectedSurfaceFamily,
-    note: 'Inspect a family to review its board tiles (and their flat top-down surfaces).',
+    note: 'Inspect a family to review its independently authored top and side layers on a board.',
   };
 
   // Scene Animations — the menu-backdrop waterfall regions. Inspect opens the frame-clock
@@ -1338,7 +1320,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     id: 'tilesides',
     label: 'Tile Sides',
     assets: TILE_SIDE_ITEMS,
-    card: (item) => ({ img: item.src, title: item.label, badge: item.role }),
+    card: (item) => ({ img: item.sideSrc, title: item.label, badge: item.role }),
     sections: (visible) => {
       const edges = visible.filter((item) => item.role === 'edge');
       const base = visible.filter((item) => item.role !== 'edge');
@@ -1411,11 +1393,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'wallart', label: 'Wall Art', hint: 'Create and place artwork that mounts on existing perimeter walls.',
       main: <CatalogGrid type={wallArtCatalogType} />,
       controls: <CatalogControls type={wallArtCatalogType} />,
-    },
-    {
-      id: 'tilecompare', label: 'Tile Pipeline', hint: 'The QA tile set — Inspect one to compare the raw PixelLab tile against the snapped-to-grid result.',
-      main: <CatalogGrid type={tileCompareCatalogType} />,
-      controls: <CatalogControls type={tileCompareCatalogType} />,
     },
     {
       id: 'surfacetiles', label: 'Tileset Surfaces', hint: 'The production board tileset by family — Inspect one to review its tiles on a board.',
@@ -1695,7 +1672,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <option value="portrait">Portrait</option>
         <option value="nineslice">9-Slice</option>
         <option value="propseat">Prop Seat</option>
-        <option value="tilecompare">Tile Pipeline</option>
         <option value="surfacetiles">Tileset Surfaces</option>
         <option value="sceneanim">Scene Animation</option>
         <option value="animscene">Animated Scene</option>
@@ -1806,8 +1782,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             ? <NineSliceLab assetId={selectedFrameName} onAssetId={setSelectedFrameName} header={studioViewerHeader} />
             : viewerKind === 'propseat'
             ? <PropSeatLab propId={selectedPropName} onPropId={setSelectedPropName} header={studioViewerHeader} draft={structureDraft} onDraftChange={setStructureDraft} />
-            : viewerKind === 'tilecompare'
-            ? <TileCompareLab tileId={selectedTileCompareId} onTileId={setSelectedTileCompareId} header={studioViewerHeader} />
             : viewerKind === 'surfacetiles'
             ? <SurfaceTilesLab family={selectedSurfaceFamily} onFamily={setSelectedSurfaceFamily} header={studioViewerHeader} />
             : viewerKind === 'animscene'

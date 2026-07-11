@@ -392,8 +392,6 @@ function renderRoute(path: string): ReactElement {
   // /prop-lab is the same shape: a deep-link alias that opens the Studio's embedded
   // prop-seat Viewer (Props category). Not its own route or toolbar (ADR-0058).
   if (path === '/prop-lab') return <TilesetStudio initialCategory="props" />;
-  // /tile-compare: alias into the Studio's Tile Pipeline category (ADR-0058 debt migration).
-  if (path === '/tile-compare') return <TilesetStudio initialCategory="tilecompare" />;
   // /surface-lab: alias into the Studio's Tileset Surfaces category (ADR-0058 debt migration).
   if (path === '/surface-lab') return <TilesetStudio initialCategory="surfacetiles" />;
   // /scene-anim-lab: alias into the Studio's Scene Animations category (ADR-0058 debt migration).

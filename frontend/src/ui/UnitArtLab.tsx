@@ -102,7 +102,6 @@ export function UnitArtLab({
         >
           <BoardLabBoard
             board={board}
-            assetFrameSrc={(asset) => asset.src}
             boardZoom={zoom}
             boardPan={pan}
             className="unit-art-board-surface"

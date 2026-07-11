@@ -519,7 +519,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
       <style>{PS_CSS}</style>
       <section className="al-lab-main ps-board-main" aria-label="Prop seat preview">
         <ViewPane kind="board" ariaLabel="Prop seat viewport" zoom={zoom} pan={pan} minZoom={0.5} maxZoom={3} onZoomChange={setZoom} onPanChange={setPan}>
-          <BoardLabBoard board={board} assetFrameSrc={(a) => a.src} boardZoom={zoom} boardPan={pan} className="ps-board-surface" ariaLabel="Prop seat preview board">
+          <BoardLabBoard board={board} boardZoom={zoom} boardPan={pan} className="ps-board-surface" ariaLabel="Prop seat preview board">
             {showSavedGhost ? <div className="ps-ghost"><PropSprite prop={{ x: ax, y: ay, propId: activeId }} def={savedDef} /></div> : null}
             <PropSprite prop={{ x: ax, y: ay, propId: activeId }} def={liveDef} />
             {showUnit ? (

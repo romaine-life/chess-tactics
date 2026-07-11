@@ -1,32 +1,14 @@
-import { tileFamilies } from '../art/tileset';
+import { tileFamilies, type TileAsset } from '../art/tileset';
 import {
   terrainLabels,
   type TileAssetKind,
   type TileFamilyId,
-  type TileSocketAsset,
 } from '../core/tileSockets';
 
 export type StudioFamilyId = TileFamilyId;
 export type StudioAssetKind = TileAssetKind;
 
-export interface StudioAsset extends TileSocketAsset {
-  id: string;
-  label: string;
-  src: string;
-  animation?: {
-    label: string;
-    frames: string[];
-    frameMs: number;
-    status: 'prototype' | 'raw candidate' | 'approved';
-  };
-  role: string;
-  kind: StudioAssetKind;
-  source: string;
-  probability: number;
-  notes: string;
-  speculative?: boolean;
-  method?: string;
-}
+export type StudioAsset = TileAsset;
 
 export interface StudioFamily {
   id: StudioFamilyId;
@@ -36,9 +18,6 @@ export interface StudioFamily {
   review: string;
   assets: StudioAsset[];
 }
-
-export const assetFrameSrc = (asset: StudioAsset, animationFrame: number): string =>
-  asset.animation ? asset.animation.frames[animationFrame % asset.animation.frames.length] ?? asset.src : asset.src;
 
 const STUDIO_FAMILY_META: Record<TileFamilyId, { purpose: string; status: string; review: string }> = {
   grass: { purpose: 'High-volume base terrain for most playable cells.', status: 'Production', review: 'Variation + same-footprint repetition.' },

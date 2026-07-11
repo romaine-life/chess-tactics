@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { macroTileOwnedCellKeys, type TerrainCanvasMacroTile } from './BoardTerrainLayer';
+import { macroTileOwnedCellKeys, terrainTopAnimationFrame, type TerrainCanvasCell, type TerrainCanvasMacroTile } from './BoardTerrainLayer';
 
 describe('macroTileOwnedCellKeys', () => {
   it('marks every logical cell whose 1x1 top must be suppressed', () => {
@@ -27,5 +27,26 @@ describe('macroTileOwnedCellKeys', () => {
     ];
 
     expect([...macroTileOwnedCellKeys(macroTiles)].sort()).toEqual(['2,3', '2,4', '3,4', '4,3']);
+  });
+});
+
+describe('terrainTopAnimationFrame', () => {
+  const cell = (x: number, y: number): TerrainCanvasCell => ({
+    key: `${x},${y}`,
+    x,
+    y,
+    topSrc: '/water-sheet.png',
+    topAnimFrames: 8,
+  });
+
+  it('advances only whole frames with a deterministic per-cell phase', () => {
+    expect(terrainTopAnimationFrame(cell(0, 0), 0)).toBe(0);
+    expect(terrainTopAnimationFrame(cell(1, 0), 0)).toBe(7);
+    expect(terrainTopAnimationFrame(cell(0, 1), 0)).toBe(5);
+    expect(terrainTopAnimationFrame(cell(0, 0), 200)).toBe(1);
+  });
+
+  it('freezes the exact static frame for the explicit reduced-motion preference', () => {
+    expect(terrainTopAnimationFrame(cell(1, 0), 1_200, true)).toBe(0);
   });
 });

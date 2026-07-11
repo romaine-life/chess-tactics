@@ -4379,8 +4379,8 @@ h1 {
    many players' — Windows "Animation effects" off) reports reduce FALSELY, and gating on it
    would hide the deploy from the very people it's for. Hence !important, to clear the global
    `* { animation: none }` OS-reduce reset (style.css ~6036). Reduced motion is instead an
-   EXPLICIT in-game choice: `:root.reduce-motion` swaps the fall for a calm staggered fade
-   (below). A Settings toggle that sets that class is the remaining follow-up (see ADR). This
+   EXPLICIT in-game choice: Gameplay > Reduce Motion sets `:root.reduce-motion`, swapping
+   the fall for a calm staggered fade (below). This
    mirrors the repo's existing "a pure fade isn't gated on the OS query" precedent. */
 .skirmish-board-unit.is-arriving img {
   animation: unit-arrival var(--arrival-anim, 620ms) linear var(--arrival-delay, 0ms) both !important;
@@ -5842,6 +5842,7 @@ h1 {
   padding: 5px 2px;
 }
 .le-swatch img { height: 46px; image-rendering: pixelated; object-fit: contain; width: 46px; }
+.le-swatch img.le-swatch-tile { object-fit: cover; object-position: center 26%; }
 .le-macro-swatch img { width: 100%; max-width: 58px; }
 .le-brush-thumb .le-thumb-macro { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
 .le-swatch small { font-size: var(--ds-text-2xs); line-height: 1; text-align: center; }
@@ -11104,7 +11105,7 @@ button.tileset-relationship-cell {
 }
 
 .tileset-generated-board-tile img {
-  /* ADR-0039: a tile may render as two stacked layers (SIDE under TOP). Both occupy the
+  /* ADR-0075: a tile renders as two explicit stacked layers (SIDE under TOP). Both occupy the
      same 96x180 frame via absolute positioning so they overlay 1:1 with zero offset; their
      pixels are disjoint (diamond vs. cliff), so there is no overlap to blend. A single-layer
      tile is just one image at the same origin — unchanged. */

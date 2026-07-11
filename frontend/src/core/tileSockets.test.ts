@@ -4,6 +4,7 @@ import {
   transitionPairById,
   transitionSlotsForPair,
   transitionSocketsForMask,
+  resolveTileLayerSources,
   tileSocketsForAsset,
   type TileSocketAsset,
   type TileFamilyId,
@@ -36,6 +37,34 @@ describe('tile socket masks', () => {
     expect(slots[13].code).toBe('1110');
     expect(slots.some((slot) => slot.code === '0000')).toBe(false);
     expect(slots.some((slot) => slot.code === '1111')).toBe(false);
+  });
+});
+
+describe('resolveTileLayerSources', () => {
+  const layeredAsset: TileSocketAsset = {
+    id: 'water-a',
+    kind: 'tile',
+    role: 'base',
+    probability: 1,
+    topSrc: '/surface/water-top.png',
+    sideSrc: '/surface/water-side.png',
+    topAnimSrc: '/surface/water-ripples.png',
+    topAnimFrames: 8,
+  };
+
+  it('selects the explicit animated top and side without deriving filenames', () => {
+    expect(resolveTileLayerSources(layeredAsset)).toEqual({
+      topSrc: '/surface/water-ripples.png',
+      sideSrc: '/surface/water-side.png',
+      topAnimFrames: 8,
+    });
+  });
+
+  it('selects the explicit static top for deterministic rendering', () => {
+    expect(resolveTileLayerSources(layeredAsset, false)).toEqual({
+      topSrc: '/surface/water-top.png',
+      sideSrc: '/surface/water-side.png',
+    });
   });
 });
 

@@ -1,8 +1,8 @@
 // The standalone Level Editor (/editor/level; legacy aliases /level-editor, /edit). Split out of TilePreview.tsx so
 // it ships its own small lazy chunk instead of dragging the entire design Studio:
 // the heavy library studios + manifests live in TilePreview.tsx and are never
-// imported here. Shared board core (tile families, the animation clock, the facing
-// compass, the per-frame src) comes from ./studioBoard.
+// imported here. Shared board core (tile families and the facing compass) comes
+// from ./studioBoard.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -67,12 +67,11 @@ import {
 } from './unitCatalog';
 import {
   studioFamilies,
-  useAnimationClock,
   FacingCompass,
   type StudioAsset,
   type StudioFamily,
 } from './studioBoard';
-import { featureThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
+import { featureThumbSrc, fenceThumbSrc, wallThumbSrc } from '../art/tileset';
 import { resolveFeatureOverlays, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, wallArtBadge, wallArtItems, wallArtLabel, wallArtSpanEdges, wallArtSpanForId, type WallArtId } from '../core/wallArt';
 import { type TileFamilyId } from '../core/tileSockets';
@@ -228,7 +227,6 @@ function StudioEditableBoard({
   boardPan,
   showGrid = false,
   tacticalPreview,
-  animationFrame,
   onPaint,
   onErase,
   onSelect,
@@ -293,7 +291,6 @@ function StudioEditableBoard({
   boardPan: { x: number; y: number };
   showGrid?: boolean;
   tacticalPreview?: BoardTacticalPreview;
-  animationFrame: number;
   onPaint: (x: number, y: number) => void;
   onErase: (x: number, y: number) => void;
   onSelect: (x: number, y: number) => void;
@@ -430,7 +427,6 @@ function StudioEditableBoard({
         y,
         tileAsset: asset,
         feature: placedFeatures[key],
-        animationFrame,
         hidden,
         drawSide,
       }));
@@ -1775,7 +1771,6 @@ const clearEditorSignInRecoveryIntent = (): void => {
 };
 
 export function LevelEditor(): ReactElement {
-  const animationFrame = useAnimationClock(true, 8, 150);
   // The Studio routes here with ?from=studio (show a "back to catalog" link), ?kind=<brush-kind>,
   // and optionally ?brush=<id> to pre-arm the brush you clicked in the catalog. A general
   // ?layer=<id> deep-link opens straight on any panel (rules, status, zone, ...) — validated
@@ -4574,7 +4569,6 @@ export function LevelEditor(): ReactElement {
                     boardPan={viewPan}
                     showGrid={showGrid}
                     tacticalPreview={tacticalPreview}
-                    animationFrame={animationFrame}
                     onPaint={paintCell}
                     onErase={eraseCell}
                     onSelect={selectCell}
@@ -5141,7 +5135,7 @@ export function LevelEditor(): ReactElement {
                 ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
                 : macroTileBrushAsset
                 ? <img className="le-thumb-macro" src={macroTileBrushAsset.src} alt="" draggable={false} />
-                : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
+                : <img className="le-thumb-tile" src={brushAsset.topSrc} alt="" draggable={false} />}
             </span>
             <span className="le-brush-meta">
               <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : wallTool ? `${WALL_MATERIAL_LABELS[wallBrushMaterial]} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : macroTileBrushAsset?.label ?? brushAsset.label}</strong>
@@ -5506,7 +5500,7 @@ export function LevelEditor(): ReactElement {
                         title={tile.label}
                         onClick={() => { setMacroTileBrushId(null); setBrushId(tile.id); setTool('brush'); }}
                       >
-                        <img src={tile.src} alt="" draggable={false} />
+                        <img className="le-swatch-tile" src={tile.topSrc} alt="" draggable={false} />
                         <small>{tile.label}</small>
                       </button>
                     ))}

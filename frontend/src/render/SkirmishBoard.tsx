@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
+import { tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
 import { attackedSquares, blockedCandidateSquares, enemyThreats, legalMoves, livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
-import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
+import { familyIdForAsset, resolveTileLayerSources, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
@@ -313,10 +313,10 @@ function collectBoardArt(
   for (const url of sceneUrls) tiles.add(url);
   for (const cell of board.cells) {
     if (cell.asset) {
-      const top = tileFrameSrc(cell.asset);
-      tiles.add(top.replace(/\.png$/, '-top.png'));
-      const side = cell.sideAsset ? tileFrameSrc(cell.sideAsset) : top;
-      tiles.add(side.replace(/\.png$/, '-side.png'));
+      const topLayers = resolveTileLayerSources(cell.asset);
+      const sideLayers = resolveTileLayerSources(cell.sideAsset ?? cell.asset, false);
+      if (topLayers.topSrc) tiles.add(topLayers.topSrc);
+      if (sideLayers.sideSrc) tiles.add(sideLayers.sideSrc);
     }
     if (cell.feature) tiles.add(featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask));
     const cover = cell.groundCover;
@@ -1187,7 +1187,6 @@ export function SkirmishBoard() {
       >
         <BoardLabBoard
           board={board}
-          assetFrameSrc={tileFrameSrc}
           macroTiles={exactBoard?.macroTiles}
           boardZoom={boardZoom}
           boardPan={boardPan}

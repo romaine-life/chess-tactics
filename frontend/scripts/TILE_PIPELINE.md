@@ -1,65 +1,134 @@
-# Tile pipeline — surface-swap tileset
+# Tile pipeline — explicit top and side layers
 
-The production terrain tiles are **surface-swap** tiles: a Blender-derived isometric
-**edge** with a separately-generated flat **top** dropped into the top diamond, and the
-side faces **palette-tied** to the top so the block reads as one material. This sidesteps
-the fact that PixelLab can't reliably draw our iso top face — Blender owns the geometry,
-PixelLab only paints a flat material (which it does well).
+Production board tiles are two independent 96×180 PNG layers:
 
-8 variants × 6 families (`grass dirt stone pebble sand water`), wired in
-`src/art/tileset.ts` from `public/assets/tiles/surface/<fam>-<n>.png`. Rendered crisp
-(`image-rendering: pixelated`, style.css).
+```text
+public/assets/tiles/surface/<family>-<variant>-side.png
+public/assets/tiles/surface/<family>-<variant>-top.png
+```
 
-## Inputs (committed, in-repo)
+The renderer draws the side first and the top over it. A production tile path without
+`-top` or `-side` is retired; the pipeline neither reads nor emits combined tile sprites.
 
-| What | Where |
+## Geometry and ownership
+
+The canonical top diamond is apex `(48,41)`, right `(96,68)`, front `(48,95)`, left
+`(0,68)` in a 96×180 frame. Top and side ownership is determined by alpha:
+
+- TOP owns visible pixels inside that diamond.
+- SIDE owns visible pixels outside that diamond.
+- Builders affine-project flat source material into the diamond with nearest-neighbour
+  sampling, then emit native 96x180 frames. There is no hidden pre-shrink or fractional
+  runtime/display scaling; board placement stays on integer pixels.
+
+The source templates retain transparent RGB so the structural migration can reproduce
+the already-reviewed seam pixels exactly. Those RGB values are not drawn: alpha remains
+the layer-ownership contract.
+
+## Committed inputs and outputs
+
+| Purpose | Path |
 | --- | --- |
-| Raw flat top-down surface pools (16/family) | `docs/art/pixellab-runs/surfaces/<fam>/tile_<i>.png` |
-| Blender-derived iso edges (codexfilter pixelation) | `public/assets/tiles/pixel/<fam>-codexfilter.png` |
-| Curation map (which raw index → which variant) | `CURATION_MAP` in `build-surface-tiles.py` |
-| Production output | `public/assets/tiles/surface/<fam>-<n>.png` |
+| Flat generated top-material pools (16 per family) | `docs/art/pixellab-runs/surfaces/<family>/tile_<i>.png` |
+| Curated pool index → runtime variant | `CURATION_MAP` in `build-surface-tiles.py` |
+| Side-owned source pixels | `docs/art/tile-concepts/side-templates/<family>-side.png` |
+| Accepted top seam underlay | `docs/art/tile-concepts/top-underlays/<family>-top-underlay.png` |
+| Frayed edge alpha sources | `docs/art/tile-concepts/edge-masks/<family>-edge-side.png` |
+| Runtime base layers | `frontend/public/assets/tiles/surface/<family>-<variant>-{top,side}.png` |
+| Runtime rich/mural edges | numbered `frontend/public/assets/tiles/surface/*-side.png` files |
 
-Tile geometry: 96×180 canvas; top diamond apex (48,41) · right (96,68) · front-tip (48,95)
-· left (0,68). The flat square surface maps onto that diamond via an affine (square→rhombus).
+The six side templates and six top underlays are the minimal production source pixels
+extracted from the retired whole-tile intermediates. The old whole-tile images are not a
+build dependency.
 
-## To add or replace tiles
+## Generate and curate a top family
 
-1. **Generate** a flat top-down surface pool with the PixelLab MCP. One `create_tiles_pro`
-   call per family returns ~16 variations. Params that produce a flat, projectable material:
+1. Generate a flat top-down surface pool with PixelLab. The useful material parameters
+   are:
+
+   ```text
+   tile_type=square_topdown
+   tile_view=top-down
+   tile_view_angle=90
+   tile_depth_ratio=0
+   tile_size=64
+   outline_mode=segmentation
    ```
-   tile_type=square_topdown, tile_view=top-down, tile_view_angle=90,
-   tile_depth_ratio=0, tile_size=64, outline_mode=segmentation
-   description: "Flat top-down seamless <X> ground material, viewed straight from
-     directly above, no outline border, tileable. 1). … 2). … 3). … 4). …"
+
+   The prompt should request a flat, seamless material viewed directly from above, with
+   no border, cube, side face, perspective, prop, or isolated landmark.
+
+2. Commit the returned source images under
+   `docs/art/pixellab-runs/surfaces/<family>/`. Use `tile-contact-sheet.py` and the real
+   board viewer to curate them, then update `CURATION_MAP`.
+
+3. Check the proposed bake before writing anything:
+
+   ```powershell
+   python frontend/scripts/build-surface-tiles.py --check
    ```
-   Download the `storage_urls` from `get_tiles_pro` into
-   `docs/art/pixellab-runs/surfaces/<fam>/tile_<i>.png`.
 
-2. **Curate** — drop near-black / empty / single-feature surfaces; keep the ground-reading
-   ones. `python scripts/tile-contact-sheet.py <dir> out.png` builds a labeled 4×4 sheet to
-   pick from; review them applied to the edge at `/surface-lab` (Tiles view).
+   A mismatch is reported per layer and is not overwritten. If the owner has reviewed
+   and accepted the art change, write it explicitly:
 
-3. **Build** — put the chosen pool indices in `CURATION_MAP` and run:
+   ```powershell
+   python frontend/scripts/build-surface-tiles.py --accept-art-change
    ```
-   python scripts/build-surface-tiles.py
-   ```
-   This projects → composites onto the edge → palette-ties the sides → writes the production
-   set. It's deterministic: re-running reproduces the tiles byte-for-byte.
 
-4. **Review** the result on a real board at `/surface-lab` (Board view; Smooth/Crisp,
-   zoom, re-roll). The board uses the game's own renderer, so seating/tessellation match.
+   With no flag, the script rebuilds only when every existing runtime layer is already
+   pixel-identical. This keeps pipeline refactors from silently changing accepted art.
 
-## Scripts
+The accepted projection mode is intentionally part of curation: grass seals affine
+boundary misses; dirt, stone, pebble, sand, and water retain their current unsealed top
+pixels. Normalizing those families requires a separately reviewed art change.
 
-- `build-surface-tiles.py` — the production build (raw + map → tiles). Source of truth.
-- `project-tile-surface.py` — the square→diamond projection as a standalone single-tile tool.
-- `tile-contact-sheet.py` — contact sheet of a surface pool for curation.
+For a one-off top projection during curation:
 
-## Decisions on record
+```powershell
+python frontend/scripts/project-tile-surface.py <flat-material.png> <out-top.png>
+```
 
-- **Seam:** palette-tie the sides to the top (beat rim-lip / "both" after reviewing all six
-  families on a board). The palette-tie lives in `build-surface-tiles.py`.
-- **Render:** crisp/`pixelated`, not bilinear — the old `auto` was a holdover from the
-  retired 3D-render tiles and blurred the pixel art.
-- The raw PixelLab **blocks** (whole-tile, abandoned) and the legacy **textured** Blender
-  tiles are non-production — see `src/art/nonProductionTiles.ts`.
+That helper emits only a top layer.
+
+## Build side and edge sources
+
+`build-edge-tiles.py` starts from each family's explicit base side and writes the five
+land-family frayed masks to the build-source directory:
+
+```powershell
+python frontend/scripts/build-edge-tiles.py
+```
+
+`build-rich-edges.py` projects generated slab materials through those masks and emits
+only numbered runtime side layers:
+
+```powershell
+python frontend/scripts/build-rich-edges.py
+```
+
+Continuous cliff murals use the same build-source mask and likewise emit only side
+layers:
+
+```powershell
+python frontend/scripts/build-mural-edges.py `
+  <mural.png> `
+  docs/art/tile-concepts/edge-masks/<family>-edge-side.png `
+  frontend/public/assets/tiles/surface `
+  <prefix> <window-count> [start-index]
+```
+
+The board supplies the cell's own top above every rich or mural side. Edge builders must
+not copy that top or create catalog-only combined sprites.
+
+## Production scripts
+
+- `build-surface-tiles.py` — generated flat material + explicit side/underlay sources →
+  base top and side runtime layers; includes the pixel-regression gate.
+- `project-tile-surface.py` — standalone flat square → top-layer projection.
+- `build-edge-tiles.py` — explicit base side → frayed build-source mask.
+- `build-rich-edges.py` — generated slab material + frayed mask → numbered side layers.
+- `build-mural-edges.py` — generated mural + frayed mask → ordered side-layer windows.
+- `tile-contact-sheet.py` — curation contact sheet for generated top-material pools.
+
+There is no split, combined-sprite repair, or whole-tile angle-correction phase. Those
+were migration tools for the retired combined representation and have been deleted.

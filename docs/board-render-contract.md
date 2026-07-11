@@ -3,12 +3,16 @@
 ## Camera
 The skirmish board is a **fixed isometric** view — the camera does **not** rotate, tilt,
 or free-orbit (locked for the time being). This is the load-bearing decision: because the
-viewing angle never changes, the board is a **2D sprite compositor**, not a runtime 3D
-engine. Every tile, unit, rock, and portrait is a 3D model **pre-rendered in Blender to a
-flat PNG** at the one true-isometric angle, then laid out isometrically in the DOM
-(`frontend/src/render/iso.ts`, `BoardLabBoard.tsx`). Pre-rendered sprites are *optimal*
-here, not a compromise — they capture full 3D (relief, self-shadow, protruding geometry)
-from the only angle the player will ever see, at zero runtime cost.
+viewing angle never changes, the board is a **2D raster compositor**, not a runtime 3D
+engine. Terrain is composed by `frontend/src/render/BoardTerrainLayer.tsx` on a canvas;
+objects and interaction layers use the shared board projection and painter order. All
+registered art lands on the same integer-aligned isometric frame.
+
+The raster sources are asset-type specific. Some units and props are Blender renders;
+terrain tops use generated flat material projected into code-owned geometry; cliff sides,
+murals, and story features use their own generated/source pipelines. The contract is the
+fixed projection, native pixels, explicit source registry, and draw order — not one tool
+for every kind of art.
 
 If the camera ever needs to move, this contract is void and the board must become a
 real-time 3D scene (and the units re-authored as meshes).
@@ -24,8 +28,9 @@ plus props/trees/elevated ground).
 
 ### The three real constraints
 1. **Consistent contact footprint.** The *ground plane* where a tile meets its neighbors
-   and where a unit stands is the same clean diamond on every tile (the 96×140 calibration
-   — diamond ~96px wide, equator ~y27). Bumps and doodads live **above** that plane; they
+   and where a unit stands is the same clean diamond on every tile: 96px wide by 54px high
+   inside a 96x180 layer frame, with vertices `(48,41) (96,68) (48,95) (0,68)`.
+   Bumps and doodads live **above** that plane; they
    never move the contact edge. This keeps tiles tessellating and units seated.
 2. **Back-to-front draw order** (painter's, by distance to camera) — already done for
    units; protrusions ride it so nearer things overlap farther things.
@@ -33,16 +38,37 @@ plus props/trees/elevated ground).
    cell ambiguous. Tall props (trees) would need per-object dynamic sorting — out of scope
    for now.
 
-## Tiles, concretely
-Tiles are 3D-rendered sprites (same pipeline as units), NOT flat textures painted on a
-block. Use the packs' full content: **displacement/height maps** for real surface relief,
-**normal maps** for micro-detail, and the **3D models / alpha grass cards** for protruding
-doodads. Source packs ship all of these; rendering only the base-color flat was the bug
-this contract corrects.
+## Terrain, concretely
+
+Production 1x1 terrain is not one pre-rendered cube. Code owns the canonical diamond,
+side masks, frame placement, and compositing geometry; generated art owns the visible
+material, per ADR-0040. `frontend/scripts/build-surface-tiles.py` projects curated
+top-down material into the top region and combines source art only in memory to preserve
+the accepted seam. It writes independent top and side layers, never a flattened runtime
+sprite. No runtime code paints replacement RGB, rescales pixel art fractionally, or
+guesses a sibling layer from a filename.
+
+### The stored asset is layered
+
+Per [ADR-0075](adr/0075-tile-assets-are-explicit-layers.md), a production 1x1 terrain
+record names its files directly:
+
+- `topSrc`: the 96x180 walkable diamond layer;
+- `sideSrc`: the 96x180 exposed cliff/body layer;
+- optional `topAnimSrc`: a horizontal sheet of 96x180 top frames.
+
+There is no committed top+side sprite, virtual basename, or runtime filename
+substitution. Base tiles register top and side. Perimeter murals and story features are
+side-only records. Browser boards and server thumbnails compose the same registered
+layers, side first and top second, at the same integer frame origin.
+
+Macrotiles are not combined 1x1 tiles: each is one intentionally larger TOP image whose
+footprint covers several logical cells. Roads, rivers, fences, and walls remain independent
+feature/object layers.
 
 ## Composed terrain and macrotiles
 
-The runtime board is one composed terrain canvas, but its source data remains layered:
+The runtime board is one composed terrain canvas, but its registered source data remains layered:
 
 1. Exposed 1x1 tile sides.
 2. Exactly one terrain top for every playable cell: either its 1x1 top sprite or the clipped

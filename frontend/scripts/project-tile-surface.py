@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Project a FLAT top-down square surface into our exact iso top-diamond and
-composite it over a Blender-derived edge base.
+"""Project a flat top-down square material into an explicit TOP layer.
 
-The edge (sides + rim) comes from the base PNG (codexfilter = pixelated Blender,
-perfect iso geometry). We only replace the TOP FACE with the projected surface.
+This standalone curation helper writes only the canonical 96x180 top diamond. Side
+layers are authored and built independently; this tool never reads or emits a combined
+tile.
 
 Top-diamond vertices in our 96x180 tile space:
     apex (48,41)  right (96,68)  front-tip (48,95)  left (0,68)
@@ -11,7 +11,7 @@ Top-diamond vertices in our 96x180 tile space:
 A square -> rhombus map is AFFINE, so 3 corner correspondences fix it. We solve
 the dest->source affine and let PIL sample with NEAREST (pixel-art safe).
 """
-import sys, argparse
+import argparse
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -54,24 +54,13 @@ def project(surface):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('surface')
-    ap.add_argument('base')
-    ap.add_argument('out_tile')
-    ap.add_argument('--out-proj', help='projected surface alone (iso diamond, no edge)')
+    ap.add_argument('out_top')
     args = ap.parse_args()
 
     surface = Image.open(args.surface).convert('RGBA')
-    base = Image.open(args.base).convert('RGBA')
-    if base.size != CANVAS:
-        base = base.resize(CANVAS, Image.NEAREST)
-
-    proj = project(surface)
-    if args.out_proj:
-        proj.save(args.out_proj)
-
-    tile = base.copy()
-    tile.alpha_composite(proj)   # surface sits on top of the edge base's own top
-    tile.save(args.out_tile)
-    print('wrote', args.out_tile, 'src', args.surface, S := surface.size)
+    top = project(surface)
+    top.save(args.out_top)
+    print('wrote top layer', args.out_top, 'src', args.surface, surface.size)
 
 
 if __name__ == '__main__':

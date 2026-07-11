@@ -11,11 +11,12 @@ import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
-import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
+import { previewTerrain } from '../sfx';
+import { SETTINGS_CHANGE_EVENT, SETTINGS_STORAGE_KEY } from './motionPreference';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
-const SETTINGS_KEY = 'chess-tactics-settings-v1';
+const SETTINGS_KEY = SETTINGS_STORAGE_KEY;
 const ASSET_BASE = '/assets/ui/settings';
 // How long the panel body fades out before swapping in the next menu's controls,
 // then fades back in. MUST match --ds-duration-fade on .settings-panel-content in style.css
@@ -30,6 +31,7 @@ interface LocalSettings {
   musicVolume: number;
   effectsVolume: number;
   interfaceSounds: boolean;
+  reduceMotion: boolean;
 }
 
 interface BgmTrack {
@@ -69,6 +71,7 @@ const DEFAULT_SETTINGS: LocalSettings = {
   musicVolume: 70,
   effectsVolume: 80,
   interfaceSounds: true,
+  reduceMotion: false,
 };
 
 const tabs: TabDefinition[] = [
@@ -165,6 +168,7 @@ function readLocalSettings(): LocalSettings {
       musicVolume: clamp(parsed.musicVolume, 0, 100, DEFAULT_SETTINGS.musicVolume),
       effectsVolume: clamp(parsed.effectsVolume, 0, 100, DEFAULT_SETTINGS.effectsVolume),
       interfaceSounds: typeof parsed.interfaceSounds === 'boolean' ? parsed.interfaceSounds : DEFAULT_SETTINGS.interfaceSounds,
+      reduceMotion: typeof parsed.reduceMotion === 'boolean' ? parsed.reduceMotion : DEFAULT_SETTINGS.reduceMotion,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -288,10 +292,9 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
   useEffect(() => {
     saveLocalSettings(settings);
     applyUiScale(settings.uiScale);
-    // Let the running SFX service pick up master-audio / effects-volume changes live
-    // (it re-reads localStorage on this event), so the Effects slider takes effect
-    // without a reload — the SFX analogue of the BGM mute-change event.
-    window.dispatchEvent(new CustomEvent(SFX_SETTINGS_CHANGE_EVENT));
+    // Apply shared settings live in this tab: SFX re-reads its mix and the global
+    // motion preference toggles the root class that board/scene renderers consume.
+    window.dispatchEvent(new CustomEvent(SETTINGS_CHANGE_EVENT));
   }, [settings]);
 
   // Load the soundtrack list whenever the dedicated tracks view is opened. A fresh
@@ -521,7 +524,7 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
       <SettingsSection title="Defaults">
         <SettingsRow
           title="Reset to Defaults"
-          description={confirmingReset ? 'Press reset again to confirm.' : 'Restore General and Audio settings for this browser.'}
+          description={confirmingReset ? 'Press reset again to confirm.' : 'Restore General, Audio, and Gameplay settings for this browser.'}
           value={<span>{confirmingReset ? 'Confirm' : 'Ready'}</span>}
         >
           <SettingsButton tone="danger" onClick={resetDefaults}>Reset</SettingsButton>
@@ -617,13 +620,13 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
   );
 
   const renderGameplay = () => (
-    <SettingsSection title="Gameplay">
+    <SettingsSection title="Presentation">
       <SettingsRow
-        title="Coming Soon"
-        description="Gameplay settings are not available yet."
-        value={<span>Locked</span>}
-        tall
-      />
+        title="Reduce Motion"
+        description="Freeze ambient board and scene animation on their exact static frame."
+      >
+        <Toggle checked={settings.reduceMotion} label="Toggle Reduce Motion" onChange={(enabled) => updateSetting('reduceMotion', enabled)} />
+      </SettingsRow>
     </SettingsSection>
   );
 

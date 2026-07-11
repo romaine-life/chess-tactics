@@ -16,25 +16,26 @@ import pkg from 'pngjs';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
 const { PNG } = pkg;
 
-// Per-terrain config. `anchors` is the dark→bright recolor ramp; `animated` cover sways,
-// static cover (pebbles) lies flat. `greenOnly` keeps grass's exact original sampling.
+// Per-terrain config. Ground-cover palette sampling is top-owned, so `top` must point to
+// an explicit -top layer and never to a retired combined tile. `anchors` is the
+// dark→bright recolor ramp; `animated` cover sways.
 const TERRAINS = [
-  { terrain: 'grass', tile: 'grass-0.png', greenOnly: true, animated: true, scale: 2,
+  { terrain: 'grass', top: 'grass-0-top.png', greenOnly: true, animated: true, scale: 2,
     anchors: [[40, 62, 26], [64, 100, 36], [104, 150, 52], [146, 190, 76], [184, 220, 112]] },
-  { terrain: 'water', tile: 'water-0.png', greenOnly: false, animated: true, scale: 2,
+  { terrain: 'water', top: 'water-0-top.png', greenOnly: false, animated: true, scale: 2,
     anchors: [[40, 54, 26], [74, 90, 40], [114, 132, 56], [152, 164, 82], [198, 200, 128]] },
   // Sand: dune/beach grass — reuse the grass tuft sources (`src`), recolored to dry straw-khaki.
-  { terrain: 'sand', tile: 'sand-0.png', src: 'grass', greenOnly: false, animated: true, scale: 2,
+  { terrain: 'sand', top: 'sand-0-top.png', src: 'grass', greenOnly: false, animated: true, scale: 2,
     anchors: [[58, 52, 28], [92, 84, 42], [134, 120, 62], [172, 156, 92], [206, 196, 138]] },
 ];
 
 const SWAY = [0, 1, 2, 2, 1, 0];
 
-function sampleDark(tile, greenOnly) {
+function sampleDark(top, greenOnly) {
   const cols = [];
   for (let y = 45; y < 92; y++) for (let x = 8; x < 88; x++) {
-    const i = (y * tile.width + x) << 2;
-    const r = tile.data[i], g = tile.data[i + 1], b = tile.data[i + 2], a = tile.data[i + 3];
+    const i = (y * top.width + x) << 2;
+    const r = top.data[i], g = top.data[i + 1], b = top.data[i + 2], a = top.data[i + 3];
     if (a <= 200) continue;
     if (greenOnly && !(g >= r && g > b)) continue;
     cols.push([r, g, b, 0.299 * r + 0.587 * g + 0.114 * b]);
@@ -119,8 +120,8 @@ for (const cfg of TERRAINS) {
   if (sources.length === 0) { console.log(`skip ${cfg.terrain}: empty sources`); continue; }
   const OUT_DIR = `public/assets/groundcover/${cfg.terrain}`;
   mkdirSync(OUT_DIR, { recursive: true });
-  const tile = PNG.sync.read(readFileSync(`public/assets/tiles/surface/${cfg.tile}`));
-  const darkG = sampleDark(tile, cfg.greenOnly);
+  const top = PNG.sync.read(readFileSync(`public/assets/tiles/surface/${cfg.top}`));
+  const darkG = sampleDark(top, cfg.greenOnly);
   const shadowCol = [Math.round(darkG[0] * 0.62), Math.round(darkG[1] * 0.66), Math.round(darkG[2] * 0.55)];
   const ramp = buildRamp(cfg.anchors);
   const frameCount = cfg.animated ? 6 : 1;

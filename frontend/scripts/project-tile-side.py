@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Project a FLAT cliff cross-section slab onto the two iso SIDE faces (ADR-0039).
+"""Project a FLAT cliff cross-section slab onto the two iso SIDE faces (ADR-0075).
 
 The side is two parallelograms meeting at the front vertical edge (x=48):
   left face : LEFT(0,68) -> FRONT(48,95) on top, straight down to the base

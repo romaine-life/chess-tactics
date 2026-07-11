@@ -1,7 +1,8 @@
 # ADR-0048: Animated tile tops are baked frame sheets (water ripple)
 
-- Status: accepted
+- Status: superseded by ADR-0075
 - Date: 2026-07-01
+- Superseded by: [ADR-0075](0075-tile-assets-are-explicit-layers.md)
 
 ## Context
 

@@ -481,7 +481,6 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
         <ViewPane kind="board" ariaLabel="Wall art board preview" zoom={zoom} pan={pan} minZoom={0.65} maxZoom={3} onZoomChange={setZoom} onPanChange={setPan}>
           <BoardLabBoard
             board={board}
-            assetFrameSrc={(asset) => asset.src}
             boardZoom={zoom}
             boardPan={pan}
             className="wall-art-board-surface"

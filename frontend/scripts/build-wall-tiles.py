@@ -42,8 +42,8 @@ WALL_DOCS = ROOT / "docs" / "art" / "wall-concepts"
 MATERIAL_DIR = WALL_DOCS / "materials"
 PROOF_DIR = WALL_DOCS / "proofs"
 DEFAULT_ZIP = "photoscanned-old-stone-wall-2x4m.zip"
-TILE_REFERENCE = ROOT / "docs" / "art" / "pixellab-runs" / "surfaces" / "grass" / "tile_0.png"
-RUNTIME_TILE_REFERENCE = ROOT / "frontend" / "public" / "assets" / "tiles" / "surface" / "grass-0.png"
+RUNTIME_TILE_TOP_REFERENCE = ROOT / "frontend" / "public" / "assets" / "tiles" / "surface" / "grass-0-top.png"
+RUNTIME_TILE_SIDE_REFERENCE = ROOT / "frontend" / "public" / "assets" / "tiles" / "surface" / "grass-0-side.png"
 WALL_FRAME_W = 128
 WALL_FRAME_H = 240
 WALL_ANCHOR_X = 64
@@ -249,11 +249,14 @@ def bake_wall_sprites(out_dir: Path, material: str, material_path: Path) -> None
 
 
 def compose_runtime_seat_proof(out_dir: Path, material: str, draw_guides: bool) -> Image.Image:
-    tile = Image.open(RUNTIME_TILE_REFERENCE).convert("RGBA")
+    tile_top = Image.open(RUNTIME_TILE_TOP_REFERENCE).convert("RGBA")
+    tile_side = Image.open(RUNTIME_TILE_SIDE_REFERENCE).convert("RGBA")
     wall = Image.open(out_dir / f"wall-{material}-9.png").convert("RGBA")
     origin = (130, 160)
     canvas = Image.new("RGBA", (260, 300), (12, 18, 24, 255))
-    canvas.alpha_composite(tile, (origin[0] - TILE_ANCHOR_X, origin[1] - TILE_ANCHOR_Y))
+    tile_at = (origin[0] - TILE_ANCHOR_X, origin[1] - TILE_ANCHOR_Y)
+    canvas.alpha_composite(tile_side, tile_at)
+    canvas.alpha_composite(tile_top, tile_at)
     canvas.alpha_composite(wall, (origin[0] - WALL_ANCHOR_X, origin[1] - WALL_ANCHOR_Y))
     if draw_guides:
         draw = ImageDraw.Draw(canvas)

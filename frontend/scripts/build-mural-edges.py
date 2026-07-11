@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Slice a WIDE cliff MURAL into N ordered windows and project each onto the iso side
-faces (ADR-0039 continuity system). Consecutive windows are ADJACENT columns of the
+faces (ADR-0041 continuity system). Consecutive windows are ADJACENT columns of the
 mural, so when the solver hands consecutive board-edge cells consecutive windows the
 cliff FLOWS across tiles (this replaces the random per-tile edge variant).
 
@@ -8,11 +8,13 @@ The projection generalises project-tile-side.py to a RECTANGULAR window (any asp
 src triangle TL(0,0) TR(W,0) BL(0,H) -> the iso face parallelogram. Same lighting
 contract (upper-left light: left face lit, right shadowed, base darken, front-edge lip).
 
-  python build-mural-edges.py <mural.png> <mask-side.png> <out-dir> <prefix> <N> [start]
+  python build-mural-edges.py <mural.png> <edge-mask.png> <out-dir> <prefix> <N> [start]
 
-Writes <out-dir>/<prefix>-mural-<start+i>-side.png (+ -top.png + combined .png) for i in 0..N-1.
-`start` (default 0) lets several murals share ONE numbered window bank (e.g. 3 murals × 16 →
-windows 0..47), so the whole bank reads continuous AND uses every generated mural.
+The edge mask is a build source such as
+``docs/art/tile-concepts/edge-masks/grass-edge-side.png``. Writes only
+<out-dir>/<prefix>-mural-<start+i>-side.png for i in 0..N-1; the board supplies each
+cell's independent top. `start` (default 0) lets several murals share one numbered
+window bank (e.g. 3 murals × 16 -> windows 0..47).
 """
 import sys
 import os
@@ -79,8 +81,8 @@ def main():
     W, H = mural.size
     ww = W // N
     os.makedirs(out_dir, exist_ok=True)
-    # Only the -side layer is needed: the board composes this under the cell's OWN base-tile
-    # -top (the side asset's top is never used), so we don't bake redundant -top/combined files.
+    # The board composes each window under the cell's own top, so this builder owns only
+    # the ordered side-layer bank.
     for i in range(N):
         x0 = i * ww
         win = mural.crop((x0, 0, (x0 + ww) if i < N - 1 else W, H))

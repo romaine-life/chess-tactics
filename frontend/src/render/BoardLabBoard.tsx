@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import { boardLabCellPosition } from './boardProjection';
 import { BoardGridLayer } from './BoardGridLayer';
-import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
+import { BoardTerrainLayer, terrainCanvasMacroTiles, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { TileGrid } from './TileGrid';
 import { BoardBarrierSceneLayer } from './BoardBarrierSceneLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
-import type { TileSocketAsset } from '../core/tileSockets';
+import { resolveTileLayerSources, type TileSocketAsset } from '../core/tileSockets';
 import { featureFrameSrc } from '../art/tileset';
 import type { ResolvedFenceOverlay, ResolvedWallOverlay } from '../core/featureAutotile';
 import type { WallArtPlacementMap } from '../core/wallArt';
@@ -23,7 +23,6 @@ export interface BoardLabBoardOverlayContext<TAsset extends TileSocketAsset> {
 
 export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   board: SocketBoardResult<TAsset>;
-  assetFrameSrc: (asset: TAsset) => string;
   boardZoom?: number;
   boardPan?: { x: number; y: number };
   className?: string;
@@ -52,7 +51,6 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
 // Adapter: a generated socket board -> the shared TileGrid render core.
 export function BoardLabBoard<TAsset extends TileSocketAsset>({
   board,
-  assetFrameSrc,
   boardZoom = 1,
   boardPan = { x: 0, y: 0 },
   className = '',
@@ -81,16 +79,16 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
     return !occupied.has(`${cell.x + 1}-${cell.y}`) || !occupied.has(`${cell.x}-${cell.y + 1}`);
   };
   const terrainCells: TerrainCanvasCell[] = sourceCells.map((cell) => {
-    const topSrc = cell.asset ? assetFrameSrc(cell.asset) : undefined;
-    const sideSrc = cell.asset ? assetFrameSrc(cell.sideAsset ?? cell.asset) : undefined;
+    const topLayers = cell.asset ? resolveTileLayerSources(cell.asset) : undefined;
+    const sideLayers = cell.asset ? resolveTileLayerSources(cell.sideAsset ?? cell.asset, false) : undefined;
     return {
       key: `${cell.x}-${cell.y}`,
       x: cell.x,
       y: cell.y,
-      topSrc: topSrc ? terrainTopSrc(topSrc, cell.asset?.topAnimFrames) : undefined,
-      sideSrc: sideSrc ? terrainSideSrc(sideSrc) : undefined,
+      topSrc: topLayers?.topSrc,
+      sideSrc: sideLayers?.sideSrc,
       featureSrc: cell.feature ? featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask) : undefined,
-      topAnimFrames: cell.asset?.topAnimFrames,
+      topAnimFrames: topLayers?.topAnimFrames,
       drawSide: isSideExposed(cell),
     };
   });

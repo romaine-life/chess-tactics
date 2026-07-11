@@ -11,7 +11,7 @@ export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsse
   /** The TOP tile for this cell (the walkable surface; also the default SIDE). */
   asset?: TAsset;
   /**
-   * Optional independent SIDE layer (ADR-0039). When set, the renderer composes this asset's
+   * Optional independent SIDE layer (ADR-0075). When set, the renderer composes this asset's
    * `-side` under `asset`'s `-top`, so the side (frayed edge, future river/waterfall) varies
    * independently of the top. Unset ⇒ the side comes from `asset` itself (the normal cube).
    */
@@ -273,13 +273,13 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
   /**
    * Optional per-family edge tiles. When supplied, any cell on a FRONT screen edge
    * (`x === columns - 1` or `y === rows - 1` — the void-facing rows in `x+y` paint order)
-   * gets the family's edge tile as its independent SIDE layer (ADR-0039), so the outer ring
+   * gets the family's edge tile as its independent SIDE layer (ADR-0075), so the outer ring
    * frays while keeping its own top variant. The top (`asset`) and sockets are untouched, so
    * terrain and adjacency are unchanged — only the cliff face changes.
    */
   edgeAssets?: Partial<Record<TileFamilyId, TAsset[]>>;
   /**
-   * Optional per-family ORDERED continuity-mural windows (ADR-0039). When a family is present
+   * Optional per-family ORDERED continuity-mural windows (ADR-0041/0075). When a family is present
    * here, its void-facing edge cells get a SEQUENTIAL window by run-position instead of the
    * random `edgeAssets` variant — so the cliff FLOWS continuously across adjacent tiles. The
    * run wraps the bottom corner: the right edge (p = y) continues into the bottom edge. A
@@ -361,7 +361,7 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
     }
   }
 
-  // Give front-edge cells a rich SIDE layer (ADR-0039). Two strategies, per family:
+  // Give front-edge cells a rich SIDE layer (ADR-0075). Two strategies, per family:
   //  • CONTINUITY MURAL (muralEdges): consecutive cells get consecutive ORDERED windows of one
   //    wide cliff, so the geology FLOWS across tiles. Run-position wraps the bottom corner —
   //    the right edge (p = y, top→bottom corner) continues into the bottom edge
@@ -403,7 +403,7 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
     }
   }
 
-  // Phase 2 — STORY FEATURES (ADR-0039). Sparse multi-tile set-pieces (fossil, ruins) laid
+  // Phase 2 — STORY FEATURES (ADR-0041/0075). Sparse multi-tile set-pieces (fossil, ruins) laid
   // head→tail along a STRAIGHT board edge, OVERRIDING the mural side. The corner is never
   // crossed (a rigid skeleton can't bend it), and when a feature would run off the edge before
   // it completes we swap its clipping piece for the `cap` terminator — never a sliced neck.

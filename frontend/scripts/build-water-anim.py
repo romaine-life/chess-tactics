@@ -19,8 +19,9 @@ Per variant:
      frontend/public/assets/tiles/surface/water-<n>-top-anim.png.
 
 Frame selection: PixelLab v3 stores 9 frames — index 0 is the input reference
-(the static top itself) and 1..8 are generated. We keep 0..7 so the loop's
-wrap lands back on the real static art (frame 8 is usually ~= frame 0 anyway).
+and 1..8 are generated. We write the current committed static top as frame 0
+explicitly, then keep generated frames 1..7. This keeps the contract true even
+when the accepted static top is revised after the PixelLab run.
 
 Usage:
   python scripts/build-water-anim.py <runDir> [--variants 0,1,...] [--frames 8]
@@ -75,6 +76,10 @@ def bake_variant(run_dir: Path, n: int, frames: int) -> None:
     sheet = Image.new("RGBA", (FRAME_W * frames, FRAME_H), (0, 0, 0, 0))
     report = []
     for i in range(frames):
+        if i == 0:
+            sheet.paste(static, (0, 0))
+            report.append("0%")
+            continue
         frame_path = run_dir / f"v{n}" / f"{i}.png"
         frame = Image.open(frame_path).convert("RGBA")
         if frame.size != (FRAME_W, FRAME_H):

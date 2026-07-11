@@ -55,22 +55,6 @@ interface TerrainBounds {
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
 const expandedTopCache = new Map<string, HTMLCanvasElement | null>();
 
-function splitTopSrc(src: string): string {
-  return src.replace(/\.png$/, '-top.png');
-}
-
-function splitSideSrc(src: string): string {
-  return src.replace(/\.png$/, '-side.png');
-}
-
-export function terrainTopSrc(src: string, animFrames = 0): string {
-  return animFrames > 1 ? src.replace(/\.png$/, '-top-anim.png') : splitTopSrc(src);
-}
-
-export function terrainSideSrc(src: string): string {
-  return splitSideSrc(src);
-}
-
 function loadImage(src: string): Promise<HTMLImageElement> {
   const cached = imageCache.get(src);
   if (cached) return cached;
@@ -251,9 +235,10 @@ function imageReady(image: HTMLImageElement | undefined): image is HTMLImageElem
   return !!image?.complete && image.naturalWidth > 0;
 }
 
-function topAnimationFrame(cell: TerrainCanvasCell, timeMs: number): number {
+export function terrainTopAnimationFrame(cell: TerrainCanvasCell, timeMs: number, reducedMotion = false): number {
   const frames = cell.topAnimFrames ?? 0;
   if (frames <= 1) return 0;
+  if (reducedMotion) return 0;
   const phase = ((cell.x * 7 + cell.y * 13) % frames) / frames;
   return Math.floor((((timeMs / TILE_TOP_ANIM_MS) + phase) % 1) * frames);
 }
@@ -303,7 +288,7 @@ function drawCellTop(
   const dx = left - TILE_STEP_X - bounds.left;
   const dy = top - TILE_EQUATOR - bounds.top;
   const frames = cell.topAnimFrames ?? 0;
-  const frame = topAnimationFrame(cell, timeMs);
+  const frame = terrainTopAnimationFrame(cell, timeMs, document.documentElement.classList.contains('reduce-motion'));
   const source = expanded ? expandedTopImage(cell.topSrc, topImg, frames) : topImg;
   if (!source) return;
   drawTopFrame(ctx, source, frame, frames, dx, dy);

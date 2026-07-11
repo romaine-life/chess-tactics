@@ -5,7 +5,7 @@ import { BoardLabBoard } from '../render/BoardLabBoard';
 import { ViewPane } from './shared/ViewPane';
 
 // Inspector for the production surface-swap BOARD tileset (Blender edge + flat PixelLab top;
-// scripts/build-surface-tiles.py, ADR-0039/0040) as an embedded Studio Viewer kind (ADR-0058).
+// scripts/build-surface-tiles.py, ADR-0040/0075) as an embedded Studio Viewer kind (ADR-0058).
 // NOTE: distinct from the `surface` viewer kind, which is UI background-panel textures — these
 // are the iso board tiles under /assets/tiles/surface/. Board/grid in `.al-lab-main`, every
 // control in the one `.tileset-view-controls` panel, reached from the Tileset Surfaces catalog.
@@ -13,25 +13,24 @@ import { ViewPane } from './shared/ViewPane';
 
 export const SURFACE_TILE_FAMILIES = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'] as const;
 type Family = (typeof SURFACE_TILE_FAMILIES)[number];
-const MAX_PER_FAMILY = 14;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export const surfaceTileCap = cap;
 const isFamily = (f: string): f is Family => (SURFACE_TILE_FAMILIES as readonly string[]).includes(f);
 
-function Card({ family, n }: { family: Family; n: number }): ReactElement | null {
-  const [ok, setOk] = useState(true);
-  if (!ok) return null;
+function Card({ family, asset, n }: { family: Family; asset: TileAsset; n: number }): ReactElement {
   return (
     <div className="stl-card">
       <div className="stl-card-head">{cap(family)} {n + 1}</div>
       <div className="stl-stage stl-stage--tile">
-        <img className="stl-px" src={`/assets/tiles/surface/${family}-${n}.png`} alt={`${family} ${n + 1}`}
-          draggable={false} onError={() => setOk(false)} />
+        <span className="stl-layer-stack" aria-label={`${family} ${n + 1} composed top and side`}>
+          {asset.sideSrc ? <img className="stl-px" src={asset.sideSrc} alt="" draggable={false} /> : null}
+          {asset.topSrc ? <img className="stl-px" src={asset.topSrc} alt="" draggable={false} /> : null}
+        </span>
       </div>
       <div className="stl-stage stl-stage--flat">
         <img className="stl-px" src={`/assets/tiles/surface-lab/${family}-surf-${n}.png`} alt={`${family} ${n + 1} surface`} draggable={false} />
       </div>
-      <div className="stl-card-foot">surface ↑ · tile ↑↑</div>
+      <div className="stl-card-foot">material source ↑ · explicit side + top ↑↑</div>
     </div>
   );
 }
@@ -71,12 +70,14 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
       <section className={`al-lab-main ${view === 'board' ? 'stl-board-main' : ''}`.trim()} aria-label="Surface tileset preview">
         {view === 'board' ? (
           <ViewPane kind="board" ariaLabel="Surface tileset viewport" zoom={zoom} pan={pan} minZoom={0.5} maxZoom={3} onZoomChange={setZoom} onPanChange={setPan}>
-            <BoardLabBoard board={board} assetFrameSrc={(a) => a.src} boardZoom={zoom} boardPan={pan}
+            <BoardLabBoard board={board} boardZoom={zoom} boardPan={pan}
               className={`stl-board-surface ${crisp ? 'is-crisp' : ''}`} ariaLabel="Surface tileset board preview" />
           </ViewPane>
         ) : (
           <div className="stl-grid" key={fam}>
-            {Array.from({ length: MAX_PER_FAMILY }, (_, n) => <Card key={`${fam}-${n}`} family={fam} n={n} />)}
+            {tileFamilies[fam]
+              .filter((asset) => asset.kind === 'tile')
+              .map((asset, n) => <Card key={asset.id} family={fam} asset={asset} n={n} />)}
           </div>
         )}
       </section>
@@ -109,7 +110,7 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
                 </div>
               </>
             ) : (
-              <p className="stl-note">Each card pairs a baked production tile with the flat top-down surface it was projected from.</p>
+              <p className="stl-note">Each card composes the production side and top layers, then shows the flat material source beneath them.</p>
             )}
           </div>
         </section>
@@ -133,7 +134,8 @@ const STL_CSS = `
     linear-gradient(45deg, transparent 75%, #1b212b 75%), linear-gradient(-45deg, transparent 75%, #1b212b 75%);
   background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
 .stl-stage--tile { padding: 6px; height: 190px; }
-.stl-stage--tile .stl-px { height: 100%; }
+.stl-layer-stack { position: relative; display: block; width: 96px; height: 180px; }
+.stl-layer-stack .stl-px { position: absolute; inset: 0; width: 100%; height: 100%; }
 .stl-stage--flat { padding: 6px; height: 92px; }
 .stl-stage--flat .stl-px { height: 100%; }
 .stl-px { width: auto; object-fit: contain; display: block; image-rendering: pixelated; }

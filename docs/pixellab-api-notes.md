@@ -10,14 +10,14 @@ PixelLab is useful for raw game-asset candidates, inspiration, and object-style
 animation experiments. It should not be treated as the geometry authority for
 this project.
 
-For Chess Tactics, every generated tile still has to land in the canonical tile
-contract:
+For Chess Tactics, generated material still has to land in the explicit layer contract
+from ADR-0075 and `docs/tile-ruleset.md`:
 
-- `96px` top diamond width
-- `55.426px` true-isometric top diamond height
-- `86px` side height
-- shared camera angle and edge sockets
-- no generated crop junk, chess pieces, or mismatched perspective
+- native `96x180` TOP or SIDE frame;
+- canonical top vertices `(48,41) (96,68) (48,95) (0,68)`;
+- top and side alpha ownership kept separate;
+- shared edge sockets;
+- no generated crop junk, chess pieces, side-bearing cube, or mismatched perspective.
 
 PixelLab can help make candidate art. The local pipeline decides whether that
 candidate becomes a production asset.
@@ -86,8 +86,8 @@ The pipeline should be:
 
 1. Generate candidate art with PixelLab or another image tool.
 2. Download outputs into `docs/art/...` for auditability.
-3. Normalize candidates into `frontend/public/assets/tiles/...` only when they
-   are worth testing in the app.
+3. Keep candidate sources under `docs/art/...`; use the deterministic builder to emit
+   public runtime layers only when a candidate is worth testing in the app.
 4. Verify canonical footprint, edge angle, side height, and socket legality.
 5. Review in Tileset Studio at tile scale and board scale.
 6. Promote only accepted assets into the main catalog.
@@ -96,8 +96,9 @@ PixelLab is one input to the pipeline, not the pipeline.
 
 ## Recommended Next PixelLab Experiment
 
-Use `create_tiles_pro` with explicit `style_images` from our current concept or
-canonical tile references.
+Use `create_tiles_pro` with explicit `style_images` from the relevant production
+`-top.png` layers or their original flat material sources. Never provide a combined
+top+side cube as a transition-top reference.
 
 Test one narrow target at a time:
 
@@ -109,7 +110,7 @@ For each run, record:
 
 - PixelLab tool name
 - exact prompt
-- exact reference image source
+- exact top-only reference image source
 - whether reference was style-only or structure-following
 - generated output IDs
 - local downloaded paths
@@ -120,20 +121,18 @@ asset and prove the reference/style behavior.
 
 ## Animation Takeaway
 
-Animated tiles are still unsolved.
+Water top animation is solved and accepted. `frontend/scripts/build-water-anim.py`
+turns native PixelLab candidates into an eight-frame horizontal TOP sheet: every frame
+copies the static top alpha, frame 0 is the exact static top, and the independent SIDE
+never moves. The tile-layer guard verifies those invariants.
 
-The attempted "generate full animated tile sheet, then remap the top surface"
-workflow proved that we can freeze a canonical body while replacing top pixels,
-but the result looked pasted together and was not production quality.
+For another animated terrain family:
 
-Better next animation experiments:
-
-- Start from an accepted static tile and generate small frame deltas.
-- Preserve the exact palette and edge treatment.
-- Animate only the top-surface details unless the whole tile is intentionally
-  redesigned.
-- Use frame-by-frame pixel difference checks to confirm the intended parts move
-  and everything else stays fixed.
+- start from its accepted static TOP and generate small frame deltas;
+- preserve palette and copy the exact static alpha into every frame;
+- keep frame 0 identical to the static TOP;
+- do not redesign or animate the SIDE as part of a top experiment;
+- use frame-by-frame pixel checks and real-board review before registry acceptance.
 
 ## Standing Rule
 

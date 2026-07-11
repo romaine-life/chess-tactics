@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactElement } from 'react';
+import { tileFamilies } from '../art/tileset';
 import { groundCoverSet, type CoverSet, type CoverVariantMeta } from '../core/groundCover';
 import { terrainLabels, type TileFamilyId } from '../core/tileSockets';
 
@@ -11,6 +12,7 @@ export interface GroundCoverCatalogAsset {
   badge: string;
   notes: string;
   set: CoverSet;
+  topSrc: string;
 }
 
 const GROUND_COVER_META: Record<GroundCoverId, { label: string; badge: string; notes: string }> = {
@@ -36,10 +38,13 @@ export const GROUND_COVER_IDS: readonly GroundCoverId[] = ['grass', 'water', 'sa
 export const GROUND_COVER_ASSETS: readonly GroundCoverCatalogAsset[] = GROUND_COVER_IDS.map((id) => {
   const set = groundCoverSet(id);
   if (!set) throw new Error(`Missing ground-cover set: ${id}`);
+  const topSrc = tileFamilies[id][0]?.topSrc;
+  if (!topSrc) throw new Error(`Missing registered ground-cover top layer: ${id}`);
   return {
     id,
     terrainLabel: terrainLabels[id],
     set,
+    topSrc,
     ...GROUND_COVER_META[id],
   };
 });
@@ -73,7 +78,7 @@ export function GroundCoverPreview({ asset, zoom = 1 }: { asset: GroundCoverCata
   ];
   return (
     <span className="ground-cover-preview" style={{ '--tile-zoom': zoom } as CSSProperties} aria-hidden="true">
-      <img className="ground-cover-preview-tile" src={`/assets/tiles/surface/${asset.id}-0-top.png`} alt="" draggable={false} />
+      <img className="ground-cover-preview-tile" src={asset.topSrc} alt="" draggable={false} />
       {variants.map((meta, index) => {
         const [x, y] = positions[index] ?? [50, 54];
         return <span key={meta.id} className="ground-cover-preview-tuft gc-tuft" style={tuftStyle(asset, meta, x, y)} />;

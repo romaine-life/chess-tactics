@@ -5,7 +5,7 @@ import {
   TILE_STEP_X,
   TILE_STEP_Y,
 } from '../art/projectionContract';
-import { studioFamilies, assetFrameSrc, type StudioAsset } from '../ui/studioBoard';
+import { studioFamilies, type StudioAsset } from '../ui/studioBoard';
 import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
 import {
   unitAssetById,
@@ -182,13 +182,12 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
 
       const tile = board.cells[key] ? resolveTile(board.cells[key]) : undefined;
       if (tile) {
-        const frameSrc = assetFrameSrc(tile, 0);
         const drawSide = !occupiedTerrain.has(`${x + 1},${y}`) || !occupiedTerrain.has(`${x},${y + 1}`);
-        if (drawSide) {
-          ops.push({ src: frameSrc.replace(/\.png$/, '-side.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
+        if (drawSide && tile.sideSrc) {
+          ops.push({ src: tile.sideSrc, dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
         }
-        if (!macroOwnedTerrain.has(key)) {
-          ops.push({ src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
+        if (!macroOwnedTerrain.has(key) && tile.topSrc) {
+          ops.push({ src: tile.topSrc, dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
         }
       }
 

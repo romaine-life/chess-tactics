@@ -131,6 +131,11 @@ and sprite hashes; the private `unit-assets` Blob container stores the immutable
 PNG bytes. The backend serves those bytes through same-origin content-addressed
 routes. Postgres does not store image bytes.
 
+Terrain art remains code-owned and layer-native (ADR-0075). Levels and maps persist
+stable logical tile IDs such as `grass-surf-0`; they do not persist `topSrc`, `sideSrc`,
+combined sprite paths, or terrain-art catalog rows. Retiring a terrain PNG therefore must
+not rewrite board documents or mutate the live Unit Art tables.
+
 What is **not** in Postgres (deliberate, see "Boundaries"): the `lobbies`
 matchmaking map.
 

@@ -5,6 +5,7 @@
 // the reviewable in-app home for "how our chrome actually renders" — a glossary
 // TYPE, not a fake meta-asset inside an asset category.
 import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react';
+import { tileFamilies } from '../../art/tileset';
 import { pieceSpritePath } from '../../core/pieces';
 import { GLOSSARY } from './catalogData';
 
@@ -26,6 +27,8 @@ const ViewIcon = (): ReactElement => (
 const LiveKnightSprite = (): ReactElement => (
   <img src={pieceSpritePath('knight')} alt="" aria-hidden="true" />
 );
+
+const glossaryGrassTile = tileFamilies.grass[0];
 
 // Long-form docs keyed by glossary term. Terse `def` lives in catalogData; the
 // deeper "why/how" lives here so the term row stays scannable but the Viewer can
@@ -63,7 +66,8 @@ const GLOSSARY_DETAILS: Record<string, ReactNode> = {
         <span className="doodad-layer-cell">
           <span className="doodad-layer-scene">
             <span className="doodad-layer-stage">
-              <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
+              <span className="doodad-layer-half"><img src={glossaryGrassTile.sideSrc} alt="" aria-hidden="true" /></span>
+              <span className="doodad-layer-half"><img src={glossaryGrassTile.topSrc} alt="" aria-hidden="true" /></span>
               <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
               <span className="board-unit-seat is-knight" style={{ left: 0, top: 0 }}><LiveKnightSprite /></span>
             </span>
@@ -73,7 +77,8 @@ const GLOSSARY_DETAILS: Record<string, ReactNode> = {
         <span className="doodad-layer-cell">
           <span className="doodad-layer-scene">
             <span className="doodad-layer-stage">
-              <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
+              <span className="doodad-layer-half"><img src={glossaryGrassTile.sideSrc} alt="" aria-hidden="true" /></span>
+              <span className="doodad-layer-half"><img src={glossaryGrassTile.topSrc} alt="" aria-hidden="true" /></span>
               <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
               <span className="board-unit-seat is-knight" style={{ left: 0, top: 0 }}><LiveKnightSprite /></span>
               <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/front.png" alt="" aria-hidden="true" /></span>

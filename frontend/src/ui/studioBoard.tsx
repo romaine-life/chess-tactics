@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import {
-  assetFrameSrc,
   studioFamilies,
   type StudioAsset,
   type StudioAssetKind,
@@ -8,9 +7,9 @@ import {
   type StudioFamilyId,
 } from '@chess-tactics/board-render/ui/studioBoard';
 import { directionCompassCells, rookDirectionLabel, type Direction } from './unitCatalog';
+import { SETTINGS_CHANGE_EVENT } from './motionPreference';
 
 export {
-  assetFrameSrc,
   studioFamilies,
   type StudioAsset,
   type StudioAssetKind,
@@ -23,8 +22,17 @@ export function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 15
 
   useEffect(() => {
     if (!isPlaying || frameCount <= 1) return undefined;
-    const timer = window.setInterval(() => setAnimationFrame((frame) => (frame + 1) % frameCount), frameMs);
-    return () => window.clearInterval(timer);
+    const reducedMotion = () => document.documentElement.classList.contains('reduce-motion');
+    const sync = () => {
+      if (reducedMotion()) setAnimationFrame(0);
+    };
+    const timer = window.setInterval(() => setAnimationFrame((frame) => reducedMotion() ? 0 : (frame + 1) % frameCount), frameMs);
+    window.addEventListener(SETTINGS_CHANGE_EVENT, sync);
+    sync();
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(SETTINGS_CHANGE_EVENT, sync);
+    };
   }, [frameCount, frameMs, isPlaying]);
 
   useEffect(() => {

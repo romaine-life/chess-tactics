@@ -62,7 +62,7 @@ export function routeScreenKey(pathname: string): string {
   // destination's columns. (All fall through to the 'menu' default below.) The NESTED level editor
   // (/editor/level, legacy /edit·/level-editor) is its own heavy full screen and keeps its own key.
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return 'level-editor';
-  if (path === '/studio' || path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return 'studio';
+  if (path === '/studio' || path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return 'studio';
   // Each remaining explicit renderRoute entry is its own screen… (the Play selector is NOT here:
   // /play/select/* falls through to 'menu'; only the live board at exact /play is here.)
   if (

@@ -28,7 +28,7 @@ export function TileSidesViewer({ name, header }: { name?: string; header?: Reac
       <section className="al-lab-main surface-view-main" aria-label="Tile side preview">
         <div className="surface-view-stage tile-side-stage" style={stage}>
           <img
-            src={item.src}
+            src={item.sideSrc}
             alt={`${item.label} side faces`}
             width={width}
             height={height}

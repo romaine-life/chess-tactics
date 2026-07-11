@@ -3,7 +3,7 @@
 // image_generation_call event must appear in the session ROLLOUT — see codex-imagegen.mjs).
 // These are FLAT slabs; project-tile-side.py skews them onto the two iso cliff parallelograms
 // (so codex never draws our iso angle — the known PixelLab/codex iso failure) and bakes the
-// upper-left lighting. Art direction per the rich-side research (ADR-0039 side layer).
+// upper-left lighting. Art direction per the explicit side-layer contract (ADR-0075).
 //
 //   node frontend/scripts/forge-side-texture.mjs [grass dirt stone sand pebble] | --all [--n 3] [--tries 2]
 //

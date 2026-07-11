@@ -1,65 +1,89 @@
-# Tile source assets — recovery pointer
+# Tile source assets and retired-art recovery
 
-The committed terrain tiles in `frontend/public/assets/tiles/textured/*.png` are **Blender
-renders**. This file is the recoverable source of truth for *how they are made*: the exact
-inputs, the per-tile recipe, and where the (large, third-party) source bytes live. The bytes
-themselves are not committed — they are oversized PBR/photo packs (~550 MB full, ~4K maps for
-96-px tiles) under a license-pending status — so git holds this pointer + the render recipe
-instead.
+Production 1x1 terrain is layer-native (ADR-0075). Git stores only the explicit runtime
+top/side assets and the source material needed to rebuild them.
 
-## Where the bytes live
+## Current committed build sources
 
-- **Azure Blob — canonical, off-machine recovery:** subscription `romaine-life`, resource
-  group `chess-tactics-sources`, storage account `chesstacticssrc`, **private** container
-  `tile-sources` (public blob access disabled — these are license-pending source packs, not
-  browser-delivered like BGM). Holds the full archive: `tiles_ex/` (originals) + `_drivers/`
-  (the render recipe). Recover with an authorized `az login`, then:
-  `az storage blob download-batch --account-name chesstacticssrc -s tile-sources -d <dir>`
-- **Local mirror:** `D:\repos\chess-tactics-asset-sources\` (rescued out of `%TEMP%`).
+- Flat top-down generated materials:
+  `docs/art/pixellab-runs/surfaces/<family>/tile_<index>.png`.
+- Side-only production templates:
+  `docs/art/tile-concepts/side-templates/<family>-side.png`.
+- Top-only seam underlays:
+  `docs/art/tile-concepts/top-underlays/<family>-top-underlay.png`.
+- Frayed edge geometry masks:
+  `docs/art/tile-concepts/edge-masks/<family>-edge-side.png`.
+- Generated rich-side and mural material:
+  `frontend/public/assets/tiles/explore/`.
 
-> Infra note: the RG/account/container above were created directly (not via `tofu/storage.tf`,
-> whose `chesstacticsmedia` BGM account is a separate, not-yet-applied resource — kept distinct
-> on purpose so neither apply collides). Fold these into tofu and `import` them on the next
-> infra pass so the archive store is IaC-tracked.
+The former combined build input was split losslessly into a side template (outside-diamond
+RGBA) and top underlay (inside-diamond RGBA). The builder may compose those source layers
+in memory so an affine projection miss reveals the already-accepted seam pixel, but it emits
+only the explicit runtime top and side. The old whole blocks are archived below; they are
+not runtime assets or runnable production inputs.
 
-## Render recipe
+## Retired migration archives
 
-- Script: [`render_tile_3d.py`](render_tile_3d.py) — builds an iso block, textures top/side,
-  adds mode-specific 3D detail, renders 96×180 with a transparent film.
-- Driver: [`recipe/batch_tiles3d.sh`](recipe/) — the original per-tile invocations (rescued
-  from TEMP). **Note:** it references `$TEMP/tile3d.py` and a dead worktree path; the committed
-  `render_tile_3d.py` is the newer canonical script. `render_tile_3d.py` also hardcodes the
-  grass-blade OBJ to `%TEMP%/tiles_ex/grass-02/inner/`; re-pointing that at the archive is
-  required before a clean re-render.
-- Invocation: `blender -b --python render_tile_3d.py -- <mode> <out.png> <basecolor> <packdir> <seed>`
+Before removal, every retired tracked file was archived from source commit
+`8c1d30286066150b2a2458fedf9ec9c224619620`. The canonical archive inventory is
+three ZIP/manifest pairs: 207 PNGs plus 17 retired source files.
 
-## Per-tile inputs
+Shared destination:
 
-| Tile | Mode | Basecolor (pack-relative) | Pack | Seed |
-|------|------|---------------------------|------|------|
-| grass-a..f | grass | `grass/textures/Tile_{1_0,2_0,3_0,1_1,2_1,3_1}.jpg` | grass | 1–6 |
-| grass-g | grass | `grass-02/textures/2023-11-27T110445Z.png` | grass-02 | 7 |
-| dirt-a | ground | `simple-grass-chunks/textures/ground_close_04_basecolor.jpeg` | simple-grass-chunks | — |
-| dirt-b | ground | `simple-grass-chunks/textures/rostlinka_07_ground_albedo.jpeg` | simple-grass-chunks | — |
-| dirt-c | ground | `simple-grass-chunks/textures/rostlinka_07c_diffuse.jpeg` | simple-grass-chunks | — |
-| dirt-d | ground | `simple-grass-chunks/textures/rostlinka12_2k_difuse.jpeg` | simple-grass-chunks | — |
-| stone-a | ground | `grey-stone-tile-texture/textures/Grey_stone_tile_texture__photographed_in_g.jpeg` | grey-stone-tile-texture | — |
-| stone-b | ground | `old-stone-tile-with-displacement/textures/TiledMat_Base_Color.png` | old-stone-tile-with-displacement | — |
-| stone-c | ground | `overgrown-stone-tiles-tile-texture/textures/OvergrownStoneTiles_basecolor.jpg` | overgrown-stone-tiles-tile-texture | — |
-| pebble-a | pebble | `tilable-pabbles-with-mossy-1-3d-model-free/textures/1781700678456_0.png` | tilable-pabbles-with-mossy-1-3d-model-free | — |
-| sand-a | ground | `sand-at-sunset-beach/textures/texture0.jpeg` | sand-at-sunset-beach | — |
-| water-a | water | `forgotten-sanctuary-lake/textures/Image_0_2.jpeg` | forgotten-sanctuary-lake | — |
-| water-b | water | `stream/textures/Hurst - Stream.jpeg` | stream | — |
+- Azure subscription: `romaine-life`
+- storage account: `chesstacticssrc`
+- private container: `tile-sources`
+- prefix:
+  `retired/tile-layer-migration/2026-07-10/8c1d30286066150b2a2458fedf9ec9c224619620/`
 
-**Meshes added on top (the doodads):**
-- grass blades (all grass tiles): `grass-02/inner/Grass 02.obj` + `grass-02/inner/2023-11-27T110445Z.png`
-- pebble field (pebble-a): `tilable-pabbles-with-mossy-1-3d-model-free/source/tilable pabbles wit mossy 1.glb`
+Primary legacy-art bundle:
 
-`ground`/`water` modes add no mesh; `findmap()` auto-resolves normal/roughness/AO/displacement
-maps from each pack's `textures/` dir by filename keyword.
+- ZIP: `git-tile-layer-legacy-8c1d3028.zip`
+- ZIP SHA-256: `bc084847ac4c2465e3388bf6c5e3b1454a504bb117b4a1b6f6ac9398de972c6b`
+- manifest: `git-tile-layer-legacy-8c1d3028.manifest.json`
+- manifest SHA-256: `6bc4e731027b00669e621ec107916a564a1f99b577fa2ae2a8f80560afb42a65`
+- inventory: 202 PNGs, 1,862,146 source bytes.
 
-## Provenance / license
+Supplemental retired public edge-side bundle (the five painted predecessors of the new
+geometry-only source masks):
 
-All packs are third-party downloads (license-pending — see README). Each pack directory name
-above is its identifier; origin URLs were not recorded at download time. Treat as not
-redistributable until licensing is cleared.
+- ZIP: `git-tile-layer-retired-edge-masks-8c1d3028.zip`
+- ZIP SHA-256: `cdd585cf601b8d85fbbced9095817c15005598d167fe0dde81e0ce2e8b2912ff`
+- manifest: `git-tile-layer-retired-edge-masks-8c1d3028.manifest.json`
+- manifest SHA-256: `4bc2a3ea51df88b516d7fb9f205262bcad16fa9721fad16a99fcc93c8fcbefab`
+- inventory: 5 PNGs, 77,248 source bytes.
+
+Retired whole-tile source/QA bundle:
+
+- ZIP: `git-tile-layer-retired-source-8c1d3028-v3.zip`
+- ZIP SHA-256: `39131185c6fa02b4b7deefe466fd52e731a285af110f5bbde0ecbdf1a018e9bb`
+- manifest: `git-tile-layer-retired-source-8c1d3028-v3.manifest.json`
+- manifest SHA-256: `b51060f34d627c3ef99bf56d6e4c98d6915b6bce2805aa27f113eeded69e7630`
+- inventory: 17 files, 70,345 source bytes. These are the deleted whole-tile drivers,
+  split/repair scripts, retired comparison registry, and retired comparison UI.
+
+All six blobs are stored on Cool tier. Each pair was downloaded into a fresh directory
+after upload. ZIP and manifest hashes matched; all 207 extracted PNGs matched recorded
+byte lengths, SHA-256, and Git object IDs, and all 17 extracted source files matched their
+recorded byte lengths and Git object IDs. The two rejected line-ending-normalized source
+blobs from the first packaging attempt were deleted, leaving only this byte-exact `v3`
+source pair.
+
+Recover with an authorized Azure CLI session, for example:
+
+```sh
+az storage blob download-batch \
+  --subscription romaine-life \
+  --account-name chesstacticssrc \
+  --source tile-sources \
+  --destination <directory> \
+  --pattern 'retired/tile-layer-migration/2026-07-10/8c1d30286066150b2a2458fedf9ec9c224619620/*'
+```
+
+## Original third-party source packs
+
+The same private container retains the pre-existing `tiles_ex/` source packs and
+`_drivers/` recovery snapshot. A local mirror may exist at
+`D:\repos\chess-tactics-asset-sources\`. Those source packs remain license-pending and
+must not be redistributed. The obsolete whole-tile drivers are recovery material only;
+they are not committed or used by the current build.

@@ -10,7 +10,7 @@ import type { TileFamilyId } from '../core/tileSockets';
 export interface TileSideItem {
   id: string;
   label: string;
-  src: string; // served path under public/
+  sideSrc: string; // served path under public/
   family: TileFamilyId;
   /** 'base' | 'variant' for surface tiles, 'edge' for the frayed perimeter tiles. */
   role: string;
@@ -19,11 +19,15 @@ export interface TileSideItem {
 const surfaceItems: TileSideItem[] = (Object.keys(tileFamilies) as TileFamilyId[]).flatMap((family) =>
   tileFamilies[family]
     .filter((asset) => asset.kind === 'tile')
-    .map((asset) => ({ id: asset.id, label: asset.label, src: asset.src, family, role: asset.role })),
+    .flatMap((asset) => asset.sideSrc
+      ? [{ id: asset.id, label: asset.label, sideSrc: asset.sideSrc, family, role: asset.role }]
+      : []),
 );
 
 const edgeItems: TileSideItem[] = (Object.entries(edgeTiles) as [TileFamilyId, TileAsset[] | undefined][])
-  .flatMap(([family, assets]) => (assets ?? []).map((asset) => ({ id: asset.id, label: asset.label, src: asset.src, family, role: asset.role })));
+  .flatMap(([family, assets]) => (assets ?? []).flatMap((asset) => asset.sideSrc
+    ? [{ id: asset.id, label: asset.label, sideSrc: asset.sideSrc, family, role: asset.role }]
+    : []));
 
 export const TILE_SIDE_ITEMS: TileSideItem[] = [...surfaceItems, ...edgeItems];
 

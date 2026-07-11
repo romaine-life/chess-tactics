@@ -1,12 +1,12 @@
 import type { ReactElement } from 'react';
 import { BoardSceneLayer } from './BoardSceneLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
-import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
-import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
+import { BoardTerrainLayer, terrainCanvasMacroTiles, type TerrainCanvasCell } from './BoardTerrainLayer';
+import { studioFamilies, type StudioAsset } from '../ui/studioBoard';
 import { featureFrameSrc } from '../art/tileset';
 import { resolveFeatureOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
-import type { TileFamilyId } from '../core/tileSockets';
+import { resolveTileLayerSources, type TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 import { resolveMacroTilePlacements } from '../core/macroTiles';
 
@@ -15,7 +15,7 @@ import { resolveMacroTilePlacements } from '../core/macroTiles';
 // and ground cover through the shared scene-depth canvas). Both surfaces consume it:
 //   - the Level Editor layers paint/erase/select interaction on top of these same cells, and
 //   - the Campaign Editor's selected-level viewer renders it read-only inside a ViewPane.
-// It owns NO state and NO animation clock: pass `animationFrame` (default 0 = a static frame).
+// It owns no editor state; terrain animation is owned by the shared canvas renderer.
 
 /** Per-layer visibility — a true value hides that layer's elements. Mirrors the editor. */
 export interface BoardLayerVisibility {
@@ -40,7 +40,6 @@ export function studioTerrainCanvasCell({
   y,
   tileAsset,
   feature,
-  animationFrame,
   hidden,
   drawSide,
 }: {
@@ -49,19 +48,18 @@ export function studioTerrainCanvasCell({
   y: number;
   tileAsset: StudioAsset | undefined;
   feature: ResolvedFeatureOverlay | undefined;
-  animationFrame: number;
   hidden?: BoardLayerVisibility;
   drawSide: boolean;
 }): TerrainCanvasCell {
-  const frameSrc = tileAsset && !hidden?.tile ? assetFrameSrc(tileAsset, animationFrame) : undefined;
+  const layers = tileAsset && !hidden?.tile ? resolveTileLayerSources(tileAsset) : undefined;
   return {
     key,
     x,
     y,
-    topSrc: frameSrc ? terrainTopSrc(frameSrc, tileAsset?.topAnimFrames) : undefined,
-    sideSrc: frameSrc ? terrainSideSrc(frameSrc) : undefined,
+    topSrc: layers?.topSrc,
+    sideSrc: layers?.sideSrc,
     featureSrc: feature ? featureFrameSrc(feature.kind, feature.material, feature.mask) : undefined,
-    topAnimFrames: tileAsset?.topAnimFrames,
+    topAnimFrames: layers?.topAnimFrames,
     drawSide,
   };
 }
@@ -109,7 +107,6 @@ export function studioCoverCells(
  */
 export function StudioReadOnlyBoard({
   board,
-  animationFrame = 0,
   coverSeed = 1234,
   boardZoom = 1,
   boardPan = { x: 0, y: 0 },
@@ -117,7 +114,6 @@ export function StudioReadOnlyBoard({
   ariaLabel = 'Level board',
 }: {
   board: EditorBoard;
-  animationFrame?: number;
   coverSeed?: number;
   boardZoom?: number;
   boardPan?: { x: number; y: number };
@@ -137,7 +133,7 @@ export function StudioReadOnlyBoard({
       const key = `${x},${y}`;
       const tileAsset = board.cells[key] ? resolveTileAsset(board.cells[key]) : undefined;
       const drawSide = !!tileAsset && (!occupied.has(`${x + 1},${y}`) || !occupied.has(`${x},${y + 1}`));
-      terrainCells.push(studioTerrainCanvasCell({ key, x, y, tileAsset, feature: featureOverlays[key], animationFrame, drawSide }));
+      terrainCells.push(studioTerrainCanvasCell({ key, x, y, tileAsset, feature: featureOverlays[key], drawSide }));
       gridCells.push({
         key,
         x,

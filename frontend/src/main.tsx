@@ -17,6 +17,7 @@ import { loadLiveSeats } from './net/propSeats';
 import { loadLiveWallArt } from './net/wallArt';
 import { loadLiveUnitCatalog } from './net/unitAssets';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
+import { initReduceMotionPreference } from './ui/motionPreference';
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
 // content-hashed + immutable — correct — but that does NOT save a tab that
@@ -33,6 +34,8 @@ window.addEventListener('vite:preloadError', (event) => {
   event.preventDefault();
   window.location.reload();
 });
+
+initReduceMotionPreference();
 
 // The shell ships hidden (avoids an unstyled flash); reveal it once JS runs.
 const shell = document.querySelector('.shell');

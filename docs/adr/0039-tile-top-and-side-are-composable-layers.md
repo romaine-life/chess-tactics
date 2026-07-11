@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: "superseded by ADR-0075"
 date: 2026-06-28
 deciders: Nelson, Claude
+superseded_by: "[ADR-0075](0075-tile-assets-are-explicit-layers.md)"
 ---
 
 # ADR-0039: A board tile is a TOP layer composited over a SIDE layer
