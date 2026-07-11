@@ -10,10 +10,12 @@ export function testLiveUnitCatalog({
   revision = 1,
   sha256 = 'a'.repeat(64),
   scales = {},
+  nativeScales = {},
 }: {
   revision?: number;
   sha256?: string;
   scales?: Partial<Record<PieceId, number>>;
+  nativeScales?: Partial<Record<PieceId, number>>;
 } = {}): LiveUnitCatalog {
   const url = `/api/unit-sprites/${sha256}.png`;
   const sprites = Object.fromEntries(UNIT_PALETTES.map((palette) => [
@@ -44,6 +46,7 @@ export function testLiveUnitCatalog({
       notes: '',
       status: 'candidate',
       accepted: true,
+      nativeScalePercent: nativeScales[family] ?? 100,
       footprint: {
         shape: family === 'rook' ? 'square' : 'circle',
         sourceCanvasWidth: 512,

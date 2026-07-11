@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { familyLabels, type LiveUnitCatalog, type PieceId } from './unitCatalog';
+import { familyLabels, type LiveUnitCatalog, type PieceId, type UnitAsset } from './unitCatalog';
 
 export const UNIT_SIZE_STORAGE_KEY = 'chess-tactics.unit-size-draft.v1';
 export const UNIT_SIZE_DEFAULT = 100;
@@ -145,40 +145,81 @@ export function setUnitSizePercent(piece: PieceId, percent: number): void {
   writeDraft({ ...currentDraft, [piece]: clampPercent(percent) });
 }
 
-export function resetUnitSize(piece?: PieceId): void {
-  if (piece) {
-    writeDraft({ ...currentDraft, [piece]: publishedDraft[piece] });
+export function unitScalePercentForAsset(unit: UnitAsset, draft: UnitSizeDraft = currentDraft): number {
+  return Math.round((draft[unit.family] * 100) / unit.nativeScalePercent);
+}
+
+export function candidateReviewFamilyScale(unit: UnitAsset): number | null {
+  return unit.speculative && !unit.archived ? unit.nativeScalePercent : null;
+}
+
+export function unitDeliveryRasterForAsset(
+  unit: UnitAsset,
+  draft: UnitSizeDraft = currentDraft,
+): { width: number; height: number } {
+  const logicalScale = unitScalePercentForAsset(unit, draft) / 100;
+  return {
+    width: Math.round(Math.min(UNIT_SIZE_IMAGE_MAX_W, unit.footprint.sourceCanvasPx) * logicalScale),
+    height: Math.round(Math.min(UNIT_SIZE_IMAGE_MAX_H, unit.footprint.sourceCanvasHeightPx) * logicalScale),
+  };
+}
+
+export function unitScaleBoundsForAsset(unit: UnitAsset): { min: number; max: number } {
+  return {
+    min: Math.ceil((UNIT_SIZE_MIN * 100) / unit.nativeScalePercent),
+    max: Math.floor((UNIT_SIZE_MAX * 100) / unit.nativeScalePercent),
+  };
+}
+
+export function setUnitScalePercentForAsset(unit: UnitAsset, percent: number): void {
+  setUnitSizePercent(unit.family, Math.round((unit.nativeScalePercent * percent) / 100));
+}
+
+export function resetUnitSize(piece: PieceId): void {
+  const next = { ...currentDraft, [piece]: publishedDraft[piece] };
+  if (UNIT_SIZE_PIECES.some((entry) => next[entry] !== publishedDraft[entry])) {
+    writeDraft(next);
     return;
   }
   localDraftActive = false;
-  currentDraft = { ...publishedDraft };
+  currentDraft = next;
   if (canUseStorage()) window.localStorage.removeItem(UNIT_SIZE_STORAGE_KEY);
   applyUnitSizeDraft(currentDraft);
   emit();
 }
 
-export function unitSizeHandoffSpec(draft: UnitSizeDraft = currentDraft): string {
-  const units = Object.fromEntries(
-    UNIT_SIZE_PIECES.map((piece) => {
-      const scale = draft[piece] / 100;
-      return [piece, {
-        label: familyLabels[piece],
-        scalePercent: draft[piece],
-        publishedScalePercent: publishedDraft[piece],
-        boardSeatPx: {
-          w: Math.round(UNIT_SIZE_SEAT_W * scale),
-          h: Math.round(UNIT_SIZE_SEAT_H * scale),
-        },
-        imageMaxPx: {
-          w: Math.round(UNIT_SIZE_IMAGE_MAX_W * scale),
-          h: Math.round(UNIT_SIZE_IMAGE_MAX_H * scale),
-        },
-        nativeTargetPx: {
-          w: Math.round(UNIT_SIZE_IMAGE_MAX_W * scale),
-          h: Math.round(UNIT_SIZE_IMAGE_MAX_H * scale),
-        },
-      }];
-    }),
-  );
-  return JSON.stringify({ unitSizeDraft: 2, units }, null, 2);
+export function unitSizeHandoffSpec(piece: PieceId, draft: UnitSizeDraft = currentDraft, unit?: UnitAsset): string {
+  const familyScale = draft[piece] / 100;
+  const nativeScalePercent = unit?.nativeScalePercent ?? 100;
+  const logicalScalePercent = Math.round((draft[piece] * 100) / nativeScalePercent);
+  const logicalScale = logicalScalePercent / 100;
+  const nativeCanvasWidth = unit
+    ? Math.min(UNIT_SIZE_IMAGE_MAX_W, unit.footprint.sourceCanvasPx)
+    : Math.round(UNIT_SIZE_IMAGE_MAX_W * (nativeScalePercent / 100));
+  const nativeCanvasHeight = unit
+    ? Math.min(UNIT_SIZE_IMAGE_MAX_H, unit.footprint.sourceCanvasHeightPx)
+    : Math.round(UNIT_SIZE_IMAGE_MAX_H * (nativeScalePercent / 100));
+  const deliveryRaster = unit ? unitDeliveryRasterForAsset(unit, draft) : null;
+  const units = {
+    [piece]: {
+      label: familyLabels[piece],
+      scalePercent: logicalScalePercent,
+      familyScalePercent: draft[piece],
+      publishedScalePercent: publishedDraft[piece],
+      nativeBaselinePercent: nativeScalePercent,
+      boardSeatPx: {
+        w: Math.round(UNIT_SIZE_SEAT_W * familyScale),
+        h: Math.round(UNIT_SIZE_SEAT_H * familyScale),
+      },
+      imageMaxPx: {
+        w: Math.round(UNIT_SIZE_IMAGE_MAX_W * familyScale),
+        h: Math.round(UNIT_SIZE_IMAGE_MAX_H * familyScale),
+      },
+      nativeTargetPx: {
+        w: deliveryRaster?.width ?? Math.round(nativeCanvasWidth * logicalScale),
+        h: deliveryRaster?.height ?? Math.round(nativeCanvasHeight * logicalScale),
+      },
+    },
+  };
+  return JSON.stringify({ unitSizeDraft: 3, units }, null, 2);
 }

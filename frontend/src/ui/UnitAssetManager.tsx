@@ -17,6 +17,7 @@ import {
   type LiveUnitCatalogAsset,
   type UnitAsset,
 } from './unitCatalog';
+import { UnitRecaptureEditor, type UnitArtPreview } from './UnitRecaptureEditor';
 
 type MetadataDraft = {
   label: string;
@@ -57,11 +58,13 @@ export function UnitAssetManager({
   selectedUnit,
   onCatalogChange,
   onSelectUnit,
+  onArtPreview,
 }: {
   catalog: LiveUnitCatalog;
   selectedUnit: UnitAsset;
   onCatalogChange: (catalog: LiveUnitCatalog) => void;
   onSelectUnit: (unitId: string) => void;
+  onArtPreview: (preview: UnitArtPreview | null) => void;
 }): ReactElement {
   const selectedAsset = selectedUnit.catalogAssetId
     ? catalog.assets.find((asset) => asset.id === selectedUnit.catalogAssetId)
@@ -74,6 +77,8 @@ export function UnitAssetManager({
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [archivedId, setArchivedId] = useState('');
+  const recaptureAvailable = import.meta.env.DEV;
+  const [editorMode, setEditorMode] = useState<'asset' | 'recapture'>(() => recaptureAvailable ? 'recapture' : 'asset');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const archived = useMemo(
     () => catalog.assets.filter((asset) => asset.status === 'archived' && asset.family === selectedUnit.family),
@@ -217,10 +222,21 @@ export function UnitAssetManager({
     <section className="unit-asset-manager" aria-label="Unit asset manager">
       <div className="unit-size-controls-head">
         <strong>Unit Art</strong>
-        <button type="button" onClick={() => void createCandidate()} disabled={busy}>New candidate</button>
+        <span className="unit-asset-modes" role="tablist" aria-label="Unit Art editor">
+          <button type="button" role="tab" aria-selected={editorMode === 'asset'} className={editorMode === 'asset' ? 'is-active' : ''} onClick={() => setEditorMode('asset')}>Asset</button>
+          {recaptureAvailable ? <button type="button" role="tab" aria-selected={editorMode === 'recapture'} className={editorMode === 'recapture' ? 'is-active' : ''} onClick={() => setEditorMode('recapture')}>Recapture</button> : null}
+        </span>
       </div>
 
-      {candidate && draft ? (
+      {recaptureAvailable && editorMode === 'recapture' ? (
+        <UnitRecaptureEditor
+          catalog={catalog}
+          selectedUnit={selectedUnit}
+          onCatalogChange={onCatalogChange}
+          onSelectUnit={onSelectUnit}
+          onPreviewChange={onArtPreview}
+        />
+      ) : candidate && draft ? (
         <div className="unit-asset-editor">
           <div className="unit-asset-fields">
             <label><span>Label</span><input value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></label>
@@ -234,6 +250,7 @@ export function UnitAssetManager({
             <label><span>Anchor Y %</span><input type="number" min={0} max={100} step={0.001} value={draft.anchorYPercent} onChange={(event) => setDraft({ ...draft, anchorYPercent: Number(event.target.value) })} /></label>
           </div>
           <div className="unit-asset-actions">
+            <button type="button" onClick={() => void createCandidate()} disabled={busy}>New candidate</button>
             <button type="button" onClick={() => void saveMetadata()} disabled={busy}>Save metadata</button>
             <select value={palette} onChange={(event) => setPalette(event.target.value as UnitPalette)} aria-label="Upload palette">
               {UNIT_PALETTES.map((id) => <option key={id} value={id}>{UNIT_PALETTE_LABELS[id]}</option>)}
@@ -256,10 +273,11 @@ export function UnitAssetManager({
         <div className="unit-asset-current">
           <span>{familyLabels[selectedUnit.family]}</span>
           <strong>{accepted?.label ?? 'Committed fallback'}</strong>
+          <button type="button" onClick={() => void createCandidate()} disabled={busy}>New candidate</button>
         </div>
       )}
 
-      {archived.length ? (
+      {editorMode === 'asset' && archived.length ? (
         <div className="unit-asset-archive-row">
           <select value={archivedId} onChange={(event) => setArchivedId(event.target.value)} aria-label="Archived unit art">
             {archived.map((asset) => <option key={asset.id} value={asset.id}>{familyLabels[asset.family]} · {asset.label}</option>)}
@@ -267,7 +285,7 @@ export function UnitAssetManager({
           <button type="button" disabled={busy || !archivedSelection?.complete} onClick={() => archivedSelection && void acceptCandidate(archivedSelection)}>Restore accepted</button>
         </div>
       ) : null}
-      {status ? <output className="unit-asset-status">{status}</output> : null}
+      {editorMode === 'asset' && status ? <output className="unit-asset-status">{status}</output> : null}
     </section>
   );
 }

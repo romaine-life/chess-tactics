@@ -34,3 +34,58 @@ write board sprites into `frontend/public`.
 Every candidate requires six palettes and eight directions. Acceptance publishes
 the complete asset atomically while the stable piece-family identity remains the
 same.
+
+## Orientation Contract
+
+ADR-0074 separates new geometry from resizing accepted art. A new unit starts
+from one calibrated Blender model under a fixed camera at eight exact 45-degree
+facings. A scale-only revision starts from the accepted 6-palette x 8-direction
+sprite set so its approved styling and orientation cannot drift.
+
+The canonical entry point is below.
+
+```powershell
+python scripts/generate-unit-art.py render pawn --target 51x61
+python scripts/generate-unit-art.py verify pawn --target 51x61
+```
+
+For several genuinely new pieces, pass the Unit Studio handoff JSON to `render
+all --handoff <file>`. The command writes eight exact Blender frames and
+`render.json` beneath `.unit-art-output/unit-art/<piece>/<WIDTH>x<HEIGHT>/`.
+
+For an accepted-art size revision, set the size in Unit Studio and open Unit Art's
+**Recapture** tab. **Recapture accepted** samples every approved palette and
+direction with an aspect-preserving, premultiplied-alpha area reduction, previews
+the exact delivery PNGs live, and **Create candidate** uploads them without
+accepting them. A square accepted source is contained within the delivery canvas;
+for example, `512x512 -> 51x61` means a smooth `51x51` image centered in a
+transparent `51x61` frame, not a nonuniform stretch. Provenance records the
+accepted source asset, source, contained, and delivery dimensions, and the fact
+that spatial resampling occurred. The result is deliberately called downscaled,
+never pixel-authored or native-generated.
+
+Direct image generation, whole-sheet restyling/slicing, and the old south-concept
+fan-out are retired for board units. Downscaling is allowed only as this explicit,
+deterministic recapture of an accepted complete asset. Local authoring output must
+not be written under `frontend/public`.
+
+## Historical Archive
+
+The pre-cleanup candidate library and retired generator tools are stored privately
+in the `unit-art-archive` container:
+
+- `git/2026-07-10/57b85436/git-unit-art-pre-cleanup.zip`
+- `git/2026-07-10/57b85436/git-unit-art-pre-cleanup.manifest.json`
+- `git/2026-07-10/57b85436/git-unit-art-pixelover-addendum.zip`
+- `git/2026-07-10/57b85436/git-unit-art-pixelover-addendum.manifest.json`
+- `database/2026-07-10T16-45-08-591Z-unused-unit-assets-226ab98073a3.json`
+- `database/2026-07-11T02-27-12-438Z-unused-unit-assets-7524126b3016.json`
+
+The Git manifest records every original path, Git object id, byte length, and
+whether the file was removed, retained, or moved into the canonical source tree.
+The database manifest contains the eight retired asset rows, 384 sprite mappings,
+and their audit events. Immutable sprite blobs remain in the runtime storage
+container. The later targeted manifest contains the five obsolete Codex Sheet
+restyle candidates removed after the accepted-sprite recapture cutover: bishop,
+king, knight, pawn, and queen. It records 240 sprite mappings and 245 audit events;
+its SHA-256 is `7524126b3016401a24ab4fa36a81df4bbf4259f1df4bd76179528bf82a5cc4c1`.

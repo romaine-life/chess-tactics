@@ -46,4 +46,37 @@ describe('live unit catalog', () => {
     expect(unitAssetById('rook')?.id).toBe('rook');
     expect(pieceSpritePath('rook')).toContain('b'.repeat(64));
   });
+
+  it('normalizes art authored at the published family size to logical 100 percent', () => {
+    applyLiveUnitCatalog(testLiveUnitCatalog({ scales: { pawn: 66 }, nativeScales: { pawn: 66 } }));
+
+    expect(unitAssetById('pawn')?.nativeScalePercent).toBe(66);
+    expect(unitAssetById('pawn')?.defaultScale).toBe(100);
+  });
+
+  it('reviews candidates at their own native 100 percent independent of the published family scale', () => {
+    const catalog = testLiveUnitCatalog({ scales: { rook: 100 } });
+    const accepted = catalog.assets.find((asset) => asset.family === 'rook')!;
+    catalog.assets.push({
+      ...accepted,
+      id: 'candidate-rook',
+      accepted: false,
+      nativeScalePercent: 73,
+      footprint: { ...accepted.footprint, sourceCanvasWidth: 57, sourceCanvasHeight: 67 },
+    });
+
+    applyLiveUnitCatalog(catalog);
+
+    expect(unitAssetById('candidate-rook')?.defaultScale).toBe(100);
+  });
+
+  it('derives the native baseline while reading a pre-baseline catalog', () => {
+    const catalog = testLiveUnitCatalog();
+    catalog.assets[0].footprint.sourceCanvasWidth = 51;
+    catalog.assets[0].footprint.sourceCanvasHeight = 61;
+    (catalog.assets[0] as { nativeScalePercent?: number }).nativeScalePercent = undefined;
+
+    expect(applyLiveUnitCatalog(catalog)).toBe(true);
+    expect(unitAssetById(catalog.assets[0].family)?.nativeScalePercent).toBe(66);
+  });
 });

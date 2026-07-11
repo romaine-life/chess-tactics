@@ -84,6 +84,14 @@ migrations to a local database. See
 [docs/persistence.md](docs/persistence.md) for the schema, auth model, backups,
 failure behavior, and the one post-`tofu apply` value to pin.
 
+New board-unit geometry has one supported entry point: `python
+scripts/generate-unit-art.py`, which renders the calibrated Blender turntable at
+eight exact facings. Resizing already accepted art uses Unit Art's **Recapture**
+editor instead: it deterministically reduces the approved 6-palette x 8-direction
+set to the chosen delivery raster and creates a review-only storage-backed
+candidate with explicit source and resampling provenance.
+See [docs/art/unit-concepts/README.md](docs/art/unit-concepts/README.md).
+
 ## Checks
 
 ```sh

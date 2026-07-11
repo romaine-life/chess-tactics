@@ -21,7 +21,7 @@ import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, type
 import { wallArtSrcs } from '../core/wallArt';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 import { unitAnchorFraction, unitAssetById } from '../ui/unitCatalog';
-import { boardBounds, boardDrawOps, type BakeBounds, type BoardDrawOp } from '@chess-tactics/board-render';
+import { UNIT_IMG_MAX_H, UNIT_IMG_MAX_W, boardBounds, boardDrawOps, type BakeBounds, type BoardDrawOp } from '@chess-tactics/board-render';
 
 const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
   grass: 'grass',
@@ -500,20 +500,38 @@ export function pieceOp(
 ): BoardDrawOp | null {
   const src = pieceImageSrc(piece);
   if (!src) return null;
-  const scale = options.scale ?? 1;
-  const dw = UNIT_SEAT_W * scale;
-  const dh = UNIT_SEAT_H * scale;
+  const instanceScale = options.scale ?? 1;
   const unit = unitAssetById(piece.type);
   const isRock = piece.type === 'rock' || piece.type === 'random-rock';
   if (!unit && !isRock) throw new Error(`live unit metadata is missing: ${piece.type}`);
-  const anchorX = unit ? unitAnchorFraction(unit.unitAnchorX) : ROCK_ANCHOR_X;
-  const anchorY = unit ? unitAnchorFraction(unit.unitAnchorY) : ROCK_ANCHOR_Y;
+  if (isRock) {
+    const dw = UNIT_SEAT_W * instanceScale;
+    const dh = UNIT_SEAT_H * instanceScale;
+    return {
+      src,
+      dx: seat.left - dw * ROCK_ANCHOR_X,
+      dy: seat.top - dh * ROCK_ANCHOR_Y + (options.dy ?? 0),
+      dw,
+      dh,
+      z: objectBaseZIndex(piece),
+      contain: true,
+      opacity: options.opacity,
+    };
+  }
+  const logicalScale = instanceScale * (unit!.defaultScale / 100);
+  const seatScale = logicalScale * (unit!.nativeScalePercent / 100);
+  const seatW = UNIT_SEAT_W * seatScale;
+  const seatH = UNIT_SEAT_H * seatScale;
+  const imageW = Math.min(UNIT_IMG_MAX_W, unit!.footprint.sourceCanvasPx) * logicalScale;
+  const imageH = Math.min(UNIT_IMG_MAX_H, unit!.footprint.sourceCanvasHeightPx) * logicalScale;
+  const seatLeft = seat.left - seatW * unitAnchorFraction(unit!.unitAnchorX);
+  const seatTop = seat.top - seatH * unitAnchorFraction(unit!.unitAnchorY);
   return {
     src,
-    dx: seat.left - dw * anchorX,
-    dy: seat.top - dh * anchorY + (options.dy ?? 0),
-    dw,
-    dh,
+    dx: seatLeft + (seatW - imageW) / 2,
+    dy: seatTop + (seatH - imageH) / 2 + (options.dy ?? 0),
+    dw: imageW,
+    dh: imageH,
     z: objectBaseZIndex(piece),
     contain: true,
     opacity: options.opacity,

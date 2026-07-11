@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { editorBoardToLevel } from '../core/levelBoard';
 import type { Piece } from '../core/types';
 import type { EditorBoard } from '../ui/boardCode';
 import { tileFamilies } from '../art/tileset';
 import { createSkirmish } from '../game/setup';
+import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
+import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import { buildSkirmishBoard, pieceOp, skirmishTileClickIntent } from './SkirmishBoard';
+
+afterEach(() => resetLiveUnitCatalog());
 
 const exactBoard = (): EditorBoard => {
   const grass0 = tileFamilies.grass[0].id;
@@ -67,6 +71,21 @@ describe('pieceOp', () => {
     expect(op?.src).toContain('/assets/units/rock/');
     expect(op?.dx).toBe(0);
     expect(op?.dy).toBe(0);
+  });
+
+  it('paints accepted native art at its exact authored dimensions', () => {
+    const catalog = testLiveUnitCatalog({ scales: { pawn: 66 }, nativeScales: { pawn: 66 } });
+    const pawnAsset = catalog.assets.find((asset) => asset.family === 'pawn')!;
+    pawnAsset.footprint.sourceCanvasWidth = 51;
+    pawnAsset.footprint.sourceCanvasHeight = 61;
+    pawnAsset.footprint.sourceFootprintPx = 15;
+    applyLiveUnitCatalog(catalog);
+    const pawn: Piece = { id: 'pawn-1', side: 'player', type: 'pawn', x: 0, y: 0, startY: 0, alive: true };
+
+    const op = pieceOp(pawn, { left: 36, top: 70 });
+
+    expect(op?.dw).toBe(51);
+    expect(op?.dh).toBe(61);
   });
 });
 

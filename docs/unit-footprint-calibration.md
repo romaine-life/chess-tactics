@@ -23,36 +23,41 @@ Each unit declares a base/contact footprint centered on the tile center.
 
 The current canonical circular footprint target is `96px`, so the equal-area square target is about `85px`.
 
-## Active Blender Rook
+## Active Rook
 
 Asset:
 
-- `.unit-art-output/rook/navy-blue/*.png` (local rerender output; accepted frames live in Unit Art storage)
+- Accepted frames live in Unit Art storage. The authored Blender source is
+  `docs/art/unit-concepts/blender-units/rook-claude/units/rook-ruinwall/model.blend`;
+  `python scripts/generate-unit-art.py render rook ...` renders its exact
+  eight-direction turntable through the accepted-only Ruinwall renderer.
 
 Measured south-render source:
 
 - Source canvas: `512x512px`
-- Alpha bounds: `x=138..373`, `y=58..448`
 - Contact/anchor point: world origin `(0, 0, 0)`, projected through the Blender camera
-- Contact footprint row: `x=138..373`, width `236px`
-- Anchor: `x=50.000%`, `y=74.629%`
+- Published square footprint: `428px`
+- Published anchor: `x=50%`, `y=80.241%`
 
 Runtime metadata:
 
 ```ts
-footprint: squareFootprint(512, 236)
+footprint: squareFootprint(512, 428)
 unitAnchorX: '50%'
-unitAnchorY: '74.629%'
+unitAnchorY: '80.241%'
 ```
 
-At `100%` unit scale, the game renders the source image so the measured `236px` contact footprint maps to the canonical equal-area square footprint. The anchor comes from `docs/art/unit-concepts/blender-units/rook-v4-calibrated/measure_rook_anchor.py`, using the same deterministic camera projection method as the knight. The base footprint was fitted in Blender with `docs/art/unit-concepts/blender-units/rook-v4-calibrated/fit_rook_base_to_tile.py`.
+At `100%` unit scale, the game maps the published `428px` square footprint to the
+canonical equal-area square footprint. Unit Art owns these live values; the retired
+v2-v4 rook experiments are historical candidates, not the accepted rook source.
 
 ## Active Blender Knight
 
 Asset:
 
 - `.unit-art-output/knight/navy-blue/*.png` (procedural navy fur coat; render recipe: `docs/art/unit-concepts/blender-units/knight-fur/render_knight_fur.py`)
-- Supersedes the earlier `candidate-wooden` render (same OBJ, raw wood-grain diffuse — kept as historical candidate).
+- Supersedes the earlier `candidate-wooden` render (same OBJ, raw wood-grain diffuse,
+  now retained only in the private historical archive).
 
 - Source canvas: `512x512px`
 - Contact footprint (max projected base width): `178px`
@@ -150,12 +155,21 @@ unitAnchorY: '80.241%'
 
 The tiara was hand-fitted in Blender (not scripted) — the assembled `.blend` is the source. Like the bishop, the tiara's front gives a genuine per-direction facing across the 8 sprites.
 
-## Next Blender Export Rule
+## Delivery Raster Rule
 
-For every new Blender unit export:
+For genuinely new Blender-authored unit art:
 
-1. Render with the accepted tile in the Blender scene as the visual calibration reference.
-2. Export unit-only transparent sprites from the same camera.
-3. Measure the contact footprint width/diameter in source pixels.
-4. Store `sourceCanvasPx`, `sourceFootprintPx`, `unitAnchorX`, and `unitAnchorY`.
-5. Keep old AI/generated art as historical reference, not active app catalog entries.
+1. Choose the delivery raster in Unit Studio.
+2. Render unit-only transparent sprites directly at that width and height from the calibrated camera.
+3. Reject the run if authored and delivery dimensions differ or any spatial resampling occurred.
+4. Measure the contact footprint width/diameter on that native source grid.
+5. Store `sourceCanvasPx`, `sourceCanvasHeightPx`, `sourceFootprintPx`, `unitAnchorX`, and `unitAnchorY`.
+6. Keep old AI/generated art as historical reference, not active app catalog entries.
+
+For a size-only revision of accepted art:
+
+1. Treat the complete accepted 6-palette x 8-direction asset as the immutable visual source.
+2. Preserve source aspect ratio inside the Unit Studio delivery raster and reduce with deterministic premultiplied-alpha area sampling.
+3. Scale `sourceFootprintPx` by the same horizontal canvas ratio and preserve the accepted anchor.
+4. Record source asset id, source dimensions, contained dimensions, delivery dimensions, and `spatialResampling: true` in candidate provenance.
+5. Review the delivery pixels on the board before accepting. At logical `100%`, the accepted result is drawn 1:1.
