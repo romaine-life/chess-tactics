@@ -200,6 +200,10 @@ const GYM_CSS = `
 .gym-td-speed { display:flex; align-items:center; gap:8px; font-size:12px; color:#93a0b0; margin-top:2px; }
 .gym-td-speed input[type=range] { flex:1 1 auto; min-width:0; }
 .gym-td-speed .gym-num { min-width:34px; text-align:right; }
+/* The stage's own throttle — the same knob as the rail's, mirrored. */
+.gym-replay-tempo { display:flex; align-items:center; gap:6px; font-size:11px; color:#93a0b0; }
+.gym-replay-tempo input[type=range] { width:90px; min-width:0; }
+.gym-replay-tempo .gym-num { min-width:32px; text-align:right; }
 @media (max-width:1180px) { .gym-td-split.has-stage { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(320px,1fr); } }
 @media (max-width:980px) {
   .gym-run-detail.has-replay { grid-template-columns:1fr; grid-template-rows:minmax(180px,.45fr) minmax(300px,1fr); }
@@ -1164,7 +1168,17 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
           <button type="button" onClick={() => setTdReplayPly(tdReplayMax)} disabled={tdClampedReplayPly >= tdReplayMax} title={tdWalking ? 'Latest played ply' : 'Final position'} aria-label={tdWalking ? 'Latest played ply' : 'Final position'}>⏭</button>
           <span className="gym-replay-ply">{tdWalking ? `Ply ${tdClampedReplayPly} · in play` : `Ply ${tdClampedReplayPly}/${tdReplayMax}`}</span>
         </div>
-        {tdWalking && !tdWatching ? (
+        {tdWalking || tdWatching ? (
+          <label className="gym-replay-tempo" title="Tempo — steps per second; Max is a step every frame">
+            <input type="range" min={0} max={100} value={tdBeatToSlider(tdBeatMs)}
+              onChange={(e) => setTdBeatMs(tdSliderToBeat(Number(e.target.value)))} aria-label="Play-out tempo" />
+            <b className="gym-num">{tdBeatReadout(tdBeatMs)}</b>
+          </label>
+        ) : null}
+        {tdWatching ? (
+          <button type="button" className="gym-replay-focus-btn" onClick={() => setTdWatching(false)}
+            title="Pause — the game keeps its place">⏸ pause</button>
+        ) : tdWalking ? (
           <button type="button" className="gym-replay-focus-btn" onClick={() => { tdWatchScopeRef.current = 'game'; setTdWatching(true); }} disabled={tdBusy}
             title="Watch THIS game play out at the tempo, then hold at its end for inspection — the next game is not dealt">▶ play out</button>
         ) : null}
