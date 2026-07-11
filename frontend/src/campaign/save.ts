@@ -44,12 +44,19 @@ export function tierOf(id: string): 'official' | 'user' {
   return id.startsWith('off-') ? 'official' : 'user';
 }
 
-export function saveUserWorkspace(): Promise<{ ok: boolean }> {
-  return saveWorkspace(userWorkspaceForSave());
+export async function saveUserWorkspace(): Promise<{ ok: boolean; revision: number; updated_at: string | null }> {
+  const expectedRevision = useCampaigns.getState().userWorkspaceRevision;
+  const result = await saveWorkspace(userWorkspaceForSave(), expectedRevision);
+  // Advance the CAS token only after the server acknowledges this exact body.
+  useCampaigns.getState().setUserWorkspaceRevision(result.revision);
+  return result;
 }
 
-export function publishOfficialWorkspace(): Promise<{ revision: number }> {
-  return saveOfficialCampaigns(officialWorkspaceForSave());
+export async function publishOfficialWorkspace(): Promise<{ revision: number; updated_at: string | null }> {
+  const expectedRevision = useCampaigns.getState().officialWorkspaceRevision;
+  const result = await saveOfficialCampaigns(officialWorkspaceForSave(), expectedRevision);
+  useCampaigns.getState().setOfficialWorkspaceRevision(result.revision);
+  return result;
 }
 
 // Map a thrown save error onto an action or message for the caller's status UI. 401 ⇒

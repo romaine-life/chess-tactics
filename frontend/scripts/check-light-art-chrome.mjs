@@ -78,15 +78,13 @@ function checkFile(path) {
 walk(uiDir);
 
 const app = readFileSync(join(uiDir, 'App.tsx'), 'utf8');
-// The live game board (<Skirmish/>) is reachable at /play ONLY. Since #386 the Solo Skirmish
-// PICKER renders inside the persistent menu shell, so /skirmish falls through to MainMenu — it
-// must never return <Skirmish/> (the live board) directly. Guard the real invariant rather than a
-// brittle exact-literal for the picker route (which legitimately moved into the shell).
+// The live game board (<Skirmish/>) is reachable at exact /play ONLY. The unified selector lives
+// under /play/select/* inside the persistent menu shell and must never render the board directly.
 if (!/if \(path === '\/play'\) return <Skirmish \/>;/.test(app)) {
   errors.push('src/ui/App.tsx: /play must render the live Skirmish board (<Skirmish/>).');
 }
-if (/path === '\/skirmish'[^\n]*<Skirmish\b/.test(app)) {
-  errors.push("src/ui/App.tsx: /skirmish must NOT render the live Skirmish board — that lives at /play; the picker renders in the menu shell.");
+if (/play\/select[^\n]*<Skirmish\b/.test(app)) {
+  errors.push('src/ui/App.tsx: /play/select/* must NOT render the live Skirmish board — exact /play owns it.');
 }
 
 if (errors.length) {

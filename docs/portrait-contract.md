@@ -46,15 +46,16 @@ shadows survive. Body base colours (linear RGB) for the Blender-authored palette
 | black     | generated ramp           | keep   | –          |
 | white     | generated ramp           | keep   | –          |
 
-(`navy-blue` is the canonical `navy stone` base from `pieces_claude.py`; crimson/golden/
-emerald were recovered by calibrating against the navy renders, since the original ad-hoc
-commands were never committed.) The knight is procedural and carries its own per-palette fur
-tones in `knight_portrait.py`.
+(`navy-blue` is the canonical `navy stone` base; crimson/golden/emerald were
+recovered by calibrating against the navy renders, since the original ad-hoc
+commands were never committed.) The knight is procedural and carries its own
+per-palette fur tones in `knight_portrait.py`.
 
-The piece blends are the **ornamented "production" set**, not the plainer `claude-pieces`
-lathe set: helmeted pawn (`docs/art/archive/units/pawn/pawn_helmet.blend`), ornate mitre
-(`bishop-mitre`), badass keep (`rook-badass-keep`), beaded tiara (`queen-tiara`), gold crown
-(`king-crown`). See `render_all.sh` for the exact map.
+The piece blends are the **ornamented production set**, not the plainer historical
+candidate set retained only in private archive storage: helmeted pawn
+(`pawn-helmet/pawn_helmet.blend`), ornate mitre (`bishop-mitre`), accepted ruinwall
+rook (`rook-claude/units/rook-ruinwall/model.blend`), beaded tiara (`queen-tiara`),
+and gold crown (`king-crown`). See `render_all.sh` for the exact map.
 
 ## Asset path & wiring (live render — PR #189)
 The HUD does **not** load a pre-baked PNG. The Selected-Unit portrait, the roster slots, and the

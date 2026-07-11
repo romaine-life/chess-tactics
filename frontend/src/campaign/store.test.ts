@@ -3,7 +3,15 @@ import { useCampaigns } from './store';
 import { validateLevel } from '../core/level';
 
 function reset() {
-  useCampaigns.setState({ campaigns: [], levels: {}, selectedCampaignId: null, selectedLevelId: null, counter: 1 });
+  useCampaigns.setState({
+    campaigns: [],
+    levels: {},
+    selectedCampaignId: null,
+    selectedLevelId: null,
+    counter: 1,
+    userWorkspaceRevision: 0,
+    officialWorkspaceRevision: 0,
+  });
 }
 
 const OFFICIAL_ID = /^off-[a-z]+(-[a-z]+)*$/; // backend validateOfficialWorkspaceIds contract
@@ -143,18 +151,54 @@ describe('campaign store', () => {
     expect(state.selectedCampaignId).toBe(firstCampaignId);
     expect(state.selectedLevelId).toBe(unassignedId);
   });
+
+  it('moves a level to one campaign or leaves it unassigned', () => {
+    useCampaigns.getState().newCampaign();
+    const firstCampaignId = useCampaigns.getState().selectedCampaignId!;
+    useCampaigns.getState().addLevel();
+    const levelId = useCampaigns.getState().selectedLevelId!;
+    useCampaigns.getState().addLevel();
+    const trailingLevelId = useCampaigns.getState().selectedLevelId!;
+    useCampaigns.getState().newCampaign();
+    const secondCampaignId = useCampaigns.getState().selectedCampaignId!;
+
+    useCampaigns.getState().assignLevelToCampaign(levelId, secondCampaignId);
+
+    let state = useCampaigns.getState();
+    expect(state.campaigns.find((campaign) => campaign.id === firstCampaignId)!.levels).toMatchObject([{ levelId: trailingLevelId, ordinal: 0 }]);
+    expect(state.campaigns.find((campaign) => campaign.id === secondCampaignId)!.levels).toMatchObject([{ levelId, ordinal: 0 }]);
+
+    useCampaigns.getState().assignLevelToCampaign(levelId, null);
+    state = useCampaigns.getState();
+    expect(state.campaigns.every((campaign) => campaign.levels.every((ref) => ref.levelId !== levelId))).toBe(true);
+    expect(state.levels[levelId]).toBeDefined();
+  });
+
+  it('creates a standalone board directly in a private campaign', () => {
+    useCampaigns.getState().newCampaign();
+    const campaignId = useCampaigns.getState().selectedCampaignId!;
+
+    const levelId = useCampaigns.getState().createLevelInCampaign(campaignId, makeLevel('draft', 'Quick Level'))!;
+
+    const state = useCampaigns.getState();
+    expect(levelId).toBe('l2');
+    expect(state.levels[levelId]).toMatchObject({ id: levelId, name: 'Quick Level' });
+    expect(state.campaigns[0].levels).toMatchObject([{ levelId, ordinal: 0 }]);
+  });
 });
 
 describe('tiered campaigns (ADR-0038)', () => {
   beforeEach(reset);
 
   it('merges officials (tagged, first) then the user tier on top, both coexisting', () => {
-    useCampaigns.getState().mergeOfficial(officialWs);
-    useCampaigns.getState().mergeUser({ campaigns: [{ formatVersion: 1, id: 'c5', name: 'Mine', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} });
+    useCampaigns.getState().mergeOfficial({ ...officialWs, revision: 12 });
+    useCampaigns.getState().mergeUser({ campaigns: [{ formatVersion: 1, id: 'c5', name: 'Mine', difficulty: 'normal', chapters: 1, levels: [] }], levels: {}, revision: 7 });
     const s = useCampaigns.getState();
     expect(s.campaigns.map((c) => c.id)).toEqual(['off-c-crown', 'c5']);
     expect(s.campaigns[0]).toMatchObject({ origin: 'official', readOnly: true });
     expect(s.campaigns[1]).toMatchObject({ origin: 'mine' });
+    expect(s.officialWorkspaceRevision).toBe(12);
+    expect(s.userWorkspaceRevision).toBe(7);
   });
 
   it('keeps the user counter free of official ids so user ids never collide', () => {
@@ -214,6 +258,46 @@ describe('tiered campaigns (ADR-0038)', () => {
     expect(l2).not.toBe(l1);
     const ids = [c1.id, c2.id, ...Object.keys(useCampaigns.getState().levels)];
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('files a standalone board into an official campaign with a valid official level id', () => {
+    useCampaigns.getState().mergeOfficial({
+      campaigns: [{ ...officialWs.campaigns[0], levels: [] }],
+      levels: {},
+    });
+
+    const levelId = useCampaigns.getState().createLevelInCampaign('off-c-crown', makeLevel('draft', 'Quick Level'))!;
+    const secondLevelId = useCampaigns.getState().createLevelInCampaign('off-c-crown', makeLevel('draft', 'Quick Level'))!;
+
+    expect(levelId).toBe('off-l-quick-level');
+    expect(levelId).toMatch(OFFICIAL_ID);
+    expect(secondLevelId).toBe('off-l-quick-level-a');
+    expect(secondLevelId).toMatch(OFFICIAL_ID);
+    expect(useCampaigns.getState().campaigns[0].levels).toMatchObject([
+      { levelId, ordinal: 0 },
+      { levelId: secondLevelId, ordinal: 1 },
+    ]);
+    expect(useCampaigns.getState().counter).toBe(1);
+  });
+
+  it('refuses to associate a private level with an official campaign', () => {
+    useCampaigns.getState().mergeOfficial({
+      campaigns: [{ ...officialWs.campaigns[0], levels: [] }],
+      levels: {},
+    });
+    useCampaigns.getState().newCampaign();
+    const privateCampaignId = useCampaigns.getState().selectedCampaignId!;
+    const privateLevelId = useCampaigns.getState().createLevelInCampaign(privateCampaignId, makeLevel('draft', 'Private'))!;
+
+    useCampaigns.getState().assignLevelToCampaign(privateLevelId, 'off-c-crown');
+
+    const official = useCampaigns.getState().campaigns.find((campaign) => campaign.id === 'off-c-crown')!;
+    const mine = useCampaigns.getState().campaigns.find((campaign) => campaign.id === privateCampaignId)!;
+    expect(official.levels).toHaveLength(0);
+    expect(mine.levels).toMatchObject([{ levelId: privateLevelId }]);
+
+    useCampaigns.getState().attachLevelToCampaign('off-c-crown', privateLevelId);
+    expect(useCampaigns.getState().campaigns.find((campaign) => campaign.id === 'off-c-crown')!.levels).toHaveLength(0);
   });
 
   it('strips the official tag on import so a re-imported official is saved as the user\'s own', () => {

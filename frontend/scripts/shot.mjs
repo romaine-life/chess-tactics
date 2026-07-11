@@ -11,7 +11,7 @@
 //   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>] [--full]
 //
 // Examples:
-//   node scripts/shot.mjs http://127.0.0.1:5199/skirmish --select '[data-testid=skirmish-board]'
+//   node scripts/shot.mjs http://127.0.0.1:5199/play/select/skirmish --select '.menu-dest'
 //   node scripts/shot.mjs http://127.0.0.1:5199/unit-studio --select '.studio-stage' --out tmp-shots/unit.png
 //   node scripts/shot.mjs http://127.0.0.1:5199/doodad-proof/focus.html   (whole small fixture page)
 

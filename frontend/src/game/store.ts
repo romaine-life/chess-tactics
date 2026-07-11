@@ -555,7 +555,12 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
           // Turn returns to the player: keep the piece they were working with selected so the
           // board reads continuously. That can change while the enemy reply is in flight when the
           // player picks a premove unit, so use the latest store selection rather than `cur`.
-          const keep = livingSelected(game, live.selectedId, 'player') ?? firstPlayerId(game);
+          // A null latest selection is deliberate (the player clicked away while the reply
+          // was in flight), so preserve it. Only fall back when a selected unit existed but
+          // the reply captured it.
+          const keep = live.selectedId === null
+            ? null
+            : livingSelected(game, live.selectedId, 'player') ?? firstPlayerId(game);
           const openPremoveInput = !game.winner && game.turn === 'player';
           set({
             game,

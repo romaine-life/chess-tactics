@@ -1,40 +1,52 @@
-import { useMemo, useState, type ReactElement } from 'react';
-import { familyLabels, type LiveUnitCatalog, type PieceId } from './unitCatalog';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { familyLabels, type LiveUnitCatalog, type UnitAsset } from './unitCatalog';
 import { publishUnitScale } from '../net/unitAssets';
 import {
   UNIT_SIZE_DEFAULT,
   UNIT_SIZE_IMAGE_MAX_H,
-  UNIT_SIZE_MAX,
-  UNIT_SIZE_MIN,
-  UNIT_SIZE_PIECES,
+  candidateReviewFamilyScale,
   resetUnitSize,
   setUnitSizePercent,
+  setUnitScalePercentForAsset,
+  unitScaleBoundsForAsset,
+  unitScalePercentForAsset,
   unitSizeHandoffSpec,
   useUnitSizeDraft,
 } from './unitSizeTuning';
 
 export function UnitSizeControls({
   catalog = null,
-  focusFamily,
+  unit,
   onCatalogChange,
 }: {
   catalog?: LiveUnitCatalog | null;
-  focusFamily?: PieceId;
+  unit: UnitAsset;
   onCatalogChange?: (catalog: LiveUnitCatalog) => void;
 }): ReactElement {
+  const piece = unit.family;
   const draft = useUnitSizeDraft();
+  const initializedCandidates = useRef(new Set<string>());
   const [copyState, setCopyState] = useState('');
   const [publishState, setPublishState] = useState('');
-  const spec = useMemo(() => unitSizeHandoffSpec(draft), [draft, catalog?.revision]);
-  const visiblePieces = useMemo(
-    () => focusFamily
-      ? [focusFamily, ...UNIT_SIZE_PIECES.filter((piece) => piece !== focusFamily)]
-      : UNIT_SIZE_PIECES,
-    [focusFamily],
-  );
-  const changedPieces = catalog
-    ? UNIT_SIZE_PIECES.filter((piece) => catalog.families.find((family) => family.family === piece)?.displayScalePercent !== draft[piece])
-    : [];
+  const spec = useMemo(() => unitSizeHandoffSpec(piece, draft, unit), [draft, catalog?.revision, piece, unit]);
+  const family = catalog?.families.find((entry) => entry.family === piece);
+  const changed = Boolean(family && family.displayScalePercent !== draft[piece]);
+  const label = familyLabels[piece];
+  const value = unitScalePercentForAsset(unit, draft) ?? UNIT_SIZE_DEFAULT;
+  const bounds = unitScaleBoundsForAsset(unit);
+  const imageH = Math.round(UNIT_SIZE_IMAGE_MAX_H * ((draft[piece] ?? UNIT_SIZE_DEFAULT) / 100));
+
+  useEffect(() => {
+    setCopyState('');
+    setPublishState('');
+  }, [piece, unit.id]);
+
+  useEffect(() => {
+    const familyScale = candidateReviewFamilyScale(unit);
+    if (familyScale === null || initializedCandidates.current.has(unit.id)) return;
+    initializedCandidates.current.add(unit.id);
+    if (draft[piece] !== familyScale) setUnitSizePercent(piece, familyScale);
+  }, [piece, unit.id, unit.nativeScalePercent, unit.speculative, unit.archived]);
 
   const copySpec = async (): Promise<void> => {
     try {
@@ -47,16 +59,11 @@ export function UnitSizeControls({
     }
   };
 
-  const publishSizes = async (): Promise<void> => {
-    if (!catalog || !changedPieces.length || publishState === 'Publishing') return;
+  const publishSize = async (): Promise<void> => {
+    if (!catalog || !family || !changed || publishState === 'Publishing') return;
     setPublishState('Publishing');
     try {
-      let next = catalog;
-      for (const piece of changedPieces) {
-        const family = next.families.find((entry) => entry.family === piece);
-        if (!family || family.displayScalePercent === draft[piece]) continue;
-        next = await publishUnitScale(piece, draft[piece], family.rowRevision);
-      }
+      const next = await publishUnitScale(piece, draft[piece], family.rowRevision);
       onCatalogChange?.(next);
       setPublishState('Published');
       window.setTimeout(() => setPublishState(''), 1400);
@@ -67,58 +74,51 @@ export function UnitSizeControls({
   };
 
   return (
-    <section className="unit-size-controls" aria-label="Unit size tuning">
+    <section className="unit-size-controls" aria-label={`${label} size tuning`}>
       <div className="unit-size-controls-head">
-        <strong>Unit Size</strong>
+        <strong>{label} Size</strong>
         <span className="unit-size-controls-actions">
           {catalog ? (
-            <button type="button" onClick={() => void publishSizes()} disabled={!changedPieces.length || publishState === 'Publishing'}>
-              {publishState || 'Publish sizes'}
+            <button type="button" onClick={() => void publishSize()} disabled={!changed || publishState === 'Publishing'}>
+              {publishState || 'Publish'}
             </button>
           ) : null}
-          <button type="button" onClick={() => resetUnitSize()} title="Reset every unit size">Reset all</button>
+          <button
+            type="button"
+            className="pages-mini-reset unit-size-reset"
+            onClick={() => resetUnitSize(piece)}
+            title={`Reset ${label} size`}
+            aria-label={`Reset ${label} size`}
+          >
+            ↺
+          </button>
         </span>
       </div>
       <div className="unit-size-list">
-        {visiblePieces.map((piece) => {
-          const value = draft[piece] ?? UNIT_SIZE_DEFAULT;
-          const imageH = Math.round(UNIT_SIZE_IMAGE_MAX_H * (value / 100));
-          return (
-            <label key={piece} className="unit-size-row">
-              <span>
-                <strong>{familyLabels[piece]}</strong>
-                <em>{value}% · {imageH}px</em>
-              </span>
-              <input
-                type="number"
-                min={UNIT_SIZE_MIN}
-                max={UNIT_SIZE_MAX}
-                step={1}
-                value={value}
-                onChange={(event) => setUnitSizePercent(piece, Number(event.target.value))}
-                aria-label={`${familyLabels[piece]} size percent`}
-              />
-              <button
-                type="button"
-                className="pages-mini-reset unit-size-reset"
-                title={`Reset ${familyLabels[piece]} size`}
-                aria-label={`Reset ${familyLabels[piece]} size`}
-                onClick={() => resetUnitSize(piece)}
-              >
-                ↺
-              </button>
-              <input
-                type="range"
-                min={UNIT_SIZE_MIN}
-                max={UNIT_SIZE_MAX}
-                step={1}
-                value={value}
-                onChange={(event) => setUnitSizePercent(piece, Number(event.target.value))}
-                aria-label={`${familyLabels[piece]} size`}
-              />
-            </label>
-          );
-        })}
+        <label className="unit-size-row is-single">
+          <span>
+            <strong>Scale</strong>
+            <em>{value}% · {imageH}px</em>
+          </span>
+          <input
+            type="number"
+            min={bounds.min}
+            max={bounds.max}
+            step={1}
+            value={value}
+            onChange={(event) => setUnitScalePercentForAsset(unit, Number(event.target.value))}
+            aria-label={`${label} size percent`}
+          />
+          <input
+            type="range"
+            min={bounds.min}
+            max={bounds.max}
+            step={1}
+            value={value}
+            onChange={(event) => setUnitScalePercentForAsset(unit, Number(event.target.value))}
+            aria-label={`${label} size`}
+          />
+        </label>
       </div>
       <div className="unit-size-spec">
         <div className="unit-size-spec-head">

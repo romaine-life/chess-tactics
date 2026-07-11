@@ -29,6 +29,8 @@ export type UnitAsset = {
   status: string;
   directions?: Direction[];
   factionMode: 'fixed' | 'palette';
+  /** Family display scale already authored into this asset's native raster. */
+  nativeScalePercent: number;
   defaultScale: number;
   footprint: UnitFootprint;
   unitAnchorX: string;
@@ -61,6 +63,7 @@ export type LiveUnitCatalogAsset = {
   notes: string;
   status: 'candidate' | 'archived';
   accepted: boolean;
+  nativeScalePercent: number;
   footprint: {
     shape: FootprintShape;
     sourceCanvasWidth: number;
@@ -101,6 +104,11 @@ export const renderSizeFromFootprint = (unit: UnitAsset, scale: number) =>
   Math.round((canonicalFootprintSize(unit.footprint.shape) * (scale / 100) * unit.footprint.sourceCanvasPx) / unit.footprint.sourceFootprintPx);
 
 export const UNIT_INSPECTION_TILE_SCALE = 2;
+
+export function nativeScalePercentFromCanvas(sourceCanvasWidth: number, sourceCanvasHeight: number): number {
+  if (sourceCanvasWidth > 109 || sourceCanvasHeight > 129) return 100;
+  return Math.max(60, Math.min(140, Math.round(Math.max(sourceCanvasWidth / 78, sourceCanvasHeight / 92) * 100)));
+}
 
 export const renderSizeForTileScale = (unit: UnitAsset, scale: number, tileScale: number) =>
   Math.round(renderSizeFromFootprint(unit, scale) * (tileScale / UNIT_INSPECTION_TILE_SCALE));
@@ -190,7 +198,10 @@ const candidatePreview = (asset: LiveUnitCatalogAsset): string => {
   return MISSING_DIRECTION_SPRITE;
 };
 
-function catalogAssetToUnit(asset: LiveUnitCatalogAsset, scale: number): UnitAsset {
+const effectiveScalePercent = (familyScalePercent: number, nativeScalePercent: number): number =>
+  (familyScalePercent * 100) / nativeScalePercent;
+
+function catalogAssetToUnit(asset: LiveUnitCatalogAsset): UnitAsset {
   const directions = rookDirections.filter((direction) =>
     Object.values(asset.sprites).some((palette) => Boolean(palette?.[direction])));
   return {
@@ -204,7 +215,8 @@ function catalogAssetToUnit(asset: LiveUnitCatalogAsset, scale: number): UnitAss
     status: asset.status,
     directions,
     factionMode: 'palette',
-    defaultScale: scale,
+    nativeScalePercent: asset.nativeScalePercent,
+    defaultScale: 100,
     footprint: {
       shape: asset.footprint.shape,
       sourceCanvasPx: asset.footprint.sourceCanvasWidth,
@@ -255,6 +267,15 @@ export function assertLiveUnitCatalog(value: unknown): asserts value is LiveUnit
       throw catalogFailure('asset id is missing');
     }
     if (!activeUnitFamilies.includes(asset.family)) throw catalogFailure(`asset ${asset.id} has an unknown family`);
+    if (asset.nativeScalePercent == null && asset.footprint) {
+      asset.nativeScalePercent = nativeScalePercentFromCanvas(
+        Number(asset.footprint.sourceCanvasWidth),
+        Number(asset.footprint.sourceCanvasHeight),
+      );
+    }
+    if (!Number.isInteger(asset.nativeScalePercent) || asset.nativeScalePercent < 60 || asset.nativeScalePercent > 140) {
+      throw catalogFailure(`asset ${asset.id} has an invalid native scale`);
+    }
     if (assetsById.has(asset.id)) throw catalogFailure(`duplicate asset ${asset.id}`);
     assetsById.set(asset.id, asset);
   }
@@ -308,7 +329,8 @@ function productionUnitFromCatalog(family: LiveUnitCatalogFamily, accepted: Live
     status: 'active production unit',
     directions: rookDirections,
     factionMode: 'palette',
-    defaultScale: family.displayScalePercent,
+    nativeScalePercent: accepted.nativeScalePercent,
+    defaultScale: effectiveScalePercent(family.displayScalePercent, accepted.nativeScalePercent),
     footprint: {
       shape: accepted.footprint.shape,
       sourceCanvasPx: accepted.footprint.sourceCanvasWidth,
@@ -349,10 +371,10 @@ export function applyLiveUnitCatalog(value: unknown): boolean {
 
   const activeCandidates = value.assets
     .filter((asset) => !asset.accepted && asset.status !== 'archived')
-    .map((asset) => catalogAssetToUnit(asset, familyRows.get(asset.family)!.displayScalePercent));
+    .map((asset) => catalogAssetToUnit(asset));
   const archived = value.assets
     .filter((asset) => asset.status === 'archived')
-    .map((asset) => catalogAssetToUnit(asset, familyRows.get(asset.family)!.displayScalePercent));
+    .map((asset) => catalogAssetToUnit(asset));
 
   applyAcceptedUnitSprites(value.revision, acceptedSprites);
   liveUnitCatalog = value;

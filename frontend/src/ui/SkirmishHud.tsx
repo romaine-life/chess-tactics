@@ -59,7 +59,8 @@ type OverlayFlag = 'showEnemyAttacks' | 'showEnemyMoves' | 'showPlayerAttacks' |
 
 type GridAction =
   | { kind: 'toggle'; flag: OverlayFlag; label: string; hint: string }
-  | { kind: 'zoom'; dir: 1 | -1; label: string; hint: string };
+  | { kind: 'zoom'; dir: 1 | -1; label: string; hint: string }
+  | { kind: 'deselect'; label: string; hint: string };
 
 const SHORTCUT_KEY_ROWS: string[][] = [
   ['q', 'w', 'e', 'r', 't'],
@@ -67,10 +68,11 @@ const SHORTCUT_KEY_ROWS: string[][] = [
   ['z', 'x', 'c', 'v', 'b'],
 ];
 
-const SHORTCUT_BINDINGS: Record<string, GridAction> = {
+export const SHORTCUT_BINDINGS: Record<string, GridAction> = {
   q: { kind: 'toggle', flag: 'showEnemyAttacks', label: 'Opp. attacks', hint: 'Show all enemy attack squares (danger zone)' },
   w: { kind: 'toggle', flag: 'showEnemyMoves', label: 'Opp. moves', hint: 'Show all enemy legal-move squares' },
   e: { kind: 'toggle', flag: 'showGrid', label: 'Grid', hint: 'Show the board grid overlay' },
+  r: { kind: 'deselect', label: 'Deselect all', hint: 'Clear the selected and focused units' },
   a: { kind: 'toggle', flag: 'showPlayerAttacks', label: 'Your attacks', hint: 'Show all friendly attack squares' },
   s: { kind: 'toggle', flag: 'showPlayerMoves', label: 'Your moves', hint: 'Show all friendly legal-move squares' },
   z: { kind: 'zoom', dir: 1, label: 'Zoom in', hint: 'Zoom the board in' },
@@ -78,6 +80,22 @@ const SHORTCUT_BINDINGS: Record<string, GridAction> = {
 };
 
 const ZOOM_STEP = 0.1;
+
+/** Run the command card action for a physical key or painted button. */
+export function runSkirmishShortcut(key: string, repeat = false): boolean {
+  const action = SHORTCUT_BINDINGS[key.toLowerCase()];
+  if (!action || (repeat && action.kind !== 'zoom')) return false;
+  if (action.kind === 'toggle') {
+    useSkirmishView.getState().toggle(action.flag);
+  } else if (action.kind === 'zoom') {
+    const view = useSkirmishView.getState();
+    view.setZoom(view.zoom + action.dir * ZOOM_STEP);
+  } else {
+    useSkirmish.getState().select(null);
+  }
+  return true;
+}
+
 const PROMOTION_LABEL: Record<PromotionPieceType, string> = {
   queen: 'Queen',
   rook: 'Rook',
@@ -126,18 +144,18 @@ function CountPip({ side, count }: { side: Side; count: number }) {
 }
 
 type SkirmishHudProps = {
-  /** Show the (+) button — free skirmish or single-player test/attempt loops. */
+  /** Show the (+) button for authored non-campaign or single-player test/attempt loops. */
   canStartNewSkirmish?: boolean;
-  /** In-place restart of the CURRENT battle (campaign level or free skirmish). Non-null only
+  /** In-place restart of the CURRENT authored battle. Non-null only
    *  in single-player; shown as the ↻ Restart button. Same action as the title-bar diamond. */
   onRestart?: (() => void) | null;
   /** Accessible name for the Restart button (e.g. "Restart level" / "Restart skirmish"). */
   restartLabel?: string;
-  /** Start a new attempt for the CURRENT scenario. Defaults to a fresh free skirmish. */
+  /** Start a new attempt for the CURRENT authored scenario. */
   onNewSkirmish?: (() => void) | null;
   /** Accessible name for the New button (e.g. "New attempt" / "New skirmish"). */
   newSkirmishLabel?: string;
-  /** Show the battle-clock picker. Free skirmishes edit the saved pref; playtests edit this attempt. */
+  /** Show the battle-clock picker. Skirmish profiles edit the saved pref; playtests edit this attempt. */
   showClockControl?: boolean;
   clockControlValue?: TimeControl | null;
   onClockControlChange?: (value: TimeControl | null) => void;
@@ -217,15 +235,7 @@ export function SkirmishHud({
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
-      const action = SHORTCUT_BINDINGS[e.key.toLowerCase()];
-      if (!action) return;
-      const view = useSkirmishView.getState();
-      if (action.kind === 'toggle') {
-        if (e.repeat) return; // don't flip the layer repeatedly while the key is held
-        view.toggle(action.flag);
-      } else {
-        view.setZoom(view.zoom + action.dir * ZOOM_STEP);
-      }
+      if (!runSkirmishShortcut(e.key, e.repeat)) return;
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
@@ -449,10 +459,7 @@ export function SkirmishHud({
                       className={`app-header-button skirmish-grid-key ${active ? 'app-header-button-active is-active' : ''}`.trim()}
                       aria-pressed={isToggle ? active : undefined}
                       title={action.hint}
-                      onClick={() => {
-                        if (action.kind === 'toggle') toggleOverlay(action.flag);
-                        else setZoom(zoom + action.dir * ZOOM_STEP);
-                      }}
+                      onClick={() => { runSkirmishShortcut(key); }}
                     >
                       <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
                       <span className="skirmish-grid-label">{action.label}</span>
@@ -462,7 +469,7 @@ export function SkirmishHud({
               </div>
               <p className="skirmish-grid-hint">Keys work any time during the match.</p>
             </div>
-            {/* Battle clock: free skirmishes edit the saved preference; editor/test boards edit
+            {/* Battle clock: skirmish profiles edit the saved preference; editor/test boards edit
                 the next attempt directly so the + button uses exactly what's visible here. */}
             {showClockControl && canStartNewSkirmish && !net ? (
               <div className="skirmish-view-group">

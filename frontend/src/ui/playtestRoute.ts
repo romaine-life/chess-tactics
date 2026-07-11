@@ -1,4 +1,4 @@
-import type { LevelEvents, TimeControl, VictoryRules } from '../core/level';
+import type { LevelEvents, ObjectiveType, TimeControl, VictoryRules } from '../core/level';
 import { normalizeLevelEvents, type StoredLevelEvent } from '../core/levelEvents';
 
 const TIME_INITIAL_PARAM = 'time';
@@ -83,4 +83,63 @@ export function readVictoryRulesParam(params: URLSearchParams): VictoryRules | u
   } catch {
     return undefined;
   }
+}
+
+/** Build the editor's one human-facing Test action: always play the exact board currently on
+ * screen, while carrying its campaign target and editor location back through the round-trip. */
+export function currentBoardTestHref(input: {
+  boardCode: string;
+  levelName: string;
+  objective: ObjectiveType;
+  surviveTurns: number;
+  timeControl?: TimeControl;
+  events?: LevelEvents;
+  victory?: VictoryRules;
+  editorSearch?: string;
+  campaignId?: string;
+  levelId?: string;
+  documentRevision?: number;
+  editorReturnTo?: string;
+  layer?: string;
+}): string {
+  const backParams = new URLSearchParams(input.editorSearch ?? '');
+  backParams.set('board', input.boardCode);
+  backParams.set('name', input.levelName);
+  backParams.set('obj', input.objective);
+  if (Number.isSafeInteger(input.surviveTurns) && input.surviveTurns >= 1) {
+    backParams.set('survive', String(input.surviveTurns));
+  }
+  if (input.campaignId) backParams.set('campaignId', input.campaignId);
+  if (input.levelId) backParams.set('levelId', input.levelId);
+  if (Number.isSafeInteger(input.documentRevision) && (input.documentRevision ?? 0) >= 1) {
+    backParams.set('docRev', String(input.documentRevision));
+  }
+  if (input.editorReturnTo) backParams.set('returnTo', input.editorReturnTo);
+  if (input.layer) backParams.set('layer', input.layer);
+  appendTimeControlParams(backParams, input.timeControl);
+  appendLevelEventsParam(backParams, input.events);
+  appendVictoryRulesParam(backParams, input.victory);
+
+  const playParams = new URLSearchParams({
+    board: input.boardCode,
+    name: input.levelName,
+    obj: input.objective,
+    survive: String(input.surviveTurns),
+    mode: 'test',
+    returnTo: `/editor/level?${backParams.toString()}`,
+  });
+  appendTimeControlParams(playParams, input.timeControl);
+  appendLevelEventsParam(playParams, input.events);
+  appendVictoryRulesParam(playParams, input.victory);
+  return `/play?${playParams.toString()}`;
+}
+
+/** An explicit validated returnTo carries richer editor identity than the board-only fallback. */
+export function resolvePlayReturnHref(input: {
+  explicitReturnHref: string | null;
+  hasBoard: boolean;
+  boardReturnHref: string | null;
+  levelReturnHref: string | null;
+}): string | null {
+  return input.explicitReturnHref ?? (input.hasBoard ? input.boardReturnHref : input.levelReturnHref);
 }

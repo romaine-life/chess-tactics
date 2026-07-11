@@ -599,7 +599,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   z-index: 1;
-  /* .menu-layer (menu/campaign) is pointer-events:none so the rain stays
+  /* .menu-layer (menu/Play) is pointer-events:none so the rain stays
      click-through, and the credit would inherit that inertness. Opt back in,
      but at this backdrop z-index it only wins over exposed scene art. */
   pointer-events: auto;
@@ -4287,8 +4287,8 @@ h1 {
 
 .board-unit-seat img {
   display: block;
-  max-height: calc(92px * var(--unit-scale));
-  max-width: calc(78px * var(--unit-scale));
+  height: calc(92px * var(--unit-scale));
+  width: calc(78px * var(--unit-scale));
   object-fit: contain;
   image-rendering: auto;
 }
@@ -4756,7 +4756,7 @@ h1 {
   text-transform: uppercase;
 }
 
-/* Skirmish setup/profile rows in the /skirmish hub. */
+/* Skirmish setup/profile rows in the shared Play hub. */
 .skirmish-setup-section {
   display: grid;
   gap: var(--ds-stack);
@@ -5014,7 +5014,7 @@ h1 {
    disabled control, matching the retired title-bar Save's is-disabled look. */
 .le-seg-btn.is-blocked { opacity: .45; }
 
-/* Live-test Play in the always-visible Actions dock: a full-width primary button so it reads as
+/* Test in the always-visible Actions dock: a full-width primary button so it reads as
    the editor's "test this board now" verb, distinct from the Undo/Redo icons above it. */
 .le-actions-dock .le-play-board {
   border-image-source: url("/assets/ui/kit/button-primary.png");
@@ -5034,7 +5034,7 @@ h1 {
 }
 /* Pinned Actions dock in the rail: universal tools + Undo/Redo as compact icon-only
    squares. Labels ride aria-label + title; active/press states come from the editor
-   icon set. Test + Save/Publish stay with the Status layer's save workflow. */
+   icon set. Current-board Test lives below; Save/Publish stays in the Status layer. */
 .le-board-actions { display: grid; gap: var(--ds-inline-tight); grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--ds-stack); }
 .le-board-actions.le-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .le-action-toolbar {
@@ -5073,104 +5073,6 @@ h1 {
   min-width: 72px;
   padding-inline: 4px;
 }
-.le-live-link-status {
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/field-input.png") 18 fill / 10px stretch;
-  display: grid;
-  gap: 4px;
-  margin-top: var(--ds-stack);
-  padding: 4px 8px;
-}
-.le-live-link-status strong {
-  color: #f3ead8;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-xs);
-  font-weight: 400;
-  text-transform: uppercase;
-}
-.le-live-link-status span {
-  color: var(--skirmish-muted);
-  font-size: var(--ds-text-xs);
-  line-height: 1.35;
-}
-.le-live-link-status.is-saving strong,
-.le-live-link-status.is-pending strong,
-.le-live-link-status.is-creating strong { color: #9fe0ff; }
-.le-live-link-status.is-error strong { color: #ffb1a8; }
-.le-map-identity {
-  margin-top: var(--ds-stack);
-}
-.le-admin-events {
-  border-top: 1px solid rgba(146, 201, 235, .18);
-  display: grid;
-  gap: 8px;
-  margin-top: var(--ds-stack);
-  padding-top: var(--ds-stack);
-}
-.le-admin-events-head {
-  display: grid;
-  gap: 2px;
-}
-.le-admin-events-head strong {
-  color: #f3ead8;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-xs);
-  font-weight: 400;
-  text-transform: uppercase;
-}
-.le-admin-events-head span {
-  color: var(--skirmish-muted);
-  font-size: var(--ds-text-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.le-misc-map-list {
-  display: grid;
-  gap: 7px;
-  margin-top: var(--ds-stack);
-}
-.le-misc-map-row {
-  align-items: center;
-  border-bottom: 1px solid rgba(146, 201, 235, .18);
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 0 0 7px;
-}
-.le-misc-map-row:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-.le-misc-map-row div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-.le-misc-map-row strong {
-  color: #f3ead8;
-  font-size: var(--ds-text-sm);
-  font-weight: 400;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.le-misc-map-row span {
-  color: var(--skirmish-muted);
-  font-size: var(--ds-text-xs);
-}
-.le-live-viewer {
-  align-content: start;
-  gap: var(--ds-gutter);
-}
-.le-live-viewer .le-play-board {
-  border-image-source: url("/assets/ui/kit/button-primary.png");
-  width: 100%;
-}
-.le-live-meta {
-  margin: 0;
-}
-
 /* Level settings live under the Board layer: rule readout + faction-control assignment. */
 .le-level-name-input { box-sizing: border-box; width: 100%; }
 .le-settings-list { display: grid; gap: var(--ds-inline-tight); margin: 0 0 var(--ds-gutter); }
@@ -6139,6 +6041,7 @@ h1 {
 /* The level's identity (name + OFFICIAL tag) lives with the save workflow. */
 .le-status-level { align-items: end; display: grid; gap: var(--ds-inline-tight); grid-template-columns: minmax(0, 1fr) auto; min-width: 0; }
 .le-status-name-field { display: grid; gap: 6px; min-width: 0; }
+.le-status-campaign-field .le-board-note { margin: 0; }
 .le-official-tag { align-self: end; color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; padding-bottom: 8px; }
 /* Drawn text boxes wear a kit line frame (ADR-0032/0034): the transparent-interior panel-line
    9-slice over the box's own navy surface (a border-box background layer, reaching the frame
@@ -8843,15 +8746,6 @@ body { font-size: 17px; }
   font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
 
-.le-live-map-unavailable {
-  left: 50%;
-  max-width: min(560px, 82vw);
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(560px, 82%);
-}
-
 .tileset-view-board-content {
   position: relative;
   width: 100%;
@@ -9523,6 +9417,26 @@ body { font-size: 17px; }
   box-shadow: 0 0 0 2px rgba(42, 166, 255, 0.18);
 }
 
+.unit-art-select-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+.unit-art-select-row select {
+  min-width: 0;
+}
+
+.tileset-control-stack .unit-art-select-row button {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  font: 900 16px/1 ui-monospace, Cascadia Mono, monospace;
+}
+
 /* Surface catalog swatch — the texture tiled, the way it fills a panel behind chrome. */
 .surface-swatch {
   display: block;
@@ -9933,6 +9847,142 @@ body { font-size: 17px; }
   color: #79d3ff;
   font: 800 10px/1.3 var(--ds-font-sans, system-ui, sans-serif);
   text-align: right;
+}
+
+.unit-size-row.is-single {
+  grid-template-columns: minmax(0, 1fr) 58px;
+}
+
+.unit-asset-modes {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(4, 15, 24, 0.72);
+  border: 1px solid rgba(67, 127, 179, 0.3);
+  border-radius: 4px;
+}
+
+.tileset-control-stack .unit-asset-modes button {
+  min-height: 24px;
+  padding: 4px 7px;
+  color: #8fa8bd;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  font-size: 10px;
+}
+
+.tileset-control-stack .unit-asset-modes button.is-active {
+  color: #edf8ff;
+  background: #183e58;
+  box-shadow: inset 0 0 0 1px rgba(91, 200, 255, 0.35);
+}
+
+.unit-recapture-editor {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.unit-recapture-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.unit-recapture-toolbar > strong {
+  color: #75d5ff;
+  font: 800 10px/1 ui-monospace, Cascadia Mono, monospace;
+  white-space: nowrap;
+}
+
+.unit-recapture-toolbar select {
+  box-sizing: border-box;
+  width: 100%;
+  height: 28px;
+  min-width: 0;
+  padding: 0 6px;
+  color: #eef8ff;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-recapture-rotation {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.unit-recapture-rotation figure {
+  display: grid;
+  grid-template-rows: minmax(58px, auto) 15px;
+  align-items: end;
+  justify-items: center;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  background: #101b23;
+  border: 1px solid rgba(91, 157, 216, 0.28);
+  border-radius: 4px;
+}
+
+.unit-recapture-rotation canvas {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 72px;
+  image-rendering: pixelated;
+}
+
+.unit-recapture-rotation figcaption {
+  align-self: stretch;
+  width: 100%;
+  padding-top: 3px;
+  color: #8fa8bd;
+  text-align: center;
+  background: #0a141c;
+  font: 800 9px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-recapture-summary {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.unit-recapture-summary > div {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(91, 157, 216, 0.15);
+}
+
+.unit-recapture-summary dt,
+.unit-recapture-summary dd {
+  margin: 0;
+  font: 800 10px/1.3 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-recapture-summary dt {
+  color: #7f9aad;
+}
+
+.unit-recapture-summary dd {
+  min-width: 0;
+  color: #dcecff;
+  overflow-wrap: anywhere;
+}
+
+.unit-recapture-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .tileset-collection-select {
@@ -11163,7 +11213,9 @@ button.tileset-relationship-cell {
 }
 
 .tileset-scene-layer {
-  z-index: 0;
+  /* Must match OBJECT_DEPTH_OFFSET in render/sceneDepth.ts. The canvas is one
+     atomic layer, so its CSS stack belongs above the per-tile ground overlays. */
+  z-index: 20000;
 }
 
 .tileset-board-grid-layer {
@@ -13460,6 +13512,63 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
+/* Unified Play selector (ADR-0074). Column 2 is one owner: Skirmish and Levels stay
+   pinned at the top while the unbounded Campaign collection scrolls below through the
+   canonical drawn-scroll primitive (ADR-0030). This only defines flow inside the shared
+   tab column; placement still comes exclusively from .settings-shell/.menu-dest-cols
+   (ADR-0062), with no Play-specific offset. */
+.play-source-rail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.play-source-fixed {
+  display: grid;
+  gap: var(--ds-stack);
+}
+
+.play-campaign-region {
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+.play-campaign-heading {
+  margin: var(--ds-gutter) var(--ds-stack) 0;
+}
+
+.play-campaign-scroll,
+.play-action-scroll {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.play-campaign-list {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-stack);
+  padding-inline-end: var(--ds-inline-tight);
+}
+
+.play-empty,
+.play-content-warning {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-xs);
+  margin: 0 var(--ds-stack);
+}
+
+.play-content-warning {
+  color: var(--ds-color-warning, #e0aa5a);
+}
+
+.play-action-col .settings-panel-content {
+  align-content: start;
+  padding-block-end: var(--ds-gutter);
+}
+
 /* (The home-menu-only margin fork that used to live here — `.main-menu-home .settings-shell`,
    PR #339 — was removed: it floored the home rail at a DIFFERENT value (270px) than Settings /
    Campaign got (unfloored), so below ~1780px vw the home buttons sat further right than the
@@ -14034,7 +14143,7 @@ button.tileset-relationship-cell {
   justify-content: center;
 }
 
-/* Pinned rail footer — the whole-workspace verbs (New / Import / Save / Publish / Sign-in). */
+/* Pinned rail footer — creation (New Level / New Campaign), then workspace verbs. */
 .ce-rail-actions {
   display: grid;
   gap: 8px;
@@ -14195,6 +14304,18 @@ button.tileset-relationship-cell {
 
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
+
+/* A never-saved editor document has no canonical position from which a truthful thumbnail can
+   be baked. Keep the real LevelRow thumbnail footprint and label that state explicitly. */
+.settings-row-thumb .ce-draft-thumb-empty {
+  align-items: center;
+  color: rgba(201, 168, 119, .84);
+  display: grid;
+  font-size: var(--ds-text-3xs);
+  justify-items: center;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
 /* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */
 .campaign-level-row {
   align-items: center;
@@ -14302,6 +14423,9 @@ button.tileset-relationship-cell {
 /* The level list wraps its rows only to carry a data-testid — it must not disturb the
    section-rows grid, so it disappears and its rows become the grid's direct items. */
 .ce-level-list { display: contents; }
+/* Private recent-document discovery is only a test/semantic wrapper; keep the shared
+   SettingsRow elements as direct participants in the section's row grid. */
+.ce-recent-drafts { display: contents; }
 /* Section-trailing action (+ Add Level / + New Board). */
 .ce-section-action { padding: 4px 2px 0; }
 
@@ -14933,7 +15057,7 @@ button.tileset-relationship-cell {
    A true OS orientation lock is impossible in a mobile browser (screen.orientation
    .lock is unsupported on iOS Safari), so portrait shows a prompt instead of forcing
    rotation. The layout rules NEUTRALISE the desktop dressing-room offsets baked into
-   the shared menu/settings/campaign chrome — a rail `translate(-230px)` and a 931px
+   the shared menu/settings/Play chrome — a rail `translate(-230px)` and a 931px
    content panel `translate(-270px)` that are never otherwise reset (they push both
    mostly off a narrow screen). Layout only; no chrome art is hand-rolled (ADR-0032).
    Placed last so these overrides win the cascade; the two-class panel reset below is
@@ -15001,7 +15125,7 @@ button.tileset-relationship-cell {
     padding: 6px;
     overflow: visible;
   }
-  /* In the two-column (settings/campaign) case the rail column is narrow — stack 1-up. */
+  /* In the two-column (settings/Play) case the rail column is narrow — stack 1-up. */
   .settings-shell:has(.settings-main-frame) .settings-rail-frame {
     grid-template-columns: 1fr;
   }

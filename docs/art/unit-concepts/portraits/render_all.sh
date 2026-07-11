@@ -17,7 +17,7 @@
 # knight_portrait.py (override per-piece via PORTRAIT_TZ / PORTRAIT_SPAN if needed).
 #
 # Body colours (linear RGB) for the "navy stone" body material per palette:
-#   navy-blue is the canonical base (pieces_claude.py); crimson/golden/emerald
+#   navy-blue is the canonical base; crimson/golden/emerald
 #   were recovered by per-channel calibration against the navy renders (the
 #   original ad-hoc commands were never committed). golden swaps gold accents
 #   to dark iron; the others keep the gold accents.
@@ -34,9 +34,9 @@ YAW=30
 
 # piece -> blend (the ornamented "production" pieces used in the shipped portraits:
 # helmeted pawn, ornate mitre, badass keep, beaded tiara, gold crown -- NOT the
-# plainer claude-pieces lathe set).
+# retired plain candidate set).
 declare -A BLEND=(
-  [pawn]="$ROOT/docs/art/archive/units/pawn/pawn_helmet.blend"
+  [pawn]="$BU/pawn-helmet/pawn_helmet.blend"
   [bishop]="$BU/bishop-mitre/bishop_mitre.blend"
   [rook]="$BU/rook-claude/units/rook-ruinwall/model.blend"  # accepted ruinwall keep (NOT the retired badass-keep)
   [queen]="$BU/queen-tiara/queen_tiara.blend"

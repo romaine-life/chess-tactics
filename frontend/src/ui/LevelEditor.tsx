@@ -3,7 +3,7 @@
 // the heavy library studios + manifests live in TilePreview.tsx and are never
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
@@ -31,21 +31,26 @@ import {
   type LevelEditorBrushKind,
   type LevelEditorLayerKey,
 } from './levelEditorRoute';
-import { APP_NAVIGATION_EVENT, navigateApp } from './navigation';
+import { APP_NAVIGATION_EVENT, navigateApp, registerAppNavigationBlocker } from './navigation';
+import { levelEditorExitAction } from './levelEditorExit';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { WallArtPreview } from './WallArtLab';
 import { readBoardParam, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell } from './boardCode';
 import { removeZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
 import {
-  appendLevelEventsParam,
-  appendTimeControlParams,
-  appendVictoryRulesParam,
+  currentBoardTestHref,
   readLevelEventsParam,
   readTimeControlParams,
   readVictoryRulesParam,
 } from './playtestRoute';
-import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
+import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft, type LevelEditorDraft } from './levelEditorDraft';
+import { levelEditorLevelSignature, normalizedLevelEditorSignature } from './levelEditorSignature';
+import {
+  editorDocumentWorkspaceForLevelId,
+  levelEditorHrefForDocument,
+  shouldRestoreLocalEditorRecovery,
+} from './levelEditorPersistence';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import {
@@ -99,22 +104,20 @@ import { attackedSquares, blockedCandidateSquares, enemyThreats, gameEnv, legalM
 import type { GameState, Move, Piece, Vec } from '../core/types';
 import { OBJECTIVE_LABEL } from '../core/objectives';
 import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
-import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
-import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
+import { tierOf, mapSaveError } from '../campaign/save';
+import { fetchMeStatus, goSignIn, signInHref, type AuthUser } from '../net/auth';
 import {
-  createEditorMap,
-  listAdminEditorMaps,
-  listEditorMapAuditEvents,
-  listEditorMaps,
-  loadEditorMap,
-  markEditorMapSaved,
-  updateEditorMap,
-  type EditorMapAdminSummary,
-  type EditorMapAuditEvent,
-  type EditorMapCreator,
-  type EditorMapDocument,
-  type EditorMapSummary,
-} from '../net/editorMaps';
+  autosaveEditorDocument,
+  autosaveEditorDocumentOnPageHide,
+  createEditorDocument,
+  discardEditorDocumentChanges,
+  isEditorDocumentBaselineConflict,
+  isEditorDocumentConflict,
+  loadEditorDocument,
+  resolveEditorDocument,
+  saveEditorDocument,
+  type EditorDocument,
+} from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
 import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
@@ -122,7 +125,6 @@ import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf 
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
-import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
 import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 
@@ -1000,14 +1002,21 @@ const OTHER_EVENT_TEMPLATES = [
 ] as const;
 type OtherEventTemplateId = typeof OTHER_EVENT_TEMPLATES[number]['id'];
 
-// A stable fingerprint of an editor board, the basis of the real dirty flag: encodeBoard is
-// deterministic + lossless, so two boards encode identically iff they're the same board.
-// The dirty-flag signature of a whole Level: its name, lossless boardCode, and the ADR-0050 mode
-// fields (which don't ride in boardCode). ONE formula, used both for the live current-state
-// signature and for the just-saved / just-loaded baseline, so a freshly hydrated level reads clean
-// and a mode/name change (not just a board paint) marks it dirty.
-const levelSignature = (level: Level): string =>
-  JSON.stringify([level.name, level.boardCode ?? '', level.objective, level.placement ?? 'fixed', level.surviveTurns ?? '', level.roster ?? {}, level.timeControl ?? '', level.victory ?? '', effectiveLevelEvents(level)]);
+const levelFromDraft = (draft: LevelEditorDraft, base: Level): Level => editorBoardToLevel(draft.board, {
+  id: base.id,
+  name: draft.levelName,
+  objective: draft.objective,
+  surviveTurns: draft.objective === 'survive' ? draft.surviveTurns : undefined,
+  timeControl: draft.timeControl,
+  victory: draft.victory,
+  events: draft.events,
+  notes: base.notes,
+  difficulty: base.difficulty,
+  economy: base.economy,
+  theme: base.theme,
+  previousTerrain: base.layers.terrain,
+});
+
 // The undo/redo history signature of an editor board (boardCode is deterministic + lossless, so two
 // boards encode identically iff equal); plus a deep clone + the history-stack depth cap.
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
@@ -1742,6 +1751,28 @@ const formatDifficulty = (difficulty: string | undefined): string => {
 type StatusTone = 'info' | 'success' | 'warning' | 'error';
 type StatusLogEntry = { id: number; tone: StatusTone; message: string; detail?: string; at: string };
 const STATUS_LOG_LIMIT = 24;
+const EDITOR_SIGN_IN_RECOVERY_INTENT_KEY = 'ct:level-editor-sign-in-recovery:v1';
+const EDITOR_HYDRATION_WAIT_MS = 5_000;
+
+type EditorSignInRecoveryIntent = { draftKey: string; savedAt: number };
+
+const readEditorSignInRecoveryIntent = (): EditorSignInRecoveryIntent | null => {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(EDITOR_SIGN_IN_RECOVERY_INTENT_KEY) ?? 'null') as Partial<EditorSignInRecoveryIntent> | null;
+    return value
+      && typeof value.draftKey === 'string'
+      && typeof value.savedAt === 'number'
+      && Number.isFinite(value.savedAt)
+      ? { draftKey: value.draftKey, savedAt: value.savedAt }
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearEditorSignInRecoveryIntent = (): void => {
+  try { window.sessionStorage.removeItem(EDITOR_SIGN_IN_RECOVERY_INTENT_KEY); } catch { /* blocked storage */ }
+};
 
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
@@ -1773,57 +1804,112 @@ export function LevelEditor(): ReactElement {
   // (board-link / blank) board with no campaign target.
   const routeParams = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
+    const rawDocumentRevision = Number(params.get('docRev'));
+    const legacyMapId = params.get('map') ?? undefined;
     return {
       campaignId: params.get('campaignId') ?? undefined,
       levelId: params.get('levelId') ?? undefined,
+      documentId: params.get('document') ?? (legacyMapId ? `legacy-${legacyMapId}` : undefined),
+      documentRevision: Number.isSafeInteger(rawDocumentRevision) && rawDocumentRevision >= 1 ? rawDocumentRevision : undefined,
       returnTo: params.get('returnTo') ?? undefined,
       boardCode: params.get('board') ?? undefined,
-      mapId: params.get('map') ?? undefined,
     };
   }, []);
   // Optional `?board=<code>` deep-link: decode a whole board to start from (see boardCode.ts).
   // It takes precedence over a campaign level (it's the explicit "inspect this exact board").
-  const loadedBoard = useMemo(() => routeParams.mapId ? null : readBoardParam(), [routeParams.mapId]);
+  const loadedBoard = useMemo(() => readBoardParam(), []);
   const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const urlTimeControl = useMemo(() => readTimeControlParams(urlParams), [urlParams]);
   const urlEvents = useMemo(() => readLevelEventsParam(urlParams), [urlParams]);
   const urlVictory = useMemo(() => readVictoryRulesParam(urlParams), [urlParams]);
+  const urlLevelName = useMemo(() => urlParams.get('name')?.trim() || undefined, [urlParams]);
+  const urlSurviveTurns = useMemo(() => {
+    const value = Number(urlParams.get('survive'));
+    return Number.isSafeInteger(value) && value >= 1 ? value : undefined;
+  }, [urlParams]);
   const urlObjective = useMemo(() => {
     const raw = urlParams.get('obj');
     return (OBJECTIVE_TYPES as readonly string[]).includes(raw ?? '') ? raw as ObjectiveType : undefined;
   }, [urlParams]);
-  const draftKey = useMemo(() => levelEditorDraftKey({ levelId: routeParams.levelId, boardCode: routeParams.boardCode }), [routeParams.levelId, routeParams.boardCode]);
-  const localDraft = useMemo(() => routeParams.mapId ? null : readLevelEditorDraft(draftKey), [draftKey, routeParams.mapId]);
+  const initialDraftKey = useMemo(
+    () => levelEditorDraftKey({ levelId: routeParams.levelId, boardCode: routeParams.boardCode }),
+    [routeParams.levelId, routeParams.boardCode],
+  );
+  const [draftKey, setDraftKey] = useState(initialDraftKey);
+  // Unscoped legacy/browser-only recovery is not applied until auth resolves. Signed-in cloud
+  // documents use an account+document key below, so switching accounts cannot cross-load drafts.
+  const unscopedLocalDraft = useMemo(() => readLevelEditorDraft(initialDraftKey), [initialDraftKey]);
+  // levelId names the canonical Save/campaign-play target; the opaque `document` URL parameter
+  // names the private working copy globally. Thumbnails and gameplay never read that working copy.
+  const initialTargetLevel = useMemo(
+    () => routeParams.levelId ? useCampaigns.getState().levels[routeParams.levelId] : undefined,
+    [routeParams.levelId],
+  );
+  const initialTargetSig = useMemo(
+    () => initialTargetLevel ? normalizedLevelEditorSignature(initialTargetLevel) : null,
+    [initialTargetLevel],
+  );
+  const draftHasCampaignAssignment = unscopedLocalDraft?.campaignId !== undefined;
+  const initialCampaignAssignmentId = draftHasCampaignAssignment
+    ? unscopedLocalDraft?.campaignId ?? ''
+    : routeParams.campaignId ?? '';
+  // Campaign membership is staged alongside the working document and committed only by Save.
+  const [campaignAssignmentId, setCampaignAssignmentId] = useState(initialCampaignAssignmentId);
+  const [savedCampaignAssignmentId, setSavedCampaignAssignmentId] = useState('');
+  const [campaignAssignmentHydrated, setCampaignAssignmentHydrated] = useState(!routeParams.levelId);
+  const recoveredCampaignAssignmentRef = useRef(draftHasCampaignAssignment);
+  // Recovery content is never silently discarded because its saved baseline changed. We restore
+  // it as the document source, then compare it with the current canonical target below.
+  const [localDraft] = useState<LevelEditorDraft | null>(() => null);
   const initialCampaignLevel = useMemo(
-    () => (!routeParams.mapId && !localDraft && !loadedBoard && routeParams.levelId ? useCampaigns.getState().levels[routeParams.levelId] : undefined),
-    [loadedBoard, localDraft, routeParams.levelId, routeParams.mapId],
+    () => (!loadedBoard ? initialTargetLevel : undefined),
+    [initialTargetLevel, loadedBoard],
   );
   const initialCampaignBoard = useMemo(() => initialCampaignLevel ? levelToEditorBoard(initialCampaignLevel) : undefined, [initialCampaignLevel]);
   const initialBoard = localDraft?.board ?? loadedBoard ?? initialCampaignBoard;
   const initialFactionDirections = normalizeFactionDirections(initialBoard?.factionDirections);
   const initialGeneratedRegions = initialBoard?.generatedRegions ?? [];
-  const needsRemoteMapHydration = Boolean(routeParams.mapId);
-  const needsCampaignHydration = Boolean(routeParams.levelId && !routeParams.mapId && !loadedBoard && !localDraft && !initialCampaignLevel);
-  const [editorReady, setEditorReady] = useState(!needsCampaignHydration && !needsRemoteMapHydration);
-  const [remoteMapId, setRemoteMapId] = useState<string | undefined>(routeParams.mapId);
-  const [remoteMapCanEdit, setRemoteMapCanEdit] = useState(false);
-  const [remoteMapRevision, setRemoteMapRevision] = useState<number | null>(null);
-  const [remoteMapUpdatedAt, setRemoteMapUpdatedAt] = useState<string | null>(null);
-  const [remoteMapExpiresAt, setRemoteMapExpiresAt] = useState<string | null>(null);
-  const [remoteMapSavedAt, setRemoteMapSavedAt] = useState<string | null>(null);
-  const [remoteMapIsMisc, setRemoteMapIsMisc] = useState(false);
-  const [remoteMapCreator, setRemoteMapCreator] = useState<EditorMapCreator | null>(null);
-  const [sourceMiscMapId, setSourceMiscMapId] = useState<string | null>(null);
-  const [liveSyncState, setLiveSyncState] = useState<'idle' | 'creating' | 'pending' | 'saving' | 'saved' | 'error'>(routeParams.mapId ? 'idle' : 'creating');
-  const [myMaps, setMyMaps] = useState<EditorMapSummary[]>([]);
-  const [myMapsLoading, setMyMapsLoading] = useState(false);
-  const [miscMaps, setMiscMaps] = useState<EditorMapSummary[]>([]);
-  const [miscMapsLoading, setMiscMapsLoading] = useState(false);
-  const [adminMaps, setAdminMaps] = useState<EditorMapAdminSummary[]>([]);
-  const [adminMapsLoading, setAdminMapsLoading] = useState(false);
-  const [adminAuditMapId, setAdminAuditMapId] = useState<string | null>(null);
-  const [adminAuditEvents, setAdminAuditEvents] = useState<EditorMapAuditEvent[]>([]);
-  const [adminAuditLoading, setAdminAuditLoading] = useState(false);
+  // Do not expose an editable board until the durable document has had a chance to resolve. On a
+  // signed-out/offline visit we deliberately fall back to the browser recovery copy instead.
+  const [editorReady, setEditorReady] = useState(false);
+  const [targetBaselineResolved, setTargetBaselineResolved] = useState(!routeParams.levelId || Boolean(initialTargetLevel));
+  const [editorDocument, setEditorDocument] = useState<EditorDocument | null>(null);
+  const [editorLoadError, setEditorLoadError] = useState<{ title: string; detail: string; signIn?: boolean; retry?: boolean } | null>(null);
+  const [cloudSaveState, setCloudSaveState] = useState<'loading' | 'local' | 'pending' | 'saving' | 'saved' | 'error' | 'conflict'>('loading');
+  const [cloudSaveDetail, setCloudSaveDetail] = useState<string | null>(null);
+  const [localBackupAvailable, setLocalBackupAvailable] = useState<boolean | null>(null);
+  const [authReachable, setAuthReachable] = useState<boolean | null>(null);
+  const [documentLoadAttempt, setDocumentLoadAttempt] = useState(0);
+  const [userWorkspaceHydration, setUserWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [officialWorkspaceHydration, setOfficialWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const signInForEditor = (): void => {
+    const recovery = readLevelEditorDraft(draftKey);
+    let intentStored = false;
+    if (recovery) {
+      try {
+        window.sessionStorage.setItem(EDITOR_SIGN_IN_RECOVERY_INTENT_KEY, JSON.stringify({
+          draftKey,
+          savedAt: recovery.savedAt,
+        } satisfies EditorSignInRecoveryIntent));
+        intentStored = true;
+      } catch { /* Fall through to a separate sign-in tab; never abandon the only copy. */ }
+    }
+    if (!dirty || (recovery && intentStored)) {
+      goSignIn();
+      return;
+    }
+
+    // With no durable same-tab handoff, keep the live editor mounted and authenticate in a
+    // separate tab. Returning focus retries auth and uploads the in-memory candidate safely.
+    signInHandoffPendingRef.current = true;
+    const signInWindow = window.open(signInHref('/editor'), '_blank', 'noopener,noreferrer');
+    if (!signInWindow) {
+      signInHandoffPendingRef.current = false;
+      reportStatus('Sign-in tab was blocked.', 'warning', 'Keep this editor open and allow pop-ups before trying again.');
+      return;
+    }
+    reportStatus('Sign-in opened in another tab.', 'info', 'Keep this editor open. Return here after signing in; cloud sync will retry without discarding this work.');
+  };
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
   const [boardMacroTiles, setBoardMacroTiles] = useState<MacroTilePlacement[]>(() => initialBoard ? validMacroTilesForBoard(initialBoard) : []);
   const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
@@ -1941,7 +2027,7 @@ export function LevelEditor(): ReactElement {
   // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
   // schema defaults so it reads exactly like a blank createBlankLevel.
   const [objective, setObjective] = useState<ObjectiveType>(localDraft?.objective ?? initialCampaignLevel?.objective ?? urlObjective ?? 'capture-all');
-  const [surviveTurns, setSurviveTurns] = useState<number>(localDraft?.surviveTurns ?? initialCampaignLevel?.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
+  const [surviveTurns, setSurviveTurns] = useState<number>(localDraft?.surviveTurns ?? initialCampaignLevel?.surviveTurns ?? urlSurviveTurns ?? DEFAULT_SURVIVE_TURNS);
   // The battle clock (ADR-0053) — off by default; when on, the level carries a TimeControl and the
   // skirmish runs the player's chess clock (the enemy is untimed). Seeded like the other RULES
   // fields: a restored draft (present ⇒ on, with its authored seconds) beats the campaign level.
@@ -1963,7 +2049,7 @@ export function LevelEditor(): ReactElement {
   );
   // The victory-events editor opens as a full-size overlay over the board — the narrow control
   // panel can't give rule authoring room to breathe. The panel stays put; a button opens this.
-  const [eventsOpen, setEventsOpen] = useState(false);
+  const [eventsOpen, setEventsOpen] = useState(() => Boolean(window.history.state?.levelEditorRules));
   // The template dropdown choices append event rows; Clear is the explicit page-local reset.
   const [templateChoice, setTemplateChoiceState] = useState<ObjectiveType>(objective);
   const [otherTemplateChoice, setOtherTemplateChoice] = useState<OtherEventTemplateId>('pawn-promotion');
@@ -1973,10 +2059,10 @@ export function LevelEditor(): ReactElement {
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name is edited in
   // Status, beside the save workflow; `savedSig` is the level signature at last save, the dirty basis.
-  const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId);
-  const [levelName, setLevelNameState] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? 'Untitled level');
+  const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId ?? localDraft?.editingId);
+  const [levelName, setLevelNameState] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? urlLevelName ?? 'Untitled level');
   const levelNameForSave = useMemo(() => levelName.trim() || 'Untitled level', [levelName]);
-  const [savedSig, setSavedSig] = useState<string | null>(localDraft?.savedSig ?? (initialCampaignLevel ? levelSignature(initialCampaignLevel) : null));
+  const [savedSig, setSavedSig] = useState<string | null>(initialTargetSig ?? localDraft?.savedSig ?? null);
   // Set true once a campaign level has been hydrated into the board state; the baseline effect
   // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
   // clean even for a legacy level whose derived boardCode differs from its saved one).
@@ -2009,10 +2095,21 @@ export function LevelEditor(): ReactElement {
   const isAdmin = Boolean(me?.is_admin);
   const { ask, dialog: confirmDialog } = useConfirm();
   const didMountRouteSync = useRef(false);
-  const autoCreateMapRef = useRef(false);
-  const lastRemoteSyncedSigRef = useRef<string | null>(null);
-  const remoteMapRevisionRef = useRef<number | null>(null);
-  useEffect(() => { remoteMapRevisionRef.current = remoteMapRevision; }, [remoteMapRevision]);
+  const documentRevisionRef = useRef<number | null>(null);
+  const lastCloudSyncedSigRef = useRef<string | null>(null);
+  const autosaveInFlightRef = useRef(false);
+  const autosavePromiseRef = useRef<Promise<void> | null>(null);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const documentConflictRef = useRef(false);
+  const documentConflictKindRef = useRef<'revision' | 'baseline' | 'recovery' | null>(null);
+  const preserveUnscopedRecoveryIntentRef = useRef(false);
+  const offlineRecoveryLevelRef = useRef<Level | null>(null);
+  const offlineRecoverySavedSigRef = useRef<string | null>(null);
+  const rulesHistorySentinelRef = useRef(Boolean(window.history.state?.levelEditorRules));
+  const eventsOpenRef = useRef(eventsOpen);
+  eventsOpenRef.current = eventsOpen;
+  const departureFlushSigRef = useRef<string | null>(null);
+  const signInHandoffPendingRef = useRef(false);
 
   useEffect(() => {
     if (!didMountRouteSync.current) {
@@ -2068,23 +2165,9 @@ export function LevelEditor(): ReactElement {
     const entry: StatusLogEntry = { id: statusLogSeq.current, tone, message, detail, at };
     setStatusLog((prev) => [entry, ...prev].slice(0, STATUS_LOG_LIMIT));
   };
-  const readOnlyLiveMap = Boolean(remoteMapId && !remoteMapCanEdit);
-  const liveMapUnavailable = Boolean(routeParams.mapId && liveSyncState === 'error' && remoteMapRevision === null);
-
-  const applyRemoteMapMetadata = (doc: EditorMapDocument): void => {
-    setRemoteMapId(doc.public_id);
-    setRemoteMapCanEdit(doc.can_edit);
-    setRemoteMapRevision(doc.revision);
-    setRemoteMapUpdatedAt(doc.updated_at ?? null);
-    setRemoteMapExpiresAt(doc.expires_at ?? null);
-    setRemoteMapSavedAt(doc.saved_at ?? null);
-    setRemoteMapIsMisc(doc.is_misc);
-    setRemoteMapCreator(doc.creator ?? null);
-  };
-
   // Apply a level document's rules-panel state. A LOAD is the user explicitly opening a
   // document: it replaces everything and resets authorship. A SEED is a mount-time load
-  // resolving late (campaign hydrate / ?map= fetch): fields the user authored while it was
+  // resolving late (campaign hydrate / working-copy fetch): fields the user authored while it was
   // in flight are kept — both orderings then converge on "loaded document + the user's
   // edit" — and seedSkewRef records the seeded rules so the clean-baseline capture can
   // still anchor on the document.
@@ -2134,7 +2217,7 @@ export function LevelEditor(): ReactElement {
     applyLevelRules(level, options.seed ? 'seed' : 'load');
     setEditingId(options.editingId);
     if (options.clean !== false) {
-      setSavedSig(levelSignature(level));
+      setSavedSig(normalizedLevelEditorSignature(level));
       needsBaselineRef.current = true;
     }
   };
@@ -2142,48 +2225,8 @@ export function LevelEditor(): ReactElement {
   useEffect(() => {
     if (quietDraftRestore) return;
     if (!localDraft || (routeParams.levelId && !loadedBoard)) return;
-    reportStatus('Restored unsaved local draft.', 'success', 'This browser saved it before the refresh.');
+    reportStatus('Restored editor draft.', 'success', 'This browser kept the latest working copy.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!routeParams.mapId) return;
-    let active = true;
-    setEditorReady(false);
-    void loadEditorMap(routeParams.mapId)
-      .then((doc) => {
-        if (!active) return;
-        applyRemoteMapMetadata(doc);
-        setSourceMiscMapId(doc.is_misc ? doc.public_id : null);
-        lastRemoteSyncedSigRef.current = levelSignature(doc.level);
-        // seed: this mount-time load resolves async — it must not clobber rules the user
-        // authored after the entrance failsafe made the editor interactive.
-        applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: true, seed: true });
-        setLiveSyncState(doc.can_edit ? 'saved' : 'idle');
-        setEditorReady(true);
-        reportStatus(
-          doc.can_edit ? 'Live editor link connected.' : 'Viewing live map.',
-          'success',
-          doc.can_edit ? 'The browser URL now follows your board for viewers.' : 'This board updates as the owner edits, but controls are locked here.',
-        );
-      })
-      .catch((error) => {
-        if (!active) return;
-        setEditorReady(true);
-        setRemoteMapCanEdit(false);
-        setLiveSyncState('error');
-        reportStatus('Could not load live map.', 'error', (error as Error).message);
-      });
-    return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Who's signed in — for the publish confirm/label copy. The server's requireAdmin is the
-  // real gate (a non-admin save of an official level fails closed → 403 surfaced below).
-  useEffect(() => {
-    let active = true;
-    fetchMe().then((user) => { if (active) setMe(user); }).catch(() => {});
-    return () => { active = false; };
   }, []);
 
   // Go full-bleed like Skirmish (is-immersive): #root owns the whole viewport so the
@@ -2192,74 +2235,6 @@ export function LevelEditor(): ReactElement {
     const shell = document.querySelector('.shell');
     shell?.classList.add('is-immersive');
     return () => shell?.classList.remove('is-immersive');
-  }, []);
-
-  // Cold deep-link / campaign path: hydrate the shared store (idempotent), then — unless a
-  // `?board=` override was supplied — seed the board from the resolved level and mark it
-  // clean. Falls through to the blank/board-link board when no level resolves.
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        await ensureCampaignsHydrated();
-      } catch {
-        // The editor can still show the blank/local board; don't leave the fade held forever.
-      }
-      if (!active) return;
-      ensureDefaultSkirmishProfileLevel();
-      if (routeParams.mapId) return;
-      if (loadedBoard || !routeParams.levelId) {
-        setEditorReady(true);
-        return;
-      }
-      const level = useCampaigns.getState().levels[routeParams.levelId];
-      if (!level) {
-        setEditorReady(true);
-        return;
-      }
-      if (localDraft) {
-        setEditingId(level.id);
-        setSavedSig(levelSignature(level));
-        if (!quietDraftRestore) reportStatus('Restored unsaved local draft.', 'success', `Save will update "${level.name}".`);
-        setEditorReady(true);
-        return;
-      }
-      const board = levelToEditorBoard(level);
-      setBoardCols(board.cols);
-      setBoardRows(board.rows);
-      setBoardCells(board.cells);
-      setBoardMacroTiles(validMacroTilesForBoard(board));
-      setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
-      setBoardDoodads(board.doodads);
-      setBoardProps(board.props);
-      setBoardCover(board.cover);
-      setBoardCoverTypes(board.coverTypes ?? {});
-      setBoardFeatures(board.features);
-      setBoardFences(board.fences ?? {});
-      setBoardWalls(perimeterWalls(board.walls, board.cols, board.rows));
-      setBoardWallArt(perimeterWallArt(board.wallArt, board.cols, board.rows));
-      setFeatureCuts(board.featureCuts);
-      setFeatureExits(board.featureExits);
-      setBoardZoneEntries(zoneEntriesForBoard(board));
-      setGeneratedRegions(board.generatedRegions ?? []);
-      setActiveGeneratedRegionId(null);
-      setRegionSelection(new Set());
-      setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
-      setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
-      setUndoStack([]);
-      setRedoStack([]);
-      // Restore the rule fields from the Level so the Rules panel opens on what was authored.
-      // Seed, not load: this hydrate resolves async, and the entrance failsafe may have let
-      // the user author rules first — those must survive (the Rival Kings clobber bug).
-      applyLevelRules(level, 'seed');
-      setEditingId(level.id);
-      // Defer the clean-baseline capture to the effect below: it reads the SETTLED signature, so a
-      // legacy level (derived boardCode) doesn't spuriously read dirty the instant it loads.
-      needsBaselineRef.current = true;
-      setEditorReady(true);
-    })();
-    return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resolveAsset = (id: string): StudioAsset | undefined => leAllTiles.find((asset) => asset.id === id);
@@ -2968,9 +2943,19 @@ export function LevelEditor(): ReactElement {
   // The live candidate Level — the exact document a Save would persist — recomputed from the board
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
+  const candidateMetadataSource = editorDocument?.level ?? initialTargetLevel;
   const candidateLevel = useMemo(
-    () => editorBoardToLevel(currentEditorBoard, { id: editingId ?? 'draft', name: levelNameForSave, ...modeMeta }),
-    [currentEditorBoard, editingId, levelNameForSave, modeMeta],
+    () => editorBoardToLevel(currentEditorBoard, {
+      id: editingId ?? 'draft',
+      name: levelNameForSave,
+      ...modeMeta,
+      notes: candidateMetadataSource?.notes,
+      difficulty: candidateMetadataSource?.difficulty,
+      economy: candidateMetadataSource?.economy,
+      theme: candidateMetadataSource?.theme,
+      previousTerrain: candidateMetadataSource?.layers.terrain,
+    }),
+    [candidateMetadataSource, currentEditorBoard, editingId, levelNameForSave, modeMeta],
   );
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
@@ -3027,18 +3012,53 @@ export function LevelEditor(): ReactElement {
     [showBlocked, showEnemyAttacks, showMoves, showPromotionZones, tacticalFocusPiece, tacticalPreviewEnv, tacticalPreviewGame],
   );
   const targetLevelId = editingId ?? routeParams.levelId;
+  const campaigns = useCampaigns((s) => s.campaigns);
   const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
-  // Real dirty flag: the board has unsaved changes when its signature differs from the one
+  useEffect(() => {
+    if (campaignAssignmentHydrated || !targetLevelId || !targetLevel) return;
+    const resolvedCampaignId = campaigns.find((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId))?.id ?? '';
+    if (!recoveredCampaignAssignmentRef.current) setCampaignAssignmentId(resolvedCampaignId);
+    setSavedCampaignAssignmentId(resolvedCampaignId);
+    setCampaignAssignmentHydrated(true);
+  }, [campaignAssignmentHydrated, campaigns, targetLevel, targetLevelId]);
+  const assignedCampaign = campaignAssignmentId
+    ? campaigns.find((campaign) => campaign.id === campaignAssignmentId) ?? null
+    : null;
+  const eligibleCampaigns = useMemo(
+    () => campaigns.filter((campaign) => !targetLevelId || tierOf(campaign.id) === tierOf(targetLevelId)),
+    [campaigns, targetLevelId],
+  );
+  const officialCampaignOptions = eligibleCampaigns.filter((campaign) => campaign.origin === 'official');
+  const privateCampaignOptions = eligibleCampaigns.filter((campaign) => campaign.origin !== 'official');
+  // Real dirty flag: the working draft differs when its signature or staged campaign assignment
+  // no longer matches the last canonical Save.
   // captured at the last save. The signature folds in rules/settings/events through the candidate
   // level, so event edits mark the level dirty, not just board paint.
-  const currentSig = useMemo(() => levelSignature(candidateLevel), [candidateLevel]);
+  const currentSig = useMemo(() => levelEditorLevelSignature(candidateLevel), [candidateLevel]);
   // Standalone / board-link editors do not have a saved Level document to compare against. Capture
   // the very first rendered signature and keep that as the clean baseline; otherwise a first
   // event-template edit can become the baseline if the seeding effect runs after that edit.
   const standaloneBaselineSigRef = useRef<string | null>(routeParams.levelId ? null : currentSig);
-  const dirty = savedSig === null
-    ? currentSig !== (standaloneBaselineSigRef.current ?? currentSig)
-    : currentSig !== savedSig;
+  const levelDirty = editorDocument?.never_saved
+    ? true
+    : savedSig !== null
+    ? currentSig !== savedSig
+    : editorDocument
+    ? editorDocument.dirty || currentSig !== levelEditorLevelSignature(editorDocument.level)
+    : currentSig !== (standaloneBaselineSigRef.current ?? currentSig);
+  const campaignAssignmentDirty = campaignAssignmentHydrated && campaignAssignmentId !== savedCampaignAssignmentId;
+  const dirty = levelDirty || campaignAssignmentDirty;
+  const currentSigRef = useRef(currentSig);
+  currentSigRef.current = currentSig;
+  const initialCandidateRef = useRef(candidateLevel);
+  const currentCandidateRef = useRef(candidateLevel);
+  currentCandidateRef.current = candidateLevel;
+  const savedSigRef = useRef(savedSig);
+  savedSigRef.current = savedSig;
+  const editorDocumentRef = useRef(editorDocument);
+  editorDocumentRef.current = editorDocument;
+  const signedInRef = useRef(Boolean(me?.signed_in));
+  signedInRef.current = Boolean(me?.signed_in);
   // Establish the clean baseline signature. Two ways in: a standalone board (no campaign level)
   // seeds from its first-render signature; a campaign level seeds it AFTER hydrate has settled the
   // board state (needsBaselineRef, captured from the live currentSig so it always matches). Depends
@@ -3051,181 +3071,690 @@ export function LevelEditor(): ReactElement {
       // user's authored delta reads dirty (and keeps flowing into drafts / the Save).
       const skew = seedSkewRef.current;
       seedSkewRef.current = null;
-      setSavedSig(skew ? levelSignature(seededBaselineLevel(candidateLevel, skew)) : currentSig);
+      setSavedSig(skew ? levelEditorLevelSignature(seededBaselineLevel(candidateLevel, skew)) : currentSig);
       return;
     }
     if (savedSig === null && !routeParams.levelId) setSavedSig(standaloneBaselineSigRef.current ?? currentSig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSig]);
 
-  useEffect(() => {
-    if (remoteMapId) return;
-    if (savedSig === null) return;
-    if (!dirty) {
-      clearLevelEditorDraft(draftKey);
-      return;
+  useLayoutEffect(() => {
+    // localStorage is a crash/offline fallback only. The status UI never calls this a cloud save;
+    // durable progress is acknowledged solely by the revisioned editor-document endpoint below.
+    if (!editorReady || editorLoadError) return;
+    const existingRecovery = editorDocument ? null : readLevelEditorDraft(draftKey);
+    const ownerEmail = editorDocument
+      ? me?.email?.trim().toLowerCase()
+      : existingRecovery?.ownerEmail;
+    if (editorDocument) {
+      if (!ownerEmail) return;
+      const expectedKey = levelEditorDraftKey({ documentId: editorDocument.document_id, ownerEmail });
+      if (draftKey !== expectedKey) return;
     }
-    writeLevelEditorDraft(draftKey, {
-      savedAt: Date.now(),
-      savedSig,
+    const savedAt = Date.now();
+    const draft: LevelEditorDraft = {
+      savedAt,
+      savedSig: savedSig ?? standaloneBaselineSigRef.current ?? '',
+      documentId: editorDocument?.document_id ?? existingRecovery?.documentId,
+      ownerEmail,
+      documentRevision: editorDocument
+        ? documentRevisionRef.current ?? undefined
+        : existingRecovery?.documentRevision,
+      cloudSignature: editorDocument
+        ? lastCloudSyncedSigRef.current ?? undefined
+        : existingRecovery?.cloudSignature,
+      recoveryConflict: documentConflictRef.current || existingRecovery?.recoveryConflict || undefined,
+      editingId: targetLevelId,
       board: currentEditorBoard,
       levelName: levelNameForSave,
+      campaignId: campaignAssignmentId || null,
       objective,
       surviveTurns,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
       victory: victoryForSave,
       events: eventsForSave,
-    });
-  }, [currentEditorBoard, dirty, draftKey, levelNameForSave, objective, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
+    };
+    const wrote = writeLevelEditorDraft(draftKey, draft);
+    setLocalBackupAvailable(wrote);
+    // A recovery being claimed after sign-in stays protected until it has a scoped browser copy
+    // and a durable cloud document. If the cloud call is temporarily down, keep the intent's
+    // timestamp in lockstep with subsequent edits instead of invalidating it on the next reload.
+    if (wrote && preserveUnscopedRecoveryIntentRef.current && draftKey === initialDraftKey) {
+      try {
+        window.sessionStorage.setItem(EDITOR_SIGN_IN_RECOVERY_INTENT_KEY, JSON.stringify({
+          draftKey,
+          savedAt,
+        } satisfies EditorSignInRecoveryIntent));
+      } catch { /* The browser copy still exists even if sessionStorage is unavailable. */ }
+    }
+  }, [campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
+
+  const closeEventsEditor = (): void => {
+    eventsOpenRef.current = false;
+    setEventsOpen(false);
+    if (rulesHistorySentinelRef.current) {
+      rulesHistorySentinelRef.current = false;
+      window.history.back();
+    }
+  };
+
+  // Give the nested Rules editor one same-document history entry. That makes native/hardware
+  // Back collapse Rules even after a cold editor load; the following Back can then leave.
+  useLayoutEffect(() => {
+    if (!eventsOpen || rulesHistorySentinelRef.current) return;
+    eventsOpenRef.current = true;
+    const state = window.history.state;
+    window.history.pushState({
+      ...(state && typeof state === 'object' ? state as Record<string, unknown> : {}),
+      levelEditorRules: true,
+    }, '', window.location.href);
+    rulesHistorySentinelRef.current = true;
+  }, [eventsOpen]);
 
   useEffect(() => {
-    if (!editorReady || routeParams.mapId || remoteMapId || readOnlyLiveMap) return;
-    if (autoCreateMapRef.current) return;
-    autoCreateMapRef.current = true;
-    setLiveSyncState('creating');
-    const levelAtCreate = candidateLevel;
-    const headless = !routeParams.campaignId && !routeParams.levelId;
-    void createEditorMap(levelAtCreate, { headless })
-      .then((doc) => {
-        applyRemoteMapMetadata(doc);
-        lastRemoteSyncedSigRef.current = levelSignature(levelAtCreate);
-        setLiveSyncState('saved');
-        refreshMyMaps();
-        const url = new URL(window.location.href);
-        url.searchParams.delete('board');
-        url.searchParams.set('map', doc.public_id);
-        navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
-        reportStatus('Live editor link is ready.', 'success', 'Anyone else opening this URL sees the board read-only as you edit.');
-      })
-      .catch((error) => {
-        autoCreateMapRef.current = false;
-        setLiveSyncState('error');
-        reportStatus('Live editor link is unavailable.', 'warning', (error as Error).message);
+    const collapseRulesFromHistory = (): void => {
+      if (!rulesHistorySentinelRef.current) return;
+      rulesHistorySentinelRef.current = false;
+      eventsOpenRef.current = false;
+      setEventsOpen(false);
+    };
+    window.addEventListener('popstate', collapseRulesFromHistory);
+    return () => window.removeEventListener('popstate', collapseRulesFromHistory);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!eventsOpen) return undefined;
+
+    return registerAppNavigationBlocker((attempt) => {
+      const action = levelEditorExitAction({
+        destinationHref: attempt.href,
+        replace: attempt.replace,
+        rulesEditorOpen: eventsOpenRef.current,
+        source: attempt.source,
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorReady, remoteMapId, readOnlyLiveMap, routeParams.mapId]);
+      if (action === 'allow') return false;
+      if (action === 'close-rules-editor') {
+        closeEventsEditor();
+        return true;
+      }
+      return false;
+    });
+  }, [eventsOpen]);
 
+  // Resolve one durable, account-owned working copy and put its globally unique document id in
+  // the editor URL. This prevents per-account level ids such as `l1` from colliding when a URL is
+  // pasted into another account. Copying the address bar is absent from this flow and mutates
+  // nothing; access remains owner/admin gated independently of possession of the URL.
   useEffect(() => {
-    if (!editorReady || !remoteMapId || !remoteMapCanEdit || readOnlyLiveMap) return undefined;
-    if (lastRemoteSyncedSigRef.current === currentSig) {
-      setLiveSyncState('saved');
+    let active = true;
+    void (async () => {
+      const hydration = ensureCampaignsHydrated()
+        .then((result) => {
+          if (active) {
+            setUserWorkspaceHydration(result.userWorkspace === 'unavailable' ? 'unavailable' : 'ready');
+            setOfficialWorkspaceHydration(result.officialAvailable ? 'ready' : 'unavailable');
+          }
+          return result;
+        })
+        .catch(() => {
+          if (active) {
+            setUserWorkspaceHydration('unavailable');
+            setOfficialWorkspaceHydration('unavailable');
+          }
+          return undefined;
+        });
+      const authRequest = fetchMeStatus();
+      let hydrationTimer: number | undefined;
+      await Promise.race([
+        hydration,
+        new Promise<void>((resolve) => {
+          hydrationTimer = window.setTimeout(resolve, EDITOR_HYDRATION_WAIT_MS);
+        }),
+      ]);
+      if (hydrationTimer !== undefined) window.clearTimeout(hydrationTimer);
+      const auth = await authRequest;
+      const user = auth.user;
+      if (!active) return;
+      setMe(user);
+      setAuthReachable(auth.reachable);
+      if (user.signed_in) signInHandoffPendingRef.current = false;
+
+      const requestedLevelId = routeParams.levelId;
+      const canonical = requestedLevelId ? useCampaigns.getState().levels[requestedLevelId] : undefined;
+      if (canonical) {
+        setSavedSig(normalizedLevelEditorSignature(canonical));
+        setTargetBaselineResolved(true);
+      }
+      const currentUnscopedDraft = readLevelEditorDraft(initialDraftKey) ?? unscopedLocalDraft;
+      const recoveryIntent = user.signed_in && !routeParams.documentId
+        ? readEditorSignInRecoveryIntent()
+        : null;
+      const claimedUnscopedDraft = recoveryIntent
+        && recoveryIntent.draftKey === initialDraftKey
+        && currentUnscopedDraft
+        && recoveryIntent.savedAt === currentUnscopedDraft.savedAt
+        ? currentUnscopedDraft
+        : null;
+
+      if (!auth.reachable) {
+        if (routeParams.documentId) {
+          setEditorLoadError({
+            title: 'Cloud working copy unavailable',
+            detail: 'The private document could not be reached. Reconnect and retry; no other level was substituted.',
+            retry: true,
+          });
+          setCloudSaveState('error');
+          setCloudSaveDetail('Waiting to reconnect to your account.');
+          setTargetBaselineResolved(false);
+          setEditorReady(true);
+          return;
+        }
+        if (currentUnscopedDraft) {
+          const recovered = levelFromDraft(currentUnscopedDraft, canonical ?? initialCandidateRef.current);
+          applyLevelDocument(recovered, {
+            editingId: canonical?.id ?? currentUnscopedDraft.editingId,
+            clean: false,
+            seed: true,
+          });
+          setSavedSig(canonical ? normalizedLevelEditorSignature(canonical) : currentUnscopedDraft.savedSig);
+        } else if (canonical && !loadedBoard) {
+          applyLevelDocument(canonical, { editingId: canonical.id, clean: true, seed: true });
+        }
+        offlineRecoveryLevelRef.current = currentUnscopedDraft
+          ? levelFromDraft(currentUnscopedDraft, canonical ?? initialCandidateRef.current)
+          : canonical ?? initialCandidateRef.current;
+        offlineRecoverySavedSigRef.current = canonical
+          ? normalizedLevelEditorSignature(canonical)
+          : currentUnscopedDraft?.savedSig ?? savedSigRef.current;
+        setCloudSaveState('local');
+        setCloudSaveDetail(null);
+        setTargetBaselineResolved(!requestedLevelId || Boolean(canonical));
+        setEditorReady(true);
+        return;
+      }
+      if (user.signed_in && routeParams.documentId) clearEditorSignInRecoveryIntent();
+      if (user.signed_in && recoveryIntent && !claimedUnscopedDraft) clearEditorSignInRecoveryIntent();
+
+      if (!user.signed_in) {
+        if (routeParams.documentId) {
+          setEditorLoadError({
+            title: 'Sign in to open this editor document',
+            detail: 'The URL identifies a private cloud working copy. Sign in with the account that owns it.',
+            signIn: true,
+          });
+          setCloudSaveState('local');
+          setCloudSaveDetail(null);
+          setEditorReady(true);
+          return;
+        }
+        if (currentUnscopedDraft) {
+          const recovered = levelFromDraft(currentUnscopedDraft, canonical ?? initialCandidateRef.current);
+          applyLevelDocument(recovered, {
+            editingId: canonical?.id ?? currentUnscopedDraft.editingId,
+            clean: false,
+            seed: true,
+          });
+          setSavedSig(canonical ? normalizedLevelEditorSignature(canonical) : currentUnscopedDraft.savedSig);
+          if (!quietDraftRestore) reportStatus('Restored browser recovery copy.', 'success', 'Sign in to sync it across devices.');
+        } else if (canonical && !loadedBoard) {
+          applyLevelDocument(canonical, { editingId: canonical.id, clean: true, seed: true });
+        }
+        setCloudSaveState('local');
+        setCloudSaveDetail('Sign in to sync this working copy across devices.');
+        setTargetBaselineResolved(!requestedLevelId || Boolean(canonical));
+        setEditorReady(true);
+        return;
+      }
+
+      if (claimedUnscopedDraft) preserveUnscopedRecoveryIntentRef.current = true;
+      try {
+        const sessionRecoveryLevel = offlineRecoveryLevelRef.current;
+        const createSeed = claimedUnscopedDraft
+          ? levelFromDraft(claimedUnscopedDraft, initialCandidateRef.current)
+          : sessionRecoveryLevel ?? initialCandidateRef.current;
+        const doc = routeParams.documentId
+          ? await loadEditorDocument(routeParams.documentId)
+          : requestedLevelId
+          ? await resolveEditorDocument(requestedLevelId, editorDocumentWorkspaceForLevelId(requestedLevelId))
+          : await createEditorDocument(createSeed);
+        if (!active) return;
+
+        const ownerEmail = user.email?.trim().toLowerCase() ?? '';
+        const scopedDraftKey = ownerEmail
+          ? levelEditorDraftKey({ documentId: doc.document_id, ownerEmail })
+          : null;
+        const rawScopedDraft = scopedDraftKey ? readLevelEditorDraft(scopedDraftKey) : null;
+        const scopedDraft = rawScopedDraft
+          && rawScopedDraft.documentId === doc.document_id
+          && rawScopedDraft.ownerEmail === ownerEmail
+          && rawScopedDraft.editingId === doc.level_id
+          ? rawScopedDraft
+          : null;
+        const recoveryDraft = scopedDraft ?? claimedUnscopedDraft;
+        if (recoveryDraft?.campaignId !== undefined) {
+          recoveredCampaignAssignmentRef.current = true;
+          setCampaignAssignmentId(recoveryDraft.campaignId ?? '');
+        }
+        const documentSig = levelEditorLevelSignature(doc.level);
+        const localLevel = recoveryDraft
+          ? levelFromDraft(recoveryDraft, doc.level)
+          : sessionRecoveryLevel
+          ? { ...sessionRecoveryLevel, id: doc.level_id }
+          : null;
+        const localSig = localLevel ? levelEditorLevelSignature(localLevel) : undefined;
+        const initialLevel = { ...initialCandidateRef.current, id: doc.level_id };
+        const initialSig = levelEditorLevelSignature(initialLevel);
+        const restoreClaimedDraft = Boolean(
+          claimedUnscopedDraft
+          && localLevel
+          && localSig !== documentSig
+          && !doc.dirty
+          && claimedUnscopedDraft.savedSig === normalizedLevelEditorSignature(doc.level),
+        );
+        const restoreOfflineSession = Boolean(
+          sessionRecoveryLevel
+          && localLevel
+          && localSig !== documentSig
+          && !doc.dirty
+          && offlineRecoverySavedSigRef.current === normalizedLevelEditorSignature(doc.level),
+        );
+        const restoreLocal = restoreClaimedDraft || restoreOfflineSession || Boolean(scopedDraft && localLevel && shouldRestoreLocalEditorRecovery({
+          localSignature: localSig,
+          documentSignature: documentSig,
+          localSavedAt: scopedDraft.savedAt,
+          documentUpdatedAt: doc.updated_at,
+          localDocumentRevision: scopedDraft.documentRevision,
+          documentRevision: doc.revision,
+          localCloudSignature: scopedDraft.cloudSignature,
+          localRecoveryConflict: scopedDraft.recoveryConflict,
+        }));
+        const localDiverged = Boolean(localLevel && localSig !== documentSig);
+        const localRecoveryConflict = localDiverged && !restoreLocal;
+        const routeSnapshotDiverged = Boolean(loadedBoard && initialSig !== documentSig);
+        const routeSnapshotSafe = !routeParams.documentId || routeParams.documentRevision === doc.revision;
+        const restoreRouteSnapshot = routeSnapshotDiverged && routeSnapshotSafe;
+        const routeRecoveryConflict = routeSnapshotDiverged && !routeSnapshotSafe;
+        const recoveryConflict = localRecoveryConflict || routeRecoveryConflict || doc.baseline_conflict;
+        const recoveredLevel = routeSnapshotDiverged
+          ? initialLevel
+          : localDiverged && localLevel
+          ? localLevel
+          : doc.level;
+        const shouldRecover = restoreLocal || restoreRouteSnapshot || recoveryConflict;
+
+        documentRevisionRef.current = doc.revision;
+        lastCloudSyncedSigRef.current = documentSig;
+        documentConflictRef.current = recoveryConflict;
+        documentConflictKindRef.current = doc.baseline_conflict
+          ? 'baseline'
+          : recoveryConflict
+          ? 'recovery'
+          : null;
+        setEditorLoadError(null);
+        setEditorDocument(doc);
+        setEditingId(doc.level_id);
+        setTargetBaselineResolved(true);
+
+        const resolvedCanonical = useCampaigns.getState().levels[doc.level_id];
+        if (resolvedCanonical) {
+          setSavedSig(normalizedLevelEditorSignature(resolvedCanonical));
+        } else if (!doc.dirty && doc.has_saved_baseline) {
+          setSavedSig(normalizedLevelEditorSignature(doc.level));
+        } else if (doc.never_saved) {
+          setSavedSig(standaloneBaselineSigRef.current ?? documentSig);
+        } else if (scopedDraft?.savedSig) {
+          setSavedSig(scopedDraft.savedSig);
+        }
+
+        applyLevelDocument(shouldRecover ? recoveredLevel : doc.level, {
+          editingId: doc.level_id,
+          clean: false,
+          seed: true,
+        });
+
+        if (scopedDraftKey && scopedDraftKey !== draftKey) setDraftKey(scopedDraftKey);
+        if (claimedUnscopedDraft && scopedDraftKey && ownerEmail) {
+          const migrated = writeLevelEditorDraft(scopedDraftKey, {
+            ...claimedUnscopedDraft,
+            documentId: doc.document_id,
+            ownerEmail,
+            documentRevision: doc.revision,
+            cloudSignature: documentSig,
+            recoveryConflict: recoveryConflict || undefined,
+            editingId: doc.level_id,
+          });
+          if (migrated) {
+            preserveUnscopedRecoveryIntentRef.current = false;
+            clearEditorSignInRecoveryIntent();
+            clearLevelEditorDraft(initialDraftKey);
+          }
+        }
+        offlineRecoveryLevelRef.current = null;
+        offlineRecoverySavedSigRef.current = null;
+        navigateApp(levelEditorHrefForDocument(window.location.href, {
+          levelId: doc.level_id,
+          documentId: doc.document_id,
+        }, { keepRecoverySnapshot: shouldRecover }), { replace: true, scroll: false });
+
+        setCloudSaveState(recoveryConflict ? 'conflict' : shouldRecover ? 'pending' : 'saved');
+        setCloudSaveDetail(recoveryConflict
+          ? doc.baseline_conflict
+            ? 'The saved level changed after this working copy branched. Your progress is preserved; autosave is paused until you discard or resolve it.'
+            : 'This browser recovery was based on an older cloud revision. It is preserved here, and autosave is paused.'
+          : null);
+        setEditorReady(true);
+        reportStatus(
+          doc.baseline_conflict ? 'Saved-position conflict preserved.' : recoveryConflict ? 'Recovery conflict preserved.' : shouldRecover ? 'Recovered newer browser edits.' : 'Working copy loaded.',
+          recoveryConflict ? 'warning' : 'success',
+          recoveryConflict
+            ? 'No cloud or canonical data was overwritten. Discard changes restores the last saved position.'
+            : shouldRecover
+            ? 'They will be written to the durable working copy automatically.'
+            : doc.dirty
+            ? 'Your autosaved progress is separate from the saved level until you choose Save.'
+            : 'Progress is saved to your account.',
+        );
+      } catch (error) {
+        if (!active) return;
+        if (routeParams.documentId) {
+          const status = (error as { status?: number }).status;
+          const ownerEmail = user.email?.trim().toLowerCase() ?? '';
+          const failedDocumentDraftKey = ownerEmail
+            ? levelEditorDraftKey({ documentId: routeParams.documentId, ownerEmail })
+            : null;
+          const failedDocumentDraft = failedDocumentDraftKey
+            ? readLevelEditorDraft(failedDocumentDraftKey)
+            : null;
+          const scopedRecovery = failedDocumentDraft
+            && failedDocumentDraft.documentId === routeParams.documentId
+            && failedDocumentDraft.ownerEmail === ownerEmail
+            ? failedDocumentDraft
+            : null;
+          if (scopedRecovery && status !== 403 && status !== 404) {
+            const recovered = levelFromDraft(scopedRecovery, canonical ?? initialCandidateRef.current);
+            applyLevelDocument(recovered, {
+              editingId: scopedRecovery.editingId ?? canonical?.id,
+              clean: false,
+              seed: true,
+            });
+            if (scopedRecovery.editingId) setEditingId(scopedRecovery.editingId);
+            if (failedDocumentDraftKey) setDraftKey(failedDocumentDraftKey);
+            offlineRecoveryLevelRef.current = recovered;
+            offlineRecoverySavedSigRef.current = scopedRecovery.savedSig;
+            setEditorLoadError(null);
+            setCloudSaveState('error');
+            setCloudSaveDetail('Cloud autosave is unavailable. The current editor remains open and will retry after reconnection.');
+            setTargetBaselineResolved(Boolean(canonical) || !routeParams.levelId);
+            setEditorReady(true);
+            return;
+          }
+          setEditorLoadError({
+            title: status === 403 || status === 404 ? 'No access to this editor document' : 'Editor document unavailable',
+            detail: status === 403 || status === 404
+              ? 'Sign in with the account that owns this working copy.'
+              : 'The working copy could not be reached. No other level was substituted for it.',
+            retry: status !== 403 && status !== 404,
+          });
+          setCloudSaveState('error');
+          setCloudSaveDetail(null);
+          setTargetBaselineResolved(false);
+          setEditorReady(true);
+          return;
+        }
+        if (claimedUnscopedDraft) {
+          const recovered = levelFromDraft(claimedUnscopedDraft, canonical ?? initialCandidateRef.current);
+          applyLevelDocument(recovered, {
+            editingId: canonical?.id ?? claimedUnscopedDraft.editingId,
+            clean: false,
+            seed: true,
+          });
+          setSavedSig(canonical ? normalizedLevelEditorSignature(canonical) : claimedUnscopedDraft.savedSig);
+          offlineRecoveryLevelRef.current = recovered;
+          offlineRecoverySavedSigRef.current = claimedUnscopedDraft.savedSig;
+        } else if (offlineRecoveryLevelRef.current) {
+          applyLevelDocument(offlineRecoveryLevelRef.current, {
+            editingId: offlineRecoveryLevelRef.current.id,
+            clean: false,
+            seed: true,
+          });
+        } else if (canonical && !loadedBoard) {
+          applyLevelDocument(canonical, { editingId: canonical.id, clean: true, seed: true });
+        }
+        setCloudSaveState('error');
+        setCloudSaveDetail('Cloud autosave is unavailable. The current editor remains open; reconnect to retry.');
+        setTargetBaselineResolved(!requestedLevelId || Boolean(canonical));
+        setEditorReady(true);
+        reportStatus('Cloud autosave is unavailable.', 'warning', (error as Error).message);
+      }
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentLoadAttempt]);
+
+  const retryCloudDocument = (): void => {
+    if (editorDocument) {
+      setCloudSaveState((state) => state === 'error' ? 'pending' : state);
+      setCloudSaveDetail(null);
+      return;
+    }
+    if (editorReady && !editorLoadError) {
+      offlineRecoveryLevelRef.current = currentCandidateRef.current;
+      offlineRecoverySavedSigRef.current = savedSigRef.current;
+    }
+    setEditorLoadError(null);
+    setEditorReady(false);
+    setCloudSaveState('loading');
+    setCloudSaveDetail(null);
+    setDocumentLoadAttempt((attempt) => attempt + 1);
+  };
+
+  // Debounced, serialized compare-and-swap autosave. A conflict never overwrites either side:
+  // the current board stays in memory/local recovery and the server's newer revision is surfaced.
+  useEffect(() => {
+    if (!editorReady || !editorDocument || !me?.signed_in || saving) return undefined;
+    if (cloudSaveState === 'conflict' || cloudSaveState === 'error') return undefined;
+    if (autosaveInFlightRef.current) return undefined;
+    if (lastCloudSyncedSigRef.current === currentSig) {
+      setCloudSaveState('saved');
+      setCloudSaveDetail(null);
       return undefined;
     }
-    setLiveSyncState('pending');
+    setCloudSaveState('pending');
     const timer = window.setTimeout(() => {
-      setLiveSyncState('saving');
-      void updateEditorMap(remoteMapId, candidateLevel)
+      autosaveTimerRef.current = null;
+      if (autosaveInFlightRef.current) return;
+      const revision = documentRevisionRef.current;
+      if (revision === null) return;
+      const signatureAtSave = currentSig;
+      const levelAtSave = candidateLevel;
+      autosaveInFlightRef.current = true;
+      setCloudSaveState('saving');
+      const request = autosaveEditorDocument(
+        editorDocument.document_id,
+        levelAtSave,
+        revision,
+      )
         .then((doc) => {
-          lastRemoteSyncedSigRef.current = currentSig;
-          applyRemoteMapMetadata(doc);
-          setLiveSyncState('saved');
+          documentRevisionRef.current = doc.revision;
+          lastCloudSyncedSigRef.current = signatureAtSave;
+          if (doc.baseline_conflict) {
+            documentConflictRef.current = true;
+            documentConflictKindRef.current = 'baseline';
+            setEditorDocument(doc);
+            setCloudSaveState('conflict');
+            setCloudSaveDetail('The saved level changed outside this working copy. Your current progress was preserved and autosave is paused.');
+            reportStatus(
+              'Autosave paused because the saved position changed.',
+              'warning',
+              'Discard changes restores the latest saved position; no canonical data was overwritten.',
+            );
+            return;
+          }
+          documentConflictRef.current = false;
+          documentConflictKindRef.current = null;
+          setEditorDocument(doc);
+          setCloudSaveDetail(null);
+          setCloudSaveState(currentSigRef.current === signatureAtSave ? 'saved' : 'pending');
         })
-        .catch((error) => {
-          setLiveSyncState('error');
-          reportStatus('Live map autosave failed.', 'warning', (error as Error).message);
+        .catch((error: unknown) => {
+          if (isEditorDocumentConflict(error)) {
+            documentRevisionRef.current = error.document.revision;
+            documentConflictRef.current = true;
+            documentConflictKindRef.current = isEditorDocumentBaselineConflict(error) ? 'baseline' : 'revision';
+            setEditorDocument(error.document);
+            setCloudSaveState('conflict');
+            setCloudSaveDetail(isEditorDocumentBaselineConflict(error)
+              ? 'The saved level changed outside this working copy. Your current progress was not overwritten.'
+              : 'Another tab or device saved a newer revision. The current editor was not overwritten.');
+            reportStatus(
+              isEditorDocumentBaselineConflict(error) ? 'Autosave paused because the saved position changed.' : 'Autosave paused for a revision conflict.',
+              'warning',
+              'Your current editor remains open; Discard changes restores the latest saved position.',
+            );
+            return;
+          }
+          setCloudSaveState('error');
+          setCloudSaveDetail('Cloud autosave was interrupted. Keep this tab open if browser recovery is unavailable.');
+          reportStatus('Cloud autosave failed.', 'warning', (error as Error).message);
+        })
+        .finally(() => {
+          autosaveInFlightRef.current = false;
+          autosavePromiseRef.current = null;
         });
+      autosavePromiseRef.current = request;
     }, 700);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candidateLevel, currentSig, editorReady, remoteMapCanEdit, remoteMapId, readOnlyLiveMap]);
+    autosaveTimerRef.current = timer;
+    return () => {
+      window.clearTimeout(timer);
+      if (autosaveTimerRef.current === timer) autosaveTimerRef.current = null;
+    };
+  }, [candidateLevel, cloudSaveState, currentSig, editorDocument, editorReady, me?.signed_in, saving]);
 
   useEffect(() => {
-    if (!editorReady || !remoteMapId || !readOnlyLiveMap) return undefined;
-    let active = true;
-    const poll = (): void => {
-      void loadEditorMap(remoteMapId)
-        .then((doc) => {
-          if (!active) return;
-          applyRemoteMapMetadata(doc);
-          if (!doc.can_edit) setLiveSyncState('idle');
-          if (doc.revision !== remoteMapRevisionRef.current) {
-            lastRemoteSyncedSigRef.current = levelSignature(doc.level);
-            applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: true });
+    const retry = (): void => {
+      if (editorDocumentRef.current) {
+        setCloudSaveState((state) => state === 'error' ? 'pending' : state);
+        return;
+      }
+      retryCloudDocument();
+    };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [editorDocument, editorLoadError, editorReady]);
+
+  useEffect(() => {
+    const retryAfterSignIn = (): void => {
+      if (!signInHandoffPendingRef.current) return;
+      retryCloudDocument();
+    };
+    window.addEventListener('focus', retryAfterSignIn);
+    return () => window.removeEventListener('focus', retryAfterSignIn);
+  }, [editorDocument, editorLoadError, editorReady]);
+
+  // A route change must not manufacture a 700 ms loss window. Normal autosaves themselves use
+  // keepalive, and this departure flush sends the latest unsent snapshot. If an older write is
+  // already in flight during an in-app unmount, the latest write is chained after its CAS ack.
+  useEffect(() => {
+    const flushLatest = (pageHiding: boolean): void => {
+      const doc = editorDocumentRef.current;
+      const revision = documentRevisionRef.current;
+      const signature = currentSigRef.current;
+      if (
+        !doc
+        || !signedInRef.current
+        || revision === null
+        || documentConflictRef.current
+        || signature === lastCloudSyncedSigRef.current
+        || signature === departureFlushSigRef.current
+      ) return;
+      departureFlushSigRef.current = signature;
+      if (pageHiding) {
+        autosaveEditorDocumentOnPageHide(doc.document_id, currentCandidateRef.current, revision);
+      } else {
+        void autosaveEditorDocument(doc.document_id, currentCandidateRef.current, revision).catch(() => undefined);
+      }
+    };
+    const flushAfterCurrentWrite = (pageHiding: boolean): void => {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      const inFlight = autosavePromiseRef.current;
+      if (inFlight && pageHiding) {
+        // Page freeze may prevent promise continuations from running. Send the latest snapshot
+        // now as a best-effort peer to the older in-flight CAS; browser recovery is already sync.
+        flushLatest(true);
+      } else if (inFlight) void inFlight.then(
+        () => flushLatest(pageHiding),
+        () => flushLatest(pageHiding),
+      );
+      else flushLatest(pageHiding);
+    };
+    const onPageHide = (): void => flushAfterCurrentWrite(true);
+    const onPageShow = (event: PageTransitionEvent): void => {
+      if (!event.persisted) return;
+      const doc = editorDocumentRef.current;
+      const observedRevision = documentRevisionRef.current;
+      if (!doc || observedRevision === null || !signedInRef.current) return;
+      departureFlushSigRef.current = null;
+      void loadEditorDocument(doc.document_id)
+        .then((serverDocument) => {
+          const serverSignature = levelEditorLevelSignature(serverDocument.level);
+          const liveSignature = currentSigRef.current;
+          documentRevisionRef.current = serverDocument.revision;
+          lastCloudSyncedSigRef.current = serverSignature;
+          setEditorDocument(serverDocument);
+          if (serverDocument.baseline_conflict) {
+            documentConflictRef.current = true;
+            documentConflictKindRef.current = 'baseline';
+            setCloudSaveState('conflict');
+            setCloudSaveDetail('The saved position changed while this page was in the background. Your editor was preserved.');
+          } else if (serverSignature === liveSignature) {
+            documentConflictRef.current = false;
+            documentConflictKindRef.current = null;
+            setCloudSaveState('saved');
+            setCloudSaveDetail(null);
+          } else if (serverDocument.revision === observedRevision) {
+            setCloudSaveState('pending');
+            setCloudSaveDetail(null);
+          } else {
+            documentConflictRef.current = true;
+            documentConflictKindRef.current = 'revision';
+            setCloudSaveState('conflict');
+            setCloudSaveDetail('The working copy advanced while this page was in the background. Your current editor was preserved.');
           }
         })
         .catch(() => {
-          if (active) setLiveSyncState('error');
+          setCloudSaveState('error');
+          setCloudSaveDetail('Cloud sync could not be checked after returning to this page. Retry when connected.');
         });
     };
-    const timer = window.setInterval(poll, 2000);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
     return () => {
-      active = false;
-      window.clearInterval(timer);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
+      flushAfterCurrentWrite(false);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorReady, remoteMapId, readOnlyLiveMap]);
+  }, []);
 
-  const refreshMyMaps = (): void => {
-    setMyMapsLoading(true);
-    void listEditorMaps('mine')
-      .then(setMyMaps)
-      .catch(() => setMyMaps([]))
-      .finally(() => setMyMapsLoading(false));
-  };
-
-  const refreshMiscMaps = (): void => {
-    setMiscMapsLoading(true);
-    void listEditorMaps('misc')
-      .then(setMiscMaps)
-      .catch(() => setMiscMaps([]))
-      .finally(() => setMiscMapsLoading(false));
-  };
-
-  const refreshAdminMaps = (): void => {
-    if (!isAdmin) {
-      setAdminMaps([]);
-      setAdminAuditMapId(null);
-      setAdminAuditEvents([]);
-      return;
-    }
-    setAdminMapsLoading(true);
-    void listAdminEditorMaps()
-      .then(setAdminMaps)
-      .catch(() => setAdminMaps([]))
-      .finally(() => setAdminMapsLoading(false));
-  };
-
-  const loadAdminAuditEvents = (publicId: string): void => {
-    if (!isAdmin) return;
-    setAdminAuditMapId(publicId);
-    setAdminAuditLoading(true);
-    void listEditorMapAuditEvents(publicId)
-      .then(setAdminAuditEvents)
-      .catch(() => setAdminAuditEvents([]))
-      .finally(() => setAdminAuditLoading(false));
-  };
-
-  const openMyEditorMap = async (publicId: string): Promise<void> => {
-    setLayer('board');
-    setTool('select');
-    try {
-      const doc = await loadEditorMap(publicId);
-      applyRemoteMapMetadata(doc);
-      setSourceMiscMapId(doc.is_misc ? doc.public_id : null);
-      lastRemoteSyncedSigRef.current = levelSignature(doc.level);
-      applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: true });
-      setLiveSyncState(doc.can_edit ? 'saved' : 'idle');
-      const url = new URL(window.location.href);
-      url.searchParams.delete('board');
-      url.searchParams.set('map', doc.public_id);
-      navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
-      reportStatus(doc.can_edit ? 'Live map opened.' : 'Viewing live map.', 'success', doc.can_edit ? 'This URL follows your edits for viewers.' : 'Controls are locked for this browser.');
-    } catch (error) {
-      reportStatus('Could not open live map.', 'error', (error as Error).message);
-    }
-  };
-
+  // A Test-return board is a one-shot recovery envelope. Keep it in the URL until that exact
+  // snapshot is acknowledged, then consume it so refresh/history can never replay stale pixels
+  // over a newer cloud revision.
   useEffect(() => {
-    if (!editorReady || readOnlyLiveMap || layer !== 'board') return;
-    refreshMyMaps();
-    refreshMiscMaps();
-    if (isAdmin) refreshAdminMaps();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorReady, layer, readOnlyLiveMap, isAdmin]);
+    if (!editorDocument || cloudSaveState !== 'saved' || lastCloudSyncedSigRef.current !== currentSig) return;
+    if (!isLevelEditorRoutePath(window.location.pathname)) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('board')) return;
+    navigateApp(levelEditorHrefForDocument(window.location.href, {
+      levelId: editorDocument.level_id,
+      documentId: editorDocument.document_id,
+    }), { replace: true, scroll: false });
+  }, [cloudSaveState, currentSig, editorDocument]);
 
-  const isCampaignLevel = useCampaigns((s) =>
-    Boolean(routeParams.campaignId || (targetLevelId && s.campaigns.some((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId)))),
-  );
+  // The staged selector is the source of truth here: choosing a campaign immediately turns on
+  // campaign-only requirements (notably Player faction) before the association is published.
+  const isCampaignLevel = Boolean(campaignAssignmentId);
   const boardFactionCounts = useMemo<Record<UnitPalette, number>>(() => {
     const counts = Object.fromEntries(UNIT_PALETTES.map((faction) => [faction, 0])) as Record<UnitPalette, number>;
     for (const unit of Object.values(boardUnits)) counts[unit.faction] += 1;
@@ -3255,70 +3784,70 @@ export function LevelEditor(): ReactElement {
   const onFactionControlChange = (faction: UnitPalette) => (event: ChangeEvent<HTMLSelectElement>): void => {
     setFactionControl(faction, event.currentTarget.value as FactionControl);
   };
-
-  const markSourceMapSaved = async (): Promise<void> => {
-    const id = sourceMiscMapId ?? remoteMapId;
-    if (!id) return;
-    try {
-      const doc = await markEditorMapSaved(id);
-      setRemoteMapSavedAt(doc.saved_at ?? null);
-      setRemoteMapExpiresAt(doc.expires_at ?? null);
-      if (sourceMiscMapId === id) setSourceMiscMapId(null);
-      refreshMyMaps();
-      refreshMiscMaps();
-      if (isAdmin) refreshAdminMaps();
-    } catch {
-      /* Marking the handoff saved is bookkeeping; the workspace save already succeeded. */
-    }
+  const browserRecoverySafetyDetail = localBackupAvailable === true
+    ? 'A browser recovery copy is available.'
+    : localBackupAvailable === false
+    ? 'Browser recovery is unavailable; keep this tab open.'
+    : 'The current editor remains open while recovery storage is checked.';
+  const syncSavedLevelRoute = (levelId: string): void => {
+    if (!isLevelEditorRoutePath(window.location.pathname)) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('levelId', levelId);
+    if (campaignAssignmentId) url.searchParams.set('campaignId', campaignAssignmentId);
+    else url.searchParams.delete('campaignId');
+    navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
   };
 
-  const loadEditorMapIntoEditor = async (publicId: string): Promise<void> => {
-    setLayer('status');
-    setTool('select');
-    try {
-      const doc = await loadEditorMap(publicId);
-      const previousSig = currentSig;
-      setRemoteMapId(undefined);
-      setRemoteMapCanEdit(false);
-      setRemoteMapRevision(null);
-      setRemoteMapUpdatedAt(null);
-      setRemoteMapExpiresAt(null);
-      setRemoteMapSavedAt(null);
-      setRemoteMapIsMisc(false);
-      setRemoteMapCreator(null);
-      setSourceMiscMapId(doc.is_misc ? publicId : null);
-      lastRemoteSyncedSigRef.current = null;
-      applyLevelDocument(doc.level, { editingId: routeParams.levelId, clean: false });
-      const loadedSig = levelSignature(doc.level);
-      // If the copy comes from the read-only map already on screen, force a dirty
-      // baseline so Save can adopt it immediately.
-      setSavedSig(
-        previousSig === loadedSig
-          ? JSON.stringify(['editor-map-copy-source', publicId, loadedSig])
-          : previousSig,
-      );
-      const url = new URL(window.location.href);
-      url.searchParams.delete('map');
-      url.searchParams.delete('board');
-      navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
-      reportStatus(
-        doc.is_misc ? 'Loaded misc map copy.' : 'Loaded live map copy.',
-        'success',
-        doc.is_misc
-          ? 'Save will adopt it into your workspace and clear its expiry.'
-          : 'Save will adopt this board into your workspace without changing the source map.',
-      );
-    } catch (error) {
-      reportStatus('Could not load map copy.', 'error', (error as Error).message);
-    }
-  };
-
-  // Save the painted board. Campaign path: serialize into the resolved level id and write it
-  // back into the store, then route by TIER — an official (`off-`) level publishes to all
-  // players (confirmed); a private/unassigned level saves to the user workspace. The server's
-  // requireAdmin is the real gate; a non-admin official save fails closed (403 surfaced here).
+  // Save promotes the exact current working copy into the canonical workspace transactionally.
+  // Only the acknowledged response enters the shared store, which keeps thumbnails and gameplay
+  // pinned to the last successful Save/Publish rather than the autosaved working document.
   const saveLevel = async (): Promise<void> => {
     if (saving) return;
+    if (!me?.signed_in) {
+      if (authReachable === false) {
+        reportStatus('Cloud is unavailable.', 'warning', browserRecoverySafetyDetail);
+        retryCloudDocument();
+        return;
+      }
+      signInForEditor();
+      return;
+    }
+    if (!editorDocument || !targetLevelId || documentRevisionRef.current === null) {
+      reportStatus('Cloud working copy is unavailable.', 'warning', browserRecoverySafetyDetail);
+      if (me?.signed_in || authReachable === false) retryCloudDocument();
+      return;
+    }
+    if (documentConflictRef.current) {
+      reportStatus(
+        documentConflictKindRef.current === 'baseline' ? 'The saved position changed outside this working copy.' : 'Resolve the revision conflict before saving.',
+        'warning',
+        `Discard changes restores the latest saved position. ${browserRecoverySafetyDetail}`,
+      );
+      return;
+    }
+    const savingOfficialTier = editorDocument.workspace_kind === 'official';
+    const persistenceHydration = savingOfficialTier ? officialWorkspaceHydration : userWorkspaceHydration;
+    if (persistenceHydration !== 'ready' || !campaignAssignmentHydrated) {
+      const workspaceLabel = savingOfficialTier ? 'Official campaigns' : 'Your workspace';
+      reportStatus(
+        persistenceHydration === 'unavailable' ? `${workspaceLabel} unavailable.` : `${workspaceLabel} still loading.`,
+        persistenceHydration === 'unavailable' ? 'warning' : 'info',
+        'Editing and working-copy autosave remain safe, but canonical Save is paused until campaign data is available.',
+      );
+      return;
+    }
+    const state = useCampaigns.getState();
+    const targetCampaign = campaignAssignmentId
+      ? state.campaigns.find((campaign) => campaign.id === campaignAssignmentId)
+      : undefined;
+    if (campaignAssignmentId && !targetCampaign) {
+      reportStatus('Campaign is unavailable.', 'error', 'Choose another campaign, or leave the level unassigned.');
+      return;
+    }
+    if (targetCampaign && tierOf(targetCampaign.id) !== tierOf(targetLevelId)) {
+      reportStatus('Campaign tier does not match this level.', 'error', 'Move private levels only among private campaigns, and official levels only among official campaigns.');
+      return;
+    }
     // Playability is the save gate (ADR-0050): never persist a rule-violating level. The button is
     // disabled while violations exist, but re-check here so a programmatic call can't slip past.
     if (!playability.ok) return;
@@ -3327,35 +3856,12 @@ export function LevelEditor(): ReactElement {
       setLayer('board');
       return;
     }
-    const targetId = targetLevelId;
-    if (!targetId) {
-      // Cold path (no campaign level): a standalone board authored outside a campaign.
-      // Mint a fresh per-user level id (`l<n>`) and write it into the user workspace — never
-      // an `off-` id (INV8). createUnassignedLevel stamps the minted id onto the level and
-      // returns it; the editor then tracks that id so subsequent saves write back to it.
-      const newLevel = editorBoardToLevel(currentEditorBoard, { id: 'new', name: levelNameForSave, ...modeMeta });
-      const newId = useCampaigns.getState().createUnassignedLevel(newLevel);
-      setEditingId(newId);
-      setSaving(true);
-      try {
-        await saveUserWorkspace();
-        await markSourceMapSaved();
-        reportStatus('Saved to server.', 'success');
-        setSavedSig(currentSig);
-      } catch (e) {
-        const mapped = mapSaveError(e);
-        if ('action' in mapped) { goSignIn(); return; }
-        reportStatus(mapped.message, 'error');
-      } finally {
-        setSaving(false);
-      }
-      return;
-    }
     // Carry the existing level's authored metadata (objective/difficulty/economy/notes/theme)
-    // so a board save doesn't reset them; only the painted board + name are re-derived here.
-    const existing = useCampaigns.getState().levels[targetId];
+    // so a board save doesn't reset them. The working document is the fallback for a brand-new
+    // unassigned level that has not entered the canonical store yet.
+    const existing = useCampaigns.getState().levels[targetLevelId] ?? editorDocument.level;
     const level = editorBoardToLevel(currentEditorBoard, {
-      id: targetId,
+      id: targetLevelId,
       name: levelNameForSave,
       notes: existing?.notes,
       // The Rules panel is the source of truth for objective, battle settings, and authored events;
@@ -3368,7 +3874,6 @@ export function LevelEditor(): ReactElement {
       // republishing a legacy official (no boardCode) doesn't flatten those surfaces to grass.
       previousTerrain: existing?.layers.terrain,
     });
-    useCampaigns.getState().replaceLevel(level);
     const official = tierOf(level.id) === 'official';
     if (official && !(await ask({
       title: 'Publish to all players?',
@@ -3376,22 +3881,126 @@ export function LevelEditor(): ReactElement {
       confirmLabel: 'Publish',
       cancelLabel: 'Cancel',
     }))) return;
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
     setSaving(true);
     try {
-      if (official) {
-        const { revision } = await publishOfficialWorkspace();
-        await markSourceMapSaved();
-        reportStatus(`Published revision ${revision}.`, 'success');
-      } else {
-        await saveUserWorkspace();
-        await markSourceMapSaved();
-        reportStatus('Saved to server.', 'success');
+      if (autosavePromiseRef.current) await autosavePromiseRef.current;
+      if (documentConflictRef.current) {
+        reportStatus('Save stopped by a revision conflict.', 'warning', 'No canonical data was changed.');
+        return;
       }
-      setSavedSig(currentSig);
+      const revision = documentRevisionRef.current;
+      if (revision === null) throw new Error('working copy revision unavailable');
+      const saved = await saveEditorDocument(
+        editorDocument.document_id,
+        revision,
+        level,
+        campaignAssignmentId || null,
+      );
+      const doc = saved.document;
+      if (saved.workspace_revision !== null) {
+        if (doc.workspace_kind === 'official') {
+          useCampaigns.getState().setOfficialWorkspaceRevision(saved.workspace_revision);
+        } else {
+          useCampaigns.getState().setUserWorkspaceRevision(saved.workspace_revision);
+        }
+      }
+      documentRevisionRef.current = doc.revision;
+      documentConflictRef.current = false;
+      documentConflictKindRef.current = null;
+      lastCloudSyncedSigRef.current = levelEditorLevelSignature(doc.level);
+      setEditorDocument(doc);
+      const acknowledgedSig = levelEditorLevelSignature(doc.level);
+      const stillMatchesAcknowledgement = currentSigRef.current === acknowledgedSig;
+      setCloudSaveState(stillMatchesAcknowledgement ? 'saved' : 'pending');
+      setCloudSaveDetail(null);
+      // This is the canonical boundary: no optimistic mutation before the server succeeds.
+      useCampaigns.getState().replaceLevel(doc.level);
+      useCampaigns.getState().assignLevelToCampaign(doc.level_id, campaignAssignmentId || null);
+      setSavedSig(normalizedLevelEditorSignature(doc.level));
+      setSavedCampaignAssignmentId(campaignAssignmentId);
+      setTargetBaselineResolved(true);
+      if (stillMatchesAcknowledgement) clearLevelEditorDraft(draftKey);
+      syncSavedLevelRoute(doc.level_id);
+      reportStatus(official ? 'Published.' : 'Saved.', 'success', 'The thumbnail and campaign play now use this position.');
     } catch (e) {
+      if (isEditorDocumentConflict(e)) {
+        documentRevisionRef.current = e.document.revision;
+        documentConflictRef.current = true;
+        documentConflictKindRef.current = isEditorDocumentBaselineConflict(e) ? 'baseline' : 'revision';
+        setEditorDocument(e.document);
+        setCloudSaveState('conflict');
+        setCloudSaveDetail(isEditorDocumentBaselineConflict(e)
+          ? 'The canonical saved position changed. Your working progress was preserved and nothing was overwritten.'
+          : 'Another tab or device saved a newer revision. No canonical data was overwritten.');
+        reportStatus(
+          isEditorDocumentBaselineConflict(e) ? 'Save stopped because the saved position changed.' : 'Save stopped by a revision conflict.',
+          'warning',
+          `Your current editor remains open. ${browserRecoverySafetyDetail}`,
+        );
+        return;
+      }
       const mapped = mapSaveError(e);
-      if ('action' in mapped) { goSignIn(); return; }
+      if ('action' in mapped) { signInForEditor(); return; }
       reportStatus(mapped.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const discardChanges = async (): Promise<void> => {
+    if (!editorDocument || !targetLevelId || !editorDocument.has_saved_baseline) return;
+    if (!me?.signed_in || documentRevisionRef.current === null) {
+      reportStatus('Cloud working copy is unavailable.', 'warning', 'Reconnect before discarding changes.');
+      return;
+    }
+    if (!(await ask({
+      title: 'Discard changes?',
+      message: 'Restore the working copy to the last saved position? This deliberately removes all unsaved editor progress for this level.',
+      confirmLabel: 'Discard changes',
+      cancelLabel: 'Keep editing',
+    }))) return;
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    setSaving(true);
+    try {
+      if (autosavePromiseRef.current) await autosavePromiseRef.current;
+      const revision = documentRevisionRef.current;
+      if (revision === null) throw new Error('working copy revision unavailable');
+      const doc = await discardEditorDocumentChanges(
+        editorDocument.document_id,
+        revision,
+      );
+      documentRevisionRef.current = doc.revision;
+      documentConflictRef.current = false;
+      documentConflictKindRef.current = null;
+      lastCloudSyncedSigRef.current = levelEditorLevelSignature(doc.level);
+      setEditorDocument(doc);
+      setCloudSaveState('saved');
+      setCloudSaveDetail(null);
+      useCampaigns.getState().replaceLevel(doc.level);
+      applyLevelDocument(doc.level, { editingId: doc.level_id, clean: true });
+      setSavedSig(normalizedLevelEditorSignature(doc.level));
+      setTargetBaselineResolved(true);
+      setCampaignAssignmentId(savedCampaignAssignmentId);
+      clearLevelEditorDraft(draftKey);
+      reportStatus('Changes discarded.', 'success', 'The editor again matches the saved thumbnail and campaign position.');
+    } catch (error) {
+      if (isEditorDocumentConflict(error)) {
+        documentRevisionRef.current = error.document.revision;
+        documentConflictRef.current = true;
+        setEditorDocument(error.document);
+        setCloudSaveState('conflict');
+        setCloudSaveDetail('The working copy changed in another tab. Review and choose Discard changes again.');
+        reportStatus('Discard stopped by a revision conflict.', 'warning', 'Nothing was discarded.');
+      } else {
+        reportStatus('Discard failed.', 'error', (error as Error).message);
+      }
     } finally {
       setSaving(false);
     }
@@ -3770,55 +4379,107 @@ export function LevelEditor(): ReactElement {
   // Tier of the level under edit drives the Save verb (INV6): an official (`off-`) level
   // PUBLISHES to all players; a private/unassigned level just SAVES. A level only resolves a
   // tier once a target id is known (campaign path); a fresh standalone board saves as private.
-  const isOfficialTarget = targetLevelId ? tierOf(targetLevelId) === 'official' : false;
+  const isOfficialTarget = targetLevelId
+    ? tierOf(targetLevelId) === 'official'
+    : Boolean(assignedCampaign && tierOf(assignedCampaign.id) === 'official');
   const saveLabel = isOfficialTarget ? 'Publish to all players' : 'Save';
+  const cloudDocumentAvailable = Boolean(me?.signed_in && editorDocument && targetLevelId && targetBaselineResolved);
+  const targetSaveUnavailable = !cloudDocumentAvailable;
   // Save (user save AND official publish) is gated on ZERO playability violations (ADR-0050) — the
   // editor gives full freedom to mess the board up, but blocks persisting a rule-breaking level —
-  // AND on main's conditions: something to save (dirty), no in-flight save, and (campaign levels) a
-  // resolved Player faction.
-  const canSave = !readOnlyLiveMap && !saving && dirty && !needsPlayerFaction && playability.ok;
+  // AND on main's conditions: hydrated workspace/association context, something to save (dirty),
+  // no in-flight save, and (campaign levels) a resolved Player faction.
+  const persistenceHydration = isOfficialTarget ? officialWorkspaceHydration : userWorkspaceHydration;
+  const saveContextReady = persistenceHydration === 'ready' && campaignAssignmentHydrated;
+  const canSave = saveContextReady && !saving && !targetSaveUnavailable && !documentConflictRef.current && dirty && !needsPlayerFaction && playability.ok;
   const saveBlockedMessage = saving
     ? 'Save is already in progress.'
-    : readOnlyLiveMap
-    ? 'This live map is locked for viewing.'
+    : !me?.signed_in && authReachable === false
+    ? 'Reconnect to save this level.'
+    : !me?.signed_in
+    ? 'Sign in to save this level.'
+    : documentConflictRef.current
+    ? 'Save is paused because another tab or device has a newer revision.'
+    : targetSaveUnavailable
+    ? 'Save is blocked because the cloud working copy is unavailable.'
+    : persistenceHydration === 'unavailable'
+    ? isOfficialTarget ? 'Official campaigns are unavailable.' : 'Your workspace is unavailable.'
+    : !saveContextReady
+    ? 'Workspace is still loading.'
     : !playability.ok
     ? 'Save is blocked by playability issues.'
     : needsPlayerFaction
     ? 'Save is blocked because this campaign level needs a Player faction.'
     : !dirty && targetLevelId
-    ? 'Save is disabled because this level has no unsaved board changes.'
+    ? 'Save is disabled because this draft already matches the saved level.'
     : !dirty
-    ? 'Save is disabled because this standalone board has no unsaved changes.'
+    ? 'Save is disabled because this standalone draft has no new changes.'
     : '';
   const saveBlockedDetail = saving
     ? 'Wait for the current save to finish.'
-    : readOnlyLiveMap
-    ? 'Open your own editor session or load this map from the misc pool to make a copy.'
+    : !me?.signed_in && authReachable === false
+    ? browserRecoverySafetyDetail
+    : !me?.signed_in
+    ? `${browserRecoverySafetyDetail} Sign in to sync and save it.`
+    : documentConflictRef.current
+    ? `Your current editor remains open. Discard changes restores the latest saved position. ${browserRecoverySafetyDetail}`
+    : targetSaveUnavailable
+    ? `Reconnect to restore cloud autosave. ${browserRecoverySafetyDetail}`
+    : persistenceHydration === 'unavailable'
+    ? `Working-copy autosave remains safe, but Save is locked to protect the canonical workspace. ${browserRecoverySafetyDetail}`
+    : !saveContextReady
+    ? 'Editing is ready; Save will unlock as soon as your campaigns finish loading.'
     : !playability.ok
     ? 'Resolve the issues in the Fix-before-saving list above, then Save.'
     : needsPlayerFaction
     ? 'Open Board > Level Settings, then assign Player to one board faction.'
     : !dirty && targetLevelId
-    ? 'Make an edit, or load a backend map from the Board tab and overwrite this target.'
+    ? 'Make an edit to create a new saved position.'
     : !dirty
-    ? 'Make an edit or load a backend map; then Save will create a workspace level.'
+    ? 'Make an edit; then Save will create the canonical level.'
     : '';
   const explainBlockedSave = (): void => {
     if (!saveBlockedMessage) return;
     // Playability blocks stay on 'status': the Fix-before-saving list renders there, beside Save.
     setLayer(needsPlayerFaction && playability.ok ? 'board' : 'status');
     setTool('select');
-    reportStatus(saveBlockedMessage, saving ? 'info' : 'warning', saveBlockedDetail);
+    reportStatus(saveBlockedMessage, saving || persistenceHydration === 'loading' ? 'info' : 'warning', saveBlockedDetail);
   };
-  // Save-state label priority (Status card fallback): saving → blocked-by-violations →
-  // needs-player → dirty → clean.
-  const saveStateLabel = saving ? 'Saving…' : !playability.ok ? 'Fix issues to save' : needsPlayerFaction ? 'Needs Player' : dirty ? 'Unsaved' : 'No changes';
+  const progressStateLabel = cloudSaveState === 'loading'
+    ? 'Opening working copy…'
+    : cloudSaveState === 'local'
+    ? localBackupAvailable === true
+      ? 'Saved in this browser'
+      : localBackupAvailable === false
+      ? 'Browser recovery unavailable'
+      : 'Saving in this browser…'
+    : cloudSaveState === 'pending' || cloudSaveState === 'saving'
+    ? 'Saving progress…'
+    : cloudSaveState === 'saved'
+    ? 'Progress saved'
+    : cloudSaveState === 'conflict'
+    ? 'Autosave paused'
+    : 'Cloud autosave interrupted';
+  const hasDiscardableChanges = Boolean(
+    editorDocument?.has_saved_baseline
+    && (dirty || documentConflictRef.current),
+  );
   // Button text should name the available action or the current blocker. In particular, a clean
   // official level should not look like it is waiting to publish.
   const saveButtonLabel = canSave
     ? saveLabel
     : saving
     ? 'Saving…'
+    : !me?.signed_in
+    ? 'Sign in to save'
+    : documentConflictRef.current
+    ? 'Revision conflict'
+    : targetSaveUnavailable
+    ? 'Working copy unavailable'
+    : persistenceHydration === 'unavailable'
+    ? 'Unavailable'
+    : !saveContextReady
+    ? 'Loading…'
     : !playability.ok
     ? 'Fix issues'
     : needsPlayerFaction
@@ -3826,42 +4487,27 @@ export function LevelEditor(): ReactElement {
     : !dirty
     ? 'No changes'
     : saveLabel;
-  const anonymousIdentityLabel = remoteMapCreator?.kind === 'anonymous'
-    ? remoteMapCreator.label
-    : myMaps.find((map) => map.creator?.kind === 'anonymous')?.creator?.label ?? 'Anonymous browser';
-  const editorMapIdentityLabel = me?.signed_in ? me.email ?? 'Signed-in account' : anonymousIdentityLabel;
-  const remoteMapCreatorLabel = remoteMapCreator?.label ?? (remoteMapId ? 'Unknown creator' : editorMapIdentityLabel);
-  const selectedAdminMap = adminAuditMapId ? adminMaps.find((map) => map.public_id === adminAuditMapId) ?? null : null;
-  // Test-Play is enabled only for a SAVED (clean, in-store), violation-free level with a resolvable
-  // id: /play resolves the level from the store, so an unsaved board would test-play the stale
-  // saved version. mode=test skips progress recording. See below (button title explains the state).
-  const canTest = Boolean(targetLevelId) && playability.ok && !dirty && savedSig !== null;
-  const testHref = canTest ? (() => {
-    const params = new URLSearchParams({ levelId: targetLevelId as string, mode: 'test' });
-    if (routeParams.campaignId) params.set('campaignId', routeParams.campaignId);
-    params.set('returnTo', `${window.location.pathname}${window.location.search}${window.location.hash}`);
-    return `/play?${params.toString()}`;
-  })() : undefined;
-  // "Play" a Test Board: play the CURRENT (possibly unsaved) board against the AI right now via
-  // the transient ?board= play-test URL — the position rides the URL, so unlike Test it needs no saved
-  // level and is gated only on playability. mode=test keeps it non-persisted and surfaces the
-  // Test Board's CPU-delay control in the HUD. returnTo carries the SAME board back, so ending
-  // (or leaving) the test lands you in the editor on the identical position (encode/decode is
-  // lossless) — this is what makes an unsaved play-test return to the same in-editor position.
-  const playBoardHref = useMemo(() => {
+  // Test always means the board the author is looking at. The exact current snapshot rides the URL,
+  // so saving/publishing is persistence—not permission to iterate. The return link keeps the
+  // durable level target while carrying this exact in-progress snapshot back to the editor.
+  const testHref = useMemo(() => {
     if (!playability.ok) return undefined;
-    const code = encodeBoard(currentEditorBoard);
-    const timeControl = clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined;
-    const backParams = new URLSearchParams({ board: code, obj: objective });
-    appendTimeControlParams(backParams, timeControl);
-    appendLevelEventsParam(backParams, eventsForSave);
-    appendVictoryRulesParam(backParams, victoryForSave);
-    const playParams = new URLSearchParams({ board: code, obj: objective, mode: 'test', returnTo: `/editor/level?${backParams.toString()}` });
-    appendTimeControlParams(playParams, timeControl);
-    appendLevelEventsParam(playParams, eventsForSave);
-    appendVictoryRulesParam(playParams, victoryForSave);
-    return `/play?${playParams.toString()}`;
-  }, [playability.ok, currentEditorBoard, objective, clockEnabled, clockInitialSeconds, clockIncrementSeconds, eventsForSave, victoryForSave]);
+    return currentBoardTestHref({
+      boardCode: encodeBoard(currentEditorBoard),
+      levelName: levelNameForSave,
+      objective,
+      surviveTurns,
+      timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
+      events: eventsForSave,
+      victory: victoryForSave,
+      editorSearch: window.location.search,
+      campaignId: routeParams.campaignId,
+      levelId: targetLevelId,
+      documentRevision: editorDocument?.revision,
+      editorReturnTo: routeParams.returnTo,
+      layer,
+    });
+  }, [clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, editorDocument?.revision, eventsForSave, layer, levelNameForSave, objective, playability.ok, routeParams.campaignId, routeParams.returnTo, surviveTurns, targetLevelId, victoryForSave]);
 
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
@@ -3881,7 +4527,8 @@ export function LevelEditor(): ReactElement {
         {editorReady ? <TitleBarSlot region="actions">
           {/* Only the RETURN nav rides the global title bar now (‹ Catalog / ‹ Back). The
               workspace ACTIONS live in the editor's OWN chrome — tools + Undo/Redo in the pinned
-              dock (.le-actions-dock), Test + Save/Publish in the Status layer card — because
+              dock (.le-actions-dock), Test in that always-visible dock, and Save/Publish in
+              the Status layer card — because
               document verbs belong in the editor's toolbar, not global chrome (the
               Unity/Unreal/Godot/Blender convention). The bar stays brand + return-nav +
               account cluster, matching Settings. */}
@@ -3891,14 +4538,20 @@ export function LevelEditor(): ReactElement {
           </TitleBarActions>
         </TitleBarSlot> : null}
 
-        <div className="skirmish-field">
+        <div className="skirmish-field" inert={!editorReady || saving ? true : undefined} aria-busy={!editorReady || saving || undefined}>
           <div className="skirmish-board-frame">
             <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
               <div className="tileset-view-board-content is-board">
-                {liveMapUnavailable ? (
-                  <div className="tileset-view-empty le-live-map-unavailable" role="status" aria-live="polite">
-                    <h2>Live map unavailable</h2>
-                    <p>This map link has expired, was pruned, or could not be reached. No fallback board is being shown.</p>
+                {editorLoadError ? (
+                  <div className="tileset-view-empty" role="status" aria-live="polite">
+                    <h2>{editorLoadError.title}</h2>
+                    <p>{editorLoadError.detail}</p>
+                    {editorLoadError.signIn ? (
+                      <button type="button" className="le-seg-btn" onClick={signInForEditor}>Sign in</button>
+                    ) : null}
+                    {editorLoadError.retry ? (
+                      <button type="button" className="le-seg-btn" onClick={retryCloudDocument}>Retry</button>
+                    ) : null}
                   </div>
                 ) : (
                   <StudioEditableBoard
@@ -3915,37 +4568,37 @@ export function LevelEditor(): ReactElement {
                     resolveUnit={resolveUnitAsset}
                     resolveDoodad={resolveDoodadAsset}
                     resolveProp={resolvePropDef}
-                    tool={readOnlyLiveMap ? 'select' : tool}
+                    tool={tool}
                     selectedCell={selectedCell}
                     boardZoom={viewZoom}
                     boardPan={viewPan}
                     showGrid={showGrid}
                     tacticalPreview={tacticalPreview}
                     animationFrame={animationFrame}
-                    onPaint={readOnlyLiveMap ? (() => {}) : paintCell}
-                    onErase={readOnlyLiveMap ? (() => {}) : eraseCell}
+                    onPaint={paintCell}
+                    onErase={eraseCell}
                     onSelect={selectCell}
-                    onMove={readOnlyLiveMap ? undefined : moveObject}
-                    canMoveTo={readOnlyLiveMap ? undefined : canMoveObjectTo}
+                    onMove={moveObject}
+                    canMoveTo={canMoveObjectTo}
                     fences={boardFences}
                     cover={boardCover}
                     coverTypes={boardCoverTypes}
                     coverSeed={coverSeed}
-                    fenceTool={readOnlyLiveMap ? false : fenceTool}
+                    fenceTool={fenceTool}
                     onPaintEdge={paintFenceEdge}
                     onEraseEdge={eraseFenceEdge}
                     walls={boardWalls}
-                    wallTool={readOnlyLiveMap ? false : wallTool}
+                    wallTool={wallTool}
                     onPaintWallEdge={paintWallEdge}
                     onEraseWallEdge={eraseWallEdge}
                     wallArt={boardWallArt}
-                    wallArtTool={readOnlyLiveMap ? false : wallArtTool}
+                    wallArtTool={wallArtTool}
                     onPaintWallArtEdge={paintWallArtEdge}
                     onEraseWallArtEdge={eraseWallArtEdge}
-                    propBrush={!readOnlyLiveMap && brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
-                    macroTileBrush={!readOnlyLiveMap && brushKind === 'tile' ? macroTileBrushAsset : null}
-                    regionCells={readOnlyLiveMap ? undefined : regionSelection}
-                    onRegionStart={readOnlyLiveMap ? undefined : regionSelectPatch}
+                    propBrush={brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
+                    macroTileBrush={brushKind === 'tile' ? macroTileBrushAsset : null}
+                    regionCells={regionSelection}
+                    onRegionStart={regionSelectPatch}
                   />
                 )}
               </div>
@@ -3960,7 +4613,7 @@ export function LevelEditor(): ReactElement {
                     <button type="button" role="tab" aria-selected={eventsTab === 'victory'} className={`le-seg-btn ${eventsTab === 'victory' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('victory')}>Victory rules</button>
                     <button type="button" role="tab" aria-selected={eventsTab === 'other'} className={`le-seg-btn ${eventsTab === 'other' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('other')}>Other events</button>
                   </div>
-                  <button type="button" className="le-seg-btn le-events-done" onClick={() => setEventsOpen(false)}>Done</button>
+                  <button type="button" className="le-seg-btn le-events-done" onClick={closeEventsEditor}>Done</button>
                 </div>
               </div>
               {eventsTab === 'victory' ? (
@@ -4018,53 +4671,24 @@ export function LevelEditor(): ReactElement {
           ) : null}
         </div>
 
-      {readOnlyLiveMap ? (
-      <aside className="skirmish-hud le-live-viewer" aria-label="Live map viewer controls">
+      {editorLoadError ? (
+      <aside className="skirmish-hud" aria-label="Editor document access" inert={!editorReady || saving ? true : undefined}>
         <section className="skirmish-card le-status-card">
-          <h2>Live View</h2>
-          <div className="le-status-level" aria-label="Level">
-            <span className="le-level-name">{levelName}</span>
-            <span className="le-official-tag">LOCKED</span>
+          <h2>Document</h2>
+          <div className="le-status-current is-blocked">
+            <strong>{editorLoadError.title}</strong>
+            <span>{editorLoadError.detail}</span>
           </div>
-          <div className="le-status-current is-ready">
-            <strong>Watching owner edits</strong>
-            <span>{liveSyncState === 'error' ? 'The live map is temporarily unreachable.' : 'The board refreshes automatically while this page is open.'}</span>
-          </div>
-          <dl className="le-settings-list le-live-meta">
-            <div><dt>Creator</dt><dd>{remoteMapCreatorLabel}</dd></div>
-            <div><dt>Revision</dt><dd>{remoteMapRevision ?? '—'}</dd></div>
-            <div><dt>Updated</dt><dd>{remoteMapUpdatedAt ? new Date(remoteMapUpdatedAt).toLocaleString() : '—'}</dd></div>
-            <div><dt>Expires</dt><dd>{remoteMapSavedAt ? 'Saved' : remoteMapExpiresAt ? new Date(remoteMapExpiresAt).toLocaleString() : '—'}</dd></div>
-            <div><dt>Board</dt><dd>{boardCols}×{boardRows}</dd></div>
-          </dl>
-        </section>
-        <section className="skirmish-card le-details">
-          <h2>Inspect</h2>
-          <dl>
-            {selectedCell ? <div><dt>Cell</dt><dd>{selectedCell.x}, {selectedCell.y}</dd></div> : null}
-            <div><dt>Tiles</dt><dd>{paintedCount}</dd></div>
-            <div><dt>Units</dt><dd>{unitCount}</dd></div>
-            <div><dt>Props</dt><dd>{propCount}</dd></div>
-            <div><dt>Zones</dt><dd>{zoneCount}</dd></div>
-          </dl>
-          {remoteMapId ? (
-            <button
-              type="button"
-              className="le-seg-btn"
-              style={{ width: '100%', marginTop: 10 }}
-              onClick={() => void loadEditorMapIntoEditor(remoteMapId)}
-              title={remoteMapIsMisc ? 'Load this misc map into your editor as a saveable copy.' : 'Load this live map into your editor as a saveable copy.'}
-            >Edit copy</button>
+          {editorLoadError.signIn ? (
+            <button type="button" className="le-seg-btn" style={{ width: '100%' }} onClick={signInForEditor}>Sign in</button>
+          ) : null}
+          {editorLoadError.retry ? (
+            <button type="button" className="le-seg-btn" style={{ width: '100%' }} onClick={retryCloudDocument}>Retry</button>
           ) : null}
         </section>
-        {playBoardHref ? (
-          <NavButton className="le-seg-btn le-play-board" data-testid="le-play-board" to={playBoardHref} title="Play this exact board against the AI now.">Play test</NavButton>
-        ) : (
-          <button type="button" className="le-seg-btn le-play-board" disabled title="This board needs playable pieces before it can be tested.">Play test</button>
-        )}
       </aside>
       ) : (
-      <aside className="skirmish-hud" aria-label="Editor controls">
+      <aside className="skirmish-hud" aria-label="Editor controls" inert={!editorReady || saving ? true : undefined} aria-busy={!editorReady || saving || undefined}>
         <section className="skirmish-card">
           <h2>Layer</h2>
           <SelectFrame>
@@ -4083,9 +4707,8 @@ export function LevelEditor(): ReactElement {
           </SelectFrame>
         </section>
 
-        {/* Pinned editor ACTIONS dock: the universal edit controls — tools plus Undo/Redo — stay
-            above the sole scroll region, visible on every layer without overlaying the board.
-            Test and Save/Publish are session verbs, so they live with the save workflow. */}
+        {/* Pinned editor ACTIONS dock: tools, Undo/Redo, and current-board Test stay above the sole
+            scroll region, visible on every layer without overlaying the board. */}
         <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
           <h2>Actions</h2>
           <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
@@ -4111,13 +4734,12 @@ export function LevelEditor(): ReactElement {
               title={redoStack.length ? 'Redo the last undone edit.' : 'Nothing to redo.'}
             ><span className="le-ico ic-redo" aria-hidden="true" /></button>
           </div>
-          {/* Live-test: play THIS board against the AI now, no save. Lives in the always-visible
-              Actions dock (not a layer-gated card); the test returns here (returnTo) so it's a
-              loop, not a one-way trip. Gated on playability, like Save/Test. */}
-          {playBoardHref ? (
-            <NavButton className="le-seg-btn le-play-board" data-testid="le-play-board" to={playBoardHref} title="Play this exact board against the AI now — no save (a Test Board; set a CPU-delay floor in the game's Controls tab). ‹ Back returns you here.">▶ Play test</NavButton>
+          {/* Test the exact board on screen, saved or not. It lives in the always-visible Actions
+              dock and returns to the same editor target, making edit → test → back one loop. */}
+          {testHref ? (
+            <NavButton className="le-seg-btn le-play-board" data-testid="le-test" to={testHref} title="Test this exact board against the AI now. No save is required; ‹ Back returns you here.">Test</NavButton>
           ) : (
-            <button type="button" className="le-seg-btn le-play-board" disabled title="Add a player and an enemy piece (clear the playability issues in the Status layer) to live-test this board.">▶ Play test</button>
+            <button type="button" className="le-seg-btn le-play-board" data-testid="le-test" disabled title="Add a player and an enemy piece (clear the playability issues in the Status layer) to test this board.">Test</button>
           )}
         </section>
 
@@ -4137,8 +4759,8 @@ export function LevelEditor(): ReactElement {
             <section className="skirmish-card le-violations" aria-label="Playability issues" data-testid="le-violations">
               <h2>Fix before saving</h2>
               <ul className="le-violation-list">
-                {playability.violations.map((v) => (
-                  <li key={v.code} className="le-violation">
+                {playability.violations.map((v, index) => (
+                  <li key={`${v.code}-${index}`} className="le-violation">
                     <span className="le-violation-msg">{v.message}</span>
                     {v.code === 'P3_UNITS_NOT_EMPTY' ? (
                       <button type="button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
@@ -4166,38 +4788,77 @@ export function LevelEditor(): ReactElement {
               </label>
               {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
             </div>
-            <div className={`le-status-current ${canSave ? 'is-ready' : 'is-blocked'}`}>
-              <strong>{canSave ? 'Ready to save' : saveBlockedMessage || saveStateLabel}</strong>
-              {canSave ? <span>{isOfficialTarget ? 'Publishing will update the official campaigns.' : 'The current board has unsaved changes.'}</span> : <span>{saveBlockedDetail}</span>}
+            {isAdmin ? (
+              <div className="le-status-name-field le-status-campaign-field">
+                <span className="le-settings-label">Campaign</span>
+                <SelectFrame>
+                  <select
+                    className="le-layer-select"
+                    data-testid="le-campaign-select"
+                    value={campaignAssignmentId}
+                    aria-label="Campaign"
+                    disabled={!campaignAssignmentHydrated || saving}
+                    onChange={(event) => setCampaignAssignmentId(event.currentTarget.value)}
+                  >
+                    <option value="">Unassigned</option>
+                    {officialCampaignOptions.length ? (
+                      <optgroup label="Official campaigns">
+                        {officialCampaignOptions.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+                      </optgroup>
+                    ) : null}
+                    {privateCampaignOptions.length ? (
+                      <optgroup label="Your campaigns">
+                        {privateCampaignOptions.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+                      </optgroup>
+                    ) : null}
+                  </select>
+                </SelectFrame>
+                <span className="le-board-note">Admin only · Save or publish to apply this assignment.</span>
+              </div>
+            ) : null}
+            <div className={`le-status-current ${cloudSaveState === 'error' || cloudSaveState === 'conflict' ? 'is-blocked' : 'is-ready'}`}>
+              <strong>{progressStateLabel}</strong>
+              <span>{cloudSaveDetail ?? (
+                cloudSaveState === 'saved'
+                  ? 'Your working copy is safely stored in your account.'
+                  : cloudSaveState === 'local'
+                  ? localBackupAvailable === true
+                    ? 'This browser has a recovery copy, but it is not synced across devices.'
+                    : localBackupAvailable === false
+                    ? 'Browser storage is blocked or full. Keep this tab open, or sign in and retry cloud sync.'
+                    : 'Writing a browser recovery copy…'
+                  : 'Edits are saved automatically without changing the saved thumbnail or campaign position.'
+              )}</span>
             </div>
-            {/* The save-workflow verbs live HERE with the state that explains them (the pinned
-                dock above keeps only Undo/Redo). Gating is preserved verbatim — /play reads the
-                STORED level, so Test stays Save-gated; a blocked Save click still routes to the
-                blocking layer via explainBlockedSave. */}
+            {/* Persistence controls live here with the state that explains them. Test is the
+                always-visible current-board action above; Save/Publish remains independently gated. */}
             <div className="le-board-actions le-status-actions">
-              {canTest && testHref ? (
-                <NavButton className="le-seg-btn" data-testid="le-test" to={testHref} title="Play-test this level (progress is not recorded).">Test</NavButton>
-              ) : (
+              {cloudSaveState === 'error' ? (
                 <button
                   type="button"
                   className="le-seg-btn"
-                  data-testid="le-test"
-                  disabled
-                  title={
-                    !playability.ok ? 'Fix the playability issues listed above to test-play.'
-                    : dirty ? 'Save the level first — Test plays the saved version.'
-                    : !targetLevelId ? 'Save the level first to test-play it.'
-                    : 'Test-play unavailable.'
-                  }
-                >Test</button>
-              )}
+                  data-testid="le-retry-cloud-sync"
+                  disabled={saving}
+                  onClick={retryCloudDocument}
+                >Retry cloud sync</button>
+              ) : null}
+              {editorDocument?.has_saved_baseline ? (
+                <button
+                  type="button"
+                  className="le-seg-btn"
+                  data-testid="le-discard-changes"
+                  disabled={!hasDiscardableChanges || saving}
+                  title={hasDiscardableChanges ? 'Revert the working copy to the last saved position.' : 'The working copy already matches the saved position.'}
+                  onClick={() => void discardChanges()}
+                >Discard changes</button>
+              ) : null}
               <button
                 type="button"
                 className={`le-seg-btn ${canSave ? 'active' : 'is-blocked'}`.trim()}
                 data-testid="le-save"
                 aria-label={canSave ? saveLabel : `${saveButtonLabel}: ${saveBlockedMessage}`}
                 title={canSave ? (isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.') : `${saveBlockedMessage} ${saveBlockedDetail}`.trim()}
-                onClick={() => { if (canSave) void saveLevel(); else explainBlockedSave(); }}
+                onClick={() => { if (canSave || !me?.signed_in) void saveLevel(); else explainBlockedSave(); }}
               >{saveButtonLabel}</button>
             </div>
             <div className="le-material-values" aria-label="Team material point values">
@@ -4242,121 +4903,6 @@ export function LevelEditor(): ReactElement {
               <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
             </div>
-            <div className={`le-live-link-status is-${liveSyncState}`}>
-              <strong>{remoteMapId ? 'URL is live' : 'Preparing live URL'}</strong>
-              <span>
-                {remoteMapId
-                  ? liveSyncState === 'saving' || liveSyncState === 'pending'
-                    ? 'Syncing current edits to the backend map.'
-                    : liveSyncState === 'error'
-                    ? 'Live sync needs attention; local editing still works.'
-                    : 'The browser URL opens this board read-only for other viewers.'
-                  : 'A backend map id will be added to the URL automatically.'}
-              </span>
-            </div>
-          </section>
-          <section className="skirmish-card le-map-audit">
-            <div className="le-card-row">
-              <h2>My Maps</h2>
-              <button type="button" className="le-seg-btn le-mini-btn" onClick={refreshMyMaps} disabled={myMapsLoading} title="Refresh my maps">Refresh</button>
-            </div>
-            <dl className="le-settings-list le-map-identity">
-              <div><dt>Identity</dt><dd>{editorMapIdentityLabel}</dd></div>
-              <div><dt>Current</dt><dd>{remoteMapId ?? 'New draft'}</dd></div>
-              {remoteMapId ? <div><dt>Creator</dt><dd>{remoteMapCreatorLabel}</dd></div> : null}
-            </dl>
-            {myMapsLoading ? (
-              <p className="le-board-note">Loading maps…</p>
-            ) : myMaps.length ? (
-              <div className="le-misc-map-list">
-                {myMaps.map((map) => (
-                  <article className="le-misc-map-row" key={map.public_id}>
-                    <div>
-                      <strong>{map.name}</strong>
-                      <span>{map.cols ?? '?'}×{map.rows ?? '?'} · rev {map.revision} · {map.saved_at ? 'saved' : map.expires_at ? `expires ${new Date(map.expires_at).toLocaleDateString()}` : 'no expiry'}</span>
-                    </div>
-                    <button type="button" className="le-seg-btn le-mini-btn" onClick={() => void openMyEditorMap(map.public_id)} title="Open this backend map">Open</button>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="le-board-note">No backend maps are tied to this identity yet.</p>
-            )}
-          </section>
-          {isAdmin ? (
-            <section className="skirmish-card le-map-audit">
-              <div className="le-card-row">
-                <h2>Admin Audit</h2>
-                <button type="button" className="le-seg-btn le-mini-btn" onClick={refreshAdminMaps} disabled={adminMapsLoading} title="Refresh admin audit">Refresh</button>
-              </div>
-              {adminMapsLoading ? (
-                <p className="le-board-note">Loading maps…</p>
-              ) : adminMaps.length ? (
-                <div className="le-misc-map-list">
-                  {adminMaps.slice(0, 10).map((map) => {
-                    const ownerLabel = map.owner_email ?? map.anonymous_label ?? map.creator?.label ?? 'system';
-                    return (
-                      <article className="le-misc-map-row" key={map.public_id} title={map.anonymous_user_hash ?? map.owner_email ?? undefined}>
-                        <div>
-                          <strong>{map.name}</strong>
-                          <span>{ownerLabel} · {map.listed ? 'misc' : 'direct'} · rev {map.revision}</span>
-                        </div>
-                        <button type="button" className="le-seg-btn le-mini-btn" onClick={() => loadAdminAuditEvents(map.public_id)} title="Show audit events">Events</button>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="le-board-note">No backend maps found.</p>
-              )}
-              {adminAuditMapId ? (
-                <div className="le-admin-events">
-                  <div className="le-admin-events-head">
-                    <strong>{selectedAdminMap?.name ?? 'Selected map'}</strong>
-                    <span>{adminAuditMapId}</span>
-                  </div>
-                  {adminAuditLoading ? (
-                    <p className="le-board-note">Loading events…</p>
-                  ) : adminAuditEvents.length ? (
-                    <div className="le-misc-map-list">
-                      {adminAuditEvents.slice(0, 8).map((event) => (
-                        <article className="le-misc-map-row" key={event.id}>
-                          <div>
-                            <strong>{event.action}</strong>
-                            <span>{event.actor_email ?? event.anonymous_label ?? 'system'} · {event.created_at ? new Date(event.created_at).toLocaleString() : 'unknown time'}</span>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="le-board-note">No audit events recorded.</p>
-                  )}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-          <section className="skirmish-card le-misc-pool">
-            <div className="le-card-row">
-              <h2>Misc Map Pool</h2>
-              <button type="button" className="le-seg-btn le-mini-btn" onClick={refreshMiscMaps} disabled={miscMapsLoading} title="Refresh misc maps">Refresh</button>
-            </div>
-            {miscMapsLoading ? (
-              <p className="le-board-note">Loading maps…</p>
-            ) : miscMaps.length ? (
-              <div className="le-misc-map-list">
-                {miscMaps.map((map) => (
-                  <article className="le-misc-map-row" key={map.public_id}>
-                    <div>
-                      <strong>{map.name}</strong>
-                      <span>{map.cols ?? '?'}×{map.rows ?? '?'} · expires {map.expires_at ? new Date(map.expires_at).toLocaleDateString() : 'later'}</span>
-                    </div>
-                    <button type="button" className="le-seg-btn le-mini-btn" onClick={() => void loadEditorMapIntoEditor(map.public_id)} title="Load this backend map into the editor">Load</button>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="le-board-note">No unsaved misc maps are waiting.</p>
-            )}
           </section>
           <section className="skirmish-card le-level-settings">
             <h2>Level Settings</h2>

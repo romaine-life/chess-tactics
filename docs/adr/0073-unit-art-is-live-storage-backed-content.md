@@ -29,9 +29,10 @@ Postgres owns the live catalog:
 
 - `unit_families` stores each stable family's accepted-art pointer and published
   display scale.
-- `unit_assets` stores editable candidate metadata, footprint, source canvas, and
-  contact anchor. Candidate UUIDs are Studio/storage identities and never gameplay
-  identities.
+- `unit_assets` stores active editable candidate metadata, footprint, source canvas,
+  and contact anchor. Candidate UUIDs are Studio/storage identities and never
+  gameplay identities. Retired records may be exported to private archive storage
+  and removed from the operational catalog.
 - `unit_sprites` maps candidate + palette + direction to content-addressed PNG
   metadata.
 - `unit_catalog_state` supplies one revision for manifests and thumbnail caches.
@@ -84,6 +85,7 @@ without granting test-slot service accounts production identity.
   they do not cause repeated blob downloads.
 - A changed image cannot invalidate a level because levels identify chess pieces,
   not art records.
-- Candidate history leaves Git while remaining recoverable in storage and the DB.
+- Candidate history leaves Git and the operational DB while remaining recoverable
+  from verified manifests and immutable bytes in private archive storage.
 - A missing or incomplete catalog is an explicit availability failure, not a request
   to render another source.

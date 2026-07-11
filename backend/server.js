@@ -89,9 +89,9 @@ app.use('/api/opening-books', express.json({ limit: '4mb' }));
 // docs, each carrying a full per-cell terrain array + boardCode), so it grows well past the
 // 256kb ceiling. Mount a larger parser first, same as lab-runs; the global parser below skips it.
 app.use('/api/official-campaigns', express.json({ limit: '10mb' }));
-// Editor maps are live Level documents (boardCode + layer arrays) and can be created by
-// in-editor autosave or an agent handoff. They need the same headroom as a single level doc.
-app.use('/api/editor-maps', express.json({ limit: '4mb' }));
+// Editor documents hold one complete Level working copy. They need the same
+// headroom as a single level document (boardCode + layer arrays).
+app.use('/api/editor-documents', express.json({ limit: '4mb' }));
 // Sprite upload routes send one PNG as the request body. Mount this before the
 // global JSON parser; it only consumes image/png, so candidate metadata requests
 // continue through to express.json below.
@@ -502,6 +502,121 @@ const MIGRATIONS = [
         updated_at  timestamptz NOT NULL DEFAULT now()
       );
       CREATE INDEX IF NOT EXISTS solve_runs_owner_idx ON solve_runs (owner_email, created_at DESC);
+    `,
+  },
+  {
+    version: 16,
+    name: 'durable account-owned level working copies',
+    // A working copy is private account data with an opaque global document id;
+    // account-local level ids (l1, l2, ...) are not safe URL identities. It never
+    // expires and is never public-by-link.
+    // revision is the compare-and-swap token; saved_revision equals revision exactly
+    // when the working copy is known to match the canonical saved Level. baseline_hash
+    // identifies the canonical Level the working copy was based on, so a later external
+    // workspace write cannot be silently overwritten by a stale editor document.
+    //
+    // Preserve signed-in v13 rows: newest per real user/official level, and every
+    // standalone "draft" under a unique legacy id. Then remove the superseded
+    // public/edit-key subsystem.
+    sql: `
+      CREATE TABLE IF NOT EXISTS level_working_copies (
+        document_id     text        PRIMARY KEY,
+        owner_email     text        NOT NULL,
+        workspace_kind  text        NOT NULL CHECK (workspace_kind IN ('user', 'official')),
+        workspace_id    text        NOT NULL,
+        level_id        text        NOT NULL,
+        body            jsonb       NOT NULL,
+        revision        bigint      NOT NULL DEFAULT 1 CHECK (revision >= 1),
+        saved_revision  bigint      NOT NULL DEFAULT 0 CHECK (saved_revision >= 0 AND saved_revision <= revision),
+        baseline_hash   text,
+        created_at      timestamptz NOT NULL DEFAULT now(),
+        updated_at      timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (owner_email, workspace_kind, workspace_id, level_id),
+        CHECK (
+          (workspace_kind = 'user' AND workspace_id = 'campaign') OR
+          (workspace_kind = 'official' AND char_length(workspace_id) > 0)
+        )
+      );
+      CREATE INDEX IF NOT EXISTS level_working_copies_owner_updated_idx
+        ON level_working_copies (owner_email, updated_at DESC);
+
+      ALTER TABLE level_working_copies
+        ADD COLUMN IF NOT EXISTS baseline_hash text;
+
+      ALTER TABLE campaign_workspaces
+        ADD COLUMN IF NOT EXISTS revision bigint NOT NULL DEFAULT 0;
+
+      WITH migratable AS (
+        SELECT
+          em.*,
+          CASE
+            -- The old editor created unrelated standalone maps with the shared
+            -- placeholder id "draft". Give each one a distinct account-local id
+            -- so the uniqueness constraint cannot collapse recoverable work.
+            WHEN COALESCE(em.body->>'id', '') = 'draft'
+              OR COALESCE(em.body->>'id', '') !~ '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$'
+              THEN 'legacy-' || em.public_id
+            ELSE em.body->>'id'
+          END AS migrated_level_id,
+          CASE WHEN COALESCE(em.body->>'id', '') ~ '^off-' THEN 'official' ELSE 'user' END AS migrated_workspace_kind,
+          CASE WHEN COALESCE(em.body->>'id', '') ~ '^off-' THEN 'default' ELSE 'campaign' END AS migrated_workspace_id
+        FROM editor_maps em
+        WHERE em.owner_email IS NOT NULL
+          AND jsonb_typeof(em.body) = 'object'
+          AND em.public_id ~ '^[abcdefghijkmnpqrstuvwxyz23456789]{8,24}$'
+      ), ranked AS (
+        SELECT
+          migratable.*,
+          row_number() OVER (
+            PARTITION BY owner_email, migrated_workspace_kind, migrated_workspace_id, migrated_level_id
+            ORDER BY updated_at DESC, public_id
+          ) AS level_rank
+        FROM migratable
+      ), prepared AS (
+        SELECT
+          ranked.*,
+          jsonb_set(ranked.body, '{id}', to_jsonb(migrated_level_id), true) AS migrated_body,
+          CASE
+            WHEN migrated_workspace_kind = 'official'
+              THEN (oc.data->'levels')->migrated_level_id
+            ELSE (cw.body->'levels')->migrated_level_id
+          END AS canonical_body
+        FROM ranked
+        LEFT JOIN campaign_workspaces cw
+          ON migrated_workspace_kind = 'user' AND cw.owner_email = ranked.owner_email
+        LEFT JOIN official_campaigns oc
+          ON migrated_workspace_kind = 'official' AND oc.id = migrated_workspace_id
+        WHERE level_rank = 1
+      )
+      INSERT INTO level_working_copies
+        (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash, created_at, updated_at)
+      SELECT
+        'legacy-' || public_id,
+        owner_email,
+        migrated_workspace_kind,
+        migrated_workspace_id,
+        migrated_level_id,
+        migrated_body,
+        CASE
+          WHEN canonical_body IS NOT NULL AND canonical_body <> migrated_body THEN GREATEST(revision, 2)
+          ELSE GREATEST(revision, 1)
+        END,
+        CASE
+          WHEN canonical_body = migrated_body THEN GREATEST(revision, 1)
+          -- Synthetic revision 1 represents the canonical baseline; revision
+          -- 2+ is the recovered differing draft. This keeps saved_revision=0
+          -- reserved for documents that truly have never had a saved Level.
+          WHEN canonical_body IS NOT NULL THEN 1
+          ELSE 0
+        END,
+        md5(canonical_body::text),
+        created_at,
+        updated_at
+      FROM prepared
+      ON CONFLICT (owner_email, workspace_kind, workspace_id, level_id) DO NOTHING;
+
+      DROP TABLE IF EXISTS editor_map_audit_events;
+      DROP TABLE IF EXISTS editor_maps;
     `,
   },
 ];
@@ -1277,14 +1392,6 @@ async function requireUser(req, res) {
     return null;
   }
   return user;
-}
-
-async function readOptionalUser(req) {
-  try {
-    return publicUser(await readSession(req));
-  } catch {
-    return { signed_in: false };
-  }
 }
 
 // Gate for authoring the global OFFICIAL campaign tier (ADR-0038). requireUser first
@@ -2601,357 +2708,725 @@ app.put('/api/levels/:id', async (req, res) => {
   }
 });
 
-// --- Live editor maps + misc map pool --------------------------------------
-// These are public-by-link live Level documents for the Level Editor. A signed-in
-// owner's row is writable only by that owner; anonymous rows are agent/misc pool
-// handoffs and can be viewed/imported until they expire or are marked saved.
-const EDITOR_MAP_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
-const EDITOR_MAP_ID_RE = new RegExp(`^[${EDITOR_MAP_ID_ALPHABET}]{8,24}$`);
-function newEditorMapId() {
-  const bytes = crypto.randomBytes(12);
-  let out = '';
-  for (const b of bytes) out += EDITOR_MAP_ID_ALPHABET[b % 32];
-  return out;
-}
-function editorMapId(raw) {
+// --- Durable Level editor documents ---------------------------------------
+// One private, non-expiring working copy per (account, workspace, level). An
+// opaque global document id is the address. Copying that address has no backend
+// effect; only these explicit editor persistence calls mutate state (ADR-0068).
+const USER_EDITOR_WORKSPACE_ID = 'campaign';
+const EDITOR_DOCUMENT_ID_PATTERN = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|legacy-[abcdefghijkmnpqrstuvwxyz23456789]{8,24})$/i;
+const EDITOR_DOCUMENT_COLUMNS = 'document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash, created_at, updated_at';
+
+function editorDocumentId(raw) {
   const id = String(raw || '').trim();
-  return EDITOR_MAP_ID_RE.test(id) ? id : '';
+  return EDITOR_DOCUMENT_ID_PATTERN.test(id) ? id : '';
 }
-function newEditorMapEditKey() {
-  return crypto.randomBytes(32).toString('base64url');
+
+function editorDocumentWorkspace(raw) {
+  const source = isObjectRecord(raw) ? raw : {};
+  const nested = isObjectRecord(source.workspace) ? source.workspace : {};
+  const kind = String(source.workspace_kind ?? nested.kind ?? 'user').trim().toLowerCase();
+  if (kind === 'user') return { kind, id: USER_EDITOR_WORKSPACE_ID };
+  if (kind !== 'official') return { error: 'invalid_editor_workspace' };
+  const id = officialCampaignsRowId(source.workspace_id ?? nested.id);
+  return id ? { kind, id } : { error: 'invalid_official_campaign_id' };
 }
-function editorMapEditKeyHash(key) {
-  const value = String(key || '').trim();
-  if (value.length < 24 || value.length > 128) return '';
-  return crypto.createHash('sha256').update(value).digest('hex');
+
+function editorDocumentRevision(raw) {
+  return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 1 ? raw : null;
 }
-function editorMapAnonymousHash(raw) {
-  const value = String(raw || '').trim();
-  if (value.length < 24 || value.length > 128) return '';
-  return crypto.createHash('sha256').update(value).digest('hex');
+
+function editorDocumentLevel(raw, levelId, { rewriteId = false } = {}) {
+  if (!isObjectRecord(raw)) return { error: 'invalid_level_body' };
+  if (!rewriteId && raw.id !== levelId) {
+    return { error: 'invalid_level_body', details: `levels.${levelId}.id must match its workspace key` };
+  }
+  const level = { ...raw, id: levelId };
+  const details = validateWorkspaceLevel(level, levelId);
+  return details ? { error: 'invalid_level_body', details } : { level };
 }
-function editorMapAnonymousLabel(hash) {
-  return hash ? `anon-${hash.slice(0, 8)}` : null;
-}
-function requestEditorMapEditKey(req) {
-  return typeof req.get('x-editor-map-key') === 'string' ? req.get('x-editor-map-key') : '';
-}
-function requestEditorMapAnonymousHash(req) {
-  return editorMapAnonymousHash(req.get('x-editor-anonymous-id'));
-}
-function editorMapActor({ user, anonymousHash }) {
-  if (user && user.signed_in) return { actor_email: user.email, anonymous_user_hash: null, anonymous_label: null };
+
+function publicEditorDocument(row) {
+  const revision = Number(row && row.revision) || 0;
+  const savedRevision = Number(row && row.saved_revision) || 0;
+  const hasSavedBaseline = Boolean(row && row.baseline_hash);
   return {
-    actor_email: null,
-    anonymous_user_hash: anonymousHash || null,
-    anonymous_label: editorMapAnonymousLabel(anonymousHash),
+    document_id: row.document_id,
+    level_id: row.level_id,
+    workspace_kind: row.workspace_kind,
+    workspace_id: row.workspace_id,
+    level: isObjectRecord(row.body) ? row.body : {},
+    revision,
+    saved_revision: savedRevision,
+    dirty: revision !== savedRevision,
+    has_saved_baseline: hasSavedBaseline,
+    never_saved: !hasSavedBaseline,
+    baseline_conflict: Boolean(row && row.baseline_conflict),
+    created_at: row.created_at ?? null,
+    updated_at: row.updated_at ?? null,
   };
 }
-function editorMapExpiry(ownerEmail) {
-  const days = ownerEmail ? 30 : 7;
-  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
+function publicEditorDocumentSummary(row) {
+  const revision = Number(row && row.revision) || 0;
+  const savedRevision = Number(row && row.saved_revision) || 0;
+  const hasSavedBaseline = Boolean(row && row.baseline_hash);
+  return {
+    document_id: row.document_id,
+    level_id: row.level_id,
+    workspace_kind: row.workspace_kind,
+    workspace_id: row.workspace_id,
+    name: typeof row.name === 'string' ? row.name : '',
+    revision,
+    saved_revision: savedRevision,
+    dirty: revision !== savedRevision,
+    has_saved_baseline: hasSavedBaseline,
+    never_saved: !hasSavedBaseline,
+    created_at: row.created_at ?? null,
+    updated_at: row.updated_at ?? null,
+  };
 }
-function normalizeEditorMapLevel(raw) {
-  if (!isObjectRecord(raw) || !isObjectRecord(raw.level)) return { error: 'invalid_level_body' };
-  const level = { ...raw.level };
-  if (typeof level.id !== 'string' || !level.id.trim()) level.id = 'draft';
-  const validation = validateWorkspaceLevel(level, level.id);
-  if (validation) return { error: 'invalid_level_body', details: validation };
-  return { level };
+
+function editorDocumentError(statusCode, code, row = null, details = null) {
+  const error = new Error(code);
+  error.statusCode = statusCode;
+  error.responseCode = code;
+  error.row = row;
+  error.details = details;
+  return error;
 }
-function isExpiredEditorMap(row) {
-  return Boolean(row && !row.saved_at && row.expires_at && new Date(row.expires_at).getTime() < Date.now());
+
+function respondEditorDocumentError(res, error, operation) {
+  if (error && error.statusCode && error.responseCode) {
+    res.status(error.statusCode).json({
+      error: error.responseCode,
+      ...(error.details ? { details: error.details } : {}),
+      ...(error.row ? { document: publicEditorDocument(error.row) } : {}),
+    });
+    return;
+  }
+  dbUnavailable(res, `editor document ${operation} failed`, error, 'editor_document_store_unavailable');
 }
-function editorMapCanEdit(row, { viewerEmail, editKey } = {}) {
-  if (!row) return false;
-  if (row.owner_email && viewerEmail) return row.owner_email.toLowerCase() === String(viewerEmail).toLowerCase();
-  const hash = editorMapEditKeyHash(editKey);
-  return Boolean(!row.owner_email && row.edit_key_hash && hash && row.edit_key_hash === hash);
-}
-async function dbSweepExpiredEditorMaps() {
+
+async function withEditorDocumentTransaction(fn) {
   await ensureDbReady();
-  await pool.query('DELETE FROM editor_maps WHERE saved_at IS NULL AND expires_at IS NOT NULL AND expires_at < now()');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const value = await fn(client);
+    await client.query('COMMIT');
+    return value;
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
 }
-async function dbCreateEditorMap({ ownerEmail, anonymousHash, level, listed }) {
+
+async function dbGetEditorDocument(ownerEmail, documentId, client = pool) {
   await ensureDbReady();
-  const name = typeof level.name === 'string' ? level.name : null;
-  const expiresAt = editorMapExpiry(ownerEmail);
-  const editKey = ownerEmail ? null : newEditorMapEditKey();
-  const editKeyHash = editKey ? editorMapEditKeyHash(editKey) : null;
-  const anonymousLabel = ownerEmail ? null : editorMapAnonymousLabel(anonymousHash);
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const id = newEditorMapId();
-    try {
-      const { rows } = await pool.query(
-        `INSERT INTO editor_maps (public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, expires_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 1, $9)
-         RETURNING public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, saved_by, expires_at, created_at, updated_at`,
-        [id, ownerEmail, anonymousHash || null, anonymousLabel, editKeyHash, Boolean(listed), name, JSON.stringify(level), expiresAt],
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_DOCUMENT_COLUMNS}
+       FROM level_working_copies
+      WHERE owner_email = $1 AND document_id = $2`,
+    [ownerEmail, documentId],
+  );
+  return rows[0] || null;
+}
+
+async function dbListEditorDocuments(ownerEmail, {
+  includeOfficial = false,
+  status = 'all',
+  limit = 100,
+  offset = 0,
+} = {}) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT document_id, workspace_kind, workspace_id, level_id,
+            body->>'name' AS name, revision, saved_revision, baseline_hash, created_at, updated_at
+       FROM level_working_copies
+      WHERE owner_email = $1
+        AND ($2::boolean OR workspace_kind = 'user')
+        AND (
+          $3::text = 'all' OR
+          ($3::text = 'dirty' AND revision <> saved_revision) OR
+          ($3::text = 'never-saved' AND baseline_hash IS NULL)
+        )
+      ORDER BY (revision <> saved_revision) DESC, updated_at DESC, document_id
+      LIMIT $4 OFFSET $5`,
+    [ownerEmail, includeOfficial, status, limit + 1, offset],
+  );
+  return rows;
+}
+
+async function dbGetEditorDocumentByLevel(ownerEmail, workspace, levelId, client = pool, { lock = false } = {}) {
+  await ensureDbReady();
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_DOCUMENT_COLUMNS}
+       FROM level_working_copies
+      WHERE owner_email = $1 AND workspace_kind = $2 AND workspace_id = $3 AND level_id = $4
+      ${lock ? 'FOR UPDATE' : ''}`,
+    [ownerEmail, workspace.kind, workspace.id, levelId],
+  );
+  return rows[0] || null;
+}
+
+async function dbLockEditorDocument(client, ownerEmail, documentId) {
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_DOCUMENT_COLUMNS}
+       FROM level_working_copies
+      WHERE owner_email = $1 AND document_id = $2
+      FOR UPDATE`,
+    [ownerEmail, documentId],
+  );
+  return rows[0] || null;
+}
+
+function assertEditorDocumentRevision(row, expectedRevision) {
+  if (!row) throw editorDocumentError(404, 'editor_document_not_found');
+  if (Number(row.revision) !== expectedRevision) {
+    throw editorDocumentError(409, 'editor_document_revision_conflict', row);
+  }
+}
+
+async function dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock = false } = {}) {
+  if (workspace.kind === 'user') {
+    const { rows } = await client.query(
+      `SELECT body, updated_at, md5(((body->'levels')->$2)::text) AS level_hash
+         FROM campaign_workspaces WHERE owner_email = $1${lock ? ' FOR UPDATE' : ''}`,
+      [ownerEmail, levelId],
+    );
+    const body = isObjectRecord(rows[0] && rows[0].body) ? rows[0].body : null;
+    const levels = body && isObjectRecord(body.levels) ? body.levels : null;
+    return {
+      level: levels && isObjectRecord(levels[levelId]) ? levels[levelId] : null,
+      hash: rows[0] && rows[0].level_hash ? rows[0].level_hash : null,
+      body,
+      row: rows[0] || null,
+    };
+  }
+  const { rows } = await client.query(
+    `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by,
+            md5(((data->'levels')->$2)::text) AS level_hash
+       FROM official_campaigns WHERE id = $1${lock ? ' FOR UPDATE' : ''}`,
+    [workspace.id, levelId],
+  );
+  const body = isObjectRecord(rows[0] && rows[0].data) ? rows[0].data : null;
+  const levels = body && isObjectRecord(body.levels) ? body.levels : null;
+  return {
+    level: levels && isObjectRecord(levels[levelId]) ? levels[levelId] : null,
+    hash: rows[0] && rows[0].level_hash ? rows[0].level_hash : null,
+    body,
+    row: rows[0] || null,
+  };
+}
+
+function editorDocumentIsDirty(row) {
+  return Number(row && row.revision) !== Number(row && row.saved_revision);
+}
+
+function editorDocumentBaselineChanged(row, canonical) {
+  return (row && row.baseline_hash ? row.baseline_hash : null) !== (canonical && canonical.hash ? canonical.hash : null);
+}
+
+async function dbJsonbHash(client, value) {
+  const { rows } = await client.query('SELECT md5(($1::jsonb)::text) AS hash', [JSON.stringify(value)]);
+  return rows[0] && rows[0].hash ? rows[0].hash : null;
+}
+
+async function dbReconcileEditorDocument(client, row, { lockCanonical = true } = {}) {
+  if (!row) throw editorDocumentError(404, 'editor_document_not_found');
+  const workspace = { kind: row.workspace_kind, id: row.workspace_id };
+  const canonical = await dbCanonicalLevel(client, row.owner_email, workspace, row.level_id, { lock: lockCanonical });
+  if (!editorDocumentBaselineChanged(row, canonical)) return { ...row, baseline_conflict: false };
+
+  // A clean document has no work to preserve, so follow the newer canonical
+  // Level automatically. A dirty document keeps its body and reports the
+  // divergence; only Discard may deliberately replace it.
+  if (editorDocumentIsDirty(row) || !canonical.level) {
+    return { ...row, baseline_conflict: true };
+  }
+  const parsed = editorDocumentLevel(canonical.level, row.level_id);
+  if (parsed.error) throw editorDocumentError(409, 'saved_level_invalid', row, parsed.details);
+  const { rows } = await client.query(
+    `UPDATE level_working_copies
+        SET body = $3::jsonb,
+            revision = revision + 1,
+            saved_revision = revision + 1,
+            baseline_hash = $4,
+            updated_at = now()
+      WHERE owner_email = $1 AND document_id = $2
+      RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+    [row.owner_email, row.document_id, JSON.stringify(parsed.level), canonical.hash],
+  );
+  return { ...rows[0], baseline_conflict: false };
+}
+
+async function dbResolveEditorDocument(ownerEmail, workspace, levelId) {
+  return withEditorDocumentTransaction(async (client) => {
+    let row = await dbGetEditorDocumentByLevel(ownerEmail, workspace, levelId, client, { lock: true });
+    if (row) return { row: await dbReconcileEditorDocument(client, row), created: false };
+    const canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
+    if (!canonical.level) throw editorDocumentError(404, 'saved_level_not_found');
+    const parsed = editorDocumentLevel(canonical.level, levelId);
+    if (parsed.error) throw editorDocumentError(409, 'saved_level_invalid', null, parsed.details);
+    const inserted = await client.query(
+      `INSERT INTO level_working_copies
+         (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, 1, 1, $7)
+       ON CONFLICT (owner_email, workspace_kind, workspace_id, level_id) DO NOTHING
+       RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [crypto.randomUUID(), ownerEmail, workspace.kind, workspace.id, levelId, JSON.stringify(parsed.level), canonical.hash],
+    );
+    row = inserted.rows[0] || await dbGetEditorDocumentByLevel(ownerEmail, workspace, levelId, client, { lock: true });
+    return {
+      row: inserted.rows[0] ? { ...inserted.rows[0], baseline_conflict: false } : await dbReconcileEditorDocument(client, row),
+      created: Boolean(inserted.rows[0]),
+    };
+  });
+}
+
+function nextUserLevelId(workspaceBody, workingLevelIds) {
+  let max = 0n;
+  const usedNumericSuffixes = new Set();
+  const ids = [
+    ...Object.keys(isObjectRecord(workspaceBody && workspaceBody.levels) ? workspaceBody.levels : {}),
+    ...(Array.isArray(workspaceBody && workspaceBody.campaigns)
+      ? workspaceBody.campaigns.map((campaign) => campaign && campaign.id)
+      : []),
+    ...workingLevelIds,
+  ];
+  for (const raw of ids) {
+    const match = /^[cl](\d+)$/.exec(String(raw || ''));
+    // Generated ids are at most 80 characters (`l` + 79 digits). Longer
+    // imported/campaign ids cannot collide and must not trigger a huge BigInt parse.
+    if (!match || match[1].length > 79) continue;
+    const value = BigInt(match[1]);
+    usedNumericSuffixes.add(value.toString());
+    if (value > max) max = value;
+  }
+  const next = max + 1n;
+  if (`l${next}`.length <= 80) return `l${next}`;
+
+  // A malicious or imported 79-digit suffix can exhaust the increasing end of
+  // the id format, but it must not make Number round or emit an invalid 81-char
+  // id. With a finite set of existing rows, one of the first N+1 suffixes is free.
+  for (let candidate = 1n; candidate <= BigInt(usedNumericSuffixes.size + 1); candidate += 1n) {
+    if (!usedNumericSuffixes.has(candidate.toString())) return `l${candidate}`;
+  }
+  throw editorDocumentError(409, 'level_id_allocation_failed');
+}
+
+async function dbCreateEditorDocument(ownerEmail, initialLevel) {
+  return withEditorDocumentTransaction(async (client) => {
+    // Serialize allocation per owner without a separate mutable counter table.
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [ownerEmail]);
+    await client.query(
+      `INSERT INTO campaign_workspaces (owner_email, body)
+       VALUES ($1, '{"campaigns":[],"levels":{}}'::jsonb)
+       ON CONFLICT (owner_email) DO NOTHING`,
+      [ownerEmail],
+    );
+    const workspaceResult = await client.query(
+      'SELECT body FROM campaign_workspaces WHERE owner_email = $1 FOR UPDATE',
+      [ownerEmail],
+    );
+    const workspaceBody = isObjectRecord(workspaceResult.rows[0] && workspaceResult.rows[0].body)
+      ? workspaceResult.rows[0].body
+      : { campaigns: [], levels: {} };
+    const workingResult = await client.query(
+      "SELECT level_id FROM level_working_copies WHERE owner_email = $1 AND workspace_kind = 'user' AND workspace_id = 'campaign'",
+      [ownerEmail],
+    );
+    const levelId = nextUserLevelId(workspaceBody, workingResult.rows.map((row) => row.level_id));
+    const parsed = editorDocumentLevel(initialLevel, levelId, { rewriteId: true });
+    if (parsed.error) throw editorDocumentError(400, parsed.error, null, parsed.details);
+    const { rows } = await client.query(
+      `INSERT INTO level_working_copies
+         (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash)
+       VALUES ($1, $2, 'user', 'campaign', $3, $4::jsonb, 1, 0, NULL)
+       RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [crypto.randomUUID(), ownerEmail, levelId, JSON.stringify(parsed.level)],
+    );
+    return rows[0];
+  });
+}
+
+async function dbLoadEditorDocument(ownerEmail, documentId) {
+  return withEditorDocumentTransaction(async (client) => {
+    const row = await dbLockEditorDocument(client, ownerEmail, documentId);
+    if (!row) return null;
+    return dbReconcileEditorDocument(client, row);
+  });
+}
+
+async function dbAnnotateEditorDocumentBaseline(row, client = pool) {
+  if (!row) return row;
+  const workspace = { kind: row.workspace_kind, id: row.workspace_id };
+  const canonical = await dbCanonicalLevel(client, row.owner_email, workspace, row.level_id);
+  return { ...row, baseline_conflict: editorDocumentBaselineChanged(row, canonical) };
+}
+
+async function dbAutosaveEditorDocument(ownerEmail, documentId, expectedRevision, level) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `UPDATE level_working_copies
+        SET body = $4::jsonb,
+            revision = revision + 1,
+            saved_revision = CASE
+              WHEN md5(($4::jsonb)::text) = baseline_hash THEN revision + 1
+              ELSE saved_revision
+            END,
+            updated_at = now()
+      WHERE owner_email = $1 AND document_id = $2 AND revision = $3
+      RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+    [ownerEmail, documentId, expectedRevision, JSON.stringify(level)],
+  );
+  if (rows[0]) return dbAnnotateEditorDocumentBaseline(rows[0]);
+  const current = await dbGetEditorDocument(ownerEmail, documentId);
+  if (!current) throw editorDocumentError(404, 'editor_document_not_found');
+  throw editorDocumentError(409, 'editor_document_revision_conflict', await dbAnnotateEditorDocumentBaseline(current));
+}
+
+function editorDocumentCampaignsWithAssignment(campaigns, levelId, level, campaignId) {
+  if (campaignId === undefined) return campaigns;
+  const target = campaignId === null
+    ? null
+    : campaigns.find((campaign) => campaign.id === campaignId);
+  if (campaignId !== null && !target) {
+    throw editorDocumentError(409, 'campaign_not_found', null, `campaign ${campaignId} is not in this workspace`);
+  }
+  if (target && target.id.startsWith('off-') !== levelId.startsWith('off-')) {
+    throw editorDocumentError(409, 'campaign_tier_mismatch');
+  }
+
+  return campaigns.map((campaign) => {
+    const priorRef = campaign.levels.find((ref) => ref.levelId === levelId);
+    const withoutLevel = campaign.levels
+      .filter((ref) => ref.levelId !== levelId)
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .map((ref, ordinal) => ({ ...ref, ordinal }));
+    if (campaign.id !== target?.id) return { ...campaign, levels: withoutLevel };
+    return {
+      ...campaign,
+      levels: [
+        ...withoutLevel,
+        {
+          ...(priorRef || {}),
+          levelId,
+          ordinal: withoutLevel.length,
+          objective: level.objective,
+        },
+      ],
+    };
+  });
+}
+
+async function dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, level, campaignId) {
+  let canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
+  if (workspace.kind === 'user' && !canonical.row) {
+    // Materialize and lock the owner's workspace before merging a first-saved
+    // unassigned Level. This prevents a concurrent workspace write from being
+    // replaced by a snapshot built from an assumed empty row.
+    await client.query(
+      `INSERT INTO campaign_workspaces (owner_email, body)
+       VALUES ($1, '{"campaigns":[],"levels":{}}'::jsonb)
+       ON CONFLICT (owner_email) DO NOTHING`,
+      [ownerEmail],
+    );
+    canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
+  }
+  const existing = canonical.body || { campaigns: [], levels: {} };
+  const existingCampaigns = Array.isArray(existing.campaigns) ? existing.campaigns : [];
+  const nextBody = {
+    campaigns: editorDocumentCampaignsWithAssignment(existingCampaigns, levelId, level, campaignId),
+    levels: { ...(isObjectRecord(existing.levels) ? existing.levels : {}), [levelId]: level },
+  };
+  const validation = validateWorkspaceBody(nextBody);
+  if (validation) throw editorDocumentError(409, 'canonical_workspace_invalid', null, validation);
+  if (workspace.kind === 'user') {
+    const { rows } = await client.query(
+      `INSERT INTO campaign_workspaces (owner_email, body, revision)
+       VALUES ($1, $2::jsonb, 1)
+       ON CONFLICT (owner_email) DO UPDATE SET
+         body = EXCLUDED.body,
+         revision = campaign_workspaces.revision + 1,
+         updated_at = now()
+       RETURNING revision`,
+      [ownerEmail, JSON.stringify(nextBody)],
+    );
+    return Number(rows[0].revision);
+  }
+  const idError = validateOfficialWorkspaceIds(nextBody);
+  if (idError) throw editorDocumentError(400, 'invalid_official_ids', null, idError);
+  if (!canonical.row) throw editorDocumentError(404, 'official_workspace_not_found');
+  const { rows } = await client.query(
+    `UPDATE official_campaigns
+        SET data = $2::jsonb, revision = revision + 1, updated_at = now(), updated_by = $3
+      WHERE id = $1
+      RETURNING revision`,
+    [workspace.id, JSON.stringify(nextBody), ownerEmail],
+  );
+  return Number(rows[0].revision);
+}
+
+async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, requestedLevel, campaignId) {
+  return withEditorDocumentTransaction(async (client) => {
+    const current = await dbLockEditorDocument(client, ownerEmail, documentId);
+    assertEditorDocumentRevision(current, expectedRevision);
+    const workspace = { kind: current.workspace_kind, id: current.workspace_id };
+    const levelId = current.level_id;
+    const level = requestedLevel || current.body;
+    if (workspace.kind === 'user') {
+      // PostgreSQL cannot row-lock an absent workspace. Materialize the empty
+      // owner row first so a concurrent whole-workspace insert must serialize
+      // before the baseline check for a never-saved document.
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [ownerEmail]);
+      await client.query(
+        `INSERT INTO campaign_workspaces (owner_email, body)
+         VALUES ($1, '{"campaigns":[],"levels":{}}'::jsonb)
+         ON CONFLICT (owner_email) DO NOTHING`,
+        [ownerEmail],
       );
-      return { row: rows[0], editKey };
-    } catch (error) {
-      if (error && error.code === '23505') continue;
-      throw error;
     }
-  }
-  throw new Error('editor_map_id_allocation_failed');
-}
-async function dbGetEditorMap(publicId) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    'SELECT public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, saved_by, expires_at, created_at, updated_at FROM editor_maps WHERE public_id = $1',
-    [publicId],
-  );
-  return rows[0] || null;
-}
-async function dbUpdateEditorMap(publicId, level) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    `UPDATE editor_maps
-       SET name = $2, body = $3::jsonb, revision = revision + 1, updated_at = now()
-     WHERE public_id = $1
-     RETURNING public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, saved_by, expires_at, created_at, updated_at`,
-    [publicId, typeof level.name === 'string' ? level.name : null, JSON.stringify(level)],
-  );
-  return rows[0] || null;
-}
-async function dbMarkEditorMapSaved(publicId, savedBy) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    `UPDATE editor_maps
-       SET saved_at = now(), saved_by = $2, expires_at = NULL, updated_at = now()
-     WHERE public_id = $1 AND (owner_email IS NULL OR owner_email = $2)
-     RETURNING public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, saved_by, expires_at, created_at, updated_at`,
-    [publicId, savedBy],
-  );
-  return rows[0] || null;
-}
-async function dbListEditorMaps(scope, ownerEmail, anonymousHash) {
-  await dbSweepExpiredEditorMaps();
-  if (scope === 'misc') {
-    const { rows } = await pool.query(
-      `SELECT public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, expires_at, created_at, updated_at
-         FROM editor_maps
-        WHERE listed = true AND saved_at IS NULL AND (expires_at IS NULL OR expires_at > now())
-        ORDER BY updated_at DESC
-        LIMIT 100`,
+    const canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
+    if (editorDocumentBaselineChanged(current, canonical)) {
+      throw editorDocumentError(
+        409,
+        'editor_document_baseline_conflict',
+        { ...current, baseline_conflict: true },
+        'canonical Level changed after this working copy was based on it',
+      );
+    }
+    const workspaceRevision = await dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, level, campaignId);
+    const baselineHash = await dbJsonbHash(client, level);
+    const { rows } = await client.query(
+      `UPDATE level_working_copies
+          SET body = $3::jsonb,
+              revision = revision + 1,
+              saved_revision = revision + 1,
+              baseline_hash = $4,
+              updated_at = now()
+        WHERE owner_email = $1 AND document_id = $2
+        RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [ownerEmail, documentId, JSON.stringify(level), baselineHash],
     );
-    return rows;
-  }
-  if (!ownerEmail && !anonymousHash) return [];
-  if (!ownerEmail) {
-    const { rows } = await pool.query(
-      `SELECT public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, expires_at, created_at, updated_at
-         FROM editor_maps
-        WHERE anonymous_user_hash = $1 AND (saved_at IS NOT NULL OR expires_at IS NULL OR expires_at > now())
-        ORDER BY updated_at DESC
-        LIMIT 100`,
-      [anonymousHash],
-    );
-    return rows;
-  }
-  const { rows } = await pool.query(
-    `SELECT public_id, owner_email, anonymous_user_hash, anonymous_label, edit_key_hash, listed, name, body, revision, saved_at, expires_at, created_at, updated_at
-       FROM editor_maps
-      WHERE owner_email = $1 AND (saved_at IS NOT NULL OR expires_at IS NULL OR expires_at > now())
-      ORDER BY updated_at DESC
-      LIMIT 100`,
-    [ownerEmail],
-  );
-  return rows;
-}
-async function dbLogEditorMapEvent(publicId, action, actor) {
-  try {
-    await pool.query(
-      `INSERT INTO editor_map_audit_events (public_id, action, actor_email, anonymous_user_hash, anonymous_label)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [publicId, action, actor.actor_email || null, actor.anonymous_user_hash || null, actor.anonymous_label || null],
-    );
-  } catch (error) {
-    console.warn('editor map audit event failed:', error && error.message);
-  }
-}
-async function dbListAdminEditorMaps() {
-  await dbSweepExpiredEditorMaps();
-  const { rows } = await pool.query(
-    `SELECT public_id, owner_email, anonymous_user_hash, anonymous_label, listed, name, body, revision, saved_at, saved_by, expires_at, created_at, updated_at
-       FROM editor_maps
-      ORDER BY updated_at DESC
-      LIMIT 250`,
-  );
-  return rows;
-}
-async function dbListEditorMapEvents(publicId) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    `SELECT id, public_id, action, actor_email, anonymous_user_hash, anonymous_label, created_at
-       FROM editor_map_audit_events
-      WHERE public_id = $1
-      ORDER BY created_at DESC
-      LIMIT 250`,
-    [publicId],
-  );
-  return rows;
-}
-function publicEditorMapCreator(row) {
-  if (row.owner_email) return { kind: 'account', label: 'Signed-in creator' };
-  if (row.anonymous_user_hash) return { kind: 'anonymous', label: row.anonymous_label || editorMapAnonymousLabel(row.anonymous_user_hash) || 'Anonymous creator' };
-  return { kind: 'system', label: row.listed ? 'Misc pool' : 'Unknown creator' };
-}
-function publicEditorMap(row, { viewerEmail, editKey, issuedEditKey } = {}) {
-  const level = isObjectRecord(row && row.body) ? row.body : {};
-  const canEdit = editorMapCanEdit(row, { viewerEmail, editKey }) || Boolean(issuedEditKey);
-  return {
-    public_id: row.public_id,
-    level,
-    revision: Number.isInteger(row.revision) ? row.revision : 0,
-    created_at: row.created_at ?? null,
-    updated_at: row.updated_at ?? null,
-    expires_at: row.expires_at ?? null,
-    saved_at: row.saved_at ?? null,
-    is_misc: Boolean(row.listed),
-    can_edit: canEdit,
-    creator: publicEditorMapCreator(row),
-    ...(issuedEditKey ? { edit_key: issuedEditKey } : {}),
-  };
-}
-function publicEditorMapSummary(row, viewerEmail) {
-  const level = isObjectRecord(row && row.body) ? row.body : {};
-  const board = isObjectRecord(level.board) ? level.board : {};
-  return {
-    public_id: row.public_id,
-    name: typeof row.name === 'string' && row.name ? row.name : (typeof level.name === 'string' ? level.name : 'Untitled level'),
-    cols: Number.isInteger(board.cols) ? board.cols : null,
-    rows: Number.isInteger(board.rows) ? board.rows : null,
-    revision: Number.isInteger(row.revision) ? row.revision : 0,
-    created_at: row.created_at ?? null,
-    updated_at: row.updated_at ?? null,
-    expires_at: row.expires_at ?? null,
-    saved_at: row.saved_at ?? null,
-    is_misc: Boolean(row.listed),
-    can_edit: editorMapCanEdit(row, { viewerEmail }),
-    creator: publicEditorMapCreator(row),
-  };
-}
-function adminEditorMapSummary(row) {
-  const summary = publicEditorMapSummary(row, row.owner_email);
-  return {
-    ...summary,
-    owner_email: row.owner_email ?? null,
-    anonymous_user_hash: row.anonymous_user_hash ?? null,
-    anonymous_label: row.anonymous_label ?? null,
-    listed: Boolean(row.listed),
-    saved_by: row.saved_by ?? null,
-  };
+    return { row: rows[0], workspaceRevision };
+  });
 }
 
-app.get('/api/editor-maps', async (req, res) => {
-  const scope = req.query.scope === 'misc' ? 'misc' : 'mine';
-  const user = await readOptionalUser(req);
-  const anonymousHash = requestEditorMapAnonymousHash(req);
-  try {
-    const rows = await dbListEditorMaps(scope, user.signed_in ? user.email : null, anonymousHash);
-    res.status(200).json({ maps: rows.map((row) => publicEditorMapSummary(row, user.signed_in ? user.email : null)) });
-  } catch (error) {
-    dbUnavailable(res, 'editor map list failed', error, 'editor_map_store_unavailable');
-  }
-});
+async function dbDiscardEditorDocument(ownerEmail, documentId, expectedRevision) {
+  return withEditorDocumentTransaction(async (client) => {
+    const current = await dbLockEditorDocument(client, ownerEmail, documentId);
+    assertEditorDocumentRevision(current, expectedRevision);
+    const workspace = { kind: current.workspace_kind, id: current.workspace_id };
+    const levelId = current.level_id;
+    const canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
+    if (!canonical.level) throw editorDocumentError(409, 'no_saved_level');
+    const parsed = editorDocumentLevel(canonical.level, levelId);
+    if (parsed.error) throw editorDocumentError(409, 'saved_level_invalid', null, parsed.details);
+    const { rows } = await client.query(
+      `UPDATE level_working_copies
+          SET body = $3::jsonb,
+              revision = revision + 1,
+              saved_revision = revision + 1,
+              baseline_hash = $4,
+              updated_at = now()
+        WHERE owner_email = $1 AND document_id = $2
+        RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [ownerEmail, documentId, JSON.stringify(parsed.level), canonical.hash],
+    );
+    return rows[0];
+  });
+}
 
-app.post('/api/editor-maps', async (req, res) => {
+function editorDocumentResolveRequest(req, res) {
   const raw = isObjectRecord(req.body) ? req.body : {};
-  const parsed = normalizeEditorMapLevel(raw);
-  if (parsed.error) { res.status(400).json({ error: parsed.error, ...(parsed.details ? { details: parsed.details } : {}) }); return; }
-  const user = await readOptionalUser(req);
-  const anonymousHash = requestEditorMapAnonymousHash(req);
-  const listed = raw.misc === true;
-  const headless = raw.headless === true;
-  const ownerEmail = (listed || headless) ? null : (user.signed_in ? user.email : null);
-  try {
-    const created = await dbCreateEditorMap({ ownerEmail, anonymousHash: ownerEmail ? null : anonymousHash, level: parsed.level, listed });
-    await dbLogEditorMapEvent(created.row.public_id, 'create', editorMapActor({ user, anonymousHash }));
-    res.status(201).json(publicEditorMap(created.row, { viewerEmail: user.signed_in ? user.email : null, issuedEditKey: created.editKey }));
-  } catch (error) {
-    dbUnavailable(res, 'editor map create failed', error, 'editor_map_store_unavailable');
-  }
-});
+  const workspace = editorDocumentWorkspace(raw);
+  if (workspace.error) { res.status(400).json({ error: workspace.error }); return null; }
+  const rawLevelId = raw.level_id;
+  const levelId = rawLevelId === undefined || rawLevelId === null || rawLevelId === '' ? '' : levelStoreId(rawLevelId);
+  if (rawLevelId && !levelId) { res.status(400).json({ error: 'invalid_level_id' }); return null; }
+  return { raw, workspace, levelId };
+}
 
-app.get('/api/editor-maps/:publicId', async (req, res) => {
-  const publicId = editorMapId(req.params.publicId);
-  if (!publicId) { res.status(400).json({ error: 'invalid_editor_map_id' }); return; }
-  const user = await readOptionalUser(req);
-  const editKey = requestEditorMapEditKey(req);
-  try {
-    const row = await dbGetEditorMap(publicId);
-    if (!row || isExpiredEditorMap(row)) { res.status(404).json({ error: 'editor_map_not_found' }); return; }
-    res.status(200).json(publicEditorMap(row, { viewerEmail: user.signed_in ? user.email : null, editKey }));
-  } catch (error) {
-    dbUnavailable(res, 'editor map read failed', error, 'editor_map_store_unavailable');
-  }
-});
+function editorDocumentOperationRequest(req, res) {
+  const documentId = editorDocumentId(req.params.documentId);
+  if (!documentId) { res.status(400).json({ error: 'invalid_editor_document_id' }); return null; }
+  return { documentId, raw: isObjectRecord(req.body) ? req.body : {} };
+}
 
-app.put('/api/editor-maps/:publicId', async (req, res) => {
-  const user = await readOptionalUser(req);
-  const publicId = editorMapId(req.params.publicId);
-  if (!publicId) { res.status(400).json({ error: 'invalid_editor_map_id' }); return; }
-  const parsed = normalizeEditorMapLevel(isObjectRecord(req.body) ? req.body : {});
-  if (parsed.error) { res.status(400).json({ error: parsed.error, ...(parsed.details ? { details: parsed.details } : {}) }); return; }
-  const editKey = requestEditorMapEditKey(req);
-  const anonymousHash = requestEditorMapAnonymousHash(req);
+function editorDocumentListRequest(req, res) {
+  const status = String(req.query.status || 'all').trim().toLowerCase();
+  if (!['all', 'dirty', 'never-saved'].includes(status)) {
+    res.status(400).json({ error: 'invalid_editor_document_status' });
+    return null;
+  }
+  const parseInteger = (raw, fallback) => {
+    if (raw === undefined) return fallback;
+    const text = String(raw);
+    if (!/^\d+$/.test(text)) return null;
+    const value = Number(text);
+    return Number.isSafeInteger(value) ? value : null;
+  };
+  const limit = parseInteger(req.query.limit, 100);
+  const offset = parseInteger(req.query.offset, 0);
+  if (limit === null || limit < 1 || limit > 200 || offset === null || offset < 0) {
+    res.status(400).json({ error: 'invalid_editor_document_page' });
+    return null;
+  }
+  return { status, limit, offset };
+}
+
+async function requireEditorDocumentUser(req, res, workspace) {
+  const user = await requireUser(req, res);
+  if (!user) return null;
+  if (workspace.kind === 'official' && !isAdminEmail(user.email)) {
+    res.status(403).json({ error: 'admin_required' });
+    return null;
+  }
+  return user;
+}
+
+function editorDocumentRowIsAuthorized(row, user, res) {
+  if (row.workspace_kind === 'official' && !isAdminEmail(user.email)) {
+    res.status(403).json({ error: 'admin_required' });
+    return false;
+  }
+  return true;
+}
+
+app.post('/api/editor-documents/resolve', async (req, res) => {
+  const input = editorDocumentResolveRequest(req, res);
+  if (!input) return;
+  const user = await requireEditorDocumentUser(req, res, input.workspace);
+  if (!user) return;
   try {
-    const current = await dbGetEditorMap(publicId);
-    if (!current || isExpiredEditorMap(current)) { res.status(404).json({ error: 'editor_map_not_found' }); return; }
-    if (!editorMapCanEdit(current, { viewerEmail: user.signed_in ? user.email : null, editKey })) {
-      res.status(403).json({ error: 'editor_map_read_only' });
+    if (!input.levelId) {
+      if (input.workspace.kind !== 'user') { res.status(400).json({ error: 'level_id_required' }); return; }
+      if (!isObjectRecord(input.raw.level)) { res.status(400).json({ error: 'invalid_level_body' }); return; }
+      const row = await dbCreateEditorDocument(user.email, input.raw.level);
+      res.status(201).json({ document: publicEditorDocument(row) });
       return;
     }
-    const row = await dbUpdateEditorMap(publicId, parsed.level);
-    await dbLogEditorMapEvent(publicId, 'update', editorMapActor({ user, anonymousHash }));
-    res.status(200).json(publicEditorMap(row, { viewerEmail: user.signed_in ? user.email : null, editKey }));
+    const result = await dbResolveEditorDocument(user.email, input.workspace, input.levelId);
+    res.status(result.created ? 201 : 200).json({ document: publicEditorDocument(result.row) });
   } catch (error) {
-    dbUnavailable(res, 'editor map update failed', error, 'editor_map_store_unavailable');
+    respondEditorDocumentError(res, error, 'resolve');
   }
 });
 
-app.post('/api/editor-maps/:publicId/saved', async (req, res) => {
+app.get('/api/editor-documents', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const publicId = editorMapId(req.params.publicId);
-  if (!publicId) { res.status(400).json({ error: 'invalid_editor_map_id' }); return; }
+  const page = editorDocumentListRequest(req, res);
+  if (!page) return;
   try {
-    const current = await dbGetEditorMap(publicId);
-    if (!current || isExpiredEditorMap(current)) { res.status(404).json({ error: 'editor_map_not_found' }); return; }
-    if (current.owner_email && current.owner_email.toLowerCase() !== user.email.toLowerCase()) {
-      res.status(403).json({ error: 'editor_map_read_only' });
-      return;
+    const rows = await dbListEditorDocuments(user.email, {
+      includeOfficial: isAdminEmail(user.email),
+      ...page,
+    });
+    const hasMore = rows.length > page.limit;
+    const documents = rows.slice(0, page.limit).map(publicEditorDocumentSummary);
+    res.status(200).json({
+      documents,
+      next_offset: hasMore ? page.offset + page.limit : null,
+    });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'list');
+  }
+});
+
+app.get('/api/editor-documents/:documentId', async (req, res) => {
+  const input = editorDocumentOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const stored = await dbGetEditorDocument(user.email, input.documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, user, res)) return;
+    const row = await dbLoadEditorDocument(user.email, input.documentId);
+    if (!row) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    res.status(200).json({ document: publicEditorDocument(row) });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'read');
+  }
+});
+
+app.put('/api/editor-documents/:documentId', async (req, res) => {
+  const input = editorDocumentOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const revision = editorDocumentRevision(input.raw.revision);
+  if (revision === null) { res.status(400).json({ error: 'revision_required' }); return; }
+  try {
+    const current = await dbGetEditorDocument(user.email, input.documentId);
+    if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    const parsed = editorDocumentLevel(input.raw.level, current.level_id);
+    if (parsed.error) { res.status(400).json({ error: parsed.error, ...(parsed.details ? { details: parsed.details } : {}) }); return; }
+    const row = await dbAutosaveEditorDocument(user.email, input.documentId, revision, parsed.level);
+    res.status(200).json({ document: publicEditorDocument(row) });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'autosave');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/save', async (req, res) => {
+  const input = editorDocumentOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const revision = editorDocumentRevision(input.raw.revision);
+  if (revision === null) { res.status(400).json({ error: 'revision_required' }); return; }
+  try {
+    const current = await dbGetEditorDocument(user.email, input.documentId);
+    if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    let level = null;
+    if (Object.hasOwn(input.raw, 'level')) {
+      const parsed = editorDocumentLevel(input.raw.level, current.level_id);
+      if (parsed.error) { res.status(400).json({ error: parsed.error, ...(parsed.details ? { details: parsed.details } : {}) }); return; }
+      level = parsed.level;
     }
-    const row = await dbMarkEditorMapSaved(publicId, user.email);
-    await dbLogEditorMapEvent(publicId, 'saved', editorMapActor({ user, anonymousHash: null }));
-    res.status(200).json(publicEditorMap(row, { viewerEmail: user.email }));
+    let campaignId;
+    if (Object.hasOwn(input.raw, 'campaign_id')) {
+      if (input.raw.campaign_id === null) {
+        campaignId = null;
+      } else if (typeof input.raw.campaign_id === 'string' && input.raw.campaign_id.trim() && input.raw.campaign_id.length <= 200) {
+        campaignId = input.raw.campaign_id.trim();
+      } else {
+        res.status(400).json({ error: 'invalid_campaign_id' });
+        return;
+      }
+    }
+    const saved = await dbSaveEditorDocument(user.email, input.documentId, revision, level, campaignId);
+    res.status(200).json({
+      document: publicEditorDocument(saved.row),
+      workspace_revision: saved.workspaceRevision,
+    });
   } catch (error) {
-    dbUnavailable(res, 'editor map saved mark failed', error, 'editor_map_store_unavailable');
+    respondEditorDocumentError(res, error, 'save');
   }
 });
 
-app.get('/api/admin/editor-maps', async (req, res) => {
-  const user = await requireAdmin(req, res);
+app.post('/api/editor-documents/:documentId/discard', async (req, res) => {
+  const input = editorDocumentOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
   if (!user) return;
+  const revision = editorDocumentRevision(input.raw.revision);
+  if (revision === null) { res.status(400).json({ error: 'revision_required' }); return; }
   try {
-    const rows = await dbListAdminEditorMaps();
-    res.status(200).json({ maps: rows.map(adminEditorMapSummary) });
+    const current = await dbGetEditorDocument(user.email, input.documentId);
+    if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    const row = await dbDiscardEditorDocument(user.email, input.documentId, revision);
+    res.status(200).json({ document: publicEditorDocument(row) });
   } catch (error) {
-    dbUnavailable(res, 'admin editor map list failed', error, 'editor_map_store_unavailable');
-  }
-});
-
-app.get('/api/admin/editor-maps/:publicId/events', async (req, res) => {
-  const user = await requireAdmin(req, res);
-  if (!user) return;
-  const publicId = editorMapId(req.params.publicId);
-  if (!publicId) { res.status(400).json({ error: 'invalid_editor_map_id' }); return; }
-  try {
-    res.status(200).json({ events: await dbListEditorMapEvents(publicId) });
-  } catch (error) {
-    dbUnavailable(res, 'admin editor map audit failed', error, 'editor_map_store_unavailable');
+    respondEditorDocumentError(res, error, 'discard');
   }
 });
 
@@ -2961,24 +3436,77 @@ app.get('/api/admin/editor-maps/:publicId/events', async (req, res) => {
 async function dbGetWorkspace(ownerEmail) {
   await ensureDbReady();
   const { rows } = await pool.query(
-    'SELECT body, updated_at FROM campaign_workspaces WHERE owner_email = $1',
+    'SELECT body, revision, updated_at FROM campaign_workspaces WHERE owner_email = $1',
     [ownerEmail],
   );
   return rows[0] || null;
 }
 
-async function dbPutWorkspace(ownerEmail, body) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    `INSERT INTO campaign_workspaces (owner_email, body)
-       VALUES ($1, $2::jsonb)
-     ON CONFLICT (owner_email) DO UPDATE SET
-       body = EXCLUDED.body,
-       updated_at = now()
-     RETURNING updated_at`,
-    [ownerEmail, JSON.stringify(body)],
-  );
-  return rows[0].updated_at;
+function campaignWorkspaceRevision(raw) {
+  return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 ? raw : null;
+}
+
+function publicCampaignWorkspace(row) {
+  const body = row && isObjectRecord(row.body) ? row.body : { campaigns: [], levels: {} };
+  return {
+    campaigns: Array.isArray(body.campaigns) ? body.campaigns : [],
+    levels: isObjectRecord(body.levels) ? body.levels : {},
+    revision: Number(row && row.revision) || 0,
+    updated_at: row && row.updated_at ? row.updated_at : null,
+  };
+}
+
+async function dbPutWorkspace(ownerEmail, body, expectedRevision) {
+  return withEditorDocumentTransaction(async (client) => {
+    // Uses the same owner lock as new editor-document id allocation, so a whole
+    // workspace write cannot race the scan and claim a newly allocated level id.
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [ownerEmail]);
+    const currentResult = await client.query(
+      'SELECT body, revision, updated_at FROM campaign_workspaces WHERE owner_email = $1 FOR UPDATE',
+      [ownerEmail],
+    );
+    const current = currentResult.rows[0] || null;
+    if ((Number(current && current.revision) || 0) !== expectedRevision) {
+      return { conflict: 'revision', row: current };
+    }
+
+    const levelIds = Object.keys(body.levels);
+    if (levelIds.length) {
+      const reserved = await client.query(
+        `SELECT document_id, level_id
+           FROM level_working_copies
+          WHERE owner_email = $1
+            AND workspace_kind = 'user'
+            AND workspace_id = 'campaign'
+            AND baseline_hash IS NULL
+            AND saved_revision = 0
+            AND level_id = ANY($2::text[])
+          ORDER BY level_id`,
+        [ownerEmail, levelIds],
+      );
+      if (reserved.rows.length) return { conflict: 'reserved', row: current, reserved: reserved.rows };
+    }
+
+    if (!current) {
+      const { rows } = await client.query(
+        `INSERT INTO campaign_workspaces (owner_email, body, revision)
+         VALUES ($1, $2::jsonb, 1)
+         RETURNING body, revision, updated_at`,
+        [ownerEmail, JSON.stringify(body)],
+      );
+      return { row: rows[0] };
+    }
+    const { rows } = await client.query(
+      `UPDATE campaign_workspaces
+          SET body = $2::jsonb,
+              revision = revision + 1,
+              updated_at = now()
+        WHERE owner_email = $1
+        RETURNING body, revision, updated_at`,
+      [ownerEmail, JSON.stringify(body)],
+    );
+    return { row: rows[0] };
+  });
 }
 
 app.get('/api/campaign-workspace', async (req, res) => {
@@ -2986,12 +3514,7 @@ app.get('/api/campaign-workspace', async (req, res) => {
   if (!user) return;
   try {
     const row = await dbGetWorkspace(user.email);
-    const body = row && row.body ? row.body : { campaigns: [], levels: {} };
-    res.status(200).json({
-      campaigns: Array.isArray(body.campaigns) ? body.campaigns : [],
-      levels: body.levels && typeof body.levels === 'object' ? body.levels : {},
-      updated_at: row ? row.updated_at : null,
-    });
+    res.status(200).json(publicCampaignWorkspace(row));
   } catch (error) {
     dbUnavailable(res, 'campaign workspace read failed', error, 'workspace_unavailable');
   }
@@ -3001,14 +3524,36 @@ app.put('/api/campaign-workspace', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
   const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const expectedRevision = campaignWorkspaceRevision(raw.revision);
+  if (expectedRevision === null) {
+    res.status(400).json({ error: 'workspace_revision_required' });
+    return;
+  }
   const validationError = validateWorkspaceBody(raw);
   if (validationError) {
     res.status(400).json({ error: 'invalid_workspace', details: validationError });
     return;
   }
   try {
-    const updatedAt = await dbPutWorkspace(user.email, { campaigns: raw.campaigns, levels: raw.levels });
-    res.status(200).json({ ok: true, campaigns: raw.campaigns.length, updated_at: updatedAt });
+    const result = await dbPutWorkspace(
+      user.email,
+      { campaigns: raw.campaigns, levels: raw.levels },
+      expectedRevision,
+    );
+    if (result.conflict === 'revision') {
+      res.status(409).json({ error: 'workspace_revision_conflict', workspace: publicCampaignWorkspace(result.row) });
+      return;
+    }
+    if (result.conflict === 'reserved') {
+      res.status(409).json({
+        error: 'workspace_level_reserved',
+        level_ids: result.reserved.map((entry) => entry.level_id),
+        workspace: publicCampaignWorkspace(result.row),
+      });
+      return;
+    }
+    const workspace = publicCampaignWorkspace(result.row);
+    res.status(200).json({ ok: true, campaigns: workspace.campaigns.length, revision: workspace.revision, updated_at: workspace.updated_at });
   } catch (error) {
     dbUnavailable(res, 'campaign workspace write failed', error, 'workspace_unavailable');
   }
@@ -3497,21 +4042,44 @@ async function dbGetOfficialCampaigns(id) {
   return rows[0] || null;
 }
 
-async function dbUpsertOfficialCampaigns(id, input) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    `INSERT INTO official_campaigns (id, data, client_schema_version, revision, updated_by)
-       VALUES ($1, $2::jsonb, $3, 1, $4)
-     ON CONFLICT (id) DO UPDATE SET
-       data = EXCLUDED.data,
-       client_schema_version = EXCLUDED.client_schema_version,
-       revision = official_campaigns.revision + 1,
-       updated_at = now(),
-       updated_by = EXCLUDED.updated_by
-     RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
-    [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
-  );
-  return rows[0];
+async function dbUpsertOfficialCampaigns(id, input, expectedRevision) {
+  return withEditorDocumentTransaction(async (client) => {
+    // Row locks cannot serialize two first writers while the row is absent.
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('official-campaigns:' || $1, 0))",
+      [id],
+    );
+    const currentResult = await client.query(
+      `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by
+         FROM official_campaigns WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    const current = currentResult.rows[0] || null;
+    if ((Number(current && current.revision) || 0) !== expectedRevision) {
+      return { conflict: 'revision', row: current };
+    }
+    if (!current) {
+      const { rows } = await client.query(
+        `INSERT INTO official_campaigns (id, data, client_schema_version, revision, updated_by)
+         VALUES ($1, $2::jsonb, $3, 1, $4)
+         RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+      );
+      return { row: rows[0] };
+    }
+    const { rows } = await client.query(
+      `UPDATE official_campaigns
+          SET data = $2::jsonb,
+              client_schema_version = $3,
+              revision = revision + 1,
+              updated_at = now(),
+              updated_by = $4
+        WHERE id = $1
+        RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+      [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+    );
+    return { row: rows[0] };
+  });
 }
 
 function publicOfficialCampaignsDocument(id, document) {
@@ -3552,6 +4120,11 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
     return;
   }
   const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const expectedRevision = campaignWorkspaceRevision(raw.revision);
+  if (expectedRevision === null) {
+    res.status(400).json({ error: 'official_campaign_revision_required' });
+    return;
+  }
   if (!isObjectRecord(raw.data)) {
     res.status(400).json({ error: 'official_campaign_data_object_required' });
     return;
@@ -3567,13 +4140,21 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
     return;
   }
   try {
-    const document = await dbUpsertOfficialCampaigns(id, {
+    const result = await dbUpsertOfficialCampaigns(id, {
       data: { campaigns: raw.data.campaigns, levels: raw.data.levels },
       client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
       updated_by: user.email,
-    });
+    }, expectedRevision);
+    if (result.conflict === 'revision') {
+      res.status(409).json({
+        error: 'official_campaign_revision_conflict',
+        portfolio: publicOfficialCampaignsDocument(id, result.row),
+        store_schema_version: OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION,
+      });
+      return;
+    }
     res.status(200).json({
-      portfolio: publicOfficialCampaignsDocument(id, document),
+      portfolio: publicOfficialCampaignsDocument(id, result.row),
       store_schema_version: OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION,
     });
   } catch (error) {
@@ -3892,6 +4473,13 @@ function integerUnitNumber(raw, fallback, min, max) {
   if (raw === undefined) return fallback;
   const value = Number(raw);
   return Number.isInteger(value) && value >= min && value <= max ? value : null;
+}
+
+function nativeUnitScalePercent(sourceCanvasWidth, sourceCanvasHeight) {
+  if (!serverRender || typeof serverRender.nativeScalePercentFromCanvas !== 'function') {
+    throw new Error('board-render native scale contract is unavailable');
+  }
+  return serverRender.nativeScalePercentFromCanvas(Number(sourceCanvasWidth), Number(sourceCanvasHeight));
 }
 
 function validateUnitAssetInput(raw, current = null) {
@@ -4269,6 +4857,7 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
       sourceCanvasHeight: Number(row.source_canvas_height),
       sourceFootprintPx: Number(row.source_footprint_px),
     },
+    nativeScalePercent: nativeUnitScalePercent(row.source_canvas_width, row.source_canvas_height),
     anchor: { x: Number(row.anchor_x), y: Number(row.anchor_y) },
     rowRevision: Number(row.row_revision),
     createdAt: row.created_at,
@@ -4485,6 +5074,12 @@ app.put('/api/admin/unit-assets/:id/sprites/:palette/:direction', async (req, re
     const before = await dbUnitAssetRow(id);
     if (!before) throw unitMutationError('unit_asset_not_found', 404);
     assertUnitRevision(before, expected);
+    if (inspected.width !== Number(before.source_canvas_width) || inspected.height !== Number(before.source_canvas_height)) {
+      throw unitMutationError('unit_sprite_canvas_mismatch', 400, {
+        expected: { width: Number(before.source_canvas_width), height: Number(before.source_canvas_height) },
+        actual: { width: inspected.width, height: inspected.height },
+      });
+    }
     const familyRow = await pool.query('SELECT accepted_asset_id FROM unit_families WHERE family = $1', [before.family]);
     if (String(familyRow.rows[0]?.accepted_asset_id || '') === id) {
       throw unitMutationError('accepted_unit_asset_locked', 409, 'Create a candidate before replacing accepted sprite frames.');
@@ -4591,6 +5186,7 @@ app.post('/api/admin/unit-assets/:id/accept', async (req, res) => {
         'SELECT accepted_asset_id, row_revision FROM unit_families WHERE family = $1 FOR UPDATE',
         [asset.family],
       );
+      const nativeScalePercent = nativeUnitScalePercent(asset.source_canvas_width, asset.source_canvas_height);
       const previousId = familyResult.rows[0]?.accepted_asset_id ? String(familyResult.rows[0].accepted_asset_id) : null;
       if (previousId && previousId !== id) {
         await client.query(
@@ -4605,11 +5201,14 @@ app.post('/api/admin/unit-assets/:id/accept', async (req, res) => {
         [id, user.email],
       );
       await client.query(
-        `UPDATE unit_families SET accepted_asset_id = $2, row_revision = row_revision + 1,
-           updated_at = now(), updated_by = $3 WHERE family = $1`,
-        [asset.family, id, user.email],
+        `UPDATE unit_families SET accepted_asset_id = $2, display_scale_percent = $3,
+           row_revision = row_revision + 1, updated_at = now(), updated_by = $4 WHERE family = $1`,
+        [asset.family, id, nativeScalePercent, user.email],
       );
-      await logUnitAssetEvent(client, asset.family, id, 'accepted', user.email, { previousAssetId: previousId });
+      await logUnitAssetEvent(client, asset.family, id, 'accepted', user.email, {
+        previousAssetId: previousId,
+        displayScalePercent: nativeScalePercent,
+      });
       await bumpUnitCatalog(client);
     });
     const catalog = await dbReadUnitCatalog({ includeArchived: true });

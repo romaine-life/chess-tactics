@@ -1,10 +1,9 @@
 // Seed-vs-author arbitration for the Level Editor's rules state (objective preset,
 // victory events, other events, battle clock, level name, template choice).
 //
-// The editor's two mount-time document loads resolve ASYNCHRONOUSLY — campaign-store
-// hydration for a ?levelId= deep link, loadEditorMap for a ?map= link — and the ADR-0046
-// entrance failsafe reveals a still-loading editor after 4s rather than strand it on a
-// slow fetch. So the user can author rules BEFORE the load resolves, and a blind
+// The editor's canonical and durable-working-copy loads resolve ASYNCHRONOUSLY, and the
+// ADR-0046 entrance failsafe reveals a still-loading editor after 4s rather than strand it
+// on a slow fetch. So the user can author rules BEFORE a load resolves, and a blind
 // `setVictory(level.victory ?? preset)` on resolve silently replaces what they authored
 // (the "applied Rival Kings, workspace persisted King Assault" bug; the reproduced
 // ordering lives in levelEditorRulesSeed.test.ts). The arbitration rule:
@@ -12,7 +11,7 @@
 //   - a SEED (deferred mount initialization) never overwrites a field the user
 //     explicitly authored first — both orderings converge on "loaded document + the
 //     user's edit";
-//   - an explicit document LOAD (Open my map / Load copy / read-only live sync) is the
+//   - an explicit document LOAD (opening another level or discarding to canonical) is the
 //     user asking for that document: it replaces everything and resets authorship.
 //
 // When a seed does withhold authored fields, the editor's clean baseline must still be
@@ -50,7 +49,7 @@ export interface LevelRulesSeed {
 }
 
 /** The rules state a level document seeds into the editor — the single derivation both
- * document-apply paths (campaign hydrate and editor-map load) share. Pure. */
+ * document-apply paths (canonical hydrate and working-copy load) share. Pure. */
 export function levelRulesSeed(level: Level): LevelRulesSeed {
   const surviveTurns = level.surviveTurns ?? DEFAULT_SURVIVE_TURNS;
   const preset = victoryRulesForObjective(level.objective, { surviveTurns });

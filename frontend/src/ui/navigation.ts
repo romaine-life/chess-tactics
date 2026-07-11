@@ -1,5 +1,36 @@
 export const APP_NAVIGATION_EVENT = 'chess-tactics:navigate';
 
+export type AppNavigationSource = 'app' | 'history';
+
+export interface AppNavigationAttempt {
+  href: string;
+  path: string;
+  replace: boolean;
+  source: AppNavigationSource;
+  retry: () => boolean;
+}
+
+export type AppNavigationBlocker = (attempt: AppNavigationAttempt) => boolean;
+
+// Nested authoring surfaces can consume one navigation attempt (for example, Back closes the
+// full rules editor before leaving the level editor). Working drafts persist independently.
+const navigationBlockers = new Set<AppNavigationBlocker>();
+
+export function registerAppNavigationBlocker(blocker: AppNavigationBlocker): () => void {
+  navigationBlockers.add(blocker);
+  return () => navigationBlockers.delete(blocker);
+}
+
+export function runAppNavigationBlockers(attempt: AppNavigationAttempt): boolean {
+  // The most recently mounted screen gets first refusal. In normal use there is one routed
+  // authoring surface, but reverse order makes nested editors behave predictably as well.
+  const blockers = Array.from(navigationBlockers);
+  for (let index = blockers.length - 1; index >= 0; index -= 1) {
+    if (blockers[index](attempt)) return true;
+  }
+  return false;
+}
+
 export function normalizeRoutePath(pathname: string): string {
   return pathname.replace(/\/+$/, '') || '/';
 }
@@ -59,8 +90,21 @@ export function navigateApp(href: string, options: { replace?: boolean; scroll?:
   const nextHref = `${url.pathname}${url.search}${url.hash}`;
   const currentHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (nextHref !== currentHref) {
+    if (runAppNavigationBlockers({
+      href: nextHref,
+      path: normalizeRoutePath(url.pathname),
+      replace: Boolean(options.replace),
+      source: 'app',
+      retry: () => navigateApp(nextHref, options),
+    })) return false;
+
     const method = options.replace ? 'replaceState' : 'pushState';
-    window.history[method]({}, '', nextHref);
+    // Query-only editor rewrites must preserve same-document history sentinels (for example the
+    // open Rules surface). A real pushed destination starts with fresh state.
+    const state = options.replace && window.history.state && typeof window.history.state === 'object'
+      ? window.history.state
+      : {};
+    window.history[method](state, '', nextHref);
   }
 
   window.dispatchEvent(new CustomEvent(APP_NAVIGATION_EVENT, {

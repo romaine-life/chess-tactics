@@ -25,8 +25,9 @@ did NOT follow the app's one shared shell. Two problems compounded:
 **1 — Route naming.** The canonical routes are:
 
 - **`/editor`** — the Editor (formerly `/campaigns-next`). The main-menu "Editor" tab points here.
-- **`/editor/level`** — the level editor nested inside it (formerly `/edit`), reached only by
-  drilling into a level ("Edit Board" / "+ New Board"), carrying the same query params.
+- **`/editor/level`** — the level editor nested inside it (formerly `/edit`). Existing levels
+  reach it through "Edit Board"; the Editor rail's pinned "New Level" action opens it directly as
+  a blank, standalone board that can be assigned to a campaign later.
 
 Legacy paths (`/campaigns-next`, `/campaigns`, `/edit`, `/level-editor`) stay as **aliases** (the
 router + `routeSurfaces` + `titleBarConfig` + `routePrefetch` accept both) so bookmarks/tests keep

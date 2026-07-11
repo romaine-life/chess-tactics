@@ -22,15 +22,16 @@ describe('fenceOverlayZIndex', () => {
 });
 
 describe('wallOverlayZIndex', () => {
-  it('places a perimeter wall in the owner object band', () => {
+  it('places a perimeter wall above ground cover and below same-cell structure art', () => {
     const ownerCell = { x: 2, y: 3 };
-    const farUnitZIndex = objectBaseZIndex({ x: ownerCell.x - 1, y: ownerCell.y });
-    const nearUnitZIndex = objectBaseZIndex(ownerCell);
+    const ownerCoverFrontZIndex = ownerCell.x + ownerCell.y + GROUND_COVER_FRONT_DEPTH_OFFSET;
+    const ownerStructureBackZIndex = ownerCell.x + ownerCell.y + OBJECT_DEPTH_OFFSET + STRUCTURE_BACK_DEPTH_DELTA;
     const wallZIndex = wallOverlayZIndex(ownerCell);
 
-    expect(WALL_OVERLAY_DEPTH_OFFSET).toBe(OBJECT_DEPTH_OFFSET);
-    expect(wallZIndex).toBeGreaterThan(farUnitZIndex);
-    expect(wallZIndex).toBe(nearUnitZIndex);
+    expect(WALL_OVERLAY_DEPTH_OFFSET).toBe(OBJECT_DEPTH_OFFSET - 2);
+    expect(wallZIndex).toBeGreaterThan(ownerCoverFrontZIndex);
+    expect(wallZIndex).toBeLessThan(ownerStructureBackZIndex);
+    expect(wallZIndex).toBeLessThan(objectBaseZIndex(ownerCell));
   });
 });
 

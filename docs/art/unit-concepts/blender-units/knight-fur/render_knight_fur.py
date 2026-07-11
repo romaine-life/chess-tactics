@@ -2,11 +2,14 @@
 
 Run with:  blender --background --python render_knight_fur.py
 
-Produces .unit-art-output/knight/navy-blue/<direction>.png at the
+Produces .unit-art-output/knight/navy-blue/<direction>.png by default at the
 true-isometric contract angle (45 yaw / 35.264 elevation / orthographic, fixed camera,
 piece rotated per direction). The wood-grain diffuse is dropped and replaced with a
 procedural navy "hint of fur" coat (smooth muzzle, fur only on the coat — not the
 pedestal base or the sculpted mane). See docs/blender-projection-contract.md.
+
+The canonical pipeline supplies UNIT_ART_OUTPUT_DIR plus
+UNIT_ART_FRAME_WIDTH/HEIGHT. Blender writes that exact raster; no resize follows.
 
 Orientation gotchas this script handles (each cost an iteration to find):
   - obj_import bakes an axis-conversion rotation -> transform_apply immediately.
@@ -22,7 +25,11 @@ ROOT = Path(__file__).resolve().parent
 while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 OBJ = str(ROOT / "docs/art/unit-concepts/source-assets/knight/wooden-chess-knight-side-b/12936_Wooden_Chess_Knight_Side_B_V2_l3.obj")
-OUT = str(ROOT / ".unit-art-output/knight/navy-blue")
+OUT = os.environ.get("UNIT_ART_OUTPUT_DIR", str(ROOT / ".unit-art-output/knight/navy-blue"))
+FRAME_WIDTH = int(os.environ.get("UNIT_ART_FRAME_WIDTH", "512"))
+FRAME_HEIGHT = int(os.environ.get("UNIT_ART_FRAME_HEIGHT", "512"))
+if not (1 <= FRAME_WIDTH <= 4096 and 1 <= FRAME_HEIGHT <= 4096):
+    raise RuntimeError("UNIT_ART_FRAME_WIDTH/HEIGHT must be between 1 and 4096")
 os.makedirs(OUT, exist_ok=True)
 
 bpy.ops.object.select_all(action="SELECT"); bpy.ops.object.delete()
@@ -108,8 +115,9 @@ cam.data.type = "ORTHO"; cam.data.ortho_scale = 2.7
 s = bpy.context.scene
 s.render.engine = "CYCLES"; s.cycles.samples = 48; s.cycles.use_denoising = True
 s.view_settings.view_transform = "Standard"
-s.render.resolution_x = s.render.resolution_y = 512; s.render.film_transparent = True
-s.render.image_settings.file_format = "PNG"
+s.render.resolution_x = FRAME_WIDTH; s.render.resolution_y = FRAME_HEIGHT; s.render.resolution_percentage = 100
+s.render.film_transparent = True
+s.render.image_settings.file_format = "PNG"; s.render.image_settings.color_mode = "RGBA"
 DIRECTIONS = {"south": 0, "south-west": -45, "west": -90, "north-west": -135,
               "north": 180, "north-east": 135, "east": 90, "south-east": 45}
 for name, angle in DIRECTIONS.items():

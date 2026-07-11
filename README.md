@@ -41,12 +41,13 @@ under `frontend/public`.
 
 ## Local Backend
 
-When agents hand off Level Editor boards through the backend, use an anonymous
-misc editor map: `POST /api/editor-maps` with `{ "level": ..., "misc": true }`.
-Do not hand off a normal signed-in `/editor/level?map=<id>` created under the
-agent's account; account-owned live maps are editable only by their owner, so
-Nelson opens them read-only. Misc handoffs are anonymous and can be loaded as
-editable copies from the Misc Map Pool.
+Level Editor documents use a stable `/editor/level?document=<opaque-id>&levelId=<id>` URL. The opaque document id is global; the level id remains account-local.
+For authenticated editors, changes autosave to a durable server-side working copy;
+**Save** promotes that working copy to the canonical level, while **Discard changes**
+replaces it with the canonical saved level. Copying the browser URL is side-effect
+free: it does not save, publish, grant access, or create another document. Gameplay
+and thumbnails read only canonical saved levels. Browser storage is a crash/offline
+fallback, not the cloud persistence model.
 
 Fresh worktrees do not have `backend/node_modules`; that is expected every time.
 `npm run dev` installs/refreshes backend dependencies before Vite starts the
@@ -83,6 +84,14 @@ set `SCHEMA_MIGRATIONS=auto` when you intentionally want to apply missing
 migrations to a local database. See
 [docs/persistence.md](docs/persistence.md) for the schema, auth model, backups,
 failure behavior, and the one post-`tofu apply` value to pin.
+
+New board-unit geometry has one supported entry point: `python
+scripts/generate-unit-art.py`, which renders the calibrated Blender turntable at
+eight exact facings. Resizing already accepted art uses Unit Art's **Recapture**
+editor instead: it deterministically reduces the approved 6-palette x 8-direction
+set to the chosen delivery raster and creates a review-only storage-backed
+candidate with explicit source and resampling provenance.
+See [docs/art/unit-concepts/README.md](docs/art/unit-concepts/README.md).
 
 ## Checks
 

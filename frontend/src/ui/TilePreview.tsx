@@ -56,6 +56,7 @@ import { structureSourceHalfSrc } from '../render/BoardStructure';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
 import { navigateApp } from './navigation';
+import { STUDIO_VIEWER_KIND_OPTIONS, isViewerKind, type ViewerKind } from './studioViewerKinds';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton, TitleBarIconButton } from './shell/TitleBarControls';
 import {
@@ -94,12 +95,6 @@ type StudioMode = 'catalog' | 'viewer';
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
 type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym' | 'solver';
-
-// What the Viewer is currently holding. Assets and artwork feed read-only stages;
-// 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
-// 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
-// in full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'unitart' | 'portrait' | 'nineslice' | 'divider' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscene' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'walldecor' | 'wallart' | 'sfx' | 'gamelab' | 'gym' | 'solver';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -345,7 +340,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedSurfaceFamily: sfamily || undefined,
     selectedRegionId: regionParam || undefined,
     viewerKind: isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
-      : normalizedVk === 'asset' || normalizedVk === 'artwork' || normalizedVk === 'unitart' || normalizedVk === 'portrait' || normalizedVk === 'nineslice' || normalizedVk === 'divider' || normalizedVk === 'propseat' || normalizedVk === 'tilecompare' || normalizedVk === 'surfacetiles' || normalizedVk === 'sceneanim' || normalizedVk === 'animscene' || normalizedVk === 'artworkcompare' || normalizedVk === 'glossary' || normalizedVk === 'surface' || normalizedVk === 'scrollbar' || normalizedVk === 'slider' || normalizedVk === 'page' || normalizedVk === 'tileside' || normalizedVk === 'walldecor' || normalizedVk === 'wallart' || normalizedVk === 'sfx' || normalizedVk === 'gamelab' || normalizedVk === 'gym' || normalizedVk === 'solver' ? normalizedVk : undefined,
+      : isViewerKind(normalizedVk) ? normalizedVk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -1689,29 +1684,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     <label className="tileset-category-select" title="Which kind of item the Viewer shows.">
       <span>Viewer</span>
       <select value={viewerKind} onChange={(event) => setViewerKind(event.target.value as ViewerKind)} aria-label="Viewer kind">
-        <option value="asset">Asset</option>
-        <option value="artwork">Artwork</option>
-        <option value="unitart">Unit Art</option>
-        <option value="portrait">Portrait</option>
-        <option value="nineslice">9-Slice</option>
-        <option value="propseat">Prop Seat</option>
-        <option value="tilecompare">Tile Pipeline</option>
-        <option value="surfacetiles">Tileset Surfaces</option>
-        <option value="sceneanim">Scene Animation</option>
-        <option value="animscene">Animated Scene</option>
-        <option value="artworkcompare">Art Compare</option>
-        <option value="glossary">Glossary</option>
-        <option value="surface">Surface</option>
-        <option value="scrollbar">Scrollbar</option>
-        <option value="slider">Slider</option>
-        <option value="sfx">Sound Assignments</option>
-        <option value="page">Page</option>
-        <option value="gamelab">Game Lab</option>
-        <option value="gym">Training Gym</option>
-        <option value="solver">Board Solver</option>
-        <option value="tileside">Tile Sides</option>
-        <option value="walldecor">Wall Art Sources</option>
-        <option value="wallart">Wall Art</option>
+        {STUDIO_VIEWER_KIND_OPTIONS.map((option) => (
+          <option key={option.id} value={option.id}>{option.label}</option>
+        ))}
       </select>
     </label>
   );

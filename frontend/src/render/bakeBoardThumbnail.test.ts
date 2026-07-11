@@ -188,6 +188,26 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
 });
 
 describe('boardDrawOps — z-order matches the live DOM bands', () => {
+  it('keeps accepted native unit rasters at their authored dimensions', () => {
+    const catalog = testLiveUnitCatalog({ scales: { pawn: 66 }, nativeScales: { pawn: 66 } });
+    const pawn = catalog.assets.find((asset) => asset.family === 'pawn')!;
+    pawn.footprint.sourceCanvasWidth = 51;
+    pawn.footprint.sourceCanvasHeight = 61;
+    pawn.footprint.sourceFootprintPx = 15;
+    applyLiveUnitCatalog(catalog);
+    try {
+      const board: EditorBoard = {
+        ...blank(),
+        units: { '0,0': { unitId: 'pawn', direction: 'south', faction: 'navy-blue' } },
+      };
+      const unit = boardDrawOps(board).find((op) => op.contain);
+      expect(unit?.dw).toBe(51);
+      expect(unit?.dh).toBe(61);
+    } finally {
+      applyLiveUnitCatalog(testLiveUnitCatalog());
+    }
+  });
+
   it('sorts tiles by x+y, then brackets the unit/doodad in the object band', () => {
     const board: EditorBoard = {
       ...blank(),
@@ -331,8 +351,27 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(wall!.dx).toBeCloseTo((1 - 0) * TILE_TEMPLATE.stepX - 64);
     expect(wall!.dy).toBeCloseTo((1 + 0) * TILE_TEMPLATE.stepY - 96);
     expect(wall!.z).toBe(wallOverlayZIndex({ x: 1, y: 0 }));
-    expect(wall!.z).toBe(ownerUnit!.z);
-    expect(ops.indexOf(wall!)).toBeLessThan(ops.indexOf(ownerUnit!));
+    expect(wall!.z).toBeLessThan(ownerUnit!.z);
+  });
+
+  it('keeps every half of a same-cell fieldstone in front of the wall', () => {
+    const board: EditorBoard = {
+      ...blank(3, 3),
+      cells: { '1,0': TILE },
+      walls: { [roadEdgeKey(1, 0, 1, -1)]: 'stone' },
+      props: { '1,0': { propId: 'fieldstone' } },
+    };
+    const ops = boardDrawOps(board);
+    const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-1.png');
+    const structureBack = ops.find((op) => op.src === '/assets/props/fieldstone/back.png');
+    const structureFront = ops.find((op) => op.src === '/assets/props/fieldstone/front.png');
+
+    expect(wall).toBeDefined();
+    expect(structureBack).toBeDefined();
+    expect(structureFront).toBeDefined();
+    expect(wall!.z).toBeLessThan(structureBack!.z);
+    expect(wall!.z).toBeLessThan(structureFront!.z);
+    expect(structureBack!.z).toBe(structureBackZIndex({ x: 1, y: 0 }));
   });
 
   it('keeps wall art in the wall display layer while drawing it after the wall frame', () => {
@@ -341,21 +380,20 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       ...blank(3, 3),
       walls: { [edge]: 'stone' },
       wallArt: { [edge]: 'banner-stone-wall' },
-      units: { '0,0': UNIT },
+      props: { '0,0': { propId: 'fieldstone' } },
     };
     const ops = boardDrawOps(board);
     const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-8.png');
     const art = ops.find((op) => op.src === '/assets/wall-decor/banner-tattered-west.png');
-    const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 0, y: 0 }));
+    const structureBack = ops.find((op) => op.src === '/assets/props/fieldstone/back.png');
 
     expect(wall).toBeDefined();
     expect(art).toBeDefined();
-    expect(ownerUnit).toBeDefined();
+    expect(structureBack).toBeDefined();
     expect(art!.z).toBe(wallArtOverlayZIndex({ x: 0, y: 0 }));
     expect(art!.z).toBe(wall!.z);
-    expect(art!.z).toBe(ownerUnit!.z);
+    expect(art!.z).toBeLessThan(structureBack!.z);
     expect(ops.indexOf(wall!)).toBeLessThan(ops.indexOf(art!));
-    expect(ops.indexOf(art!)).toBeLessThan(ops.indexOf(ownerUnit!));
   });
 });
 

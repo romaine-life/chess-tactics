@@ -15,6 +15,8 @@ import {
   type UnitAsset,
 } from './unitCatalog';
 import { UnitStudioControls } from './UnitStudioControls';
+import type { UnitArtPreview } from './UnitRecaptureEditor';
+import { unitDeliveryRasterForAsset, useUnitSizeDraft } from './unitSizeTuning';
 
 const UNIT_ART_GROUNDS = ['grass', 'stone', 'water'] as const;
 type UnitArtGround = (typeof UNIT_ART_GROUNDS)[number];
@@ -62,6 +64,9 @@ export function UnitArtLab({
 }): ReactElement {
   const [ground, setGround] = useState<UnitArtGround>('grass');
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [artPreview, setArtPreview] = useState<UnitArtPreview | null>(null);
+  const sizes = useUnitSizeDraft();
+  const deliveryRaster = unitDeliveryRasterForAsset(selectedUnit, sizes);
   const board = useMemo(
     () => solveSocketBoard({
       assets: tileAssets as readonly TileAsset[],
@@ -77,14 +82,24 @@ export function UnitArtLab({
   );
   const production = unitAssets.filter((unit) => !unit.speculative);
   const candidates = unitAssets.filter((unit) => unit.speculative);
+  const choices = [...production, ...candidates];
+  const selectedIndex = choices.findIndex((unit) => unit.id === selectedUnit.id);
+  const adjacentUnit = (step: -1 | 1): UnitAsset | undefined => {
+    if (!choices.length) return undefined;
+    const index = selectedIndex >= 0 ? selectedIndex : 0;
+    return choices[(index + step + choices.length) % choices.length];
+  };
+  const previousUnit = adjacentUnit(-1);
+  const nextUnit = adjacentUnit(1);
   const rotate = (): void => {
     const index = rookDirections.indexOf(direction);
     onDirection(rookDirections[(index + 1) % rookDirections.length] ?? 'south');
   };
   const spriteFor = (palette: UnitPalette): string => (
-    hasDirectionSprite(selectedUnit, direction)
+    artPreview?.sprites[palette]?.[direction]
+    ?? (hasDirectionSprite(selectedUnit, direction)
       ? selectedUnit.sprite(palette, direction)
-      : MISSING_DIRECTION_SPRITE
+      : MISSING_DIRECTION_SPRITE)
   );
 
   return (
@@ -119,7 +134,15 @@ export function UnitArtLab({
               };
               return (
                 <span key={palette} className={`board-unit-seat is-${selectedUnit.family}`} style={style}>
-                  <img src={spriteFor(palette)} alt={`${UNIT_PALETTE_LABELS[palette]} ${selectedUnit.label}`} draggable={false} />
+                  <img
+                    src={spriteFor(palette)}
+                    alt={`${UNIT_PALETTE_LABELS[palette]} ${selectedUnit.label}`}
+                    draggable={false}
+                    style={{
+                      width: `${artPreview?.width ?? deliveryRaster.width}px`,
+                      height: `${artPreview?.height ?? deliveryRaster.height}px`,
+                    }}
+                  />
                 </span>
               );
             })}
@@ -132,19 +155,39 @@ export function UnitArtLab({
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
-            <label className="tileset-category-select" title="Which unit art is being edited.">
+            <div className="tileset-category-select unit-art-select" title="Which unit art is being edited.">
               <span>Unit</span>
-              <select value={selectedUnit.id} onChange={(event) => onSelectUnit(event.target.value)} aria-label="Unit art">
-                <optgroup label="Production">
-                  {production.map((unit) => <option key={unit.id} value={unit.id}>{familyLabels[unit.family]}</option>)}
-                </optgroup>
-                {candidates.length ? (
-                  <optgroup label="Candidates">
-                    {candidates.map((unit) => <option key={unit.id} value={unit.id}>{familyLabels[unit.family]} - {unit.label}</option>)}
+              <span className="unit-art-select-row">
+                <button
+                  type="button"
+                  aria-label="Previous unit"
+                  title={previousUnit ? `Previous unit: ${previousUnit.label}` : 'Previous unit'}
+                  disabled={choices.length < 2}
+                  onClick={() => previousUnit && onSelectUnit(previousUnit.id)}
+                >
+                  &lt;
+                </button>
+                <select value={selectedUnit.id} onChange={(event) => onSelectUnit(event.target.value)} aria-label="Unit art">
+                  <optgroup label="Production">
+                    {production.map((unit) => <option key={unit.id} value={unit.id}>{familyLabels[unit.family]}</option>)}
                   </optgroup>
-                ) : null}
-              </select>
-            </label>
+                  {candidates.length ? (
+                    <optgroup label="Candidates">
+                      {candidates.map((unit) => <option key={unit.id} value={unit.id}>{familyLabels[unit.family]} - {unit.label}</option>)}
+                    </optgroup>
+                  ) : null}
+                </select>
+                <button
+                  type="button"
+                  aria-label="Next unit"
+                  title={nextUnit ? `Next unit: ${nextUnit.label}` : 'Next unit'}
+                  disabled={choices.length < 2}
+                  onClick={() => nextUnit && onSelectUnit(nextUnit.id)}
+                >
+                  &gt;
+                </button>
+              </span>
+            </div>
             <label className="tileset-category-select" title="Board surface behind the unit preview.">
               <span>Ground</span>
               <select value={ground} onChange={(event) => setGround(event.target.value as UnitArtGround)} aria-label="Preview ground">
@@ -159,6 +202,7 @@ export function UnitArtLab({
               selectedUnit={selectedUnit}
               onSelectUnit={onSelectUnit}
               onCatalogChanged={onCatalogChanged}
+              onArtPreview={setArtPreview}
             />
           </div>
         </section>

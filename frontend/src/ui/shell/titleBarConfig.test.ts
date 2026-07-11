@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { titleBarConfig } from './titleBarConfig';
 
 describe('titleBarConfig play route screen names', () => {
+  it('uses one Play title across selector sections', () => {
+    expect(titleBarConfig('/play/select/skirmish')?.screenName).toBe('Play');
+    expect(titleBarConfig('/play/select/levels')?.screenName).toBe('Play');
+    expect(titleBarConfig('/play/select/campaign/off-c-crown')?.screenName).toBe('Play');
+  });
+
+  it('returns from sign-in to the current Play selector section', () => {
+    expect(titleBarConfig('/play/select/skirmish')?.signInReturnTo).toBe('/play/select/skirmish');
+    expect(titleBarConfig('/play/select/levels')?.signInReturnTo).toBe('/play/select/levels');
+    expect(titleBarConfig('/play/select/campaign/off-c-crown')?.signInReturnTo)
+      .toBe('/play/select/campaign/off-c-crown');
+  });
+
   it('uses campaign context for campaign play links', () => {
     expect(titleBarConfig('/play', '?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge')?.screenName).toBe('Campaign');
   });
