@@ -6,7 +6,6 @@ import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
-import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 import { fetchLobby, postMove, resignLobby, leaveLobby, fetchMovesSince, subscribeLobbyChannel, type MoveEvent } from '../net/lobbies';
 import type { Level, TimeControl } from '../core/level';
 import type { Side } from '../core/types';
@@ -35,7 +34,7 @@ import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
 import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
 import { navigateApp, readValidatedReturnTo } from './navigation';
-import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
+import { PLAY_SKIRMISH_SELECTOR_HREF, playCampaignSelectorHref } from './playHubRoute';
 
 export function Skirmish() {
   const routeSearch = window.location.search;
@@ -78,9 +77,6 @@ export function Skirmish() {
   // A shared USER map: `?map=<publicId>` fetches its public snapshot and plays it (no sign-in, no
   // campaign). The dead-link message shows if the id is unknown/removed.
   const routeMap = routeParams.get('map');
-  // Legacy free-skirmish links can still enter as `?random=1`: always roll a FRESH random
-  // battle on the player's chosen clock, rather than resuming a prior in-progress skirmish.
-  const routeRandom = routeParams.get('random') === '1';
   // Where a test-play should return to (the editor board that launched it, via ?returnTo). Drives
   // a "‹ Back to editor" in the title bar so a live board test is a LOOP — tweak, play, back —
   // not a one-way trip to the skirmish. Null for a normal match (no returnTo), so nothing shows.
@@ -117,7 +113,7 @@ export function Skirmish() {
   // "View board" dismisses it to review the final position (re-armed for the next match).
   const [netResultDismissed, setNetResultDismissed] = useState(false);
   // Real campaign play (records progress + shows the result flow), as opposed to the
-  // editor's "Test Play" (mode=test) or a free skirmish (no campaign/level).
+  // editor's "Test Play" (mode=test) or an authored non-campaign level.
   const isCampaignPlay = Boolean(routeCampaignId && routeLevelId && routeMode !== 'test');
   // The Level Editor's "Test Play" is ephemeral author iteration — never persisted or
   // resumed (a stale snapshot after an edit would mislead), unlike real play below.
@@ -140,11 +136,11 @@ export function Skirmish() {
   // The live objective + which side holds the King come from the STORE (not routeLevel):
   // the store computes kingSide from the actual starting pieces, so a setup-spawn King
   // Assault whose events deal the player the King reads "Protect your King" too, and a
-  // free skirmish (no level) still gets a correct goal line. objectiveSummary is the one
-  // source of that copy (ADR-0050 — no re-hardcoded objective strings in the UI).
+  // objectiveSummary is the one source of that copy (ADR-0050 — no re-hardcoded
+  // objective strings in the UI).
   const objective = useSkirmish((s) => s.objective);
   const kingSide = useSkirmish((s) => s.objectiveCtx.kingSide);
-  // The battle clock (null = untimed level / free skirmish). The store quantizes
+  // The battle clock (null = untimed level). The store quantizes
   // remainingMs to the displayed readout, so this subscription re-renders about
   // once a second, not per tick.
   const clock = useSkirmish((s) => s.clock);
@@ -201,25 +197,21 @@ export function Skirmish() {
   };
 
   // The title-bar ornament diamond doubles as a Retry control in single-player (see the
-  // stud TitleBarSlot below). It restarts the CURRENT battle: a level (campaign / test /
-  // board-link / shared map) reuses replayLevel's fixed-vs-random logic; a bare free
-  // skirmish rebuilds byte-identically from its seed. Netplay never reaches here — the
-  // stud is hidden there, since a local reset would desync the shared board.
+  // stud TitleBarSlot below). It restarts the CURRENT authored level (campaign / test /
+  // board-link / shared map) with replayLevel's fixed-vs-random logic. Netplay never
+  // reaches here — the stud is hidden there, since a local reset would desync the board.
   const retrySkirmish = () => {
     if (activeLevel) { replayLevel(); return; }
-    // A free skirmish rebuilds from its seed on the player's current clock preference, so
-    // retrying keeps the same time control (or untimed) rather than resetting to the 5:00
-    // default — matching what "New skirmish" and the hub's Start produce.
-    newSkirmish({ seed: useSkirmish.getState().seed, timeControl: loadSkirmishClockPref() });
+    navigateApp(PLAY_SKIRMISH_SELECTOR_HREF);
   };
   const startNewScenario = () => {
     if (activeLevel) { replayLevel(); return; }
-    newSkirmish({ seed: Date.now() & 0x7fffffff, timeControl: loadSkirmishClockPref() });
+    navigateApp(PLAY_SKIRMISH_SELECTOR_HREF);
   };
   // Show the Retry stud only once a single-player board is up (no netplay, no dead map link).
   const showRetryStud = boardSettled && !mapError && !routeLobby && !net;
-  const retryStudLabel = activeLevel ? (isCampaignPlay ? 'Retry level' : 'Retry board') : 'Retry skirmish';
-  const newScenarioLabel = activeLevel ? 'New attempt' : 'New skirmish';
+  const retryStudLabel = activeLevel ? (isCampaignPlay ? 'Retry level' : 'Retry board') : 'Back to Play';
+  const newScenarioLabel = activeLevel ? 'New attempt' : 'Choose board';
 
   // The next level in this campaign after the one just cleared (null on the last level or
   // before the workspace hydrates) — powers the victory "Continue" button.
@@ -270,8 +262,15 @@ export function Skirmish() {
 
   useEffect(() => {
     // Multiplayer routes are driven by the netplay effect below, not this single-player
-    // start/resume path — bail so it can't clobber the shared board with a free skirmish.
+    // start/resume path — bail so it can't clobber the shared board with a local match.
     if (routeLobby) return undefined;
+    // A live board must name canonical content (or carry an authored board/map link).
+    // Bare /play and the retired ?random=1 path return to the selector instead of
+    // synthesizing an item-less procedural match (ADR-0070/0074).
+    if (!routeLevelId && !routeBoard && !routeMap) {
+      navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
+      return undefined;
+    }
     // A manual refresh or the "new version available" reload (net/appUpdate) rebuilds
     // the in-memory store from scratch; without a saved copy that would silently
     // restart a live battle. Turn disk persistence on for real play, off for the
@@ -297,7 +296,7 @@ export function Skirmish() {
     // for this level if one survived a reload; else start fresh. The saved board is
     // self-contained (full position), so resume needs no level document — only the
     // levelId must match the one being entered.
-    const startOrResume = (levelId: string | null, levelDoc: Level | null): void => {
+    const startOrResume = (levelId: string, levelDoc: Level): void => {
       if (!shouldStartFresh(levelId)) return; // singleton already holds this battle
       if (!isTestPlay) {
         const saved = loadMatch();
@@ -306,31 +305,23 @@ export function Skirmish() {
           return;
         }
       }
-      // A FREE skirmish (no level) is timed from the player's saved clock preference
-      // (default 5:00); a level carries its own authored control, so leave timeControl
-      // unset there and let the level decide.
       newSkirmish({
         seed: freshSeed(),
-        level: levelDoc ?? undefined,
+        level: levelDoc,
         ai,
-        ...(levelDoc ? {} : { timeControl: loadSkirmishClockPref() }),
       });
     };
 
-    // Legacy `?random=1` links ALWAYS roll a fresh free battle on the chosen clock — never
-    // resume — then strip the flag so a later reload resumes THIS battle instead of
-    // re-rolling a different one. The Skirmish hub now routes through editable profiles.
-    if (routeRandom) {
-      newSkirmish({ seed: freshSeed(), ai, timeControl: loadSkirmishClockPref() });
-      navigateApp('/play', { replace: true, scroll: false });
-      setBoardSettled(true);
-      return;
-    }
-
     // A `?board=<code>` link plays an authored position straight away — decode it into a
     // fixed-placement level and start fresh (ephemeral, never persisted; see the
-    // persistence toggle above). Falls through to the normal flow if it can't decode.
-    if (routeBoardLevel) {
+    // persistence toggle above). An invalid code stays loud instead of falling through
+    // to a generated free match.
+    if (routeBoard) {
+      if (!routeBoardLevel) {
+        setMapError('This board link isn’t valid.');
+        setBoardSettled(true);
+        return;
+      }
       if (shouldStartFresh(routeBoardLevel.id)) newSkirmish({ seed: freshSeed(), level: routeBoardLevel, ai });
       setBoardSettled(true);
       return;
@@ -362,29 +353,41 @@ export function Skirmish() {
       return () => { active = false; };
     }
 
-    if (!routeLevelId || routeLevel) {
-      startOrResume(routeLevel?.id ?? null, routeLevel);
+    if (routeLevel) {
+      startOrResume(routeLevel.id, routeLevel);
       setBoardSettled(true);
       return;
     }
+    if (!routeLevelId) {
+      navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
+      return undefined;
+    }
+    const requestedLevelId = routeLevelId;
     let active = true;
-    // Hydrate the shared workspace the same way the menu does (server when reachable,
-    // else the bundled default) so a deep-link / reload of a campaign battle resolves
-    // its level offline too — not just when arriving from the level select.
+    // Hydrate the shared workspace the same way the Play selector does so a deep-link /
+    // reload resolves the same canonical level document as a clicked selection.
     ensureCampaignsHydrated()
       .then(() => {
         if (!active) return;
-        ensureDefaultSkirmishProfileLevel();
         if (routeCampaignId) useCampaigns.getState().selectCampaign(routeCampaignId);
-        useCampaigns.getState().selectLevel(routeLevelId);
-        const level = useCampaigns.getState().levels[routeLevelId] ?? null;
+        useCampaigns.getState().selectLevel(requestedLevelId);
+        const level = useCampaigns.getState().levels[requestedLevelId] ?? null;
+        if (!level) {
+          setMapError('This level isn’t available — it may have been removed or the content service could not be reached.');
+          setBoardSettled(true);
+          return;
+        }
         setRouteLevel(level);
-        startOrResume(level?.id ?? null, level);
+        startOrResume(level.id, level);
         setBoardSettled(true);
       })
-      .catch(() => { startOrResume(routeLevelId, null); setBoardSettled(true); });
+      .catch(() => {
+        if (!active) return;
+        setMapError('This level could not be loaded. Return to Play and try again.');
+        setBoardSettled(true);
+      });
     return () => { active = false; };
-  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby, routeRandom]);
+  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby]);
 
   // Multiplayer entry: `/play?lobby=<id>` enters a lobby's shared board. Both clients
   // build the SAME (level, seed) game; each side's moves relay through the lobby channel
@@ -519,8 +522,8 @@ export function Skirmish() {
           brand + account cluster are rendered by the shell bar itself. */}
       <TitleBarSlot region="center">
         {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
-            counts down, an untimed one (a free skirmish with the clock off, or a level with
-            no authored control) reads "∞ / No limit". Keeping the centre chip present means
+            counts down and an authored untimed level reads "∞ / No limit". Keeping the
+            centre chip present means
             the turn plate and objective always flank a real element, so the clock stays
             page-centred over the title bar's diamond (equal-width flanks, see style.css). */}
         <div className="skirmish-topbar-status">
@@ -590,7 +593,9 @@ export function Skirmish() {
             {mapError ? (
               <div className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
                 <strong>{mapError}</strong>
-                <NavButton className="app-header-button app-header-button-active" to="/">Home</NavButton>
+                <NavButton className="app-header-button app-header-button-active" to={returnHref ?? PLAY_SKIRMISH_SELECTOR_HREF}>
+                  {returnIsEditor ? 'Back to editor' : 'Back to Play'}
+                </NavButton>
               </div>
             ) : boardSettled ? <SkirmishBoard /> : routeLobby ? (
               <div className="skirmish-status-chip skirmish-turn-plate" role="status">
@@ -616,7 +621,7 @@ export function Skirmish() {
         ) : null}
       </section>
       <SkirmishHud
-        canStartNewSkirmish={!isCampaignPlay}
+        canStartNewSkirmish={Boolean(activeLevel) && !isCampaignPlay}
         onRestart={showRetryStud ? retrySkirmish : null}
         restartLabel={activeLevel ? (isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish'}
         onNewSkirmish={startNewScenario}
@@ -628,7 +633,7 @@ export function Skirmish() {
         returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
       />
 
-      {isCampaignPlay && routeLevel && game.winner && (
+      {isCampaignPlay && routeCampaignId && routeLevel && game.winner && (
         <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result">
           <div className="settings-frame campaign-result-panel">
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
@@ -642,7 +647,7 @@ export function Skirmish() {
                   Continue
                 </button>
               ) : (
-                <NavButton className="app-header-button app-header-button-active" to={`/campaign/${routeCampaignId}`}>
+                <NavButton className="app-header-button app-header-button-active" to={playCampaignSelectorHref(routeCampaignId)}>
                   Back to Campaign
                 </NavButton>
               )}

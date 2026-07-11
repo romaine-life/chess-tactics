@@ -542,8 +542,9 @@ async function main() {
     '/level-editor/skeleton',
     '/design/level-editor/render',
     '/design/level-editor/render/hotspots',
-    '/skirmish',
-    '/skirmish/skeleton',
+    '/play/select/skirmish',
+    '/play/select/levels',
+    '/play/select/campaign/off-c-crown-valoria',
     '/design/skirmish/render',
     '/design/skirmish/render/hotspots',
   ];
@@ -1508,7 +1509,7 @@ async function main() {
   const savedEditor = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/save`,
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 4, level: exactSaveLevel }),
+    JSON.stringify({ revision: 4, level: exactSaveLevel, campaign_id: null }),
   );
   const savedEditorBody = JSON.parse(savedEditor.body);
   if (
@@ -1522,7 +1523,11 @@ async function main() {
   }
   const canonicalAfterSave = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
   const canonicalAfterSaveBody = JSON.parse(canonicalAfterSave.body);
-  if (canonicalAfterSaveBody.levels['smoke-1'].name !== 'Exact Save Click' || canonicalAfterSaveBody.revision !== 2) {
+  if (
+    canonicalAfterSaveBody.levels['smoke-1'].name !== 'Exact Save Click' ||
+    canonicalAfterSaveBody.revision !== 2 ||
+    canonicalAfterSaveBody.campaigns[0].levels.some((ref) => ref.levelId === 'smoke-1')
+  ) {
     throw new Error(`Editor Save did not promote to canonical workspace: ${canonicalAfterSave.body}`);
   }
   const staleWholeWorkspaceSave = await request(

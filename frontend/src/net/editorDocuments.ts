@@ -288,6 +288,7 @@ export async function saveEditorDocument(
   documentId: string,
   expectedRevision: number,
   level?: Level,
+  campaignId?: string | null,
 ): Promise<EditorDocumentSaveResult> {
   const response = await editorDocumentFetch(`${documentUrl(documentId)}/save`, {
     method: 'POST',
@@ -296,6 +297,7 @@ export async function saveEditorDocument(
     body: JSON.stringify({
       revision: expectedRevision,
       ...(level ? { level } : {}),
+      ...(campaignId !== undefined ? { campaign_id: campaignId } : {}),
     }),
   });
   const metadataResponse = response.clone();

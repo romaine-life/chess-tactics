@@ -125,7 +125,6 @@ import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf 
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
-import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
 import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 
@@ -1850,6 +1849,15 @@ export function LevelEditor(): ReactElement {
     () => initialTargetLevel ? normalizedLevelEditorSignature(initialTargetLevel) : null,
     [initialTargetLevel],
   );
+  const draftHasCampaignAssignment = unscopedLocalDraft?.campaignId !== undefined;
+  const initialCampaignAssignmentId = draftHasCampaignAssignment
+    ? unscopedLocalDraft?.campaignId ?? ''
+    : routeParams.campaignId ?? '';
+  // Campaign membership is staged alongside the working document and committed only by Save.
+  const [campaignAssignmentId, setCampaignAssignmentId] = useState(initialCampaignAssignmentId);
+  const [savedCampaignAssignmentId, setSavedCampaignAssignmentId] = useState('');
+  const [campaignAssignmentHydrated, setCampaignAssignmentHydrated] = useState(!routeParams.levelId);
+  const recoveredCampaignAssignmentRef = useRef(draftHasCampaignAssignment);
   // Recovery content is never silently discarded because its saved baseline changed. We restore
   // it as the document source, then compare it with the current canonical target below.
   const [localDraft] = useState<LevelEditorDraft | null>(() => null);
@@ -1872,6 +1880,8 @@ export function LevelEditor(): ReactElement {
   const [localBackupAvailable, setLocalBackupAvailable] = useState<boolean | null>(null);
   const [authReachable, setAuthReachable] = useState<boolean | null>(null);
   const [documentLoadAttempt, setDocumentLoadAttempt] = useState(0);
+  const [userWorkspaceHydration, setUserWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [officialWorkspaceHydration, setOfficialWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const signInForEditor = (): void => {
     const recovery = readLevelEditorDraft(draftKey);
     let intentStored = false;
@@ -3002,8 +3012,26 @@ export function LevelEditor(): ReactElement {
     [showBlocked, showEnemyAttacks, showMoves, showPromotionZones, tacticalFocusPiece, tacticalPreviewEnv, tacticalPreviewGame],
   );
   const targetLevelId = editingId ?? routeParams.levelId;
+  const campaigns = useCampaigns((s) => s.campaigns);
   const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
-  // Real dirty flag: the working draft differs when its signature no longer matches the one
+  useEffect(() => {
+    if (campaignAssignmentHydrated || !targetLevelId || !targetLevel) return;
+    const resolvedCampaignId = campaigns.find((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId))?.id ?? '';
+    if (!recoveredCampaignAssignmentRef.current) setCampaignAssignmentId(resolvedCampaignId);
+    setSavedCampaignAssignmentId(resolvedCampaignId);
+    setCampaignAssignmentHydrated(true);
+  }, [campaignAssignmentHydrated, campaigns, targetLevel, targetLevelId]);
+  const assignedCampaign = campaignAssignmentId
+    ? campaigns.find((campaign) => campaign.id === campaignAssignmentId) ?? null
+    : null;
+  const eligibleCampaigns = useMemo(
+    () => campaigns.filter((campaign) => !targetLevelId || tierOf(campaign.id) === tierOf(targetLevelId)),
+    [campaigns, targetLevelId],
+  );
+  const officialCampaignOptions = eligibleCampaigns.filter((campaign) => campaign.origin === 'official');
+  const privateCampaignOptions = eligibleCampaigns.filter((campaign) => campaign.origin !== 'official');
+  // Real dirty flag: the working draft differs when its signature or staged campaign assignment
+  // no longer matches the last canonical Save.
   // captured at the last save. The signature folds in rules/settings/events through the candidate
   // level, so event edits mark the level dirty, not just board paint.
   const currentSig = useMemo(() => levelEditorLevelSignature(candidateLevel), [candidateLevel]);
@@ -3011,13 +3039,15 @@ export function LevelEditor(): ReactElement {
   // the very first rendered signature and keep that as the clean baseline; otherwise a first
   // event-template edit can become the baseline if the seeding effect runs after that edit.
   const standaloneBaselineSigRef = useRef<string | null>(routeParams.levelId ? null : currentSig);
-  const dirty = editorDocument?.never_saved
+  const levelDirty = editorDocument?.never_saved
     ? true
     : savedSig !== null
     ? currentSig !== savedSig
     : editorDocument
     ? editorDocument.dirty || currentSig !== levelEditorLevelSignature(editorDocument.level)
     : currentSig !== (standaloneBaselineSigRef.current ?? currentSig);
+  const campaignAssignmentDirty = campaignAssignmentHydrated && campaignAssignmentId !== savedCampaignAssignmentId;
+  const dirty = levelDirty || campaignAssignmentDirty;
   const currentSigRef = useRef(currentSig);
   currentSigRef.current = currentSig;
   const initialCandidateRef = useRef(candidateLevel);
@@ -3077,6 +3107,7 @@ export function LevelEditor(): ReactElement {
       editingId: targetLevelId,
       board: currentEditorBoard,
       levelName: levelNameForSave,
+      campaignId: campaignAssignmentId || null,
       objective,
       surviveTurns,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
@@ -3096,7 +3127,7 @@ export function LevelEditor(): ReactElement {
         } satisfies EditorSignInRecoveryIntent));
       } catch { /* The browser copy still exists even if sessionStorage is unavailable. */ }
     }
-  }, [clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
+  }, [campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
 
   const closeEventsEditor = (): void => {
     eventsOpenRef.current = false;
@@ -3157,7 +3188,21 @@ export function LevelEditor(): ReactElement {
   useEffect(() => {
     let active = true;
     void (async () => {
-      const hydration = ensureCampaignsHydrated().catch(() => undefined);
+      const hydration = ensureCampaignsHydrated()
+        .then((result) => {
+          if (active) {
+            setUserWorkspaceHydration(result.userWorkspace === 'unavailable' ? 'unavailable' : 'ready');
+            setOfficialWorkspaceHydration(result.officialAvailable ? 'ready' : 'unavailable');
+          }
+          return result;
+        })
+        .catch(() => {
+          if (active) {
+            setUserWorkspaceHydration('unavailable');
+            setOfficialWorkspaceHydration('unavailable');
+          }
+          return undefined;
+        });
       const authRequest = fetchMeStatus();
       let hydrationTimer: number | undefined;
       await Promise.race([
@@ -3173,7 +3218,6 @@ export function LevelEditor(): ReactElement {
       setMe(user);
       setAuthReachable(auth.reachable);
       if (user.signed_in) signInHandoffPendingRef.current = false;
-      ensureDefaultSkirmishProfileLevel();
 
       const requestedLevelId = routeParams.levelId;
       const canonical = requestedLevelId ? useCampaigns.getState().levels[requestedLevelId] : undefined;
@@ -3287,6 +3331,10 @@ export function LevelEditor(): ReactElement {
           ? rawScopedDraft
           : null;
         const recoveryDraft = scopedDraft ?? claimedUnscopedDraft;
+        if (recoveryDraft?.campaignId !== undefined) {
+          recoveredCampaignAssignmentRef.current = true;
+          setCampaignAssignmentId(recoveryDraft.campaignId ?? '');
+        }
         const documentSig = levelEditorLevelSignature(doc.level);
         const localLevel = recoveryDraft
           ? levelFromDraft(recoveryDraft, doc.level)
@@ -3704,9 +3752,9 @@ export function LevelEditor(): ReactElement {
     }), { replace: true, scroll: false });
   }, [cloudSaveState, currentSig, editorDocument]);
 
-  const isCampaignLevel = useCampaigns((s) =>
-    Boolean(routeParams.campaignId || (targetLevelId && s.campaigns.some((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId)))),
-  );
+  // The staged selector is the source of truth here: choosing a campaign immediately turns on
+  // campaign-only requirements (notably Player faction) before the association is published.
+  const isCampaignLevel = Boolean(campaignAssignmentId);
   const boardFactionCounts = useMemo<Record<UnitPalette, number>>(() => {
     const counts = Object.fromEntries(UNIT_PALETTES.map((faction) => [faction, 0])) as Record<UnitPalette, number>;
     for (const unit of Object.values(boardUnits)) counts[unit.faction] += 1;
@@ -3741,6 +3789,14 @@ export function LevelEditor(): ReactElement {
     : localBackupAvailable === false
     ? 'Browser recovery is unavailable; keep this tab open.'
     : 'The current editor remains open while recovery storage is checked.';
+  const syncSavedLevelRoute = (levelId: string): void => {
+    if (!isLevelEditorRoutePath(window.location.pathname)) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('levelId', levelId);
+    if (campaignAssignmentId) url.searchParams.set('campaignId', campaignAssignmentId);
+    else url.searchParams.delete('campaignId');
+    navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
+  };
 
   // Save promotes the exact current working copy into the canonical workspace transactionally.
   // Only the acknowledged response enters the shared store, which keeps thumbnails and gameplay
@@ -3767,6 +3823,29 @@ export function LevelEditor(): ReactElement {
         'warning',
         `Discard changes restores the latest saved position. ${browserRecoverySafetyDetail}`,
       );
+      return;
+    }
+    const savingOfficialTier = editorDocument.workspace_kind === 'official';
+    const persistenceHydration = savingOfficialTier ? officialWorkspaceHydration : userWorkspaceHydration;
+    if (persistenceHydration !== 'ready' || !campaignAssignmentHydrated) {
+      const workspaceLabel = savingOfficialTier ? 'Official campaigns' : 'Your workspace';
+      reportStatus(
+        persistenceHydration === 'unavailable' ? `${workspaceLabel} unavailable.` : `${workspaceLabel} still loading.`,
+        persistenceHydration === 'unavailable' ? 'warning' : 'info',
+        'Editing and working-copy autosave remain safe, but canonical Save is paused until campaign data is available.',
+      );
+      return;
+    }
+    const state = useCampaigns.getState();
+    const targetCampaign = campaignAssignmentId
+      ? state.campaigns.find((campaign) => campaign.id === campaignAssignmentId)
+      : undefined;
+    if (campaignAssignmentId && !targetCampaign) {
+      reportStatus('Campaign is unavailable.', 'error', 'Choose another campaign, or leave the level unassigned.');
+      return;
+    }
+    if (targetCampaign && tierOf(targetCampaign.id) !== tierOf(targetLevelId)) {
+      reportStatus('Campaign tier does not match this level.', 'error', 'Move private levels only among private campaigns, and official levels only among official campaigns.');
       return;
     }
     // Playability is the save gate (ADR-0050): never persist a rule-violating level. The button is
@@ -3819,6 +3898,7 @@ export function LevelEditor(): ReactElement {
         editorDocument.document_id,
         revision,
         level,
+        campaignAssignmentId || null,
       );
       const doc = saved.document;
       if (saved.workspace_revision !== null) {
@@ -3839,9 +3919,12 @@ export function LevelEditor(): ReactElement {
       setCloudSaveDetail(null);
       // This is the canonical boundary: no optimistic mutation before the server succeeds.
       useCampaigns.getState().replaceLevel(doc.level);
+      useCampaigns.getState().assignLevelToCampaign(doc.level_id, campaignAssignmentId || null);
       setSavedSig(normalizedLevelEditorSignature(doc.level));
+      setSavedCampaignAssignmentId(campaignAssignmentId);
       setTargetBaselineResolved(true);
       if (stillMatchesAcknowledgement) clearLevelEditorDraft(draftKey);
+      syncSavedLevelRoute(doc.level_id);
       reportStatus(official ? 'Published.' : 'Saved.', 'success', 'The thumbnail and campaign play now use this position.');
     } catch (e) {
       if (isEditorDocumentConflict(e)) {
@@ -3904,6 +3987,7 @@ export function LevelEditor(): ReactElement {
       applyLevelDocument(doc.level, { editingId: doc.level_id, clean: true });
       setSavedSig(normalizedLevelEditorSignature(doc.level));
       setTargetBaselineResolved(true);
+      setCampaignAssignmentId(savedCampaignAssignmentId);
       clearLevelEditorDraft(draftKey);
       reportStatus('Changes discarded.', 'success', 'The editor again matches the saved thumbnail and campaign position.');
     } catch (error) {
@@ -4295,15 +4379,19 @@ export function LevelEditor(): ReactElement {
   // Tier of the level under edit drives the Save verb (INV6): an official (`off-`) level
   // PUBLISHES to all players; a private/unassigned level just SAVES. A level only resolves a
   // tier once a target id is known (campaign path); a fresh standalone board saves as private.
-  const isOfficialTarget = targetLevelId ? tierOf(targetLevelId) === 'official' : false;
+  const isOfficialTarget = targetLevelId
+    ? tierOf(targetLevelId) === 'official'
+    : Boolean(assignedCampaign && tierOf(assignedCampaign.id) === 'official');
   const saveLabel = isOfficialTarget ? 'Publish to all players' : 'Save';
   const cloudDocumentAvailable = Boolean(me?.signed_in && editorDocument && targetLevelId && targetBaselineResolved);
   const targetSaveUnavailable = !cloudDocumentAvailable;
   // Save (user save AND official publish) is gated on ZERO playability violations (ADR-0050) — the
   // editor gives full freedom to mess the board up, but blocks persisting a rule-breaking level —
-  // AND on main's conditions: something to save (dirty), no in-flight save, and (campaign levels) a
-  // resolved Player faction.
-  const canSave = !saving && !targetSaveUnavailable && !documentConflictRef.current && dirty && !needsPlayerFaction && playability.ok;
+  // AND on main's conditions: hydrated workspace/association context, something to save (dirty),
+  // no in-flight save, and (campaign levels) a resolved Player faction.
+  const persistenceHydration = isOfficialTarget ? officialWorkspaceHydration : userWorkspaceHydration;
+  const saveContextReady = persistenceHydration === 'ready' && campaignAssignmentHydrated;
+  const canSave = saveContextReady && !saving && !targetSaveUnavailable && !documentConflictRef.current && dirty && !needsPlayerFaction && playability.ok;
   const saveBlockedMessage = saving
     ? 'Save is already in progress.'
     : !me?.signed_in && authReachable === false
@@ -4314,6 +4402,10 @@ export function LevelEditor(): ReactElement {
     ? 'Save is paused because another tab or device has a newer revision.'
     : targetSaveUnavailable
     ? 'Save is blocked because the cloud working copy is unavailable.'
+    : persistenceHydration === 'unavailable'
+    ? isOfficialTarget ? 'Official campaigns are unavailable.' : 'Your workspace is unavailable.'
+    : !saveContextReady
+    ? 'Workspace is still loading.'
     : !playability.ok
     ? 'Save is blocked by playability issues.'
     : needsPlayerFaction
@@ -4333,6 +4425,10 @@ export function LevelEditor(): ReactElement {
     ? `Your current editor remains open. Discard changes restores the latest saved position. ${browserRecoverySafetyDetail}`
     : targetSaveUnavailable
     ? `Reconnect to restore cloud autosave. ${browserRecoverySafetyDetail}`
+    : persistenceHydration === 'unavailable'
+    ? `Working-copy autosave remains safe, but Save is locked to protect the canonical workspace. ${browserRecoverySafetyDetail}`
+    : !saveContextReady
+    ? 'Editing is ready; Save will unlock as soon as your campaigns finish loading.'
     : !playability.ok
     ? 'Resolve the issues in the Fix-before-saving list above, then Save.'
     : needsPlayerFaction
@@ -4347,7 +4443,7 @@ export function LevelEditor(): ReactElement {
     // Playability blocks stay on 'status': the Fix-before-saving list renders there, beside Save.
     setLayer(needsPlayerFaction && playability.ok ? 'board' : 'status');
     setTool('select');
-    reportStatus(saveBlockedMessage, saving ? 'info' : 'warning', saveBlockedDetail);
+    reportStatus(saveBlockedMessage, saving || persistenceHydration === 'loading' ? 'info' : 'warning', saveBlockedDetail);
   };
   const progressStateLabel = cloudSaveState === 'loading'
     ? 'Opening working copy…'
@@ -4380,6 +4476,10 @@ export function LevelEditor(): ReactElement {
     ? 'Revision conflict'
     : targetSaveUnavailable
     ? 'Working copy unavailable'
+    : persistenceHydration === 'unavailable'
+    ? 'Unavailable'
+    : !saveContextReady
+    ? 'Loading…'
     : !playability.ok
     ? 'Fix issues'
     : needsPlayerFaction
@@ -4688,6 +4788,34 @@ export function LevelEditor(): ReactElement {
               </label>
               {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
             </div>
+            {isAdmin ? (
+              <div className="le-status-name-field le-status-campaign-field">
+                <span className="le-settings-label">Campaign</span>
+                <SelectFrame>
+                  <select
+                    className="le-layer-select"
+                    data-testid="le-campaign-select"
+                    value={campaignAssignmentId}
+                    aria-label="Campaign"
+                    disabled={!campaignAssignmentHydrated || saving}
+                    onChange={(event) => setCampaignAssignmentId(event.currentTarget.value)}
+                  >
+                    <option value="">Unassigned</option>
+                    {officialCampaignOptions.length ? (
+                      <optgroup label="Official campaigns">
+                        {officialCampaignOptions.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+                      </optgroup>
+                    ) : null}
+                    {privateCampaignOptions.length ? (
+                      <optgroup label="Your campaigns">
+                        {privateCampaignOptions.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+                      </optgroup>
+                    ) : null}
+                  </select>
+                </SelectFrame>
+                <span className="le-board-note">Admin only · Save or publish to apply this assignment.</span>
+              </div>
+            ) : null}
             <div className={`le-status-current ${cloudSaveState === 'error' || cloudSaveState === 'conflict' ? 'is-blocked' : 'is-ready'}`}>
               <strong>{progressStateLabel}</strong>
               <span>{cloudSaveDetail ?? (

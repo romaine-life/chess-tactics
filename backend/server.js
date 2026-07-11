@@ -3088,7 +3088,41 @@ async function dbAutosaveEditorDocument(ownerEmail, documentId, expectedRevision
   throw editorDocumentError(409, 'editor_document_revision_conflict', await dbAnnotateEditorDocumentBaseline(current));
 }
 
-async function dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, level) {
+function editorDocumentCampaignsWithAssignment(campaigns, levelId, level, campaignId) {
+  if (campaignId === undefined) return campaigns;
+  const target = campaignId === null
+    ? null
+    : campaigns.find((campaign) => campaign.id === campaignId);
+  if (campaignId !== null && !target) {
+    throw editorDocumentError(409, 'campaign_not_found', null, `campaign ${campaignId} is not in this workspace`);
+  }
+  if (target && target.id.startsWith('off-') !== levelId.startsWith('off-')) {
+    throw editorDocumentError(409, 'campaign_tier_mismatch');
+  }
+
+  return campaigns.map((campaign) => {
+    const priorRef = campaign.levels.find((ref) => ref.levelId === levelId);
+    const withoutLevel = campaign.levels
+      .filter((ref) => ref.levelId !== levelId)
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .map((ref, ordinal) => ({ ...ref, ordinal }));
+    if (campaign.id !== target?.id) return { ...campaign, levels: withoutLevel };
+    return {
+      ...campaign,
+      levels: [
+        ...withoutLevel,
+        {
+          ...(priorRef || {}),
+          levelId,
+          ordinal: withoutLevel.length,
+          objective: level.objective,
+        },
+      ],
+    };
+  });
+}
+
+async function dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, level, campaignId) {
   let canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
   if (workspace.kind === 'user' && !canonical.row) {
     // Materialize and lock the owner's workspace before merging a first-saved
@@ -3103,8 +3137,9 @@ async function dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, l
     canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
   }
   const existing = canonical.body || { campaigns: [], levels: {} };
+  const existingCampaigns = Array.isArray(existing.campaigns) ? existing.campaigns : [];
   const nextBody = {
-    campaigns: Array.isArray(existing.campaigns) ? existing.campaigns : [],
+    campaigns: editorDocumentCampaignsWithAssignment(existingCampaigns, levelId, level, campaignId),
     levels: { ...(isObjectRecord(existing.levels) ? existing.levels : {}), [levelId]: level },
   };
   const validation = validateWorkspaceBody(nextBody);
@@ -3135,7 +3170,7 @@ async function dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, l
   return Number(rows[0].revision);
 }
 
-async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, requestedLevel) {
+async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, requestedLevel, campaignId) {
   return withEditorDocumentTransaction(async (client) => {
     const current = await dbLockEditorDocument(client, ownerEmail, documentId);
     assertEditorDocumentRevision(current, expectedRevision);
@@ -3163,7 +3198,7 @@ async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, re
         'canonical Level changed after this working copy was based on it',
       );
     }
-    const workspaceRevision = await dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, level);
+    const workspaceRevision = await dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, level, campaignId);
     const baselineHash = await dbJsonbHash(client, level);
     const { rows } = await client.query(
       `UPDATE level_working_copies
@@ -3356,7 +3391,18 @@ app.post('/api/editor-documents/:documentId/save', async (req, res) => {
       if (parsed.error) { res.status(400).json({ error: parsed.error, ...(parsed.details ? { details: parsed.details } : {}) }); return; }
       level = parsed.level;
     }
-    const saved = await dbSaveEditorDocument(user.email, input.documentId, revision, level);
+    let campaignId;
+    if (Object.hasOwn(input.raw, 'campaign_id')) {
+      if (input.raw.campaign_id === null) {
+        campaignId = null;
+      } else if (typeof input.raw.campaign_id === 'string' && input.raw.campaign_id.trim() && input.raw.campaign_id.length <= 200) {
+        campaignId = input.raw.campaign_id.trim();
+      } else {
+        res.status(400).json({ error: 'invalid_campaign_id' });
+        return;
+      }
+    }
+    const saved = await dbSaveEditorDocument(user.email, input.documentId, revision, level, campaignId);
     res.status(200).json({
       document: publicEditorDocument(saved.row),
       workspace_revision: saved.workspaceRevision,

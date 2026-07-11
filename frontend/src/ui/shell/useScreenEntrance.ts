@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react';
 // plays the one deterministic fade when readiness lands — never a fade over an empty frame with
 // content popping in after. Screens with synchronous content (or a designed in-chrome loading
 // state) simply omit the flag. A generous failsafe force-starts the fade so a dead fetch can
-// never strand a screen invisible. A hold applies on COLD loads too (a cold-loaded /campaign is
+// never strand a screen invisible. A hold applies on COLD loads too (a cold-loaded /play/select is
 // as empty as a navigated-to one); ready cold mounts still skip the fade — the main menu's
 // cold-load reveal owns that first appearance, and a second fade would double up. App flips the
 // nav flag on the first navigation.

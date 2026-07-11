@@ -699,6 +699,20 @@ describe('skirmish store: premoves', () => {
     expect(useSkirmish.getState().focusedId).toBe('pr');
   });
 
+  it('preserves an explicitly cleared selection through the opponent reply', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7); // selected mover is pk; reply is now staged
+
+    useSkirmish.getState().select(null); // mirrors clicking away from every unit
+    expect(useSkirmish.getState().selectedId).toBeNull();
+    expect(useSkirmish.getState().focusedId).toBeNull();
+
+    vi.runAllTimers();
+    expect(useSkirmish.getState().game.turn).toBe('player');
+    expect(useSkirmish.getState().selectedId).toBeNull();
+    expect(useSkirmish.getState().focusedId).toBeNull();
+  });
+
   it('keeps the premove unit selected during the fire beat after the reply', () => {
     loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
     useSkirmish.getState().tryMoveTo(1, 7);

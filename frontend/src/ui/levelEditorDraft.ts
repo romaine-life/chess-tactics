@@ -21,6 +21,9 @@ export interface LevelEditorDraft {
   editingId?: string;
   board: EditorBoard;
   levelName: string;
+  // Pending campaign association from the admin-only Level Editor selector. `null`
+  // explicitly means unassigned; `undefined` is a legacy draft with no staged choice.
+  campaignId?: string | null;
   objective: ObjectiveType;
   surviveTurns: number;
   // The battle clock (ADR-0053), or undefined when the level is untimed.
@@ -79,6 +82,7 @@ export function serializeLevelEditorDraft(draft: LevelEditorDraft): string {
     editingId: draft.editingId,
     boardCode: encodeBoard(draft.board),
     levelName: draft.levelName,
+    campaignId: draft.campaignId,
     objective: draft.objective,
     surviveTurns: draft.surviveTurns,
     timeControl: draft.timeControl,
@@ -134,6 +138,11 @@ export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
       editingId: typeof value.editingId === 'string' && value.editingId.trim() ? value.editingId : undefined,
       board,
       levelName: typeof value.levelName === 'string' && value.levelName.trim() ? value.levelName : 'Untitled level',
+      campaignId: value.campaignId === null
+        ? null
+        : typeof value.campaignId === 'string' && value.campaignId.trim()
+          ? value.campaignId
+          : undefined,
       objective,
       surviveTurns,
       timeControl: cleanTimeControl(value.timeControl),

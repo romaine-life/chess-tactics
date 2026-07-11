@@ -70,6 +70,7 @@ describe('level editor draft codec', () => {
 
   it('round-trips the board and edit metadata through a compact board code', () => {
     const parsed = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft({
+      campaignId: 'off-c-crown',
       documentId: 'doc-7f3c',
       ownerEmail: 'Nelson@Example.com',
       documentRevision: 7,
@@ -82,9 +83,17 @@ describe('level editor draft codec', () => {
     expect(parsed.documentRevision).toBe(7);
     expect(parsed.cloudSignature).toBe('cloud-at-revision-7');
     expect(parsed.editingId).toBe('l-created-after-first-save');
+    expect(parsed.campaignId).toBe('off-c-crown');
     expect(parsed.objective).toBe('reach');
     expect(parsed.surviveTurns).toBe(7);
     expect(encodeBoard(parsed.board)).toBe(encodeBoard(baseDraft().board));
+  });
+
+  it('round-trips an explicit unassigned campaign choice and ignores malformed values', () => {
+    expect(parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft({ campaignId: null })))!.campaignId).toBeNull();
+    const raw = JSON.parse(serializeLevelEditorDraft(baseDraft())) as Record<string, unknown>;
+    raw.campaignId = { nope: true };
+    expect(parseLevelEditorDraft(JSON.stringify(raw))!.campaignId).toBeUndefined();
   });
 
   it('round-trips an authored battle clock, and stays untimed when absent', () => {

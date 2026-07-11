@@ -178,7 +178,7 @@ describe('editor document persistence', () => {
       workspace_revision: 9,
     }));
 
-    await expect(saveEditorDocument('doc-7f3c', 4, level)).resolves.toMatchObject({
+    await expect(saveEditorDocument('doc-7f3c', 4, level, 'c1')).resolves.toMatchObject({
       workspace_revision: 9,
       document: { document_id: 'doc-7f3c' },
     });
@@ -186,7 +186,7 @@ describe('editor document persistence', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/editor-documents/doc-7f3c/save');
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body)).toEqual({ revision: 4, level });
+    expect(JSON.parse(init.body)).toEqual({ revision: 4, level, campaign_id: 'c1' });
   });
 
   it('can promote an already-autosaved working copy without resending the level', async () => {

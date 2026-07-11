@@ -24,7 +24,7 @@ const ART: ArtEntry[] = [
   { id: 'main-menu', label: 'Main Menu', src: `${INSPO}/01-main-menu-aspirational.png`, route: '/' },
   { id: 'campaign-editor', label: 'Campaign Editor', src: `${INSPO}/02-campaign-editor.png`, route: '/editor' },
   { id: 'level-editor', label: 'Level Editor', src: `${INSPO}/03-level-editor.png`, route: '/editor/level' },
-  { id: 'skirmish', label: 'Skirmish', src: `${INSPO}/04-skirmish.png`, route: '/skirmish' },
+  { id: 'skirmish', label: 'Skirmish', src: `${INSPO}/04-skirmish.png`, route: '/play/select/skirmish' },
 ];
 const ROUTES = Array.from(new Set(ART.map((a) => a.route)));
 const LIVE_W = 1440;
