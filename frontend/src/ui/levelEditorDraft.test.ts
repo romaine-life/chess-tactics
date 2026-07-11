@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeBoard, encodeBoard, type EditorBoard } from './boardCode';
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 import {
@@ -6,8 +6,11 @@ import {
   levelEditorDraftKey,
   parseLevelEditorDraft,
   serializeLevelEditorDraft,
+  writeLevelEditorDraft,
   type LevelEditorDraft,
 } from './levelEditorDraft';
+
+afterEach(() => vi.unstubAllGlobals());
 
 const baseBoard = (over: Partial<EditorBoard> = {}): EditorBoard => ({
   cols: 6,
@@ -40,14 +43,45 @@ describe('levelEditorDraftKey', () => {
     const boardCode = encodeBoard(baseBoard({ cells: { '1,1': 'sand-surf-0' } }));
     expect(levelEditorDraftKey({ levelId: 'l42' })).toBe('ct:level-editor-draft:v1:level:l42');
     expect(levelEditorDraftKey({})).toBe('ct:level-editor-draft:v1:standalone');
-    expect(levelEditorDraftKey({ levelId: 'l42', boardCode })).toBe(`ct:level-editor-draft:v1:board:${hashDraftSeed(boardCode)}`);
+    expect(levelEditorDraftKey({ levelId: 'l42', boardCode })).toBe('ct:level-editor-draft:v1:level:l42');
+    expect(levelEditorDraftKey({ boardCode })).toBe(`ct:level-editor-draft:v1:board:${hashDraftSeed(boardCode)}`);
+  });
+
+  it('binds cloud recovery to both the account and opaque document identity', () => {
+    expect(levelEditorDraftKey({
+      levelId: 'l42',
+      boardCode: 'ignored-for-cloud-docs',
+      documentId: 'doc-7f3c',
+      ownerEmail: 'Nelson@Example.com ',
+    })).toBe(`ct:level-editor-draft:v1:account:${hashDraftSeed('nelson@example.com')}:document:doc-7f3c`);
   });
 });
 
 describe('level editor draft codec', () => {
+  it('reports whether the browser actually accepted the recovery write', () => {
+    const setItem = vi.fn();
+    vi.stubGlobal('window', { localStorage: { setItem } });
+    expect(writeLevelEditorDraft('draft-key', baseDraft())).toBe(true);
+    expect(setItem).toHaveBeenCalledOnce();
+
+    setItem.mockImplementationOnce(() => { throw new Error('quota'); });
+    expect(writeLevelEditorDraft('draft-key', baseDraft())).toBe(false);
+  });
+
   it('round-trips the board and edit metadata through a compact board code', () => {
-    const parsed = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft()))!;
+    const parsed = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft({
+      documentId: 'doc-7f3c',
+      ownerEmail: 'Nelson@Example.com',
+      documentRevision: 7,
+      cloudSignature: 'cloud-at-revision-7',
+      editingId: 'l-created-after-first-save',
+    })))!;
     expect(parsed.levelName).toBe('Bridge sketch');
+    expect(parsed.documentId).toBe('doc-7f3c');
+    expect(parsed.ownerEmail).toBe('nelson@example.com');
+    expect(parsed.documentRevision).toBe(7);
+    expect(parsed.cloudSignature).toBe('cloud-at-revision-7');
+    expect(parsed.editingId).toBe('l-created-after-first-save');
     expect(parsed.objective).toBe('reach');
     expect(parsed.surviveTurns).toBe(7);
     expect(encodeBoard(parsed.board)).toBe(encodeBoard(baseDraft().board));

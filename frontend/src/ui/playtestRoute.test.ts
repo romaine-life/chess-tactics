@@ -4,9 +4,11 @@ import {
   appendLevelEventsParam,
   appendTimeControlParams,
   appendVictoryRulesParam,
+  currentBoardTestHref,
   readLevelEventsParam,
   readTimeControlParams,
   readVictoryRulesParam,
+  resolvePlayReturnHref,
 } from './playtestRoute';
 
 describe('playtest route helpers', () => {
@@ -73,5 +75,54 @@ describe('playtest route helpers', () => {
     appendVictoryRulesParam(params, undefined);
     expect(params.has('events')).toBe(false);
     expect(params.has('victory')).toBe(false);
+  });
+
+  it('tests the current board without requiring a save and returns to the same target', () => {
+    const href = currentBoardTestHref({
+      boardCode: 'unsaved-board-code',
+      levelName: 'Current board',
+      objective: 'rival-kings',
+      surviveTurns: 12,
+      editorSearch: '?from=studio&document=doc-42',
+      campaignId: 'off-c-crown-valoria',
+      levelId: 'off-l-fortress-gate',
+      documentRevision: 17,
+      editorReturnTo: '/editor',
+      layer: 'status',
+    });
+    const play = new URL(href, 'https://chess.test');
+    expect(play.pathname).toBe('/play');
+    expect(play.searchParams.get('board')).toBe('unsaved-board-code');
+    expect(play.searchParams.get('name')).toBe('Current board');
+    expect(play.searchParams.get('survive')).toBe('12');
+    expect(play.searchParams.get('mode')).toBe('test');
+
+    const back = new URL(play.searchParams.get('returnTo')!, 'https://chess.test');
+    expect(back.pathname).toBe('/editor/level');
+    expect(back.searchParams.get('board')).toBe('unsaved-board-code');
+    expect(back.searchParams.get('name')).toBe('Current board');
+    expect(back.searchParams.get('survive')).toBe('12');
+    expect(back.searchParams.get('campaignId')).toBe('off-c-crown-valoria');
+    expect(back.searchParams.get('levelId')).toBe('off-l-fortress-gate');
+    expect(back.searchParams.get('returnTo')).toBe('/editor');
+    expect(back.searchParams.get('layer')).toBe('status');
+    expect(back.searchParams.get('from')).toBe('studio');
+    expect(back.searchParams.get('document')).toBe('doc-42');
+    expect(back.searchParams.get('docRev')).toBe('17');
+  });
+
+  it('prefers the explicit editor return over the board-only fallback', () => {
+    expect(resolvePlayReturnHref({
+      explicitReturnHref: '/editor/level?campaignId=c1&levelId=l1&board=current',
+      hasBoard: true,
+      boardReturnHref: '/editor/level?board=current',
+      levelReturnHref: '/editor/level?levelId=l1',
+    })).toBe('/editor/level?campaignId=c1&levelId=l1&board=current');
+    expect(resolvePlayReturnHref({
+      explicitReturnHref: null,
+      hasBoard: true,
+      boardReturnHref: '/editor/level?board=current',
+      levelReturnHref: '/editor/level?levelId=l1',
+    })).toBe('/editor/level?board=current');
   });
 });

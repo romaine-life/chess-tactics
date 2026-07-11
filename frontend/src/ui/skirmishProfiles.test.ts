@@ -13,7 +13,15 @@ import {
 
 describe('skirmish profiles', () => {
   beforeEach(() => {
-    useCampaigns.setState({ campaigns: [], levels: {}, selectedCampaignId: null, selectedLevelId: null, counter: 1 });
+    useCampaigns.setState({
+      campaigns: [],
+      levels: {},
+      selectedCampaignId: null,
+      selectedLevelId: null,
+      counter: 1,
+      userWorkspaceRevision: 0,
+      officialWorkspaceRevision: 0,
+    });
   });
 
   it('creates a playable setup-spawn default profile', () => {

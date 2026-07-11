@@ -18,12 +18,17 @@ export interface CampaignState {
   selectedCampaignId: string | null;
   selectedLevelId: string | null;
   counter: number;
+  /** Last server revisions observed for whole-workspace compare-and-swap writes. */
+  userWorkspaceRevision: number;
+  officialWorkspaceRevision: number;
   hydrate: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
   // Tier-scoped replace: swap just the official slice (id-preserving, tagged
   // readOnly), keeping the user slice — and vice versa. Used by the always-load-then-
   // merge hydration so officials show for everyone and the user's own merge on top.
-  mergeOfficial: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
-  mergeUser: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
+  mergeOfficial: (ws: { campaigns: Campaign[]; levels: Record<string, Level>; revision?: number }) => void;
+  mergeUser: (ws: { campaigns: Campaign[]; levels: Record<string, Level>; revision?: number }) => void;
+  setUserWorkspaceRevision: (revision: number) => void;
+  setOfficialWorkspaceRevision: (revision: number) => void;
   importWorkspace: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
   newCampaign: () => void;
   // Admin-gated: mint a new OFFICIAL campaign (`off-c-…`, origin:'official') and select
@@ -136,6 +141,9 @@ const nextCounterFrom = (campaigns: Campaign[], levels: Record<string, Level>): 
   return max + 1;
 };
 
+const observedRevision = (value: unknown, fallback: number): number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : fallback;
+
 const importableWorkspace = (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => {
   const levels = Object.fromEntries(Object.entries(ws.levels ?? {}).map(([id, level]) => [id, withLevelDefaults(level)]));
   const campaigns = (ws.campaigns ?? []).map(withCampaignDefaults);
@@ -162,6 +170,8 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
   selectedCampaignId: null,
   selectedLevelId: null,
   counter: 1,
+  userWorkspaceRevision: 0,
+  officialWorkspaceRevision: 0,
 
   hydrate: (ws) => set(() => {
     const imported = importableWorkspace(ws);
@@ -181,7 +191,13 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
     const userLevels = Object.fromEntries(Object.entries(s.levels).filter(([id]) => !isOfficialId(id)));
     const campaigns = [...officialCampaigns, ...userCampaigns];
     const levels = { ...officialLevels, ...userLevels };
-    return { campaigns, levels, counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)), ...reconcileSelection(s, campaigns, levels) };
+    return {
+      campaigns,
+      levels,
+      counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)),
+      officialWorkspaceRevision: observedRevision(ws.revision, s.officialWorkspaceRevision),
+      ...reconcileSelection(s, campaigns, levels),
+    };
   }),
 
   mergeUser: (ws) => set((s) => {
@@ -191,8 +207,22 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
     const officialLevels = Object.fromEntries(Object.entries(s.levels).filter(([id]) => isOfficialId(id)));
     const campaigns = [...officialCampaigns, ...userCampaigns];
     const levels = { ...officialLevels, ...userLevels };
-    return { campaigns, levels, counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)), ...reconcileSelection(s, campaigns, levels) };
+    return {
+      campaigns,
+      levels,
+      counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)),
+      userWorkspaceRevision: observedRevision(ws.revision, s.userWorkspaceRevision),
+      ...reconcileSelection(s, campaigns, levels),
+    };
   }),
+
+  setUserWorkspaceRevision: (revision) => set((s) => ({
+    userWorkspaceRevision: observedRevision(revision, s.userWorkspaceRevision),
+  })),
+
+  setOfficialWorkspaceRevision: (revision) => set((s) => ({
+    officialWorkspaceRevision: observedRevision(revision, s.officialWorkspaceRevision),
+  })),
 
   importWorkspace: (ws) => set((s) => {
     const imported = importableWorkspace(ws);

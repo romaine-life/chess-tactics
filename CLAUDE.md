@@ -8,14 +8,16 @@ start. If the Vite-spawned backend fails, fix the backend startup issue (for
 example install backend dependencies or address auth/DB access) or report the
 backend failure as the blocker.
 
-## Agent board handoff rule
+## Level Editor persistence rule
 
-When an agent needs to hand Nelson a Level Editor board through the backend, create
-an anonymous misc handoff: `POST /api/editor-maps` with `{ "level": ..., "misc": true }`.
-Do not hand off a normal signed-in `/editor/level?map=<id>` created under the agent's
-account. Account-owned live maps are writable only by that account, so Nelson opens
-them read-only. Misc handoffs are anonymous, appear in the Misc Map Pool, and can be
-loaded as editable copies.
+The stable `/editor/level?document=<opaque-id>&levelId=<id>` URL identifies its private editor document; `levelId` alone is account-local and is never the URL authority.
+Authenticated edits autosave to a durable server-side working copy. **Save** promotes
+that copy to the canonical level, and **Discard changes** restores the working copy
+from canonical. Copying the browser URL must remain side-effect free: it does not
+save, publish, create another document, change permissions, rewrite the URL, or
+navigate. Gameplay and thumbnails read canonical levels only; browser storage is a
+crash/offline fallback. Do not introduce another editor identity or a link-triggered
+persistence path.
 
 ## Taking screenshots (read this before trying to screenshot the app)
 

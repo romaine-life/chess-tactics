@@ -9,6 +9,16 @@ const DRAFT_VERSION = 1;
 export interface LevelEditorDraft {
   savedAt: number;
   savedSig: string;
+  // Cloud recovery entries are bound to both identities. This prevents a switched account or a
+  // tampered levelId query from uploading another document's browser recovery into the open doc.
+  documentId?: string;
+  ownerEmail?: string;
+  documentRevision?: number;
+  cloudSignature?: string;
+  recoveryConflict?: boolean;
+  // The canonical workspace level this document will update. New cloud documents receive it from
+  // the server immediately, before their first canonical Save.
+  editingId?: string;
   board: EditorBoard;
   levelName: string;
   objective: ObjectiveType;
@@ -35,9 +45,24 @@ export function hashDraftSeed(seed: string): string {
   return (hash >>> 0).toString(36);
 }
 
-export function levelEditorDraftKey({ levelId, boardCode }: { levelId?: string; boardCode?: string | null }): string {
-  if (boardCode) return `${STORAGE_PREFIX}:board:${hashDraftSeed(boardCode)}`;
+export function levelEditorDraftKey({
+  levelId,
+  boardCode,
+  documentId,
+  ownerEmail,
+}: {
+  levelId?: string;
+  boardCode?: string | null;
+  documentId?: string | null;
+  ownerEmail?: string | null;
+}): string {
+  if (documentId && ownerEmail) {
+    return `${STORAGE_PREFIX}:account:${hashDraftSeed(ownerEmail.trim().toLowerCase())}:document:${safeKeyPart(documentId)}`;
+  }
+  // A Test return carries both fields. Keep recovery attached to the known level so the
+  // one-shot board snapshot cannot fork subsequent edits into an undiscoverable board key.
   if (levelId) return `${STORAGE_PREFIX}:level:${safeKeyPart(levelId)}`;
+  if (boardCode) return `${STORAGE_PREFIX}:board:${hashDraftSeed(boardCode)}`;
   return `${STORAGE_PREFIX}:standalone`;
 }
 
@@ -46,6 +71,12 @@ export function serializeLevelEditorDraft(draft: LevelEditorDraft): string {
     v: DRAFT_VERSION,
     savedAt: draft.savedAt,
     savedSig: draft.savedSig,
+    documentId: draft.documentId,
+    ownerEmail: draft.ownerEmail,
+    documentRevision: draft.documentRevision,
+    cloudSignature: draft.cloudSignature,
+    recoveryConflict: draft.recoveryConflict,
+    editingId: draft.editingId,
     boardCode: encodeBoard(draft.board),
     levelName: draft.levelName,
     objective: draft.objective,
@@ -93,6 +124,14 @@ export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
     return {
       savedAt: typeof value.savedAt === 'number' && Number.isFinite(value.savedAt) ? value.savedAt : Date.now(),
       savedSig: value.savedSig,
+      documentId: typeof value.documentId === 'string' && value.documentId.trim() ? value.documentId : undefined,
+      ownerEmail: typeof value.ownerEmail === 'string' && value.ownerEmail.trim() ? value.ownerEmail.trim().toLowerCase() : undefined,
+      documentRevision: typeof value.documentRevision === 'number' && Number.isSafeInteger(value.documentRevision) && value.documentRevision >= 1
+        ? value.documentRevision
+        : undefined,
+      cloudSignature: typeof value.cloudSignature === 'string' ? value.cloudSignature : undefined,
+      recoveryConflict: value.recoveryConflict === true ? true : undefined,
+      editingId: typeof value.editingId === 'string' && value.editingId.trim() ? value.editingId : undefined,
       board,
       levelName: typeof value.levelName === 'string' && value.levelName.trim() ? value.levelName : 'Untitled level',
       objective,
@@ -126,13 +165,14 @@ export function readLevelEditorDraft(key: string): LevelEditorDraft | null {
   }
 }
 
-export function writeLevelEditorDraft(key: string, draft: LevelEditorDraft): void {
+export function writeLevelEditorDraft(key: string, draft: LevelEditorDraft): boolean {
   const store = localStore();
-  if (!store) return;
+  if (!store) return false;
   try {
     store.setItem(key, serializeLevelEditorDraft(draft));
+    return true;
   } catch {
-    /* Storage can be blocked or full; losing autosave is non-fatal to editing. */
+    return false;
   }
 }
 
