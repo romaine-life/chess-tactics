@@ -58,7 +58,10 @@ House art is STYLIZED, never photoreal (he reads scanned-mesh renders as "too re
    ```
    This goes through `codex-imagegen.mjs` → `imageGenVerdict` (rollout `image_generation_call`), so a
    code-drawn run is REJECTED (never call `codex.exe` raw). Output is flat-green → chroma-keyed to
-   alpha; then crop-to-content + downscale to ~210px wide + re-binarise alpha + measure anchor.
+   alpha; the existing bridge then crops to content, downscales to ~210px wide, re-binarises alpha,
+   and measures the anchor. Under [ADR-0076](../../adr/0076-scaling-is-calibration-production-art-is-native-1x.md),
+   that downscaled result is calibration work, not accepted production art; regenerate at the
+   approved native footprint before acceptance.
 
 Output `/assets/props/<propId>/{back,front}.png` (flat sprites use the same image for both halves).
 
@@ -80,8 +83,11 @@ Sizing baseline (owner call, 2026-07-03): a small 1×1 prop is baked at ~its on-
 NATURAL `scale: 1` IS the intended size — the scale slider then centers on 1× and you tune ± from a
 sane baseline, and the sprite renders crisp 1:1. `rock` is 40px native @ `scale 1` and `fieldstone` 51px @ `scale 1`. (This differs from big props
 like `cabin`/`cottage`, which ship large and shrink via a fractional `scale` so they stay detailed
-when scaled up — the right trade-off there; for a rock that's always small, 1:1 wins.)
+when scaled up. ADR-0076 now classifies those large, live-shrunk sprites as legacy calibration
+bridges: retain the tuned footprint as the regeneration brief, but do not call them accepted until
+native replacements render at asset-local scale `1`.)
 
-Fences are NOT props — they are an edge-autotile feature (`featureAutotile.ts`, kind `fence`),
-visual-only in v1; the brush is gated until a 16-mask wood/stone set is baked (via the feature-tile
-pipeline, not this recipe).
+Fences are NOT props — they are gameplay-blocking, edge-keyed barriers resolved by
+`featureAutotile.ts`. Runtime art uses three deterministic E/S rail masks plus generated
+automatic or author-placed vertex-post sprites for wood and stone. The active sources, topology, proofs, and bake
+live in `docs/art/fence-concepts/SOURCES.md`, not in this doodad recipe.

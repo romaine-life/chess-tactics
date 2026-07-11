@@ -16,8 +16,8 @@ import { objectBaseZIndex } from './sceneDepth';
 import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardArtReveal } from './boardArtReady';
 import { groundCoverSet } from '../core/groundCover';
-import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
-import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay, type ResolvedWallOverlay } from '../core/featureAutotile';
+import { featureFrameSrc, fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
+import { resolveFeatureOverlays, resolveFenceOverlays, resolveFencePosts, resolveWallOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay, type ResolvedFencePost, type ResolvedWallOverlay } from '../core/featureAutotile';
 import { wallArtSrcs } from '../core/wallArt';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 import { unitAnchorFraction, unitAssetById } from '../ui/unitCatalog';
@@ -209,6 +209,7 @@ function sceneBoardForSkirmish(
     coverTypes: exactBoard?.coverTypes ?? coverTypes,
     features: exactBoard?.features ?? {},
     fences: exactBoard?.fences ?? {},
+    fencePosts: exactBoard?.fencePosts ?? {},
     walls: exactBoard?.walls ?? {},
     wallArt: exactBoard?.wallArt ?? {},
     featureCuts: exactBoard?.featureCuts ?? {},
@@ -302,12 +303,14 @@ function collectBoardArt(
   board: SocketBoardResult<TileAsset>,
   livePieces: readonly Piece[],
   fenceOverlays: ReadonlyMap<string, ResolvedFenceOverlay>,
+  fencePosts: ReadonlyMap<string, ResolvedFencePost>,
   wallOverlays: ReadonlyMap<string, ResolvedWallOverlay>,
   wallArtUrls: readonly string[],
   sceneUrls: readonly string[],
 ): { urls: string[]; signature: string } {
   const tiles = new Set<string>();
   for (const fence of fenceOverlays.values()) tiles.add(fenceFrameSrc(fence.material, fence.mask));
+  for (const post of fencePosts.values()) tiles.add(fencePostSrc(post.material));
   for (const wall of wallOverlays.values()) tiles.add(wallFrameSrc(wall.material, wall.mask));
   for (const url of wallArtUrls) tiles.add(url);
   for (const url of sceneUrls) tiles.add(url);
@@ -826,6 +829,9 @@ export function SkirmishBoard() {
   const fenceOverlays = useMemo<ReadonlyMap<string, ResolvedFenceOverlay>>(() => {
     return exactBoard ? resolveFenceOverlays(exactBoard.fences ?? {}) : new Map();
   }, [exactBoard]);
+  const fencePosts = useMemo<ReadonlyMap<string, ResolvedFencePost>>(() => {
+    return exactBoard ? resolveFencePosts(exactBoard.fences ?? {}, exactBoard.fencePosts ?? {}) : new Map();
+  }, [exactBoard]);
   const wallOverlays = useMemo<ReadonlyMap<string, ResolvedWallOverlay>>(() => {
     return exactBoard ? resolveWallOverlays(exactBoard.walls ?? {}, { cols: game.size.cols, rows: game.size.rows }) : new Map();
   }, [exactBoard, game.size.cols, game.size.rows]);
@@ -843,7 +849,10 @@ export function SkirmishBoard() {
   // Hold the board hidden until its whole art set has decoded, then fade it in as one
   // unit — no per-tile popcorn (see render/boardArtReady). The signature is the tile set
   // (stable across moves), so this arms once per board/seed, not on every move.
-  const boardArt = useMemo(() => collectBoardArt(board, livePieces, fenceOverlays, wallOverlays, wallArtUrls, sceneUrls), [board, livePieces, fenceOverlays, wallOverlays, wallArtUrls, sceneUrls]);
+  const boardArt = useMemo(
+    () => collectBoardArt(board, livePieces, fenceOverlays, fencePosts, wallOverlays, wallArtUrls, sceneUrls),
+    [board, fenceOverlays, fencePosts, livePieces, sceneUrls, wallArtUrls, wallOverlays],
+  );
   const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
   // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
   // the tile signature so a new skirmish/replay re-arms it, but moves (signature stable) don't.

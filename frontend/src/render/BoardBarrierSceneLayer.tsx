@@ -1,11 +1,11 @@
 import { useMemo, type ReactElement } from 'react';
 import { type BakeBounds, type BoardDrawOp } from '@chess-tactics/board-render';
-import { fenceFrameSrc, wallFrameSrc } from '../art/tileset';
-import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X } from '../art/projectionContract';
-import type { ResolvedFenceOverlay, ResolvedWallOverlay } from '../core/featureAutotile';
+import { fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
+import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
+import type { ResolvedFenceOverlay, ResolvedFencePost, ResolvedWallOverlay } from '../core/featureAutotile';
 import { resolveWallArtFaces, slotSource, wallArtSlotsForFace, type WallArtFaceMap, type WallArtPlacementMap } from '../core/wallArt';
 import { boardLabCellPosition } from './boardProjection';
-import { fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
+import { fenceOverlayZIndex, fencePostZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
 import { BoardCanvasLayer, boundsForOps } from './BoardCanvasLayer';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
@@ -47,11 +47,13 @@ function wallArtOps(
 
 function barrierOps({
   fenceOverlays,
+  fencePosts,
   wallOverlays,
   wallArt,
   wallBounds,
 }: {
   fenceOverlays?: ReadonlyMap<string, ResolvedFenceOverlay>;
+  fencePosts?: ReadonlyMap<string, ResolvedFencePost>;
   wallOverlays?: ReadonlyMap<string, ResolvedWallOverlay>;
   wallArt?: WallArtPlacementMap;
   wallBounds?: { cols: number; rows: number };
@@ -74,17 +76,33 @@ function barrierOps({
     wallArtOps(ops, cell, wall, faceStyles.get(key));
   }
 
+  // Posts cap their incident rails at a positive half-depth bias. Insert them first only as a
+  // secondary deterministic tie breaker; numeric z owns the visible ordering.
+  for (const post of fencePosts?.values() ?? []) {
+    const { left, top: vertexCellTop } = boardLabCellPosition(post);
+    const top = vertexCellTop - TILE_STEP_Y;
+    ops.push({
+      src: fencePostSrc(post.material),
+      dx: left - TILE_STEP_X,
+      dy: top - TILE_EQUATOR,
+      dw: TILE_FRAME_W,
+      dh: TILE_FRAME_H,
+      z: fencePostZIndex(post),
+    });
+  }
+
   for (const [key, fence] of fenceOverlays ?? []) {
     const cell = parseCellKey(key);
     if (!cell) continue;
     const { left, top } = boardLabCellPosition(cell);
+    const z = fenceOverlayZIndex(cell);
     ops.push({
       src: fenceFrameSrc(fence.material, fence.mask),
       dx: left - TILE_STEP_X,
       dy: top - TILE_EQUATOR,
       dw: TILE_FRAME_W,
       dh: TILE_FRAME_H,
-      z: fenceOverlayZIndex(cell),
+      z,
     });
   }
 
@@ -95,16 +113,21 @@ const FALLBACK_BOUNDS: BakeBounds = { minX: -TILE_STEP_X, minY: -TILE_EQUATOR, w
 
 export function BoardBarrierSceneLayer({
   fenceOverlays,
+  fencePosts,
   wallOverlays,
   wallArt,
   wallBounds,
 }: {
   fenceOverlays?: ReadonlyMap<string, ResolvedFenceOverlay>;
+  fencePosts?: ReadonlyMap<string, ResolvedFencePost>;
   wallOverlays?: ReadonlyMap<string, ResolvedWallOverlay>;
   wallArt?: WallArtPlacementMap;
   wallBounds?: { cols: number; rows: number };
 }): ReactElement | null {
-  const ops = useMemo(() => barrierOps({ fenceOverlays, wallOverlays, wallArt, wallBounds }), [fenceOverlays, wallArt, wallBounds, wallOverlays]);
+  const ops = useMemo(
+    () => barrierOps({ fenceOverlays, fencePosts, wallOverlays, wallArt, wallBounds }),
+    [fenceOverlays, fencePosts, wallArt, wallBounds, wallOverlays],
+  );
   const bounds = useMemo(() => boundsForOps(ops, FALLBACK_BOUNDS), [ops]);
   return <BoardCanvasLayer ops={ops} bounds={bounds} />;
 }

@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "review_batch": "fence-native-candidates-2026-07-10",
+  "board_edge_contract": {
+    "frame": [96, 180],
+    "edge_run": [48, 27],
+    "expected_abs_midline_slope": 0.5625,
+    "midline_slope_tolerance": 0.08,
+    "alpha_x_ranges": {
+      "E": [48, 96],
+      "S": [0, 48]
+    },
+    "direction": {
+      "E": "negative_screen_y_slope",
+      "S": "positive_screen_y_slope"
+    }
+  },
+  "candidates": [
+    {
+      "id": "blender-stone",
+      "board_edge_alignment": "claimed",
+      "rails": {
+        "E": {
+          "path": "frontend/public/assets/tiles/feature/candidates/2026-07-10/blender-stone-rail-e.png"
+        },
+        "S": {
+          "path": "frontend/public/assets/tiles/feature/candidates/2026-07-10/blender-stone-rail-s.png"
+        }
+      }
+    },
+    {
+      "id": "pixellab-wood",
+      "board_edge_alignment": "not_claimed",
+      "reason": "Native source and shown rails are short of both endpoints and use a shallower pitch than the 48x27 board edge."
+    },
+    {
+      "id": "pixellab-stone",
+      "board_edge_alignment": "not_claimed",
+      "reason": "The accepted material silhouette is 42 pixels wide and too shallow for the standard 48x27 board edge.",
+      "acceptance": {
+        "status": "accepted_for_future_use",
+        "scope": "future_bishop_passable_art",
+        "standard_board_edge_use": false,
+        "pixel_identity": {
+          "source": {
+            "path": "docs/art/fence-concepts/candidates/2026-07-10/pixellab/stone-rail-48x32-v2.png",
+            "sha256": "4bdbc2f4bdfff0e736b4de98796363b0415aae3f35517f2e3c356c05c48b6998"
+          },
+          "shown_outputs": [
+            {
+              "direction": "E",
+              "path": "frontend/public/assets/tiles/feature/candidates/2026-07-10/pixellab-stone-rail-e.png",
+              "sha256": "b5895225c48b8e281a269dd3a0843b93ae1747f24f00f415a9219f6e5c456f6e"
+            },
+            {
+              "direction": "S",
+              "path": "frontend/public/assets/tiles/feature/candidates/2026-07-10/pixellab-stone-rail-s.png",
+              "sha256": "fa56aa41713a16d16879ee143ef67464b5ebca3fec5bc1d9231e4c6b4ef84748"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "codex-wood",
+      "board_edge_alignment": "not_claimed",
+      "reason": "The high-resolution source is calibration-only; its shown E/S rails are reversed and too shallow."
+    },
+    {
+      "id": "codex-stone",
+      "board_edge_alignment": "not_claimed",
+      "reason": "The high-resolution source is calibration-only; its shown E/S rails are reversed and too shallow."
+    }
+  ]
+}

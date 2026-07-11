@@ -1,8 +1,14 @@
 ---
-status: "accepted"
+status: "accepted; production display-scale clause superseded by ADR-0076"
 date: 2026-07-09
 deciders: Nelson, Codex
 ---
+
+> **Production display-scale clause superseded by
+> [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md) (2026-07-10).**
+> Stable identities, live storage, accepted pointers, completeness, and audit
+> history stand. Display scale remains useful for candidate calibration, but an
+> accepted family must be regenerated for that footprint and render at native 1×.
 
 # ADR-0073: Unit art is live storage-backed content behind six stable piece identities
 
