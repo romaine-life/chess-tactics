@@ -209,6 +209,12 @@ const GYM_CSS = `
    .tileset-control-stack button { min-width:0 }. */
 .gym-replay-playout-btn { width:90px; text-align:center; }
 .gym-controls .gym-run-row .gym-td-watch-btn { min-width:96px; text-align:center; }
+/* Transport buttons NEVER shrink or letter-wrap (the control stack's
+   overflow-wrap:anywhere would sliver them one character per line when squeezed);
+   when the row is tight, whole buttons flow to the next line instead. The compound
+   selector outweighs .tileset-control-stack button. */
+.gym-run-row { flex-wrap:wrap; row-gap:8px; }
+.tileset-view-controls.gym-controls .gym-run-row button { flex:0 0 auto; white-space:nowrap; overflow-wrap:normal; }
 @media (max-width:1180px) { .gym-td-split.has-stage { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(320px,1fr); } }
 @media (max-width:980px) {
   .gym-run-detail.has-replay { grid-template-columns:1fr; grid-template-rows:minmax(180px,.45fr) minmax(300px,1fr); }
