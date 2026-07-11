@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-9fa784b1c18965c8bc8dc7ab75150d5e14a840854fcbd6f040212e334f78d4f5"
+  tag: "app-31adf179174c8df409c2a85b3d1a254ae70837b1a70599876e2e2841c61c5a63"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Move unit art to live recapture workflow"
-  prNumber: "470"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/470"
-  commit: "54dabd8"
+  prTitle: "Deal-then-walk step tempo, values-pane layout, legacy unit-id resolution"
+  prNumber: "471"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/471"
+  commit: "31d2708"
 
 name: chess-tactics
 namespace: chess-tactics
