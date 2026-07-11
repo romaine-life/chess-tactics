@@ -830,24 +830,47 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const tdKnobsFrozen = tdStarted || tdBusy || tdSummary !== null || tdPending !== null;
 
   // --- The session as a web-backed document -----------------------------------
-  // Every meaningful change autosaves (debounced) into the level's account blob via
-  // the same commit path the opening books use; the load effect above restores it.
-  // Closing the tab never discards learning — only the Reset button does.
+  // Every meaningful change autosaves into the level's account blob via the same
+  // commit path the opening books use; the load effect above restores it. The save
+  // is a TRAILING DEBOUNCE — event-driven, nothing polls: each change arms a
+  // one-shot timer and cancels the previous, so a run's ~10 progress frames/second
+  // coalesce into one whole-blob PUT instead of hundreds. The debounce tail is
+  // covered by a pagehide flush below, so closing the tab mid-window loses nothing.
   const tdKnobsRef = useRef(tdKnobs); tdKnobsRef.current = tdKnobs;
+  const tdFlushRef = useRef<(() => void) | null>(null);
   useEffect(() => {
-    if (!levelId || !tdSession) return undefined;
-    const id = setTimeout(() => {
+    if (!levelId || !tdSession) { tdFlushRef.current = null; return undefined; }
+    const buildDoc = (): TdSessionDoc => {
       const prior = blobRef.current.tdSession;
-      const doc: TdSessionDoc = {
+      return {
         opts: tdOptionsOf(tdKnobsRef.current), seedCount: tdKnobsRef.current.seedCount,
         session: tdSession, probeLog: tdProbeLog, summary: tdSummary, kept: tdKept,
         ...(prior?.adoption ? { adoption: prior.adoption } : {}),
       };
+    };
+    const id = setTimeout(() => {
+      tdFlushRef.current = null;
+      const doc = buildDoc();
       tdDocRef.current = doc;
       commit({ ...blobRef.current, tdSession: doc });
     }, 1200);
+    // The pending save, flushable NOW with a keepalive PUT that outlives the tab.
+    tdFlushRef.current = () => {
+      clearTimeout(id);
+      tdFlushRef.current = null;
+      const doc = buildDoc();
+      tdDocRef.current = doc;
+      const next = { ...blobRef.current, tdSession: doc };
+      blobRef.current = next;
+      void saveOpeningBooks(levelId, next, true).catch(() => { /* best effort at teardown */ });
+    };
     return () => clearTimeout(id);
   }, [levelId, tdSession, tdProbeLog, tdSummary, tdKept, commit]);
+  useEffect(() => {
+    const flush = (): void => { tdFlushRef.current?.(); };
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, []);
 
   // Reset = discard the run, including its stored document (the level's ADOPTION is
   // separate and survives — clearing that is the audit box's explicit button).

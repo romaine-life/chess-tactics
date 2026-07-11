@@ -8,12 +8,15 @@ import { emptyBlob, capSessionForStorage, type BooksBlob } from '../lab/openingB
 
 // One fetch core (mirrors net/campaignWorkspace.ts): same credentials + JSON +
 // ok-check + HttpError in one place, so 401/retry handling is a single edit.
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+// `keepalive` lets a save fired from pagehide outlive the tab (the browser caps
+// keepalive bodies at ~64KB — callers use it for flush-on-close best effort).
+async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
   const res = await fetch(path, {
     method,
     headers: { 'content-type': 'application/json' },
     credentials: 'include',
     body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
+    ...(keepalive ? { keepalive: true } : {}),
   });
   if (!res.ok) throw new HttpError(`${method} ${path}`, res.status);
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
@@ -34,8 +37,9 @@ export async function loadOpeningBooks(levelId: string): Promise<BooksBlob> {
 }
 
 /** Persist a level's books (each book's trajectory capped so the blob stays
- * bounded). Throws HttpError on non-ok. */
-export async function saveOpeningBooks(levelId: string, blob: BooksBlob): Promise<void> {
+ * bounded). Throws HttpError on non-ok. `keepalive` is for flush-on-pagehide:
+ * the request outlives the tab (best effort — the browser caps such bodies). */
+export async function saveOpeningBooks(levelId: string, blob: BooksBlob, keepalive = false): Promise<void> {
   const capped: BooksBlob = {
     nextId: blob.nextId,
     books: blob.books.map((b) => ({ ...b, session: capSessionForStorage(b.session) })),
@@ -44,5 +48,5 @@ export async function saveOpeningBooks(levelId: string, blob: BooksBlob): Promis
     // per probe cadence) — keep the newest window.
     ...(blob.tdSession ? { tdSession: { ...blob.tdSession, probeLog: blob.tdSession.probeLog.slice(-400) } } : {}),
   };
-  await request<{ ok: boolean }>('PUT', `/api/opening-books/${encodeURIComponent(levelId)}`, { data: capped });
+  await request<{ ok: boolean }>('PUT', `/api/opening-books/${encodeURIComponent(levelId)}`, { data: capped }, keepalive);
 }
