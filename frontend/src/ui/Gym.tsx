@@ -26,8 +26,8 @@ import type { ValState } from '../lab/validate';
 import type { TdRequest, TdResponse, TdRunConfig, TdSession } from '../lab/tdWorker';
 import { freshTdSession } from '../lab/tdSession';
 import {
-  DEFAULT_PROBE_GAMES, DEFAULT_TRAIN_OPTIONS, pawnRelativeValues, scheduleAt,
-  type SeedSummary, type TrainOptions, type ValueWeights,
+  DEFAULT_PROBE_GAMES, DEFAULT_TRAIN_OPTIONS, pawnRelativeValues, previewNextGame, scheduleAt,
+  type SeedSummary, type TdGameRecord, type TrainOptions, type ValueWeights,
 } from '../game/tdValues';
 import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
 import { drawRulesForLevel } from '../core/levelEvents';
@@ -175,6 +175,22 @@ const GYM_CSS = `
 .gym-replay-stage.is-focused .gym-replay-focus-btn { margin-left:0; }
 .gym-replay-focus-btn { margin-left:auto; min-width:34px; border:1px solid #3a4657; background:#161d26; color:#c6d0dc; border-radius:5px; padding:4px 8px; font-size:12px; cursor:pointer; }
 .gym-replay-focus-btn:hover { border-color:#46d6b8; color:#8ff0dc; }
+/* Piece-values two-pane: running numbers hug content on the left, the game stage takes
+   ALL remaining space (the board was starved at the bottom of a single column). */
+.gym-td-split { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
+.gym-td-split.has-stage { grid-template-columns:minmax(330px,max-content) minmax(0,1fr); }
+.gym-td-left { min-width:0; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding-right:4px; }
+.gym-td-right { min-width:0; min-height:0; display:grid; grid-template-rows:minmax(0,1fr); }
+/* Full chess-style navigation on the values stage (first/prev/slider/next/last). */
+.gym-replay-controls.is-nav { grid-template-columns:auto auto minmax(80px,1fr) auto auto auto; }
+.gym-replay-stage.is-focused .gym-replay-controls.is-nav { grid-template-columns:auto auto minmax(160px,1fr) auto auto auto; }
+/* Focus mode's move list: every played ply, clickable, current highlighted. */
+.gym-replay-focus-view.is-values { grid-template-columns:minmax(0,1fr) 250px; grid-template-rows:minmax(0,1fr); gap:10px; }
+.gym-replay-movelist { min-height:0; overflow-y:auto; border:1px solid #29323f; border-radius:8px; background:#0b1016; padding:6px; display:flex; flex-direction:column; gap:1px; }
+.gym-replay-movelist button { text-align:left; border:0; background:none; color:#93a0b0; font:11px ui-monospace,monospace; padding:3px 6px; border-radius:4px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gym-replay-movelist button:hover { background:#161d26; color:#c6d0dc; }
+.gym-replay-movelist button.is-current { background:#212b37; color:#e7ebf0; }
+@media (max-width:1180px) { .gym-td-split.has-stage { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(320px,1fr); } }
 @media (max-width:980px) {
   .gym-run-detail.has-replay { grid-template-columns:1fr; grid-template-rows:minmax(180px,.45fr) minmax(300px,1fr); }
   .gym-replay-controls { grid-template-columns:auto minmax(80px,1fr) auto; }
@@ -565,7 +581,14 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const [tdReady, setTdReady] = useState(false);
   const [tdKnobs, setTdKnobs] = useState<TdKnobs>(TD_KNOB_DEFAULTS);
   const [tdStepN, setTdStepN] = useState(25);
-  // Ply cursor into the LAST stepped game's replay (rewound whenever a new game lands).
+  // Deal-then-walk (the owner's tempo): STEP deals the next game at its start position
+  // WITHOUT learning from it; he walks it forward ply by ply and the TD update lands
+  // when the game concludes (exactly where episodic TD(λ) commits). `tdPending` is the
+  // dealt game; `tdFrontier` is how many plies of it have been PLAYED (the walk's
+  // forward edge — review behind it is free, scrubbing ahead of it is not a thing).
+  const [tdPending, setTdPending] = useState<TdGameRecord | null>(null);
+  const [tdFrontier, setTdFrontier] = useState(0);
+  // Ply cursor into the inspected game (the pending walk, or the last committed game).
   const [tdReplayPly, setTdReplayPly] = useState(0);
   const [tdSession, setTdSession] = useState<TdSession | null>(null);
   const [tdBusy, setTdBusy] = useState(false);
@@ -593,6 +616,9 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setTdSession(null); setTdSummary(null); setTdKept(false); setTdDiscarded(false);
     setTdStopped(false); setTdError(null); setTdSummarizing(null); setTdBusy(false);
     setTdDelta(null); tdShownRef.current = null; setTdReplayPly(0);
+    // A dealt-but-unfinished game is DISCARDED, never learned from — the same game
+    // re-deals identically later ((seed, gameIndex) rng), so nothing is lost or skipped.
+    setTdPending(null); setTdFrontier(0);
   }, []);
 
   // The learner's OWN worker — never gymWorker (that one is shared by generate/step/
@@ -689,7 +715,26 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   // coming (they are scored only after a move commits) — drawRulesForLevel is the
   // canonical chess-draws scan (never the solver's castle-inclusive hidden-ledger one).
   const tdDrawsAuthored = useMemo(() => (level ? drawRulesForLevel(level) !== undefined : false), [level]);
-  const tdKnobsFrozen = tdStarted || tdBusy || tdSummary !== null;
+  // A dealt game freezes the knobs too: the commit must replay the SAME game the deal
+  // previewed, and the game derives from (seed, budget-schedule, weights) — changing a
+  // knob mid-walk would silently make the walked game and the learned game differ.
+  const tdKnobsFrozen = tdStarted || tdBusy || tdSummary !== null || tdPending !== null;
+
+  // STEP deals the next game (start position, learning NOT yet applied). Pure main-thread
+  // preview — the worker only gets involved at the commit, and replays bit-identically.
+  const tdDeal = useCallback(() => {
+    if (!level || tdBusy || tdPending || tdGamesDone >= tdKnobs.games) return;
+    const record = previewNextGame(level, tdOptionsOf(tdKnobs), tdSessionRef.current?.train ?? freshTdSession(tdOptionsOf(tdKnobs)).train);
+    if (!record) return;
+    setTdStopped(false); setTdError(null);
+    setTdPending(record); setTdFrontier(0); setTdReplayPly(0);
+  }, [level, tdBusy, tdPending, tdGamesDone, tdKnobs]);
+
+  // The walk's conclusion: the frontier reached the game's final ply — commit it.
+  // tdSend(1) replays the SAME game in the worker and applies the update; the session
+  // comes back advanced and the stage's retire effect swaps the pending record for the
+  // committed one seamlessly.
+  const tdConclude = useCallback(() => { tdSend(1); }, [tdSend]);
 
   // Keep the inspected position inside the active book as it changes size.
   const posCount = activeBook?.positions.length ?? 0;
@@ -955,15 +1000,30 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   ) : null;
   const replayFocusActive = replayFocus && replayPanel !== null;
 
-  // --- Stepped-game replay (`values` mode) — the same inspect stage, fed by the TD
-  // session's lastGame record. Both self-play sides share one policy, so the outcome
-  // chip reads from the PLAYER's side (matching the W/D/L line's labels).
-  useEffect(() => { setTdReplayPly(0); }, [tdLastGame?.game]);
+  // --- Stepped-game stage (`values` mode) — deal-then-walk. The stage shows either
+  // the PENDING dealt game (in play: Next advances the frontier, review behind it is
+  // free, no scrubbing ahead; the TD update has NOT landed yet) or the last COMMITTED
+  // game (concluded: outcome chip shown, fully scrubbable). Both self-play sides share
+  // one policy, so the outcome reads from the PLAYER's side (the W/D/L line's labels).
+  const tdInspect = tdPending ?? tdLastGame;
+  const tdWalking = tdPending !== null;
+  // One cursor-keeping effect: retire a pending game once the session has learned from
+  // it (single-step commit, or a Run that consumed it as the batch's first game); with
+  // no walk in progress, rest the cursor on the latest game's final position (during a
+  // Run the games fly past at their conclusions).
+  useEffect(() => {
+    if (tdPending) {
+      if (tdGamesDone >= tdPending.game) { setTdPending(null); setTdFrontier(0); }
+      return;
+    }
+    setTdReplayPly(tdLastGame?.plies ?? 0);
+  }, [tdPending, tdGamesDone, tdLastGame?.game, tdLastGame?.plies]);
   const tdReplayStates = useMemo(
-    () => (level && tdLastGame ? replayStates(level, tdLastGame) : null),
-    [level, tdLastGame],
+    () => (level && tdInspect ? replayStates(level, tdInspect) : null),
+    [level, tdInspect],
   );
-  const tdReplayMax = tdReplayStates ? tdReplayStates.length - 1 : 0;
+  // The walk's forward edge caps the cursor: a game in play only exists up to its frontier.
+  const tdReplayMax = tdWalking ? tdFrontier : tdReplayStates ? tdReplayStates.length - 1 : 0;
   const tdClampedReplayPly = Math.max(0, Math.min(tdReplayPly, tdReplayMax));
   const tdReplayBoard = useMemo(() => {
     if (!level || !tdReplayStates) return null;
@@ -971,30 +1031,62 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     if (!state) return null;
     return { ...levelToEditorBoard(level), units: unitsForGamePieces(state.pieces) };
   }, [level, tdReplayStates, tdClampedReplayPly]);
-  const tdReplayMoveLabel = tdLastGame
-    ? tdClampedReplayPly === 0 ? 'Start position' : gameMoveLabel(tdLastGame, tdClampedReplayPly - 1)
+  const tdReplayMoveLabel = tdInspect
+    ? tdClampedReplayPly === 0 ? 'Start position' : gameMoveLabel(tdInspect, tdClampedReplayPly - 1)
     : '';
-  const tdReplayEpsilon = tdLastGame ? scheduleAt(tdOpts, tdLastGame.game - 1).epsilon : 0;
-  const tdReplayPanel: ReactElement | null = tdLastGame && tdReplayStates && tdReplayBoard ? (
+  const tdReplayEpsilon = tdInspect ? scheduleAt(tdOpts, tdInspect.game - 1).epsilon : 0;
+  // THE universal advance — one button that always moves the algorithm one step: no game
+  // in play → deal the next one; game in play → play its next ply (the final ply lands
+  // the TD update); concluded → the next press deals again. The board follows; the
+  // stage's own controls are pure NAVIGATION and never advance anything.
+  const tdAdvance = useCallback(() => {
+    if (tdBusy) return;
+    if (!tdPending) { tdDeal(); return; }
+    const nf = tdFrontier + 1;
+    setTdFrontier(nf); setTdReplayPly(nf);
+    if (nf >= tdPending.plies) tdConclude();
+  }, [tdBusy, tdPending, tdFrontier, tdDeal, tdConclude]);
+  // "Run until completion", one level down: play the dealt game out and commit it.
+  const tdWalkToEnd = useCallback(() => {
+    if (!tdPending) return;
+    setTdFrontier(tdPending.plies); setTdReplayPly(tdPending.plies);
+    tdConclude();
+  }, [tdPending, tdConclude]);
+  // The board renders pixel art 1:1 whenever the stage has content — the shared
+  // read-only renderer is the Level Editor's render core, and its art is authored for
+  // integer scale (0.72 nearest-neighbour was the "extra pixelated" look).
+  const tdHasInspect = tdInspect !== null;
+  useEffect(() => {
+    if (mode === 'values' && tdHasInspect) setViewZoom((zoom) => Math.max(zoom, 1));
+  }, [mode, tdHasInspect]);
+  const tdReplayPanel: ReactElement | null = tdInspect && tdReplayStates && tdReplayBoard ? (
     <div className={`gym-replay-stage ${replayFocus ? 'is-focused' : ''}`} aria-label="Stepped training game replay">
       <div className="gym-replay-head">
         <div className="gym-replay-title">
-          <h3>Inspect game</h3>
+          <h3>{tdWalking ? 'Game in play' : 'Inspect game'}</h3>
           <span className="gym-replay-move" title={tdReplayMoveLabel}>{tdReplayMoveLabel}</span>
         </div>
-        <span className={`outcome ${tdLastGame.winner === 'player' ? 'win' : tdLastGame.winner === 'draw' ? 'draw' : 'loss'}`}>
-          {tdLastGame.winner === 'player' ? 'player win' : tdLastGame.winner === 'draw' ? 'draw' : 'enemy win'}
-        </span>
-        <span>game <b className="gym-num">{tdLastGame.game}</b></span>
+        {tdWalking ? (
+          // No outcome, no total plies: the game has not happened past the frontier yet.
+          <span className="gym-hint">learning lands when the game ends</span>
+        ) : (
+          <span className={`outcome ${tdInspect.winner === 'player' ? 'win' : tdInspect.winner === 'draw' ? 'draw' : 'loss'}`}>
+            {tdInspect.winner === 'player' ? 'player win' : tdInspect.winner === 'draw' ? 'draw' : 'enemy win'}
+          </span>
+        )}
+        <span>game <b className="gym-num">{tdInspect.game}</b></span>
         <span>ε <b className="gym-num">{tdReplayEpsilon.toFixed(3)}</b></span>
-        <span>plies <b className="gym-num">{tdLastGame.plies}</b></span>
-        <span>seed <b className="gym-num">{tdLastGame.seed}</b></span>
-        <div className="gym-replay-controls is-inline">
-          <button type="button" onClick={() => setTdReplayPly(Math.max(0, tdClampedReplayPly - 1))} disabled={tdClampedReplayPly === 0}>Prev</button>
+        {tdWalking ? null : <span>plies <b className="gym-num">{tdInspect.plies}</b></span>}
+        <span>seed <b className="gym-num">{tdInspect.seed}</b></span>
+        <div className="gym-replay-controls is-inline is-nav">
+          <button type="button" onClick={() => setTdReplayPly(0)} disabled={tdClampedReplayPly === 0} title="First position" aria-label="First position">⏮</button>
+          <button type="button" onClick={() => setTdReplayPly(Math.max(0, tdClampedReplayPly - 1))} disabled={tdClampedReplayPly === 0} title="Previous ply" aria-label="Previous ply">◀</button>
           <input type="range" min={0} max={tdReplayMax} value={tdClampedReplayPly} onChange={(e) => setTdReplayPly(Number(e.target.value))} aria-label="Replay ply" />
-          <button type="button" onClick={() => setTdReplayPly(Math.min(tdReplayMax, tdClampedReplayPly + 1))} disabled={tdClampedReplayPly >= tdReplayMax}>Next</button>
-          <span className="gym-replay-ply">Ply {tdClampedReplayPly}/{tdReplayMax}</span>
+          <button type="button" onClick={() => setTdReplayPly(Math.min(tdReplayMax, tdClampedReplayPly + 1))} disabled={tdClampedReplayPly >= tdReplayMax} title="Next ply" aria-label="Next ply">▶</button>
+          <button type="button" onClick={() => setTdReplayPly(tdReplayMax)} disabled={tdClampedReplayPly >= tdReplayMax} title={tdWalking ? 'Latest played ply' : 'Final position'} aria-label={tdWalking ? 'Latest played ply' : 'Final position'}>⏭</button>
+          <span className="gym-replay-ply">{tdWalking ? `Ply ${tdClampedReplayPly} · in play` : `Ply ${tdClampedReplayPly}/${tdReplayMax}`}</span>
         </div>
+        {tdWalking ? <button type="button" className="gym-replay-focus-btn" onClick={tdWalkToEnd} disabled={tdBusy} title="Play the dealt game out and land its update">⏩ to end</button> : null}
         <button
           type="button"
           className="gym-replay-focus-btn"
@@ -1016,6 +1108,35 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     </div>
   ) : null;
   const tdReplayFocusActive = replayFocus && tdReplayPanel !== null;
+  // Focus mode is a real chess-game viewer: keyboard navigation (← → Home End) plus a
+  // clickable move list beside the board. Navigation only — the frontier never moves.
+  useEffect(() => {
+    if (!tdReplayFocusActive) return undefined;
+    const onKey = (e: KeyboardEvent): void => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); setTdReplayPly((p) => Math.max(0, Math.min(p, tdReplayMax) - 1)); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); setTdReplayPly((p) => Math.min(tdReplayMax, p + 1)); }
+      else if (e.key === 'Home') { e.preventDefault(); setTdReplayPly(0); }
+      else if (e.key === 'End') { e.preventDefault(); setTdReplayPly(tdReplayMax); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tdReplayFocusActive, tdReplayMax]);
+  const tdMoveListRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    tdMoveListRef.current?.querySelector('.is-current')?.scrollIntoView({ block: 'nearest' });
+  }, [tdReplayFocusActive, tdClampedReplayPly]);
+  const tdMoveList: ReactElement | null = tdReplayFocusActive && tdInspect ? (
+    <div className="gym-replay-movelist" ref={tdMoveListRef} aria-label="Move list">
+      <button type="button" className={tdClampedReplayPly === 0 ? 'is-current' : ''} onClick={() => setTdReplayPly(0)}>Start position</button>
+      {Array.from({ length: tdReplayMax }, (_, i) => (
+        <button key={i} type="button" className={tdClampedReplayPly === i + 1 ? 'is-current' : ''} onClick={() => setTdReplayPly(i + 1)}>
+          {gameMoveLabel(tdInspect, i)}
+        </button>
+      ))}
+    </div>
+  ) : null;
 
   // SPRT view derivation: map the live LLR onto the [lower, upper] bar (0 => reject
   // edge, 1 => accept edge, .5 => the zero line). The fill grows from center toward
@@ -1275,13 +1396,15 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
             ) : mode === 'values' ? (
               <div className={`gym-run ${tdReplayFocusActive ? 'is-replay-focus' : ''}`.trim()} aria-label="Piece-value learner">
                 {tdReplayFocusActive ? (
-                  <div className="gym-replay-focus-view">{tdReplayPanel}</div>
+                  <div className="gym-replay-focus-view is-values">{tdReplayPanel}{tdMoveList}</div>
                 ) : (
-                  <>
+                  <div className={`gym-td-split ${tdReplayPanel ? 'has-stage' : ''}`.trim()}>
+                  <div className="gym-td-left">
                 <div className="gym-run-head">
-                  <span className={`gym-run-state ${tdBusy ? 'live' : ''}`}>
+                  <span className={`gym-run-state ${tdBusy || tdWalking ? 'live' : ''}`}>
                     {tdSummarizing ? `▶ folding seeds — ${tdSummarizing.done}/${tdSummarizing.total} done`
                       : tdBusy ? '▶ learning'
+                      : tdWalking ? '▶ game in play'
                       : tdComplete ? (tdSummary === null && tdStopped ? '⏹ seed fold stopped' : '✓ budget complete')
                       : tdStopped ? '⏹ stopped'
                       : tdStarted ? '⏸ paused'
@@ -1330,8 +1453,6 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   ) : null}
                 </div>
 
-                {tdReplayPanel}
-
                 {tdSummary ? (
                   <div className="gym-td-results" aria-label="Learned values vs chess defaults">
                     <h3>Result — learned mean ± spread over {tdSummary.perSeed.length} seed{tdSummary.perSeed.length === 1 ? '' : 's'}, next to the chess defaults{tdKept ? ' · KEPT' : ''}</h3>
@@ -1373,8 +1494,10 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                 ) : null}
 
                 {tdError ? <p className="gym-error">Value learner failed: {tdError}</p> : null}
-                {!tdStarted && !tdBusy ? <p className="gym-hint">Every piece starts at the same weight. Step plays ONE training game and updates them — watch the numbers move. Set the budget in the rail, then Run plays it out.</p> : null}
-                  </>
+                {!tdStarted && !tdBusy && !tdWalking ? <p className="gym-hint">Every piece starts at the same weight. ⏭ step always advances the algorithm one step: first press deals a training game, each press after plays one ply, and the weight update lands on the last one. Run plays the whole budget at full speed.</p> : null}
+                  </div>
+                  {tdReplayPanel ? <div className="gym-td-right">{tdReplayPanel}</div> : null}
+                  </div>
                 )}
               </div>
             ) : null}
@@ -1560,18 +1683,21 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
             {mode === 'values' && level ? (
               <>
                 <div className="gym-run-row">
-                  <button type="button" onClick={() => tdSend(1)} disabled={!tdReady || tdBusy || tdComplete}>⏭ step 1</button>
-                  <button type="button" onClick={() => tdSend(Math.max(1, tdStepN))} disabled={!tdReady || tdBusy || tdComplete}>⏭ step</button>
+                  <button type="button" onClick={tdAdvance} disabled={!tdReady || tdBusy || (tdComplete && !tdWalking)}
+                    title={tdWalking ? 'Play the next ply — the update lands on the final one' : 'Deal the next training game; each press after plays one ply'}>⏭ step</button>
+                  <button type="button" onClick={() => tdSend(Math.max(1, tdStepN))} disabled={!tdReady || tdBusy || tdComplete}
+                    title="Play N whole games at full speed">⏭ games</button>
                   <input className="gym-td-stepn-input" type="number" min={1} max={100000} value={tdStepN}
-                    onChange={(e) => setTdStepN(Math.max(1, Math.floor(Number(e.target.value) || 1)))} aria-label="Games per step" />
+                    onChange={(e) => setTdStepN(Math.max(1, Math.floor(Number(e.target.value) || 1)))} aria-label="Games per batch step" />
                 </div>
                 <div className="gym-run-row">
                   <button type="button" className="play" onClick={() => tdSend('run')} disabled={!tdReady || tdBusy || (tdComplete && tdSummary !== null)}>▶ run</button>
                   <button type="button" onClick={tdStop} disabled={!tdBusy}>⏹ stop</button>
-                  <button type="button" onClick={tdReset} disabled={tdBusy || (!tdStarted && tdSummary === null && !tdStopped && !tdError)}>↺ reset</button>
+                  <button type="button" onClick={tdReset} disabled={tdBusy || (!tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)}>↺ reset</button>
                 </div>
                 {!tdReady ? <p className="gym-hint">Preparing learner…</p>
                   : tdBusy ? <p className="gym-hint">{tdSummarizing ? 'Folding sibling seeds into the mean ± spread table…' : 'Playing training games — Stop lands between games, nothing half-applied.'}</p>
+                  : tdWalking ? <p className="gym-hint">Game {tdPending?.game} is in play — each ⏭ step plays one ply (⏩ to end finishes it); its weight update lands when the game ends. ⏭ games / Run consume it as the batch&apos;s first game; Reset discards it unlearned.</p>
                   : tdComplete && tdSummary === null && tdDiscarded ? <p className="gym-hint">Result discarded — the run&apos;s numbers stay. Run recomputes the mean ± spread table; Reset starts a new run.</p>
                   : tdComplete && tdSummary === null ? <p className="gym-hint">Budget done but the seed fold was stopped — Run finishes the mean ± spread table, or Reset.</p>
                   : tdComplete ? <p className="gym-hint">Budget complete. Keep or Discard the result in the main pane; Reset starts a new run.</p>

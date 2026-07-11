@@ -612,6 +612,25 @@ export function runTrainingGames(
   return { game: g, weights: toRecord(w), outcomes };
 }
 
+/**
+ * Deal the session's NEXT training game without learning from it — the watch-it-unfold
+ * surface's data. Plays game `state.game` under the current weights and the annealed ε
+ * (exactly runOneGame's policy) but applies NO update, so the caller can walk the game
+ * forward ply by ply and only then commit it via runTrainingGames(..., 1) — which
+ * replays the SAME (seed, gameIndex) rng under the SAME weights and therefore plays
+ * bit-for-bit the SAME moves (asserted in tdValues.test.ts). Pure: `state` is untouched.
+ * Null once the budget is complete.
+ */
+export function previewNextGame(level: Level, opts: TrainOptions, state: TrainSessionState): TdGameRecord | null {
+  const cfg = trainConfigOf(opts);
+  const g = state.game;
+  if (g >= cfg.games) return null;
+  const t = cfg.games > 1 ? g / (cfg.games - 1) : 0;
+  const pol: SidePolicy = { weights: fromRecord(state.weights), epsilon: lerp(cfg.epsilon, t) };
+  const played = playGame(level, gameSeed(cfg.seed, g), { player: pol, enemy: pol }, cfg.maxPlies);
+  return { game: g + 1, seed: gameSeed(cfg.seed, g), winner: played.winner, plies: played.plies, moves: played.moves };
+}
+
 export interface SeedSummary {
   seeds: number[];
   perSeed: Array<{ seed: number; weights: ValueWeights }>;

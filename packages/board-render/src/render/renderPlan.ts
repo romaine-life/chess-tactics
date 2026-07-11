@@ -8,7 +8,7 @@ import {
 import { studioFamilies, assetFrameSrc, type StudioAsset } from '../ui/studioBoard';
 import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
 import {
-  unitAssetById,
+  unitArtForId,
   unitAnchorFraction,
   hasDirectionSprite,
   MISSING_DIRECTION_SPRITE,
@@ -80,7 +80,7 @@ export interface BoardDrawOptions {
 
 const studioTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
 const resolveTile = (id: string): StudioAsset | undefined => studioTiles.find((asset) => asset.id === id);
-const resolveUnit = (id: string): UnitAsset | undefined => unitAssetById(id);
+const resolveUnit = (id: string): UnitAsset | undefined => unitArtForId(id);
 const resolveDoodad = (id: string): DoodadAsset | undefined => doodadAsset(id);
 
 function terrainCellClipPolygon(index: number, columns: number): number[] {
