@@ -23,7 +23,7 @@ import { stateAtPosition, type BookPosition, type OpeningBookSettings } from '..
 import type { GymRequest, GymResponse } from '../lab/gymWorker';
 import type { StepProgress } from '../lab/gymStep';
 import type { ValState } from '../lab/validate';
-import type { TdRequest, TdResponse, TdRunConfig, TdSession } from '../lab/tdWorker';
+import type { TdProbe, TdRequest, TdResponse, TdRunConfig, TdSession } from '../lab/tdWorker';
 import { freshTdSession } from '../lab/tdSession';
 import {
   DEFAULT_PROBE_GAMES, DEFAULT_TRAIN_OPTIONS, pawnRelativeValues, previewNextGame, scheduleAt,
@@ -196,6 +196,20 @@ const GYM_CSS = `
 .gym-score-row .n { color:#5c6875; font:12px ui-monospace,monospace; text-align:right; padding-right:4px; }
 .gym-score-row .gap { color:#5c6875; font:12px ui-monospace,monospace; padding:3px 6px; }
 .gym-score-start { margin-bottom:2px; }
+/* Probe history: the learning curve as running numbers. */
+.gym-td-probelog { display:flex; flex-direction:column; gap:4px; font-size:11px; color:#93a0b0; }
+.gym-td-probelog .h { color:#5c6875; }
+.gym-td-probelog .rows { display:flex; flex-wrap:wrap; gap:4px 14px; max-height:66px; overflow-y:auto; font-family:ui-monospace,monospace; }
+/* The pane's documentation view. */
+.gym-td-help { flex:1 1 auto; min-height:0; overflow-y:auto; max-width:88ch; color:#c6d0dc; font-size:13px; line-height:1.55; padding-right:8px; }
+.gym-td-help-head { display:flex; align-items:center; gap:12px; }
+.gym-td-help-head h3 { flex:1 1 auto; margin:0; }
+.gym-td-help h4 { margin:16px 0 4px; color:#93a0b0; font-size:13px; }
+.gym-td-help p { margin:4px 0; }
+.gym-td-help ul { margin:4px 0; padding-left:20px; }
+.gym-td-help li { margin:3px 0; }
+.gym-td-help b { color:#e7ebf0; }
+.gym-td-help-keys b { font-family:ui-monospace,monospace; background:#161d26; border:1px solid #29323f; border-radius:4px; padding:1px 5px; }
 /* Watch tempo. */
 .gym-td-speed { display:flex; align-items:center; gap:8px; font-size:12px; color:#93a0b0; margin-top:2px; }
 .gym-td-speed input[type=range] { flex:1 1 auto; min-width:0; }
@@ -628,6 +642,10 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const [tdReplayPly, setTdReplayPly] = useState(0);
   // WATCH mode: an autoplay clock presses the universal advance one beat at a time.
   const [tdWatching, setTdWatching] = useState(false);
+  // Every probe the run has taken, in order — the learning curve as running numbers.
+  const [tdProbeLog, setTdProbeLog] = useState<TdProbe[]>([]);
+  // The pane's own documentation ("how this works") as a full-pane view.
+  const [tdHelp, setTdHelp] = useState(false);
   // Watch tempo — the delay between beats, on a log scale down to one beat per frame.
   const [tdBeatMs, setTdBeatMs] = useState(250);
   // Watch scope: 'run' keeps dealing new games; 'game' (the stage's ▶ play out) stops
@@ -661,7 +679,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setTdDelta(null); tdShownRef.current = null; setTdReplayPly(0);
     // A dealt-but-unfinished game is DISCARDED, never learned from — the same game
     // re-deals identically later ((seed, gameIndex) rng), so nothing is lost or skipped.
-    setTdPending(null); setTdFrontier(0); setTdWatching(false);
+    setTdPending(null); setTdFrontier(0); setTdWatching(false); setTdProbeLog([]);
   }, []);
 
   // The learner's OWN worker — never gymWorker (that one is shared by generate/step/
@@ -681,6 +699,9 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
       const shown = tdShownRef.current;
       if (shown && session.train.game > shown.game) setTdDelta(tdWeightsDelta(session.train.weights, shown.weights));
       if (!shown || session.train.game > shown.game) tdShownRef.current = { game: session.train.game, weights: session.train.weights };
+      // Accumulate every distinct probe — the learning curve as running numbers.
+      const probe = session.probe;
+      if (probe) setTdProbeLog((log) => (log.length && log[log.length - 1].game === probe.game ? log : [...log, probe]));
       setTdSession(session);
     };
     worker.onmessage = (event: MessageEvent<TdResponse>) => {
@@ -1530,6 +1551,84 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
               <div className={`gym-run ${tdReplayFocusActive ? 'is-replay-focus' : ''}`.trim()} aria-label="Piece-value learner">
                 {tdReplayFocusActive ? (
                   <div className="gym-replay-focus-view is-values">{tdReplayPanel}{tdMoveList}</div>
+                ) : tdHelp ? (
+                  <div className="gym-td-help" aria-label="How the piece-value learner works">
+                    <div className="gym-td-help-head">
+                      <h3>How the piece-value learner works</h3>
+                      <button type="button" className="gym-replay-focus-btn" onClick={() => setTdHelp(false)}>✕ close</button>
+                    </div>
+
+                    <h4>What this is</h4>
+                    <p>
+                      This pane learns <b>this board&apos;s</b> piece values from nothing, by playing itself. The method is
+                      <b> afterstate TD(λ)</b> — the TD-Gammon family (Tesauro 1992–95), in the Beal &amp; Smith (1997)
+                      &ldquo;learn piece values from random play&rdquo; lineage. The value model is deliberately the smallest thing
+                      that can learn piece values: <b>six numbers, one per piece type</b>. A position&apos;s value is
+                      σ(w · f), where f counts your living pieces minus the enemy&apos;s per type, read as the probability the
+                      player wins. Absolute weights are in log-odds units; the piece-value story is the <b>ratios</b> — hence the
+                      pawn&nbsp;=&nbsp;1 column.
+                    </p>
+
+                    <h4>One step of the algorithm</h4>
+                    <p>
+                      ⏭ step deals a game: both sides play 1-ply greedy against the <i>current</i> values, with an ε chance per move
+                      of exploring at random (ε anneals from its start to its end across the whole budget — early games are noisy on
+                      purpose). When the game ends, its result (win 1, draw ½, loss 0) becomes the target, and TD(λ) walks the error
+                      back through the game&apos;s positions. <b>The six weights move once per game, at its end</b> — that is why every
+                      number on this pane holds still while a game is in play, and why the Δ column after a step is exactly what the
+                      game you just watched taught the learner.
+                    </p>
+
+                    <h4>Does it want to run in parallel?</h4>
+                    <p>
+                      No — as configured it is <b>inherently sequential</b>: game n+1 is played <i>by</i> the values that game n just
+                      updated (on-policy self-play). Watching does not force synchrony onto a parallel algorithm; the beat only sets the
+                      clock between plies. ▶ run executes the identical chain at full speed — step, watch, and run all produce
+                      <b> bit-for-bit the same numbers</b> (that reproducibility is bought by the fixed sequence). Where this family
+                      <i>does</i> parallelize: independent <b>seeds</b> — the mean&nbsp;±&nbsp;spread fold at budget completion is exactly
+                      that — and large deep-RL systems (A3C, AlphaZero) run many self-play workers against a slightly-stale shared
+                      network because their games are expensive and their models huge. Here a game takes milliseconds and the model is
+                      six numbers, so parallel workers would buy nothing and cost the reproducibility.
+                    </p>
+
+                    <h4>Watching it progress</h4>
+                    <ul>
+                      <li><b>game n / budget</b> — position in the run; ε and α (learning rate) anneal across it.</li>
+                      <li><b>W · D · L</b> — training outcomes. Variety is signal; all-draws means the board is giving the learner no gradient.</li>
+                      <li><b>vs random</b> — every 25 games, greedy-with-current-values plays 16 seeded games against a fixed random opponent
+                        (0.5 = parity, 1.0 = sweep). The history line under W·D·L is the learning curve as numbers.</li>
+                      <li><b>Learned values — live</b> — weights separating from the equal start; Δ is the last displayed update; greyed
+                        rows never received signal; pawn&nbsp;=&nbsp;1 ratios are the reading.</li>
+                      <li><b>At completion</b> — the run refolds across sibling seeds into mean&nbsp;±&nbsp;spread next to the chess
+                        defaults: small spread = a real value of this board, large spread = seed noise.</li>
+                    </ul>
+
+                    <h4>What is saved</h4>
+                    <p>
+                      Plainly: <b>this session lives in this page</b>. Pause and Stop hold it while the tab stays open; Reset, switching
+                      level, or closing the tab discards it. &ldquo;Keep result&rdquo; pins the completed table for this session only —
+                      <b> nothing is written to your account yet</b>, and there is no named run record for this pane (the Cluster tab&apos;s
+                      runs are persisted; these are not). The consolation is determinism: a run&apos;s whole identity is
+                      (board, master seed, settings) — re-running the same seed replays the same games to the same values, so nothing
+                      here is unrecoverable, only un-stored.
+                    </p>
+
+                    <h4>Becoming a level&apos;s AI</h4>
+                    <p>
+                      The live opponent resolves its evaluation weights per level in three tiers, checked before every enemy reply:
+                      your personally <b>adopted</b> champion → the globally <b>shipped</b> weights → the built-in defaults. Today that
+                      path is fed from the <b>Training</b> tab: an SPRT-validated champion is adopted there, and audited under
+                      &ldquo;Live enemy weights (this level)&rdquo;. <b>This pane&apos;s learned values do not flow into that path yet</b> —
+                      the bridge (learned piece values → the evaluation vector&apos;s piece-value terms → the same Adopt) is the next
+                      piece of the pipeline. Until it lands, treat this pane as the measuring instrument, not the assignment.
+                    </p>
+
+                    <h4>Keys</h4>
+                    <p className="gym-td-help-keys">
+                      <b>Space</b> watch/pause · <b>→</b> step forward · <b>Shift+→</b> ten plies · <b>←</b> back one position
+                      (view only — nothing un-learns) · <b>Home/End</b> first/latest
+                    </p>
+                  </div>
                 ) : (
                   <div className={`gym-td-split ${tdReplayPanel ? 'has-stage' : ''}`.trim()}>
                   <div className="gym-td-left">
@@ -1561,6 +1660,17 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   <span className="wdl"><b className="w">{tdSess.train.outcomes.playerWins}</b> W · <b className="d">{tdSess.train.outcomes.draws}</b> D · <b className="l">{tdSess.train.outcomes.enemyWins}</b> L</span>
                   <span className="gym-hint">training-game outcomes (exploration on) — player wins / draws / enemy wins</span>
                 </div>
+
+                {tdProbeLog.length ? (
+                  <div className="gym-td-probelog" aria-label="Probe history">
+                    <span className="h">vs random over the run — greedy with the current values, 0.5 = parity</span>
+                    <div className="rows">
+                      {tdProbeLog.map((p) => (
+                        <span key={p.game}>@{p.game} <b className="gym-num">{p.winRate.toFixed(3)}</b></span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div>
                   <h3>Learned values — live</h3>
@@ -1843,6 +1953,10 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                     onChange={(e) => setTdBeatMs(tdSliderToBeat(Number(e.target.value)))} aria-label="Watch tempo" />
                   <b className="gym-num">{tdBeatReadout(tdBeatMs)}</b>
                 </label>
+                <div className="gym-run-row">
+                  <button type="button" onClick={() => setTdHelp((h) => !h)} aria-pressed={tdHelp}
+                    title="What this algorithm is, how to read its progress, what is saved, and how it becomes a level's AI">? how this works</button>
+                </div>
                 {!tdReady ? <p className="gym-hint">Preparing learner…</p>
                   : tdWatching ? <p className="gym-hint">Watching — the system plays by itself, one step per beat; each game&apos;s update lands as it ends. Pause (or ⏹) any time; nothing is ever half-applied.</p>
                   : tdBusy ? <p className="gym-hint">{tdSummarizing ? 'Folding sibling seeds into the mean ± spread table…' : 'Playing training games — Stop lands between games, nothing half-applied.'}</p>
