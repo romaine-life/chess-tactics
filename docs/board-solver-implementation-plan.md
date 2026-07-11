@@ -421,16 +421,15 @@ It plays by *exactly* the live rules — every move, terminal, promotion, and ch
 
 ### Victory-rule terminal oracle (F1 — correctness-critical)
 
-The solver's terminal check MUST reproduce the store's exact decision. Implement a small helper `terminalOutcome(state, input): Winner` in `input.ts`/`retrograde.ts` that mirrors store.ts:466/533/619:
+The solver's terminal check MUST call the same `core/adjudication.ts`
+`adjudicateCommittedPosition` primitive as live play, netplay, AI and self-play. `SolverInput`
+carries the exact resolved rule list once (`victoryRulesForLevel(level, input.ctx)`), and each
+position supplies its own `turnsElapsed` plus movement environment. The one shared order is:
+ordered victory rules, then checkmate/stalemate, then enabled chess draws.
 
-```ts
-// input.ts carries the resolved rule set + ctx once (they are static per level):
-input.victoryRules = level.victory ?? victoryRulesForObjective(level.objective, input.ctx);
-// per position (input.ctx augmented with per-position turnsElapsed where it matters):
-const { winner } = resolveVictory(state, input.victoryRules, { ...input.ctx, turnsElapsed });
-```
-
-The full terminal decision is the store/AI/self-play **triple**: (a) `applyMove`'s last-side-standing `winner` (piece-count only — does NOT flag a king capture), (b) `resolveVictory(state, victoryRules, ctx)` (this is what decides king-capture / objective wins, using `level.victory` when present), and (c) the stuck-side rule (no legal move ⇒ checkmate/loss if `sideInCheck` else stalemate/draw). Using `evaluateObjective` instead of `resolveVictory(...,victoryRules,...)` is the F1 bug and is forbidden.
+`applyMove` is mechanics-only and never stamps a last-side-standing winner. Recreating the old
+store/AI/self-play terminal triple, rebuilding rules from only `objective`, or calling
+`evaluateObjective` in a consumer is the F1 parallel-game bug and is forbidden by ADR-0077.
 
 ### Files
 

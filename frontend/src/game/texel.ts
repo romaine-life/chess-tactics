@@ -33,7 +33,7 @@ import {
   type SearchContext,
   type SearchOptions,
 } from '../core/ai';
-import { objectiveContextForLevel, kingSideOf } from '../core/objectives';
+import { objectiveContextForLevel, kingSideOf, victoryRulesForLevel } from '../core/objectives';
 import { playLevelGame, replayStates, type GameRecord, type RecordedMove } from './selfplay';
 import { encodeWeights, decodeWeights, deriveScales } from './tuning';
 import type { BookPosition } from './openingBook';
@@ -96,10 +96,14 @@ export function labelGamePositions(
   if (states.length === 0) return [];
   const baseEnv = gameEnv(states[0]);
   const ctx = { ...objectiveContextForLevel(level), kingSide: kingSideOf(states[0].pieces) };
+  const victoryRules = victoryRulesForLevel(level, ctx);
   const label = resultLabel(record.winner);
 
   const out: LabeledPosition[] = [];
-  let turnsElapsed = 0;
+  // replayStates index 0 is already AFTER the fixed opening. Every recorded
+  // enemy opening ply completed one player→enemy round and must be present in
+  // survive/turn-limit evaluation from the first labeled decision position.
+  let turnsElapsed = openingMoves.filter((m) => m.side === 'enemy').length;
   for (let i = 0; i < states.length; i += 1) {
     const state = states[i];
     // A full round completed when the previous state was the enemy's turn and this one
@@ -108,7 +112,7 @@ export function labelGamePositions(
     if (state.winner || (state.turn !== 'player' && state.turn !== 'enemy')) continue;
     const env: MoveEnv = { ...baseEnv, lastMove: state.lastMove };
     if (!isQuiet(state, env)) continue;
-    out.push({ state, sctx: { objective: level.objective, ctx, turnsElapsed }, env, label });
+    out.push({ state, sctx: { objective: level.objective, victoryRules, ctx, turnsElapsed }, env, label });
   }
   return out;
 }

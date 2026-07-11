@@ -117,14 +117,15 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
 
 ## Verifying backend / multiplayer changes (NO Postgres needed)
 
-The whole lobby/netplay surface (host/join/level/start/moves/resign/leave) lives in an
-in-memory Map — those routes never touch the database, and the server boots and serves
-them even with no DB configured (`server.js` starts anyway and only 503s the *persistence*
-endpoints). So multiplayer features are fully testable locally without Postgres:
+Live lobby state and move/result relay live in an in-memory Map. Production level selection
+and Start deliberately read the canonical official level from Postgres so a client cannot
+author timing metadata and reconnect can pin the exact content snapshot. The DB-free protocol
+smoke supplies canonical test content through an explicit `NODE_ENV=test`-only seam; gameplay
+protocol changes therefore remain fully testable locally without Postgres:
 
 ```
 cd backend && npm ci        # for the smoke test's OWN `node` run — `npm run dev` auto-installs this itself
-node netplay-smoke-test.js  # boots the server DB-free, exercises the lobby/netplay lifecycle
+node netplay-smoke-test.js  # boots DB-free with canonical test content; exercises lobby/netplay
 ```
 
 `netplay-smoke-test.js` is the go-to for any lobby/netplay change — it runs anywhere in

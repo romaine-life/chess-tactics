@@ -16,8 +16,9 @@ import type { GameState, Piece, PieceType, Side, Vec, Winner } from '../types';
 import type { Level, VictoryRules } from '../level';
 import type { MoveEnv } from '../rules';
 import type { ObjectiveContext } from '../objectives';
-import { gameEnv, legalMoves, livingPieces, sideInCheck } from '../rules';
-import { kingSideOf, objectiveContextForLevel, resolveVictory, victoryRulesForObjective } from '../objectives';
+import { gameEnv } from '../rules';
+import { kingSideOf, objectiveContextForLevel, victoryRulesForLevel } from '../objectives';
+import { adjudicateCommittedPosition } from '../adjudication';
 import { isPassableTerrain } from '../terrain';
 import { createFromLevel } from '../../game/setup';
 
@@ -165,7 +166,7 @@ export function toSolverInput(level: Level, seed = 0): SolverInput {
   const env = gameEnv(start); // no lastMove — added per ply by callers that need it (F6)
 
   const ctx: ObjectiveContext = { ...objectiveContextForLevel(level), kingSide: kingSideOf(start.pieces) };
-  const victoryRules: VictoryRules = level.victory ?? victoryRulesForObjective(level.objective, ctx);
+  const victoryRules: VictoryRules = victoryRulesForLevel(level, ctx);
   const clockMatters = objectiveNeedsClock(level, victoryRules);
   const clockCeil = clockCeilFor(clockMatters, ctx, victoryRules);
 
@@ -215,39 +216,18 @@ export function toSolverInput(level: Level, seed = 0): SolverInput {
 }
 
 /**
- * The store/AI/self-play terminal decision triple (F1), reproduced exactly:
- *  (a) `applyMove`'s last-side-standing winner (piece-count only — captured in `state.winner`),
- *  (b) `resolveVictory(state, victoryRules, {...ctx, turnsElapsed})` — the objective / king-capture
- *      decision, using `level.victory` when present,
- *  (c) the stuck-side rule: a side to move with no legal move loses if in check (checkmate),
- *      draws otherwise (stalemate).
+ * The canonical live/AI/self-play committed-position decision (F1), reproduced
+ * by calling the shared adjudicator with the solver's exact resolved rule list.
  * Returns the Winner: a side, 'draw', or null while undecided. Pure.
- *
- * Note the ordering mirrors the live store: (a) first (a wipe is already recorded in
- * state.winner by applyMove and turns the game 'done'), then (b) the objective rules,
- * then (c) the stuck-side fallback for the side whose turn it is.
  */
 export function terminalOutcome(state: GameState, input: SolverInput, turnsElapsed: number): Winner {
-  // (a) last-side-standing (applyMove already set winner + turn='done' on a wipe).
   if (state.winner) return state.winner;
-
-  // (b) objective / king-capture rules (F1) — clock threaded per position.
-  const { winner } = resolveVictory(state, input.victoryRules, { ...input.ctx, turnsElapsed });
-  if (winner) return winner;
-
-  // (c) stuck-side rule: no legal move for the side to move.
-  const side = state.turn;
-  if (side !== 'player' && side !== 'enemy') return null;
-  const movers = livingPieces(state.pieces, side);
-  const envWithLast: MoveEnv = input.env; // no lastMove: en-passant boards are refused upstream
-  let hasMove = false;
-  for (const p of movers) {
-    if (legalMoves(p, state.pieces, state.size, envWithLast).length > 0) { hasMove = true; break; }
-  }
-  if (hasMove) return null;
-  // Stuck: checkmate (loss for the stuck side) if in check, else stalemate (draw).
-  if (sideInCheck(state, side, envWithLast)) {
-    return side === 'player' ? 'enemy' : 'player';
-  }
-  return 'draw';
+  return adjudicateCommittedPosition(state, {
+    victoryRules: input.victoryRules,
+    ctx: input.ctx,
+    turnsElapsed,
+    // En-passant/hidden-ledger boards are refused upstream; decoded retrograde
+    // states intentionally have no dynamic lastMove, which the adjudicator keeps.
+    env: input.env,
+  })?.winner ?? null;
 }

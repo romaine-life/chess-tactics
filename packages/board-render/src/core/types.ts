@@ -239,5 +239,4 @@ export type GameEvent =
   | { kind: 'moved'; pieceId: string; from: Vec; to: Vec }
   | { kind: 'captured'; pieceId: string; by: string }
   | { kind: 'promoted'; pieceId: string; to: PieceType }
-  | { kind: 'castled'; kingId: string; rookId: string }
-  | { kind: 'victory'; winner: Side };
+  | { kind: 'castled'; kingId: string; rookId: string };

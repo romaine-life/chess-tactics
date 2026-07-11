@@ -28,36 +28,26 @@
 // plain Monte-Carlo update (every afterstate regresses straight to the outcome — the
 // λ = 1 limit) as an A/B lever.
 //
-// Terminality is the live triple: (a) applyMove's last-side-standing winner, (b)
-// resolveVictory over `level.victory ?? victoryRulesForObjective(...)` (reused, not
-// forked — note game/selfplay.ts still routes through evaluateObjective, which ignores
-// authored level.victory; on authored-victory levels this file matches the SOLVER),
-// (c) the stuck-side rule (checkmate/stalemate); plus the committed-move chess draw
-// rules (ruleDraw) and a hard ply cap scored as a draw. Ordering: mid-game is
-// core/solver/input.ts `terminalOutcome` exactly ((a)→(b)→(c)); at PLY 0 the live game
-// checks stuck FIRST (store.newSkirmish's resolveIfPlayerStuck, selfplay's pre-loop
-// check) and playGame does the same — the solver keeps victory-first even at the root,
-// the one spot the repo's references disagree (observable only on double-terminal
-// authored starts).
+// Terminality routes through the same committed-position adjudicator as live play,
+// search, the solver, and self-play: exact resolved VictoryRules first, then
+// checkmate/stalemate, then authored chess draws. A hard training ply cap is still a
+// draw outside the authored game rules.
 //
 // Pure + deterministic (no DOM, no Date, no Math.random): every random draw comes from
 // core/rng seeded per game, so a given (level, opts) reproduces bit-for-bit on one JS
 // engine (sigmoid's Math.exp is the lone op with no cross-engine bit guarantee; the
 // rng itself is integer-exact).
 //
-// Named debt (ADR-0059): playGame is the repo's THIRD turn-loop skeleton (store,
-// selfplay, here) and terminalWinner re-states the solver's terminalOutcome. Blind
-// reuse was semantically wrong today — selfplay hard-codes searchBestAction and
-// evaluateObjective (no policy hook, no authored victory) and the solver's stuck env
-// omits lastMove (en-passant boards are refused upstream) where this learner must
-// thread it — but the shared extraction (a policy-pluggable turn loop / an
-// env-parameterized terminalOutcome) is owed, not waived.
+// Named debt (ADR-0059): playGame remains a separate policy-specific turn loop from
+// game/selfplay, but terminality is no longer copied; both consume the canonical core
+// adjudicator. A policy-pluggable shared runner remains the future consolidation.
 
 import type { GameState, Move, Side, Vec, Winner } from '../core/types';
 import type { Level, VictoryRules } from '../core/level';
 import type { MoveEnv } from '../core/rules';
-import { applyMove, gameEnv, legalMoves, livingPieces, recordPosition, ruleDraw, sideInCheck } from '../core/rules';
-import { kingSideOf, objectiveContextForLevel, resolveVictory, victoryRulesForObjective, type ObjectiveContext } from '../core/objectives';
+import { applyMove, gameEnv, legalMoves, livingPieces, recordPosition } from '../core/rules';
+import { kingSideOf, objectiveContextForLevel, victoryRulesForLevel, type ObjectiveContext } from '../core/objectives';
+import { adjudicateCommittedPosition } from '../core/adjudication';
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { createFromLevel } from './setup';
 import { createRng, type Rng } from '../core/rng';
@@ -209,40 +199,19 @@ interface GameFrame {
 function frameFor(level: Level, seed: number): GameFrame {
   const start = createFromLevel(level, seed);
   const ctx: ObjectiveContext = { ...objectiveContextForLevel(level), kingSide: kingSideOf(start.pieces) };
-  const rules: VictoryRules = level.victory ?? victoryRulesForObjective(level.objective, ctx);
+  const rules: VictoryRules = victoryRulesForLevel(level, ctx);
   return { start, baseEnv: gameEnv(start), ctx, rules };
 }
 
-/**
- * The stuck-side rule on its own: the side to move has no legal move — loses in
- * check (checkmate), draws otherwise (stalemate). Null when a move exists (or no
- * playable side is on turn). Split out because start-of-game resolution checks
- * this BEFORE the victory rules (the live order — see playGame), while every
- * later ply checks it after.
- */
-function stuckWinner(state: GameState, frame: GameFrame): Winner {
-  const side = state.turn;
-  if (side !== 'player' && side !== 'enemy') return null;
-  const env: MoveEnv = { ...frame.baseEnv, lastMove: state.lastMove };
-  for (const p of livingPieces(state.pieces, side)) {
-    if (legalMoves(p, state.pieces, state.size, env).length > 0) return null;
-  }
-  return sideInCheck(state, side, env) ? (side === 'player' ? 'enemy' : 'player') : 'draw';
-}
-
-/**
- * The mid-game terminal triple on a settled position (reproduces core/solver/input.ts
- * `terminalOutcome` exactly): (a) applyMove's last-side-standing winner, (b)
- * resolveVictory over the frame's rules with the clock threaded, (c) the stuck-side
- * rule (checkmate/stalemate). Null while undecided. Committed-move draw rules
- * (ruleDraw) are the turn loop's job, not this function's — they need the committed
- * threefold table.
- */
+/** Canonical terminal winner for either a root or a committed/hypothetical successor. */
 function terminalWinner(state: GameState, frame: GameFrame, turnsElapsed: number): Winner {
   if (state.winner) return state.winner;
-  const { winner } = resolveVictory(state, frame.rules, { ...frame.ctx, turnsElapsed });
-  if (winner) return winner;
-  return stuckWinner(state, frame);
+  return adjudicateCommittedPosition(state, {
+    victoryRules: frame.rules,
+    ctx: frame.ctx,
+    turnsElapsed,
+    env: { ...frame.baseEnv, lastMove: state.lastMove },
+  })?.winner ?? null;
 }
 
 interface Action {
@@ -323,7 +292,7 @@ interface PlayedGame {
 /**
  * Play one full game under per-side policies. The turn loop mirrors game/selfplay.ts:
  * start-of-game resolution, then per ply choose → applyMove → recordPosition →
- * terminal triple → committed draw rules, with the ply cap scored as a draw.
+ * canonical adjudication, with the ply cap scored as a draw.
  */
 function playGame(level: Level, seed: number, policy: Record<'player' | 'enemy', SidePolicy>, maxPlies: number): PlayedGame {
   const frame = frameFor(level, seed);
@@ -334,13 +303,8 @@ function playGame(level: Level, seed: number, policy: Record<'player' | 'enemy',
   let turnsElapsed = 0;
   let plies = 0;
 
-  // Start-of-game resolution (a degenerate level can be over before any move).
-  // Ply-0 ORDER follows the live game — stuck FIRST, then victory rules (the store's
-  // newSkirmish runs resolveIfPlayerStuck before anything else; selfplay's pre-loop
-  // check does the same) — where the solver's terminalOutcome keeps victory-first
-  // even at the root. The repo's references disagree only there, and only on
-  // degenerate double-terminal authored starts.
-  let winner: Winner = stuckWinner(game, frame) ?? terminalWinner(game, frame, turnsElapsed);
+  // Initial and post-move positions use the same rule order.
+  let winner: Winner = terminalWinner(game, frame, turnsElapsed);
 
   while (!winner && plies < maxPlies && (game.turn === 'player' || game.turn === 'enemy')) {
     const side = game.turn;
@@ -363,10 +327,6 @@ function playGame(level: Level, seed: number, policy: Record<'player' | 'enemy',
     if (prevTurn === 'enemy' && game.turn !== 'enemy') turnsElapsed += 1;
 
     winner = terminalWinner(game, frame, turnsElapsed);
-    if (!winner) {
-      const draw = ruleDraw(game, { ...frame.baseEnv, lastMove: game.lastMove });
-      if (draw) winner = 'draw';
-    }
   }
 
   // Ply cap reached with no decision: a draw, exactly like selfplay.

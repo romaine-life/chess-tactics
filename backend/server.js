@@ -27,6 +27,24 @@ const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life')
 // (k8s/templates/deployment.yaml:17 `replicas: 1`, a hard invariant) — a second
 // pod would split the lobby state and the relay. No Redis; in-memory is fine for v1.
 const lobbies = new Map();
+const parsedLobbyTombstoneTtl = Number.parseInt(process.env.LOBBY_TOMBSTONE_TTL_MS, 10);
+const LOBBY_TOMBSTONE_TTL_MS = Number.isFinite(parsedLobbyTombstoneTtl) && parsedLobbyTombstoneTtl > 0
+  ? parsedLobbyTombstoneTtl
+  : 5 * 60 * 1000;
+
+// Production derives lobby eligibility only from the canonical official workspace.
+// The DB-free protocol smoke has no workspace store, so tests may inject a tiny metadata
+// map only under an explicit test process. Merely setting the metadata variable in any
+// non-test environment has no effect.
+let lobbyTestLevelMetadata = null;
+if (process.env.NODE_ENV === 'test' && process.env.LOBBY_TEST_LEVEL_METADATA) {
+  try {
+    const parsed = JSON.parse(process.env.LOBBY_TEST_LEVEL_METADATA);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) lobbyTestLevelMetadata = parsed;
+  } catch (error) {
+    console.warn('LOBBY_TEST_LEVEL_METADATA is invalid JSON and will be ignored:', error.message);
+  }
+}
 // SSE subscribers. Global list channel (lobby list changed) and per-lobby game
 // channels. Each per-lobby entry is { res, email } so the lobby frame can be
 // projected per-viewer (your_side / viewer_role depend on the viewer's email).
@@ -874,8 +892,10 @@ function publicLobbyUser(user) {
   };
 }
 
-function publicLobby(lobby, viewerEmail) {
-  return {
+function publicLobby(lobby, viewerEmail, { includeLevelSnapshot = false } = {}) {
+  const reports = lobby.resultReports || {};
+  const viewerSide = lobbySideForEmail(lobby, viewerEmail);
+  const projected = {
     id: lobby.id,
     name: lobby.name,
     phase: lobby.phase,
@@ -889,14 +909,24 @@ function publicLobby(lobby, viewerEmail) {
     },
     viewer_role: viewerEmail === lobby.host.email ? 'host' : (lobby.guest && viewerEmail === lobby.guest.email ? 'guest' : 'observer'),
     level_id: lobby.levelId ?? null,
+    level_timed: typeof lobby.levelTimed === 'boolean' ? lobby.levelTimed : null,
+    level_name: lobby.levelName ?? null,
+    level_objective: lobby.levelObjective ?? null,
     seed: lobby.seed ?? null,
     move_count: lobby.moves ? lobby.moves.length : 0,
-    // Terminal outcome (resignation) in board terms, or null while the match is live.
+    // Terminal outcome in canonical board terms, or null while the match is live.
     result: lobby.result ?? null,
-    your_side: viewerEmail === lobby.host.email
-      ? 'player'
-      : (lobby.guest && viewerEmail === lobby.guest.email ? 'enemy' : null),
+    // A deterministic result is authoritative only after both occupied seats report the
+    // exact same outcome. Expose the pending state without leaking either private report.
+    result_pending: !lobby.result && !lobby.resultDisputed && Boolean(reports.player || reports.enemy),
+    result_disputed: !lobby.result && Boolean(lobby.resultDisputed),
+    your_side: viewerSide,
   };
+  if (includeLevelSnapshot && viewerSide) {
+    projected.level_snapshot = lobby.levelSnapshot ?? null;
+    projected.level_fingerprint = lobby.levelFingerprint ?? null;
+  }
+  return projected;
 }
 
 function isObjectRecord(value) {
@@ -1444,6 +1474,7 @@ async function requireDesignPortfolioWriter(req, res) {
 }
 
 function activeLobbies() {
+  purgeExpiredLobbyTombstones();
   return Array.from(lobbies.values())
     .filter((lobby) => lobby.phase !== 'closed')
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -1451,6 +1482,106 @@ function activeLobbies() {
 
 function userActiveLobby(email) {
   return activeLobbies().find((lobby) => lobby.host.email === email || (lobby.guest && lobby.guest.email === email)) || null;
+}
+
+function userRecoverableLobbies(email) {
+  purgeExpiredLobbyTombstones();
+  return Array.from(lobbies.values())
+    .filter((lobby) => {
+      if (lobby.phase !== 'closed') return false;
+      const side = lobbySideForEmail(lobby, email);
+      return Boolean(side && !(lobby.departed && lobby.departed[side]));
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function lobbySideForEmail(lobby, email) {
+  if (lobby.host && lobby.host.email === email) return 'player';
+  if (lobby.guest && lobby.guest.email === email) return 'enemy';
+  return null;
+}
+
+function touchLobby(lobby) {
+  lobby.stateRevision = Number.isInteger(lobby.stateRevision) ? lobby.stateRevision + 1 : 1;
+  lobby.updatedAt = new Date().toISOString();
+}
+
+function lobbyStateMatches(lobby, expected) {
+  const current = lobbies.get(expected.id);
+  if (current !== lobby) return false;
+  if (lobby.stateRevision !== expected.revision) return false;
+  if (lobby.phase !== expected.phase) return false;
+  if ((lobby.host && lobby.host.email) !== expected.hostEmail) return false;
+  if ((lobby.guest && lobby.guest.email) !== expected.guestEmail) return false;
+  if (Object.hasOwn(expected, 'levelId') && lobby.levelId !== expected.levelId) return false;
+  return true;
+}
+
+function endLobbyStreams(lobbyId) {
+  const subs = lobbyChannelSubscribers.get(lobbyId);
+  if (!subs) return;
+  for (const sub of subs) {
+    try { sub.res.end(); } catch { /* already closed */ }
+  }
+  lobbyChannelSubscribers.delete(lobbyId);
+}
+
+// Closing a lobby turns its retained snapshot, moves, and result reports into
+// seat-private recovery data. Observers admitted while the lobby was public must
+// be disconnected before the first closed frame is broadcast.
+function restrictClosedLobbyStreams(lobby) {
+  if (lobby.phase !== 'closed') return;
+  const subs = lobbyChannelSubscribers.get(lobby.id);
+  if (!subs) return;
+  for (const sub of [...subs]) {
+    if (lobbySideForEmail(lobby, sub.email)) continue;
+    subs.delete(sub);
+    try { sub.res.end(); } catch { /* already closed */ }
+  }
+  if (subs.size === 0) lobbyChannelSubscribers.delete(lobby.id);
+}
+
+function deleteLobbyRecord(lobby, notify = true) {
+  endLobbyStreams(lobby.id);
+  lobbies.delete(lobby.id);
+  if (notify) broadcastLobbies();
+}
+
+function purgeExpiredLobbyTombstones() {
+  const now = Date.now();
+  let changed = false;
+  for (const lobby of lobbies.values()) {
+    if (lobby.phase !== 'closed' || !lobby.closedAt) continue;
+    const closedAt = Date.parse(lobby.closedAt);
+    if (Number.isFinite(closedAt) && now - closedAt >= LOBBY_TOMBSTONE_TTL_MS) {
+      endLobbyStreams(lobby.id);
+      lobbies.delete(lobby.id);
+      changed = true;
+    }
+  }
+  if (changed) broadcastLobbies();
+}
+
+function lobbyRecord(id) {
+  purgeExpiredLobbyTombstones();
+  return lobbies.get(id) || null;
+}
+
+function bothLobbySeatsDeparted(lobby) {
+  // A two-seat tombstone can be collected immediately once both original participants
+  // acknowledge it. A host-only tombstone remains until TTL because no enemy identity
+  // ever existed to acknowledge the second canonical seat.
+  return Boolean(
+    lobby.guest
+    && lobby.departed
+    && lobby.departed.player
+    && lobby.departed.enemy,
+  );
+}
+
+function isStartedLobbyLifecycle(lobby) {
+  return lobby.phase === 'started'
+    || (lobby.phase === 'closed' && lobby.closedFromPhase === 'started');
 }
 
 // ---------------------------------------------------------------------------
@@ -1501,7 +1632,10 @@ function broadcastToLobby(lobbyId, frame) {
 // Push the current lobby state to every game-channel subscriber, each correctly
 // projected for its own viewer. Use after any lobby-state change (start/leave/etc).
 function broadcastLobbyState(lobby) {
-  broadcastToLobby(lobby.id, (sub) => ({ type: 'lobby', lobby: publicLobby(lobby, sub.email) }));
+  broadcastToLobby(lobby.id, (sub) => ({
+    type: 'lobby',
+    lobby: publicLobby(lobby, sub.email, { includeLevelSnapshot: true }),
+  }));
 }
 
 const SSE_HEADERS = {
@@ -1724,9 +1858,11 @@ app.patch('/api/auth/me', async (req, res) => {
 app.get('/api/lobbies', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
+  const current = userActiveLobby(user.email);
   res.status(200).json({
     lobbies: activeLobbies().map((lobby) => publicLobby(lobby, user.email)),
-    current: userActiveLobby(user.email) ? publicLobby(userActiveLobby(user.email), user.email) : null,
+    current: current ? publicLobby(current, user.email) : null,
+    recoverable: userRecoverableLobbies(user.email).map((lobby) => publicLobby(lobby, user.email)),
   });
 });
 
@@ -1735,7 +1871,7 @@ app.post('/api/lobbies', async (req, res) => {
   if (!user) return;
   const existing = userActiveLobby(user.email);
   if (existing) {
-    res.status(200).json({ lobby: publicLobby(existing, user.email) });
+    res.status(200).json({ lobby: publicLobby(existing, user.email, { includeLevelSnapshot: true }) });
     return;
   }
   const now = new Date().toISOString();
@@ -1746,16 +1882,26 @@ app.post('/api/lobbies', async (req, res) => {
     phase: 'waiting',
     createdAt: now,
     updatedAt: now,
+    stateRevision: 0,
     host: user,
     guest: null,
     levelId: null,
+    levelTimed: null,
+    levelName: null,
+    levelObjective: null,
+    levelSnapshot: null,
+    levelFingerprint: null,
     seed: null,
     moves: [],
-    // Terminal outcome from a non-move event (a player resigning). `null` while the
-    // match is live; once set, both clients read it off the lobby frame and end the
-    // game — so it survives reconnect/late-join the way the move log does. Checkmate/
-    // stalemate/objective ends stay purely client-side (deterministic replay).
+    // Terminal outcome reported by deterministic gameplay or caused by resignation.
+    // Once set, both clients read it off the lobby frame, so it survives reconnect and
+    // late join the way the authoritative move log does.
     result: null,
+    resultReports: { player: null, enemy: null },
+    resultDisputed: false,
+    departed: { player: false, enemy: false },
+    closedAt: null,
+    closedFromPhase: null,
   };
   lobbies.set(id, lobby);
   broadcastLobbies();
@@ -1785,18 +1931,18 @@ app.get('/api/lobbies/events', async (req, res) => {
 app.get('/api/lobbies/:id', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby || (lobby.phase === 'closed' && !lobbySideForEmail(lobby, user.email))) {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
   }
-  res.status(200).json({ lobby: publicLobby(lobby, user.email) });
+  res.status(200).json({ lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) });
 });
 
 app.post('/api/lobbies/:id/join', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
+  const lobby = lobbyRecord(req.params.id);
   if (!lobby || lobby.phase === 'closed') {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
@@ -1815,18 +1961,52 @@ app.post('/api/lobbies/:id/join', async (req, res) => {
     return;
   }
   lobby.guest = user;
+  lobby.departed.enemy = false;
   lobby.phase = 'ready';
-  lobby.updatedAt = new Date().toISOString();
+  touchLobby(lobby);
   broadcastLobbies();
   broadcastLobbyState(lobby);
   res.status(200).json({ lobby: publicLobby(lobby, user.email) });
 });
 
-// Host picks the level (before start). phase must be waiting|ready.
+async function canonicalLobbyLevelMetadata(levelId) {
+  if (process.env.NODE_ENV === 'test' && lobbyTestLevelMetadata) {
+    const testEntry = lobbyTestLevelMetadata[levelId];
+    if (isObjectRecord(testEntry) && isObjectRecord(testEntry.level)) {
+      if (Number.isInteger(testEntry.delayMs) && testEntry.delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, testEntry.delayMs));
+      }
+      return { timed: Boolean(testEntry.level.timeControl), level: testEntry.level };
+    }
+  }
+  // Do not use the OG/thumbnail last-good cache here. Match authority must read the
+  // current canonical document at both selection and Start and fail closed on DB loss.
+  try {
+    const document = await dbGetOfficialCampaigns('default');
+    const data = document && document.data;
+    const level = data && isObjectRecord(data.levels) && data.levels[levelId];
+    if (!isObjectRecord(level)) return null;
+    return { timed: Boolean(level.timeControl), level };
+  } catch (error) {
+    console.warn('canonical lobby level lookup failed:', error.message);
+    return null;
+  }
+}
+
+function immutableLobbyLevelSnapshot(level) {
+  const serialized = JSON.stringify(level);
+  return {
+    level: JSON.parse(serialized),
+    fingerprint: `sha256:${crypto.createHash('sha256').update(serialized).digest('hex')}`,
+  };
+}
+
+// Host picks a canonical official level (before start). Timing eligibility is derived
+// server-side from that level; request metadata is never trusted.
 app.post('/api/lobbies/:id/level', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
+  const lobby = lobbyRecord(req.params.id);
   if (!lobby || lobby.phase === 'closed') {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
@@ -1839,13 +2019,35 @@ app.post('/api/lobbies/:id/level', async (req, res) => {
     res.status(409).json({ error: 'lobby_already_started' });
     return;
   }
-  const levelId = req.body && typeof req.body.levelId === 'string' ? req.body.levelId.trim() : '';
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const levelId = typeof body.levelId === 'string' ? body.levelId.trim() : '';
   if (!levelId) {
     res.status(400).json({ error: 'missing_level_id' });
     return;
   }
+  const expectedState = {
+    id: lobby.id,
+    revision: lobby.stateRevision,
+    phase: lobby.phase,
+    hostEmail: lobby.host.email,
+    guestEmail: lobby.guest && lobby.guest.email,
+  };
+  const metadata = await canonicalLobbyLevelMetadata(levelId);
+  if (!lobbyStateMatches(lobby, expectedState)) {
+    res.status(409).json({ error: 'lobby_state_changed' });
+    return;
+  }
+  if (!metadata) {
+    res.status(404).json({ error: 'level_not_found' });
+    return;
+  }
   lobby.levelId = levelId;
-  lobby.updatedAt = new Date().toISOString();
+  lobby.levelTimed = metadata.timed;
+  lobby.levelName = typeof metadata.level.name === 'string' ? metadata.level.name : levelId;
+  lobby.levelObjective = typeof metadata.level.objective === 'string' ? metadata.level.objective : null;
+  lobby.levelSnapshot = null;
+  lobby.levelFingerprint = null;
+  touchLobby(lobby);
   broadcastLobbies();
   broadcastLobbyState(lobby);
   res.status(200).json({ lobby: publicLobby(lobby, user.email) });
@@ -1854,13 +2056,26 @@ app.post('/api/lobbies/:id/level', async (req, res) => {
 app.post('/api/lobbies/:id/start', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby) {
     res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  if (lobby.phase === 'closed') {
+    const isSeated = Boolean(lobbySideForEmail(lobby, user.email));
+    res.status(isSeated ? 409 : 404).json({ error: isSeated ? 'lobby_closed' : 'lobby_not_found' });
     return;
   }
   if (lobby.host.email !== user.email) {
     res.status(403).json({ error: 'host_only' });
+    return;
+  }
+  if (lobby.phase === 'started') {
+    res.status(409).json({ error: 'lobby_already_started' });
+    return;
+  }
+  if (lobby.phase !== 'ready') {
+    res.status(409).json({ error: 'lobby_not_ready' });
     return;
   }
   if (!lobby.guest) {
@@ -1871,80 +2086,291 @@ app.post('/api/lobbies/:id/start', async (req, res) => {
     res.status(409).json({ error: 'no_level' });
     return;
   }
+  const selectedLevelId = lobby.levelId;
+  const expectedState = {
+    id: lobby.id,
+    revision: lobby.stateRevision,
+    phase: 'ready',
+    hostEmail: lobby.host.email,
+    guestEmail: lobby.guest && lobby.guest.email,
+    levelId: selectedLevelId,
+  };
+  // Re-resolve at the transition boundary: official content can be republished between
+  // selection and Start, so cached eligibility is presentation only, never authority.
+  const currentLevelMetadata = await canonicalLobbyLevelMetadata(selectedLevelId);
+  if (!lobbyStateMatches(lobby, expectedState)) {
+    res.status(409).json({ error: 'lobby_state_changed' });
+    return;
+  }
+  if (!currentLevelMetadata) {
+    res.status(409).json({ error: 'level_not_found' });
+    return;
+  }
+  lobby.levelTimed = currentLevelMetadata.timed;
+  lobby.levelName = typeof currentLevelMetadata.level.name === 'string'
+    ? currentLevelMetadata.level.name
+    : selectedLevelId;
+  lobby.levelObjective = typeof currentLevelMetadata.level.objective === 'string'
+    ? currentLevelMetadata.level.objective
+    : null;
+  if (lobby.levelTimed) {
+    touchLobby(lobby);
+    broadcastLobbies();
+    broadcastLobbyState(lobby);
+    res.status(409).json({ error: 'timed_level_unsupported' });
+    return;
+  }
+  const pinnedLevel = immutableLobbyLevelSnapshot(currentLevelMetadata.level);
+  lobby.levelSnapshot = pinnedLevel.level;
+  lobby.levelFingerprint = pinnedLevel.fingerprint;
   // Lock a positive-integer seed for deterministic shared placement (crypto so it
   // is not predictable). Both clients build the identical board from (level, seed).
   lobby.seed = 1 + (crypto.randomInt ? crypto.randomInt(900000) : Math.floor(Math.random() * 900000));
-  // Fresh match: drop any relayed moves and terminal result from a prior game played in
-  // this lobby (a lobby is reusable — e.g. a guest leaves after a match and a new one
-  // joins), so both clients start from an empty log rather than backfilling the old game.
+  // Initialize the one match owned by this ready lobby. A started lobby cannot be reset;
+  // rematch requires a new coordinated server operation.
   lobby.moves = [];
   lobby.result = null;
+  lobby.resultReports = { player: null, enemy: null };
+  lobby.resultDisputed = false;
+  lobby.departed = { player: false, enemy: false };
+  lobby.closedAt = null;
+  lobby.closedFromPhase = null;
   lobby.phase = 'started';
-  lobby.updatedAt = new Date().toISOString();
+  touchLobby(lobby);
   broadcastLobbies();
   broadcastLobbyState(lobby);
-  res.status(200).json({ lobby: publicLobby(lobby, user.email) });
+  res.status(200).json({ lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) });
 });
+
+const LOBBY_INTENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const LOBBY_PROMOTIONS = new Set(['queen', 'rook', 'bishop', 'knight']);
+
+function sameLobbyRelayMove(a, b) {
+  return Boolean(
+    a && b
+    && a.x === b.x
+    && a.y === b.y
+    && (a.promotion ?? null) === (b.promotion ?? null),
+  );
+}
 
 // Relay one applyMove. Caller must be host/guest; lobby must be started. The
 // server does NOT validate chess legality — clients do (deterministic replay).
 app.post('/api/lobbies/:id/moves', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby) {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
   }
-  const isHost = lobby.host.email === user.email;
-  const isGuest = lobby.guest && lobby.guest.email === user.email;
-  if (!isHost && !isGuest) {
+  const callerSide = lobbySideForEmail(lobby, user.email);
+  if (!callerSide) {
     res.status(409).json({ error: 'not_in_lobby' });
     return;
   }
-  if (lobby.phase !== 'started') {
-    res.status(409).json({ error: 'lobby_not_started' });
-    return;
-  }
-  // The match is already decided by a resignation — no further moves are relayed. (A
-  // well-behaved client stops sending once its board shows a winner; this guards a
-  // stale/racing POST from re-opening a finished game.)
-  if (lobby.result) {
-    res.status(409).json({ error: 'match_over' });
-    return;
-  }
   const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const expectedMoveCount = body.expectedMoveCount;
+  if (!Number.isInteger(expectedMoveCount) || expectedMoveCount < 0) {
+    res.status(400).json({ error: 'bad_expected_move_count', move_count: lobby.moves.length });
+    return;
+  }
+  const intentId = body.intentId;
+  if (typeof intentId !== 'string' || !LOBBY_INTENT_ID_PATTERN.test(intentId)) {
+    res.status(400).json({ error: 'bad_intent_id' });
+    return;
+  }
   const pieceId = typeof body.pieceId === 'string' ? body.pieceId : '';
   const move = body.move;
   if (
     !pieceId ||
     !move || typeof move !== 'object' || Array.isArray(move) ||
     typeof move.x !== 'number' || !Number.isFinite(move.x) ||
-    typeof move.y !== 'number' || !Number.isFinite(move.y)
+    typeof move.y !== 'number' || !Number.isFinite(move.y) ||
+    (move.promotion !== undefined && !LOBBY_PROMOTIONS.has(move.promotion))
   ) {
     res.status(400).json({ error: 'bad_move' });
+    return;
+  }
+  const relayMove = move.promotion === undefined
+    ? { x: move.x, y: move.y }
+    : { x: move.x, y: move.y, promotion: move.promotion };
+
+  // Intent identity is checked before terminal/count/turn gates. An HTTP retry of the
+  // original body therefore returns the original ordered event even though its expected
+  // index is now stale; reusing the id for any different request is a protocol conflict.
+  const priorIntent = lobby.moves.find((event) => event.intentId === intentId);
+  if (priorIntent) {
+    const identical = priorIntent.side === callerSide
+      && priorIntent.i === expectedMoveCount
+      && priorIntent.pieceId === pieceId
+      && sameLobbyRelayMove(priorIntent.move, relayMove);
+    if (!identical) {
+      res.status(409).json({ error: 'intent_id_conflict', move_count: lobby.moves.length, move: priorIntent });
+      return;
+    }
+    res.status(200).json({ move: priorIntent });
+    return;
+  }
+
+  if (lobby.phase === 'closed') {
+    res.status(409).json({ error: 'lobby_closed' });
+    return;
+  }
+  if (lobby.phase !== 'started') {
+    res.status(409).json({ error: 'lobby_not_started' });
+    return;
+  }
+
+  // The match is already decided by a published deterministic result or resignation —
+  // no new intents are relayed. This guards a stale/racing POST from re-opening it.
+  if (lobby.result) {
+    res.status(409).json({ error: 'match_over' });
+    return;
+  }
+  if (lobby.resultDisputed) {
+    res.status(409).json({ error: 'result_disputed', move_count: lobby.moves.length });
+    return;
+  }
+  const pendingReports = lobby.resultReports || {};
+  if (pendingReports.player || pendingReports.enemy) {
+    res.status(409).json({ error: 'result_pending', move_count: lobby.moves.length });
+    return;
+  }
+  // expectedMoveCount gates only a genuinely new intent.
+  if (expectedMoveCount !== lobby.moves.length) {
+    res.status(409).json({ error: 'stale_move', move_count: lobby.moves.length });
     return;
   }
   // Turn integrity: the client store applies moves without AP mode, so every move flips
   // the turn — strict one-move-per-turn alternation. Host ('player') therefore posts at
   // EVEN relay indices, guest ('enemy') at odd. Reject a post from the side whose turn it
   // isn't, so a tampered/misbehaving client can't move out of turn (which desyncs boards).
-  const expectHost = lobby.moves.length % 2 === 0;
-  if (isHost !== expectHost) {
+  const expectedSide = lobby.moves.length % 2 === 0 ? 'player' : 'enemy';
+  if (callerSide !== expectedSide) {
     res.status(409).json({ error: 'not_your_turn' });
     return;
   }
   const event = {
     i: lobby.moves.length,
-    side: isHost ? 'player' : 'enemy',
+    side: callerSide,
+    intentId,
     pieceId,
-    move,
+    move: relayMove,
   };
   lobby.moves.push(event);
-  lobby.updatedAt = new Date().toISOString();
+  touchLobby(lobby);
   broadcastToLobby(lobby.id, { type: 'move', move: event });
   res.status(200).json({ move: event });
 });
+
+const LOBBY_PLAYING_SIDES = new Set(['player', 'enemy']);
+const LOBBY_DRAW_REASONS = new Set(['stalemate', 'fifty-move', 'threefold']);
+const LOBBY_WIN_REASONS = new Set(['victory-rule', 'checkmate']);
+
+function sameLobbyResult(a, b) {
+  return Boolean(a && b && a.winner === b.winner && a.reason === b.reason);
+}
+
+function sameLobbyResultReport(a, b) {
+  return Boolean(
+    a && b
+    && a.expectedMoveCount === b.expectedMoveCount
+    && sameLobbyResult(a, b),
+  );
+}
+
+// Persist and publish an authoritative terminal result while the current seats/phase
+// still exist. Deterministic callers reach this only after matching two-seat consensus;
+// explicit resignation/Leave are server-authored concessions and clear any dispute.
+function publishLobbyResult(lobby, result) {
+  if (lobby.result) return sameLobbyResult(lobby.result, result) ? 'identical' : 'conflict';
+  lobby.result = result;
+  lobby.resultDisputed = false;
+  touchLobby(lobby);
+  broadcastLobbyState(lobby);
+  broadcastLobbies();
+  return 'published';
+}
+
+function parseDeterministicLobbyResult(lobby, raw) {
+  const body = isObjectRecord(raw) ? raw : {};
+  const expectedMoveCount = body.expectedMoveCount;
+  if (!Number.isInteger(expectedMoveCount) || expectedMoveCount < 0) {
+    return { status: 400, body: { error: 'bad_expected_move_count', move_count: lobby.moves.length } };
+  }
+  if (expectedMoveCount !== lobby.moves.length) {
+    return { status: 409, body: { error: 'stale_result', move_count: lobby.moves.length } };
+  }
+
+  const winner = body.winner;
+  const reason = body.reason;
+  const isDraw = winner === 'draw' && LOBBY_DRAW_REASONS.has(reason);
+  const isWin = LOBBY_PLAYING_SIDES.has(winner) && LOBBY_WIN_REASONS.has(reason);
+  if (!isDraw && !isWin) {
+    return { status: 400, body: { error: 'bad_result' } };
+  }
+  return { report: { expectedMoveCount, winner, reason } };
+}
+
+function recordDeterministicLobbyResult(lobby, reportingSide, raw) {
+  const parsed = parseDeterministicLobbyResult(lobby, raw);
+  if (!parsed.report) return parsed;
+  const reports = lobby.resultReports || (lobby.resultReports = { player: null, enemy: null });
+  const previous = reports[reportingSide];
+  if (previous) {
+    if (!sameLobbyResultReport(previous, parsed.report)) {
+      return {
+        status: 409,
+        body: { error: 'conflicting_result_report', move_count: lobby.moves.length, report: previous },
+      };
+    }
+    // Critical for SSE stability: a same-seat retry is a read-only acknowledgement.
+    return {
+      report: previous,
+      publication: lobby.result ? 'published' : (lobby.resultDisputed ? 'disputed' : 'pending'),
+    };
+  }
+
+  if (lobby.result) {
+    return {
+      status: 409,
+      body: { error: 'match_over', move_count: lobby.moves.length, result: lobby.result },
+    };
+  }
+
+  const otherSide = reportingSide === 'player' ? 'enemy' : 'player';
+  const other = reports[otherSide];
+  if (other && !sameLobbyResultReport(other, parsed.report)) {
+    // Both deterministic clients have stopped on different terminal states. Preserve
+    // both immutable reports and freeze the exact prefix for explicit user resolution.
+    reports[reportingSide] = parsed.report;
+    lobby.resultDisputed = true;
+    touchLobby(lobby);
+    broadcastLobbyState(lobby);
+    broadcastLobbies();
+    return {
+      status: 409,
+      body: {
+        error: 'conflicting_result_report',
+        move_count: lobby.moves.length,
+        report: other,
+        result_disputed: true,
+      },
+    };
+  }
+
+  reports[reportingSide] = parsed.report;
+  if (other) {
+    publishLobbyResult(lobby, { winner: parsed.report.winner, reason: parsed.report.reason });
+    return { report: parsed.report, publication: 'published' };
+  }
+
+  touchLobby(lobby);
+  broadcastLobbyState(lobby);
+  broadcastLobbies();
+  return { report: parsed.report, publication: 'pending' };
+}
 
 // Resign the match. Caller must be host/guest; lobby must be started. Records a
 // terminal result (the OTHER side wins) on the lobby and pushes it to both clients
@@ -1954,7 +2380,7 @@ app.post('/api/lobbies/:id/moves', async (req, res) => {
 app.post('/api/lobbies/:id/resign', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
+  const lobby = lobbyRecord(req.params.id);
   if (!lobby || lobby.phase === 'closed') {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
@@ -1970,22 +2396,49 @@ app.post('/api/lobbies/:id/resign', async (req, res) => {
     return;
   }
   // Idempotent: a double-tap (or both players racing to resign) keeps the first result.
-  if (!lobby.result) {
-    lobby.result = { winner: isHost ? 'enemy' : 'player', reason: 'resign' };
-    lobby.updatedAt = new Date().toISOString();
-    broadcastLobbyState(lobby);
-    broadcastLobbies();
-  }
-  res.status(200).json({ lobby: publicLobby(lobby, user.email) });
+  publishLobbyResult(lobby, {
+    winner: isHost ? 'enemy' : 'player',
+    reason: 'resign',
+  });
+  res.status(200).json({ lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) });
 });
 
-// Backfill relayed moves since index N (reconnect / late join). Same visibility
-// as GET /api/lobbies/:id (host/guest/observer — lobby exists & not closed).
+// Publish a terminal outcome reached by deterministic gameplay. Either seated client
+// may report it, but it must describe the exact authoritative relay index. Identical
+// reports are idempotent; a conflicting report is surfaced instead of replacing the
+// first result.
+app.post('/api/lobbies/:id/result', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby) {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  const reportingSide = lobbySideForEmail(lobby, user.email);
+  if (!reportingSide) {
+    res.status(403).json({ error: 'not_in_lobby' });
+    return;
+  }
+  if (!isStartedLobbyLifecycle(lobby)) {
+    res.status(409).json({ error: 'lobby_not_started' });
+    return;
+  }
+  const accepted = recordDeterministicLobbyResult(lobby, reportingSide, req.body);
+  if (!accepted.report) {
+    res.status(accepted.status).json(accepted.body);
+    return;
+  }
+  res.status(200).json({ lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) });
+});
+
+// Backfill relayed moves since index N. Open lobbies are observer-readable; closed
+// tombstones retain backfill only for their two original seats.
 app.get('/api/lobbies/:id/moves', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby || (lobby.phase === 'closed' && !lobbySideForEmail(lobby, user.email))) {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
   }
@@ -1994,13 +2447,13 @@ app.get('/api/lobbies/:id/moves', async (req, res) => {
   res.status(200).json({ moves: lobby.moves.slice(since) });
 });
 
-// PER-LOBBY game SSE channel. Auth; lobby must exist & be open. Sends the current
-// lobby frame immediately (projected for this viewer), then move + lobby frames.
+// PER-LOBBY game SSE channel. Open lobbies admit observers; a closed tombstone admits
+// original seats only. Sends the current projected frame immediately, then live frames.
 app.get('/api/lobbies/:id/events', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby || (lobby.phase === 'closed' && !lobbySideForEmail(lobby, user.email))) {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
   }
@@ -2013,7 +2466,7 @@ app.get('/api/lobbies/:id/events', async (req, res) => {
   }
   subs.add(sub);
   // Immediate current-state frame so the client has state without a refetch.
-  sseWrite(res, `data: ${JSON.stringify({ type: 'lobby', lobby: publicLobby(lobby, user.email) })}\n\n`);
+  sseWrite(res, `data: ${JSON.stringify({ type: 'lobby', lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) })}\n\n`);
   req.on('close', () => {
     clearInterval(heartbeat);
     const set = lobbyChannelSubscribers.get(lobby.id);
@@ -2027,40 +2480,79 @@ app.get('/api/lobbies/:id/events', async (req, res) => {
 app.post('/api/lobbies/:id/leave', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby) {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
   }
-  if (lobby.host.email === user.email) {
-    lobby.phase = 'closed';
-    lobby.updatedAt = new Date().toISOString();
-    // Notify game-channel subscribers (guest sees the lobby close) before dropping it.
-    broadcastLobbyState(lobby);
-    // Proactively end the per-lobby SSE streams so their heartbeats/timers don't linger
-    // against a now-deleted lobby (ending each res fires its own 'close' handler, which
-    // clears the heartbeat and removes the sub). Otherwise it only self-heals whenever the
-    // guest's socket eventually drops.
-    const subs = lobbyChannelSubscribers.get(lobby.id);
-    if (subs) {
-      for (const sub of subs) { try { sub.res.end(); } catch { /* already closed */ } }
-      lobbyChannelSubscribers.delete(lobby.id);
+  const leavingSide = lobbySideForEmail(lobby, user.email);
+  if (!leavingSide) {
+    res.status(403).json({ error: 'not_in_lobby' });
+    return;
+  }
+
+  const leaveBody = isObjectRecord(req.body) ? req.body : {};
+  const hasCompletion = ['expectedMoveCount', 'winner', 'reason']
+    .some((key) => Object.prototype.hasOwnProperty.call(leaveBody, key));
+  if (hasCompletion) {
+    if (!isStartedLobbyLifecycle(lobby)) {
+      res.status(409).json({ error: 'lobby_not_started' });
+      return;
     }
-    lobbies.delete(lobby.id);
+    // Completion is one seat's report, not authority. It suppresses resignation for this
+    // navigation, but only an independent matching report from the other seat publishes.
+    const accepted = recordDeterministicLobbyResult(lobby, leavingSide, leaveBody);
+    if (!accepted.report) {
+      res.status(accepted.status).json(accepted.body);
+      return;
+    }
+  }
+
+  // Preserve the pregame guest-leave behavior: no match exists, so the seat can simply
+  // reopen. Once a match starts, neither identity is removed; the closed tombstone owns
+  // the move/result history until both original participants acknowledge it or TTL.
+  if (leavingSide === 'enemy' && (lobby.phase === 'waiting' || lobby.phase === 'ready')) {
+    lobby.guest = null;
+    lobby.departed.enemy = false;
+    lobby.phase = 'waiting';
+    touchLobby(lobby);
     broadcastLobbies();
+    broadcastLobbyState(lobby);
+    res.status(200).json({ lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) });
+    return;
+  }
+
+  const isLiveLifecycle = isStartedLobbyLifecycle(lobby);
+  // A completion-bearing Leave is a normal-finish report. Without one, explicit Leave
+  // from a live lifecycle remains resignation and is published before the tombstone.
+  if (!hasCompletion && isLiveLifecycle && lobby.guest && !lobby.result) {
+    publishLobbyResult(lobby, {
+      winner: leavingSide === 'player' ? 'enemy' : 'player',
+      reason: 'resign',
+    });
+  }
+
+  if (lobby.phase !== 'closed') {
+    lobby.closedFromPhase = lobby.phase;
+    lobby.phase = 'closed';
+    lobby.closedAt = new Date().toISOString();
+  }
+  lobby.departed = lobby.departed || { player: false, enemy: false };
+  lobby.departed[leavingSide] = true;
+  touchLobby(lobby);
+  const snapshot = publicLobby(lobby, user.email, { includeLevelSnapshot: true });
+  restrictClosedLobbyStreams(lobby);
+  broadcastLobbyState(lobby);
+  broadcastLobbies();
+
+  if (bothLobbySeatsDeparted(lobby)) {
+    deleteLobbyRecord(lobby);
     res.status(204).end();
     return;
   }
-  if (lobby.guest && lobby.guest.email === user.email) {
-    lobby.guest = null;
-    lobby.phase = 'waiting';
-    lobby.updatedAt = new Date().toISOString();
-    broadcastLobbies();
-    broadcastLobbyState(lobby);
-    res.status(200).json({ lobby: publicLobby(lobby, user.email) });
-    return;
-  }
-  res.status(403).json({ error: 'not_in_lobby' });
+
+  if (leavingSide === 'player') res.status(204).end();
+  else res.status(200).json({ lobby: snapshot });
 });
 
 app.get('/api/campaigns', async (req, res) => {

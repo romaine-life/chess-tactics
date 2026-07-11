@@ -4,12 +4,15 @@
 
 import { create } from 'zustand';
 import { PROMOTION_PIECE_TYPES, type GameEvent, type GameState, type Move, type Piece, type PromotionPieceType, type Side, type Winner } from '../core/types';
-import { applyMove, gameEnv, legalMoves, livingPieces, promotionRuleForMove, recordPosition, ruleDraw, sideInCheck, type MoveEnv, type RuleDrawKind } from '../core/rules';
+import { applyMove, gameEnv, legalMoves, promotionRuleForMove, recordPosition, sideInCheck, type MoveEnv, type RuleDrawKind } from '../core/rules';
+import { settleCommittedPosition, type Adjudication } from '../core/adjudication';
 import { adoptedWeightsFor } from './adoptedWeights';
-import { premoveTargets, type PremoveStep } from './premoves';
+import { premoveTargets, provisionalBoard, type PremoveStep } from './premoves';
 import { requestEnemyReply } from './aiWorkerClient';
-import { evaluateVictory, resolveVictory, kingSideOf, objectiveContextForLevel, objectiveSummary, victoryRulesForObjective, type ObjectiveContext } from '../core/objectives';
-import type { Level, ObjectiveType, TimeControl, VictoryRule, VictoryRules } from '../core/level';
+import { objectiveBriefingForSide, victoryRuleDetailForSide } from './objectiveBriefing';
+import type { PlayingSide } from './clientPerspective';
+import { kingSideOf, objectiveContextForLevel, objectiveSummary, victoryRulesForObjective, type ObjectiveContext } from '../core/objectives';
+import type { Level, ObjectiveType, TimeControl, VictoryRules } from '../core/level';
 import { DEFAULT_TIME_CONTROL } from '../core/clock';
 import { terrainAt } from '../core/terrain';
 import { ARRIVAL_BAKED, playArrival, playTerrain } from '../sfx';
@@ -17,6 +20,7 @@ import { createSkirmish, type SkirmishOptions } from './setup';
 import { persistMatch, type PersistedMatch } from './matchPersistence';
 import { loadShippedAiWeights } from '../net/aiWeights';
 import { PIECE_LABEL } from '../core/pieces';
+import { clearPersistedNetIntent, loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence';
 
 // Seed the shipped-AI-weights cache once so the live enemy AI picks up any weights an
 // admin shipped for a level (ship-to-everyone). Best-effort; a failure leaves the
@@ -36,14 +40,44 @@ void loadShippedAiWeights();
 export interface NetState {
   lobbyId: string;
   /** The board side THIS client controls ('player' = host, 'enemy' = guest). */
-  localSide: Side;
+  localSide: PlayingSide;
   /** Moves applied to this client's board so far — the next expected relay index. */
   moveCount: number;
+  /** One local intent awaiting the authoritative relay at `expectedMoveCount`. The board
+   *  remains unchanged until that echo/backfill is committed. */
+  pendingMove: PendingNetMove | null;
+  /** A deterministic gameplay result derived from the committed relay. Both clients report
+   *  the same value so the lobby can retain it across reconnect/leave like resignation. */
+  terminalResult: NetTerminalResult | null;
+  /** First terminal frame published by the server. Once present, later conflicting
+   *  frames are stale; before it exists, a dispute-resolution resignation may override
+   *  this client's independently derived terminal verdict. */
+  authoritativeResult?: { winner: Winner; reason: 'resign' | NetGameResultReason } | null;
+}
+
+export interface PendingNetMove {
+  /** Stable idempotency key for this exact gesture. Every retry reuses it, so request
+   *  arrival order can never turn one gesture into two different relay entries. */
+  intentId: string;
+  createdAt: number;
+  expectedMoveCount: number;
+  pieceId: string;
+  move: RelayMove;
+  /** POST and immediate recovery both failed. The client keeps input locked and retries
+   *  this same idempotent intent until echo/backfill settles the relay slot. */
+  uncertain: boolean;
+}
+
+export type NetGameResultReason = Adjudication['kind'];
+export interface NetTerminalResult {
+  expectedMoveCount: number;
+  winner: PlayingSide | 'draw';
+  reason: NetGameResultReason;
 }
 
 export interface NetMatchOptions {
   lobbyId: string;
-  localSide: Side;
+  localSide: PlayingSide;
   level: Level;
   seed: number;
 }
@@ -53,11 +87,22 @@ export interface NetMatchOptions {
  *  identical board via legalMoves; promotion choice is the one move detail the rules cannot infer. */
 export interface RelayMove { x: number; y: number; promotion?: PromotionPieceType }
 
+function sameRelayMove(a: RelayMove, b: RelayMove): boolean {
+  return a.x === b.x && a.y === b.y && a.promotion === b.promotion;
+}
+
 /** Relay hook: in a netplay match the store calls this with each LOCAL move so the
  *  netplay layer (Skirmish) can POST it to the lobby relay. Null in single-player. */
-export type NetMoveSink = (pieceId: string, move: RelayMove) => void;
+export type NetMoveSink = (pieceId: string, move: RelayMove, expectedMoveCount: number, intentId: string) => void;
 let netMoveSink: NetMoveSink | null = null;
 export function setNetMoveSink(sink: NetMoveSink | null): void { netMoveSink = sink; }
+
+let fallbackNetIntentSequence = 0;
+function createNetIntentId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
+  fallbackNetIntentSequence += 1;
+  return `intent-${Date.now().toString(36)}-${fallbackNetIntentSequence.toString(36)}`;
+}
 
 /** Relay hook: fired when the local player resigns, so the netplay layer POSTs the
  *  resignation to the lobby. Like moves, the game only ENDS when the server echoes the
@@ -88,33 +133,6 @@ const ENEMY_LANDING_STAGGER = 130;
 const SPAWN_SFX_BASE_DELAY = 220;
 const SPAWN_SFX_STAGGER = 70;
 
-/**
- * The log line announcing a decided objective. Direction-aware via the game's
- * kingSide (ObjectiveContext): in King Assault the PLAYER may be the King-holder,
- * and Rival Kings ends on a King capture either way, so the win/loss wording has
- * to name the right event — a King falling vs a force being routed. The goal-copy
- * strings themselves come from core/objectives (objectiveSummary/OBJECTIVE_LABEL);
- * only the outcome framing lives here.
- */
-function objectiveOutcomeCopy(objective: ObjectiveType, winner: Winner, kingSide: 'player' | 'enemy' = 'enemy'): string {
-  if (winner !== 'player') {
-    // A King-holding player in King Assault — or anyone in Rival Kings — loses the
-    // moment the King falls, not by a wipe; say so.
-    if (objective === 'rival-kings' || (objective === 'capture-king' && kingSide === 'player')) {
-      return 'Defeat — your King has fallen.';
-    }
-    return 'Defeat — your force has fallen.';
-  }
-  switch (objective) {
-    // King-holder wins by routing the kingless side; the hunter wins by the capture.
-    case 'capture-king': return kingSide === 'player' ? 'Victory — the enemy is routed.' : 'Victory — the enemy King is captured.';
-    case 'rival-kings': return 'Victory — the rival King is captured.';
-    case 'survive': return 'Victory — you held the line.';
-    case 'reach': return 'Victory — the objective is reached.';
-    default: return 'Victory — the enemy is routed.';
-  }
-}
-
 /** Movement environment for a state: its static terrain + fence env (gameEnv) plus lastMove. */
 function envFor(game: GameState): MoveEnv {
   return { ...gameEnv(game), lastMove: game.lastMove };
@@ -128,13 +146,12 @@ function envFor(game: GameState): MoveEnv {
  * know the audio state. `delayMs` aligns the sound with the move tween; `gain`
  * (<1) softens secondary footsteps (enemy replies, spawn roll-call).
  */
-function playLandingSfx(env: MoveEnv, x: number, y: number, delayMs: number, gain?: number): void {
+function playLandingTerrain(env: MoveEnv, x: number, y: number, gain?: number): void {
   if (!env.terrain) return;
   const cell = terrainAt(env.terrain, x, y);
   if (!cell) return;
   const opts = gain !== undefined ? { gain } : undefined;
-  if (delayMs > 0) setTimeout(() => playTerrain(cell.terrain, opts), delayMs);
-  else playTerrain(cell.terrain, opts);
+  playTerrain(cell.terrain, opts);
 }
 
 function describeEvent(ev: GameEvent): string | null {
@@ -142,7 +159,6 @@ function describeEvent(ev: GameEvent): string | null {
     case 'captured': return 'A piece falls.';
     case 'promoted': return `A pawn ascends to a ${PIECE_LABEL[ev.to] ?? ev.to}.`;
     case 'castled': return 'Castled — the King and Rook regroup.';
-    case 'victory': return ev.winner === 'player' ? 'Victory — the enemy is routed.' : 'Defeat — your force has fallen.';
     default: return null;
   }
 }
@@ -154,8 +170,8 @@ const DRAW_RULE_COPY: Record<RuleDrawKind, string> = {
 };
 
 /** Result-screen "how it ended" line per draw kind (see resultDetail). */
-const DRAW_RESULT_DETAIL: Record<TerminalKind, string | null> = {
-  checkmate: null, // checkmate keeps the objective-goal fallback line, as before
+const DRAW_RESULT_DETAIL: Record<Exclude<Adjudication['kind'], 'victory-rule'>, string | null> = {
+  checkmate: 'Checkmate — the side to move has no legal escape.',
   stalemate: 'Stalemate — no legal moves remain.',
   'fifty-move': '50 moves passed without a capture or pawn move.',
   threefold: 'The same position occurred three times.',
@@ -189,82 +205,37 @@ function livingSelected(game: GameState, selectedId: string | null, side: Side):
 }
 
 /** Result copy from THIS client's seat: in netplay 'you' is the local side, not 'player'. */
-function netOutcomeCopy(winner: Winner, localSide: Side): string {
+function netOutcomeCopy(winner: Winner, localSide: PlayingSide): string {
   if (winner === 'draw') return 'Draw — the skirmish is even.';
   return winner === localSide ? 'Victory — the field is yours.' : 'Defeat — your force has fallen.';
 }
 
-/** Log copy for an AUTHORED victory (ADR-0064): name the exact rule that fired rather than the mode
- * label — a level won by a condition that diverges from its headline objective reads honestly
- * ("Victory — Enemy King is captured." not "…the objective is reached."). Preset games keep
- * objectiveOutcomeCopy's polished mode sentence. */
-function victoryOutcomeCopy(winner: Winner, rule: VictoryRule | null): string {
-  const name = rule?.name?.trim();
-  if (!name) return winner === 'player' ? 'Victory — the objective is complete.' : 'Defeat — your force has fallen.';
-  return `${winner === 'player' ? 'Victory' : 'Defeat'} — ${name}.`;
+function adjudicationResultDetail(adjudication: Adjudication | null, localSide: PlayingSide, authored: boolean): string | null {
+  if (!adjudication) return null;
+  if (adjudication.kind === 'victory-rule') {
+    return authored
+      ? adjudication.rule.name?.trim() || null
+      : victoryRuleDetailForSide(adjudication.rule, localSide);
+  }
+  return DRAW_RESULT_DETAIL[adjudication.kind];
 }
 
-/** The fired rule's authored name, for the result screen's "how it ended" line (both preset and
- * authored rules carry names). Null when no victory rule decided the game (checkmate / clock / draw /
- * resignation) — the screen then falls back to the static objective goal. */
-const ruleResultDetail = (rule: VictoryRule | null): string | null => rule?.name?.trim() || null;
-
-/** True if any living piece of `side` has at least one legal move. */
-export function sideHasLegalMove(game: GameState, side: Side, env: MoveEnv): boolean {
-  return livingPieces(game.pieces, side).some((p) => legalMoves(p, game.pieces, game.size, env).length > 0);
-}
-
-/** True if any living player piece has at least one legal move. */
-export function playerHasLegalMove(game: GameState, env: MoveEnv): boolean {
-  return sideHasLegalMove(game, 'player', env);
-}
-
-/** How a settled position ended the game outside the victory rules. */
-export type TerminalKind = 'checkmate' | 'stalemate' | RuleDrawKind;
-
-/** The no-legal-move terminal only: checkmate (a loss for the stuck side) or stalemate (a
- * draw). Null while the side can move — the chess draw rules are a SEPARATE, later check
- * (see terminalIfStuck), because victory rules outrank them on every surface. */
-function stuckTerminal(game: GameState, env: MoveEnv): { winner: Winner; kind: TerminalKind; side: Side } | null {
-  const side = game.turn;
-  if ((side !== 'player' && side !== 'enemy') || game.winner) return null;
-  if (sideHasLegalMove(game, side, env)) return null;
-  const checkmate = sideInCheck(game, side, env);
-  const winner: Winner = checkmate ? (side === 'player' ? 'enemy' : 'player') : 'draw';
-  return { winner, kind: checkmate ? 'checkmate' : 'stalemate', side };
-}
-
-/**
- * The terminal result at a settled position: when the side to move has no legal
- * move the game ends here — a LOSS for that side if its King is in check
- * (checkmate), otherwise a DRAW (stalemate; a kingless army is never in check, so
- * it can only stalemate). When the side CAN move, the game's authored chess draw
- * rules (ADR-0072: 50-move rule / threefold repetition) may still end it as a
- * draw. Returns null when the game goes on, is already decided, or it isn't a
- * live side's turn. Call sites evaluate victory rules FIRST — a win and a rule
- * draw arriving on the same move resolve as the win, identically on every surface
- * (store, netplay, self-play, search).
- */
-export function terminalIfStuck(game: GameState, env: MoveEnv): { winner: Winner; kind: TerminalKind; side: Side } | null {
-  const stuck = stuckTerminal(game, env);
-  if (stuck) return stuck;
-  if (game.winner || (game.turn !== 'player' && game.turn !== 'enemy')) return null;
-  const draw = ruleDraw(game, env);
-  return draw ? { winner: 'draw', kind: draw, side: game.turn } : null;
-}
-
-/**
- * Resolve a soft-lock on the player's turn (handing control back after the enemy
- * reply, and as a start-of-game safety net): checkmate ⇒ defeat, stalemate ⇒ draw.
- * STUCK positions only — the chess draw rules are checked by the caller AFTER the
- * victory rules, so a winning move that also fills the clock still wins (the order
- * every other surface uses). No-op unless it is the player's undecided turn.
- */
-export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: GameState; stuck: boolean; kind: TerminalKind | null } {
-  if (game.turn !== 'player') return { game, stuck: false, kind: null };
-  const t = stuckTerminal(game, env);
-  if (!t) return { game, stuck: false, kind: null };
-  return { game: { ...game, winner: t.winner, turn: 'done' }, stuck: true, kind: t.kind };
+function adjudicationCopy(
+  adjudication: Adjudication,
+  localSide: PlayingSide,
+  authored: boolean,
+): string {
+  if (adjudication.kind === 'victory-rule') {
+    const detail = authored
+      ? adjudication.rule.name?.trim()
+      : victoryRuleDetailForSide(adjudication.rule, localSide);
+    return `${adjudication.winner === localSide ? 'Victory' : 'Defeat'}${detail ? ` — ${detail}.` : '.'}`;
+  }
+  if (adjudication.kind === 'checkmate') {
+    return adjudication.winner === localSide ? 'Checkmate — victory!' : 'Checkmate — defeat.';
+  }
+  if (adjudication.kind === 'stalemate') return 'Stalemate — the skirmish is a draw.';
+  return DRAW_RULE_COPY[adjudication.kind];
 }
 
 /** Enemy decision policies (dev A/B lever: `?ai=greedy` on the skirmish route). The live reply
@@ -285,6 +256,7 @@ export interface ClockState {
 }
 
 export interface PendingPromotion {
+  mode: 'move' | 'premove';
   pieceId: string;
   move: Move;
   choices: readonly PromotionPieceType[];
@@ -330,6 +302,9 @@ export interface SkirmishState {
   clock: ClockState | null;
   /** A local pawn has chosen a promotion-zone move and is waiting for the piece choice. */
   pendingPromotion: PendingPromotion | null;
+  /** Monotonic match-session identity. Every delayed callback captures this value and
+   *  no-ops after any new/resumed/network match replaces its owner. */
+  sessionEpoch: number;
   /** Multiplayer context (null = single-player). When set, the AI never fires and
    *  input is gated to `net.localSide` instead of 'player'. */
   net: NetState | null;
@@ -338,9 +313,20 @@ export interface SkirmishState {
    *  side this client controls, disable the local AI + clock, and route local moves
    *  to the relay sink. Both clients call this with the SAME level + seed. */
   newNetMatch: (opts: NetMatchOptions) => void;
-  /** Apply a move that arrived from the OTHER player over the relay (no AI, no
-   *  re-emit). Re-validates legality before applying. */
-  applyRemoteMove: (pieceId: string, move: RelayMove) => void;
+  /** Apply the next move that arrived over the relay, including this seat's own echo
+   *  (no AI, no re-emit). Re-validates legality before applying. */
+  applyRemoteMove: (pieceId: string, move: RelayMove, intentId?: string) => void;
+  /** Clear a rejected/authoritatively absent local move intent, iff it still belongs to
+   *  `expectedMoveCount`. Restores the selected piece when it remains locally owned. */
+  rejectNetMove: (expectedMoveCount: number) => void;
+  /** Mark a move whose POST and recovery GET both failed. It stays locked while the
+   *  transport retries the exact same stable intent id. */
+  markNetMoveUncertain: (expectedMoveCount: number) => void;
+  /** Freeze gesture-local input when server authority stops the relay (result agreement,
+   *  dispute, or desync) without discarding an unresolved durable move identity. */
+  freezeNetInput: () => void;
+  /** Invalidate and clear a lobby-owned local session when its route is left. */
+  leaveNetSession: (lobbyId: string) => void;
   /** Concede a multiplayer match: relay the resignation to the lobby. The game itself
    *  ends only when the server's terminal result echoes back via `concludeNet`. No-op
    *  outside netplay or once the game is decided. */
@@ -351,7 +337,7 @@ export interface SkirmishState {
   /** End a netplay match by a non-move terminal event (a resignation relayed by the
    *  server). Sets the winner directly and logs the outcome from this seat. Idempotent —
    *  a duplicate/redelivered lobby frame is ignored once the game is decided. */
-  concludeNet: (winner: Winner, reason: 'resign') => void;
+  concludeNet: (winner: Winner, reason: 'resign' | NetGameResultReason) => void;
   /** Rehydrate a match saved to disk (see matchPersistence) — used to resume the
    * live board after a page reload instead of starting a fresh game. */
   resumeMatch: (match: PersistedMatch) => void;
@@ -396,15 +382,20 @@ export interface SkirmishState {
  * been started, the last one already finished, or a different level is opened.
  */
 export function shouldStartFreshSkirmish(
-  state: Pick<SkirmishState, 'started' | 'game' | 'levelId'>,
+  state: Pick<SkirmishState, 'started' | 'game' | 'levelId'> & { net?: NetState | null },
   requestedLevelId: string | null,
 ): boolean {
-  return !state.started || state.game.winner !== null || state.levelId !== requestedLevelId;
+  return !!state.net || !state.started || state.game.winner !== null || state.levelId !== requestedLevelId;
 }
 
 const INITIAL_GAME = createSkirmish({ seed: 1 });
 
 export const useSkirmish = create<SkirmishState>((set, get) => {
+  let matchEpoch = 0;
+  let enemyReplyTimer: ReturnType<typeof setTimeout> | null = null;
+  let premoveFireTimer: ReturnType<typeof setTimeout> | null = null;
+  const sessionEffectTimers = new Set<ReturnType<typeof setTimeout>>();
+
   // ---- Battle clock ----------------------------------------------------------
   // Standard chess-clock rules for the PLAYER only: the clock runs while it's their
   // live turn, pauses the moment their move applies (banking the Fischer increment),
@@ -420,25 +411,62 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     if (clockTicker !== null) { clearInterval(clockTicker); clockTicker = null; }
   };
 
+  const cancelSessionAsync = () => {
+    stopClockTicker();
+    if (enemyReplyTimer !== null) { clearTimeout(enemyReplyTimer); enemyReplyTimer = null; }
+    if (premoveFireTimer !== null) { clearTimeout(premoveFireTimer); premoveFireTimer = null; }
+    for (const timer of sessionEffectTimers) clearTimeout(timer);
+    sessionEffectTimers.clear();
+  };
+
+  /** Invalidate every callback owned by the previous match and return the new epoch. */
+  const beginSession = (): number => {
+    cancelSessionAsync();
+    matchEpoch += 1;
+    return matchEpoch;
+  };
+
+  /** Schedule cosmetic work in the current match generation. New/resume/net/conclude
+   * cancels the handle, and the epoch check is a second guard against a racing callback. */
+  const scheduleSessionEffect = (callback: () => void, delayMs: number): void => {
+    const epoch = get().sessionEpoch;
+    const timer = setTimeout(() => {
+      sessionEffectTimers.delete(timer);
+      if (get().sessionEpoch === epoch) callback();
+    }, Math.max(0, delayMs));
+    sessionEffectTimers.add(timer);
+  };
+
+  const playLandingSfx = (env: MoveEnv, x: number, y: number, delayMs: number, gain?: number): void => {
+    if (delayMs > 0) scheduleSessionEffect(() => playLandingTerrain(env, x, y, gain), delayMs);
+    else playLandingTerrain(env, x, y, gain);
+  };
+
   // Flag fall: losing on time is a defeat like any other — turn locks, result copy
   // names the clock.
   const expireClock = () => {
-    stopClockTicker();
     const cur = get();
     if (!cur.clock || cur.game.winner) return;
+    const epoch = beginSession();
     set({
       game: { ...cur.game, winner: 'enemy', turn: 'done' },
       clock: { ...cur.clock, remainingMs: 0, running: false },
       selectedId: null,
       focusedId: null,
+      sessionEpoch: epoch,
+      pendingPromotion: null,
+      premoves: [],
       premoveInputOpen: false,
+      testMode: false,
+      testMinCpuDelayMs: 0,
       log: ['Defeat — your clock ran out.', ...cur.log].slice(0, 12),
     });
     persistMatch(get()); // game decided → drops the saved copy
   };
 
-  const tickClock = () => {
+  const tickClock = (epoch: number) => {
     const cur = get();
+    if (cur.sessionEpoch !== epoch) { stopClockTicker(); return; }
     if (!cur.clock?.running) { stopClockTicker(); return; }
     const remaining = clockDeadline - Date.now();
     if (remaining <= 0) { expireClock(); return; }
@@ -453,9 +481,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   const startClock = () => {
     const cur = get();
     if (!cur.clock || cur.clock.running || cur.game.winner || cur.game.turn !== 'player') return;
+    const epoch = cur.sessionEpoch;
     clockDeadline = Date.now() + cur.clock.remainingMs;
     stopClockTicker();
-    clockTicker = setInterval(tickClock, 100);
+    clockTicker = setInterval(() => tickClock(epoch), 100);
     set({ clock: { ...cur.clock, running: true } });
   };
 
@@ -470,9 +499,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     set({ clock: { ...cur.clock, remainingMs, running: false } });
   };
 
-  const finishPremoveInputBeat = (gameRef: GameState) => {
+  const finishPremoveInputBeat = (gameRef: GameState, epoch: number) => {
     const s = get();
-    if (s.game !== gameRef || s.game.winner || !s.premoveInputOpen) return;
+    if (s.sessionEpoch !== epoch || s.game !== gameRef || s.game.winner || !s.premoveInputOpen) return;
+    premoveFireTimer = null;
     if (s.premoves.length > 0) {
       const fired = drainPremove();
       if (fired) return;
@@ -482,17 +512,28 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     persistMatch(get());
   };
 
+  const schedulePremoveInputBeat = (gameRef: GameState) => {
+    const epoch = get().sessionEpoch;
+    if (premoveFireTimer !== null) clearTimeout(premoveFireTimer);
+    premoveFireTimer = setTimeout(() => finishPremoveInputBeat(gameRef, epoch), PREMOVE_FIRE_DELAY);
+  };
+
   // Stage the enemy half-turn after a beat so it reads as a reply, not a mirror
   // of the player's click. The turn is already flipped to 'enemy' (which locks
   // player input) before this fires.
   const scheduleEnemyReply = () => {
     // A Test Board can floor the CPU's think time (testMinCpuDelayMs) to widen the premove
     // window; real/campaign play leaves it 0, so this is exactly ENEMY_REPLY_DELAY.
-    const delay = Math.max(ENEMY_REPLY_DELAY, get().testMinCpuDelayMs);
-    setTimeout(() => {
+    const scheduled = get();
+    const epoch = scheduled.sessionEpoch;
+    const gameRef = scheduled.game;
+    const delay = Math.max(ENEMY_REPLY_DELAY, scheduled.testMinCpuDelayMs);
+    if (enemyReplyTimer !== null) clearTimeout(enemyReplyTimer);
+    enemyReplyTimer = setTimeout(() => {
+      enemyReplyTimer = null;
       const cur = get();
       // Bail if a new game reset the turn, or it somehow already resolved.
-      if (cur.game.turn !== 'enemy' || cur.game.winner) return;
+      if (cur.sessionEpoch !== epoch || cur.game !== gameRef || cur.net || cur.game.turn !== 'enemy' || cur.game.winner) return;
       // Resolve the reply OFF the main thread (game/aiWorker) so the board stays live —
       // animation AND premove input — for the whole think. The search is node-bounded and
       // deterministic, so the worker returns the identical move to an inline resolve; only
@@ -509,6 +550,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
           objective: cur.objective,
           ctx: cur.objectiveCtx ?? {},
           turnsElapsed: cur.turnsElapsed ?? 0,
+          victoryRules: cur.victoryOverride ?? victoryRulesForObjective(cur.objective, cur.objectiveCtx ?? {}),
           weights: adoptedWeightsFor(cur.levelId),
         },
         (enemyRes) => {
@@ -516,42 +558,24 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
           // meanwhile (a new game / a resume) before applying its move. Premove selection can
           // legitimately change while the worker thinks, so read the latest live slice here.
           const live = get();
-          if (live.game !== cur.game) return;
+          if (live.sessionEpoch !== epoch || live.game !== cur.game || live.net) return;
           const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
-          // With no manual End Turn, a player handed the turn with no legal move would
-          // soft-lock — resolve that as a loss (you can't pass in chess).
           const afterEnv = envFor(enemyRes.game);
-          const stuckRes = resolveIfPlayerStuck(enemyRes.game, afterEnv);
-          let game = stuckRes.game;
-          let resultDetail: string | null = null;
-          if (stuckRes.stuck && stuckRes.kind) {
-            msgs.push(stuckRes.kind === 'checkmate'
-              ? 'Checkmate — your King is trapped. Defeat.'
-              : 'Stalemate — no legal moves remain. The skirmish is a draw.');
-            resultDetail = DRAW_RESULT_DETAIL[stuckRes.kind];
-          } else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
           // A full player→enemy round just elapsed: advance the survive clock, then re-check the
           // objective — survive reached, or a player wipe = defeat.
           const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
-          if (!game.winner) {
-            const ctx = { ...(cur.objectiveCtx ?? {}), turnsElapsed };
-            const { winner, rule } = resolveVictory(game, cur.victoryOverride ?? victoryRulesForObjective(cur.objective, ctx), ctx);
-            if (winner) {
-              game = { ...game, winner, turn: 'done' };
-              resultDetail = ruleResultDetail(rule);
-              msgs.push(cur.victoryOverride ? victoryOutcomeCopy(winner, rule) : objectiveOutcomeCopy(cur.objective, winner, cur.objectiveCtx?.kingSide));
-            }
-          }
-          // Chess draw rules AFTER the victory rules — a reply that both wins and fills the
-          // clock resolves as the win, matching commitPlayerMove/commitNet/self-play/search.
-          if (!game.winner) {
-            const draw = ruleDraw(game, afterEnv);
-            if (draw) {
-              game = { ...game, winner: 'draw', turn: 'done' };
-              msgs.push(DRAW_RULE_COPY[draw]);
-              resultDetail = DRAW_RESULT_DETAIL[draw];
-            }
-          }
+          const ctx = { ...(cur.objectiveCtx ?? {}), turnsElapsed };
+          const settled = settleCommittedPosition(enemyRes.game, {
+            victoryRules: cur.victoryOverride ?? victoryRulesForObjective(cur.objective, ctx),
+            ctx,
+            turnsElapsed,
+            env: afterEnv,
+          });
+          const game = settled.state;
+          const resultDetail = adjudicationResultDetail(settled.adjudication, 'player', !!cur.victoryOverride);
+          if (settled.adjudication) {
+            msgs.push(adjudicationCopy(settled.adjudication, 'player', !!cur.victoryOverride));
+          } else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
           // Turn returns to the player: keep the piece they were working with selected so the
           // board reads continuously. That can change while the enemy reply is in flight when the
           // player picks a premove unit, so use the latest store selection rather than `cur`.
@@ -588,11 +612,77 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
           // A queued premove fires after a visible beat rather than in this same frame, so the
           // player sees the enemy's move land with their queued arrow still on the board before
           // it executes. Premoves queued during that landing beat are accepted too.
-          if (openPremoveInput) setTimeout(() => finishPremoveInputBeat(game), PREMOVE_FIRE_DELAY);
+          if (openPremoveInput) schedulePremoveInputBeat(game);
           else startClock();
         },
       );
     }, delay);
+  };
+
+  /** Submit one server-sequenced local intent without mutating the board. */
+  const submitNetMove = (pieceId: string, move: RelayMove): boolean => {
+    const s = get();
+    if (!s.net || s.net.pendingMove || s.game.winner || s.game.turn !== s.net.localSide || !netMoveSink) return false;
+    const durable = loadPersistedNetIntent(s.net.lobbyId, s.net.localSide);
+    if (durable && durable.expectedMoveCount >= s.net.moveCount) {
+      // Another tab or a just-reloaded instance already owns this seat's unresolved
+      // gesture. Restore and (only at its exact current slot) retry that identity instead
+      // of allowing this new click to race it.
+      const restored: PendingNetMove = {
+        intentId: durable.intentId,
+        createdAt: durable.createdAt,
+        expectedMoveCount: durable.expectedMoveCount,
+        pieceId: durable.pieceId,
+        move: durable.move,
+        uncertain: true,
+      };
+      set({ net: { ...s.net, pendingMove: restored }, premoveInputOpen: false });
+      if (durable.expectedMoveCount === s.net.moveCount) {
+        try {
+          netMoveSink(durable.pieceId, durable.move, durable.expectedMoveCount, durable.intentId);
+        } catch (error) {
+          console.warn('[netplay] restored move sink threw before relay retry', error);
+        }
+      }
+      return false;
+    }
+    // The local board has authoritatively advanced past this journal entry (normally the
+    // matching relay already cleared it); discard only that stale identity.
+    if (durable) clearPersistedNetIntent(s.net.lobbyId, durable.intentId);
+    const expectedMoveCount = s.net.moveCount;
+    const intentId = createNetIntentId();
+    const createdAt = Date.now();
+    const pendingMove: PendingNetMove = { intentId, createdAt, expectedMoveCount, pieceId, move, uncertain: false };
+    const persisted = persistNetIntent({
+      lobbyId: s.net.lobbyId,
+      localSide: s.net.localSide,
+      intentId,
+      createdAt,
+      expectedMoveCount,
+      pieceId,
+      move,
+    });
+    if (!persisted) {
+      console.error('[netplay] move blocked because no reload-durable intent journal is available');
+      set({ log: ['Move not sent — browser storage is unavailable, so safe multiplayer retry is disabled.', ...s.log].slice(0, 12) });
+      return false;
+    }
+    set({
+      net: { ...s.net, pendingMove },
+      premoveInputOpen: false,
+    });
+    try {
+      netMoveSink(pieceId, move, expectedMoveCount, intentId);
+      return true;
+    } catch (error) {
+      console.warn('[netplay] move sink threw before relay submission', error);
+      const live = get();
+      if (live.net?.pendingMove === pendingMove) {
+        clearPersistedNetIntent(live.net.lobbyId, intentId);
+        set({ net: { ...live.net, pendingMove: null } });
+      }
+      return false;
+    }
   };
 
   // Apply a legal player move and run the full post-move pipeline: bank the clock
@@ -607,41 +697,26 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // The settled position joins the threefold table BEFORE the terminal checks read it
     // (a no-op unless this game enforces threefold). enemyEnv matches the post-move state.
     const enemyEnv = envFor(playerRes.state);
-    let game = recordPosition(playerRes.state, enemyEnv);
+    const committed = recordPosition(playerRes.state, enemyEnv);
     // Footstep: only when the piece actually relocates, at the mover's real landing
     // square (a castle's gesture square can differ from where the king lands).
     if (playerRes.events.some((e) => e.kind === 'moved')) {
       playLandingSfx(s.env, mv.castle?.kingTo.x ?? mv.x, mv.castle?.kingTo.y ?? mv.y, LANDING_SFX_DELAY);
     }
     const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
-    // Objective win on the player's move: capturing the enemy King, routing the last
-    // enemy, or stepping onto a reach tile ends it immediately. (survive is decided a
-    // round later, after the enemy reply.)
-    let resultDetail: string | null = null;
-    if (!game.winner) {
-      const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 };
-      const { winner, rule } = resolveVictory(game, s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx), ctx);
-      if (winner) {
-        game = { ...game, winner, turn: 'done' };
-        resultDetail = ruleResultDetail(rule);
-        msgs.push(s.victoryOverride ? victoryOutcomeCopy(winner, rule) : objectiveOutcomeCopy(s.objective, winner, s.objectiveCtx?.kingSide));
-      }
-    }
-    // Checkmate the player just delivered ends the game immediately; the chess draw
-    // rules (50-move / threefold) end it as a draw; a non-terminal check is announced.
-    if (!game.winner && game.turn === 'enemy') {
-      const term = terminalIfStuck(game, enemyEnv);
-      if (term) {
-        game = { ...game, winner: term.winner, turn: 'done' };
-        msgs.push(term.kind === 'checkmate'
-          ? 'Checkmate — the enemy King has no escape. Victory!'
-          : term.kind === 'stalemate'
-            ? 'Stalemate — the enemy has no legal move. The skirmish is a draw.'
-            : DRAW_RULE_COPY[term.kind]);
-        resultDetail = DRAW_RESULT_DETAIL[term.kind];
-      } else if (sideInCheck(game, 'enemy', enemyEnv)) {
-        msgs.push('Check!');
-      }
+    const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 };
+    const settled = settleCommittedPosition(committed, {
+      victoryRules: s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx),
+      ctx,
+      turnsElapsed: s.turnsElapsed ?? 0,
+      env: enemyEnv,
+    });
+    const game = settled.state;
+    const resultDetail = adjudicationResultDetail(settled.adjudication, 'player', !!s.victoryOverride);
+    if (settled.adjudication) {
+      msgs.push(adjudicationCopy(settled.adjudication, 'player', !!s.victoryOverride));
+    } else if (game.turn === 'enemy' && sideInCheck(game, 'enemy', enemyEnv)) {
+      msgs.push('Check!');
     }
     // Keep the moved piece selected (the mover always survives its own move) so its
     // highlight carries through the enemy turn — input is gated by turn, so it shows no
@@ -660,8 +735,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     persistMatch(get());
   };
 
-  // Drain one premove as control returns to the player. Returns true iff a premove was
-  // applied. The head is re-validated against the REAL board the enemy reply produced —
+  // Drain one premove as control returns to this client. Returns true iff a premove was
+  // applied locally or submitted as the next authoritative net intent. The head is
+  // re-validated against the REAL board the opponent produced —
   // if its piece was captured or the square is no longer reachable, the WHOLE chain is
   // dropped (chess default: one illegal step kills the queue). A decided game clears the
   // queue too. When a premove fires, its move re-stages the enemy reply, so the next
@@ -669,13 +745,20 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   function drainPremove(): boolean {
     const s = get();
     if (s.premoves.length === 0) return false;
-    if (s.game.turn !== 'player' || s.game.winner) { set({ premoves: [], premoveInputOpen: false }); return false; }
+    const side = s.net ? s.net.localSide : 'player';
+    if (s.net?.pendingMove) return false;
+    if (s.game.turn !== side || s.game.winner) { set({ premoves: [], premoveInputOpen: false }); return false; }
     const [head, ...rest] = s.premoves;
-    const p = s.game.pieces.find((q) => q.id === head.pieceId && q.alive && q.side === 'player');
+    const p = s.game.pieces.find((q) => q.id === head.pieceId && q.alive && q.side === side);
     const mv = p ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === head.x && m.y === head.y) : undefined;
     if (!p || !mv) { set({ premoves: [], premoveInputOpen: false }); return false; }
+    if (s.net) {
+      if (!submitNetMove(p.id, { x: mv.x, y: mv.y, promotion: head.promotion })) return false;
+      set({ premoves: rest, premoveInputOpen: false });
+      return true;
+    }
     set({ premoves: rest });
-    commitPlayerMove(p, mv);
+    commitPlayerMove(p, mv, head.promotion);
     // A premove that ended the game leaves the rest of the chain moot — drop it.
     if (get().game.winner) set({ premoves: [], premoveInputOpen: false });
     return true;
@@ -686,7 +769,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   // single apply path for both sides (no optimistic local apply → no rollback/desync).
   // Mirrors the bookkeeping tail of tryMoveTo (SFX, objective + terminal + check, log)
   // but NEVER runs the AI or the clock, and is side-agnostic. Returns true iff it applied.
-  const commitNet = (pieceId: string, move: RelayMove): boolean => {
+  const commitNet = (pieceId: string, move: RelayMove, intentId?: string): boolean => {
     const s = get();
     if (!s.net || s.game.winner) return false;
     const piece = s.game.pieces.find((q) => q.id === pieceId && q.alive);
@@ -705,46 +788,69 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // Both clients fold the settled position into the threefold table here — the single
     // netplay apply path — so a rule draw fires identically on both boards.
     const postEnv = envFor(res.state);
-    let game = recordPosition(res.state, postEnv);
-    if (res.events.some((e) => e.kind === 'moved')) playLandingSfx(s.env, mv.castle?.kingTo.x ?? mv.x, mv.castle?.kingTo.y ?? mv.y, LANDING_SFX_DELAY);
+    const committed = recordPosition(res.state, postEnv);
+    const moved = res.events.some((event) => event.kind === 'moved');
     const msgs = res.events.map(describeEvent).filter((m): m is string => m !== null);
     // A full enemy turn completing (enemy→player) advances the survive-clock round count.
-    const turnsElapsed = (s.turnsElapsed ?? 0) + (prevTurn === 'enemy' && game.turn === 'player' ? 1 : 0);
-
-    let resultDetail: string | null = null;
-    if (!game.winner) {
-      const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed };
-      const winner = evaluateVictory(game, s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx), ctx);
-      if (winner) { game = { ...game, winner, turn: 'done' }; msgs.push(netOutcomeCopy(winner, localSide)); }
-    }
-    if (!game.winner && (game.turn === 'player' || game.turn === 'enemy')) {
-      const term = terminalIfStuck(game, postEnv);
-      if (term) {
-        game = { ...game, winner: term.winner, turn: 'done' };
-        msgs.push(term.kind === 'checkmate'
-          ? (term.winner === localSide ? 'Checkmate — victory!' : 'Checkmate — defeat.')
-          : term.kind === 'stalemate'
-            ? 'Stalemate — the skirmish is a draw.'
-            : DRAW_RULE_COPY[term.kind]);
-        resultDetail = DRAW_RESULT_DETAIL[term.kind];
-      } else if (sideInCheck(game, game.turn, postEnv)) {
-        msgs.push(game.turn === localSide ? 'Your King is in check!' : 'Check delivered.');
-      }
+    const turnsElapsed = (s.turnsElapsed ?? 0) + (prevTurn === 'enemy' && committed.turn === 'player' ? 1 : 0);
+    const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed };
+    const settled = settleCommittedPosition(committed, {
+      victoryRules: s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx),
+      ctx,
+      turnsElapsed,
+      env: postEnv,
+    });
+    const game = settled.state;
+    const resultDetail = adjudicationResultDetail(settled.adjudication, localSide, !!s.victoryOverride);
+    if (settled.adjudication) {
+      msgs.push(adjudicationCopy(settled.adjudication, localSide, !!s.victoryOverride));
+    } else if (game.turn === 'player' || game.turn === 'enemy') {
+      if (sideInCheck(game, game.turn, postEnv)) msgs.push(game.turn === localSide ? 'Your King is in check!' : 'Check delivered.');
     }
 
-    const nextSel = game.turn === localSide ? firstOwnId(game, localSide) : null;
+    const selectedId = s.selectedId === null ? null : livingSelected(game, s.selectedId, localSide);
+    const focusedId = game.pieces.some((candidate) => candidate.id === s.focusedId && candidate.alive)
+      ? s.focusedId
+      : selectedId;
+    const pending = s.net.pendingMove;
+    const clearsPending = pending?.expectedMoveCount === s.net.moveCount;
+    if (clearsPending && (
+      pending.intentId !== intentId
+      || pending.pieceId !== pieceId
+      || !sameRelayMove(pending.move, move)
+    )) {
+      console.warn('[netplay] authoritative relay replaced a different pending local intent', pending, { intentId, pieceId, move });
+    }
+    if (clearsPending && pending) clearPersistedNetIntent(s.net.lobbyId, pending.intentId);
+    const returnedToLocal = !game.winner && prevTurn !== localSide && game.turn === localSide;
+    const nextEpoch = game.winner ? beginSession() : s.sessionEpoch;
     set({
       game,
       env: postEnv,
       resultDetail,
       turnsElapsed,
-      selectedId: nextSel,
-      focusedId: nextSel,
+      selectedId,
+      focusedId,
+      sessionEpoch: nextEpoch,
       pendingPromotion: null,
-      premoveInputOpen: false,
+      premoves: game.winner ? [] : s.premoves,
+      premoveInputOpen: returnedToLocal,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
-      net: { ...s.net, moveCount: s.net.moveCount + 1 },
+      net: {
+        ...s.net,
+        moveCount: s.net.moveCount + 1,
+        pendingMove: clearsPending ? null : pending,
+        terminalResult: settled.adjudication
+          ? {
+              expectedMoveCount: s.net.moveCount + 1,
+              winner: settled.adjudication.winner,
+              reason: settled.adjudication.kind,
+            }
+          : s.net.terminalResult,
+      },
     });
+    if (moved) playLandingSfx(s.env, mv.castle?.kingTo.x ?? mv.x, mv.castle?.kingTo.y ?? mv.y, LANDING_SFX_DELAY);
+    if (returnedToLocal) schedulePremoveInputBeat(game);
     return true;
   };
 
@@ -766,6 +872,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   aiMode: 'search',
   clock: null,
   pendingPromotion: null,
+  sessionEpoch: 0,
   net: null,
   premoves: [],
   premoveInputOpen: false,
@@ -773,12 +880,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   testMinCpuDelayMs: 0,
 
   newSkirmish: (opts) => {
-    // A previous game's ticker must never outlive its game.
-    stopClockTicker();
+    const epoch = beginSession();
     const created = createSkirmish(opts);
     const env = envFor(created);
-    // Safety net: a degenerate start with no player move resolves rather than locks.
-    const { game } = resolveIfPlayerStuck(created, env);
     const objective: ObjectiveType = opts.level?.objective ?? 'capture-king';
     // Uniform for level AND free games (ADR-0050): the level's static context (survive
     // clock / reach cells) plus kingSide read off the ACTUAL starting pieces — a free
@@ -791,10 +895,21 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // The level's authored win/lose lists override the preset (ADR-0064); null ⇒ the eval sites
     // derive the `objective` preset each turn from objectiveCtx (kingSide / survive target).
     const victoryOverride: VictoryRules | null = opts.level?.victory ?? null;
+    const initial = settleCommittedPosition(created, {
+      victoryRules: victoryOverride ?? victoryRulesForObjective(objective, objectiveCtx),
+      ctx: objectiveCtx,
+      turnsElapsed: 0,
+      env,
+    });
+    const game = initial.state;
+    const resultDetail = adjudicationResultDetail(initial.adjudication, 'player', !!victoryOverride);
     const intro = opts.level
       ? `Test play begins — objective: ${objectiveSummary(objective, objectiveCtx.kingSide)}.`
       : `Skirmish begins — ${objectiveSummary(objective, objectiveCtx.kingSide)}.`;
-    const selectedId = firstPlayerId(game);
+    const selectedId = game.winner ? null : firstPlayerId(game);
+    const log = initial.adjudication
+      ? [adjudicationCopy(initial.adjudication, 'player', !!victoryOverride), intro]
+      : [intro];
     // Arm the battle clock. An explicit opts.timeControl wins (the HUD's clock control /
     // "New skirmish" — a TimeControl times the game, null plays it untimed). Otherwise a
     // level uses its authored control (undefined ⇒ untimed), and a FREE skirmish (no
@@ -810,7 +925,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       : null;
     // An explicit opts.ai wins; otherwise keep the running mode (a HUD retry
     // preserves the A/B lever the route set on entry).
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail: null, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, pendingPromotion: null, net: null, premoves: [], premoveInputOpen: false });
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail, selectedId, focusedId: selectedId, log, objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, pendingPromotion: null, sessionEpoch: epoch, net: null, premoves: [], premoveInputOpen: false });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
     startClock();
@@ -826,7 +941,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       .forEach((pc, i) => {
         const delay = SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER;
         playLandingSfx(env, pc.x, pc.y, delay, 0.7);
-        setTimeout(() => playArrival({ gain: ARRIVAL_BAKED.gain }), delay);
+        scheduleSessionEffect(() => playArrival({ gain: ARRIVAL_BAKED.gain }), delay);
       });
     // Snapshot the fresh board immediately, so a reload before the first move
     // resumes THIS game rather than re-rolling a different random start.
@@ -834,19 +949,43 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   },
 
   newNetMatch: ({ lobbyId, localSide, level, seed }) => {
-    // A previous game's ticker must never outlive its game.
-    stopClockTicker();
+    const epoch = beginSession();
     // Both clients build the SAME board from (level, seed); with the AI disabled the
     // only randomness is initial placement, so the two boards are byte-identical.
     const created = createSkirmish({ seed, level });
     const env = envFor(created);
     const objective: ObjectiveType = level.objective ?? 'capture-king';
     const objectiveCtx: ObjectiveContext = { ...objectiveContextForLevel(level), kingSide: kingSideOf(created.pieces) };
-    const localTurn = created.turn === localSide;
-    const selectedId = localTurn ? firstOwnId(created, localSide) : null;
+    const victoryOverride = level.victory ?? null;
+    const victoryRules = victoryOverride ?? victoryRulesForObjective(objective, objectiveCtx);
+    const initial = settleCommittedPosition(created, {
+      victoryRules,
+      ctx: objectiveCtx,
+      turnsElapsed: 0,
+      env,
+    });
+    const game = initial.state;
+    const localTurn = !game.winner && game.turn === localSide;
+    const selectedId = localTurn ? firstOwnId(game, localSide) : null;
     const youCommand = localSide === 'player' ? 'the vanguard' : 'the challenger';
+    const intro = `Multiplayer skirmish — ${objectiveBriefingForSide(victoryRules, localSide).summary}. You command ${youCommand}.`;
+    const log = initial.adjudication
+      ? [adjudicationCopy(initial.adjudication, localSide, !!victoryOverride), intro]
+      : [intro];
+    const durableIntent = loadPersistedNetIntent(lobbyId, localSide);
+    if (initial.adjudication && durableIntent) clearPersistedNetIntent(lobbyId, durableIntent.intentId);
+    const restoredPending: PendingNetMove | null = !initial.adjudication && durableIntent
+      ? {
+          intentId: durableIntent.intentId,
+          createdAt: durableIntent.createdAt,
+          expectedMoveCount: durableIntent.expectedMoveCount,
+          pieceId: durableIntent.pieceId,
+          move: durableIntent.move,
+          uncertain: true,
+        }
+      : null;
     set({
-      game: created,
+      game,
       env,
       seed,
       tick: 0,
@@ -855,17 +994,30 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       objectiveCtx,
       // Netplay honours the level's own authored victory (else the objective preset); resetting it
       // here also stops a prior single-player game's override leaking into the match.
-      victoryOverride: level.victory ?? null,
-      resultDetail: null,
+      victoryOverride,
+      resultDetail: adjudicationResultDetail(initial.adjudication, localSide, !!victoryOverride),
       selectedId,
       focusedId: selectedId,
-      log: [`Multiplayer skirmish — ${objectiveSummary(objective, objectiveCtx.kingSide)}. You command ${youCommand}.`],
+      log,
       started: true,
       levelId: level.id,
       clock: null, // netplay is untimed in v1 (a shared wall-clock is future work)
       pendingPromotion: null,
+      sessionEpoch: epoch,
+      premoves: [],
       premoveInputOpen: false,
-      net: { lobbyId, localSide, moveCount: 0 },
+      testMode: false,
+      testMinCpuDelayMs: 0,
+      net: {
+        lobbyId,
+        localSide,
+        moveCount: 0,
+        pendingMove: restoredPending,
+        terminalResult: initial.adjudication
+          ? { expectedMoveCount: 0, winner: initial.adjudication.winner, reason: initial.adjudication.kind }
+          : null,
+        authoritativeResult: null,
+      },
     });
     // Deploy roll-call for the pieces this client commands (cosmetic; each client
     // voices only its own side).
@@ -874,11 +1026,71 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       .forEach((pc, i) => {
         const delay = SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER;
         playLandingSfx(env, pc.x, pc.y, delay, 0.7);
-        setTimeout(() => playArrival({ gain: 0.55 }), delay);
+        scheduleSessionEffect(() => playArrival({ gain: 0.55 }), delay);
       });
   },
 
-  applyRemoteMove: (pieceId, move) => { commitNet(pieceId, move); },
+  applyRemoteMove: (pieceId, move, intentId) => { commitNet(pieceId, move, intentId); },
+
+  rejectNetMove: (expectedMoveCount) => {
+    const s = get();
+    const pending = s.net?.pendingMove;
+    if (!s.net || !pending || pending.expectedMoveCount !== expectedMoveCount) return;
+    const selectedId = livingSelected(s.game, s.selectedId, s.net.localSide)
+      ?? livingSelected(s.game, pending.pieceId, s.net.localSide);
+    const focusedId = s.game.pieces.some((piece) => piece.id === s.focusedId && piece.alive)
+      ? s.focusedId
+      : selectedId;
+    clearPersistedNetIntent(s.net.lobbyId, pending.intentId);
+    set({
+      net: { ...s.net, pendingMove: null },
+      selectedId,
+      focusedId,
+      pendingPromotion: null,
+      premoveInputOpen: false,
+    });
+  },
+
+  markNetMoveUncertain: (expectedMoveCount) => {
+    const s = get();
+    const pending = s.net?.pendingMove;
+    if (!s.net || !pending || pending.expectedMoveCount !== expectedMoveCount || pending.uncertain) return;
+    set({ net: { ...s.net, pendingMove: { ...pending, uncertain: true } } });
+  },
+
+  freezeNetInput: () => {
+    const s = get();
+    if (!s.net) return;
+    set({
+      selectedId: null,
+      pendingPromotion: null,
+      premoves: [],
+      premoveInputOpen: false,
+    });
+  },
+
+  leaveNetSession: (lobbyId) => {
+    const s = get();
+    if (!s.net || s.net.lobbyId !== lobbyId) return;
+    const epoch = beginSession();
+    set({
+      started: false,
+      levelId: null,
+      victoryOverride: null,
+      resultDetail: null,
+      turnsElapsed: 0,
+      selectedId: null,
+      focusedId: null,
+      sessionEpoch: epoch,
+      pendingPromotion: null,
+      premoves: [],
+      premoveInputOpen: false,
+      testMode: false,
+      testMinCpuDelayMs: 0,
+      clock: null,
+      net: null,
+    });
+  },
 
   resign: () => {
     const s = get();
@@ -892,16 +1104,19 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   resignLocal: () => {
     const s = get();
     if (s.net || s.game.winner || !s.started) return;
-    stopClockTicker();
+    const epoch = beginSession();
     set({
       game: { ...s.game, winner: 'enemy', turn: 'done' },
       selectedId: null,
       focusedId: null,
+      sessionEpoch: epoch,
       premoves: [],
       premoveInputOpen: false,
       pendingPromotion: null,
       resultDetail: null,
       clock: s.clock ? { ...s.clock, running: false } : null,
+      testMode: false,
+      testMinCpuDelayMs: 0,
       log: ['Defeat — you resigned.', ...s.log].slice(0, 12),
     });
     persistMatch(get()); // game decided → drops the saved copy
@@ -909,8 +1124,14 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
 
   concludeNet: (winner, reason) => {
     const s = get();
-    if (!s.net || s.game.winner) return; // idempotent: already decided (or not netplay)
+    if (!s.net || s.net.authoritativeResult) return; // first published server frame wins
+    if (s.game.winner === winner && reason !== 'resign') {
+      set({ net: { ...s.net, authoritativeResult: { winner, reason } } });
+      return;
+    }
+    const epoch = beginSession();
     const localSide = s.net.localSide;
+    if (s.net.pendingMove) clearPersistedNetIntent(s.net.lobbyId, s.net.pendingMove.intentId);
     const copy = reason === 'resign'
       ? (winner === localSide ? 'Victory — your opponent resigned.' : 'Defeat — you resigned.')
       : netOutcomeCopy(winner, localSide);
@@ -918,18 +1139,38 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       game: { ...s.game, winner, turn: 'done' },
       selectedId: null,
       focusedId: null,
+      sessionEpoch: epoch,
       pendingPromotion: null,
+      resultDetail: reason === 'resign' ? null : s.resultDetail,
+      premoves: [],
       premoveInputOpen: false,
+      testMode: false,
+      testMinCpuDelayMs: 0,
+      net: {
+        ...s.net,
+        pendingMove: null,
+        terminalResult: reason === 'resign' ? null : s.net.terminalResult,
+        authoritativeResult: { winner, reason },
+      },
       log: [copy, ...s.log].slice(0, 12),
     });
   },
 
   resumeMatch: (match) => {
-    // A previous game's ticker must never outlive its game.
-    stopClockTicker();
-    const game = match.game;
-    const env = envFor(game);
-    const selectedId = firstPlayerId(game);
+    const epoch = beginSession();
+    const env = envFor(match.game);
+    const victoryOverride = match.victoryOverride ?? null;
+    const settled = settleCommittedPosition(match.game, {
+      victoryRules: victoryOverride ?? victoryRulesForObjective(match.objective, match.objectiveCtx),
+      ctx: match.objectiveCtx,
+      turnsElapsed: match.turnsElapsed,
+      env,
+    });
+    const game = settled.state;
+    const selectedId = game.winner ? null : firstPlayerId(game);
+    const log = settled.adjudication
+      ? [adjudicationCopy(settled.adjudication, 'player', !!victoryOverride), ...match.log].slice(0, 12)
+      : match.log;
     set({
       game,
       env,
@@ -939,9 +1180,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       objective: match.objective,
       objectiveCtx: match.objectiveCtx,
       // Back-compat: a match saved before ADR-0064 has no override → preset (null).
-      victoryOverride: match.victoryOverride ?? null,
-      resultDetail: null, // a resumed match is always mid-game (winner === null), so no result yet
-      log: match.log,
+      victoryOverride,
+      resultDetail: adjudicationResultDetail(settled.adjudication, 'player', !!victoryOverride),
+      log,
       levelId: match.levelId,
       // Restore the enemy policy so the ?ai=greedy A/B lever survives a reload
       // (older snapshots predate the field ⇒ default to the search AI).
@@ -954,11 +1195,14 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       premoves: [],
       premoveInputOpen: false,
       pendingPromotion: null,
+      sessionEpoch: epoch,
       // Resume with the clock paused; startClock re-arms the deadline from the
       // banked remainder when it's the player's live turn. A reload isn't thinking
       // time, so the player keeps the time they had at their last move.
       clock: match.clock ? { ...match.clock, running: false } : null,
       net: null, // netplay disables persistence, so a disk-resumed match is single-player
+      testMode: false,
+      testMinCpuDelayMs: 0,
     });
     startClock();
     // If the reload caught the game mid enemy-reply (the player had just moved, the
@@ -988,7 +1232,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
 
   movesForSelected: () => {
     const { game, selectedId, env, net, pendingPromotion } = get();
-    if (pendingPromotion) return [];
+    if (pendingPromotion || net?.pendingMove) return [];
     const side = net ? net.localSide : 'player';
     if (game.turn !== side || game.winner) return [];
     const p = game.pieces.find((q) => q.id === selectedId && q.alive && q.side === side);
@@ -998,21 +1242,21 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   tryMoveTo: (x, y) => {
     const s = get();
     const side = s.net ? s.net.localSide : 'player';
-    if (s.pendingPromotion) return;
+    if (s.pendingPromotion || s.net?.pendingMove) return;
     if (s.game.turn !== side || s.game.winner) return;
     const p = s.game.pieces.find((q) => q.id === s.selectedId && q.alive && q.side === side);
     if (!p) return;
     const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
     if (movePromotesPawn(s.game, p, mv)) {
-      set({ pendingPromotion: { pieceId: p.id, move: mv, choices: promotionChoicesForMove(s.game, p, mv) }, premoves: [], premoveInputOpen: false });
+      set({ pendingPromotion: { mode: 'move', pieceId: p.id, move: mv, choices: promotionChoicesForMove(s.game, p, mv) }, premoves: [], premoveInputOpen: false });
       return;
     }
     // Netplay is server-sequenced: DON'T apply locally — relay the target cell and let
     // the server's echo apply it in order on both boards (no optimistic apply, so a
     // dropped POST is a no-op the seat can retry, never a permanent desync). Clear the
     // selection for immediate "click registered" feedback; the echo sets the next one.
-    if (s.net) { if (netMoveSink) netMoveSink(p.id, { x: mv.x, y: mv.y }); set({ selectedId: null, focusedId: null, premoveInputOpen: false }); return; }
+    if (s.net) { submitNetMove(p.id, { x: mv.x, y: mv.y }); return; }
     // A deliberate manual move overrides any premove queued during the fire-beat — the
     // player took the wheel, so drop the chain rather than firing it a beat later.
     if (s.premoves.length || s.premoveInputOpen) set({ premoves: [], premoveInputOpen: false });
@@ -1027,6 +1271,23 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const pending = s.pendingPromotion;
     if (!pending || !pending.choices.includes(type)) return;
     const side = s.net ? s.net.localSide : 'player';
+
+    if (pending.mode === 'premove') {
+      const projected = provisionalBoard(s.game, s.premoves, side);
+      const p = projected.pieces.find((q) => q.id === pending.pieceId && q.alive && q.side === side);
+      const mv = premoveTargets(s.game, s.premoves, pending.pieceId, side)
+        .find((move) => move.x === pending.move.x && move.y === pending.move.y);
+      if (!p || !mv || !movePromotesPawn(projected, p, mv)) {
+        set({ pendingPromotion: null });
+        return;
+      }
+      set({
+        pendingPromotion: null,
+        premoves: [...s.premoves, { pieceId: p.id, x: mv.x, y: mv.y, promotion: type }],
+      });
+      return;
+    }
+
     const p = s.game.pieces.find((q) => q.id === pending.pieceId && q.alive && q.side === side);
     const mv = p
       ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === pending.move.x && m.y === pending.move.y)
@@ -1036,8 +1297,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       return;
     }
     if (s.net) {
-      if (netMoveSink) netMoveSink(p.id, { x: mv.x, y: mv.y, promotion: type });
-      set({ pendingPromotion: null, selectedId: null, focusedId: null, premoveInputOpen: false });
+      if (submitNetMove(p.id, { x: mv.x, y: mv.y, promotion: type })) set({ pendingPromotion: null });
       return;
     }
     if (s.premoves.length || s.premoveInputOpen) set({ premoves: [], premoveInputOpen: false });
@@ -1046,14 +1306,27 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
 
   queueMove: (pieceId, x, y) => {
     const s = get();
-    // Premoves are single-player only — the local AI reply is what drains them, and a
-    // netplay match has no such local reply. They're also the OPPONENT-turn action; the only
-    // player-turn exception is the short post-reply input window while the enemy is still
-    // visibly landing. Nothing queues onto a decided game.
-    if (s.net || s.pendingPromotion || (s.game.turn === 'player' && !s.premoveInputOpen) || s.game.winner) return;
+    const side = s.net ? s.net.localSide : 'player';
+    // Premoves are the opponent-turn action for whichever side this client controls. The
+    // only local-turn exception is the short post-reply landing beat.
+    if (s.pendingPromotion || s.net?.pendingMove || (s.game.turn === side && !s.premoveInputOpen) || s.game.winner) return;
     // Validate against the PROVISIONAL board (current board + the moves already queued)
     // so the chain builds on itself; the tip stays legal for the click that follows.
-    if (!premoveTargets(s.game, s.premoves, pieceId).some((m) => m.x === x && m.y === y)) return;
+    const mv = premoveTargets(s.game, s.premoves, pieceId, side).find((m) => m.x === x && m.y === y);
+    if (!mv) return;
+    const projected = provisionalBoard(s.game, s.premoves, side);
+    const p = projected.pieces.find((q) => q.id === pieceId && q.alive && q.side === side);
+    if (p && movePromotesPawn(projected, p, mv)) {
+      set({
+        pendingPromotion: {
+          mode: 'premove',
+          pieceId,
+          move: mv,
+          choices: promotionChoicesForMove(projected, p, mv),
+        },
+      });
+      return;
+    }
     set({ premoves: [...s.premoves, { pieceId, x, y }] });
   },
 

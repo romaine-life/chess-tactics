@@ -3,6 +3,8 @@ import { createSkirmish } from './setup';
 import { applyMove, gameEnv, legalMoves, livingPieces, recordPosition } from '../core/rules';
 import { createBlankLevel } from '../core/level';
 import type { GameState, Move, Side } from '../core/types';
+import { settleCommittedPosition } from '../core/adjudication';
+import { kingSideOf, victoryRulesForObjective } from '../core/objectives';
 
 // The netplay contract (see store.ts newNetMatch/applyRemoteMove + Skirmish.tsx relay):
 //   * both clients build the SAME board from (level, seed) — with the AI disabled the
@@ -12,8 +14,8 @@ import type { GameState, Move, Side } from '../core/types';
 //   * every applyMove is relayed in order and folded through the same pure core.
 // This test proves that two independent boards fed the same relayed move sequence stay
 // byte-identical at every step and reach the same outcome — the whole basis of the
-// relay design. It deliberately mirrors the store's applyMove usage, so every
-// move flips the turn: strict one-move-per-turn alternation.
+// relay design. It deliberately mirrors the store's committed-position pipeline:
+// mechanics → recordPosition → canonical adjudication.
 
 // The canonical env builder (terrain + fences + castle rules), exactly as the store's
 // envFor does — so re-derivation here honours every gameplay layer, castling included.
@@ -53,18 +55,29 @@ describe('netplay relay determinism', () => {
       let host = createSkirmish({ seed });
       let guest = createSkirmish({ seed });
       expect(guest).toEqual(host);
+      const ctx = { kingSide: kingSideOf(host.pieces) };
+      const victoryRules = victoryRulesForObjective('capture-king', ctx);
+      let turnsElapsed = 0;
+      host = settleCommittedPosition(host, { victoryRules, ctx, turnsElapsed, env: env(host) }).state;
+      guest = settleCommittedPosition(guest, { victoryRules, ctx, turnsElapsed, env: env(guest) }).state;
 
       let relayed = 0;
       for (let i = 0; i < 60; i += 1) {
         if (host.winner) break;
         const chosen = pickMove(host);
         if (!chosen) break; // side to move is stuck — game would resolve terminal
+        const prevTurn = host.turn;
         // Host applies locally (as commitNet does for the local move)...
-        host = applyMove(host, chosen.pieceId, chosen.move).state;
+        const hostMoved = applyMove(host, chosen.pieceId, chosen.move).state;
+        host = recordPosition(hostMoved, env(hostMoved));
         // ...and relays ONLY { pieceId, x, y }. The guest re-derives + applies.
         const canon = reDerive(guest, chosen.pieceId, chosen.move.x, chosen.move.y);
         expect(canon, `seed ${seed}, move ${i}: guest could not re-derive the relayed move`).not.toBeNull();
-        guest = applyMove(guest, chosen.pieceId, canon as Move).state;
+        const guestMoved = applyMove(guest, chosen.pieceId, canon as Move).state;
+        guest = recordPosition(guestMoved, env(guestMoved));
+        if (prevTurn === 'enemy') turnsElapsed += 1;
+        host = settleCommittedPosition(host, { victoryRules, ctx, turnsElapsed, env: env(host) }).state;
+        guest = settleCommittedPosition(guest, { victoryRules, ctx, turnsElapsed, env: env(guest) }).state;
         relayed += 1;
         // The crux: after each relayed move the two boards are byte-identical.
         expect(guest, `seed ${seed}: boards diverged after ${relayed} relayed moves`).toEqual(host);
