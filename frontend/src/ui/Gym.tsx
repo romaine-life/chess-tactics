@@ -204,6 +204,11 @@ const GYM_CSS = `
 .gym-replay-tempo { display:flex; align-items:center; gap:6px; font-size:11px; color:#93a0b0; }
 .gym-replay-tempo input[type=range] { width:90px; min-width:0; }
 .gym-replay-tempo .gym-num { min-width:32px; text-align:right; }
+/* Label-toggling buttons hold a FIXED width so ▶/⏸ swaps never shift their neighbours.
+   The watch button needs the extra selector weight to beat the rail's
+   .tileset-control-stack button { min-width:0 }. */
+.gym-replay-playout-btn { width:90px; text-align:center; }
+.gym-controls .gym-run-row .gym-td-watch-btn { min-width:96px; text-align:center; }
 @media (max-width:1180px) { .gym-td-split.has-stage { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(320px,1fr); } }
 @media (max-width:980px) {
   .gym-run-detail.has-replay { grid-template-columns:1fr; grid-template-rows:minmax(180px,.45fr) minmax(300px,1fr); }
@@ -1176,10 +1181,10 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
           </label>
         ) : null}
         {tdWatching ? (
-          <button type="button" className="gym-replay-focus-btn" onClick={() => setTdWatching(false)}
+          <button type="button" className="gym-replay-focus-btn gym-replay-playout-btn" onClick={() => setTdWatching(false)}
             title="Pause — the game keeps its place">⏸ pause</button>
         ) : tdWalking ? (
-          <button type="button" className="gym-replay-focus-btn" onClick={() => { tdWatchScopeRef.current = 'game'; setTdWatching(true); }} disabled={tdBusy}
+          <button type="button" className="gym-replay-focus-btn gym-replay-playout-btn" onClick={() => { tdWatchScopeRef.current = 'game'; setTdWatching(true); }} disabled={tdBusy}
             title="Watch THIS game play out at the tempo, then hold at its end for inspection — the next game is not dealt">▶ play out</button>
         ) : null}
         {tdWalking ? <button type="button" className="gym-replay-focus-btn" onClick={tdWalkToEnd} disabled={tdBusy} title="Jump the dealt game to its end instantly and land its update">⏩ to end</button> : null}
@@ -1817,7 +1822,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   </datalist>
                 </div>
                 <div className="gym-run-row">
-                  <button type="button" className="play" onClick={() => { tdWatchScopeRef.current = 'run'; setTdWatching((w) => !w); }} disabled={!tdReady || (tdComplete && !tdWalking)}
+                  <button type="button" className="play gym-td-watch-btn" onClick={() => { tdWatchScopeRef.current = 'run'; setTdWatching((w) => !w); }} disabled={!tdReady || (tdComplete && !tdWalking)}
                     title={tdWatching ? 'Pause — the game in play keeps its place' : 'The system plays by itself, one step per beat: each ply on the board, the update landing at every game’s end, game after game, until you pause'}>
                     {tdWatching ? '⏸ pause' : '▶ watch'}
                   </button>
