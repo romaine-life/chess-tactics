@@ -29,8 +29,9 @@ describe('runSolve — mode:search dispatch (feasibility gate routes hard/infeas
   it('Break the Line is a search-mode board and runSolve returns a well-formed search SolveResult', () => {
     // Break the Line is `hard` (too big to strong-solve) → the feasibility gate selects search.
     expect(estimateFeasibility(breakLineLevel).recommendedMode).toBe('search');
-    // A tight node budget so this finishes fast: the search runner returns a bounded partial.
-    const bounds = { wallClockMs: 30_000, maxStates: 50_000, maxMemoryBytes: 3 * 2 ** 30 };
+    // This is a routing/shape smoke, so a 10k-node cap intentionally returns a bounded
+    // partial without making the parallel suite pay for a deeper proof attempt.
+    const bounds = { wallClockMs: 30_000, maxStates: 10_000, maxMemoryBytes: 3 * 2 ** 30 };
     const res = runSolve(breakLineLevel, bounds);
     expect(res.mode).toBe('search'); // routed to the Phase-4 delegate, not retrograde.
     expect(res).toHaveProperty('rootBounds');

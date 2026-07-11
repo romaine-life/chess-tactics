@@ -5,6 +5,7 @@
 // are the shared contract with backend/server.js — keep them in lockstep.
 
 import { HttpError } from './http';
+import type { Level, ObjectiveType } from '../core/level';
 
 export interface LobbyUser {
   name?: string;
@@ -21,19 +22,43 @@ export interface Lobby {
   seats: { filled: number; total: number };
   viewer_role: 'host' | 'guest' | 'observer';
   level_id: string | null;
+  /** Eligibility resolved by the server from canonical level content. Null means the
+   *  selection is unavailable; true is blocked until shared clocks ship. */
+  level_timed: boolean | null;
+  level_name: string | null;
+  level_objective: ObjectiveType | null;
+  /** Present on participant/detail projections after Start. This immutable canonical
+   *  snapshot—not the mutable campaign store—is the simulation input for reconnect. */
+  level_snapshot?: Level | null;
+  level_fingerprint?: string | null;
   seed: number | null;
   move_count: number;
   your_side: 'player' | 'enemy' | null;
-  // Terminal outcome from a non-move event (a player resigned), in board terms, or null
-  // while the match is live. Clients end the game off this — it rides the lobby frame so
-  // it survives reconnect/late-join. Checkmate/stalemate/objective ends never set it (they
-  // resolve identically on both boards from the deterministic move replay).
-  result: { winner: 'player' | 'enemy'; reason: 'resign' } | null;
+  // Durable terminal outcome in board terms. Deterministic gameplay results are reported
+  // at an exact relay count; resignations originate on the server.
+  result: LobbyResult | null;
+  /** One seat has reported a deterministic terminal position and the server is retaining
+   *  the match while it waits for the other seat's independent matching report. */
+  result_pending: boolean;
+  /** Both seats reported different terminal states for the same frozen prefix. */
+  result_disputed: boolean;
+}
+
+export type LobbyGameResultReason = 'victory-rule' | 'checkmate' | 'stalemate' | 'fifty-move' | 'threefold';
+export interface LobbyResult {
+  winner: 'player' | 'enemy' | 'draw';
+  reason: 'resign' | LobbyGameResultReason;
+}
+export interface ReportedLobbyResult extends LobbyResult {
+  reason: LobbyGameResultReason;
+  expectedMoveCount: number;
 }
 
 export interface LobbyList {
   lobbies: Lobby[];
   current: Lobby | null;
+  /** Closed participant-owned tombstones still awaiting this seat's acknowledgement. */
+  recoverable: Lobby[];
 }
 
 // One relayed applyMove. `i` is its 0-based position in the lobby's move log —
@@ -43,6 +68,7 @@ export interface LobbyList {
 // rook hop are RE-DERIVED on each board from its own legalMoves, never relayed.
 export interface MoveEvent {
   i: number;
+  intentId: string;
   side: 'player' | 'enemy';
   pieceId: string;
   move: { x: number; y: number; promotion?: 'queen' | 'rook' | 'bishop' | 'knight' };
@@ -57,7 +83,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     credentials: 'include',
     body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
   });
-  if (!res.ok) throw new HttpError(`${method} ${path}`, res.status);
+  if (!res.ok) throw await HttpError.fromResponse(`${method} ${path}`, res);
   return res.status === 204 ? (undefined as T) : (res.json() as Promise<T>);
 }
 
@@ -77,8 +103,8 @@ export function joinLobby(id: string): Promise<{ lobby: Lobby }> {
   return request<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/join`);
 }
 
-export function leaveLobby(id: string): Promise<void> {
-  return request<void>('POST', `/api/lobbies/${encodeURIComponent(id)}/leave`);
+export function leaveLobby(id: string, completion?: ReportedLobbyResult): Promise<void> {
+  return request<void>('POST', `/api/lobbies/${encodeURIComponent(id)}/leave`, completion);
 }
 
 export function startLobby(id: string): Promise<{ lobby: Lobby }> {
@@ -89,8 +115,19 @@ export function setLobbyLevel(id: string, levelId: string): Promise<{ lobby: Lob
   return request<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/level`, { levelId });
 }
 
-export function postMove(id: string, pieceId: string, move: MoveEvent['move']): Promise<{ move: MoveEvent }> {
-  return request<{ move: MoveEvent }>('POST', `/api/lobbies/${encodeURIComponent(id)}/moves`, { pieceId, move });
+export function postMove(
+  id: string,
+  pieceId: string,
+  move: MoveEvent['move'],
+  expectedMoveCount: number,
+  intentId: string,
+): Promise<{ move: MoveEvent }> {
+  return request<{ move: MoveEvent }>('POST', `/api/lobbies/${encodeURIComponent(id)}/moves`, {
+    pieceId,
+    move,
+    expectedMoveCount,
+    intentId,
+  });
 }
 
 // Concede the match. The server records the terminal result (the other side wins) and
@@ -98,6 +135,11 @@ export function postMove(id: string, pieceId: string, move: MoveEvent['move']): 
 // frame arrives (see Skirmish's onLobby), not optimistically — mirroring the move relay.
 export function resignLobby(id: string): Promise<{ lobby: Lobby }> {
   return request<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/resign`);
+}
+
+/** Persist the deterministic result both clients derive from one committed relay. */
+export function reportLobbyResult(id: string, result: ReportedLobbyResult): Promise<{ lobby: Lobby }> {
+  return request<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/result`, result);
 }
 
 export function fetchMovesSince(id: string, since: number): Promise<{ moves: MoveEvent[] }> {

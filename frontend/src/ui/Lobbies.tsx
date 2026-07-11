@@ -20,6 +20,9 @@ import { HomepageBackdrop } from './HomepageBackdrop';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { navigateApp } from './navigation';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { clearPersistedNetIntent } from '../game/netIntentPersistence';
+import { OBJECTIVE_LABEL } from '../core/objectives';
+import { withNetSeatLease } from '../game/netSeatLease';
 
 function displayName(user: LobbyUser | null, fallback: string): string {
   return user?.name || user?.email || fallback;
@@ -119,6 +122,7 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
   // Latest lobby data, read inside stable callbacks (SSE handler) without re-subscribing.
   const dataRef = useRef<LobbyList | null>(null);
   dataRef.current = data;
+  const refreshGenerationRef = useRef(0);
   // Guard so the guest auto-launch fires exactly once even as refresh() re-runs.
   const launchedRef = useRef(false);
 
@@ -130,8 +134,17 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
   }, [embedded]);
 
   const refresh = async () => {
-    try { setData(await fetchLobbies()); setStatus(''); }
-    catch (e) { if (isUnauthorized(e)) setData(null); else setStatus(`Error: ${(e as Error).message}`); }
+    const generation = ++refreshGenerationRef.current;
+    try {
+      const next = await fetchLobbies();
+      if (generation !== refreshGenerationRef.current) return;
+      setData(next);
+      setStatus('');
+    } catch (e) {
+      if (generation !== refreshGenerationRef.current) return;
+      if (isUnauthorized(e)) setData(null);
+      else setStatus(`Error: ${(e as Error).message}`);
+    }
   };
 
   useEffect(() => {
@@ -173,7 +186,8 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
 
   const pickLevel = (levelId: string) => act(async () => {
     const id = dataRef.current?.current?.id;
-    if (id) await setLobbyLevel(id, levelId);
+    const level = useCampaigns.getState().levels[levelId];
+    if (id && level) await setLobbyLevel(id, levelId);
   })();
 
   const startHere = act(async () => {
@@ -183,10 +197,52 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
     navigateApp(`/play?lobby=${encodeURIComponent(id)}`, { replace: true });
   });
 
+  const openMatch = (id: string) => {
+    navigateApp(`/play?lobby=${encodeURIComponent(id)}`, { replace: true });
+  };
+
+  const mutateOwnedSeat = async <T,>(lobby: Lobby, action: () => Promise<T>): Promise<T> => {
+    if (!lobby.your_side) throw new Error('Only a seated player can change this match.');
+    const leased = await withNetSeatLease(lobby.id, lobby.your_side, action);
+    if (!leased.acquired) {
+      throw new Error(leased.reason === 'unavailable'
+        ? 'This seat is active in another tab; use that tab for Leave or concession.'
+        : 'Safe multiplayer control is unavailable in this browser.');
+    }
+    return leased.value;
+  };
+
+  const leaveCurrent = act(async () => {
+    const lobby = dataRef.current?.current;
+    if (!lobby) return;
+    const requiresConcession = lobby.phase === 'started' && !lobby.result;
+    if (
+      requiresConcession
+      && !window.confirm(lobby.result_disputed
+        ? 'The clients disagree about the result. Concede and close this match recovery?'
+        : lobby.result_pending
+          ? 'Result confirmation is still pending. Leaving now concedes the match to your opponent. Continue?'
+          : 'Leave this live match? This resigns the game to your opponent.')
+    ) return;
+    await mutateOwnedSeat(lobby, () => leaveLobby(lobby.id));
+    clearPersistedNetIntent(lobby.id);
+  });
+
+  const acknowledgeClosed = (lobby: Lobby, requiresConcession = false) => act(async () => {
+    if (requiresConcession && !window.confirm('Concede this unresolved match and acknowledge its recovery record?')) return;
+    await mutateOwnedSeat(lobby, () => leaveLobby(lobby.id));
+    clearPersistedNetIntent(lobby.id);
+  });
+
   const current = data?.current ?? null;
   const isHost = current?.viewer_role === 'host';
-  const canStart = Boolean(isHost && current?.guest && current?.level_id);
   const chosenLevel = useCampaigns((s) => (current?.level_id ? s.levels[current.level_id] : undefined));
+  const chosenLevelName = current?.level_name ?? chosenLevel?.name;
+  const timedLevelBlocked = current?.level_timed === true;
+  const canStart = Boolean(
+    isHost && current?.phase === 'ready' && current.guest && current.level_id
+    && current.level_timed === false,
+  );
 
   // The lobbies content — one utility column (host/join + the lobby list, or a sign-in prompt).
   const content = me && !me.signed_in ? (
@@ -214,20 +270,25 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
                       <strong>{current.name}</strong>
                       <span>
                         {current.phase} / {current.seats.filled}/{current.seats.total}
-                        {chosenLevel ? ` · ${chosenLevel.name}` : ''}
+                        {chosenLevelName ? ` · ${chosenLevelName}` : ''}
                       </span>
-                      {chosenLevel ? <span>{levelObjectiveLine(chosenLevel)}</span> : null}
+                      {current.level_objective ? (
+                        <span>Published objective: {OBJECTIVE_LABEL[current.level_objective]}</span>
+                      ) : null}
+                      {timedLevelBlocked ? (
+                        <span role="alert">Timed levels need a shared multiplayer clock and cannot start in a lobby yet.</span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="utility-lobby-seats">
                     <LobbySeat user={current.host} label="Host" />
                     <LobbySeat user={current.guest} label="Guest" />
                   </div>
-                  {isHost && current.phase !== 'started' ? (
+                  {isHost && (current.phase === 'waiting' || current.phase === 'ready') ? (
                     <LevelPicker current={current} selectedId={current.level_id} onPick={pickLevel} />
                   ) : null}
                   <div className="utility-actions">
-                    {isHost ? (
+                    {isHost && current.phase === 'ready' ? (
                       <button
                         type="button"
                         className="utility-button utility-button-primary"
@@ -238,13 +299,59 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
                         Start
                       </button>
                     ) : null}
-                    <button type="button" className="utility-button utility-button-danger" onClick={act(() => leaveLobby(current.id))}>
+                    {current.phase === 'started' ? (
+                      <button type="button" className="utility-button utility-button-primary" onClick={() => openMatch(current.id)}>
+                        <span className="utility-button-icon icon-start" aria-hidden="true" />
+                        {current.result ? 'View result' : (current.result_pending || current.result_disputed ? 'Resume recovery' : 'Resume match')}
+                      </button>
+                    ) : null}
+                    <button type="button" className="utility-button utility-button-danger" onClick={leaveCurrent}>
                       <span className="utility-button-icon icon-leave" aria-hidden="true" />
-                      Leave
+                      {current.result_disputed
+                        ? 'Concede and leave'
+                        : current.phase === 'started' && !current.result
+                          ? 'Resign and leave'
+                          : 'Leave'}
                     </button>
                   </div>
                 </section>
               ) : null}
+              {(data?.recoverable ?? []).map((lobby) => (
+                <section key={lobby.id} className="utility-lobby-card is-current" data-testid="recoverable-lobby">
+                  <div className="utility-lobby-main">
+                    <span className="utility-row-icon icon-players" aria-hidden="true" />
+                    <div className="utility-lobby-copy">
+                      <strong>{lobby.name}</strong>
+                      <span>{lobby.result
+                        ? 'Finished match'
+                        : lobby.result_disputed
+                          ? 'Result disputed'
+                          : lobby.result_pending
+                            ? 'Result confirmation pending'
+                            : 'Closed match'}</span>
+                      <span>Your seat still has a recoverable board and move history.</span>
+                    </div>
+                  </div>
+                  <div className="utility-actions">
+                    {lobby.level_id && lobby.seed !== null ? (
+                      <button type="button" className="utility-button utility-button-primary" onClick={() => openMatch(lobby.id)}>
+                        <span className="utility-button-icon icon-start" aria-hidden="true" />
+                        {lobby.result ? 'View result' : 'Resume recovery'}
+                      </button>
+                    ) : null}
+                    {lobby.result || lobby.result_pending || lobby.result_disputed || (!lobby.level_id || lobby.seed === null) ? (
+                      <button
+                        type="button"
+                        className="utility-button utility-button-danger"
+                        onClick={acknowledgeClosed(lobby, lobby.result_pending || lobby.result_disputed)}
+                      >
+                        <span className="utility-button-icon icon-leave" aria-hidden="true" />
+                        {lobby.result_pending || lobby.result_disputed ? 'Concede and acknowledge' : 'Acknowledge'}
+                      </button>
+                    ) : null}
+                  </div>
+                </section>
+              ))}
               <div className="utility-lobby-list">
                 {(data?.lobbies ?? []).filter((l) => !current || l.id !== current.id).map((l) => (
                   <div key={l.id} className="utility-lobby-row">

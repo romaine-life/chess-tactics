@@ -13,7 +13,7 @@ import type { GameEvent, GameState, Move } from '../core/types';
 import { applyMove, enemyMove, gameEnv, recordPosition, type MoveEnv } from '../core/rules';
 import { searchEnemyMove, type EvalWeights } from '../core/ai';
 import { createRng, type Rng } from '../core/rng';
-import type { ObjectiveType } from '../core/level';
+import type { ObjectiveType, VictoryRules } from '../core/level';
 import type { ObjectiveContext } from '../core/objectives';
 
 // Live-play search budget: bounded by NODES + DEPTH, never wall-clock, so the reply is
@@ -29,6 +29,9 @@ export interface EnemyReplyRequest {
   tick: number;
   aiMode: 'search' | 'greedy';
   objective: ObjectiveType;
+  /** Exact authored override or expanded preset. Required so search cannot silently
+   * plan against a different terminal game than the live match adjudicates. */
+  victoryRules: VictoryRules;
   ctx: ObjectiveContext;
   turnsElapsed: number;
   /** Resolved on the main thread (the adopted-weights cache) and passed in, so the worker needs
@@ -54,7 +57,12 @@ export function resolveEnemyReply(req: EnemyReplyRequest): EnemyReplyResult {
       ? enemyMove
       : (g, rng, e) => searchEnemyMove(
           g, rng, e,
-          { objective: req.objective, ctx: req.ctx, turnsElapsed: req.turnsElapsed },
+          {
+            objective: req.objective,
+            victoryRules: req.victoryRules,
+            ctx: req.ctx,
+            turnsElapsed: req.turnsElapsed,
+          },
           { ...LIVE_SEARCH, weights: req.weights },
         );
 

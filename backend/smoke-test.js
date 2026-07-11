@@ -152,6 +152,7 @@ const child = spawn(process.execPath, ['supervisor.js'], {
   cwd: __dirname,
   env: {
     ...process.env,
+    NODE_ENV: 'test',
     AUTH_BASE_URL: `http://127.0.0.1:${authPort}`,
     PORT: String(port),
     PUBLIC_ORIGIN: 'https://chess.romaine.life',
@@ -161,6 +162,9 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     BGM_READ_URL: `http://127.0.0.1:${bgmPort}`,
     HOT_BACKEND_DIR: hotBackendDir,
     STATIC_FRONTEND_DIR: hotStaticDir,
+    LOBBY_TEST_LEVEL_METADATA: JSON.stringify({
+      'off-l-smoke-timed': { level: { id: 'off-l-smoke-timed', name: 'Smoke Timed Level', objective: 'survive', timeControl: { initialSeconds: 60, incrementSeconds: 0 } } },
+    }),
     // The mock auth returns player@example.com for any non-rival session; make that
     // the official-campaigns admin so the requireAdmin path is exercised (ADR-0038).
     ADMIN_EMAILS: 'player@example.com',
@@ -2277,8 +2281,8 @@ async function main() {
     throw new Error(`Start without a level should 409 no_level: ${startNoLevel.statusCode} ${startNoLevel.body}`);
   }
 
-  // Only the host may pick the level; a missing levelId is a 400.
-  const rivalSetLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-crown-valoria-01' }));
+  // Only the host may pick a canonical official level; timing comes from its content.
+  const rivalSetLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-test' }));
   if (rivalSetLevel.statusCode !== 403) {
     throw new Error(`Guest should not be able to set the lobby level: ${rivalSetLevel.statusCode} ${rivalSetLevel.body}`);
   }
@@ -2286,9 +2290,25 @@ async function main() {
   if (missingLevelId.statusCode !== 400 || JSON.parse(missingLevelId.body).error !== 'missing_level_id') {
     throw new Error(`Setting a level without an id should 400 missing_level_id: ${missingLevelId.statusCode} ${missingLevelId.body}`);
   }
-  const setLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-crown-valoria-01' }));
+  const unknownCanonicalLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-missing-smoke' }));
+  if (unknownCanonicalLevel.statusCode !== 404 || JSON.parse(unknownCanonicalLevel.body).error !== 'level_not_found') {
+    throw new Error(`Unknown canonical level should 404 level_not_found: ${unknownCanonicalLevel.statusCode} ${unknownCanonicalLevel.body}`);
+  }
+  const setTimedLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-smoke-timed', timed: false }));
+  if (setTimedLevel.statusCode !== 200 || JSON.parse(setTimedLevel.body).lobby.level_timed !== true) {
+    throw new Error(`Unexpected timed-level response: ${setTimedLevel.statusCode} ${setTimedLevel.body}`);
+  }
+  const startTimedLevel = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  if (startTimedLevel.statusCode !== 409 || JSON.parse(startTimedLevel.body).error !== 'timed_level_unsupported') {
+    throw new Error(`Timed level should 409 timed_level_unsupported: ${startTimedLevel.statusCode} ${startTimedLevel.body}`);
+  }
+  // This id is intentionally absent from LOBBY_TEST_LEVEL_METADATA: Level and Start
+  // must resolve the exact DB-backed official document written earlier in this smoke.
+  const setLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-test', timed: true }));
   const setLevelBody = JSON.parse(setLevel.body);
-  if (setLevel.statusCode !== 200 || setLevelBody.lobby.level_id !== 'off-l-crown-valoria-01' || setLevelBody.lobby.your_side !== 'player') {
+  if (setLevel.statusCode !== 200 || setLevelBody.lobby.level_id !== 'off-l-test' || setLevelBody.lobby.level_timed !== false
+    || setLevelBody.lobby.level_name !== 'Official Exact Save' || setLevelBody.lobby.level_objective !== 'capture-all'
+    || setLevelBody.lobby.your_side !== 'player') {
     throw new Error(`Unexpected set-level response: ${setLevel.statusCode} ${setLevel.body}`);
   }
 
@@ -2300,27 +2320,27 @@ async function main() {
 
   // Relay moves. Host ('player') moves first (index 0), then guest ('enemy') at index 1 —
   // strict one-move-per-turn alternation is enforced server-side (host=even, guest=odd).
-  const hostMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-1', move: { x: 3, y: 4 } }));
+  const hostMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-host-0', expectedMoveCount: 0, pieceId: 'p-1', move: { x: 3, y: 4 } }));
   const hostMoveBody = JSON.parse(hostMove.body);
   if (hostMove.statusCode !== 200 || hostMoveBody.move.i !== 0 || hostMoveBody.move.side !== 'player' || hostMoveBody.move.pieceId !== 'p-1') {
     throw new Error(`Unexpected host move response: ${hostMove.statusCode} ${hostMove.body}`);
   }
   // Turn integrity: the host cannot move again out of turn (index 1 belongs to the guest).
-  const outOfTurn = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-2', move: { x: 1, y: 1 } }));
+  const outOfTurn = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-host-out-of-turn', expectedMoveCount: 1, pieceId: 'p-2', move: { x: 1, y: 1 } }));
   if (outOfTurn.statusCode !== 409 || JSON.parse(outOfTurn.body).error !== 'not_your_turn') {
     throw new Error(`Out-of-turn move should 409 not_your_turn: ${outOfTurn.statusCode} ${outOfTurn.body}`);
   }
-  const guestMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'e-1', move: { x: 3, y: 4 } }));
+  const guestMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-guest-1', expectedMoveCount: 1, pieceId: 'e-1', move: { x: 3, y: 4 } }));
   const guestMoveBody = JSON.parse(guestMove.body);
   if (guestMove.statusCode !== 200 || guestMoveBody.move.i !== 1 || guestMoveBody.move.side !== 'enemy' || guestMoveBody.move.pieceId !== 'e-1') {
     throw new Error(`Unexpected guest move response: ${guestMove.statusCode} ${guestMove.body}`);
   }
   // Payload validation runs before the turn check, so a malformed move is 400 bad_move.
-  const badMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-1', move: { x: 'nope' } }));
+  const badMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-bad-move', expectedMoveCount: 2, pieceId: 'p-1', move: { x: 'nope' } }));
   if (badMove.statusCode !== 400 || JSON.parse(badMove.body).error !== 'bad_move') {
     throw new Error(`Malformed move should 400 bad_move: ${badMove.statusCode} ${badMove.body}`);
   }
-  const outsiderMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'x-1', move: { x: 1, y: 1 } }));
+  const outsiderMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-outsider', expectedMoveCount: 2, pieceId: 'x-1', move: { x: 1, y: 1 } }));
   if (outsiderMove.statusCode !== 401) {
     throw new Error(`Anonymous move should require sign-in: ${outsiderMove.statusCode} ${outsiderMove.body}`);
   }
@@ -2331,7 +2351,7 @@ async function main() {
   }
   const startedList = await get('/api/lobbies', { cookie: 'better-auth.session=abc' });
   const startedListBody = JSON.parse(startedList.body);
-  if (startedList.statusCode !== 200 || startedListBody.current.move_count !== 2 || startedListBody.current.level_id !== 'off-l-crown-valoria-01') {
+  if (startedList.statusCode !== 200 || startedListBody.current.move_count !== 2 || startedListBody.current.level_id !== 'off-l-test') {
     throw new Error(`Started lobby should expose move_count/level_id: ${startedList.statusCode} ${startedList.body}`);
   }
 
@@ -2355,7 +2375,7 @@ async function main() {
     throw new Error(`Resigned lobby should expose the result to the host: ${resignedView.statusCode} ${resignedView.body}`);
   }
   // The match is over — further moves are rejected rather than re-opening a decided game.
-  const moveAfterResign = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-2', move: { x: 5, y: 5 } }));
+  const moveAfterResign = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-after-resign', expectedMoveCount: 2, pieceId: 'p-2', move: { x: 5, y: 5 } }));
   if (moveAfterResign.statusCode !== 409 || JSON.parse(moveAfterResign.body).error !== 'match_over') {
     throw new Error(`Move after resign should 409 match_over: ${moveAfterResign.statusCode} ${moveAfterResign.body}`);
   }
@@ -2365,16 +2385,15 @@ async function main() {
   if (hostResign.statusCode !== 200 || hostResignBody.lobby.result.winner !== 'player') {
     throw new Error(`Resign should be idempotent (first result kept): ${hostResign.statusCode} ${hostResign.body}`);
   }
-  // Re-starting the lobby begins a fresh match: the prior game's move log AND result are
-  // cleared, so a reused lobby never replays the old game or carries a stale outcome.
+  // Start is a one-shot ready→started transition; it cannot reset a live/finished match.
   const restart = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
   const restartBody = JSON.parse(restart.body);
-  if (restart.statusCode !== 200 || restartBody.lobby.phase !== 'started' || restartBody.lobby.move_count !== 0 || restartBody.lobby.result !== null) {
-    throw new Error(`Re-start should clear moves + result: ${restart.statusCode} ${restart.body}`);
+  if (restart.statusCode !== 409 || restartBody.error !== 'lobby_already_started') {
+    throw new Error(`Re-start should 409 lobby_already_started: ${restart.statusCode} ${restart.body}`);
   }
   const restartBackfill = await get(`/api/lobbies/${lobbyId}/moves?since=0`, { cookie: 'better-auth.session=abc' });
-  if (restartBackfill.statusCode !== 200 || JSON.parse(restartBackfill.body).moves.length !== 0) {
-    throw new Error(`Re-started lobby should have an empty move log: ${restartBackfill.statusCode} ${restartBackfill.body}`);
+  if (restartBackfill.statusCode !== 200 || JSON.parse(restartBackfill.body).moves.length !== 2) {
+    throw new Error(`Rejected Re-start must preserve move log: ${restartBackfill.statusCode} ${restartBackfill.body}`);
   }
 
   const redirect = await get('/api/auth/sign-in?returnTo=%2Fplay');

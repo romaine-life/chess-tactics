@@ -49,6 +49,32 @@ describe('playLevelGame', () => {
     expect(record.plies).toBe(0);
   });
 
+  it('uses an authored victory override at the initial position and preserves its rule', () => {
+    const level = createBlankLevel('sp-authored', 'Authored', 4, 4);
+    level.objective = 'capture-all';
+    level.layers.units = [
+      { x: 0, y: 3, type: 'king', side: 'player' },
+      { x: 3, y: 0, type: 'king', side: 'enemy' },
+      { x: 2, y: 0, type: 'pawn', side: 'enemy' },
+    ];
+    // Capture-all would continue (two enemies live). This exact override is
+    // already true because the enemy has no bishop.
+    level.victory = [{
+      name: 'No enemy bishop remains',
+      if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'bishop' } }],
+      do: [{ kind: 'win', side: 'player' }],
+    }];
+
+    const record = playLevelGame(level, { seed: 1, ...SHORT });
+    expect(record.winner).toBe('player');
+    expect(record.plies).toBe(0);
+    expect(record.adjudication).toMatchObject({
+      kind: 'victory-rule',
+      winner: 'player',
+      rule: { name: 'No enemy bishop remains' },
+    });
+  });
+
   it('obeys fences: a lone fully fenced-in player piece is stuck at the start (draw, 0 plies)', () => {
     // A single player rook walled on all four edges has zero legal moves — every orthogonal
     // crossing is fenced. Self-play must see the fence (its env now goes through rules.gameEnv,

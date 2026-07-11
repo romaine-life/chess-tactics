@@ -69,32 +69,34 @@ describe('kingSideForLevel — which side owns the King, read off the level cont
   });
 });
 
-describe('levelObjectiveLine — mode name + direction-aware summary', () => {
-  it('King Assault held by the ENEMY reads "Capture the enemy King"', () => {
+describe('levelObjectiveLine — mode name + seat-relative rule briefing', () => {
+  it('mirrors King Assault for the attacker and King-holder seats', () => {
     const level = fixedLevel([unit(0, 5, 'pawn', 'player'), unit(5, 0, 'king', 'enemy')], (l) => {
       l.objective = 'capture-king';
     });
-    expect(levelObjectiveLine(level)).toBe(`${MODE_NAME['capture-king']} — Capture the enemy King`);
+    expect(levelObjectiveLine(level, 'player')).toBe(`${MODE_NAME['capture-king']} — Capture the opposing King; protect your force`);
+    expect(levelObjectiveLine(level, 'enemy')).toBe(`${MODE_NAME['capture-king']} — Eliminate the opposing force; protect your King`);
   });
 
-  it('King Assault held by the PLAYER flips to "Protect your King"', () => {
+  it('mirrors a player-held King Assault too', () => {
     const level = fixedLevel([unit(0, 5, 'king', 'player'), unit(5, 0, 'pawn', 'enemy')], (l) => {
       l.objective = 'capture-king';
     });
-    expect(levelObjectiveLine(level)).toBe(`${MODE_NAME['capture-king']} — Protect your King`);
+    expect(levelObjectiveLine(level, 'player')).toBe(`${MODE_NAME['capture-king']} — Eliminate the opposing force; protect your King`);
+    expect(levelObjectiveLine(level, 'enemy')).toBe(`${MODE_NAME['capture-king']} — Capture the opposing King; protect your force`);
   });
 
   it('Rival Kings surfaces its own name + summary', () => {
     const level = fixedLevel([unit(0, 5, 'king', 'player'), unit(5, 0, 'king', 'enemy')], (l) => {
       l.objective = 'rival-kings';
     });
-    expect(levelObjectiveLine(level)).toBe('Rival Kings — Capture the rival King');
+    expect(levelObjectiveLine(level)).toBe('Rival Kings — Capture the opposing King; protect your King');
   });
 
-  it('non-King modes are unaffected by king side', () => {
+  it('non-King modes expose both the win path and the danger', () => {
     const level = fixedLevel([unit(0, 5, 'pawn', 'player'), unit(5, 0, 'pawn', 'enemy')], (l) => {
       l.objective = 'capture-all';
     });
-    expect(levelObjectiveLine(level)).toBe('Last Man Standing — Defeat every enemy piece');
+    expect(levelObjectiveLine(level)).toBe('Last Man Standing — Eliminate the opposing force; protect your force');
   });
 });

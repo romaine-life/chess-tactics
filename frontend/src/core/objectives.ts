@@ -1,7 +1,7 @@
 // Per-objective win conditions (issue #44 Track 4). Pure + deterministic: maps a
-// level's ObjectiveType + a small context into a Winner, replacing the core's
-// hard-coded last-side-standing rule for levels that want richer goals. The
-// store evaluates this after each resolved turn.
+// level's ObjectiveType + a small context into ordered VictoryRules. The canonical
+// committed-position adjudicator evaluates the exact authored/preset list after
+// every settled move.
 
 import type { BoardSize, GameState, Piece, Vec, Winner } from './types';
 import type { ConditionSide, Level, ObjectiveType, VictoryAction, VictoryCondition, VictoryRule, VictoryRules } from './level';
@@ -176,6 +176,16 @@ export function victoryRulesForObjective(objective: ObjectiveType, ctx: Objectiv
     default:
       return [loseRule('Your force is wiped out', eliminate('player')), winRule('Enemy is wiped out', eliminate('enemy'))];
   }
+}
+
+/**
+ * Resolve the exact rule list a level plays by: an authored override has full
+ * authority; otherwise the objective preset expands through the one preset table.
+ * Consumers should resolve this once at match/search setup and pass the result
+ * explicitly, never reconstruct terminality from `objective` alone.
+ */
+export function victoryRulesForLevel(level: Level, ctx: ObjectiveContext = {}): VictoryRules {
+  return level.victory ?? victoryRulesForObjective(level.objective, ctx);
 }
 
 /**
