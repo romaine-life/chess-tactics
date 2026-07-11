@@ -590,6 +590,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const [tdFrontier, setTdFrontier] = useState(0);
   // Ply cursor into the inspected game (the pending walk, or the last committed game).
   const [tdReplayPly, setTdReplayPly] = useState(0);
+  // WATCH mode: an autoplay clock presses the universal advance one beat at a time.
+  const [tdWatching, setTdWatching] = useState(false);
   const [tdSession, setTdSession] = useState<TdSession | null>(null);
   const [tdBusy, setTdBusy] = useState(false);
   const [tdSummarizing, setTdSummarizing] = useState<{ done: number; total: number } | null>(null);
@@ -618,7 +620,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setTdDelta(null); tdShownRef.current = null; setTdReplayPly(0);
     // A dealt-but-unfinished game is DISCARDED, never learned from — the same game
     // re-deals identically later ((seed, gameIndex) rng), so nothing is lost or skipped.
-    setTdPending(null); setTdFrontier(0);
+    setTdPending(null); setTdFrontier(0); setTdWatching(false);
   }, []);
 
   // The learner's OWN worker — never gymWorker (that one is shared by generate/step/
@@ -1052,6 +1054,22 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setTdFrontier(tdPending.plies); setTdReplayPly(tdPending.plies);
     tdConclude();
   }, [tdPending, tdConclude]);
+  // WATCH — the system presses ⏭ step for you, one beat at a time (bender-world's
+  // watchable full play): deal, play each ply, land the update at the game's end, deal
+  // the next, until the budget completes or he pauses. Same provably-inert advance as
+  // manual stepping — the clock is the ONLY new thing. During a commit (tdBusy) the
+  // beat no-ops, so game boundaries breathe naturally.
+  const TD_WATCH_BEAT_MS = 250;
+  const tdAdvanceRef = useRef(tdAdvance); tdAdvanceRef.current = tdAdvance;
+  useEffect(() => {
+    if (!tdWatching) return undefined;
+    const id = setInterval(() => { tdAdvanceRef.current(); }, TD_WATCH_BEAT_MS);
+    return () => clearInterval(id);
+  }, [tdWatching]);
+  // Budget done and nothing left in play: the show is over — stop the clock.
+  useEffect(() => {
+    if (tdWatching && tdComplete && !tdPending) setTdWatching(false);
+  }, [tdWatching, tdComplete, tdPending]);
   // The board renders pixel art 1:1 whenever the stage has content — the shared
   // read-only renderer is the Level Editor's render core, and its art is authored for
   // integer scale (0.72 nearest-neighbour was the "extra pixelated" look).
@@ -1401,8 +1419,9 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   <div className={`gym-td-split ${tdReplayPanel ? 'has-stage' : ''}`.trim()}>
                   <div className="gym-td-left">
                 <div className="gym-run-head">
-                  <span className={`gym-run-state ${tdBusy || tdWalking ? 'live' : ''}`}>
+                  <span className={`gym-run-state ${tdBusy || tdWalking || tdWatching ? 'live' : ''}`}>
                     {tdSummarizing ? `▶ folding seeds — ${tdSummarizing.done}/${tdSummarizing.total} done`
+                      : tdWatching ? '▶ watching'
                       : tdBusy ? '▶ learning'
                       : tdWalking ? '▶ game in play'
                       : tdComplete ? (tdSummary === null && tdStopped ? '⏹ seed fold stopped' : '✓ budget complete')
@@ -1494,7 +1513,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                 ) : null}
 
                 {tdError ? <p className="gym-error">Value learner failed: {tdError}</p> : null}
-                {!tdStarted && !tdBusy && !tdWalking ? <p className="gym-hint">Every piece starts at the same weight. ⏭ step always advances the algorithm one step: first press deals a training game, each press after plays one ply, and the weight update lands on the last one. Run plays the whole budget at full speed.</p> : null}
+                {!tdStarted && !tdBusy && !tdWalking && !tdWatching ? <p className="gym-hint">Every piece starts at the same weight. ⏭ step always advances the algorithm one step: first press deals a training game, each press after plays one ply, and the weight update lands on the last one. ▶ watch presses step for you, one beat at a time; ▶ run plays the whole budget at full speed.</p> : null}
                   </div>
                   {tdReplayPanel ? <div className="gym-td-right">{tdReplayPanel}</div> : null}
                   </div>
@@ -1691,11 +1710,17 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                     onChange={(e) => setTdStepN(Math.max(1, Math.floor(Number(e.target.value) || 1)))} aria-label="Games per batch step" />
                 </div>
                 <div className="gym-run-row">
-                  <button type="button" className="play" onClick={() => tdSend('run')} disabled={!tdReady || tdBusy || (tdComplete && tdSummary !== null)}>▶ run</button>
-                  <button type="button" onClick={tdStop} disabled={!tdBusy}>⏹ stop</button>
+                  <button type="button" className="play" onClick={() => setTdWatching((w) => !w)} disabled={!tdReady || (tdComplete && !tdWalking)}
+                    title={tdWatching ? 'Pause — the game in play keeps its place' : 'The system plays by itself, one step per beat: each ply on the board, the update landing at every game’s end, game after game, until you pause'}>
+                    {tdWatching ? '⏸ pause' : '▶ watch'}
+                  </button>
+                  <button type="button" onClick={() => { setTdWatching(false); tdSend('run'); }} disabled={!tdReady || tdBusy || (tdComplete && tdSummary !== null)}
+                    title="Full speed, no animation — plays the remaining budget in seconds; same numbers, bit for bit">▶ run</button>
+                  <button type="button" onClick={() => { setTdWatching(false); tdStop(); }} disabled={!tdBusy && !tdWatching}>⏹ stop</button>
                   <button type="button" onClick={tdReset} disabled={tdBusy || (!tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)}>↺ reset</button>
                 </div>
                 {!tdReady ? <p className="gym-hint">Preparing learner…</p>
+                  : tdWatching ? <p className="gym-hint">Watching — the system plays by itself, one step per beat; each game&apos;s update lands as it ends. Pause (or ⏹) any time; nothing is ever half-applied.</p>
                   : tdBusy ? <p className="gym-hint">{tdSummarizing ? 'Folding sibling seeds into the mean ± spread table…' : 'Playing training games — Stop lands between games, nothing half-applied.'}</p>
                   : tdWalking ? <p className="gym-hint">Game {tdPending?.game} is in play — each ⏭ step plays one ply (⏩ to end finishes it); its weight update lands when the game ends. ⏭ games / Run consume it as the batch&apos;s first game; Reset discards it unlearned.</p>
                   : tdComplete && tdSummary === null && tdDiscarded ? <p className="gym-hint">Result discarded — the run&apos;s numbers stay. Run recomputes the mean ± spread table; Reset starts a new run.</p>
