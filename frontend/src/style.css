@@ -14148,6 +14148,37 @@ button.tileset-relationship-cell {
 
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
+
+/* Resumable editor documents are levels, not settings fields. They reuse the exact level-row
+   footprint and make the whole card the navigation control. A never-saved document has no
+   canonical position from which a truthful thumbnail can be baked, so its fixed thumbnail slot
+   says so explicitly instead of collapsing or previewing the unsaved working body. */
+.ce-editor-draft-row {
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  inline-size: 100%;
+  text-align: left;
+}
+
+.ce-editor-draft-row .ce-draft-continue {
+  color: #c9a877;
+  font-size: var(--ds-text-2xs);
+  font-weight: 700;
+  grid-area: actions;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.ce-editor-draft-row .ce-draft-thumb-empty {
+  align-items: center;
+  color: rgba(201, 168, 119, .84);
+  display: grid;
+  font-size: var(--ds-text-3xs);
+  justify-items: center;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
 /* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */
 .campaign-level-row {
   align-items: center;
