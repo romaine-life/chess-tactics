@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { HttpError } from './http';
-import { isUnauthorized, signInHref } from './auth';
+import { fetchMeStatus, isUnauthorized, signInHref } from './auth';
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('HttpError', () => {
   it('carries the status code and a descriptive message', () => {
@@ -35,5 +37,23 @@ describe('signInHref', () => {
   it('encodes the returnTo path so the backend can round-trip it', () => {
     expect(signInHref('/edit')).toBe('/api/auth/sign-in?returnTo=%2Fedit');
     expect(signInHref('/design/main-menu?x=1')).toBe('/api/auth/sign-in?returnTo=%2Fdesign%2Fmain-menu%3Fx%3D1');
+  });
+});
+
+describe('fetchMeStatus', () => {
+  it('keeps an unreachable auth service distinct from a signed-out response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')));
+    await expect(fetchMeStatus()).resolves.toEqual({
+      user: { signed_in: false },
+      reachable: false,
+    });
+  });
+
+  it('reports a normal signed-out auth payload as reachable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ signed_in: false }), { status: 200 })));
+    await expect(fetchMeStatus()).resolves.toEqual({
+      user: { signed_in: false },
+      reachable: true,
+    });
   });
 });

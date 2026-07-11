@@ -5014,7 +5014,7 @@ h1 {
    disabled control, matching the retired title-bar Save's is-disabled look. */
 .le-seg-btn.is-blocked { opacity: .45; }
 
-/* Live-test Play in the always-visible Actions dock: a full-width primary button so it reads as
+/* Test in the always-visible Actions dock: a full-width primary button so it reads as
    the editor's "test this board now" verb, distinct from the Undo/Redo icons above it. */
 .le-actions-dock .le-play-board {
   border-image-source: url("/assets/ui/kit/button-primary.png");
@@ -5034,7 +5034,7 @@ h1 {
 }
 /* Pinned Actions dock in the rail: universal tools + Undo/Redo as compact icon-only
    squares. Labels ride aria-label + title; active/press states come from the editor
-   icon set. Test + Save/Publish stay with the Status layer's save workflow. */
+   icon set. Current-board Test lives below; Save/Publish stays in the Status layer. */
 .le-board-actions { display: grid; gap: var(--ds-inline-tight); grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--ds-stack); }
 .le-board-actions.le-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .le-action-toolbar {
@@ -5073,104 +5073,6 @@ h1 {
   min-width: 72px;
   padding-inline: 4px;
 }
-.le-live-link-status {
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/field-input.png") 18 fill / 10px stretch;
-  display: grid;
-  gap: 4px;
-  margin-top: var(--ds-stack);
-  padding: 4px 8px;
-}
-.le-live-link-status strong {
-  color: #f3ead8;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-xs);
-  font-weight: 400;
-  text-transform: uppercase;
-}
-.le-live-link-status span {
-  color: var(--skirmish-muted);
-  font-size: var(--ds-text-xs);
-  line-height: 1.35;
-}
-.le-live-link-status.is-saving strong,
-.le-live-link-status.is-pending strong,
-.le-live-link-status.is-creating strong { color: #9fe0ff; }
-.le-live-link-status.is-error strong { color: #ffb1a8; }
-.le-map-identity {
-  margin-top: var(--ds-stack);
-}
-.le-admin-events {
-  border-top: 1px solid rgba(146, 201, 235, .18);
-  display: grid;
-  gap: 8px;
-  margin-top: var(--ds-stack);
-  padding-top: var(--ds-stack);
-}
-.le-admin-events-head {
-  display: grid;
-  gap: 2px;
-}
-.le-admin-events-head strong {
-  color: #f3ead8;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-xs);
-  font-weight: 400;
-  text-transform: uppercase;
-}
-.le-admin-events-head span {
-  color: var(--skirmish-muted);
-  font-size: var(--ds-text-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.le-misc-map-list {
-  display: grid;
-  gap: 7px;
-  margin-top: var(--ds-stack);
-}
-.le-misc-map-row {
-  align-items: center;
-  border-bottom: 1px solid rgba(146, 201, 235, .18);
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 0 0 7px;
-}
-.le-misc-map-row:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-.le-misc-map-row div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-.le-misc-map-row strong {
-  color: #f3ead8;
-  font-size: var(--ds-text-sm);
-  font-weight: 400;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.le-misc-map-row span {
-  color: var(--skirmish-muted);
-  font-size: var(--ds-text-xs);
-}
-.le-live-viewer {
-  align-content: start;
-  gap: var(--ds-gutter);
-}
-.le-live-viewer .le-play-board {
-  border-image-source: url("/assets/ui/kit/button-primary.png");
-  width: 100%;
-}
-.le-live-meta {
-  margin: 0;
-}
-
 /* Level settings live under the Board layer: rule readout + faction-control assignment. */
 .le-level-name-input { box-sizing: border-box; width: 100%; }
 .le-settings-list { display: grid; gap: var(--ds-inline-tight); margin: 0 0 var(--ds-gutter); }
@@ -8842,15 +8744,6 @@ body { font-size: 17px; }
   border-radius: 4px;
   cursor: pointer;
   font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
-}
-
-.le-live-map-unavailable {
-  left: 50%;
-  max-width: min(560px, 82vw);
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(560px, 82%);
 }
 
 .tileset-view-board-content {
@@ -14362,6 +14255,9 @@ button.tileset-relationship-cell {
 /* The level list wraps its rows only to carry a data-testid — it must not disturb the
    section-rows grid, so it disappears and its rows become the grid's direct items. */
 .ce-level-list { display: contents; }
+/* Private recent-document discovery is only a test/semantic wrapper; keep the shared
+   SettingsRow elements as direct participants in the section's row grid. */
+.ce-recent-drafts { display: contents; }
 /* Section-trailing action (+ Add Level / + New Board). */
 .ce-section-action { padding: 4px 2px 0; }
 

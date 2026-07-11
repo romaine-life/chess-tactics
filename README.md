@@ -41,12 +41,13 @@ under `frontend/public`.
 
 ## Local Backend
 
-When agents hand off Level Editor boards through the backend, use an anonymous
-misc editor map: `POST /api/editor-maps` with `{ "level": ..., "misc": true }`.
-Do not hand off a normal signed-in `/editor/level?map=<id>` created under the
-agent's account; account-owned live maps are editable only by their owner, so
-Nelson opens them read-only. Misc handoffs are anonymous and can be loaded as
-editable copies from the Misc Map Pool.
+Level Editor documents use a stable `/editor/level?document=<opaque-id>&levelId=<id>` URL. The opaque document id is global; the level id remains account-local.
+For authenticated editors, changes autosave to a durable server-side working copy;
+**Save** promotes that working copy to the canonical level, while **Discard changes**
+replaces it with the canonical saved level. Copying the browser URL is side-effect
+free: it does not save, publish, grant access, or create another document. Gameplay
+and thumbnails read only canonical saved levels. Browser storage is a crash/offline
+fallback, not the cloud persistence model.
 
 Fresh worktrees do not have `backend/node_modules`; that is expected every time.
 `npm run dev` installs/refreshes backend dependencies before Vite starts the

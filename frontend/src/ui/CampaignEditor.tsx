@@ -4,6 +4,7 @@ import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, offi
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
 import { MODE_NAME } from '../core/objectives';
+import { isWorkspaceConflict } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
@@ -18,6 +19,12 @@ import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { KitScroll } from './KitScroll';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { editSkirmishProfileHref, isSkirmishProfileLevel, skirmishProfileLevels } from './skirmishProfiles';
+import { listEditorDocuments, type EditorDocumentSummary } from '../net/editorDocuments';
+import {
+  editorDocumentContinueHref,
+  editorDocumentDisplayName,
+  resumableUserEditorDocuments,
+} from './campaignEditorRecentDrafts';
 
 const CE_ICONS = {
   favorite: '/assets/ui/kit/icons/brand-shield.png',
@@ -51,6 +58,14 @@ function userSliceSignature(): string {
 
 function officialSliceSignature(): string {
   return workspaceSignature(officialWorkspaceForSave());
+}
+
+function recentDraftDescription(document: EditorDocumentSummary): string {
+  const state = document.never_saved ? 'Not saved yet' : 'Unsaved changes';
+  if (!document.updated_at) return state;
+  const updatedAt = new Date(document.updated_at);
+  if (Number.isNaN(updatedAt.getTime())) return state;
+  return `${state} · Edited ${updatedAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
 }
 
 function validateWorkspaceImport(ws: Partial<{ campaigns: Campaign[]; levels: Record<string, Level> }>): string | null {
@@ -313,6 +328,11 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
+  const [recentDrafts, setRecentDrafts] = useState<EditorDocumentSummary[]>([]);
+  // A stale whole-workspace body must never be paired with the newer revision from a 409 and
+  // retried. Keep the local work visible, stop that tier's writes, and require a deliberate reload.
+  const [userSaveConflict, setUserSaveConflict] = useState(false);
+  const [officialSaveConflict, setOfficialSaveConflict] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState<CampaignCollection>('campaign');
   const { ask, dialog: confirmDialog } = useConfirm();
   // Entrance readiness (ADR-0051): the shared store may already hold campaigns from a
@@ -360,10 +380,21 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
 
   useEffect(() => {
     let active = true;
-    fetchMe().then((user) => {
+    void fetchMe().then(async (user) => {
       if (!active) return;
       setMe(user);
-      if (!user.signed_in) setStatus('Official campaigns shown. Sign in to author your own.');
+      if (!user.signed_in) {
+        setRecentDrafts([]);
+        setStatus('Official campaigns shown. Sign in to author your own.');
+        return;
+      }
+      try {
+        const result = await listEditorDocuments({ status: 'all', limit: 100 });
+        if (active) setRecentDrafts(resumableUserEditorDocuments(result.documents));
+      } catch {
+        // Discovery is optional UI. Workspace authoring remains available when the private list
+        // endpoint is temporarily unavailable, and no fallback may invent or expose documents.
+      }
     }).catch(() => {});
     void (async () => {
       let userReady = false;
@@ -415,6 +446,10 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
 
   // Private "Save": frictionless, writes only the user slice (officials never enter it).
   const saveUserNow = async () => {
+    if (userSaveConflict) {
+      setStatus('Save remains paused after a workspace conflict. Reload the Editor before saving again.');
+      return;
+    }
     if (!userWorkspaceReady) {
       setStatus('Your workspace is unavailable. Reopen the Editor to retry before saving.');
       return;
@@ -424,6 +459,13 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       setSavedUserSig(userSliceSignature());
       setStatus('Saved to server');
     } catch (e) {
+      if (isWorkspaceConflict(e)) {
+        setUserSaveConflict(true);
+        setStatus(e.code === 'workspace_level_reserved'
+          ? 'Save stopped: a new board already reserves one of these level IDs. Reload the Editor; your local changes remain in this tab.'
+          : 'Save stopped: this workspace changed elsewhere. Reload the Editor before saving; your local changes remain in this tab.');
+        return;
+      }
       const mapped = mapSaveError(e);
       if ('action' in mapped) { goSignIn(); return; }
       setStatus(mapped.message);
@@ -433,6 +475,10 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   // "Publish to all players": a distinct, confirmed, admin-gated write of ONLY the
   // official slice. The server's requireAdmin is the real gate (403 surfaces here).
   const publishOfficialNow = async () => {
+    if (officialSaveConflict) {
+      setStatus('Publish remains paused after an official workspace conflict. Reload the Editor before publishing again.');
+      return;
+    }
     if (!officialWorkspaceReady) {
       setStatus('Official campaigns are unavailable. Reopen the Editor to retry before publishing.');
       return;
@@ -448,6 +494,11 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       setSavedOfficialSig(officialSliceSignature());
       setStatus(`Published (revision ${revision}).`);
     } catch (e) {
+      if (isWorkspaceConflict(e)) {
+        setOfficialSaveConflict(true);
+        setStatus('Publish stopped: official campaigns changed elsewhere. Reload the Editor before publishing; your local changes remain in this tab.');
+        return;
+      }
       const mapped = mapSaveError(e);
       if ('action' in mapped) { goSignIn(); return; }
       setStatus(mapped.message);
@@ -751,9 +802,29 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                 }}
               >+ New Campaign</SettingsButton>
               <SettingsButton disabled={!userWorkspaceReady} onClick={() => importInputRef.current?.click()}>Import</SettingsButton>
-              <SettingsButton tone="primary" data-testid="save-workspace" disabled={!userWorkspaceReady || !userDirty} onClick={() => void saveUserNow()}>Save</SettingsButton>
-              {isAdmin && officialWorkspaceReady && officialDirty ? (
-                <SettingsButton tone="primary" data-testid="publish-officials" onClick={() => void publishOfficialNow()}>Publish to all players</SettingsButton>
+              <SettingsButton
+                tone="primary"
+                data-testid="save-workspace"
+                disabled={!userWorkspaceReady || !userDirty || userSaveConflict}
+                title={userSaveConflict
+                  ? 'Reload the Editor to resolve the workspace revision conflict.'
+                  : !userWorkspaceReady
+                  ? 'Your workspace must finish loading before it can be saved.'
+                  : undefined}
+                onClick={() => void saveUserNow()}
+              >Save</SettingsButton>
+              {isAdmin && officialDirty ? (
+                <SettingsButton
+                  tone="primary"
+                  data-testid="publish-officials"
+                  disabled={!officialWorkspaceReady || officialSaveConflict}
+                  title={officialSaveConflict
+                    ? 'Reload the Editor to resolve the official workspace revision conflict.'
+                    : !officialWorkspaceReady
+                    ? 'Official campaigns must finish loading before publishing.'
+                    : undefined}
+                  onClick={() => void publishOfficialNow()}
+                >Publish to all players</SettingsButton>
               ) : null}
               {me && !me.signed_in ? (
                 <SettingsButton data-testid="campaign-sign-in" onClick={() => goSignIn()}>Sign in to save</SettingsButton>
@@ -780,6 +851,21 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
             <div className="ce-editor-body">
               <KitScroll className="settings-scroll ce-editor-scroll">
                 <div className="settings-panel-content">
+                  {recentDrafts.length > 0 ? (
+                    <SettingsSection title="Continue editing">
+                      <div className="ce-recent-drafts" data-testid="recent-editor-documents">
+                        {recentDrafts.map((document) => (
+                          <SettingsRow
+                            key={document.document_id}
+                            title={editorDocumentDisplayName(document)}
+                            description={recentDraftDescription(document)}
+                          >
+                            <SettingsButton href={editorDocumentContinueHref(document)}>Continue</SettingsButton>
+                          </SettingsRow>
+                        ))}
+                      </div>
+                    </SettingsSection>
+                  ) : null}
                   {isSkirmishProfilesSelected ? (
                     <SettingsSection title="Skirmish Profiles">
                       <div className="ce-level-list" data-testid="skirmish-profiles">

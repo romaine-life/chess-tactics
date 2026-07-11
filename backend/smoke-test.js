@@ -290,7 +290,7 @@ function openSse(path, headers = {}) {
 // server applies migrations before it begins listening (and /health gates on
 // that), so waitForServer() has already returned by the time this runs.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
+  await queryDb('TRUNCATE levels, campaign_workspaces, level_working_copies, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
   await queryDb("INSERT INTO unit_catalog_state (singleton) VALUES (true); INSERT INTO unit_families (family) VALUES ('pawn'), ('rook'), ('knight'), ('bishop'), ('queen'), ('king');");
 }
 
@@ -300,6 +300,128 @@ async function queryDb(sql, params = []) {
   await client.connect();
   try {
     return await client.query(sql, params);
+  } finally {
+    await client.end();
+  }
+}
+
+function inlineMigrationSql(version) {
+  const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  const marker = `version: ${version},`;
+  const markerOffset = source.indexOf(marker);
+  if (markerOffset === -1) throw new Error(`Could not find inline migration ${version}`);
+  const sqlMarker = 'sql: `';
+  const sqlOffset = source.indexOf(sqlMarker, markerOffset);
+  if (sqlOffset === -1) throw new Error(`Could not find SQL for inline migration ${version}`);
+  const sqlStart = sqlOffset + sqlMarker.length;
+  const sqlEnd = source.indexOf('`,', sqlStart);
+  if (sqlEnd === -1) throw new Error(`Could not find end of inline migration ${version}`);
+  return source.slice(sqlStart, sqlEnd);
+}
+
+async function validateEditorMigration16Preservation() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_editor_migration_16');
+    await client.query('SET LOCAL search_path TO smoke_editor_migration_16');
+    await client.query(`
+      CREATE TABLE campaign_workspaces (
+        owner_email text PRIMARY KEY,
+        body jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE official_campaigns (
+        id text PRIMARY KEY,
+        data jsonb NOT NULL
+      );
+      CREATE TABLE public_maps (
+        public_id text PRIMARY KEY,
+        body jsonb NOT NULL
+      );
+      CREATE TABLE editor_maps (
+        public_id text PRIMARY KEY,
+        owner_email text,
+        body jsonb NOT NULL,
+        revision integer NOT NULL DEFAULT 0,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE editor_map_audit_events (
+        id bigserial PRIMARY KEY,
+        public_id text NOT NULL REFERENCES editor_maps(public_id) ON DELETE CASCADE
+      );
+    `);
+    await client.query(
+      'INSERT INTO campaign_workspaces (owner_email, body) VALUES ($1, $2::jsonb)',
+      [
+        'player@example.com',
+        JSON.stringify({ campaigns: [], levels: { l7: { id: 'l7', name: 'Canonical L7' } } }),
+      ],
+    );
+    await client.query(
+      "INSERT INTO official_campaigns (id, data) VALUES ('default', $1::jsonb)",
+      [JSON.stringify({ campaigns: [], levels: { 'off-l-one': { id: 'off-l-one', name: 'Canonical Official' } } })],
+    );
+    await client.query(`INSERT INTO public_maps (public_id, body) VALUES ('abcdefgh', '{"kept":true}'::jsonb)`);
+    const legacyRows = [
+      ['abcdefgh', 'player@example.com', { id: 'draft', name: 'Standalone A' }, 3, '2026-01-01T00:00:00Z'],
+      ['jkmnpqrs', 'player@example.com', { id: 'draft', name: 'Standalone B' }, 4, '2026-01-02T00:00:00Z'],
+      ['tuvwxyz2', 'player@example.com', { id: 'off-l-one', name: 'Official Working Copy' }, 5, '2026-01-03T00:00:00Z'],
+      ['23456789', 'player@example.com', { id: 'l7', name: 'Older L7 Working Copy' }, 2, '2026-01-01T00:00:00Z'],
+      ['bcdefghj', 'player@example.com', { id: 'l7', name: 'Newest L7 Working Copy' }, 6, '2026-01-04T00:00:00Z'],
+      ['kmnpqrst', null, { id: 'draft', name: 'Anonymous Must Not Become Account Data' }, 7, '2026-01-05T00:00:00Z'],
+    ];
+    for (const [publicId, ownerEmail, body, revision, updatedAt] of legacyRows) {
+      await client.query(
+        `INSERT INTO editor_maps (public_id, owner_email, body, revision, created_at, updated_at)
+         VALUES ($1, $2, $3::jsonb, $4, $5::timestamptz, $5::timestamptz)`,
+        [publicId, ownerEmail, JSON.stringify(body), revision, updatedAt],
+      );
+    }
+
+    await client.query(inlineMigrationSql(16));
+    const migrated = await client.query(
+      `SELECT document_id, owner_email, workspace_kind, workspace_id, level_id, body,
+              revision, saved_revision, baseline_hash
+         FROM level_working_copies
+        ORDER BY document_id`,
+    );
+    const byDocument = new Map(migrated.rows.map((row) => [row.document_id, row]));
+    const standaloneA = byDocument.get('legacy-abcdefgh');
+    const standaloneB = byDocument.get('legacy-jkmnpqrs');
+    const official = byDocument.get('legacy-tuvwxyz2');
+    const newestReal = byDocument.get('legacy-bcdefghj');
+    if (
+      migrated.rows.length !== 4 ||
+      !standaloneA || standaloneA.level_id !== 'legacy-abcdefgh' || standaloneA.body.id !== 'legacy-abcdefgh' || Number(standaloneA.saved_revision) !== 0 ||
+      !standaloneB || standaloneB.level_id !== 'legacy-jkmnpqrs' || standaloneB.body.id !== 'legacy-jkmnpqrs' || Number(standaloneB.saved_revision) !== 0 ||
+      !official || official.workspace_kind !== 'official' || official.workspace_id !== 'default' || official.level_id !== 'off-l-one' || !official.baseline_hash || Number(official.saved_revision) !== 1 ||
+      !newestReal || newestReal.level_id !== 'l7' || newestReal.body.name !== 'Newest L7 Working Copy' || !newestReal.baseline_hash || Number(newestReal.saved_revision) !== 1 ||
+      byDocument.has('legacy-23456789') || byDocument.has('legacy-kmnpqrst')
+    ) {
+      throw new Error(`Migration 16 did not preserve signed-in legacy editor rows safely: ${JSON.stringify(migrated.rows)}`);
+    }
+    const retired = await client.query(
+      `SELECT to_regclass('editor_maps') AS maps,
+              to_regclass('editor_map_audit_events') AS events,
+              (SELECT body->>'kept' FROM public_maps WHERE public_id = 'abcdefgh') AS published_kept,
+              (SELECT revision FROM campaign_workspaces WHERE owner_email = 'player@example.com') AS workspace_revision`,
+    );
+    if (
+      retired.rows[0].maps ||
+      retired.rows[0].events ||
+      retired.rows[0].published_kept !== 'true' ||
+      Number(retired.rows[0].workspace_revision) !== 0
+    ) {
+      throw new Error(`Migration 16 retired the wrong schema objects: ${JSON.stringify(retired.rows[0])}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
   } finally {
     await client.end();
   }
@@ -340,7 +462,38 @@ async function main() {
   if (!fs.existsSync(path.join(hotBackendDir, 'server.js'))) {
     throw new Error('Supervisor did not initialize the hot backend entrypoint');
   }
+  await validateEditorMigration16Preservation();
   await resetDb();
+  const editorSchema = await queryDb(
+     `SELECT
+       to_regclass('public.level_working_copies') AS working_copies,
+       to_regclass('public.editor_maps') AS retired_editor_maps,
+       to_regclass('public.editor_map_audit_events') AS retired_editor_map_events,
+       to_regclass('public.public_maps') AS public_play_maps,
+       EXISTS (
+         SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'level_working_copies'
+            AND column_name = 'baseline_hash'
+       ) AS has_baseline_hash,
+       EXISTS (
+         SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'campaign_workspaces'
+            AND column_name = 'revision'
+       ) AS has_workspace_revision`,
+  );
+  const editorSchemaRow = editorSchema.rows[0];
+  if (
+    !editorSchemaRow.working_copies ||
+    editorSchemaRow.retired_editor_maps ||
+    editorSchemaRow.retired_editor_map_events ||
+    !editorSchemaRow.public_play_maps ||
+    editorSchemaRow.has_baseline_hash !== true ||
+    editorSchemaRow.has_workspace_revision !== true
+  ) {
+    throw new Error(`Unexpected editor persistence schema: ${JSON.stringify(editorSchemaRow)}`);
+  }
 
   const root = await get('/');
   if (root.statusCode !== 200 || !root.body.includes('Chess Tactics')) {
@@ -755,7 +908,7 @@ async function main() {
   const adminOfficialWrite = await request(
     'PUT', '/api/official-campaigns/default',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ data: officialWorkspace }),
+    JSON.stringify({ data: officialWorkspace, revision: emptyOfficialBody.portfolio.revision }),
   );
   const adminOfficialWriteBody = JSON.parse(adminOfficialWrite.body);
   if (
@@ -766,6 +919,14 @@ async function main() {
     adminOfficialWriteBody.portfolio.data.levels['off-l-test'].events[0].trigger.zoneId !== 'promotion-zone'
   ) {
     throw new Error(`Unexpected admin official write: ${adminOfficialWrite.statusCode} ${adminOfficialWrite.body}`);
+  }
+  const missingOfficialRevision = await request(
+    'PUT', '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: officialWorkspace }),
+  );
+  if (missingOfficialRevision.statusCode !== 400 || JSON.parse(missingOfficialRevision.body).error !== 'official_campaign_revision_required') {
+    throw new Error(`Official whole-workspace writes must carry an observed revision: ${missingOfficialRevision.statusCode} ${missingOfficialRevision.body}`);
   }
 
   // Public GET now returns the published officials — visible WITHOUT a session.
@@ -801,7 +962,7 @@ async function main() {
   const nonOffIdWrite = await request(
     'PUT', '/api/official-campaigns/default',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'c1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} } }),
+    JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'c1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} }, revision: 1 }),
   );
   if (nonOffIdWrite.statusCode !== 400 || JSON.parse(nonOffIdWrite.body).error !== 'invalid_official_ids') {
     throw new Error(`Non-off-prefixed official ids should be rejected: ${nonOffIdWrite.statusCode} ${nonOffIdWrite.body}`);
@@ -811,7 +972,7 @@ async function main() {
   const digitOffIdWrite = await request(
     'PUT', '/api/official-campaigns/default',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'off-c-test1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} } }),
+    JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'off-c-test1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} }, revision: 1 }),
   );
   if (digitOffIdWrite.statusCode !== 400 || JSON.parse(digitOffIdWrite.body).error !== 'invalid_official_ids') {
     throw new Error(`Official ids with digits should be rejected: ${digitOffIdWrite.statusCode} ${digitOffIdWrite.body}`);
@@ -983,7 +1144,7 @@ async function main() {
 
   const emptyWorkspace = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
   const emptyWorkspaceBody = JSON.parse(emptyWorkspace.body);
-  if (emptyWorkspace.statusCode !== 200 || emptyWorkspaceBody.campaigns.length !== 0 || Object.keys(emptyWorkspaceBody.levels).length !== 0) {
+  if (emptyWorkspace.statusCode !== 200 || emptyWorkspaceBody.revision !== 0 || emptyWorkspaceBody.campaigns.length !== 0 || Object.keys(emptyWorkspaceBody.levels).length !== 0) {
     throw new Error(`Empty workspace should be empty: ${emptyWorkspace.statusCode} ${emptyWorkspace.body}`);
   }
 
@@ -1013,6 +1174,11 @@ async function main() {
       units: [{ x: 0, y: 0, type: 'king', side: 'player' }],
     },
   };
+  const recoverableLegacyCanonical = {
+    ...workspaceLevel,
+    id: 'recoverable-legacy',
+    name: 'Recovered Saved Position',
+  };
   const workspaceDoc = {
     campaigns: [{
       formatVersion: 1,
@@ -1022,15 +1188,26 @@ async function main() {
       chapters: 1,
       levels: [{ levelId: 'smoke-1', ordinal: 0, objective: 'capture-all', stars: 0 }],
     }],
-    levels: { 'smoke-1': workspaceLevel },
+    levels: {
+      'smoke-1': workspaceLevel,
+      'recoverable-legacy': recoverableLegacyCanonical,
+    },
   };
-  const savedWorkspace = await request(
+  const missingWorkspaceRevision = await request(
     'PUT', '/api/campaign-workspace',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
     JSON.stringify(workspaceDoc),
   );
+  if (missingWorkspaceRevision.statusCode !== 400 || JSON.parse(missingWorkspaceRevision.body).error !== 'workspace_revision_required') {
+    throw new Error(`Whole-workspace writes must carry an observed revision: ${missingWorkspaceRevision.statusCode} ${missingWorkspaceRevision.body}`);
+  }
+  const savedWorkspace = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ ...workspaceDoc, revision: emptyWorkspaceBody.revision }),
+  );
   const savedWorkspaceBody = JSON.parse(savedWorkspace.body);
-  if (savedWorkspace.statusCode !== 200 || savedWorkspaceBody.ok !== true || savedWorkspaceBody.campaigns !== 1) {
+  if (savedWorkspace.statusCode !== 200 || savedWorkspaceBody.ok !== true || savedWorkspaceBody.campaigns !== 1 || savedWorkspaceBody.revision !== 1) {
     throw new Error(`Unexpected workspace save: ${savedWorkspace.statusCode} ${savedWorkspace.body}`);
   }
 
@@ -1040,6 +1217,7 @@ async function main() {
     loadedWorkspace.statusCode !== 200 ||
     loadedWorkspaceBody.campaigns.length !== 1 ||
     loadedWorkspaceBody.campaigns[0].name !== 'Smoke Campaign' ||
+    loadedWorkspaceBody.revision !== 1 ||
     !loadedWorkspaceBody.levels['smoke-1']
   ) {
     throw new Error(`Workspace did not persist: ${loadedWorkspace.statusCode} ${loadedWorkspace.body}`);
@@ -1050,6 +1228,631 @@ async function main() {
   const rivalWorkspaceBody = JSON.parse(rivalWorkspace.body);
   if (rivalWorkspace.statusCode !== 200 || rivalWorkspaceBody.campaigns.length !== 0) {
     throw new Error(`Workspace should be scoped to owner: ${rivalWorkspace.statusCode} ${rivalWorkspace.body}`);
+  }
+
+  // A migrated v13 URL is translated client-side from ?map=<id> to the normal
+  // owner-scoped document id legacy-<id>. There is intentionally no public or
+  // edit-key compatibility endpoint: only the signed-in owner can recover it.
+  const legacyRecoveredLevel = {
+    ...workspaceLevel,
+    id: 'legacy-abcdefgh',
+    name: 'Recovered Legacy Draft',
+  };
+  await queryDb(
+    `INSERT INTO level_working_copies
+       (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash)
+     VALUES ('legacy-abcdefgh', 'player@example.com', 'user', 'campaign', 'legacy-abcdefgh', $1::jsonb, 3, 0, NULL)`,
+    [JSON.stringify(legacyRecoveredLevel)],
+  );
+  const canonicalBackedLegacyDraft = {
+    ...recoverableLegacyCanonical,
+    name: 'Recovered Dirty Draft',
+  };
+  await queryDb(
+    `INSERT INTO level_working_copies
+       (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash)
+     SELECT 'legacy-kmnpqrst', owner_email, 'user', 'campaign', 'recoverable-legacy', $2::jsonb, 3, 1,
+            md5(((body->'levels')->'recoverable-legacy')::text)
+       FROM campaign_workspaces
+      WHERE owner_email = $1`,
+    ['player@example.com', JSON.stringify(canonicalBackedLegacyDraft)],
+  );
+  const ownerReadsLegacyDocument = await get('/api/editor-documents/legacy-abcdefgh', { cookie: 'better-auth.session=abc' });
+  const ownerReadsLegacyBody = JSON.parse(ownerReadsLegacyDocument.body);
+  if (
+    ownerReadsLegacyDocument.statusCode !== 200 ||
+    ownerReadsLegacyBody.document.document_id !== 'legacy-abcdefgh' ||
+    ownerReadsLegacyBody.document.level_id !== 'legacy-abcdefgh' ||
+    ownerReadsLegacyBody.document.level.name !== 'Recovered Legacy Draft'
+  ) {
+    throw new Error(`Legacy editor URL did not recover the owner's private document: ${ownerReadsLegacyDocument.statusCode} ${ownerReadsLegacyDocument.body}`);
+  }
+  const rivalReadsLegacyDocument = await get('/api/editor-documents/legacy-abcdefgh', { cookie: 'better-auth.session=rival' });
+  if (rivalReadsLegacyDocument.statusCode !== 404) {
+    throw new Error(`Legacy editor document must remain private to its owner: ${rivalReadsLegacyDocument.statusCode} ${rivalReadsLegacyDocument.body}`);
+  }
+  const anonymousReadsLegacyDocument = await get('/api/editor-documents/legacy-abcdefgh');
+  if (anonymousReadsLegacyDocument.statusCode !== 401) {
+    throw new Error(`Legacy editor document must require sign-in: ${anonymousReadsLegacyDocument.statusCode} ${anonymousReadsLegacyDocument.body}`);
+  }
+  const unauthorizedOfficialLevel = { ...officialWorkspace.levels['off-l-test'], name: 'Must Not Reconcile Before Auth' };
+  await queryDb(
+    `INSERT INTO level_working_copies
+       (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash)
+     VALUES ('legacy-jkmnpqrs', 'rival@example.com', 'official', 'default', 'off-l-test', $1::jsonb, 1, 1, 'stale-baseline')`,
+    [JSON.stringify(unauthorizedOfficialLevel)],
+  );
+  const nonAdminLoadsOwnedOfficialDocument = await get(
+    '/api/editor-documents/legacy-jkmnpqrs',
+    { cookie: 'better-auth.session=rival' },
+  );
+  if (nonAdminLoadsOwnedOfficialDocument.statusCode !== 403) {
+    throw new Error(`Stored official workspace must be authorized before reconcile: ${nonAdminLoadsOwnedOfficialDocument.statusCode} ${nonAdminLoadsOwnedOfficialDocument.body}`);
+  }
+  const untouchedUnauthorizedOfficial = await queryDb(
+    `SELECT body, revision, saved_revision, baseline_hash
+       FROM level_working_copies
+      WHERE document_id = 'legacy-jkmnpqrs'`,
+  );
+  if (
+    Number(untouchedUnauthorizedOfficial.rows[0].revision) !== 1 ||
+    Number(untouchedUnauthorizedOfficial.rows[0].saved_revision) !== 1 ||
+    untouchedUnauthorizedOfficial.rows[0].baseline_hash !== 'stale-baseline' ||
+    untouchedUnauthorizedOfficial.rows[0].body.name !== 'Must Not Reconcile Before Auth'
+  ) {
+    throw new Error(`Unauthorized GET mutated an official working copy: ${JSON.stringify(untouchedUnauthorizedOfficial.rows[0])}`);
+  }
+  const anonymousEditorDocumentList = await get('/api/editor-documents');
+  if (anonymousEditorDocumentList.statusCode !== 401) {
+    throw new Error(`Editor document discovery must require sign-in: ${anonymousEditorDocumentList.statusCode} ${anonymousEditorDocumentList.body}`);
+  }
+  const ownerEditorDocumentList = await get('/api/editor-documents', { cookie: 'better-auth.session=abc' });
+  const ownerEditorDocumentListBody = JSON.parse(ownerEditorDocumentList.body);
+  const standaloneLegacySummary = ownerEditorDocumentListBody.documents.find((entry) => entry.document_id === 'legacy-abcdefgh');
+  const canonicalBackedLegacySummary = ownerEditorDocumentListBody.documents.find((entry) => entry.document_id === 'legacy-kmnpqrst');
+  if (
+    ownerEditorDocumentList.statusCode !== 200 ||
+    ownerEditorDocumentListBody.documents.length !== 2 ||
+    !standaloneLegacySummary || standaloneLegacySummary.never_saved !== true || standaloneLegacySummary.has_saved_baseline !== false ||
+    !canonicalBackedLegacySummary || canonicalBackedLegacySummary.dirty !== true || canonicalBackedLegacySummary.never_saved !== false || canonicalBackedLegacySummary.has_saved_baseline !== true
+  ) {
+    throw new Error(`Owner could not discover private legacy editor work: ${ownerEditorDocumentList.statusCode} ${ownerEditorDocumentList.body}`);
+  }
+  const firstEditorDocumentPage = await get('/api/editor-documents?limit=1', { cookie: 'better-auth.session=abc' });
+  const firstEditorDocumentPageBody = JSON.parse(firstEditorDocumentPage.body);
+  const secondEditorDocumentPage = await get(
+    `/api/editor-documents?limit=1&offset=${firstEditorDocumentPageBody.next_offset}`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const secondEditorDocumentPageBody = JSON.parse(secondEditorDocumentPage.body);
+  if (
+    firstEditorDocumentPage.statusCode !== 200 ||
+    firstEditorDocumentPageBody.documents.length !== 1 ||
+    firstEditorDocumentPageBody.next_offset !== 1 ||
+    secondEditorDocumentPage.statusCode !== 200 ||
+    secondEditorDocumentPageBody.documents.length !== 1 ||
+    secondEditorDocumentPageBody.documents[0].document_id === firstEditorDocumentPageBody.documents[0].document_id
+  ) {
+    throw new Error(`Editor document discovery pagination lost a draft: ${firstEditorDocumentPage.body} / ${secondEditorDocumentPage.body}`);
+  }
+  const neverSavedEditorDocuments = await get(
+    '/api/editor-documents?status=never-saved',
+    { cookie: 'better-auth.session=abc' },
+  );
+  const neverSavedEditorDocumentsBody = JSON.parse(neverSavedEditorDocuments.body);
+  if (
+    neverSavedEditorDocuments.statusCode !== 200 ||
+    neverSavedEditorDocumentsBody.documents.length !== 1 ||
+    neverSavedEditorDocumentsBody.documents[0].document_id !== 'legacy-abcdefgh'
+  ) {
+    throw new Error(`Never-saved document filter was not baseline-aware: ${neverSavedEditorDocuments.statusCode} ${neverSavedEditorDocuments.body}`);
+  }
+  const rivalEditorDocumentList = await get('/api/editor-documents', { cookie: 'better-auth.session=rival' });
+  if (rivalEditorDocumentList.statusCode !== 200 || JSON.parse(rivalEditorDocumentList.body).documents.length !== 0) {
+    throw new Error(`Editor document discovery leaked another owner's work: ${rivalEditorDocumentList.statusCode} ${rivalEditorDocumentList.body}`);
+  }
+  const loadedCanonicalBackedLegacy = await get('/api/editor-documents/legacy-kmnpqrst', { cookie: 'better-auth.session=abc' });
+  const loadedCanonicalBackedLegacyBody = JSON.parse(loadedCanonicalBackedLegacy.body);
+  if (
+    loadedCanonicalBackedLegacy.statusCode !== 200 ||
+    loadedCanonicalBackedLegacyBody.document.level.name !== 'Recovered Dirty Draft' ||
+    loadedCanonicalBackedLegacyBody.document.has_saved_baseline !== true ||
+    loadedCanonicalBackedLegacyBody.document.never_saved !== false
+  ) {
+    throw new Error(`Canonical-backed migrated draft lost its Discard target: ${loadedCanonicalBackedLegacy.statusCode} ${loadedCanonicalBackedLegacy.body}`);
+  }
+  const discardCanonicalBackedLegacy = await request(
+    'POST', '/api/editor-documents/legacy-kmnpqrst/discard',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 3 }),
+  );
+  const discardCanonicalBackedLegacyBody = JSON.parse(discardCanonicalBackedLegacy.body);
+  if (
+    discardCanonicalBackedLegacy.statusCode !== 200 ||
+    discardCanonicalBackedLegacyBody.document.level.name !== 'Recovered Saved Position' ||
+    discardCanonicalBackedLegacyBody.document.revision !== 4 ||
+    discardCanonicalBackedLegacyBody.document.saved_revision !== 4 ||
+    discardCanonicalBackedLegacyBody.document.has_saved_baseline !== true
+  ) {
+    throw new Error(`Discard could not restore a migrated draft's canonical position: ${discardCanonicalBackedLegacy.statusCode} ${discardCanonicalBackedLegacy.body}`);
+  }
+
+  // --- Durable editor documents: private working copy, CAS autosave, explicit
+  //     save/discard, canonical workspace separation (ADR-0068) ---------------
+  const anonymousEditorResolve = await request(
+    'POST', '/api/editor-documents/resolve', { 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-1' }),
+  );
+  if (anonymousEditorResolve.statusCode !== 401) {
+    throw new Error(`Anonymous editor resolve should require sign-in: ${anonymousEditorResolve.statusCode} ${anonymousEditorResolve.body}`);
+  }
+
+  const resolvedEditor = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-1' }),
+  );
+  const resolvedEditorBody = JSON.parse(resolvedEditor.body);
+  const smokeDocumentId = resolvedEditorBody.document && resolvedEditorBody.document.document_id;
+  if (
+    resolvedEditor.statusCode !== 201 ||
+    typeof smokeDocumentId !== 'string' || !smokeDocumentId ||
+    resolvedEditorBody.document.level_id !== 'smoke-1' ||
+    resolvedEditorBody.document.workspace_kind !== 'user' ||
+    resolvedEditorBody.document.revision !== 1 ||
+    resolvedEditorBody.document.saved_revision !== 1 ||
+    resolvedEditorBody.document.dirty !== false
+  ) {
+    throw new Error(`Unexpected editor resolve: ${resolvedEditor.statusCode} ${resolvedEditor.body}`);
+  }
+
+  const draftLevel = { ...workspaceLevel, name: 'Autosaved Draft' };
+  const autosavedEditor = await request(
+    'PUT', `/api/editor-documents/${smokeDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 1, level: draftLevel }),
+  );
+  const autosavedEditorBody = JSON.parse(autosavedEditor.body);
+  if (
+    autosavedEditor.statusCode !== 200 ||
+    autosavedEditorBody.document.revision !== 2 ||
+    autosavedEditorBody.document.saved_revision !== 1 ||
+    autosavedEditorBody.document.dirty !== true ||
+    autosavedEditorBody.document.level.name !== 'Autosaved Draft'
+  ) {
+    throw new Error(`Unexpected editor autosave: ${autosavedEditor.statusCode} ${autosavedEditor.body}`);
+  }
+
+  // Autosave changes only the private working copy. Canonical workspace reads
+  // (and therefore thumbnails/gameplay) still see the last explicit Save.
+  const canonicalBeforeSave = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  if (JSON.parse(canonicalBeforeSave.body).levels['smoke-1'].name !== 'Smoke Level') {
+    throw new Error(`Editor autosave must not mutate the canonical workspace: ${canonicalBeforeSave.body}`);
+  }
+
+  const staleAutosave = await request(
+    'PUT', `/api/editor-documents/${smokeDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 1, level: { ...workspaceLevel, name: 'Stale Tab' } }),
+  );
+  const staleAutosaveBody = JSON.parse(staleAutosave.body);
+  if (
+    staleAutosave.statusCode !== 409 ||
+    staleAutosaveBody.error !== 'editor_document_revision_conflict' ||
+    staleAutosaveBody.document.revision !== 2 ||
+    staleAutosaveBody.document.level.name !== 'Autosaved Draft'
+  ) {
+    throw new Error(`Stale editor autosave should return the current document: ${staleAutosave.statusCode} ${staleAutosave.body}`);
+  }
+
+  const rivalEditorRead = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: 'better-auth.session=rival' });
+  if (rivalEditorRead.statusCode !== 404) {
+    throw new Error(`Editor documents must be account-scoped: ${rivalEditorRead.statusCode} ${rivalEditorRead.body}`);
+  }
+  // Per-owner level ids can collide. Give the rival their own `smoke-1` and
+  // prove the globally opaque document address still cannot cross accounts.
+  const rivalCollisionWorkspace = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    JSON.stringify({ campaigns: [], levels: { 'smoke-1': workspaceLevel }, revision: rivalWorkspaceBody.revision }),
+  );
+  if (rivalCollisionWorkspace.statusCode !== 200) {
+    throw new Error(`Could not create rival collision workspace: ${rivalCollisionWorkspace.statusCode} ${rivalCollisionWorkspace.body}`);
+  }
+  const rivalResolvedEditor = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-1' }),
+  );
+  const rivalResolvedEditorBody = JSON.parse(rivalResolvedEditor.body);
+  const rivalDocumentId = rivalResolvedEditorBody.document && rivalResolvedEditorBody.document.document_id;
+  if (
+    rivalResolvedEditor.statusCode !== 201 ||
+    rivalResolvedEditorBody.document.level_id !== 'smoke-1' ||
+    typeof rivalDocumentId !== 'string' || !rivalDocumentId || rivalDocumentId === smokeDocumentId
+  ) {
+    throw new Error(`Colliding owner level ids must receive distinct document ids: ${rivalResolvedEditor.statusCode} ${rivalResolvedEditor.body}`);
+  }
+  const playerReadsRivalDocument = await get(`/api/editor-documents/${rivalDocumentId}`, { cookie: 'better-auth.session=abc' });
+  if (playerReadsRivalDocument.statusCode !== 404) {
+    throw new Error(`Player must not resolve rival's opaque editor document: ${playerReadsRivalDocument.statusCode} ${playerReadsRivalDocument.body}`);
+  }
+
+  const discardedEditor = await request(
+    'POST', `/api/editor-documents/${smokeDocumentId}/discard`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 2 }),
+  );
+  const discardedEditorBody = JSON.parse(discardedEditor.body);
+  if (
+    discardedEditor.statusCode !== 200 ||
+    discardedEditorBody.document.revision !== 3 ||
+    discardedEditorBody.document.saved_revision !== 3 ||
+    discardedEditorBody.document.dirty !== false ||
+    discardedEditorBody.document.level.name !== 'Smoke Level'
+  ) {
+    throw new Error(`Discard should restore the canonical saved Level: ${discardedEditor.statusCode} ${discardedEditor.body}`);
+  }
+
+  const autosavedAgain = await request(
+    'PUT', `/api/editor-documents/${smokeDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 3, level: { ...workspaceLevel, name: 'Debounced Version' } }),
+  );
+  if (autosavedAgain.statusCode !== 200 || JSON.parse(autosavedAgain.body).document.revision !== 4) {
+    throw new Error(`Second autosave failed: ${autosavedAgain.statusCode} ${autosavedAgain.body}`);
+  }
+
+  // Save may carry the exact current in-memory Level. The server promotes it in
+  // the same transaction as the working-copy CAS, so a pending debounce cannot win.
+  const exactSaveLevel = { ...workspaceLevel, name: 'Exact Save Click' };
+  const savedEditor = await request(
+    'POST', `/api/editor-documents/${smokeDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 4, level: exactSaveLevel, campaign_id: null }),
+  );
+  const savedEditorBody = JSON.parse(savedEditor.body);
+  if (
+    savedEditor.statusCode !== 200 ||
+    savedEditorBody.document.revision !== 5 ||
+    savedEditorBody.document.saved_revision !== 5 ||
+    savedEditorBody.workspace_revision !== 2 ||
+    savedEditorBody.document.level.name !== 'Exact Save Click'
+  ) {
+    throw new Error(`Editor Save should promote the exact supplied Level: ${savedEditor.statusCode} ${savedEditor.body}`);
+  }
+  const canonicalAfterSave = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const canonicalAfterSaveBody = JSON.parse(canonicalAfterSave.body);
+  if (
+    canonicalAfterSaveBody.levels['smoke-1'].name !== 'Exact Save Click' ||
+    canonicalAfterSaveBody.revision !== 2 ||
+    canonicalAfterSaveBody.campaigns[0].levels.some((ref) => ref.levelId === 'smoke-1')
+  ) {
+    throw new Error(`Editor Save did not promote to canonical workspace: ${canonicalAfterSave.body}`);
+  }
+  const staleWholeWorkspaceSave = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ ...workspaceDoc, revision: loadedWorkspaceBody.revision }),
+  );
+  const staleWholeWorkspaceSaveBody = JSON.parse(staleWholeWorkspaceSave.body);
+  if (
+    staleWholeWorkspaceSave.statusCode !== 409 ||
+    staleWholeWorkspaceSaveBody.error !== 'workspace_revision_conflict' ||
+    staleWholeWorkspaceSaveBody.workspace.revision !== 2 ||
+    staleWholeWorkspaceSaveBody.workspace.levels['smoke-1'].name !== 'Exact Save Click'
+  ) {
+    throw new Error(`Stale whole-workspace Save could revert the canonical Level: ${staleWholeWorkspaceSave.statusCode} ${staleWholeWorkspaceSave.body}`);
+  }
+
+  // Canonical workspaces still have other legitimate writers. A clean editor
+  // document follows an externally changed canonical Level on its next load;
+  // a dirty one preserves its work but may not blindly overwrite that change.
+  const baselineLevelId = 'baseline-check';
+  const baselineCanonicalV1 = { ...workspaceLevel, id: baselineLevelId, name: 'Baseline Canonical V1' };
+  const workspaceForBaseline = canonicalAfterSaveBody;
+  workspaceForBaseline.levels[baselineLevelId] = baselineCanonicalV1;
+  const createBaselineCanonical = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(workspaceForBaseline),
+  );
+  if (createBaselineCanonical.statusCode !== 200) {
+    throw new Error(`Could not seed baseline-conflict Level: ${createBaselineCanonical.statusCode} ${createBaselineCanonical.body}`);
+  }
+  workspaceForBaseline.revision = JSON.parse(createBaselineCanonical.body).revision;
+  const baselineResolved = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: baselineLevelId }),
+  );
+  const baselineResolvedBody = JSON.parse(baselineResolved.body);
+  const baselineDocumentId = baselineResolvedBody.document && baselineResolvedBody.document.document_id;
+  if (
+    baselineResolved.statusCode !== 201 ||
+    typeof baselineDocumentId !== 'string' || !baselineDocumentId ||
+    baselineResolvedBody.document.baseline_conflict !== false
+  ) {
+    throw new Error(`Could not resolve baseline-conflict document: ${baselineResolved.statusCode} ${baselineResolved.body}`);
+  }
+
+  const baselineCanonicalV2 = { ...baselineCanonicalV1, name: 'Baseline Canonical V2' };
+  workspaceForBaseline.levels[baselineLevelId] = baselineCanonicalV2;
+  const externalCleanChange = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(workspaceForBaseline),
+  );
+  if (externalCleanChange.statusCode !== 200) {
+    throw new Error(`Could not apply external clean canonical change: ${externalCleanChange.statusCode} ${externalCleanChange.body}`);
+  }
+  workspaceForBaseline.revision = JSON.parse(externalCleanChange.body).revision;
+  const refreshedCleanDocument = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: baselineLevelId }),
+  );
+  const refreshedCleanBody = JSON.parse(refreshedCleanDocument.body);
+  if (
+    refreshedCleanDocument.statusCode !== 200 ||
+    refreshedCleanBody.document.revision !== 2 ||
+    refreshedCleanBody.document.saved_revision !== 2 ||
+    refreshedCleanBody.document.dirty !== false ||
+    refreshedCleanBody.document.baseline_conflict !== false ||
+    refreshedCleanBody.document.level.name !== 'Baseline Canonical V2'
+  ) {
+    throw new Error(`Clean editor document did not refresh from canonical: ${refreshedCleanDocument.statusCode} ${refreshedCleanDocument.body}`);
+  }
+
+  const baselineDraft = { ...baselineCanonicalV2, name: 'Preserve This Dirty Draft' };
+  const dirtyBaselineDocument = await request(
+    'PUT', `/api/editor-documents/${baselineDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 2, level: baselineDraft }),
+  );
+  if (dirtyBaselineDocument.statusCode !== 200 || JSON.parse(dirtyBaselineDocument.body).document.revision !== 3) {
+    throw new Error(`Could not autosave dirty baseline document: ${dirtyBaselineDocument.statusCode} ${dirtyBaselineDocument.body}`);
+  }
+  const baselineCanonicalV3 = { ...baselineCanonicalV2, name: 'Baseline Canonical V3 External' };
+  workspaceForBaseline.levels[baselineLevelId] = baselineCanonicalV3;
+  const externalDirtyChange = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(workspaceForBaseline),
+  );
+  if (externalDirtyChange.statusCode !== 200) {
+    throw new Error(`Could not apply external dirty canonical change: ${externalDirtyChange.statusCode} ${externalDirtyChange.body}`);
+  }
+  const loadedConflictedDocument = await get(`/api/editor-documents/${baselineDocumentId}`, { cookie: 'better-auth.session=abc' });
+  const loadedConflictedBody = JSON.parse(loadedConflictedDocument.body);
+  if (
+    loadedConflictedDocument.statusCode !== 200 ||
+    loadedConflictedBody.document.revision !== 3 ||
+    loadedConflictedBody.document.level.name !== 'Preserve This Dirty Draft' ||
+    loadedConflictedBody.document.baseline_conflict !== true
+  ) {
+    throw new Error(`Dirty editor document did not preserve/report canonical divergence: ${loadedConflictedDocument.statusCode} ${loadedConflictedDocument.body}`);
+  }
+  const rejectedBaselineSave = await request(
+    'POST', `/api/editor-documents/${baselineDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 3, level: baselineDraft }),
+  );
+  const rejectedBaselineSaveBody = JSON.parse(rejectedBaselineSave.body);
+  if (
+    rejectedBaselineSave.statusCode !== 409 ||
+    rejectedBaselineSaveBody.error !== 'editor_document_baseline_conflict' ||
+    rejectedBaselineSaveBody.document.level.name !== 'Preserve This Dirty Draft' ||
+    rejectedBaselineSaveBody.document.baseline_conflict !== true
+  ) {
+    throw new Error(`Stale baseline Save should preserve work and refuse promotion: ${rejectedBaselineSave.statusCode} ${rejectedBaselineSave.body}`);
+  }
+  const canonicalAfterRejectedBaselineSave = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  if (JSON.parse(canonicalAfterRejectedBaselineSave.body).levels[baselineLevelId].name !== 'Baseline Canonical V3 External') {
+    throw new Error(`Rejected baseline Save overwrote canonical content: ${canonicalAfterRejectedBaselineSave.body}`);
+  }
+  const discardedBaselineConflict = await request(
+    'POST', `/api/editor-documents/${baselineDocumentId}/discard`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 3 }),
+  );
+  const discardedBaselineConflictBody = JSON.parse(discardedBaselineConflict.body);
+  if (
+    discardedBaselineConflict.statusCode !== 200 ||
+    discardedBaselineConflictBody.document.revision !== 4 ||
+    discardedBaselineConflictBody.document.saved_revision !== 4 ||
+    discardedBaselineConflictBody.document.baseline_conflict !== false ||
+    discardedBaselineConflictBody.document.level.name !== 'Baseline Canonical V3 External'
+  ) {
+    throw new Error(`Discard did not adopt current canonical baseline: ${discardedBaselineConflict.statusCode} ${discardedBaselineConflict.body}`);
+  }
+
+  // Allocation must not round an imported numeric id through Number or emit an
+  // 81-character id when a 79-digit suffix rolls over. A bounded BigInt fallback
+  // chooses the first free suffix (c1 already exists, so this remains l2).
+  const maximumWidthNumericId = `l${'9'.repeat(79)}`;
+  await queryDb(
+    `UPDATE campaign_workspaces
+        SET body = jsonb_set(body, ARRAY['levels', $2]::text[], $3::jsonb, true)
+      WHERE owner_email = $1`,
+    [
+      'player@example.com',
+      maximumWidthNumericId,
+      JSON.stringify({ ...workspaceLevel, id: maximumWidthNumericId, name: 'Imported Maximum Numeric Id' }),
+    ],
+  );
+
+  // A new editor document receives its stable user level id from the server.
+  // It is durable immediately, but remains dirty until its first explicit Save.
+  const newEditor = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level: { ...workspaceLevel, id: 'client-placeholder', name: 'New Working Level' } }),
+  );
+  const newEditorBody = JSON.parse(newEditor.body);
+  const newDocumentId = newEditorBody.document && newEditorBody.document.document_id;
+  if (
+    newEditor.statusCode !== 201 ||
+    typeof newDocumentId !== 'string' || !newDocumentId || newDocumentId === smokeDocumentId ||
+    newEditorBody.document.level_id !== 'l2' ||
+    newEditorBody.document.level.id !== 'l2' ||
+    newEditorBody.document.revision !== 1 ||
+    newEditorBody.document.saved_revision !== 0 ||
+    newEditorBody.document.dirty !== true
+  ) {
+    throw new Error(`New editor document should get a server level id and start dirty: ${newEditor.statusCode} ${newEditor.body}`);
+  }
+  const recentAfterNewDocument = await get('/api/editor-documents', { cookie: 'better-auth.session=abc' });
+  const recentAfterNewDocumentBody = JSON.parse(recentAfterNewDocument.body);
+  const discoveredNewDocument = recentAfterNewDocumentBody.documents.find((entry) => entry.document_id === newDocumentId);
+  if (
+    recentAfterNewDocument.statusCode !== 200 ||
+    !discoveredNewDocument ||
+    discoveredNewDocument.level_id !== 'l2' ||
+    discoveredNewDocument.name !== 'New Working Level' ||
+    discoveredNewDocument.never_saved !== true
+  ) {
+    throw new Error(`Never-saved cloud document was not discoverable without its URL: ${recentAfterNewDocument.statusCode} ${recentAfterNewDocument.body}`);
+  }
+  const workspaceBeforeReservedCollision = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const workspaceBeforeReservedCollisionBody = JSON.parse(workspaceBeforeReservedCollision.body);
+  const reservedCollisionAttempt = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      ...workspaceBeforeReservedCollisionBody,
+      levels: {
+        ...workspaceBeforeReservedCollisionBody.levels,
+        l2: { ...newEditorBody.document.level, name: 'Unrelated Canonical Claim' },
+      },
+    }),
+  );
+  const reservedCollisionAttemptBody = JSON.parse(reservedCollisionAttempt.body);
+  if (
+    reservedCollisionAttempt.statusCode !== 409 ||
+    reservedCollisionAttemptBody.error !== 'workspace_level_reserved' ||
+    !Array.isArray(reservedCollisionAttemptBody.level_ids) ||
+    reservedCollisionAttemptBody.level_ids[0] !== 'l2' ||
+    reservedCollisionAttemptBody.workspace.levels.l2
+  ) {
+    throw new Error(`Whole-workspace writer claimed a never-saved document id: ${reservedCollisionAttempt.statusCode} ${reservedCollisionAttempt.body}`);
+  }
+  const discardNeverSaved = await request(
+    'POST', `/api/editor-documents/${newDocumentId}/discard`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 1 }),
+  );
+  if (discardNeverSaved.statusCode !== 409 || JSON.parse(discardNeverSaved.body).error !== 'no_saved_level') {
+    throw new Error(`Never-saved document should have no discard target: ${discardNeverSaved.statusCode} ${discardNeverSaved.body}`);
+  }
+  const newEditorAutosaveLevel = { ...workspaceLevel, id: 'l2', name: 'New Working Level Autosaved' };
+  const newEditorAutosave = await request(
+    'PUT', `/api/editor-documents/${newDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 1, level: newEditorAutosaveLevel }),
+  );
+  if (newEditorAutosave.statusCode !== 200 || JSON.parse(newEditorAutosave.body).document.revision !== 2) {
+    throw new Error(`New document autosave failed: ${newEditorAutosave.statusCode} ${newEditorAutosave.body}`);
+  }
+  const firstNewEditorSave = await request(
+    'POST', `/api/editor-documents/${newDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 2 }),
+  );
+  const firstNewEditorSaveBody = JSON.parse(firstNewEditorSave.body);
+  if (
+    firstNewEditorSave.statusCode !== 200 ||
+    firstNewEditorSaveBody.document.revision !== 3 ||
+    firstNewEditorSaveBody.document.saved_revision !== 3 ||
+    firstNewEditorSaveBody.workspace_revision !== 6 ||
+    firstNewEditorSaveBody.document.dirty !== false
+  ) {
+    throw new Error(`First Save should promote a new document: ${firstNewEditorSave.statusCode} ${firstNewEditorSave.body}`);
+  }
+  const workspaceWithNewLevel = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  if (JSON.parse(workspaceWithNewLevel.body).levels.l2.name !== 'New Working Level Autosaved') {
+    throw new Error(`First Save did not create the canonical Level: ${workspaceWithNewLevel.body}`);
+  }
+  const postSaveDraft = await request(
+    'PUT', `/api/editor-documents/${newDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 3, level: { ...newEditorAutosaveLevel, name: 'Throw This Away' } }),
+  );
+  if (postSaveDraft.statusCode !== 200 || JSON.parse(postSaveDraft.body).document.revision !== 4) {
+    throw new Error(`Post-save draft failed: ${postSaveDraft.statusCode} ${postSaveDraft.body}`);
+  }
+  const discardNewEditorDraft = await request(
+    'POST', `/api/editor-documents/${newDocumentId}/discard`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 4 }),
+  );
+  const discardNewEditorDraftBody = JSON.parse(discardNewEditorDraft.body);
+  if (
+    discardNewEditorDraft.statusCode !== 200 ||
+    discardNewEditorDraftBody.document.revision !== 5 ||
+    discardNewEditorDraftBody.document.saved_revision !== 5 ||
+    discardNewEditorDraftBody.document.level.name !== 'New Working Level Autosaved'
+  ) {
+    throw new Error(`Discard should restore the newly saved canonical Level: ${discardNewEditorDraft.statusCode} ${discardNewEditorDraft.body}`);
+  }
+
+  // Official working copies use the same CAS contract, but only admins may
+  // resolve or mutate them; the promoted workspace remains globally readable.
+  const nonAdminOfficialEditor = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'off-l-test', workspace_kind: 'official', workspace_id: 'default' }),
+  );
+  if (nonAdminOfficialEditor.statusCode !== 403) {
+    throw new Error(`Official editor document should require admin: ${nonAdminOfficialEditor.statusCode} ${nonAdminOfficialEditor.body}`);
+  }
+  const officialEditor = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'off-l-test', workspace_kind: 'official', workspace_id: 'default' }),
+  );
+  const officialEditorBody = JSON.parse(officialEditor.body);
+  const officialDocumentId = officialEditorBody.document && officialEditorBody.document.document_id;
+  if (officialEditor.statusCode !== 201 || typeof officialDocumentId !== 'string' || !officialDocumentId || officialEditorBody.document.level.name !== 'Test Level') {
+    throw new Error(`Official editor resolve failed: ${officialEditor.statusCode} ${officialEditor.body}`);
+  }
+  const officialEditorSave = await request(
+    'POST', `/api/editor-documents/${officialDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      revision: 1,
+      level: { ...officialWorkspace.levels['off-l-test'], name: 'Official Exact Save' },
+    }),
+  );
+  const officialEditorSaveBody = JSON.parse(officialEditorSave.body);
+  if (
+    officialEditorSave.statusCode !== 200 ||
+    officialEditorSaveBody.document.saved_revision !== 2 ||
+    officialEditorSaveBody.workspace_revision !== 2
+  ) {
+    throw new Error(`Official editor Save failed: ${officialEditorSave.statusCode} ${officialEditorSave.body}`);
+  }
+  const officialAfterEditorSave = await get('/api/official-campaigns/default');
+  const officialAfterEditorSaveBody = JSON.parse(officialAfterEditorSave.body);
+  if (
+    officialAfterEditorSaveBody.portfolio.data.levels['off-l-test'].name !== 'Official Exact Save' ||
+    officialAfterEditorSaveBody.portfolio.revision !== 2
+  ) {
+    throw new Error(`Official editor Save did not promote globally: ${officialAfterEditorSave.body}`);
+  }
+  const staleOfficialWorkspaceSave = await request(
+    'PUT', '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: officialWorkspace, revision: publishedOfficialBody.portfolio.revision }),
+  );
+  const staleOfficialWorkspaceSaveBody = JSON.parse(staleOfficialWorkspaceSave.body);
+  if (
+    staleOfficialWorkspaceSave.statusCode !== 409 ||
+    staleOfficialWorkspaceSaveBody.error !== 'official_campaign_revision_conflict' ||
+    staleOfficialWorkspaceSaveBody.portfolio.revision !== 2 ||
+    staleOfficialWorkspaceSaveBody.portfolio.data.levels['off-l-test'].name !== 'Official Exact Save'
+  ) {
+    throw new Error(`Stale official workspace Save could revert the canonical Level: ${staleOfficialWorkspaceSave.statusCode} ${staleOfficialWorkspaceSave.body}`);
   }
 
   // --- Game Lab runs (/api/lab-runs): per-user, DB-backed --------------------

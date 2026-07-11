@@ -13,14 +13,46 @@ export interface AuthUser {
   is_admin?: boolean;
 }
 
-export async function fetchMe(): Promise<AuthUser> {
+export interface AuthStatus {
+  user: AuthUser;
+  /** False means the request never reached a usable auth response; it is not a sign-out. */
+  reachable: boolean;
+}
+
+const AUTH_CHECK_TIMEOUT_MS = 10_000;
+
+/**
+ * Keep network failure distinct from a real signed-out response. Editors need this distinction:
+ * treating an offline signed-in user as anonymous strands their cloud document and can mislabel
+ * recoverable work as a sign-in problem.
+ */
+export async function fetchMeStatus(): Promise<AuthStatus> {
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), AUTH_CHECK_TIMEOUT_MS);
   try {
-    const res = await fetch('/api/auth/me', { credentials: 'include' });
-    if (!res.ok) return { signed_in: false };
-    return (await res.json()) as AuthUser;
+    const res = await fetch('/api/auth/me', {
+      credentials: 'include',
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      return {
+        user: { signed_in: false },
+        reachable: res.status < 500,
+      };
+    }
+    return {
+      user: (await res.json()) as AuthUser,
+      reachable: true,
+    };
   } catch {
-    return { signed_in: false };
+    return { user: { signed_in: false }, reachable: false };
+  } finally {
+    globalThis.clearTimeout(timeout);
   }
+}
+
+export async function fetchMe(): Promise<AuthUser> {
+  return (await fetchMeStatus()).user;
 }
 
 // Set (or clear, with an empty string) the signed-in user's display name — the

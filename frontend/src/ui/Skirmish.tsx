@@ -21,6 +21,7 @@ import {
   readLevelEventsParam,
   readTimeControlParams,
   readVictoryRulesParam,
+  resolvePlayReturnHref,
 } from './playtestRoute';
 import { editorBoardToLevel } from '../core/levelBoard';
 import { fetchPublicMap } from '../net/maps';
@@ -45,7 +46,12 @@ export function Skirmish() {
   // authored board into a one-off fixed-placement level. `?obj=<mode>` picks the win rule
   // (defaults to capture-all). Lets a crafted position be handed round as a URL.
   const routeBoard = routeParams.get('board');
+  const routeLevelName = routeParams.get('name')?.trim() || 'Board Link';
   const routeObjective = routeParams.get('obj');
+  const rawRouteSurviveTurns = Number(routeParams.get('survive'));
+  const routeSurviveTurns = Number.isSafeInteger(rawRouteSurviveTurns) && rawRouteSurviveTurns >= 1
+    ? rawRouteSurviveTurns
+    : undefined;
   const routeTimeControl = useMemo(() => readTimeControlParams(routeParams), [routeParams]);
   const routeEvents = useMemo(() => readLevelEventsParam(routeParams), [routeParams]);
   const routeVictory = useMemo(() => readVictoryRulesParam(routeParams), [routeParams]);
@@ -58,13 +64,14 @@ export function Skirmish() {
       ? (routeObjective as ObjectiveType) : 'capture-all';
     return editorBoardToLevel(decoded, {
       id: 'board-link',
-      name: 'Board Link',
+      name: routeLevelName,
       objective,
+      surviveTurns: objective === 'survive' ? routeSurviveTurns : undefined,
       timeControl: scenarioTimeControl ?? undefined,
       events: routeEvents,
       victory: routeVictory,
     });
-  }, [routeBoard, routeObjective, scenarioTimeControl, routeEvents, routeVictory]);
+  }, [routeBoard, routeLevelName, routeObjective, routeSurviveTurns, scenarioTimeControl, routeEvents, routeVictory]);
   // Multiplayer: `?lobby=<id>` enters a lobby's shared board as one of the two seats.
   const routeLobby = routeParams.get('lobby');
   // A shared USER map: `?map=<publicId>` fetches its public snapshot and plays it (no sign-in, no
@@ -80,18 +87,25 @@ export function Skirmish() {
       ? routeObjective as ObjectiveType
       : 'capture-all';
     const params = new URLSearchParams({ board: routeBoard, obj: objective });
+    params.set('name', routeLevelName);
+    if (routeSurviveTurns !== undefined) params.set('survive', String(routeSurviveTurns));
     appendTimeControlParams(params, scenarioTimeControl ?? undefined);
     appendLevelEventsParam(params, routeEvents);
     appendVictoryRulesParam(params, routeVictory);
     return `/editor/level?${params.toString()}`;
-  }, [routeBoard, routeObjective, scenarioTimeControl, routeEvents, routeVictory]);
+  }, [routeBoard, routeLevelName, routeObjective, routeSurviveTurns, scenarioTimeControl, routeEvents, routeVictory]);
   const levelReturnHref = useMemo(() => {
     if (routeMode !== 'test' || !routeLevelId) return null;
     const params = new URLSearchParams({ levelId: routeLevelId });
     if (routeCampaignId) params.set('campaignId', routeCampaignId);
     return `/editor/level?${params.toString()}`;
   }, [routeCampaignId, routeLevelId, routeMode]);
-  const returnHref = routeBoard ? boardReturnHref : launchedReturnHref ?? levelReturnHref;
+  const returnHref = resolvePlayReturnHref({
+    explicitReturnHref: launchedReturnHref,
+    hasBoard: Boolean(routeBoard),
+    boardReturnHref,
+    levelReturnHref,
+  });
   const returnIsEditor = !!returnHref && /^\/(editor\/level|level-editor|edit)(\?|$)/.test(returnHref);
   const [netError, setNetError] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);

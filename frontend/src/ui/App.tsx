@@ -12,6 +12,7 @@ import {
   getAppNavigationUrl,
   navigateApp,
   normalizeRoutePath,
+  runAppNavigationBlockers,
   shouldInterceptAppLinkClick,
 } from './navigation';
 import { isBoardArtRoute, isHeavyRoute, isLightArtRoute, routeScreenKey } from './routeSurfaces';
@@ -121,10 +122,30 @@ export function App(): ReactElement {
 
   // Navigation + prefetch wiring (delegated at the document, like the click router).
   useEffect(() => {
-    const onNav = () => {
+    const onNav = (event: Event) => {
       const next = normalizeRoutePath(window.location.pathname);
       const nextSearch = window.location.search;
       const current = pendingTarget.current ?? pathRef.current;
+      // popstate has already moved the browser's history pointer by the time it fires. Let a
+      // nested authoring surface consume this attempt, then restore the editor URL without
+      // remounting. The next Back proceeds normally after that nested surface has closed.
+      if (event.type === 'popstate') {
+        const nextHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        const currentHref = `${pathRef.current}${searchRef.current}`;
+        if (nextHref !== currentHref && runAppNavigationBlockers({
+          href: nextHref,
+          path: next,
+          replace: false,
+          source: 'history',
+          retry: () => {
+            window.history.back();
+            return true;
+          },
+        })) {
+          window.history.pushState({}, '', currentHref);
+          return;
+        }
+      }
       if (next === current) {
         if (nextSearch !== searchRef.current) {
           searchRef.current = nextSearch;
