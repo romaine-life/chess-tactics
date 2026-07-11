@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "node scripts/ensure-backend-deps.mjs && npm --prefix ../packages/board-render run build",
-    "dev": "vite --host 0.0.0.0",
+    "dev": "node scripts/start-vite-dev.mjs",
     "build": "vite build",
     "build:trainer": "vite build --config vite.trainer.config.js",
     "build:board-render": "npm --prefix ../packages/board-render run build",
