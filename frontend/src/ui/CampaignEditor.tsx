@@ -11,6 +11,7 @@ import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { injectStressLevels } from '../campaign/stressFixture';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { NavButton } from './shared/NavButton';
+import { navigateApp } from './navigation';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
@@ -262,6 +263,11 @@ function LevelRow({
   index,
   active,
   readOnly = false,
+  displayName,
+  description,
+  showOrdinal = true,
+  ariaLabel,
+  emptyThumbnailLabel,
   onSelect,
   editHref,
   onMoveUp,
@@ -273,22 +279,29 @@ function LevelRow({
   index: number;
   active: boolean;
   readOnly?: boolean;
+  displayName?: string;
+  description?: string;
+  showOrdinal?: boolean;
+  ariaLabel?: string;
+  emptyThumbnailLabel?: string;
   onSelect: () => void;
   editHref?: string;
-  onMoveUp: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  onMoveDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  onDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onMoveUp?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onMoveDown?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onDelete?: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
   // The full level doc drives a direction-aware goal line (King Assault reads "Protect
   // your King" when the player holds the King); before it hydrates, fall back to the
   // ref's objective as a mode name only.
-  const goalLine = level ? levelObjectiveLine(level) : MODE_NAME[levelRef.objective ?? 'capture-all'];
+  const rowName = displayName ?? level?.name ?? levelRef.levelId;
+  const goalLine = description ?? (level ? levelObjectiveLine(level) : MODE_NAME[levelRef.objective ?? 'capture-all']);
   return (
     <div
       role="button"
       tabIndex={0}
+      aria-label={ariaLabel}
       aria-current={active ? 'true' : undefined}
-      className={`settings-row ce-editor-level-row ${active ? 'is-selected' : ''} ${readOnly ? 'is-read-only' : ''}`.trim()}
+      className={['settings-row', 'ce-editor-level-row', active ? 'is-selected' : '', readOnly ? 'is-read-only' : ''].filter(Boolean).join(' ')}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -298,18 +311,24 @@ function LevelRow({
       }}
     >
       <span className="settings-row-thumb" aria-hidden="true">
-        {level ? <LevelThumbnail level={level} width={68} height={44} /> : <span className="settings-row-thumb-empty" />}
+        {level ? (
+          <LevelThumbnail level={level} width={68} height={44} />
+        ) : (
+          <span className={`settings-row-thumb-empty ${emptyThumbnailLabel ? 'ce-draft-thumb-empty' : ''}`.trim()}>
+            {emptyThumbnailLabel ? <small>{emptyThumbnailLabel}</small> : null}
+          </span>
+        )}
       </span>
       <div className="settings-row-copy ce-editor-level-copy">
         <div className="ce-editor-level-heading">
-          <h4>{index + 1}. {level?.name ?? levelRef.levelId}</h4>
+          <h4>{showOrdinal ? `${index + 1}. ` : ''}{rowName}</h4>
         </div>
         <p>{goalLine}</p>
       </div>
       {readOnly ? null : (
         <div className="settings-row-control ce-row-actions" aria-label="Level actions">
           {editHref ? (
-            <IconNavButton to={editHref} aria-label={`Edit ${level?.name ?? levelRef.levelId}`}>
+            <IconNavButton to={editHref} aria-label={`Edit ${rowName}`}>
               <CeIcon icon="pencil" />
             </IconNavButton>
           ) : null}
@@ -331,28 +350,19 @@ export function RecentDraftLevelRow({
 }): ReactElement {
   const name = editorDocumentDisplayName(document);
   return (
-    <NavButton
-      className="settings-row ce-editor-level-row ce-editor-draft-row"
-      data-testid="recent-editor-document"
-      to={editorDocumentContinueHref(document)}
-      aria-label={`Continue editing ${name}`}
-      title={`Continue editing ${name}`}
-    >
-      <span className="settings-row-thumb" aria-hidden="true">
-        {savedLevel ? (
-          <LevelThumbnail level={savedLevel} width={68} height={44} />
-        ) : (
-          <span className="settings-row-thumb-empty ce-draft-thumb-empty"><small>Not saved</small></span>
-        )}
-      </span>
-      <span className="settings-row-copy ce-editor-level-copy">
-        <span className="ce-editor-level-heading">
-          <h4>{name}</h4>
-        </span>
-        <p>{recentDraftDescription(document)}</p>
-      </span>
-      <span className="ce-draft-continue" aria-hidden="true">Continue</span>
-    </NavButton>
+    <LevelRow
+      levelRef={{ levelId: document.level_id, ordinal: 0, objective: savedLevel?.objective }}
+      level={savedLevel}
+      index={0}
+      active={false}
+      readOnly
+      displayName={name}
+      description={recentDraftDescription(document)}
+      showOrdinal={false}
+      ariaLabel={`Continue editing ${name}`}
+      emptyThumbnailLabel="Not saved"
+      onSelect={() => navigateApp(editorDocumentContinueHref(document))}
+    />
   );
 }
 

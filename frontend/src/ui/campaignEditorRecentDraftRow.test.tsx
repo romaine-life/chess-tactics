@@ -25,9 +25,9 @@ describe('Campaign Editor recent draft row', () => {
       <RecentDraftLevelRow document={document} savedLevel={createBlankLevel('l2', 'Saved position')} />,
     );
 
-    expect(markup).toContain('<button type="button"');
-    expect(markup).toContain('class="settings-row ce-editor-level-row ce-editor-draft-row"');
-    expect(markup).toContain('data-nav="/editor/level?levelId=l2&amp;document=36bb67ae-f2a2-44e0-91dd-71f4ef981a91&amp;returnTo=%2Feditor"');
+    expect(markup).toContain('<div role="button" tabindex="0"');
+    expect(markup).toContain('class="settings-row ce-editor-level-row is-read-only"');
+    expect(markup).not.toContain('ce-editor-draft-row');
     expect(markup).toContain('class="level-thumbnail');
     expect(markup).toContain('Continue editing Bridge sketch');
   });
