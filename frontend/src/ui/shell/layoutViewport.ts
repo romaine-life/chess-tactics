@@ -1,6 +1,6 @@
 // --layout-vw: the width (px) the window would have at the reference (load-time) zoom.
 //
-// Why: the shared menu/settings/campaign chrome centres itself against the viewport.
+// Why: the shared menu/settings/Play chrome centres itself against the viewport.
 // CSS cannot tell browser zoom from a window resize — both just change the CSS viewport
 // width — so viewport-relative centring re-computes under zoom and the rail slides
 // sideways (inward on zoom-out, off the left edge on zoom-in) instead of magnifying.

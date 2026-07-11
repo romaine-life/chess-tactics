@@ -18,6 +18,12 @@ export interface CampaignHydrationResult {
   userWorkspace: 'loaded' | 'signed-out' | 'unavailable';
 }
 
+export function isUserWorkspaceAvailable(status: CampaignHydrationResult['userWorkspace']): boolean {
+  // Signed-out is an authoritative empty private slice, not a failed load. Only an
+  // unavailable response leaves the selector unable to distinguish empty from unknown.
+  return status !== 'unavailable';
+}
+
 let officialAvailable = false;
 let userWorkspace: CampaignHydrationResult['userWorkspace'] = 'unavailable';
 let inFlight: Promise<CampaignHydrationResult> | null = null;

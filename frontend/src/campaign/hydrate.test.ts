@@ -110,3 +110,10 @@ test('reports an unavailable private workspace and retries only that slice', asy
   expect(officialAttempts).toBe(1);
   expect(workspaceAttempts).toBe(2);
 });
+
+test('treats signed-out as a settled private slice but not an unavailable response', async () => {
+  const { isUserWorkspaceAvailable } = await import('./hydrate');
+  expect(isUserWorkspaceAvailable('loaded')).toBe(true);
+  expect(isUserWorkspaceAvailable('signed-out')).toBe(true);
+  expect(isUserWorkspaceAvailable('unavailable')).toBe(false);
+});

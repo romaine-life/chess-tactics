@@ -3,7 +3,15 @@ import { useCampaigns } from './store';
 import { validateLevel } from '../core/level';
 
 function reset() {
-  useCampaigns.setState({ campaigns: [], levels: {}, selectedCampaignId: null, selectedLevelId: null, counter: 1 });
+  useCampaigns.setState({
+    campaigns: [],
+    levels: {},
+    selectedCampaignId: null,
+    selectedLevelId: null,
+    counter: 1,
+    userWorkspaceRevision: 0,
+    officialWorkspaceRevision: 0,
+  });
 }
 
 const OFFICIAL_ID = /^off-[a-z]+(-[a-z]+)*$/; // backend validateOfficialWorkspaceIds contract
@@ -183,12 +191,14 @@ describe('tiered campaigns (ADR-0038)', () => {
   beforeEach(reset);
 
   it('merges officials (tagged, first) then the user tier on top, both coexisting', () => {
-    useCampaigns.getState().mergeOfficial(officialWs);
-    useCampaigns.getState().mergeUser({ campaigns: [{ formatVersion: 1, id: 'c5', name: 'Mine', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} });
+    useCampaigns.getState().mergeOfficial({ ...officialWs, revision: 12 });
+    useCampaigns.getState().mergeUser({ campaigns: [{ formatVersion: 1, id: 'c5', name: 'Mine', difficulty: 'normal', chapters: 1, levels: [] }], levels: {}, revision: 7 });
     const s = useCampaigns.getState();
     expect(s.campaigns.map((c) => c.id)).toEqual(['off-c-crown', 'c5']);
     expect(s.campaigns[0]).toMatchObject({ origin: 'official', readOnly: true });
     expect(s.campaigns[1]).toMatchObject({ origin: 'mine' });
+    expect(s.officialWorkspaceRevision).toBe(12);
+    expect(s.userWorkspaceRevision).toBe(7);
   });
 
   it('keeps the user counter free of official ids so user ids never collide', () => {

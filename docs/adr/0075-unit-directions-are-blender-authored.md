@@ -4,7 +4,7 @@ date: 2026-07-10
 deciders: Nelson, Codex
 ---
 
-# ADR-0074: Unit orientation and accepted-sprite recapture
+# ADR-0075: Unit orientation and accepted-sprite recapture
 
 ## Context
 

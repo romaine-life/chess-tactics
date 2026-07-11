@@ -37,7 +37,7 @@ same.
 
 ## Orientation Contract
 
-ADR-0074 separates new geometry from resizing accepted art. A new unit starts
+ADR-0075 separates new geometry from resizing accepted art. A new unit starts
 from one calibrated Blender model under a fixed camera at eight exact 45-degree
 facings. A scale-only revision starts from the accepted 6-palette x 8-direction
 sprite set so its approved styling and orientation cannot drift.

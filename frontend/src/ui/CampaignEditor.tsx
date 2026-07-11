@@ -4,12 +4,14 @@ import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, offi
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
 import { MODE_NAME } from '../core/objectives';
+import { isWorkspaceConflict } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { injectStressLevels } from '../campaign/stressFixture';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { NavButton } from './shared/NavButton';
+import { navigateApp } from './navigation';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
@@ -17,7 +19,14 @@ import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { KitScroll } from './KitScroll';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
-import { editSkirmishProfileHref, ensureDefaultSkirmishProfileLevel, isSkirmishProfileLevel, skirmishProfileLevels } from './skirmishProfiles';
+import { editSkirmishProfileHref, isSkirmishProfileLevel, skirmishProfileLevels } from './skirmishProfiles';
+import { listEditorDocuments, type EditorDocumentSummary } from '../net/editorDocuments';
+import {
+  editorDocumentContinueHref,
+  editorDocumentDisplayName,
+  resumableUserEditorDocuments,
+  savedLevelForEditorDocument,
+} from './campaignEditorRecentDrafts';
 
 const CE_ICONS = {
   favorite: '/assets/ui/kit/icons/brand-shield.png',
@@ -28,7 +37,7 @@ const CE_ICONS = {
   pencil: '/assets/ui/kit/icons/pencil.png',
 } as const;
 
-// The carved rail-tab icon, shared with the play-side Campaign screen (Campaign.tsx) so a
+// The carved rail-tab icon, shared with the play-side Campaign section (PlayMenu.tsx) so a
 // campaign looks identical whether you're picking one to play or one to edit.
 const CAMPAIGN_TAB_ICON = '/assets/ui/main-menu/icons-carved/campaign-editor.png';
 
@@ -51,6 +60,14 @@ function userSliceSignature(): string {
 
 function officialSliceSignature(): string {
   return workspaceSignature(officialWorkspaceForSave());
+}
+
+function recentDraftDescription(document: EditorDocumentSummary): string {
+  const state = document.never_saved ? 'Not saved yet' : 'Unsaved changes';
+  if (!document.updated_at) return state;
+  const updatedAt = new Date(document.updated_at);
+  if (Number.isNaN(updatedAt.getTime())) return state;
+  return `${state} · Edited ${updatedAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
 }
 
 function validateWorkspaceImport(ws: Partial<{ campaigns: Campaign[]; levels: Record<string, Level> }>): string | null {
@@ -246,6 +263,11 @@ function LevelRow({
   index,
   active,
   readOnly = false,
+  displayName,
+  description,
+  showOrdinal = true,
+  ariaLabel,
+  emptyThumbnailLabel,
   onSelect,
   editHref,
   onMoveUp,
@@ -257,22 +279,29 @@ function LevelRow({
   index: number;
   active: boolean;
   readOnly?: boolean;
+  displayName?: string;
+  description?: string;
+  showOrdinal?: boolean;
+  ariaLabel?: string;
+  emptyThumbnailLabel?: string;
   onSelect: () => void;
   editHref?: string;
-  onMoveUp: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  onMoveDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  onDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onMoveUp?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onMoveDown?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onDelete?: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
   // The full level doc drives a direction-aware goal line (King Assault reads "Protect
   // your King" when the player holds the King); before it hydrates, fall back to the
   // ref's objective as a mode name only.
-  const goalLine = level ? levelObjectiveLine(level) : MODE_NAME[levelRef.objective ?? 'capture-all'];
+  const rowName = displayName ?? level?.name ?? levelRef.levelId;
+  const goalLine = description ?? (level ? levelObjectiveLine(level) : MODE_NAME[levelRef.objective ?? 'capture-all']);
   return (
     <div
       role="button"
       tabIndex={0}
+      aria-label={ariaLabel}
       aria-current={active ? 'true' : undefined}
-      className={`settings-row ce-editor-level-row ${active ? 'is-selected' : ''} ${readOnly ? 'is-read-only' : ''}`.trim()}
+      className={['settings-row', 'ce-editor-level-row', active ? 'is-selected' : '', readOnly ? 'is-read-only' : ''].filter(Boolean).join(' ')}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -282,18 +311,24 @@ function LevelRow({
       }}
     >
       <span className="settings-row-thumb" aria-hidden="true">
-        {level ? <LevelThumbnail level={level} width={68} height={44} /> : <span className="settings-row-thumb-empty" />}
+        {level ? (
+          <LevelThumbnail level={level} width={68} height={44} />
+        ) : (
+          <span className={`settings-row-thumb-empty ${emptyThumbnailLabel ? 'ce-draft-thumb-empty' : ''}`.trim()}>
+            {emptyThumbnailLabel ? <small>{emptyThumbnailLabel}</small> : null}
+          </span>
+        )}
       </span>
       <div className="settings-row-copy ce-editor-level-copy">
         <div className="ce-editor-level-heading">
-          <h4>{index + 1}. {level?.name ?? levelRef.levelId}</h4>
+          <h4>{showOrdinal ? `${index + 1}. ` : ''}{rowName}</h4>
         </div>
         <p>{goalLine}</p>
       </div>
       {readOnly ? null : (
         <div className="settings-row-control ce-row-actions" aria-label="Level actions">
           {editHref ? (
-            <IconNavButton to={editHref} aria-label={`Edit ${level?.name ?? levelRef.levelId}`}>
+            <IconNavButton to={editHref} aria-label={`Edit ${rowName}`}>
               <CeIcon icon="pencil" />
             </IconNavButton>
           ) : null}
@@ -306,6 +341,31 @@ function LevelRow({
   );
 }
 
+export function RecentDraftLevelRow({
+  document,
+  savedLevel,
+}: {
+  document: EditorDocumentSummary;
+  savedLevel: Level | undefined;
+}): ReactElement {
+  const name = editorDocumentDisplayName(document);
+  return (
+    <LevelRow
+      levelRef={{ levelId: document.level_id, ordinal: 0, objective: savedLevel?.objective }}
+      level={savedLevel}
+      index={0}
+      active={false}
+      readOnly
+      displayName={name}
+      description={recentDraftDescription(document)}
+      showOrdinal={false}
+      ariaLabel={`Continue editing ${name}`}
+      emptyThumbnailLabel="Not saved"
+      onSelect={() => navigateApp(editorDocumentContinueHref(document))}
+    />
+  );
+}
+
 export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}) {
   const campaigns = useCampaigns((s) => s.campaigns);
   const levels = useCampaigns((s) => s.levels);
@@ -313,10 +373,15 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
+  const [recentDrafts, setRecentDrafts] = useState<EditorDocumentSummary[]>([]);
+  // A stale whole-workspace body must never be paired with the newer revision from a 409 and
+  // retried. Keep the local work visible, stop that tier's writes, and require a deliberate reload.
+  const [userSaveConflict, setUserSaveConflict] = useState(false);
+  const [officialSaveConflict, setOfficialSaveConflict] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState<CampaignCollection>('campaign');
   const { ask, dialog: confirmDialog } = useConfirm();
   // Entrance readiness (ADR-0051): the shared store may already hold campaigns from a
-  // /campaign or /skirmish visit this session — then there's real content at mount and
+  // /play/select visit this session — then there's real content at mount and
   // nothing holds; otherwise hold the fade until the officials merge settles.
   const [loaded, setLoaded] = useState(() => useCampaigns.getState().campaigns.length > 0);
   const [userWorkspaceHydration, setUserWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
@@ -360,10 +425,21 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
 
   useEffect(() => {
     let active = true;
-    fetchMe().then((user) => {
+    void fetchMe().then(async (user) => {
       if (!active) return;
       setMe(user);
-      if (!user.signed_in) setStatus('Official campaigns shown. Sign in to author your own.');
+      if (!user.signed_in) {
+        setRecentDrafts([]);
+        setStatus('Official campaigns shown. Sign in to author your own.');
+        return;
+      }
+      try {
+        const result = await listEditorDocuments({ status: 'all', limit: 100 });
+        if (active) setRecentDrafts(resumableUserEditorDocuments(result.documents));
+      } catch {
+        // Discovery is optional UI. Workspace authoring remains available when the private list
+        // endpoint is temporarily unavailable, and no fallback may invent or expose documents.
+      }
     }).catch(() => {});
     void (async () => {
       let userReady = false;
@@ -392,7 +468,6 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       if (!active) return;
       setUserWorkspaceHydration(userReady ? 'ready' : 'unavailable');
       setOfficialWorkspaceHydration(officialReady ? 'ready' : 'unavailable');
-      if (userReady) ensureDefaultSkirmishProfileLevel();
       // Dev-only perf harness: `?stress=<n>` injects a throwaway campaign of N generated levels
       // (selecting it) so scroll/thumbnail perf can be measured on a long list. No-op without the
       // flag, so it never touches normal use; the levels live only in the in-memory store.
@@ -416,6 +491,10 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
 
   // Private "Save": frictionless, writes only the user slice (officials never enter it).
   const saveUserNow = async () => {
+    if (userSaveConflict) {
+      setStatus('Save remains paused after a workspace conflict. Reload the Editor before saving again.');
+      return;
+    }
     if (!userWorkspaceReady) {
       setStatus('Your workspace is unavailable. Reopen the Editor to retry before saving.');
       return;
@@ -425,6 +504,13 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       setSavedUserSig(userSliceSignature());
       setStatus('Saved to server');
     } catch (e) {
+      if (isWorkspaceConflict(e)) {
+        setUserSaveConflict(true);
+        setStatus(e.code === 'workspace_level_reserved'
+          ? 'Save stopped: a new board already reserves one of these level IDs. Reload the Editor; your local changes remain in this tab.'
+          : 'Save stopped: this workspace changed elsewhere. Reload the Editor before saving; your local changes remain in this tab.');
+        return;
+      }
       const mapped = mapSaveError(e);
       if ('action' in mapped) { goSignIn(); return; }
       setStatus(mapped.message);
@@ -434,6 +520,10 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   // "Publish to all players": a distinct, confirmed, admin-gated write of ONLY the
   // official slice. The server's requireAdmin is the real gate (403 surfaces here).
   const publishOfficialNow = async () => {
+    if (officialSaveConflict) {
+      setStatus('Publish remains paused after an official workspace conflict. Reload the Editor before publishing again.');
+      return;
+    }
     if (!officialWorkspaceReady) {
       setStatus('Official campaigns are unavailable. Reopen the Editor to retry before publishing.');
       return;
@@ -449,6 +539,11 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       setSavedOfficialSig(officialSliceSignature());
       setStatus(`Published (revision ${revision}).`);
     } catch (e) {
+      if (isWorkspaceConflict(e)) {
+        setOfficialSaveConflict(true);
+        setStatus('Publish stopped: official campaigns changed elsewhere. Reload the Editor before publishing; your local changes remain in this tab.');
+        return;
+      }
       const mapped = mapSaveError(e);
       if ('action' in mapped) { goSignIn(); return; }
       setStatus(mapped.message);
@@ -639,10 +734,9 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       setStatus('Your workspace is unavailable. Reopen the Editor to retry.');
       return;
     }
-    ensureDefaultSkirmishProfileLevel();
     setSelectedCollection('skirmish-profiles');
     const selectedIsStillProfile = selectedLevelId && profileLevels.some((level) => level.id === selectedLevelId);
-    const nextLevelId = selectedIsStillProfile ? selectedLevelId : profileLevels[0]?.id ?? ensureDefaultSkirmishProfileLevel().id;
+    const nextLevelId = selectedIsStillProfile ? selectedLevelId : profileLevels[0]?.id;
     if (nextLevelId) useCampaigns.getState().selectLevel(nextLevelId);
     else useCampaigns.setState({ selectedLevelId: null });
   };
@@ -753,9 +847,29 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                 }}
               >+ New Campaign</SettingsButton>
               <SettingsButton disabled={!userWorkspaceReady} onClick={() => importInputRef.current?.click()}>Import</SettingsButton>
-              <SettingsButton tone="primary" data-testid="save-workspace" disabled={!userWorkspaceReady || !userDirty} onClick={() => void saveUserNow()}>Save</SettingsButton>
-              {isAdmin && officialWorkspaceReady && officialDirty ? (
-                <SettingsButton tone="primary" data-testid="publish-officials" onClick={() => void publishOfficialNow()}>Publish to all players</SettingsButton>
+              <SettingsButton
+                tone="primary"
+                data-testid="save-workspace"
+                disabled={!userWorkspaceReady || !userDirty || userSaveConflict}
+                title={userSaveConflict
+                  ? 'Reload the Editor to resolve the workspace revision conflict.'
+                  : !userWorkspaceReady
+                  ? 'Your workspace must finish loading before it can be saved.'
+                  : undefined}
+                onClick={() => void saveUserNow()}
+              >Save</SettingsButton>
+              {isAdmin && officialDirty ? (
+                <SettingsButton
+                  tone="primary"
+                  data-testid="publish-officials"
+                  disabled={!officialWorkspaceReady || officialSaveConflict}
+                  title={officialSaveConflict
+                    ? 'Reload the Editor to resolve the official workspace revision conflict.'
+                    : !officialWorkspaceReady
+                    ? 'Official campaigns must finish loading before publishing.'
+                    : undefined}
+                  onClick={() => void publishOfficialNow()}
+                >Publish to all players</SettingsButton>
               ) : null}
               {me && !me.signed_in ? (
                 <SettingsButton data-testid="campaign-sign-in" onClick={() => goSignIn()}>Sign in to save</SettingsButton>
@@ -782,9 +896,23 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
             <div className="ce-editor-body">
               <KitScroll className="settings-scroll ce-editor-scroll">
                 <div className="settings-panel-content">
+                  {recentDrafts.length > 0 ? (
+                    <SettingsSection title="Continue editing">
+                      <div className="ce-recent-drafts" data-testid="recent-editor-documents">
+                        {recentDrafts.map((document) => (
+                          <RecentDraftLevelRow
+                            key={document.document_id}
+                            document={document}
+                            savedLevel={savedLevelForEditorDocument(document, levels)}
+                          />
+                        ))}
+                      </div>
+                    </SettingsSection>
+                  ) : null}
                   {isSkirmishProfilesSelected ? (
                     <SettingsSection title="Skirmish Profiles">
                       <div className="ce-level-list" data-testid="skirmish-profiles">
+                        {profileLevelRefs.length === 0 ? <p className="ce-empty">No authored skirmish profiles.</p> : null}
                         {profileLevelRefs.map((ref, index) => (
                           <LevelRow
                             key={ref.levelId}

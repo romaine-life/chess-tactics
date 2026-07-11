@@ -9,7 +9,7 @@ const campaignEditorSource = readFileSync(new URL('./CampaignEditor.tsx', import
 
 describe('new-level shortcut and campaign assignment controls', () => {
   it('pins one New Level shortcut above New Campaign in the Editor rail', () => {
-    expect(menuSource).toContain("new Set(['level-editor'])");
+    expect(menuSource).toContain("new Set(['solo-skirmish', 'level-editor'])");
     expect(menuSource).not.toContain("'level-editor': '/editor/level?returnTo=%2F'");
     expect(menuSource).not.toContain("'level-editor': 'New Level'");
 
@@ -30,14 +30,15 @@ describe('new-level shortcut and campaign assignment controls', () => {
     expect(editorSource).toContain('const dirty = levelDirty || campaignAssignmentDirty;');
     expect(editorSource).toContain("const [savedCampaignAssignmentId, setSavedCampaignAssignmentId] = useState('');");
     expect(editorSource).toContain('const canSave = saveContextReady &&');
-    expect(editorSource).toContain('const rollbackStore = (): void => {');
-    expect(editorSource).toContain('clearLevelEditorDraft(draftKeyBeforeSave);');
-    expect(editorSource).toContain('levelEditorDraftKey({ levelId: editingId })');
+    expect(editorSource).toContain('const saved = await saveEditorDocument(');
+    expect(editorSource).toContain('campaignAssignmentId || null,');
+    expect(editorSource).toContain('useCampaigns.getState().assignLevelToCampaign(doc.level_id, campaignAssignmentId || null);');
+    expect(editorSource).toContain('levelEditorDraftKey({ documentId: doc.document_id, ownerEmail })');
   });
 
   it('keeps destructive workspace controls locked when private hydration is unavailable', () => {
     expect(campaignEditorSource).toContain('disabled={!userWorkspaceReady}');
-    expect(campaignEditorSource).toContain('disabled={!userWorkspaceReady || !userDirty}');
+    expect(campaignEditorSource).toContain('disabled={!userWorkspaceReady || !userDirty || userSaveConflict}');
     expect(campaignEditorSource).toContain('const readOnly = !selectedTierReady ||');
   });
 });
