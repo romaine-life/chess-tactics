@@ -6131,6 +6131,29 @@ h1 {
 .le-roadconn-edge.is-none:hover line:last-child { stroke: #67d98a; }
 .le-roadconn-edge:focus-visible { outline: none; }
 .le-roadconn-edge:focus-visible line:last-child { stroke-width: 9; }
+.le-fenceconn-post { cursor: pointer; }
+.le-fenceconn-post-mark {
+  fill: rgba(8, 20, 28, .92);
+  stroke: rgba(120, 150, 165, .55);
+  stroke-width: 2;
+}
+.le-fenceconn-post.is-wood { --le-fence-post-color: #d6b169; }
+.le-fenceconn-post.is-stone { --le-fence-post-color: #c7d3d8; }
+.le-fenceconn-post.is-explicit .le-fenceconn-post-mark {
+  fill: var(--le-fence-post-color);
+  stroke: #fff4d2;
+}
+.le-fenceconn-post.is-automatic .le-fenceconn-post-mark {
+  stroke: var(--le-fence-post-color);
+  stroke-dasharray: 3 2;
+}
+.le-fenceconn-post.is-none .le-fenceconn-post-mark {
+  fill: rgba(103, 217, 138, .12);
+  stroke: rgba(103, 217, 138, .6);
+}
+.le-fenceconn-post:hover .le-fenceconn-post-mark { stroke: #fff4d2; stroke-width: 3; }
+.le-fenceconn-post:focus-visible { outline: none; }
+.le-fenceconn-post:focus-visible .le-fenceconn-post-mark { stroke: #fff; stroke-width: 4; }
 
 /* status line */
 .le-statusline { align-items: center; color: var(--skirmish-muted); display: flex; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 2px 6px; }
@@ -9819,6 +9842,12 @@ body { font-size: 17px; }
   color: #76d9a5;
 }
 
+.unit-asset-production-gate {
+  margin: 0;
+  color: #f0be72;
+  font: 800 10px/1.35 var(--ds-font-sans, system-ui, sans-serif);
+}
+
 .unit-asset-current {
   display: flex;
   align-items: baseline;
@@ -11437,6 +11466,18 @@ button.tileset-relationship-cell {
   stroke: rgba(126, 236, 174, 0.95);
   stroke-width: 9;
   stroke-linecap: round;
+}
+.le-fence-post-hint {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 3px solid rgba(220, 255, 232, .98);
+  border-radius: 50%;
+  background: rgba(103, 217, 138, .75);
+  box-shadow: 0 0 0 3px rgba(21, 72, 48, .7), 0 0 12px rgba(103, 217, 138, .85);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 7;
 }
 
 .tileset-brush-display {
@@ -15209,4 +15250,148 @@ button.tileset-relationship-cell {
   border-radius: 6px; font: 400 12px/1.45 system-ui, sans-serif; text-align: left;
   text-transform: none; letter-spacing: normal;
   box-shadow: 0 8px 24px rgba(0, 0, 0, .45); pointer-events: none;
+}
+.le-fence-review-banner {
+  align-items: center;
+  background: rgba(8, 16, 27, 0.92);
+  border: 1px solid rgba(117, 186, 255, 0.48);
+  border-radius: 7px;
+  color: #dcecff;
+  display: flex;
+  gap: 12px;
+  left: 50%;
+  max-width: calc(100% - 32px);
+  padding: 7px 11px;
+  pointer-events: none;
+  position: absolute;
+  top: 12px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 80;
+}
+
+.le-fence-review-banner strong {
+  color: #f3f8ff;
+  font-size: 11px;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.le-fence-review-banner span {
+  color: #8faac7;
+  font-size: 10px;
+}
+
+.le-fence-artwork-cycle {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+}
+
+.le-fence-artwork-cycle .settings-select-frame,
+.le-fence-artwork-cycle .le-layer-select {
+  min-width: 0;
+  width: 100%;
+}
+
+.le-fence-artwork-preview {
+  align-items: start;
+  background: rgba(5, 12, 20, 0.58);
+  border: 1px solid rgba(90, 121, 151, 0.35);
+  border-radius: 5px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  height: 66px;
+  justify-items: center;
+  margin-top: 7px;
+  overflow: hidden;
+}
+
+.le-fence-artwork-preview.is-rail-only {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.le-fence-artwork-preview img {
+  height: 135px;
+  image-rendering: pixelated;
+  margin-top: -31px;
+  object-fit: fill;
+  width: 72px;
+}
+
+.le-fence-artwork-status {
+  border-left: 2px solid #f0b35b;
+  display: grid;
+  gap: 3px;
+  margin-top: 7px;
+  padding: 3px 0 3px 8px;
+}
+
+.le-fence-artwork-status strong {
+  color: #f0b35b;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.le-fence-artwork-status span {
+  color: #90a5bb;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.le-fence-artwork-status.is-native-pass {
+  border-left-color: #58d68d;
+}
+
+.le-fence-artwork-status.is-native-pass strong {
+  color: #58d68d;
+}
+
+.le-fence-artwork-status.is-calibration {
+  border-left-color: #72b7ff;
+}
+
+.le-fence-artwork-status.is-calibration strong {
+  color: #72b7ff;
+}
+
+.le-fence-material-readout {
+  align-items: center;
+  background: rgba(8, 16, 27, 0.52);
+  border: 1px solid rgba(90, 121, 151, 0.28);
+  border-radius: 5px;
+  color: #8fa6bc;
+  display: flex;
+  font-size: 10px;
+  justify-content: space-between;
+  margin-top: 7px;
+  padding: 6px 8px;
+}
+
+.le-fence-material-readout strong {
+  color: #dcecff;
+}
+
+.tileset-studio-card-image .fence-art-card-media {
+  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  height: 150px;
+  justify-items: center;
+  overflow: hidden;
+  width: 100%;
+}
+
+.tileset-studio-card-image .fence-art-card-media.is-rail-only {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tileset-studio-card-image .fence-art-card-media img {
+  height: calc(135px * var(--tile-zoom, 1));
+  max-height: none;
+  max-width: none;
+  object-fit: fill;
+  width: calc(72px * var(--tile-zoom, 1));
 }

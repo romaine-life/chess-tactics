@@ -679,17 +679,59 @@ async function main() {
   )).rows[0];
   const palettes = ['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white'];
   const directions = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
-  const spriteParams = [];
-  const spriteValues = [];
-  for (const palette of palettes) for (const direction of directions) {
-    const base = spriteParams.length;
-    spriteParams.push(secondUnitId, palette, direction, storedSprite.sha256, storedSprite.blob_key, storedSprite.width, storedSprite.height, storedSprite.byte_length);
-    spriteValues.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`);
-  }
-  await queryDb(
-    `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length) VALUES ${spriteValues.join(',')}`,
-    spriteParams,
+  const seedCompleteUnitSprites = async (assetId) => {
+    const spriteParams = [];
+    const spriteValues = [];
+    for (const palette of palettes) for (const direction of directions) {
+      const base = spriteParams.length;
+      spriteParams.push(assetId, palette, direction, storedSprite.sha256, storedSprite.blob_key, storedSprite.width, storedSprite.height, storedSprite.byte_length);
+      spriteValues.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`);
+    }
+    await queryDb(
+      `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length) VALUES ${spriteValues.join(',')}`,
+      spriteParams,
+    );
+  };
+
+  const resampledUnit = await request('POST', '/api/admin/unit-assets', adminJson, JSON.stringify({
+    ...unitMetadata,
+    label: 'Calibration-only recapture',
+    method: 'Accepted sprite smooth recapture',
+    notes: JSON.stringify({ pipeline: 'accepted-sprite-recapture', spatialResampling: true }),
+  }), 5000);
+  if (resampledUnit.statusCode !== 201) throw new Error(`Resampled unit candidate create failed: ${resampledUnit.statusCode} ${resampledUnit.body}`);
+  const resampledUnitId = JSON.parse(resampledUnit.body).assetId;
+  await seedCompleteUnitSprites(resampledUnitId);
+  const blockedResampledAccept = await request(
+    'POST', `/api/admin/unit-assets/${resampledUnitId}/accept`, { ...adminJson, 'if-match': '"0"' }, '{}', 5000,
   );
+  const blockedResampledBody = JSON.parse(blockedResampledAccept.body);
+  if (
+    blockedResampledAccept.statusCode !== 409
+    || blockedResampledBody.error !== 'unit_asset_calibration_only'
+    || blockedResampledBody.details?.reason !== 'spatial-resampling'
+  ) {
+    throw new Error(`Resampled unit acceptance should be blocked by ADR-0076: ${blockedResampledAccept.statusCode} ${blockedResampledAccept.body}`);
+  }
+  const scrubbedResampled = await request(
+    'PATCH', `/api/admin/unit-assets/${resampledUnitId}`, { ...adminJson, 'if-match': '"0"' },
+    JSON.stringify({ method: 'Blender', notes: 'metadata markers removed after recapture' }), 5000,
+  );
+  if (scrubbedResampled.statusCode !== 200) throw new Error(`Resampled metadata update failed: ${scrubbedResampled.statusCode} ${scrubbedResampled.body}`);
+  const scrubbedAsset = JSON.parse(scrubbedResampled.body).catalog.assets.find((asset) => asset.id === resampledUnitId);
+  if (scrubbedAsset?.acceptanceBlockReason !== 'spatial-resampling') {
+    throw new Error(`Resampled acceptance block was not monotonic: ${scrubbedResampled.body}`);
+  }
+  const stillBlockedResampledAccept = await request(
+    'POST', `/api/admin/unit-assets/${resampledUnitId}/accept`, { ...adminJson, 'if-match': '"1"' }, '{}', 5000,
+  );
+  if (stillBlockedResampledAccept.statusCode !== 409 || JSON.parse(stillBlockedResampledAccept.body).error !== 'unit_asset_calibration_only') {
+    throw new Error(`Edited resampled unit should remain blocked: ${stillBlockedResampledAccept.statusCode} ${stillBlockedResampledAccept.body}`);
+  }
+  const pawnBeforeNativeAccept = (await queryDb('SELECT accepted_asset_id FROM unit_families WHERE family = $1', ['pawn'])).rows[0];
+  if (pawnBeforeNativeAccept?.accepted_asset_id) throw new Error('Blocked recapture changed the accepted pawn pointer');
+
+  await seedCompleteUnitSprites(secondUnitId);
   const acceptedUnit = await request(
     'POST', `/api/admin/unit-assets/${secondUnitId}/accept`, { ...adminJson, 'if-match': '"0"' }, '{}', 5000,
   );

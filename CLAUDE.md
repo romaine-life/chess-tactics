@@ -19,6 +19,26 @@ navigate. Gameplay and thumbnails read canonical levels only; browser storage is
 crash/offline fallback. Do not introduce another editor identity or a link-triggered
 persistence path.
 
+## Generated-art handoff rule
+
+Generated-art work is not complete at exported files, manifests, filesystem
+links, or contact sheets. Before saying **done** or **finished**, mount every
+candidate Nelson is being asked to judge in a game-owned viewing surface and put
+that exact surface in front of him.
+
+For board art — tiles, units, props, walls, fences, and overlays — the default
+proof is a durable private Level Editor document at canonical 1× over
+representative terrain and neighboring game objects. Prefer an editable
+document handoff under the persistence rule above.
+A dedicated Studio map is allowed for a multi-candidate review batch only when it
+uses the real game board renderer, mounts every candidate, and does not overwrite
+accepted runtime art. Studio asset pages are supplemental when a map applies.
+
+Open the exact deep link and provide a focused capture from that live route.
+Review-only mounting does not promote a candidate. Contact sheets and standalone
+PNGs are supplementary and never satisfy this handoff. If the game-surface proof
+cannot be produced, report the generation task as unfinished and name the blocker.
+
 ## Taking screenshots (read this before trying to screenshot the app)
 
 **Do NOT use the in-editor preview/screenshot tool to capture images on this

@@ -7,6 +7,7 @@ import {
   resetLiveUnitCatalog,
   unitArtForId,
   unitAssetById,
+  unitAssetProductionEligibility,
   unitAssets,
   unitFamilyForId,
 } from './unitCatalog';
@@ -103,5 +104,22 @@ describe('live unit catalog', () => {
 
     expect(applyLiveUnitCatalog(catalog)).toBe(true);
     expect(unitAssetById(catalog.assets[0].family)?.nativeScalePercent).toBe(66);
+  });
+
+  it('keeps spatially resampled recaptures calibration-only under ADR-0076', () => {
+    expect(unitAssetProductionEligibility({
+      method: 'Accepted sprite smooth recapture',
+      notes: '',
+      acceptanceBlockReason: null,
+    })).toMatchObject({ eligible: false, reason: 'spatial-resampling', adr: 'ADR-0076' });
+    expect(unitAssetProductionEligibility({
+      method: 'Blender',
+      notes: JSON.stringify({ pipeline: 'accepted-sprite-recapture', spatialResampling: true }),
+    })).toMatchObject({ eligible: false, reason: 'spatial-resampling' });
+    expect(unitAssetProductionEligibility({
+      method: 'Blender',
+      notes: 'native render at the delivery raster',
+      acceptanceBlockReason: null,
+    })).toEqual({ eligible: true });
   });
 });

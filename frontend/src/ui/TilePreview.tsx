@@ -51,12 +51,19 @@ import { wallArt, wallArtBadge, wallArtItems, type WallArt } from '../core/wallA
 import { WallArtLab, WallArtPreview } from './WallArtLab';
 import { SceneAnimLab, SceneRegionPicker, SCENE_ANIM_REGIONS, SCENE_ANIM_SCENES, SceneRegionThumb, type SceneRegion, type SceneAnimScene } from './SceneAnimLab';
 import { ArtworkCompareLab } from './ArtworkCompareLab';
+import { FENCE_ART_KITS, fenceArtKit, type FenceArtKit } from './fenceCandidateProfiles';
+import {
+  FENCE_ART_REVIEW_LEVEL_NAME,
+  fenceArtReviewEditorHref,
+  findFenceArtReviewDocument,
+} from './fenceArtReview';
 import { currentDoodadAssets, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { structureSourceHalfSrc } from '../render/BoardStructure';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
 import { navigateApp } from './navigation';
 import { STUDIO_VIEWER_KIND_OPTIONS, isViewerKind, type ViewerKind } from './studioViewerKinds';
+import { listEditorDocuments } from '../net/editorDocuments';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton, TitleBarIconButton } from './shell/TitleBarControls';
 import {
@@ -183,6 +190,7 @@ interface TilesetStudioRouteState {
   selectedGroundCoverId?: string;
   selectedWallDecorId?: string;
   selectedWallArtId?: string;
+  selectedFenceArtworkId?: string;
   selectedSurfaceFamily?: string;
   selectedRegionId?: string;
   viewerKind?: ViewerKind;
@@ -300,6 +308,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const cover = params.get('cover');
   const wdecor = params.get('wdecor');
   const wart = params.get('wart') ?? params.get('wasset');
+  const fenceArt = params.get('fenceArt');
   const sfamily = params.get('sfamily');
   const regionParam = params.get('region');
   const frame = params.get('frame') || (isNineSliceAlias ? asset : null);
@@ -338,6 +347,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedGroundCoverId: GROUND_COVER_ASSETS.some((asset) => asset.id === cover) ? cover ?? undefined : undefined,
     selectedWallDecorId: WALL_DECOR_ASSETS.some((asset) => asset.id === wdecor) ? wdecor ?? undefined : undefined,
     selectedWallArtId: wallArt(wart ?? undefined)?.id,
+    selectedFenceArtworkId: fenceArtKit(fenceArt)?.id,
     selectedSurfaceFamily: sfamily || undefined,
     selectedRegionId: regionParam || undefined,
     viewerKind: isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
@@ -376,6 +386,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   if (route.category === 'groundcover' && route.selectedGroundCoverId) catalogParams.set('cover', route.selectedGroundCoverId);
   if (route.category === 'walldecor' && route.selectedWallDecorId) catalogParams.set('wdecor', route.selectedWallDecorId);
   if (route.category === 'wallart' && route.selectedWallArtId) catalogParams.set('wart', route.selectedWallArtId);
+    if (route.category === 'fences' && route.selectedFenceArtworkId) catalogParams.set('fenceArt', route.selectedFenceArtworkId);
     if (route.category === 'gamelab' && route.selectedGameLabLevelId) catalogParams.set('glvl', route.selectedGameLabLevelId);
     if (route.category === 'gym' && route.selectedGymLevelId) catalogParams.set('gymlvl', route.selectedGymLevelId);
     if (route.category === 'solver' && route.selectedSolverLevelId) catalogParams.set('slvl', route.selectedSolverLevelId);
@@ -515,6 +526,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedGroundCoverId, setSelectedGroundCoverId] = useState<GroundCoverId>(groundCoverAsset(initialRoute.selectedGroundCoverId).id);
   const [selectedWallDecorId, setSelectedWallDecorId] = useState<string>(wallDecorAsset(initialRoute.selectedWallDecorId).id);
   const [selectedWallArtId, setSelectedWallArtId] = useState<string>(wallArt(initialRoute.selectedWallArtId)?.id ?? wallArtItems()[0].id);
+  const [selectedFenceArtworkId, setSelectedFenceArtworkId] = useState<string>(fenceArtKit(initialRoute.selectedFenceArtworkId)?.id ?? FENCE_ART_KITS[0].id);
+  const [fenceEditorLaunchError, setFenceEditorLaunchError] = useState<string | null>(null);
   const [wallArtDraftSourceId, setWallArtDraftSourceId] = useState<string | null>(null);
   const [selectedWallId, setSelectedWallId] = useState<string>(WALL_CATALOG_ASSETS[0].id);
   // Which family the embedded Tileset Surfaces inspector (Viewer 'surfacetiles' kind) opens on.
@@ -661,6 +674,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.selectedGroundCoverId) setSelectedGroundCoverId(groundCoverAsset(route.selectedGroundCoverId).id);
       if (route.selectedWallDecorId) setSelectedWallDecorId(wallDecorAsset(route.selectedWallDecorId).id);
       if (route.selectedWallArtId) setSelectedWallArtId(wallArt(route.selectedWallArtId)?.id ?? wallArtItems()[0].id);
+      if (route.selectedFenceArtworkId) setSelectedFenceArtworkId(fenceArtKit(route.selectedFenceArtworkId)?.id ?? FENCE_ART_KITS[0].id);
       if (route.selectedGameLabLevelId) setSelectedGameLabLevelId(route.selectedGameLabLevelId);
       if (route.selectedGymLevelId) setSelectedGymLevelId(route.selectedGymLevelId);
       if (route.selectedSolverLevelId) setSelectedSolverLevelId(route.selectedSolverLevelId);
@@ -743,6 +757,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedGroundCoverId,
       selectedWallDecorId,
       selectedWallArtId,
+      selectedFenceArtworkId,
       selectedSurfaceFamily,
       selectedRegionId,
       viewerKind,
@@ -758,7 +773,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, solverTab, selectedTileSideId, selectedFrameName, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedFenceArtworkId, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, solverTab, selectedTileSideId, selectedFrameName, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
   // the card you came from — not the top of the grid. The selection is already kept
@@ -795,6 +810,31 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Level Editor with that asset pre-armed as the brush — the in-studio board lab is retired.
   const openInLevelEditor = (kind: 'tile' | 'unit' | 'doodad' | 'cover' | 'wall' | 'wallart', id: string): void => {
     navigateApp(`/editor/level?from=studio&kind=${kind}&brush=${encodeURIComponent(id)}`);
+  };
+  const openFenceArtworkInEditor = async (artwork: FenceArtKit): Promise<void> => {
+    setSelectedFenceArtworkId(artwork.id);
+    setFenceEditorLaunchError(null);
+    try {
+      let offset = 0;
+      while (true) {
+        const result = await listEditorDocuments({ status: 'all', limit: 200, offset });
+        const document = findFenceArtReviewDocument(result.documents);
+        if (document) {
+          navigateApp(fenceArtReviewEditorHref(document, artwork.id));
+          return;
+        }
+        if (result.next_offset === null) break;
+        offset = result.next_offset;
+      }
+    } catch {
+      setFenceEditorLaunchError(
+        'Fence review board lookup failed. Check that you are signed in and the backend is running, then try again.',
+      );
+      return;
+    }
+    setFenceEditorLaunchError(
+      `Fence review board is not seeded for this account. Create or seed a private Level Editor document named “${FENCE_ART_REVIEW_LEVEL_NAME}”, then try again.`,
+    );
   };
 
   const viewSubtitle =
@@ -1367,6 +1407,40 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     selectedId: selectedTileSideId,
     note: 'Inspect each tile’s cliff/side faces — includes the frayed perimeter edges.',
   };
+  const fencesCatalogType: CatalogType<FenceArtKit> = {
+    id: 'fences',
+    label: 'Fences',
+    assets: FENCE_ART_KITS,
+    card: (artwork) => ({ img: artwork.thumb, title: artwork.label, badge: artwork.statusLabel }),
+    cardMedia: (artwork) => (
+      <span className={`fence-art-card-media ${artwork.post ? '' : 'is-rail-only'}`.trim()}>
+        <img src={artwork.railE} alt="" draggable={false} />
+        <img src={artwork.railS} alt="" draggable={false} />
+        {artwork.post ? <img src={artwork.post} alt="" draggable={false} /> : null}
+      </span>
+    ),
+    sections: (visible) => [
+      { id: 'candidates', label: 'Generated candidates', assets: visible.filter((artwork) => artwork.category === 'candidate') },
+    ],
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'fence artwork, method, status…',
+      match: (artwork, query) => [artwork.label, artwork.statusLabel, artwork.note, artwork.material].join(' ').toLowerCase().includes(query),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    onSelect: (artwork) => {
+      setSelectedFenceArtworkId(artwork.id);
+      setFenceEditorLaunchError(null);
+    },
+    onView: (artwork) => { void openFenceArtworkInEditor(artwork); },
+    onArm: (artwork) => { void openFenceArtworkInEditor(artwork); },
+    selectedId: selectedFenceArtworkId,
+    extra: fenceEditorLaunchError ? (
+      <p className="tileset-catalog-note" role="alert">{fenceEditorLaunchError}</p>
+    ) : null,
+    note: 'Select a generated candidate, then open the same pre-drawn Level Editor board to draw rails and posts and cycle the review set without changing production status.',
+  };
   const catalogCategories: { id: StudioCategory; label: string; hint: string; main: ReactElement; controls: ReactElement }[] = [
     {
       id: 'tiles', label: 'Tiles', hint: 'Browse terrain tiles.',
@@ -1544,25 +1618,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       ),
     },
     {
-      id: 'fences', label: 'Fences', hint: 'Edge fences — a low rail you paint on a tile edge to make that edge untraversable. Paint them in the Level Editor.',
-      main: (
-        <div className="al-lab-main" style={{ display: 'grid', placeItems: 'center', padding: 24, overflow: 'auto' }}>
-          <div style={{ display: 'flex', gap: 18, alignItems: 'center', maxWidth: 560, background: '#0f1728', border: '1px solid #223350', borderRadius: 10, padding: 20 }}>
-            <img src="/assets/tiles/feature/fence-wood-thumb.png" alt="Wooden fence" width={120} height={120} style={{ imageRendering: 'pixelated', flex: 'none' }} draggable={false} />
-            <div>
-              <h3 style={{ margin: '0 0 6px', color: '#eaf3ff' }}>Edge fences</h3>
-              <p style={{ margin: '0 0 12px', color: '#9fb6d6', fontSize: 13, lineHeight: 1.5 }}>A low rail that sits on the boundary between two tiles and blocks a piece from crossing that edge — both tiles stay walkable, and knights hop it. Paint them on tile edges in the Level Editor.</p>
-              <button type="button" className="tileset-view-action" onClick={() => navigateApp('/editor/level?from=studio&layer=fence')}>Paint fences in the editor</button>
-            </div>
-          </div>
-        </div>
-      ),
-      controls: (
-        <>
-          <p className="tileset-catalog-note" style={{ color: '#9fb6d6', fontSize: 12, lineHeight: 1.5 }}>Fences live on tile edges and block crossing. Paint them in the Level Editor&rsquo;s Fence layer.</p>
-          <button type="button" className="tileset-view-action" onClick={() => navigateApp('/editor/level?from=studio&layer=fence')}>Paint fences in the editor</button>
-        </>
-      ),
+      id: 'fences', label: 'Fences', hint: 'Choose candidate artwork, then draw rails and posts on the shared Level Editor board.',
+      main: <CatalogGrid type={fencesCatalogType} />,
+      controls: <CatalogControls type={fencesCatalogType} />,
     },
     {
       id: 'walls', label: 'Walls', hint: 'Tall blockers for the map north and west perimeter. Paint them in the Level Editor.',

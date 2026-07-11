@@ -260,7 +260,7 @@ export function UnitRecaptureEditor({
       const next = await fetchAdminUnitCatalog();
       onCatalogChange(next);
       onSelectUnit(`candidate:${assetId}`);
-      setStatus(candidateAtTarget ? 'Candidate updated' : 'Candidate ready');
+      setStatus(candidateAtTarget ? 'Calibration candidate updated' : 'Calibration candidate ready');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Candidate upload failed');
     } finally {
@@ -291,9 +291,13 @@ export function UnitRecaptureEditor({
 
       <dl className="unit-recapture-summary">
         <div><dt>Source</dt><dd>{sourceLabel}</dd></div>
-        <div><dt>Output</dt><dd>{targetWidth}x{targetHeight} PNG</dd></div>
+        <div><dt>Output</dt><dd>{targetWidth}x{targetHeight} calibration PNG</dd></div>
         <div><dt>Sampling</dt><dd>Smooth contain</dd></div>
       </dl>
+
+      <p className="unit-asset-production-gate">
+        Calibration only · this resampled candidate cannot be accepted. Regenerate the approved dimensions natively in Blender (ADR-0076).
+      </p>
 
       <div className="unit-recapture-actions">
         <button
@@ -301,7 +305,7 @@ export function UnitRecaptureEditor({
           onClick={() => void saveCandidate()}
           disabled={busy || !recaptured || candidateIsCurrent}
         >
-          {candidateIsCurrent ? 'Candidate ready' : candidateAtTarget ? 'Update candidate' : 'Create candidate'}
+          {candidateIsCurrent ? 'Calibration ready' : candidateAtTarget ? 'Update calibration' : 'Create calibration candidate'}
         </button>
       </div>
       {status ? <output className="unit-asset-status">{status}</output> : null}

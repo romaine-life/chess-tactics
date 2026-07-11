@@ -7,7 +7,7 @@ import { BoardBarrierSceneLayer } from './BoardBarrierSceneLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileSocketAsset } from '../core/tileSockets';
 import { featureFrameSrc } from '../art/tileset';
-import type { ResolvedFenceOverlay, ResolvedWallOverlay } from '../core/featureAutotile';
+import type { ResolvedFenceOverlay, ResolvedFencePost, ResolvedWallOverlay } from '../core/featureAutotile';
 import type { WallArtPlacementMap } from '../core/wallArt';
 import { resolveMacroTilePlacements, type MacroTilePlacement } from '../core/macroTiles';
 
@@ -36,6 +36,8 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
    * They render in a board-level foreground layer so the near rails can occlude same-cell art.
    */
   fenceOverlays?: ReadonlyMap<string, ResolvedFenceOverlay>;
+  /** Automatic and explicitly authored posts, keyed once by canonical fence vertex "x,y". */
+  fencePosts?: ReadonlyMap<string, ResolvedFencePost>;
   /**
    * Perimeter walls resolved to a per-cell wall overlay (N/W mask + material), keyed by "x,y".
    * Only northmost/westmost map edges resolve to this layer.
@@ -61,6 +63,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   macroTiles,
   renderCellOverlay,
   fenceOverlays,
+  fencePosts,
   wallOverlays,
   wallArt,
   wallBounds,
@@ -134,7 +137,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       backgroundLayer={(
         <>
           <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(resolvedMacroTiles)} />
-          <BoardBarrierSceneLayer fenceOverlays={fenceOverlays} wallOverlays={wallOverlays} wallArt={wallArt} wallBounds={wallBounds} />
+          <BoardBarrierSceneLayer fenceOverlays={fenceOverlays} fencePosts={fencePosts} wallOverlays={wallOverlays} wallArt={wallArt} wallBounds={wallBounds} />
           {sceneLayer}
         </>
       )}

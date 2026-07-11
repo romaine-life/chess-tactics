@@ -96,6 +96,12 @@ describe('level editor draft codec', () => {
     expect(parseLevelEditorDraft(JSON.stringify(raw))!.campaignId).toBeUndefined();
   });
 
+  it('round-trips standalone authored fence posts through local draft storage', () => {
+    const draft = baseDraft({ board: baseBoard({ fencePosts: { '0,0': 'wood', '6,6': 'stone' } }) });
+    const parsed = parseLevelEditorDraft(serializeLevelEditorDraft(draft))!;
+    expect(parsed.board.fencePosts).toEqual(draft.board.fencePosts);
+  });
+
   it('round-trips an authored battle clock, and stays untimed when absent', () => {
     const timed = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft({ timeControl: { initialSeconds: 300, incrementSeconds: 2 } })))!;
     expect(timed.timeControl).toEqual({ initialSeconds: 300, incrementSeconds: 2 });

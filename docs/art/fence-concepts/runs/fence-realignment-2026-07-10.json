@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-10",
+  "run_id": "fence-realignment-2026-07-10",
+  "review_status": "ready_for_owner_verification",
+  "runtime_assets_changed": false,
+  "adrs": ["ADR-0040", "ADR-0076"],
+  "candidate_manifest": "docs/art/fence-concepts/candidates/2026-07-10-realignment/manifest.json",
+  "frozen_components": [
+    {
+      "id": "pixellab-stone-rail-2026-07-10-v2",
+      "decision": "owner_accepted_and_frozen",
+      "scope": "future_bishop_passable_fence",
+      "standard_board_edge_alignment_claim": false,
+      "source": {
+        "path": "docs/art/fence-concepts/candidates/2026-07-10/pixellab/stone-rail-48x32-v2.png",
+        "sha256": "4bdbc2f4bdfff0e736b4de98796363b0415aae3f35517f2e3c356c05c48b6998"
+      },
+      "shown_rails": {
+        "E": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10/pixellab-stone-rail-e.png", "sha256": "b5895225c48b8e281a269dd3a0843b93ae1747f24f00f415a9219f6e5c456f6e"},
+        "S": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10/pixellab-stone-rail-s.png", "sha256": "fa56aa41713a16d16879ee143ef67464b5ebca3fec5bc1d9231e4c6b4ef84748"}
+      }
+    }
+  ],
+  "primary_kit_ids": [
+    "pixellab-stone-rail-r2",
+    "pixellab-wood-canonical-r2",
+    "codex-wood-canonical-r2",
+    "codex-stone-canonical-r2"
+  ],
+  "active_candidate_ids": [
+    "pixellab-stone-rail-r2",
+    "pixellab-wood-canonical-r2",
+    "codex-wood-canonical-r2",
+    "codex-stone-canonical-r2"
+  ],
+  "archived_kit_ids": [
+    "blender-stone",
+    "pixellab-wood",
+    "pixellab-stone",
+    "codex-wood",
+    "codex-stone"
+  ],
+  "catalog_removal": {
+    "date": "2026-07-10",
+    "removed_ids": ["live-wood", "live-stone"],
+    "scope": "studio_and_level_editor_review_catalog_registry_and_cycle",
+    "runtime_assets_retained": true,
+    "reason": "The procedural PNG family remains the canonical renderer input for persisted wood/stone fences until complete standard-edge replacements are accepted; the frozen PixelLab stone rail is reserved for a future bishop-passable family."
+  },
+  "cleanup_decisions": {
+    "pixellab_stone": "accepted_frozen_rail_only_no_post",
+    "rejected_post_trial_ids": ["pixellab-stone-pale-r2", "pixellab-stone-compact-r2"],
+    "post_depth_policy": "shared_vertex_contact_z_uses_positive_half_band_bias_so_post_caps_every_incident_rail",
+    "post_pixels_changed": false
+  },
+  "game_surface_proof": {
+    "status": "ready",
+    "kind": "level_editor_document",
+    "route": "/editor/level?document=5d04d83f-474e-4d76-a49e-094bbe26ec0d&levelId=l6&from=studio&layer=fence&kind=fence&artReview=fence-native-candidates-2026-07-10&fenceArt=pixellab-stone-rail-r2",
+    "document_id": "5d04d83f-474e-4d76-a49e-094bbe26ec0d",
+    "level_id": "l6",
+    "private_account_document": true,
+    "editable_in_handoff_browser": true,
+    "verified_cloud_revision": 3,
+    "verified_geometry": {"rails": 12, "authored_posts": 7},
+    "canonical_scale": 1,
+    "selector": "[data-testid=level-editor]",
+    "primary_screenshot": "docs/art/fence-concepts/proofs/realignment-2026-07-10/pixellab-stone-rail-only-editor.png",
+    "candidate_captures": [
+      {"id": "pixellab-stone-rail-r2", "screenshot": "docs/art/fence-concepts/proofs/realignment-2026-07-10/pixellab-stone-rail-only-editor.png"},
+      {"id": "pixellab-wood-canonical-r2", "screenshot": "docs/art/fence-concepts/proofs/realignment-2026-07-10/pixellab-wood-canonical-editor.png"},
+      {"id": "codex-wood-canonical-r2", "screenshot": "docs/art/fence-concepts/proofs/realignment-2026-07-10/codex-wood-canonical-editor.png"},
+      {"id": "codex-stone-canonical-r2", "screenshot": "docs/art/fence-concepts/proofs/realignment-2026-07-10/codex-stone-canonical-editor.png"}
+    ],
+    "draw_targets": ["rails_on_board_edges", "posts_on_board_vertices"],
+    "rail_only_ids": ["pixellab-stone-rail-r2"],
+    "mounting": "isolated_review_assets_not_runtime_promotion"
+  },
+  "production_status": {
+    "pixellab_stone_rail": "accepted_and_frozen_for_future_bishop_passable_family",
+    "pixellab_stone_posts": "intentionally_none_owner_decision",
+    "pixellab_wood": "native_no_resampling_candidate_pending_owner_review",
+    "codex_wood": "corrected_projection_calibration_only",
+    "codex_stone": "corrected_projection_calibration_only"
+  }
+}

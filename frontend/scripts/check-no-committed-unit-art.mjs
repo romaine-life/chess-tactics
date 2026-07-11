@@ -70,9 +70,12 @@ if (fs.existsSync(recaptureEditor)) {
 
 const nativeRuntimeContracts = [
   [path.join(repoRoot, 'packages', 'board-render', 'src', 'ui', 'unitCatalog.ts'), 'nativeScalePercentFromCanvas'],
+  [path.join(repoRoot, 'packages', 'board-render', 'src', 'ui', 'unitCatalog.ts'), 'unitAssetProductionEligibility'],
   [path.join(repoRoot, 'packages', 'board-render', 'src', 'render', 'renderPlan.ts'), 'unit.footprint.sourceCanvasPx'],
   [path.join(frontendRoot, 'src', 'render', 'SkirmishBoard.tsx'), 'unit!.footprint.sourceCanvasPx'],
   [path.join(repoRoot, 'backend', 'server.js'), 'unit_sprite_canvas_mismatch'],
+  [path.join(repoRoot, 'backend', 'server.js'), 'unit_asset_calibration_only'],
+  [path.join(frontendRoot, 'src', 'ui', 'UnitAssetManager.tsx'), 'CALIBRATION_ONLY_MESSAGE'],
 ];
 for (const [contractPath, marker] of nativeRuntimeContracts) {
   if (!fs.existsSync(contractPath) || !fs.readFileSync(contractPath, 'utf8').includes(marker)) {
