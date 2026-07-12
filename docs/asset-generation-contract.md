@@ -18,7 +18,7 @@ scaling may calibrate a candidate, but acceptance requires regenerated native
 pixels and a 1:1 canonical runtime path.
 
 Storage and promotion are governed by
-[ADR-0081](adr/0081-runtime-assets-are-live-storage-backed.md): generated media
+[ADR-0085](adr/0085-runtime-assets-are-live-storage-backed.md): generated media
 is uploaded as a live candidate, accepted pointers live in Postgres, immutable
 bytes live in private Blob Storage, and no production/review/source media is
 published into Git.

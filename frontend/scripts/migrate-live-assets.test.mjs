@@ -188,7 +188,7 @@ describe('one-time live-media importer resume behavior', () => {
         kind: 'git-media-cutover', byteExact: true, sha256: entry.sha256,
         repositoryCommit: inventory.repositoryCommit, originalRepositoryPath: entry.sourcePath,
       }) },
-    }), expect.objectContaining({ idempotencyKey: expect.stringMatching(/^adr0081-/) }));
+    }), expect.objectContaining({ idempotencyKey: expect.stringMatching(/^adr0085-/) }));
     expect(client.createVersion.mock.calls[0][0]).not.toHaveProperty('nativeEvidence');
     expect(client.uploadContent).toHaveBeenCalledTimes(1);
     expect(client.verifyMedia).toHaveBeenCalledTimes(2);

@@ -1,0 +1,651 @@
+{
+  "id": "pixellab-inner-repeat-native-v4",
+  "provider": "pixellab-object",
+  "role": "inner",
+  "fit": "repeat",
+  "nativeThickness": 7,
+  "sourceDir": "../docs/art/chrome-native-rails/v1/attempts/pixellab-inner-32-v4-exact",
+  "accepted": [],
+  "rejected": [
+    {
+      "file": "frame-0.png",
+      "bounds": {
+        "x": 2,
+        "y": 2,
+        "w": 30,
+        "h": 30
+      },
+      "reason": "painted thickness 30px, expected exactly 7px"
+    },
+    {
+      "file": "frame-1.png",
+      "bounds": {
+        "x": 0,
+        "y": 1,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-10.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-11.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 28,
+        "h": 32
+      },
+      "reason": "painted thickness 28px, expected exactly 7px"
+    },
+    {
+      "file": "frame-12.png",
+      "bounds": {
+        "x": 2,
+        "y": 0,
+        "w": 24,
+        "h": 32
+      },
+      "reason": "painted thickness 24px, expected exactly 7px"
+    },
+    {
+      "file": "frame-13.png",
+      "bounds": {
+        "x": 0,
+        "y": 20,
+        "w": 32,
+        "h": 12
+      },
+      "reason": "painted thickness 12px, expected exactly 7px"
+    },
+    {
+      "file": "frame-14.png",
+      "bounds": {
+        "x": 1,
+        "y": 0,
+        "w": 31,
+        "h": 32
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-15.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 30,
+        "h": 32
+      },
+      "reason": "painted thickness 30px, expected exactly 7px"
+    },
+    {
+      "file": "frame-16.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-17.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-18.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-19.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 28,
+        "h": 32
+      },
+      "reason": "painted thickness 28px, expected exactly 7px"
+    },
+    {
+      "file": "frame-2.png",
+      "bounds": {
+        "x": 0,
+        "y": 1,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-20.png",
+      "bounds": {
+        "x": 1,
+        "y": 0,
+        "w": 23,
+        "h": 32
+      },
+      "reason": "painted thickness 23px, expected exactly 7px"
+    },
+    {
+      "file": "frame-21.png",
+      "bounds": {
+        "x": 1,
+        "y": 0,
+        "w": 31,
+        "h": 32
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-22.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-23.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 30,
+        "h": 32
+      },
+      "reason": "painted thickness 30px, expected exactly 7px"
+    },
+    {
+      "file": "frame-24.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-25.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-26.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-27.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 28,
+        "h": 29
+      },
+      "reason": "painted thickness 28px, expected exactly 7px"
+    },
+    {
+      "file": "frame-28.png",
+      "bounds": {
+        "x": 1,
+        "y": 0,
+        "w": 23,
+        "h": 29
+      },
+      "reason": "painted thickness 23px, expected exactly 7px"
+    },
+    {
+      "file": "frame-29.png",
+      "bounds": {
+        "x": 1,
+        "y": 0,
+        "w": 31,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-3.png",
+      "bounds": {
+        "x": 0,
+        "y": 1,
+        "w": 24,
+        "h": 31
+      },
+      "reason": "painted thickness 24px, expected exactly 7px"
+    },
+    {
+      "file": "frame-30.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-31.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 30,
+        "h": 31
+      },
+      "reason": "painted thickness 30px, expected exactly 7px"
+    },
+    {
+      "file": "frame-32.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-33.png",
+      "bounds": {
+        "x": 0,
+        "y": 4,
+        "w": 32,
+        "h": 28
+      },
+      "reason": "painted thickness 28px, expected exactly 7px"
+    },
+    {
+      "file": "frame-34.png",
+      "bounds": {
+        "x": 0,
+        "y": 1,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-35.png",
+      "bounds": {
+        "x": 0,
+        "y": 1,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-36.png",
+      "bounds": {
+        "x": 0,
+        "y": 3,
+        "w": 32,
+        "h": 29
+      },
+      "reason": "painted thickness 29px, expected exactly 7px"
+    },
+    {
+      "file": "frame-37.png",
+      "bounds": {
+        "x": 0,
+        "y": 1,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-38.png",
+      "bounds": {
+        "x": 0,
+        "y": 1,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-39.png",
+      "bounds": {
+        "x": 0,
+        "y": 1,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-4.png",
+      "bounds": {
+        "x": 8,
+        "y": 1,
+        "w": 24,
+        "h": 31
+      },
+      "reason": "painted thickness 24px, expected exactly 7px"
+    },
+    {
+      "file": "frame-40.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-41.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-42.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-43.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 31,
+        "h": 32
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-44.png",
+      "bounds": {
+        "x": 2,
+        "y": 0,
+        "w": 30,
+        "h": 32
+      },
+      "reason": "painted thickness 30px, expected exactly 7px"
+    },
+    {
+      "file": "frame-45.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-46.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-47.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 30,
+        "h": 32
+      },
+      "reason": "painted thickness 30px, expected exactly 7px"
+    },
+    {
+      "file": "frame-48.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-49.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-5.png",
+      "bounds": {
+        "x": 0,
+        "y": 1,
+        "w": 32,
+        "h": 25
+      },
+      "reason": "painted thickness 25px, expected exactly 7px"
+    },
+    {
+      "file": "frame-50.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-51.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 27,
+        "h": 32
+      },
+      "reason": "painted thickness 27px, expected exactly 7px"
+    },
+    {
+      "file": "frame-52.png",
+      "bounds": {
+        "x": 1,
+        "y": 0,
+        "w": 31,
+        "h": 32
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-53.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-54.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-55.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 29,
+        "h": 32
+      },
+      "reason": "painted thickness 29px, expected exactly 7px"
+    },
+    {
+      "file": "frame-56.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-57.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-58.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    },
+    {
+      "file": "frame-59.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 31,
+        "h": 32
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-6.png",
+      "bounds": {
+        "x": 0,
+        "y": 1,
+        "w": 32,
+        "h": 27
+      },
+      "reason": "painted thickness 27px, expected exactly 7px"
+    },
+    {
+      "file": "frame-60.png",
+      "bounds": {
+        "x": 2,
+        "y": 0,
+        "w": 30,
+        "h": 31
+      },
+      "reason": "painted thickness 30px, expected exactly 7px"
+    },
+    {
+      "file": "frame-61.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-62.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-63.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 31,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-7.png",
+      "bounds": {
+        "x": 0,
+        "y": 1,
+        "w": 31,
+        "h": 31
+      },
+      "reason": "painted thickness 31px, expected exactly 7px"
+    },
+    {
+      "file": "frame-8.png",
+      "bounds": {
+        "x": 2,
+        "y": 0,
+        "w": 30,
+        "h": 32
+      },
+      "reason": "painted thickness 30px, expected exactly 7px"
+    },
+    {
+      "file": "frame-9.png",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "reason": "painted thickness 32px, expected exactly 7px"
+    }
+  ]
+}

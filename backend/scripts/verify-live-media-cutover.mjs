@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Read-only cutover proof for ADR-0081. This deliberately verifies the public
+// Read-only cutover proof for ADR-0085. This deliberately verifies the public
 // backend boundary instead of reading Postgres, Blob Storage, or repository
 // files: the browser and headless renderer must be able to resolve the exact
 // catalog revision and immutable bytes through the same-origin contract.
@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const SLOT_SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9._@+-]*$/;
-const INVENTORY_SCHEMA = 'adr-0081-media-migration-inventory-v1';
+const INVENTORY_SCHEMA = 'adr-0085-media-migration-inventory-v1';
 
 function invariant(condition, message) {
   if (!condition) throw new Error(message);

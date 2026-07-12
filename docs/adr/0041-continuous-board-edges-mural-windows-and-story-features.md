@@ -1,8 +1,8 @@
 ---
-status: "accepted; whole-cell side assignment superseded by ADR-0083"
+status: "accepted; whole-cell side assignment superseded by ADR-0087"
 date: 2026-06-29
 deciders: Nelson, Claude
-partially_superseded_by: "[ADR-0083](0083-exposed-terrain-faces-own-independent-edge-treatments.md)"
+partially_superseded_by: "[ADR-0087](0087-exposed-terrain-faces-own-independent-edge-treatments.md)"
 ---
 
 # ADR-0041: Continuous board edges — mural windows + multi-tile story features

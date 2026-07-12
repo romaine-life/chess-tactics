@@ -1,0 +1,42 @@
+[
+  {
+    "slug": "complete-family-large-outer-pixellab-ui",
+    "args": {
+      "name": "ct-large-outer-through-rail-chrome-family",
+      "description": "LARGE OUTER scale for main panel frames. Chunkier proportions, bigger corner sockets, sturdy 4-pixel-feeling gunmetal rails. Transparent-background complete cuttable pixel-art UI chrome family sheet. No labels, no text, no icons, no characters. Include separate reusable assets with generous spacing: full top-left corner socket / 2-way L corner atom with aged carved gold ornament integrated at the actual outside corner; 3-way T junction with one gold ornament centered exactly over the intersection; 4-way cross junction with one gold ornament centered exactly over the intersection; natural 3-way T junction with no gold ornament; natural 4-way cross junction with no gold ornament; long NORTH top rail strip; long SOUTH bottom rail strip; long WEST left vertical rail strip; long EAST right vertical rail strip. Style: crisp hard-pixel fantasy strategy-game UI chrome, aged carved gold, dark navy and blue-black gunmetal rails, strong bevels, organic forged-metal filigree and scratches, authored alive-looking rails. Rail continuity contract: rails are not terminal pieces. Rail strips run cleanly to canvas ends as uninterrupted rail material. No end caps, no collars, no sockets, no gold plates, no decorative terminal hardware at rail strip ends. At every T or cross, rails flow invisibly through the joint as the same exact material; the vertical rail continues straight through the T and the branch meets at the exact center. Gold junction ornament is centered over the crossing only and must not cap or decorate rail entrances. Corner ornament belongs to the outside corner only; both arms leave as uninterrupted rail material ready to continue into strips.",
+      "color_palette": "aged gold, dark navy black, blue-black gunmetal, pale bevel highlights",
+      "elements": [
+        "panel",
+        "window",
+        "toolbar"
+      ],
+      "width": 688,
+      "height": 384,
+      "no_background": true,
+      "seed": 70603
+    },
+    "id": "4f55d991-3cd8-49c2-a53c-a9e063831b01",
+    "queuedAt": "2026-07-06T06:19:19.015Z",
+    "responseText": "id: 4f55d991-3cd8-49c2-a53c-a9e063831b01\ndescription: LARGE OUTER scale for main panel frames. Chunkier proportions, bigger corner sockets, sturdy 4-pixel-feeling gunmetal rails. Transparent-background complete cuttable pixel-art UI chrome family sheet. No labels, no text, no icons, no characters. Include separate reusable assets with generous spacing: full top-left corner socket / 2-way L corner atom with aged carved gold ornament integrated at the actual outside corner; 3-way T junction with one gold ornament centered exactly over the intersection; 4-way cross junction with one gold ornament centered exactly over the intersection; natural 3-way T junction with no gold ornament; natural 4-way cross junction with no gold ornament; long NORTH top rail strip; long SOUTH bottom rail strip; long WEST left vertical rail strip; long EAST right vertical rail strip. Style: crisp hard-pixel fantasy strategy-game UI chrome, aged carved gold, dark navy and blue-black gunmetal rails, strong bevels, organic forged-metal filigree and scratches, authored alive-looking rails. Rail continuity contract: rails are not terminal pieces. Rail strips run cleanly to canvas ends as uninterrupted rail material. No end caps, no collars, no sockets, no gold plates, no decorative terminal hardware at rail strip ends. At every T or cross, rails flow invisibly through the joint as the same exact material; the vertical rail continues straight through the T and the branch meets at the exact center. Gold junction ornament is centered over the crossing only and must not cap or decorate rail entrances. Corner ornament belongs to the outside corner only; both arms leave as uninterrupted rail material ready to continue into strips.\nmode: ui-panel (688x384px)\ncost: 40 generations\nstatus: processing (~30-90s)\n\nhint: get_ui_asset(ui_asset_id=\"4f55d991-3cd8-49c2-a53c-a9e063831b01\")"
+  },
+  {
+    "slug": "complete-family-small-inner-pixellab-ui",
+    "args": {
+      "name": "ct-small-inner-through-rail-chrome-family",
+      "description": "SMALL INNER scale for controls inside the larger box. Tighter proportions, compact gold corner sockets, slimmer but still crisp gunmetal rails. Transparent-background complete cuttable pixel-art UI chrome family sheet. No labels, no text, no icons, no characters. Include separate reusable assets with generous spacing: full top-left corner socket / 2-way L corner atom with aged carved gold ornament integrated at the actual outside corner; 3-way T junction with one gold ornament centered exactly over the intersection; 4-way cross junction with one gold ornament centered exactly over the intersection; natural 3-way T junction with no gold ornament; natural 4-way cross junction with no gold ornament; long NORTH top rail strip; long SOUTH bottom rail strip; long WEST left vertical rail strip; long EAST right vertical rail strip. Style: crisp hard-pixel fantasy strategy-game UI chrome, aged carved gold, dark navy and blue-black gunmetal rails, strong bevels, organic forged-metal filigree and scratches, authored alive-looking rails. Rail continuity contract: rails are not terminal pieces. Rail strips run cleanly to canvas ends as uninterrupted rail material. No end caps, no collars, no sockets, no gold plates, no decorative terminal hardware at rail strip ends. At every T or cross, rails flow invisibly through the joint as the same exact material; the vertical rail continues straight through the T and the branch meets at the exact center. Gold junction ornament is centered over the crossing only and must not cap or decorate rail entrances. Corner ornament belongs to the outside corner only; both arms leave as uninterrupted rail material ready to continue into strips.",
+      "color_palette": "aged gold, dark navy black, blue-black gunmetal, pale bevel highlights",
+      "elements": [
+        "panel",
+        "toolbar",
+        "button"
+      ],
+      "width": 688,
+      "height": 384,
+      "no_background": true,
+      "seed": 70604
+    },
+    "id": "ecdbcaf6-1e6f-4622-b51d-7c0b23f89f56",
+    "queuedAt": "2026-07-06T06:19:19.859Z",
+    "responseText": "id: ecdbcaf6-1e6f-4622-b51d-7c0b23f89f56\ndescription: SMALL INNER scale for controls inside the larger box. Tighter proportions, compact gold corner sockets, slimmer but still crisp gunmetal rails. Transparent-background complete cuttable pixel-art UI chrome family sheet. No labels, no text, no icons, no characters. Include separate reusable assets with generous spacing: full top-left corner socket / 2-way L corner atom with aged carved gold ornament integrated at the actual outside corner; 3-way T junction with one gold ornament centered exactly over the intersection; 4-way cross junction with one gold ornament centered exactly over the intersection; natural 3-way T junction with no gold ornament; natural 4-way cross junction with no gold ornament; long NORTH top rail strip; long SOUTH bottom rail strip; long WEST left vertical rail strip; long EAST right vertical rail strip. Style: crisp hard-pixel fantasy strategy-game UI chrome, aged carved gold, dark navy and blue-black gunmetal rails, strong bevels, organic forged-metal filigree and scratches, authored alive-looking rails. Rail continuity contract: rails are not terminal pieces. Rail strips run cleanly to canvas ends as uninterrupted rail material. No end caps, no collars, no sockets, no gold plates, no decorative terminal hardware at rail strip ends. At every T or cross, rails flow invisibly through the joint as the same exact material; the vertical rail continues straight through the T and the branch meets at the exact center. Gold junction ornament is centered over the crossing only and must not cap or decorate rail entrances. Corner ornament belongs to the outside corner only; both arms leave as uninterrupted rail material ready to continue into strips.\nmode: ui-panel (688x384px)\ncost: 40 generations\nstatus: processing (~30-90s)\n\nhint: get_ui_asset(ui_asset_id=\"ecdbcaf6-1e6f-4622-b51d-7c0b23f89f56\")"
+  }
+]

@@ -9,7 +9,7 @@ For task-level instructions that prevent agents from replacing pixel art with
 CSS approximations, see `docs/asset-generation-contract.md`.
 
 Storage and promotion in this early proposal are superseded by
-[ADR-0081](adr/0081-runtime-assets-are-live-storage-backed.md). Media enters the
+[ADR-0085](adr/0085-runtime-assets-are-live-storage-backed.md). Media enters the
 backend as a candidate and is reviewed/promoted from live storage; it is never
 published into Git.
 

@@ -2,6 +2,7 @@ import { useState, type ReactElement, type ReactNode } from 'react';
 import type { ConditionSide, VictoryAction, VictoryCondition, VictoryRule, VictoryRules } from '../core/level';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
+import { HouseSelect } from './shared/HouseSelect';
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 
 // The Level Editor's "Victory events" editor (ADR-0064) — a MASTER-DETAIL surface inside the
@@ -144,7 +145,7 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
           ))}
         </div>
         <div className="le-cond-add le-rule-add">
-          <button type="button" className="le-seg-btn le-add-event" onClick={addEvent}>+ Add event</button>
+          <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-add-event" onClick={addEvent}>+ Add event</button>
         </div>
       </div>
 
@@ -162,16 +163,18 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
               <div className="le-rule-cond" key={j}>
                 <div className="le-cond-top">
                   <span className="le-cond-summary"><b>{j === 0 ? 'IF' : 'and'}</b> {conditionSummary(c, factionLabel)}</span>
-                  <button type="button" className="le-seg-btn danger le-cond-remove" aria-label="Remove this condition" title="Remove condition" onClick={() => removeCond(j)}>–</button>
+                  <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger le-cond-remove" aria-label="Remove this condition" title="Remove condition" onClick={() => removeCond(j)}>–</button>
                 </div>
                 {c.kind === 'eliminate' ? (
                   <div className="le-cond-params">
                     <div className="le-ctrlrow">
                       <span className="le-ctrllabel">Faction</span>
-                      <select className="le-layer-select le-faction-select" aria-label="Faction this condition is about"
-                        value={c.side} onChange={(e) => setCond(j, { ...c, side: e.target.value as ConditionSide })}>
-                        {factions.map((f) => <option key={f.side} value={f.side}>{f.label}</option>)}
-                      </select>
+                      <HouseSelect
+                        ariaLabel="Faction this condition is about"
+                        value={c.side}
+                        options={factions.map((f) => ({ value: f.side, label: f.label }))}
+                        onChange={(side) => setCond(j, { ...c, side })}
+                      />
                     </div>
                     <div className="le-ctrlrow">
                       <span className="le-ctrllabel">King only</span>
@@ -193,24 +196,26 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
 
             <div className="le-cond-add">
               <span className="le-ctrllabel le-rule-and">and…</span>
-              <button type="button" className="le-seg-btn" onClick={() => addCond({ kind: 'eliminate', side: 'enemy' })}>+ Eliminate</button>
-              <button type="button" className="le-seg-btn" onClick={() => addCond({ kind: 'reach', side: 'player' })}>+ Reach goal</button>
-              <button type="button" className="le-seg-btn" onClick={() => addCond({ kind: 'turnLimit', turns: DEFAULT_SURVIVE_TURNS })}>+ Turn N</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => addCond({ kind: 'eliminate', side: 'enemy' })}>+ Eliminate</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => addCond({ kind: 'reach', side: 'player' })}>+ Reach goal</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => addCond({ kind: 'turnLimit', turns: DEFAULT_SURVIVE_TURNS })}>+ Turn N</button>
             </div>
 
             <div className="le-rule-then">
               <span className="le-ctrllabel">THEN</span>
-              <select className="le-layer-select le-faction-select" aria-label="Faction this outcome is for"
-                value={action.side} onChange={(e) => patchAction({ side: e.target.value as ConditionSide })}>
-                {factions.map((f) => <option key={f.side} value={f.side}>{f.label}</option>)}
-              </select>
+              <HouseSelect
+                ariaLabel="Faction this outcome is for"
+                value={action.side}
+                options={factions.map((f) => ({ value: f.side, label: f.label }))}
+                onChange={(side) => patchAction({ side })}
+              />
               <div className="le-seg le-seg-wrap le-seg-compact">
                 {(['win', 'lose'] as const).map((kind) => (
-                  <button type="button" key={kind} className={`le-seg-btn ${action.kind === kind ? 'active' : ''}`.trim()}
+                  <button type="button" key={kind} data-chrome-unit="inner-text-button" className={`le-seg-btn ${action.kind === kind ? 'active' : ''}`.trim()}
                     onClick={() => patchAction({ kind })}>{kind === 'win' ? 'wins' : 'loses'}</button>
                 ))}
               </div>
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeRule(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger le-rule-remove" onClick={() => removeRule(selected)}>Remove event</button>
             </div>
           </div>
         ) : <p className="le-board-note">No event selected — add a template or add an event on the left.</p>}

@@ -1,5 +1,5 @@
 ---
-status: "accepted; production render-scale publication superseded by ADR-0076; committed asset-baseline and bake-back clauses superseded by ADR-0081"
+status: "accepted; production render-scale publication superseded by ADR-0076; committed asset-baseline and bake-back clauses superseded by ADR-0085"
 date: 2026-07-03
 deciders: Nelson, Claude
 ---

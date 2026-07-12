@@ -79,7 +79,7 @@ contracts whenever the task vocabulary suggests one.
   must not own media bytes, accepted pointers, or a packaged fallback. Promotion
   is an admin backend transaction; generation tools upload candidates instead of
   writing runtime art into the repository. See
-  [ADR-0081](docs/adr/0081-runtime-assets-are-live-storage-backed.md) and the
+  [ADR-0085](docs/adr/0085-runtime-assets-are-live-storage-backed.md) and the
   [runtime asset contract](docs/runtime-asset-contract.md).
 - Any board or level offered through the UI must use the canonical content
   system. Do not hide a broken or unavailable source behind compiled-in demo
@@ -116,6 +116,21 @@ contracts whenever the task vocabulary suggests one.
   running application, verify the real full app on the exact route and state
   affected. Use the dynamically printed Vite URL, not an assumed port, and use
   the supported screenshot path documented in `CLAUDE.md`.
+- For visual UI work, especially Chrome Lab, level editor chrome, rail/atom
+  alignment, clipping, overflow, title text placement, preview surfaces, and
+  dark-theme controls, static inspection and typecheck are never sufficient.
+  Take and inspect a screenshot of the affected surface before reporting the
+  work as ready.
+- If browser or screenshot tooling appears unavailable, diagnosing that path
+  becomes the priority. Do not stop at the first blocked screenshot attempt:
+  identify whether the blocker is an app crash, dev server outage,
+  navigation/policy issue, stale tab, console/runtime error, or missing browser
+  capability.
+- If screenshot verification genuinely cannot be restored in the current turn,
+  the response must be failure-first. Do not frame the visual work as done,
+  successful, implemented, or complete. State the concrete screenshot blocker
+  first, and mention code edits or passing non-visual checks only as secondary
+  context if they help decide the next action.
 
 ## User verification gates feature completion
 

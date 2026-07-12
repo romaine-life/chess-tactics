@@ -226,6 +226,199 @@
         }
       ]
     },
+    "codex-outer-panel": {
+      "label": "Codex outer chrome panel (gold corners / transparent fill)",
+      "atoms": {
+        "corner": "codex-outer-corner",
+        "edge": "codex-outer-edge",
+        "fill": "codex-outer-fill"
+      },
+      "frame": {
+        "w": 512,
+        "h": 384
+      },
+      "variants": [
+        {
+          "out": "codex-outer-panel.png"
+        }
+      ]
+    },
+    "codex-outer-divider": {
+      "label": "Codex outer divider (atomless natural T caps)",
+      "kind": "bar",
+      "railSource": "edge",
+      "railFit": "stretch",
+      "junctionStyle": "natural",
+      "host": {
+        "frame": "codex-outer-panel.png",
+        "slice": 180,
+        "previewWidth": 560
+      },
+      "atoms": {
+        "edge": "codex-outer-edge",
+        "corner": "codex-outer-corner",
+        "tee": "codex-outer-tee-natural"
+      },
+      "frame": {
+        "w": 512,
+        "h": 112
+      },
+      "variants": [
+        {
+          "out": "codex-outer-divider.png"
+        }
+      ]
+    },
+    "codex-outer-tee": {
+      "label": "Codex outer rail junction — atomless 3-way tee",
+      "kind": "junction",
+      "sides": "NSE",
+      "atoms": {
+        "corner": "codex-outer-corner",
+        "tee": "codex-outer-tee-natural"
+      },
+      "frame": {
+        "w": 218,
+        "h": 195
+      },
+      "variants": [
+        {
+          "out": "codex-outer-tee.png"
+        }
+      ]
+    },
+    "codex-outer-cross": {
+      "label": "Codex outer rail junction — atomless 4-way cross",
+      "kind": "junction",
+      "sides": "NSEW",
+      "atoms": {
+        "corner": "codex-outer-corner",
+        "cross": "codex-outer-cross-natural"
+      },
+      "frame": {
+        "w": 236,
+        "h": 325
+      },
+      "variants": [
+        {
+          "out": "codex-outer-cross.png"
+        }
+      ]
+    },
+    "codex-parts-outer-panel": {
+      "label": "Codex independent outer panel (gold atom corners / rail source)",
+      "atoms": {
+        "corner": "codex-parts-outer-corner",
+        "edge": "codex-parts-outer-edge",
+        "fill": "codex-parts-outer-fill"
+      },
+      "frame": {
+        "w": 512,
+        "h": 384
+      },
+      "variants": [
+        {
+          "out": "codex-parts-outer-panel.png"
+        }
+      ]
+    },
+    "codex-parts-outer-cross": {
+      "label": "Codex independent outer rail junction — atomless 4-way cross",
+      "kind": "junction",
+      "sides": "NSEW",
+      "atoms": {
+        "corner": "codex-parts-outer-corner",
+        "cross": "codex-parts-outer-cross-natural"
+      },
+      "frame": {
+        "w": 245,
+        "h": 245
+      },
+      "variants": [
+        {
+          "out": "codex-parts-outer-cross.png"
+        }
+      ]
+    },
+    "codex-parts-inner-panel": {
+      "label": "Codex independent inner panel (gold atom corners / rail source)",
+      "atoms": {
+        "corner": "codex-parts-inner-corner",
+        "edge": "codex-parts-inner-edge",
+        "fill": "codex-parts-inner-fill"
+      },
+      "frame": {
+        "w": 256,
+        "h": 192
+      },
+      "variants": [
+        {
+          "out": "codex-parts-inner-panel.png"
+        }
+      ]
+    },
+    "codex-parts-inner-divider": {
+      "label": "Codex independent inner divider (atomless natural T caps)",
+      "kind": "bar",
+      "railSource": "edge",
+      "railFit": "stretch",
+      "junctionStyle": "natural",
+      "host": {
+        "frame": "codex-parts-inner-panel.png",
+        "slice": 92,
+        "previewWidth": 360
+      },
+      "atoms": {
+        "edge": "codex-parts-inner-edge",
+        "corner": "codex-parts-inner-corner",
+        "tee": "codex-parts-inner-tee-natural"
+      },
+      "frame": {
+        "w": 320,
+        "h": 160
+      },
+      "variants": [
+        {
+          "out": "codex-parts-inner-divider.png"
+        }
+      ]
+    },
+    "codex-parts-inner-tee": {
+      "label": "Codex independent inner rail junction — atomless 3-way tee",
+      "kind": "junction",
+      "sides": "NSE",
+      "atoms": {
+        "corner": "codex-parts-inner-corner",
+        "tee": "codex-parts-inner-tee-natural"
+      },
+      "frame": {
+        "w": 87,
+        "h": 148
+      },
+      "variants": [
+        {
+          "out": "codex-parts-inner-tee.png"
+        }
+      ]
+    },
+    "codex-parts-inner-cross": {
+      "label": "Codex independent inner rail junction — atomless 4-way cross",
+      "kind": "junction",
+      "sides": "NSEW",
+      "atoms": {
+        "corner": "codex-parts-inner-corner",
+        "cross": "codex-parts-inner-cross-natural"
+      },
+      "frame": {
+        "w": 148,
+        "h": 148
+      },
+      "variants": [
+        {
+          "out": "codex-parts-inner-cross.png"
+        }
+      ]
+    },
     "tee": {
       "label": "Rail junction — 3-way tee (derived from the corner atom)",
       "kind": "junction",

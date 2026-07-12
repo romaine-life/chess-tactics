@@ -126,7 +126,7 @@ separate from `public_maps`, the explicit published
 snapshot store used by the existing public `/play?map=...` subsystem; migration
 16 deliberately leaves that store intact.
 
-Per [ADR-0081](adr/0081-runtime-assets-are-live-storage-backed.md), media is live
+Per [ADR-0085](adr/0085-runtime-assets-are-live-storage-backed.md), media is live
 content. Postgres stores stable slots, active pointers, accepted status, candidate metadata,
 geometry/provenance, revisions, and content hashes. Private Blob Storage stores
 immutable content-addressed bytes. The backend resolves stable `/assets/<slot>`
@@ -256,6 +256,6 @@ so it is idempotent against the intended throwaway database.
 
 - **Game art/assets** are live storage-backed. The retired `design_assets`
   `bytea` table and its Git-seeded fallback routes remain absent; the replacement
-  is the content-addressed live-media substrate governed by ADR-0081.
+  is the content-addressed live-media substrate governed by ADR-0085.
 - **`lobbies`** remain process-memory matchmaking state. They are transient room
   coordination, not authored game content.

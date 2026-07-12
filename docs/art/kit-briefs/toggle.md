@@ -1,6 +1,6 @@
 # Kit Art Brief — Toggle (on / off)
 
-> **Live-storage workflow (ADR-0081).** Paths below identify archived source
+> **Live-storage workflow (ADR-0085).** Paths below identify archived source
 > records and semantic slots; they are not repository files. Fetch references by
 > original `sourcePath` with the live-media admin client, generate only in an
 > OS-temporary directory, and upload the results as candidates. Never overwrite

@@ -1,5 +1,5 @@
 ---
-status: "accepted; navigation superseded by ADR-0058; asset-storage clauses superseded by ADR-0081"
+status: "accepted; navigation superseded by ADR-0058; asset-storage clauses superseded by ADR-0085"
 date: 2026-06-25
 deciders: Nelson, Claude
 ---

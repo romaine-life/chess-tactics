@@ -9,4 +9,4 @@ the composed panel is uploaded as a candidate for its semantic live-media slot.
 Owner review and backend acceptance are the only production transition. No
 panel pixels, candidate roster, or accepted pointer belongs in Git.
 
-See `docs/ui-kit-standard.md`, `docs/runtime-asset-contract.md`, and ADR-0081.
+See `docs/ui-kit-standard.md`, `docs/runtime-asset-contract.md`, and ADR-0085.

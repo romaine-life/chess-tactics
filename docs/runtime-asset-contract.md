@@ -1,7 +1,7 @@
 # Runtime Asset Contract
 
 This is the living storage and delivery contract derived from
-[ADR-0081](adr/0081-runtime-assets-are-live-storage-backed.md). It applies to
+[ADR-0085](adr/0085-runtime-assets-are-live-storage-backed.md). It applies to
 runtime, review, candidate, and source-media binaries: images, audio, fonts,
 atlases, animation sheets, and other media consumed or judged by the application.
 
@@ -94,7 +94,7 @@ review instrument.
   authoritative content data plane.
 - The cutover and owner verification use unserved candidate pods against that
   same data plane, as decided by
-  [ADR-0082](adr/0082-runtime-asset-cutover-uses-one-live-data-plane.md). A
+  [ADR-0086](adr/0086-runtime-asset-cutover-uses-one-live-data-plane.md). A
   production-seeded test database is not a release gate.
 - Automated tests may use transient databases and local object storage for
   generated fixtures. Optional preview tooling may project immutable public

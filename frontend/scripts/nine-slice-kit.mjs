@@ -62,6 +62,7 @@ const loadAtom = (n) => {
   if (!ATOMS) throw new Error('set NINE_SLICE_MEDIA_WORKSPACE to a fetched temporary atom workspace');
   return PNG.sync.read(readFileSync(`${ATOMS}${n}.png`));
 };
+const MIN_SCALE = 0.25;
 const DEFAULT_BRACKET_SCALE = 1;
 const DEFAULT_FRAME_SCALE = 1;
 const n0 = (v) => (Number.isFinite(v) ? Number(v) : 0);
@@ -304,23 +305,86 @@ function scaleNearest(src, factor) {
   return o;
 }
 
+function cropRect(src, x0, y0, w, h) {
+  const o = np(w, h);
+  for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
+    const sx = x0 + x, sy = y0 + y;
+    if (sx < 0 || sy < 0 || sx >= src.width || sy >= src.height) continue;
+    const si = (sy * src.width + sx) * 4;
+    const di = (y * w + x) * 4;
+    o.data[di] = src.data[si];
+    o.data[di + 1] = src.data[si + 1];
+    o.data[di + 2] = src.data[si + 2];
+    o.data[di + 3] = src.data[si + 3];
+  }
+  return o;
+}
+
+function barMetrics(assetId, cfg = loadConfig(assetId)) {
+  const rec = REGISTRY[assetId];
+  if (!rec || rec.kind !== 'bar') throw new Error(`nine-slice-kit: "${assetId}" is not a bar asset`);
+  const scale = Number.isFinite(cfg.scale) ? cfg.scale : 1;
+  const jy = Number.isFinite(cfg.jy) ? cfg.jy : 0;
+  if (!rec.atoms.tee) return { cap: loadAtom(rec.atoms.corner).width, height: undefined };
+  const tee = scaleNearest(loadAtom(rec.atoms.tee), scale);
+  const height = Number.isFinite(cfg.dividerH)
+    ? Math.max(tee.height + Math.abs(jy), Math.round(cfg.dividerH))
+    : tee.height + Math.abs(jy);
+  return { cap: tee.width, height };
+}
+
+function panelLineTopRail(frameWidth = 16) {
+  const line = PNG.sync.read(readFileSync(`${LINE_DIR}panel-line.png`));
+  // The panel frame is rendered with border-image-slice: 24; the top-middle
+  // source slice is x=24..48, y=0..24. Scale it to the same border-image width
+  // the host panel uses so the divider branch is the exact same chrome pipe.
+  return scaleNearest(cropRect(line, 24, 0, 24, 24), Math.max(1, frameWidth) / 24);
+}
+
+function barRail(edgeAtom, frameWidth = 16, railSource = 'panel-line') {
+  if (railSource === 'edge') return scaleNearest(edgeAtom, Math.max(1, frameWidth) / edgeAtom.height);
+  return panelLineTopRail(frameWidth);
+}
+
+function stretchH(src, width) {
+  if (src.width === width) return src;
+  const o = np(Math.max(1, width), src.height);
+  for (let y = 0; y < o.height; y += 1) for (let x = 0; x < o.width; x += 1) {
+    const sx = Math.min(src.width - 1, Math.floor(x * src.width / o.width));
+    const si = (y * src.width + sx) * 4;
+    const di = (y * o.width + x) * 4;
+    o.data[di] = src.data[si]; o.data[di + 1] = src.data[si + 1]; o.data[di + 2] = src.data[si + 2]; o.data[di + 3] = src.data[si + 3];
+  }
+  return o;
+}
+
 // The section divider using an AUTHORED tee atom (corner-t.png) as the cap, instead of the
-// composeTee derivation. The tee is used AS DRAWN — mirrored for the right cap — and the steel
-// branch rail (edge atom) is tiled full-width, on the tee's branch row so the rail runs through the
-// junction. `scale` grows the TEE only (the divider viewer's "Junction size"; the rail is not
-// scaled); `jy` nudges the gold that many px below the rail (the viewer's "Align ↕"). These come
-// from the asset's config (config/nine-slice/panel-divider.json), so the shipped bar equals what
-// was hand-tuned in the viewer. Height = the scaled tee's height (+jy) so the consumer renders 1:1.
-export function buildBarFromTee(edgeAtom, teeAtom, W, scale = 1, jy = 0) {
+// composeTee derivation. The tee is used in its full authored atom coordinate frame — mirrored for
+// the right cap — and the panel-line top rail is tiled full-width, at the same frame width as the
+// host panel, so the rail runs through the junction. `scale` grows the TEE only (the divider
+// viewer's "Junction size"; the rail is not scaled); `jx` seats the authored atom horizontally
+// over the branch rail (the viewer's "Seat ↔");
+// `jy` nudges the gold that many px below the rail (the viewer's "Align ↕"). These come from the
+// asset's config (config/nine-slice/panel-divider.json), so the shipped bar equals what was
+// hand-tuned in the viewer. Height = the scaled tee's height (+jy) so the consumer renders 1:1.
+export function buildBarFromTee(edgeAtom, teeAtom, W, scale = 1, jx = 0, jy = 0, dividerH, frameWidth = 16, railSource = 'panel-line', railFit = 'tile') {
   const tee = scaleNearest(teeAtom, scale);
   const cap = tee.width;
-  const teeY = Math.max(0, jy), railBelow = Math.max(0, -jy);
-  const H = tee.height + Math.abs(jy);
+  const rail = barRail(edgeAtom, frameWidth, railSource);
+  const H = Number.isFinite(dividerH) ? Math.max(tee.height + Math.abs(jy), Math.round(dividerH)) : tee.height + Math.abs(jy);
+  const mid = H / 2;
+  const teeY = Number.isFinite(dividerH)
+    ? Math.round(mid - teeBranchRow(tee) + jy)
+    : Math.max(0, jy);
+  const railBelow = Math.max(0, -jy);
   const o = np(W, H);
-  const railY = Math.round(teeBranchRow(tee) + railBelow - edgeAtom.height / 2); // gold sits jy below the rail
-  tile(o, edgeAtom, 0, railY, W, railY + edgeAtom.height); // branch rail, full width, on the branch
-  comp(o, tee, 0, teeY);                                    // left cap (spine on the left rail)
-  comp(o, flipH(tee), W - cap, teeY);                      // right cap (mirrored)
+  const railY = Number.isFinite(dividerH)
+    ? Math.round(mid - rail.height / 2)
+    : Math.round(teeBranchRow(tee) + railBelow - rail.height / 2); // gold sits jy below the rail
+  if (railFit === 'stretch') comp(o, stretchH(rail, W), 0, railY);
+  else tile(o, rail, 0, railY, W, railY + rail.height); // branch rail, full width, on the branch
+  comp(o, tee, jx, teeY);                                  // left cap (spine on the left rail)
+  comp(o, flipH(tee), W - cap - jx, teeY);                 // right cap (mirrored)
   return o;
 }
 
@@ -359,10 +423,10 @@ export function normalizeConfig(c) {
   // Returns the CANONICAL shape (see file header): per-element absolutes. A legacy
   // config (global+residual fields) folds in transparently; a canonical config
   // passes through. Mixing is resolved per element group: canonical field wins.
-  // Scale is clamped to [1,4] and rounded to 2 decimals — the SAME quantization the
+  // Scale is clamped to [0.25,4] and rounded to 2 decimals — the SAME quantization the
   // editor applies (NineSliceEditor roundedScale), so a hand-edited high-precision
   // scale bakes exactly what the editor previews, not one Math.round(w*scale) off.
-  const scale = (v, fb) => (Number.isFinite(v) ? Math.max(1, Math.min(4, Math.round(Number(v) * 100) / 100)) : fb);
+  const scale = (v, fb) => (Number.isFinite(v) ? Math.max(MIN_SCALE, Math.min(4, Math.round(Number(v) * 100) / 100)) : fb);
   return {
     asset: c.asset,
     coolCorners: c.coolCorners ? foldCorners(undefined, c.coolCorners) : foldCorners(c.keyline, c.frameCorners),
@@ -397,7 +461,7 @@ function maxFrameScaleForAsset(assetId) {
   const rec = REGISTRY[assetId];
   if (!rec) return 4;
   const corner = loadAtom(rec.atoms.corner);
-  return Math.max(1, Math.min(4, rec.frame.w / corner.width, rec.frame.h / corner.height));
+  return Math.max(MIN_SCALE, Math.min(4, rec.frame.w / corner.width, rec.frame.h / corner.height));
 }
 export function normalizeConfigForAsset(assetId, c) {
   // `bar` (divider) and `junction` (tee/cross) assets are composed straight from atoms with no
@@ -406,7 +470,15 @@ export function normalizeConfigForAsset(assetId, c) {
   const kind = REGISTRY[assetId]?.kind;
   if (kind === 'junction') return { asset: assetId };
   // A `bar` carries only the divider's hand-tuned junction size + vertical nudge (from the viewer).
-  if (kind === 'bar') return { asset: assetId, scale: Number.isFinite(c.scale) ? c.scale : 1, jy: Number.isFinite(c.jy) ? c.jy : 0 };
+  if (kind === 'bar') return {
+    asset: assetId,
+    frameWidth: Number.isFinite(c.frameWidth) ? c.frameWidth : undefined,
+    reach: Number.isFinite(c.reach) ? c.reach : undefined,
+    dividerH: Number.isFinite(c.dividerH) ? c.dividerH : undefined,
+    scale: Number.isFinite(c.scale) ? c.scale : 1,
+    jx: Number.isFinite(c.jx) ? c.jx : 0,
+    jy: Number.isFinite(c.jy) ? c.jy : 0,
+  };
   const cfg = normalizeConfig({ ...c, asset: assetId });
   cfg.frameScale = Math.min(cfg.frameScale, maxFrameScaleForAsset(assetId));
   return cfg;
@@ -432,7 +504,7 @@ export function loadConfig(assetId) {
   if (kind === 'junction') return { asset: assetId };
   if (kind === 'bar') {
     try { return normalizeConfigForAsset(assetId, JSON.parse(readFileSync(`${CONFIG_DIR}${assetId}.json`, 'utf8'))); }
-    catch { return { asset: assetId, scale: 1, jy: 0 }; }
+    catch { return { asset: assetId, scale: 1, jx: 0, jy: 0 }; }
   }
   const raw = JSON.parse(readFileSync(`${CONFIG_DIR}${assetId}.json`, 'utf8'));
   const theme = themeOf(assetId);
@@ -446,16 +518,20 @@ export function loadConfig(assetId) {
 }
 
 // Bake an asset to in-memory PNGs WITHOUT writing — the pure core shared by
-// buildAsset (which writes) and the bake parity test (which compares the result
-// against the committed PNGs), so the writer and the test can never disagree about
-// what a config bakes to. Returns { variants:[{out, png, inspect, inspectPng}], warns, note }.
+// buildAsset (which writes only to an OS-temporary candidate workspace) and callers
+// that verify an upload before sending it to live media storage. Returns
+// { variants:[{out, png, inspect, inspectPng}], warns, note }.
 // Bake a `bar` (divider) asset: the horizontal-rail primitive (buildBar), one output per
 // variant with its optional palette swap. Bars carry no corner/pipe geometry, so this is a
 // self-contained path that never touches the frame normalizer or the corner atom.
 function bakeBar(assetId, rec, cfg = {}) {
   const edge = loadAtom(rec.atoms.edge);
   const { w } = rec.frame;                   // width; height follows the (scaled) tee
-  const scale = Number.isFinite(cfg.scale) ? cfg.scale : 1, jy = Number.isFinite(cfg.jy) ? cfg.jy : 0;
+  const scale = Number.isFinite(cfg.scale) ? cfg.scale : 1;
+  const jx = Number.isFinite(cfg.jx) ? cfg.jx : 0;
+  const jy = Number.isFinite(cfg.jy) ? cfg.jy : 0;
+  const dividerH = Number.isFinite(cfg.dividerH) ? cfg.dividerH : undefined;
+  const frameWidth = Number.isFinite(cfg.frameWidth) ? cfg.frameWidth : 16;
   // Prefer an AUTHORED tee atom (used as drawn) over deriving one from the corner (composeTee).
   const teeAtom = rec.atoms.tee ? loadAtom(rec.atoms.tee) : null;
   const corner = teeAtom ? null : loadAtom(rec.atoms.corner);
@@ -463,17 +539,27 @@ function bakeBar(assetId, rec, cfg = {}) {
     const e = v.swap ? swapPalette(edge, v.swap) : edge;
     if (teeAtom) {
       const t = v.swap ? swapPalette(teeAtom, v.swap) : teeAtom;
-      return { out: v.out, png: buildBarFromTee(e, t, w, scale, jy), inspect: null, inspectPng: null };
+      return { out: v.out, png: buildBarFromTee(e, t, w, scale, jx, jy, dividerH, frameWidth, rec.railSource, rec.railFit), inspect: null, inspectPng: null };
     }
     const c = v.swap ? swapPalette(corner, v.swap) : corner;
     return { out: v.out, png: buildBar(e, c, w), inspect: null, inspectPng: null };
   });
-  const cap = teeAtom ? Math.round(teeAtom.width * scale) : corner.width;
-  return { variants, warns: [], note: `bar · ${teeAtom ? `authored tee ×${scale}` : 'derived corner'} · cap ${cap}px` };
+  const cap = teeAtom ? barMetrics(assetId, cfg).cap : corner.width;
+  return { variants, warns: [], note: `bar · ${teeAtom ? `authored tee ×${scale} seat ${cfg.jx ?? 0},${cfg.jy ?? 0}` : 'derived corner'} · cap ${cap}px${dividerH ? ` · h ${dividerH}px` : ''}` };
 }
 // A `junction` asset bakes a single derived rail-junction PNG — tee (3-way) or cross (4-way) —
 // from the frame's corner atom (composeTee / composeCross), keyed by its `sides` string.
 function bakeJunction(assetId, rec) {
+  if (rec.atoms.tee || rec.atoms.cross) {
+    const atomName = rec.sides === 'NSEW' ? rec.atoms.cross : rec.atoms.tee;
+    if (!atomName) throw new Error(`nine-slice-kit: "${assetId}" is missing an authored ${rec.sides === 'NSEW' ? 'cross' : 'tee'} atom`);
+    const atom = loadAtom(atomName);
+    const variants = rec.variants.map((v) => {
+      const png = v.swap ? swapPalette(atom, v.swap) : atom;
+      return { out: v.out, png, inspect: null, inspectPng: null };
+    });
+    return { variants, warns: [], note: `junction ${rec.sides} · authored ${atomName}` };
+  }
   const corner = loadAtom(rec.atoms.corner);
   const compose = rec.sides === 'NSEW' ? composeCross : composeTee;
   const variants = rec.variants.map((v) => {
@@ -482,14 +568,13 @@ function bakeJunction(assetId, rec) {
   });
   return { variants, warns: [], note: `junction ${rec.sides} · derived from corner` };
 }
-// Cap-slice width (px) a `bar` asset's horizontal border-image uses — the full-corner tee
-// width = corner width. One number the consumer CSS and the editor read so they can't disagree.
+// Cap-slice width (px) a `bar` asset's horizontal border-image uses. For authored tee bars this
+// is the full authored T atom width after scale: the same coordinate system the divider Studio
+// previews and the corner atoms already use.
 export function barCapWidth(assetId) {
   const rec = REGISTRY[assetId];
   if (!rec || rec.kind !== 'bar') return 0;
-  const w = loadAtom(rec.atoms.tee || rec.atoms.corner).width;
-  const scale = loadConfig(assetId)?.scale ?? 1; // the cap grows with the tuned junction size
-  return Math.round(w * scale);
+  return barMetrics(assetId).cap;
 }
 
 export function bakeAsset(assetId, cfgRaw) {

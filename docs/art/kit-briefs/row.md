@@ -9,4 +9,4 @@ uploaded as candidates for semantic live-media slots. Owner review and backend
 acceptance move the active pointer. No row pixels, candidate lifecycle, gate
 result, or accepted pointer belongs in Git.
 
-See `docs/ui-kit-standard.md`, `docs/runtime-asset-contract.md`, and ADR-0081.
+See `docs/ui-kit-standard.md`, `docs/runtime-asset-contract.md`, and ADR-0085.

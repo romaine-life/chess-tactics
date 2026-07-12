@@ -1,7 +1,7 @@
 // Dev-only persistence for code-owned nine-slice geometry.
 //
 // This endpoint deliberately cannot read or write media, invoke a bake, update
-// a catalog, or promote an asset. ADR-0081 permits deterministic geometry in
+// a catalog, or promote an asset. ADR-0085 permits deterministic geometry in
 // Git; media candidates and accepted pointers remain backend-owned.
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

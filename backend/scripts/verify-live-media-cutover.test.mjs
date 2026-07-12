@@ -79,12 +79,12 @@ test('migration inventory comparison is exact for public legacy bridges', () => 
   assert.match(compareCatalogToInventory(catalog(), { expected }).join('\n'), /sha256 expected/);
 });
 
-test('reads the ADR-0081 importer inventory schema end to end', (t) => {
+test('reads the ADR-0085 importer inventory schema end to end', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'live-media-inventory-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const filename = path.join(directory, 'inventory.json');
   const inventory = {
-    schema: 'adr-0081-media-migration-inventory-v1',
+    schema: 'adr-0085-media-migration-inventory-v1',
     repositoryCommit: 'a'.repeat(40),
     totals: { files: 2, versions: 2, bytes: bytes.length * 2 },
     entries: [

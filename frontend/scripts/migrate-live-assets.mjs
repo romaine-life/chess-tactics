@@ -1,4 +1,4 @@
-// TEMPORARY ADR-0081 CUTOVER TOOL.
+// TEMPORARY ADR-0085 CUTOVER TOOL.
 //
 // This is not a seed path and must not survive the cutover. The permanent
 // no-committed-media guard fails while this file exists. It inventories the old
@@ -32,7 +32,7 @@ import {
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const defaultRepoRoot = path.resolve(frontendRoot, '..');
-const INVENTORY_SCHEMA = 'adr-0081-media-migration-inventory-v1';
+const INVENTORY_SCHEMA = 'adr-0085-media-migration-inventory-v1';
 const PUBLIC_ASSET_PREFIX = 'frontend/public/assets/';
 const DIVIDER_ORNAMENT_SOURCE = 'frontend/public/kit-portfolio/cand3-codex.png';
 const PORTRAIT_CANONICAL_ACTIVATION_SOURCE = /^frontend\/public\/assets\/portrait-candidates\/codex-stone\/(bishop|king|knight|pawn|queen|rook)\/(black|crimson|emerald|golden|navy-blue|white)\.png$/;
@@ -421,7 +421,7 @@ function createPayload(entry, inventory, options) {
     slot: entry.slot,
     domain: entry.domain,
     role: entry.role,
-    label: `ADR-0081 Git cutover: ${entry.sourcePath}`,
+    label: `ADR-0085 Git cutover: ${entry.sourcePath}`,
     metadata: {
       migrationDisposition: entry.migrationDisposition,
       originalRepositoryPath: entry.sourcePath,
@@ -611,7 +611,7 @@ export async function migrateEntry(entry, inventory, options, client, catalog, e
     revision = Number(existing.rowRevision);
   } else {
     const created = await client.createVersion(createPayload(entry, inventory, options), {
-      idempotencyKey: `adr0081-${sha256Text(`${inventory.repositoryCommit}\0${entry.sourcePath}\0${entry.slot ?? '<private>'}`).slice(0, 48)}`,
+      idempotencyKey: `adr0085-${sha256Text(`${inventory.repositoryCommit}\0${entry.sourcePath}\0${entry.slot ?? '<private>'}`).slice(0, 48)}`,
     });
     id = created.id;
     revision = created.revision;
@@ -645,9 +645,9 @@ export async function migrateEntry(entry, inventory, options, client, catalog, e
       client,
       ARCHIVE_PATH, id, {
         expectedRevision: revision,
-        reason: 'ADR-0081 private source/review archive; not a runtime semantic slot',
+        reason: 'ADR-0085 private source/review archive; not a runtime semantic slot',
         evidence: {
-          schema: 'adr-0081-private-archive-v1',
+          schema: 'adr-0085-private-archive-v1',
           repositoryCommit: inventory.repositoryCommit,
           sourcePath: entry.sourcePath,
           sha256: entry.sha256,
@@ -703,7 +703,7 @@ async function run() {
   // catalog can resolve every semantic route without a partial-state failure.
   results = await verifyStableMigrationResults(inventory.entries, results, options, client);
   console.log(JSON.stringify({
-    schema: 'adr-0081-media-migration-result-v1',
+    schema: 'adr-0085-media-migration-result-v1',
     repositoryCommit: inventory.repositoryCommit,
     migratedAt: new Date().toISOString(),
     totals: inventory.totals,

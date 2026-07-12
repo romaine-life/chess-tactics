@@ -1,7 +1,7 @@
 # Terrain media authoring
 
 Terrain pixels are live-storage-backed under
-[ADR-0081](../../docs/adr/0081-runtime-assets-are-live-storage-backed.md).
+[ADR-0085](../../docs/adr/0085-runtime-assets-are-live-storage-backed.md).
 This directory no longer contains a production bake that writes tile PNGs into
 `frontend/public` or source/review images into `docs/art`.
 
@@ -39,6 +39,6 @@ supplementary; it is not review evidence or promotion.
 ## Retired pipeline
 
 The previous `build-*`, `forge-*`, and Git-hash guard scripts were deleted at
-the ADR-0081 cutover. They depended on committed input pools, emitted directly
+the ADR-0085 cutover. They depended on committed input pools, emitted directly
 into `frontend/public/assets`, and treated manifests or filenames as production
 registration. Do not restore them as seed, fallback, or regeneration paths.

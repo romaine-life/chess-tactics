@@ -1,7 +1,7 @@
 # UI-kit live-media authoring
 
 UI-kit images use the shared live-media lifecycle in
-[ADR-0081](adr/0081-runtime-assets-are-live-storage-backed.md). The former
+[ADR-0085](adr/0085-runtime-assets-are-live-storage-backed.md). The former
 batch forges and nine-slice bake scripts are retired: they read committed
 reference images, wrote PNGs into `frontend/public`, and generated a Git-owned
 catalog. They must not be restored.

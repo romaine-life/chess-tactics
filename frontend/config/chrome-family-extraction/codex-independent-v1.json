@@ -1,0 +1,72 @@
+{
+  "id": "codex-independent-v1",
+  "sourceDir": "docs/art/chrome-junction-candidates/codex-independent-v1/sources",
+  "outDir": "docs/art/chrome-junction-candidates/codex-independent-v1",
+  "atomsDir": "frontend/public/assets/ui/kit/atoms",
+  "keyOut": "magenta",
+  "contactSheet": "source-parts-sheet-alpha.png",
+  "families": [
+    {
+      "id": "outer",
+      "prefix": "codex-parts-outer",
+      "pieces": {
+        "corner": {
+          "source": "outer-corner-raw.png",
+          "trim": true,
+          "fitMax": 180
+        },
+        "edge": {
+          "source": "outer-edge-raw.png",
+          "trim": true,
+          "fitHeight": 56
+        },
+        "cross-natural": {
+          "source": "outer-cross-raw.png",
+          "trim": true,
+          "fitRailHeight": 56
+        },
+        "fill": {
+          "transparent": {
+            "w": 8,
+            "h": 8
+          },
+          "contact": false
+        }
+      }
+    },
+    {
+      "id": "inner",
+      "prefix": "codex-parts-inner",
+      "pieces": {
+        "corner": {
+          "source": "inner-corner-raw.png",
+          "trim": true,
+          "fitMax": 92
+        },
+        "edge": {
+          "source": "inner-edge-raw.png",
+          "trim": true,
+          "fitHeight": 28
+        },
+        "cross-natural": {
+          "source": "inner-cross-raw.png",
+          "trim": true,
+          "fitRailHeight": 28
+        },
+        "tee-natural": {
+          "derive": {
+            "type": "teeFromCross",
+            "piece": "cross-natural"
+          }
+        },
+        "fill": {
+          "transparent": {
+            "w": 8,
+            "h": 8
+          },
+          "contact": false
+        }
+      }
+    }
+  ]
+}

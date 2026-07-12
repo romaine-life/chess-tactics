@@ -42,7 +42,7 @@ this contract corrects.
 
 ### Exposed faces and abrupt cuts
 
-Per [ADR-0083](adr/0083-exposed-terrain-faces-own-independent-edge-treatments.md),
+Per [ADR-0087](adr/0087-exposed-terrain-faces-own-independent-edge-treatments.md),
 side topology is face-level. The fixed camera sees logical south and east: south
 is exposed when `(x, y + 1)` is void, and east when `(x + 1, y)` is void. The
 canonical 96x180 side frame stores south in columns `0..47` and east in columns

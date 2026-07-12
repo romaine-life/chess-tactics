@@ -1,5 +1,5 @@
 ---
-status: "accepted; asset-storage clauses superseded by ADR-0081"
+status: "accepted; asset-storage clauses superseded by ADR-0085"
 date: 2026-07-04
 deciders: Nelson, Claude
 ---
@@ -77,21 +77,23 @@ self-contained bake path (`bakeJunction`) and never touch the frame normalizer.
 ### B. The divider seats a three-way **tee atom** at each end
 
 `buildBarFromTee(edge, tee, W)` — the `panel-divider` (`kind: "bar"`) — is a full-width branch
-rail (the `edge` atom) carrying a three-way **tee atom** at each end (the tee + its `flipH`), the
-rail centred on the tee's own branch row, so the divider tees into the panel's side rail exactly
-as a frame corner reads, just branched. The bar's height = the tee atom's **own height (24px)**, so
-the consumer renders it **1:1 — no downscale, crisp**.
+rail (the top-middle `panel-line.png` slice, scaled to the host frame width) carrying a three-way
+**tee atom** at each end (the tee + its `flipH`). The tee uses the full authored atom coordinate
+frame, transparent padding included, so the divider tees into the panel's side rail exactly as a
+frame corner reads, just branched. The bar's height is the tuned `dividerH`, never less than the
+scaled tee height.
 
 > **Revision (2026-07-04): the tee is authored, not derived.** The tee was first *derived* from the
 > `corner` atom by mirroring (`composeTee` = `corner` + `flipV`, §A). In review the derivation never
 > read as a clean 3-way: mirroring the corner's 90° gold bracket reproduced the corner **flair** (the
 > outer-vertex nub) at a junction that has no outer vertex, and rescaling it to the rail weight broke
-> the pixels. So the divider's cap is now a **hand-authored atom** — `corner-t.png` (24px): the frame's
-> gold corner made **symmetric with the flair removed**, used **as drawn** (mirrored L/R), not composed.
+> the pixels. So the divider's cap is now a **hand-authored atom** — `corner-t.png` (24px source):
+> the frame's gold corner made **symmetric with the flair removed**, used in its full authored atom
+> coordinate frame (mirrored L/R), not composed.
 > `buildBarFromTee` uses it directly (registry `atoms.tee: "corner-t"`); `composeTee`/`composeCross`
-> remain only for the standalone derived `tee`/`cross` glyphs (§A). The band drops from the derived
-> ~45px to the atom's **24px**, and — drawn at its native size and rendered 1:1 — it is crisp, where
-> the old fractional downscale was not.
+> remain only for the standalone derived `tee`/`cross` glyphs (§A). The cap width is the full
+> authored atom width after the tuned `scale` is applied, so preview and production share one
+> coordinate system.
 
 ### C. Registry-declared, parity-tested (ADR-0016)
 
@@ -109,25 +111,39 @@ edit-link** (nothing to nudge); the divider is calibrated as a live in-panel pre
 ### D. Consumed as a 1-D border-image, placed by ONE rule
 
 The consumer is the `.kit-divider` class (`src/style.css`): a horizontal 1-D `border-image`
-(`url(panel-divider.png) 0 24 0 24 fill / 0 24px`), the 90°-rotate of the scrollbar's vertical
-1-D slice — the cap is `barCapWidth('panel-divider')` = the full-corner tee width. The single
-placement rule: the divider **bleeds out horizontally by exactly the host panel's frame width**
-(`margin-inline: calc(-1 * var(--frame-w))`), so the three-way corners land on the side rail on a
-thick or thin frame alike. A host opts in by declaring `--frame-w` (its border-width, or the
-padding a `::before` frame insets by) and dropping `<div class="kit-divider">` between sections.
-N dividers = N elements; DOM flow gives arbitrary count and vertical position for free.
+(`url(panel-divider.png) 0 cap 0 cap fill / 0 cap`), the 90°-rotate of the scrollbar's vertical
+1-D slice. The cap is `barCapWidth('panel-divider')` = the full authored T atom width after applying
+the tuned scale, matching the Divider Studio's authored-atom coordinate system. The transparent
+padding around `corner-t.png` is part of the seating coordinate, just like the corner atom's
+transparent padding is part of the corner/frame relationship. The shipped tuning comes from
+`config/nine-slice/panel-divider.json`: `frameWidth` is the host frame width the preview was tuned
+against, `reach` is the horizontal bleed from the host content box to the rail, `scale` sizes the
+authored tee, `jx` seats the authored atom horizontally over the branch rail, `jy` seats the tee
+vertically against the branch, and `dividerH` preserves the tuned strip height.
+
+The branch rail is not the raw `edge.png` atom. It is the top-middle slice of `panel-line.png`
+(`border-image-slice: 24`) scaled to `frameWidth`, then tiled. This is deliberately the same
+horizontal pipe treatment as the surrounding panel frame; the tee is the authored junction cap
+seated onto that pipe.
+
+Those values are exported to `src/generated/nine-slice.css` as `--kit-panel-divider-*` variables.
+The single placement rule: the divider **bleeds out horizontally by the tuned reach**
+(`margin-inline: calc(-1 * var(--kit-divider-reach))`), falling back to `--frame-w` for older
+consumers. A host opts in by declaring `--kit-divider-reach` (usually the generated
+`--kit-panel-divider-reach`) and dropping `<div class="kit-divider">` between sections. N dividers =
+N elements; DOM flow gives arbitrary count and vertical position for free.
 
 ### Consequences
 
 - **Good:** any kit-framed panel gains N separators with one child element each and one
-  `--frame-w` declaration; the junction can't drift (one authored `corner-t` atom, mirrored, parity
-  + geometry tests) and — drawn at its native 24px and rendered 1:1 — it is crisp.
+  `--kit-divider-reach` declaration; the junction can't drift (one authored `corner-t` atom, mirrored, parity
+  + geometry tests) and the authored atom coordinate frame is preserved from Studio to production.
 - **Good:** the payoff is a reusable rail-junction vocabulary (`corner`, the authored `corner-t`
   tee, the derived `tee`/`cross`) plus a general 1-D `bar` primitive; `cross` is banked for the
   first grid/table.
 - **Cost:** the registry now has two composed-from-atoms shapes (`bar`, `junction`) beside the
   4-corner frame, so the consumers (bake, editor, catalog) branch on `kind` — the editor and
-  catalog simply skip them. `--frame-w` is a small contract a host must honour to reach the rail.
+  catalog simply skip them. `--kit-divider-reach` is a small contract a host must honour to reach the rail.
 - **Cost:** the tee is **hand-authored art** (`corner-t.png`), not derived — the one place the kit
   drew a junction glyph by hand rather than falling out of the corner. The trade bought a clean,
   flair-free, crisp 3-way that the mirror-derivation couldn't produce (§B revision).

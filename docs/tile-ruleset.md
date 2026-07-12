@@ -33,7 +33,7 @@ Source of truth:
 
 ## Exposed Face Contract
 
-Per [ADR-0083](adr/0083-exposed-terrain-faces-own-independent-edge-treatments.md),
+Per [ADR-0087](adr/0087-exposed-terrain-faces-own-independent-edge-treatments.md),
 an abrupt edge is an occupancy boundary, not a special terrain family.
 
 - Only the camera-facing south and east vertical faces are drawn.

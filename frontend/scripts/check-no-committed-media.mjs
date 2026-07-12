@@ -38,7 +38,7 @@ export const SYNTHETIC_TEST_MEDIA_ROOTS = [
 ];
 export const SYNTHETIC_TEST_MEDIA_MAX_BYTES = 16 * 1024;
 
-// Stage 1 of the one-time ADR-0081 cutover must be deployable before the
+// Stage 1 of the one-time ADR-0085 cutover must be deployable before the
 // migration commit deletes these bytes. This fingerprint is not a general
 // media allowlist: the caller must opt into this exact snapshot, and any path,
 // size, or content-hash change leaves every legacy-media violation active.
@@ -85,6 +85,7 @@ const OLD_PUBLIC_ASSET_FILESYSTEM = /(?:frontend\/)?public\/assets(?:\/|\b)/i;
 const OLD_DEDICATED_SOURCE_FILESYSTEM = /frontend\/scripts\/groundcover\/src(?:\/|\b)/i;
 const BACKEND_SOURCE_PATH_IDENTIFIER = /(?:["']sourcePath["']|\bsourcePath)\s*:/;
 const GUARD_OR_CUTOVER_INSPECTORS = new Set([
+  'frontend/scripts/check-empty-panel-frame-overlay.mjs',
   'frontend/scripts/check-no-committed-media.mjs',
   'frontend/scripts/check-no-committed-media.test.mjs',
   'frontend/scripts/live-media-admin-client.mjs',

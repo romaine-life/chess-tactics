@@ -1,7 +1,7 @@
 # Tile concept provenance
 
 This directory retains text provenance only. Tile source, candidate, proof, and
-runtime media moved to private live storage under ADR-0081. The former Blender
+runtime media moved to private live storage under ADR-0085. The former Blender
 recipes and repository-output batch scripts were deleted; they are not a
 supported rebuild path.
 

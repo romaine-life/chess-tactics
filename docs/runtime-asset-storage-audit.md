@@ -75,7 +75,7 @@ catalogs:
 - The existing app Postgres/Blob pair is the one authoritative content data
   plane. Cutover and owner verification use unserved candidate pods against it;
   transient CI databases contain synthetic fixtures and are not promotion or
-  release authorities ([ADR-0082](adr/0082-runtime-asset-cutover-uses-one-live-data-plane.md)).
+  release authorities ([ADR-0086](adr/0086-runtime-asset-cutover-uses-one-live-data-plane.md)).
 - Generation and editing tools upload candidates. They do not write production
   media into the repository.
 
@@ -93,5 +93,5 @@ The migration is incomplete until all of the following are true:
 - source and rejected-candidate binaries leave Git for private object storage;
 - the one-time importer is removed after its verified cutover.
 
-ADR-0081 records this as the repository-wide decision. Domain visual and geometry
+ADR-0085 records this as the repository-wide decision. Domain visual and geometry
 rules remain valid; only their Git/filesystem storage clauses are superseded.

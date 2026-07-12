@@ -1,0 +1,68 @@
+{
+  "id": "codex-outer-long-native-v2",
+  "provider": "codex-imagegen-long-lane-sheet",
+  "role": "outer",
+  "fit": "long",
+  "nativeThickness": 15,
+  "sourceSheet": "../docs/art/chrome-native-rails/v1/attempts/codex-outer-long-rail-family-v2-source.png",
+  "extraction": "fixed-long-lanes-1:1-no-resize-no-clipping",
+  "accepted": [
+    {
+      "file": "long-top.png",
+      "sourceBounds": {
+        "x": 48,
+        "y": 63,
+        "w": 1440,
+        "h": 15
+      },
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/codex-outer-long-native-v2/long-top.png",
+      "orientation": "horizontal",
+      "width": 1440,
+      "height": 15,
+      "seam": null
+    },
+    {
+      "file": "long-bottom.png",
+      "sourceBounds": {
+        "x": 48,
+        "y": 130,
+        "w": 1440,
+        "h": 15
+      },
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/codex-outer-long-native-v2/long-bottom.png",
+      "orientation": "horizontal",
+      "width": 1440,
+      "height": 15,
+      "seam": null
+    },
+    {
+      "file": "long-left.png",
+      "sourceBounds": {
+        "x": 95,
+        "y": 196,
+        "w": 15,
+        "h": 792
+      },
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/codex-outer-long-native-v2/long-left.png",
+      "orientation": "vertical",
+      "width": 15,
+      "height": 792,
+      "seam": null
+    },
+    {
+      "file": "long-right.png",
+      "sourceBounds": {
+        "x": 177,
+        "y": 196,
+        "w": 15,
+        "h": 792
+      },
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/codex-outer-long-native-v2/long-right.png",
+      "orientation": "vertical",
+      "width": 15,
+      "height": 792,
+      "seam": null
+    }
+  ],
+  "rejected": []
+}

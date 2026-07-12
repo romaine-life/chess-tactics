@@ -33,7 +33,7 @@ import {
 // are the iso board tiles under /assets/tiles/surface/. Board/grid in `.al-lab-main`, every
 // control in the one `.tileset-view-controls` panel, reached from the Tileset Surfaces catalog.
 // Runtime pixels stay backend-owned: this surface previews authenticated
-// candidates and records review/acceptance through ADR-0081 transactions.
+// candidates and records review/acceptance through ADR-0085 transactions.
 
 export const SURFACE_TILE_FAMILIES = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'] as const;
 type Family = (typeof SURFACE_TILE_FAMILIES)[number];

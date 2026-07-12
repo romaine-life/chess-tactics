@@ -15,4 +15,4 @@ Current contract:
 - no source, candidate, gate result, accepted pointer, or runtime media file is
   written to Git.
 
-See `docs/kit-forge.md`, `docs/runtime-asset-contract.md`, and ADR-0081.
+See `docs/kit-forge.md`, `docs/runtime-asset-contract.md`, and ADR-0085.

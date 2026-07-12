@@ -1,6 +1,6 @@
 # Kit Art Brief — Button (pilot component)
 
-> **Live-storage workflow (ADR-0081).** Paths below identify archived source
+> **Live-storage workflow (ADR-0085).** Paths below identify archived source
 > records and semantic slots; they are not repository files. Fetch each reference
 > by its original `sourcePath` with `frontend/scripts/live-media-admin-client.mjs
 > fetch-source`, work only in an OS-temporary directory, and upload each result as

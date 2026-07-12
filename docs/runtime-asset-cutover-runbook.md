@@ -1,6 +1,6 @@
 # Runtime Asset Cutover Runbook
 
-This is the operational companion to [ADR-0081](adr/0081-runtime-assets-are-live-storage-backed.md)
+This is the operational companion to [ADR-0085](adr/0085-runtime-assets-are-live-storage-backed.md)
 and the [runtime asset contract](runtime-asset-contract.md). It covers the one-time
 move from repository media to Postgres pointers plus private content-addressed Blob
 storage. It is not a second storage contract and it does not authorize a permanent
@@ -26,7 +26,7 @@ pods must fail closed if a seed variable or directory is present. Local
 development uses the live app database and container by default; an explicitly
 isolated synthetic test process must not silently retain production credentials.
 
-Per [ADR-0082](adr/0082-runtime-asset-cutover-uses-one-live-data-plane.md), the
+Per [ADR-0086](adr/0086-runtime-asset-cutover-uses-one-live-data-plane.md), the
 cutover does not create or seed a second owner-facing asset database. CI may
 still create a transient synthetic Postgres as a test-process implementation
 detail; it is not a content environment or release gate.
@@ -63,7 +63,7 @@ or mark legacy pixels native merely to avoid the sequence.
 1. Start from a clean, current `origin/main` checkout that still contains the
    pre-cutover media.
 2. Run the temporary migration tool's inventory mode and keep its JSON outside
-   the repository. Its schema is `adr-0081-media-migration-inventory-v1`.
+   the repository. Its schema is `adr-0085-media-migration-inventory-v1`.
 3. Record the source commit, count, byte total, per-file SHA-256, and the inventory
    file's own SHA-256 in the operator log.
 4. Stop media-authoring changes until the final cutover, or regenerate the entire

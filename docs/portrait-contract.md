@@ -53,5 +53,5 @@ committed-art fallback for a required portrait role.
 6. Delete the temporary source and render workspace.
 
 The retired portrait scripts that wrote masters, palette variants, or catalog
-references under `frontend/public` and `docs/art` were deleted at the ADR-0081
+references under `frontend/public` and `docs/art` were deleted at the ADR-0085
 cutover. They are not a regeneration or fallback path.

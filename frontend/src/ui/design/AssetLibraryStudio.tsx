@@ -173,16 +173,25 @@ function runtimeSlice(item: StudioAssetRecord): { top: number; right: number; bo
   return { top: Number(slice.top), right: Number(slice.right), bottom: Number(slice.bottom), left: Number(slice.left) };
 }
 
+function dividerAssetIdForItem(item: StudioAssetRecord): string | undefined {
+  const slots = new Set(item.slots.map((slot) => slot.slot));
+  return Object.entries(REG_ASSETS).find(([, asset]) => (
+    asset.kind === 'bar'
+    && asset.variants.some((variant) => slots.has(`ui/kit/${variant.out}`))
+  ))?.[0];
+}
+
 export function AssetLab({ library, name, header, onEditFrame, onOpenDivider }: {
   library: StudioAssetLibrary;
   name: string;
   header?: ReactNode;
   onEditFrame?: (editorAssetId: string) => void;
-  onOpenDivider?: () => void;
+  onOpenDivider?: (dividerAssetId: string) => void;
 }): ReactElement {
   const item = name ? findAsset(library, name) : null;
   const geometry = item?.structureId ? structureArtAsset(item.structureId) : undefined;
   const editableFrameId = item ? EDITOR_ASSET[item.primary.slot] : undefined;
+  const dividerAssetId = item ? dividerAssetIdForItem(item) : undefined;
   const slice = item ? runtimeSlice(item) : null;
   const fallbackSlice = item ? Math.max(2, Math.floor(Math.min(item.width ?? 1, item.height ?? 1) / 3)) : 2;
   const sliceCss = slice ? `${slice.top} ${slice.right} ${slice.bottom} ${slice.left} fill` : `${fallbackSlice} fill`;
@@ -224,10 +233,12 @@ export function AssetLab({ library, name, header, onEditFrame, onOpenDivider }: 
                 onClick={() => onEditFrame(editableFrameId)}
                 style={{ display: 'block', width: '100%', padding: '9px 12px', textAlign: 'center', background: '#1d5f9e', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}
               >✎ Edit in 9-slice editor</button>
-            ) : item?.name === 'panel-divider' && onOpenDivider ? (
+            ) : dividerAssetId && onOpenDivider ? (
+              // A divider is a junction, not a box — it only reads assembled. Its interactive,
+              // inspectable home is the divider Viewer (DividerLab), not this read-only card (ADR-0063).
               <button
                 type="button"
-                onClick={onOpenDivider}
+                onClick={() => onOpenDivider(dividerAssetId)}
                 style={{ display: 'block', width: '100%', padding: '9px 12px', textAlign: 'center', background: '#6b4f1d', color: '#fff2c4', border: '1px solid #d5a34a', borderRadius: 4, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}
               >◫ Open divider viewer</button>
             ) : item?.kind === 'frame' ? (

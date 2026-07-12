@@ -923,21 +923,20 @@ h1 {
    frame corner reads, just branched. (Distinct from the decorative settings `section-divider-frame`
    — an inline rule.)
 
-   The ONE thing a host must supply is --frame-w: the panel's frame width in px (its border-width,
-   or the padding a ::before frame insets its content by). The divider bleeds out by exactly that,
-   so the three-way tees land on the side rail no matter how thick the frame is. Slice/width/height
-   track the baked asset: cap = barCapWidth('panel-divider') = round(tee 24px × junction-size), and
-   the bar's height = the (scaled) tee's own height, so the consumer renders it 1:1 (no downscale).
-   The tuned junction size + nudge live in config/nine-slice/panel-divider.json (scale 1.2, jy 1)
-   -> cap 29px, height 30px. Regenerate in an OS temporary workspace and upload
-   the result as a reviewed live-media candidate after changing this geometry. */
+   A host supplies --kit-divider-reach: how far the divider bleeds out from that host's content box
+   toward the side rail. If omitted it falls back to --rail-w for older consumers. Slice/width/height
+   derive from code-owned nine-slice geometry so the app consumes the same cap/reach/height the
+   divider Studio tuned. The raster at the semantic slot remains backend-owned live media; geometry
+   changes never restore a committed public-file fallback. */
 .kit-divider {
-  height: 30px;
+  height: var(--kit-panel-divider-height, 34px);
   border: 0 solid transparent;
-  border-width: 0 29px;
-  border-image: url("/assets/ui/kit/panel-divider.png") 0 29 0 29 fill / 0 29px;
+  border-width: 0 var(--kit-panel-divider-cap, 13px);
+  border-image-source: url("/assets/ui/kit/panel-divider.png");
+  border-image-slice: 0 var(--kit-panel-divider-cap-slice, 13) 0 var(--kit-panel-divider-cap-slice, 13) fill;
+  border-image-width: 0 var(--kit-panel-divider-cap, 13px);
   image-rendering: pixelated;
-  margin: var(--kit-divider-gap, 6px) calc(-1 * var(--frame-w, 16px));
+  margin: var(--kit-divider-gap, 6px) calc(-1 * var(--kit-divider-reach, var(--rail-w, 16px)));
   align-self: stretch;
   flex: none;
 }
@@ -1214,8 +1213,8 @@ h1 {
 .confirm-panel {
   box-sizing: border-box;
   width: min(92vw, 430px);
-  border: 14px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
+  border: var(--skirmish-chrome-outer-rail-w) solid transparent;
+  border-image: var(--skirmish-chrome-outer-panel-image) 24 fill / var(--skirmish-chrome-outer-rail-w) round;
   padding: 6px 10px 10px;
   color: #f3ead8;
   animation: confirm-panel-in 160ms ease both;
@@ -1962,7 +1961,7 @@ h1 {
   border: 2px solid rgba(63, 95, 111, .82);
   color: #e8d4a6;
   font-size: .52rem;
-  min-height: 38px;
+  min-height: var(--le-inner-control-h);
   padding: 10px 12px;
 }
 
@@ -3299,7 +3298,7 @@ h1 {
 .level-tabs button {
   display: grid;
   height: 38px;
-  min-height: 38px;
+  min-height: var(--le-inner-control-h);
   min-width: 38px;
   padding: 0;
   place-items: center;
@@ -3413,7 +3412,7 @@ h1 {
   display: grid;
   gap: 8px;
   grid-template-columns: 16px minmax(0, 1fr) auto;
-  min-height: 38px;
+  min-height: var(--le-inner-control-h);
   padding: 6px 8px;
   text-align: left;
 }
@@ -3651,6 +3650,28 @@ h1 {
   --skirmish-muted: #a7c1ce;
   --skirmish-panel: rgba(7, 19, 29, .86);
   --skirmish-panel-strong: rgba(10, 29, 42, .94);
+  /* Control-panel chrome roles. Outer is the rail/shell; inner is every kit-looking
+     control, well, tab, and sub-panel inside it. Tune these roles, not individual boxes. */
+  --skirmish-chrome-outer-rail-w: 12px;
+  --skirmish-chrome-inner-rail-w: 7px;
+  --skirmish-chrome-outer-panel-image: url("/assets/ui/kit/panel.png");
+  --skirmish-chrome-outer-line-image: url("/assets/ui/explore/frames/panel-line.png");
+  --skirmish-chrome-inner-control-image: url("/assets/ui/kit/mode-button.png");
+  --skirmish-chrome-inner-control-active-image: url("/assets/ui/kit/mode-button-active.png");
+  --skirmish-chrome-inner-control-danger-image: url("/assets/ui/kit/button-danger.png");
+  --skirmish-chrome-inner-line-image: url("/assets/ui/explore/frames/panel-line.png");
+  --skirmish-chrome-inner-line-warm-image: url("/assets/ui/explore/frames/panel-line-warm.png");
+  --skirmish-chrome-inner-line-success-image: url("/assets/ui/explore/frames/panel-line-success.png");
+  --skirmish-chrome-inner-line-warning-image: url("/assets/ui/explore/frames/panel-line-warning.png");
+  --skirmish-chrome-inner-line-error-image: url("/assets/ui/explore/frames/panel-line-error.png");
+  --le-chrome-outer-rail-w: var(--skirmish-chrome-outer-rail-w);
+  --le-chrome-inner-rail-w: var(--skirmish-chrome-inner-rail-w);
+  --le-outer-atom-outset: 0px;
+  --le-outer-content-padding: 8px;
+  --le-outer-fill-box-left: 0px;
+  --le-outer-fill-box-right: 0px;
+  --le-outer-fill-box-top: 0px;
+  --le-outer-fill-box-bottom: 0px;
   /* COMPACT density — this is an in-game surface (ADR-0006 lean + ADR-0031). The
      spatial-role tokens resolve to the tight end of the scale here. */
   --ds-inset: var(--ds-space-2);
@@ -4595,8 +4616,8 @@ h1 {
      14px corner as the title bar, so they read consistently) holding the tabs, the
      active content, and the actions. Inner sections are frameless content, not nested
      boxes. This is the precedent for the level editor's right side too (ADR-0033). */
-  border: 14px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
+  border: var(--skirmish-chrome-outer-rail-w) solid transparent;
+  border-image: var(--skirmish-chrome-outer-panel-image) 24 fill / var(--skirmish-chrome-outer-rail-w) round;
   box-sizing: border-box;
   /* Sections are separated by the GUTTER, not the within-section stack (ADR-0056). */
   gap: var(--ds-gutter);
@@ -4638,8 +4659,8 @@ h1 {
      the kit 9-slice, never hand-rolled CSS borders/gradients (ADR-0002/0011/0014).
      Slimmed to 7px now the cell only carries a glyph, not a word; stretch (not round)
      so the scaled frame's uniform pipes render continuous instead of re-tiling. */
-  border: 7px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 7px stretch;
+  border: var(--skirmish-chrome-inner-rail-w) solid transparent;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--skirmish-chrome-inner-rail-w) stretch;
   border-radius: 0;
   color: var(--skirmish-muted);
   cursor: pointer;
@@ -4664,7 +4685,7 @@ h1 {
 }
 
 .skirmish-hud-tab.active {
-  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+  border-image-source: var(--skirmish-chrome-inner-control-active-image);
   color: #f3fbff;
 }
 
@@ -4695,6 +4716,31 @@ h1 {
   overflow-y: auto;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
+}
+
+.skirmish-hud .settings-chrome-button,
+.skirmish-hud .settings-toggle,
+.skirmish-hud .settings-stepper .settings-chrome-button {
+  border-width: var(--skirmish-chrome-inner-rail-w);
+  border-image-source: var(--skirmish-chrome-inner-control-image);
+  border-image-width: var(--skirmish-chrome-inner-rail-w);
+}
+
+.skirmish-hud .app-header-button {
+  border-width: var(--skirmish-chrome-inner-rail-w);
+  border-image-source: var(--skirmish-chrome-inner-control-image);
+  border-image-width: var(--skirmish-chrome-inner-rail-w);
+  border-image-slice: 24 fill;
+  border-image-repeat: stretch;
+}
+
+.skirmish-hud .app-header-button-active,
+.skirmish-hud .settings-chrome-button-primary {
+  border-image-source: var(--skirmish-chrome-inner-control-active-image);
+}
+
+.skirmish-hud .settings-chrome-button-danger {
+  border-image-source: var(--skirmish-chrome-inner-control-danger-image);
 }
 
 /* View tab: layout only — the buttons themselves wear the kit mode-button frame
@@ -4739,7 +4785,7 @@ h1 {
    one so it reads as distinct from the other match controls (same treatment as the
    editor's Delete/Clear buttons). */
 .skirmish-view-row .app-header-button.skirmish-resign-button {
-  border-image-source: url("/assets/ui/kit/button-danger.png");
+  border-image-source: var(--skirmish-chrome-inner-control-danger-image);
 }
 
 /* Test Board CPU-delay floor (HUD Controls tab, test only): the shared editable Stepper,
@@ -4791,8 +4837,8 @@ h1 {
   gap: var(--ds-stack);
   margin-top: var(--ds-gutter);
   max-inline-size: 360px;
-  border: 2px solid transparent;
-  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round;
+  border: var(--skirmish-chrome-inner-rail-w) solid transparent;
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--skirmish-chrome-inner-rail-w) round;
   background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
   background-origin: padding-box;
   background-clip: padding-box;
@@ -4959,14 +5005,35 @@ h1 {
    LEVEL EDITOR — Skirmish-sibling rail helpers.
    The /edit shell reuses the real .skirmish-screen / .skirmish-war-room /
    .skirmish-field / .skirmish-board-frame / .skirmish-hud / .skirmish-card
-   chrome (so it IS the same game). These .le-* classes only add the
-   editor-specific controls; nothing here restyles the Skirmish page itself.
+   chrome (so it IS the same game). Most .le-* classes add editor-specific
+   controls; the named .le-outer-panel contract below is intentionally shared
+   by the live Level Editor, Rules/events overlay, and Skirmish HUD.
    ============================================================ */
 /* Full-bleed title row across the top (ADR-0004), board + rail below it. The editor is
    NOT the battle HUD, so it takes the standard full-width title bar rather than Skirmish's
    board-column placement. Columns, CSS vars, and the night-sky ::before still come from
    .skirmish-screen; we only re-grid into a title row + a board|rail row. */
 .level-editor-screen {
+  /* ADR-0069: house chrome in the editor control surface is role-based. These
+     are eye-tuned art constants, not a proportion; components choose outer or
+     inner and inherit the rail weight from the role. */
+  --le-chrome-outer-rail-w: 12px;
+  --le-chrome-inner-rail-w: 7px;
+  --le-outer-atom-outset: 0px;
+  --le-inner-atom-outset: 0px;
+  --le-inner-atom-left-overhang: 0px;
+  --le-inner-atom-right-overhang: 0px;
+  --le-inner-atom-left-footprint: 0px;
+  --le-inner-atom-right-footprint: 0px;
+  --le-inner-control-h: 38px;
+  --le-inner-field-h: var(--le-inner-control-h);
+  --le-inner-square: var(--le-inner-control-h);
+  --le-inner-control-compact-h: 30px;
+  --le-inner-tab-compact-h: 28px;
+  --le-inner-row-h: 42px;
+  --le-inner-zone-button-w: var(--le-inner-square);
+  --skirmish-chrome-outer-rail-w: var(--le-chrome-outer-rail-w);
+  --skirmish-chrome-inner-rail-w: var(--le-chrome-inner-rail-w);
   grid-template-areas:
     "titlebar titlebar"
     "board    rail";
@@ -4976,13 +5043,196 @@ h1 {
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
 }
 .level-editor-screen .skirmish-field { grid-area: board; }
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel {
+  --le-control-rail-w: var(--le-chrome-outer-rail-w);
+  --rail-w: var(--le-control-rail-w);
+  --kit-divider-reach: var(--le-outer-content-padding, 0px);
+  --le-control-content-inset: var(--le-outer-content-padding, 0px);
+  --le-visible-content-left-inset: var(--le-inner-atom-left-footprint, var(--le-inner-atom-left-overhang, 0px));
+  --le-visible-content-right-inset: var(--le-inner-atom-right-footprint, var(--le-inner-atom-right-overhang, 0px));
+  border: 0;
+  border-image: none;
+  box-sizing: border-box;
+  overflow: visible;
+  padding: 0;
+  position: relative;
+}
+
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel::before {
+  border: var(--le-control-rail-w) solid transparent;
+  border-image: var(--skirmish-chrome-outer-line-image) 24 / var(--le-control-rail-w) round;
+  box-sizing: border-box;
+  content: "";
+  image-rendering: pixelated;
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 3;
+}
+
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-fill {
+  image-rendering: pixelated;
+  inset:
+    var(--le-outer-fill-box-top, 0px)
+    var(--le-outer-fill-box-right, 0px)
+    var(--le-outer-fill-box-bottom, 0px)
+    var(--le-outer-fill-box-left, 0px);
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-content {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--ds-gutter);
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  /* Chrome children, especially divider atoms, may need to sit over the frame.
+     Scrolling/clipping belongs to the actual content scroller below, not this
+     shared chrome composition layer. */
+  overflow: visible;
+  padding: var(--le-control-content-inset);
+  position: relative;
+}
+
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-content > :not(.le-control-divider-host) {
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-content--titled {
+  padding-block-start: 0;
+}
+
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-content--titled > .le-layer-card {
+  margin-inline: calc(-1 * var(--le-control-content-inset));
+}
+
 /* No scrollbar-gutter here: this HUD is overflow:hidden (never scrolls), so a stable
    gutter only reserved ~10px of dead space on the RIGHT — making the inner padding
    lopsided (14px frame on the left, 14px + 10px gutter on the right). */
-.level-editor-screen .skirmish-hud { grid-area: rail; }
+.level-editor-screen .skirmish-hud {
+  grid-area: rail;
+}
+
+/* The titled shell is the one full-bleed contents exception: its title belongs
+   to the fill box, while every real control beneath it returns to the shared
+   contents boundary. */
+.level-editor-screen .le-layer-card > :not(.kit-panel-title) {
+  margin-inline:
+    calc(var(--le-control-content-inset) + var(--le-visible-content-left-inset))
+    calc(var(--le-control-content-inset) + var(--le-visible-content-right-inset));
+}
+
+.level-editor-screen .le-layer-card > .house-select.le-select-wrap {
+  width: auto;
+}
+
+/* Inner controls can visually overhang their CSS box because the atom is part of
+   the rendered control, not layout. Promote that footprint to the section edge so
+   headings, labels, and controls all share the same visible left/right boundary. */
+:is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-content > .skirmish-card:not(.le-layer-card),
+:is(.level-editor-screen, .skirmish-screen) .le-hud-scroll > .kit-scroll-content > .skirmish-card {
+  box-sizing: border-box;
+  padding-inline: var(--le-visible-content-left-inset) var(--le-visible-content-right-inset);
+}
+
+/* Repeatable divider host: each instance represents one section break in the
+   rail's content box. .kit-divider then uses --kit-divider-reach to bleed back
+   out to the frame rails, keeping the authored T caps and horizontal bar aligned. */
+.level-editor-screen .le-control-divider-host {
+  --kit-divider-gap: 0px;
+  flex: none;
+  margin-block: calc(var(--ds-gutter) * -0.5);
+  margin-inline: 0;
+  min-width: 0;
+  pointer-events: none;
+  position: relative;
+  z-index: 4;
+}
+
+/* Inner chrome role: buttons, toggles, selects, text wells, and small line boxes
+   inherit the same rail weight instead of each component tuning its own pixels. */
+.level-editor-screen .settings-chrome-button,
+.level-editor-screen .settings-toggle,
+.level-editor-screen .settings-stepper .settings-chrome-button {
+  border-width: var(--le-chrome-inner-rail-w);
+  border-image-source: var(--skirmish-chrome-inner-control-image);
+  border-image-width: var(--le-chrome-inner-rail-w);
+}
+
+.level-editor-screen .settings-stepper .settings-chrome-button {
+  block-size: var(--le-inner-square);
+  inline-size: var(--le-inner-square);
+  min-block-size: var(--le-inner-square);
+  min-inline-size: var(--le-inner-square);
+  padding: 0;
+}
+
+.level-editor-screen .settings-chrome-button-primary {
+  border-image-source: var(--skirmish-chrome-inner-control-active-image);
+}
+
+.level-editor-screen .settings-chrome-button-danger {
+  border-image-source: var(--skirmish-chrome-inner-control-danger-image);
+}
 
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
 .level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: var(--ds-gutter); }
+
+/* First non-app-bar use of the title-bar visual language: a compact panel title
+   strip. It borrows the title font + forged nailhead rule, but its height is a
+   SUB-header proportion of the app bar (not a second full title bar). The text
+   keeps normal tracking; the chrome carries the connection to the global bar. */
+.level-editor-screen .skirmish-card h2.kit-panel-title {
+  --kit-panel-title-rule-h: 10px;
+  --kit-panel-title-base-frame-w: 12px;
+  --kit-panel-title-base-h: clamp(44px, calc(var(--app-header-h) * .58), 50px);
+  --kit-panel-title-visible-h: calc(var(--kit-panel-title-base-h) - var(--kit-panel-title-base-frame-w));
+  align-items: flex-start;
+  background:
+    url("/assets/ui/titlebar/band-forged.png") left bottom / auto var(--kit-panel-title-rule-h) repeat-x,
+    url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
+  /* The outer frame is painted above this title. Keep the visible title field
+     measured from the bottom of that frame, so thicker outer chrome does not
+     eat the title's usable vertical space. */
+  block-size: calc(var(--le-control-rail-w, var(--kit-panel-title-base-frame-w)) + var(--kit-panel-title-visible-h));
+  box-sizing: border-box;
+  color: #f0eadb;
+  display: flex;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--le-panel-title-font-size, 1rem);
+  font-weight: 400;
+  image-rendering: pixelated;
+  letter-spacing: 0;
+  line-height: 1;
+  margin:
+    var(--le-outer-fill-box-top, 0px)
+    var(--le-outer-fill-box-right, 0px)
+    var(--ds-stack)
+    var(--le-outer-fill-box-left, 0px);
+  padding:
+    0
+    calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset) - var(--le-outer-fill-box-right, 0px))
+    var(--kit-panel-title-rule-h)
+    calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset) - var(--le-outer-fill-box-left, 0px));
+  text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
+}
+
+.level-editor-screen .skirmish-card h2.kit-panel-title .kit-panel-title-text {
+  display: inline-block;
+  margin-block-start: calc(var(--le-control-rail-w, var(--kit-panel-title-base-frame-w)) + (var(--kit-panel-title-visible-h) - var(--kit-panel-title-rule-h) - 1em) / 2);
+  transform: translate(
+    var(--le-panel-title-effective-text-x, var(--le-panel-title-text-x, 0px)),
+    var(--le-panel-title-effective-text-y, var(--le-panel-title-text-y, 0px))
+  );
+}
 
 /* Title bar = the standard app bar (ADR-0004/0023/0037): the oak frame, height, grid
    columns, gap, and padding all come from .app-titlebar + .settings-header-frame carried
@@ -5000,8 +5250,8 @@ h1 {
    The icon+label grid layout stays the editor's own; only the frame comes from the kit. */
 .le-seg-btn {
   appearance: none;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
   box-sizing: border-box;
   color: #eff9ff;
   cursor: pointer;
@@ -5011,7 +5261,7 @@ h1 {
   gap: 5px;
   grid-auto-flow: column;
   line-height: 1;
-  min-height: 38px;
+  min-height: var(--le-inner-control-h);
   padding: 0 2px;
   place-items: center;
   text-shadow: 0 2px 0 #010407;
@@ -5023,8 +5273,8 @@ h1 {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
 }
-.le-seg-btn.active { border-image-source: url("/assets/ui/kit/button-primary.png"); }
-.le-seg-btn.danger { border-image-source: url("/assets/ui/kit/button-danger.png"); }
+.le-seg-btn.active { border-image-source: var(--skirmish-chrome-inner-control-active-image); }
+.le-seg-btn.danger { border-image-source: var(--skirmish-chrome-inner-control-danger-image); }
 /* Save when blocked by a playability violation: clickable (it explains why) but dimmed like a
    disabled control, matching the retired title-bar Save's is-disabled look. */
 .le-seg-btn.is-blocked { opacity: .45; }
@@ -5032,7 +5282,7 @@ h1 {
 /* Test in the always-visible Actions dock: a full-width primary button so it reads as
    the editor's "test this board now" verb, distinct from the Undo/Redo icons above it. */
 .le-actions-dock .le-play-board {
-  border-image-source: url("/assets/ui/kit/button-primary.png");
+  border-image-source: var(--skirmish-chrome-inner-control-active-image);
   margin-top: var(--ds-inline, 8px);
   width: 100%;
 }
@@ -5048,12 +5298,20 @@ h1 {
   z-index: 40;
 }
 /* Pinned Actions dock in the rail: universal tools + Undo/Redo as compact icon-only
-   squares. Labels ride aria-label + title; active/press states come from the editor
-   icon set. Current-board Test lives below; Save/Publish stays in the Status layer. */
-.le-board-actions { display: grid; gap: var(--ds-inline-tight); grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--ds-stack); }
+   squares. Labels ride aria-label + title; the button chrome comes from the inner
+   role, while the icons are glyph-only. Current-board Test lives below; Save/Publish
+   stays in the Status layer. */
+.le-board-actions {
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: var(--ds-stack);
+}
 .le-board-actions.le-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .le-action-toolbar {
   align-items: center;
+  box-sizing: border-box;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -5062,16 +5320,12 @@ h1 {
 .le-action-toolbar-divider {
   align-self: stretch;
   background: rgba(146, 201, 235, .28);
-  min-height: 38px;
+  min-height: var(--le-inner-control-h);
   width: 1px;
 }
-/* Undo/Redo glyph PNGs already carry their OWN kit frame, so we drop the outer .le-seg-btn
-   button frame (same treatment as the .le-seg-icons tool row) — otherwise the two frames nest
-   into a double border. The icon fills the square so its single frame IS the button edge. */
-.le-icon-btn { border: 0; border-image: none; min-height: 0; padding: 0; width: 38px; height: 38px; }
-.le-icon-btn .le-ico { width: 100%; height: 100%; }
-.le-icon-btn:not(:disabled):active .ic-undo { background-image: url("/assets/ui/level-editor/icons/undo-active.png"); }
-.le-icon-btn:not(:disabled):active .ic-redo { background-image: url("/assets/ui/level-editor/icons/redo-active.png"); }
+.le-icon-btn { min-height: 0; padding: 0; width: var(--le-inner-square); height: var(--le-inner-square); }
+.le-icon-btn .le-ico { width: 18px; height: 18px; }
+.le-icon-btn:not(:disabled):active { border-image-source: var(--skirmish-chrome-inner-control-active-image); }
 /* The status card is a live flex column (ADR-0056) — its gap spaces the row; no extra margin. */
 .le-board-actions.le-status-actions { margin-top: 0; }
 .le-board-actions .le-seg-btn { min-width: 0; }
@@ -5097,8 +5351,11 @@ h1 {
 .le-settings-list dd { color: #f3ead8; font-size: var(--ds-text-sm); line-height: 1.25; margin: 0; word-break: break-word; }
 .le-faction-control { display: grid; gap: 7px; }
 .le-faction-assignments { display: grid; gap: 6px; }
-.le-faction-assignment { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(150px, .95fr); }
-.le-faction-fields { display: grid; gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
+.le-faction-assignment { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, .95fr); min-width: 0; }
+.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
+.le-faction-fields .le-select-wrap,
+.le-faction-fields .le-layer-select,
+.le-faction-fields .le-faction-select { min-width: 0; }
 .le-faction-name { align-items: center; color: #f3ead8; display: grid; font-size: var(--ds-text-sm); gap: 6px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; }
 .le-faction-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .le-faction-name b { color: #9fe0ff; font-size: var(--ds-text-xs); font-weight: 700; }
@@ -5119,8 +5376,8 @@ h1 {
   appearance: none;
   -webkit-appearance: none;
   background: transparent;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
   box-sizing: border-box;
   color: #eff9ff;
   cursor: pointer;
@@ -5227,14 +5484,14 @@ h1 {
 .le-faction-select {
   appearance: none;
   -webkit-appearance: none;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
   box-sizing: border-box;
   color: #eff9ff;
   cursor: pointer;
   font: inherit;
   font-size: var(--ds-text-xs);
-  min-height: 38px;
+  min-height: var(--le-inner-control-h);
   min-width: 0;
   outline: none;
   padding: 0 8px;
@@ -5249,8 +5506,15 @@ h1 {
   text-shadow: none;
   text-transform: none;
 }
-.le-direction-popover { min-width: 0; position: relative; width: 100%; }
-.le-direction-trigger { align-items: center; display: flex; justify-content: center; text-align: center; }
+.le-direction-popover { inline-size: var(--le-inner-square); min-width: 0; position: relative; width: var(--le-inner-square); }
+.le-direction-trigger { align-items: center; block-size: var(--le-inner-square); display: flex; inline-size: var(--le-inner-square); justify-content: center; min-block-size: var(--le-inner-square); min-inline-size: var(--le-inner-square); min-width: var(--le-inner-square); padding: 0; text-align: center; width: var(--le-inner-square); }
+.le-faction-fields .le-direction-popover,
+.le-faction-fields .le-direction-trigger {
+  inline-size: var(--le-inner-square);
+  min-inline-size: var(--le-inner-square);
+  min-width: var(--le-inner-square);
+  width: var(--le-inner-square);
+}
 .le-direction-menu {
   background: rgba(3, 10, 17, .97);
   border: 1px solid rgba(93, 160, 211, .42);
@@ -5276,12 +5540,109 @@ h1 {
 }
 .le-board-warning { color: #f0bd55; font-size: var(--ds-text-sm); line-height: 1.3; margin: 0; text-shadow: 0 0 8px rgba(240, 189, 85, .22); }
 
-/* Canonical Level Editor select: the <select> wears the kit frame; the wrapper owns the
-   chevron because native selects cannot host a reliable ::after above the 9-slice fill. */
+/* Canonical Level Editor select: the wrapper wears the kit frame and owns the
+   chevron because native selects cannot reliably host chrome pseudos. */
 .le-select-wrap,
 .le-layer-select-wrap,
 .le-event-select-wrap {
+  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
+  box-sizing: border-box;
+  min-height: var(--le-inner-field-h);
+  overflow: visible;
   position: relative;
+  width: 100%;
+}
+.house-select.le-select-wrap {
+  display: block;
+  min-width: 0;
+}
+.house-select-trigger {
+  align-items: center;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  box-sizing: border-box;
+  color: #eff9ff;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  justify-content: flex-start;
+  min-height: calc(var(--le-inner-field-h) - (var(--le-chrome-inner-rail-w, 10px) * 2));
+  min-width: 0;
+  outline: none;
+  overflow: hidden;
+  padding: 0 34px 0 10px;
+  position: relative;
+  text-align: left;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 0 #010407;
+  text-transform: uppercase;
+  white-space: nowrap;
+  width: 100%;
+  z-index: 1;
+}
+.house-select-trigger:disabled {
+  cursor: default;
+  opacity: .55;
+}
+.house-select-trigger:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: calc(var(--le-chrome-inner-rail-w, 10px) + 2px);
+}
+.house-select-menu {
+  background: rgba(3, 10, 17, .98);
+  border: 1px solid rgba(93, 160, 211, .46);
+  border-radius: 4px;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .56), inset 0 0 0 1px rgba(221, 237, 255, .05);
+  box-sizing: border-box;
+  color: #eff9ff;
+  display: grid;
+  gap: 3px;
+  image-rendering: pixelated;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 5px;
+  position: fixed;
+  z-index: 2200;
+}
+.house-select-option {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(10, 28, 43, .82);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  box-sizing: border-box;
+  color: #d8eaff;
+  cursor: pointer;
+  font: 800 var(--ds-text-xs)/1 var(--ds-font-sans, system-ui, sans-serif);
+  min-height: 30px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 7px 9px;
+  text-align: left;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 0 #010407;
+  text-transform: uppercase;
+  white-space: nowrap;
+  width: 100%;
+}
+.house-select-option.is-active,
+.house-select-option:hover:not(:disabled) {
+  background: rgba(25, 94, 132, .95);
+  border-color: rgba(111, 210, 255, .64);
+  color: #f3fbff;
+}
+.house-select-option[aria-selected="true"] {
+  background: rgba(88, 151, 198, .42);
+  border-color: rgba(159, 224, 255, .58);
+  color: #ffffff;
+}
+.house-select-option:disabled {
+  color: rgba(180, 200, 214, .44);
+  cursor: default;
 }
 .le-select-wrap::after,
 .le-layer-select-wrap::after,
@@ -5297,10 +5658,15 @@ h1 {
   height: 8px;
   transform: translateY(-65%) rotate(45deg);
   pointer-events: none;
+  z-index: 6;
 }
 .le-select-wrap .le-layer-select,
 .le-layer-select-wrap .le-layer-select,
 .le-event-select-wrap .le-layer-select {
+  background: transparent;
+  border: 0;
+  border-image: none;
+  min-height: calc(var(--le-inner-field-h) - (var(--le-chrome-inner-rail-w, 10px) * 2));
   overflow: hidden;
   padding-left: 10px;
   padding-right: 34px;
@@ -5312,14 +5678,14 @@ h1 {
 .le-layer-select {
   appearance: none;
   -webkit-appearance: none;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
   box-sizing: border-box;
   color: #eff9ff;
   cursor: pointer;
   font: inherit;
   font-size: var(--ds-text-xs);
-  min-height: 40px;
+  min-height: var(--le-inner-field-h);
   outline: none;
   padding: 0 34px 0 10px;
   text-shadow: 0 2px 0 #010407;
@@ -5346,23 +5712,23 @@ h1 {
   align-items: center;
   display: grid;
   gap: 6px;
-  grid-template-columns: minmax(0, 1fr) 34px 34px;
+  grid-template-columns: minmax(0, 1fr) var(--le-inner-square) var(--le-inner-square);
   min-width: 0;
 }
 .le-zone-stepper-button.settings-chrome-button {
-  height: 34px;
-  min-height: 34px;
-  min-width: 34px;
+  height: var(--le-inner-square);
+  min-height: var(--le-inner-square);
+  min-width: var(--le-inner-square);
   padding: 0;
-  width: 34px;
+  width: var(--le-inner-square);
 }
 .le-zone-stepper-button:disabled {
   cursor: default;
   opacity: .42;
 }
 .le-zone-panel {
-  --le-zone-button-w: 38px;
-  --le-zone-row-h: 42px;
+  --le-zone-button-w: var(--le-inner-zone-button-w);
+  --le-zone-row-h: var(--le-inner-row-h);
 }
 .le-zone-panel .le-ctrlrow {
   align-items: center;
@@ -5421,16 +5787,18 @@ h1 {
    min-height (ADR-0055). */
 .le-board-link-input {
   appearance: none;
-  background: transparent;
-  border: 8px solid transparent;
-  border-image: url("/assets/ui/kit/field-input.png") 14 fill / 8px stretch;
+  background: rgba(8, 18, 26, .8);
+  background-clip: border-box;
+  background-origin: border-box;
+  border: var(--le-chrome-inner-rail-w, 8px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--le-chrome-inner-rail-w, 8px) round;
   box-sizing: border-box;
   color: #eff9ff;
   font: inherit;
   font-size: var(--ds-text-sm);
   image-rendering: pixelated;
   margin-top: 8px;
-  min-height: 38px;
+  min-height: var(--le-inner-control-h);
   outline: none;
   padding: 0 var(--ds-inset);
   width: 100%;
@@ -5586,7 +5954,7 @@ h1 {
   font-weight: 700;
   letter-spacing: 0;
 }
-.le-generate .le-gen-unit-select select {
+.le-generate .le-gen-unit-select .house-select {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -5612,21 +5980,18 @@ h1 {
   align-items: center;
   gap: 6px;
 }
-.le-generate .le-gen-region-terrain {
-  flex: 0 0 76px;
+.le-generate .le-gen-region-select {
+  flex: 0 0 96px;
   min-width: 0;
-  font: inherit;
-  color: #eff9ff;
-  background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(255, 255, 255, .18);
-  border-radius: 4px;
-  padding: 3px 4px;
 }
-/* The open popup uses a white system background — force dark options with light text so they're
-   readable (mirrors .le-faction-select option). */
-.le-generate .le-gen-region-terrain option {
-  background: #0a1f2e;
-  color: #cfe6f1;
+.le-generate .le-gen-cover-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.le-generate .le-gen-region-select .house-select-trigger,
+.le-generate .le-gen-cover-select .house-select-trigger {
+  padding-left: 7px;
+  padding-right: 24px;
 }
 .le-generate .le-gen-region-slider {
   flex: 1 1 auto;
@@ -5689,7 +6054,7 @@ h1 {
   align-items: center;
   gap: 6px;
 }
-.le-generate .le-gen-cover-head select { flex: 1 1 auto; min-width: 0; }
+.le-generate .le-gen-cover-head .house-select { flex: 1 1 auto; min-width: 0; }
 /* Compact caret button that toggles this cover's knobs (no min-height:44 touch target). */
 .le-generate .le-gen-cover-caret-btn {
   flex: 0 0 auto;
@@ -5789,18 +6154,12 @@ h1 {
    grid so every layer (Zone / Rules included) stays reachable without a horizontal overflow. */
 .le-seg-layers { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: repeat(4, 1fr); }
 
-/* Tool picker: each icon is a self-framed tile (its own navy + gold-corner border), so it needs
-   no outer kit button — the tile IS the square button. No text, tooltip-only. The selected tool
-   swaps to its cyan `-active.png` variant instead of the shared button-primary frame. */
+/* Tool picker: icon-only inner-role buttons. The glyph stays independent; selected state swaps
+   the shared inner frame source, not a pre-framed icon tile. */
 .le-seg-icons { grid-auto-flow: column; grid-auto-columns: max-content; justify-content: start; gap: 6px; }
-.le-seg-icons .le-seg-btn { border: 0; border-image: none; min-height: 0; padding: 0; width: 44px; height: 44px; }
-.le-seg-icons .le-seg-btn .le-ico { width: 100%; height: 100%; }
-.le-seg-icons .le-seg-btn.active { border-image: none; }
-.le-action-toolbar .le-seg-btn { width: 38px; height: 38px; }
-.le-seg-icons .le-seg-btn.active .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper-active.png"); }
-.le-seg-icons .le-seg-btn.active .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush-active.png"); }
-.le-seg-icons .le-seg-btn.active .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser-active.png"); }
-.le-seg-icons .le-seg-btn.active .ic-move { background-image: url("/assets/ui/level-editor/icons/move-active.png"); }
+.le-seg-icons .le-seg-btn { min-height: 0; padding: 0; width: var(--le-inner-square); height: var(--le-inner-square); }
+.le-seg-icons .le-seg-btn .le-ico { width: 20px; height: 20px; }
+.le-action-toolbar .le-seg-btn { width: var(--le-inner-square); height: var(--le-inner-square); }
 
 /* ---- Playability violations list (ADR-0050) -----------------------------------------------
    The to-fix list (Status layer only). A warm/blocking kit line frame (the `warm` tone twin of
@@ -5809,9 +6168,8 @@ h1 {
    Because it DRAWS a box around its text, the content insets by the role token (ADR-0055): text
    never sits flush against the drawn edge. */
 .le-violations {
-  --le-frame: 12px;
-  border: var(--le-frame) solid transparent;
-  border-image: url("/assets/ui/explore/frames/panel-line-warm.png") 24 / var(--le-frame) round;
+  border: var(--le-chrome-inner-rail-w, 12px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-line-warm-image) 24 / var(--le-chrome-inner-rail-w, 12px) round;
   image-rendering: pixelated;
   padding: var(--ds-inset);
 }
@@ -5828,7 +6186,13 @@ h1 {
    Cover — never clip their bottom controls. Layer tabs stay fixed above it; this fills the
    remaining panel height and carries the same stack gap the sections had as aside children. */
 .le-hud-scroll { flex: 1 1 auto; min-height: 0; }
-.le-hud-scroll > .kit-scroll-content { display: flex; flex-direction: column; gap: var(--ds-gutter); }
+.le-hud-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-gutter);
+  padding-right: 18px;
+}
 
 /* kit-scroll — the DRAWN scroll primitive (ADR-0030), rendered by <KitScroll>. The native bar is
    hidden; we draw an ALWAYS-PRESENT rail (a real DOM element the browser can't hide) + a grip thumb
@@ -5927,11 +6291,11 @@ h1 {
 .le-cond-params { margin-top: 2px; }
 .le-faction-select { min-width: 120px; }
 .le-cond-add { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.le-cond-add .le-seg-btn { min-height: 30px; min-width: 0; padding: 0 10px; }
+.le-cond-add .le-seg-btn { min-height: var(--le-inner-control-compact-h); min-width: 0; padding: 0 10px; }
 .le-rule-and { opacity: .7; }
 .le-rule-then { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .le-rule-then .le-ctrllabel { color: var(--skirmish-cyan, #7fd7ff); }
-.le-rule-remove { margin-left: auto; min-height: 30px; min-width: 0; padding: 0 10px; }
+.le-rule-remove { margin-left: auto; min-height: var(--le-inner-control-compact-h); min-width: 0; padding: 0 10px; }
 .le-rule-add { margin-top: 12px; }
 .le-seg-compact .le-seg-btn { min-width: 0; padding: 0 12px; }
 
@@ -5940,21 +6304,17 @@ h1 {
    .skirmish-field because the board column can collapse before the rail at narrow widths. */
 .le-events-open { width: 100%; }
 .le-events-overlay {
-  /* Same kit panel frame as the right control panel (.skirmish-hud, ADR-0033): the panel.png
-     9-slice at 14px, box-sizing border-box, full height, padding:0 — NOT a hand-rolled border. */
-  border: 14px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  bottom: 0;
-  left: 0;
-  overflow: hidden;
+  /* Outer corner atoms draw outside the border box; fixed panels need viewport
+     breathing room equal to the generated atom overlay's bleed. */
+  bottom: var(--le-outer-atom-outset, 0px);
+  left: var(--le-outer-atom-outset, 0px);
   padding: 0;
   position: fixed;
-  right: calc(var(--skirmish-rail-w) + var(--skirmish-grid-gap));
+  right: calc(var(--skirmish-rail-w) + var(--skirmish-grid-gap) + var(--le-outer-atom-outset, 0px));
   text-align: left;
-  top: calc(var(--app-header-h) + var(--skirmish-grid-gap));
+  top: calc(var(--app-header-h) + var(--skirmish-grid-gap) + var(--le-outer-atom-outset, 0px));
   z-index: 30;
 }
 .le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; gap: 12px; justify-content: space-between; padding: 0 2px 8px; }
@@ -5973,7 +6333,7 @@ h1 {
 .le-events-tabs .le-seg-btn,
 .le-events-done {
   font-size: var(--ds-text-2xs);
-  min-height: 28px;
+  min-height: var(--le-inner-tab-compact-h);
   min-width: 0;
   padding: 0 12px;
 }
@@ -6068,12 +6428,11 @@ h1 {
    edge). Ready/blocked swap the SOURCE to the success/warning tone twin — one frame, tone at the
    corners. Content insets by the role token (ADR-0055). */
 .le-status-current {
-  --le-frame: 12px;
   background: rgba(4, 13, 20, .7);
   background-clip: border-box;
   background-origin: border-box;
-  border: var(--le-frame) solid transparent;
-  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / var(--le-frame) round;
+  border: var(--le-chrome-inner-rail-w, 12px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--le-chrome-inner-rail-w, 12px) round;
   display: grid;
   gap: var(--ds-inline-tight);
   image-rendering: pixelated;
@@ -6081,17 +6440,16 @@ h1 {
 }
 .le-status-current strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
-.le-status-current.is-ready { border-image-source: url("/assets/ui/explore/frames/panel-line-success.png"); }
-.le-status-current.is-blocked { border-image-source: url("/assets/ui/explore/frames/panel-line-warning.png"); }
+.le-status-current.is-ready { border-image-source: var(--skirmish-chrome-inner-line-success-image); }
+.le-status-current.is-blocked { border-image-source: var(--skirmish-chrome-inner-line-warning-image); }
 /* Drawn text box → kit line frame (panel-line over its own navy surface, ADR-0032/0034) +
    role-token inset + ladder gaps (ADR-0055/0056). */
 .le-material-values {
-  --le-frame: 12px;
   background: rgba(3, 12, 19, .48);
   background-clip: border-box;
   background-origin: border-box;
-  border: var(--le-frame) solid transparent;
-  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / var(--le-frame) round;
+  border: var(--le-chrome-inner-rail-w, 12px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--le-chrome-inner-rail-w, 12px) round;
   display: grid;
   gap: var(--ds-stack);
   image-rendering: pixelated;
@@ -6120,12 +6478,11 @@ h1 {
    raw border-left stripe now lives in the frame's corners. Content insets by the role token
    (ADR-0055). */
 .le-status-entry {
-  --le-frame: 10px;
   background: rgba(3, 12, 19, .58);
   background-clip: border-box;
   background-origin: border-box;
-  border: var(--le-frame) solid transparent;
-  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / var(--le-frame) round;
+  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--le-chrome-inner-rail-w, 10px) round;
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: 58px minmax(0, 1fr);
@@ -6135,9 +6492,9 @@ h1 {
 .le-status-entry time { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.2; }
 .le-status-entry strong { color: #f3ead8; display: block; font-size: var(--ds-text-sm); line-height: 1.2; }
 .le-status-entry span { color: var(--skirmish-muted); display: block; font-size: var(--ds-text-sm); line-height: 1.35; margin-top: 3px; }
-.le-status-entry.is-success { border-image-source: url("/assets/ui/explore/frames/panel-line-success.png"); }
-.le-status-entry.is-warning { border-image-source: url("/assets/ui/explore/frames/panel-line-warning.png"); }
-.le-status-entry.is-error { border-image-source: url("/assets/ui/explore/frames/panel-line-error.png"); }
+.le-status-entry.is-success { border-image-source: var(--skirmish-chrome-inner-line-success-image); }
+.le-status-entry.is-warning { border-image-source: var(--skirmish-chrome-inner-line-warning-image); }
+.le-status-entry.is-error { border-image-source: var(--skirmish-chrome-inner-line-error-image); }
 
 /* path/fence edge editor — clickable diamond edges for the selected tile */
 .le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
@@ -6181,18 +6538,18 @@ h1 {
 
 /* editor rail icons */
 .le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 18px; image-rendering: pixelated; width: 18px; }
-.ic-brush { background-image: url("/assets/ui/level-editor/icons/brush.png"); }
-.ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser.png"); }
-.ic-move { background-image: url("/assets/ui/level-editor/icons/move.png"); }
-.ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper.png"); }
-.ic-grid { background-image: url("/assets/ui/level-editor/icons/grid.png"); }
-.ic-zone { background-image: url("/assets/ui/level-editor/icons/zone.png"); }
-.ic-undo { background-image: url("/assets/ui/level-editor/icons/undo.png"); }
-.ic-redo { background-image: url("/assets/ui/level-editor/icons/redo.png"); }
-.ic-save { background-image: url("/assets/ui/level-editor/icons/save.png"); }
-.ic-play { background-image: url("/assets/ui/level-editor/icons/play.png"); }
-.ic-up { background-image: url("/assets/ui/level-editor/icons/height-up.png"); }
-.ic-down { background-image: url("/assets/ui/level-editor/icons/height-down.png"); }
+.ic-brush { background-image: url("/assets/ui/kit/icons/pencil.png"); }
+.ic-eraser { background-image: url("/assets/ui/kit/icons/delete.png"); }
+.ic-move { background-image: url("/assets/ui/kit/icons/game/move.png"); }
+.ic-eyedropper { background-image: url("/assets/ui/kit/icons/wrench.png"); }
+.ic-grid { background-image: url("/assets/ui/kit/icons/design-index.png"); }
+.ic-zone { background-image: url("/assets/ui/kit/icons/game/objective.png"); }
+.ic-undo { background-image: url("/assets/ui/kit/icons/reset.png"); transform: scaleX(-1); }
+.ic-redo { background-image: url("/assets/ui/kit/icons/reset.png"); }
+.ic-save { background-image: url("/assets/ui/kit/icons/save.png"); }
+.ic-play { background-image: url("/assets/ui/kit/icons/game/power.png"); }
+.ic-up { background-image: url("/assets/ui/kit/icons/chevron-up.png"); }
+.ic-down { background-image: url("/assets/ui/kit/icons/chevron-down.png"); }
 
 .skirmish-count-pip strong {
   font-size: .72rem;
@@ -6212,11 +6569,10 @@ h1 {
    frame whose bracket ornament bleeds over a bust/backdrop that fills to the `--up-fill` boundary
    (the editor's Fill box, config/nine-slice/panel.json `fill` = 2). The Selected-Unit HUD, the
    roster slots, and the editor previews ALL render through this — the framing/fill is defined here
-   ONCE, never re-derived per surface. `--up-frame-w` = rendered frame thickness; `--up-backdrop` =
+   ONCE, never re-derived per surface. The rendered rail thickness comes from the inner chrome role; `--up-backdrop` =
    the scene art (when a surface composites one behind the bust). Not a raw-CSS box. */
 .unit-portrait {
   --up-fill: 2px;
-  --up-frame-w: 12px;
   position: relative;
   box-sizing: border-box;
   overflow: hidden;
@@ -6224,8 +6580,8 @@ h1 {
   background-clip: padding-box;
   background-origin: padding-box;
   border: var(--up-fill) solid transparent;
-  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / var(--up-frame-w) round;
-  padding: calc(var(--up-frame-w) - var(--up-fill));
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--skirmish-chrome-inner-rail-w, 12px) round;
+  padding: calc(var(--skirmish-chrome-inner-rail-w, 12px) - var(--up-fill));
   image-rendering: pixelated;
 }
 
@@ -6253,9 +6609,9 @@ h1 {
   min-height: 86px;
 }
 
-/* Roster thumbnail: fills its button; thinner frame so the bracket doesn't swamp the small square. */
+/* Roster thumbnail: fills its button; frame thickness still comes from the inner chrome role. */
 .unit-portrait--roster {
-  --up-frame-w: 9px;
+  border-image-width: var(--skirmish-chrome-inner-rail-w);
   width: 100%;
   height: 100%;
 }
@@ -6315,8 +6671,8 @@ h1 {
 .skirmish-service-record {
   /* In-theme kit sub-panel so the stats aren't bare/"headless" on the control panel
      (ADR-0032). One frame for the whole block — not five sets of brackets. */
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / 12px round;
+  border: var(--skirmish-chrome-inner-rail-w, 12px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--skirmish-chrome-inner-rail-w, 12px) round;
   box-sizing: border-box;
   margin-top: var(--ds-stack);
 }
@@ -8230,6 +8586,12 @@ body { font-size: 17px; }
   grid-template-columns: minmax(0, 1fr) 260px;
 }
 
+.tileset-studio-shell.is-catalog > .tileset-studio-grid {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* Narrow effective widths — a genuinely small window OR high browser zoom, which
    shrinks the CSS viewport. The main pane shrinks toward 0 but the Controls stay a
    fixed 260px, so below ~560px the panel was pushed past the right edge and clipped
@@ -9558,6 +9920,937 @@ body { font-size: 17px; }
   position: absolute;
   top: 0;
   left: 0;
+}
+
+.chrome-lab-main {
+  position: relative;
+}
+
+.chrome-lab-main.is-pan {
+  cursor: grab;
+}
+
+.chrome-lab-main.is-pan:active {
+  cursor: grabbing;
+}
+
+.chrome-lab-pan-layer {
+  cursor: grab;
+  inset: 0;
+  position: absolute;
+  touch-action: none;
+  z-index: 2;
+}
+
+.chrome-lab-controls .tileset-inspector-section {
+  min-width: 0;
+}
+
+.chrome-lab-controls,
+.chrome-lab-controls * {
+  box-sizing: border-box;
+}
+
+.chrome-lab-controls {
+  overflow-x: hidden;
+}
+
+.chrome-lab-controls .tileset-control-stack,
+.chrome-lab-controls .tileset-control-stack > *,
+.chrome-lab-section,
+.chrome-lab-subsection,
+.chrome-lab-section-body,
+.chrome-lab-controls label,
+.chrome-lab-controls .pages-ctl-row {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.chrome-lab-controls .pages-ctl-row {
+  gap: 5px;
+  width: 100%;
+}
+
+.chrome-lab-controls .pages-step,
+.chrome-lab-controls .pages-mini-reset {
+  min-width: 24px;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.chrome-lab-tabs {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.chrome-lab-main-tabs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.chrome-lab-tab {
+  min-width: 0;
+  overflow: hidden;
+  padding: 8px 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(3, 12, 19, .72);
+  border: 1px solid rgba(67, 127, 179, .26);
+  border-radius: 5px;
+  color: #a9bdd2;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.chrome-lab-tab.is-active {
+  background: rgba(28, 75, 109, .58);
+  border-color: rgba(101, 205, 255, .62);
+  color: #e6f6ff;
+}
+
+.chrome-lab-tabpanels,
+.chrome-lab-tabpanels > [role="tabpanel"] {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chrome-lab-section,
+.chrome-lab-subsection {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  background: #0b1f2d;
+  border: 1px solid #315f79;
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgba(205, 235, 251, .04), 0 1px 0 rgba(0, 0, 0, .42);
+}
+
+.chrome-lab-subsection {
+  background: #071722;
+  border-color: #264c63;
+}
+
+.chrome-lab-subpane {
+  align-content: start;
+}
+
+.chrome-lab-pane-title {
+  color: #d9e7f7;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.chrome-lab-section > summary,
+.chrome-lab-subsection > summary {
+  color: #d9e7f7;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  list-style-position: inside;
+  text-transform: uppercase;
+}
+
+.chrome-lab-section-body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 8px;
+}
+
+.chrome-lab-frame-preview {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 72px minmax(0, 1fr);
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  padding: 8px;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    rgba(2, 8, 13, .56);
+  background-position: 0 0, 8px 8px;
+  background-size: 16px 16px;
+  border: 1px solid rgba(67, 127, 179, .18);
+  border-radius: 4px;
+}
+
+.chrome-lab-divider-mini {
+  align-self: center;
+  display: block;
+  height: 34px;
+  image-rendering: pixelated;
+  width: 72px;
+  background-color: rgba(2, 8, 13, .44);
+  background-position: left center;
+}
+
+.chrome-lab-align-tools {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  background: #091b27;
+  border: 1px solid #294f67;
+  border-radius: 5px;
+}
+
+.chrome-lab-align-selects {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.chrome-lab-align-preview {
+  align-items: start;
+  display: grid;
+  justify-items: start;
+  min-height: 72px;
+  max-height: 180px;
+  min-width: 0;
+  overflow: auto;
+  position: relative;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    rgba(2, 8, 13, .56);
+  background-position: 0 0, 6px 6px;
+  background-size: 12px 12px;
+  border: 1px solid rgba(67, 127, 179, .22);
+  border-radius: 4px;
+}
+
+.chrome-lab-align-preview img {
+  display: block;
+  image-rendering: pixelated;
+  max-width: none;
+}
+
+.chrome-lab-divider-align-preview {
+  flex: none;
+  max-width: 100%;
+  overflow: auto;
+  position: relative;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    rgba(2, 8, 13, .56);
+  background-position: 0 0, 6px 6px;
+  background-size: 12px 12px;
+  border: 1px solid rgba(67, 127, 179, .22);
+  border-radius: 4px;
+}
+
+.chrome-lab-divider-align-baked {
+  display: block;
+  image-rendering: pixelated;
+  max-width: none;
+  position: absolute;
+  inset: 0;
+}
+
+.chrome-lab-align-preview.is-debug::before,
+.chrome-lab-divider-align-preview.is-debug::before {
+  background:
+    repeating-linear-gradient(to right, rgba(255, 255, 255, .08) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(to bottom, rgba(255, 255, 255, .08) 0 1px, transparent 1px 8px),
+    linear-gradient(to right, transparent calc(var(--chrome-align-target-x) - .5px), rgba(112, 218, 255, .8) calc(var(--chrome-align-target-x) - .5px) calc(var(--chrome-align-target-x) + .5px), transparent calc(var(--chrome-align-target-x) + .5px)),
+    linear-gradient(to bottom, transparent calc(var(--chrome-align-target-y) - .5px), rgba(112, 218, 255, .8) calc(var(--chrome-align-target-y) - .5px) calc(var(--chrome-align-target-y) + .5px), transparent calc(var(--chrome-align-target-y) + .5px)),
+    linear-gradient(to right, transparent calc(var(--chrome-align-anchor-x) - .5px), rgba(255, 204, 94, .9) calc(var(--chrome-align-anchor-x) - .5px) calc(var(--chrome-align-anchor-x) + .5px), transparent calc(var(--chrome-align-anchor-x) + .5px)),
+    linear-gradient(to bottom, transparent calc(var(--chrome-align-anchor-y) - .5px), rgba(255, 204, 94, .9) calc(var(--chrome-align-anchor-y) - .5px) calc(var(--chrome-align-anchor-y) + .5px), transparent calc(var(--chrome-align-anchor-y) + .5px));
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.chrome-lab-align-readout {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: 1fr;
+  margin: 0;
+  min-width: 0;
+}
+
+.chrome-lab-align-readout div {
+  align-items: baseline;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 64px minmax(0, 1fr);
+  min-width: 0;
+  padding: 5px 6px;
+  background: #0c2331;
+  border: 1px solid #2b536b;
+  border-radius: 4px;
+}
+
+.chrome-lab-align-readout .chrome-lab-align-final-row {
+  align-items: stretch;
+  gap: 3px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.chrome-lab-align-readout dt {
+  color: #7fa4bd;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.chrome-lab-align-readout dd {
+  color: #d8f2ff;
+  font-family: "Cascadia Mono", ui-monospace, monospace;
+  font-size: 11px;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.chrome-lab-final-readout {
+  align-items: center;
+  display: grid;
+  font-size: 11px;
+  gap: 3px;
+  grid-template-columns: repeat(4, max-content);
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.chrome-lab-final-readout span {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chrome-lab-final-readout b {
+  color: #9fc3d7;
+  font-weight: 900;
+}
+
+.chrome-lab-frame-preview span,
+.chrome-lab-cycle span,
+.chrome-lab-note {
+  color: #9eb1c5;
+  font-size: 11px;
+  font-weight: 900;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
+.chrome-lab-fill-preview {
+  block-size: 56px;
+  border: 1px solid rgba(67, 127, 179, .28);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(2, 8, 13, .58);
+  image-rendering: pixelated;
+  min-width: 0;
+}
+
+.chrome-lab-note {
+  margin: 0;
+}
+
+/* Chrome Audit is a dense working surface, so secondary copy and native menus need
+   stronger contrast than catalog metadata. Keep the palette dark without making
+   labels, current values, or the expanded OS-level select menu recede. */
+.chrome-lab-controls {
+  background: #06141f;
+  color: #edf6fc;
+}
+
+.chrome-lab-controls .tileset-category-select,
+.chrome-lab-controls .tileset-filter-field,
+.chrome-lab-controls .tileset-catalog-zoom,
+.chrome-lab-controls .chrome-lab-frame-preview span,
+.chrome-lab-controls .chrome-lab-cycle span {
+  color: #c8dbe9;
+}
+
+.chrome-lab-controls .chrome-lab-note {
+  color: #c2d6e5;
+}
+
+.chrome-lab-controls .chrome-lab-note.is-success {
+  color: #9ff0c2;
+}
+
+.chrome-lab-controls .chrome-lab-note.is-error {
+  color: #ff9da9;
+}
+
+.chrome-lab-controls .tileset-category-select select {
+  color-scheme: dark;
+  color: #f5f9fc;
+  background: #10293a;
+  border-color: #4e86aa;
+}
+
+.chrome-lab-controls .tileset-category-select select option {
+  color: #f5f9fc;
+  background: #0b1e2b;
+}
+
+.chrome-lab-controls .tileset-category-select select:focus {
+  border-color: #72c8f2;
+  box-shadow: 0 0 0 2px rgba(91, 200, 255, .24);
+}
+
+.chrome-lab-controls .chrome-lab-frame-preview,
+.chrome-lab-controls .chrome-lab-fill-preview,
+.chrome-lab-controls .chrome-lab-align-preview,
+.chrome-lab-controls .chrome-lab-divider-align-preview,
+.chrome-lab-controls .chrome-lab-crop-canvas,
+.chrome-lab-controls .chrome-lab-source-stage,
+.chrome-lab-controls .chrome-lab-divider-atom-stage,
+.chrome-lab-controls .chrome-lab-json-export {
+  border-color: #294f67;
+}
+
+.chrome-lab-export-block {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chrome-lab-json-export {
+  block-size: 180px;
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: 8px;
+  resize: vertical;
+  color: #d8f2ff;
+  background: rgba(2, 8, 13, .78);
+  border: 1px solid rgba(67, 127, 179, .32);
+  border-radius: 5px;
+  font-family: "Cascadia Mono", ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.chrome-lab-cycle {
+  align-items: stretch;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.chrome-lab-cycle button {
+  min-width: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.chrome-lab-crop-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.chrome-lab-crop-row > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chrome-lab-crop-canvas {
+  align-self: start;
+  display: block;
+  height: auto;
+  image-rendering: pixelated;
+  justify-self: start;
+  max-height: 120px;
+  max-width: 100%;
+  min-height: 24px;
+  min-width: 24px;
+  object-fit: contain;
+  padding: 6px;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    rgba(2, 8, 13, .56);
+  background-position: 0 0, 6px 6px;
+  background-size: 12px 12px;
+  border: 1px solid rgba(67, 127, 179, .18);
+  border-radius: 4px;
+}
+
+.chrome-lab-source-stage {
+  align-items: center;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    rgba(2, 8, 13, .56);
+  background-position: 0 0, 6px 6px;
+  background-size: 12px 12px;
+  border: 1px solid rgba(67, 127, 179, .18);
+  border-radius: 4px;
+  box-sizing: content-box;
+  display: grid;
+  justify-items: center;
+  max-width: calc(100% - 14px);
+  overflow: auto;
+  padding: 6px;
+}
+
+.chrome-lab-source-canvas {
+  align-self: center;
+  display: block;
+  height: auto;
+  image-rendering: pixelated;
+  justify-self: center;
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.chrome-lab-divider-atom-stage {
+  align-items: center;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    rgba(2, 8, 13, .56);
+  background-position: 0 0, 6px 6px;
+  background-size: 12px 12px;
+  border: 1px solid rgba(67, 127, 179, .18);
+  border-radius: 4px;
+  box-sizing: content-box;
+  display: grid;
+  justify-items: center;
+  max-width: calc(100% - 14px);
+  overflow: auto;
+  padding: 6px;
+}
+
+.chrome-lab-divider-atom-canvas {
+  align-self: center;
+  display: block;
+  height: auto;
+  image-rendering: pixelated;
+  justify-self: center;
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.chrome-unit-card-image {
+  align-items: center;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, .05) 25%, transparent 25% 75%, rgba(255, 255, 255, .05) 75%),
+    rgba(2, 8, 13, .66);
+  background-position: 0 0, 8px 8px;
+  background-size: 16px 16px;
+  box-sizing: border-box;
+  display: grid;
+  height: 150px;
+  justify-items: center;
+  padding: 10px;
+}
+
+.chrome-unit-card-stage.level-editor-screen {
+  align-items: center;
+  background: transparent;
+  display: grid;
+  height: 100%;
+  justify-items: center;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  pointer-events: none;
+  width: 100%;
+}
+
+.chrome-unit-card-stage.level-editor-screen::before {
+  content: none;
+}
+
+.chrome-unit-card-stage .chrome-unit-outer-panel {
+  gap: 5px;
+  transform: scale(.72);
+  transform-origin: center;
+}
+
+.chrome-unit-card-stage .chrome-unit-panel-card,
+.chrome-unit-card-stage .chrome-unit-panel-section {
+  gap: 5px;
+}
+
+.chrome-unit-card-stage .kit-panel-title {
+  block-size: 32px;
+  font-size: .68rem;
+  margin-bottom: 5px;
+}
+
+.chrome-unit-card-stage .chrome-unit-panel-section .le-card-subhead {
+  font-size: .64rem;
+  margin: 0 0 4px;
+}
+
+.chrome-unit-card-stage .chrome-unit-panel-body {
+  min-height: 0;
+}
+
+.chrome-unit-card-stage .chrome-unit-panel-select {
+  width: 118px !important;
+}
+
+.chrome-unit-card-stage .chrome-unit-divider-host {
+  margin-block: 0;
+}
+
+.chrome-unit-card-stage .le-seg {
+  gap: 4px;
+}
+
+.chrome-unit-card-stage .le-select-wrap,
+.chrome-unit-card-stage .chrome-unit-dropdown {
+  max-width: 100%;
+}
+
+.chrome-unit-card-stage .le-layer-select {
+  font-size: .68rem;
+}
+
+.chrome-unit-inert-select {
+  align-items: center;
+  cursor: default;
+  display: flex;
+}
+
+.chrome-unit-card-stage .chrome-unit-rect {
+  max-width: 100%;
+}
+
+.chrome-unit-card-stage .chrome-unit-rect span {
+  font-size: .68rem;
+}
+
+.chrome-unit-audit-main {
+  overflow: auto;
+  padding: 0;
+}
+
+.chrome-unit-audit-scroll {
+  min-height: 100%;
+  overflow: auto;
+  padding: 24px;
+}
+
+.chrome-unit-audit-scale {
+  min-height: 1px;
+  min-width: 1px;
+  position: relative;
+  transform-origin: left top;
+}
+
+.chrome-unit-audit-stage.level-editor-screen {
+  align-content: start;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, .045) 25%, transparent 25% 75%, rgba(255, 255, 255, .045) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, .045) 25%, transparent 25% 75%, rgba(255, 255, 255, .045) 75%),
+    rgba(4, 13, 20, .78);
+  background-position: 0 0, 12px 12px;
+  background-size: 24px 24px;
+  color: #f0eadb;
+  display: grid;
+  grid-template-areas: none;
+  grid-template-columns: none;
+  grid-template-rows: none;
+  justify-items: start;
+  min-height: 320px;
+  min-width: 520px;
+  overflow: visible;
+  padding: 36px;
+  transform-origin: left top;
+  width: max-content;
+}
+
+.chrome-unit-audit-stage.level-editor-screen::before {
+  content: none;
+}
+
+.chrome-unit-audit-stage .skirmish-hud {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-stack);
+  grid-area: auto;
+  overflow: visible;
+  position: relative;
+}
+
+.chrome-unit-audit-stage .chrome-unit-consumer-panel {
+  max-height: none;
+}
+
+.chrome-unit-audit-stage .chrome-unit-consumer-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--ds-gutter);
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: #315160 #071017;
+  scrollbar-width: thin;
+}
+
+.chrome-unit-audit-stage .chrome-unit-events-overlay {
+  bottom: auto;
+  left: auto;
+  max-height: none;
+  overflow: visible;
+  position: relative;
+  right: auto;
+  top: auto;
+}
+
+.chrome-unit-audit-stage .chrome-unit-events-body {
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+}
+
+.chrome-unit-audit-stage .skirmish-card {
+  background: transparent;
+  border: 0;
+  border-image: none;
+  box-shadow: none;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.chrome-unit-audit-stage .le-outer-panel > .le-outer-panel-content > .skirmish-card:not(.le-layer-card),
+.chrome-unit-audit-stage .le-hud-scroll > .kit-scroll-content > .skirmish-card {
+  padding-inline: var(--le-visible-content-left-inset) var(--le-visible-content-right-inset);
+}
+
+.chrome-unit-panel-card,
+.chrome-unit-panel-section {
+  display: grid;
+  gap: var(--ds-stack);
+}
+
+.chrome-unit-panel-body {
+  display: grid;
+  gap: var(--ds-stack);
+  min-width: 0;
+}
+
+.chrome-unit-panel-select {
+  max-width: 100%;
+}
+
+.chrome-unit-divider-host {
+  flex: none;
+}
+
+.chrome-unit-inline-seat {
+  width: max-content;
+}
+
+.chrome-unit-key-only {
+  display: inline-grid;
+  grid-template-columns: auto;
+  width: max-content;
+}
+
+.chrome-unit-slot-marker {
+  align-self: center;
+  block-size: 14px;
+  border: 1px solid rgba(201, 232, 244, .62);
+  box-shadow: inset 0 0 0 2px rgba(3, 12, 19, .42);
+  display: block;
+  inline-size: 14px;
+  justify-self: center;
+  opacity: .74;
+}
+
+.chrome-unit-rect {
+  min-width: 0;
+}
+
+.chrome-unit-variant-stack {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chrome-unit-empty-template {
+  display: block;
+}
+
+.chrome-unit-dropdown {
+  max-width: 100%;
+}
+
+.chrome-unit-audit-list {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chrome-unit-audit-list h3 {
+  color: #d9e7f7;
+  font-size: 11px;
+  line-height: 1;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.chrome-unit-audit-list ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 17px;
+}
+
+.chrome-unit-audit-list li {
+  color: #9eb1c5;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.chrome-unit-audit-list code {
+  color: #cbefff;
+  font-family: "Cascadia Mono", ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.rail-lab-stage {
+  align-items: start;
+  justify-items: center;
+  overflow: hidden;
+  padding: 28px;
+}
+
+.rail-lab-stack {
+  display: grid;
+  gap: 18px;
+  max-width: none;
+  min-width: 0;
+  transform-origin: center top;
+}
+
+.rail-lab-proof {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  background: rgba(3, 12, 19, .74);
+  border: 1px solid rgba(67, 127, 179, .22);
+  border-radius: 6px;
+}
+
+.rail-lab-proof-head {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.rail-lab-proof-head h3 {
+  color: #d9e7f7;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.rail-lab-proof-head span {
+  color: #91a8ba;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.rail-lab-proof-body {
+  overflow: visible;
+}
+
+.rail-lab-canvas {
+  display: block;
+  image-rendering: pixelated;
+  max-width: none;
+}
+
+.rail-lab-family-canvas {
+  background: #07121b;
+}
+
+.rail-lab-member-proofs {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+}
+
+.rail-lab-member-proofs .rail-lab-proof-body {
+  align-items: center;
+  display: grid;
+  justify-items: center;
+  min-height: 64px;
+}
+
+.rail-lab-source-picker {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rail-lab-source-picker select {
+  min-width: 0;
+}
+
+.rail-lab-source-step {
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+@media (max-width: 840px) {
+  .rail-lab-member-proofs {
+    grid-template-columns: minmax(220px, 1fr);
+  }
+}
+
+.rail-lab-controls,
+.rail-lab-controls * {
+  box-sizing: border-box;
+}
+
+.rail-lab-controls .tileset-control-stack,
+.rail-lab-controls .tileset-control-stack > *,
+.rail-lab-controls label,
+.rail-lab-controls .pages-ctl-row {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .surface-region-card {
@@ -11122,6 +12415,71 @@ button.tileset-relationship-cell {
   font-style: normal;
   font-size: 12px;
   text-transform: uppercase;
+}
+
+.chrome-unit-card-image ~ .tileset-studio-card-meta {
+  align-items: flex-start;
+}
+
+.chrome-unit-card-image ~ .tileset-studio-card-meta strong {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.chrome-unit-card-hierarchy {
+  color: #8fb6c6;
+  display: grid;
+  font-size: 11px;
+  gap: 4px;
+  line-height: 1.25;
+  min-width: 0;
+  text-transform: uppercase;
+}
+
+.chrome-unit-card-hierarchy span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.chrome-unit-card-hierarchy b {
+  color: #789fb3;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.chrome-unit-card-hierarchy code {
+  color: #c9e8f4;
+  font-family: "Cascadia Mono", ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 1.25;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-transform: none;
+  white-space: normal;
+}
+
+.chrome-unit-path-stack {
+  display: grid;
+  gap: 1px;
+}
+
+.chrome-unit-path-stack span {
+  display: block;
+  padding-inline-start: calc(var(--chrome-unit-path-depth, 0) * 8px);
+}
+
+.al-meta .chrome-unit-path-stack {
+  font-size: .82rem;
+}
+
+.al-meta dd code {
+  color: #c9e8f4;
+  font-family: "Cascadia Mono", ui-monospace, monospace;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .tileset-studio-panel {
