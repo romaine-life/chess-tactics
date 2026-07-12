@@ -286,6 +286,29 @@ describe('aperture clipping and continuous spans', () => {
       { x: 3, y: 0 },
     ]);
     expect(north[0].segments.every((segment) => segment.apertureClip.length >= 6)).toBe(true);
+
+    for (const surface of [surfaces[0], north[0]]) {
+      for (let index = 1; index < surface.segments.length; index += 1) {
+        const previousSupport = polygonBounds(surface.segments[index - 1].supportPolygon);
+        const laterSupport = polygonBounds(surface.segments[index].supportPolygon);
+        const supportOverlap = Math.min(previousSupport.left + previousSupport.width, laterSupport.left + laterSupport.width)
+          - Math.max(previousSupport.left, laterSupport.left);
+        expect(supportOverlap, `${surface.face} support seam ${index}`).toBeCloseTo(1);
+
+        const previousAperture = polygonBounds(surface.segments[index - 1].apertureClip);
+        const laterAperture = polygonBounds(surface.segments[index].apertureClip);
+        const apertureOverlap = Math.min(previousAperture.left + previousAperture.width, laterAperture.left + laterAperture.width)
+          - Math.max(previousAperture.left, laterAperture.left);
+        expect(apertureOverlap, `${surface.face} aperture seam ${index}`).toBeCloseTo(1);
+
+        const polygon = surface.segments[index].supportPolygon;
+        for (const pointIndex of [4, 6]) {
+          expect(polygon[pointIndex + 1]).toBeCloseTo(
+            mirrorWallFloorBoundaryY(surface.face, polygon[pointIndex]),
+          );
+        }
+      }
+    }
   });
 
   it('uses one tall canonical wall geometry and a stable base-relative art datum', () => {
@@ -304,7 +327,7 @@ describe('aperture clipping and continuous spans', () => {
     const gallery = wallArt('mirror-grand-gallery-wall')!;
     expect(gallery.slots.map(({ face, x, y, scale }) => ({ face, x, y, scale }))).toEqual([
       { face: 'west', x: 42, y: 72, scale: 1 },
-      { face: 'north', x: 84, y: 72, scale: 1 },
+      { face: 'north', x: 86, y: 72, scale: 1 },
     ]);
   });
 

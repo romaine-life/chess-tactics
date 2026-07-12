@@ -65,7 +65,7 @@
     "reflection": { "opacity": 0.84 },
     "slots": [
         { "id": "mirror-grand-gallery-west", "sourceId": "mirror-grand-gallery", "face": "west", "x": 42, "y": 72, "scale": 1 },
-        { "id": "mirror-grand-gallery-north", "sourceId": "mirror-grand-gallery", "face": "north", "x": 84, "y": 72, "scale": 1 }
+        { "id": "mirror-grand-gallery-north", "sourceId": "mirror-grand-gallery", "face": "north", "x": 86, "y": 72, "scale": 1 }
     ]
   }
 }

@@ -278,7 +278,17 @@ export function mirrorSegmentSupportPolygon(
   segmentIndex: number,
   segmentCount: number,
 ): number[] {
-  const { start, end } = wallArtSegmentBoundary(target, segmentIndex, segmentCount);
+  let { start, end } = wallArtSegmentBoundary(target, segmentIndex, segmentCount);
+  if (segmentIndex > 0) {
+    // Canvas clips are half-open at raster boundaries. Exact-abutting depth slices leave the
+    // shared west edge uncovered after the next wall tile paints, exposing a one-pixel wall seam.
+    // Let the later (nearer) slice own one horizontal canvas pixel of its predecessor. Moving
+    // along the wall tangent keeps the adjusted bottom edge exactly on the wall/floor seam.
+    start = {
+      left: start.left + (target.face === 'west' ? 1 : -1),
+      top: start.top - TILE_STEP_Y / TILE_STEP_X,
+    };
+  }
   return [
     start.left, start.top - SEGMENT_VERTICAL_EXTENT,
     end.left, end.top - SEGMENT_VERTICAL_EXTENT,

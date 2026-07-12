@@ -221,7 +221,7 @@ ASSETS = [
         # lower rail at the projected wall/floor datum so every physical-silhouette grid-axis
         # crossing reaches glass. The canonical wall supplies all required headroom above it.
         "west_target": (42, 72),
-        "north_target": (84, 72),
+        "north_target": (86, 72),
         "full_unit_aperture": True,
         "glass_aperture": (
             (0.05, 0.04), (0.95, 0.04), (0.95, 0.96), (0.05, 0.96),
