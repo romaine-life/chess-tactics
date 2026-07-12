@@ -2,6 +2,7 @@
 status: "accepted; mandatory test-slot cutover gate superseded by ADR-0082"
 date: 2026-07-11
 deciders: Nelson, Codex
+partially_superseded_by: "[ADR-0082](0082-runtime-asset-cutover-uses-one-live-data-plane.md)"
 partially_supersedes:
   - ADR-0005
   - ADR-0007
@@ -25,13 +26,6 @@ partially_supersedes:
   - ADR-0066
   - ADR-0073
 ---
-
-> **The mandatory production-seeded test-slot cutover gate is superseded by
-> [ADR-0082](0082-runtime-asset-cutover-uses-one-live-data-plane.md)
-> (2026-07-12).** The existing app database and media container are the one live
-> data authority; cutover and owner verification use unserved candidate pods
-> against that authority. ADR-0081's storage, delivery, acceptance, and
-> deletion-complete migration decisions stand.
 
 # ADR-0081: Runtime assets are live storage-backed content behind stable semantic slots
 

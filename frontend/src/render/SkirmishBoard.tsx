@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
+import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, muralTiles, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
@@ -23,7 +23,16 @@ import { resolveFeatureOverlays, resolveFenceOverlays, resolveFencePosts, resolv
 import { wallArtSrcs } from '../core/wallArt';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 import { unitAnchorFraction, unitAssetById } from '../ui/unitCatalog';
-import { UNIT_IMG_MAX_H, UNIT_IMG_MAX_W, boardBounds, boardDrawOps, type BakeBounds, type BoardDrawOp } from '@chess-tactics/board-render';
+import {
+  TERRAIN_SIDE_FACES,
+  UNIT_IMG_MAX_H,
+  UNIT_IMG_MAX_W,
+  boardBounds,
+  boardDrawOps,
+  withoutBoardDrawLayers,
+  type BakeBounds,
+  type BoardDrawOp,
+} from '@chess-tactics/board-render';
 
 const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
   grass: 'grass',
@@ -179,7 +188,7 @@ function resolveSkirmishGroundCover(
     for (const cell of result.cells) {
       if (!voids.has(`${cell.x},${cell.y}`)) continue;
       cell.asset = undefined;
-      cell.sideAsset = undefined;
+      cell.sideAssets = undefined;
       cell.feature = undefined;
       cell.groundCover = undefined;
       cell.missing = undefined;
@@ -239,17 +248,12 @@ function sceneArtUrls(sceneBoard: EditorBoard, seed: number, ambientCover: boole
   return [...new Set(boardDrawOps(sceneBoard, { coverSeed: seed, ambientCover }).map((op) => op.src))];
 }
 
-function isTerrainSceneOp(op: BoardDrawOp): boolean {
-  return op.src.includes('/assets/tiles/surface/') || op.src.includes('/assets/tiles/macro-tiles/');
-}
-
-function isLinearFeatureSceneOp(op: BoardDrawOp): boolean {
-  return op.src.includes('/assets/tiles/feature/road-') || op.src.includes('/assets/tiles/feature/river-');
-}
-
 function skirmishStaticSceneOps(sceneBoard: EditorBoard, seed: number, ambientCover: boolean): BoardDrawOp[] {
-  return boardDrawOps(sceneBoard, { coverSeed: seed, ambientCover })
-    .filter((op) => !isTerrainSceneOp(op) && !isLinearFeatureSceneOp(op));
+  return withoutBoardDrawLayers(
+    boardDrawOps(sceneBoard, { coverSeed: seed, ambientCover }),
+    'terrain',
+    'linear-feature',
+  );
 }
 
 function generatedSkirmishBoard(game: GameState, seed: number): SocketBoardResult<TileAsset> {
@@ -262,6 +266,7 @@ function generatedSkirmishBoard(game: GameState, seed: number): SocketBoardResul
     familyAssets: tileFamilies,
     featureMap: legacyFeatureMapForGame(game),
     edgeAssets: edgeTiles,
+    muralEdges: muralTiles,
   });
 }
 
@@ -282,7 +287,7 @@ function exactSkirmishBoard(
     return {
       ...cell,
       asset: exactAsset,
-      sideAsset: undefined,
+      sideAssets: undefined,
       terrain,
       sockets: tileSocketsForAsset(exactAsset, tileFamilies),
       feature,
@@ -333,8 +338,10 @@ function collectBoardArt(
     if (cell.asset) {
       const top = tileFrameSrc(cell.asset);
       tiles.add(immutableBoardLabTerrainSrc(terrainTopSrc(top, cell.asset.topAnimFrames)));
-      const side = cell.sideAsset ? tileFrameSrc(cell.sideAsset) : top;
-      tiles.add(immutableBoardLabTerrainSrc(terrainSideSrc(side)));
+      for (const face of TERRAIN_SIDE_FACES) {
+        const side = tileFrameSrc(cell.sideAssets?.[face] ?? cell.asset);
+        tiles.add(immutableBoardLabTerrainSrc(terrainSideSrc(side)));
+      }
     }
     if (cell.feature) tiles.add(featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask));
     const cover = cell.groundCover;
@@ -526,6 +533,7 @@ export function pieceOp(
     const dw = UNIT_SEAT_W * instanceScale;
     const dh = UNIT_SEAT_H * instanceScale;
     return {
+      layer: 'scene',
       src,
       dx: seat.left - dw * ROCK_ANCHOR_X,
       dy: seat.top - dh * ROCK_ANCHOR_Y + (options.dy ?? 0),
@@ -545,6 +553,7 @@ export function pieceOp(
   const seatLeft = seat.left - seatW * unitAnchorFraction(unit!.unitAnchorX);
   const seatTop = seat.top - seatH * unitAnchorFraction(unit!.unitAnchorY);
   return {
+    layer: 'scene',
     src,
     dx: seatLeft + (seatW - imageW) / 2,
     dy: seatTop + (seatH - imageH) / 2 + (options.dy ?? 0),

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tileFamilies } from '../art/tileset';
 import { baseSocketsForFamily } from '../core/tileSockets';
 import type { SocketBoardCell } from '../core/tileBoardGenerator';
-import { immutableBoardLabTerrainSrc, resolveBoardLabTerrainSrc } from './BoardLabBoard';
+import { boardLabTerrainCanvasCells, immutableBoardLabTerrainSrc, resolveBoardLabTerrainSrc } from './BoardLabBoard';
 
 function hydrateSlot(slot: string, sha256 = 'a'.repeat(64)): void {
   applyLiveMediaCatalog({
@@ -45,7 +45,7 @@ describe('BoardLabBoard terrain review source', () => {
       x: 0,
       y: 0,
       asset,
-      sideAsset: asset,
+      sideAssets: { south: asset },
       terrain: 'water',
       sockets: baseSocketsForFamily('water'),
     };
@@ -80,5 +80,34 @@ describe('BoardLabBoard terrain review source', () => {
 
     expect(immutableBoardLabTerrainSrc('/assets/tiles/surface/water-0-side.png'))
       .toBe(`/api/media/${'b'.repeat(64)}`);
+  });
+
+  it('keeps hidden faces hidden while allowing different materials at a corner', () => {
+    const base = tileFamilies.water[0];
+    const south = tileFamilies.water[1];
+    const east = tileFamilies.water[2];
+    const cells: SocketBoardCell<typeof base>[] = [
+      {
+        x: 0,
+        y: 0,
+        asset: base,
+        sideAssets: { south, east },
+        terrain: 'water',
+        sockets: baseSocketsForFamily('water'),
+      },
+      {
+        x: 1,
+        y: 0,
+        asset: base,
+        terrain: 'water',
+        sockets: baseSocketsForFamily('water'),
+      },
+    ];
+
+    const [first] = boardLabTerrainCanvasCells(cells, (asset) => asset.src, (stableSrc) => stableSrc);
+    expect(first.sideFaces).toEqual({
+      south: { exposed: true, material: '/assets/tiles/surface/water-1-side.png' },
+      east: { exposed: false, material: '/assets/tiles/surface/water-2-side.png' },
+    });
   });
 });

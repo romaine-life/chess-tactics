@@ -1,6 +1,6 @@
-// Canonical Node/tooling client for creating and uploading a live-media
-// candidate. Its supported CLI and uploadCandidateBytes helper deliberately
-// stop at candidate upload: they cannot manufacture owner review, accept a
+// Canonical Node/tooling client for archiving exact source bytes and creating
+// live-media candidates. Its supported CLI deliberately stops at private source
+// archival or candidate upload: it cannot manufacture owner review, accept a
 // version, or activate a legacy bridge.
 // Generators should write only to a temporary/ignored work directory, then call
 // this client with that file as the upload source.
@@ -20,6 +20,10 @@ const DEFAULT_PATHS = {
 };
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(frontendRoot, '..');
+const CANDIDATE_BATCH_SCHEMA = 'live-media-candidate-batch-v1';
+const CANDIDATE_BATCH_RESULT_SCHEMA = 'live-media-candidate-batch-result-v1';
+const BATCH_PROVENANCE_SCHEMA = 'live-media-candidate-batch-provenance-v1';
+const BATCH_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,119}$/;
 
 const MEDIA_TYPES = new Map(Object.entries({
   '.aac': 'audio/aac', '.avif': 'image/avif', '.bmp': 'image/bmp', '.eot': 'application/vnd.ms-fontobject',
@@ -180,7 +184,25 @@ export class LiveMediaAdminClient {
   }
 }
 
-export async function uploadCandidateBytes({ client, payload, bytes, mediaType, idempotencyKey = '' }) {
+function exactUploadedMedia(row, expected, operation) {
+  const media = mediaRecordFrom(row);
+  if (!media?.url) throw new Error(`${operation} did not include an admin media URL`);
+  const mismatches = [];
+  if (media.sha256 !== expected.sha256) mismatches.push('sha256');
+  if (Number(media.byteLength) !== expected.byteLength) mismatches.push('byteLength');
+  if (media.mediaType !== expected.mediaType) mismatches.push('mediaType');
+  if (mismatches.length) throw new Error(`${operation} media differs from local bytes: ${mismatches.join(', ')}`);
+  return media;
+}
+
+export async function uploadCandidateBytes({
+  client,
+  payload,
+  bytes,
+  mediaType,
+  idempotencyKey = '',
+  resumableStatuses = ['candidate'],
+}) {
   if (!(client instanceof LiveMediaAdminClient)) throw new Error('uploadCandidateBytes requires LiveMediaAdminClient');
   if (!payload || Array.isArray(payload) || typeof payload !== 'object') throw new Error('uploadCandidateBytes requires payload');
   if (!Buffer.isBuffer(bytes) || !bytes.length) throw new Error('uploadCandidateBytes requires non-empty Buffer bytes');
@@ -190,10 +212,29 @@ export async function uploadCandidateBytes({ client, payload, bytes, mediaType, 
   }
   const expected = { sha256: sha256Bytes(bytes), byteLength: bytes.length, mediaType };
   const created = await client.createVersion(payload, { idempotencyKey });
+  const status = created.row?.status || 'candidate';
+  if (!resumableStatuses.includes(status)) {
+    throw new Error(`Idempotent media version has non-resumable status ${status}`);
+  }
+  const existingMedia = mediaRecordFrom(created.row);
+  if (existingMedia) {
+    const media = exactUploadedMedia(created.row, expected, 'Idempotent replay');
+    const verification = await client.verifyMedia({ url: media.url, ...expected });
+    return {
+      id: created.id,
+      revision: created.revision,
+      row: created.row,
+      media,
+      verification,
+      reused: true,
+    };
+  }
+  if (status !== 'candidate') throw new Error(`Media version ${created.id} has no content in status ${status}`);
   const uploaded = await client.uploadContent({ id: created.id, revision: created.revision, bytes, mediaType });
-  const media = mediaRecordFrom(uploaded.body);
-  if (!media?.url) throw new Error('Upload response did not include an admin media URL');
-  if (media.sha256 !== expected.sha256) throw new Error(`Backend content hash mismatch: ${media.sha256} != ${expected.sha256}`);
+  if (uploaded.row?.status && uploaded.row.status !== 'candidate') {
+    throw new Error(`Upload unexpectedly changed media version to ${uploaded.row.status}`);
+  }
+  const media = exactUploadedMedia(uploaded.row ?? uploaded.body, expected, 'Upload response');
   const verification = await client.verifyMedia({ url: media.url, ...expected });
   return {
     id: created.id,
@@ -201,6 +242,7 @@ export async function uploadCandidateBytes({ client, payload, bytes, mediaType, 
     row: uploaded.row,
     media,
     verification,
+    reused: Boolean(created.body?.idempotentReplay),
   };
 }
 
@@ -218,7 +260,17 @@ export async function archiveSourceBytes({
   if (!payload?.sourcePath || payload.role !== 'source') {
     throw new Error('archiveSourceBytes requires sourcePath and role=source');
   }
-  const uploaded = await uploadCandidateBytes({ client, payload, bytes, mediaType, idempotencyKey });
+  const uploaded = await uploadCandidateBytes({
+    client,
+    payload,
+    bytes,
+    mediaType,
+    idempotencyKey,
+    resumableStatuses: ['candidate', 'archived'],
+  });
+  if (uploaded.row?.status === 'archived') {
+    return { ...uploaded, archived: uploaded.row, revision: uploaded.revision, reused: true };
+  }
   const archived = await client.archiveVersion({
     id: uploaded.id,
     revision: uploaded.revision,
@@ -250,6 +302,249 @@ function isWithin(parent, child) {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function deterministicIdempotencyKey(prefix, value) {
+  const digest = sha256Bytes(Buffer.from(canonicalJson(value), 'utf8'));
+  return `${prefix}-${digest.slice(0, 56)}`;
+}
+
+function manifestText(value, label) {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`${label} must be a non-empty string`);
+  return value.trim();
+}
+
+function manifestObject(value, label, { required = false } = {}) {
+  if (value === undefined && !required) return {};
+  if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error(`${label} must be an object`);
+  if (required && !Object.keys(value).length) throw new Error(`${label} must not be empty`);
+  return value;
+}
+
+function manifestFile(baseDir, value, label) {
+  const filePath = path.resolve(baseDir, manifestText(value, label));
+  let stat;
+  try { stat = fs.statSync(filePath); } catch { throw new Error(`${label} does not exist: ${filePath}`); }
+  if (!stat.isFile()) throw new Error(`${label} is not a file: ${filePath}`);
+  return filePath;
+}
+
+function normalizeBatchManifest(raw, manifestPath) {
+  if (!raw || Array.isArray(raw) || typeof raw !== 'object') throw new Error('Candidate batch manifest must be an object');
+  if (raw.schema !== CANDIDATE_BATCH_SCHEMA) throw new Error(`Unsupported candidate batch schema: ${raw.schema}`);
+  const batchId = manifestText(raw.batchId, 'batchId');
+  if (!BATCH_ID_PATTERN.test(batchId)) throw new Error('batchId contains unsupported characters');
+  const sourceRows = raw.sources === undefined ? [] : raw.sources;
+  const candidateRows = raw.candidates;
+  if (!Array.isArray(sourceRows)) throw new Error('sources must be an array');
+  if (!Array.isArray(candidateRows) || !candidateRows.length) throw new Error('candidates must be a non-empty array');
+  if (sourceRows.length + candidateRows.length > 1000) throw new Error('Candidate batch exceeds 1000 entries');
+  const baseDir = path.dirname(manifestPath);
+  const ids = new Set();
+  const normalizeId = (value, label) => {
+    const id = manifestText(value, label);
+    if (!BATCH_ID_PATTERN.test(id)) throw new Error(`${label} contains unsupported characters`);
+    if (ids.has(id)) throw new Error(`Duplicate candidate batch id: ${id}`);
+    ids.add(id);
+    return id;
+  };
+  const sources = sourceRows.map((row, index) => {
+    const label = `sources[${index}]`;
+    if (!row || Array.isArray(row) || typeof row !== 'object') throw new Error(`${label} must be an object`);
+    return {
+      id: normalizeId(row.id, `${label}.id`),
+      filePath: manifestFile(baseDir, row.file, `${label}.file`),
+      sourcePath: manifestText(row.sourcePath, `${label}.sourcePath`),
+      domain: manifestText(row.domain, `${label}.domain`),
+      label: manifestText(row.label, `${label}.label`),
+      mediaType: row.mediaType ? manifestText(row.mediaType, `${label}.mediaType`) : '',
+      metadata: manifestObject(row.metadata, `${label}.metadata`),
+      provenance: manifestObject(row.provenance, `${label}.provenance`),
+      reason: manifestText(row.reason, `${label}.reason`),
+      evidence: manifestObject(row.evidence, `${label}.evidence`, { required: true }),
+    };
+  });
+  const sourceIds = new Set(sources.map((entry) => entry.id));
+  const candidates = candidateRows.map((row, index) => {
+    const label = `candidates[${index}]`;
+    if (!row || Array.isArray(row) || typeof row !== 'object') throw new Error(`${label} must be an object`);
+    const refs = row.sourceIds === undefined ? [] : row.sourceIds;
+    if (!Array.isArray(refs) || refs.some((id) => typeof id !== 'string' || !id.trim())) {
+      throw new Error(`${label}.sourceIds must be an array of source ids`);
+    }
+    const normalizedRefs = refs.map((id) => id.trim());
+    if (new Set(normalizedRefs).size !== normalizedRefs.length) throw new Error(`${label}.sourceIds contains duplicates`);
+    for (const sourceId of normalizedRefs) {
+      if (!sourceIds.has(sourceId)) throw new Error(`${label}.sourceIds references unknown source ${sourceId}`);
+    }
+    const availabilityPolicy = row.availabilityPolicy === undefined
+      ? '' : manifestText(row.availabilityPolicy, `${label}.availabilityPolicy`);
+    if (availabilityPolicy && !['critical', 'decorative'].includes(availabilityPolicy)) {
+      throw new Error(`${label}.availabilityPolicy must be critical or decorative`);
+    }
+    const role = manifestText(row.role, `${label}.role`);
+    if (role === 'source') throw new Error(`${label}.role=source belongs in the archived sources array`);
+    return {
+      id: normalizeId(row.id, `${label}.id`),
+      filePath: manifestFile(baseDir, row.file, `${label}.file`),
+      slot: manifestText(row.slot, `${label}.slot`),
+      domain: manifestText(row.domain, `${label}.domain`),
+      role,
+      label: manifestText(row.label, `${label}.label`),
+      availabilityPolicy,
+      mediaType: row.mediaType ? manifestText(row.mediaType, `${label}.mediaType`) : '',
+      metadata: manifestObject(row.metadata, `${label}.metadata`),
+      provenance: manifestObject(row.provenance, `${label}.provenance`),
+      nativeEvidence: manifestObject(row.nativeEvidence, `${label}.nativeEvidence`),
+      slotMetadata: row.slotMetadata === undefined ? null : manifestObject(row.slotMetadata, `${label}.slotMetadata`),
+      sourceIds: normalizedRefs,
+    };
+  });
+  return { schema: CANDIDATE_BATCH_SCHEMA, batchId, manifestPath, sources, candidates };
+}
+
+export function readCandidateBatchManifest(filename) {
+  const requested = path.resolve(filename);
+  const manifestPath = fs.realpathSync(requested);
+  const actualRepoRoot = fs.realpathSync(repoRoot);
+  if (isWithin(actualRepoRoot, manifestPath)) {
+    throw new Error('Candidate batch manifest must live outside the Git repository');
+  }
+  return normalizeBatchManifest(JSON.parse(fs.readFileSync(manifestPath, 'utf8')), manifestPath);
+}
+
+function batchMediaReport(entry, result, idempotencyKey, extra = {}) {
+  return {
+    id: entry.id,
+    versionId: result.id,
+    revision: result.revision,
+    sha256: result.verification.sha256,
+    byteLength: result.verification.byteLength,
+    mediaType: result.media.mediaType,
+    idempotencyKey,
+    reused: Boolean(result.reused),
+    ...extra,
+  };
+}
+
+export async function uploadCandidateBatch({ client, manifest }) {
+  if (!(client instanceof LiveMediaAdminClient)) throw new Error('uploadCandidateBatch requires LiveMediaAdminClient');
+  if (!manifest || manifest.schema !== CANDIDATE_BATCH_SCHEMA) {
+    throw new Error('uploadCandidateBatch requires a validated candidate batch manifest');
+  }
+  const sourceReports = [];
+  const sourceReportById = new Map();
+  for (const source of manifest.sources) {
+    const bytes = fs.readFileSync(source.filePath);
+    if (!bytes.length) throw new Error(`Refusing to archive empty source file: ${source.filePath}`);
+    const mediaType = source.mediaType || mediaTypeFromBytes(source.filePath, bytes);
+    const contentSha256 = sha256Bytes(bytes);
+    const archiveEvidenceSha256 = sha256Bytes(Buffer.from(canonicalJson({
+      reason: source.reason,
+      evidence: source.evidence,
+    }), 'utf8'));
+    const idempotencyKey = deterministicIdempotencyKey('livebatch-source', {
+      batchId: manifest.batchId, id: source.id,
+    });
+    const archived = await archiveSourceBytes({
+      client,
+      payload: {
+        sourcePath: source.sourcePath,
+        domain: source.domain,
+        role: 'source',
+        label: source.label,
+        metadata: source.metadata,
+        provenance: {
+          ...source.provenance,
+          liveMediaBatch: {
+            schema: BATCH_PROVENANCE_SCHEMA,
+            batchId: manifest.batchId,
+            entryId: source.id,
+            kind: 'source',
+            contentSha256,
+            archiveEvidenceSha256,
+          },
+        },
+      },
+      bytes,
+      mediaType,
+      idempotencyKey,
+      reason: source.reason,
+      evidence: {
+        ...source.evidence,
+        batchId: manifest.batchId,
+        batchEntryId: source.id,
+      },
+    });
+    const report = batchMediaReport(source, archived, idempotencyKey, {
+      sourcePath: source.sourcePath,
+      status: archived.archived.status,
+    });
+    sourceReports.push(report);
+    sourceReportById.set(source.id, report);
+  }
+
+  const candidateReports = [];
+  for (const candidate of manifest.candidates) {
+    const bytes = fs.readFileSync(candidate.filePath);
+    if (!bytes.length) throw new Error(`Refusing to upload empty candidate file: ${candidate.filePath}`);
+    const mediaType = candidate.mediaType || mediaTypeFromBytes(candidate.filePath, bytes);
+    const contentSha256 = sha256Bytes(bytes);
+    const sourceVersions = candidate.sourceIds.map((id) => {
+      const source = sourceReportById.get(id);
+      return {
+        entryId: id,
+        sourcePath: source.sourcePath,
+        versionId: source.versionId,
+        sha256: source.sha256,
+      };
+    });
+    const payload = {
+      slot: candidate.slot,
+      domain: candidate.domain,
+      role: candidate.role,
+      label: candidate.label,
+      metadata: candidate.metadata,
+      provenance: {
+        ...candidate.provenance,
+        liveMediaBatch: {
+          schema: BATCH_PROVENANCE_SCHEMA,
+          batchId: manifest.batchId,
+          entryId: candidate.id,
+          kind: 'candidate',
+          contentSha256,
+          sources: sourceVersions,
+        },
+      },
+      nativeEvidence: candidate.nativeEvidence,
+    };
+    if (candidate.availabilityPolicy) payload.availabilityPolicy = candidate.availabilityPolicy;
+    if (candidate.slotMetadata) payload.slotMetadata = candidate.slotMetadata;
+    const idempotencyKey = deterministicIdempotencyKey('livebatch-candidate', {
+      batchId: manifest.batchId, id: candidate.id,
+    });
+    const uploaded = await uploadCandidateBytes({ client, payload, bytes, mediaType, idempotencyKey });
+    candidateReports.push(batchMediaReport(candidate, uploaded, idempotencyKey, {
+      slot: candidate.slot,
+      status: uploaded.row?.status || 'candidate',
+      sourceVersions,
+    }));
+  }
+  return {
+    schema: CANDIDATE_BATCH_RESULT_SCHEMA,
+    batchId: manifest.batchId,
+    completedAt: new Date().toISOString(),
+    sources: sourceReports,
+    candidates: candidateReports,
+  };
+}
+
 function assertSafeExplicitOutput(outputPath) {
   if (!isWithin(repoRoot, outputPath)) return;
   const allowedRoots = [
@@ -275,11 +570,11 @@ function readJsonObject(filePath, option) {
   return value;
 }
 
-function parseCli(argv) {
+export function parseCli(argv) {
   const options = {
     command: '',
     headers: process.env.LIVE_MEDIA_COOKIE ? { Cookie: process.env.LIVE_MEDIA_COOKIE } : {},
-    metadata: '', provenance: '', nativeEvidence: '', force: false,
+    metadata: '', provenance: '', nativeEvidence: '', evidence: '', force: false,
   };
   let index = 0;
   if (argv[0] && !argv[0].startsWith('-')) options.command = argv[index++];
@@ -294,6 +589,7 @@ function parseCli(argv) {
     else if (flag === '--cookie') options.headers.Cookie = next();
     else if (flag === '--header') { const [name, value] = parseHeader(next()); options.headers[name] = value; }
     else if (flag === '--file') options.file = path.resolve(next());
+    else if (flag === '--manifest') options.manifest = path.resolve(next());
     else if (flag === '--out') options.out = path.resolve(next());
     else if (flag === '--slot') options.slot = next();
     else if (flag === '--source-path') options.sourcePath = next();
@@ -305,21 +601,30 @@ function parseCli(argv) {
     else if (flag === '--metadata-json') options.metadata = next();
     else if (flag === '--provenance-json') options.provenance = next();
     else if (flag === '--native-evidence-json') options.nativeEvidence = next();
+    else if (flag === '--evidence-json') options.evidence = next();
+    else if (flag === '--reason') options.reason = next();
     else if (flag === '--idempotency-key') options.idempotencyKey = next();
     else if (flag === '--force') options.force = true;
     else throw new Error(`Unknown option: ${flag}`);
   }
-  if (!['upload-candidate', 'fetch-source'].includes(options.command)) {
-    throw new Error('Usage: live-media-admin-client.mjs upload-candidate|fetch-source [options]');
+  if (!['upload-candidate', 'archive-source', 'upload-candidate-batch', 'fetch-source'].includes(options.command)) {
+    throw new Error('Usage: live-media-admin-client.mjs upload-candidate|archive-source|upload-candidate-batch|fetch-source [options]');
   }
-  const required = options.command === 'upload-candidate'
-    ? ['apiBase', 'file', 'domain', 'role', 'label']
-    : ['apiBase', 'sourcePath', 'out'];
+  const required = ({
+    'upload-candidate': ['apiBase', 'file', 'domain', 'role', 'label'],
+    'archive-source': ['apiBase', 'file', 'sourcePath', 'domain', 'label', 'reason', 'evidence'],
+    'upload-candidate-batch': ['apiBase', 'manifest'],
+    'fetch-source': ['apiBase', 'sourcePath', 'out'],
+  })[options.command];
   for (const name of required) {
     if (!options[name]) throw new Error(`--${name.replace(/[A-Z]/g, (value) => `-${value.toLowerCase()}`)} is required`);
   }
   if (options.command === 'upload-candidate' && Boolean(options.slot) === Boolean(options.sourcePath)) {
     throw new Error('Provide exactly one of --slot or --source-path');
+  }
+  if (options.command === 'archive-source' && options.slot) throw new Error('archive-source does not accept --slot');
+  if (options.command === 'archive-source' && options.role && options.role !== 'source') {
+    throw new Error('archive-source role is always source');
   }
   if (options.availabilityPolicy && !['critical', 'decorative'].includes(options.availabilityPolicy)) {
     throw new Error('--availability-policy must be critical or decorative');
@@ -330,6 +635,11 @@ function parseCli(argv) {
 async function runCli() {
   const options = parseCli(process.argv.slice(2));
   const client = new LiveMediaAdminClient({ apiBase: options.apiBase, headers: options.headers });
+  if (options.command === 'upload-candidate-batch') {
+    const manifest = readCandidateBatchManifest(options.manifest);
+    console.log(JSON.stringify(await uploadCandidateBatch({ client, manifest }), null, 2));
+    return;
+  }
   if (options.command === 'fetch-source') {
     assertSafeExplicitOutput(options.out);
     if (fs.existsSync(options.out) && !options.force) throw new Error(`Output already exists; pass --force to replace it: ${options.out}`);
@@ -385,6 +695,37 @@ async function runCli() {
   if (provenance) payload.provenance = provenance;
   if (nativeEvidence) payload.nativeEvidence = nativeEvidence;
 
+  if (options.command === 'archive-source') {
+    payload.slot = null;
+    payload.role = 'source';
+    const evidence = readJsonObject(options.evidence, '--evidence-json');
+    const idempotencyKey = options.idempotencyKey || deterministicIdempotencyKey('archive-source', {
+      payload,
+      sha256: sha256Bytes(bytes),
+      reason: options.reason,
+      evidence,
+    });
+    const archived = await archiveSourceBytes({
+      client,
+      payload,
+      bytes,
+      mediaType,
+      idempotencyKey,
+      reason: options.reason,
+      evidence,
+    });
+    console.log(JSON.stringify({
+      status: 'source-archived',
+      id: archived.id,
+      revision: archived.revision,
+      sourcePath: options.sourcePath,
+      idempotencyKey,
+      reused: Boolean(archived.reused),
+      media: archived.verification,
+    }, null, 2));
+    return;
+  }
+
   const uploaded = await uploadCandidateBytes({
     client,
     payload,
@@ -398,6 +739,7 @@ async function runCli() {
     revision: uploaded.revision,
     slot: options.slot || null,
     sourcePath: options.sourcePath || null,
+    reused: Boolean(uploaded.reused),
     media: uploaded.verification,
   }, null, 2));
 }

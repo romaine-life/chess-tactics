@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: "accepted; whole-cell side composition superseded by ADR-0083"
 date: 2026-06-28
 deciders: Nelson, Claude
+partially_superseded_by: "[ADR-0083](0083-exposed-terrain-faces-own-independent-edge-treatments.md)"
 ---
 
 # ADR-0039: A board tile is a TOP layer composited over a SIDE layer

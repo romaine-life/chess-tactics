@@ -40,6 +40,31 @@ block. Use the packs' full content: **displacement/height maps** for real surfac
 doodads. Source packs ship all of these; rendering only the base-color flat was the bug
 this contract corrects.
 
+### Exposed faces and abrupt cuts
+
+Per [ADR-0083](adr/0083-exposed-terrain-faces-own-independent-edge-treatments.md),
+side topology is face-level. The fixed camera sees logical south and east: south
+is exposed when `(x, y + 1)` is void, and east when `(x + 1, y)` is void. The
+canonical 96x180 side frame stores south in columns `0..47` and east in columns
+`48..95`; a compositor draws only the exposed half. A per-face override may
+select a different material for a mural, story feature, transition treatment,
+or explicit waterfall. An override never makes an interior face visible.
+
+`packages/board-render/src/render/terrainSides.ts` is the shared topology,
+material-fallback, and source-half authority. Gameplay, Studio/editor views,
+client bakes, and server thumbnails must consume it rather than inventing local
+exposure rules.
+
+Abruptness comes from occupancy; treatment comes from live media. Ordinary Water
+at a map cut uses generated native pixels for a thin meniscus over dark
+substrate. A waterfall is an explicit connected feature, not the fallback for
+every Water/void boundary.
+
+The runtime's two-pixel top dilation is seam-repair geometry. It is clipped to
+the union of occupied logical diamonds, including holes, and must never paint a
+top-color apron outside the map. A visible lip or cap is authored side media,
+not generic renderer padding.
+
 ## Composed terrain and macrotiles
 
 The runtime board is one composed terrain canvas, but its source data remains layered:

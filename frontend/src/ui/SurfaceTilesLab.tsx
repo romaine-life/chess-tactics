@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { TERRAIN_SIDE_FACES, resolveTerrainSideExposure } from '@chess-tactics/board-render';
 import { tileAssets, tileFamilies, edgeTiles, muralTiles, edgeFeatures, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
@@ -203,10 +204,14 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
     for (const cell of board.cells) {
       if (!cell.asset) continue;
       slots.add(terrainTopSrc(cell.asset.src, cell.asset.topAnimFrames));
-      const sideExposed = Boolean(cell.sideAsset)
-        || !occupied.has(`${cell.x + 1}-${cell.y}`)
-        || !occupied.has(`${cell.x}-${cell.y + 1}`);
-      if (sideExposed) slots.add(terrainSideSrc((cell.sideAsset ?? cell.asset).src));
+      const exposure = resolveTerrainSideExposure(
+        cell,
+        (x, y) => occupied.has(`${x}-${y}`),
+      );
+      for (const face of TERRAIN_SIDE_FACES) {
+        if (!exposure[face]) continue;
+        slots.add(terrainSideSrc((cell.sideAssets?.[face] ?? cell.asset).src));
+      }
     }
     return slots;
   }, [board]);
@@ -351,7 +356,9 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
   };
 
   const effectiveZoom = canonicalProof ? 1 : zoom;
-  const effectivePan = canonicalProof ? { x: 0, y: 0 } : pan;
+  // Translation preserves native 1x pixels and remains available so both long
+  // proof edges can be inspected in a narrow Studio pane. Only zoom is locked.
+  const effectivePan = pan;
 
   return (
     <>
@@ -359,7 +366,7 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
       <section className={`al-lab-main ${view === 'board' ? 'stl-board-main' : ''}`.trim()} aria-label="Surface tileset preview">
         {view === 'board' ? (
           <ViewPane kind="board" ariaLabel="Surface tileset viewport" zoom={effectiveZoom} pan={effectivePan} minZoom={0.5} maxZoom={3}
-            onZoomChange={canonicalProof ? () => {} : setZoom} onPanChange={canonicalProof ? () => {} : setPan}>
+            onZoomChange={canonicalProof ? () => {} : setZoom} onPanChange={setPan}>
             <BoardLabBoard
               board={board}
               assetFrameSrc={(a) => a.src}
@@ -368,12 +375,23 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
               boardPan={effectivePan}
               className={`stl-board-surface ${crisp ? 'is-crisp' : ''} ${canonicalProof ? 'is-canonical-proof' : ''}`}
               ariaLabel={canonicalProof && fam === 'water'
-                ? 'Canonical one-times Water side candidate proof with all eight abrupt-edge variants'
+                ? 'Canonical one-times Water side candidate proof with all eight variants on both exposed faces'
                 : 'Surface tileset board preview'}
               renderCellOverlay={canonicalProof && fam === 'water'
-                ? ({ cell }) => cell.y === 2
-                  ? <span className="stl-proof-index" aria-label={`Water side variant ${cell.x + 1}`}>{cell.x + 1}</span>
-                  : null
+                ? ({ cell }) => {
+                  const labels = [
+                    ...(cell.y === 7 ? [`S${cell.x + 1}`] : []),
+                    ...(cell.x === 7 ? [`E${cell.y + 1}`] : []),
+                  ];
+                  return labels.length ? (
+                    <span
+                      className="stl-proof-index"
+                      aria-label={`Water side ${labels.join(' and ')} candidate proof`}
+                    >
+                      {labels.join(' · ')}
+                    </span>
+                  ) : null;
+                }
                 : undefined}
             />
           </ViewPane>
@@ -413,7 +431,7 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
                   <button type="button" disabled={canonicalProof} className={`stl-toggle ${story ? 'is-on' : ''}`} onClick={() => setStory((v) => !v)} title="Parked story edge-features (ADR-0041)">Story</button>
                 </div>
                 {canonicalProof && fam === 'water' ? (
-                  <p className="stl-note stl-proof-note">The south edge is fixed at native 1×: Water side slots 0–7 appear exactly once, in order.</p>
+                  <p className="stl-note stl-proof-note">South and east are fixed at native 1×: Water side slots 0–7 appear exactly once per face, in order.</p>
                 ) : null}
               </>
             ) : (

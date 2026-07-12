@@ -970,11 +970,13 @@ async function main() {
     spatialResampling: false,
     deterministicProof: true,
     abruptExposedEdge: true,
+    exposedFaces: ['south', 'east'],
     selectedCandidates: preparedGroupVersions.map((version) => ({
       slot: version.slot,
       versionId: version.id,
       sha256: version.sha256,
       rowRevision: version.rowRevision,
+      faces: ['south', 'east'],
     })),
     slotSnapshots: groupSlotSnapshotsBeforeReview.map((slot) => ({
       slot: slot.slot,

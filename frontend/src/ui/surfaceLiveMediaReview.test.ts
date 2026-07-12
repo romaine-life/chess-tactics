@@ -120,9 +120,13 @@ describe('surface live-media review', () => {
       assetLocalScale: 1,
       spatialResampling: false,
       abruptExposedEdge: true,
+      exposedFaces: ['south', 'east'],
     });
     expect((evidence.selectedCandidates as Array<{ sha256: string }>).map((item) => item.sha256))
       .toEqual(versions.map((item) => item.media?.sha256));
+    expect((evidence.selectedCandidates as Array<{ faces: string[] }>).every(
+      (item) => item.faces.join(',') === 'south,east',
+    )).toBe(true);
     expect(versions.every(isReviewedForCurrentContent)).toBe(true);
     expect(versions.every((version, index) => isReviewedForCurrentSurfaceSnapshot(version, snapshot.slots[index]))).toBe(true);
 
@@ -147,14 +151,18 @@ describe('surface live-media review', () => {
     expect(isReviewedForCurrentSurfaceSnapshot(candidate, { ...currentSlot, rowRevision: currentSlot.rowRevision + 1 })).toBe(false);
   });
 
-  it('mounts all eight Water side variants exactly once on one exposed edge', () => {
+  it('mounts all eight Water side variants exactly once on each exposed face', () => {
     const board = waterSideCanonicalProofBoard(tileFamilies.water);
-    const exposed = board.cells.filter((cell) => cell.y === 2);
+    const south = board.cells.filter((cell) => cell.y === 7);
+    const east = board.cells.filter((cell) => cell.x === 7);
 
-    expect(exposed).toHaveLength(8);
-    expect(exposed.map((cell) => cell.sideAsset?.id)).toEqual(
+    expect(south).toHaveLength(8);
+    expect(south.map((cell) => cell.sideAssets?.south?.id)).toEqual(
       Array.from({ length: 8 }, (_, index) => `water-surf-${index}`),
     );
-    expect(new Set(exposed.map((cell) => cell.sideAsset?.id)).size).toBe(8);
+    expect(east).toHaveLength(8);
+    expect(east.map((cell) => cell.sideAssets?.east?.id)).toEqual(
+      Array.from({ length: 8 }, (_, index) => `water-surf-${index}`),
+    );
   });
 });

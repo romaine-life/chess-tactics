@@ -31,6 +31,24 @@ Source of truth:
 - `frontend/scripts/generate-tile-template.mjs`
 - backend terrain-template slots under `/assets/tiles/canonical-template/`
 
+## Exposed Face Contract
+
+Per [ADR-0083](adr/0083-exposed-terrain-faces-own-independent-edge-treatments.md),
+an abrupt edge is an occupancy boundary, not a special terrain family.
+
+- Only the camera-facing south and east vertical faces are drawn.
+- South borders `(x, y + 1)` and owns source columns `0..47`.
+- East borders `(x + 1, y)` and owns source columns `48..95`.
+- Exposure and material selection are independent. A face override cannot force
+  an occupied/internal face to render.
+- South and east may select different side materials at the same corner.
+- A base side is the fallback. Murals, story features, transitions, and
+  waterfalls are explicit per-face overrides.
+- Water's ordinary abrupt treatment is a thin generated cap over dark substrate.
+  Waterfall art requires an explicit connected feature.
+- The top seam-repair pass stays inside the occupied diamond union and cannot
+  extend the logical map.
+
 ## Base Tiles
 
 Base tiles are family-local.

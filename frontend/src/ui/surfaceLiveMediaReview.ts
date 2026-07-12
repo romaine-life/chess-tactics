@@ -193,6 +193,7 @@ export function surfaceReviewProofEvidence({
     versionId: version.id,
     sha256: version.media?.sha256,
     rowRevision: version.rowRevision,
+    faces: ['south', 'east'],
   }));
   return {
     schema: 'terrain-surface-canonical-board-proof-v1',
@@ -204,6 +205,7 @@ export function surfaceReviewProofEvidence({
     spatialResampling: false,
     deterministicProof: true,
     abruptExposedEdge: true,
+    exposedFaces: ['south', 'east'],
     selectedCandidates,
     slotSnapshots: slots.map((slot) => ({
       slot: slot.slot,
@@ -219,14 +221,14 @@ export function surfaceReviewProofEvidence({
 }
 
 /**
- * Real-renderer proof fixture: three rows of Water with every side variant on
- * one straight, abruptly exposed south edge. No generated solver choice can
- * omit or duplicate a member of the eight-slot acceptance group.
+ * Real-renderer proof fixture: an 8x8 Water field with every side variant on
+ * both straight, abruptly exposed faces. No generated solver choice can omit
+ * or duplicate a member of the eight-slot acceptance group.
  */
 export function waterSideCanonicalProofBoard(variants: readonly TileAsset[]): SocketBoardResult<TileAsset> {
   if (variants.length < 8) throw new Error('Canonical Water side proof requires eight tile variants.');
   const columns = 8;
-  const rows = 3;
+  const rows = 8;
   const cells = Array.from({ length: columns * rows }, (_, index) => {
     const x = index % columns;
     const y = Math.floor(index / columns);
@@ -235,7 +237,10 @@ export function waterSideCanonicalProofBoard(variants: readonly TileAsset[]): So
       x,
       y,
       asset,
-      sideAsset: y === rows - 1 ? variants[x] : undefined,
+      sideAssets: {
+        ...(y === rows - 1 ? { south: variants[x] } : {}),
+        ...(x === columns - 1 ? { east: variants[y] } : {}),
+      },
       sockets: baseSocketsForFamily('water'),
       terrain: 'water' as const,
     };

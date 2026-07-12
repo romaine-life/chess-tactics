@@ -34,6 +34,7 @@ function wallArtOps(
     for (const slot of wallArtSlotsForFace(faceStyles?.[face], face)) {
       const faceAsset = slotSource(slot).faces[face];
       ops.push({
+        layer: 'scene',
         src: faceAsset.src,
         dx: left - WALL_ANCHOR_X + slot.x - faceAsset.mountX * slot.scale,
         dy: top - WALL_ANCHOR_Y + slot.y - faceAsset.mountY * slot.scale,
@@ -66,6 +67,7 @@ function barrierOps({
     if (!cell) continue;
     const { left, top } = boardLabCellPosition(cell);
     ops.push({
+      layer: 'scene',
       src: wallFrameSrc(wall.material, wall.mask),
       dx: left - WALL_ANCHOR_X,
       dy: top - WALL_ANCHOR_Y,
@@ -82,6 +84,7 @@ function barrierOps({
     const { left, top: vertexCellTop } = boardLabCellPosition(post);
     const top = vertexCellTop - TILE_STEP_Y;
     ops.push({
+      layer: 'scene',
       src: fencePostSrc(post.material),
       dx: left - TILE_STEP_X,
       dy: top - TILE_EQUATOR,
@@ -97,6 +100,7 @@ function barrierOps({
     const { left, top } = boardLabCellPosition(cell);
     const z = fenceOverlayZIndex(cell);
     ops.push({
+      layer: 'scene',
       src: fenceFrameSrc(fence.material, fence.mask),
       dx: left - TILE_STEP_X,
       dy: top - TILE_EQUATOR,

@@ -107,8 +107,8 @@ const edgeVariant = (family: TileFamilyId, v: number): TileAsset => ({
   terrains: [family],
 });
 
-// Families with rich edges. Water is intentionally excluded — its edge is the (animated)
-// waterfall, gated on river types; a static frayed water lip reads as clip-art.
+// Families with random rich-edge overrides. Water uses its base side's intentional
+// thin-cap abrupt cut; a waterfall is a separate connected feature, never a void fallback.
 const EDGE_FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand'];
 export const edgeTiles: Partial<Record<TileFamilyId, TileAsset[]>> = Object.fromEntries(
   EDGE_FAMILIES.map((family) => [family, Array.from({ length: EDGE_VARIANTS }, (_, v) => edgeVariant(family, v))]),
@@ -136,7 +136,8 @@ const muralVariant = (family: TileFamilyId, i: number): TileAsset => ({
   notes: `${terrainLabels[family]} — continuous cliff mural, window ${i + 1} of ${MURAL_WINDOWS}.`,
   terrains: [family],
 });
-// Families with a baked continuity mural (water excluded — its edge is the waterfall).
+// Families with baked continuity-mural overrides. Water keeps its base thin-cap cut and
+// gains waterfall art only through an explicit connected edge feature.
 const MURAL_FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'sand', 'pebble'];
 export const muralTiles: Partial<Record<TileFamilyId, TileAsset[]>> = Object.fromEntries(
   MURAL_FAMILIES.map((family) => [family, Array.from({ length: MURAL_WINDOWS }, (_, i) => muralVariant(family, i))]),

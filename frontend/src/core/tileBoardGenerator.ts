@@ -4,18 +4,15 @@ import type { EdgeName, EdgeSockets, TerrainPairId, TileFamilyId, TileSocketAsse
 import { baseSocketsForFamily, familyIdForAsset, tileSocketsForAsset, transitionPairs } from './tileSockets';
 import type { FeatureKind, FeatureMaterial } from './featureAutotile';
 import { featureKey, featureMaskAt } from './featureAutotile';
+import type { TerrainSideFace, TerrainSideMaterials } from '@chess-tactics/board-render';
 
 export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsset> {
   x: number;
   y: number;
   /** The TOP tile for this cell (the walkable surface; also the default SIDE). */
   asset?: TAsset;
-  /**
-   * Optional independent SIDE layer (ADR-0039). When set, the renderer composes this asset's
-   * `-side` under `asset`'s `-top`, so the side (frayed edge, future river/waterfall) varies
-   * independently of the top. Unset ⇒ the side comes from `asset` itself (the normal cube).
-   */
-  sideAsset?: TAsset;
+  /** Independent material overrides for the two camera-facing SIDE layers. */
+  sideAssets?: TerrainSideMaterials<TAsset>;
   /** Phase 2: set when this cell's side is part of a multi-tile story feature (fossil, ruins). */
   edgeFeatureId?: string;
   sockets: EdgeSockets;
@@ -281,9 +278,9 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
   /**
    * Optional per-family ORDERED continuity-mural windows (ADR-0039). When a family is present
    * here, its void-facing edge cells get a SEQUENTIAL window by run-position instead of the
-   * random `edgeAssets` variant — so the cliff FLOWS continuously across adjacent tiles. The
-   * run wraps the bottom corner: the right edge (p = y) continues into the bottom edge. A
-   * family absent here falls back to `edgeAssets`. Index order == window order.
+   * random `edgeAssets` variant — so the cliff FLOWS continuously across adjacent tiles.
+   * South and east are independent straight runs and never bend one source window around the
+   * southeast corner. A family absent here falls back to `edgeAssets`. Index order == window order.
    */
   muralEdges?: Partial<Record<TileFamilyId, TAsset[]>>;
   /**
@@ -291,6 +288,24 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
    * straight board edges, OVERRIDING the mural side, with a clean terminator when they'd clip.
    */
   edgeFeatures?: EdgeFeatureSpec<TAsset>[];
+}
+
+function setSideAsset<TAsset extends TileSocketAsset>(
+  cell: SocketBoardCell<TAsset>,
+  face: TerrainSideFace,
+  asset: TAsset,
+): void {
+  cell.sideAssets = { ...cell.sideAssets, [face]: asset };
+}
+
+function setVoidFacingSideAssets<TAsset extends TileSocketAsset>(
+  cell: SocketBoardCell<TAsset>,
+  asset: TAsset,
+  columns: number,
+  rows: number,
+): void {
+  if (cell.x === columns - 1) setSideAsset(cell, 'east', asset);
+  if (cell.y === rows - 1) setSideAsset(cell, 'south', asset);
 }
 
 /**
@@ -361,11 +376,9 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
     }
   }
 
-  // Give front-edge cells a rich SIDE layer (ADR-0039). Two strategies, per family:
-  //  • CONTINUITY MURAL (muralEdges): consecutive cells get consecutive ORDERED windows of one
-  //    wide cliff, so the geology FLOWS across tiles. Run-position wraps the bottom corner —
-  //    the right edge (p = y, top→bottom corner) continues into the bottom edge
-  //    (p = rows-1 + (columns-1 - x), bottom corner→left corner) as one unbroken count.
+  // Give front-edge cells a rich SIDE layer. Two strategies, per family:
+  //  • CONTINUITY MURAL (muralEdges): each straight face run gets consecutive ORDERED windows
+  //    of one wide cliff, so geology FLOWS without bending one source window around the corner.
   //  • RANDOM VARIANT (edgeAssets): a weighted, anti-adjacent pick — rich but non-continuous.
   // Either keeps each cell's own top + sockets, so legality and the stats below are unaffected.
   if (edgeAssets || muralEdges) {
@@ -376,12 +389,8 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
 
       const mural = muralEdges?.[cell.terrain];
       if (mural && mural.length > 0) {
-        const p = cell.x === columns - 1
-          ? cell.y                                    // right edge (incl. bottom corner)
-          : (rows - 1) + (columns - 1 - cell.x);      // bottom edge, continuing past the corner
-        const pick = mural[((p % mural.length) + mural.length) % mural.length];
-        cell.sideAsset = pick;
-        sideById.set(`${cell.x}-${cell.y}`, pick.id);
+        if (cell.x === columns - 1) setSideAsset(cell, 'east', mural[cell.y % mural.length]);
+        if (cell.y === rows - 1) setSideAsset(cell, 'south', mural[(columns - 1 - cell.x) % mural.length]);
         continue;
       }
 
@@ -398,7 +407,7 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
         pick = pickWeightedAsset(variants, edgeRng.next); // re-roll once…
         if (neighborIds.includes(pick.id)) pick = variants.find((v) => !neighborIds.includes(v.id)) ?? pick; // …then force a different one
       }
-      cell.sideAsset = pick;
+      setVoidFacingSideAssets(cell, pick, columns, rows);
       sideById.set(`${cell.x}-${cell.y}`, pick.id);
     }
   }
@@ -416,7 +425,7 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
     // bottom run starts one cell in from it (no double-placement, no bending).
     const rightRun = Array.from({ length: rows }, (_, y) => at(columns - 1, y)).filter(isEdgeCell);
     const bottomRun = Array.from({ length: columns - 1 }, (_, k) => at(columns - 2 - k, rows - 1)).filter(isEdgeCell);
-    for (const run of [rightRun, bottomRun]) {
+    for (const [face, run] of [['east', rightRun], ['south', bottomRun]] as const) {
       let p = 1 + Math.floor(fRng.next() * 3); // a gap before the first feature
       while (p < run.length) {
         const eligible = edgeFeatures.filter((f) => !f.families || f.families.includes(run[p].terrain));
@@ -426,7 +435,7 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
         const span = Math.min(feat.pieces.length, avail);
         for (let i = 0; i < span; i += 1) {
           const truncated = i === span - 1 && span < feat.pieces.length;
-          run[p + i].sideAsset = truncated ? feat.cap : feat.pieces[i];
+          setSideAsset(run[p + i], face, truncated ? feat.cap : feat.pieces[i]);
           run[p + i].edgeFeatureId = feat.id;
         }
         p += span + 2 + Math.floor(fRng.next() * 4); // feature + a gap before the next

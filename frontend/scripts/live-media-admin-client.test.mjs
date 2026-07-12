@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import {
   archiveSourceBytes,
@@ -5,7 +9,10 @@ import {
   latestArchivedSourceVersion,
   mediaTypeFromBytes,
   mediaTypeFromPath,
+  parseCli,
+  readCandidateBatchManifest,
   sha256Bytes,
+  uploadCandidateBatch,
   uploadCandidateBytes,
 } from './live-media-admin-client.mjs';
 
@@ -66,6 +73,39 @@ describe('live media admin tooling client', () => {
     })).rejects.toThrow(/verification mismatch/i);
   });
 
+  it('resumes an idempotent candidate with exact bytes without uploading again', async () => {
+    const bytes = Buffer.from('already uploaded candidate');
+    const hash = sha256Bytes(bytes);
+    const client = new LiveMediaAdminClient({ apiBase: 'http://localhost:9999', fetchImpl: vi.fn() });
+    client.createVersion = vi.fn(async () => ({
+      id: 'version-existing',
+      revision: 4,
+      body: { idempotentReplay: true },
+      row: {
+        id: 'version-existing',
+        status: 'candidate',
+        rowRevision: 4,
+        media: {
+          url: '/api/admin/media/existing', sha256: hash, byteLength: bytes.length, mediaType: 'image/png',
+        },
+      },
+    }));
+    client.uploadContent = vi.fn();
+    client.verifyMedia = vi.fn(async (request) => request);
+
+    const result = await uploadCandidateBytes({
+      client,
+      payload: { slot: 'terrain/example.png', domain: 'terrain', role: 'top', label: 'Example' },
+      bytes,
+      mediaType: 'image/png',
+      idempotencyKey: 'same-candidate',
+    });
+
+    expect(result).toMatchObject({ id: 'version-existing', revision: 4, reused: true });
+    expect(client.uploadContent).not.toHaveBeenCalled();
+    expect(client.verifyMedia).toHaveBeenCalledWith(expect.objectContaining({ sha256: hash }));
+  });
+
   it('uploads source bytes and immediately archives them as private backend provenance', async () => {
     const bytes = Buffer.from('synthetic source mesh');
     const hash = sha256Bytes(bytes);
@@ -102,6 +142,157 @@ describe('live media admin tooling client', () => {
       evidence: { schema: 'external-source-archive-v1', contentSha256: hash },
     });
     expect(fetchImpl.mock.calls.map((call) => call[0])).not.toContain(expect.stringMatching(/review|accept|bridge/));
+  });
+
+  it('treats an exact already-archived source as a completed replay', async () => {
+    const bytes = Buffer.from('already archived source');
+    const hash = sha256Bytes(bytes);
+    const client = new LiveMediaAdminClient({ apiBase: 'http://localhost:9999', fetchImpl: vi.fn() });
+    client.createVersion = vi.fn(async () => ({
+      id: 'source-existing',
+      revision: 3,
+      body: { idempotentReplay: true },
+      row: {
+        id: 'source-existing',
+        status: 'archived',
+        rowRevision: 3,
+        media: {
+          url: '/api/admin/media/source-existing',
+          sha256: hash,
+          byteLength: bytes.length,
+          mediaType: 'application/octet-stream',
+        },
+      },
+    }));
+    client.uploadContent = vi.fn();
+    client.archiveVersion = vi.fn();
+    client.verifyMedia = vi.fn(async (request) => request);
+
+    const result = await archiveSourceBytes({
+      client,
+      payload: { sourcePath: 'sources/example.blend', domain: 'terrain', role: 'source', label: 'Example source' },
+      bytes,
+      mediaType: 'application/octet-stream',
+      idempotencyKey: 'same-source',
+      reason: 'Exact source archive.',
+      evidence: { schema: 'source-proof-v1' },
+    });
+
+    expect(result).toMatchObject({ revision: 3, reused: true, archived: { status: 'archived' } });
+    expect(client.uploadContent).not.toHaveBeenCalled();
+    expect(client.archiveVersion).not.toHaveBeenCalled();
+  });
+
+  it('archives manifest sources before idempotent candidate uploads and reports exact revisions and hashes', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'live-media-batch-test-'));
+    try {
+      const sourceBytes = Buffer.from('exact generator source');
+      const candidateBytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+      fs.writeFileSync(path.join(root, 'source.bin'), sourceBytes);
+      fs.writeFileSync(path.join(root, 'candidate.png'), candidateBytes);
+      const manifestPath = path.join(root, 'batch.json');
+      fs.writeFileSync(manifestPath, JSON.stringify({
+        schema: 'live-media-candidate-batch-v1',
+        batchId: 'example-batch-v1',
+        sources: [{
+          id: 'generator-source',
+          file: 'source.bin',
+          sourcePath: 'generators/example/source.bin',
+          domain: 'terrain',
+          label: 'Exact generator source',
+          reason: 'Preserve exact source bytes before candidate upload.',
+          evidence: { schema: 'example-source-proof-v1' },
+        }],
+        candidates: [{
+          id: 'candidate-a',
+          file: 'candidate.png',
+          slot: 'terrain/example-side.png',
+          domain: 'terrain',
+          role: 'side',
+          label: 'Example side candidate',
+          availabilityPolicy: 'critical',
+          sourceIds: ['generator-source'],
+          metadata: { canonicalScale: 1 },
+        }],
+      }));
+      const manifest = readCandidateBatchManifest(manifestPath);
+      const operations = [];
+      const client = new LiveMediaAdminClient({ apiBase: 'http://localhost:9999', fetchImpl: vi.fn() });
+      client.createVersion = vi.fn(async (payload, { idempotencyKey }) => {
+        operations.push(`create:${payload.role}`);
+        const id = payload.role === 'source' ? 'source-version' : 'candidate-version';
+        return { id, revision: 0, row: { id, status: 'candidate', rowRevision: 0, media: null }, body: {}, idempotencyKey };
+      });
+      client.uploadContent = vi.fn(async ({ id, bytes, mediaType }) => {
+        operations.push(`upload:${id}`);
+        return {
+          revision: 1,
+          row: {
+            id,
+            status: 'candidate',
+            rowRevision: 1,
+            media: {
+              url: `/api/admin/media/${id}`,
+              sha256: sha256Bytes(bytes),
+              byteLength: bytes.length,
+              mediaType,
+            },
+          },
+        };
+      });
+      client.verifyMedia = vi.fn(async (request) => {
+        operations.push(`verify:${request.url.split('/').at(-1)}`);
+        return request;
+      });
+      client.archiveVersion = vi.fn(async ({ id }) => {
+        operations.push(`archive:${id}`);
+        return { revision: 2, row: { id, status: 'archived', rowRevision: 2 } };
+      });
+
+      const report = await uploadCandidateBatch({ client, manifest });
+
+      expect(operations).toEqual([
+        'create:source', 'upload:source-version', 'verify:source-version', 'archive:source-version',
+        'create:side', 'upload:candidate-version', 'verify:candidate-version',
+      ]);
+      expect(report).toMatchObject({
+        schema: 'live-media-candidate-batch-result-v1',
+        batchId: 'example-batch-v1',
+        sources: [{
+          id: 'generator-source', versionId: 'source-version', revision: 2,
+          sha256: sha256Bytes(sourceBytes), status: 'archived',
+        }],
+        candidates: [{
+          id: 'candidate-a', slot: 'terrain/example-side.png', versionId: 'candidate-version', revision: 1,
+          sha256: sha256Bytes(candidateBytes), status: 'candidate',
+          sourceVersions: [{ entryId: 'generator-source', versionId: 'source-version', sha256: sha256Bytes(sourceBytes) }],
+        }],
+      });
+      const candidateCreate = client.createVersion.mock.calls.find(([payload]) => payload.role === 'side');
+      expect(candidateCreate[0].provenance.liveMediaBatch).toMatchObject({
+        batchId: 'example-batch-v1', entryId: 'candidate-a', kind: 'candidate',
+        sources: [{ entryId: 'generator-source', versionId: 'source-version' }],
+      });
+      expect(client.createVersion.mock.calls.map(([, request]) => request.idempotencyKey))
+        .toEqual([expect.stringMatching(/^livebatch-source-/), expect.stringMatching(/^livebatch-candidate-/)]);
+      expect(operations.some((operation) => /review|accept|bridge/.test(operation))).toBe(false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('exposes source archive and batch upload commands without a review or acceptance command', () => {
+    expect(parseCli([
+      'archive-source', '--api-base', 'http://localhost:9999', '--file', 'source.bin',
+      '--source-path', 'sources/source.bin', '--domain', 'terrain', '--label', 'Source',
+      '--reason', 'Exact archive', '--evidence-json', 'evidence.json',
+    ]).command).toBe('archive-source');
+    expect(parseCli([
+      'upload-candidate-batch', '--api-base', 'http://localhost:9999', '--manifest', 'batch.json',
+    ]).command).toBe('upload-candidate-batch');
+    expect(() => parseCli(['review-candidate'])).toThrow(/Usage/);
+    expect(() => readCandidateBatchManifest(fileURLToPath(import.meta.url)))
+      .toThrow(/outside the Git repository/);
   });
 
   it('does not allow image bytes to bypass validation as an opaque upload', async () => {

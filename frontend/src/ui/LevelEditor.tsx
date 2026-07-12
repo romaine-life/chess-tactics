@@ -4,6 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
+import { resolveTerrainSideExposure } from '@chess-tactics/board-render';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
@@ -511,7 +512,10 @@ function StudioEditableBoard({
       const key = `${x},${y}`;
       const assetId = placed[key];
       const asset = assetId ? resolveAsset(assetId) : undefined;
-      const drawSide = !!asset && (!occupiedTiles.has(`${x + 1},${y}`) || !occupiedTiles.has(`${x},${y + 1}`));
+      const sideExposure = resolveTerrainSideExposure(
+        { x, y },
+        (nextX, nextY) => occupiedTiles.has(`${nextX},${nextY}`),
+      );
       terrainCells.push(studioTerrainCanvasCell({
         key,
         x,
@@ -520,7 +524,7 @@ function StudioEditableBoard({
         feature: placedFeatures[key],
         animationFrame,
         hidden,
-        drawSide,
+        sideExposure,
       }));
       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
       // Move-tool feedback reuses the built-in diamond tile-ring (not an axis-aligned box): the

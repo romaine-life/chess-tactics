@@ -7180,7 +7180,12 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     if (
       selected.length !== requiredSlots.length || selectedBySlot.size !== requiredSlots.length
       || snapshots.length !== requiredSlots.length || snapshotBySlot.size !== requiredSlots.length
-      || evidence.abruptExposedEdge !== true || !Array.isArray(evidence.acceptanceGroups)
+      || evidence.abruptExposedEdge !== true
+      || canonicalJson(evidence.exposedFaces) !== canonicalJson(['south', 'east'])
+      || requiredSlots.some((slot) => (
+        canonicalJson(selectedBySlot.get(slot)?.faces) !== canonicalJson(['south', 'east'])
+      ))
+      || !Array.isArray(evidence.acceptanceGroups)
     ) throw mediaMutationError('invalid_media_review_proof', 409, 'group terrain proof must cover every required face exactly once');
     const group = evidence.acceptanceGroups.find((item) => (
       isObjectRecord(item) && item.groupId === contract.groupId
@@ -7457,6 +7462,8 @@ function assertTerrainAcceptanceProof(rows, slotById, contract = null) {
     if (
       !isObjectRecord(ownProof) || ownProof.versionId !== row.id || ownProof.sha256 !== row.blob_sha256
       || Number(ownProof.rowRevision) + 1 !== Number(row.row_revision)
+      || (contract?.mode === 'group'
+        && canonicalJson(ownProof.faces) !== canonicalJson(['south', 'east']))
     ) throw mediaMutationError('media_review_candidate_snapshot_stale', 409, { slot: row.slot });
     if (contract?.mode === 'group') {
       const canonical = canonicalJson(proof);

@@ -15,6 +15,7 @@ import { fencePostZIndex, objectBaseZIndex, structureBackZIndex } from './sceneD
 import type { EditorBoard } from '../ui/boardCode';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
+import { withoutBoardDrawLayers, type BoardDrawOp } from '@chess-tactics/board-render';
 
 beforeAll(() => applyLiveUnitCatalog(testLiveUnitCatalog()));
 afterAll(() => resetLiveUnitCatalog());
@@ -146,7 +147,10 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
     const topSrc = tileSrcs.find((src) => src.endsWith('-top.png'))!;
     const sideSrc = tileSrcs.find((src) => src.endsWith('-side.png'))!;
     expect(boardDrawOps(board).filter((op) => op.src === topSrc)).toHaveLength(4);
-    expect(boardDrawOps(board).filter((op) => op.src === sideSrc)).toHaveLength(3);
+    const sideOps = boardDrawOps(board).filter((op) => op.src === sideSrc);
+    expect(sideOps).toHaveLength(4);
+    expect(sideOps.filter((op) => op.sx === 0 && op.sw === 48 && op.dw === 48)).toHaveLength(2);
+    expect(sideOps.filter((op) => op.sx === 48 && op.sw === 48 && op.dw === 48)).toHaveLength(2);
     // Exact editor boards do not invent ambient cover when their authored cover map is empty.
     expect(srcs.some((s) => s.includes('groundcover'))).toBe(false);
   });
@@ -214,6 +218,27 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
 });
 
 describe('boardDrawOps — z-order matches the live DOM bands', () => {
+  it('filters semantic layers without depending on asset URL conventions', () => {
+    const op = (layer: BoardDrawOp['layer'], src: string): BoardDrawOp => ({
+      layer,
+      src,
+      dx: 0,
+      dy: 0,
+      dw: 48,
+      dh: 180,
+      z: 0,
+    });
+    const profileTerrain = op('terrain', '/registered/profiles/abrupt-water-cut.png');
+    const misleadingScene = op('scene', '/assets/tiles/surface/not-terrain.png');
+    const feature = op('linear-feature', '/registered/features/river.png');
+
+    expect(withoutBoardDrawLayers(
+      [profileTerrain, misleadingScene, feature],
+      'terrain',
+      'linear-feature',
+    )).toEqual([misleadingScene]);
+  });
+
   it('keeps accepted native unit rasters at their authored dimensions', () => {
     const catalog = testLiveUnitCatalog({ scales: { pawn: 66 }, nativeScales: { pawn: 66 } });
     const pawn = catalog.assets.find((asset) => asset.family === 'pawn')!;
@@ -307,6 +332,9 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(tileOps).toHaveLength(1);
     expect(macroTileOp).toBeDefined();
     expect(featureOp).toBeDefined();
+    expect(tileOps.every((op) => op.layer === 'terrain')).toBe(true);
+    expect(macroTileOp!.layer).toBe('terrain');
+    expect(featureOp!.layer).toBe('linear-feature');
     expect(macroTileOp!.z).toBeGreaterThan(tileOps[0].z);
     expect(featureOp!.z).toBeGreaterThan(macroTileOp!.z);
     expect(featureOp!.z).toBeLessThan(20000);

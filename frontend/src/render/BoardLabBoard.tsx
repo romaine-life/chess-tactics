@@ -1,5 +1,10 @@
 import type { ReactNode } from 'react';
-import { liveMediaForSlot } from '@chess-tactics/board-render';
+import {
+  liveMediaForSlot,
+  resolveTerrainSideExposure,
+  resolveTerrainSideFaces,
+  resolveTerrainSideMaterials,
+} from '@chess-tactics/board-render';
 import { boardLabCellPosition } from './boardProjection';
 import { BoardGridLayer } from './BoardGridLayer';
 import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
@@ -103,6 +108,42 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   children?: ReactNode;
 }
 
+export function boardLabTerrainCanvasCells<TAsset extends TileSocketAsset>(
+  sourceCells: readonly SocketBoardCell<TAsset>[],
+  assetFrameSrc: (asset: TAsset) => string,
+  terrainSrcOverride?: BoardLabTerrainSourceOverride<TAsset>,
+): TerrainCanvasCell[] {
+  const occupied = new Set(sourceCells.filter((cell) => cell.asset).map((cell) => `${cell.x}-${cell.y}`));
+  return sourceCells.map((cell) => {
+    const topAsset = cell.asset;
+    const topFrameSrc = topAsset ? assetFrameSrc(topAsset) : undefined;
+    const sideMaterials = resolveTerrainSideMaterials(
+      cell.asset,
+      cell.sideAssets,
+      (asset) => resolveBoardLabTerrainSrc(
+        assetFrameSrc(asset),
+        'side',
+        { cell, asset },
+        terrainSrcOverride,
+      ),
+    );
+    return {
+      key: `${cell.x}-${cell.y}`,
+      x: cell.x,
+      y: cell.y,
+      topSrc: topFrameSrc && topAsset
+        ? resolveBoardLabTerrainSrc(topFrameSrc, 'top', { cell, asset: topAsset }, terrainSrcOverride)
+        : undefined,
+      sideFaces: topAsset ? resolveTerrainSideFaces(
+        resolveTerrainSideExposure(cell, (x, y) => occupied.has(`${x}-${y}`)),
+        sideMaterials,
+      ) : undefined,
+      featureSrc: cell.feature ? featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask) : undefined,
+      topAnimFrames: topAsset?.topAnimFrames,
+    };
+  });
+}
+
 // Adapter: a generated socket board -> the shared TileGrid render core.
 export function BoardLabBoard<TAsset extends TileSocketAsset>({
   board,
@@ -130,32 +171,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   const byCoordinate = new Map<string, SocketBoardCell<TAsset>>(
     sourceCells.map((cell): [string, SocketBoardCell<TAsset>] => [`${cell.x},${cell.y}`, cell]),
   );
-  const occupied = new Set(sourceCells.filter((cell) => cell.asset).map((cell) => `${cell.x}-${cell.y}`));
-  const isSideExposed = (cell: SocketBoardCell<TAsset>): boolean => {
-    if (!cell.asset) return false;
-    if (cell.sideAsset) return true;
-    return !occupied.has(`${cell.x + 1}-${cell.y}`) || !occupied.has(`${cell.x}-${cell.y + 1}`);
-  };
-  const terrainCells: TerrainCanvasCell[] = sourceCells.map((cell) => {
-    const topAsset = cell.asset;
-    const sideAsset = cell.sideAsset ?? cell.asset;
-    const topSrc = topAsset ? assetFrameSrc(topAsset) : undefined;
-    const sideSrc = sideAsset ? assetFrameSrc(sideAsset) : undefined;
-    return {
-      key: `${cell.x}-${cell.y}`,
-      x: cell.x,
-      y: cell.y,
-      topSrc: topSrc && topAsset
-        ? resolveBoardLabTerrainSrc(topSrc, 'top', { cell, asset: topAsset }, terrainSrcOverride)
-        : undefined,
-      sideSrc: sideSrc && sideAsset
-        ? resolveBoardLabTerrainSrc(sideSrc, 'side', { cell, asset: sideAsset }, terrainSrcOverride)
-        : undefined,
-      featureSrc: cell.feature ? featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask) : undefined,
-      topAnimFrames: cell.asset?.topAnimFrames,
-      drawSide: isSideExposed(cell),
-    };
-  });
+  const terrainCells = boardLabTerrainCanvasCells(sourceCells, assetFrameSrc, terrainSrcOverride);
   const cells = sourceCells.map((cell) => {
     // Terrain art is composed once in BoardTerrainLayer; the per-cell DOM stays as semantic
     // editor/game chrome (data hooks, missing labels, selections, hit targets), not tile pixels.
@@ -166,7 +182,8 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       className: cell.missing ? 'is-missing' : !cell.asset ? 'is-empty' : '',
       data: {
         'data-asset-id': cell.asset?.id,
-        'data-side-id': cell.sideAsset?.id,
+        'data-east-side-id': cell.sideAssets?.east?.id,
+        'data-south-side-id': cell.sideAssets?.south?.id,
         'data-missing': cell.missing?.label,
         'data-board-x': cell.x,
         'data-board-y': cell.y,

@@ -58,6 +58,7 @@ export function transformFenceArtReviewOps(
     for (const post of resolveFencePosts(board.fences ?? {}, board.fencePosts ?? {}).values()) {
       const { left, top: vertexCellTop } = boardLabCellPosition(post);
       transformed.push({
+        layer: 'scene',
         src: kit.post,
         dx: left - TILE_STEP_X,
         dy: vertexCellTop - TILE_STEP_Y - TILE_FRAME_EQUATOR_Y,
@@ -74,6 +75,7 @@ export function transformFenceArtReviewOps(
     const cell = { x, y };
     const { left, top } = boardLabCellPosition(cell);
     const base: Omit<BoardDrawOp, 'src'> = {
+      layer: 'scene',
       dx: left - TILE_STEP_X,
       dy: top - TILE_FRAME_EQUATOR_Y,
       dw: FRAME_WIDTH,

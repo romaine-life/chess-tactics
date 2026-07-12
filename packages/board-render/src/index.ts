@@ -60,6 +60,7 @@ export * from './render/fenceOverlayDepth';
 export * from './render/renderPlan';
 export * from './render/sceneDepth';
 export * from './render/structureGeometry';
+export * from './render/terrainSides';
 export * from './ui/boardCode';
 export * from './ui/doodadCatalog';
 export * from './ui/studioBoard';

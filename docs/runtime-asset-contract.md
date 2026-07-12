@@ -77,6 +77,15 @@ accepted or review media into a committed directory. Source and rejected binary
 attempts also go to private storage; only prompts and non-material deterministic
 geometry may remain in Git.
 
+`frontend/scripts/live-media-admin-client.mjs` is the command-line boundary for
+non-browser tools. `archive-source` stores and verifies one exact private source;
+`upload-candidate` stores one candidate; and `upload-candidate-batch` consumes an
+outside-repository manifest, archives its declared sources first, then uploads
+idempotent candidates whose provenance binds those archived version ids and
+hashes. These commands deliberately cannot review, accept, or activate media.
+Those judgment operations remain reachable only through the game-owned backend
+review instrument.
+
 ## Tests and development
 
 - The backend is required; no offline media fallback is permitted.
