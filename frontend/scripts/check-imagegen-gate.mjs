@@ -83,6 +83,41 @@ export function verifyRolloutShapes() {
   assert.equal(rolloutImageGenEvidence(unverified).ok, false, 'tool source without a returned bitmap must fail');
 }
 
+export function verifyGrandGalleryFaceParity() {
+  const assetDir = join(FRONTEND, 'public/assets/wall-decor');
+  for (const layer of ['', '-glass']) {
+    const west = PNG.sync.read(readFileSync(join(assetDir, `mirror-grand-gallery-west${layer}.png`)));
+    const north = PNG.sync.read(readFileSync(join(assetDir, `mirror-grand-gallery-north${layer}.png`)));
+    assert.equal(north.width, west.width, `Grand Gallery north${layer} width must match west`);
+    assert.equal(north.height, west.height, `Grand Gallery north${layer} height must match west`);
+    for (let y = 0; y < west.height; y += 1) {
+      for (let x = 0; x < west.width; x += 1) {
+        const westOffset = (y * west.width + (west.width - 1 - x)) * 4;
+        const northOffset = (y * north.width + x) * 4;
+        for (let channel = 0; channel < 4; channel += 1) {
+          assert.equal(
+            north.data[northOffset + channel],
+            west.data[westOffset + channel],
+            `Grand Gallery north${layer} must be the exact horizontal counterpart of west at ${x},${y}`,
+          );
+        }
+      }
+    }
+  }
+
+  const manifest = JSON.parse(readFileSync(join(assetDir, 'manifest.json'), 'utf8'));
+  const gallery = manifest.assets.find((asset) => asset.id === 'mirror-grand-gallery');
+  assert.ok(gallery, 'Grand Gallery must exist in the wall-decor manifest');
+  assert.equal(gallery.faces.north.mountX, gallery.faces.west.width - gallery.faces.west.mountX);
+  assert.equal(gallery.faces.north.mountY, gallery.faces.west.mountY);
+  const points = (aperture) => Array.from({ length: aperture.length / 2 }, (_, index) =>
+    `${aperture[index * 2].toFixed(6)},${aperture[index * 2 + 1].toFixed(6)}`,
+  ).sort();
+  const mirroredWest = gallery.faces.west.aperture.flatMap((coordinate, index) =>
+    index % 2 === 0 ? [1 - coordinate] : [coordinate]);
+  assert.deepEqual(points(gallery.faces.north.aperture), points(mirroredWest));
+}
+
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const projectGridPoint = ({ x, y }) => ({ left: (x - y) * 48, top: (x + y) * 27 });
 const WALL_FLOOR_SEAM_OFFSET_Y = -28;
@@ -348,6 +383,7 @@ export function verifyGrandGalleryExactSeat() {
 const invokedDirectly = !!process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith(`/${SELF}`);
 if (invokedDirectly) {
   verifyRolloutShapes();
+  verifyGrandGalleryFaceParity();
   const galleryReports = verifyGrandGalleryExactSeat();
   const bad = stdoutGateOffenders();
   if (bad.length) {

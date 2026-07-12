@@ -149,8 +149,10 @@ check, repeats the pinned-source hashes, grounded slot, virtual-raster containme
 semantic wall-crossing classification, shared support seam, and tall-wall bounds.
 
 3. The build script trims and frames the transparent sources into stable runtime
-   PNGs, projects each sprite onto the west and north wall-face slopes, and
-   splits every projected mirror into an aperture-only `*-glass.png` underlay
+   PNGs and projects each sprite onto its wall-face slope. Grand Gallery projects west once and
+   derives north as its pixel-exact horizontal counterpart per ADR-0087; other assets retain
+   their authored projection policy. The bake splits every projected mirror into an aperture-only
+   `*-glass.png` underlay
    plus a clear-aperture frame foreground. It then writes the runtime and
    canonical package manifests and creates proof/contact sheets:
 

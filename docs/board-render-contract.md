@@ -36,6 +36,12 @@ piece's exact continuous board position before screen projection or aperture cli
 It must not be inferred from projected pixels or a rounded movement source/destination
 cell.
 
+Grand Gallery's generated material is face-parity exact: its north frame and glass rasters are
+horizontal pixel mirrors of west, with mirrored mount and aperture geometry. This affects only
+the generated material projection; runtime board-grid reflection and facing rules below remain
+unchanged. See
+[ADR-0087](adr/0087-grand-gallery-wall-faces-are-exact-visual-counterparts.md).
+
 For a mirror covering `N >= 1` wall cells from integer tangent anchor `a`, the authored
 tangent interval is `I(a, N) = [a - 0.5, a + N - 0.5)`. A west-wall mirror casts inward
 from `x = -0.5` along board `+X` and admits a physical piece `(px, py)` iff `py` is in that

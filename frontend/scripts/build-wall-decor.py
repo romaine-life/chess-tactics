@@ -26,7 +26,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -201,6 +201,9 @@ ASSETS = [
         "kind": "mirror",
         "badge": "three-wall",
         "mirror_coverage": "full-body",
+        # Opposing isometric wall faces are exact visual counterparts. Project the west face once,
+        # then mirror those pixels for north instead of independently shearing directional sheen.
+        "exact_face_parity": True,
         "span": 3,
         "frame": (216, 252),
         "fit": (204, 238),
@@ -467,6 +470,28 @@ def project_to_wall_face(
             normalized_y = (mapped_y - min_y - bbox[1]) / crop.height
             aperture.extend((round(max(0, min(1, normalized_x)), 6), round(max(0, min(1, normalized_y)), 6)))
     return crop, anchor, aperture
+
+
+def mirrored_wall_face(
+    west: Image.Image,
+    west_anchor: tuple[int, int],
+    west_aperture: list[float] | None,
+) -> tuple[Image.Image, tuple[int, int], list[float] | None]:
+    """Derive the north face as the pixel-exact horizontal counterpart of west."""
+    north = ImageOps.mirror(west)
+    north_anchor = (west.width - west_anchor[0], west_anchor[1])
+    if west_aperture is None:
+        return north, north_anchor, None
+
+    # Mirroring reverses polygon winding. Reverse the transformed vertices so the runtime convex
+    # clipper receives the same winding convention as the projected west aperture.
+    points = [
+        (round(1 - west_aperture[index], 6), west_aperture[index + 1])
+        for index in range(0, len(west_aperture), 2)
+    ]
+    points.reverse()
+    north_aperture = [coordinate for point in points for coordinate in point]
+    return north, north_anchor, north_aperture
 
 
 def split_mirror_face(src: Image.Image, aperture: list[float]) -> tuple[Image.Image, Image.Image]:
@@ -950,7 +975,10 @@ def main() -> None:
     for asset in ASSETS:
         source = normalize(asset)
         west, west_anchor, west_aperture = project_to_wall_face(source, asset, "west")
-        north, north_anchor, north_aperture = project_to_wall_face(source, asset, "north")
+        if asset.get("exact_face_parity"):
+            north, north_anchor, north_aperture = mirrored_wall_face(west, west_anchor, west_aperture)
+        else:
+            north, north_anchor, north_aperture = project_to_wall_face(source, asset, "north")
         assert_full_unit_aperture(asset, "west", west, west_aperture)
         assert_full_unit_aperture(asset, "north", north, north_aperture)
         west_frame, west_glass = split_mirror_face(west, west_aperture) if west_aperture else (west, None)

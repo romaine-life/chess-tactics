@@ -173,6 +173,13 @@ Mirror fit follows the exact one-to-one game-world and wall-height rules in
   not stretch an existing frame, shrink or shift the live piece, float it above its seat,
   or append CSS, SVG, gradient, or code-painted wall pixels
 
+Grand Gallery additionally uses exact face parity: the emitted north frame and glass are
+horizontal pixel mirrors of the west frame and glass. Its north mount and normalized aperture
+mirror the west geometry with polygon winding restored. Independently shearing directional
+source highlights for the two faces is not an eligible bake because it changes the material's
+visual identity by wall orientation. The image-generation gate compares every emitted RGBA
+sample. See [ADR-0087](adr/0087-grand-gallery-wall-faces-are-exact-visual-counterparts.md).
+
 Grand Gallery acceptance evidence must show the full tallest-unit reflection at 1:1
 beside its physical board draw on both wall faces, with aperture bounds visible. It must
 also show or report the exhaustive wall-hit silhouette from the physical alpha mask:
