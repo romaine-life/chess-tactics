@@ -27,15 +27,41 @@ export function approvalMarker({ head, fingerprint, digest }) {
   return `<!-- exact-image-approval:${MARKER_VERSION} head=${head} fingerprint=${fingerprint} digest=${digest} -->`;
 }
 
+function flattenedComments(comments) {
+  return Array.isArray(comments)
+    ? comments.flat(Infinity).filter((comment) => comment && typeof comment === 'object' && !Array.isArray(comment))
+    : [];
+}
+
+function commentAssociation(comment) {
+  return comment.author_association ?? comment.authorAssociation ?? null;
+}
+
+function commentLogin(comment) {
+  return comment.user?.login ?? comment.author?.login ?? null;
+}
+
 export function trustedApprovals(comments, expected) {
   const marker = approvalMarker(expected);
-  const flattened = Array.isArray(comments) ? comments.flat(Infinity) : [];
-  return flattened.filter((comment) =>
+  return flattenedComments(comments).filter((comment) =>
     comment &&
-    TRUSTED_ASSOCIATIONS.has(comment.author_association ?? comment.authorAssociation) &&
+    TRUSTED_ASSOCIATIONS.has(commentAssociation(comment)) &&
     typeof comment.body === 'string' &&
     comment.body.trim() === marker,
   );
+}
+
+export function approvalDiagnostics(comments, expected) {
+  const marker = approvalMarker(expected);
+  const flattened = flattenedComments(comments);
+  const markers = flattened
+    .filter((comment) => typeof comment.body === 'string' && comment.body.includes('exact-image-approval:'))
+    .map((comment) => ({
+      login: commentLogin(comment),
+      association: commentAssociation(comment),
+      exact: comment.body.trim() === marker,
+    }));
+  return { commentCount: flattened.length, markerCount: markers.length, markers };
 }
 
 function usage() {
@@ -74,10 +100,13 @@ function main() {
 
   const matches = trustedApprovals(comments, expected);
   if (matches.length === 0) {
-    fail(`No trusted pull-request comment exactly approves ${approvalMarker(expected)}`);
+    fail(
+      `No trusted pull-request comment exactly approves ${approvalMarker(expected)}; ` +
+      `comment query summary: ${JSON.stringify(approvalDiagnostics(comments, expected))}`,
+    );
   }
 
-  const approvers = [...new Set(matches.map((comment) => comment.user?.login ?? comment.author?.login).filter(Boolean))];
+  const approvers = [...new Set(matches.map(commentLogin).filter(Boolean))];
   console.log(`Exact image approved by ${approvers.join(', ') || 'a trusted repository collaborator'}.`);
 }
 

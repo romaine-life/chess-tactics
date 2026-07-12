@@ -23,6 +23,9 @@ on:
 permissions:
   id-token: write
   contents: write
+  # Pull-request comments use GitHub's shared issue-comment connection, even
+  # when queried through `gh pr view --json comments`.
+  issues: read
   # Resolve the merged PR (title/number/url) for the built commit — surfaced in
   # Settings → About. See the "Resolve build metadata" step.
   pull-requests: read

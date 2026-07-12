@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { approvalMarker, trustedApprovals } from './exact-image-approval.mjs';
+import { approvalDiagnostics, approvalMarker, trustedApprovals } from './exact-image-approval.mjs';
 
 const expected = {
   head: 'a'.repeat(40),
@@ -38,6 +38,21 @@ test('paginated gh api output is flattened', () => {
   assert.equal(trustedApprovals(pages, expected).length, 1);
 });
 
+test('approval diagnostics expose no comment bodies', () => {
+  const marker = approvalMarker(expected);
+  assert.deepEqual(approvalDiagnostics([
+    { authorAssociation: 'MEMBER', body: marker, author: { login: 'nelson' } },
+    { authorAssociation: 'CONTRIBUTOR', body: `${marker} stale`, author: { login: 'outsider' } },
+  ], expected), {
+    commentCount: 2,
+    markerCount: 2,
+    markers: [
+      { login: 'nelson', association: 'MEMBER', exact: true },
+      { login: 'outsider', association: 'CONTRIBUTOR', exact: false },
+    ],
+  });
+});
+
 test('malformed identities are rejected', () => {
   assert.throws(() => approvalMarker({ ...expected, digest: 'latest' }), /Invalid --digest/);
 });
@@ -55,9 +70,13 @@ test('release workflows preserve immutable candidate and explicit approval gates
   assert.match(candidate, /NODE_BASE=\$\{\{ steps\.fingerprint\.outputs\.resolved_base_ref \}\}/);
   assert.match(candidate, /--write-enabled false/);
   assert.match(candidate, /--delete-enabled false/);
+  assert.match(candidate, /Probe exact-image approval visibility/);
+  assert.match(candidate, /permissions:[\s\S]*issues:\s*read/);
+  assert.match(candidate, /pull-requests:\s*read/);
 
   assert.doesNotMatch(production, /uses: docker\/build-push-action/);
   assert.doesNotMatch(production, /sha-\$\{|sha-<pr-head>/);
+  assert.match(production, /permissions:[\s\S]*issues:\s*read/);
   assert.match(production, /permissions:[\s\S]*pull-requests:\s*read/);
   assert.match(production, /gh pr view "\$\{PR_NUMBER\}"[\s\S]*--json comments/);
   assert.doesNotMatch(production, /issues\/\$\{PR_NUMBER\}\/comments/);
