@@ -6122,7 +6122,11 @@ function publicMediaSlot(row) {
     // Public consumers receive only the validated per-version runtime
     // projection. Authoring notes, migration paths, provenance, and review
     // evidence remain confined to the authenticated admin catalog.
-    versionMetadata: publicRuntimeVersionMetadata(row),
+    // A staging slot has no runtime version to project yet. In particular,
+    // typed semantic slots such as ground-cover sheets require metadata on the
+    // eventual active version; applying that requirement to the empty staging
+    // shell makes the slot impossible to configure through the admin API.
+    versionMetadata: hasActiveMedia ? publicRuntimeVersionMetadata(row) : {},
     provenance: {},
     nativeEvidence: {},
     media: hasActiveMedia ? {
