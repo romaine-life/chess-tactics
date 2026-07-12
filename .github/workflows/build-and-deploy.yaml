@@ -23,6 +23,9 @@ on:
 permissions:
   id-token: write
   contents: write
+  # Pull-request comments use GitHub's shared issue-comment connection, even
+  # when queried through `gh pr view --json comments`.
+  issues: read
   # Resolve the merged PR (title/number/url) for the built commit — surfaced in
   # Settings → About. See the "Resolve build metadata" step.
   pull-requests: read
@@ -265,18 +268,18 @@ jobs:
           PR_HEAD_SHA: ${{ steps.meta.outputs.pr_head_sha }}
           FINGERPRINT: ${{ steps.fingerprint.outputs.fingerprint }}
           IMAGE_DIGEST: ${{ steps.deployment-image.outputs.digest }}
+          TRUSTED_APPROVER_IDS: ${{ vars.EXACT_IMAGE_APPROVER_IDS }}
         shell: bash
         run: |
           set -euo pipefail
-          gh pr view "${PR_NUMBER}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --json comments \
-            --jq '.comments' \
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
             | node scripts/exact-image-approval.mjs verify \
                 --comments - \
                 --head "${PR_HEAD_SHA}" \
                 --fingerprint "${FINGERPRINT}" \
-                --digest "${IMAGE_DIGEST}"
+                --digest "${IMAGE_DIGEST}" \
+                --trusted-user-ids "${TRUSTED_APPROVER_IDS}"
           echo "The exact owner-approved digest is ${IMAGE_DIGEST}." >>"${GITHUB_STEP_SUMMARY}"
 
       - name: Publish tag + version to the prod deploy branch

@@ -27,22 +27,70 @@ export function approvalMarker({ head, fingerprint, digest }) {
   return `<!-- exact-image-approval:${MARKER_VERSION} head=${head} fingerprint=${fingerprint} digest=${digest} -->`;
 }
 
-export function trustedApprovals(comments, expected) {
+function flattenedComments(comments) {
+  return Array.isArray(comments)
+    ? comments.flat(Infinity).filter((comment) => comment && typeof comment === 'object' && !Array.isArray(comment))
+    : [];
+}
+
+function commentAssociation(comment) {
+  return comment.author_association ?? comment.authorAssociation ?? null;
+}
+
+function commentLogin(comment) {
+  return comment.user?.login ?? comment.author?.login ?? null;
+}
+
+function commentUserId(comment) {
+  const value = comment.user?.id ?? comment.author?.databaseId ?? null;
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : null;
+}
+
+function normalizedTrustedUserIds(values) {
+  const ids = values instanceof Set ? [...values] : Array.isArray(values) ? values : [];
+  return new Set(ids.map(String));
+}
+
+function parseTrustedUserIds(value) {
+  const ids = value.split(',').map((item) => item.trim()).filter(Boolean);
+  if (ids.length === 0 || ids.some((id) => !/^[1-9][0-9]*$/.test(id))) {
+    fail(`Invalid --trusted-user-ids: ${value || '(empty)'}`);
+  }
+  return new Set(ids);
+}
+
+export function trustedApprovals(comments, expected, trustedUserIds = []) {
   const marker = approvalMarker(expected);
-  const flattened = Array.isArray(comments) ? comments.flat(Infinity) : [];
-  return flattened.filter((comment) =>
+  const trustedIds = normalizedTrustedUserIds(trustedUserIds);
+  return flattenedComments(comments).filter((comment) =>
     comment &&
-    TRUSTED_ASSOCIATIONS.has(comment.author_association ?? comment.authorAssociation) &&
+    (TRUSTED_ASSOCIATIONS.has(commentAssociation(comment)) || trustedIds.has(commentUserId(comment))) &&
     typeof comment.body === 'string' &&
     comment.body.trim() === marker,
   );
+}
+
+export function approvalDiagnostics(comments, expected, trustedUserIds = []) {
+  const marker = approvalMarker(expected);
+  const trustedIds = normalizedTrustedUserIds(trustedUserIds);
+  const flattened = flattenedComments(comments);
+  const markers = flattened
+    .filter((comment) => typeof comment.body === 'string' && comment.body.includes('exact-image-approval:'))
+    .map((comment) => ({
+      login: commentLogin(comment),
+      userId: commentUserId(comment),
+      association: commentAssociation(comment),
+      exact: comment.body.trim() === marker,
+      explicitlyTrusted: trustedIds.has(commentUserId(comment)),
+    }));
+  return { commentCount: flattened.length, markerCount: markers.length, markers };
 }
 
 function usage() {
   console.error(
     'usage:\n' +
     '  exact-image-approval.mjs marker --head SHA --fingerprint SHA256 --digest sha256:SHA256\n' +
-    '  exact-image-approval.mjs verify --comments FILE|- --head SHA --fingerprint SHA256 --digest sha256:SHA256',
+    '  exact-image-approval.mjs verify --comments FILE|- --head SHA --fingerprint SHA256 --digest sha256:SHA256 --trusted-user-ids ID[,ID...]',
   );
   process.exit(2);
 }
@@ -64,6 +112,7 @@ function main() {
 
   const commentsPath = option('comments');
   if (!commentsPath) usage();
+  const trustedUserIds = parseTrustedUserIds(option('trusted-user-ids'));
   const source = commentsPath === '-' ? fs.readFileSync(0, 'utf8') : fs.readFileSync(commentsPath, 'utf8');
   let comments;
   try {
@@ -72,12 +121,15 @@ function main() {
     fail(`Unable to parse approval comments JSON: ${error.message}`);
   }
 
-  const matches = trustedApprovals(comments, expected);
+  const matches = trustedApprovals(comments, expected, trustedUserIds);
   if (matches.length === 0) {
-    fail(`No trusted pull-request comment exactly approves ${approvalMarker(expected)}`);
+    fail(
+      `No trusted pull-request comment exactly approves ${approvalMarker(expected)}; ` +
+      `comment query summary: ${JSON.stringify(approvalDiagnostics(comments, expected, trustedUserIds))}`,
+    );
   }
 
-  const approvers = [...new Set(matches.map((comment) => comment.user?.login ?? comment.author?.login).filter(Boolean))];
+  const approvers = [...new Set(matches.map(commentLogin).filter(Boolean))];
   console.log(`Exact image approved by ${approvers.join(', ') || 'a trusted repository collaborator'}.`);
 }
 

@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
   id-token: write
+  # Pull-request comments use GitHub's shared issue-comment connection, even
+  # when queried through `gh pr view --json comments`.
+  issues: read
+  pull-requests: read
 
 concurrency:
   group: docker-build-check-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.git_ref || '' }}
@@ -270,6 +274,39 @@ jobs:
             printf 'gh pr comment %s --body '\''%s'\''\n' "${PR_NUMBER:-<number>}" "${marker}"
             echo '```'
           } >>"${GITHUB_STEP_SUMMARY}"
+
+      # This is an observability preflight, not the production gate. Before
+      # owner verification there is normally no marker, so absence is a notice.
+      # When a marker exists, this proves the same workflow token can see and
+      # validate the exact PR-head/fingerprint/digest identity before merge.
+      - name: Probe exact-image approval visibility
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.candidate.outputs.digest != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ steps.source.outputs.sha }}
+          FINGERPRINT: ${{ steps.fingerprint.outputs.fingerprint }}
+          IMAGE_DIGEST: ${{ steps.candidate.outputs.digest }}
+          TRUSTED_APPROVER_IDS: ${{ vars.EXACT_IMAGE_APPROVER_IDS }}
+        run: |
+          set +e
+          output="$(gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            | node scripts/exact-image-approval.mjs verify \
+                --comments - \
+                --head "${PR_HEAD_SHA}" \
+                --fingerprint "${FINGERPRINT}" \
+                --digest "${IMAGE_DIGEST}" \
+                --trusted-user-ids "${TRUSTED_APPROVER_IDS}" 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "${output}"
+          if [[ "${status}" -eq 0 ]]; then
+            echo "Exact-image approval is visible to the candidate workflow token." >>"${GITHUB_STEP_SUMMARY}"
+          else
+            echo "::notice::No exact approval is visible yet; this is expected before owner verification."
+          fi
 
       - name: Build image without pushing (fork PRs)
         # Fork PRs stay build-only: no ACR login, no push. This preserves the
