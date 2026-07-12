@@ -48,7 +48,6 @@ import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
 import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
 import { navigateApp, readValidatedReturnTo } from './navigation';
-import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { PLAY_SKIRMISH_SELECTOR_HREF, playCampaignSelectorHref } from './playHubRoute';
 
