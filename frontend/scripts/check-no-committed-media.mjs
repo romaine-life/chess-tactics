@@ -645,23 +645,27 @@ function gitNulPaths(repoRoot, args) {
   return output.split('\0').filter(Boolean).map(normalizeRepoPath);
 }
 
-function headBlobSizes(repoRoot, head) {
+function headBlobIndex(repoRoot, head) {
   const output = execFileSync('git', ['ls-tree', '-r', '-l', '-z', head], {
     cwd: repoRoot,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
   const sizes = new Map();
+  const objectIds = new Map();
   for (const record of output.split('\0')) {
     if (!record) continue;
     const separator = record.indexOf('\t');
     if (separator < 0) continue;
     const metadata = record.slice(0, separator).trim().split(/\s+/);
+    if (metadata[1] !== 'blob' || !/^[0-9a-f]{40,64}$/.test(metadata[2] || '')) continue;
     const size = Number(metadata.at(-1));
     if (!Number.isSafeInteger(size) || size < 0) continue;
-    sizes.set(normalizeRepoPath(record.slice(separator + 1)), size);
+    const relativePath = normalizeRepoPath(record.slice(separator + 1));
+    sizes.set(relativePath, size);
+    objectIds.set(relativePath, metadata[2]);
   }
-  return sizes;
+  return { sizes, objectIds };
 }
 
 // Git's clean/smudge filters can make a clean checkout byte-different from the
@@ -679,7 +683,7 @@ export function createCanonicalGitByteReader(repoRoot = defaultRepoRoot) {
     repoRoot,
     ['diff', '--no-ext-diff', '--name-only', '-z', head, '--'],
   ));
-  const canonicalBlobSizes = headBlobSizes(repoRoot, head);
+  const { sizes: canonicalBlobSizes, objectIds: canonicalBlobObjectIds } = headBlobIndex(repoRoot, head);
   const canonicalBlobCache = new Map();
 
   const read = (relativePath, suppliedWorkingBytes) => {
@@ -692,7 +696,12 @@ export function createCanonicalGitByteReader(repoRoot = defaultRepoRoot) {
     const canonicalSize = canonicalBlobSizes.get(normalized);
     if (canonicalSize === undefined || canonicalSize === workingBytes.length) return workingBytes;
     if (canonicalBlobCache.has(normalized)) return canonicalBlobCache.get(normalized);
-    const canonicalBytes = execFileSync('git', ['show', `${head}:${normalized}`], {
+    const objectId = canonicalBlobObjectIds.get(normalized);
+    if (!objectId) throw new Error(`Canonical Git blob identity is missing for ${normalized}`);
+    // Address the object directly. `git show HEAD:path` makes Git probe the
+    // revision argument as a filesystem name first and can hit Windows' legacy
+    // path-length limit when the checkout itself is deeply nested.
+    const canonicalBytes = execFileSync('git', ['cat-file', 'blob', objectId], {
       cwd: repoRoot,
       encoding: null,
       maxBuffer: Math.max(64 * 1024 * 1024, canonicalSize + 1024),
@@ -704,7 +713,7 @@ export function createCanonicalGitByteReader(repoRoot = defaultRepoRoot) {
     return canonicalBytes;
   };
 
-  return { head, changedPaths, canonicalBlobSizes, read };
+  return { head, changedPaths, canonicalBlobSizes, canonicalBlobObjectIds, read };
 }
 
 export function collectNoCommittedMediaViolations({
