@@ -18,14 +18,18 @@ test('approval marker binds head, complete fingerprint, and immutable digest', (
   );
 });
 
-test('only exact markers from trusted repository relationships count', () => {
+test('only exact markers from trusted REST or GraphQL repository relationships count', () => {
   const marker = approvalMarker(expected);
   const comments = [
     { author_association: 'MEMBER', body: marker, user: { login: 'nelson' } },
+    { authorAssociation: 'COLLABORATOR', body: marker, author: { login: 'graphql-reviewer' } },
     { author_association: 'CONTRIBUTOR', body: marker, user: { login: 'untrusted' } },
     { author_association: 'OWNER', body: marker.replace('fingerprint=', 'fingerprint=0'), user: { login: 'stale' } },
   ];
-  assert.deepEqual(trustedApprovals(comments, expected).map((comment) => comment.user.login), ['nelson']);
+  assert.deepEqual(
+    trustedApprovals(comments, expected).map((comment) => comment.user?.login ?? comment.author?.login),
+    ['nelson', 'graphql-reviewer'],
+  );
 });
 
 test('paginated gh api output is flattened', () => {
@@ -54,7 +58,9 @@ test('release workflows preserve immutable candidate and explicit approval gates
 
   assert.doesNotMatch(production, /uses: docker\/build-push-action/);
   assert.doesNotMatch(production, /sha-\$\{|sha-<pr-head>/);
-  assert.match(production, /permissions:[\s\S]*issues:\s*read[\s\S]*pull-requests:\s*read/);
+  assert.match(production, /permissions:[\s\S]*pull-requests:\s*read/);
+  assert.match(production, /gh pr view "\$\{PR_NUMBER\}"[\s\S]*--json comments/);
+  assert.doesNotMatch(production, /issues\/\$\{PR_NUMBER\}\/comments/);
   assert.match(production, /exact-image-approval\.mjs verify/);
   assert.match(production, /--fingerprint "\$\{FINGERPRINT\}"/);
   assert.match(production, /DEPLOY_IMAGE_REF=\$\{image_ref\}/);

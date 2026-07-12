@@ -32,7 +32,7 @@ export function trustedApprovals(comments, expected) {
   const flattened = Array.isArray(comments) ? comments.flat(Infinity) : [];
   return flattened.filter((comment) =>
     comment &&
-    TRUSTED_ASSOCIATIONS.has(comment.author_association) &&
+    TRUSTED_ASSOCIATIONS.has(comment.author_association ?? comment.authorAssociation) &&
     typeof comment.body === 'string' &&
     comment.body.trim() === marker,
   );
@@ -77,7 +77,7 @@ function main() {
     fail(`No trusted pull-request comment exactly approves ${approvalMarker(expected)}`);
   }
 
-  const approvers = [...new Set(matches.map((comment) => comment.user?.login).filter(Boolean))];
+  const approvers = [...new Set(matches.map((comment) => comment.user?.login ?? comment.author?.login).filter(Boolean))];
   console.log(`Exact image approved by ${approvers.join(', ') || 'a trusted repository collaborator'}.`);
 }
 

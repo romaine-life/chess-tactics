@@ -23,9 +23,6 @@ on:
 permissions:
   id-token: write
   contents: write
-  # The exact-image approval marker is an issue comment on the merged PR.
-  # Pull-request metadata and issue comments use separate token permissions.
-  issues: read
   # Resolve the merged PR (title/number/url) for the built commit — surfaced in
   # Settings → About. See the "Resolve build metadata" step.
   pull-requests: read
@@ -271,8 +268,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh api --paginate --slurp \
-            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+          gh pr view "${PR_NUMBER}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --json comments \
+            --jq '.comments' \
             | node scripts/exact-image-approval.mjs verify \
                 --comments - \
                 --head "${PR_HEAD_SHA}" \
