@@ -207,11 +207,11 @@ if (!/CHROME_LAB_STORAGE_VERSION\s*=\s*3/.test(chromeLab)
   failures.push('Chrome Lab must migrate v2 tuning while dropping obsolete geometry fields');
 }
 if (!/function\s+defaultRailFitForSource[\s\S]*?source\.kind === 'rail-repeat'\)\s*return 'tile';/.test(chromeRuntime)
-  || chromeLabDefaults.inner?.railSourceId !== 'inner-rails-repeat-v4-02'
+  || chromeLabDefaults.inner?.railSourceId !== 'ui/chrome/inner/rail.png'
   || chromeLabDefaults.inner?.railFit !== 'tile') {
   failures.push('Chrome Lab repeat rail sources must default to tile, not stretch-crush long seam strips into side rails');
 }
-if (chromeLabDefaults.outer?.railSourceId !== 'outer-rails-v3-01'
+if (chromeLabDefaults.outer?.railSourceId !== 'ui/chrome/outer/rail.png'
   || chromeLabDefaults.outer?.railFit !== 'stretch'
   || !/function\s+borderImageRepeatForTune[\s\S]*?tune\.railFit === 'tile'\s*\?\s*'repeat'\s*:\s*'stretch'/.test(chromeRuntime)
   || /repeat stretch/.test(chromeRuntime)) {
@@ -235,13 +235,13 @@ if (!/(?:export\s+)?const\s+DEFAULT_DIVIDER_ATOM_SIZE\s*=\s*17\s*;/.test(chromeR
 if (/DIVIDER_TEE_SOURCES/.test(chromeRuntime + chromeLab) || /divider-atoms-img2img-t-v[12]-/.test(chromeRuntime + chromeLab) || /divider-atoms-img2img-socket-v1-/.test(chromeRuntime + chromeLab)) {
   failures.push('Chrome Lab divider picker must not expose T/socket joint candidates as normal cover-atom choices');
 }
-if (!/divider-atoms-pixellab-cover-v1/.test(chromeRuntime)
-  || !/divider-atoms-codex-style-cover-v1/.test(chromeRuntime)
-  || chromeLabDefaults.divider?.atomSourceId !== 'divider-atoms-pixellab-cover-v1-21') {
-  failures.push('Chrome Lab divider picker must expose native 17px PixelLab and Codex-style divider cover atoms and default to the curated cover atom');
+if (!/dividerJointSources\s+as\s+liveDividerJointSources/.test(chromeRuntime)
+  || !/export\s+function\s+dividerJointSources/.test(chromeRuntime)
+  || chromeLabDefaults.divider?.atomSourceId !== 'ui/chrome/divider/joint.png') {
+  failures.push('Chrome Lab divider picker must use backend candidates and the canonical installed divider slot');
 }
-if (chromeLabDefaults.outer?.atomSourceId !== 'outer-atoms-img2img-32-v1-08'
-  || chromeLabDefaults.inner?.atomSourceId !== 'inner-atoms-img2img-micro-v2-10'
+if (chromeLabDefaults.outer?.atomSourceId !== 'ui/chrome/outer/atom.png'
+  || chromeLabDefaults.inner?.atomSourceId !== 'ui/chrome/inner/atom.png'
   || chromeLabDefaults.inner?.atomX !== -3
   || chromeLabDefaults.inner?.atomY !== -8) {
   failures.push('Chrome Lab atom defaults must use the right-sized outer atom family instead of retired oversized/undersized atoms');
@@ -494,7 +494,7 @@ for (const selector of [
 if (/generate-divider-atom-candidates/.test(readFileSync(join(frontend, 'package.json'), 'utf8'))) {
   failures.push('Chrome Lab divider atoms must not be regenerated from code-drawn placeholder geometry');
 }
-if (!/(?:export\s+)?const\s+DIVIDER_JOINT_PREVIEW_BOX\s*=/.test(chromeRuntime) || !/className="chrome-lab-divider-atom-stage"/.test(chromeLab)) {
+if (!/export\s+function\s+dividerJointPreviewBox/.test(chromeRuntime) || !/className="chrome-lab-divider-atom-stage"/.test(chromeLab)) {
   failures.push('Chrome Lab divider picker must lock the source preview seat to the largest available joint source');
 }
 if (!/function\s+sourcePreviewBox/.test(chromeRuntime) || !/className="chrome-lab-source-stage"/.test(chromeLab)) {

@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { SliderRow } from './dressing/SliderRow';
 import { ViewPane } from './shared/ViewPane';
+import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
-  NATIVE_RAIL_FAMILIES,
+  nativeRailCatalogFromAdmin,
   normalizeNativeRailFamilyId,
+  type NativeRailCatalog,
   type NativeRailCandidateSource,
   type NativeRailFamily,
   type NativeRailOrientation,
 } from './nativeRailCandidateSources';
-
-const RAIL_FAMILIES = NATIVE_RAIL_FAMILIES;
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -237,17 +237,62 @@ export function RailLab({
   zoom: number;
   onZoomChange: (zoom: number) => void;
 }): ReactElement {
-  const [ownFamilyId, setOwnFamilyId] = useState(normalizeNativeRailFamilyId(familyId));
-  const selectedFamilyId = familyId ? normalizeNativeRailFamilyId(familyId) : ownFamilyId;
-  const family = RAIL_FAMILIES.find((entry) => entry.id === selectedFamilyId) ?? RAIL_FAMILIES[0];
+  const [catalogState, setCatalogState] = useState<
+    | { status: 'loading'; catalog: null; error: null }
+    | { status: 'error'; catalog: null; error: string }
+    | { status: 'ready'; catalog: NativeRailCatalog; error: null }
+  >({ status: 'loading', catalog: null, error: null });
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const refreshCatalog = useCallback((): void => {
+    setCatalogState((current) => current.status === 'ready'
+      ? current
+      : { status: 'loading', catalog: null, error: null });
+    void fetchAdminLiveMediaCatalog().then((adminCatalog) => {
+      if (mounted.current) setCatalogState({ status: 'ready', catalog: nativeRailCatalogFromAdmin(adminCatalog), error: null });
+    }).catch((error: unknown) => {
+      if (mounted.current) setCatalogState({
+        status: 'error',
+        catalog: null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }, []);
+  useEffect(() => { refreshCatalog(); }, [refreshCatalog]);
+
+  const railCatalog = catalogState.status === 'ready' ? catalogState.catalog : null;
+  const railFamilies = railCatalog?.families ?? [];
+  const railSources = railCatalog?.sources ?? [];
+  const [ownFamilyId, setOwnFamilyId] = useState(familyId ?? '');
+  const selectedFamilyId = normalizeNativeRailFamilyId(railFamilies, railSources, familyId ?? ownFamilyId);
+  const family = railFamilies.find((entry) => entry.id === selectedFamilyId) ?? railFamilies[0];
   const [memberSelections, setMemberSelections] = useState<FamilyMemberSelections>({});
   const [boxWidth, setBoxWidth] = useState(480);
   const [boxHeight, setBoxHeight] = useState(280);
   const [seamTrim, setSeamTrim] = useState(0);
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
+  if (catalogState.status === 'loading') {
+    return <div className="tileset-empty-state" role="status">Loading Rail Lab candidates from the backend...</div>;
+  }
+  if (catalogState.status === 'error') {
+    return (
+      <div className="tileset-empty-state" role="alert">
+        <p>Rail candidates could not be loaded: {catalogState.error}</p>
+        <button type="button" className="tileset-view-action" onClick={refreshCatalog}>Retry backend catalog</button>
+      </div>
+    );
+  }
   if (!family || !family.horizontal.length || !family.vertical.length) {
-    return <div className="tileset-empty-state">No complete native-size rail families have passed admission.</div>;
+    return (
+      <div className="tileset-empty-state">
+        <p>No complete native-size rail families are present in the backend catalog.</p>
+        <button type="button" className="tileset-view-action" onClick={refreshCatalog}>Refresh candidates</button>
+      </div>
+    );
   }
 
   const horizontal = selectedMember(family, 'horizontal', memberSelections);
@@ -265,9 +310,9 @@ export function RailLab({
   };
 
   const cycleFamily = (delta: -1 | 1): void => {
-    const currentIndex = RAIL_FAMILIES.findIndex((entry) => entry.id === family.id);
-    const nextIndex = (Math.max(0, currentIndex) + delta + RAIL_FAMILIES.length) % RAIL_FAMILIES.length;
-    selectFamily(RAIL_FAMILIES[nextIndex].id);
+    const currentIndex = railFamilies.findIndex((entry) => entry.id === family.id);
+    const nextIndex = (Math.max(0, currentIndex) + delta + railFamilies.length) % railFamilies.length;
+    selectFamily(railFamilies[nextIndex].id);
   };
 
   const selectFamilyMember = (orientation: NativeRailOrientation, id: string): void => {
@@ -318,12 +363,16 @@ export function RailLab({
               <div className="rail-lab-source-picker">
                 <button type="button" className="tileset-view-action rail-lab-source-step" onClick={() => cycleFamily(-1)} aria-label="Previous rail family" title="Previous rail family">&lt;</button>
                 <select value={family.id} onChange={(event) => selectFamily(event.target.value)} aria-label="Rail family">
-                  {RAIL_FAMILIES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
+                  {railFamilies.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
                 </select>
                 <button type="button" className="tileset-view-action rail-lab-source-step" onClick={() => cycleFamily(1)} aria-label="Next rail family" title="Next rail family">&gt;</button>
               </div>
             </div>
             {zoomControl}
+            <div className="rail-lab-catalog-status" aria-live="polite">
+              <span>{catalogState.catalog.sources.length} backend candidates · {railFamilies.length} complete families</span>
+              <button type="button" className="tileset-view-action" onClick={refreshCatalog}>Refresh candidates</button>
+            </div>
             <RailMemberPicker label="Horizontal variant" orientation="horizontal" sources={family.horizontal} sourceId={horizontal.id} onSourceId={(id) => selectFamilyMember('horizontal', id)} />
             <RailMemberPicker label="Vertical variant" orientation="vertical" sources={family.vertical} sourceId={vertical.id} onSourceId={(id) => selectFamilyMember('vertical', id)} />
             <SliderRow label={<>Seam trim - {seamTrim}px each side</>} value={seamTrim} set={setSeamTrim} min={0} max={maxSeamTrim} nudge={1} step={1} dflt={0} />
@@ -337,9 +386,13 @@ export function RailLab({
               <div><dt>Native scale</dt><dd>100%</dd></div>
               <div><dt>Seam trim</dt><dd>{seamTrim}px each end</dd></div>
               <div><dt>Horizontal</dt><dd>{horizontal.sourceFile}</dd></div>
+              <div><dt>Horizontal status</dt><dd>{horizontal.status}</dd></div>
+              <div><dt>Horizontal provenance</dt><dd>{horizontal.provider} · {horizontal.attemptId}</dd></div>
               <div><dt>Horizontal period</dt><dd>{horizontal.width}px</dd></div>
               <div><dt>Horizontal seam</dt><dd>{seamLabel(horizontal)}</dd></div>
               <div><dt>Vertical</dt><dd>{vertical.sourceFile}</dd></div>
+              <div><dt>Vertical status</dt><dd>{vertical.status}</dd></div>
+              <div><dt>Vertical provenance</dt><dd>{vertical.provider} · {vertical.attemptId}</dd></div>
               <div><dt>Vertical period</dt><dd>{vertical.height}px</dd></div>
               <div><dt>Vertical seam</dt><dd>{seamLabel(vertical)}</dd></div>
             </dl>

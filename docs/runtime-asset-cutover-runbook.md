@@ -69,14 +69,19 @@ or mark legacy pixels native merely to avoid the sequence.
 4. Stop media-authoring changes until the final cutover, or regenerate the entire
    inventory after any such change.
 
-Public `frontend/public/assets/*` entries map to stable slots relative to
-`/assets`. Every existing runtime pixel is imported as `legacy-bridge`, never
-accepted, regardless of any filename, manifest, or historical review status.
-Non-runtime source/review files become slotless private versions keyed by their
-original source path, are byte-verified, and are archived rather than exposed
-through the active public catalog. The importer has no review or acceptance
-input; later production acceptance is available only through the normal
-owner-operated application workflow.
+Public runtime entries map to stable slots relative to `/assets` and import as
+`legacy-bridge`, never accepted. Paths under the historical Chrome candidate
+tree are not runtime merely because they lived beneath `frontend/public`: image
+candidates remain non-active candidate versions, report/manifests become private
+archives, and exactly five formerly installed parts receive separate canonical
+bridge activations under `ui/chrome/{outer,inner,divider}/...`. Other non-runtime
+source/review files become slotless private versions keyed by original source
+path, are byte-verified, and are archived rather than exposed through the public
+catalog. The importer has no review or acceptance input. Later production
+acceptance uses the owner-operated application workflow only where that domain
+already has a typed validator and review instrument. Terrain has that path;
+Chrome/UI replacements remain bridge-only until their typed completeness
+validator and game-owned review/accept controls exist.
 
 ## Stage 2: provision storage first
 
@@ -148,7 +153,9 @@ must:
 1. create each deterministic slot/version through the admin API;
 2. upload bytes and require the server's recorded hash/length/type/dimensions to
    match the frozen inventory;
-3. activate public legacy entries only as `legacy-bridge`;
+3. activate public runtime entries only as `legacy-bridge`, keep Chrome review
+   images as candidates, and create only the five declared canonical Chrome
+   bridge activations;
 4. fetch every uploaded immutable route and stream-hash the returned bytes;
 5. defer stable `/assets/<slot>` checks until every required group and remapped
    canonical slot is present, then verify all active semantic routes;
@@ -159,8 +166,9 @@ The importer must be restart-safe: content hashes, stable runtime slots, and exa
 private source paths make a retry converge, while any conflicting existing record
 fails visibly. Never delete or overwrite an existing blob to make a retry pass.
 
-After import, run the public proof through the port-forward, comparing it to the
-frozen inventory:
+After import, run the proof through the port-forward with an admin session in
+`LIVE_MEDIA_COOKIE`, comparing both public and private records to the frozen
+inventory:
 
 ```powershell
 cd backend
@@ -172,11 +180,14 @@ npm run media:verify-cutover -- `
 
 This streams every active immutable object, checks SHA-256 and length, proves the
 stable same-origin redirect, validates cache headers, and rejects unexplained
-public slots. The expected and actual public slot sets must match exactly, and
-every migrated runtime slot must remain `legacy-bridge`; an `accepted` migrated
-version is a verification failure. The importer report remains the proof for
-private archived source objects because they are intentionally absent from the
-public catalog.
+public slots. It also reads the authenticated admin catalog, stream-verifies
+every remaining unique private candidate/archive blob, and requires one exact
+version for every inventory entry: bridges stay `legacy-bridge`, review
+candidates stay `candidate`, and private sources/reports stay `archived`. Hash,
+length, type, dimensions, source path, namespace, slot, domain, role,
+availability policy, acceptance contract, candidate metadata, native evidence,
+disposition, and migration provenance must match; an extra or accepted migration
+version fails proof.
 
 Delete the bootstrap pod. Start a fresh unserved pod against the same live
 Postgres/Blob state and re-run the verifier to prove the catalog and bytes did
@@ -213,6 +224,7 @@ to a local origin and run the verifier:
 
 ```powershell
 cd backend
+$env:LIVE_MEDIA_COOKIE = '<owner session cookie>'
 npm run media:verify-cutover -- --origin http://127.0.0.1:3000 --inventory C:\path\live-media-inventory.json --json
 ```
 

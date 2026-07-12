@@ -4,10 +4,11 @@ Date: 2026-07-11
 
 ## Finding
 
-The application is still broadly Git-backed for media. At current `origin/main`:
+The application was still broadly Git-backed for media at the 2026-07-11 audit
+baseline:
 
-- 2,217 tracked runtime/review/source-media files live in the repository (about
-  342 MB, including editable 3D/source formats);
+- 2,217 tracked runtime/review/source-media files live in the repository
+  (358,097,371 canonical Git bytes, including editable 3D/source formats);
 - 1,582 of those files are under `frontend/public` (about 223 MB);
 - production source contains 735 literal `/assets/` references;
 - Vite copies `frontend/public` into the deployment, and the backend serves those
@@ -25,6 +26,42 @@ The Water edge reviewed on 2026-07-11 was therefore not promoted through live
 storage. Its eight runtime side files were public Git files, its registry URLs
 were compiled strings, and its `registeredForProduction` value was only a JSON
 field checked by a repository script.
+
+## Re-audit after the parallel Chrome merge (2026-07-12)
+
+PR #478 merged while this cutover and its repository guard were still on an
+unmerged branch. It added 1,738 Chrome PNGs (70,277,870 bytes), modified one
+existing runtime PNG, and added 26 JSON reports beneath the public asset root.
+The repository-media/public-root snapshot consequently grew to 3,981 files and
+428,614,935 canonical Git bytes: 1,764 more repository-backed asset records and
+70,517,564
+more bytes than the first frozen inventory. The full importer fingerprint also
+freezes the three committed Chrome candidate/family catalogs that must be
+archived before deletion, for 3,984 exact inputs and 428,728,479 canonical Git
+bytes. Canonical object bytes, rather than checkout-normalized line endings, are
+the freeze and upload authority so the inventory is identical on Windows and
+Linux.
+
+The new files exposed three policy gaps that the cutover must absorb rather than
+grandfather:
+
+1. 530 public Chrome review images were named like runtime assets and would have
+   become active legacy bridges. They are backend candidate versions, not public
+   runtime pointers.
+2. Five live Chrome parts (outer/inner atom and rail plus divider joint) were
+   selected by committed candidate ids. They require canonical semantic runtime
+   slots whose active versions are owned by Postgres.
+3. Committed Chrome candidate/family manifests and nine media-writing scripts
+   had recreated Git as the candidate catalog and publication path. Candidate
+   lists and provenance must come from the admin media-version catalog; useful
+   generation work writes temporary files and uploads through the live-media
+   client.
+
+This recurrence did not bypass an active guard: the guard had not reached
+`main`. The final guard now covers repository-wide media, public-root metadata,
+candidate databases, installed candidate selectors, filesystem readers, and
+committed-media writers so the same parallel-branch pattern fails once this
+cutover lands.
 
 ## Why the problem recurred
 

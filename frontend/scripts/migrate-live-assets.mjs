@@ -3,9 +3,10 @@
 // This is not a seed path and must not survive the cutover. The permanent
 // no-committed-media guard fails while this file exists. It inventories the old
 // Git bytes, uploads each byte-for-byte, verifies the immutable object by hash,
-// and records either:
+// and records exactly one of:
 //   - an active, explicitly non-production-eligible legacy bridge for an old
 //     frontend/public/assets semantic path; or
+//   - a non-active candidate for old Chrome Lab candidate pixels; or
 //   - a non-active private archive version for source/review media elsewhere.
 //
 // It never claims that legacy media is native 1x or owner-reviewed, and it has
@@ -14,9 +15,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
+  createCanonicalGitByteReader,
   isAllowedSyntheticTestMedia,
   isMediaPath,
   listTrackedFiles,
@@ -34,6 +35,40 @@ const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const defaultRepoRoot = path.resolve(frontendRoot, '..');
 const INVENTORY_SCHEMA = 'adr-0085-media-migration-inventory-v1';
 const PUBLIC_ASSET_PREFIX = 'frontend/public/assets/';
+const CHROME_CANDIDATE_PREFIX = `${PUBLIC_ASSET_PREFIX}ui/chrome-candidates/`;
+const CHROME_CANDIDATE_MANIFEST_SOURCE = 'frontend/src/ui/chromeCandidateManifest.json';
+const NATIVE_RAIL_CANDIDATE_MANIFEST_SOURCE = 'frontend/src/ui/nativeRailCandidateManifest.json';
+const NATIVE_RAIL_FAMILIES_SOURCE = 'frontend/config/native-rail-families.json';
+const CHROME_LAB_DEFAULTS_SOURCE = 'frontend/config/chrome-lab-defaults.json';
+const CHROME_PRIVATE_ARCHIVE_SOURCES = new Set([
+  CHROME_CANDIDATE_MANIFEST_SOURCE,
+  NATIVE_RAIL_CANDIDATE_MANIFEST_SOURCE,
+  NATIVE_RAIL_FAMILIES_SOURCE,
+]);
+const CHROME_DEFAULT_ACTIVATION_SPECS = Object.freeze([
+  { configKey: 'outer.atomSourceId', sourceId: 'outer-atoms-img2img-32-v1-08', slot: 'ui/chrome/outer/atom.png', role: 'atom' },
+  { configKey: 'outer.railSourceId', sourceId: 'outer-rails-v3-01', slot: 'ui/chrome/outer/rail.png', role: 'rail' },
+  { configKey: 'inner.atomSourceId', sourceId: 'inner-atoms-img2img-micro-v2-10', slot: 'ui/chrome/inner/atom.png', role: 'atom' },
+  { configKey: 'inner.railSourceId', sourceId: 'inner-rails-repeat-v4-02', slot: 'ui/chrome/inner/rail.png', role: 'rail' },
+  { configKey: 'divider.atomSourceId', sourceId: 'divider-atoms-pixellab-cover-v1-21', slot: 'ui/chrome/divider/joint.png', role: 'joint' },
+]);
+const SYNTHESIZED_DIVIDER_SETS = Object.freeze([
+  {
+    id: 'divider-atoms-pixellab-cover-v1',
+    label: 'Divider PixelLab cover',
+    sourceSheetLabel: 'Divider PixelLab cover atoms 17',
+    sourceSheetPath: '/assets/ui/chrome-candidates/pixellab-v1/divider-cover-atoms-17',
+    count: 52,
+  },
+  {
+    id: 'divider-atoms-codex-style-cover-v1',
+    label: 'Divider Codex-style cover',
+    sourceSheetLabel: 'Divider Codex-style cover atoms 17',
+    sourceSheetPath: '/assets/ui/chrome-candidates/pixellab-v1/divider-cover-atoms-codex-style-17',
+    count: 55,
+  },
+]);
+const CHROME_CANDIDATE_REPORT_COUNT = 26;
 const DIVIDER_ORNAMENT_SOURCE = 'frontend/public/kit-portfolio/cand3-codex.png';
 const PORTRAIT_CANONICAL_ACTIVATION_SOURCE = /^frontend\/public\/assets\/portrait-candidates\/codex-stone\/(bishop|king|knight|pawn|queen|rook)\/(black|crimson|emerald|golden|navy-blue|white)\.png$/;
 const DISPLACED_CANONICAL_PORTRAIT_SOURCE = /^frontend\/public\/assets\/units\/(bishop|king|knight|pawn|queen|rook)\/portrait\/(black|crimson|emerald|golden|navy-blue|white)\.png$/;
@@ -44,17 +79,19 @@ const CREATE_PATH = '/api/admin/media-versions';
 const CONTENT_PATH = '/api/admin/media-versions/{id}/content';
 const BRIDGE_PATH = '/api/admin/media-versions/{id}/bridge';
 const ARCHIVE_PATH = '/api/admin/media-versions/{id}/archive';
+const CANONICAL_GIT_BYTE_CONTEXT = Symbol('canonicalGitByteContext');
 export const WATER_SIDE_ACCEPTANCE_REQUIRED_SLOTS = Object.freeze(
   Array.from({ length: 8 }, (_, index) => `tiles/surface/water-${index}-side.png`).sort(),
 );
 const FROZEN_FULL_INVENTORY = {
-  count: 2217,
-  bytes: 358412274,
-  versionCount: 2253,
-  activeCount: 1579,
-  archiveCount: 674,
-  canonicalActivationCount: 36,
-  sha256: '972619d31295316214eb7da47fe66dd436db8c919659080f751e25775b71f8b5',
+  count: 3984,
+  bytes: 428728479,
+  versionCount: 4025,
+  activeCount: 1608,
+  candidateCount: 273,
+  archiveCount: 2144,
+  canonicalActivationCount: 41,
+  sha256: '0f1a017089b5b59bcc17d8e2ebcb2b1a9536fe5c627ad7af7bf2e279cb9ad446',
 };
 
 function sha256(bytes) {
@@ -127,6 +164,7 @@ function runtimeDomain(slot) {
 }
 
 function sourceDomain(sourcePath) {
+  if (/^docs\/art\/chrome-/i.test(sourcePath)) return 'ui-kit';
   if (/unit|portrait/i.test(sourcePath)) return /portrait/i.test(sourcePath) ? 'portrait' : 'unit-art';
   if (/tile|terrain|surface|groundcover|wall|fence|shore|water|road/i.test(sourcePath)) return 'terrain';
   if (/ui|kit|menu|button|toggle|frame|titlebar|scrollbar/i.test(sourcePath)) return 'ui-kit';
@@ -135,15 +173,15 @@ function sourceDomain(sourcePath) {
   return 'source-media';
 }
 
-function roleFor(sourcePath, isRuntime) {
+function roleFor(sourcePath, isRuntime, domain) {
   const value = sourcePath.toLowerCase();
   if (!isRuntime) {
     if (/candidate/.test(value)) return 'candidate';
     return /contact.sheet|proof|review|comparison|preview|screenshot/.test(value) ? 'review' : 'source';
   }
-  if (/-top-anim\.|\/animation/.test(value)) return 'animation';
-  if (/-top\./.test(value)) return 'top';
-  if (/-side\./.test(value)) return 'side';
+  if (domain === 'terrain' && (/-top-anim\.|\/animation/.test(value))) return 'animation';
+  if (domain === 'terrain' && /-top\./.test(value)) return 'top';
+  if (domain === 'terrain' && /-side\./.test(value)) return 'side';
   if (/thumb|preview|contact.sheet|candidate|review|proof|concept|explore|generated-source|inspiration|aspirational/.test(value)) return 'review';
   if (/(?:^|\/)(?:readme|ofl|license)(?:\.|$)/.test(value)) return 'metadata';
   if (/\.json$/.test(value)) return 'manifest';
@@ -153,13 +191,46 @@ function roleFor(sourcePath, isRuntime) {
 }
 
 function availabilityPolicyFor(domain, role) {
-  if (role === 'review' || role === 'metadata') return 'decorative';
+  if (role === 'candidate' || role === 'review' || role === 'metadata') return 'decorative';
   if (['sfx', 'portrait', 'prop', 'wall-decor', 'social-card', 'review-media'].includes(domain)) return 'decorative';
   return 'critical';
 }
 
-export function migrationIdentity(sourcePath) {
+export function migrationIdentity(sourcePath, chromeContext = null) {
   const normalized = normalizeRepoPath(sourcePath);
+  if (normalized.startsWith(CHROME_CANDIDATE_PREFIX)) {
+    const isCatalogCandidate = normalized.toLowerCase().endsWith('.png')
+      && chromeContext?.candidateBySourcePath?.has(normalized);
+    if (!isCatalogCandidate) {
+      return {
+        namespace: 'migration/git-media-cutover',
+        slot: null,
+        migrationDisposition: 'private-archive',
+        domain: 'ui-kit',
+        role: normalized.toLowerCase().endsWith('.json') ? 'manifest' : 'source',
+      };
+    }
+    const slot = normalized.slice(PUBLIC_ASSET_PREFIX.length);
+    if (!slot || slot.length > 512 || !slot.split('/').every((segment) => SLOT_SEGMENT_PATTERN.test(segment))) {
+      throw new Error(`Chrome candidate path cannot be preserved as a semantic slot: ${normalized}`);
+    }
+    return {
+      namespace: 'runtime-candidate',
+      slot,
+      migrationDisposition: 'candidate',
+      domain: 'ui-kit',
+      role: 'candidate',
+    };
+  }
+  if (CHROME_PRIVATE_ARCHIVE_SOURCES.has(normalized)) {
+    return {
+      namespace: 'migration/git-media-cutover',
+      slot: null,
+      migrationDisposition: 'private-archive',
+      domain: 'ui-kit',
+      role: 'manifest',
+    };
+  }
   if (DISPLACED_CANONICAL_PORTRAIT_SOURCE.test(normalized)) {
     return {
       namespace: 'migration/git-media-cutover',
@@ -183,12 +254,13 @@ export function migrationIdentity(sourcePath) {
     if (!slot || slot.length > 512 || !slot.split('/').every((segment) => SLOT_SEGMENT_PATTERN.test(segment))) {
       throw new Error(`Public asset path cannot be preserved as a semantic slot: ${normalized}`);
     }
+    const domain = runtimeDomain(slot);
     return {
       namespace: 'runtime',
       slot,
       migrationDisposition: 'legacy-bridge',
-      domain: runtimeDomain(slot),
-      role: roleFor(slot, true),
+      domain,
+      role: roleFor(slot, true, domain),
     };
   }
   return {
@@ -196,7 +268,7 @@ export function migrationIdentity(sourcePath) {
     slot: null,
     migrationDisposition: 'private-archive',
     domain: sourceDomain(normalized),
-    role: roleFor(normalized, false),
+    role: roleFor(normalized, false, sourceDomain(normalized)),
   };
 }
 
@@ -217,6 +289,324 @@ export function portraitCanonicalActivation(sourcePath, baseEntry) {
   };
 }
 
+function requiredJson(repoRoot, sourcePath) {
+  const absolutePath = path.join(repoRoot, sourcePath);
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(absolutePath, 'utf8'));
+  } catch (error) {
+    throw new Error(`Unable to read required Chrome cutover manifest ${sourcePath}: ${error.message}`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`Chrome cutover manifest must contain an object: ${sourcePath}`);
+  }
+  return parsed;
+}
+
+function sourcePathFromAssetUrl(value, label) {
+  if (typeof value !== 'string' || !value.startsWith('/assets/')) {
+    throw new Error(`${label} must use an /assets/ source URL`);
+  }
+  const sourcePath = normalizeRepoPath(`frontend/public${value}`);
+  if (!sourcePath.startsWith(CHROME_CANDIDATE_PREFIX)) {
+    throw new Error(`${label} must resolve inside ${CHROME_CANDIDATE_PREFIX}`);
+  }
+  return sourcePath;
+}
+
+function pickOwn(source, keys) {
+  const result = {};
+  for (const key of keys) {
+    if (Object.hasOwn(source, key)) result[key] = source[key];
+  }
+  return result;
+}
+
+function indexUnique(rows, keyFor, label) {
+  const result = new Map();
+  for (const row of rows) {
+    const key = keyFor(row);
+    if (!key) throw new Error(`${label} contains an entry without an identity`);
+    if (result.has(key)) throw new Error(`${label} contains duplicate identity ${key}`);
+    result.set(key, row);
+  }
+  return result;
+}
+
+function normalizedNativeFamily(family) {
+  if (!family) return null;
+  const members = family.members && typeof family.members === 'object' ? family.members : {};
+  return {
+    ...pickOwn(family, ['id', 'label', 'role', 'fit', 'generationAttemptId', 'review']),
+    horizontalSourceIds: Array.isArray(family.horizontalSourceIds)
+      ? [...family.horizontalSourceIds]
+      : Array.isArray(members.horizontalSourceIds) ? [...members.horizontalSourceIds] : [],
+    verticalSourceIds: Array.isArray(family.verticalSourceIds)
+      ? [...family.verticalSourceIds]
+      : Array.isArray(members.verticalSourceIds) ? [...members.verticalSourceIds] : [],
+  };
+}
+
+function dividerSourcePath(sourceId) {
+  const match = String(sourceId || '').match(/^(divider-atoms-(?:pixellab|codex-style)-cover-v1)-(\d{2})$/);
+  if (!match) throw new Error(`Unsupported Chrome Lab divider source id: ${sourceId}`);
+  return `${CHROME_CANDIDATE_PREFIX}exploded/${match[1]}/candidate-${match[2]}.png`;
+}
+
+/**
+ * Builds the lossless lookup used only by the one-time cutover. The DB record
+ * keeps the UI-facing descriptor under metadata and records which frozen
+ * manifest supplied it under provenance.
+ */
+export function createChromeCutoverContext({
+  chromeManifest,
+  nativeRailManifest,
+  nativeRailFamilies,
+  chromeLabDefaults,
+}) {
+  if (!Array.isArray(chromeManifest?.sources)) throw new Error('Chrome candidate manifest is missing sources');
+  if (!Array.isArray(nativeRailManifest?.sources) || !Array.isArray(nativeRailManifest?.families)
+    || !Array.isArray(nativeRailManifest?.unpairedSourceIds)) {
+    throw new Error('Native rail candidate manifest is incomplete');
+  }
+  if (!Array.isArray(nativeRailFamilies?.families)) throw new Error('Native rail family manifest is missing families');
+
+  const familyById = indexUnique(nativeRailFamilies.families, (row) => row?.id, 'Native rail family manifest');
+  const embeddedFamilyById = indexUnique(nativeRailManifest.families, (row) => row?.id, 'Native rail candidate families');
+  if (familyById.size !== embeddedFamilyById.size) {
+    throw new Error('Native rail candidate and family manifests disagree about family count');
+  }
+  for (const [familyId, family] of familyById) {
+    if (JSON.stringify(normalizedNativeFamily(family))
+      !== JSON.stringify(normalizedNativeFamily(embeddedFamilyById.get(familyId)))) {
+      throw new Error(`Native rail candidate and family manifests disagree about ${familyId}`);
+    }
+  }
+  const unpairedSourceIds = new Set(nativeRailManifest.unpairedSourceIds);
+  const candidateBySourcePath = new Map();
+  const sourcePathById = new Map();
+
+  for (const source of chromeManifest.sources) {
+    const sourcePath = sourcePathFromAssetUrl(source?.src, `Chrome candidate ${source?.id ?? '<unknown>'}`);
+    if (!source?.id || sourcePathById.has(source.id)) throw new Error(`Duplicate Chrome candidate id: ${source?.id}`);
+    sourcePathById.set(source.id, sourcePath);
+    const current = candidateBySourcePath.get(sourcePath) ?? {};
+    if (current.metadata?.chromeCandidate) throw new Error(`Duplicate Chrome candidate source path: ${sourcePath}`);
+    candidateBySourcePath.set(sourcePath, {
+      ...current,
+      metadata: {
+        ...(current.metadata ?? {}),
+        chromeCandidate: pickOwn(source, [
+          'id', 'label', 'role', 'kind', 'width', 'height',
+          'sourceSheetId', 'sourceSheetLabel', 'sourceSheetPath',
+          'componentIndex', 'componentCount', 'crop', 'recommended',
+        ]),
+      },
+      provenance: {
+        ...(current.provenance ?? {}),
+        chromeCandidateManifest: {
+          schema: 'chrome-candidate-manifest-v1',
+          manifestPath: CHROME_CANDIDATE_MANIFEST_SOURCE,
+          generatedBy: chromeManifest.generatedBy ?? null,
+        },
+      },
+    });
+  }
+
+  // These two direct-copy sets were intentionally omitted from the generated
+  // JSON manifest even though Chrome Lab synthesized their descriptors. Rebuild
+  // that deterministic registry here so no candidate loses its authoring
+  // identity when Git-backed discovery is removed.
+  for (const set of SYNTHESIZED_DIVIDER_SETS) {
+    for (let index = 0; index < set.count; index += 1) {
+      const number = String(index + 1).padStart(2, '0');
+      const id = `${set.id}-${number}`;
+      const sourcePath = `${CHROME_CANDIDATE_PREFIX}exploded/${set.id}/candidate-${number}.png`;
+      if (sourcePathById.has(id) || candidateBySourcePath.has(sourcePath)) {
+        throw new Error(`Duplicate synthesized divider candidate ${id}`);
+      }
+      sourcePathById.set(id, sourcePath);
+      candidateBySourcePath.set(sourcePath, {
+        metadata: {
+          chromeCandidate: {
+            id,
+            label: `${set.label} ${number}`,
+            role: 'divider',
+            kind: 'atom',
+            width: 17,
+            height: 17,
+            sourceSheetId: set.id,
+            sourceSheetLabel: set.sourceSheetLabel,
+            sourceSheetPath: set.sourceSheetPath,
+            componentIndex: index,
+            componentCount: set.count,
+            crop: { x: 0, y: 0, w: 17, h: 17 },
+            recommended: index === 0,
+          },
+        },
+        provenance: {
+          chromeCandidateManifest: {
+            schema: 'chrome-candidate-runtime-synthesis-v1',
+            registryPath: 'frontend/src/ui/chromeFamilyRuntime.ts',
+            generatorPath: 'frontend/scripts/explode-chrome-candidate-sheets.mjs',
+            sourceSetPath: set.sourceSheetPath,
+          },
+        },
+      });
+    }
+  }
+
+  const nativeIdIndex = indexUnique(nativeRailManifest.sources, (row) => row?.id, 'Native rail candidate manifest');
+  const familyOwnerBySourceId = new Map();
+  for (const family of familyById.values()) {
+    const normalized = normalizedNativeFamily(family);
+    for (const sourceId of [...normalized.horizontalSourceIds, ...normalized.verticalSourceIds]) {
+      if (!nativeIdIndex.has(sourceId)) throw new Error(`Native rail family ${family.id} references missing source ${sourceId}`);
+      if (familyOwnerBySourceId.has(sourceId)) throw new Error(`Native rail source ${sourceId} belongs to multiple families`);
+      if (nativeIdIndex.get(sourceId).familyId !== family.id) {
+        throw new Error(`Native rail source ${sourceId} does not point back to family ${family.id}`);
+      }
+      familyOwnerBySourceId.set(sourceId, family.id);
+    }
+  }
+  for (const sourceId of unpairedSourceIds) {
+    if (!nativeIdIndex.has(sourceId)) throw new Error(`Unpaired native rail list references missing source ${sourceId}`);
+    if (familyOwnerBySourceId.has(sourceId)) throw new Error(`Native rail source ${sourceId} is both family-owned and unpaired`);
+  }
+  for (const source of nativeIdIndex.values()) {
+    const sourcePath = sourcePathFromAssetUrl(source?.src, `Native rail candidate ${source.id}`);
+    if (sourcePathById.has(source.id)) throw new Error(`Candidate id appears in both Chrome manifests: ${source.id}`);
+    sourcePathById.set(source.id, sourcePath);
+    const family = source.familyId ? familyById.get(source.familyId) : null;
+    const unpaired = unpairedSourceIds.has(source.id);
+    if (source.familyId && !family) throw new Error(`Native rail ${source.id} references missing family ${source.familyId}`);
+    if (Boolean(family) === unpaired) {
+      throw new Error(`Native rail ${source.id} must be either family-owned or explicitly unpaired`);
+    }
+    const familyEvidence = normalizedNativeFamily(family);
+    if (familyEvidence) {
+      const members = [...familyEvidence.horizontalSourceIds, ...familyEvidence.verticalSourceIds];
+      if (!members.includes(source.id)) throw new Error(`Native rail family ${family.id} omits member ${source.id}`);
+    }
+    const nativeRail = pickOwn(source, [
+      'id', 'label', 'familyId', 'role', 'fit', 'orientation', 'width', 'height',
+      'nativeThickness', 'nativeScale', 'provider', 'attemptId', 'sourceFile', 'seam',
+    ]);
+    if (family?.label !== undefined) nativeRail.familyLabel = family.label;
+    const current = candidateBySourcePath.get(sourcePath) ?? {};
+    if (current.metadata?.nativeRail) throw new Error(`Duplicate native rail source path: ${sourcePath}`);
+    candidateBySourcePath.set(sourcePath, {
+      ...current,
+      metadata: { ...(current.metadata ?? {}), nativeRail },
+      provenance: {
+        ...(current.provenance ?? {}),
+        nativeRailManifest: {
+          schema: 'native-rail-candidate-manifest-v1',
+          manifestPath: NATIVE_RAIL_CANDIDATE_MANIFEST_SOURCE,
+          familyManifestPath: NATIVE_RAIL_FAMILIES_SOURCE,
+          generatedBy: nativeRailManifest.generatedBy ?? null,
+          family: familyEvidence,
+          unpaired,
+        },
+      },
+      nativeEvidenceBasis: {
+        sourceId: source.id,
+        width: source.width,
+        height: source.height,
+        nativeScale: source.nativeScale,
+      },
+    });
+  }
+
+  const configValue = (configKey) => configKey.split('.').reduce((value, key) => value?.[key], chromeLabDefaults);
+  const selectionSpecs = CHROME_DEFAULT_ACTIVATION_SPECS.map((selection) => ({ ...selection }));
+  const activationsBySourcePath = new Map();
+  for (const selection of selectionSpecs) {
+    if (configValue(selection.configKey) !== selection.slot) {
+      throw new Error(`Chrome Lab default ${selection.configKey} must select canonical slot ${selection.slot}`);
+    }
+    const sourcePath = sourcePathById.get(selection.sourceId)
+      ?? (selection.configKey === 'divider.atomSourceId' ? dividerSourcePath(selection.sourceId) : null);
+    if (!sourcePath) throw new Error(`Chrome Lab default ${selection.configKey} references unknown source ${selection.sourceId}`);
+    const activation = { ...selection, sourcePath };
+    const current = activationsBySourcePath.get(sourcePath) ?? [];
+    current.push(activation);
+    activationsBySourcePath.set(sourcePath, current);
+  }
+  if (new Set(selectionSpecs.map((row) => row.slot)).size !== 5) {
+    throw new Error('Chrome Lab default activations must own five distinct canonical slots');
+  }
+  return { candidateBySourcePath, activationsBySourcePath, selections: selectionSpecs };
+}
+
+export function loadChromeCutoverContext(repoRoot = defaultRepoRoot) {
+  return createChromeCutoverContext({
+    chromeManifest: requiredJson(repoRoot, CHROME_CANDIDATE_MANIFEST_SOURCE),
+    nativeRailManifest: requiredJson(repoRoot, NATIVE_RAIL_CANDIDATE_MANIFEST_SOURCE),
+    nativeRailFamilies: requiredJson(repoRoot, NATIVE_RAIL_FAMILIES_SOURCE),
+    chromeLabDefaults: requiredJson(repoRoot, CHROME_LAB_DEFAULTS_SOURCE),
+  });
+}
+
+export function enrichChromeCandidateEntry(baseEntry, context) {
+  if (baseEntry.migrationDisposition !== 'candidate') return baseEntry;
+  const descriptor = context.candidateBySourcePath.get(baseEntry.sourcePath);
+  if (!descriptor) return baseEntry;
+  for (const metadata of [descriptor.metadata?.chromeCandidate, descriptor.metadata?.nativeRail].filter(Boolean)) {
+    if (Number(metadata.width) !== baseEntry.width || Number(metadata.height) !== baseEntry.height) {
+      throw new Error(`Chrome candidate manifest dimensions differ from tracked pixels: ${baseEntry.sourcePath}`);
+    }
+  }
+  let nativeEvidence;
+  if (descriptor.nativeEvidenceBasis) {
+    if (descriptor.nativeEvidenceBasis.nativeScale !== 1) {
+      throw new Error(`Native rail candidate is not recorded at native 1x: ${baseEntry.sourcePath}`);
+    }
+    nativeEvidence = {
+      native1x: true,
+      spatialResampling: false,
+      sourceWidth: baseEntry.width,
+      sourceHeight: baseEntry.height,
+      sourceSha256: baseEntry.sha256,
+      evidenceSchema: 'native-rail-candidate-manifest-v1',
+      sourceManifest: NATIVE_RAIL_CANDIDATE_MANIFEST_SOURCE,
+      sourceId: descriptor.nativeEvidenceBasis.sourceId,
+    };
+  }
+  return {
+    ...baseEntry,
+    candidateMetadata: descriptor.metadata,
+    candidateProvenance: descriptor.provenance,
+    ...(nativeEvidence ? { nativeEvidence } : {}),
+  };
+}
+
+export function chromeCanonicalActivations(sourcePath, baseEntry, context) {
+  const selections = context.activationsBySourcePath.get(normalizeRepoPath(sourcePath)) ?? [];
+  if (!selections.length) return [];
+  if (baseEntry.migrationDisposition !== 'candidate' || !baseEntry.slot) {
+    throw new Error(`Chrome canonical activation requires its non-active candidate slot: ${sourcePath}`);
+  }
+  return selections.map((selection) => ({
+    ...baseEntry,
+    namespace: 'runtime-chrome-default-activation',
+    slot: selection.slot,
+    migrationDisposition: 'legacy-bridge',
+    domain: 'ui-kit',
+    role: selection.role,
+    availabilityPolicy: 'critical',
+    activationSourceSlot: baseEntry.slot,
+    chromeDefaultActivation: {
+      schema: 'chrome-lab-default-activation-v1',
+      configPath: CHROME_LAB_DEFAULTS_SOURCE,
+      configKey: selection.configKey,
+      sourceId: selection.sourceId,
+      sourceSlot: baseEntry.slot,
+      targetSlot: selection.slot,
+    },
+  }));
+}
+
 export function acceptanceContractForSlot(slot) {
   if (!WATER_SIDE_ACCEPTANCE_REQUIRED_SLOTS.includes(slot)) return null;
   return {
@@ -226,21 +616,16 @@ export function acceptanceContractForSlot(slot) {
   };
 }
 
-function repositoryCommit(repoRoot) {
-  return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim();
-}
-
-function filesChangedFromHead(repoRoot) {
-  const output = execFileSync('git', ['diff', '--name-only', '-z', 'HEAD', '--'], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  return new Set(output.split('\0').filter(Boolean).map(normalizeRepoPath));
-}
-
 function includePath(relativePath, prefixes) {
   return !prefixes.length || prefixes.some((prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`));
+}
+
+/** Every retired public-asset file is migration data, including JSON reports. */
+export function isCutoverSourcePath(relativePath) {
+  const normalized = normalizeRepoPath(relativePath);
+  return isMediaPath(normalized)
+    || normalized.startsWith(CHROME_CANDIDATE_PREFIX)
+    || CHROME_PRIVATE_ARCHIVE_SOURCES.has(normalized);
 }
 
 function inventorySha256(entries) {
@@ -257,38 +642,56 @@ function inventorySha256(entries) {
     entry.availabilityPolicy ?? '',
     entry.activationSourceSlot ?? '',
     entry.displacedSourcePath ?? '',
+    JSON.stringify(entry.chromeDefaultActivation ?? null),
+    JSON.stringify(entry.candidateMetadata ?? null),
+    JSON.stringify(entry.candidateProvenance ?? null),
+    JSON.stringify(entry.nativeEvidence ?? null),
     JSON.stringify(entry.acceptance ?? null),
     entry.migrationDisposition,
   ].join('\t')).join('\n'), 'utf8'));
 }
 
-export function buildMigrationInventory({ repoRoot = defaultRepoRoot, prefixes = [], startAfter = '', limit = Infinity } = {}) {
-  const commit = repositoryCommit(repoRoot);
-  const changedFromHead = filesChangedFromHead(repoRoot);
+export function buildMigrationInventory({
+  repoRoot = defaultRepoRoot,
+  prefixes = [],
+  startAfter = '',
+  limit = Infinity,
+  canonicalGitByteReader = createCanonicalGitByteReader(repoRoot),
+} = {}) {
+  const commit = canonicalGitByteReader.head;
+  const changedFromHead = canonicalGitByteReader.changedPaths;
+  const chromeContext = loadChromeCutoverContext(repoRoot);
   const normalizedPrefixes = prefixes.map(normalizeRepoPath);
+  const trackedFiles = listTrackedFiles(repoRoot).sort();
   const entries = [];
+  const workingBytesBySource = new Map();
   let processedSources = 0;
   let started = !startAfter;
-  for (const sourcePath of listTrackedFiles(repoRoot).sort()) {
+  for (const sourcePath of trackedFiles) {
     if (!started) {
       if (sourcePath === normalizeRepoPath(startAfter)) started = true;
       continue;
     }
-    if (!isMediaPath(sourcePath) || !includePath(sourcePath, normalizedPrefixes)) continue;
+    if (!isCutoverSourcePath(sourcePath) || !includePath(sourcePath, normalizedPrefixes)) continue;
     if (changedFromHead.has(sourcePath)) {
       throw new Error(`Tracked migration source differs from ${commit}: ${sourcePath}`);
     }
     const absolutePath = path.join(repoRoot, sourcePath);
     if (!fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) continue;
-    const bytes = fs.readFileSync(absolutePath);
+    const workingBytes = fs.readFileSync(absolutePath);
+    const bytes = canonicalGitByteReader.read(sourcePath, workingBytes);
     if (isMediaPath(sourcePath) && isAllowedSyntheticTestMedia(sourcePath, bytes.length)) continue;
-    if (!bytes.length) throw new Error(`Refusing to migrate empty media: ${sourcePath}`);
-    if (bytes.length > MAX_API_BYTES) throw new Error(`Media exceeds the 32 MiB API limit: ${sourcePath}`);
+    if (!bytes.length) throw new Error(`Refusing to migrate an empty cutover asset: ${sourcePath}`);
+    if (bytes.length > MAX_API_BYTES) throw new Error(`Cutover asset exceeds the 32 MiB API limit: ${sourcePath}`);
+    workingBytesBySource.set(sourcePath, {
+      byteLength: workingBytes.length,
+      sha256: sha256(workingBytes),
+    });
     const mediaType = mediaTypeFor(sourcePath, bytes);
     const dimensions = imageDimensions(bytes, mediaType);
-    const identity = migrationIdentity(sourcePath);
+    const identity = migrationIdentity(sourcePath, chromeContext);
     const acceptance = identity.slot ? acceptanceContractForSlot(identity.slot) : null;
-    const baseEntry = {
+    let baseEntry = {
       sourcePath,
       ...identity,
       availabilityPolicy: identity.slot === null ? null : availabilityPolicyFor(identity.domain, identity.role),
@@ -299,9 +702,11 @@ export function buildMigrationInventory({ repoRoot = defaultRepoRoot, prefixes =
       height: dimensions.height,
       ...(acceptance ? { acceptance } : {}),
     };
+    baseEntry = enrichChromeCandidateEntry(baseEntry, chromeContext);
     entries.push(baseEntry);
     const activationEntry = portraitCanonicalActivation(sourcePath, baseEntry);
     if (activationEntry) entries.push(activationEntry);
+    entries.push(...chromeCanonicalActivations(sourcePath, baseEntry, chromeContext));
     processedSources += 1;
     if (processedSources >= limit) break;
   }
@@ -312,6 +717,44 @@ export function buildMigrationInventory({ repoRoot = defaultRepoRoot, prefixes =
     if (JSON.stringify(waterSideSlots) !== JSON.stringify(WATER_SIDE_ACCEPTANCE_REQUIRED_SLOTS)
       || waterSideEntries.some((entry) => JSON.stringify(entry.acceptance) !== JSON.stringify(acceptanceContractForSlot(entry.slot)))) {
       throw new Error('Full cutover inventory must seed the exact eight-slot terrain/water/side-v1 acceptance group');
+    }
+    const candidateSources = entries.filter((entry) => entry.migrationDisposition === 'candidate');
+    const expectedCandidateSourcePaths = [...chromeContext.candidateBySourcePath.keys()].sort();
+    if (candidateSources.some((entry) => !entry.sourcePath.startsWith(CHROME_CANDIDATE_PREFIX)
+      || !entry.sourcePath.toLowerCase().endsWith('.png') || entry.slot !== entry.sourcePath.slice(PUBLIC_ASSET_PREFIX.length))
+      || expectedCandidateSourcePaths.some((sourcePath) => !trackedFiles.includes(sourcePath))
+      || JSON.stringify(candidateSources.map((entry) => entry.sourcePath).sort()) !== JSON.stringify(expectedCandidateSourcePaths)) {
+      throw new Error('Full cutover inventory contains an invalid Chrome candidate classification');
+    }
+    const expectedCandidateArchivePaths = trackedFiles.filter((sourcePath) => sourcePath.startsWith(CHROME_CANDIDATE_PREFIX)
+      && !chromeContext.candidateBySourcePath.has(sourcePath));
+    const candidateArchiveEntries = entries.filter((entry) => expectedCandidateArchivePaths.includes(entry.sourcePath));
+    if (JSON.stringify(candidateArchiveEntries.map((entry) => entry.sourcePath).sort())
+      !== JSON.stringify(expectedCandidateArchivePaths)
+      || candidateArchiveEntries.some((entry) => entry.migrationDisposition !== 'private-archive' || entry.slot !== null)) {
+      throw new Error('Full cutover inventory must privately archive unclassified Chrome pixels and all non-image data');
+    }
+    const reportEntries = entries.filter((entry) => entry.sourcePath.startsWith(CHROME_CANDIDATE_PREFIX)
+      && entry.sourcePath.toLowerCase().endsWith('/report.json'));
+    if (reportEntries.length !== CHROME_CANDIDATE_REPORT_COUNT
+      || reportEntries.some((entry) => entry.migrationDisposition !== 'private-archive' || entry.slot !== null)) {
+      throw new Error(`Full cutover inventory must privately archive exactly ${CHROME_CANDIDATE_REPORT_COUNT} Chrome candidate reports`);
+    }
+    for (const sourcePath of CHROME_PRIVATE_ARCHIVE_SOURCES) {
+      const matches = entries.filter((entry) => entry.sourcePath === sourcePath);
+      if (matches.length !== 1 || matches[0].migrationDisposition !== 'private-archive' || matches[0].slot !== null) {
+        throw new Error(`Full cutover inventory must privately archive ${sourcePath}`);
+      }
+    }
+    const chromeActivations = entries.filter((entry) => entry.chromeDefaultActivation);
+    const expectedChromeSlots = [
+      'ui/chrome/outer/atom.png', 'ui/chrome/outer/rail.png',
+      'ui/chrome/inner/atom.png', 'ui/chrome/inner/rail.png',
+      'ui/chrome/divider/joint.png',
+    ].sort();
+    if (JSON.stringify(chromeActivations.map((entry) => entry.slot).sort()) !== JSON.stringify(expectedChromeSlots)
+      || chromeActivations.some((entry) => entry.migrationDisposition !== 'legacy-bridge')) {
+      throw new Error('Full cutover inventory must create exactly the five Chrome Lab default canonical activations');
     }
   }
   const dispositionCounts = Object.fromEntries([...new Set(entries.map((entry) => entry.migrationDisposition))]
@@ -335,6 +778,7 @@ export function buildMigrationInventory({ repoRoot = defaultRepoRoot, prefixes =
       versionCount: entries.length,
       transferBytes: entries.reduce((total, entry) => total + entry.byteLength, 0),
       activeCount: entries.filter((entry) => entry.migrationDisposition === 'legacy-bridge').length,
+      candidateCount: entries.filter((entry) => entry.migrationDisposition === 'candidate').length,
       archiveCount: entries.filter((entry) => entry.migrationDisposition === 'private-archive').length,
       canonicalActivationCount: entries.filter((entry) => entry.activationSourceSlot).length,
       uniqueBlobCount: blobEntries.length,
@@ -349,6 +793,7 @@ export function buildMigrationInventory({ repoRoot = defaultRepoRoot, prefixes =
       || inventory.totals.bytes !== FROZEN_FULL_INVENTORY.bytes
       || inventory.totals.versionCount !== FROZEN_FULL_INVENTORY.versionCount
       || inventory.totals.activeCount !== FROZEN_FULL_INVENTORY.activeCount
+      || inventory.totals.candidateCount !== FROZEN_FULL_INVENTORY.candidateCount
       || inventory.totals.archiveCount !== FROZEN_FULL_INVENTORY.archiveCount
       || inventory.totals.canonicalActivationCount !== FROZEN_FULL_INVENTORY.canonicalActivationCount
       || inventory.inventorySha256 !== FROZEN_FULL_INVENTORY.sha256)) {
@@ -359,12 +804,19 @@ export function buildMigrationInventory({ repoRoot = defaultRepoRoot, prefixes =
         bytes: inventory.totals.bytes,
         versionCount: inventory.totals.versionCount,
         activeCount: inventory.totals.activeCount,
+        candidateCount: inventory.totals.candidateCount,
         archiveCount: inventory.totals.archiveCount,
         canonicalActivationCount: inventory.totals.canonicalActivationCount,
         sha256: inventory.inventorySha256,
       },
     })}`);
   }
+  Object.defineProperty(inventory, CANONICAL_GIT_BYTE_CONTEXT, {
+    value: { reader: canonicalGitByteReader, workingBytesBySource },
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
   return inventory;
 }
 
@@ -379,7 +831,7 @@ export function parseArgs(argv) {
     command: 'inventory', repoRoot: defaultRepoRoot, prefixes: [], startAfter: '', limit: Infinity,
     json: false, execute: false, apiBase: '',
     headers: process.env.LIVE_MEDIA_COOKIE ? { Cookie: process.env.LIVE_MEDIA_COOKIE } : {},
-    immutablePrefix: '/api/media', stablePrefix: '/assets', availabilityPolicy: '',
+    immutablePrefix: '/api/media', stablePrefix: '/assets',
   };
   let index = 0;
   if (argv[0] && !argv[0].startsWith('-')) options.command = argv[index++];
@@ -401,15 +853,11 @@ export function parseArgs(argv) {
     else if (value === '--header') { const [name, headerValue] = parseHeader(next()); options.headers[name] = headerValue; }
     else if (value === '--immutable-prefix') options.immutablePrefix = next();
     else if (value === '--stable-prefix') options.stablePrefix = next();
-    else if (value === '--availability-policy') options.availabilityPolicy = next();
     else throw new Error(`Unknown option: ${value}`);
   }
   if (!['inventory', 'upload'].includes(options.command)) throw new Error(`Unknown command: ${options.command}`);
   if (options.limit !== Infinity && (!Number.isSafeInteger(options.limit) || options.limit < 1)) {
     throw new Error('--limit must be a positive integer');
-  }
-  if (options.availabilityPolicy && !['critical', 'decorative'].includes(options.availabilityPolicy)) {
-    throw new Error('--availability-policy must be critical or decorative');
   }
   if (options.execute && options.command !== 'upload') throw new Error('--execute is valid only with upload');
   if (options.execute && !options.apiBase) throw new Error('--execute requires --api-base');
@@ -417,12 +865,15 @@ export function parseArgs(argv) {
 }
 
 function createPayload(entry, inventory, options) {
+  const candidateLabel = entry.candidateMetadata?.chromeCandidate?.label
+    ?? entry.candidateMetadata?.nativeRail?.label;
   const payload = {
     slot: entry.slot,
     domain: entry.domain,
     role: entry.role,
-    label: `ADR-0085 Git cutover: ${entry.sourcePath}`,
+    label: candidateLabel || `ADR-0085 Git cutover: ${entry.sourcePath}`,
     metadata: {
+      ...(entry.candidateMetadata ?? {}),
       migrationDisposition: entry.migrationDisposition,
       originalRepositoryPath: entry.sourcePath,
       mediaType: entry.mediaType,
@@ -431,8 +882,10 @@ function createPayload(entry, inventory, options) {
       height: entry.height,
     },
     provenance: {
+      ...(entry.candidateProvenance ?? {}),
       migration: {
         kind: 'git-media-cutover',
+        namespace: entry.namespace,
         repositoryCommit: inventory.repositoryCommit,
         originalRepositoryPath: entry.sourcePath,
         sha256: entry.sha256,
@@ -446,15 +899,26 @@ function createPayload(entry, inventory, options) {
     payload.provenance.migration.activationSourceSlot = entry.activationSourceSlot;
     payload.provenance.migration.displacedSourcePath = entry.displacedSourcePath;
   }
+  if (entry.chromeDefaultActivation) {
+    payload.metadata.chromeDefaultActivation = entry.chromeDefaultActivation;
+    payload.provenance.migration.chromeDefaultActivation = entry.chromeDefaultActivation;
+  }
   if (entry.acceptance) payload.slotMetadata = { acceptance: entry.acceptance };
   if (entry.slot) payload.provenance.migration.targetSlot = entry.slot;
   payload.sourcePath = entry.sourcePath;
-  if (entry.slot !== null) payload.availabilityPolicy = options.availabilityPolicy || entry.availabilityPolicy;
+  if (entry.slot !== null) payload.availabilityPolicy = entry.availabilityPolicy;
+  if (entry.nativeEvidence) payload.nativeEvidence = entry.nativeEvidence;
   return payload;
 }
 
-function migrationKey(repositoryCommit, sourcePath, slot) {
-  return `${repositoryCommit}\0${sourcePath}\0${slot ?? '<private>'}`;
+function migrationKey(repositoryCommit, sourcePath, namespace, slot) {
+  return `${repositoryCommit}\0${sourcePath}\0${namespace}\0${slot ?? '<private>'}`;
+}
+
+export function migrationIdempotencyKey(entry, inventory) {
+  return `adr0085-${sha256Text(migrationKey(
+    inventory.repositoryCommit, entry.sourcePath, entry.namespace, entry.slot,
+  )).slice(0, 48)}`;
 }
 
 export function existingMigrationIndex(catalog) {
@@ -462,7 +926,10 @@ export function existingMigrationIndex(catalog) {
   for (const version of catalog.versions) {
     const migration = version?.provenance?.migration;
     if (migration?.kind !== 'git-media-cutover' || !migration.repositoryCommit || !migration.originalRepositoryPath) continue;
-    const key = migrationKey(migration.repositoryCommit, migration.originalRepositoryPath, version.slot ?? null);
+    if (!migration.namespace) throw new Error(`Git cutover version ${version.id} is missing migration.namespace`);
+    const key = migrationKey(
+      migration.repositoryCommit, migration.originalRepositoryPath, migration.namespace, version.slot ?? null,
+    );
     if (result.has(key)) {
       throw new Error(`Duplicate Git cutover versions already exist for ${migration.originalRepositoryPath} -> ${version.slot ?? '<private>'} at ${migration.repositoryCommit}`);
     }
@@ -476,6 +943,7 @@ export function assertExistingMatches(entry, inventory, version, slotRecord = nu
   const expectedSourcePath = entry.sourcePath;
   const mismatches = [];
   if (migration?.kind !== 'git-media-cutover') mismatches.push('migration.kind');
+  if (migration?.namespace !== entry.namespace) mismatches.push('migration.namespace');
   if (migration?.repositoryCommit !== inventory.repositoryCommit) mismatches.push('repositoryCommit');
   if (migration?.originalRepositoryPath !== entry.sourcePath) mismatches.push('originalRepositoryPath');
   if (migration?.sha256 !== entry.sha256) mismatches.push('sha256');
@@ -487,6 +955,22 @@ export function assertExistingMatches(entry, inventory, version, slotRecord = nu
   if ((version.metadata?.displacedSourcePath ?? null) !== (entry.displacedSourcePath ?? null)) mismatches.push('metadata.displacedSourcePath');
   if ((migration?.activationSourceSlot ?? null) !== (entry.activationSourceSlot ?? null)) mismatches.push('migration.activationSourceSlot');
   if ((migration?.displacedSourcePath ?? null) !== (entry.displacedSourcePath ?? null)) mismatches.push('migration.displacedSourcePath');
+  if (JSON.stringify(version.metadata?.chromeDefaultActivation ?? null)
+    !== JSON.stringify(entry.chromeDefaultActivation ?? null)) mismatches.push('metadata.chromeDefaultActivation');
+  if (JSON.stringify(migration?.chromeDefaultActivation ?? null)
+    !== JSON.stringify(entry.chromeDefaultActivation ?? null)) mismatches.push('migration.chromeDefaultActivation');
+  for (const key of ['chromeCandidate', 'nativeRail']) {
+    if (JSON.stringify(version.metadata?.[key] ?? null) !== JSON.stringify(entry.candidateMetadata?.[key] ?? null)) {
+      mismatches.push(`metadata.${key}`);
+    }
+  }
+  for (const key of ['chromeCandidateManifest', 'nativeRailManifest']) {
+    if (JSON.stringify(version.provenance?.[key] ?? null) !== JSON.stringify(entry.candidateProvenance?.[key] ?? null)) {
+      mismatches.push(`provenance.${key}`);
+    }
+  }
+  if (entry.nativeEvidence
+    && JSON.stringify(version.nativeEvidence ?? null) !== JSON.stringify(entry.nativeEvidence)) mismatches.push('nativeEvidence');
   if (JSON.stringify(slotRecord?.metadata?.acceptance ?? null) !== JSON.stringify(entry.acceptance ?? null)) {
     mismatches.push('slotMetadata.acceptance');
   }
@@ -529,7 +1013,12 @@ async function postMigrationAction(client, routeTemplate, id, body, operation) {
 }
 
 async function verifyFinalEntry(client, entry, version, options, reused, uploadedVerification = null) {
-  const expectedStatus = entry.migrationDisposition === 'legacy-bridge' ? 'legacy-bridge' : 'archived';
+  const expectedStatus = ({
+    'legacy-bridge': 'legacy-bridge',
+    'private-archive': 'archived',
+    candidate: 'candidate',
+  })[entry.migrationDisposition];
+  if (!expectedStatus) throw new Error(`Unsupported migration disposition ${entry.migrationDisposition}: ${entry.sourcePath}`);
   if (version.status !== expectedStatus) {
     throw new Error(`Migration may only finish as ${expectedStatus}, got ${version.status}: ${entry.sourcePath}`);
   }
@@ -537,12 +1026,14 @@ async function verifyFinalEntry(client, entry, version, options, reused, uploade
   if (version.status === 'legacy-bridge' && version.media.url !== `${options.immutablePrefix}/${entry.sha256}`) {
     throw new Error(`Active version did not resolve to its immutable content route: ${entry.sourcePath}`);
   }
-  const finalMediaVerification = await verifyEntryUrl(client, version.media.url, entry);
+  const finalMediaVerification = entry.migrationDisposition === 'candidate' && uploadedVerification
+    ? uploadedVerification
+    : await verifyEntryUrl(client, version.media.url, entry);
   return {
     sourcePath: entry.sourcePath,
     slot: entry.slot,
     id: String(version.id),
-    action: version.status === 'archived' ? 'private-archive' : version.status,
+    action: entry.migrationDisposition,
     revision: Number(version.rowRevision),
     reused,
     uploadedVerification: uploadedVerification || finalMediaVerification,
@@ -577,12 +1068,30 @@ export async function verifyStableMigrationResults(entries, results, options, cl
   return completed;
 }
 
+function migrationSourceBytes(entry, inventory, options) {
+  const absolutePath = path.join(options.repoRoot, entry.sourcePath);
+  const workingBytes = fs.readFileSync(absolutePath);
+  const context = inventory?.[CANONICAL_GIT_BYTE_CONTEXT] ?? null;
+  if (!context) return workingBytes;
+  if (context.reader.head !== inventory.repositoryCommit) {
+    throw new Error(`Canonical Git reader HEAD differs from inventory commit: ${entry.sourcePath}`);
+  }
+  const observed = context.workingBytesBySource.get(entry.sourcePath);
+  if (!observed) throw new Error(`Canonical Git byte snapshot is missing source: ${entry.sourcePath}`);
+  if (workingBytes.length !== observed.byteLength || sha256(workingBytes) !== observed.sha256) {
+    throw new Error(`Tracked migration source changed after inventory: ${entry.sourcePath}`);
+  }
+  if (context.reader.changedPaths.has(entry.sourcePath)) {
+    throw new Error(`Tracked migration source differs from ${inventory.repositoryCommit}: ${entry.sourcePath}`);
+  }
+  return context.reader.read(entry.sourcePath, workingBytes);
+}
+
 export async function migrateEntry(entry, inventory, options, client, catalog, existing) {
-  if (!['legacy-bridge', 'private-archive'].includes(entry.migrationDisposition)) {
+  if (!['legacy-bridge', 'private-archive', 'candidate'].includes(entry.migrationDisposition)) {
     throw new Error(`Unsupported migration disposition ${entry.migrationDisposition}: ${entry.sourcePath}`);
   }
-  const absolutePath = path.join(options.repoRoot, entry.sourcePath);
-  const bytes = fs.readFileSync(absolutePath);
+  const bytes = migrationSourceBytes(entry, inventory, options);
   if (bytes.length !== entry.byteLength || sha256(bytes) !== entry.sha256) {
     throw new Error(`Local bytes changed after inventory: ${entry.sourcePath}`);
   }
@@ -595,8 +1104,11 @@ export async function migrateEntry(entry, inventory, options, client, catalog, e
     throw new Error(`Stable slot ${entry.slot} is already active at version ${conflict.activeVersionId}; refusing to overwrite it`);
   }
 
-  const finalStatus = entry.migrationDisposition === 'legacy-bridge' ? 'legacy-bridge' : 'archived';
-  if (existing && existing.status === finalStatus) {
+  const finalStatus = ({ 'legacy-bridge': 'legacy-bridge', 'private-archive': 'archived', candidate: 'candidate' })[
+    entry.migrationDisposition
+  ];
+  if (existing && existing.status === finalStatus
+    && (entry.migrationDisposition !== 'candidate' || existing.media)) {
     return verifyFinalEntry(client, entry, existing, options, true);
   }
   if (existing && existing.status !== 'candidate') {
@@ -611,7 +1123,7 @@ export async function migrateEntry(entry, inventory, options, client, catalog, e
     revision = Number(existing.rowRevision);
   } else {
     const created = await client.createVersion(createPayload(entry, inventory, options), {
-      idempotencyKey: `adr0085-${sha256Text(`${inventory.repositoryCommit}\0${entry.sourcePath}\0${entry.slot ?? '<private>'}`).slice(0, 48)}`,
+      idempotencyKey: migrationIdempotencyKey(entry, inventory),
     });
     id = created.id;
     revision = created.revision;
@@ -634,6 +1146,9 @@ export async function migrateEntry(entry, inventory, options, client, catalog, e
     throw new Error(`Uploaded media response is incomplete or hash-mismatched for ${entry.sourcePath}`);
   }
   const uploadedVerification = await verifyEntryUrl(client, currentMedia.url, entry);
+  if (entry.migrationDisposition === 'candidate') {
+    return verifyFinalEntry(client, entry, current, options, false, uploadedVerification);
+  }
   let actionResult;
   if (entry.migrationDisposition === 'legacy-bridge') {
     actionResult = await postMigrationAction(
@@ -694,7 +1209,9 @@ async function run() {
   for (let index = 0; index < inventory.entries.length; index += 1) {
     const entry = inventory.entries[index];
     console.error(`[${index + 1}/${inventory.entries.length}] ${entry.sourcePath}`);
-    const existing = existingByMigration.get(migrationKey(inventory.repositoryCommit, entry.sourcePath, entry.slot)) ?? null;
+    const existing = existingByMigration.get(migrationKey(
+      inventory.repositoryCommit, entry.sourcePath, entry.namespace, entry.slot,
+    )) ?? null;
     const result = await migrateEntry(entry, inventory, options, client, catalog, existing);
     results.push(result);
     console.error(JSON.stringify({ migrationProgress: index + 1, total: inventory.entries.length, result }));

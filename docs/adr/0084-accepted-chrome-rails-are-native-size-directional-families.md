@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: "accepted; Git-backed candidate storage and generator enforcement superseded by ADR-0088"
 date: 2026-07-10
 deciders: Nelson, Codex
+partially_superseded_by: "[ADR-0088](0088-chrome-candidates-and-installed-roles-are-live-catalog-owned.md)"
 ---
 
 # ADR-0084: Accepted chrome rails are native-size directional families

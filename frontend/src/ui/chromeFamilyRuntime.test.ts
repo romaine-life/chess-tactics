@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  dividerDefault,
   frameCss,
+  installedChromeTuningPayload,
   renderedRailThickness,
   roleContentInset,
   roleDefault,
   type DividerRender,
   type FrameRender,
 } from './chromeFamilyRuntime';
+import { CHROME_LIVE_SLOTS } from './chromeCandidateSources';
 
 const frame = (url: string, slice: number): FrameRender => ({
   url,
@@ -25,6 +28,36 @@ const divider: DividerRender = {
 };
 
 describe('chrome family geometry ownership (ADR-0083)', () => {
+  it('keeps installed media selectors on canonical backend slots', () => {
+    expect(roleDefault('outer')).toMatchObject({
+      atomSourceId: CHROME_LIVE_SLOTS.outerAtom,
+      railSourceId: CHROME_LIVE_SLOTS.outerRail,
+    });
+    expect(roleDefault('inner')).toMatchObject({
+      atomSourceId: CHROME_LIVE_SLOTS.innerAtom,
+      railSourceId: CHROME_LIVE_SLOTS.innerRail,
+    });
+    expect(dividerDefault().atomSourceId).toBe(CHROME_LIVE_SLOTS.dividerJoint);
+  });
+
+  it('exports geometry without promoting auditioned version ids into defaults', () => {
+    const payload = installedChromeTuningPayload(
+      'level-editor',
+      { ...roleDefault('outer'), atomSourceId: 'private-atom-version', railSourceId: 'private-rail-version' },
+      { ...roleDefault('inner'), atomSourceId: 'private-inner-atom', railSourceId: 'private-inner-rail' },
+      { ...dividerDefault(), atomSourceId: 'none' },
+    );
+    expect(payload.outer).toMatchObject({
+      atomSourceId: CHROME_LIVE_SLOTS.outerAtom,
+      railSourceId: CHROME_LIVE_SLOTS.outerRail,
+    });
+    expect(payload.inner).toMatchObject({
+      atomSourceId: CHROME_LIVE_SLOTS.innerAtom,
+      railSourceId: CHROME_LIVE_SLOTS.innerRail,
+    });
+    expect(payload.divider.atomSourceId).toBe(CHROME_LIVE_SLOTS.dividerJoint);
+  });
+
   it('keeps derived frame geometry and invisible rail seats out of authored state', () => {
     for (const role of ['outer', 'inner'] as const) {
       const tune = roleDefault(role);

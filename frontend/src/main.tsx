@@ -18,6 +18,7 @@ import { loadLiveWallArt } from './net/wallArt';
 import { loadLiveUnitCatalog } from './net/unitAssets';
 import { loadLiveMediaCatalog } from './net/liveMedia';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
+import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
 // content-hashed + immutable — correct — but that does NOT save a tab that
@@ -69,6 +70,7 @@ if (root) {
 
   void Promise.all([loadLiveMediaCatalog(), loadLiveUnitCatalog()])
     .then(() => {
+      assertInstalledChromeSlots();
       initUnitSizeTuning();
       reactRoot.render(<App />);
       // Placement metadata remains independently live. Media and Unit Art are

@@ -43,15 +43,21 @@ export const SYNTHETIC_TEST_MEDIA_MAX_BYTES = 16 * 1024;
 // media allowlist: the caller must opt into this exact snapshot, and any path,
 // size, or content-hash change leaves every legacy-media violation active.
 export const FROZEN_LEGACY_CUTOVER = Object.freeze({
-  count: 2217,
-  bytes: 358412274,
-  sha256: '11a6290a9aed299d8124581b4d566a716f53f4578c03bb6685bcdcfcf180fda9',
+  count: 3984,
+  bytes: 428728479,
+  sha256: 'c4ed900d39d9be8721ff2ea1fae6ff1f70bb89c7ca2ce8555d5e63b78c263106',
 });
 
 export const CUTOVER_IMPORTER_PATH = 'frontend/scripts/migrate-live-assets.mjs';
+const CUTOVER_IMPORT_INPUT_PATHS = new Set([
+  'frontend/config/native-rail-families.json',
+  'frontend/src/ui/chromeCandidateManifest.json',
+  'frontend/src/ui/nativeRailCandidateManifest.json',
+]);
 const CUTOVER_TEMPORARY_PATHS = [
   CUTOVER_IMPORTER_PATH,
   'frontend/scripts/migrate-live-assets.test.mjs',
+  ...CUTOVER_IMPORT_INPUT_PATHS,
 ];
 const PUBLIC_ASSET_PREFIX = 'frontend/public/assets/';
 
@@ -79,8 +85,28 @@ const STATIC_POINTER_FILES = new Set([
   'frontend/src/ui/design/kitProvenance.json',
   'frontend/src/ui/design/kitUsage.json',
 ]);
+const STATIC_CANDIDATE_DATABASE_FILES = new Set([
+  'frontend/config/native-rail-families.json',
+  'frontend/src/ui/chromeCandidateManifest.json',
+  'frontend/src/ui/nativeRailCandidateManifest.json',
+]);
+const CANONICAL_CHROME_SOURCE_SLOTS = new Set([
+  'ui/chrome/outer/atom.png',
+  'ui/chrome/outer/rail.png',
+  'ui/chrome/inner/atom.png',
+  'ui/chrome/inner/rail.png',
+  'ui/chrome/divider/joint.png',
+]);
 const STATIC_POINTER_AUTHORITY = /["']status["']\s*:\s*["'](?:accepted_for_future_use|promoted|production-accepted)["']|accepted_and_frozen|owner_accepted|["']production_status["']\s*:|registeredForProduction["']?\s*[:=]\s*true|productionAccepted["']?\s*[:=]\s*true|["']accepted(?:Asset|Pointer|Version)Id?["']\s*:\s*["'][^"']+["']|accepted-surfaces\.json|(?:frontend\/public|\.\.\/public)\/asset-catalog\.json/i;
 const STATIC_CANDIDATE_LIFECYCLE = /(?:RIGHT_CANDIDATES|CANDIDATE_ROOT|ARCHIVE_ROOT|category\s*:\s*["'](?:candidate|archived)["'])[\s\S]{0,12000}(?:\/assets\/|\.png|\.webp|\.wav)/i;
+const GENERATED_CANDIDATE_CATALOG_NAME = /candidate[^/]*(?:manifest|catalog|database)|(?:manifest|catalog|database)[^/]*candidate/i;
+const GENERATED_CANDIDATE_CATALOG_MARKER = /["']generatedBy["']\s*:/i;
+const GENERATED_CANDIDATE_CATALOG_ROWS = /["'](?:sources|candidates|families)["']\s*:/i;
+const GENERATED_CANDIDATE_CATALOG_POINTER = /\/assets\/[^"'`\s]*candidate|["']?(?:source|candidate)Ids?["']?\s*:/i;
+const CHROME_INSTALLED_SELECTOR_PATH = /(?:^|\/)(?=[^/]*chrome)(?=[^/]*(?:accepted|default|family|installed|production|runtime))[^/]*\.(?:c?js|json|mjs|mts|ts|tsx)$/i;
+const CHROME_INSTALLED_CONTEXT = /\b(?:acceptedChrome|committedChrome|installedChrome|productionChrome|useInstalledChromeCss)\w*/i;
+const CHROME_SOURCE_SELECTOR_LITERAL = /["']?((?:atom|rail)SourceId|(?:outer|inner|divider)(?:Atom|Rail)Source(?:Id|Path|Slot|Url)?)["']?\s*[:=]\s*["'`]([^"'`]+)["'`]/gi;
+const GENERATED_CHROME_SOURCE_PATH = /(?:^|\/)assets\/ui\/chrome-candidates(?:\/|$)|(?:^|\/)ui\/chrome-candidates(?:\/|$)/i;
 const OLD_PUBLIC_ASSET_FILESYSTEM = /(?:frontend\/)?public\/assets(?:\/|\b)/i;
 const OLD_DEDICATED_SOURCE_FILESYSTEM = /frontend\/scripts\/groundcover\/src(?:\/|\b)/i;
 const BACKEND_SOURCE_PATH_IDENTIFIER = /(?:["']sourcePath["']|\bsourcePath)\s*:/;
@@ -378,12 +404,87 @@ export function embeddedMediaLiteralReason(relativePath, source, byteLength = Bu
   return encodedLiteralReason(source);
 }
 
+function isStaticCandidateDatabase(relativePath, source) {
+  const normalized = normalizeRepoPath(relativePath);
+  if (STATIC_CANDIDATE_DATABASE_FILES.has(normalized)) return true;
+  if (!normalized.startsWith('frontend/config/') && !normalized.startsWith('frontend/src/')) return false;
+  if (GENERATED_CANDIDATE_CATALOG_NAME.test(path.posix.basename(normalized))) return true;
+  return GENERATED_CANDIDATE_CATALOG_MARKER.test(source)
+    && GENERATED_CANDIDATE_CATALOG_ROWS.test(source)
+    && GENERATED_CANDIDATE_CATALOG_POINTER.test(source);
+}
+
+function normalizedChromeSemanticSlot(value) {
+  const withoutQuery = value.trim().split(/[?#]/, 1)[0].replaceAll('\\', '/').replace(/^\/+/, '');
+  return withoutQuery.startsWith('assets/') ? withoutQuery.slice('assets/'.length) : withoutQuery;
+}
+
+function chromeConfigSelectorReason(source) {
+  try {
+    const parsed = JSON.parse(source);
+    const expectedByRole = {
+      outer: {
+        atomSourceId: 'ui/chrome/outer/atom.png',
+        railSourceId: 'ui/chrome/outer/rail.png',
+      },
+      inner: {
+        atomSourceId: 'ui/chrome/inner/atom.png',
+        railSourceId: 'ui/chrome/inner/rail.png',
+      },
+      divider: {
+        atomSourceId: 'ui/chrome/divider/joint.png',
+      },
+    };
+    for (const [role, selectors] of Object.entries(expectedByRole)) {
+      const roleConfig = parsed?.[role];
+      if (!roleConfig || typeof roleConfig !== 'object' || Array.isArray(roleConfig)) continue;
+      for (const [selector, expected] of Object.entries(selectors)) {
+        if (!(selector in roleConfig)) continue;
+        const actual = typeof roleConfig[selector] === 'string'
+          ? normalizedChromeSemanticSlot(roleConfig[selector])
+          : '';
+        if (actual !== expected) {
+          return `${role}.${selector} must resolve through the canonical ${expected} backend slot`;
+        }
+      }
+    }
+  } catch {
+    // JavaScript/TypeScript installation declarations are handled by the
+    // literal scan below. Malformed JSON will fail its own parser in CI.
+  }
+
+  for (const match of source.matchAll(CHROME_SOURCE_SELECTOR_LITERAL)) {
+    const slot = normalizedChromeSemanticSlot(match[2]);
+    if (!CANONICAL_CHROME_SOURCE_SLOTS.has(slot)) {
+      return `${match[1]} points at a generated candidate id/path instead of a canonical backend slot`;
+    }
+  }
+  return null;
+}
+
+export function chromeInstalledSourceAuthorityReason(relativePath, source) {
+  const normalized = normalizeRepoPath(relativePath);
+  if (GUARD_OR_CUTOVER_INSPECTORS.has(normalized)) return null;
+  const installedContext = CHROME_INSTALLED_SELECTOR_PATH.test(normalized)
+    || CHROME_INSTALLED_CONTEXT.test(source);
+  if (!installedContext) return null;
+
+  const selectorReason = chromeConfigSelectorReason(source);
+  if (selectorReason) return selectorReason;
+  if (GENERATED_CHROME_SOURCE_PATH.test(source)) {
+    return 'installed Chrome resolves a generated candidate path instead of canonical backend slots';
+  }
+  return null;
+}
+
 export function isStaticPromotionAuthority(relativePath, source) {
   const normalized = normalizeRepoPath(relativePath);
   if (GUARD_OR_CUTOVER_INSPECTORS.has(normalized)) return false;
   if (STATIC_POINTER_FILES.has(normalized)) return true;
   if (!/\.(?:c?js|json|mjs|mts|ts|tsx)$/.test(normalized)) return false;
   if (/(?:^|\/)(?:test|tests|__tests__)(?:\/|$)|\.test\.[^.]+$/.test(normalized)) return false;
+  if (isStaticCandidateDatabase(normalized, source)) return true;
+  if (chromeInstalledSourceAuthorityReason(normalized, source)) return true;
   if (/"authority"\s*:\s*"historical-provenance-only"/.test(source)) return false;
   return STATIC_POINTER_AUTHORITY.test(source) || STATIC_CANDIDATE_LIFECYCLE.test(source)
     || codeOwnedAssetRegistryAuthority(normalized, source);
@@ -535,6 +636,77 @@ export function listTrackedFiles(repoRoot = defaultRepoRoot) {
   return output.split('\0').filter(Boolean).map(normalizeRepoPath);
 }
 
+function gitNulPaths(repoRoot, args) {
+  const output = execFileSync('git', args, {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  return output.split('\0').filter(Boolean).map(normalizeRepoPath);
+}
+
+function headBlobSizes(repoRoot, head) {
+  const output = execFileSync('git', ['ls-tree', '-r', '-l', '-z', head], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  const sizes = new Map();
+  for (const record of output.split('\0')) {
+    if (!record) continue;
+    const separator = record.indexOf('\t');
+    if (separator < 0) continue;
+    const metadata = record.slice(0, separator).trim().split(/\s+/);
+    const size = Number(metadata.at(-1));
+    if (!Number.isSafeInteger(size) || size < 0) continue;
+    sizes.set(normalizeRepoPath(record.slice(separator + 1)), size);
+  }
+  return sizes;
+}
+
+// Git's clean/smudge filters can make a clean checkout byte-different from the
+// committed blob (notably LF blobs checked out as CRLF on Windows). The frozen
+// cutover fingerprints committed bytes, while ordinary guard diagnostics must
+// continue to inspect the actual working tree. Avoid `git show` for the common
+// case: only a clean path whose size proves it differs from HEAD needs a blob
+// read, and cache that exceptional read for the life of this guard run.
+export function createCanonicalGitByteReader(repoRoot = defaultRepoRoot) {
+  const head = execFileSync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  }).trim();
+  const changedPaths = new Set(gitNulPaths(
+    repoRoot,
+    ['diff', '--no-ext-diff', '--name-only', '-z', head, '--'],
+  ));
+  const canonicalBlobSizes = headBlobSizes(repoRoot, head);
+  const canonicalBlobCache = new Map();
+
+  const read = (relativePath, suppliedWorkingBytes) => {
+    const normalized = normalizeRepoPath(relativePath);
+    const workingBytes = suppliedWorkingBytes ?? fs.readFileSync(path.join(repoRoot, normalized));
+    if (!Buffer.isBuffer(workingBytes)) {
+      throw new TypeError(`Working bytes for ${normalized} must be a Buffer`);
+    }
+    if (changedPaths.has(normalized)) return workingBytes;
+    const canonicalSize = canonicalBlobSizes.get(normalized);
+    if (canonicalSize === undefined || canonicalSize === workingBytes.length) return workingBytes;
+    if (canonicalBlobCache.has(normalized)) return canonicalBlobCache.get(normalized);
+    const canonicalBytes = execFileSync('git', ['show', `${head}:${normalized}`], {
+      cwd: repoRoot,
+      encoding: null,
+      maxBuffer: Math.max(64 * 1024 * 1024, canonicalSize + 1024),
+    });
+    if (canonicalBytes.length !== canonicalSize) {
+      throw new Error(`Canonical Git blob size changed for ${normalized}: expected ${canonicalSize}, read ${canonicalBytes.length}`);
+    }
+    canonicalBlobCache.set(normalized, canonicalBytes);
+    return canonicalBytes;
+  };
+
+  return { head, changedPaths, canonicalBlobSizes, read };
+}
+
 export function collectNoCommittedMediaViolations({
   repoRoot = defaultRepoRoot,
   trackedFiles = listTrackedFiles(repoRoot),
@@ -543,6 +715,7 @@ export function collectNoCommittedMediaViolations({
 } = {}) {
   let violations = [];
   const frozenEntries = [];
+  const canonicalGitBytes = allowFrozenCutover ? createCanonicalGitByteReader(repoRoot) : null;
 
   for (const relativePath of trackedFiles) {
     const absolutePath = path.join(repoRoot, relativePath);
@@ -552,6 +725,14 @@ export function collectNoCommittedMediaViolations({
 
     const bytes = fs.readFileSync(absolutePath);
     const byteLength = bytes.length;
+    const addFrozenEntry = () => {
+      const canonicalBytes = canonicalGitBytes.read(relativePath, bytes);
+      frozenEntries.push({
+        path: relativePath,
+        byteLength: canonicalBytes.length,
+        sha256: crypto.createHash('sha256').update(canonicalBytes).digest('hex'),
+      });
+    };
     // Extensions are only a convenience, never the security boundary. Inspect
     // every tracked payload so renaming a PNG/SVG/ZIP-backed source to `.dat`
     // or removing its extension cannot reopen the Git-backed asset path.
@@ -559,13 +740,7 @@ export function collectNoCommittedMediaViolations({
     let source = null;
     if (media) {
       if (!isAllowedSyntheticTestMedia(relativePath, byteLength)) {
-        if (allowFrozenCutover) {
-          frozenEntries.push({
-            path: relativePath,
-            byteLength,
-            sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
-          });
-        }
+        if (allowFrozenCutover) addFrozenEntry();
         violations.push({
           kind: 'tracked-media',
           path: relativePath,
@@ -575,19 +750,16 @@ export function collectNoCommittedMediaViolations({
       }
     }
     if (relativePath.startsWith(PUBLIC_ASSET_PREFIX) && !media) {
-      if (allowFrozenCutover) {
-        frozenEntries.push({
-          path: relativePath,
-          byteLength,
-          sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
-        });
-      }
+      if (allowFrozenCutover) addFrozenEntry();
       violations.push({
         kind: 'tracked-public-asset-file',
         path: relativePath,
         detail: `${byteLength} committed bytes under the retired public asset root`,
         byteLength,
       });
+    }
+    if (allowFrozenCutover && CUTOVER_IMPORT_INPUT_PATHS.has(relativePath)) {
+      addFrozenEntry();
     }
 
     if (!media) {
@@ -604,7 +776,8 @@ export function collectNoCommittedMediaViolations({
       }
     }
 
-    if (isStaticPromotionAuthority(relativePath, '')) {
+    const permittedFrozenImportInput = allowCutoverImporter && CUTOVER_IMPORT_INPUT_PATHS.has(relativePath);
+    if (!permittedFrozenImportInput && isStaticPromotionAuthority(relativePath, '')) {
       violations.push({
         kind: 'static-promotion-authority',
         path: relativePath,
@@ -612,7 +785,7 @@ export function collectNoCommittedMediaViolations({
       });
     } else if (/\.(?:c?js|json|mjs|mts|ts|tsx)$/.test(relativePath)) {
       const staticSource = source ?? fs.readFileSync(absolutePath, 'utf8');
-      if (isStaticPromotionAuthority(relativePath, staticSource)) {
+      if (!permittedFrozenImportInput && isStaticPromotionAuthority(relativePath, staticSource)) {
         violations.push({
           kind: 'static-promotion-authority',
           path: relativePath,
@@ -649,7 +822,7 @@ export function collectNoCommittedMediaViolations({
       violations.push({
         kind: 'temporary-cutover-tool',
         path: temporaryPath,
-        detail: 'run/test the one-time migration, then delete it before cutover',
+        detail: 'run/test the one-time migration, then delete this tool or frozen input before cutover',
       });
     }
   }

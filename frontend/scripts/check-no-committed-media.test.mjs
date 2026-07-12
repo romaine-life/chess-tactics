@@ -1,13 +1,17 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import {
   FROZEN_LEGACY_CUTOVER,
   SYNTHETIC_TEST_MEDIA_MAX_BYTES,
+  chromeInstalledSourceAuthorityReason,
   collectNoCommittedMediaViolations,
   committedMediaFilesystemAssumptionReason,
   committedMediaWriterReason,
+  createCanonicalGitByteReader,
   embeddedMediaLiteralReason,
   frozenCutoverSnapshot,
   isAllowedSyntheticTestMedia,
@@ -182,10 +186,102 @@ describe('no-committed-media guard', () => {
       sha256: 'fa965ad94a918980402d90489c5423d380aa486d237f9c306666bd9102443868',
     });
     expect(FROZEN_LEGACY_CUTOVER).toEqual({
-      count: 2217,
-      bytes: 358412274,
-      sha256: '11a6290a9aed299d8124581b4d566a716f53f4578c03bb6685bcdcfcf180fda9',
+      count: 3984,
+      bytes: 428728479,
+      sha256: 'c4ed900d39d9be8721ff2ea1fae6ff1f70bb89c7ca2ce8555d5e63b78c263106',
     });
+  });
+
+  it('freezes canonical Git blobs across CRLF checkouts and uses working bytes for modifications', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'canonical-git-bytes-test-'));
+    const relativePath = 'frontend/public/assets/crlf-catalog.json';
+    const absolutePath = path.join(repoRoot, relativePath);
+    const canonicalLf = Buffer.from('{"row":1}\n{"row":2}\n', 'utf8');
+    const checkoutCrlf = Buffer.from('{"row":1}\r\n{"row":2}\r\n', 'utf8');
+    const git = (args) => execFileSync('git', args, {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const cutoverRun = () => {
+      const violations = collectNoCommittedMediaViolations({
+        repoRoot,
+        trackedFiles: [relativePath],
+        allowFrozenCutover: FROZEN_LEGACY_CUTOVER.sha256,
+      });
+      const mismatch = violations.find((violation) => violation.kind === 'frozen-cutover-mismatch');
+      expect(mismatch).toBeDefined();
+      return {
+        actual: JSON.parse(mismatch.detail.slice(mismatch.detail.indexOf('{'))).actual,
+        violations,
+      };
+    };
+    try {
+      git(['init', '--quiet']);
+      git(['config', 'user.email', 'guard@example.test']);
+      git(['config', 'user.name', 'Media guard test']);
+      git(['config', 'core.autocrlf', 'false']);
+      git(['config', 'core.safecrlf', 'false']);
+      git(['config', 'commit.gpgSign', 'false']);
+      fs.writeFileSync(
+        path.join(repoRoot, '.gitattributes'),
+        `${relativePath} text eol=crlf\n`,
+      );
+      fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+      fs.writeFileSync(absolutePath, canonicalLf);
+      git(['add', '.gitattributes', relativePath]);
+      git(['commit', '--quiet', '-m', 'fixture']);
+      fs.rmSync(absolutePath);
+      git(['checkout', '--quiet', '--', relativePath]);
+
+      const workingBytes = fs.readFileSync(absolutePath);
+      expect(workingBytes.equals(checkoutCrlf)).toBe(true);
+      expect(git(['status', '--porcelain'])).toBe('');
+
+      const reader = createCanonicalGitByteReader(repoRoot);
+      expect(reader.head).toMatch(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/);
+      expect(reader.changedPaths.has(relativePath)).toBe(false);
+      expect(reader.canonicalBlobSizes.get(relativePath)).toBe(canonicalLf.length);
+      const canonicalBytes = reader.read(relativePath, workingBytes);
+      expect(canonicalBytes.equals(canonicalLf)).toBe(true);
+      expect(reader.read(relativePath, workingBytes)).toBe(canonicalBytes);
+      const attributesWorkingBytes = fs.readFileSync(path.join(repoRoot, '.gitattributes'));
+      expect(reader.read('.gitattributes', attributesWorkingBytes)).toBe(attributesWorkingBytes);
+
+      const expectedCanonicalSnapshot = frozenCutoverSnapshot([{
+        path: relativePath,
+        byteLength: canonicalLf.length,
+        sha256: crypto.createHash('sha256').update(canonicalLf).digest('hex'),
+      }]);
+      const cleanRun = cutoverRun();
+      expect(cleanRun.actual).toEqual(expectedCanonicalSnapshot);
+      expect(cleanRun.violations).toContainEqual(expect.objectContaining({
+        kind: 'tracked-public-asset-file',
+        path: relativePath,
+        byteLength: workingBytes.length,
+      }));
+
+      const modifiedWorkingBytes = Buffer.from('{"row":1}\r\n{"row":2}\r\n{"row":3}\r\n', 'utf8');
+      fs.writeFileSync(absolutePath, modifiedWorkingBytes);
+      const modifiedReader = createCanonicalGitByteReader(repoRoot);
+      expect(modifiedReader.changedPaths.has(relativePath)).toBe(true);
+      expect(modifiedReader.read(relativePath, modifiedWorkingBytes)).toBe(modifiedWorkingBytes);
+      const expectedModifiedSnapshot = frozenCutoverSnapshot([{
+        path: relativePath,
+        byteLength: modifiedWorkingBytes.length,
+        sha256: crypto.createHash('sha256').update(modifiedWorkingBytes).digest('hex'),
+      }]);
+      const modifiedRun = cutoverRun();
+      expect(modifiedRun.actual).toEqual(expectedModifiedSnapshot);
+      expect(modifiedRun.violations).toContainEqual(expect.objectContaining({
+        kind: 'tracked-public-asset-file',
+        path: relativePath,
+        byteLength: modifiedWorkingBytes.length,
+      }));
+      expect(expectedModifiedSnapshot.sha256).not.toBe(expectedCanonicalSnapshot.sha256);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it('rejects committed promotion authority without rejecting live-catalog code or tests', () => {
@@ -232,6 +328,113 @@ describe('no-committed-media guard', () => {
       'frontend/src/ui/SceneAnimLab.tsx',
       "const RIGHT_CANDIDATES = { water: [{ category: 'candidate', sheet: '/assets/candidate.png' }] };",
     )).toBe(true);
+  });
+
+  it('rejects committed Chrome candidate databases, including renamed generated catalogs', () => {
+    for (const relativePath of [
+      'frontend/src/ui/chromeCandidateManifest.json',
+      'frontend/src/ui/nativeRailCandidateManifest.json',
+      'frontend/config/native-rail-families.json',
+      'frontend/src/ui/generatedChromeCandidateCatalog.json',
+      'frontend/config/chrome-candidate-database.ts',
+    ]) {
+      expect(isStaticPromotionAuthority(relativePath, '{}'), relativePath).toBe(true);
+    }
+    expect(isStaticPromotionAuthority(
+      'frontend/src/ui/generatedChromeSources.json',
+      JSON.stringify({
+        generatedBy: 'scripts/rebuild-chrome-sources.mjs',
+        sources: [{ id: 'outer-candidate-01', src: '/assets/ui/chrome-candidates/outer/candidate-01.png' }],
+      }),
+    )).toBe(true);
+    expect(isStaticPromotionAuthority(
+      'frontend/src/ui/liveChromeCatalog.test.ts',
+      "const candidateCatalog = { generatedBy: 'test', sources: ['/assets/ui/chrome-candidates/test.png'] };",
+    )).toBe(false);
+  });
+
+  it('rejects #478-style installed Chrome candidate selection but permits only canonical backend slots', () => {
+    const generatedCandidateDefaults = JSON.stringify({
+      outer: {
+        atomSourceId: 'outer-atoms-img2img-32-v1-08',
+        railSourceId: 'outer-rails-v3-01',
+        railThickness: 24,
+      },
+      inner: {
+        atomSourceId: 'inner-atoms-img2img-micro-v2-10',
+        railSourceId: 'inner-rails-repeat-v4-02',
+        railThickness: 7,
+      },
+      divider: { atomSourceId: 'divider-atoms-pixellab-cover-v1-21', atomSize: 32 },
+    });
+    expect(chromeInstalledSourceAuthorityReason(
+      'frontend/config/chrome-lab-defaults.json',
+      generatedCandidateDefaults,
+    )).toMatch(/canonical .*backend slot|generated candidate/i);
+    expect(isStaticPromotionAuthority(
+      'frontend/config/chrome-lab-defaults.json',
+      generatedCandidateDefaults,
+    )).toBe(true);
+    expect(isStaticPromotionAuthority(
+      'frontend/src/ui/chromeFamilyRuntime.ts',
+      "import committedChromeDefaults from '../../config/chrome-lab-defaults.json';\n"
+        + "const src = `/assets/ui/chrome-candidates/exploded/${setId}/candidate-01.png`;",
+    )).toBe(true);
+
+    const canonicalBackendDefaults = JSON.stringify({
+      outer: {
+        atomSourceId: '/assets/ui/chrome/outer/atom.png',
+        railSourceId: 'ui/chrome/outer/rail.png',
+        railThickness: 24,
+      },
+      inner: {
+        atomSourceId: 'ui/chrome/inner/atom.png',
+        railSourceId: '/assets/ui/chrome/inner/rail.png',
+        railThickness: 7,
+      },
+      divider: { atomSourceId: 'ui/chrome/divider/joint.png', atomSize: 32 },
+    });
+    expect(chromeInstalledSourceAuthorityReason(
+      'frontend/config/chrome-lab-defaults.json',
+      canonicalBackendDefaults,
+    )).toBeNull();
+    expect(isStaticPromotionAuthority(
+      'frontend/config/chrome-lab-defaults.json',
+      canonicalBackendDefaults,
+    )).toBe(false);
+    expect(isStaticPromotionAuthority(
+      'frontend/config/chrome-lab-defaults.json',
+      canonicalBackendDefaults.replace('ui/chrome/divider/joint.png', 'ui/chrome/divider/atom.png'),
+    )).toBe(true);
+    expect(isStaticPromotionAuthority(
+      'frontend/src/ui/installedChromeSources.ts',
+      [
+        'export const installedChromeSources = {',
+        "  outerAtomSourceId: '/assets/ui/chrome/outer/atom.png',",
+        "  outerRailSourceId: 'ui/chrome/outer/rail.png',",
+        "  innerAtomSourceId: 'ui/chrome/inner/atom.png',",
+        "  innerRailSourceId: '/assets/ui/chrome/inner/rail.png',",
+        "  dividerAtomSourceId: 'ui/chrome/divider/joint.png',",
+        '};',
+      ].join('\n'),
+    )).toBe(false);
+    expect(isStaticPromotionAuthority(
+      'frontend/config/chrome-lab-defaults.json',
+      JSON.stringify({ outer: { railThickness: 24, atomSize: 41 }, inner: { railThickness: 7 } }),
+    )).toBe(false);
+  });
+
+  it('keeps the geometry-only empty-panel guard exempt from media-authority rules', () => {
+    const inspectorSource = [
+      "const defaults = JSON.parse(readFileSync('frontend/config/chrome-lab-defaults.json', 'utf8'));",
+      "const candidate = '/assets/ui/chrome-candidates/exploded/outer/candidate-01.png';",
+      "if (defaults.outer.railSourceId !== 'outer-rails-v3-01') failures.push('wrong geometry');",
+    ].join('\n');
+    const relativePath = 'frontend/scripts/check-empty-panel-frame-overlay.mjs';
+    expect(isStaticPromotionAuthority(relativePath, inspectorSource)).toBe(false);
+    expect(chromeInstalledSourceAuthorityReason(relativePath, inspectorSource)).toBeNull();
+    expect(committedMediaWriterReason(relativePath, inspectorSource)).toBeNull();
+    expect(committedMediaFilesystemAssumptionReason(relativePath, inspectorSource)).toBeNull();
   });
 
   it('strict mode rejects cutover switches and media copied into the production build', () => {

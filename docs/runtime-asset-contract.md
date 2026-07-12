@@ -116,12 +116,15 @@ CI rejects:
 - fallback selection of committed, cached prior, or generic art.
 
 The one-time legacy importer is a migration tool, not a seed path. It is removed
-after every object and pointer is verified in live storage. Every existing
-runtime asset is recorded and served as `legacy-bridge`, never accepted by the
-importer regardless of prior files or metadata. The importer has no review or
-acceptance input. A bridge pointer is named `active`, never `accepted`, and its
-catalog entry is explicitly non-production-eligible; storage cutover cannot
-legitimize its pixels.
+after every object and pointer is verified in live storage. Existing runtime
+slots are served as `legacy-bridge`; source/review bytes are private archives;
+and files that were only Chrome review candidates become non-active candidate
+versions. Five historically installed Chrome parts are additionally mapped to
+canonical `ui/chrome/...` bridge slots so generated candidate filenames no
+longer select live art. The importer never marks a version accepted and has no
+review or acceptance input. A bridge pointer is named `active`, never
+`accepted`, and its catalog entry is explicitly non-production-eligible;
+storage cutover cannot legitimize its pixels.
 
 The one-time infrastructure ordering, one-data-plane bootstrap, immutable proof,
 and owner-verification gates are documented in the

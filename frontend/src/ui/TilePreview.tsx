@@ -35,7 +35,6 @@ import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudi
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS } from './ChromeLab';
 import { RailLab } from './RailLab';
-import { DEFAULT_RAIL_FAMILY_ID, normalizeNativeRailFamilyId } from './nativeRailCandidateSources';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
 import { GymCatalog, GymViewer, type GymMode } from './Gym';
 import { SolveCatalog, SolveViewer } from './SolveRuns';
@@ -356,7 +355,9 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedTileSideId: side || undefined,
     selectedFrameName: frame || undefined,
     selectedDividerName: divider || undefined,
-    selectedRailFamilyId: rail ? normalizeNativeRailFamilyId(rail) : undefined,
+    // Rail families are backend-owned and cannot be normalized until Rail Lab's
+    // authenticated catalog has loaded. Preserve the opaque route selection.
+    selectedRailFamilyId: rail || undefined,
     selectedPropName: prop || undefined,
     selectedTileCompareId: tile || undefined,
     selectedGroundCoverId: GROUND_COVER_ASSETS.some((asset) => asset.id === cover) ? cover ?? undefined : undefined,
@@ -578,7 +579,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Which kit frame the embedded 9-slice editor (Viewer 'nineslice' kind) is aligning.
   const [selectedFrameName, setSelectedFrameName] = useState(initialRoute.selectedFrameName ?? DEFAULT_NINE_SLICE_ASSET);
   const [selectedDividerName, setSelectedDividerName] = useState(initialRoute.selectedDividerName ?? DEFAULT_DIVIDER_ASSET);
-  const [selectedRailFamilyId, setSelectedRailFamilyId] = useState(initialRoute.selectedRailFamilyId ?? DEFAULT_RAIL_FAMILY_ID);
+  const [selectedRailFamilyId, setSelectedRailFamilyId] = useState(initialRoute.selectedRailFamilyId ?? '');
   // Which prop the embedded prop-seat editor (Viewer 'propseat' kind) is tuning.
   const [selectedPropName, setSelectedPropName] = useState(initialRoute.selectedPropName ?? PROP_DEFS[0].id);
   // Which pipeline tile the embedded Tile Pipeline compare (Viewer 'tilecompare' kind) shows.
