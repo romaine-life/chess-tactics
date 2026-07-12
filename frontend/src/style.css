@@ -5236,7 +5236,7 @@ h1 {
 .le-seg-btn {
   appearance: none;
   border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
-  border-image: var(--skirmish-chrome-inner-control-image, url("/assets/ui/kit/mode-button.png")) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
   box-sizing: border-box;
   color: #eff9ff;
   cursor: pointer;
@@ -5258,8 +5258,8 @@ h1 {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
 }
-.le-seg-btn.active { border-image-source: var(--skirmish-chrome-inner-control-active-image, url("/assets/ui/kit/mode-button-active.png")); }
-.le-seg-btn.danger { border-image-source: var(--skirmish-chrome-inner-control-danger-image, url("/assets/ui/kit/button-danger.png")); }
+.le-seg-btn.active { border-image-source: var(--skirmish-chrome-inner-control-active-image); }
+.le-seg-btn.danger { border-image-source: var(--skirmish-chrome-inner-control-danger-image); }
 /* Save when blocked by a playability violation: clickable (it explains why) but dimmed like a
    disabled control, matching the retired title-bar Save's is-disabled look. */
 .le-seg-btn.is-blocked { opacity: .45; }
@@ -5267,7 +5267,7 @@ h1 {
 /* Test in the always-visible Actions dock: a full-width primary button so it reads as
    the editor's "test this board now" verb, distinct from the Undo/Redo icons above it. */
 .le-actions-dock .le-play-board {
-  border-image-source: var(--skirmish-chrome-inner-control-active-image, url("/assets/ui/kit/mode-button-active.png"));
+  border-image-source: var(--skirmish-chrome-inner-control-active-image);
   margin-top: var(--ds-inline, 8px);
   width: 100%;
 }
@@ -5310,7 +5310,7 @@ h1 {
 }
 .le-icon-btn { min-height: 0; padding: 0; width: var(--le-inner-square); height: var(--le-inner-square); }
 .le-icon-btn .le-ico { width: 18px; height: 18px; }
-.le-icon-btn:not(:disabled):active { border-image-source: var(--skirmish-chrome-inner-control-active-image, url("/assets/ui/kit/mode-button-active.png")); }
+.le-icon-btn:not(:disabled):active { border-image-source: var(--skirmish-chrome-inner-control-active-image); }
 /* The status card is a live flex column (ADR-0056) — its gap spaces the row; no extra margin. */
 .le-board-actions.le-status-actions { margin-top: 0; }
 .le-board-actions .le-seg-btn { min-width: 0; }
@@ -5361,8 +5361,8 @@ h1 {
   appearance: none;
   -webkit-appearance: none;
   background: transparent;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
   box-sizing: border-box;
   color: #eff9ff;
   cursor: pointer;
@@ -5467,7 +5467,7 @@ h1 {
   appearance: none;
   -webkit-appearance: none;
   border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
-  border-image: var(--skirmish-chrome-inner-control-image, url("/assets/ui/kit/mode-button.png")) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
   box-sizing: border-box;
   color: #eff9ff;
   cursor: pointer;
@@ -5528,7 +5528,7 @@ h1 {
 .le-layer-select-wrap,
 .le-event-select-wrap {
   border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
-  border-image: var(--skirmish-chrome-inner-control-image, url("/assets/ui/kit/mode-button.png")) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
   box-sizing: border-box;
   min-height: var(--le-inner-field-h);
   overflow: visible;
@@ -5659,7 +5659,7 @@ h1 {
   appearance: none;
   -webkit-appearance: none;
   border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
-  border-image: var(--skirmish-chrome-inner-control-image, url("/assets/ui/kit/mode-button.png")) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
   box-sizing: border-box;
   color: #eff9ff;
   cursor: pointer;
@@ -5771,7 +5771,7 @@ h1 {
   background-clip: border-box;
   background-origin: border-box;
   border: var(--le-chrome-inner-rail-w, 8px) solid transparent;
-  border-image: var(--skirmish-chrome-inner-line-image, url("/assets/ui/explore/frames/panel-line.png")) 24 / var(--le-chrome-inner-rail-w, 8px) round;
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--le-chrome-inner-rail-w, 8px) round;
   box-sizing: border-box;
   color: #eff9ff;
   font: inherit;
@@ -6148,9 +6148,8 @@ h1 {
    Because it DRAWS a box around its text, the content insets by the role token (ADR-0055): text
    never sits flush against the drawn edge. */
 .le-violations {
-  --le-frame: var(--le-chrome-inner-rail-w, 12px);
-  border: var(--le-frame) solid transparent;
-  border-image: var(--skirmish-chrome-inner-line-warm-image, url("/assets/ui/explore/frames/panel-line-warm.png")) 24 / var(--le-frame) round;
+  border: var(--le-chrome-inner-rail-w, 12px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-line-warm-image) 24 / var(--le-chrome-inner-rail-w, 12px) round;
   image-rendering: pixelated;
   padding: var(--ds-inset);
 }
@@ -6409,12 +6408,11 @@ h1 {
    edge). Ready/blocked swap the SOURCE to the success/warning tone twin — one frame, tone at the
    corners. Content insets by the role token (ADR-0055). */
 .le-status-current {
-  --le-frame: var(--le-chrome-inner-rail-w, 12px);
   background: rgba(4, 13, 20, .7);
   background-clip: border-box;
   background-origin: border-box;
-  border: var(--le-frame) solid transparent;
-  border-image: var(--skirmish-chrome-inner-line-image, url("/assets/ui/explore/frames/panel-line.png")) 24 / var(--le-frame) round;
+  border: var(--le-chrome-inner-rail-w, 12px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--le-chrome-inner-rail-w, 12px) round;
   display: grid;
   gap: var(--ds-inline-tight);
   image-rendering: pixelated;
@@ -6422,17 +6420,16 @@ h1 {
 }
 .le-status-current strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
-.le-status-current.is-ready { border-image-source: var(--skirmish-chrome-inner-line-success-image, url("/assets/ui/explore/frames/panel-line-success.png")); }
-.le-status-current.is-blocked { border-image-source: var(--skirmish-chrome-inner-line-warning-image, url("/assets/ui/explore/frames/panel-line-warning.png")); }
+.le-status-current.is-ready { border-image-source: var(--skirmish-chrome-inner-line-success-image); }
+.le-status-current.is-blocked { border-image-source: var(--skirmish-chrome-inner-line-warning-image); }
 /* Drawn text box → kit line frame (panel-line over its own navy surface, ADR-0032/0034) +
    role-token inset + ladder gaps (ADR-0055/0056). */
 .le-material-values {
-  --le-frame: var(--le-chrome-inner-rail-w, 12px);
   background: rgba(3, 12, 19, .48);
   background-clip: border-box;
   background-origin: border-box;
-  border: var(--le-frame) solid transparent;
-  border-image: var(--skirmish-chrome-inner-line-image, url("/assets/ui/explore/frames/panel-line.png")) 24 / var(--le-frame) round;
+  border: var(--le-chrome-inner-rail-w, 12px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--le-chrome-inner-rail-w, 12px) round;
   display: grid;
   gap: var(--ds-stack);
   image-rendering: pixelated;
@@ -6461,12 +6458,11 @@ h1 {
    raw border-left stripe now lives in the frame's corners. Content insets by the role token
    (ADR-0055). */
 .le-status-entry {
-  --le-frame: var(--le-chrome-inner-rail-w, 10px);
   background: rgba(3, 12, 19, .58);
   background-clip: border-box;
   background-origin: border-box;
-  border: var(--le-frame) solid transparent;
-  border-image: var(--skirmish-chrome-inner-line-image, url("/assets/ui/explore/frames/panel-line.png")) 24 / var(--le-frame) round;
+  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--le-chrome-inner-rail-w, 10px) round;
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: 58px minmax(0, 1fr);
@@ -6476,9 +6472,9 @@ h1 {
 .le-status-entry time { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.2; }
 .le-status-entry strong { color: #f3ead8; display: block; font-size: var(--ds-text-sm); line-height: 1.2; }
 .le-status-entry span { color: var(--skirmish-muted); display: block; font-size: var(--ds-text-sm); line-height: 1.35; margin-top: 3px; }
-.le-status-entry.is-success { border-image-source: var(--skirmish-chrome-inner-line-success-image, url("/assets/ui/explore/frames/panel-line-success.png")); }
-.le-status-entry.is-warning { border-image-source: var(--skirmish-chrome-inner-line-warning-image, url("/assets/ui/explore/frames/panel-line-warning.png")); }
-.le-status-entry.is-error { border-image-source: var(--skirmish-chrome-inner-line-error-image, url("/assets/ui/explore/frames/panel-line-error.png")); }
+.le-status-entry.is-success { border-image-source: var(--skirmish-chrome-inner-line-success-image); }
+.le-status-entry.is-warning { border-image-source: var(--skirmish-chrome-inner-line-warning-image); }
+.le-status-entry.is-error { border-image-source: var(--skirmish-chrome-inner-line-error-image); }
 
 /* path/fence edge editor — clickable diamond edges for the selected tile */
 .le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
@@ -6553,11 +6549,10 @@ h1 {
    frame whose bracket ornament bleeds over a bust/backdrop that fills to the `--up-fill` boundary
    (the editor's Fill box, config/nine-slice/panel.json `fill` = 2). The Selected-Unit HUD, the
    roster slots, and the editor previews ALL render through this — the framing/fill is defined here
-   ONCE, never re-derived per surface. `--up-rail-w` = rendered rail thickness; `--up-backdrop` =
+   ONCE, never re-derived per surface. The rendered rail thickness comes from the inner chrome role; `--up-backdrop` =
    the scene art (when a surface composites one behind the bust). Not a raw-CSS box. */
 .unit-portrait {
   --up-fill: 2px;
-  --up-rail-w: var(--skirmish-chrome-inner-rail-w, 12px);
   position: relative;
   box-sizing: border-box;
   overflow: hidden;
@@ -6565,8 +6560,8 @@ h1 {
   background-clip: padding-box;
   background-origin: padding-box;
   border: var(--up-fill) solid transparent;
-  border-image: var(--skirmish-chrome-inner-line-image, url("/assets/ui/explore/frames/panel-line.png")) 24 / var(--up-rail-w) round;
-  padding: calc(var(--up-rail-w) - var(--up-fill));
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--skirmish-chrome-inner-rail-w, 12px) round;
+  padding: calc(var(--skirmish-chrome-inner-rail-w, 12px) - var(--up-fill));
   image-rendering: pixelated;
 }
 
@@ -6596,7 +6591,7 @@ h1 {
 
 /* Roster thumbnail: fills its button; frame thickness still comes from the inner chrome role. */
 .unit-portrait--roster {
-  --up-rail-w: var(--skirmish-chrome-inner-rail-w, 9px);
+  border-image-width: var(--skirmish-chrome-inner-rail-w);
   width: 100%;
   height: 100%;
 }
@@ -6657,7 +6652,7 @@ h1 {
   /* In-theme kit sub-panel so the stats aren't bare/"headless" on the control panel
      (ADR-0032). One frame for the whole block — not five sets of brackets. */
   border: var(--skirmish-chrome-inner-rail-w, 12px) solid transparent;
-  border-image: var(--skirmish-chrome-inner-control-image, url("/assets/ui/kit/mode-button.png")) 24 fill / var(--skirmish-chrome-inner-rail-w, 12px) round;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--skirmish-chrome-inner-rail-w, 12px) round;
   box-sizing: border-box;
   margin-top: var(--ds-stack);
 }

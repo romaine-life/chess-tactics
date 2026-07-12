@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 
 const frontend = fileURLToPath(new URL('..', import.meta.url));
-const css = readFileSync(join(frontend, 'src/style.css'), 'utf8');
+const css = readFileSync(join(frontend, 'src/style.css'), 'utf8').replace(/\r\n/g, '\n');
 const chromeLab = readFileSync(join(frontend, 'src/ui/ChromeLab.tsx'), 'utf8');
 const chromeUnitAudit = readFileSync(join(frontend, 'src/ui/ChromeUnitAudit.tsx'), 'utf8');
 const chromeRuntime = readFileSync(join(frontend, 'src/ui/chromeFamilyRuntime.ts'), 'utf8');
@@ -176,8 +176,8 @@ if (!/:is\(\.level-editor-screen, \.skirmish-screen\) \.le-outer-panel > \.le-ou
   failures.push('the titled panel shell must be an explicit full-bleed exception to the inherited contents box');
 }
 
-if (!/\.level-editor-screen \.le-layer-card > :not\(\.kit-panel-title\)\s*\{[\s\S]*?margin-inline\s*:\s*var\(--le-control-content-inset\)\s*;/.test(css)) {
-  failures.push('layer card controls must use the contents box while the title fill remains full-width');
+if (!/\.level-editor-screen \.le-layer-card > :not\(\.kit-panel-title\)\s*\{[\s\S]*?margin-inline\s*:\s*\n\s*calc\(var\(--le-control-content-inset\) \+ var\(--le-visible-content-left-inset\)\)\s*\n\s*calc\(var\(--le-control-content-inset\) \+ var\(--le-visible-content-right-inset\)\)\s*;/.test(css)) {
+  failures.push('layer card controls must use the contents box plus visible atom overhang while the title fill remains full-width');
 }
 
 if (!/className="le-control-divider-host"[\s\S]*?className="kit-divider"/.test(levelEditorChromeConsumers)) {
