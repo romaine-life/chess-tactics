@@ -11,22 +11,27 @@ export function testLiveUnitCatalog({
   sha256 = 'a'.repeat(64),
   scales = {},
   nativeScales = {},
+  directionalUrls = false,
 }: {
   revision?: number;
   sha256?: string;
   scales?: Partial<Record<PieceId, number>>;
   nativeScales?: Partial<Record<PieceId, number>>;
+  /** Give each facing a distinct valid immutable URL so render tests can prove sprite selection. */
+  directionalUrls?: boolean;
 } = {}): LiveUnitCatalog {
-  const url = `/api/unit-sprites/${sha256}.png`;
   const sprites = Object.fromEntries(UNIT_PALETTES.map((palette) => [
     palette,
-    Object.fromEntries(rookDirections.map((direction) => [direction, {
-      url,
-      sha256,
-      width: 512,
-      height: 512,
-      byteLength: 1024,
-    }])),
+    Object.fromEntries(rookDirections.map((direction, index) => {
+      const directionSha = directionalUrls ? (index + 1).toString(16).repeat(64) : sha256;
+      return [direction, {
+        url: `/api/unit-sprites/${directionSha}.png`,
+        sha256: directionSha,
+        width: 512,
+        height: 512,
+        byteLength: 1024,
+      }];
+    })),
   ]));
 
   return {

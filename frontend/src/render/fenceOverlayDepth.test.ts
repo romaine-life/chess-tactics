@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { FENCE_OVERLAY_DEPTH_OFFSET, WALL_OVERLAY_DEPTH_OFFSET, fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
+import {
+  FENCE_OVERLAY_DEPTH_OFFSET,
+  WALL_OVERLAY_DEPTH_OFFSET,
+  fenceOverlayZIndex,
+  mirrorGlassOverlayZIndex,
+  mirrorReflectionOverlayZIndex,
+  wallArtOverlayZIndex,
+  wallOverlayZIndex,
+} from './fenceOverlayDepth';
 import { GROUND_COVER_FRONT_DEPTH_OFFSET, OBJECT_DEPTH_OFFSET, STRUCTURE_BACK_DEPTH_DELTA, objectBaseZIndex } from './sceneDepth';
 
 describe('fenceOverlayZIndex', () => {
@@ -36,9 +44,12 @@ describe('wallOverlayZIndex', () => {
 });
 
 describe('wallArtOverlayZIndex', () => {
-  it('keeps mounted art in the wall display layer', () => {
+  it('orders wall, generated glass, live reflection, and foreground frame inside one display lane', () => {
     const ownerCell = { x: 2, y: 3 };
 
-    expect(wallArtOverlayZIndex(ownerCell)).toBe(wallOverlayZIndex(ownerCell));
+    expect(mirrorGlassOverlayZIndex(ownerCell)).toBeGreaterThan(wallOverlayZIndex(ownerCell));
+    expect(mirrorReflectionOverlayZIndex(ownerCell)).toBeGreaterThan(mirrorGlassOverlayZIndex(ownerCell));
+    expect(wallArtOverlayZIndex(ownerCell)).toBeGreaterThan(mirrorReflectionOverlayZIndex(ownerCell));
+    expect(wallArtOverlayZIndex(ownerCell)).toBeLessThan(objectBaseZIndex(ownerCell));
   });
 });

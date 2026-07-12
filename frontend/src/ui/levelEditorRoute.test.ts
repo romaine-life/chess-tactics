@@ -68,6 +68,21 @@ describe('level editor route helpers', () => {
     })).toBe('/editor/level?board=abc&layer=wallart&kind=wallart');
   });
 
+  it('round-trips the selected wall-art stamp in a copyable editor URL', () => {
+    const href = levelEditorHrefWithRouteState('/editor/level?levelId=l18&document=doc-18', {
+      layer: 'wallart',
+      brushKind: 'wallart',
+      brush: 'mirror-grand-gallery-wall',
+    });
+
+    expect(href).toBe('/editor/level?levelId=l18&document=doc-18&layer=wallart&kind=wallart&brush=mirror-grand-gallery-wall');
+    expect(readLevelEditorRouteState(new URL(href, 'https://example.test').search)).toEqual({
+      layer: 'wallart',
+      brushKind: 'wallart',
+      brush: 'mirror-grand-gallery-wall',
+    });
+  });
+
   it('recognizes canonical and legacy level editor routes', () => {
     expect(isLevelEditorRoutePath('/editor/level')).toBe(true);
     expect(isLevelEditorRoutePath('/level-editor/')).toBe(true);

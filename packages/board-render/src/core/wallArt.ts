@@ -8,22 +8,41 @@ import { wallDecorAsset, type WallDecorAsset, type WallDecorFaceId } from './wal
 
 export type WallArtId = string;
 
+/** Wall-art slots use a stable base-relative mounting datum. Growing the canonical wall upward
+ * must not move existing persisted or live-authored art; the datum remains 96px above the seat. */
+export const WALL_ART_SLOT_DATUM = {
+  anchorX: 64,
+  anchorY: 96,
+} as const;
+
 export interface WallArtSlot {
   id: string;
   sourceId: string;
   face: WallDecorFaceId;
-  /** Target point in the 128x240 wall frame, in native pixels. */
+  /** Target point from the canonical base-relative wall-art datum, in native pixels. */
   x: number;
-  /** Target point in the 128x240 wall frame, in native pixels. */
+  /** Target point from the canonical base-relative wall-art datum, in native pixels. */
   y: number;
   scale: number;
 }
+
+export interface WallArtReflectionConfig {
+  /** Final alpha multiplier for reflected subjects. */
+  opacity: number;
+}
+
+export const DEFAULT_WALL_ART_REFLECTION: Readonly<WallArtReflectionConfig> = {
+  opacity: 0.72,
+};
 
 export interface WallArt {
   id: string;
   label: string;
   span: number;
   slots: WallArtSlot[];
+  /** Present whenever at least one slot is a mirror. There is deliberately no off/none mode:
+   * mirror artwork always resolves to live optics. */
+  reflection?: WallArtReflectionConfig;
 }
 
 export type WallArtEntry = Omit<WallArt, 'id' | 'span'> & { span?: number };
@@ -50,16 +69,33 @@ function coerceSlot(slot: WallArtSlot): WallArtSlot | null {
   };
 }
 
+const clamp = (value: unknown, fallback: number, min: number, max: number): number =>
+  typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+
+/** Normalize persisted/editor optics into the one live contract. Geometry and sprite scale are
+ * intentionally not configurable: every mirror is an exact board-grid, 1:1 reflection. */
+export function normalizeWallArtReflection(value: unknown): WallArtReflectionConfig {
+  const record = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Partial<Record<keyof WallArtReflectionConfig, unknown>>
+    : {};
+  return {
+    opacity: clamp(record.opacity, DEFAULT_WALL_ART_REFLECTION.opacity, 0.05, 1),
+  };
+}
+
 function normalizeWallArt(id: string, entry: WallArtEntry): WallArt | null {
   if (!WALL_ART_ID_PATTERN.test(id)) return null;
   if (!entry || !Array.isArray(entry.slots)) return null;
   const slots = entry.slots.map((slot) => coerceSlot(slot as WallArtSlot)).filter((slot): slot is WallArtSlot => !!slot);
   const span = Number.isFinite(entry.span) ? Math.max(1, Math.min(16, Math.round(Number(entry.span)))) : 1;
+  const hasMirrorSlot = slots.some((slot) => wallDecorAsset(slot.sourceId).kind === 'mirror');
+  const reflection = hasMirrorSlot || entry.reflection ? normalizeWallArtReflection(entry.reflection) : undefined;
   return {
     id,
     label: typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : id,
     span,
     slots,
+    ...(reflection ? { reflection } : {}),
   };
 }
 
@@ -70,8 +106,11 @@ export function currentWallArt(): WallArtMap {
 export function applyLiveWallArt(overrides: WallArtMap | null | undefined): boolean {
   if (!overrides || Object.keys(overrides).length === 0) return false;
   const merged = { ...BASELINE_WALL_ART, ...overrides };
-  if (!Object.entries(merged).every(([id, entry]) => normalizeWallArt(id, entry))) return false;
-  WALL_ART_MAP = merged;
+  const normalized = Object.entries(merged).map(([id, entry]) => normalizeWallArt(id, entry));
+  if (normalized.some((entry) => !entry)) return false;
+  // Persist only the current contract shape in memory. This retires stale mode/FOV/scale keys
+  // from older live rows instead of carrying them back through Studio on the next save.
+  WALL_ART_MAP = wallArtMapFromItems(normalized as WallArt[]);
   return true;
 }
 
@@ -85,6 +124,11 @@ export function wallArt(id: string | undefined): WallArt | undefined {
   if (!id) return undefined;
   const entry = WALL_ART_MAP[id];
   return entry ? normalizeWallArt(id, entry) ?? undefined : undefined;
+}
+
+/** The stable catalog fallback shared by editor mount and later route synchronization. */
+export function wallArtIdOrDefault(id: string | undefined): WallArtId {
+  return wallArt(id)?.id ?? wallArtItems()[0]?.id ?? 'banner-stone-wall';
 }
 
 export function wallArtLabel(artId: string | undefined): string {
@@ -139,6 +183,40 @@ export function wallArtSpanEdges(
   return out;
 }
 
+export interface WallArtPlacementSpan {
+  anchorEdge: string;
+  edges: string[];
+}
+
+/** Resolve a multi-wall stamp from any supporting edge the user clicked.
+ *
+ * The persisted placement still owns one canonical leading edge, but the editor must not require
+ * an author to know which end of an isometric wall run that is. Preserve the old clicked-as-anchor
+ * behavior whenever its forward span is supported; otherwise scan toward the leading end one edge
+ * at a time until the nearest complete span containing the click is found. */
+export function wallArtPlacementSpanAtEdge(
+  clickedEdge: string,
+  artId: string | undefined,
+  bounds: { cols: number; rows: number },
+  hasSupportingWall: (edge: string) => boolean,
+): WallArtPlacementSpan | null {
+  const art = wallArt(artId);
+  const clicked = wallFaceTarget(clickedEdge, bounds);
+  if (!art || !clicked) return null;
+
+  for (let clickedOffset = 0; clickedOffset < art.span; clickedOffset += 1) {
+    const tangent = (clicked.face === 'west' ? clicked.y : clicked.x) - clickedOffset;
+    if (tangent < 0) continue;
+    const anchorEdge = clicked.face === 'west'
+      ? roadEdgeKey(0, tangent, -1, tangent)
+      : roadEdgeKey(tangent, 0, tangent, -1);
+    const edges = wallArtSpanEdges(anchorEdge, art.id, bounds);
+    if (edges.length !== art.span || !edges.includes(clicked.edge)) continue;
+    if (edges.every(hasSupportingWall)) return { anchorEdge, edges };
+  }
+  return null;
+}
+
 export function wallArtAtEdge(
   edge: string,
   placements: WallArtPlacementMap | undefined,
@@ -175,7 +253,12 @@ export function slotSource(slot: WallArtSlot): WallDecorAsset {
 }
 
 export function wallArtMapFromItems(items: readonly WallArt[]): WallArtMap {
-  return Object.fromEntries(items.map((asset) => [asset.id, { label: asset.label, span: asset.span, slots: asset.slots }]));
+  return Object.fromEntries(items.map((asset) => [asset.id, {
+    label: asset.label,
+    span: asset.span,
+    slots: asset.slots,
+    ...(asset.reflection ? { reflection: asset.reflection } : {}),
+  }]));
 }
 
 export function wallArtSrcs(
@@ -186,7 +269,11 @@ export function wallArtSrcs(
   const faces = resolveWallArtFaces(placements, bounds);
   for (const faceMap of faces.values()) {
     for (const face of ['west', 'north'] as const) {
-      for (const slot of wallArtSlotsForFace(faceMap[face], face)) urls.add(slotSource(slot).faces[face].src);
+      for (const slot of wallArtSlotsForFace(faceMap[face], face)) {
+        const source = slotSource(slot);
+        urls.add(source.faces[face].src);
+        if (source.kind === 'mirror') urls.add(source.faces[face].glassSrc);
+      }
     }
   }
   return [...urls];

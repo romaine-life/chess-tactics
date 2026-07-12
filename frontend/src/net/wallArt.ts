@@ -2,6 +2,7 @@ import { applyLiveWallArt, type WallArtMap } from '../core/wallArt';
 import { HttpError } from './http';
 
 const WALL_ART_ID = 'default';
+const WALL_ART_CLIENT_SCHEMA_VERSION = 2;
 
 function asWallArtMap(value: unknown): WallArtMap {
   return value && typeof value === 'object' ? (value as WallArtMap) : {};
@@ -28,7 +29,7 @@ export async function saveLiveWallArt(assets: WallArtMap): Promise<{ revision: n
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ data: assets }),
+    body: JSON.stringify({ data: assets, client_schema_version: WALL_ART_CLIENT_SCHEMA_VERSION }),
   });
   if (!res.ok) throw new HttpError('save-wall-art', res.status);
   const body = (await res.json()) as { portfolio?: { revision?: number } };

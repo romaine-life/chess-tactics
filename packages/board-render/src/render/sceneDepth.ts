@@ -17,6 +17,9 @@ export const FENCE_OVERLAY_DEPTH_OFFSET = OBJECT_DEPTH_OFFSET - 2;
 // same-cell structure art; otherwise a split prop/doodad is painted back-half, wall, front-half
 // and the wall appears to cut through it. This is the same background-barrier lane as fences.
 export const WALL_OVERLAY_DEPTH_OFFSET = OBJECT_DEPTH_OFFSET - 2;
+export const MIRROR_GLASS_DEPTH_DELTA = 0.1;
+export const MIRROR_REFLECTION_DEPTH_DELTA = 0.25;
+export const WALL_ART_DEPTH_DELTA = 0.5;
 
 export function cellDepth(cell: { x: number; y: number }): number {
   return cell.x + cell.y;
@@ -47,5 +50,15 @@ export function wallOverlayZIndex(cell: { x: number; y: number }): number {
 }
 
 export function wallArtOverlayZIndex(cell: { x: number; y: number }): number {
-  return wallOverlayZIndex(cell);
+  return wallOverlayZIndex(cell) + WALL_ART_DEPTH_DELTA;
+}
+
+/** Glass lives after the wall pixels but before the generated frame. Fractional lanes keep both
+ * below the next integer object/structure band without relying on insertion order. */
+export function mirrorReflectionOverlayZIndex(cell: { x: number; y: number }): number {
+  return wallOverlayZIndex(cell) + MIRROR_REFLECTION_DEPTH_DELTA;
+}
+
+export function mirrorGlassOverlayZIndex(cell: { x: number; y: number }): number {
+  return wallOverlayZIndex(cell) + MIRROR_GLASS_DEPTH_DELTA;
 }

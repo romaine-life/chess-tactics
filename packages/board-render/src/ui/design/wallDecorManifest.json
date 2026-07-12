@@ -1,6 +1,9 @@
 {
   "generatedBy": "frontend/scripts/build-wall-decor.py",
   "source": "docs/art/wall-art-concepts/codex/<id>-alpha.png",
+  "sourceOverrides": {
+    "mirror-grand-gallery": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-grounded-wide-alpha.png"
+  },
   "imageRendering": "pixelated",
   "assets": [
     {
@@ -33,7 +36,7 @@
           "previewY": 24
         }
       },
-      "method": "Codex img2img + chroma-key alpha + deterministic frame normalization",
+      "method": "Codex built-in image_gen img2img + chroma-key alpha + deterministic frame normalization",
       "notes": "Faded hanging banner for stone perimeter walls."
     },
     {
@@ -66,7 +69,7 @@
           "previewY": 42
         }
       },
-      "method": "Codex img2img + chroma-key alpha + deterministic frame normalization",
+      "method": "Codex built-in image_gen img2img + chroma-key alpha + deterministic frame normalization",
       "notes": "Carved pawn plaque for quiet chess-themed wall dressing."
     },
     {
@@ -99,7 +102,7 @@
           "previewY": 42
         }
       },
-      "method": "Codex img2img + chroma-key alpha + deterministic frame normalization",
+      "method": "Codex built-in image_gen img2img + chroma-key alpha + deterministic frame normalization",
       "notes": "Carved rook plaque for quiet chess-themed wall dressing."
     },
     {
@@ -132,8 +135,388 @@
           "previewY": 28
         }
       },
-      "method": "Codex img2img + chroma-key alpha + deterministic frame normalization",
+      "method": "Codex built-in image_gen img2img + chroma-key alpha + deterministic frame normalization",
       "notes": "Unlit brass wall bracket with soot-darkened cap."
+    },
+    {
+      "id": "mirror-keep",
+      "label": "Keep Mirror",
+      "kind": "mirror",
+      "badge": "iron",
+      "mirrorCoverage": "authored-crop",
+      "src": "/assets/wall-decor/mirror-keep.png",
+      "width": 72,
+      "height": 88,
+      "mountX": 36,
+      "mountY": 44,
+      "faces": {
+        "west": {
+          "src": "/assets/wall-decor/mirror-keep-west.png",
+          "width": 34,
+          "height": 71,
+          "mountX": 17,
+          "mountY": 35,
+          "previewX": 42,
+          "previewY": 44,
+          "glassSrc": "/assets/wall-decor/mirror-keep-west-glass.png",
+          "aperture": [
+            0.241176,
+            0.295423,
+            0.758824,
+            0.155986,
+            0.758824,
+            0.67993,
+            0.241176,
+            0.819366
+          ]
+        },
+        "north": {
+          "src": "/assets/wall-decor/mirror-keep-north.png",
+          "width": 34,
+          "height": 71,
+          "mountX": 17,
+          "mountY": 35,
+          "previewX": 84,
+          "previewY": 44,
+          "glassSrc": "/assets/wall-decor/mirror-keep-north-glass.png",
+          "aperture": [
+            0.241176,
+            0.166549,
+            0.758824,
+            0.305986,
+            0.758824,
+            0.82993,
+            0.241176,
+            0.690493
+          ]
+        }
+      },
+      "method": "Codex built-in image_gen img2img + chroma-key alpha + deterministic projection + aperture layer split",
+      "notes": "Austere riveted iron mirror with a live planar reflection aperture."
+    },
+    {
+      "id": "mirror-court-oval",
+      "label": "Court Oval",
+      "kind": "mirror",
+      "badge": "brass",
+      "mirrorCoverage": "authored-crop",
+      "src": "/assets/wall-decor/mirror-court-oval.png",
+      "width": 72,
+      "height": 88,
+      "mountX": 36,
+      "mountY": 44,
+      "faces": {
+        "west": {
+          "src": "/assets/wall-decor/mirror-court-oval-west.png",
+          "width": 30,
+          "height": 57,
+          "mountX": 15,
+          "mountY": 27,
+          "previewX": 42,
+          "previewY": 44,
+          "glassSrc": "/assets/wall-decor/mirror-court-oval-west-glass.png",
+          "aperture": [
+            0.5,
+            0.263289,
+            0.612,
+            0.250482,
+            0.696,
+            0.286667,
+            0.752,
+            0.382018,
+            0.766,
+            0.499978,
+            0.724,
+            0.634518,
+            0.626,
+            0.744934,
+            0.5,
+            0.812763,
+            0.374,
+            0.819539,
+            0.276,
+            0.767149,
+            0.234,
+            0.657478,
+            0.248,
+            0.531228,
+            0.304,
+            0.402719,
+            0.388,
+            0.316798
+          ]
+        },
+        "north": {
+          "src": "/assets/wall-decor/mirror-court-oval-north.png",
+          "width": 30,
+          "height": 57,
+          "mountX": 15,
+          "mountY": 28,
+          "previewX": 84,
+          "previewY": 44,
+          "glassSrc": "/assets/wall-decor/mirror-court-oval-north-glass.png",
+          "aperture": [
+            0.5,
+            0.274254,
+            0.612,
+            0.327763,
+            0.696,
+            0.413684,
+            0.752,
+            0.542193,
+            0.766,
+            0.668443,
+            0.724,
+            0.778114,
+            0.626,
+            0.830504,
+            0.5,
+            0.823728,
+            0.374,
+            0.755899,
+            0.276,
+            0.645482,
+            0.234,
+            0.510943,
+            0.248,
+            0.392982,
+            0.304,
+            0.297632,
+            0.388,
+            0.261447
+          ]
+        }
+      },
+      "method": "Codex built-in image_gen img2img + chroma-key alpha + deterministic projection + aperture layer split",
+      "notes": "Tarnished oval court mirror with a live planar reflection aperture."
+    },
+    {
+      "id": "mirror-chapel-glass",
+      "label": "Chapel Glass",
+      "kind": "mirror",
+      "badge": "stone",
+      "mirrorCoverage": "authored-crop",
+      "src": "/assets/wall-decor/mirror-chapel-glass.png",
+      "width": 72,
+      "height": 96,
+      "mountX": 36,
+      "mountY": 48,
+      "faces": {
+        "west": {
+          "src": "/assets/wall-decor/mirror-chapel-glass-west.png",
+          "width": 32,
+          "height": 72,
+          "mountX": 16,
+          "mountY": 32,
+          "previewX": 42,
+          "previewY": 46,
+          "glassSrc": "/assets/wall-decor/mirror-chapel-glass-west-glass.png",
+          "aperture": [
+            0.5,
+            0.146458,
+            0.6375,
+            0.187639,
+            0.72,
+            0.280347,
+            0.72,
+            0.667569,
+            0.28,
+            0.777569,
+            0.28,
+            0.390347,
+            0.3625,
+            0.256389
+          ]
+        },
+        "north": {
+          "src": "/assets/wall-decor/mirror-chapel-glass-north.png",
+          "width": 32,
+          "height": 72,
+          "mountX": 16,
+          "mountY": 32,
+          "previewX": 84,
+          "previewY": 46,
+          "glassSrc": "/assets/wall-decor/mirror-chapel-glass-north-glass.png",
+          "aperture": [
+            0.5,
+            0.156875,
+            0.6375,
+            0.266806,
+            0.72,
+            0.400764,
+            0.72,
+            0.787986,
+            0.28,
+            0.677986,
+            0.28,
+            0.290764,
+            0.3625,
+            0.198056
+          ]
+        }
+      },
+      "method": "Codex built-in image_gen img2img + chroma-key alpha + deterministic projection + aperture layer split",
+      "notes": "Pointed stone-arch mirror with a live planar reflection aperture."
+    },
+    {
+      "id": "mirror-witch-eye",
+      "label": "Witch's Eye",
+      "kind": "mirror",
+      "badge": "convex",
+      "mirrorCoverage": "authored-crop",
+      "src": "/assets/wall-decor/mirror-witch-eye.png",
+      "width": 72,
+      "height": 72,
+      "mountX": 36,
+      "mountY": 36,
+      "faces": {
+        "west": {
+          "src": "/assets/wall-decor/mirror-witch-eye-west.png",
+          "width": 38,
+          "height": 45,
+          "mountX": 19,
+          "mountY": 19,
+          "previewX": 42,
+          "previewY": 42,
+          "glassSrc": "/assets/wall-decor/mirror-witch-eye-west-glass.png",
+          "aperture": [
+            0.5,
+            0.193056,
+            0.610526,
+            0.159222,
+            0.698947,
+            0.173222,
+            0.765263,
+            0.225722,
+            0.787368,
+            0.308556,
+            0.765263,
+            0.412389,
+            0.698947,
+            0.527889,
+            0.610526,
+            0.625889,
+            0.5,
+            0.697056,
+            0.389474,
+            0.730889,
+            0.301053,
+            0.716889,
+            0.234737,
+            0.664389,
+            0.212632,
+            0.581556,
+            0.234737,
+            0.477722,
+            0.301053,
+            0.362222,
+            0.389474,
+            0.264222
+          ]
+        },
+        "north": {
+          "src": "/assets/wall-decor/mirror-witch-eye-north.png",
+          "width": 38,
+          "height": 45,
+          "mountX": 19,
+          "mountY": 20,
+          "previewX": 84,
+          "previewY": 42,
+          "glassSrc": "/assets/wall-decor/mirror-witch-eye-north-glass.png",
+          "aperture": [
+            0.5,
+            0.206944,
+            0.610526,
+            0.278111,
+            0.698947,
+            0.376111,
+            0.765263,
+            0.491611,
+            0.787368,
+            0.595444,
+            0.765263,
+            0.678278,
+            0.698947,
+            0.730778,
+            0.610526,
+            0.744778,
+            0.5,
+            0.710944,
+            0.389474,
+            0.639778,
+            0.301053,
+            0.541778,
+            0.234737,
+            0.426278,
+            0.212632,
+            0.322444,
+            0.234737,
+            0.239611,
+            0.301053,
+            0.187111,
+            0.389474,
+            0.173111
+          ]
+        }
+      },
+      "method": "Codex built-in image_gen img2img + chroma-key alpha + deterministic projection + aperture layer split",
+      "notes": "Small black mirror with a live convex reflection aperture."
+    },
+    {
+      "id": "mirror-grand-gallery",
+      "label": "Grand Gallery Mirror",
+      "kind": "mirror",
+      "badge": "three-wall",
+      "mirrorCoverage": "full-body",
+      "src": "/assets/wall-decor/mirror-grand-gallery.png",
+      "width": 216,
+      "height": 252,
+      "mountX": 108,
+      "mountY": 215,
+      "faces": {
+        "west": {
+          "src": "/assets/wall-decor/mirror-grand-gallery-west.png",
+          "width": 142,
+          "height": 240,
+          "mountX": 119,
+          "mountY": 152,
+          "previewX": 42,
+          "previewY": 72,
+          "glassSrc": "/assets/wall-decor/mirror-grand-gallery-west-glass.png",
+          "aperture": [
+            0.043662,
+            0.327792,
+            0.956338,
+            0.024042,
+            0.956338,
+            0.668042,
+            0.043662,
+            0.971792
+          ]
+        },
+        "north": {
+          "src": "/assets/wall-decor/mirror-grand-gallery-north.png",
+          "width": 142,
+          "height": 240,
+          "mountX": 23,
+          "mountY": 152,
+          "previewX": 84,
+          "previewY": 72,
+          "glassSrc": "/assets/wall-decor/mirror-grand-gallery-north-glass.png",
+          "aperture": [
+            0.043662,
+            0.024042,
+            0.956338,
+            0.327792,
+            0.956338,
+            0.971792,
+            0.043662,
+            0.668042
+          ]
+        }
+      },
+      "method": "Codex built-in image_gen precise-object edit + chroma-key alpha + deterministic projection + aperture layer split",
+      "notes": "One continuous full-height three-wall gallery mirror sized for every accepted 1x unit silhouette on the canonical full-height wall."
     }
   ]
 }

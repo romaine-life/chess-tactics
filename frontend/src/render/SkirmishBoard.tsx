@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
-import type { GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
+import type { GameState, Move, Piece, Side, TerrainType, UnitFacing, Vec } from '../core/types';
 import { attackedSquares, blockedCandidateSquares, enemyThreats, legalMoves, livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
@@ -21,7 +21,19 @@ import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, type
 import { wallArtSrcs } from '../core/wallArt';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 import { unitAnchorFraction, unitAssetById } from '../ui/unitCatalog';
-import { UNIT_IMG_MAX_H, UNIT_IMG_MAX_W, boardBounds, boardDrawOps, type BakeBounds, type BoardDrawOp } from '@chess-tactics/board-render';
+import {
+  UNIT_IMG_MAX_H,
+  UNIT_IMG_MAX_W,
+  boardBounds,
+  boardDrawOps,
+  mirrorFacingPlan,
+  mirrorSurfacesForPlacements,
+  reflectedOpsForSubjects,
+  unprojectBoardPoint,
+  type BakeBounds,
+  type BoardDrawOp,
+  type MirrorReflectionSubject,
+} from '@chess-tactics/board-render';
 
 const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
   grass: 'grass',
@@ -45,6 +57,36 @@ const tileAssetById = new Map(tileAssets.map((asset) => [asset.id, asset]));
 
 function isPlayablePieceType(type: Piece['type']): type is PlayablePieceType {
   return (PLAYABLE_PIECE_TYPES as readonly Piece['type'][]).includes(type);
+}
+
+type DirectionalPieceAppearance = {
+  facing: UnitFacing;
+  spriteForFacing: (facing: UnitFacing) => string;
+};
+
+/** Resolve the canonical eight-way appearance shared by the physical unit and every mirror face.
+ * Nondirectional obstacles are deliberately excluded from the mirror subject set. */
+function directionalPieceAppearance(piece: Piece): DirectionalPieceAppearance | null {
+  if (isPropCollider(piece) || piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
+  const palette = paletteForSide(piece.side, piece.palette);
+  return {
+    facing: piece.facing ?? defaultFacingForSide(piece.side),
+    spriteForFacing: (facing) => pieceSpritePath(piece.type as PlayablePieceType, palette, facing),
+  };
+}
+
+/** Exact alternate directional assets a live canvas frame can request for the active mirror faces.
+ * These must be loaded before the first paint; loading only the physical-facing sprite leaves the
+ * corrected reflection absent until some unrelated later redraw. */
+export function mirrorSpriteSourcesForPiece(
+  piece: Piece,
+  faces: readonly ('west' | 'north')[],
+): string[] {
+  const appearance = directionalPieceAppearance(piece);
+  if (!appearance) return [];
+  return faces.map((face) => appearance.spriteForFacing(
+    mirrorFacingPlan(face, appearance.facing).sourceFacing,
+  ));
 }
 
 // Neutral rocks: two boulder variants x 8 rotations. Pick deterministically from the
@@ -75,8 +117,8 @@ const isPropCollider = (piece: Piece): boolean => piece.id.startsWith('prop-');
 function pieceImageSrc(piece: Piece): string | null {
   if (isPropCollider(piece)) return null;
   if (piece.type === 'rock' || piece.type === 'random-rock') return rockSpritePath(piece);
-  if (piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
-  return pieceSpritePath(piece.type, paletteForSide(piece.side, piece.palette), piece.facing ?? defaultFacingForSide(piece.side));
+  const appearance = directionalPieceAppearance(piece);
+  return appearance?.spriteForFacing(appearance.facing) ?? null;
 }
 
 export type SkirmishTileClickIntent =
@@ -473,6 +515,23 @@ function motionSeat(motion: PieceMotion, timeMs: number): { left: number; top: n
   };
 }
 
+/** Build a live mirror subject from the animated seat itself, so corridor membership changes at
+ * the exact point where a moving piece crosses a grid-axis boundary rather than at move commit. */
+export function mirrorSubjectForSeat(
+  op: BoardDrawOp,
+  seat: { left: number; top: number },
+  piece: Piece,
+): MirrorReflectionSubject | null {
+  const appearance = directionalPieceAppearance(piece);
+  if (!appearance) return null;
+  return {
+    op,
+    grid: unprojectBoardPoint(seat),
+    seat,
+    ...appearance,
+  };
+}
+
 function moveHopOffset(progress: number, side: Piece['side']): number {
   const peak = side === 'enemy' ? -12 : -16;
   if (progress <= 0 || progress >= 1) return 0;
@@ -591,6 +650,11 @@ function SkirmishSceneLayer({
   const motionRef = useRef<Map<string, PieceMotion>>(new Map());
   const arrivalStartRef = useRef<number | null>(null);
   const staticOps = useMemo(() => skirmishStaticSceneOps(sceneBoard, seed, ambientCover), [ambientCover, sceneBoard, seed]);
+  const mirrorSurfaces = useMemo(
+    () => mirrorSurfacesForPlacements(sceneBoard.wallArt, { cols: sceneBoard.cols, rows: sceneBoard.rows })
+      .filter((surface) => surface.segments.every((segment) => !segment.edge || Boolean(sceneBoard.walls?.[segment.edge]))),
+    [sceneBoard],
+  );
   const bounds = useMemo(() => {
     const fallback = boardBounds(sceneBoard, { coverSeed: seed, ambientCover });
     return padBounds(boundsForOps([...staticOps, ...targetPieceOps(livePieces, afterGhosts)], fallback));
@@ -649,11 +713,15 @@ function SkirmishSceneLayer({
       ...livePieces.map(pieceImageSrc),
       ...afterGhosts.flatMap((group) => group.pieces.map(pieceImageSrc)),
     ].filter((src): src is string => !!src);
-    const sources = [...new Set([...staticOps.map((op) => op.src), ...unitSources])];
+    const mirrorFaces = [...new Set(mirrorSurfaces.map((surface) => surface.face))];
+    const reflectedUnitSources = livePieces.flatMap((piece) => mirrorSpriteSourcesForPiece(piece, mirrorFaces));
+    const sources = [...new Set([...staticOps.map((op) => op.src), ...unitSources, ...reflectedUnitSources])];
     const hasAnimatedGroundCover = staticOps.some(isAnimatedGroundCoverOp);
 
     const frameOps = (timeMs: number): BoardDrawOp[] => {
       const ops: BoardDrawOp[] = [...staticOps];
+      const physicalPieceOps: BoardDrawOp[] = [];
+      const reflectionSubjects: MirrorReflectionSubject[] = [];
       for (const piece of livePieces) {
         const target = boardLabCellPosition(piece);
         const motion = motionRef.current.get(piece.id) ?? {
@@ -673,8 +741,14 @@ function SkirmishSceneLayer({
           dy: moveHopOffset(seat.progress, piece.side) + arrival.dy,
           opacity: baseOpacity * arrival.opacity,
         });
-        if (op) ops.push(op);
+        if (op) {
+          physicalPieceOps.push(op);
+          const reflectionSubject = mirrorSubjectForSeat(op, seat, piece);
+          if (reflectionSubject) reflectionSubjects.push(reflectionSubject);
+        }
       }
+      ops.push(...reflectedOpsForSubjects(mirrorSurfaces, reflectionSubjects));
+      ops.push(...physicalPieceOps);
       for (const group of afterGhosts) {
         group.pieces.forEach((piece, i) => {
           const off = (GHOST_SLOTS[group.pieces.length] ?? GHOST_SLOTS[1])[i] ?? { dx: 0, dy: 0 };
@@ -712,7 +786,7 @@ function SkirmishSceneLayer({
       cancelled = true;
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, premovedIds, staticOps]);
+  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, premovedIds, staticOps]);
 
   return (
     <canvas

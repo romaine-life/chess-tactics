@@ -19,7 +19,7 @@ Default material inputs:
 
 Outputs:
 
-  frontend/public/assets/tiles/feature/wall-<material>-{1,8,9}.png  (128x240, anchor 64,96)
+  frontend/public/assets/tiles/feature/wall-<material>-{1,8,9}.png  (128x336, anchor 64,192)
   frontend/public/assets/tiles/feature/wall-<material>-thumb.png
   docs/art/wall-concepts/proofs/wall-<material>-proof.png
   docs/art/wall-concepts/proofs/wall-<material>-runtime-seat-proof.png
@@ -28,6 +28,7 @@ Outputs:
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import os
 import tempfile
 import zipfile
@@ -44,18 +45,39 @@ PROOF_DIR = WALL_DOCS / "proofs"
 DEFAULT_ZIP = "photoscanned-old-stone-wall-2x4m.zip"
 TILE_REFERENCE = ROOT / "docs" / "art" / "pixellab-runs" / "surfaces" / "grass" / "tile_0.png"
 RUNTIME_TILE_REFERENCE = ROOT / "frontend" / "public" / "assets" / "tiles" / "surface" / "grass-0.png"
-WALL_FRAME_W = 128
-WALL_FRAME_H = 240
-WALL_ANCHOR_X = 64
-WALL_ANCHOR_Y = 96
 TILE_ANCHOR_X = 48
 TILE_ANCHOR_Y = 69
 TILE_STEP_X = 48
 TILE_STEP_Y = 28
-WALL_HEIGHT = 64
-WALL_BASE_APEX = (64, 68)
-WALL_BASE_LEFT = (16, 95)
-WALL_BASE_RIGHT = (112, 95)
+
+
+@dataclass(frozen=True)
+class WallBakeGeometry:
+    prefix: str
+    frame_w: int
+    frame_h: int
+    anchor_x: int
+    anchor_y: int
+    wall_height: int
+    base_apex: tuple[int, int]
+    base_left: tuple[int, int]
+    base_right: tuple[int, int]
+
+
+# Every wall uses the full-height geometry required by an exact 1:1 full-body mirror.
+# The board-space base and 144px below-anchor tail are unchanged from the retired short
+# geometry; the single canonical frame supplies 96px more upward headroom.
+WALL_GEOMETRY = WallBakeGeometry(
+    prefix="wall",
+    frame_w=128,
+    frame_h=336,
+    anchor_x=64,
+    anchor_y=192,
+    wall_height=160,
+    base_apex=(64, 164),
+    base_left=(16, 191),
+    base_right=(112, 191),
+)
 
 MATERIAL_INPUTS = {
     "stone": MATERIAL_DIR / "source" / "stone-photoscan.png",
@@ -124,11 +146,19 @@ def prepare_texture(src: Path, dst: Path, max_side: int = 1024) -> Path:
     return dst
 
 
-def ensure_source_materials(source_zip: Path) -> None:
+def source_materials_ready() -> bool:
     stone = MATERIAL_INPUTS["stone"]
     normal = MATERIAL_DIR / "source" / "stone-photoscan-normal.png"
-    if stone.exists() and normal.exists():
+    return stone.exists() and normal.exists()
+
+
+def ensure_source_materials(source_zip: Path | None) -> None:
+    if source_materials_ready():
         return
+    if source_zip is None:
+        raise FileNotFoundError("prepared stone material is missing and no photoscan source zip was resolved")
+    stone = MATERIAL_INPUTS["stone"]
+    normal = MATERIAL_DIR / "source" / "stone-photoscan-normal.png"
     with tempfile.TemporaryDirectory(prefix="chess-tactics-wall-src-") as td:
         raw_albedo, raw_normal = extract_photoscan_textures(source_zip, Path(td))
         prepare_texture(raw_albedo, stone)
@@ -153,8 +183,16 @@ def selected_materials(raw: str | None) -> list[str]:
     return existing
 
 
-def write_thumb(out_dir: Path, material: str) -> None:
-    full = Image.open(out_dir / f"wall-{material}-9.png").convert("RGBA")
+def wall_sprite_name(geometry: WallBakeGeometry, material: str, mask: int) -> str:
+    return f"{geometry.prefix}-{material}-{mask}.png"
+
+
+def wall_thumb_name(geometry: WallBakeGeometry, material: str) -> str:
+    return f"{geometry.prefix}-{material}-thumb.png"
+
+
+def write_thumb(out_dir: Path, material: str, geometry: WallBakeGeometry) -> None:
+    full = Image.open(out_dir / wall_sprite_name(geometry, material, 9)).convert("RGBA")
     bbox = full.getbbox()
     if not bbox:
         raise RuntimeError(f"wall bake produced an empty sprite for {material}")
@@ -162,12 +200,12 @@ def write_thumb(out_dir: Path, material: str) -> None:
     size = max(crop.size) + 10
     thumb = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     thumb.paste(crop, ((size - crop.width) // 2, (size - crop.height) // 2), crop)
-    thumb.save(out_dir / f"wall-{material}-thumb.png")
+    thumb.save(out_dir / wall_thumb_name(geometry, material))
 
 
-def postprocess_sprites(out_dir: Path, material: str) -> None:
+def postprocess_sprites(out_dir: Path, material: str, geometry: WallBakeGeometry) -> None:
     for mask in (1, 8, 9):
-        name = f"wall-{material}-{mask}.png"
+        name = wall_sprite_name(geometry, material, mask)
         img = Image.open(out_dir / name).convert("RGBA")
         alpha = img.getchannel("A")
         rgb = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -182,16 +220,16 @@ def opaque_run(alpha: Image.Image, y: int) -> tuple[int, int] | None:
     return (min(xs), max(xs)) if xs else None
 
 
-def assert_wall_geometry(out_dir: Path, material: str) -> None:
-    north = Image.open(out_dir / f"wall-{material}-1.png").convert("RGBA").getchannel("A")
-    west = Image.open(out_dir / f"wall-{material}-8.png").convert("RGBA").getchannel("A")
-    corner = Image.open(out_dir / f"wall-{material}-9.png").convert("RGBA").getchannel("A")
+def assert_wall_geometry(out_dir: Path, material: str, geometry: WallBakeGeometry) -> None:
+    north = Image.open(out_dir / wall_sprite_name(geometry, material, 1)).convert("RGBA").getchannel("A")
+    west = Image.open(out_dir / wall_sprite_name(geometry, material, 8)).convert("RGBA").getchannel("A")
+    corner = Image.open(out_dir / wall_sprite_name(geometry, material, 9)).convert("RGBA").getchannel("A")
     expected = {
-        "north-apex-row": (opaque_run(north, WALL_BASE_APEX[1]), (WALL_BASE_APEX[0], WALL_BASE_RIGHT[0])),
-        "north-end": (opaque_run(north, WALL_BASE_RIGHT[1]), (WALL_BASE_RIGHT[0], WALL_BASE_RIGHT[0])),
-        "west-apex-row": (opaque_run(west, WALL_BASE_APEX[1]), (WALL_BASE_LEFT[0], WALL_BASE_APEX[0])),
-        "west-end": (opaque_run(west, WALL_BASE_LEFT[1]), (WALL_BASE_LEFT[0], WALL_BASE_LEFT[0])),
-        "corner-apex-row": (opaque_run(corner, WALL_BASE_APEX[1]), (WALL_BASE_LEFT[0], WALL_BASE_RIGHT[0])),
+        "north-apex-row": (opaque_run(north, geometry.base_apex[1]), (geometry.base_apex[0], geometry.base_right[0])),
+        "north-end": (opaque_run(north, geometry.base_right[1]), (geometry.base_right[0], geometry.base_right[0])),
+        "west-apex-row": (opaque_run(west, geometry.base_apex[1]), (geometry.base_left[0], geometry.base_apex[0])),
+        "west-end": (opaque_run(west, geometry.base_left[1]), (geometry.base_left[0], geometry.base_left[0])),
+        "corner-apex-row": (opaque_run(corner, geometry.base_apex[1]), (geometry.base_left[0], geometry.base_right[0])),
     }
     for label, (actual, want) in expected.items():
         if actual != want:
@@ -212,16 +250,23 @@ def sample_material(material: Image.Image, u: float, v: float, shade: float) -> 
     return (clamp_channel(r * shade), clamp_channel(g * shade), clamp_channel(b * shade), 255)
 
 
-def paint_wall_face(canvas: Image.Image, material: Image.Image, bottom_start: tuple[int, int], bottom_end: tuple[int, int], shade: float) -> None:
+def paint_wall_face(
+    canvas: Image.Image,
+    material: Image.Image,
+    bottom_start: tuple[int, int],
+    bottom_end: tuple[int, int],
+    shade: float,
+    wall_height: int,
+) -> None:
     p0x, p0y = bottom_start
     ux, uy = bottom_end[0] - p0x, bottom_end[1] - p0y
-    vx, vy = 0, -WALL_HEIGHT
+    vx, vy = 0, -wall_height
     det = ux * vy - uy * vx
     if det == 0:
         raise ValueError("wall face basis collapsed")
     min_x = max(0, min(p0x, bottom_end[0]) - 1)
     max_x = min(canvas.width - 1, max(p0x, bottom_end[0]) + 1)
-    min_y = max(0, min(p0y, bottom_end[1]) - WALL_HEIGHT - 1)
+    min_y = max(0, min(p0y, bottom_end[1]) - wall_height - 1)
     max_y = min(canvas.height - 1, max(p0y, bottom_end[1]) + 1)
     px = canvas.load()
     for y in range(min_y, max_y + 1):
@@ -233,28 +278,33 @@ def paint_wall_face(canvas: Image.Image, material: Image.Image, bottom_start: tu
                 px[x, y] = sample_material(material, max(0, min(1, s)), max(0, min(1, t)), shade)
 
 
-def bake_wall_sprite(material_path: Path, mask: int) -> Image.Image:
+def bake_wall_sprite(material_path: Path, mask: int, geometry: WallBakeGeometry) -> Image.Image:
     material = Image.open(material_path).convert("RGBA").resize((96, 96), Image.Resampling.NEAREST)
-    sprite = Image.new("RGBA", (WALL_FRAME_W, WALL_FRAME_H), (0, 0, 0, 0))
+    sprite = Image.new("RGBA", (geometry.frame_w, geometry.frame_h), (0, 0, 0, 0))
     if mask & 8:
-        paint_wall_face(sprite, material, WALL_BASE_LEFT, WALL_BASE_APEX, 0.78)
+        paint_wall_face(sprite, material, geometry.base_left, geometry.base_apex, 0.78, geometry.wall_height)
     if mask & 1:
-        paint_wall_face(sprite, material, WALL_BASE_APEX, WALL_BASE_RIGHT, 1.08)
+        paint_wall_face(sprite, material, geometry.base_apex, geometry.base_right, 1.08, geometry.wall_height)
     return sprite
 
 
-def bake_wall_sprites(out_dir: Path, material: str, material_path: Path) -> None:
+def bake_wall_sprites(out_dir: Path, material: str, material_path: Path, geometry: WallBakeGeometry) -> None:
     for mask in (1, 8, 9):
-        bake_wall_sprite(material_path, mask).save(out_dir / f"wall-{material}-{mask}.png")
+        bake_wall_sprite(material_path, mask, geometry).save(out_dir / wall_sprite_name(geometry, material, mask))
 
 
-def compose_runtime_seat_proof(out_dir: Path, material: str, draw_guides: bool) -> Image.Image:
+def compose_runtime_seat_proof(
+    out_dir: Path,
+    material: str,
+    geometry: WallBakeGeometry,
+    draw_guides: bool,
+) -> Image.Image:
     tile = Image.open(RUNTIME_TILE_REFERENCE).convert("RGBA")
-    wall = Image.open(out_dir / f"wall-{material}-9.png").convert("RGBA")
+    wall = Image.open(out_dir / wall_sprite_name(geometry, material, 9)).convert("RGBA")
     origin = (130, 160)
     canvas = Image.new("RGBA", (260, 300), (12, 18, 24, 255))
     canvas.alpha_composite(tile, (origin[0] - TILE_ANCHOR_X, origin[1] - TILE_ANCHOR_Y))
-    canvas.alpha_composite(wall, (origin[0] - WALL_ANCHOR_X, origin[1] - WALL_ANCHOR_Y))
+    canvas.alpha_composite(wall, (origin[0] - geometry.anchor_x, origin[1] - geometry.anchor_y))
     if draw_guides:
         draw = ImageDraw.Draw(canvas)
         apex = (origin[0], origin[1] - TILE_STEP_Y)
@@ -268,22 +318,38 @@ def compose_runtime_seat_proof(out_dir: Path, material: str, draw_guides: bool) 
     return canvas
 
 
-def write_runtime_seat_proof(out_dir: Path, proof_dir: Path, material: str) -> None:
-    compose_runtime_seat_proof(out_dir, material, draw_guides=False).save(proof_dir / f"wall-{material}-proof.png")
-    compose_runtime_seat_proof(out_dir, material, draw_guides=True).save(proof_dir / f"wall-{material}-runtime-seat-proof.png")
+def write_runtime_seat_proof(
+    out_dir: Path,
+    proof_dir: Path,
+    material: str,
+    geometry: WallBakeGeometry,
+) -> None:
+    compose_runtime_seat_proof(out_dir, material, geometry, draw_guides=False).save(
+        proof_dir / f"{geometry.prefix}-{material}-proof.png"
+    )
+    compose_runtime_seat_proof(out_dir, material, geometry, draw_guides=True).save(
+        proof_dir / f"{geometry.prefix}-{material}-runtime-seat-proof.png"
+    )
 
 
-def write_contact_sheet(out_dir: Path, proof_dir: Path, materials: list[str]) -> None:
-    cell_w, cell_h = 220, 360
+def write_contact_sheet(
+    out_dir: Path,
+    proof_dir: Path,
+    materials: list[str],
+    geometry: WallBakeGeometry,
+) -> None:
+    cell_w = 220
+    cell_h = 408
     sheet = Image.new("RGBA", (cell_w * len(materials), cell_h), (10, 16, 22, 255))
     draw = ImageDraw.Draw(sheet)
     for idx, material in enumerate(materials):
         x0 = idx * cell_w
-        wall = Image.open(out_dir / f"wall-{material}-9.png").convert("RGBA")
-        proof = Image.open(proof_dir / f"wall-{material}-runtime-seat-proof.png").convert("RGBA")
+        wall = Image.open(out_dir / wall_sprite_name(geometry, material, 9)).convert("RGBA")
+        proof = Image.open(proof_dir / f"{geometry.prefix}-{material}-runtime-seat-proof.png").convert("RGBA")
         sheet.alpha_composite(wall, (x0 + (cell_w - wall.width) // 2, 28))
         proof_small = proof.resize((156, 180), Image.Resampling.NEAREST)
-        sheet.alpha_composite(proof_small, (x0 + (cell_w - proof_small.width) // 2, 170))
+        proof_y = 218
+        sheet.alpha_composite(proof_small, (x0 + (cell_w - proof_small.width) // 2, proof_y))
         draw.text((x0 + 12, 8), material, fill=(230, 242, 255, 255))
     sheet.save(WALL_DOCS / "wall-bake-contact-sheet.png")
 
@@ -297,7 +363,7 @@ def main() -> None:
     parser.add_argument("--materials", help="Comma-separated material ids to bake; default: all existing inputs")
     args = parser.parse_args()
 
-    source_zip = resolve_zip(args.source_zip)
+    source_zip = resolve_zip(args.source_zip) if args.source_zip or not source_materials_ready() else None
     ensure_source_materials(source_zip)
     material_names = selected_materials(args.materials)
 
@@ -307,13 +373,13 @@ def main() -> None:
     proof_dir.mkdir(parents=True, exist_ok=True)
 
     for material in material_names:
-        bake_wall_sprites(out_dir, material, MATERIAL_INPUTS[material])
-        postprocess_sprites(out_dir, material)
-        assert_wall_geometry(out_dir, material)
-        write_thumb(out_dir, material)
-        write_runtime_seat_proof(out_dir, proof_dir, material)
-    write_contact_sheet(out_dir, proof_dir, material_names)
-    print(f"baked wall tiles ({', '.join(material_names)}) -> {out_dir}")
+        bake_wall_sprites(out_dir, material, MATERIAL_INPUTS[material], WALL_GEOMETRY)
+        postprocess_sprites(out_dir, material, WALL_GEOMETRY)
+        assert_wall_geometry(out_dir, material, WALL_GEOMETRY)
+        write_thumb(out_dir, material, WALL_GEOMETRY)
+        write_runtime_seat_proof(out_dir, proof_dir, material, WALL_GEOMETRY)
+    write_contact_sheet(out_dir, proof_dir, material_names, WALL_GEOMETRY)
+    print(f"baked canonical full-height wall tiles ({', '.join(material_names)}) -> {out_dir}")
     print(f"wrote wall proof renders -> {proof_dir}")
 
 

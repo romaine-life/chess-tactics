@@ -32,6 +32,7 @@ import {
   type LevelEditorLayerKey,
 } from './levelEditorRoute';
 import { APP_NAVIGATION_EVENT, navigateApp, registerAppNavigationBlocker } from './navigation';
+import { levelEditorWallFaceGeometry } from './levelEditorWallFace';
 import { levelEditorExitAction } from './levelEditorExit';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
@@ -74,7 +75,7 @@ import {
 } from './studioBoard';
 import { featureThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
 import { resolveFeatureOverlays, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
-import { wallArt, wallArtAtEdge, wallArtBadge, wallArtItems, wallArtLabel, wallArtSpanEdges, wallArtSpanForId, type WallArtId } from '../core/wallArt';
+import { wallArt, wallArtAtEdge, wallArtBadge, wallArtIdOrDefault, wallArtItems, wallArtLabel, wallArtPlacementSpanAtEdge, wallArtSpanEdges, wallArtSpanForId, type WallArtId } from '../core/wallArt';
 import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
 import { scatterTerrainDetailed } from '../core/terrainScatter';
@@ -205,6 +206,7 @@ function StudioEditableBoard({
   fences: placedFences = {},
   walls: placedWalls = {},
   wallArt: placedWallArt = {},
+  wallArtBrushId,
   cover: placedCover = {},
   coverTypes: placedCoverTypes = {},
   coverSeed = 1234,
@@ -257,6 +259,8 @@ function StudioEditableBoard({
   walls?: Record<string, WallMaterial>;
   /** Wall art keyed by anchor edge; spans across N north/west perimeter wall edges. */
   wallArt?: Record<string, WallArtId>;
+  /** Active wall-art stamp, used to show whether each visible supporting wall can accept it. */
+  wallArtBrushId?: WallArtId;
   /** Painted ground-cover densities keyed by cell. */
   cover?: Record<string, GroundCoverDensity>;
   /** Optional per-cell ground-cover family overrides. */
@@ -521,6 +525,82 @@ function StudioEditableBoard({
   // Board art now renders through BoardSceneLayer. These remaining DOM nodes are editor-only
   // hit targets for tall bodies whose visible pixels extend beyond their owning tile.
   const overlaySprites: ReactNode[] = [];
+
+  // Walls rise well above the tile-surface diamonds that normally own editor input. Give each
+  // visible perimeter face its own exact isometric target so clicking the thing on screen paints
+  // or erases that wall edge. The polygons follow the canonical full-height generated wall
+  // relative to the owning cell seat (160px rise, 48x27 tangent).
+  if ((wallTool || wallArtTool) && (tool === 'brush' || tool === 'erase')) {
+    const addWallFaceTarget = (x: number, y: number, face: 'west' | 'north'): void => {
+      const edge = face === 'west'
+        ? roadEdgeKey(0, y, -1, y)
+        : roadEdgeKey(x, 0, x, -1);
+      if (!placedWalls[edge]) return;
+      const placement = wallArtAtEdge(edge, placedWallArt, wallBounds);
+      const candidate = wallArtTool
+        ? wallArtPlacementSpanAtEdge(edge, wallArtBrushId, wallBounds, (spanEdge) => Boolean(placedWalls[spanEdge]))
+        : null;
+      const ready = wallTool || (tool === 'erase' ? Boolean(placement) : Boolean(candidate));
+      const artLabel = wallArtLabel(wallArtBrushId);
+      const label = wallTool
+        ? `${tool === 'erase' ? 'Remove' : 'Paint'} wall on ${face} boundary edge`
+        : tool === 'erase'
+        ? placement
+          ? `Remove ${wallArtLabel(placement.artId)} from ${face} wall`
+          : `No wall art to remove from ${face} wall`
+        : ready
+        ? `Place ${artLabel} from this ${face} wall`
+        : `${artLabel} needs ${wallArtSpanForId(wallArtBrushId)} consecutive supporting walls here`;
+      const seat = boardLabCellPosition({ x, y });
+      const geometry = levelEditorWallFaceGeometry(face, seat);
+      const apply = (erasing: boolean): void => {
+        if (wallTool) {
+          if (erasing) onEraseWallEdge?.(edge);
+          else onPaintWallEdge?.(edge);
+        } else if (erasing) {
+          onEraseWallArtEdge?.(edge);
+        } else {
+          // Invoke the placement handler even while blocked: it owns the human-readable reason
+          // instead of leaving another silent no-op in the editor.
+          onPaintWallArtEdge?.(edge);
+        }
+      };
+      overlaySprites.push(
+        <svg
+          key={`wall-face-hit-${face}-${x},${y}`}
+          className={`le-wall-face-hit is-${ready ? 'ready' : 'blocked'}`}
+          viewBox={geometry.viewBox}
+          aria-label={label}
+          role="button"
+          tabIndex={0}
+          style={{ left: geometry.left, top: geometry.top, width: geometry.width, height: geometry.height, zIndex: 30000 + x + y }}
+          onPointerDown={(event) => {
+            if (event.button === 2) return;
+            event.preventDefault();
+            event.stopPropagation();
+            apply(tool === 'erase');
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            apply(tool === 'erase');
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            apply(true);
+          }}
+        >
+          <title>{label}</title>
+          <polygon points={geometry.points} />
+        </svg>,
+      );
+    };
+
+    for (let y = 0; y < rows; y += 1) addWallFaceTarget(0, y, 'west');
+    for (let x = 0; x < cols; x += 1) addWallFaceTarget(x, 0, 'north');
+  }
+
   if (!hidden?.doodad) {
     for (const key of Object.keys(placedDoodads)) {
       const [cx, cy] = key.split(',').map(Number);
@@ -1978,10 +2058,9 @@ export function LevelEditor(): ReactElement {
   });
   const [boardWallArt, setBoardWallArt] = useState<Record<string, WallArtId>>(() =>
     perimeterWallArt(initialBoard?.wallArt, initialBoard?.cols ?? LE_COLS, initialBoard?.rows ?? LE_ROWS));
-  const [wallArtBrushId, setWallArtBrushId] = useState<WallArtId>(() => {
-    const brush = studioArm.kind === 'wallart' ? studioArm.brush : undefined;
-    return wallArt(brush)?.id ?? wallArtItems()[0]?.id ?? 'banner-stone-wall';
-  });
+  const [wallArtBrushId, setWallArtBrushId] = useState<WallArtId>(() =>
+    wallArtIdOrDefault(studioArm.kind === 'wallart' ? studioArm.brush : undefined));
+  const [wallArtPlacementFeedback, setWallArtPlacementFeedback] = useState<{ tone: 'ready' | 'blocked'; message: string } | null>(null);
   const wallArtBrush = wallArt(wallArtBrushId) ?? wallArtItems()[0];
   // The remembered brush material PER kind, so switching Road↔River keeps each picker's choice.
   const [featureBrushMaterial, setFeatureBrushMaterial] = useState<Record<FeatureKind, FeatureMaterial>>({
@@ -2120,10 +2199,12 @@ export function LevelEditor(): ReactElement {
     const nextHref = levelEditorHrefWithRouteState(window.location.href, {
       layer,
       brushKind: levelEditorRouteBrushKind(layer, brushKind),
-      brush: null,
+      // A copied/reloaded Wall Art editor URL must keep the exact armed stamp. Losing this made a
+      // Grand Gallery handoff silently reopen with the first catalog item (Tattered Banner).
+      brush: brushKind === 'wallart' ? wallArtBrushId : null,
     });
     navigateApp(nextHref, { replace: true, scroll: false });
-  }, [brushKind, layer]);
+  }, [brushKind, layer, wallArtBrushId]);
 
   useEffect(() => {
     const syncFromRoute = (): void => {
@@ -2137,6 +2218,9 @@ export function LevelEditor(): ReactElement {
       setLayer(nextLayer);
       setTool(toolForLayer(nextLayer));
       setBrushKind(brushKindForRouteState(nextLayer, routeState.brushKind));
+      if (routeState.brushKind === 'wallart') {
+        setWallArtBrushId(wallArtIdOrDefault(routeState.brush));
+      }
     };
     window.addEventListener('popstate', syncFromRoute);
     window.addEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
@@ -2572,33 +2656,54 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
   const paintWallArtEdge = (edgeKey: string): void => {
-    if (!wallEdgeCanRender(edgeKey)) return;
-    if (!wallArt(wallArtBrushId)) return;
+    const art = wallArt(wallArtBrushId);
+    if (!wallEdgeCanRender(edgeKey) || !art) {
+      setWallArtPlacementFeedback({ tone: 'blocked', message: 'Wall art can only be placed on the north or west perimeter wall.' });
+      return;
+    }
     const bounds = { cols: boardCols, rows: boardRows };
-    const spanEdges = wallArtSpanEdges(edgeKey, wallArtBrushId, bounds);
-    if (spanEdges.length !== wallArtSpanForId(wallArtBrushId)) return;
     const current = currentEditorBoardRef.current;
-    if (spanEdges.some((edge) => !current.walls?.[edge])) return;
+    const placementSpan = wallArtPlacementSpanAtEdge(
+      edgeKey,
+      art.id,
+      bounds,
+      (spanEdge) => Boolean(current.walls?.[spanEdge]),
+    );
+    if (!placementSpan) {
+      setWallArtPlacementFeedback({
+        tone: 'blocked',
+        message: `${art.label} needs ${art.span} consecutive supporting wall${art.span === 1 ? '' : 's'}. Add the missing wall${art.span === 1 ? '' : 's'}, then click any wall face in the run.`,
+      });
+      return;
+    }
     const next = cloneEditorBoard(current);
     const wallArtPlacements = { ...(next.wallArt ?? {}) };
-    for (const edge of spanEdges) {
+    for (const edge of placementSpan.edges) {
       const existing = wallArtAtEdge(edge, wallArtPlacements, bounds);
       if (existing) delete wallArtPlacements[existing.anchorEdge];
     }
-    wallArtPlacements[edgeKey] = wallArtBrushId;
+    wallArtPlacements[placementSpan.anchorEdge] = art.id;
     next.wallArt = wallArtPlacements;
     commitEditorBoard(next);
+    setWallArtPlacementFeedback({
+      tone: 'ready',
+      message: `Placed ${art.label} across ${art.span} wall${art.span === 1 ? '' : 's'}.`,
+    });
   };
   const eraseWallArtEdge = (edgeKey: string): void => {
     const bounds = { cols: boardCols, rows: boardRows };
     const current = currentEditorBoardRef.current.wallArt ?? {};
     const hit = wallArtAtEdge(edgeKey, current, bounds);
-    if (!hit) return;
+    if (!hit) {
+      setWallArtPlacementFeedback({ tone: 'blocked', message: 'There is no wall art on that wall segment.' });
+      return;
+    }
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     const wallArtPlacements = { ...(next.wallArt ?? {}) };
     delete wallArtPlacements[hit.anchorEdge];
     next.wallArt = wallArtPlacements;
     commitEditorBoard(next);
+    setWallArtPlacementFeedback({ tone: 'ready', message: `Removed ${wallArtLabel(hit.artId)}.` });
   };
   const clearBoard = (): void => {
     commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, macroTiles: [], units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
@@ -4592,6 +4697,7 @@ export function LevelEditor(): ReactElement {
                     onPaintWallEdge={paintWallEdge}
                     onEraseWallEdge={eraseWallEdge}
                     wallArt={boardWallArt}
+                    wallArtBrushId={wallArtBrushId}
                     wallArtTool={wallArtTool}
                     onPaintWallArtEdge={paintWallArtEdge}
                     onEraseWallArtEdge={eraseWallArtEdge}
@@ -5375,7 +5481,7 @@ export function LevelEditor(): ReactElement {
                     key={art.id}
                     className={`le-swatch le-wall-asset-swatch ${wallArtBrushId === art.id && tool !== 'erase' ? 'active' : ''}`.trim()}
                     title={`${art.label} - spans ${art.span} wall${art.span === 1 ? '' : 's'}`}
-                    onClick={() => { setWallArtBrushId(art.id); setBrushKind('wallart'); setLayer('wallart'); setTool('brush'); }}
+                    onClick={() => { setWallArtBrushId(art.id); setWallArtPlacementFeedback(null); setBrushKind('wallart'); setLayer('wallart'); setTool('brush'); }}
                   >
                     <WallArtPreview art={art} zoom={0.46} />
                     <small>{art.label}</small>
@@ -5384,8 +5490,15 @@ export function LevelEditor(): ReactElement {
               </div>
             </div>
             <p className="le-board-note">
-              Wall art mounts on existing north or west perimeter walls. A spanned piece needs every wall segment in its span before it can be placed.
+              {tool === 'erase'
+                ? 'Click a wall face carrying art to remove that complete placement. A dashed outline means there is no wall art on that segment.'
+                : 'Click the visible face of an existing north or west perimeter wall. A spanned piece may start from any wall in a complete supporting run; a solid outline means ready and a dashed outline means more walls are needed.'}
             </p>
+            {wallArtPlacementFeedback ? (
+              <p className={`le-wall-placement-feedback is-${wallArtPlacementFeedback.tone}`} role="status">
+                {wallArtPlacementFeedback.message}
+              </p>
+            ) : null}
           </section>
         ) : fenceTool ? (
           <section className="skirmish-card le-brush-panel">

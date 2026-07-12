@@ -70,7 +70,7 @@ if (root) {
     .then(() => {
       initUnitSizeTuning();
       reactRoot.render(<App />);
-      // Prop seats and wall art remain independent decorative overlays. Unit art is
+      // Prop seats and wall-art definitions remain independent live render inputs. Unit art is
       // deliberately absent from this fail-soft group: the app does not render without it.
       void loadLiveSeats()
         .then((changed) => { if (changed) reactRoot.render(<App />); })

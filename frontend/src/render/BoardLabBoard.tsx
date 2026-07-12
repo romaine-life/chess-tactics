@@ -8,7 +8,6 @@ import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenera
 import type { TileSocketAsset } from '../core/tileSockets';
 import { featureFrameSrc } from '../art/tileset';
 import type { ResolvedFenceOverlay, ResolvedWallOverlay } from '../core/featureAutotile';
-import type { WallArtPlacementMap } from '../core/wallArt';
 import { resolveMacroTilePlacements, type MacroTilePlacement } from '../core/macroTiles';
 
 // Re-export the projection so existing importers (SkirmishBoard, TilePreview, the
@@ -41,9 +40,6 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
    * Only northmost/westmost map edges resolve to this layer.
    */
   wallOverlays?: ReadonlyMap<string, ResolvedWallOverlay>;
-  /** Raw wall-art ids by anchor edge key; used to draw mounted wall art over wall frames. */
-  wallArt?: WallArtPlacementMap;
-  wallBounds?: { cols: number; rows: number };
   /** Additional board-art canvas for generated boards (ground cover, props, units, etc.). */
   sceneLayer?: ReactNode;
   children?: ReactNode;
@@ -62,8 +58,6 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   renderCellOverlay,
   fenceOverlays,
   wallOverlays,
-  wallArt,
-  wallBounds,
   sceneLayer,
   children,
 }: BoardLabBoardProps<TAsset>) {
@@ -134,7 +128,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       backgroundLayer={(
         <>
           <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(resolvedMacroTiles)} />
-          <BoardBarrierSceneLayer fenceOverlays={fenceOverlays} wallOverlays={wallOverlays} wallArt={wallArt} wallBounds={wallBounds} />
+          <BoardBarrierSceneLayer fenceOverlays={fenceOverlays} wallOverlays={wallOverlays} />
           {sceneLayer}
         </>
       )}

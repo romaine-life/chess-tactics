@@ -4299,7 +4299,7 @@ app.put('/api/prop-seats/:id', async (req, res) => {
 // Placeable wall art: N face artwork slots mounted on existing walls.
 // Public GET / requireAdmin PUT, parallel to prop_seats. The committed
 // wallArt.json is the baseline; this row is an optional live overlay.
-const WALL_ART_STORE_SCHEMA_VERSION = 1;
+const WALL_ART_STORE_SCHEMA_VERSION = 2;
 const WALL_ART_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
 const WALL_ART_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 const WALL_ART_FACES = new Set(['west', 'north']);
@@ -4317,6 +4317,14 @@ function validateWallArtData(data) {
     if (typeof asset.label !== 'string' || !asset.label.trim()) return `wall art "${id}" needs a label`;
     if (Object.hasOwn(asset, 'span') && !(Number.isInteger(asset.span) && asset.span >= 1 && asset.span <= 16)) return `wall art "${id}" span must be an integer from 1 to 16`;
     if (!Array.isArray(asset.slots)) return `wall art "${id}" slots must be an array`;
+    if (Object.hasOwn(asset, 'reflection')) {
+      if (!isObjectRecord(asset.reflection)) return `wall art "${id}" reflection must be an object`;
+      const reflectionKeys = Object.keys(asset.reflection);
+      if (reflectionKeys.some((key) => key !== 'opacity')) return `wall art "${id}" reflection supports opacity only`;
+      if (!(Number.isFinite(asset.reflection.opacity) && asset.reflection.opacity >= 0.05 && asset.reflection.opacity <= 1)) {
+        return `wall art "${id}" reflection opacity must be from 0.05 to 1`;
+      }
+    }
     for (const [index, slot] of asset.slots.entries()) {
       if (!isObjectRecord(slot)) return `wall art "${id}" slot ${index + 1} must be an object`;
       if (typeof slot.id !== 'string' || !WALL_ART_ID_PATTERN.test(slot.id)) return `wall art "${id}" slot ${index + 1} needs a lowercase slug id`;
@@ -5530,10 +5538,35 @@ async function thumbnailPropSeats() {
   } catch { /* DB unreachable — fall through to the last-good seats below, else baseline */ }
   return _thumbnailPropSeatsCache.data ? _thumbnailPropSeatsCache : { at: now, data: {}, revision: 0 };
 }
+const THUMBNAIL_WALL_ART_TTL_MS = 60 * 1000;
+let _thumbnailWallArtCache = { at: 0, data: null, revision: 0 }; // last SUCCESSFUL DB read
+async function thumbnailWallArt() {
+  const now = Date.now();
+  if (_thumbnailWallArtCache.data && now - _thumbnailWallArtCache.at < THUMBNAIL_WALL_ART_TTL_MS) {
+    return _thumbnailWallArtCache;
+  }
+  try {
+    const doc = await dbGetWallArt('default');
+    const data = doc && doc.data && typeof doc.data === 'object' ? doc.data : {};
+    _thumbnailWallArtCache = {
+      at: now,
+      data,
+      revision: Number.isInteger(doc && doc.revision) ? doc.revision : 0,
+    };
+    return _thumbnailWallArtCache;
+  } catch { /* DB unreachable — fall through to the last-good wall art below, else baseline */ }
+  return _thumbnailWallArtCache.data ? _thumbnailWallArtCache : { at: now, data: {}, revision: 0 };
+}
 async function applyThumbnailRenderInputs() {
-  const seats = await thumbnailPropSeats();
+  const [seats, wallArt] = await Promise.all([thumbnailPropSeats(), thumbnailWallArt()]);
   if (serverRender && typeof serverRender.applyPropSeatOverrides === 'function') {
     try { serverRender.applyPropSeatOverrides(seats.data); } catch { /* keep the renderer's last-good seats */ }
+  }
+  if (!serverRender || typeof serverRender.applyLiveWallArt !== 'function') {
+    throw new Error('wall art renderer is unavailable');
+  }
+  if (Object.keys(wallArt.data).length > 0) {
+    serverRender.applyLiveWallArt(wallArt.data);
   }
   if (!serverRender || typeof serverRender.applyLiveUnitCatalog !== 'function') {
     throw new Error('unit catalog renderer is unavailable');
@@ -5541,12 +5574,19 @@ async function applyThumbnailRenderInputs() {
   const catalog = await publicUnitCatalog();
   serverRender.applyLiveUnitCatalog(catalog);
   const unitCatalogRevision = catalog.revision || 0;
-  return { propSeatsRevision: seats.revision || 0, unitCatalogRevision };
+  return { propSeatsRevision: seats.revision || 0, wallArtRevision: wallArt.revision || 0, unitCatalogRevision };
 }
+// Board/live-data hashes do not change when committed renderer logic or
+// stable-path visual assets change. Bump this revision for any such thumbnail
+// pixel change so browser/CDN and in-process caches cannot serve old pixels.
+// Keep this inline: the production supervisor hot-reloads server.js by itself.
+const BOARD_THUMBNAIL_RENDER_REVISION = 3;
 function thumbnailVersion(boardHash, renderInputs) {
+  const renderRevision = `br${BOARD_THUMBNAIL_RENDER_REVISION}`;
   const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
+  const wallArtRevision = renderInputs && renderInputs.wallArtRevision ? `wa${renderInputs.wallArtRevision}` : '';
   const unitCatalogRevision = renderInputs && renderInputs.unitCatalogRevision ? `uc${renderInputs.unitCatalogRevision}` : '';
-  return [boardHash, propSeatsRevision, unitCatalogRevision].filter(Boolean).join('-');
+  return [boardHash, renderRevision, propSeatsRevision, wallArtRevision, unitCatalogRevision].filter(Boolean).join('-');
 }
 function playScreenName(input) {
   if (serverRender && typeof serverRender.playRouteScreenName === 'function') {

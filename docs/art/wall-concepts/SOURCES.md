@@ -7,7 +7,7 @@ isometric footprint, but the visible material must come from generated/source ar
 
 - Source staging: `walls/photoscanned-old-stone-wall-2x4m.zip`
 - Run record: `docs/art/wall-concepts/runs/wall-material-runs-2026-07-06.json`
-- Contact sheet: `docs/art/wall-concepts/wall-bake-contact-sheet.png`
+- Canonical full-height contact sheet: `docs/art/wall-concepts/wall-bake-contact-sheet.png`
 - Current baked materials:
   - `stone` — photoscanned wall texture, runtime-diamond geometry bake
   - `brick` — Codex img2img material, runtime-diamond geometry bake
@@ -31,12 +31,21 @@ python frontend/scripts/build-wall-tiles.py
 ```
 
 The script prepares material images, projects them into the exact shipped tile
-back-edge geometry, writes 128x240 anchored wall frames, composites proofs
-against the shipped grass tile, then crops square palette thumbnails. The wall
-frame is intentionally taller than the 96x180 tile/fence frame; runtime seats it
-at anchor `(64,96)`. In wall-frame pixels the back-edge base is fixed at
-`(16,95) -> (64,68) -> (112,95)`, matching the grass tile diamond after anchor
-translation.
+back-edge geometry, writes canonical 128x336 wall frames, composites proofs against the
+shipped grass tile, then crops square palette thumbnails. Runtime seats every wall at
+anchor `(64,192)`. The full-height frame has wall height 160 and
+back-edge base `(16,191) -> (64,164) -> (112,191)`. Relative to its anchor, that base
+retains the established board-space geometry: endpoints at
+`y=-1`, apex at `y=-28`, and x positions 16/64/112. Only the top grows upward; logical
+wall plane, contact footprint, masks, materials, shading, and below-anchor tail remain
+unchanged. The upward headroom contains the grounded Grand Gallery at runtime slot
+`y=72`; the 142x240 face canvas begins 16px below the wall canvas top while the lower
+rail reaches the wall/floor datum.
+
+The former 128x240/anchor `(64,96)` short bake and parallel `wall-tall-*` mirror-only
+outputs are retired. The full-height pixels now occupy the canonical `wall-*` runtime
+filenames for bare, decorated, and mirror-bearing walls alike, per
+[ADR-0086](../../adr/0086-all-perimeter-walls-use-full-height-geometry.md).
 
 Gameplay/editor placement is narrower than the baked masks: walls are authored
 only on the board's northmost and westmost perimeter edges. Interior, south, and

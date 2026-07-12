@@ -5,8 +5,20 @@ import type { EditorBoard } from '../ui/boardCode';
 import { tileFamilies } from '../art/tileset';
 import { createSkirmish } from '../game/setup';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
-import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
-import { buildSkirmishBoard, pieceOp, skirmishTileClickIntent } from './SkirmishBoard';
+import { applyLiveUnitCatalog, resetLiveUnitCatalog, unitArtForId } from '../ui/unitCatalog';
+import {
+  mirrorSurfacesForArt,
+  projectBoardPoint,
+  reflectedOpsForSubjects,
+  wallArt,
+} from '@chess-tactics/board-render';
+import {
+  buildSkirmishBoard,
+  mirrorSpriteSourcesForPiece,
+  mirrorSubjectForSeat,
+  pieceOp,
+  skirmishTileClickIntent,
+} from './SkirmishBoard';
 
 afterEach(() => resetLiveUnitCatalog());
 
@@ -86,6 +98,55 @@ describe('pieceOp', () => {
 
     expect(op?.dw).toBe(51);
     expect(op?.dh).toBe(61);
+  });
+});
+
+describe('live mirror subjects', () => {
+  it('derives continuous grid coordinates from an animated projected seat', () => {
+    const start = projectBoardPoint({ x: 0, y: 2 });
+    const end = projectBoardPoint({ x: 1, y: 1 });
+    const seat = {
+      left: start.left + (end.left - start.left) * 0.25,
+      top: start.top + (end.top - start.top) * 0.25,
+    };
+    const op = { src: 'knight.png', dx: seat.left - 12, dy: seat.top - 24, dw: 24, dh: 24, z: 1 };
+    const knight: Piece = {
+      id: 'knight-1', side: 'player', type: 'knight', x: 1, y: 1, startY: 1, alive: true, facing: 'west',
+    };
+
+    const subject = mirrorSubjectForSeat(op, seat, knight)!;
+
+    expect(subject.grid.x).toBeCloseTo(0.25, 12);
+    expect(subject.grid.y).toBeCloseTo(1.75, 12);
+    expect(subject.seat).toBe(seat);
+    expect(subject.op).toBe(op);
+    expect(subject.facing).toBe('west');
+  });
+
+  it('supplies face-specific directional sprites for an animated west-facing knight', () => {
+    applyLiveUnitCatalog(testLiveUnitCatalog({ directionalUrls: true }));
+    const knight: Piece = {
+      id: 'knight-1', side: 'player', type: 'knight', x: 1, y: 1, startY: 1, alive: true, facing: 'west',
+    };
+    const seat = projectBoardPoint(knight);
+    const op = pieceOp(knight, seat)!;
+    const subject = mirrorSubjectForSeat(op, seat, knight)!;
+    const art = wallArt('mirror-keep-wall')!;
+    const west = mirrorSurfacesForArt(art, { x: 0, y: 1, face: 'west' })[0];
+    const north = mirrorSurfacesForArt(art, { x: 1, y: 0, face: 'north' })[0];
+    const westReflection = reflectedOpsForSubjects([west], [subject])[0];
+    const northReflection = reflectedOpsForSubjects([north], [subject])[0];
+    const unit = unitArtForId('knight')!;
+
+    expect(op.src).toBe(unit.sprite('navy-blue', 'west'));
+    expect(westReflection.src).toBe(unit.sprite('navy-blue', 'south'));
+    expect(westReflection.flipX).toBe(true);
+    expect(northReflection.src).toBe(unit.sprite('navy-blue', 'north'));
+    expect(northReflection.flipX).toBe(true);
+    expect(mirrorSpriteSourcesForPiece(knight, ['west', 'north'])).toEqual([
+      westReflection.src,
+      northReflection.src,
+    ]);
   });
 });
 

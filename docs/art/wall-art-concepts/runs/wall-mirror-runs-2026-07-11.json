@@ -1,0 +1,286 @@
+{
+  "generatedAt": "2026-07-11T18:06:55.500Z",
+  "revisedAt": "2026-07-12T18:18:59.2765761Z",
+  "method": "Codex built-in image_gen with img2img style references, chroma-key alpha removal, deterministic west/north projection, authored aperture polygons, and generated-glass/frame layer splitting",
+  "contactSheet": "docs/art/wall-art-concepts/wall-decor-contact-sheet.png",
+  "runtimeProof": "docs/art/wall-art-concepts/proofs/wall-decor-runtime-proof.png",
+  "materialProof": "docs/art/wall-art-concepts/proofs/mirror-wall-material-proof.png",
+  "layerProof": "docs/art/wall-art-concepts/proofs/mirror-layer-split-proof.png",
+  "fullUnitProof": "docs/art/wall-art-concepts/proofs/mirror-full-unit-fit-proof.png",
+  "runtimeManifest": "frontend/public/assets/wall-decor/manifest.json",
+  "catalogManifest": "packages/board-render/src/ui/design/wallDecorManifest.json",
+  "results": [
+    {
+      "id": "mirror-keep",
+      "mirrorCoverage": "authored-crop",
+      "threadId": "019f5072-49d0-7903-afc9-7d1611a02f72",
+      "reference": "docs/art/wall-art-concepts/codex/relief-rook-alpha.png",
+      "prompt": "a single tall austere rectangular keep mirror in heavy soot-darkened wrought iron, broad square rails, four large corner bolt heads, slightly chipped edges, cold opaque blue-gray antique glass with one broad diagonal moonlight highlight and two chunky foxed patches; severe practical castle hardware, no filigree or detailed room reflection",
+      "raw": "docs/art/wall-art-concepts/codex/mirror-keep-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/mirror-keep-alpha.png",
+      "runtime": "frontend/public/assets/wall-decor/mirror-keep.png",
+      "west": "frontend/public/assets/wall-decor/mirror-keep-west.png",
+      "north": "frontend/public/assets/wall-decor/mirror-keep-north.png",
+      "westGlass": "frontend/public/assets/wall-decor/mirror-keep-west-glass.png",
+      "northGlass": "frontend/public/assets/wall-decor/mirror-keep-north-glass.png"
+    },
+    {
+      "id": "mirror-court-oval",
+      "mirrorCoverage": "authored-crop",
+      "threadId": "019f5074-125b-7412-b50f-5ca5d7e02e67",
+      "reference": "docs/art/wall-art-concepts/codex/lantern-brass-alpha.png",
+      "prompt": "a single vertical court mirror with a clearly oval silhouette, thick tarnished-brass double rim and one large simple hanging crown-loop at the top, warm aged metal around opaque cool silver glass, three broad edge-foxing clusters and one restrained crescent highlight; elegant but worn, no tiny scrollwork or detailed room reflection",
+      "raw": "docs/art/wall-art-concepts/codex/mirror-court-oval-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/mirror-court-oval-alpha.png",
+      "runtime": "frontend/public/assets/wall-decor/mirror-court-oval.png",
+      "west": "frontend/public/assets/wall-decor/mirror-court-oval-west.png",
+      "north": "frontend/public/assets/wall-decor/mirror-court-oval-north.png",
+      "westGlass": "frontend/public/assets/wall-decor/mirror-court-oval-west-glass.png",
+      "northGlass": "frontend/public/assets/wall-decor/mirror-court-oval-north-glass.png"
+    },
+    {
+      "id": "mirror-chapel-glass",
+      "mirrorCoverage": "authored-crop",
+      "threadId": "019f5076-1d3e-7ba1-8265-0d1471d46953",
+      "reference": "docs/art/wall-art-concepts/codex/relief-pawn-alpha.png",
+      "prompt": "a single tall chapel mirror shaped as one bold pointed Gothic arch, broad cool-gray carved-stone frame with one deep inset bevel and a restrained muted-gold inner rim, opaque midnight-blue silvered glass with one broad dim amber reflection suggesting distant candlelight; unmistakably a mirror rather than an open window, no tracery, cross, icon, or detailed room reflection",
+      "raw": "docs/art/wall-art-concepts/codex/mirror-chapel-glass-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/mirror-chapel-glass-alpha.png",
+      "runtime": "frontend/public/assets/wall-decor/mirror-chapel-glass.png",
+      "west": "frontend/public/assets/wall-decor/mirror-chapel-glass-west.png",
+      "north": "frontend/public/assets/wall-decor/mirror-chapel-glass-north.png",
+      "westGlass": "frontend/public/assets/wall-decor/mirror-chapel-glass-west-glass.png",
+      "northGlass": "frontend/public/assets/wall-decor/mirror-chapel-glass-north-glass.png"
+    },
+    {
+      "id": "mirror-witch-eye",
+      "mirrorCoverage": "authored-crop",
+      "threadId": "019f5078-d723-7191-8ee0-aed9599670a9",
+      "reference": "docs/art/wall-art-concepts/codex/lantern-brass-alpha.png",
+      "prompt": "a single small round convex antique mirror, heavy tarnished dark-bronze ring with three broad mounting lugs, nearly black opaque convex glass with one off-center cold silver crescent and two stepped blue-charcoal reflection bands; eerie only through emptiness, not an eyeball, eye symbol, occult object, portal, rune, or glowing artifact",
+      "raw": "docs/art/wall-art-concepts/codex/mirror-witch-eye-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/mirror-witch-eye-alpha.png",
+      "runtime": "frontend/public/assets/wall-decor/mirror-witch-eye.png",
+      "west": "frontend/public/assets/wall-decor/mirror-witch-eye-west.png",
+      "north": "frontend/public/assets/wall-decor/mirror-witch-eye-north.png",
+      "westGlass": "frontend/public/assets/wall-decor/mirror-witch-eye-west-glass.png",
+      "northGlass": "frontend/public/assets/wall-decor/mirror-witch-eye-north-glass.png"
+    },
+    {
+      "id": "mirror-grand-gallery",
+      "mirrorCoverage": "full-body",
+      "threadId": "019f525a-a15d-7280-aa7d-6a747e7590fd",
+      "reference": "docs/art/wall-art-concepts/codex/mirror-keep-alpha.png",
+      "prompt": "one single extremely wide Grand Gallery mirror built as a continuous three-wall-span object, a broad uninterrupted horizontal silvered-glass aperture inside one continuous blackened-iron and restrained old-brass frame, outer-corner mounting bosses only, subtle age and a few broad foxed patches; emphatically one panoramic mirror with no mullions, dividers, seams, repeated panels, triptych, or tiled small mirrors, and no detailed room reflection",
+      "raw": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-alpha.png",
+      "runtime": "frontend/public/assets/wall-decor/mirror-grand-gallery.png",
+      "west": "frontend/public/assets/wall-decor/mirror-grand-gallery-west.png",
+      "north": "frontend/public/assets/wall-decor/mirror-grand-gallery-north.png",
+      "westGlass": "frontend/public/assets/wall-decor/mirror-grand-gallery-west-glass.png",
+      "northGlass": "frontend/public/assets/wall-decor/mirror-grand-gallery-north-glass.png"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "mirror-grand-gallery-tall",
+      "revises": "mirror-grand-gallery",
+      "threadId": "019f532d-383d-7ef0-81e4-f12f216c0a6b",
+      "method": "Codex built-in image_gen precise-object edit on the original Grand Gallery raw source, followed by the installed remove_chroma_key.py helper with border auto-key, soft matte, and despill",
+      "methodEvidence": "built-in image_gen call returned image in rollout",
+      "editTarget": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-raw.png",
+      "prompt": "Use case: precise-object-edit. Asset type: production pixel-art game sprite for a continuous three-wall-span Grand Gallery mirror. Rebuild the same single panoramic Grand Gallery mirror substantially taller while keeping its full three-span width. Extend the frame and uninterrupted glass aperture upward; keep the entire bottom rail, bottom corner bosses, and lower mounting baseline fixed. The finished outer frame should be approximately 1.5:1 width-to-height, with a very tall usable glass opening. Preserve the exact crisp pixel-art language, blackened iron, restrained aged-brass trim, four outer corner bosses, blue-gray silvered glass, broad stepped diagonal highlight, and sparse foxing. Center it on a perfectly flat solid #00ff00 chroma-key background with generous padding. No perspective, seams, mullions, dividers, repeated panels, triptych, tiled mirrors, extra bosses, detailed room scene, shadows, text, or watermark.",
+      "raw": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-tall-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-tall-alpha.png",
+      "alphaValidation": {
+        "canvas": [1536, 1024],
+        "bbox": [84, 73, 1449, 924],
+        "transparentPixels": 433301,
+        "partialAlphaPixels": 4009,
+        "visibleGreenSpillPixels": 0
+      },
+      "build": {
+        "normalizedFrame": [216, 135],
+        "projectedSurface": [144, 94],
+        "mount": [108, 101],
+        "westFaceMount": [180, 101],
+        "northFaceMount": [36, 101],
+        "runtimeSlotTargets": {
+          "west": [42, -4],
+          "north": [84, -4]
+        },
+        "wallLocalTargets": {
+          "west": [42, 92],
+          "north": [84, 92]
+        },
+        "wallFrame": {
+          "size": [128, 336],
+          "anchor": [64, 192],
+          "wallHeight": 160,
+          "frameCanvasTopHeadroomPx": 11
+        },
+        "mirrorCoverage": "full-body",
+        "apertureUv": [[0.075, 0.09], [0.925, 0.09], [0.925, 0.905], [0.075, 0.905]],
+        "projectedApertureEdgePx": 76,
+        "relativeMaterialDeformation": 0.04444444444444451
+      },
+      "apertureCapacityAuditInput": {
+        "family": "rook",
+        "palette": "navy-blue",
+        "facing": "west",
+        "catalogRevision": 842,
+        "sha256": "8ed72569b70f3bd56d47d92222cd839f34f1b22523336b09d9fd98c36e41e63b",
+        "path": "docs/art/wall-art-concepts/proof-inputs/accepted-rook-navy-west-8ed72569.png",
+        "runtimeCanvas": [57, 67],
+        "visibleAlphaBounds": [10, 5, 47, 58],
+        "visibleSize": [37, 53],
+        "requiredSlopedBandPx": 73.8125
+      },
+      "exactSeatProof": {
+        "catalogRevision": 842,
+        "subjectGrid": [1, 1],
+        "slotY": -4,
+        "auditedSafeSlotYIntervals": {
+          "west": [-4.868, 1.916],
+          "north": [-5.993, 0.534]
+        },
+        "limitingReflectionInput": {
+          "family": "rook",
+          "palette": "navy-blue",
+          "sourceFacing": "north-east",
+          "sha256": "c396999a1cec31c94311548d47e662f61634132b82b8acb59e287cfc012e8356",
+          "path": "docs/art/wall-art-concepts/proof-inputs/accepted-rook-navy-north-east-c396999a.png",
+          "runtimeCanvas": [57, 67],
+          "visibleAlphaBounds": [15, 7, 42, 55]
+        },
+        "physicalInputs": {
+          "west": {
+            "facing": "south-east",
+            "sha256": "bbeeef7ea117a79e897ce3ec3d10ab51c887839e83c6a15ce877b32775a09ee0",
+            "path": "docs/art/wall-art-concepts/proof-inputs/accepted-rook-navy-south-east-bbeeef7e.png"
+          },
+          "north": {
+            "facing": "north-west",
+            "sha256": "f73fc4a08bb05269c4aacaa0675ec8f0fe70515361589055ea668978aac69e5b",
+            "path": "docs/art/wall-art-concepts/proof-inputs/accepted-rook-navy-north-west-f73fc4a0.png"
+          }
+        },
+        "reflectedFaceOrigins": {
+          "west": [16.5, 74.5147002],
+          "north": [70.5, 74.5147002]
+        },
+        "visibleAlphaPreserved": true,
+        "durableGate": "frontend/scripts/check-imagegen-gate.mjs"
+      },
+      "proof": "docs/art/wall-art-concepts/proofs/mirror-full-unit-fit-proof.png",
+      "runtime": "frontend/public/assets/wall-decor/mirror-grand-gallery.png",
+      "west": "frontend/public/assets/wall-decor/mirror-grand-gallery-west.png",
+      "north": "frontend/public/assets/wall-decor/mirror-grand-gallery-north.png",
+      "westGlass": "frontend/public/assets/wall-decor/mirror-grand-gallery-west-glass.png",
+      "northGlass": "frontend/public/assets/wall-decor/mirror-grand-gallery-north-glass.png"
+    },
+    {
+      "id": "mirror-grand-gallery-grounded",
+      "revises": "mirror-grand-gallery-tall",
+      "method": "Codex built-in image_gen precise-object edit on the tall Grand Gallery raw source, followed by the installed remove_chroma_key.py helper with border auto-key, soft matte, and despill",
+      "methodEvidence": "built-in image_gen call returned image in rollout",
+      "editTarget": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-tall-raw.png",
+      "prompt": "Use case: precise-object-edit. Asset type: production pixel-art game sprite for the same single continuous three-wall-span Grand Gallery mirror. Input images: Image 1 is the edit target and exact visual/material reference. Primary request: change only the mirror's vertical proportions. Keep the entire bottom rail, both bottom corner bosses, and their lower mounting baseline visually fixed as one unchanged assembly. Extend both side rails and the uninterrupted glass aperture substantially upward, then move the existing top rail and two top corner bosses upward. The final outer mirror bounding box should be slightly taller than it is wide, approximately 0.90:1 width-to-height, with a floor-to-near-ceiling usable glass opening. This is one continuous mirror, not panels. Style/medium: preserve the exact crisp high-resolution pixel-art language of Image 1. Materials/textures: preserve blackened iron, restrained aged-brass trim, four outer corner bosses, blue-gray silvered glass, broad stepped diagonal highlights, sparse foxing, scratches, and all existing material character. Composition/framing: show the complete mirror centered on a perfectly flat solid #00ff00 chroma-key background, with generous clear padding on every side; no part cropped. Constraints: change only the height/proportions and the extra upward continuation needed to support them; preserve rail thickness, boss size, colors, lighting, pixel scale, glass treatment, and bottom assembly. The glass must remain one large uninterrupted opening and extend almost to the bottom rail. No perspective. Avoid: moving or raising the bottom baseline; shrinking the rail/boss details; seams, mullions, dividers, repeated panels, triptych, tiled mirrors, extra bosses, a room scene or reflected objects, shadows, gradients or texture in the green background, text, logos, or watermark.",
+      "raw": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-grounded-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-grounded-alpha.png",
+      "alphaValidation": {
+        "canvas": [1182, 1330],
+        "bbox": [161, 61, 1022, 1245],
+        "transparentPixels": 567837,
+        "partialAlphaPixels": 4703,
+        "transparentCorners": true
+      }
+    },
+    {
+      "id": "mirror-grand-gallery-grounded-wide",
+      "revises": "mirror-grand-gallery-grounded",
+      "method": "Codex built-in image_gen precise-object edit on the grounded Grand Gallery raw source, followed by the installed remove_chroma_key.py helper with border auto-key, soft matte, and despill",
+      "methodEvidence": "built-in image_gen call returned image in rollout",
+      "editTarget": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-grounded-raw.png",
+      "prompt": "Use case: precise-object-edit. Asset type: production pixel-art game sprite for the same continuous three-wall Grand Gallery mirror. Input images: Image 1 is the edit target. Primary request: preserve the mirror's exact current height and fixed bottom baseline, but make the mirror approximately 24% wider by moving the two complete side-rail-and-corner-boss assemblies outward and extending only the uninterrupted top rail, bottom rail, glass, and diagonal glass highlights between them. The final outer-frame bounding box must be approximately 0.90:1 width-to-height. This is one panoramic three-wall mirror, just very tall. Style/medium: exact same crisp pixel-art rendering, pixel scale, colors, lighting, materials, rail thickness, boss size, foxing, scratches, and glass treatment as Image 1. Composition/framing: complete object centered on a perfectly flat solid #00ff00 chroma-key background with clear padding; no crop. Constraints: change only horizontal span. Keep top and bottom heights, bottom mounting baseline, rail thickness, and every vertical proportion unchanged. Keep one uninterrupted glass opening. Avoid: narrowing or shortening the mirror; moving the bottom baseline; rescaling the corner bosses or rail thickness; seams, mullions, dividers, repeated panels, triptych, extra bosses, perspective, reflected room objects, shadows, textured/gradient green background, text, logos, watermark.",
+      "raw": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-grounded-wide-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-grounded-wide-alpha.png",
+      "alphaValidation": {
+        "canvas": [1182, 1331],
+        "bbox": [89, 91, 1091, 1258],
+        "transparentPixels": 421062,
+        "partialAlphaPixels": 6324,
+        "transparentCorners": true
+      },
+      "build": {
+        "normalizedFrame": [216, 252],
+        "projectedSurface": [144, 168],
+        "mount": [108, 215],
+        "westFaceMount": [180, 215],
+        "northFaceMount": [36, 215],
+        "runtimeFaces": {
+          "west": { "size": [142, 240], "mount": [119, 152] },
+          "north": { "size": [142, 240], "mount": [23, 152] }
+        },
+        "runtimeSlotTargets": {
+          "west": [42, 72],
+          "north": [84, 72]
+        },
+        "wallFrame": {
+          "size": [128, 336],
+          "anchor": [64, 192],
+          "wallHeight": 160,
+          "frameCanvasTopHeadroomPx": 16
+        },
+        "mirrorCoverage": "full-body",
+        "apertureUv": [[0.05, 0.04], [0.95, 0.04], [0.95, 0.96], [0.05, 0.96]],
+        "projectedApertureEdgePx": 154.56,
+        "relativeMaterialDeformation": 0.001714
+      },
+      "exactSeatProof": {
+        "subjectGrid": [1, 1],
+        "slotY": 72,
+        "limitingReflectionInput": {
+          "family": "rook",
+          "palette": "navy-blue",
+          "sourceFacing": "north-east",
+          "sha256": "c396999a1cec31c94311548d47e662f61634132b82b8acb59e287cfc012e8356",
+          "path": "docs/art/wall-art-concepts/proof-inputs/accepted-rook-navy-north-east-c396999a.png"
+        },
+        "reflectedFaceOrigins": {
+          "west": [16.5, 69.5147002],
+          "north": [70.5, 69.5147002]
+        },
+        "visibleAlphaPreserved": true
+      },
+      "semanticLineOfSightProof": {
+        "rule": "physical destination alpha translated to west x=-0.5 along grid X or north y=-0.5 along grid Y; wall hits strictly below the generated back-edge/floor seam are floor-occluded before glass/support classification",
+        "physicalInput": {
+          "family": "knight",
+          "palette": "navy-blue",
+          "facing": "west",
+          "sha256": "f40b46bb3e70bf3378fc29a8a06f85371a4fd278b160e069a6fb494e71ee7343",
+          "path": "docs/art/wall-art-concepts/proof-inputs/accepted-knight-navy-west-f40b46bb.png",
+          "sourceCanvas": [512, 512],
+          "runtimeDraw": [78, 92]
+        },
+        "supportBoundary": {
+          "source": "WALL_FRAME_GEOMETRY.backEdgeApexOffsetY",
+          "backEdgeApexOffsetY": -28,
+          "west": "y = -28 - (27 / 48) * x",
+          "north": "y = -28 + (27 / 48) * x"
+        },
+        "west": { "supportedGlass": 1007, "floorOccluded": 114, "failures": 0, "visible": 1121 },
+        "north": { "supportedGlass": 1004, "floorOccluded": 117, "failures": 0, "visible": 1121 },
+        "wallFaceSupportUnionCheckedInStudio": true,
+        "durableGate": "frontend/scripts/check-imagegen-gate.mjs"
+      },
+      "proof": "docs/art/wall-art-concepts/proofs/mirror-full-unit-fit-proof.png",
+      "runtime": "frontend/public/assets/wall-decor/mirror-grand-gallery.png",
+      "west": "frontend/public/assets/wall-decor/mirror-grand-gallery-west.png",
+      "north": "frontend/public/assets/wall-decor/mirror-grand-gallery-north.png",
+      "westGlass": "frontend/public/assets/wall-decor/mirror-grand-gallery-west-glass.png",
+      "northGlass": "frontend/public/assets/wall-decor/mirror-grand-gallery-north-glass.png"
+    }
+  ]
+}

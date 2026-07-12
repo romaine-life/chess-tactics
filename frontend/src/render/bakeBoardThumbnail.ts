@@ -22,6 +22,7 @@ export {
 };
 
 type Canvas2D = HTMLCanvasElement | OffscreenCanvas;
+type ThumbnailContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
 
@@ -80,64 +81,119 @@ async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ c
   for (const op of ops) {
     const img = images.get(op.src);
     if (!img) continue;
-    paintOp(ctx, img, op, bounds, scale);
+    paintBoardThumbnailOp(ctx, img, op, bounds, scale);
   }
   return { canvas, bounds };
 }
 
-function paintOp(
-  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+function withOpacity(ctx: ThumbnailContext, opacity: number | undefined, draw: () => void): void {
+  const factor = opacity == null ? 1 : Math.max(0, Math.min(1, opacity));
+  if (factor >= 1) {
+    draw();
+    return;
+  }
+  const previous = ctx.globalAlpha;
+  ctx.globalAlpha = previous * factor;
+  try {
+    draw();
+  } finally {
+    ctx.globalAlpha = previous;
+  }
+}
+
+function withClipPolygons(
+  ctx: ThumbnailContext,
+  op: BoardDrawOp,
+  bounds: BakeBounds,
+  scale: number,
+  draw: () => void,
+): void {
+  if (!op.clipPolygons?.length) {
+    draw();
+    return;
+  }
+  ctx.save();
+  ctx.beginPath();
+  for (const polygon of op.clipPolygons) {
+    if (polygon.length < 6) continue;
+    ctx.moveTo((polygon[0] - bounds.minX) * scale, (polygon[1] - bounds.minY) * scale);
+    for (let index = 2; index + 1 < polygon.length; index += 2) {
+      ctx.lineTo((polygon[index] - bounds.minX) * scale, (polygon[index + 1] - bounds.minY) * scale);
+    }
+    ctx.closePath();
+  }
+  ctx.clip();
+  try {
+    draw();
+  } finally {
+    ctx.restore();
+  }
+}
+
+function withFlipX(
+  ctx: ThumbnailContext,
+  op: BoardDrawOp,
+  bounds: BakeBounds,
+  scale: number,
+  draw: (dx: number, dy: number) => void,
+): void {
+  const dx = (op.dx - bounds.minX) * scale;
+  const dy = (op.dy - bounds.minY) * scale;
+  if (!op.flipX) {
+    draw(dx, dy);
+    return;
+  }
+  ctx.save();
+  ctx.translate(dx + op.dw * scale, dy);
+  ctx.scale(-1, 1);
+  try {
+    draw(0, 0);
+  } finally {
+    ctx.restore();
+  }
+}
+
+export function paintBoardThumbnailOp(
+  ctx: ThumbnailContext,
   img: HTMLImageElement,
   op: BoardDrawOp,
   bounds: BakeBounds,
   scale: number,
 ): void {
-  const clipped = Boolean(op.clipPolygons?.length);
-  if (clipped) {
-    ctx.save();
-    ctx.beginPath();
-    for (const polygon of op.clipPolygons ?? []) {
-      if (polygon.length < 6) continue;
-      ctx.moveTo((polygon[0] - bounds.minX) * scale, (polygon[1] - bounds.minY) * scale);
-      for (let index = 2; index + 1 < polygon.length; index += 2) {
-        ctx.lineTo((polygon[index] - bounds.minX) * scale, (polygon[index + 1] - bounds.minY) * scale);
-      }
-      ctx.closePath();
-    }
-    ctx.clip();
-  }
-  try {
-    if (op.contain) {
-      const boxW = Math.min(op.dw, UNIT_IMG_MAX_W);
-      const boxH = Math.min(op.dh, UNIT_IMG_MAX_H);
-      const natW = img.naturalWidth || boxW;
-      const natH = img.naturalHeight || boxH;
-      const fit = Math.min(boxW / natW, boxH / natH);
-      const w = natW * fit;
-      const h = natH * fit;
-      const cx = op.dx + (op.dw - w) / 2;
-      const cy = op.dy + (op.dh - h) / 2;
-      ctx.drawImage(img, (cx - bounds.minX) * scale, (cy - bounds.minY) * scale, w * scale, h * scale);
-      return;
-    }
-    if (op.sw != null) {
-      ctx.drawImage(
-        img,
-        op.sx ?? 0,
-        op.sy ?? 0,
-        op.sw,
-        op.sh ?? op.dh,
-        (op.dx - bounds.minX) * scale,
-        (op.dy - bounds.minY) * scale,
-        op.dw * scale,
-        op.dh * scale,
-      );
-      return;
-    }
-    ctx.drawImage(img, (op.dx - bounds.minX) * scale, (op.dy - bounds.minY) * scale, op.dw * scale, op.dh * scale);
-  } finally {
-    if (clipped) ctx.restore();
-  }
+  withOpacity(ctx, op.opacity, () => {
+    withClipPolygons(ctx, op, bounds, scale, () => {
+      withFlipX(ctx, op, bounds, scale, (dx, dy) => {
+        if (op.contain) {
+          const boxW = Math.min(op.dw, UNIT_IMG_MAX_W);
+          const boxH = Math.min(op.dh, UNIT_IMG_MAX_H);
+          const natW = img.naturalWidth || boxW;
+          const natH = img.naturalHeight || boxH;
+          const fit = Math.min(boxW / natW, boxH / natH);
+          const w = natW * fit;
+          const h = natH * fit;
+          const cx = dx + (op.dw - w) * scale / 2;
+          const cy = dy + (op.dh - h) * scale / 2;
+          ctx.drawImage(img, cx, cy, w * scale, h * scale);
+          return;
+        }
+        if (op.sw != null) {
+          ctx.drawImage(
+            img,
+            op.sx ?? 0,
+            op.sy ?? 0,
+            op.sw,
+            op.sh ?? op.dh,
+            dx,
+            dy,
+            op.dw * scale,
+            op.dh * scale,
+          );
+          return;
+        }
+        ctx.drawImage(img, dx, dy, op.dw * scale, op.dh * scale);
+      });
+    });
+  });
 }
 
 export async function bakeBoardThumbnail(board: EditorBoard, opts?: { scale?: number }): Promise<Blob> {

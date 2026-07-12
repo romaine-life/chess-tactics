@@ -158,6 +158,86 @@ async function paintTitleBar(ctx, frontendDir, screenName, loadDynamicSprite) {
   ctx.shadowOffsetY = 0;
 }
 
+function withOpacity(ctx, opacity, draw) {
+  const factor = opacity == null ? 1 : Math.max(0, Math.min(1, opacity));
+  if (factor >= 1) {
+    draw();
+    return;
+  }
+  const previous = ctx.globalAlpha;
+  ctx.globalAlpha = previous * factor;
+  try {
+    draw();
+  } finally {
+    ctx.globalAlpha = previous;
+  }
+}
+
+function withClipPolygons(ctx, op, originX, originY, fitBounds, scale, draw) {
+  if (!Array.isArray(op.clipPolygons) || op.clipPolygons.length === 0) {
+    draw();
+    return;
+  }
+  ctx.save();
+  ctx.beginPath();
+  for (const polygon of op.clipPolygons) {
+    if (!Array.isArray(polygon) || polygon.length < 6) continue;
+    ctx.moveTo(originX + (polygon[0] - fitBounds.minX) * scale, originY + (polygon[1] - fitBounds.minY) * scale);
+    for (let index = 2; index + 1 < polygon.length; index += 2) {
+      ctx.lineTo(originX + (polygon[index] - fitBounds.minX) * scale, originY + (polygon[index + 1] - fitBounds.minY) * scale);
+    }
+    ctx.closePath();
+  }
+  ctx.clip();
+  try {
+    draw();
+  } finally {
+    ctx.restore();
+  }
+}
+
+function withFlipX(ctx, op, originX, originY, fitBounds, scale, draw) {
+  const dx = originX + (op.dx - fitBounds.minX) * scale;
+  const dy = originY + (op.dy - fitBounds.minY) * scale;
+  if (!op.flipX) {
+    draw(dx, dy);
+    return;
+  }
+  ctx.save();
+  ctx.translate(dx + op.dw * scale, dy);
+  ctx.scale(-1, 1);
+  try {
+    draw(0, 0);
+  } finally {
+    ctx.restore();
+  }
+}
+
+function paintBoardThumbnailOp(ctx, img, op, originX, originY, fitBounds, scale) {
+  withOpacity(ctx, op.opacity, () => {
+    withClipPolygons(ctx, op, originX, originY, fitBounds, scale, () => {
+      withFlipX(ctx, op, originX, originY, fitBounds, scale, (dx, dy) => {
+        if (op.contain) {
+          const boxW = op.dw;
+          const boxH = op.dh;
+          const natW = img.width || boxW;
+          const natH = img.height || boxH;
+          const fit = Math.min(boxW / natW, boxH / natH);
+          const w = natW * fit;
+          const h = natH * fit;
+          const cx = dx + (op.dw - w) * scale / 2;
+          const cy = dy + (op.dh - h) * scale / 2;
+          ctx.drawImage(img, cx, cy, w * scale, h * scale);
+        } else if (op.sw != null) {
+          ctx.drawImage(img, op.sx || 0, op.sy || 0, op.sw, op.sh || op.dh, dx, dy, op.dw * scale, op.dh * scale);
+        } else {
+          ctx.drawImage(img, dx, dy, op.dw * scale, op.dh * scale);
+        }
+      });
+    });
+  });
+}
+
 async function renderLevelCard({ plan, frontendDir, title, subtitle, screenName, backgroundSrc, loadDynamicSprite }) {
   ensureFont(frontendDir);
   const canvas = createCanvas(CARD_W, CARD_H);
@@ -188,42 +268,7 @@ async function renderLevelCard({ plan, frontendDir, title, subtitle, screenName,
   for (const op of ops) {
     const img = images.get(op.src);
     if (!img) continue;
-    const dx = originX + (op.dx - fitBounds.minX) * scale;
-    const dy = originY + (op.dy - fitBounds.minY) * scale;
-    const clipped = Array.isArray(op.clipPolygons) && op.clipPolygons.length > 0;
-    if (clipped) {
-      ctx.save();
-      ctx.beginPath();
-      for (const polygon of op.clipPolygons) {
-        if (!Array.isArray(polygon) || polygon.length < 6) continue;
-        ctx.moveTo(originX + (polygon[0] - fitBounds.minX) * scale, originY + (polygon[1] - fitBounds.minY) * scale);
-        for (let index = 2; index + 1 < polygon.length; index += 2) {
-          ctx.lineTo(originX + (polygon[index] - fitBounds.minX) * scale, originY + (polygon[index + 1] - fitBounds.minY) * scale);
-        }
-        ctx.closePath();
-      }
-      ctx.clip();
-    }
-    try {
-      if (op.contain) {
-        const boxW = op.dw;
-        const boxH = op.dh;
-        const natW = img.width || boxW;
-        const natH = img.height || boxH;
-        const fit = Math.min(boxW / natW, boxH / natH);
-        const w = natW * fit;
-        const h = natH * fit;
-        const cx = op.dx + (op.dw - w) / 2;
-        const cy = op.dy + (op.dh - h) / 2;
-        ctx.drawImage(img, originX + (cx - fitBounds.minX) * scale, originY + (cy - fitBounds.minY) * scale, w * scale, h * scale);
-      } else if (op.sw != null) {
-        ctx.drawImage(img, op.sx || 0, op.sy || 0, op.sw, op.sh || op.dh, dx, dy, op.dw * scale, op.dh * scale);
-      } else {
-        ctx.drawImage(img, dx, dy, op.dw * scale, op.dh * scale);
-      }
-    } finally {
-      if (clipped) ctx.restore();
-    }
+    paintBoardThumbnailOp(ctx, img, op, originX, originY, fitBounds, scale);
   }
   ctx.restore();
 
@@ -249,4 +294,4 @@ async function renderLevelCard({ plan, frontendDir, title, subtitle, screenName,
   return canvas.toBuffer('image/png');
 }
 
-module.exports = { renderLevelCard, CARD_W, CARD_H };
+module.exports = { renderLevelCard, paintBoardThumbnailOp, CARD_W, CARD_H };
