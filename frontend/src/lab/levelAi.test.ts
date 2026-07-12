@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { MATERIAL_SEARCH, type AiApproachId } from '../game/aiApproach';
 import {
-  clearLevelAiApproach, migrateLevelAi, sanitizeLevelAi, setLevelAiApproach,
+  clearLevelAiApproach, migrateLevelAi, pointLevelAi, sanitizeLevelAi, setLevelAiApproach,
   type BooksBlob, type LevelAiDoc,
 } from './openingBooks';
 import type { TdAdoptionRecord } from './tdSession';
@@ -55,6 +55,37 @@ describe('setLevelAiApproach / clearLevelAiApproach', () => {
     const set = setLevelAiApproach(bare, MATERIAL_SEARCH, { vector: [1] });
     expect(clearLevelAiApproach(set, MATERIAL_SEARCH).levelAi).toBeUndefined();
     expect(clearLevelAiApproach(bare, MATERIAL_SEARCH)).toBe(bare);
+  });
+});
+
+describe('pointLevelAi — the approach picker verb (repoint, never destroy)', () => {
+  const future = 'future-approach' as AiApproachId;
+
+  it('switching to stock unsets live but KEEPS every config, so switching back restores the values', () => {
+    const set = setLevelAiApproach(bare, MATERIAL_SEARCH, { vector: [1, 2] });
+    const toStock = pointLevelAi(set, null);
+    expect(toStock.levelAi).toEqual({ approaches: { 'material-search': { vector: [1, 2] } } });
+    const back = pointLevelAi(toStock, MATERIAL_SEARCH);
+    expect(back.levelAi).toEqual({ live: 'material-search', approaches: { 'material-search': { vector: [1, 2] } } });
+  });
+
+  it('repoints between two adopted approaches without touching either config', () => {
+    const both = setLevelAiApproach(
+      setLevelAiApproach(bare, future, { vector: [9] }),
+      MATERIAL_SEARCH, { vector: [1] },
+    );
+    const toFuture = pointLevelAi(both, future);
+    expect(toFuture.levelAi?.live).toBe(future);
+    const expected: Record<string, { vector: number[] }> = { 'future-approach': { vector: [9] }, 'material-search': { vector: [1] } };
+    expect(toFuture.levelAi?.approaches).toEqual(expected);
+  });
+
+  it('pointing at an approach with no config on this level is a no-op (nothing to put in force)', () => {
+    expect(pointLevelAi(bare, MATERIAL_SEARCH)).toBe(bare);
+    const set = setLevelAiApproach(bare, MATERIAL_SEARCH, { vector: [1] });
+    expect(pointLevelAi(set, future)).toBe(set);           // future has no config
+    expect(pointLevelAi(set, MATERIAL_SEARCH)).toBe(set);  // already live
+    expect(pointLevelAi(bare, null)).toBe(bare);           // already stock
   });
 });
 

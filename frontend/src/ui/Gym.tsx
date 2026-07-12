@@ -35,10 +35,10 @@ import { drawRulesForLevel } from '../core/levelEvents';
 import { setAdoptedWeights, readAdoptedVector, readShippedVector } from '../game/adoptedWeights';
 import { ClusterRuns } from './ClusterRuns';
 import {
-  emptyBlob, makeNewBook, deleteBook, updateBook, setLevelAiApproach, clearLevelAiApproach,
+  emptyBlob, makeNewBook, deleteBook, updateBook, setLevelAiApproach, clearLevelAiApproach, pointLevelAi,
   DEFAULT_BOOK_SETTINGS, type BooksBlob, type GymSession,
 } from '../lab/openingBooks';
-import { AI_APPROACHES, MATERIAL_SEARCH } from '../game/aiApproach';
+import { AI_APPROACHES, MATERIAL_SEARCH, type AiApproachId } from '../game/aiApproach';
 import { loadOpeningBooks, saveOpeningBooks } from '../net/openingBooks';
 import { HttpError } from '../net/http';
 
@@ -206,8 +206,9 @@ const GYM_CSS = `
 /* Adopt + live-AI audit blocks. */
 .gym-td-adopt, .gym-td-liveai { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; }
 .gym-td-liveai { border-top:1px solid #29323f; padding-top:10px; }
-.gym-td-liveai-tier { margin:0; font-size:12px; color:#93a0b0; }
+.gym-td-liveai-tier { margin:0; font-size:12px; color:#93a0b0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .gym-td-liveai-tier b { color:#8ff0dc; }
+.gym-td-liveai-tier select { background:#0c1116; color:#8ff0dc; border:1px solid #3a4657; border-radius:4px; padding:5px 8px; font-size:12px; font-weight:700; }
 .gym-td-liveai-vals { margin:0; font:12px ui-monospace,monospace; color:#e7ebf0; }
 .gym-td-liveai-vals.dim { color:#5c6875; }
 /* Probe history: the learning curve as running numbers. */
@@ -1485,6 +1486,19 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setAdoptedVec(null);
     commit(clearLevelAiApproach(blobRef.current, MATERIAL_SEARCH));
   }, [levelId, loadingBooks, commit]);
+  // The approach picker's verb: repoint WHICH approach the level plays (null =
+  // stock). Non-destructive — every approach keeps its tuned values, so flipping
+  // to stock and back restores them; "clear adoption" is the discard. Same
+  // load-settled gate as the other verbs.
+  const tdSwitchApproach = useCallback((id: AiApproachId | null) => {
+    if (!levelId || loadingBooks) return;
+    const next = pointLevelAi(blobRef.current, id);
+    const cfg = id !== null ? next.levelAi?.approaches[id] : undefined;
+    if (id !== null && !cfg) return; // nothing adopted on that approach yet
+    setAdoptedWeights(levelId, cfg ? cfg.vector : null);
+    setAdoptedVec(cfg ? cfg.vector : null);
+    if (next !== blobRef.current) commit(next);
+  }, [levelId, loadingBooks, commit]);
   // What the live opponent will actually use on this level, resolved tier by tier —
   // the audit read. `adoptedVec` mirrors localStorage + the account blob; the live
   // record comes from the live APPROACH's config (falling back to a vector-match
@@ -1507,7 +1521,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     // boundary, but a render must survive one regardless (no ErrorBoundary above).
     const liveId = blob.levelAi?.live && blob.levelAi.live in AI_APPROACHES ? blob.levelAi.live : MATERIAL_SEARCH;
     const approach = AI_APPROACHES[liveId];
-    const approachName = adoptedVec ? approach.name : 'material search (stock)';
+    // The picker (the <select>) is the approach name in the render; here we only
+    // carry the value SOURCE tier and the technique line beside it.
     const tier = adoptedVec
       ? (record ? 'your values — set from this pane' : 'your values — set from the Training tab')
       : shipped ? 'globally shipped values' : 'built-in default values';
@@ -1516,7 +1531,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     const fromRunId = record?.runId ?? null;
     const runStillExists = fromRunId !== null && (blob.tdRuns?.runs ?? []).some((r) => r.id === fromRunId);
     return {
-      tier, approachName, technique: approach.technique, pieceValues,
+      tier, technique: approach.technique, pieceValues,
       hasAdoption: !!adoptedVec, usingDefaults: !vec,
       adoption: record ?? null,
       fromRunId: runStillExists ? fromRunId : null,
@@ -2262,7 +2277,27 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                 {level ? (
                   <div className="gym-td-liveai" aria-label="This level's AI">
                     <h3>This level&apos;s AI</h3>
-                    <p className="gym-td-liveai-tier">plays <b>{tdLiveAi.approachName}</b> — <b>{tdLiveAi.tier}</b></p>
+                    <p className="gym-td-liveai-tier">
+                      plays{' '}
+                      <select
+                        aria-label="AI approach"
+                        value={blob.levelAi?.live ?? 'stock'}
+                        disabled={loadingBooks}
+                        onChange={(e) => tdSwitchApproach(e.target.value === 'stock' ? null : (e.target.value as AiApproachId))}
+                      >
+                        <option value="stock">Stock — shipped/default values</option>
+                        {(Object.keys(AI_APPROACHES) as AiApproachId[]).map((id) => {
+                          const has = !!blob.levelAi?.approaches[id];
+                          return (
+                            <option key={id} value={id} disabled={!has}>
+                              {AI_APPROACHES[id].name}{has ? ' — your tuned values' : ' — nothing adopted yet'}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <b>{tdLiveAi.tier}</b>
+                    </p>
+                    <p className="gym-hint">every approach keeps its own tuned values — switching here repoints the level and switching back restores them; a new approach will appear in this picker beside this one</p>
                     <p className="gym-hint">{tdLiveAi.technique}</p>
                     <p className="gym-td-liveai-vals">
                       {PLAYABLE_PIECE_TYPES.map((t) => `${pieceInitial(t)} ${Math.round(tdLiveAi.pieceValues[t] * 100) / 100}`).join(' · ')}

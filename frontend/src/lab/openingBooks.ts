@@ -149,6 +149,23 @@ export function setLevelAiApproach(blob: BooksBlob, id: AiApproachId, config: Ai
   return { ...blob, levelAi: { live: id, approaches: { ...blob.levelAi?.approaches, [id]: config } } };
 }
 
+/** Repoint which approach is in force WITHOUT touching any config — the approach
+ * picker's verb. `null` = stock (live unset, every approach's tuned values kept, so
+ * switching back restores them); an id with no config on this level is a no-op
+ * (there is nothing to put in force). Destroying values is a different verb:
+ * clearLevelAiApproach. */
+export function pointLevelAi(blob: BooksBlob, id: AiApproachId | null): BooksBlob {
+  const cur = blob.levelAi;
+  if (id === null) {
+    if (!cur?.live) return blob;
+    const { live: _unset, ...rest } = cur;
+    return { ...blob, levelAi: rest };
+  }
+  if (!cur?.approaches[id]) return blob;
+  if (cur.live === id) return blob;
+  return { ...blob, levelAi: { ...cur, live: id } };
+}
+
 /** Drop one approach's config (the owner cleared it). If it was the live one the
  * level falls back to stock; an emptied document is removed entirely. */
 export function clearLevelAiApproach(blob: BooksBlob, id: AiApproachId): BooksBlob {
