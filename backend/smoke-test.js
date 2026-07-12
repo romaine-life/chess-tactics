@@ -1604,7 +1604,10 @@ async function main() {
     || !Number.isInteger(completeReadinessBody.catalogRevision)
     || completeReadinessBody.propSeatsRevision !== 1
     || !Number.isInteger(completeReadinessBody.unitCatalogRevision)
-  ) throw new Error(`Complete renderer snapshot was not ready: ${completeReadiness.statusCode} ${completeReadiness.body}`);
+  ) throw new Error(
+    `Complete renderer snapshot was not ready: ${completeReadiness.statusCode} ${completeReadiness.body}\n`
+    + `Recent backend output:\n${output.slice(-4000)}`,
+  );
 
   // The live prop document remains independently availability-critical. Its
   // restoration uses the same explicit synthetic DB fixture, never a Git seed.
