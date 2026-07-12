@@ -23,20 +23,22 @@ import { stateAtPosition, type BookPosition, type OpeningBookSettings } from '..
 import type { GymRequest, GymResponse } from '../lab/gymWorker';
 import type { StepProgress } from '../lab/gymStep';
 import type { ValState } from '../lab/validate';
-import type { TdRequest, TdResponse, TdRunConfig, TdSession } from '../lab/tdWorker';
-import { freshTdSession } from '../lab/tdSession';
+import type { TdProbe, TdRequest, TdResponse, TdRunConfig, TdSession } from '../lab/tdWorker';
+import { freshTdSession, upsertTdRun, type TdAdoptionRecord, type TdRunDoc, type TdSessionDoc } from '../lab/tdSession';
 import {
   DEFAULT_PROBE_GAMES, DEFAULT_TRAIN_OPTIONS, pawnRelativeValues, previewNextGame, scheduleAt,
   type SeedSummary, type TdGameRecord, type TrainOptions, type ValueWeights,
 } from '../game/tdValues';
+import { pieceInitial, sanForGame, sanFullMoves } from '../game/sanNotation';
 import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
 import { drawRulesForLevel } from '../core/levelEvents';
-import { setAdoptedWeights, readAdoptedVector } from '../game/adoptedWeights';
+import { setAdoptedWeights, readAdoptedVector, readShippedVector } from '../game/adoptedWeights';
 import { ClusterRuns } from './ClusterRuns';
 import {
-  emptyBlob, makeNewBook, deleteBook, updateBook,
+  emptyBlob, makeNewBook, deleteBook, updateBook, setLevelAiApproach, clearLevelAiApproach, pointLevelAi,
   DEFAULT_BOOK_SETTINGS, type BooksBlob, type GymSession,
 } from '../lab/openingBooks';
+import { AI_APPROACHES, MATERIAL_SEARCH, type AiApproachId } from '../game/aiApproach';
 import { loadOpeningBooks, saveOpeningBooks } from '../net/openingBooks';
 import { HttpError } from '../net/http';
 
@@ -187,9 +189,73 @@ const GYM_CSS = `
 /* Focus mode's move list: every played ply, clickable, current highlighted. */
 .gym-replay-focus-view.is-values { grid-template-columns:minmax(0,1fr) 250px; grid-template-rows:minmax(0,1fr); gap:10px; }
 .gym-replay-movelist { min-height:0; overflow-y:auto; border:1px solid #29323f; border-radius:8px; background:#0b1016; padding:6px; display:flex; flex-direction:column; gap:1px; }
-.gym-replay-movelist button { text-align:left; border:0; background:none; color:#93a0b0; font:11px ui-monospace,monospace; padding:3px 6px; border-radius:4px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gym-replay-movelist button { text-align:left; border:0; background:none; color:#93a0b0; font:12px ui-monospace,monospace; padding:3px 6px; border-radius:4px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .gym-replay-movelist button:hover { background:#161d26; color:#c6d0dc; }
 .gym-replay-movelist button.is-current { background:#212b37; color:#e7ebf0; }
+/* Score sheet: numbered full moves, each half-move a jump target. */
+.gym-score-row { display:grid; grid-template-columns:34px minmax(0,1fr) minmax(0,1fr); align-items:center; gap:2px; }
+.gym-score-row .n { color:#5c6875; font:12px ui-monospace,monospace; text-align:right; padding-right:4px; }
+.gym-score-row .gap { color:#5c6875; font:12px ui-monospace,monospace; padding:3px 6px; }
+.gym-score-start { margin-bottom:2px; }
+/* The game ledger: one row per game, newest first, scrolling in place. */
+.gym-td-ledger { flex:0 0 auto; display:flex; flex-direction:column; gap:4px; }
+.gym-td-ledger-wrap { max-height:220px; overflow-y:auto; }
+.gym-td-ledger td.w { color:#5ad19a; } .gym-td-ledger td.d { color:#e0b24a; } .gym-td-ledger td.l { color:#e0685f; }
+.gym-td-ledger td.delta { text-align:right; white-space:nowrap; }
+.gym-td-ledger td.delta.up { color:#5ad19a; } .gym-td-ledger td.delta.dn { color:#e0685f; } .gym-td-ledger td.delta.z { color:#5c6875; }
+/* Adopt + live-AI audit blocks. */
+.gym-td-adopt, .gym-td-liveai { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; }
+.gym-td-liveai { border-top:1px solid #29323f; padding-top:10px; }
+.gym-td-liveai-tier { margin:0; font-size:12px; color:#93a0b0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.gym-td-liveai-tier b { color:#8ff0dc; }
+.gym-td-liveai-tier select { background:#0c1116; color:#8ff0dc; border:1px solid #3a4657; border-radius:4px; padding:5px 8px; font-size:12px; font-weight:700; }
+.gym-td-liveai-vals { margin:0; font:12px ui-monospace,monospace; color:#e7ebf0; }
+.gym-td-liveai-vals.dim { color:#5c6875; }
+/* Probe history: the learning curve as running numbers. */
+.gym-td-probelog { display:flex; flex-direction:column; gap:4px; font-size:11px; color:#93a0b0; }
+.gym-td-probelog .h { color:#5c6875; }
+.gym-td-probelog .rows { display:flex; flex-wrap:wrap; gap:4px 14px; max-height:66px; overflow-y:auto; font-family:ui-monospace,monospace; }
+/* The pane's documentation view. */
+.gym-td-help { flex:1 1 auto; min-height:0; overflow-y:auto; max-width:88ch; color:#c6d0dc; font-size:13px; line-height:1.55; padding-right:8px; }
+.gym-td-help-head { display:flex; align-items:center; gap:12px; }
+.gym-td-help-head h3 { flex:1 1 auto; margin:0; }
+.gym-td-help h4 { margin:16px 0 4px; color:#93a0b0; font-size:13px; }
+.gym-td-help p { margin:4px 0; }
+.gym-td-help ul { margin:4px 0; padding-left:20px; }
+.gym-td-help li { margin:3px 0; }
+.gym-td-help b { color:#e7ebf0; }
+.gym-td-help-keys b { font-family:ui-monospace,monospace; background:#161d26; border:1px solid #29323f; border-radius:4px; padding:1px 5px; }
+/* ⇄ compare — one column per run; row-label th cells stick LEFT (not top), section
+   rows band the table, and highlighted rows mark settings that differ across runs. */
+.gym-td-compare { flex:1 1 auto; min-height:0; overflow-y:auto; padding-right:8px; }
+.gym-td-compare > .gym-hint { display:block; margin:4px 0 10px; }
+.gym-td-compare-table thead th { text-align:right; white-space:nowrap; }
+.gym-td-compare-table thead th:first-child { left:0; z-index:2; }
+.gym-td-compare-table thead th.is-open { color:#8ff0dc; }
+.gym-td-compare-table tbody th { position:sticky; top:auto; left:0; background:#0b1016; color:#93a0b0; text-align:left; font-weight:600; padding:5px 12px; border-bottom:1px solid #141b23; white-space:nowrap; }
+.gym-td-compare-table tbody td { white-space:nowrap; }
+.gym-td-compare-table tr.sect th { position:sticky; left:0; background:#161d26; color:#5c6875; text-align:left; padding-top:8px; white-space:normal; }
+.gym-td-compare-table tr.differs th, .gym-td-compare-table tr.differs td { color:#e0b24a; }
+.gym-td-compare-table td.na { color:#5c6875; }
+/* Watch tempo. */
+.gym-td-speed { display:flex; align-items:center; gap:8px; font-size:12px; color:#93a0b0; margin-top:2px; }
+.gym-td-speed input[type=range] { flex:1 1 auto; min-width:0; }
+.gym-td-speed .gym-num { min-width:34px; text-align:right; }
+/* The stage's own throttle — the same knob as the rail's, mirrored. */
+.gym-replay-tempo { display:flex; align-items:center; gap:6px; font-size:11px; color:#93a0b0; }
+.gym-replay-tempo input[type=range] { width:90px; min-width:0; }
+.gym-replay-tempo .gym-num { min-width:32px; text-align:right; }
+/* Label-toggling buttons hold a FIXED width so ▶/⏸ swaps never shift their neighbours.
+   The watch button needs the extra selector weight to beat the rail's
+   .tileset-control-stack button { min-width:0 }. */
+.gym-replay-playout-btn { width:90px; text-align:center; }
+.gym-controls .gym-run-row .gym-td-watch-btn { min-width:96px; text-align:center; }
+/* Transport buttons NEVER shrink or letter-wrap (the control stack's
+   overflow-wrap:anywhere would sliver them one character per line when squeezed);
+   when the row is tight, whole buttons flow to the next line instead. The compound
+   selector outweighs .tileset-control-stack button. */
+.gym-run-row { flex-wrap:wrap; row-gap:8px; }
+.tileset-view-controls.gym-controls .gym-run-row button { flex:0 0 auto; white-space:nowrap; overflow-wrap:normal; }
 @media (max-width:1180px) { .gym-td-split.has-stage { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(320px,1fr); } }
 @media (max-width:980px) {
   .gym-run-detail.has-replay { grid-template-columns:1fr; grid-template-rows:minmax(180px,.45fr) minmax(300px,1fr); }
@@ -310,6 +376,12 @@ export function GymCatalog({ search, selected, onSelect }: { search: string; sel
 
 const REF_VEC = encodeWeights(DEFAULT_EVAL_WEIGHTS);
 
+/** Exact vector equality for the adoption reads (JSON round-trips preserve the
+ * doubles). Defensive on `a`: persisted adoption records are compared here, and a
+ * malformed one must read as "different", never throw in render. */
+const sameVec = (a: unknown, b: readonly number[]): boolean =>
+  Array.isArray(a) && a.length === b.length && a.every((v, i) => v === b[i]);
+
 // --- TD piece-value learner (the `values` mode) ------------------------------------
 /** Every knob the learner exposes — complete vs TrainOptions (games, seed, λ, ε/α
  * schedules, ply cap, initial weight, update rule, probe cadence) plus the seed fold.
@@ -344,6 +416,17 @@ const tdOptionsOf = (k: TdKnobs): TrainOptions => ({
   initialWeight: k.initialWeight, monteCarlo: k.monteCarlo,
   probeEvery: k.probeEvery, probeGames: k.probeGames,
 });
+/** tdOptionsOf's inverse — a restored session document carries its exact schedule. */
+const tdKnobsOfDoc = (opts: TrainOptions, seedCount: number): TdKnobs => ({
+  games: opts.games, seed: opts.seed,
+  seedCount: Number.isInteger(seedCount) && seedCount >= 1 ? seedCount : TD_KNOB_DEFAULTS.seedCount,
+  lambda: opts.lambda ?? TD_KNOB_DEFAULTS.lambda,
+  epsStart: opts.epsilon?.start ?? TD_KNOB_DEFAULTS.epsStart, epsEnd: opts.epsilon?.end ?? TD_KNOB_DEFAULTS.epsEnd,
+  alphaStart: opts.alpha?.start ?? TD_KNOB_DEFAULTS.alphaStart, alphaEnd: opts.alpha?.end ?? TD_KNOB_DEFAULTS.alphaEnd,
+  maxPlies: opts.maxPlies ?? TD_KNOB_DEFAULTS.maxPlies, initialWeight: opts.initialWeight ?? TD_KNOB_DEFAULTS.initialWeight,
+  monteCarlo: opts.monteCarlo === true,
+  probeEvery: opts.probeEvery ?? TD_KNOB_DEFAULTS.probeEvery, probeGames: opts.probeGames ?? TD_KNOB_DEFAULTS.probeGames,
+});
 
 /** Per-type `next − prev` — the live table's Δ column (running NUMBERS, the SPSA
  * rail's ▲/▼ idiom — not a chart). */
@@ -372,6 +455,17 @@ function movesLabel(moves: BookPosition['moves']): string {
   if (moves.length === 0) return '(start — no plies)';
   return moves.map((m) => `${pieceLabel(m.pieceId)} (${m.from.x},${m.from.y})->(${m.move.x},${m.move.y})`).join(', ');
 }
+
+// Watch-tempo mapping — log scale from 1 step/second down to a step every frame
+// ("Max"), eight-queens' slider idiom.
+const TD_BEAT_MAX_MS = 1000;
+const TD_BEAT_MIN_MS = 16;
+const tdBeatToSlider = (ms: number): number =>
+  Math.round(100 * Math.log(ms / TD_BEAT_MAX_MS) / Math.log(TD_BEAT_MIN_MS / TD_BEAT_MAX_MS));
+const tdSliderToBeat = (v: number): number =>
+  Math.round(TD_BEAT_MAX_MS * Math.pow(TD_BEAT_MIN_MS / TD_BEAT_MAX_MS, v / 100));
+const tdBeatReadout = (ms: number): string =>
+  ms <= TD_BEAT_MIN_MS ? 'Max' : `${(1000 / ms).toFixed(1000 / ms < 10 ? 1 : 0)}/s`;
 
 function gameMoveLabel(record: Pick<GameRecord, 'moves'>, index: number): string {
   const m = record.moves[index];
@@ -446,16 +540,25 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const blobRef = useRef(blob); blobRef.current = blob;
   const activeIdRef = useRef(activeId); activeIdRef.current = activeId;
 
+  // A failed account save must be VISIBLE, not just logged — otherwise training
+  // continues for hours against a dead persistence path (e.g. an oversized blob or
+  // a server error) and the loss is only discovered on reload.
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   // Persist + set state together — every meaningful change goes through here. The
-  // save is fire-and-forget (never blocks the UI); a signed-out/failed save is
-  // swallowed after logging, matching Game Lab's saved-runs behavior.
+  // save is fire-and-forget (never blocks the UI); a signed-out save is swallowed
+  // after flipping the signed-in hint, matching Game Lab's saved-runs behavior;
+  // any other failure raises the visible save-error line until a save succeeds.
   const commit = useCallback((next: BooksBlob) => {
     blobRef.current = next;
     setBlob(next);
     if (levelId) {
-      void saveOpeningBooks(levelId, next).catch((error) => {
+      saveOpeningBooks(levelId, next).then(() => setSaveError(null)).catch((error) => {
         if (error instanceof HttpError && error.status === 401) setSignedIn(false);
-        else console.warn('opening-books save failed', error);
+        else {
+          console.warn('opening-books save failed', error);
+          setSaveError(`Account save FAILED (${error instanceof HttpError ? `HTTP ${error.status}` : 'network error'}) — changes since the last successful save exist only in this tab; the next change retries.`);
+        }
       });
     }
   }, [levelId]);
@@ -477,6 +580,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setLatestReplayPly(0);
     setMode(deepLinkModeRef.current ?? 'book');
     deepLinkModeRef.current = undefined;
+    tdDocRef.current = null;
     if (!levelId) { setLoadingBooks(false); setAdoptedVec(null); return undefined; }
     // Reflect the local cache immediately (the live AI's synchronous source); the
     // account blob below can overwrite it once it resolves.
@@ -490,11 +594,35 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
         blobRef.current = loaded;
         setBlob(loaded);
         setActiveId(loaded.books[0]?.id);
-        // The account blob is the durable adopt truth: mirror it into the local cache
-        // the live AI reads, so a fresh device picks up an adoption made elsewhere.
-        if (loaded.adoptedWeights) {
-          setAdoptedWeights(levelId, loaded.adoptedWeights);
-          setAdoptedVec(loaded.adoptedWeights);
+        // The account blob is the durable adopt truth — in BOTH directions: mirror
+        // the LIVE approach's vector into the local cache the live AI reads (a
+        // fresh device picks up an AI set elsewhere), and when the loaded blob has
+        // NO live approach, drop the cache — an adoption made on this device was
+        // cleared elsewhere, and keeping the stale vector would leave the enemy
+        // playing values the account no longer holds while the audit box
+        // resurrects a run's history record as "in force". (loadOpeningBooks
+        // already migrated any bare-vector adoption into `levelAi` and unset a
+        // foreign live id, so `live` here is registry-known.)
+        const liveApproach = loaded.levelAi?.live ? loaded.levelAi.approaches[loaded.levelAi.live] : undefined;
+        if (liveApproach) {
+          setAdoptedWeights(levelId, liveApproach.vector);
+          setAdoptedVec(liveApproach.vector);
+        } else {
+          setAdoptedWeights(levelId, null);
+          setAdoptedVec(null);
+        }
+        // Restore the run library's OPEN run — it continues exactly where it stood
+        // (its OPTS restore with it: a session is a position inside a fixed schedule,
+        // so the knobs must be the ones it was trained under). The run also parks in
+        // a ref: the TD worker-init effect keys on the LEVEL object, which often
+        // resolves after this blob, and its reset would wipe the restore — it
+        // re-applies from the ref instead. (loadOpeningBooks already migrated any
+        // pre-library single document into `tdRuns` as Run 1.)
+        const lib = loaded.tdRuns;
+        const open = lib?.runs.find((r) => r.id === lib.activeId);
+        if (open && open.session?.train && open.opts && typeof open.opts.games === 'number') {
+          tdDocRef.current = open;
+          tdApplyDoc(open);
         }
       })
       .catch((error) => {
@@ -590,6 +718,25 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const [tdFrontier, setTdFrontier] = useState(0);
   // Ply cursor into the inspected game (the pending walk, or the last committed game).
   const [tdReplayPly, setTdReplayPly] = useState(0);
+  // WATCH mode: an autoplay clock presses the universal advance one beat at a time.
+  const [tdWatching, setTdWatching] = useState(false);
+  // Every probe the run has taken, in order — the learning curve as running numbers.
+  const [tdProbeLog, setTdProbeLog] = useState<TdProbe[]>([]);
+  // The pane's own documentation ("how this works") as a full-pane view.
+  const [tdHelp, setTdHelp] = useState(false);
+  // Run comparison ("what did that knob buy?") as a full-pane view: every saved run
+  // side by side — settings, outcomes, learned values.
+  const [tdCompare, setTdCompare] = useState(false);
+  // Which run in the level's library the pane has open; null = a fresh run that has
+  // not recorded anything yet (its first game creates it). Ref-mirrored for the
+  // autosave timer, which may allocate the id itself.
+  const [tdRunId, setTdRunId] = useState<number | null>(null);
+  const tdRunIdRef = useRef<number | null>(tdRunId); tdRunIdRef.current = tdRunId;
+  // Watch tempo — the delay between beats, on a log scale down to one beat per frame.
+  const [tdBeatMs, setTdBeatMs] = useState(250);
+  // Watch scope: 'run' keeps dealing new games; 'game' (the stage's ▶ play out) stops
+  // when THIS game concludes so the finished game can be inspected in place.
+  const tdWatchScopeRef = useRef<'run' | 'game'>('run');
   const [tdSession, setTdSession] = useState<TdSession | null>(null);
   const [tdBusy, setTdBusy] = useState(false);
   const [tdSummarizing, setTdSummarizing] = useState<{ done: number; total: number } | null>(null);
@@ -608,17 +755,31 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const tdWorkerRef = useRef<Worker | null>(null);
   // Freshest session for the send handlers (the ref pattern the SPSA wiring uses).
   const tdSessionRef = useRef<TdSession | null>(tdSession); tdSessionRef.current = tdSession;
+  // The pane's open run as last restored/saved. The books load and the worker
+  // init race (blob vs level fetch); whichever runs last re-applies from here.
+  const tdDocRef = useRef<TdRunDoc | null>(null);
+  const tdApplyDoc = useCallback((run: TdRunDoc) => {
+    setTdRunId(run.id);
+    setTdKnobs(tdKnobsOfDoc(run.opts, run.seedCount));
+    setTdSession(run.session);
+    setTdProbeLog(Array.isArray(run.probeLog) ? run.probeLog : []);
+    setTdSummary(run.summary ?? null);
+    setTdKept(run.kept === true);
+    tdShownRef.current = { game: run.session.train.game, weights: run.session.train.weights };
+  }, []);
 
-  // RESET: back to a fresh session derived from the engine baseline (ADR-0057) — the
-  // weights return to the all-equal start and the knobs unfreeze. Knob VALUES are kept
-  // here (every knob carries its own per-control ↺, and "↺ settings" restores them all).
+  // Fresh pane: back to a fresh session derived from the engine baseline (ADR-0057) —
+  // the weights return to the all-equal start and the knobs unfreeze. Knob VALUES are
+  // kept (every knob carries its own per-control ↺, and "↺ settings" restores them
+  // all). Detaches from any run (tdApplyDoc re-attaches); saved runs are untouched.
   const tdReset = useCallback(() => {
+    setTdRunId(null); setTdCompare(false);
     setTdSession(null); setTdSummary(null); setTdKept(false); setTdDiscarded(false);
     setTdStopped(false); setTdError(null); setTdSummarizing(null); setTdBusy(false);
     setTdDelta(null); tdShownRef.current = null; setTdReplayPly(0);
     // A dealt-but-unfinished game is DISCARDED, never learned from — the same game
     // re-deals identically later ((seed, gameIndex) rng), so nothing is lost or skipped.
-    setTdPending(null); setTdFrontier(0);
+    setTdPending(null); setTdFrontier(0); setTdWatching(false); setTdProbeLog([]);
   }, []);
 
   // The learner's OWN worker — never gymWorker (that one is shared by generate/step/
@@ -628,6 +789,10 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   useEffect(() => {
     setTdReady(false);
     tdReset();
+    // Re-apply the level's saved session if the books blob restored it first — this
+    // effect keys on the LEVEL object, which usually resolves after the blob, and the
+    // reset above would otherwise wipe the restore.
+    if (tdDocRef.current) tdApplyDoc(tdDocRef.current);
     if (!level) return undefined;
     const worker = new Worker(new URL('../lab/tdWorker.ts', import.meta.url), { type: 'module' });
     tdWorkerRef.current = worker;
@@ -638,6 +803,9 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
       const shown = tdShownRef.current;
       if (shown && session.train.game > shown.game) setTdDelta(tdWeightsDelta(session.train.weights, shown.weights));
       if (!shown || session.train.game > shown.game) tdShownRef.current = { game: session.train.game, weights: session.train.weights };
+      // Accumulate every distinct probe — the learning curve as running numbers.
+      const probe = session.probe;
+      if (probe) setTdProbeLog((log) => (log.length && log[log.length - 1].game === probe.game ? log : [...log, probe]));
       setTdSession(session);
     };
     worker.onmessage = (event: MessageEvent<TdResponse>) => {
@@ -719,6 +887,136 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   // previewed, and the game derives from (seed, budget-schedule, weights) — changing a
   // knob mid-walk would silently make the walked game and the learned game differ.
   const tdKnobsFrozen = tdStarted || tdBusy || tdSummary !== null || tdPending !== null;
+
+  // --- The run as a web-backed document in the level's run library -------------
+  // Every meaningful change autosaves into the pane's run inside the account blob,
+  // via the same commit path the opening books use; the load effect above restores
+  // the open run. The save is a TRAILING DEBOUNCE WITH A MAX WAIT — event-driven,
+  // nothing polls: each change arms a one-shot timer and cancels the previous, so a
+  // run's ~10 progress frames/second coalesce into one whole-blob PUT instead of
+  // hundreds. A pure trailing debounce would be STARVED by a streaming ▶ run
+  // (frames land faster than the window forever), so once the last landed save is
+  // 10s old the next change saves immediately — a long run persists every ~10s,
+  // bounding what a crash or tab-close can lose. The pagehide flush below covers
+  // the tail best-effort (keepalive bodies cap at ~64KB; the periodic saves are the
+  // durable path). A fresh pane's FIRST save records a new run.
+  const tdKnobsRef = useRef(tdKnobs); tdKnobsRef.current = tdKnobs;
+  const tdFlushRef = useRef<((keepalive: boolean) => void) | null>(null);
+  const tdLastSaveRef = useRef(0);
+  useEffect(() => {
+    // While the account blob is still loading, saving would clobber the server-side
+    // library with this tab's empty one (the transport is gated on the same flag,
+    // so a session can't normally exist here — belt and braces for the race).
+    if (!levelId || !tdSession || loadingBooks) { tdFlushRef.current = null; return undefined; }
+    const buildNext = (): { blob: BooksBlob; run: TdRunDoc } => {
+      const payload: TdSessionDoc = {
+        opts: tdOptionsOf(tdKnobsRef.current), seedCount: tdKnobsRef.current.seedCount,
+        session: tdSession, probeLog: tdProbeLog, summary: tdSummary, kept: tdKept,
+      };
+      const { lib, run } = upsertTdRun(blobRef.current.tdRuns, payload, tdRunIdRef.current);
+      // A first save allocated the run — attach the pane to it immediately (the ref
+      // now, so a racing flush reuses the id; the state for the rail's picker).
+      tdDocRef.current = run;
+      if (tdRunIdRef.current !== run.id) { tdRunIdRef.current = run.id; setTdRunId(run.id); }
+      return { blob: { ...blobRef.current, tdRuns: lib }, run };
+    };
+    // Max wait: the ref holds the last landed save — or, before any save has
+    // landed, the FIRST pending change (a run started on a fresh pane must not
+    // starve). Once it is 10s stale the save fires NOW instead of trailing (0ms
+    // keeps it async and coalesces the current frame burst).
+    if (tdLastSaveRef.current === 0) tdLastSaveRef.current = Date.now();
+    const overdue = Date.now() - tdLastSaveRef.current > 10_000;
+    const id = setTimeout(() => {
+      tdFlushRef.current = null;
+      tdLastSaveRef.current = Date.now();
+      commit(buildNext().blob);
+    }, overdue ? 0 : 1200);
+    // The pending save, flushable NOW: keepalive = a PUT that outlives the tab
+    // (pagehide); otherwise the normal commit path (run switches flush through it).
+    tdFlushRef.current = (keepalive: boolean) => {
+      clearTimeout(id);
+      tdFlushRef.current = null;
+      tdLastSaveRef.current = Date.now();
+      const next = buildNext().blob;
+      if (keepalive) {
+        blobRef.current = next;
+        void saveOpeningBooks(levelId, next, true).catch(() => { /* best effort at teardown */ });
+      } else {
+        commit(next);
+      }
+    };
+    return () => clearTimeout(id);
+  }, [levelId, tdSession, tdProbeLog, tdSummary, tdKept, loadingBooks, commit]);
+  useEffect(() => {
+    const flush = (): void => { tdFlushRef.current?.(true); };
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, []);
+
+  // The level's run library (source of truth: the account blob).
+  const tdRunList = blob.tdRuns?.runs ?? [];
+  const tdActiveRun = tdRunId !== null ? tdRunList.find((r) => r.id === tdRunId) ?? null : null;
+
+  // + New run: shelve the open run (flush its pending save) and detach onto a fresh
+  // pane with the settings unfrozen — tweak a knob and run the next experiment. The
+  // shelved run stays in the library; the fresh run is recorded on its first game.
+  const tdNewRun = useCallback(() => {
+    tdFlushRef.current?.(false);
+    tdDocRef.current = null;
+    tdReset();
+    // Drop the open-run pointer so a reload lands on the fresh pane too.
+    if (blobRef.current.tdRuns?.activeId !== undefined) {
+      const { activeId: _off, ...lib } = blobRef.current.tdRuns;
+      commit({ ...blobRef.current, tdRuns: lib });
+    }
+  }, [tdReset, commit]);
+
+  // Open a saved run: flush the current one, then restore the picked one whole
+  // (session, settings, probe history, result table). Disabled while learning —
+  // a worker reply landing after a switch would write onto the wrong run.
+  const tdOpenRun = useCallback((id: number) => {
+    if (id === tdRunIdRef.current) return;
+    tdFlushRef.current?.(false);
+    const run = blobRef.current.tdRuns?.runs.find((r) => r.id === id);
+    if (!run) return;
+    tdReset();
+    tdDocRef.current = run;
+    tdApplyDoc(run);
+    if (blobRef.current.tdRuns) commit({ ...blobRef.current, tdRuns: { ...blobRef.current.tdRuns, activeId: id } });
+  }, [tdReset, tdApplyDoc, commit]);
+
+  // Delete the open run from the library (the one destructive verb — every other
+  // path keeps history). Lands on the newest remaining run, or a fresh pane. The
+  // level's ADOPTION is separate and survives — clearing it is the audit box's
+  // explicit button.
+  const tdDeleteRun = useCallback(() => {
+    const id = tdRunIdRef.current;
+    tdDocRef.current = null;
+    tdReset();
+    const lib = blobRef.current.tdRuns;
+    if (!lib || id === null || !lib.runs.some((r) => r.id === id)) return;
+    const remaining = lib.runs.filter((r) => r.id !== id);
+    const open = remaining.length ? remaining[remaining.length - 1] : null;
+    if (open) {
+      commit({ ...blobRef.current, tdRuns: { ...lib, runs: remaining, activeId: open.id } });
+      tdDocRef.current = open;
+      tdApplyDoc(open);
+    } else {
+      // Library emptied: keep it (nextId never rewinds — ids stay stable handles).
+      commit({ ...blobRef.current, tdRuns: { nextId: lib.nextId, runs: [] } });
+    }
+  }, [tdReset, tdApplyDoc, commit]);
+
+  // Rename the open run (commits on blur/Enter — never per keystroke, each commit
+  // is a whole-blob PUT).
+  const tdRenameRun = useCallback((name: string) => {
+    const id = tdRunIdRef.current;
+    const lib = blobRef.current.tdRuns;
+    const trimmed = name.trim();
+    if (id === null || !lib || !trimmed) return;
+    if (lib.runs.find((r) => r.id === id)?.name === trimmed) return;
+    commit({ ...blobRef.current, tdRuns: { ...lib, runs: lib.runs.map((r) => (r.id === id ? { ...r, name: trimmed } : r)) } });
+  }, [commit]);
 
   // STEP deals the next game (start position, learning NOT yet applied). Pure main-thread
   // preview — the worker only gets involved at the commit, and replays bit-identically.
@@ -878,30 +1176,36 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     worker.postMessage({ type: 'validate', candidate, book: cur.positions } as GymRequest);
   }, [busy, ready, stepPaused]);
 
-  // Adopt the champion for this level's LIVE enemy AI: write the winning vector to the
-  // local cache (the live AI's synchronous source) AND the account blob (durable,
+  // Adopt the champion as this level's AI: the level plays the material-search
+  // approach with the winning vector — written to the local cache (the live AI's
+  // synchronous source) AND the account blob's approach config (durable,
   // cross-device). The next enemy reply on this level plays with these weights.
   // Adopt any weight vector (a local champion OR a cluster champion) for this level.
+  // No run record travels here — the SPRT champion is the Training tab's provenance
+  // — so a values-pane adoption record on the config is correctly replaced.
+  // Gated on the books load settling (like the TD autosave): before it resolves,
+  // blobRef holds the EMPTY blob, and committing that would wipe the account's
+  // books + run library for this level.
   const adoptVector = useCallback((vec: number[]) => {
-    if (!levelId) return;
+    if (!levelId || loadingBooks) return;
     setAdoptedWeights(levelId, vec);
     setAdoptedVec(vec);
-    commit({ ...blobRef.current, adoptedWeights: vec });
-  }, [levelId, commit]);
+    commit(setLevelAiApproach(blobRef.current, MATERIAL_SEARCH, { vector: vec }));
+  }, [levelId, loadingBooks, commit]);
   const adoptChampion = useCallback(() => {
     const cur = blobRef.current.books.find((b) => b.id === activeIdRef.current);
     if (!cur || cur.session.champion.step < 0) return;
     adoptVector(cur.session.champion.theta.slice());
   }, [adoptVector]);
 
-  // Revert to the shipped weights for this level (clears both cache and account blob).
+  // Revert to the stock AI for this level (clears the approach config in both the
+  // cache and the account blob). Same load-settled gate as adoptVector.
   const unadopt = useCallback(() => {
-    if (!levelId) return;
+    if (!levelId || loadingBooks) return;
     setAdoptedWeights(levelId, null);
     setAdoptedVec(null);
-    const { adoptedWeights: _drop, ...rest } = blobRef.current;
-    commit(rest);
-  }, [levelId, commit]);
+    commit(clearLevelAiApproach(blobRef.current, MATERIAL_SEARCH));
+  }, [levelId, loadingBooks, commit]);
 
   // --- Derived training view (from the active book's retained session) -------
   const session: GymSession | undefined = activeBook?.session;
@@ -946,6 +1250,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setReplayFocus((focus) => !focus);
   }, [replayFocus]);
   const tdLastGame = tdSess.lastGame ?? null;
+  const tdLedger = tdSess.ledger ?? [];
   useEffect(() => {
     const hasReplay = mode === 'train' ? !!selectedLatestGame : mode === 'values' ? !!tdLastGame : false;
     if (!hasReplay) setReplayFocus(false);
@@ -1013,7 +1318,12 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   // Run the games fly past at their conclusions).
   useEffect(() => {
     if (tdPending) {
-      if (tdGamesDone >= tdPending.game) { setTdPending(null); setTdFrontier(0); }
+      if (tdGamesDone >= tdPending.game) {
+        setTdPending(null); setTdFrontier(0);
+        // ▶ play out watches only THIS game: its conclusion ends the show, leaving the
+        // finished game on the stage for inspection instead of dealing the next.
+        if (tdWatchScopeRef.current === 'game') setTdWatching(false);
+      }
       return;
     }
     setTdReplayPly(tdLastGame?.plies ?? 0);
@@ -1031,9 +1341,23 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     if (!state) return null;
     return { ...levelToEditorBoard(level), units: unitsForGamePieces(state.pieces) };
   }, [level, tdReplayStates, tdClampedReplayPly]);
+  // Standard algebraic notation for the inspected game — the accepted chess score.
+  const tdReplaySan = useMemo(
+    () => (tdInspect && tdReplayStates ? sanForGame(tdReplayStates, tdInspect.moves) : null),
+    [tdInspect, tdReplayStates],
+  );
+  const tdSanAt = useCallback((ply: number): string => {
+    if (!tdInspect || !tdReplaySan || ply < 1) return '';
+    const i = ply - 1;
+    const opensWithReply = tdInspect.moves[0]?.side === 'enemy';
+    const num = Math.floor((i + (opensWithReply ? 1 : 0)) / 2) + 1;
+    return `${num}${tdInspect.moves[i]?.side === 'player' ? '.' : '…'} ${tdReplaySan[i] ?? ''}`;
+  }, [tdInspect, tdReplaySan]);
   const tdReplayMoveLabel = tdInspect
-    ? tdClampedReplayPly === 0 ? 'Start position' : gameMoveLabel(tdInspect, tdClampedReplayPly - 1)
+    ? tdClampedReplayPly === 0 ? 'Start position' : tdSanAt(tdClampedReplayPly)
     : '';
+  // The coordinate form rides the tooltip for exactness.
+  const tdReplayMoveTitle = tdInspect && tdClampedReplayPly > 0 ? gameMoveLabel(tdInspect, tdClampedReplayPly - 1) : '';
   const tdReplayEpsilon = tdInspect ? scheduleAt(tdOpts, tdInspect.game - 1).epsilon : 0;
   // THE universal advance — one button that always moves the algorithm one step: no game
   // in play → deal the next one; game in play → play its next ply (the final ply lands
@@ -1052,6 +1376,258 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setTdFrontier(tdPending.plies); setTdReplayPly(tdPending.plies);
     tdConclude();
   }, [tdPending, tdConclude]);
+  // Advance up to n plies of the game in play in one gesture (Shift+→); the final ply
+  // still concludes and lands the update. With no game in play it deals one.
+  const tdAdvanceN = useCallback((n: number) => {
+    if (tdBusy) return;
+    if (!tdPending) { tdDeal(); return; }
+    const nf = Math.min(tdPending.plies, tdFrontier + n);
+    setTdFrontier(nf); setTdReplayPly(nf);
+    if (nf >= tdPending.plies) tdConclude();
+  }, [tdBusy, tdPending, tdFrontier, tdDeal, tdConclude]);
+  // "Step forward once" for the keyboard: review forward when the cursor is behind
+  // what's been played, else advance the algorithm — the natural single-key reading.
+  const tdForward = useCallback(() => {
+    if (tdClampedReplayPly < tdReplayMax) { setTdReplayPly(tdClampedReplayPly + 1); return; }
+    tdAdvance();
+  }, [tdClampedReplayPly, tdReplayMax, tdAdvance]);
+  const tdBack = useCallback(() => { setTdReplayPly(Math.max(0, tdClampedReplayPly - 1)); }, [tdClampedReplayPly]);
+  // WATCH — the system presses ⏭ step for you, one beat at a time (bender-world's
+  // watchable full play): deal, play each ply, land the update at the game's end, deal
+  // the next, until the budget completes or he pauses. Same provably-inert advance as
+  // manual stepping — the clock is the ONLY new thing. During a commit (tdBusy) the
+  // beat no-ops, so game boundaries breathe naturally.
+  const tdAdvanceRef = useRef(tdAdvance); tdAdvanceRef.current = tdAdvance;
+  useEffect(() => {
+    if (!tdWatching) return undefined;
+    const id = setInterval(() => { tdAdvanceRef.current(); }, Math.max(16, tdBeatMs));
+    return () => clearInterval(id);
+  }, [tdWatching, tdBeatMs]);
+  // Budget done and nothing left in play: the show is over — stop the clock.
+  useEffect(() => {
+    if (tdWatching && tdComplete && !tdPending) setTdWatching(false);
+  }, [tdWatching, tdComplete, tdPending]);
+  // --- Setting and auditing the level's live AI --------------------------------
+  // Adoption converts the learned pawn-relative values into the eval vector's piece
+  // values (touched types only; untouched types keep the shipped default — a weight
+  // that never received signal is noise, not a value) and sets them through the SAME
+  // per-level slot the Training tab's champion uses. Requires the pawn gauge.
+  const tdAdoptSource = tdSummary ? tdSummary.mean : tdSess.train.weights;
+  const tdAdoptRel = useMemo(
+    () => (tdHasPawns ? pawnRelativeValues(tdAdoptSource) : null),
+    [tdHasPawns, tdAdoptSource],
+  );
+  const tdAdoptPreview = useMemo(() => {
+    if (!tdAdoptRel || !tdStarted) return null;
+    return PLAYABLE_PIECE_TYPES.map((t) => {
+      const untouched = tdSummary
+        ? tdUntouched(tdSummary.mean[t]) && tdSummary.spread[t] === 0
+        : tdUntouched(tdSess.train.weights[t]);
+      // The king never adopts: classically kings have no trade value, and the two
+      // numbers mean different things — the eval's king "value" is its king-DANGER
+      // coefficient (the hanging-piece safety term), while the learner's king weight
+      // is a mate indicator (its count feature is nonzero only once a king is dead).
+      // Pouring one into the other would be a category error.
+      const kept = t === 'king' || untouched;
+      return {
+        type: t,
+        learned: tdAdoptRel[t],
+        adopted: kept ? DEFAULT_EVAL_WEIGHTS.pieceValues[t] : Math.round(tdAdoptRel[t] * 100) / 100,
+        untouched,
+        keptReason: t === 'king' ? 'kept — king-safety coefficient, not material' : untouched ? 'kept — no signal' : null,
+      };
+    });
+  }, [tdAdoptRel, tdStarted, tdSummary, tdSess, tdUntouched]);
+  const tdAdopt = useCallback(() => {
+    // Gated on the books load settling: committing the pre-load EMPTY blob would
+    // wipe the account's books + run library for this level.
+    if (!levelId || !tdAdoptPreview || loadingBooks) return;
+    const pieceValues = { ...DEFAULT_EVAL_WEIGHTS.pieceValues };
+    for (const row of tdAdoptPreview) pieceValues[row.type] = row.adopted;
+    const vec = encodeWeights({ ...DEFAULT_EVAL_WEIGHTS, pieceValues });
+    setAdoptedWeights(levelId, vec);
+    setAdoptedVec(vec);
+    const adopted = {} as ValueWeights;
+    for (const row of tdAdoptPreview) adopted[row.type] = row.adopted;
+    // The adoption is recorded ON its run (provenance: the audit box names the run),
+    // saving the pane's freshest state with it — a fresh pane records its run here.
+    const payload: TdSessionDoc = {
+      opts: tdOptionsOf(tdKnobsRef.current), seedCount: tdKnobsRef.current.seedCount,
+      session: tdSess, probeLog: tdProbeLog, summary: tdSummary, kept: tdKept,
+    };
+    const { lib, run } = upsertTdRun(blobRef.current.tdRuns, payload, tdRunIdRef.current);
+    const adoption: TdAdoptionRecord = {
+      at: new Date().toISOString(), vector: vec, pieceValues: adopted,
+      fromGames: tdGamesDone,
+      seeds: tdSummary ? tdSummary.seeds : [tdKnobsRef.current.seed],
+      source: tdSummary ? 'seed-mean' : 'live-weights',
+      runId: run.id, runName: run.name,
+    };
+    const adoptedRun: TdRunDoc = { ...run, adoption };
+    tdDocRef.current = adoptedRun;
+    if (tdRunIdRef.current !== run.id) { tdRunIdRef.current = run.id; setTdRunId(run.id); }
+    // The record lands twice on purpose: on the run (history) and in the approach
+    // config (the LIVE record — it must survive even deleting the run it came from).
+    // Adoption is the whole pointer: the level's AI becomes the material-search
+    // approach carrying these values and this provenance.
+    commit(setLevelAiApproach(
+      { ...blobRef.current, tdRuns: { ...lib, runs: lib.runs.map((r) => (r.id === run.id ? adoptedRun : r)) } },
+      MATERIAL_SEARCH,
+      { vector: vec, adoption },
+    ));
+  }, [levelId, tdAdoptPreview, loadingBooks, tdGamesDone, tdSummary, tdSess, tdProbeLog, tdKept, commit]);
+  // Clearing takes the approach OUT OF FORCE (its config: vector + live record) but
+  // keeps every run's own adoption record — that is history ("this run went live on
+  // the 14th"). The level falls back to the stock AI. Same load-settled gate as the
+  // other adopt/clear verbs.
+  const tdClearAdoption = useCallback(() => {
+    if (!levelId || loadingBooks) return;
+    setAdoptedWeights(levelId, null);
+    setAdoptedVec(null);
+    commit(clearLevelAiApproach(blobRef.current, MATERIAL_SEARCH));
+  }, [levelId, loadingBooks, commit]);
+  // The approach picker's verb: repoint WHICH approach the level plays (null =
+  // stock). Non-destructive — every approach keeps its tuned values, so flipping
+  // to stock and back restores them; "clear adoption" is the discard. Same
+  // load-settled gate as the other verbs.
+  const tdSwitchApproach = useCallback((id: AiApproachId | null) => {
+    if (!levelId || loadingBooks) return;
+    const next = pointLevelAi(blobRef.current, id);
+    const cfg = id !== null ? next.levelAi?.approaches[id] : undefined;
+    if (id !== null && !cfg) return; // nothing adopted on that approach yet
+    setAdoptedWeights(levelId, cfg ? cfg.vector : null);
+    setAdoptedVec(cfg ? cfg.vector : null);
+    if (next !== blobRef.current) commit(next);
+  }, [levelId, loadingBooks, commit]);
+  // What the live opponent will actually use on this level, resolved tier by tier —
+  // the audit read. `adoptedVec` mirrors localStorage + the account blob; the live
+  // record comes from the live APPROACH's config (falling back to a vector-match
+  // scan over the runs for local-cache adoptions the blob never saw). Vector
+  // equality is sound: JSON round-trips preserve the exact doubles. A config record
+  // whose vector no longer matches (e.g. the Training tab set values later) is
+  // correctly ignored. The approach NAME is part of the read: with nothing set, the
+  // level still plays material search — just with stock values — so the box always
+  // names the recipe and separately says where its values come from.
+  const tdLiveAi = useMemo(() => {
+    const shipped = levelId ? readShippedVector(levelId) : null;
+    const vec = adoptedVec ?? shipped;
+    const liveCfg = blob.levelAi?.live ? blob.levelAi.approaches[blob.levelAi.live] : undefined;
+    const record = adoptedVec
+      ? (liveCfg?.adoption && sameVec(liveCfg.adoption.vector, adoptedVec)
+        ? liveCfg.adoption
+        : (blob.tdRuns?.runs ?? []).find((r) => r.adoption && sameVec(r.adoption.vector, adoptedVec))?.adoption ?? null)
+      : null;
+    // Registry-guarded: sanitizeLevelAi unsets a foreign `live` at the load
+    // boundary, but a render must survive one regardless (no ErrorBoundary above).
+    const liveId = blob.levelAi?.live && blob.levelAi.live in AI_APPROACHES ? blob.levelAi.live : MATERIAL_SEARCH;
+    const approach = AI_APPROACHES[liveId];
+    // The picker (the <select>) is the approach name in the render; here we only
+    // carry the value SOURCE tier and the technique line beside it.
+    const tier = adoptedVec
+      ? (record ? 'your values — set from this pane' : 'your values — set from the Training tab')
+      : shipped ? 'globally shipped values' : 'built-in default values';
+    let pieceValues = DEFAULT_EVAL_WEIGHTS.pieceValues;
+    if (vec) { try { pieceValues = decodeWeights(vec).pieceValues; } catch { /* fall back to defaults */ } }
+    const fromRunId = record?.runId ?? null;
+    const runStillExists = fromRunId !== null && (blob.tdRuns?.runs ?? []).some((r) => r.id === fromRunId);
+    return {
+      tier, technique: approach.technique, pieceValues,
+      hasAdoption: !!adoptedVec, usingDefaults: !vec,
+      adoption: record ?? null,
+      fromRunId: runStillExists ? fromRunId : null,
+      fromRunName: record?.runName ? `${record.runName}${runStillExists || fromRunId === null ? '' : ' (deleted)'}` : null,
+    };
+  }, [levelId, adoptedVec, blob.tdRuns, blob.levelAi]);
+
+  // ⇄ compare — the experiment-tracking read: every saved run side by side, one
+  // column per run. Settings rows that DIFFER across runs are highlighted (they are
+  // the experiment); values are the seed-fold mean when a run folded, live weights
+  // otherwise. Read straight from the library (autosave keeps the open run fresh).
+  const tdCompareView: ReactElement | null = tdCompare && tdRunList.length ? (() => {
+    // The OPEN run's column reads the LIVE pane state — the blob copy trails it by
+    // the autosave debounce (and by the whole run while frames stream continuously).
+    const runs = tdRunList.map((r) => (r.id === tdRunId
+      ? { ...r, session: tdSess, probeLog: tdProbeLog, summary: tdSummary, kept: tdKept }
+      : r));
+    const optRows: Array<{ label: string; get: (r: TdRunDoc) => string }> = [
+      { label: 'games budget', get: (r) => String(r.opts.games) },
+      { label: 'master seed', get: (r) => String(r.opts.seed) },
+      { label: 'seeds for ± spread', get: (r) => String(r.seedCount) },
+      { label: 'update rule', get: (r) => (r.opts.monteCarlo ? 'Monte-Carlo' : 'TD(λ)') },
+      { label: 'λ trace decay', get: (r) => (r.opts.lambda ?? DEFAULT_TRAIN_OPTIONS.lambda).toFixed(2) },
+      { label: 'ε start → end', get: (r) => `${(r.opts.epsilon?.start ?? DEFAULT_TRAIN_OPTIONS.epsilon.start).toFixed(2)} → ${(r.opts.epsilon?.end ?? DEFAULT_TRAIN_OPTIONS.epsilon.end).toFixed(2)}` },
+      { label: 'α start → end', get: (r) => `${(r.opts.alpha?.start ?? DEFAULT_TRAIN_OPTIONS.alpha.start).toFixed(3)} → ${(r.opts.alpha?.end ?? DEFAULT_TRAIN_OPTIONS.alpha.end).toFixed(3)}` },
+      { label: 'ply cap', get: (r) => String(r.opts.maxPlies ?? DEFAULT_TRAIN_OPTIONS.maxPlies) },
+      { label: 'initial weight', get: (r) => String(r.opts.initialWeight ?? DEFAULT_TRAIN_OPTIONS.initialWeight) },
+      { label: 'probe cadence', get: (r) => `every ${r.opts.probeEvery ?? 0} × ${r.opts.probeGames ?? 0}` },
+    ];
+    const valueOf = (r: TdRunDoc): ValueWeights => (r.summary ? r.summary.mean : r.session.train.weights);
+    const relByRun = new Map(runs.map((r) => [r.id, tdHasPawns ? pawnRelativeValues(valueOf(r)) : null]));
+    const untouchedIn = (r: TdRunDoc, t: (typeof PLAYABLE_PIECE_TYPES)[number]): boolean => {
+      const iw = r.opts.initialWeight ?? DEFAULT_TRAIN_OPTIONS.initialWeight;
+      return r.summary ? r.summary.mean[t] === iw && r.summary.spread[t] === 0 : r.session.train.weights[t] === iw;
+    };
+    const sect = (label: string): ReactElement => (
+      <tr className="sect"><th colSpan={runs.length + 1}>{label}</th></tr>
+    );
+    return (
+      <div className="gym-td-compare" aria-label="Compare runs">
+        <div className="gym-td-help-head">
+          <h3>Compare runs</h3>
+          <button type="button" className="gym-replay-focus-btn" onClick={() => setTdCompare(false)}>✕ close</button>
+        </div>
+        <p className="gym-hint">One column per saved run. Settings that differ between runs are highlighted — those are the experiment; the value rows answer what the change bought.</p>
+        <div className="gym-td-table-wrap">
+          <table className="gym-td-table gym-td-compare-table">
+            <thead>
+              <tr>
+                <th />
+                {runs.map((r) => (
+                  <th key={r.id} className={r.id === tdRunId ? 'is-open' : ''}>
+                    {r.name}{r.id === tdRunId ? ' · open' : ''}{tdLiveAi.fromRunId === r.id ? ' · LIVE AI' : ''}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr><th>created</th>{runs.map((r) => <td key={r.id}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}</td>)}</tr>
+              <tr><th>progress</th>{runs.map((r) => <td key={r.id}>{r.session.train.game >= r.opts.games ? '✓ ' : ''}{r.session.train.game}/{r.opts.games}</td>)}</tr>
+              {sect('settings — highlighted rows differ')}
+              {optRows.map(({ label, get }) => {
+                const vals = runs.map(get);
+                const differs = new Set(vals).size > 1;
+                return (
+                  <tr key={label} className={differs ? 'differs' : ''}>
+                    <th>{label}</th>
+                    {vals.map((v, i) => <td key={runs[i].id}>{v}</td>)}
+                  </tr>
+                );
+              })}
+              {sect('outcome')}
+              <tr><th>W · D · L</th>{runs.map((r) => <td key={r.id}>{r.session.train.outcomes.playerWins} · {r.session.train.outcomes.draws} · {r.session.train.outcomes.enemyWins}</td>)}</tr>
+              <tr><th>vs random</th>{runs.map((r) => <td key={r.id}>{r.session.probe ? `${r.session.probe.winRate.toFixed(3)} @ ${r.session.probe.game}` : '—'}</td>)}</tr>
+              {sect(`learned values ${tdHasPawns ? '(pawn = 1)' : '(raw logit)'} — seed-fold mean when folded, live weights otherwise; — = no signal; king is a mate indicator, never adopted`)}
+              <tr><th>values from</th>{runs.map((r) => <td key={r.id}>{r.summary ? `fold of ${r.summary.perSeed.length} seed${r.summary.perSeed.length === 1 ? '' : 's'}` : 'live weights'}</td>)}</tr>
+              {PLAYABLE_PIECE_TYPES.map((t) => (
+                <tr key={t}>
+                  <th>{t}</th>
+                  {runs.map((r) => {
+                    const na = untouchedIn(r, t);
+                    const rel = relByRun.get(r.id);
+                    // A run whose pawn weight can't normalize shows raw logits —
+                    // labeled per cell, never passed off as a pawn = 1 number.
+                    return <td key={r.id} className={na ? 'na' : ''}>{na ? '—' : rel ? rel[t].toFixed(2) : `${valueOf(r)[t].toFixed(3)} (logit)`}</td>;
+                  })}
+                </tr>
+              ))}
+              <tr><th>adopted</th>{runs.map((r) => <td key={r.id}>{r.adoption ? `${new Date(r.adoption.at).toLocaleDateString()} @ ${r.adoption.fromGames}g${tdLiveAi.fromRunId === r.id ? ' · LIVE' : ' (not in force)'}` : '—'}</td>)}</tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  })() : null;
+
   // The board renders pixel art 1:1 whenever the stage has content — the shared
   // read-only renderer is the Level Editor's render core, and its art is authored for
   // integer scale (0.72 nearest-neighbour was the "extra pixelated" look).
@@ -1064,7 +1640,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
       <div className="gym-replay-head">
         <div className="gym-replay-title">
           <h3>{tdWalking ? 'Game in play' : 'Inspect game'}</h3>
-          <span className="gym-replay-move" title={tdReplayMoveLabel}>{tdReplayMoveLabel}</span>
+          <span className="gym-replay-move" title={tdReplayMoveTitle}>{tdReplayMoveLabel}</span>
         </div>
         {tdWalking ? (
           // No outcome, no total plies: the game has not happened past the frontier yet.
@@ -1086,7 +1662,21 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
           <button type="button" onClick={() => setTdReplayPly(tdReplayMax)} disabled={tdClampedReplayPly >= tdReplayMax} title={tdWalking ? 'Latest played ply' : 'Final position'} aria-label={tdWalking ? 'Latest played ply' : 'Final position'}>⏭</button>
           <span className="gym-replay-ply">{tdWalking ? `Ply ${tdClampedReplayPly} · in play` : `Ply ${tdClampedReplayPly}/${tdReplayMax}`}</span>
         </div>
-        {tdWalking ? <button type="button" className="gym-replay-focus-btn" onClick={tdWalkToEnd} disabled={tdBusy} title="Play the dealt game out and land its update">⏩ to end</button> : null}
+        {tdWalking || tdWatching ? (
+          <label className="gym-replay-tempo" title="Tempo — steps per second; Max is a step every frame">
+            <input type="range" min={0} max={100} value={tdBeatToSlider(tdBeatMs)}
+              onChange={(e) => setTdBeatMs(tdSliderToBeat(Number(e.target.value)))} aria-label="Play-out tempo" />
+            <b className="gym-num">{tdBeatReadout(tdBeatMs)}</b>
+          </label>
+        ) : null}
+        {tdWatching ? (
+          <button type="button" className="gym-replay-focus-btn gym-replay-playout-btn" onClick={() => setTdWatching(false)}
+            title="Pause — the game keeps its place">⏸ pause</button>
+        ) : tdWalking ? (
+          <button type="button" className="gym-replay-focus-btn gym-replay-playout-btn" onClick={() => { tdWatchScopeRef.current = 'game'; setTdWatching(true); }} disabled={tdBusy}
+            title="Watch THIS game play out at the tempo, then hold at its end for inspection — the next game is not dealt">▶ play out</button>
+        ) : null}
+        {tdWalking ? <button type="button" className="gym-replay-focus-btn" onClick={tdWalkToEnd} disabled={tdBusy} title="Jump the dealt game to its end instantly and land its update">⏩ to end</button> : null}
         <button
           type="button"
           className="gym-replay-focus-btn"
@@ -1108,32 +1698,58 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     </div>
   ) : null;
   const tdReplayFocusActive = replayFocus && tdReplayPanel !== null;
-  // Focus mode is a real chess-game viewer: keyboard navigation (← → Home End) plus a
-  // clickable move list beside the board. Navigation only — the frontier never moves.
+  // Keyboard transport on the whole pane (bender-world's bindings): Space watch/pause,
+  // → step forward (review first, then advance), Shift+→ ten plies, ← back one position
+  // (view only — nothing un-learns), Home/End first/latest. Skips form controls so
+  // typing in knobs never drives the board.
+  const tdKeysRef = useRef({ tdForward, tdAdvanceN, tdBack, tdReplayMax });
+  tdKeysRef.current = { tdForward, tdAdvanceN, tdBack, tdReplayMax };
   useEffect(() => {
-    if (!tdReplayFocusActive) return undefined;
+    if (mode !== 'values') return undefined;
     const onKey = (e: KeyboardEvent): void => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
-      if (e.key === 'ArrowLeft') { e.preventDefault(); setTdReplayPly((p) => Math.max(0, Math.min(p, tdReplayMax) - 1)); }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); setTdReplayPly((p) => Math.min(tdReplayMax, p + 1)); }
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.tagName === 'BUTTON')) return;
+      if (e.key === ' ') { e.preventDefault(); tdWatchScopeRef.current = 'run'; setTdWatching((w) => !w); }
+      else if (e.key === 'ArrowRight' && e.shiftKey) { e.preventDefault(); tdKeysRef.current.tdAdvanceN(10); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); tdKeysRef.current.tdForward(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); tdKeysRef.current.tdBack(); }
       else if (e.key === 'Home') { e.preventDefault(); setTdReplayPly(0); }
-      else if (e.key === 'End') { e.preventDefault(); setTdReplayPly(tdReplayMax); }
+      else if (e.key === 'End') { e.preventDefault(); setTdReplayPly(tdKeysRef.current.tdReplayMax); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [tdReplayFocusActive, tdReplayMax]);
+  }, [mode]);
   const tdMoveListRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     tdMoveListRef.current?.querySelector('.is-current')?.scrollIntoView({ block: 'nearest' });
   }, [tdReplayFocusActive, tdClampedReplayPly]);
-  const tdMoveList: ReactElement | null = tdReplayFocusActive && tdInspect ? (
-    <div className="gym-replay-movelist" ref={tdMoveListRef} aria-label="Move list">
-      <button type="button" className={tdClampedReplayPly === 0 ? 'is-current' : ''} onClick={() => setTdReplayPly(0)}>Start position</button>
-      {Array.from({ length: tdReplayMax }, (_, i) => (
-        <button key={i} type="button" className={tdClampedReplayPly === i + 1 ? 'is-current' : ''} onClick={() => setTdReplayPly(i + 1)}>
-          {gameMoveLabel(tdInspect, i)}
-        </button>
+  // The score sheet: numbered full moves in standard notation, every half-move a jump
+  // target. While a game is in play only the PLAYED plies appear (the frontier again).
+  const tdScoreRows = useMemo(
+    () => (tdReplayFocusActive && tdInspect && tdReplayStates
+      ? sanFullMoves(tdReplayStates, tdInspect.moves.slice(0, tdReplayMax))
+      : null),
+    [tdReplayFocusActive, tdInspect, tdReplayStates, tdReplayMax],
+  );
+  const tdScoreCell = (half: { ply: number; san: string } | null): ReactElement | null => half ? (
+    <button
+      type="button"
+      className={tdClampedReplayPly === half.ply ? 'is-current' : ''}
+      onClick={() => setTdReplayPly(half.ply)}
+      title={tdInspect ? gameMoveLabel(tdInspect, half.ply - 1) : ''}
+    >
+      {half.san}
+    </button>
+  ) : null;
+  const tdMoveList: ReactElement | null = tdScoreRows ? (
+    <div className="gym-replay-movelist" ref={tdMoveListRef} aria-label="Score sheet">
+      <button type="button" className={`gym-score-start ${tdClampedReplayPly === 0 ? 'is-current' : ''}`.trim()} onClick={() => setTdReplayPly(0)}>Start position</button>
+      {tdScoreRows.map((row) => (
+        <div className="gym-score-row" key={row.number}>
+          <span className="n">{row.number}.</span>
+          {row.first ? tdScoreCell(row.first) : <span className="gap">…</span>}
+          {tdScoreCell(row.second)}
+        </div>
       ))}
     </div>
   ) : null;
@@ -1354,9 +1970,9 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                     </div>
                     {verdict === 'accept' && val?.done ? (
                       <div className="gym-val-adopt">
-                        {adoptedActive
-                          ? <span className="adopted">✓ adopted for this level — the live enemy plays these weights</span>
-                          : <button type="button" className="adopt" onClick={adoptChampion} disabled={!levelId}>Adopt for this level</button>}
+                        {adoptedVec !== null && sameVec(champion.theta, adoptedVec)
+                          ? <span className="adopted">✓ adopted for this level — the live enemy plays {AI_APPROACHES[MATERIAL_SEARCH].name} with these weights</span>
+                          : <button type="button" className="adopt" onClick={adoptChampion} disabled={!levelId || loadingBooks}>Adopt for this level</button>}
                       </div>
                     ) : null}
                   </div>
@@ -1397,12 +2013,112 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
               <div className={`gym-run ${tdReplayFocusActive ? 'is-replay-focus' : ''}`.trim()} aria-label="Piece-value learner">
                 {tdReplayFocusActive ? (
                   <div className="gym-replay-focus-view is-values">{tdReplayPanel}{tdMoveList}</div>
+                ) : tdHelp ? (
+                  <div className="gym-td-help" aria-label="How the piece-value learner works">
+                    <div className="gym-td-help-head">
+                      <h3>How the piece-value learner works</h3>
+                      <button type="button" className="gym-replay-focus-btn" onClick={() => setTdHelp(false)}>✕ close</button>
+                    </div>
+
+                    <h4>What this is</h4>
+                    <p>
+                      This pane learns <b>this board&apos;s</b> piece values from nothing, by playing itself. The method is
+                      <b> afterstate TD(λ)</b> — the TD-Gammon family (Tesauro 1992–95), in the Beal &amp; Smith (1997)
+                      &ldquo;learn piece values from random play&rdquo; lineage. The value model is deliberately the smallest thing
+                      that can learn piece values: <b>six numbers, one per piece type</b>. A position&apos;s value is
+                      σ(w · f), where f counts your living pieces minus the enemy&apos;s per type, read as the probability the
+                      player wins. Absolute weights are in log-odds units; the piece-value story is the <b>ratios</b> — hence the
+                      pawn&nbsp;=&nbsp;1 column.
+                    </p>
+
+                    <h4>One step of the algorithm</h4>
+                    <p>
+                      ⏭ step deals a game: both sides play 1-ply greedy against the <i>current</i> values, with an ε chance per move
+                      of exploring at random (ε anneals from its start to its end across the whole budget — early games are noisy on
+                      purpose). When the game ends, its result (win 1, draw ½, loss 0) becomes the target, and TD(λ) walks the error
+                      back through the game&apos;s positions. <b>The six weights move once per game, at its end</b> — that is why every
+                      number on this pane holds still while a game is in play, and why the Δ column after a step is exactly what the
+                      game you just watched taught the learner.
+                    </p>
+
+                    <h4>Does it want to run in parallel?</h4>
+                    <p>
+                      No — as configured it is <b>inherently sequential</b>: game n+1 is played <i>by</i> the values that game n just
+                      updated (on-policy self-play). Watching does not force synchrony onto a parallel algorithm; the beat only sets the
+                      clock between plies. ▶ run executes the identical chain at full speed — step, watch, and run all produce
+                      <b> bit-for-bit the same numbers</b> (that reproducibility is bought by the fixed sequence). Where this family
+                      <i>does</i> parallelize: independent <b>seeds</b> — the mean&nbsp;±&nbsp;spread fold at budget completion is exactly
+                      that — and large deep-RL systems (A3C, AlphaZero) run many self-play workers against a slightly-stale shared
+                      network because their games are expensive and their models huge. Here a game takes milliseconds and the model is
+                      six numbers, so parallel workers would buy nothing and cost the reproducibility.
+                    </p>
+
+                    <h4>Watching it progress</h4>
+                    <ul>
+                      <li><b>game n / budget</b> — position in the run; ε and α (learning rate) anneal across it.</li>
+                      <li><b>W · D · L</b> — training outcomes. Variety is signal; all-draws means the board is giving the learner no gradient.</li>
+                      <li><b>vs random</b> — every 25 games, greedy-with-current-values plays 16 seeded games against a fixed random opponent
+                        (0.5 = parity, 1.0 = sweep). The history line under W·D·L is the learning curve as numbers.</li>
+                      <li><b>Game ledger</b> — one row per game, newest first: result (cap-length draws marked), plies, the ε it played
+                        under, and the exact per-piece weight change its update landed. The run&apos;s accounting, game by game.</li>
+                      <li><b>Learned values — live</b> — weights separating from the equal start; Δ is the last displayed update; greyed
+                        rows never received signal; pawn&nbsp;=&nbsp;1 ratios are the reading.</li>
+                      <li><b>At completion</b> — the run refolds across sibling seeds into mean&nbsp;±&nbsp;spread next to the chess
+                        defaults: small spread = a real value of this board, large spread = seed noise.</li>
+                    </ul>
+
+                    <h4>Runs — the experiment log</h4>
+                    <p>
+                      <b>Every run is a document on your account, and the level keeps a library of them.</b> A run freezes its
+                      settings (the schedules anneal over its whole budget) and accumulates everything it produced — games played,
+                      the weights, the probe history, the game ledger, the result table and its Kept mark, and any adoption made
+                      from it. It autosaves (about a second after each change) and restores when you return, on any device. The
+                      <b> Run</b> picker on the right is the library: <b>+ New run</b> shelves the open run and unfreezes the
+                      settings — tweak one knob, run again, and <b>⇄ compare</b> puts every run side by side to answer what the
+                      change bought. That loop — change one thing, re-run, compare — is the whole method; ML tools call it
+                      <b> experiment tracking</b> (MLflow, Weights &amp; Biases), and the run is its unit. <b>Delete run is the only
+                      discard</b> (the level&apos;s adopted AI, if any, survives until you clear it in the audit box). One deliberate
+                      exception: a dealt-but-unfinished game is not stored — it re-deals identically from the same seed, so nothing
+                      is lost. And determinism still holds underneath: a run&apos;s whole identity is (board, master seed, settings);
+                      the same seed replays the same games to the same values.
+                    </p>
+
+                    <h4>Becoming a level&apos;s AI — approaches, setting, auditing</h4>
+                    <p>
+                      A level&apos;s AI is a named <b>approach</b> carrying its own tuned parameters — never a bare number set.
+                      An approach is the whole recipe: the algorithm, the evaluation it searches, and that evaluation&apos;s
+                      parameter set. Today there is one — <b>{AI_APPROACHES[MATERIAL_SEARCH].name}</b>
+                      ({AI_APPROACHES[MATERIAL_SEARCH].technique}) — and both tuning surfaces feed it: this pane&apos;s runs and
+                      the Training tab&apos;s SPSA champions tune the <i>same</i> approach&apos;s values. A future approach
+                      (piece-square tables, a small value network — the next rungs of the ladder) gets its <i>own</i> parameter
+                      slot beside this one: pointing the level at one approach never destroys another&apos;s tuning.
+                      <b> Setting:</b> the &ldquo;Make it this level&apos;s AI&rdquo; table shows exactly what will be set — the
+                      learned pawn&nbsp;=&nbsp;1 values become the evaluation&apos;s piece values (types that never received
+                      signal keep the default, marked), and Adopt points the level at the approach with these values — the very
+                      next enemy reply plays under them. <b>Resolution</b>, checked before every enemy reply: your set approach →
+                      the globally shipped values → the built-in defaults (with nothing set, the level still plays material
+                      search, just with stock values). <b>Auditing:</b> the &ldquo;This level&apos;s AI&rdquo; box always names the
+                      approach in force and where its values come from, shows the exact piece values next to the defaults, and
+                      keeps the provenance record (when, <i>from which run</i>, from which seeds, at how many games).
+                      &ldquo;clear adoption&rdquo; empties the approach&apos;s config and returns the level to stock values — the
+                      run keeps its adoption record as history.
+                    </p>
+
+                    <h4>Keys</h4>
+                    <p className="gym-td-help-keys">
+                      <b>Space</b> watch/pause · <b>→</b> step forward · <b>Shift+→</b> ten plies · <b>←</b> back one position
+                      (view only — nothing un-learns) · <b>Home/End</b> first/latest
+                    </p>
+                  </div>
+                ) : tdCompareView ? (
+                  tdCompareView
                 ) : (
                   <div className={`gym-td-split ${tdReplayPanel ? 'has-stage' : ''}`.trim()}>
                   <div className="gym-td-left">
                 <div className="gym-run-head">
-                  <span className={`gym-run-state ${tdBusy || tdWalking ? 'live' : ''}`}>
+                  <span className={`gym-run-state ${tdBusy || tdWalking || tdWatching ? 'live' : ''}`}>
                     {tdSummarizing ? `▶ folding seeds — ${tdSummarizing.done}/${tdSummarizing.total} done`
+                      : tdWatching ? '▶ watching'
                       : tdBusy ? '▶ learning'
                       : tdWalking ? '▶ game in play'
                       : tdComplete ? (tdSummary === null && tdStopped ? '⏹ seed fold stopped' : '✓ budget complete')
@@ -1427,6 +2143,44 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   <span className="wdl"><b className="w">{tdSess.train.outcomes.playerWins}</b> W · <b className="d">{tdSess.train.outcomes.draws}</b> D · <b className="l">{tdSess.train.outcomes.enemyWins}</b> L</span>
                   <span className="gym-hint">training-game outcomes (exploration on) — player wins / draws / enemy wins</span>
                 </div>
+
+                {tdProbeLog.length ? (
+                  <div className="gym-td-probelog" aria-label="Probe history">
+                    <span className="h">vs random over the run — greedy with the current values, 0.5 = parity</span>
+                    <div className="rows">
+                      {tdProbeLog.map((p) => (
+                        <span key={p.game}>@{p.game} <b className="gym-num">{p.winRate.toFixed(3)}</b></span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {tdLedger.length ? (
+                  <div className="gym-td-ledger" aria-label="Game ledger">
+                    <h3>Game ledger <span className="gym-hint">— one row per game, newest first; Δ = what that game&apos;s update moved</span></h3>
+                    <div className="gym-td-table-wrap gym-td-ledger-wrap">
+                      <table className="gym-td-table">
+                        <thead><tr><th>#</th><th>result</th><th>plies</th><th>ε</th><th>Δ P</th><th>Δ N</th><th>Δ B</th><th>Δ R</th><th>Δ Q</th><th>Δ K</th></tr></thead>
+                        <tbody>
+                          {[...tdLedger].reverse().map((row) => (
+                            <tr key={row.game}>
+                              <td className="gym-num">{row.game}</td>
+                              <td className={row.winner === 'player' ? 'w' : row.winner === 'draw' ? 'd' : 'l'}>
+                                {row.winner === 'player' ? 'win' : row.winner === 'draw' ? (row.plies >= (tdKnobs.maxPlies || Infinity) ? 'draw (cap)' : 'draw') : 'loss'}
+                              </td>
+                              <td className="gym-num">{row.plies}</td>
+                              <td className="gym-num">{row.epsilon.toFixed(2)}</td>
+                              {PLAYABLE_PIECE_TYPES.map((t) => {
+                                const d = tdDeltaCell(row.delta[t]);
+                                return <td key={t} className={`delta ${d.cls}`}>{d.txt}</td>;
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div>
                   <h3>Learned values — live</h3>
@@ -1485,16 +2239,87 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                       <div className="gym-td-keep">
                         <button type="button" className="keep" onClick={() => setTdKept(true)}>Keep result</button>
                         <button type="button" className="discard" onClick={() => { setTdSummary(null); setTdKept(false); setTdDiscarded(true); }}>Discard</button>
-                        <span className="gym-hint">Keep pins this table until Reset (this session only — it is not saved to your account); Discard clears it (the run&apos;s numbers stay).</span>
+                        <span className="gym-hint">Keep marks this result in the saved run; Discard clears the table (the run&apos;s numbers stay). The whole run autosaves to your account either way.</span>
                       </div>
                     ) : (
-                      <p className="gym-hint">Kept — this table stays until Reset (this session only; it is not saved to your account).</p>
+                      <p className="gym-hint">Kept — saved with the run on your account; it stays in the run library until deleted.</p>
                     )}
                   </div>
                 ) : null}
 
+                {tdAdoptPreview ? (
+                  <div className="gym-td-adopt" aria-label="Make it this level's AI">
+                    <h3>Make it this level&apos;s AI</h3>
+                    <div className="gym-td-table-wrap">
+                      <table className="gym-td-table">
+                        <thead><tr><th>piece</th><th>learned (pawn = 1)</th><th>will set</th><th>current default</th></tr></thead>
+                        <tbody>
+                          {tdAdoptPreview.map((row) => (
+                            <tr key={row.type} className={row.keptReason ? 'na' : ''}>
+                              <td>{row.type}</td>
+                              <td>{row.learned.toFixed(2)}</td>
+                              <td>{row.adopted}{row.keptReason ? ` (${row.keptReason})` : ''}</td>
+                              <td>{DEFAULT_EVAL_WEIGHTS.pieceValues[row.type]}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="gym-hint">source: {tdSummary
+                      ? <>mean of {tdSummary.perSeed.length} seeds at {tdGamesDone} games</>
+                      : <>live weights at game {tdGamesDone} (the seed fold at budget completion is the steadier read)</>}. Adopting sets a whole approach, not a bare number set: the level&apos;s AI becomes <b>{AI_APPROACHES[MATERIAL_SEARCH].name}</b> carrying these values. It replaces the approach&apos;s previous values on this level, including ones set from the Training tab (both surfaces tune the same approach).</p>
+                    <div className="gym-td-keep">
+                      <button type="button" className="keep" onClick={tdAdopt} disabled={loadingBooks}>Adopt as this level&apos;s AI</button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {level ? (
+                  <div className="gym-td-liveai" aria-label="This level's AI">
+                    <h3>This level&apos;s AI</h3>
+                    <p className="gym-td-liveai-tier">
+                      plays{' '}
+                      <select
+                        aria-label="AI approach"
+                        value={blob.levelAi?.live ?? 'stock'}
+                        disabled={loadingBooks}
+                        onChange={(e) => tdSwitchApproach(e.target.value === 'stock' ? null : (e.target.value as AiApproachId))}
+                      >
+                        <option value="stock">Stock — shipped/default values</option>
+                        {(Object.keys(AI_APPROACHES) as AiApproachId[]).map((id) => {
+                          const has = !!blob.levelAi?.approaches[id];
+                          return (
+                            <option key={id} value={id} disabled={!has}>
+                              {AI_APPROACHES[id].name}{has ? ' — your tuned values' : ' — nothing adopted yet'}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <b>{tdLiveAi.tier}</b>
+                    </p>
+                    <p className="gym-hint">every approach keeps its own tuned values — switching here repoints the level and switching back restores them; a new approach will appear in this picker beside this one</p>
+                    <p className="gym-hint">{tdLiveAi.technique}</p>
+                    <p className="gym-td-liveai-vals">
+                      {PLAYABLE_PIECE_TYPES.map((t) => `${pieceInitial(t)} ${Math.round(tdLiveAi.pieceValues[t] * 100) / 100}`).join(' · ')}
+                    </p>
+                    {!tdLiveAi.usingDefaults ? (
+                      <p className="gym-td-liveai-vals dim">defaults: {PLAYABLE_PIECE_TYPES.map((t) => `${pieceInitial(t)} ${DEFAULT_EVAL_WEIGHTS.pieceValues[t]}`).join(' · ')}</p>
+                    ) : null}
+                    {tdLiveAi.adoption ? (
+                      <p className="gym-hint">adopted {new Date(tdLiveAi.adoption.at).toLocaleString()}{tdLiveAi.fromRunName ? <> — from <b>{tdLiveAi.fromRunName}</b></> : null} — {tdLiveAi.adoption.source === 'seed-mean' ? `mean of seeds ${tdLiveAi.adoption.seeds.join(', ')}` : `live weights (seed ${tdLiveAi.adoption.seeds.join(', ')})`} at {tdLiveAi.adoption.fromGames} games</p>
+                    ) : null}
+                    <p className="gym-hint">resolved before every enemy reply: your set approach → globally shipped values → built-in defaults</p>
+                    {tdLiveAi.hasAdoption ? (
+                      <div className="gym-adopt-row">
+                        <button type="button" onClick={tdClearAdoption} disabled={loadingBooks}>clear adoption</button>
+                        <span className="gym-hint">the approach keeps nothing in force — the level falls back to stock values</span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {tdError ? <p className="gym-error">Value learner failed: {tdError}</p> : null}
-                {!tdStarted && !tdBusy && !tdWalking ? <p className="gym-hint">Every piece starts at the same weight. ⏭ step always advances the algorithm one step: first press deals a training game, each press after plays one ply, and the weight update lands on the last one. Run plays the whole budget at full speed.</p> : null}
+                {!tdStarted && !tdBusy && !tdWalking && !tdWatching ? <p className="gym-hint">Every piece starts at the same weight. ⏭ step always advances the algorithm one step: first press deals a training game, each press after plays one ply, and the weight update lands on the last one. ▶ watch presses step for you, one beat at a time; ▶ run plays the whole budget at full speed.</p> : null}
                   </div>
                   {tdReplayPanel ? <div className="gym-td-right">{tdReplayPanel}</div> : null}
                   </div>
@@ -1661,11 +2486,11 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   : validating ? <p className="gym-hint">Playing the test games — watch the verdict resolve in the main view.</p>
                   : <p className="gym-hint">Plays candidate vs shipped game-by-game until SPRT decides ACCEPT or REJECT.</p>}
 
-                <h3>Live enemy weights <span className="gym-hint">(this level)</span></h3>
+                <h3>Live enemy AI <span className="gym-hint">(this level)</span></h3>
                 <div className="gym-adopt-row">
-                  <span className={`badge ${adoptedActive ? 'on' : 'off'}`}>{adoptedActive ? 'ADOPTED' : 'shipped'}</span>
-                  <span className="gym-hint">{adoptedActive ? 'the played opponent uses the adopted champion' : 'the played opponent uses the shipped defaults'}</span>
-                  {adoptedActive ? <button type="button" onClick={unadopt}>Revert</button> : null}
+                  <span className={`badge ${adoptedActive ? 'on' : 'off'}`}>{adoptedActive ? 'ADOPTED' : 'stock'}</span>
+                  <span className="gym-hint">{adoptedActive ? `plays ${AI_APPROACHES[MATERIAL_SEARCH].name} with your adopted values (this tab's champion or the Piece-values pane — the values pane's audit box names the source)` : 'plays material search with the stock values'}</span>
+                  {adoptedActive ? <button type="button" onClick={unadopt} disabled={loadingBooks}>Revert</button> : null}
                 </div>
 
                 <h3>Eval weights <span className="gym-hint">(champion vs shipped)</span></h3>
@@ -1682,26 +2507,77 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
 
             {mode === 'values' && level ? (
               <>
-                <div className="gym-run-row">
-                  <button type="button" onClick={tdAdvance} disabled={!tdReady || tdBusy || (tdComplete && !tdWalking)}
-                    title={tdWalking ? 'Play the next ply — the update lands on the final one' : 'Deal the next training game; each press after plays one ply'}>⏭ step</button>
-                  <button type="button" onClick={() => tdSend(Math.max(1, tdStepN))} disabled={!tdReady || tdBusy || tdComplete}
-                    title="Play N whole games at full speed">⏭ games</button>
-                  <input className="gym-td-stepn-input" type="number" min={1} max={100000} value={tdStepN}
-                    onChange={(e) => setTdStepN(Math.max(1, Math.floor(Number(e.target.value) || 1)))} aria-label="Games per batch step" />
+                <div className="gym-bookmgr" aria-label="Run library">
+                  <label className="gl-field">Run
+                    <select value={tdRunId ?? ''} onChange={(e) => tdOpenRun(Number(e.target.value))}
+                      disabled={tdBusy || loadingBooks || tdRunList.length === 0}
+                      title="The level's run library — every run stays until you delete it; switching restores that run whole (a dealt-but-unfinished game re-deals identically)">
+                      {tdRunId === null ? <option value="">— new run (recorded at its first game) —</option> : null}
+                      {tdRunList.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {`${r.name} — ${r.opts.games}g · seed ${r.opts.seed} · ${r.session.train.game >= r.opts.games ? '✓ done' : `game ${r.session.train.game}/${r.opts.games}`}${tdLiveAi.fromRunId === r.id ? ' · LIVE AI' : ''}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {tdActiveRun ? (
+                    <label className="gl-field">run name
+                      <input key={tdActiveRun.id} type="text" maxLength={60} defaultValue={tdActiveRun.name}
+                        onBlur={(e) => tdRenameRun(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                        aria-label="Rename this run" />
+                    </label>
+                  ) : null}
+                  <div className="gym-bookmgr-btns">
+                    <button type="button" className="new" onClick={tdNewRun} disabled={tdBusy || loadingBooks || (tdRunId === null && !tdStarted && !tdWalking)}
+                      title="Shelve this run in the library and start the next experiment — settings unfreeze, so tweak a knob and run again">+ New run</button>
+                    <button type="button" className="del" onClick={tdDeleteRun}
+                      disabled={tdBusy || loadingBooks || (tdRunId === null && !tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)}
+                      title="Delete this run from the library — the one discard (the level's adopted AI, if any, stays until cleared in the audit box)">Delete run</button>
+                    <button type="button" onClick={() => { setTdCompare((c) => !c); setTdHelp(false); }} aria-pressed={tdCompare} disabled={tdRunList.length < 2}
+                      title="Every saved run side by side — settings, outcomes, learned values">⇄ compare</button>
+                  </div>
+                  <span className="gym-count">{tdRunList.length} run{tdRunList.length === 1 ? '' : 's'} for this level — every run stays until deleted.</span>
+                  {saveError ? <p className="gym-error">{saveError}</p> : null}
                 </div>
                 <div className="gym-run-row">
-                  <button type="button" className="play" onClick={() => tdSend('run')} disabled={!tdReady || tdBusy || (tdComplete && tdSummary !== null)}>▶ run</button>
-                  <button type="button" onClick={tdStop} disabled={!tdBusy}>⏹ stop</button>
-                  <button type="button" onClick={tdReset} disabled={tdBusy || (!tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)}>↺ reset</button>
+                  <button type="button" onClick={tdAdvance} disabled={!tdReady || tdBusy || loadingBooks || (tdComplete && !tdWalking)}
+                    title={tdWalking ? 'Play the next ply — the update lands on the final one' : 'Deal the next training game; each press after plays one ply'}>⏭ step</button>
+                  <button type="button" onClick={() => tdSend(Math.max(1, tdStepN))} disabled={!tdReady || tdBusy || loadingBooks || tdComplete}
+                    title="Play N whole games at full speed">⏭ games</button>
+                  <input className="gym-td-stepn-input" type="number" min={1} max={100000} value={tdStepN} list="gym-td-step-presets"
+                    onChange={(e) => setTdStepN(Math.max(1, Math.floor(Number(e.target.value) || 1)))} aria-label="Games per batch step" />
+                  <datalist id="gym-td-step-presets">
+                    {[1, 2, 5, 10, 25, 50, 100, 1000].map((n) => <option key={n} value={n} />)}
+                  </datalist>
+                </div>
+                <div className="gym-run-row">
+                  <button type="button" className="play gym-td-watch-btn" onClick={() => { tdWatchScopeRef.current = 'run'; setTdWatching((w) => !w); }} disabled={!tdReady || loadingBooks || (tdComplete && !tdWalking)}
+                    title={tdWatching ? 'Pause — the game in play keeps its place' : 'The system plays by itself, one step per beat: each ply on the board, the update landing at every game’s end, game after game, until you pause'}>
+                    {tdWatching ? '⏸ pause' : '▶ watch'}
+                  </button>
+                  <button type="button" onClick={() => { setTdWatching(false); tdSend('run'); }} disabled={!tdReady || tdBusy || loadingBooks || (tdComplete && tdSummary !== null)}
+                    title="Full speed, no animation — plays the remaining budget in seconds; same numbers, bit for bit">▶ run</button>
+                  <button type="button" onClick={() => { setTdWatching(false); tdStop(); }} disabled={!tdBusy && !tdWatching}>⏹ stop</button>
+                </div>
+                <label className="gym-td-speed" title="Watch tempo — steps per second; Max is a step every frame">
+                  <span>speed</span>
+                  <input type="range" min={0} max={100} value={tdBeatToSlider(tdBeatMs)}
+                    onChange={(e) => setTdBeatMs(tdSliderToBeat(Number(e.target.value)))} aria-label="Watch tempo" />
+                  <b className="gym-num">{tdBeatReadout(tdBeatMs)}</b>
+                </label>
+                <div className="gym-run-row">
+                  <button type="button" onClick={() => { setTdHelp((h) => !h); setTdCompare(false); }} aria-pressed={tdHelp}
+                    title="What this algorithm is, how to read its progress, how runs are saved and compared, and how one becomes a level's AI">? how this works</button>
                 </div>
                 {!tdReady ? <p className="gym-hint">Preparing learner…</p>
+                  : tdWatching ? <p className="gym-hint">Watching — the system plays by itself, one step per beat; each game&apos;s update lands as it ends. Pause (or ⏹) any time; nothing is ever half-applied.</p>
                   : tdBusy ? <p className="gym-hint">{tdSummarizing ? 'Folding sibling seeds into the mean ± spread table…' : 'Playing training games — Stop lands between games, nothing half-applied.'}</p>
-                  : tdWalking ? <p className="gym-hint">Game {tdPending?.game} is in play — each ⏭ step plays one ply (⏩ to end finishes it); its weight update lands when the game ends. ⏭ games / Run consume it as the batch&apos;s first game; Reset discards it unlearned.</p>
-                  : tdComplete && tdSummary === null && tdDiscarded ? <p className="gym-hint">Result discarded — the run&apos;s numbers stay. Run recomputes the mean ± spread table; Reset starts a new run.</p>
-                  : tdComplete && tdSummary === null ? <p className="gym-hint">Budget done but the seed fold was stopped — Run finishes the mean ± spread table, or Reset.</p>
-                  : tdComplete ? <p className="gym-hint">Budget complete. Keep or Discard the result in the main pane; Reset starts a new run.</p>
-                  : tdStarted ? <p className="gym-hint">Paused at game {tdGamesDone}. Settings are frozen mid-run (the schedules anneal over the whole budget) — Reset to change them.</p>
+                  : tdWalking ? <p className="gym-hint">Game {tdPending?.game} is in play — each ⏭ step plays one ply (⏩ to end finishes it); its weight update lands when the game ends. ⏭ games / Run consume it as the batch&apos;s first game; + New run discards it unlearned.</p>
+                  : tdComplete && tdSummary === null && tdDiscarded ? <p className="gym-hint">Result discarded — the run&apos;s numbers stay. Run recomputes the mean ± spread table; + New run starts the next experiment.</p>
+                  : tdComplete && tdSummary === null ? <p className="gym-hint">Budget done but the seed fold was stopped — Run finishes the mean ± spread table, or + New run.</p>
+                  : tdComplete ? <p className="gym-hint">Budget complete. Keep or Discard the result in the main pane; + New run starts the next experiment — this run stays in the library, and ⇄ compare puts them side by side.</p>
+                  : tdStarted ? <p className="gym-hint">Paused at game {tdGamesDone}. Settings are frozen per run (the schedules anneal over the whole budget) — + New run to change them.</p>
                   : null}
 
                 <h3>Learner settings</h3>
@@ -1710,7 +2586,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                     plus the blanket "↺ all settings" below. Master seed is VIEW state (the
                     ADR's named exemption), so it carries none and the blanket keeps it. */}
                 <fieldset className="gym-td-knobs" disabled={tdKnobsFrozen}>
-                  <label className="gl-field"><span>games budget<InfoTip label="games budget">How many self-play training games one run plays. The exploration (ε) and learning-rate (α) schedules anneal across THIS whole budget, so it is fixed once a run starts — Reset to change it.</InfoTip></span>
+                  <label className="gl-field"><span>games budget<InfoTip label="games budget">How many self-play training games one run plays. The exploration (ε) and learning-rate (α) schedules anneal across THIS whole budget, so it is fixed once a run starts — + New run to change it.</InfoTip></span>
                     <div className="pages-ctl-row">
                       <input type="number" min={1} max={100000} value={tdKnobs.games} onChange={(e) => setTdKnob({ games: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} />
                       {ctlReset(() => setTdKnob({ games: TD_KNOB_DEFAULTS.games }))}
