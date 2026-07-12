@@ -872,13 +872,18 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   // --- The run as a web-backed document in the level's run library -------------
   // Every meaningful change autosaves into the pane's run inside the account blob,
   // via the same commit path the opening books use; the load effect above restores
-  // the open run. The save is a TRAILING DEBOUNCE — event-driven, nothing polls:
-  // each change arms a one-shot timer and cancels the previous, so a run's ~10
-  // progress frames/second coalesce into one whole-blob PUT instead of hundreds.
-  // The debounce tail is covered by a pagehide flush below, so closing the tab
-  // mid-window loses nothing. A fresh pane's FIRST save records a new run.
+  // the open run. The save is a TRAILING DEBOUNCE WITH A MAX WAIT — event-driven,
+  // nothing polls: each change arms a one-shot timer and cancels the previous, so a
+  // run's ~10 progress frames/second coalesce into one whole-blob PUT instead of
+  // hundreds. A pure trailing debounce would be STARVED by a streaming ▶ run
+  // (frames land faster than the window forever), so once the last landed save is
+  // 10s old the next change saves immediately — a long run persists every ~10s,
+  // bounding what a crash or tab-close can lose. The pagehide flush below covers
+  // the tail best-effort (keepalive bodies cap at ~64KB; the periodic saves are the
+  // durable path). A fresh pane's FIRST save records a new run.
   const tdKnobsRef = useRef(tdKnobs); tdKnobsRef.current = tdKnobs;
   const tdFlushRef = useRef<((keepalive: boolean) => void) | null>(null);
+  const tdLastSaveRef = useRef(0);
   useEffect(() => {
     // While the account blob is still loading, saving would clobber the server-side
     // library with this tab's empty one (the transport is gated on the same flag,
@@ -896,15 +901,23 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
       if (tdRunIdRef.current !== run.id) { tdRunIdRef.current = run.id; setTdRunId(run.id); }
       return { blob: { ...blobRef.current, tdRuns: lib }, run };
     };
+    // Max wait: the ref holds the last landed save — or, before any save has
+    // landed, the FIRST pending change (a run started on a fresh pane must not
+    // starve). Once it is 10s stale the save fires NOW instead of trailing (0ms
+    // keeps it async and coalesces the current frame burst).
+    if (tdLastSaveRef.current === 0) tdLastSaveRef.current = Date.now();
+    const overdue = Date.now() - tdLastSaveRef.current > 10_000;
     const id = setTimeout(() => {
       tdFlushRef.current = null;
+      tdLastSaveRef.current = Date.now();
       commit(buildNext().blob);
-    }, 1200);
+    }, overdue ? 0 : 1200);
     // The pending save, flushable NOW: keepalive = a PUT that outlives the tab
     // (pagehide); otherwise the normal commit path (run switches flush through it).
     tdFlushRef.current = (keepalive: boolean) => {
       clearTimeout(id);
       tdFlushRef.current = null;
+      tdLastSaveRef.current = Date.now();
       const next = buildNext().blob;
       if (keepalive) {
         blobRef.current = next;
