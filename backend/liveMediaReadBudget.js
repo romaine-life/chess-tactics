@@ -86,7 +86,9 @@ function createByteReadBudget({ maxBytes, timeoutMs }) {
     timeoutError.name = 'TimeoutError';
     timeoutError.code = 'LIVE_MEDIA_READ_TIMEOUT';
     const timer = setTimeout(() => controller.abort(timeoutError), deadlineMs);
-    timer.unref?.();
+    // The deadline is part of the read's completion contract. Keeping this
+    // timer referenced ensures a pending storage promise still settles even in
+    // a worker/test process with no unrelated event-loop handles.
     const onExternalAbort = () => controller.abort(abortReason(externalSignal));
     if (externalSignal) {
       if (externalSignal.aborted) onExternalAbort();
