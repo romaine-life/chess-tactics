@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-7af8c80d378ca345345e77c55e04f531af8474f58682d5cc814cfd3031f25450"
+  tag: "app-36ef1258d04360cea110828f2fa17ca1c9fc9eca65bb835711134370e744165d"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add Chrome Lab frame tuning"
-  prNumber: "478"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/478"
-  commit: "5bbc410"
+  prTitle: "Per-level AI is a named approach, with a visible picker"
+  prNumber: "480"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/480"
+  commit: "20eb43f"
 
 name: chess-tactics
 namespace: chess-tactics
