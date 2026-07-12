@@ -6,7 +6,6 @@ import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { ViewPane } from './shared/ViewPane';
 import { FacingCompass } from './studioBoard';
 import {
-  MISSING_DIRECTION_SPRITE,
   familyLabels,
   hasDirectionSprite,
   rookDirections,
@@ -95,11 +94,11 @@ export function UnitArtLab({
     const index = rookDirections.indexOf(direction);
     onDirection(rookDirections[(index + 1) % rookDirections.length] ?? 'south');
   };
-  const spriteFor = (palette: UnitPalette): string => (
+  const spriteFor = (palette: UnitPalette): string | null => (
     artPreview?.sprites[palette]?.[direction]
     ?? (hasDirectionSprite(selectedUnit, direction)
       ? selectedUnit.sprite(palette, direction)
-      : MISSING_DIRECTION_SPRITE)
+      : null)
   );
 
   return (
@@ -125,6 +124,7 @@ export function UnitArtLab({
           >
             {FORMATION.map(({ x, y, palette }) => {
               const { left, top } = boardLabCellPosition({ x, y });
+              const sprite = spriteFor(palette);
               const style: UnitSeatStyle = {
                 left,
                 top,
@@ -134,15 +134,21 @@ export function UnitArtLab({
               };
               return (
                 <span key={palette} className={`board-unit-seat is-${selectedUnit.family}`} style={style}>
-                  <img
-                    src={spriteFor(palette)}
-                    alt={`${UNIT_PALETTE_LABELS[palette]} ${selectedUnit.label}`}
-                    draggable={false}
-                    style={{
-                      width: `${artPreview?.width ?? deliveryRaster.width}px`,
-                      height: `${artPreview?.height ?? deliveryRaster.height}px`,
-                    }}
-                  />
+                  {sprite ? (
+                    <img
+                      src={sprite}
+                      alt={`${UNIT_PALETTE_LABELS[palette]} ${selectedUnit.label}`}
+                      draggable={false}
+                      style={{
+                        width: `${artPreview?.width ?? deliveryRaster.width}px`,
+                        height: `${artPreview?.height ?? deliveryRaster.height}px`,
+                      }}
+                    />
+                  ) : (
+                    <span className="unit-art-missing-frame" role="status">
+                      Missing {direction} frame
+                    </span>
+                  )}
                 </span>
               );
             })}

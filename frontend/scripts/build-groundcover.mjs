@@ -1,4 +1,4 @@
-// Build ground-cover sprite sheets from committed PixelLab sources, per terrain.
+// Build ground-cover candidate sheets from explicitly fetched sources, per terrain.
 //
 // Pipeline (all baked here — never CSS): recolor each source to a brighter-than-tile
 // ramp (so it pops, not camouflages), 2x downscale (crisp + low), "groundify" (bake a
@@ -6,15 +6,60 @@
 // on), then — for ANIMATED cover (grass, reeds) — a base-pinned shear into a 6-frame
 // gentle sway. STATIC cover (pebbles) is a single frame, no sway.
 //
-// Output: one horizontal sheet per variant (frameCount frames wide) + a typed manifest
-// per terrain. Re-run after changing a source: `node scripts/build-groundcover.mjs`.
-//
-// Source of truth = scripts/groundcover/src/<terrain>/<n>.png (committed).
-// Generated = public/assets/groundcover/<terrain>/ + src/art/groundcover/<terrain>.generated.ts
+// Output: one horizontal sheet per variant plus an outside-repository live-media
+// candidate-batch manifest. Pass --api-base to upload that exact batch; without
+// it, the manifest is ready for live-media-admin-client.mjs. No source module or
+// committed runtime directory is ever produced.
 
 import pkg from 'pngjs';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, realpathSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  LiveMediaAdminClient,
+  readCandidateBatchManifest,
+  uploadCandidateBatch,
+} from './live-media-admin-client.mjs';
 const { PNG } = pkg;
+
+const option = (name) => {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : '';
+};
+const sourceRoot = option('--source-dir');
+const tileRoot = option('--tile-dir');
+const outputRoot = option('--out-dir');
+const apiBase = option('--api-base');
+const requestedBatchId = option('--batch-id');
+if (!sourceRoot || !tileRoot || !outputRoot) {
+  console.error('usage: build-groundcover.mjs --source-dir <temp> --tile-dir <temp> --out-dir <temp> [--api-base <url>] [--batch-id <id>]');
+  process.exit(2);
+}
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+function canonicalPath(candidate) {
+  let cursor = resolve(candidate);
+  const suffix = [];
+  while (!existsSync(cursor)) {
+    const parent = dirname(cursor);
+    if (parent === cursor) break;
+    suffix.unshift(basename(cursor));
+    cursor = parent;
+  }
+  return resolve(realpathSync(cursor), ...suffix);
+}
+function isWithin(parent, child) {
+  const pathFromParent = relative(parent, child);
+  return pathFromParent === '' || (!pathFromParent.startsWith('..') && !isAbsolute(pathFromParent));
+}
+for (const [label, directory] of [
+  ['--source-dir', sourceRoot], ['--tile-dir', tileRoot], ['--out-dir', outputRoot],
+]) {
+  if (isWithin(realpathSync(repoRoot), canonicalPath(directory))) {
+    throw new Error(`${label} must be outside the Git repository; ground-cover media is live-backed`);
+  }
+}
 
 // Per-terrain config. `anchors` is the dark→bright recolor ramp; `animated` cover sways,
 // static cover (pebbles) lies flat. `greenOnly` keeps grass's exact original sampling.
@@ -112,14 +157,15 @@ function shearFrame(G, baseY, f, padX) {
 }
 
 let built = 0;
+const candidates = [];
 for (const cfg of TERRAINS) {
-  const SRC_DIR = `scripts/groundcover/src/${cfg.src ?? cfg.terrain}`;
+  const SRC_DIR = resolve(sourceRoot, cfg.src ?? cfg.terrain);
   if (!existsSync(SRC_DIR)) { console.log(`skip ${cfg.terrain}: no sources at ${SRC_DIR}`); continue; }
   const sources = readdirSync(SRC_DIR).filter((f) => /^\d+\.png$/.test(f)).sort((a, b) => parseInt(a) - parseInt(b));
   if (sources.length === 0) { console.log(`skip ${cfg.terrain}: empty sources`); continue; }
-  const OUT_DIR = `public/assets/groundcover/${cfg.terrain}`;
+  const OUT_DIR = resolve(outputRoot, cfg.terrain);
   mkdirSync(OUT_DIR, { recursive: true });
-  const tile = PNG.sync.read(readFileSync(`public/assets/tiles/surface/${cfg.tile}`));
+  const tile = PNG.sync.read(readFileSync(resolve(tileRoot, cfg.tile)));
   const darkG = sampleDark(tile, cfg.greenOnly);
   const shadowCol = [Math.round(darkG[0] * 0.62), Math.round(darkG[1] * 0.66), Math.round(darkG[2] * 0.55)];
   const ramp = buildRamp(cfg.anchors);
@@ -139,16 +185,71 @@ for (const cfg of TERRAINS) {
         sheet.data[di] = fr.data[si]; sheet.data[di + 1] = fr.data[si + 1]; sheet.data[di + 2] = fr.data[si + 2]; sheet.data[di + 3] = fr.data[si + 3];
       }
     }
-    writeFileSync(`${OUT_DIR}/v${id}.png`, PNG.sync.write(sheet));
-    variants.push({ id, frameW, frameH, baseX: gr.cx + padX, baseY: gr.baseY, w: gr.w });
+    const bytes = PNG.sync.write(sheet);
+    writeFileSync(join(OUT_DIR, `v${id}.png`), bytes);
+    const groundCover = {
+      terrain: cfg.terrain,
+      id,
+      frameWidth: frameW,
+      frameHeight: frameH,
+      frameCount,
+      baseX: gr.cx + padX,
+      baseY: gr.baseY,
+      contentWidth: gr.w,
+    };
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    variants.push(groundCover);
+    candidates.push({
+      id: `${cfg.terrain}-v${id}`,
+      file: `${cfg.terrain}/v${id}.png`,
+      slot: `groundcover/${cfg.terrain}/v${id}.png`,
+      domain: 'terrain',
+      role: 'media',
+      label: `${cfg.terrain} ground cover v${id}`,
+      availabilityPolicy: 'critical',
+      mediaType: 'image/png',
+      sourceIds: [],
+      metadata: { runtime: { groundCover } },
+      provenance: {
+        generator: 'frontend/scripts/build-groundcover.mjs',
+        pipeline: 'ground-cover-live-candidate-v1',
+      },
+      nativeEvidence: {
+        native1x: true,
+        spatialResampling: false,
+        sourceWidth: sheet.width,
+        sourceHeight: sheet.height,
+        sourceSha256: sha256,
+      },
+    });
   }
-  const SRC_MANIFEST_DIR = 'src/art/groundcover';
-  mkdirSync(SRC_MANIFEST_DIR, { recursive: true });
-  const ts = `// AUTO-GENERATED by scripts/build-groundcover.mjs — do not edit by hand.\n`
-    + `// Re-run \`node scripts/build-groundcover.mjs\` after changing a source.\n`
-    + `export default ${JSON.stringify({ terrain: cfg.terrain, frameCount, variants })} as const;\n`;
-  writeFileSync(`${SRC_MANIFEST_DIR}/${cfg.terrain}.generated.ts`, ts);
   console.log(`built ${variants.length} ${cfg.terrain} variants (${cfg.animated ? 'animated' : 'static'}) -> ${OUT_DIR}`);
   built += 1;
 }
-console.log(`done: ${built} terrain(s).`);
+if (!candidates.length) throw new Error('No ground-cover candidates were built');
+const batchDigest = createHash('sha256')
+  .update(JSON.stringify(candidates.map((candidate) => ({
+    slot: candidate.slot,
+    metadata: candidate.metadata,
+    sourceSha256: candidate.nativeEvidence.sourceSha256,
+  }))))
+  .digest('hex');
+const batchId = requestedBatchId || `ground-cover-${batchDigest.slice(0, 24)}`;
+const manifestPath = join(resolve(outputRoot), 'live-media-candidate-batch.json');
+writeFileSync(manifestPath, `${JSON.stringify({
+  schema: 'live-media-candidate-batch-v1',
+  batchId,
+  sources: [],
+  candidates,
+}, null, 2)}\n`);
+const manifest = readCandidateBatchManifest(manifestPath);
+
+console.log(`done: ${built} terrain(s); live candidate manifest -> ${manifestPath}`);
+if (apiBase) {
+  const headers = process.env.LIVE_MEDIA_COOKIE ? { Cookie: process.env.LIVE_MEDIA_COOKIE } : {};
+  const client = new LiveMediaAdminClient({ apiBase, headers });
+  const result = await uploadCandidateBatch({ client, manifest });
+  console.log(JSON.stringify(result, null, 2));
+} else {
+  console.log(`upload with: node frontend/scripts/live-media-admin-client.mjs upload-candidate-batch --api-base <url> --manifest "${manifestPath}"`);
+}

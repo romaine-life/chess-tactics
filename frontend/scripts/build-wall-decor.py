@@ -1,35 +1,22 @@
-"""Normalize generated wall-decor sprites into runtime assets and proof sheets.
+"""Normalize fetched wall-decoration sources into temporary candidates/proofs.
 
-Input source sprites are transparent PNGs from forge-wall-decor.mjs:
-
-  docs/art/wall-art-concepts/codex/<id>-alpha.png
-
-Outputs:
-
-  frontend/public/assets/wall-decor/<id>.png
-  frontend/public/assets/wall-decor/<id>-west.png
-  frontend/public/assets/wall-decor/<id>-north.png
-  frontend/public/assets/wall-decor/manifest.json
-  frontend/src/ui/design/wallDecorManifest.json
-  docs/art/wall-art-concepts/wall-decor-contact-sheet.png
-  docs/art/wall-art-concepts/proofs/wall-decor-runtime-proof.png
+The output manifest is a local upload plan, not accepted-pointer authority.
+Upload exact candidate bytes through the live-media admin workflow.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
 from PIL import Image, ImageDraw
 
 
-ROOT = Path(__file__).resolve().parents[2]
-DOCS = ROOT / "docs" / "art" / "wall-art-concepts"
-SRC_DIR = DOCS / "codex"
-PROOF_DIR = DOCS / "proofs"
-OUT_DIR = ROOT / "frontend" / "public" / "assets" / "wall-decor"
-UI_MANIFEST = ROOT / "frontend" / "src" / "ui" / "design" / "wallDecorManifest.json"
-WALL_SAMPLE = ROOT / "frontend" / "public" / "assets" / "tiles" / "feature" / "wall-stone-9.png"
+SRC_DIR: Path
+PROOF_DIR: Path
+OUT_DIR: Path
+WALL_SAMPLE: Path
 
 ASSETS = [
     {
@@ -201,7 +188,7 @@ def write_contact_sheet(rendered: dict[str, dict[str, object]]) -> None:
         west_target = tuple(round(v * 0.75) for v in asset["west_target"])
         sheet.alpha_composite(west, (x0 + 57 + west_target[0] - west_anchor[0], 78 + west_target[1] - west_anchor[1]))
         draw.text((x0 + 10, 256), f"{asset['kind']} / {asset['badge']}", fill=(125, 170, 200, 255))
-    sheet.save(DOCS / "wall-decor-contact-sheet.png")
+    sheet.save(PROOF_DIR / "wall-decor-contact-sheet.png")
 
 
 def write_runtime_proof(rendered: dict[str, dict[str, object]]) -> None:
@@ -225,7 +212,7 @@ def write_runtime_proof(rendered: dict[str, dict[str, object]]) -> None:
 def write_manifest(rendered: dict[str, dict[str, object]]) -> None:
     manifest = {
         "generatedBy": "frontend/scripts/build-wall-decor.py",
-        "source": "docs/art/wall-art-concepts/codex/<id>-alpha.png",
+        "source": "private live-media source versions",
         "imageRendering": "pixelated",
         "assets": [
             {
@@ -266,11 +253,22 @@ def write_manifest(rendered: dict[str, dict[str, object]]) -> None:
     }
     manifest_json = json.dumps(manifest, indent=2) + "\n"
     (OUT_DIR / "manifest.json").write_text(manifest_json, encoding="utf-8")
-    UI_MANIFEST.write_text(manifest_json, encoding="utf-8")
 
 
 def main() -> None:
+    global SRC_DIR, PROOF_DIR, OUT_DIR, WALL_SAMPLE
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source-dir', required=True, type=Path, help='Temporary directory containing <id>-alpha.png source versions')
+    parser.add_argument('--wall-sample', required=True, type=Path, help='Fetched wall candidate used only for supplementary proofs')
+    parser.add_argument('--out-dir', required=True, type=Path, help='Temporary candidate output directory')
+    parser.add_argument('--proof-dir', required=True, type=Path, help='Temporary supplementary proof directory')
+    args = parser.parse_args()
+    SRC_DIR = args.source_dir.resolve()
+    WALL_SAMPLE = args.wall_sample.resolve()
+    OUT_DIR = args.out_dir.resolve()
+    PROOF_DIR = args.proof_dir.resolve()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    PROOF_DIR.mkdir(parents=True, exist_ok=True)
     rendered: dict[str, dict[str, object]] = {}
     for asset in ASSETS:
         source = normalize(asset)

@@ -7,7 +7,7 @@ This manifest defines the next production art batch for the Tileset Studio board
 - Canonical canvas: `96x140px`
 - Top diamond: `96x55.426px`
 - Grid step: `stepX 48`, `stepY 27.713`
-- Style target: `frontend/public/assets/art/skirmish-style-target.png`
+- Style target: live slot `/assets/art/skirmish-style-target.png`
 - Current base families: Grass, Stone, Water
 - Current transition pairs: Grass-Stone, Grass-Water, Stone-Water
 
@@ -22,7 +22,9 @@ Required output:
 - Grass base tile.
 - Stone base tile.
 - Water base tile.
-- One contact sheet showing all bases at `1x`, `2x`, and in a small board patch.
+- One private review version showing all bases at `1x`, `2x`, and in a small
+  board patch. It supplements, but does not replace, exact-candidate review in
+  the real board renderer.
 
 Priorities:
 
@@ -87,7 +89,8 @@ Each accepted transition must include:
 
 ## Normalization Gates
 
-Before an asset can enter `canonical-true-iso` or equivalent production folders, verify:
+Before a candidate can become acceptance-eligible for the
+`tiles/canonical-true-iso/*` semantic namespace, verify:
 
 - Canvas is exactly `96x140px`.
 - Top diamond aligns to the canonical template.
@@ -96,6 +99,10 @@ Before an asset can enter `canonical-true-iso` or equivalent production folders,
 - Pixel rendering holds up at intended board scale with image smoothing disabled.
 - Palette and contrast fit beside the current Grass, Stone, and Water base tiles.
 - No accidental chess pieces, UI fragments, labels, shadows outside bounds, or crop artifacts.
+
+Those names identify backend slots, not production folders. Inputs and outputs
+stay in an outside-repository temporary workspace until the exact bytes are
+uploaded as live-media versions; no batch step copies media into Git.
 
 ## Acceptance Criteria
 
@@ -106,4 +113,4 @@ The batch is accepted when:
 - Batch C covers all supported pairs with at least the single-edge and adjacent-corner masks accepted.
 - Missing lower-priority masks are documented as explicit open slots, not silent gaps.
 - Generated board previews show legal sockets and no visible geometry drift.
-- The board reads as one tactics surface matching `frontend/public/assets/art/skirmish-style-target.png`.
+- The board reads as one tactics surface matching live slot `/assets/art/skirmish-style-target.png`.

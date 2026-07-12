@@ -11,7 +11,7 @@ from generic medieval locations alone.
 
 Use the accepted generated main-menu background as the style anchor:
 
-- `frontend/public/assets/ui/main-menu/background-scene-v1.png`
+- live slot `/assets/ui/main-menu/background-scene-v1.png`
 
 The target is refined video-game background art in the accepted main-menu style:
 pixel-art scenic illustration with disciplined clusters, visible game-art
@@ -181,8 +181,8 @@ no glowing magic, no chessboard motif.
 
 When these assets are wired into the app:
 
-- Store production images under `frontend/public/assets/backgrounds/` or a more
-  specific route-owned subfolder.
+- Upload production candidates under stable `backgrounds/*` semantic slots;
+  private Blob Storage owns their immutable bytes.
 - Keep filenames semantic and stable, e.g.
   `world-road-village-v1.png`, `portrait-bishop-chapel-v1.png`.
 - Use manifest data for semantic role, safe crop, focal area, and intended route.

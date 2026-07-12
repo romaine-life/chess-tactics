@@ -2,15 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { consumeNewBuildReloadIntent, extractEntryHash, isNewBuildLive, reloadForNewBuild } from './appUpdate';
 
 const mockIndex = (hash: string, ok = true) =>
-  vi.fn(async () => ({ ok, text: async () => `<script type="module" src="/assets/index-${hash}.js"></script>` }) as unknown as Response);
+  vi.fn(async () => ({ ok, text: async () => `<script type="module" src="/app-code/index-${hash}.js"></script>` }) as unknown as Response);
 
 describe('extractEntryHash', () => {
   it('pulls the hash from a Vite entry-chunk script src', () => {
-    expect(extractEntryHash('https://chess.romaine.life/assets/index-DExpuavm.js')).toBe('DExpuavm');
+    expect(extractEntryHash('https://chess.romaine.life/app-code/index-DExpuavm.js')).toBe('DExpuavm');
   });
 
   it('pulls the hash out of a full index.html that references the entry chunk', () => {
-    const html = '<!doctype html><script type="module" crossorigin src="/assets/index-AbC123_-.js"></script>';
+    const html = '<!doctype html><script type="module" crossorigin src="/app-code/index-AbC123_-.js"></script>';
     expect(extractEntryHash(html)).toBe('AbC123_-');
   });
 
@@ -21,8 +21,8 @@ describe('extractEntryHash', () => {
   });
 
   it('distinguishes two different builds', () => {
-    const a = extractEntryHash('/assets/index-aaaaaaaa.js');
-    const b = extractEntryHash('/assets/index-bbbbbbbb.js');
+    const a = extractEntryHash('/app-code/index-aaaaaaaa.js');
+    const b = extractEntryHash('/app-code/index-bbbbbbbb.js');
     expect(a).not.toBe(b);
     expect(a).toBeTruthy();
   });

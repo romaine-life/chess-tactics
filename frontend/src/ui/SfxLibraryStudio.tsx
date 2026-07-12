@@ -1,94 +1,91 @@
 import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import type { TerrainType } from '../core/types';
-import { ARRIVAL_BAKED, AUTHORED_SAMPLE_KEYS, auditionSampleRaw, authoredSampleKeyFor, isSampleReady, loadAuthoredSamples, previewArrival, previewSample, previewTerrain, type SampleKey } from '../sfx';
+import {
+  cloneSfxProfile,
+  currentLiveSfxProfileDocument,
+  assertSfxProfile,
+  type SfxProfile,
+  type SfxProfileDocument,
+  type SfxSoundSetProfile,
+} from '../core/sfxProfile';
+import { auditionSampleRaw, isSampleReady, loadAuthoredSamples, previewSample, type SampleKey } from '../sfx';
 import { sfxSampleWaveform, sfxSampleWaveformCached } from '../sfxWaveform';
-import { ASSIGNABLE_TERRAINS, SFX_ASSETS, type SfxAsset } from './sfxCatalog';
+import { saveLiveSfxProfile } from '../net/sfxProfile';
+import { ASSIGNABLE_TERRAINS, sfxAssets, type SfxAsset } from './sfxCatalog';
 
-// Draft SFX assignments live in localStorage so they survive reloads. They do NOT change
-// the running game — they're a proposal you craft here and hand to Claude (the "Copy for
-// Claude" button), who bakes the final values into TERRAIN_SAMPLE / playArrival.
-const ASSIGN_STORE_KEY = 'chess-tactics-sfx-assignments-v1';
-const ARRIVAL_STORE_KEY = 'chess-tactics-sfx-arrival-v1';
+// Local storage is a crash/reload draft only. The running game and the reset
+// baseline always read the backend document, and Save performs a revision-CAS PUT.
+const PROFILE_DRAFT_KEY = 'chess-tactics-sfx-profile-draft-v1';
 
-type FiringMode = 'per-unit' | 'once';
-interface ArrivalSettings { sound: string; volume: number; firing: FiringMode }
-// Baseline DERIVED from the shipped source (ADR-0057): ARRIVAL_BAKED in sfx.ts is what
-// playArrival + the deploy roll-call actually use, so "Reset to current" can't drift.
-const DEFAULT_ARRIVAL: ArrivalSettings = { sound: ARRIVAL_BAKED.sample, volume: Math.round(ARRIVAL_BAKED.gain * 100), firing: ARRIVAL_BAKED.firing };
+interface StoredDraft { baseRevision: number; data: SfxProfile }
 
-function defaultAssignments(): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const t of ASSIGNABLE_TERRAINS) out[t] = authoredSampleKeyFor(t) ?? '';
-  return out;
-}
-
-function loadAssignments(): Record<string, string> {
-  const out = defaultAssignments();
+function loadDraft(document: SfxProfileDocument): SfxProfile {
   try {
-    const raw = window.localStorage.getItem(ASSIGN_STORE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      for (const t of ASSIGNABLE_TERRAINS) if (typeof parsed[t] === 'string') out[t] = parsed[t] as string;
+    const parsed = JSON.parse(window.localStorage.getItem(PROFILE_DRAFT_KEY) || 'null') as StoredDraft | null;
+    if (parsed?.baseRevision === document.revision && parsed.data && typeof parsed.data === 'object') {
+      assertSfxProfile(parsed.data);
+      return cloneSfxProfile(parsed.data);
     }
-  } catch { /* absent / malformed → defaults */ }
-  return out;
-}
-
-function loadArrival(): ArrivalSettings {
-  const out = { ...DEFAULT_ARRIVAL };
-  try {
-    const raw = window.localStorage.getItem(ARRIVAL_STORE_KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as Partial<ArrivalSettings>;
-      if (typeof p.sound === 'string') out.sound = p.sound;
-      if (typeof p.volume === 'number' && Number.isFinite(p.volume)) out.volume = Math.min(100, Math.max(0, p.volume));
-      if (p.firing === 'per-unit' || p.firing === 'once') out.firing = p.firing;
-    }
-  } catch { /* absent / malformed → defaults */ }
-  return out;
+  } catch { /* stale/malformed draft -> exact live profile */ }
+  return cloneSfxProfile(document.data);
 }
 
 // The SFX assignment editor (terrain→sound + the arrival thump) shown above the grid.
-function SfxAssignmentPanel(): ReactElement {
-  const soundKeys = useMemo(() => AUTHORED_SAMPLE_KEYS.filter((k) => k !== 'arrival'), []);
-  const [assign, setAssign] = useState<Record<string, string>>(() => loadAssignments());
-  const [arrival, setArrival] = useState<ArrivalSettings>(() => loadArrival());
-  const [copied, setCopied] = useState(false);
+function SfxAssignmentPanel({
+  document,
+  onSaved,
+}: {
+  document: SfxProfileDocument;
+  onSaved: (next: SfxProfileDocument) => void;
+}): ReactElement {
+  const [draft, setDraft] = useState<SfxProfile>(() => loadDraft(document));
+  const [status, setStatus] = useState('');
+  const [saving, setSaving] = useState(false);
+  const soundKeys = useMemo(() => Object.keys(draft.soundSets).sort(), [draft.soundSets]);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(document.data);
 
   useEffect(() => {
-    try { window.localStorage.setItem(ASSIGN_STORE_KEY, JSON.stringify(assign)); } catch { /* ignore */ }
-  }, [assign]);
-  useEffect(() => {
-    try { window.localStorage.setItem(ARRIVAL_STORE_KEY, JSON.stringify(arrival)); } catch { /* ignore */ }
-  }, [arrival]);
+    try {
+      if (dirty) window.localStorage.setItem(PROFILE_DRAFT_KEY, JSON.stringify({ baseRevision: document.revision, data: draft }));
+      else window.localStorage.removeItem(PROFILE_DRAFT_KEY);
+    } catch { /* draft persistence is best-effort */ }
+  }, [document.revision, draft, dirty]);
 
-  const setOne = (terrain: string, key: string) => setAssign((a) => ({ ...a, [terrain]: key }));
-  const setArr = (patch: Partial<ArrivalSettings>) => setArrival((a) => ({ ...a, ...patch }));
-  const reset = () => { setAssign(defaultAssignments()); setArrival({ ...DEFAULT_ARRIVAL }); };
-  // Per-control reset (ADR-0057): each row's ↺ restores JUST that control to the baked
-  // baseline; disabled when already at it, so it doubles as a per-control dirty light.
-  const baseAssign = useMemo(() => defaultAssignments(), []);
+  const setOne = (terrain: (typeof ASSIGNABLE_TERRAINS)[number], key: string) => setDraft((current) => ({
+    ...current,
+    terrainAssignments: { ...current.terrainAssignments, [terrain]: key || null },
+  }));
+  const setArrival = (patch: Partial<SfxProfile['arrival']>) => setDraft((current) => ({
+    ...current,
+    arrival: { ...current.arrival, ...patch },
+  }));
+  const setSound = (key: string, patch: Partial<SfxSoundSetProfile>) => setDraft((current) => ({
+    ...current,
+    soundSets: { ...current.soundSets, [key]: { ...current.soundSets[key], ...patch } },
+  }));
+  const reset = () => { setDraft(cloneSfxProfile(document.data)); setStatus('Draft reset to live profile.'); };
   const miniReset = (onReset: () => void, atSaved: boolean, what: string): ReactElement => (
     <button type="button" className="tileset-view-action" title={`Reset ${what} to current`} aria-label={`Reset ${what} to current`}
       disabled={atSaved} onClick={onReset} style={{ minWidth: 30, opacity: atSaved ? 0.4 : 1 }}>↺</button>
   );
-  const copy = () => {
-    const w = Math.max(...ASSIGNABLE_TERRAINS.map((t) => t.length));
-    const terrainLines = ASSIGNABLE_TERRAINS.map((t) => `  ${t.padEnd(w)} -> ${assign[t] ? assign[t] : '(silent)'}`);
-    const text = [
-      'SFX assignments (apply in frontend/src/sfx.ts + game/store.ts):',
-      '',
-      'Terrains (TERRAIN_SAMPLE):',
-      ...terrainLines,
-      '',
-      'Arrival / deploy thump (playArrival):',
-      `  sound  -> ${arrival.sound || 'none (off)'}`,
-      `  volume -> ${arrival.volume}%`,
-      `  firing -> ${arrival.firing}`,
-    ].join('\n');
-    void navigator.clipboard?.writeText(text)
-      .then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1500); })
-      .catch(() => { /* clipboard blocked — the user can still read the rows */ });
+  const save = async () => {
+    if (!dirty || saving) return;
+    setSaving(true);
+    setStatus('Saving…');
+    try {
+      const saved = await saveLiveSfxProfile(draft, document.revision);
+      setDraft(cloneSfxProfile(saved.data));
+      onSaved(saved);
+      try { window.localStorage.removeItem(PROFILE_DRAFT_KEY); } catch { /* ignore */ }
+      setStatus(`Saved live profile revision ${saved.revision}.`);
+    } catch (error) {
+      const code = error && typeof error === 'object' && 'status' in error ? Number(error.status) : 0;
+      setStatus(code === 409 ? 'Save conflict: reload the current live profile and reapply this draft.'
+        : code === 401 ? 'Sign in to save the live SFX profile.'
+          : code === 403 ? 'Admin access is required to save the live SFX profile.'
+            : 'Save failed; the local draft is still preserved.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const label: CSSProperties = { color: 'var(--ds-ink-1, #ecedf2)', textTransform: 'capitalize' };
@@ -99,26 +96,52 @@ function SfxAssignmentPanel(): ReactElement {
   return (
     <div aria-label="Sound assignments" style={{ display: 'grid', gap: 18, alignContent: 'start' }}>
       <div style={{ display: 'grid', gap: 8 }}>
+        <h2 style={heading}>Sound sets</h2>
+        <p className="tileset-catalog-note" style={note}>Backend-owned labels, descriptions, and mix trims for each recorded set.</p>
+        <div style={{ display: 'grid', gap: 10, maxWidth: 720 }}>
+          {soundKeys.map((key) => {
+            const sound = draft.soundSets[key];
+            const saved = document.data.soundSets[key];
+            return (
+              <div key={key} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 110px auto', gap: 8, alignItems: 'center' }}>
+                <strong style={label}>{key}</strong>
+                <input value={sound.label} onChange={(event) => setSound(key, { label: event.target.value })} aria-label={`${key} label`} />
+                <input type="range" min={0} max={2} step={0.05} value={sound.gain}
+                  onChange={(event) => setSound(key, { gain: Number(event.target.value) })} aria-label={`${key} gain`} />
+                <span>{Math.round(sound.gain * 100)}%</span>
+                <span />
+                <input value={sound.character} onChange={(event) => setSound(key, { character: event.target.value })} aria-label={`${key} character`} />
+                <button type="button" className="tileset-view-action" onClick={() => previewSample(key, 1, sound.gain)}>▶</button>
+                {miniReset(() => setSound(key, saved), JSON.stringify(sound) === JSON.stringify(saved), `${key} metadata`) }
+                <span />
+                <input value={sound.build} onChange={(event) => setSound(key, { build: event.target.value })} aria-label={`${key} build`} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 8 }}>
         <h2 style={heading}>Terrain sounds</h2>
         <p className="tileset-catalog-note" style={note}>
-          Which recorded sound voices each terrain — ▶ to hear it. A draft; it doesn’t change the running game.
+          Which recorded sound voices each terrain. Changes remain a local draft until Save.
         </p>
         <div style={rows}>
           {ASSIGNABLE_TERRAINS.map((t) => (
             <Fragment key={t}>
               <span style={label}>{t}</span>
-              <select value={assign[t] ?? ''} onChange={(e) => setOne(t, e.target.value)} aria-label={`Sound for ${t}`} style={{ width: '100%' }}>
+              <select value={draft.terrainAssignments[t] ?? ''} onChange={(e) => setOne(t, e.target.value)} aria-label={`Sound for ${t}`} style={{ width: '100%' }}>
                 <option value="">— silent —</option>
                 {soundKeys.map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
               <button
                 type="button"
                 className="tileset-view-action"
-                disabled={!assign[t]}
-                onClick={() => { if (assign[t]) previewSample(assign[t] as SampleKey); }}
+                disabled={!draft.terrainAssignments[t]}
+                onClick={() => { const key = draft.terrainAssignments[t]; if (key) previewSample(key, 1, draft.soundSets[key].gain); }}
                 aria-label={`Play the sound assigned to ${t}`}
               >▶</button>
-              {miniReset(() => setOne(t, baseAssign[t]), (assign[t] ?? '') === (baseAssign[t] ?? ''), t)}
+              {miniReset(() => setOne(t, document.data.terrainAssignments[t] ?? ''), draft.terrainAssignments[t] === document.data.terrainAssignments[t], t)}
             </Fragment>
           ))}
         </div>
@@ -129,41 +152,42 @@ function SfxAssignmentPanel(): ReactElement {
         <p className="tileset-catalog-note" style={note}>The thump layered over the terrain sound as a unit lands on the board.</p>
         <div style={rows}>
           <span style={label}>Sound</span>
-          <select value={arrival.sound} onChange={(e) => setArr({ sound: e.target.value })} aria-label="Arrival sound" style={{ width: '100%' }}>
+          <select value={draft.arrival.sample ?? ''} onChange={(e) => setArrival({ sample: e.target.value || null })} aria-label="Arrival sound" style={{ width: '100%' }}>
             <option value="">— none (no thump) —</option>
-            {AUTHORED_SAMPLE_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
+            {soundKeys.map((k) => <option key={k} value={k}>{k}</option>)}
           </select>
           <button
             type="button"
             className="tileset-view-action"
-            disabled={!arrival.sound}
-            onClick={() => { if (arrival.sound) previewSample(arrival.sound as SampleKey, arrival.volume / 100); }}
+            disabled={!draft.arrival.sample}
+            onClick={() => { const key = draft.arrival.sample; if (key) previewSample(key, draft.arrival.gain, draft.soundSets[key].gain); }}
             aria-label="Play the arrival sound at its volume"
           >▶</button>
-          {miniReset(() => setArr({ sound: DEFAULT_ARRIVAL.sound }), arrival.sound === DEFAULT_ARRIVAL.sound, 'arrival sound')}
+          {miniReset(() => setArrival({ sample: document.data.arrival.sample }), draft.arrival.sample === document.data.arrival.sample, 'arrival sound')}
 
           <span style={label}>Volume</span>
           <input
-            type="range" min={0} max={100} value={arrival.volume}
-            onChange={(e) => setArr({ volume: Number(e.target.value) })}
+            type="range" min={0} max={2} step={0.05} value={draft.arrival.gain}
+            onChange={(e) => setArrival({ gain: Number(e.target.value) })}
             aria-label="Arrival volume" style={{ width: '100%' }}
           />
-          <span style={{ color: 'var(--ds-ink-2, #aeb4c2)', minWidth: 34, textAlign: 'right' }}>{arrival.volume}%</span>
-          {miniReset(() => setArr({ volume: DEFAULT_ARRIVAL.volume }), arrival.volume === DEFAULT_ARRIVAL.volume, 'arrival volume')}
+          <span style={{ color: 'var(--ds-ink-2, #aeb4c2)', minWidth: 34, textAlign: 'right' }}>{Math.round(draft.arrival.gain * 100)}%</span>
+          {miniReset(() => setArrival({ gain: document.data.arrival.gain }), draft.arrival.gain === document.data.arrival.gain, 'arrival volume')}
 
           <span style={label}>Firing</span>
-          <select value={arrival.firing} onChange={(e) => setArr({ firing: e.target.value as FiringMode })} aria-label="Arrival firing mode" style={{ width: '100%' }}>
+          <select value={draft.arrival.firing} onChange={(e) => setArrival({ firing: e.target.value as SfxProfile['arrival']['firing'] })} aria-label="Arrival firing mode" style={{ width: '100%' }}>
             <option value="per-unit">per-unit (staggered)</option>
             <option value="once">once (whole squad)</option>
           </select>
           <span />
-          {miniReset(() => setArr({ firing: DEFAULT_ARRIVAL.firing }), arrival.firing === DEFAULT_ARRIVAL.firing, 'arrival firing')}
+          {miniReset(() => setArrival({ firing: document.data.arrival.firing }), draft.arrival.firing === document.data.arrival.firing, 'arrival firing')}
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" className="tileset-view-action" onClick={copy}>{copied ? 'Copied ✓' : 'Copy for Claude'}</button>
-        <button type="button" className="tileset-view-action" onClick={reset}>Reset to current</button>
+        <button type="button" className="tileset-view-action" disabled={!dirty || saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save live profile'}</button>
+        <button type="button" className="tileset-view-action" disabled={!dirty || saving} onClick={reset}>Reset draft</button>
+        {status ? <span role="status" className="tileset-catalog-note">{status}</span> : null}
       </div>
     </div>
   );
@@ -177,9 +201,7 @@ function SfxAssignmentPanel(): ReactElement {
 
 /** Audition an asset live: the arrival thump, a terrain's landing sound, or any other set. */
 function auditionAsset(asset: SfxAsset): void {
-  if (asset.sampleKey === 'arrival') previewArrival();
-  else if (asset.terrain) previewTerrain(asset.terrain);
-  else previewSample(asset.sampleKey); // non-terrain sets (e.g. the UI click) play direct
+  previewSample(asset.sampleKey);
 }
 
 /** Normalized peaks for an asset, from the longest decoded take of its sample set. */
@@ -231,7 +253,8 @@ export function SfxLibraryStudio({
   onSelect: (name: string) => void;
 }): ReactElement {
   const q = search.trim().toLowerCase();
-  const visible = SFX_ASSETS.filter((s) => !q || [s.label, s.terrain ?? '', s.character, s.build].join(' ').toLowerCase().includes(q));
+  const assets = sfxAssets();
+  const visible = assets.filter((s) => !q || [s.label, ...s.terrains, s.character, s.build].join(' ').toLowerCase().includes(q));
   // Catalog main is CONTENT ONLY — a single internally-scrolling grid, no sub-headers
   // (docs/studio-control-architecture.md). The terrain→sound assignment editor is a
   // control surface and lives in the Viewer 'sfx' kind (see SfxViewer), not here.
@@ -260,7 +283,9 @@ export function SfxLibraryStudio({
           </span>
         </button>
       ))}
-      {visible.length === 0 ? <p className="tileset-studio-empty">No sound effects match.</p> : null}
+      {assets.length === 0
+        ? <p className="tileset-studio-empty">The live SFX profile is unavailable. Gameplay remains intentionally silent.</p>
+        : visible.length === 0 ? <p className="tileset-studio-empty">No sound effects match.</p> : null}
     </div>
   );
 }
@@ -327,11 +352,20 @@ function InterfaceSoundPanel(): ReactElement {
 }
 
 export function SfxViewer({ header }: { header?: ReactNode }): ReactElement {
+  const [document, setDocument] = useState<SfxProfileDocument | null>(() => currentLiveSfxProfileDocument());
   return (
     <>
       <section className="al-lab-main" aria-label="Sound assignments">
-        <InterfaceSoundPanel />
-        <SfxAssignmentPanel />
+        {document ? (
+          <>
+            {document.data.soundSets.click ? <InterfaceSoundPanel /> : null}
+            <SfxAssignmentPanel key={document.revision} document={document} onSaved={setDocument} />
+          </>
+        ) : (
+          <p className="tileset-studio-empty" role="status">
+            The live SFX profile is unavailable. Sound effects remain silent; there is no committed fallback to edit.
+          </p>
+        )}
       </section>
       <aside className="tileset-view-controls" aria-label="Sound assignment controls">
         <section className="tileset-inspector-section">
@@ -339,8 +373,7 @@ export function SfxViewer({ header }: { header?: ReactNode }): ReactElement {
           <div className="tileset-control-stack">
             {header}
             <p className="tileset-catalog-note">
-              Assign which recorded sound voices each terrain and tune the arrival thump, ▶ to audition,
-              then <strong>Copy for Claude</strong> and paste it into chat — I’ll bake it into the game.
+              Edit the backend-owned sound-set metadata, terrain assignments, and arrival behavior. Save performs an optimistic live revision update; unsaved work remains only in this browser's draft.
             </p>
           </div>
         </section>

@@ -1,9 +1,9 @@
 {
-  "_doc": "Committed Chrome Lab tuning. Chrome Lab's Save defaults button writes this file in dev; chromeFamilyRuntime imports it so live surfaces and the lab share one source of truth.",
+  "_doc": "Committed deterministic Chrome geometry. Chrome Lab's Save defaults button writes numeric tuning here in dev; all five source selectors remain canonical backend slots, while private candidate versions are auditioned without becoming installed authority.",
   "target": "level-editor",
   "outer": {
-    "atomSourceId": "outer-atoms-img2img-32-v1-08",
-    "railSourceId": "outer-rails-v3-01",
+    "atomSourceId": "ui/chrome/outer/atom.png",
+    "railSourceId": "ui/chrome/outer/rail.png",
     "atomTurns": 0,
     "atomSize": 41,
     "railThickness": 24,
@@ -38,8 +38,8 @@
     "titleHorizontalAlign": "content-inset"
   },
   "inner": {
-    "atomSourceId": "inner-atoms-img2img-micro-v2-10",
-    "railSourceId": "inner-rails-repeat-v4-02",
+    "atomSourceId": "ui/chrome/inner/atom.png",
+    "railSourceId": "ui/chrome/inner/rail.png",
     "atomTurns": 1,
     "atomSize": 11,
     "railThickness": 7,
@@ -69,7 +69,7 @@
     "atomPreviewMode": "live"
   },
   "divider": {
-    "atomSourceId": "divider-atoms-pixellab-cover-v1-21",
+    "atomSourceId": "ui/chrome/divider/joint.png",
     "atomTurns": 0,
     "atomSize": 32,
     "atomX": 11,

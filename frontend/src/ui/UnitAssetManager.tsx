@@ -289,7 +289,7 @@ export function UnitAssetManager({
       ) : (
         <div className="unit-asset-current">
           <span>{familyLabels[selectedUnit.family]}</span>
-          <strong>{accepted?.label ?? 'Committed fallback'}</strong>
+          <strong>{accepted?.label ?? 'No accepted backend version'}</strong>
           <button type="button" onClick={() => void createCandidate()} disabled={busy}>New candidate</button>
         </div>
       )}

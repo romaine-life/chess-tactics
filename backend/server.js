@@ -8,12 +8,20 @@ const { Pool } = require('pg');
 // from a temp dir by supervisor.js, so sibling backend assets must resolve from
 // the baked backend dir instead of this process' __dirname.
 const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
+const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
+const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
+const {
+  liveCatalogReadinessIssue,
+  nativeMediaEvidenceIssue,
+  preservesNativeEvidenceForUpload,
+} = require(path.join(bakedBackendDir, 'liveMediaPolicy'));
 let serverRender = null;
 try {
   serverRender = require('@chess-tactics/board-render');
 } catch (error) {
-  console.error('board-render package unavailable; level thumbnails will use the default image:', error && error.message);
+  console.error('board-render package unavailable; level thumbnails will return 503:', error && error.message);
 }
+const withServerRenderCriticalSection = createRenderCriticalSection();
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -86,6 +94,94 @@ const UNIT_SPRITE_CACHE_MAX_BYTES = Math.max(
 );
 let unitAssetContainerClient = null;
 
+// Shared live-media storage. Postgres owns stable semantic slots and accepted
+// version pointers; immutable bytes live in a private content-addressed object
+// store. LIVE_MEDIA_STORAGE_DIR is the local/CI/test-slot implementation of the
+// same key contract. The optional seed URLs hydrate an empty ephemeral catalog
+// from another live backend and fetch immutable objects lazily -- never from Git
+// or a packaged frontend directory.
+const liveMediaContainerUrl = (process.env.LIVE_MEDIA_CONTAINER_URL || '').replace(/\/+$/, '');
+const liveMediaStorageDir = String(process.env.LIVE_MEDIA_STORAGE_DIR || '').trim();
+const liveMediaSeedCatalogUrl = String(process.env.LIVE_MEDIA_SEED_CATALOG_URL || '').trim();
+const liveMediaSeedBaseUrl = String(process.env.LIVE_MEDIA_SEED_MEDIA_BASE_URL || '').trim().replace(/\/+$/, '');
+const propSeatsSeedUrl = String(process.env.PROP_SEATS_SEED_URL || '').trim();
+// Raw uploads are deliberately capped well below the pod's 256 MiB memory
+// limit. The current migration inventory peaks below 12 MiB; larger future
+// objects need a streaming upload path instead of raising this buffered limit.
+const LIVE_MEDIA_MAX_BYTES = 32 * 1024 * 1024;
+const LIVE_MEDIA_SEED_CATALOG_MAX_BYTES = 16 * 1024 * 1024;
+const LIVE_MEDIA_CACHE_MAX_BYTES = Math.max(
+  0,
+  Number.parseInt(process.env.LIVE_MEDIA_CACHE_BYTES || '', 10) || 32 * 1024 * 1024,
+);
+const LIVE_MEDIA_READ_BUDGET_BYTES = Math.max(
+  LIVE_MEDIA_MAX_BYTES,
+  Number.parseInt(process.env.LIVE_MEDIA_READ_BUDGET_BYTES || '', 10) || 64 * 1024 * 1024,
+);
+const LIVE_MEDIA_READ_TIMEOUT_MS = Math.min(
+  60_000,
+  Math.max(1_000, Number.parseInt(process.env.LIVE_MEDIA_READ_TIMEOUT_MS || '', 10) || 15_000),
+);
+let liveMediaContainerClient = null;
+
+function validateLiveMediaEnvironment() {
+  if (liveMediaStorageDir && liveMediaContainerUrl) {
+    throw new Error('LIVE_MEDIA_STORAGE_DIR and LIVE_MEDIA_CONTAINER_URL are mutually exclusive');
+  }
+  if (liveMediaSeedBaseUrl && !liveMediaSeedCatalogUrl) {
+    throw new Error('LIVE_MEDIA_SEED_MEDIA_BASE_URL requires LIVE_MEDIA_SEED_CATALOG_URL');
+  }
+  if ((liveMediaSeedCatalogUrl || liveMediaSeedBaseUrl) && (!liveMediaStorageDir || liveMediaContainerUrl)) {
+    throw new Error('live media seed URLs require isolated LIVE_MEDIA_STORAGE_DIR storage');
+  }
+  if (propSeatsSeedUrl && (!liveMediaStorageDir || liveMediaContainerUrl || process.env.LIVE_MEDIA_ISOLATED_DATABASE !== 'test-slot')) {
+    throw new Error('PROP_SEATS_SEED_URL is allowed only for an isolated test-slot data plane');
+  }
+  if (liveMediaStorageDir && !path.isAbsolute(liveMediaStorageDir)) {
+    throw new Error('LIVE_MEDIA_STORAGE_DIR must be an absolute path');
+  }
+  if (liveMediaStorageDir && !String(process.env.DATABASE_URL || '').trim()) {
+    throw new Error('LIVE_MEDIA_STORAGE_DIR requires an isolated DATABASE_URL');
+  }
+  if (liveMediaStorageDir) {
+    let databaseHost = '';
+    try { databaseHost = new URL(process.env.DATABASE_URL).hostname.toLowerCase(); } catch {
+      throw new Error('LIVE_MEDIA_STORAGE_DIR requires a valid isolated DATABASE_URL');
+    }
+    if (databaseHost.endsWith('.postgres.database.azure.com')) {
+      throw new Error('LIVE_MEDIA_STORAGE_DIR cannot use an Azure production DATABASE_URL');
+    }
+    const loopback = databaseHost === 'localhost' || databaseHost === '127.0.0.1' || databaseHost === '::1';
+    if (!loopback && process.env.LIVE_MEDIA_ISOLATED_DATABASE !== 'test-slot') {
+      throw new Error('non-loopback isolated live-media databases require LIVE_MEDIA_ISOLATED_DATABASE=test-slot');
+    }
+  }
+  if (liveMediaStorageDir && (
+    process.env.POSTGRES_HOST || process.env.POSTGRES_DATABASE || process.env.POSTGRES_DB || process.env.POSTGRES_USER
+  )) {
+    throw new Error('LIVE_MEDIA_STORAGE_DIR cannot be combined with production Postgres host settings');
+  }
+  if (liveMediaContainerUrl) {
+    let url;
+    try { url = new URL(liveMediaContainerUrl); } catch { throw new Error('LIVE_MEDIA_CONTAINER_URL must be a valid URL'); }
+    if (url.protocol !== 'https:' || !url.hostname || !url.pathname.replace(/^\/+|\/+$/g, '') || url.search || url.hash) {
+      throw new Error('LIVE_MEDIA_CONTAINER_URL must be an HTTPS container URL without query or fragment');
+    }
+  }
+  for (const [name, value] of [
+    ['LIVE_MEDIA_SEED_CATALOG_URL', liveMediaSeedCatalogUrl],
+    ['LIVE_MEDIA_SEED_MEDIA_BASE_URL', liveMediaSeedBaseUrl],
+    ['PROP_SEATS_SEED_URL', propSeatsSeedUrl],
+  ]) {
+    if (!value) continue;
+    let url;
+    try { url = new URL(value); } catch { throw new Error(`${name} must be a valid HTTP(S) URL`); }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`${name} must be a valid HTTP(S) URL`);
+  }
+}
+
+validateLiveMediaEnvironment();
+
 // Game Lab runs carry whole recorded-game batches (validateLabRun allows up to
 // ~8 MB of JSON), far past the global 256kb ceiling. Mount their larger parser
 // first: once it has consumed the body, the global parser below sees the
@@ -110,10 +206,31 @@ app.use('/api/official-campaigns', express.json({ limit: '10mb' }));
 // Editor documents hold one complete Level working copy. They need the same
 // headroom as a single level document (boardCode + layer arrays).
 app.use('/api/editor-documents', express.json({ limit: '4mb' }));
-// Sprite upload routes send one PNG as the request body. Mount this before the
-// global JSON parser; it only consumes image/png, so candidate metadata requests
-// continue through to express.json below.
-app.use('/api/admin/unit-assets', express.raw({ type: 'image/png', limit: '10mb' }));
+// Authenticate byte-upload routes before a raw parser allocates their request
+// bodies. This is deliberately mounted ahead of the global JSON parser: an
+// unauthenticated caller must not be able to make a 256 MiB pod buffer many
+// concurrent 10/32 MiB payloads merely by targeting an admin URL.
+async function requireAdminBeforeRawUpload(req, res, next) {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  req.rawUploadAdmin = user;
+  next();
+}
+
+// Unit sprites are the only raw requests under the Unit Art API. Candidate
+// metadata remains JSON and therefore continues through to express.json below.
+app.use(
+  /^\/api\/admin\/unit-assets\/[0-9a-f-]+\/sprites\/[^/]+\/[^/]+$/,
+  requireAdminBeforeRawUpload,
+  express.raw({ type: 'image/png', limit: '10mb' }),
+);
+// Generic media uploads may be images, fonts, audio, or opaque private source
+// binaries. Parse only this exact authenticated content route as raw bytes.
+app.use(
+  /^\/api\/admin\/media-versions\/[0-9a-f-]+\/content$/,
+  requireAdminBeforeRawUpload,
+  express.raw({ type: () => true, limit: '32mb' }),
+);
 app.use(express.json({ limit: '256kb' }));
 
 // ---------------------------------------------------------------------------
@@ -306,10 +423,9 @@ const MIGRATIONS = [
     version: 9,
     name: 'prop seats global tier',
     // The global PROP-SEAT tuning tier (ADR-0061): one upserted row per id (PK id
-    // alone ⇒ global, cloning official_campaigns), holding a map of propId → seat
-    // {anchorX,anchorY,scale,w?,h?,base?}. Public GET / admin-gated PUT. The committed
-    // propSeats.json is the always-render BASELINE the client overlays this row over,
-    // so props never depend on this row (an empty/missing row = "no overrides").
+    // alone ⇒ global, cloning official_campaigns), holding the complete map of
+    // propId → seat {anchorX,anchorY,scale,w?,h?,base?}. Public GET / admin-gated
+    // PUT. ADR-0085 removed the committed baseline; `default` is required live content.
     sql: `
       CREATE TABLE IF NOT EXISTS prop_seats (
         id                    text        PRIMARY KEY,
@@ -661,6 +777,140 @@ const MIGRATIONS = [
         CHECK (acceptance_block_reason IS NULL OR acceptance_block_reason = 'spatial-resampling');
     `,
   },
+  {
+    version: 18,
+    name: 'shared live media catalog',
+    // One content-addressed substrate for runtime, review, candidate, and source
+    // media. Domain-specific consumers retain their own typed metadata in JSON,
+    // while the shared tables own acceptance, revisions, immutable blob metadata,
+    // native-pixel evidence, owner proof, and audit history.
+    sql: `
+      CREATE TABLE IF NOT EXISTS media_slots (
+        slot                    text        PRIMARY KEY,
+        domain                  text        NOT NULL,
+        role                    text        NOT NULL,
+        availability_policy     text        NOT NULL DEFAULT 'critical'
+          CHECK (availability_policy IN ('critical', 'decorative')),
+        lifecycle_state         text        NOT NULL DEFAULT 'staging'
+          CHECK (lifecycle_state IN ('staging', 'active', 'retired')),
+        active_version_id       uuid,
+        activated_at            timestamptz,
+        retired_at              timestamptz,
+        retirement_evidence     jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        metadata                jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        row_revision            bigint      NOT NULL DEFAULT 0 CHECK (row_revision >= 0),
+        created_at              timestamptz NOT NULL DEFAULT now(),
+        updated_at              timestamptz NOT NULL DEFAULT now(),
+        updated_by              text,
+        CHECK (char_length(slot) BETWEEN 1 AND 512),
+        CHECK (slot ~ '^[A-Za-z0-9_][A-Za-z0-9._@+-]*(/[A-Za-z0-9_][A-Za-z0-9._@+-]*)*$'),
+        CHECK (slot !~ '(^|/)\\.\\.?(/|$)' AND slot !~ '//' AND right(slot, 1) <> '/'),
+        CHECK (slot <> 'level-thumb' AND slot NOT LIKE 'level-thumb/%'),
+        CHECK (
+          (lifecycle_state = 'staging' AND active_version_id IS NULL AND activated_at IS NULL AND retired_at IS NULL) OR
+          (lifecycle_state = 'active' AND active_version_id IS NOT NULL AND activated_at IS NOT NULL AND retired_at IS NULL) OR
+          (lifecycle_state = 'retired' AND active_version_id IS NULL AND retired_at IS NOT NULL)
+        )
+      );
+
+      CREATE TABLE IF NOT EXISTS media_blobs (
+        sha256                  text        PRIMARY KEY CHECK (sha256 ~ '^[0-9a-f]{64}$'),
+        blob_key                text        NOT NULL UNIQUE,
+        media_type              text        NOT NULL,
+        byte_length             bigint      NOT NULL CHECK (byte_length > 0 AND byte_length <= 33554432),
+        width                   integer     CHECK (width IS NULL OR (width > 0 AND width <= 32768)),
+        height                  integer     CHECK (height IS NULL OR (height > 0 AND height <= 32768)),
+        published_at            timestamptz,
+        created_at              timestamptz NOT NULL DEFAULT now(),
+        CHECK ((width IS NULL) = (height IS NULL)),
+        CHECK (width IS NULL OR width::bigint * height::bigint <= 8388608),
+        CHECK (blob_key = 'objects/' || left(sha256, 2) || '/' || sha256)
+      );
+
+      CREATE TABLE IF NOT EXISTS media_versions (
+        id                      uuid        PRIMARY KEY,
+        slot                    text        REFERENCES media_slots(slot) ON DELETE RESTRICT,
+        source_path             text,
+        domain                  text        NOT NULL,
+        role                    text        NOT NULL,
+        label                   text        NOT NULL,
+        status                  text        NOT NULL DEFAULT 'candidate'
+          CHECK (status IN ('candidate', 'accepted', 'legacy-bridge', 'archived')),
+        blob_sha256             text        REFERENCES media_blobs(sha256) ON DELETE RESTRICT,
+        metadata                jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        provenance              jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        native_evidence         jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        review_evidence         jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        idempotency_actor       text,
+        idempotency_key         text,
+        request_fingerprint     text,
+        row_revision            bigint      NOT NULL DEFAULT 0 CHECK (row_revision >= 0),
+        created_at              timestamptz NOT NULL DEFAULT now(),
+        updated_at              timestamptz NOT NULL DEFAULT now(),
+        updated_by              text,
+        UNIQUE (id, slot),
+        CHECK (slot IS NOT NULL OR source_path IS NOT NULL),
+        CHECK (status NOT IN ('accepted', 'legacy-bridge') OR slot IS NOT NULL),
+        CHECK (source_path IS NULL OR (char_length(source_path) BETWEEN 1 AND 1024)),
+        CHECK (
+          (idempotency_actor IS NULL AND idempotency_key IS NULL AND request_fingerprint IS NULL) OR
+          (char_length(idempotency_actor) BETWEEN 1 AND 320
+            AND char_length(idempotency_key) BETWEEN 1 AND 200
+            AND request_fingerprint ~ '^[0-9a-f]{64}$')
+        )
+      );
+      CREATE INDEX IF NOT EXISTS media_versions_slot_status_idx
+        ON media_versions (slot, status, updated_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS media_versions_one_active_idx
+        ON media_versions (slot) WHERE status IN ('accepted', 'legacy-bridge');
+      CREATE UNIQUE INDEX IF NOT EXISTS media_versions_idempotency_idx
+        ON media_versions (idempotency_actor, idempotency_key)
+        WHERE idempotency_key IS NOT NULL;
+
+      ALTER TABLE media_slots
+        ADD CONSTRAINT media_slots_active_version_fk
+        FOREIGN KEY (active_version_id, slot) REFERENCES media_versions (id, slot);
+
+      CREATE TABLE IF NOT EXISTS media_catalog_state (
+        singleton               boolean     PRIMARY KEY DEFAULT true CHECK (singleton),
+        revision                bigint      NOT NULL DEFAULT 0,
+        updated_at              timestamptz NOT NULL DEFAULT now()
+      );
+      INSERT INTO media_catalog_state (singleton) VALUES (true)
+        ON CONFLICT (singleton) DO NOTHING;
+
+      CREATE TABLE IF NOT EXISTS media_asset_events (
+        id                      bigserial   PRIMARY KEY,
+        slot                    text,
+        source_path             text,
+        version_id              uuid,
+        action                  text        NOT NULL,
+        actor_email             text,
+        details                 jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        created_at              timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS media_asset_events_slot_idx
+        ON media_asset_events (slot, created_at DESC, id DESC);
+    `,
+  },
+  {
+    version: 19,
+    name: 'global SFX profile',
+    // One complete, owner-editable SFX document. The row is intentionally not
+    // seeded: absence means decorative silence, while sound-set identity, mix
+    // gains, terrain assignments, and arrival behavior remain DB-authoritative.
+    sql: `
+      CREATE TABLE IF NOT EXISTS sfx_profiles (
+        id                    text        PRIMARY KEY CHECK (id = 'default'),
+        data                  jsonb       NOT NULL,
+        client_schema_version integer     NOT NULL CHECK (client_schema_version = 1),
+        revision              bigint      NOT NULL DEFAULT 0 CHECK (revision >= 0),
+        created_at            timestamptz NOT NULL DEFAULT now(),
+        updated_at            timestamptz NOT NULL DEFAULT now(),
+        updated_by            text
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -781,6 +1031,14 @@ async function prepareDbSchema() {
     await checkMigrations();
   }
   if (unitAssetSeedCatalogUrl) await seedUnitCatalogFromLiveSource();
+  if (liveMediaSeedCatalogUrl) await seedLiveMediaCatalogFromLiveSource();
+  if (propSeatsSeedUrl) await seedPropSeatsFromLiveSource();
+  if (schemaMigrationMode !== 'off') {
+    const activeMedia = await pool.query("SELECT count(*) AS count FROM media_slots WHERE lifecycle_state = 'active'");
+    if (Number(activeMedia.rows[0]?.count) > 0 && !liveMediaStorageConfigured()) {
+      throw new Error('live media catalog has active slots but no live media object store is configured');
+    }
+  }
   dbReady = true;
 }
 
@@ -1050,6 +1308,13 @@ function timestampString(value, fallback = new Date().toISOString()) {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === 'string' && value) return value;
   return fallback;
+}
+
+function nullableTimestampString(value) {
+  if (value === null || value === undefined) return null;
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(parsed.getTime())) throw new Error('invalid database timestamp');
+  return parsed.toISOString();
 }
 
 function campaignFromRow(row) {
@@ -1682,6 +1947,22 @@ function frontendIndexFile() {
 
 app.get('/health', (_req, res) => {
   res.status(200).send('ok');
+});
+
+// Process liveness and application readiness are deliberately separate. The
+// process can stay alive to recover from a transient database or Blob failure,
+// but it must not receive game traffic until the schema, live catalog, and
+// backend-owned object store are all usable. There is no packaged-media
+// fallback once live media owns /assets.
+app.get('/ready', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const readiness = await liveMediaReadiness();
+    res.status(200).json({ status: 'ready', ...readiness });
+  } catch (error) {
+    console.error('application readiness check failed:', error && error.message);
+    res.status(503).json({ error: 'application_not_ready' });
+  }
 });
 
 // Human-facing build/deploy provenance for Settings → About. The frontend bakes
@@ -4679,12 +4960,14 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
 });
 
 // --- Prop-seat tuning (global) tier (ADR-0061) -----------------------------
-// Live-tunable prop geometry: a map of propId → seat {anchorX,anchorY,scale,w?,h?,base?}.
-// Public GET / requireAdmin PUT, cloning official_campaigns. The committed propSeats.json is
-// the always-render BASELINE the client overlays this row over — an empty/missing row just
-// means "no overrides" (props still render), so props/`play` never depend on this row.
+// Live-tunable prop geometry: one complete map of propId → seat
+// {anchorX,anchorY,scale,w?,h?,base?}. Public GET / requireAdmin PUT, cloning
+// official_campaigns. ADR-0085 supersedes ADR-0061's committed baseline: a
+// missing or invalid `default` row is unavailable content, never an empty overlay.
 const PROP_SEATS_STORE_SCHEMA_VERSION = 1;
+const PROP_SEATS_LOCK_KEY = 4300193003;
 const PROP_SEATS_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
+const REQUIRED_PROP_SEAT_IDS = Object.freeze(['oak', 'cottage', 'cabin', 'lodge', 'rock', 'fieldstone']);
 function propSeatsRowId(raw) {
   const id = String(raw || '').trim();
   return PROP_SEATS_ROW_ID_PATTERN.test(id) ? id : null;
@@ -4695,8 +4978,13 @@ const PROP_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 // Validate the seat map shape + base/variant integrity: every entry has numeric anchors and a
 // positive scale, optional positive-integer w/h, and any `base` must reference another entry IN
 // THE SAME document (no orphan size-variant — the server-side analog of /prop-lab base-protection).
-function validatePropSeatsData(data) {
+function validatePropSeatsData(data, { requireComplete = false } = {}) {
   if (!isObjectRecord(data)) return 'prop seats must be an object map of propId → seat';
+  if (requireComplete) {
+    for (const id of REQUIRED_PROP_SEAT_IDS) {
+      if (!Object.hasOwn(data, id)) return `required prop seat "${id}" is missing`;
+    }
+  }
   for (const [id, seat] of Object.entries(data)) {
     if (!PROP_ID_PATTERN.test(id)) return `prop id "${id}" must be a lowercase slug`;
     if (!isObjectRecord(seat)) return `seat "${id}" must be an object`;
@@ -4709,7 +4997,7 @@ function validatePropSeatsData(data) {
       if (!Array.isArray(seat.parts) || seat.parts.length < 1) return `seat "${id}" parts must be a non-empty array`;
       for (const [index, part] of seat.parts.entries()) {
         if (!isObjectRecord(part)) return `seat "${id}" part ${index + 1} must be an object`;
-        if (!isObjectRecord(part.source) || (part.source.kind !== 'asset' && part.source.kind !== 'prop' && part.source.kind !== 'doodad') || typeof part.source.id !== 'string') {
+        if (!isObjectRecord(part.source) || (part.source.kind !== 'asset' && part.source.kind !== 'prop' && part.source.kind !== 'doodad') || typeof part.source.id !== 'string' || !part.source.id) {
           return `seat "${id}" part ${index + 1} needs an asset/prop/doodad source`;
         }
         if (!Number.isFinite(part.anchorX) || !Number.isFinite(part.anchorY)) return `seat "${id}" part ${index + 1} needs numeric anchorX/anchorY`;
@@ -4719,6 +5007,38 @@ function validatePropSeatsData(data) {
     if (Object.hasOwn(seat, 'base') && (typeof seat.base !== 'string' || !Object.hasOwn(data, seat.base))) {
       return `seat "${id}" base "${seat.base}" must reference an existing prop in the same document`;
     }
+    if (Object.hasOwn(seat, 'base') && !REQUIRED_PROP_SEAT_IDS.includes(seat.base)) {
+      return `seat "${id}" base "${seat.base}" must reference a code-owned base prop`;
+    }
+    if (REQUIRED_PROP_SEAT_IDS.includes(id) && (Object.hasOwn(seat, 'base') || Object.hasOwn(seat, 'placement'))) {
+      return `required prop seat "${id}" cannot be a variant or authored placement`;
+    }
+    if (Object.hasOwn(seat, 'placement') && seat.placement !== 'prop' && seat.placement !== 'doodad') {
+      return `seat "${id}" placement must be prop or doodad`;
+    }
+    if (Object.hasOwn(seat, 'base') && Object.hasOwn(seat, 'placement')) {
+      return `seat "${id}" cannot be both a variant and authored placement`;
+    }
+    if (Object.hasOwn(seat, 'source') && (
+      !isObjectRecord(seat.source)
+      || (seat.source.kind !== 'asset' && seat.source.kind !== 'prop' && seat.source.kind !== 'doodad')
+      || typeof seat.source.id !== 'string'
+      || !seat.source.id
+    )) return `seat "${id}" source must be an asset/prop/doodad source`;
+    if (seat.placement && !Object.hasOwn(seat, 'source') && !Object.hasOwn(seat, 'parts')) {
+      return `seat "${id}" authored placement needs source or parts`;
+    }
+    if (!REQUIRED_PROP_SEAT_IDS.includes(id) && !seat.base && !seat.placement) {
+      return `seat "${id}" must be a variant or authored placement`;
+    }
+    if (Object.hasOwn(seat, 'kind') && seat.kind !== 'tree' && seat.kind !== 'house' && seat.kind !== 'rock') {
+      return `seat "${id}" kind is invalid`;
+    }
+    if (Object.hasOwn(seat, 'terrains') && (!Array.isArray(seat.terrains) || seat.terrains.some((terrain) => typeof terrain !== 'string' || !terrain))) {
+      return `seat "${id}" terrains must be non-empty strings`;
+    }
+    if (Object.hasOwn(seat, 'blocking') && typeof seat.blocking !== 'boolean') return `seat "${id}" blocking must be boolean`;
+    if (Object.hasOwn(seat, 'label') && typeof seat.label !== 'string') return `seat "${id}" label must be a string`;
   }
   return null;
 }
@@ -4732,33 +5052,111 @@ async function dbGetPropSeats(id) {
   return rows[0] || null;
 }
 
-async function dbUpsertPropSeats(id, input) {
+async function dbSavePropSeats(id, input, expectedRevision) {
   await ensureDbReady();
-  const { rows } = await pool.query(
-    `INSERT INTO prop_seats (id, data, client_schema_version, revision, updated_by)
-       VALUES ($1, $2::jsonb, $3, 1, $4)
-     ON CONFLICT (id) DO UPDATE SET
-       data = EXCLUDED.data,
-       client_schema_version = EXCLUDED.client_schema_version,
-       revision = prop_seats.revision + 1,
-       updated_at = now(),
-       updated_by = EXCLUDED.updated_by
-     RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
-    [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
-  );
-  return rows[0];
-}
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // A row lock cannot serialize two concurrent creates when the row is absent.
+    // The advisory transaction lock closes that gap; FOR UPDATE then protects the
+    // existing row while its compare-and-swap token is checked and advanced.
+    await client.query('SELECT pg_advisory_xact_lock($1)', [PROP_SEATS_LOCK_KEY]);
+    const current = await client.query(
+      `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by
+         FROM prop_seats WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    const row = current.rows[0] || null;
+    if ((!row && expectedRevision !== null) || (row && Number(row.revision) !== expectedRevision)) {
+      const error = new Error('prop_seats_revision_conflict');
+      error.propSeatsConflict = true;
+      error.currentRevision = row ? Number(row.revision) : null;
+      throw error;
+    }
 
+    let saved;
+    let created = false;
+    if (!row) {
+      created = true;
+      saved = await client.query(
+        `INSERT INTO prop_seats (id, data, client_schema_version, revision, updated_by)
+           VALUES ($1, $2::jsonb, $3, 1, $4)
+         RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+      );
+    } else {
+      saved = await client.query(
+        `UPDATE prop_seats SET data = $2::jsonb, client_schema_version = $3,
+            revision = revision + 1, updated_at = now(), updated_by = $4
+          WHERE id = $1
+        RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+      );
+    }
+    await client.query('COMMIT');
+    return { row: saved.rows[0], created };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 function publicPropSeatsDocument(id, document) {
   return {
     id,
-    data: isObjectRecord(document && document.data) ? document.data : {},
+    data: document.data,
     client_schema_version: document && Object.hasOwn(document, 'client_schema_version') ? document.client_schema_version : null,
     revision: Number.isInteger(document && document.revision) ? document.revision : 0,
     created_at: document && document.created_at ? document.created_at : null,
     updated_at: document && document.updated_at ? document.updated_at : null,
     updated_by: document && document.updated_by ? document.updated_by : null,
   };
+}
+
+function requirePropSeatsDocument(id, document) {
+  if (!document) throw new Error(`required prop seats document "${id}" is missing`);
+  const issue = validatePropSeatsData(document.data, { requireComplete: id === 'default' });
+  if (issue) throw new Error(`required prop seats document "${id}" is invalid: ${issue}`);
+  return document;
+}
+
+async function seedPropSeatsFromLiveSource() {
+  const existing = await pool.query(
+    'SELECT data, client_schema_version, revision, created_at, updated_at, updated_by FROM prop_seats WHERE id = $1',
+    ['default'],
+  );
+  if (existing.rows[0]) {
+    // A restarted validation slot keeps its isolated edits and does not depend
+    // on the live source once the complete row has been copied successfully.
+    requirePropSeatsDocument('default', existing.rows[0]);
+    return;
+  }
+  const response = await fetch(propSeatsSeedUrl, { signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error(`prop seats seed returned ${response.status}`);
+  const bytes = await readFetchBodyAtMost(response, 2 * 1024 * 1024, 'prop seats seed');
+  let body;
+  try { body = JSON.parse(bytes.toString('utf8')); } catch { throw new Error('prop seats seed is not valid JSON'); }
+  const portfolio = isObjectRecord(body?.portfolio) ? body.portfolio : null;
+  const revision = Number(portfolio?.revision);
+  const issue = validatePropSeatsData(portfolio?.data, { requireComplete: true });
+  if (!portfolio || issue || !Number.isSafeInteger(revision) || revision < 0) {
+    throw new Error(`prop seats seed document is invalid${issue ? `: ${issue}` : ''}`);
+  }
+  const clientSchemaVersion = portfolio.client_schema_version === null
+    || Number.isInteger(portfolio.client_schema_version)
+    ? portfolio.client_schema_version : null;
+  await pool.query(
+    `INSERT INTO prop_seats (id, data, client_schema_version, revision, updated_by)
+       VALUES ('default', $1::jsonb, $2, $3, 'live-prop-seats-seed')
+     ON CONFLICT (id) DO NOTHING`,
+    [JSON.stringify(portfolio.data), clientSchemaVersion, revision],
+  );
+  const { rows } = await pool.query(
+    'SELECT data, client_schema_version, revision, created_at, updated_at, updated_by FROM prop_seats WHERE id = $1',
+    ['default'],
+  );
+  requirePropSeatsDocument('default', rows[0] || null);
 }
 
 app.get('/api/prop-seats/:id', async (req, res) => {
@@ -4768,7 +5166,7 @@ app.get('/api/prop-seats/:id', async (req, res) => {
     return;
   }
   try {
-    const document = await dbGetPropSeats(id);
+    const document = requirePropSeatsDocument(id, await dbGetPropSeats(id));
     res.status(200).json({
       portfolio: publicPropSeatsDocument(id, document),
       store_schema_version: PROP_SEATS_STORE_SCHEMA_VERSION,
@@ -4787,26 +5185,42 @@ app.put('/api/prop-seats/:id', async (req, res) => {
     return;
   }
   const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const expectedRevision = raw.expectedRevision === null
+    ? null
+    : Number.isInteger(raw.expectedRevision) && raw.expectedRevision >= 0
+      ? raw.expectedRevision
+      : undefined;
+  if (expectedRevision === undefined) {
+    res.status(400).json({
+      error: 'invalid_prop_seats_write',
+      details: 'expectedRevision is required (null creates only when absent; an integer must match the current revision)',
+    });
+    return;
+  }
   if (!isObjectRecord(raw.data)) {
     res.status(400).json({ error: 'prop_seats_data_object_required' });
     return;
   }
-  const validationError = validatePropSeatsData(raw.data);
+  const validationError = validatePropSeatsData(raw.data, { requireComplete: id === 'default' });
   if (validationError) {
     res.status(400).json({ error: 'invalid_prop_seats', details: validationError });
     return;
   }
   try {
-    const document = await dbUpsertPropSeats(id, {
+    const saved = await dbSavePropSeats(id, {
       data: raw.data,
       client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
       updated_by: user.email,
-    });
-    res.status(200).json({
-      portfolio: publicPropSeatsDocument(id, document),
+    }, expectedRevision);
+    res.status(saved.created ? 201 : 200).json({
+      portfolio: publicPropSeatsDocument(id, saved.row),
       store_schema_version: PROP_SEATS_STORE_SCHEMA_VERSION,
     });
   } catch (error) {
+    if (error && error.propSeatsConflict) {
+      res.status(409).json({ error: 'prop_seats_revision_conflict', currentRevision: error.currentRevision });
+      return;
+    }
     dbUnavailable(res, 'prop seats write failed', error, 'prop_seats_store_unavailable');
   }
 });
@@ -4930,6 +5344,2856 @@ app.put('/api/wall-art/:id', async (req, res) => {
     });
   } catch (error) {
     dbUnavailable(res, 'wall art write failed', error, 'wall_art_store_unavailable');
+  }
+});
+
+// --- Global SFX profile ----------------------------------------------------
+// Recording bytes are live-media slots; this complete JSON document owns the
+// semantic sound-set metadata/mix and gameplay assignments. It is deliberately
+// not seeded from code. Missing state means decorative silence and an unavailable
+// Studio editor, never a compiled fallback.
+const SFX_PROFILE_SCHEMA_VERSION = 1;
+const SFX_PROFILE_ID = 'default';
+const SFX_SOUND_SET_KEY = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const SFX_ASSIGNABLE_TERRAINS = ['grass', 'water', 'sand', 'stone', 'road', 'bridge', 'dirt', 'pebble'];
+const SFX_PROFILE_LOCK_KEY = 4300193002;
+
+function exactSfxKeys(value, expected) {
+  if (!isObjectRecord(value)) return false;
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  return actual.length === wanted.length && actual.every((key, index) => key === wanted[index]);
+}
+
+function sfxRequiredText(value, max) {
+  return typeof value === 'string' && Boolean(value.trim()) && value.length <= max;
+}
+
+function sfxGain(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 2;
+}
+
+function validateSfxProfileData(data) {
+  if (!exactSfxKeys(data, ['schemaVersion', 'soundSets', 'terrainAssignments', 'arrival'])) {
+    return 'profile must contain exactly schemaVersion, soundSets, terrainAssignments, and arrival';
+  }
+  if (data.schemaVersion !== SFX_PROFILE_SCHEMA_VERSION) return 'schemaVersion must be 1';
+  if (!isObjectRecord(data.soundSets)) return 'soundSets must be an object';
+  const soundKeys = Object.keys(data.soundSets).sort();
+  if (soundKeys.length < 1 || soundKeys.length > 64) return 'soundSets must contain 1-64 entries';
+  for (const key of soundKeys) {
+    if (!SFX_SOUND_SET_KEY.test(key)) return `sound set "${key}" must be a lowercase semantic key`;
+    const sound = data.soundSets[key];
+    if (!exactSfxKeys(sound, ['label', 'character', 'build', 'gain'])) {
+      return `sound set "${key}" must contain exactly label, character, build, and gain`;
+    }
+    if (!sfxRequiredText(sound.label, 100)) return `sound set "${key}" label is required (max 100)`;
+    if (!sfxRequiredText(sound.character, 400)) return `sound set "${key}" character is required (max 400)`;
+    if (!sfxRequiredText(sound.build, 400)) return `sound set "${key}" build is required (max 400)`;
+    if (!sfxGain(sound.gain)) return `sound set "${key}" gain must be from 0 to 2`;
+  }
+  if (!exactSfxKeys(data.terrainAssignments, SFX_ASSIGNABLE_TERRAINS)) {
+    return 'terrainAssignments must contain every assignable terrain exactly once';
+  }
+  for (const terrain of SFX_ASSIGNABLE_TERRAINS) {
+    const sample = data.terrainAssignments[terrain];
+    if (sample !== null && (typeof sample !== 'string' || !Object.hasOwn(data.soundSets, sample))) {
+      return `terrain assignment "${terrain}" must reference a declared sound set or null`;
+    }
+  }
+  if (!exactSfxKeys(data.arrival, ['sample', 'gain', 'firing'])) {
+    return 'arrival must contain exactly sample, gain, and firing';
+  }
+  if (data.arrival.sample !== null
+    && (typeof data.arrival.sample !== 'string' || !Object.hasOwn(data.soundSets, data.arrival.sample))) {
+    return 'arrival.sample must reference a declared sound set or null';
+  }
+  if (!sfxGain(data.arrival.gain)) return 'arrival.gain must be from 0 to 2';
+  if (!['per-unit', 'once'].includes(data.arrival.firing)) return 'arrival.firing must be per-unit or once';
+  return null;
+}
+
+function publicSfxProfile(row) {
+  return {
+    id: SFX_PROFILE_ID,
+    data: row.data,
+    clientSchemaVersion: Number(row.client_schema_version),
+    revision: Number(row.revision),
+    createdAt: nullableTimestampString(row.created_at),
+    updatedAt: nullableTimestampString(row.updated_at),
+    updatedBy: row.updated_by || null,
+  };
+}
+
+async function dbGetSfxProfile() {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by
+       FROM sfx_profiles WHERE id = $1`,
+    [SFX_PROFILE_ID],
+  );
+  return rows[0] || null;
+}
+
+async function dbSaveSfxProfile(data, expectedRevision, actorEmail) {
+  await ensureDbReady();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock($1)', [SFX_PROFILE_LOCK_KEY]);
+    const current = await client.query(
+      `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by
+         FROM sfx_profiles WHERE id = $1 FOR UPDATE`,
+      [SFX_PROFILE_ID],
+    );
+    const row = current.rows[0] || null;
+    if ((!row && expectedRevision !== null) || (row && Number(row.revision) !== expectedRevision)) {
+      const error = new Error('sfx_profile_conflict');
+      error.sfxProfileConflict = true;
+      error.currentRevision = row ? Number(row.revision) : null;
+      throw error;
+    }
+    let saved;
+    let created = false;
+    if (!row) {
+      created = true;
+      saved = await client.query(
+        `INSERT INTO sfx_profiles (id, data, client_schema_version, revision, updated_by)
+         VALUES ($1, $2::jsonb, $3, 0, $4)
+         RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [SFX_PROFILE_ID, JSON.stringify(data), SFX_PROFILE_SCHEMA_VERSION, actorEmail],
+      );
+    } else {
+      saved = await client.query(
+        `UPDATE sfx_profiles SET data = $2::jsonb, client_schema_version = $3,
+            revision = revision + 1, updated_at = now(), updated_by = $4
+          WHERE id = $1
+        RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [SFX_PROFILE_ID, JSON.stringify(data), SFX_PROFILE_SCHEMA_VERSION, actorEmail],
+      );
+    }
+    await client.query('COMMIT');
+    return { row: saved.rows[0], created };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+app.get('/api/sfx-profiles/:id', async (req, res) => {
+  if (req.params.id !== SFX_PROFILE_ID) { res.status(400).json({ error: 'invalid_sfx_profile_id' }); return; }
+  try {
+    const row = await dbGetSfxProfile();
+    if (!row) { res.setHeader('Cache-Control', 'no-store'); res.status(404).json({ error: 'sfx_profile_not_found' }); return; }
+    const issue = validateSfxProfileData(row.data);
+    if (issue || Number(row.client_schema_version) !== SFX_PROFILE_SCHEMA_VERSION) {
+      throw new Error(`stored SFX profile is invalid: ${issue || 'client schema version mismatch'}`);
+    }
+    const etag = `"sfx-profile-${Number(row.revision)}"`;
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) { res.status(304).end(); return; }
+    res.status(200).json({ profile: publicSfxProfile(row) });
+  } catch (error) {
+    dbUnavailable(res, 'SFX profile read failed', error, 'sfx_profile_unavailable');
+  }
+});
+
+app.put('/api/sfx-profiles/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  if (req.params.id !== SFX_PROFILE_ID) { res.status(400).json({ error: 'invalid_sfx_profile_id' }); return; }
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  const expectedRevision = raw.expectedRevision === null
+    ? null : Number.isInteger(raw.expectedRevision) && raw.expectedRevision >= 0 ? raw.expectedRevision : undefined;
+  if (expectedRevision === undefined || raw.clientSchemaVersion !== SFX_PROFILE_SCHEMA_VERSION) {
+    res.status(400).json({ error: 'invalid_sfx_profile_write', details: 'expectedRevision and clientSchemaVersion are required' });
+    return;
+  }
+  const issue = validateSfxProfileData(raw.data);
+  if (issue) { res.status(400).json({ error: 'invalid_sfx_profile', details: issue }); return; }
+  try {
+    const saved = await dbSaveSfxProfile(raw.data, expectedRevision, user.email);
+    res.status(saved.created ? 201 : 200).json({ profile: publicSfxProfile(saved.row) });
+  } catch (error) {
+    if (error && error.sfxProfileConflict) {
+      res.status(409).json({ error: 'sfx_profile_conflict', currentRevision: error.currentRevision });
+      return;
+    }
+    dbUnavailable(res, 'SFX profile write failed', error, 'sfx_profile_unavailable');
+  }
+});
+
+// --- Shared live-media catalog ---------------------------------------------
+// Stable semantic slots are the only public names. Candidate/source identities
+// and object keys remain private catalog details. A hash becomes publicly
+// immutable only after an accepted/legacy activation; candidate/source hashes
+// never become public, while historical published hashes remain seedable.
+const MEDIA_CATALOG_SCHEMA_VERSION = 1;
+const MEDIA_VERSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MEDIA_SHA_PATTERN = /^[0-9a-f]{64}$/;
+const MEDIA_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
+const MEDIA_SLOT_SEGMENT_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._@+-]*$/;
+const MEDIA_CATALOG_CACHE_TTL_MS = 5 * 1000;
+const PUBLIC_MEDIA_SLOT_INDEX = Symbol('public-media-slot-index');
+let mediaCatalogCache = { at: 0, body: null };
+let mediaCatalogCacheGeneration = 0;
+let mediaCatalogReadPromise = null;
+const mediaBufferCache = new Map();
+let mediaBufferCacheBytes = 0;
+const mediaBlobRecordCache = new Map();
+const mediaReadInFlight = new Map();
+const liveMediaReadBudget = createByteReadBudget({
+  maxBytes: LIVE_MEDIA_READ_BUDGET_BYTES,
+  timeoutMs: LIVE_MEDIA_READ_TIMEOUT_MS,
+});
+
+function mediaVersionId(raw) {
+  const value = String(raw || '').trim();
+  return MEDIA_VERSION_ID_PATTERN.test(value) ? value.toLowerCase() : null;
+}
+
+function mediaSha(raw) {
+  const value = String(raw || '').trim().toLowerCase();
+  return MEDIA_SHA_PATTERN.test(value) ? value : null;
+}
+
+function mediaSlotId(raw) {
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  if (!value || value.length > 512 || value.includes('//') || value.endsWith('/')) return null;
+  if (value.split('/').some((segment) => !MEDIA_SLOT_SEGMENT_PATTERN.test(segment) || segment === '.' || segment === '..')) return null;
+  if (value === 'level-thumb' || value.startsWith('level-thumb/')) return null;
+  return value;
+}
+
+function mediaSourcePath(raw) {
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim().replace(/\\/g, '/');
+  if (!value || value.length > 1024 || value.startsWith('/') || value.includes('//')) return null;
+  if (value.split('/').some((segment) => !segment || segment === '.' || segment === '..')) return null;
+  return value;
+}
+
+function mediaName(raw) {
+  const value = String(raw || '').trim().toLowerCase();
+  return MEDIA_NAME_PATTERN.test(value) ? value : null;
+}
+
+function boundedMediaText(raw, fallback, max) {
+  if (raw === undefined) return fallback;
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  return value.length <= max ? value : null;
+}
+
+function mediaJsonObject(raw, fallback = {}) {
+  if (raw === undefined) return fallback;
+  return isObjectRecord(raw) ? raw : null;
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (isObjectRecord(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function normalizeMediaSlotMetadata(raw) {
+  if (!isObjectRecord(raw)) return { error: 'slotMetadata must be an object' };
+  const value = { ...raw };
+  if (raw.acceptance === undefined) return { value };
+  if (!isObjectRecord(raw.acceptance)) return { error: 'slotMetadata.acceptance must be an object' };
+  const mode = String(raw.acceptance.mode || '').trim();
+  if (mode === 'standalone') {
+    value.acceptance = { mode: 'standalone' };
+    return { value };
+  }
+  if (mode !== 'group') return { error: 'slotMetadata.acceptance.mode must be standalone or group' };
+  const groupId = boundedMediaText(raw.acceptance.groupId ?? raw.acceptance.group_id, '', 160);
+  const rawSlots = raw.acceptance.requiredSlots ?? raw.acceptance.required_slots;
+  if (!groupId || !Array.isArray(rawSlots) || rawSlots.length < 2 || rawSlots.length > 256) {
+    return { error: 'group acceptance requires groupId and 2-256 requiredSlots' };
+  }
+  const requiredSlots = rawSlots.map(mediaSlotId).sort();
+  if (requiredSlots.some((slot) => !slot) || new Set(requiredSlots).size !== requiredSlots.length) {
+    return { error: 'group requiredSlots must contain unique valid semantic slots' };
+  }
+  value.acceptance = { mode: 'group', groupId, requiredSlots: [...requiredSlots].sort() };
+  return { value };
+}
+
+function mediaType(raw) {
+  const value = String(raw || '').split(';', 1)[0].trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(value)) return null;
+  return value;
+}
+
+const PUBLIC_IMAGE_MEDIA_TYPES = new Set([
+  'image/png', 'image/apng', 'image/jpeg', 'image/jpg', 'image/webp',
+  'image/avif', 'image/gif', 'image/bmp', 'image/x-icon', 'image/vnd.microsoft.icon',
+]);
+const PUBLIC_AUDIO_MEDIA_TYPES = new Set([
+  'audio/wav', 'audio/x-wav', 'audio/vnd.wave', 'audio/mpeg', 'audio/ogg',
+  'audio/mp4', 'audio/aac', 'audio/flac', 'audio/webm',
+]);
+const PUBLIC_VIDEO_MEDIA_TYPES = new Set(['video/mp4', 'video/webm', 'video/ogg']);
+const PUBLIC_FONT_MEDIA_TYPES = new Set([
+  'font/woff', 'font/woff2', 'font/ttf', 'font/otf',
+  'application/font-woff', 'application/font-sfnt',
+]);
+
+function publicMediaTypeAllowed(value) {
+  return PUBLIC_IMAGE_MEDIA_TYPES.has(value) || PUBLIC_AUDIO_MEDIA_TYPES.has(value)
+    || PUBLIC_VIDEO_MEDIA_TYPES.has(value) || PUBLIC_FONT_MEDIA_TYPES.has(value);
+}
+
+function mediaIdempotencyKey(req) {
+  const raw = req.get('idempotency-key');
+  if (raw === undefined) return null;
+  const value = String(raw).trim();
+  if (!/^[A-Za-z0-9._:@+-]{1,200}$/.test(value)) {
+    throw mediaMutationError('invalid_media_idempotency_key', 400);
+  }
+  return value;
+}
+
+function encodedMediaSlotUrl(slot) {
+  return `/assets/${slot.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+function immutableMediaUrl(sha256) {
+  return `/api/media/${sha256}`;
+}
+
+function adminMediaUrl(sha256) {
+  return `/api/admin/media/${sha256}`;
+}
+
+function contentAddressedLocalPath(rootValue, blobKey, label) {
+  const root = path.resolve(rootValue);
+  const target = path.resolve(root, ...String(blobKey).split('/'));
+  if (target !== root && !target.startsWith(`${root}${path.sep}`)) throw new Error(`invalid ${label} blob key`);
+  return target;
+}
+
+function createAzureContainerClient(containerUrl) {
+  const { BlobServiceClient } = require('@azure/storage-blob');
+  const { DefaultAzureCredential } = require('@azure/identity');
+  const url = new URL(containerUrl);
+  const service = new BlobServiceClient(`${url.protocol}//${url.host}`, new DefaultAzureCredential());
+  return service.getContainerClient(decodeURIComponent(url.pathname.replace(/^\/+/, '')));
+}
+
+function liveMediaStorageConfigured() {
+  return Boolean(liveMediaStorageDir || liveMediaContainerUrl);
+}
+
+function liveMediaBlobKey(sha256) {
+  return `objects/${sha256.slice(0, 2)}/${sha256}`;
+}
+
+function liveMediaBlobLocalPath(blobKey) {
+  return contentAddressedLocalPath(liveMediaStorageDir, blobKey, 'live media');
+}
+
+function azureLiveMediaContainer() {
+  if (liveMediaContainerClient) return liveMediaContainerClient;
+  if (!liveMediaContainerUrl) throw new Error('LIVE_MEDIA_CONTAINER_URL is not configured');
+  liveMediaContainerClient = createAzureContainerClient(liveMediaContainerUrl);
+  return liveMediaContainerClient;
+}
+
+async function readNodeStreamExactly(readable, expectedLength, label, abortSignal = null) {
+  const target = Buffer.allocUnsafe(expectedLength);
+  let offset = 0;
+  const abortRead = () => {
+    const reason = abortSignal?.reason instanceof Error
+      ? abortSignal.reason
+      : new Error(`${label} was aborted`);
+    if (typeof readable.destroy === 'function') readable.destroy(reason);
+  };
+  if (abortSignal?.aborted) abortRead();
+  else abortSignal?.addEventListener('abort', abortRead, { once: true });
+  try {
+    for await (const raw of readable) {
+      const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+      if (offset + chunk.length > expectedLength) {
+        if (typeof readable.destroy === 'function') readable.destroy();
+        throw new Error(`${label} exceeded its declared byte length`);
+      }
+      chunk.copy(target, offset);
+      offset += chunk.length;
+    }
+  } catch (error) {
+    if (typeof readable.destroy === 'function') readable.destroy();
+    throw error;
+  } finally {
+    abortSignal?.removeEventListener('abort', abortRead);
+  }
+  if (offset !== expectedLength) throw new Error(`${label} did not match its declared byte length`);
+  return target;
+}
+
+async function readFetchBodyExactly(response, expectedLength, label) {
+  const declared = response.headers.get('content-length');
+  if (declared !== null && Number(declared) !== expectedLength) {
+    if (response.body) await response.body.cancel().catch(() => {});
+    throw new Error(`${label} Content-Length did not match the catalog`);
+  }
+  if (!response.body) throw new Error(`${label} response body is unavailable`);
+  const target = Buffer.allocUnsafe(expectedLength);
+  const reader = response.body.getReader();
+  let offset = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      if (offset + chunk.length > expectedLength) {
+        await reader.cancel().catch(() => {});
+        throw new Error(`${label} exceeded its catalog byte length`);
+      }
+      chunk.copy(target, offset);
+      offset += chunk.length;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  if (offset !== expectedLength) throw new Error(`${label} did not match its catalog byte length`);
+  return target;
+}
+
+async function readFetchBodyAtMost(response, maxLength, label) {
+  const declared = response.headers.get('content-length');
+  if (declared !== null && (!Number.isInteger(Number(declared)) || Number(declared) > maxLength)) {
+    if (response.body) await response.body.cancel().catch(() => {});
+    throw new Error(`${label} exceeds its byte limit`);
+  }
+  if (!response.body) throw new Error(`${label} response body is unavailable`);
+  const target = Buffer.allocUnsafe(maxLength);
+  const reader = response.body.getReader();
+  let offset = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      if (offset + chunk.length > maxLength) {
+        await reader.cancel().catch(() => {});
+        throw new Error(`${label} exceeds its byte limit`);
+      }
+      chunk.copy(target, offset);
+      offset += chunk.length;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return target.subarray(0, offset);
+}
+
+async function writeLiveMediaBlob(blobKey, buffer, sha256, storedMediaType) {
+  if (liveMediaStorageDir) {
+    const target = liveMediaBlobLocalPath(blobKey);
+    await fs.promises.mkdir(path.dirname(target), { recursive: true });
+    try {
+      const stat = await fs.promises.stat(target);
+      if (stat.size !== buffer.length) throw new Error('content-addressed local media object length mismatch');
+      const existing = await readNodeStreamExactly(fs.createReadStream(target), buffer.length, 'existing local media object');
+      const existingSha = crypto.createHash('sha256').update(existing).digest('hex');
+      if (existingSha !== sha256) throw new Error('content-addressed local media object is corrupt');
+      return;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    const temp = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    try {
+      await fs.promises.writeFile(temp, buffer, { flag: 'wx' });
+      await fs.promises.rename(temp, target);
+    } catch (error) {
+      await fs.promises.rm(temp, { force: true }).catch(() => {});
+      if (error.code !== 'EEXIST') throw error;
+    }
+    return;
+  }
+  const block = azureLiveMediaContainer().getBlockBlobClient(blobKey);
+  try {
+    await block.uploadData(buffer, {
+      conditions: { ifNoneMatch: '*' },
+      blobHTTPHeaders: {
+        blobContentType: storedMediaType,
+        blobCacheControl: 'public, max-age=31536000, immutable',
+      },
+      metadata: { sha256 },
+    });
+  } catch (error) {
+    const status = error && (error.statusCode || error.status);
+    if (status !== 409 && status !== 412 && error.code !== 'BlobAlreadyExists') throw error;
+    const properties = await block.getProperties();
+    if (
+      String(properties.metadata?.sha256 || '') !== sha256 || Number(properties.contentLength) !== buffer.length
+      || mediaType(properties.contentType) !== storedMediaType
+    ) {
+      throw new Error('content-addressed Azure media object metadata mismatch');
+    }
+  }
+}
+
+function liveMediaSeedImmutableUrl(sha256) {
+  if (liveMediaSeedBaseUrl) return `${liveMediaSeedBaseUrl}/${sha256}`;
+  if (!liveMediaSeedCatalogUrl) return '';
+  return new URL(`/api/media/${sha256}`, liveMediaSeedCatalogUrl).toString();
+}
+
+async function readLiveMediaBlob(record, { allowSeed = true, abortSignal = null } = {}) {
+  const expectedLength = Number(record.byte_length);
+  if (!Number.isInteger(expectedLength) || expectedLength < 1 || expectedLength > LIVE_MEDIA_MAX_BYTES) {
+    throw new Error('live media record has an invalid byte length');
+  }
+  if (liveMediaStorageDir) {
+    const target = liveMediaBlobLocalPath(record.blob_key);
+    try {
+      const stat = await fs.promises.stat(target);
+      if (stat.size !== expectedLength) throw new Error('local live media object length differs from catalog');
+      return await readNodeStreamExactly(fs.createReadStream(target), expectedLength, 'local live media object', abortSignal);
+    } catch (error) {
+      if (error.code !== 'ENOENT' || !allowSeed || !liveMediaSeedCatalogUrl) throw error;
+    }
+    const sourceUrl = liveMediaSeedImmutableUrl(record.sha256);
+    if (!sourceUrl) throw new Error('live media seed immutable base is unavailable');
+    const timeoutSignal = AbortSignal.timeout(30_000);
+    const signal = abortSignal ? AbortSignal.any([abortSignal, timeoutSignal]) : timeoutSignal;
+    const response = await fetch(sourceUrl, { signal });
+    if (!response.ok) throw new Error(`live media seed object returned ${response.status}`);
+    const buffer = await readFetchBodyExactly(response, expectedLength, 'live media seed object');
+    const digest = crypto.createHash('sha256').update(buffer).digest('hex');
+    if (digest !== record.sha256 || buffer.length !== Number(record.byte_length)) {
+      throw new Error('live media seed object failed content-address verification');
+    }
+    await writeLiveMediaBlob(record.blob_key, buffer, digest, record.media_type);
+    return buffer;
+  }
+  const blob = azureLiveMediaContainer().getBlobClient(record.blob_key);
+  const options = abortSignal ? { abortSignal } : {};
+  const properties = await blob.getProperties(options);
+  if (
+    Number(properties.contentLength) !== expectedLength
+    || String(properties.metadata?.sha256 || '') !== record.sha256
+    || mediaType(properties.contentType) !== record.media_type
+  ) throw new Error('Azure live media object metadata differs from catalog');
+  const response = await blob.download(0, expectedLength, options);
+  if (Number(response.contentLength) !== expectedLength || !response.readableStreamBody) {
+    throw new Error('Azure live media download length differs from catalog');
+  }
+  return readNodeStreamExactly(response.readableStreamBody, expectedLength, 'Azure live media object', abortSignal);
+}
+
+function cachedMediaBuffer(sha256) {
+  const entry = mediaBufferCache.get(sha256);
+  if (!entry) return null;
+  mediaBufferCache.delete(sha256);
+  mediaBufferCache.set(sha256, entry);
+  return entry.buffer;
+}
+
+function cacheMediaBuffer(sha256, buffer) {
+  if (!LIVE_MEDIA_CACHE_MAX_BYTES || buffer.length > LIVE_MEDIA_CACHE_MAX_BYTES) return;
+  const prior = mediaBufferCache.get(sha256);
+  if (prior) {
+    mediaBufferCacheBytes -= prior.buffer.length;
+    mediaBufferCache.delete(sha256);
+  }
+  mediaBufferCache.set(sha256, { buffer });
+  mediaBufferCacheBytes += buffer.length;
+  while (mediaBufferCacheBytes > LIVE_MEDIA_CACHE_MAX_BYTES && mediaBufferCache.size) {
+    const oldestKey = mediaBufferCache.keys().next().value;
+    const oldest = mediaBufferCache.get(oldestKey);
+    mediaBufferCache.delete(oldestKey);
+    mediaBufferCacheBytes -= oldest.buffer.length;
+  }
+}
+
+function invalidateMediaCatalogCache() {
+  mediaCatalogCacheGeneration += 1;
+  mediaCatalogCache = { at: 0, body: null };
+}
+
+function mediaMutationError(code, status, details = null) {
+  const error = new Error(code);
+  error.mediaCode = code;
+  error.httpStatus = status;
+  error.mediaDetails = details;
+  return error;
+}
+
+function sendMediaMutationError(res, error, fallbackCode) {
+  if (error && error.mediaCode) {
+    const body = { error: error.mediaCode };
+    if (error.mediaDetails !== null) body.details = error.mediaDetails;
+    res.status(error.httpStatus || 400).json(body);
+    return;
+  }
+  dbUnavailable(res, fallbackCode.replace(/_/g, ' '), error, fallbackCode);
+}
+
+function mediaExpectedRevision(req) {
+  const body = isObjectRecord(req.body) ? req.body : {};
+  const bodyValue = body.expectedRevision ?? body.expected_revision;
+  if (Number.isInteger(bodyValue) && bodyValue >= 0) return bodyValue;
+  const header = String(req.headers['if-match'] || '').trim().replace(/^W\//, '').replace(/^"|"$/g, '');
+  return /^\d+$/.test(header) ? Number(header) : null;
+}
+
+function requireMediaExpectedRevision(req) {
+  const expected = mediaExpectedRevision(req);
+  if (expected === null) throw mediaMutationError('media_expected_revision_required', 428);
+  return expected;
+}
+
+function assertMediaRevision(row, expected) {
+  if (Number(row.row_revision) !== expected) {
+    throw mediaMutationError('media_version_conflict', 409, { currentRevision: Number(row.row_revision) });
+  }
+}
+
+async function withMediaCatalogTransaction(fn, { invalidatePublic = false } = {}) {
+  await ensureDbReady();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    if (invalidatePublic) invalidateMediaCatalogCache();
+    return result;
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function bumpMediaCatalog(client) {
+  const { rows } = await client.query(
+    'UPDATE media_catalog_state SET revision = revision + 1, updated_at = now() WHERE singleton = true RETURNING revision',
+  );
+  return Number(rows[0]?.revision || 0);
+}
+
+async function currentMediaCatalogRevision(client) {
+  const { rows } = await client.query('SELECT revision FROM media_catalog_state WHERE singleton = true');
+  return Number(rows[0]?.revision || 0);
+}
+
+async function logMediaEvent(client, row, action, actorEmail, details = {}) {
+  await client.query(
+    `INSERT INTO media_asset_events (slot, source_path, version_id, action, actor_email, details)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+    [row.slot || null, row.source_path || null, row.id || null, action, actorEmail, JSON.stringify(details)],
+  );
+}
+
+async function dbMediaVersionRow(id, queryable = pool, lock = false) {
+  const { rows } = await queryable.query(
+    `SELECT v.id, v.slot, v.source_path, v.domain, v.role, v.label, v.status,
+            v.blob_sha256, v.metadata, v.provenance, v.native_evidence,
+            v.review_evidence, v.row_revision, v.created_at, v.updated_at, v.updated_by,
+            b.blob_key, b.media_type, b.byte_length, b.width, b.height,
+            s.domain AS slot_domain, s.role AS slot_role, s.lifecycle_state AS slot_lifecycle_state,
+            s.metadata AS slot_metadata
+       FROM media_versions v
+       LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+       LEFT JOIN media_slots s ON s.slot = v.slot
+      WHERE v.id = $1${lock ? ' FOR UPDATE OF v' : ''}`,
+    [id],
+  );
+  return rows[0] || null;
+}
+
+async function mediaBlobRecord(sha256, { publicOnly = false, queryable = null } = {}) {
+  if (!publicOnly && !queryable && mediaBlobRecordCache.has(sha256)) return mediaBlobRecordCache.get(sha256);
+  if (!queryable) await ensureDbReady();
+  const db = queryable || pool;
+  const { rows } = await db.query(
+    `SELECT b.sha256, b.blob_key, b.media_type, b.byte_length, b.width, b.height, b.published_at
+       FROM media_blobs b
+       WHERE b.sha256 = $1
+         AND (NOT $2::boolean OR b.published_at IS NOT NULL)
+      LIMIT 1`,
+    [sha256, publicOnly],
+  );
+  const record = rows[0] || null;
+  if (record && !publicOnly && !queryable) mediaBlobRecordCache.set(sha256, record);
+  return record;
+}
+
+async function mediaBytesBySha(sha256, record = null, { publicOnly = false } = {}) {
+  let buffer = cachedMediaBuffer(sha256);
+  if (buffer) return buffer;
+  if (mediaReadInFlight.has(sha256)) return mediaReadInFlight.get(sha256);
+  const blob = record || await mediaBlobRecord(sha256, { publicOnly });
+  if (!blob) return null;
+  if (!liveMediaStorageConfigured()) throw new Error('live media storage is not configured');
+  const pending = liveMediaReadBudget.run(Number(blob.byte_length), async (abortSignal) => {
+    const loaded = await readLiveMediaBlob(blob, { abortSignal });
+    const digest = crypto.createHash('sha256').update(loaded).digest('hex');
+    if (digest !== sha256 || loaded.length !== Number(blob.byte_length)) {
+      throw new Error('stored live media failed content-address verification');
+    }
+    cacheMediaBuffer(sha256, loaded);
+    return loaded;
+  });
+  mediaReadInFlight.set(sha256, pending);
+  try {
+    buffer = await pending;
+    return buffer;
+  } finally {
+    if (mediaReadInFlight.get(sha256) === pending) mediaReadInFlight.delete(sha256);
+  }
+}
+
+async function verifyLiveMediaBlobPresent(record) {
+  const sha256 = mediaSha(record?.sha256 ?? record?.blob_sha256);
+  if (!sha256 || !record?.blob_key) {
+    throw mediaMutationError('media_object_verification_failed', 409, { sha256: sha256 || null });
+  }
+  const blobRecord = record.sha256 === sha256 ? record : { ...record, sha256 };
+  return liveMediaReadBudget.run(Number(blobRecord.byte_length), async (abortSignal) => {
+    const buffer = await readLiveMediaBlob(blobRecord, {
+      allowSeed: false,
+      abortSignal,
+    });
+    const digest = crypto.createHash('sha256').update(buffer).digest('hex');
+    if (digest !== sha256 || buffer.length !== Number(blobRecord.byte_length)) {
+      throw mediaMutationError('media_object_verification_failed', 409, { sha256 });
+    }
+  });
+}
+
+async function resolvedMediaSlot(slot, queryable = null) {
+  if (!queryable) await ensureDbReady();
+  const db = queryable || pool;
+  const { rows } = await db.query(
+    `SELECT s.slot, s.domain, s.role, s.availability_policy, s.lifecycle_state,
+            s.active_version_id, s.activated_at, s.retired_at, s.retirement_evidence,
+            s.metadata AS slot_metadata, s.row_revision AS slot_revision,
+            v.id AS version_id, v.status AS version_status, v.metadata AS version_metadata,
+            v.provenance, v.native_evidence, v.row_revision AS version_revision,
+            b.sha256, b.blob_key, b.media_type, b.byte_length, b.width, b.height
+       FROM media_slots s
+       LEFT JOIN media_versions v ON v.id = s.active_version_id AND v.slot = s.slot
+       LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+      WHERE s.slot = $1`,
+    [slot],
+  );
+  return rows[0] || null;
+}
+
+async function resolveMediaSlotBytes(slot, catalog = null) {
+  const snapshot = catalog || await publicMediaCatalog();
+  const item = snapshot.slots.find((entry) => entry.slot === slot);
+  if (!item?.media?.sha256) return null;
+  const record = await mediaBlobRecord(item.media.sha256);
+  if (!record) return null;
+  const buffer = await mediaBytesBySha(record.sha256, record);
+  return buffer ? { record, buffer, slot: item } : null;
+}
+
+function publicMediaSlotMetadata(row) {
+  const raw = isObjectRecord(row.slot_metadata) ? row.slot_metadata : {};
+  if (raw.acceptance === undefined) return {};
+  const contract = mediaAcceptanceContract({ slot: row.slot, slot_metadata: raw });
+  return { acceptance: contract };
+}
+
+function publicMediaSlot(row) {
+  const hasActiveMedia = Boolean(
+    row.version_id && row.sha256 && ['accepted', 'legacy-bridge'].includes(row.version_status),
+  );
+  return {
+    slot: row.slot,
+    domain: row.domain,
+    role: row.role,
+    availabilityPolicy: row.availability_policy,
+    lifecycleState: row.lifecycle_state,
+    activeVersionId: row.active_version_id ? String(row.active_version_id) : null,
+    activatedAt: nullableTimestampString(row.activated_at),
+    retiredAt: nullableTimestampString(row.retired_at),
+    rowRevision: Number(row.slot_revision),
+    metadata: publicMediaSlotMetadata(row),
+    versionStatus: hasActiveMedia ? row.version_status : null,
+    productionEligible: row.version_status === 'accepted',
+    // Public consumers receive only the validated per-version runtime
+    // projection. Authoring notes, migration paths, provenance, and review
+    // evidence remain confined to the authenticated admin catalog.
+    // A staging slot has no runtime version to project yet. In particular,
+    // typed semantic slots such as ground-cover sheets require metadata on the
+    // eventual active version; applying that requirement to the empty staging
+    // shell makes the slot impossible to configure through the admin API.
+    versionMetadata: hasActiveMedia ? publicRuntimeVersionMetadata(row) : {},
+    provenance: {},
+    nativeEvidence: {},
+    media: hasActiveMedia ? {
+      url: encodedMediaSlotUrl(row.slot),
+      immutableUrl: immutableMediaUrl(row.sha256),
+      sha256: row.sha256,
+      mediaType: row.media_type,
+      width: row.width === null ? null : Number(row.width),
+      height: row.height === null ? null : Number(row.height),
+      byteLength: Number(row.byte_length),
+    } : null,
+  };
+}
+
+async function dbReadMediaCatalog({
+  includeVersions = false,
+  includeEvents = false,
+  eventBeforeId = null,
+  eventLimit = 200,
+} = {}) {
+  await ensureDbReady();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const stateResult = await client.query(
+      'SELECT revision, updated_at FROM media_catalog_state WHERE singleton = true',
+    );
+    const slotResult = await client.query(
+      `SELECT s.slot, s.domain, s.role, s.availability_policy, s.lifecycle_state,
+              s.active_version_id, s.activated_at, s.retired_at, s.retirement_evidence,
+              s.metadata AS slot_metadata, s.row_revision AS slot_revision,
+              v.id AS version_id, v.status AS version_status, v.metadata AS version_metadata,
+              v.provenance, v.native_evidence, v.row_revision AS version_revision,
+              b.sha256, b.blob_key, b.media_type, b.byte_length, b.width, b.height
+         FROM media_slots s
+         LEFT JOIN media_versions v ON v.id = s.active_version_id AND v.slot = s.slot
+         LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+        ORDER BY s.slot`,
+    );
+    const usableActive = (row) => (
+      row.lifecycle_state === 'active' && row.version_id && row.sha256
+      && ['accepted', 'legacy-bridge'].includes(row.version_status)
+    );
+    const incompleteCritical = slotResult.rows
+    .filter((row) => row.lifecycle_state === 'active' && row.availability_policy === 'critical' && (
+      !row.version_id || !row.sha256 || !['accepted', 'legacy-bridge'].includes(row.version_status)
+    ))
+    .map((row) => row.slot);
+    const rowBySlot = new Map(slotResult.rows.map((row) => [row.slot, row]));
+    const incompleteDecorativeGroupSlots = new Set();
+    const checkedGroups = new Set();
+    for (const row of slotResult.rows.filter((candidate) => candidate.lifecycle_state === 'active')) {
+      const contract = mediaAcceptanceContract({ slot: row.slot, slot_metadata: row.slot_metadata });
+      if (contract.mode !== 'group') continue;
+      const groupKey = `${contract.groupId}\0${contract.requiredSlots.join('\0')}`;
+      if (checkedGroups.has(groupKey)) continue;
+      checkedGroups.add(groupKey);
+      const members = contract.requiredSlots.map((slot) => rowBySlot.get(slot) || null);
+      const complete = members.every((member) => {
+        if (!member || !usableActive(member)) return false;
+        const memberContract = mediaAcceptanceContract({ slot: member.slot, slot_metadata: member.slot_metadata });
+        return memberContract.mode === 'group' && memberContract.groupId === contract.groupId
+          && canonicalJson(memberContract.requiredSlots) === canonicalJson(contract.requiredSlots);
+      });
+      if (complete) continue;
+      const critical = members.some((member) => member?.availability_policy === 'critical')
+        || row.availability_policy === 'critical';
+      if (critical) {
+        for (const slot of contract.requiredSlots) if (!incompleteCritical.includes(slot)) incompleteCritical.push(slot);
+      } else {
+        for (const slot of contract.requiredSlots) incompleteDecorativeGroupSlots.add(slot);
+      }
+    }
+    incompleteCritical.sort();
+    if (!includeVersions && incompleteCritical.length) {
+      throw mediaMutationError('media_catalog_incomplete', 503, { criticalSlots: incompleteCritical });
+    }
+    const body = {
+    schemaVersion: MEDIA_CATALOG_SCHEMA_VERSION,
+    revision: Number(stateResult.rows[0]?.revision || 0),
+    updatedAt: nullableTimestampString(stateResult.rows[0]?.updated_at),
+    slots: (includeVersions
+      ? slotResult.rows
+       : slotResult.rows.filter((row) => (
+         usableActive(row) && !incompleteDecorativeGroupSlots.has(row.slot)
+       ))).map((row) => {
+        const item = publicMediaSlot(row);
+        if (includeVersions) {
+          item.metadata = row.slot_metadata || {};
+          item.retirementEvidence = row.retirement_evidence || {};
+        }
+        return item;
+      }),
+    };
+    if (includeVersions) {
+      const { rows } = await client.query(
+      `SELECT v.id, v.slot, v.source_path, v.domain, v.role, v.label, v.status,
+              v.blob_sha256, v.metadata, v.provenance, v.native_evidence,
+              v.review_evidence, v.row_revision, v.created_at, v.updated_at, v.updated_by,
+              b.media_type, b.byte_length, b.width, b.height
+         FROM media_versions v LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+        ORDER BY v.updated_at DESC, v.id`,
+    );
+      body.versions = rows.map((row) => ({
+      id: String(row.id),
+      slot: row.slot,
+      sourcePath: row.source_path,
+      domain: row.domain,
+      role: row.role,
+      label: row.label,
+      status: row.status,
+      productionEligible: row.status === 'accepted',
+      metadata: row.metadata || {},
+      provenance: row.provenance || {},
+      nativeEvidence: row.native_evidence || {},
+      reviewEvidence: row.review_evidence || {},
+      rowRevision: Number(row.row_revision),
+      createdAt: nullableTimestampString(row.created_at),
+      updatedAt: nullableTimestampString(row.updated_at),
+      updatedBy: row.updated_by,
+      media: row.blob_sha256 ? {
+        url: row.status === 'accepted' || row.status === 'legacy-bridge'
+          ? immutableMediaUrl(row.blob_sha256)
+          : adminMediaUrl(row.blob_sha256),
+        sha256: row.blob_sha256,
+        mediaType: row.media_type,
+        width: row.width === null ? null : Number(row.width),
+        height: row.height === null ? null : Number(row.height),
+        byteLength: Number(row.byte_length),
+      } : null,
+      }));
+    }
+    if (includeEvents) {
+      const { rows } = await client.query(
+        `SELECT id, slot, source_path, version_id, action, actor_email, details, created_at
+          FROM media_asset_events
+         WHERE ($1::bigint IS NULL OR id < $1::bigint)
+         ORDER BY id DESC LIMIT $2`,
+        [eventBeforeId, eventLimit],
+      );
+      body.events = rows.map((row) => ({
+      id: Number(row.id), slot: row.slot, sourcePath: row.source_path,
+      versionId: row.version_id ? String(row.version_id) : null,
+      action: row.action, actorEmail: row.actor_email, details: row.details || {},
+      createdAt: nullableTimestampString(row.created_at),
+      }));
+      body.eventsPage = {
+        limit: eventLimit,
+        nextBeforeId: rows.length === eventLimit ? Number(rows[rows.length - 1].id) : null,
+      };
+    }
+    await client.query('COMMIT');
+    return body;
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve catalog read error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function publicMediaCatalog() {
+  const now = Date.now();
+  if (mediaCatalogCache.body && now - mediaCatalogCache.at < MEDIA_CATALOG_CACHE_TTL_MS) return mediaCatalogCache.body;
+  if (mediaCatalogReadPromise) return mediaCatalogReadPromise;
+  const generation = mediaCatalogCacheGeneration;
+  const readPromise = (async () => {
+    const body = await dbReadMediaCatalog();
+    if (generation !== mediaCatalogCacheGeneration) {
+      if (mediaCatalogReadPromise === readPromise) mediaCatalogReadPromise = null;
+      return publicMediaCatalog();
+    }
+    Object.defineProperty(body, PUBLIC_MEDIA_SLOT_INDEX, {
+      value: new Map(body.slots.map((slot) => [slot.slot, slot])),
+      enumerable: false,
+    });
+    mediaCatalogCache = { at: Date.now(), body };
+    return body;
+  })();
+  mediaCatalogReadPromise = readPromise;
+  try {
+    return await readPromise;
+  } finally {
+    if (mediaCatalogReadPromise === readPromise) mediaCatalogReadPromise = null;
+  }
+}
+
+const LIVE_MEDIA_READINESS_TIMEOUT_MS = 5_000;
+const LIVE_MEDIA_READINESS_PROBE_SHA = '0'.repeat(64);
+
+async function verifyLiveMediaStoreReadiness(record) {
+  if (!liveMediaStorageConfigured()) throw new Error('live media object store is not configured');
+
+  if (liveMediaStorageDir) {
+    await fs.promises.mkdir(liveMediaStorageDir, { recursive: true });
+    await fs.promises.access(liveMediaStorageDir, fs.constants.R_OK | fs.constants.W_OK);
+    if (!record) return;
+
+    // Local/test-slot stores may hydrate lazily from the live backend. Reading
+    // the smallest active object proves both that the local store is usable and
+    // that a missing local object can actually recover from its configured seed.
+    const buffer = await readLiveMediaBlob(record, {
+      allowSeed: true,
+      abortSignal: AbortSignal.timeout(LIVE_MEDIA_READINESS_TIMEOUT_MS),
+    });
+    const digest = crypto.createHash('sha256').update(buffer).digest('hex');
+    if (digest !== record.sha256 || buffer.length !== Number(record.byte_length)) {
+      throw new Error('live media readiness object failed content-address verification');
+    }
+    return;
+  }
+
+  // A HEAD-equivalent property read proves workload identity, RBAC, container
+  // routing, and object metadata without downloading media on every Kubernetes
+  // probe. Before the first active slot exists, a correctly authorized 404 on a
+  // canonical sentinel key still proves access to the configured container.
+  const target = record || {
+    sha256: LIVE_MEDIA_READINESS_PROBE_SHA,
+    blob_key: liveMediaBlobKey(LIVE_MEDIA_READINESS_PROBE_SHA),
+  };
+  const blob = azureLiveMediaContainer().getBlobClient(target.blob_key);
+  let properties;
+  try {
+    properties = await blob.getProperties({ abortSignal: AbortSignal.timeout(LIVE_MEDIA_READINESS_TIMEOUT_MS) });
+  } catch (error) {
+    const status = error && (error.statusCode || error.status);
+    if (!record && status === 404) return;
+    throw error;
+  }
+  if (!record) throw new Error('live media readiness sentinel unexpectedly exists');
+  if (
+    Number(properties.contentLength) !== Number(record.byte_length)
+    || String(properties.metadata?.sha256 || '') !== record.sha256
+    || mediaType(properties.contentType) !== record.media_type
+  ) throw new Error('live media readiness object metadata differs from catalog');
+}
+
+async function liveMediaReadiness() {
+  await ensureDbReady();
+
+  // Read all three DB authorities afresh. Public endpoints may use short-lived
+  // caches, but a Kubernetes probe must observe current catalog state and run
+  // the exact typed renderer projections that browser boot/thumbnails require.
+  const [catalog, propSeatsRow, unitCatalog] = await Promise.all([
+    dbReadMediaCatalog(),
+    dbGetPropSeats('default'),
+    dbReadUnitCatalog(),
+  ]);
+  const propSeats = requirePropSeatsDocument('default', propSeatsRow);
+  const propSeatsRevision = Number(propSeats.revision);
+  const unitCatalogRevision = Number(unitCatalog.revision);
+  const catalogIssue = liveCatalogReadinessIssue(catalog, { requireCritical: true });
+  if (catalogIssue) throw new Error(catalogIssue);
+  const catalogRevision = Number(catalog.revision);
+
+  if (!serverRender || typeof serverRender.applyServerRenderSnapshot !== 'function') {
+    throw new Error('complete live renderer snapshot validator is unavailable');
+  }
+  await withServerRenderCriticalSection(() => {
+    serverRender.applyServerRenderSnapshot({
+      mediaCatalog: catalog,
+      propSeats: propSeats.data,
+      unitCatalog,
+    });
+  });
+
+  const sampleSlot = [...catalog.slots].sort((left, right) => (
+    Number(right.availabilityPolicy === 'critical') - Number(left.availabilityPolicy === 'critical')
+    || Number(left.media.byteLength) - Number(right.media.byteLength)
+    || left.slot.localeCompare(right.slot)
+  ))[0];
+  const sample = sampleSlot ? await mediaBlobRecord(sampleSlot.media.sha256, { publicOnly: true }) : null;
+  await verifyLiveMediaStoreReadiness(sample);
+  return { catalogRevision, propSeatsRevision, unitCatalogRevision };
+}
+
+async function publicMediaSlotById(slot) {
+  const snapshot = await publicMediaCatalog();
+  return snapshot[PUBLIC_MEDIA_SLOT_INDEX]?.get(slot) || null;
+}
+
+function publicMediaVersion(row) {
+  return {
+    id: String(row.id),
+    slot: row.slot,
+    sourcePath: row.source_path,
+    domain: row.domain,
+    role: row.role,
+    label: row.label,
+    status: row.status,
+    rowRevision: Number(row.row_revision),
+    metadata: row.metadata || {},
+    provenance: row.provenance || {},
+    nativeEvidence: row.native_evidence || {},
+    reviewEvidence: row.review_evidence || {},
+    media: row.blob_sha256 ? {
+      url: row.status === 'accepted' || row.status === 'legacy-bridge'
+        ? immutableMediaUrl(row.blob_sha256)
+        : adminMediaUrl(row.blob_sha256),
+      sha256: row.blob_sha256,
+      mediaType: row.media_type,
+      width: row.width === null ? null : Number(row.width),
+      height: row.height === null ? null : Number(row.height),
+      byteLength: Number(row.byte_length),
+    } : null,
+  };
+}
+
+const LIVE_MEDIA_MAX_RASTER_PIXELS = 8 * 1024 * 1024;
+
+function jpegDimensions(buffer) {
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null;
+  let offset = 2;
+  const sof = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
+  while (offset + 4 <= buffer.length) {
+    while (offset < buffer.length && buffer[offset] !== 0xff) offset += 1;
+    while (offset < buffer.length && buffer[offset] === 0xff) offset += 1;
+    if (offset >= buffer.length) break;
+    const marker = buffer[offset++];
+    if (marker === 0xd8 || marker === 0x01) continue;
+    if (marker === 0xd9 || marker === 0xda) break;
+    if (offset + 2 > buffer.length) break;
+    const length = buffer.readUInt16BE(offset);
+    if (length < 2 || offset + length > buffer.length) break;
+    if (sof.has(marker) && length >= 7) {
+      return { height: buffer.readUInt16BE(offset + 3), width: buffer.readUInt16BE(offset + 5) };
+    }
+    offset += length;
+  }
+  return null;
+}
+
+function webpDimensions(buffer) {
+  if (buffer.length < 30 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WEBP') return null;
+  const kind = buffer.toString('ascii', 12, 16);
+  if (kind === 'VP8X' && buffer.length >= 30) {
+    return {
+      width: 1 + buffer.readUIntLE(24, 3),
+      height: 1 + buffer.readUIntLE(27, 3),
+    };
+  }
+  if (kind === 'VP8L' && buffer.length >= 25 && buffer[20] === 0x2f) {
+    const bits = buffer.readUInt32LE(21);
+    return { width: 1 + (bits & 0x3fff), height: 1 + ((bits >>> 14) & 0x3fff) };
+  }
+  if (kind === 'VP8 ' && buffer.length >= 30 && buffer[23] === 0x9d && buffer[24] === 0x01 && buffer[25] === 0x2a) {
+    return { width: buffer.readUInt16LE(26) & 0x3fff, height: buffer.readUInt16LE(28) & 0x3fff };
+  }
+  return null;
+}
+
+function avifDimensions(buffer) {
+  let offset = 0;
+  while (offset + 8 <= buffer.length) {
+    const size = buffer.readUInt32BE(offset);
+    if (size < 8 || offset + size > buffer.length) break;
+    const end = offset + size;
+    const marker = buffer.indexOf(Buffer.from('ispe'), offset + 4);
+    if (marker !== -1 && marker + 16 <= end) {
+      return { width: buffer.readUInt32BE(marker + 8), height: buffer.readUInt32BE(marker + 12) };
+    }
+    offset = end;
+  }
+  // `ispe` is normally nested below meta/iprp/ipco; bounded search avoids
+  // decoding before dimensions have been checked.
+  const marker = buffer.indexOf(Buffer.from('ispe'));
+  if (marker !== -1 && marker + 16 <= buffer.length) {
+    return { width: buffer.readUInt32BE(marker + 8), height: buffer.readUInt32BE(marker + 12) };
+  }
+  return null;
+}
+
+function rasterHeaderDimensions(buffer, storedMediaType) {
+  if (storedMediaType === 'image/png' || storedMediaType === 'image/apng') {
+    const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    if (buffer.length < 24 || !buffer.subarray(0, 8).equals(signature) || buffer.toString('ascii', 12, 16) !== 'IHDR') return null;
+    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+  }
+  if (storedMediaType === 'image/jpeg' || storedMediaType === 'image/jpg') return jpegDimensions(buffer);
+  if (storedMediaType === 'image/webp') return webpDimensions(buffer);
+  if (storedMediaType === 'image/avif') return avifDimensions(buffer);
+  if (storedMediaType === 'image/gif') {
+    if (buffer.length < 10 || !/^GIF8[79]a$/.test(buffer.toString('ascii', 0, 6))) return null;
+    return { width: buffer.readUInt16LE(6), height: buffer.readUInt16LE(8) };
+  }
+  if (storedMediaType === 'image/bmp') {
+    if (buffer.length < 26 || buffer.toString('ascii', 0, 2) !== 'BM') return null;
+    return { width: Math.abs(buffer.readInt32LE(18)), height: Math.abs(buffer.readInt32LE(22)) };
+  }
+  if (storedMediaType === 'image/x-icon' || storedMediaType === 'image/vnd.microsoft.icon') {
+    if (buffer.length < 8 || buffer.readUInt16LE(0) !== 0 || buffer.readUInt16LE(2) !== 1) return null;
+    return { width: buffer[6] || 256, height: buffer[7] || 256 };
+  }
+  return null;
+}
+
+function mediaMagicIssue(buffer, storedMediaType) {
+  const ascii = (start, end) => buffer.length >= end ? buffer.toString('ascii', start, end) : '';
+  const starts = (...values) => values.some((value) => ascii(0, value.length) === value);
+  const sfnt = buffer.length >= 4 && (
+    starts('OTTO', 'true', 'typ1') || buffer.readUInt32BE(0) === 0x00010000
+  );
+  if (storedMediaType === 'font/woff2') return starts('wOF2') ? null : 'body is not WOFF2 font data';
+  if (storedMediaType === 'font/woff' || storedMediaType === 'application/font-woff') {
+    return starts('wOFF') ? null : 'body is not WOFF font data';
+  }
+  if (storedMediaType === 'font/otf') return starts('OTTO') ? null : 'body is not OpenType font data';
+  if (storedMediaType === 'font/ttf' || storedMediaType === 'application/font-sfnt') {
+    return sfnt ? null : 'body is not SFNT font data';
+  }
+  if (storedMediaType === 'audio/wav' || storedMediaType === 'audio/x-wav' || storedMediaType === 'audio/vnd.wave') {
+    return ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WAVE' ? null : 'body is not WAVE audio data';
+  }
+  if (storedMediaType === 'audio/ogg' || storedMediaType === 'video/ogg') {
+    return starts('OggS') ? null : 'body is not Ogg media data';
+  }
+  if (storedMediaType === 'audio/flac') return starts('fLaC') ? null : 'body is not FLAC audio data';
+  if (storedMediaType === 'audio/mpeg') {
+    const frameSync = buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0;
+    return starts('ID3') || frameSync ? null : 'body is not MPEG audio data';
+  }
+  if (storedMediaType === 'audio/aac') {
+    const adts = buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xf6) === 0xf0;
+    return adts ? null : 'body is not AAC audio data';
+  }
+  if (storedMediaType === 'audio/mp4' || storedMediaType === 'video/mp4') {
+    return ascii(4, 8) === 'ftyp' ? null : 'body is not ISO BMFF media data';
+  }
+  if (storedMediaType === 'audio/webm' || storedMediaType === 'video/webm') {
+    return buffer.length >= 4 && buffer.readUInt32BE(0) === 0x1a45dfa3 ? null : 'body is not WebM media data';
+  }
+  return null;
+}
+
+async function inspectLiveMedia(buffer, storedMediaType) {
+  if (!Buffer.isBuffer(buffer) || !buffer.length) return { error: 'body must contain media bytes' };
+  if (buffer.length > LIVE_MEDIA_MAX_BYTES) return { error: 'media exceeds the 32 MiB limit' };
+  if (!storedMediaType.startsWith('image/')) {
+    const magicIssue = mediaMagicIssue(buffer, storedMediaType);
+    return magicIssue ? { error: magicIssue } : { width: null, height: null };
+  }
+  if (storedMediaType === 'image/svg+xml') {
+    const head = buffer.subarray(0, Math.min(buffer.length, 1024 * 1024)).toString('utf8');
+    if (!/<svg(?:\s|>)/i.test(head)) return { error: 'body is not SVG image data' };
+    return { width: null, height: null };
+  }
+  const header = rasterHeaderDimensions(buffer, storedMediaType);
+  if (!header) return { error: `unsupported or invalid ${storedMediaType} raster header` };
+  if (
+    !Number.isInteger(header.width) || !Number.isInteger(header.height) || header.width < 1 || header.height < 1
+    || header.width > 32768 || header.height > 32768 || header.width * header.height > LIVE_MEDIA_MAX_RASTER_PIXELS
+  ) return { error: 'raster dimensions exceed the 8 megapixel safety limit' };
+  // Header parsing is intentionally the terminal upload inspection. Decoding
+  // untrusted compressed pixels in the request path can OOM the pod, and the
+  // browser/canvas consumers remain responsible for format support at render
+  // time. Content hash + magic/header + bounded dimensions are the storage gate.
+  return header;
+}
+
+function mediaProvenanceIssue(row) {
+  if (!isObjectRecord(row.provenance) || !Object.keys(row.provenance).length) return 'non-empty provenance is required';
+  return null;
+}
+
+function reviewedMediaEvidenceIssue(row) {
+  const evidence = isObjectRecord(row.review_evidence) ? row.review_evidence : {};
+  if (evidence.approved !== true || !evidence.approvedBy || !evidence.approvedAt) return 'owner review approval is required';
+  if (evidence.contentSha256 !== row.blob_sha256) return 'owner review does not cover the current media bytes';
+  const proof = isObjectRecord(evidence.evidence) ? evidence.evidence : {};
+  if (row.domain === 'terrain') {
+    if (proof.schema !== 'terrain-surface-canonical-board-proof-v1') return 'terrain review requires the canonical board proof schema';
+    if (proof.renderer !== 'BoardLabBoard/BoardTerrainLayer') return 'terrain review proof renderer is invalid';
+    if (proof.canonicalScale !== 1 || proof.assetLocalScale !== 1 || proof.spatialResampling !== false) {
+      return 'terrain review proof must cover exact canonical 1x pixels without resampling';
+    }
+    if (proof.deterministicProof !== true || !Array.isArray(proof.selectedCandidates) || !Array.isArray(proof.slotSnapshots)) {
+      return 'terrain review proof is incomplete';
+    }
+    const selected = proof.selectedCandidates.filter((item) => isObjectRecord(item) && item.versionId === row.id);
+    if (
+      selected.length !== 1 || selected[0].slot !== row.slot
+      || mediaSha(selected[0].sha256) !== row.blob_sha256
+    ) return 'terrain review proof does not identify the reviewed version bytes';
+  } else {
+    if (proof.schema === 'live-media-owner-group-proof-v1') {
+      if (proof.canonicalScale !== 1 || !runtimeSemanticText(proof.surfaceKind, 160) || !Array.isArray(proof.selectedCandidates)) {
+        return 'group owner proof is incomplete';
+      }
+      const selected = proof.selectedCandidates.filter((item) => isObjectRecord(item) && item.versionId === row.id);
+      if (selected.length !== 1 || selected[0].slot !== row.slot || mediaSha(selected[0].sha256) !== row.blob_sha256) {
+        return 'group owner proof does not identify the reviewed version bytes';
+      }
+    } else {
+      if (proof.schema !== 'live-media-owner-proof-v1') return 'review requires a typed live-media owner proof';
+      if (
+        mediaVersionId(proof.versionId) !== row.id || mediaSha(proof.contentSha256) !== row.blob_sha256
+        || proof.slot !== row.slot || proof.canonicalScale !== 1
+        || !runtimeSemanticText(proof.surfaceKind, 160)
+      ) return 'owner proof does not identify the reviewed version at canonical 1x';
+    }
+  }
+  return null;
+}
+
+const VISUAL_MEDIA_DOMAINS = new Set([
+  'background', 'portrait', 'prop', 'review-media', 'social-card', 'sprite-atlas',
+  'terrain', 'ui-kit', 'unit-art', 'wall-decor',
+]);
+const WATER_SIDE_REQUIRED_SLOTS = Object.freeze(
+  Array.from({ length: 8 }, (_, index) => `tiles/surface/water-${index}-side.png`),
+);
+const GROUND_COVER_SLOT_PATTERN = /^groundcover\/(grass|water|sand)\/v(0|[1-9][0-9]*)\.png$/;
+const GROUND_COVER_RUNTIME_KEYS = Object.freeze([
+  'terrain', 'id', 'frameWidth', 'frameHeight', 'frameCount', 'baseX', 'baseY', 'contentWidth',
+]);
+
+function runtimeInteger(value, { min = 0, max = 32768 } = {}) {
+  return Number.isInteger(value) && value >= min && value <= max ? value : null;
+}
+
+function runtimeSemanticText(value, max = 160) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized && normalized.length <= max ? normalized : null;
+}
+
+function runtimeMetadataProjection(row) {
+  const metadata = isObjectRecord(row.version_metadata) ? row.version_metadata
+    : isObjectRecord(row.metadata) ? row.metadata : {};
+  const groundCoverSlot = GROUND_COVER_SLOT_PATTERN.exec(String(row.slot || ''));
+  if (metadata.runtime === undefined) {
+    return groundCoverSlot
+      ? { error: 'ground-cover slots require metadata.runtime.groundCover' }
+      : { value: {} };
+  }
+  if (!isObjectRecord(metadata.runtime)) return { error: 'metadata.runtime must be an object' };
+  const raw = metadata.runtime;
+  const allowed = new Set([
+    'component', 'variant', 'state', 'family', 'palette', 'direction', 'altText',
+    'frameWidth', 'frameHeight', 'frameCount', 'anchorX', 'anchorY', 'durationMs', 'loop',
+  ]);
+  if (row.domain === 'terrain') {
+    for (const key of ['logicalTerrain', 'face', 'projection', 'alphaOwnership', 'groundCover']) allowed.add(key);
+  }
+  if (row.domain === 'ui-kit') {
+    for (const key of ['nativeRole', 'slice']) allowed.add(key);
+  }
+  const unknown = Object.keys(raw).filter((key) => !allowed.has(key));
+  if (unknown.length) return { error: `metadata.runtime contains unsupported keys: ${unknown.sort().join(', ')}` };
+
+  const value = {};
+  for (const key of ['component', 'variant', 'state', 'family', 'palette', 'direction']) {
+    if (raw[key] === undefined) continue;
+    const normalized = runtimeSemanticText(raw[key], 160);
+    if (!normalized) return { error: `metadata.runtime.${key} must be a non-empty string up to 160 characters` };
+    value[key] = normalized;
+  }
+  if (raw.altText !== undefined) {
+    if (typeof raw.altText !== 'string' || raw.altText.length > 500) {
+      return { error: 'metadata.runtime.altText must be a string up to 500 characters' };
+    }
+    value.altText = raw.altText;
+  }
+  for (const key of ['frameWidth', 'frameHeight', 'frameCount', 'durationMs']) {
+    if (raw[key] === undefined) continue;
+    const normalized = runtimeInteger(raw[key], { min: 1, max: key === 'durationMs' ? 3_600_000 : 32768 });
+    if (normalized === null) return { error: `metadata.runtime.${key} must be a positive bounded integer` };
+    value[key] = normalized;
+  }
+  for (const key of ['anchorX', 'anchorY']) {
+    if (raw[key] === undefined) continue;
+    const normalized = runtimeInteger(raw[key], { min: -32768, max: 32768 });
+    if (normalized === null) return { error: `metadata.runtime.${key} must be a bounded integer` };
+    value[key] = normalized;
+  }
+  if (raw.loop !== undefined) {
+    if (typeof raw.loop !== 'boolean') return { error: 'metadata.runtime.loop must be boolean' };
+    value.loop = raw.loop;
+  }
+  if (raw.groundCover !== undefined || groundCoverSlot) {
+    if (!groundCoverSlot || row.domain !== 'terrain') {
+      return { error: 'metadata.runtime.groundCover is allowed only on a registered ground-cover terrain slot' };
+    }
+    if (!isObjectRecord(raw.groundCover)) return { error: 'metadata.runtime.groundCover must be an object' };
+    const unsupportedRuntime = Object.keys(raw).filter((key) => key !== 'groundCover');
+    if (unsupportedRuntime.length) {
+      return { error: `ground-cover metadata.runtime contains unsupported keys: ${unsupportedRuntime.sort().join(', ')}` };
+    }
+    const unsupportedGroundCover = Object.keys(raw.groundCover)
+      .filter((key) => !GROUND_COVER_RUNTIME_KEYS.includes(key));
+    if (unsupportedGroundCover.length) {
+      return { error: `metadata.runtime.groundCover contains unsupported keys: ${unsupportedGroundCover.sort().join(', ')}` };
+    }
+    const terrain = mediaName(raw.groundCover.terrain);
+    const slotTerrain = groundCoverSlot[1];
+    if (!terrain || terrain !== slotTerrain) {
+      return { error: 'metadata.runtime.groundCover.terrain must match the semantic slot' };
+    }
+    const id = runtimeInteger(raw.groundCover.id, { min: 0, max: 32768 });
+    if (id === null || id !== Number(groundCoverSlot[2])) {
+      return { error: 'metadata.runtime.groundCover.id must match the semantic slot' };
+    }
+    const frameWidth = runtimeInteger(raw.groundCover.frameWidth, { min: 1, max: 32768 });
+    const frameHeight = runtimeInteger(raw.groundCover.frameHeight, { min: 1, max: 32768 });
+    const frameCount = runtimeInteger(raw.groundCover.frameCount, { min: 1, max: 32768 });
+    if (frameWidth === null || frameHeight === null || frameCount === null) {
+      return { error: 'metadata.runtime.groundCover frame geometry must use positive bounded integers' };
+    }
+    const baseX = runtimeInteger(raw.groundCover.baseX, { min: 0, max: 32767 });
+    const baseY = runtimeInteger(raw.groundCover.baseY, { min: 0, max: 32767 });
+    if (baseX === null || baseX >= frameWidth || baseY === null || baseY >= frameHeight) {
+      return { error: 'metadata.runtime.groundCover base anchor must lie inside one frame' };
+    }
+    const contentWidth = runtimeInteger(raw.groundCover.contentWidth, { min: 1, max: 32768 });
+    if (contentWidth === null || contentWidth > frameWidth) {
+      return { error: 'metadata.runtime.groundCover.contentWidth must fit inside one frame' };
+    }
+    value.groundCover = {
+      terrain, id, frameWidth, frameHeight, frameCount, baseX, baseY, contentWidth,
+    };
+  }
+  if (row.domain === 'terrain') {
+    if (raw.logicalTerrain !== undefined) {
+      const normalized = mediaName(raw.logicalTerrain);
+      if (!normalized) return { error: 'metadata.runtime.logicalTerrain must be a semantic terrain name' };
+      value.logicalTerrain = normalized;
+    }
+    if (raw.face !== undefined) {
+      if (!['top', 'side', 'animation', 'composite'].includes(raw.face)) {
+        return { error: 'metadata.runtime.face is invalid' };
+      }
+      value.face = raw.face;
+    }
+    if (raw.projection !== undefined) {
+      if (raw.projection !== 'iso-96x180-v1') return { error: 'metadata.runtime.projection is unsupported' };
+      value.projection = raw.projection;
+    }
+    if (raw.alphaOwnership !== undefined) {
+      if (!['top', 'side', 'animation', 'opaque', 'shared'].includes(raw.alphaOwnership)) {
+        return { error: 'metadata.runtime.alphaOwnership is invalid' };
+      }
+      value.alphaOwnership = raw.alphaOwnership;
+    }
+  }
+  if (row.domain === 'ui-kit') {
+    if (raw.nativeRole !== undefined) {
+      const normalized = mediaName(raw.nativeRole);
+      if (!normalized) return { error: 'metadata.runtime.nativeRole must be a semantic role' };
+      value.nativeRole = normalized;
+    }
+    if (raw.slice !== undefined) {
+      if (!isObjectRecord(raw.slice)) return { error: 'metadata.runtime.slice must be an object' };
+      const slice = {};
+      for (const edge of ['top', 'right', 'bottom', 'left']) {
+        const normalized = runtimeInteger(raw.slice[edge], { min: 0, max: 4096 });
+        if (normalized === null) return { error: `metadata.runtime.slice.${edge} must be a bounded integer` };
+        slice[edge] = normalized;
+      }
+      if (Object.keys(raw.slice).some((key) => !['top', 'right', 'bottom', 'left'].includes(key))) {
+        return { error: 'metadata.runtime.slice contains unsupported keys' };
+      }
+      value.slice = slice;
+    }
+  }
+  return { value };
+}
+
+function publicRuntimeVersionMetadata(row) {
+  const projected = runtimeMetadataProjection(row);
+  if (projected.error) {
+    throw mediaMutationError('media_runtime_projection_invalid', 503, { slot: row.slot, reason: projected.error });
+  }
+  return Object.keys(projected.value).length ? { runtime: projected.value } : {};
+}
+
+function mediaDomainProjectionIssue(row) {
+  const runtime = runtimeMetadataProjection(row);
+  if (runtime.error) return runtime.error;
+  const knownDomain = VISUAL_MEDIA_DOMAINS.has(row.domain) || row.domain === 'font' || row.domain === 'sfx';
+  if (!knownDomain) return `runtime acceptance requires a registered domain projection, not ${row.domain}`;
+  if (row.domain !== 'terrain') {
+    return `${row.domain} candidates remain bridge-only until their typed completeness validator and game-owned review instrument exist`;
+  }
+  if (row.domain === 'font' && !PUBLIC_FONT_MEDIA_TYPES.has(row.media_type)) return 'font slots require an allowed font media type';
+  if (row.domain === 'sfx' && !PUBLIC_AUDIO_MEDIA_TYPES.has(row.media_type)) return 'sfx slots require an allowed audio media type';
+  if (VISUAL_MEDIA_DOMAINS.has(row.domain) && !PUBLIC_IMAGE_MEDIA_TYPES.has(row.media_type)) {
+    return `${row.domain} slots require an allowed raster image media type`;
+  }
+  if (PUBLIC_IMAGE_MEDIA_TYPES.has(row.media_type) && (
+    row.width === null || row.height === null || !Number.isInteger(Number(row.width)) || !Number.isInteger(Number(row.height))
+  )) {
+    return 'raster runtime media requires decoded header dimensions';
+  }
+  if (row.domain === 'ui-kit' && runtime.value.slice) {
+    if (
+      runtime.value.slice.left + runtime.value.slice.right > Number(row.width)
+      || runtime.value.slice.top + runtime.value.slice.bottom > Number(row.height)
+    ) return 'ui-kit runtime slices exceed uploaded image geometry';
+  }
+  if (row.domain !== 'terrain') return null;
+
+  const groundCoverSlot = GROUND_COVER_SLOT_PATTERN.exec(String(row.slot || ''));
+  if (groundCoverSlot) {
+    if (row.role !== 'media') return 'ground-cover slots require the terrain media role';
+    if (row.media_type !== 'image/png') return 'ground-cover sheets require image/png';
+    const projection = runtime.value.groundCover;
+    if (!projection) return 'ground-cover slots require the typed runtime projection';
+    if (
+      Number(row.width) !== projection.frameWidth * projection.frameCount
+      || Number(row.height) !== projection.frameHeight
+    ) return 'ground-cover runtime metadata does not match uploaded sheet geometry';
+    return 'ground-cover candidates remain bridge-only until their game-owned exact-byte review instrument exists';
+  }
+
+  const suffixRole = row.slot?.endsWith('-top-anim.png') ? 'animation'
+    : row.slot?.endsWith('-top.png') ? 'top'
+      : row.slot?.endsWith('-side.png') ? 'side' : null;
+  if (suffixRole && row.role !== suffixRole) return `terrain slot suffix requires role ${suffixRole}`;
+  if (['top', 'side', 'animation'].includes(row.role) && !suffixRole) {
+    return `terrain ${row.role} role requires a matching semantic slot suffix`;
+  }
+  if (!WATER_SIDE_REQUIRED_SLOTS.includes(row.slot)) {
+    return 'terrain acceptance is currently registered only for the atomic Water side projection';
+  }
+  if (suffixRole && row.media_type !== 'image/png') return 'projected terrain faces require image/png';
+  if (suffixRole === 'top' || suffixRole === 'side') {
+    if (Number(row.width) !== 96 || Number(row.height) !== 180) return 'terrain top/side frames must be native 96x180';
+  }
+  if (suffixRole === 'animation') {
+    if (Number(row.height) !== 180 || Number(row.width) < 96 || Number(row.width) % 96 !== 0) {
+      return 'terrain animation sheets must contain horizontal 96x180 frames';
+    }
+  }
+  if (runtime.value.face !== undefined && runtime.value.face !== suffixRole) return 'terrain runtime face must match the slot role';
+  if (runtime.value.projection !== undefined && runtime.value.projection !== 'iso-96x180-v1') {
+    return 'terrain runtime projection does not match the canonical board projection';
+  }
+  const expectedFrameCount = suffixRole === 'animation' ? Number(row.width) / 96 : suffixRole ? 1 : null;
+  if (runtime.value.frameWidth !== undefined && runtime.value.frameWidth !== (suffixRole ? 96 : Number(row.width))) {
+    return 'terrain runtime frameWidth does not match uploaded geometry';
+  }
+  if (runtime.value.frameHeight !== undefined && runtime.value.frameHeight !== Number(row.height)) {
+    return 'terrain runtime frameHeight does not match uploaded geometry';
+  }
+  if (runtime.value.frameCount !== undefined && expectedFrameCount !== null && runtime.value.frameCount !== expectedFrameCount) {
+    return 'terrain runtime frameCount does not match uploaded geometry';
+  }
+  return null;
+}
+
+async function seedLiveMediaCatalogFromLiveSource() {
+  if (!liveMediaStorageDir || liveMediaContainerUrl) {
+    throw new Error('LIVE_MEDIA_SEED_CATALOG_URL is allowed only with isolated LIVE_MEDIA_STORAGE_DIR storage');
+  }
+  const countResult = await pool.query(
+    'SELECT (SELECT count(*) FROM media_slots) AS slots, (SELECT count(*) FROM media_versions) AS versions',
+  );
+  if (Number(countResult.rows[0]?.slots) || Number(countResult.rows[0]?.versions)) return;
+  const response = await fetch(liveMediaSeedCatalogUrl, { signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error(`live media seed catalog returned ${response.status}`);
+  const catalogBytes = await readFetchBodyAtMost(response, LIVE_MEDIA_SEED_CATALOG_MAX_BYTES, 'live media seed catalog');
+  let catalog;
+  try { catalog = JSON.parse(catalogBytes.toString('utf8')); } catch { throw new Error('live media seed catalog is not valid JSON'); }
+  if (Number(catalog.schemaVersion) !== MEDIA_CATALOG_SCHEMA_VERSION || !Array.isArray(catalog.slots)) {
+    throw new Error('live media seed catalog schema is invalid');
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const item of catalog.slots) {
+      const slot = mediaSlotId(item.slot);
+      const id = mediaVersionId(item.activeVersionId);
+      const status = item.versionStatus === 'accepted' ? 'accepted'
+        : item.versionStatus === 'legacy-bridge' ? 'legacy-bridge' : null;
+      const sha256 = mediaSha(item.media?.sha256);
+      const type = mediaType(item.media?.mediaType);
+      if (!slot || !id || !status || !sha256 || !type) throw new Error('live media seed catalog contains an invalid active slot');
+      const byteLength = Number(item.media.byteLength);
+      const width = item.media.width === null ? null : Number(item.media.width);
+      const height = item.media.height === null ? null : Number(item.media.height);
+      await client.query(
+        `INSERT INTO media_slots (slot, domain, role, availability_policy, metadata, row_revision, updated_by)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'live-catalog-seed')`,
+        [slot, mediaName(item.domain), mediaName(item.role), item.availabilityPolicy === 'decorative' ? 'decorative' : 'critical',
+          JSON.stringify(isObjectRecord(item.metadata) ? item.metadata : {}), Number(item.rowRevision) || 0],
+      );
+      await client.query(
+        `INSERT INTO media_blobs (sha256, blob_key, media_type, byte_length, width, height, published_at)
+         VALUES ($1, $2, $3, $4, $5, $6, now()) ON CONFLICT (sha256) DO NOTHING`,
+        [sha256, liveMediaBlobKey(sha256), type, byteLength, width, height],
+      );
+      await client.query(
+        `INSERT INTO media_versions (
+           id, slot, domain, role, label, status, blob_sha256, metadata, provenance,
+           native_evidence, review_evidence, row_revision, updated_by
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, '{}'::jsonb, 0, 'live-catalog-seed')`,
+        [id, slot, mediaName(item.domain), mediaName(item.role), `Seeded ${slot}`, status, sha256,
+          JSON.stringify(isObjectRecord(item.versionMetadata) ? item.versionMetadata : {}),
+          JSON.stringify({ seed: { kind: 'live-catalog', catalogUrl: liveMediaSeedCatalogUrl } }),
+          JSON.stringify({})],
+      );
+      await client.query(
+        `UPDATE media_slots SET active_version_id = $2, lifecycle_state = 'active',
+           activated_at = now() WHERE slot = $1`,
+        [slot, id],
+      );
+    }
+    await client.query(
+      'UPDATE media_catalog_state SET revision = $1, updated_at = now() WHERE singleton = true',
+      [Number(catalog.revision) || 0],
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  invalidateMediaCatalogCache();
+  console.log(`seeded ${catalog.slots.length} live media slots into ephemeral catalog; objects remain lazy`);
+}
+
+function validateMediaVersionInput(raw) {
+  if (!isObjectRecord(raw)) return { error: 'media version metadata must be an object' };
+  const hasSlot = raw.slot !== null && raw.slot !== undefined;
+  const slot = hasSlot ? mediaSlotId(raw.slot) : null;
+  const sourcePath = raw.sourcePath === undefined && raw.source_path === undefined
+    ? null : mediaSourcePath(raw.sourcePath ?? raw.source_path);
+  if (hasSlot && !slot) return { error: 'slot is not a valid semantic asset path' };
+  if (!slot && !sourcePath) return { error: 'slot or sourcePath is required' };
+  const domain = mediaName(raw.domain);
+  const role = mediaName(raw.role);
+  if (!domain || !role) return { error: 'domain and role must be lowercase semantic names' };
+  const label = boundedMediaText(raw.label, '', 160);
+  if (!label) return { error: 'label must be 1-160 characters' };
+  const availabilityPolicy = String(raw.availabilityPolicy ?? raw.availability_policy ?? 'critical').trim();
+  if (availabilityPolicy !== 'critical' && availabilityPolicy !== 'decorative') {
+    return { error: 'availabilityPolicy must be critical or decorative' };
+  }
+  const slotMetadataProvided = raw.slotMetadata !== undefined || raw.slot_metadata !== undefined;
+  const slotMetadataResult = normalizeMediaSlotMetadata(raw.slotMetadata ?? raw.slot_metadata ?? {});
+  const slotMetadata = slotMetadataResult.value;
+  const metadata = mediaJsonObject(raw.metadata, {});
+  const provenance = mediaJsonObject(raw.provenance, {});
+  const nativeEvidence = mediaJsonObject(raw.nativeEvidence ?? raw.native_evidence, {});
+  if (slotMetadataResult.error) return { error: slotMetadataResult.error };
+  if (slot && slotMetadata.acceptance?.mode === 'group' && !slotMetadata.acceptance.requiredSlots.includes(slot)) {
+    return { error: 'group requiredSlots must include this slot' };
+  }
+  if (!metadata || !provenance || !nativeEvidence) return { error: 'metadata and evidence fields must be objects' };
+  return {
+    value: {
+      slot, sourcePath, domain, role, label, availabilityPolicy,
+      slotMetadata, slotMetadataProvided, metadata, provenance, nativeEvidence,
+    },
+  };
+}
+
+function mediaVersionPatch(raw, current) {
+  if (!isObjectRecord(raw)) return { error: 'media version patch must be an object' };
+  const patch = {};
+  if (raw.label !== undefined) {
+    patch.label = boundedMediaText(raw.label, current.label, 160);
+    if (!patch.label) return { error: 'label must be 1-160 characters' };
+  }
+  for (const [input, output] of [
+    ['metadata', 'metadata'], ['provenance', 'provenance'],
+    ['nativeEvidence', 'native_evidence'], ['native_evidence', 'native_evidence'],
+  ]) {
+    if (raw[input] === undefined) continue;
+    const value = mediaJsonObject(raw[input]);
+    if (!value) return { error: `${input} must be an object` };
+    patch[output] = value;
+  }
+  if (!Object.keys(patch).length) return { error: 'no editable media version fields supplied' };
+  return { value: patch };
+}
+
+app.get('/api/asset-catalog', async (req, res) => {
+  try {
+    const catalog = await publicMediaCatalog();
+    const etag = `"asset-catalog-${catalog.revision}"`;
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) { res.status(304).end(); return; }
+    res.status(200).json(catalog);
+  } catch (error) {
+    if (error && error.mediaCode) { sendMediaMutationError(res, error, 'media_catalog_unavailable'); return; }
+    dbUnavailable(res, 'media catalog read failed', error, 'media_catalog_unavailable');
+  }
+});
+
+app.get('/api/admin/media-assets', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    const rawLimit = String(req.query.eventLimit ?? req.query.event_limit ?? '').trim();
+    const eventLimit = rawLimit ? Number(rawLimit) : 200;
+    const rawBefore = String(req.query.eventBeforeId ?? req.query.event_before_id ?? '').trim();
+    const eventBeforeId = rawBefore ? Number(rawBefore) : null;
+    if (!Number.isInteger(eventLimit) || eventLimit < 1 || eventLimit > 1000) {
+      res.status(400).json({ error: 'invalid_media_event_limit' });
+      return;
+    }
+    if (eventBeforeId !== null && (!Number.isSafeInteger(eventBeforeId) || eventBeforeId < 1)) {
+      res.status(400).json({ error: 'invalid_media_event_cursor' });
+      return;
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json(await dbReadMediaCatalog({
+      includeVersions: true,
+      includeEvents: true,
+      eventBeforeId,
+      eventLimit,
+    }));
+  } catch (error) {
+    dbUnavailable(res, 'media admin catalog read failed', error, 'media_catalog_unavailable');
+  }
+});
+
+app.patch(/^\/api\/admin\/media-slots\/(.+)$/, async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  let slot = null;
+  try { slot = mediaSlotId(String(req.params[0]).split('/').map(decodeURIComponent).join('/')); } catch { slot = null; }
+  if (!slot) { res.status(400).json({ error: 'invalid_media_slot' }); return; }
+  try {
+    const expected = requireMediaExpectedRevision(req);
+    const raw = isObjectRecord(req.body) ? req.body : {};
+    const hasMetadata = raw.metadata !== undefined || raw.slotMetadata !== undefined || raw.slot_metadata !== undefined;
+    const hasPolicy = raw.availabilityPolicy !== undefined || raw.availability_policy !== undefined;
+    if (!hasMetadata && !hasPolicy) throw mediaMutationError('invalid_media_slot_patch', 400);
+    const metadataResult = hasMetadata
+      ? normalizeMediaSlotMetadata(raw.metadata ?? raw.slotMetadata ?? raw.slot_metadata)
+      : { value: null };
+    if (metadataResult.error) throw mediaMutationError('invalid_media_slot_patch', 400, metadataResult.error);
+    if (
+      metadataResult.value?.acceptance?.mode === 'group'
+      && !metadataResult.value.acceptance.requiredSlots.includes(slot)
+    ) throw mediaMutationError('invalid_media_slot_patch', 400, 'group requiredSlots must include this slot');
+    const policy = hasPolicy ? String(raw.availabilityPolicy ?? raw.availability_policy).trim() : null;
+    if (hasPolicy && policy !== 'critical' && policy !== 'decorative') {
+      throw mediaMutationError('invalid_media_slot_patch', 400, 'availabilityPolicy must be critical or decorative');
+    }
+    const catalogRevision = await withMediaCatalogTransaction(async (client) => {
+      const result = await client.query('SELECT * FROM media_slots WHERE slot = $1 FOR UPDATE', [slot]);
+      const current = result.rows[0];
+      if (!current) throw mediaMutationError('media_slot_not_found', 404);
+      if (current.lifecycle_state === 'retired') throw mediaMutationError('media_slot_retired', 409);
+      if (Number(current.row_revision) !== expected) {
+        throw mediaMutationError('media_slot_conflict', 409, { currentRevision: Number(current.row_revision) });
+      }
+      if ((hasMetadata || hasPolicy) && (current.lifecycle_state !== 'staging' || current.active_version_id)) {
+        throw mediaMutationError('active_media_slot_contract_immutable', 409, { slot });
+      }
+      const before = {
+        metadata: current.metadata || {},
+        availabilityPolicy: current.availability_policy,
+        rowRevision: Number(current.row_revision),
+      };
+      await client.query(
+        `UPDATE media_slots SET metadata = COALESCE($2::jsonb, metadata),
+           availability_policy = COALESCE($3, availability_policy), row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $4 WHERE slot = $1`,
+        [slot, metadataResult.value === null ? null : JSON.stringify(metadataResult.value), policy, user.email],
+      );
+      await logMediaEvent(client, { slot, source_path: null, id: null }, 'slot-contract-updated', user.email, {
+        before,
+        after: {
+          metadata: metadataResult.value ?? before.metadata,
+          availabilityPolicy: policy ?? before.availabilityPolicy,
+          rowRevision: before.rowRevision + 1,
+        },
+      });
+      return current.active_version_id ? bumpMediaCatalog(client) : currentMediaCatalogRevision(client);
+    }, { invalidatePublic: true });
+    res.status(200).json({ slot: publicMediaSlot(await resolvedMediaSlot(slot)), catalogRevision });
+  } catch (error) {
+    sendMediaMutationError(res, error, 'media_slot_update_failed');
+  }
+});
+
+function validateMediaRetirementProof(raw) {
+  const reason = boundedMediaText(raw.reason, '', 4000);
+  const evidence = mediaJsonObject(raw.evidence, {});
+  if (!reason || !evidence || !Object.keys(evidence).length) {
+    throw mediaMutationError('media_retirement_evidence_required', 400);
+  }
+  return { reason, evidence, confirmCriticalRetirement: raw.confirmCriticalRetirement === true };
+}
+
+async function retireMediaSlotBatch(items, proof, actorEmail) {
+  const normalized = items.map((item) => ({
+    slot: mediaSlotId(item && item.slot),
+    expectedRevision: Number.isInteger(item && item.expectedRevision) && item.expectedRevision >= 0
+      ? item.expectedRevision : null,
+  }));
+  if (
+    !normalized.length || normalized.length > 256
+    || normalized.some((item) => !item.slot || item.expectedRevision === null)
+    || new Set(normalized.map((item) => item.slot)).size !== normalized.length
+  ) throw mediaMutationError('invalid_media_retire_batch', 400);
+  const batchId = crypto.randomUUID();
+  const result = await withMediaCatalogTransaction(async (client) => {
+    const requested = new Map(normalized.map((item) => [item.slot, item]));
+    const slots = [...requested.keys()].sort();
+    const slotResult = await client.query(
+      'SELECT * FROM media_slots WHERE slot = ANY($1::text[]) ORDER BY slot FOR UPDATE',
+      [slots],
+    );
+    if (slotResult.rows.length !== slots.length) throw mediaMutationError('media_slot_not_found', 404);
+    const rows = slotResult.rows;
+    for (const row of rows) {
+      if (Number(row.row_revision) !== requested.get(row.slot).expectedRevision) {
+        throw mediaMutationError('media_slot_conflict', 409, { slot: row.slot, currentRevision: Number(row.row_revision) });
+      }
+      if (row.lifecycle_state === 'retired') throw mediaMutationError('media_slot_retired', 409, { slot: row.slot });
+      if (row.availability_policy === 'critical' && !proof.confirmCriticalRetirement) {
+        throw mediaMutationError('critical_media_retirement_confirmation_required', 409, { slot: row.slot });
+      }
+    }
+    const bySlot = new Map(rows.map((row) => [row.slot, row]));
+    const grouped = new Map();
+    for (const row of rows) {
+      const contract = mediaAcceptanceContract({ slot: row.slot, slot_metadata: row.metadata });
+      if (contract.mode !== 'group') continue;
+      if (!grouped.has(contract.groupId)) grouped.set(contract.groupId, contract.requiredSlots);
+      if (JSON.stringify(grouped.get(contract.groupId)) !== JSON.stringify(contract.requiredSlots)) {
+        throw mediaMutationError('media_group_contract_mismatch', 409, { groupId: contract.groupId });
+      }
+    }
+    for (const [groupId, requiredSlots] of grouped) {
+      const missingSlots = requiredSlots.filter((slot) => !bySlot.has(slot));
+      if (missingSlots.length) throw mediaMutationError('media_group_retirement_incomplete', 409, { groupId, missingSlots });
+      for (const slot of requiredSlots) {
+        const member = mediaAcceptanceContract({ slot, slot_metadata: bySlot.get(slot).metadata });
+        if (member.mode !== 'group' || member.groupId !== groupId) {
+          throw mediaMutationError('media_group_contract_mismatch', 409, { groupId, slot });
+        }
+      }
+    }
+    let changedPublicCatalog = false;
+    for (const row of rows) {
+      const previousId = row.active_version_id ? String(row.active_version_id) : null;
+      if (previousId) {
+        await client.query(
+          `UPDATE media_versions SET status = 'archived', row_revision = row_revision + 1,
+             updated_at = now(), updated_by = $2 WHERE id = $1`,
+          [previousId, actorEmail],
+        );
+      }
+      const retirementEvidence = {
+        reason: proof.reason,
+        evidence: proof.evidence,
+        confirmedCriticalRetirement: row.availability_policy === 'critical',
+        retiredBy: actorEmail,
+        retiredAt: new Date().toISOString(),
+        previousVersionId: previousId,
+        batchId,
+      };
+      await client.query(
+        `UPDATE media_slots SET active_version_id = NULL, lifecycle_state = 'retired',
+           retired_at = now(), retirement_evidence = $2::jsonb,
+           row_revision = row_revision + 1, updated_at = now(), updated_by = $3
+         WHERE slot = $1`,
+        [row.slot, JSON.stringify(retirementEvidence), actorEmail],
+      );
+      await logMediaEvent(client, {
+        slot: row.slot, source_path: null, id: previousId,
+      }, rows.length === 1 ? 'slot-retired' : 'slot-retired-batch', actorEmail, retirementEvidence);
+      changedPublicCatalog ||= row.lifecycle_state === 'active';
+    }
+    const catalogRevision = changedPublicCatalog
+      ? await bumpMediaCatalog(client) : await currentMediaCatalogRevision(client);
+    return { catalogRevision, slots };
+  }, { invalidatePublic: true });
+  const retired = await Promise.all(result.slots.map(async (slot) => resolvedMediaSlot(slot)));
+  return {
+    batchId,
+    catalogRevision: result.catalogRevision,
+    slots: retired.map((row) => ({ ...publicMediaSlot(row), retirementEvidence: row.retirement_evidence || {} })),
+  };
+}
+
+app.post('/api/admin/media-slots/retire-batch', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    const raw = isObjectRecord(req.body) ? req.body : {};
+    if (!Array.isArray(raw.items)) throw mediaMutationError('invalid_media_retire_batch', 400);
+    res.status(200).json(await retireMediaSlotBatch(raw.items, validateMediaRetirementProof(raw), user.email));
+  } catch (error) {
+    sendMediaMutationError(res, error, 'media_slot_retirement_failed');
+  }
+});
+
+app.post(/^\/api\/admin\/media-slots\/(.+)\/retire$/, async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  let slot = null;
+  try { slot = mediaSlotId(String(req.params[0]).split('/').map(decodeURIComponent).join('/')); } catch { slot = null; }
+  if (!slot) { res.status(400).json({ error: 'invalid_media_slot' }); return; }
+  try {
+    const expected = requireMediaExpectedRevision(req);
+    const result = await retireMediaSlotBatch(
+      [{ slot, expectedRevision: expected }],
+      validateMediaRetirementProof(isObjectRecord(req.body) ? req.body : {}),
+      user.email,
+    );
+    res.status(200).json({ slot: result.slots[0], catalogRevision: result.catalogRevision, batchId: result.batchId });
+  } catch (error) {
+    sendMediaMutationError(res, error, 'media_slot_retirement_failed');
+  }
+});
+
+app.post('/api/admin/media-versions', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const validated = validateMediaVersionInput(req.body);
+  if (validated.error) { res.status(400).json({ error: 'invalid_media_version', details: validated.error }); return; }
+  const value = validated.value;
+  try {
+    const idempotencyKey = mediaIdempotencyKey(req);
+    const idempotencyActor = String(user.email).trim().toLowerCase();
+    const requestFingerprint = crypto.createHash('sha256').update(canonicalJson(value)).digest('hex');
+    const requestedId = crypto.randomUUID();
+    const result = await withMediaCatalogTransaction(async (client) => {
+      if (idempotencyKey) {
+        const replay = await client.query(
+          `SELECT id, request_fingerprint FROM media_versions
+            WHERE idempotency_actor = $1 AND idempotency_key = $2`,
+          [idempotencyActor, idempotencyKey],
+        );
+        if (replay.rows[0]) {
+          if (replay.rows[0].request_fingerprint !== requestFingerprint) {
+            throw mediaMutationError('media_idempotency_conflict', 409);
+          }
+          return {
+            id: String(replay.rows[0].id),
+            created: false,
+            catalogRevision: await currentMediaCatalogRevision(client),
+          };
+        }
+      }
+      if (value.slot) {
+        await client.query(
+          `INSERT INTO media_slots (slot, domain, role, availability_policy, metadata, updated_by)
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+           ON CONFLICT (slot) DO NOTHING`,
+          [value.slot, value.domain, value.role, value.availabilityPolicy, JSON.stringify(value.slotMetadata), user.email],
+        );
+        const currentSlot = await client.query('SELECT * FROM media_slots WHERE slot = $1 FOR UPDATE', [value.slot]);
+        const current = currentSlot.rows[0];
+        if (!current) throw new Error('media slot insert did not produce a row');
+        if (current.lifecycle_state === 'retired') {
+          throw mediaMutationError('media_slot_retired', 409, { slot: value.slot });
+        } else if (
+          current.domain !== value.domain || current.role !== value.role
+          || current.availability_policy !== value.availabilityPolicy
+        ) {
+          throw mediaMutationError('media_slot_contract_conflict', 409, {
+            slot: value.slot,
+            current: { domain: current.domain, role: current.role, availabilityPolicy: current.availability_policy },
+          });
+        } else if (value.slotMetadataProvided && canonicalJson(current.metadata || {}) !== canonicalJson(value.slotMetadata)) {
+          throw mediaMutationError('media_slot_metadata_requires_patch', 409, { slot: value.slot });
+        }
+      }
+      const inserted = await client.query(
+        `INSERT INTO media_versions (
+           id, slot, source_path, domain, role, label, metadata, provenance, native_evidence,
+           idempotency_actor, idempotency_key, request_fingerprint, updated_by
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10, $11, $12, $13)
+         ON CONFLICT (idempotency_actor, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
+         RETURNING id`,
+        [requestedId, value.slot, value.sourcePath, value.domain, value.role, value.label,
+          JSON.stringify(value.metadata), JSON.stringify(value.provenance), JSON.stringify(value.nativeEvidence),
+          idempotencyKey ? idempotencyActor : null, idempotencyKey, idempotencyKey ? requestFingerprint : null, user.email],
+      );
+      if (!inserted.rows[0]) {
+        const replay = await client.query(
+          `SELECT id, request_fingerprint FROM media_versions
+            WHERE idempotency_actor = $1 AND idempotency_key = $2`,
+          [idempotencyActor, idempotencyKey],
+        );
+        if (!replay.rows[0] || replay.rows[0].request_fingerprint !== requestFingerprint) {
+          throw mediaMutationError('media_idempotency_conflict', 409);
+        }
+        return {
+          id: String(replay.rows[0].id),
+          created: false,
+          catalogRevision: await currentMediaCatalogRevision(client),
+        };
+      }
+      await logMediaEvent(client, { id: requestedId, slot: value.slot, source_path: value.sourcePath }, 'created', user.email, {
+        idempotencyKey: idempotencyKey || null,
+        requestFingerprint: idempotencyKey ? requestFingerprint : null,
+      });
+      return {
+        id: requestedId,
+        created: true,
+        catalogRevision: await currentMediaCatalogRevision(client),
+      };
+    });
+    const version = await dbMediaVersionRow(result.id);
+    res.setHeader('Location', `/api/admin/media-versions/${result.id}`);
+    res.status(result.created ? 201 : 200).json({
+      version: publicMediaVersion(version),
+      catalogRevision: result.catalogRevision,
+      idempotentReplay: !result.created,
+    });
+  } catch (error) {
+    sendMediaMutationError(res, error, 'media_version_create_failed');
+  }
+});
+
+app.patch('/api/admin/media-versions/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = mediaVersionId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_media_version_id' }); return; }
+  try {
+    const expected = requireMediaExpectedRevision(req);
+    const catalogRevision = await withMediaCatalogTransaction(async (client) => {
+      const current = await dbMediaVersionRow(id, client, true);
+      if (!current) throw mediaMutationError('media_version_not_found', 404);
+      assertMediaRevision(current, expected);
+      if (current.status !== 'candidate') throw mediaMutationError('media_version_locked', 409, { status: current.status });
+      const validated = mediaVersionPatch(req.body, current);
+      if (validated.error) throw mediaMutationError('invalid_media_version', 400, validated.error);
+      const value = validated.value;
+      const before = {
+        label: current.label,
+        metadata: current.metadata || {},
+        provenance: current.provenance || {},
+        nativeEvidence: current.native_evidence || {},
+        reviewEvidence: current.review_evidence || {},
+        rowRevision: Number(current.row_revision),
+      };
+      await client.query(
+        `UPDATE media_versions SET
+           label = COALESCE($2, label), metadata = COALESCE($3::jsonb, metadata),
+           provenance = COALESCE($4::jsonb, provenance), native_evidence = COALESCE($5::jsonb, native_evidence),
+           review_evidence = '{}'::jsonb, row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $6 WHERE id = $1`,
+        [id, value.label ?? null, value.metadata === undefined ? null : JSON.stringify(value.metadata),
+          value.provenance === undefined ? null : JSON.stringify(value.provenance),
+          value.native_evidence === undefined ? null : JSON.stringify(value.native_evidence), user.email],
+      );
+      await logMediaEvent(client, current, 'metadata-updated', user.email, {
+        before,
+        after: {
+          label: value.label ?? before.label,
+          metadata: value.metadata ?? before.metadata,
+          provenance: value.provenance ?? before.provenance,
+          nativeEvidence: value.native_evidence ?? before.nativeEvidence,
+          reviewEvidence: {},
+          rowRevision: before.rowRevision + 1,
+        },
+      });
+      return currentMediaCatalogRevision(client);
+    });
+    res.status(200).json({ version: publicMediaVersion(await dbMediaVersionRow(id)), catalogRevision });
+  } catch (error) {
+    sendMediaMutationError(res, error, 'media_version_update_failed');
+  }
+});
+
+app.put(
+  '/api/admin/media-versions/:id/content',
+  async (req, res) => {
+    const user = req.rawUploadAdmin || await requireAdmin(req, res);
+    if (!user) return;
+    const id = mediaVersionId(req.params.id);
+    if (!id) { res.status(400).json({ error: 'invalid_media_version_id' }); return; }
+    if (!liveMediaStorageConfigured()) { res.status(503).json({ error: 'live_media_storage_unavailable' }); return; }
+    const storedMediaType = mediaType(req.headers['content-type']);
+    if (!storedMediaType) { res.status(415).json({ error: 'unsupported_media_type' }); return; }
+    const inspected = await inspectLiveMedia(req.body, storedMediaType);
+    if (inspected.error) { res.status(400).json({ error: 'invalid_media_content', details: inspected.error }); return; }
+    const sha256 = crypto.createHash('sha256').update(req.body).digest('hex');
+    const blobKey = liveMediaBlobKey(sha256);
+    try {
+      const expected = requireMediaExpectedRevision(req);
+      const before = await dbMediaVersionRow(id);
+      if (!before) throw mediaMutationError('media_version_not_found', 404);
+      assertMediaRevision(before, expected);
+      if (before.status !== 'candidate') throw mediaMutationError('media_version_locked', 409, { status: before.status });
+      await writeLiveMediaBlob(blobKey, req.body, sha256, storedMediaType);
+      const catalogRevision = await withMediaCatalogTransaction(async (client) => {
+        const current = await dbMediaVersionRow(id, client, true);
+        if (!current) throw mediaMutationError('media_version_not_found', 404);
+        assertMediaRevision(current, expected);
+        if (current.status !== 'candidate') throw mediaMutationError('media_version_locked', 409, { status: current.status });
+        await client.query(
+          `INSERT INTO media_blobs (sha256, blob_key, media_type, byte_length, width, height)
+             VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (sha256) DO NOTHING`,
+          [sha256, blobKey, storedMediaType, req.body.length, inspected.width, inspected.height],
+        );
+        const stored = await mediaBlobRecord(sha256, { queryable: client });
+        if (
+          !stored || stored.blob_key !== blobKey || stored.media_type !== storedMediaType
+          || Number(stored.byte_length) !== req.body.length
+          || (stored.width === null ? null : Number(stored.width)) !== inspected.width
+          || (stored.height === null ? null : Number(stored.height)) !== inspected.height
+        ) throw new Error('media blob metadata conflicts with existing content hash');
+        const preserveNativeEvidence = preservesNativeEvidenceForUpload(current, {
+          sha256,
+          mediaType: storedMediaType,
+          width: inspected.width,
+          height: inspected.height,
+        });
+        await client.query(
+          `UPDATE media_versions SET blob_sha256 = $2,
+             native_evidence = CASE WHEN $3::boolean THEN native_evidence ELSE '{}'::jsonb END,
+             review_evidence = '{}'::jsonb, row_revision = row_revision + 1,
+             updated_at = now(), updated_by = $4 WHERE id = $1`,
+          [id, sha256, preserveNativeEvidence, user.email],
+        );
+        await logMediaEvent(client, current, 'content-uploaded', user.email, {
+          before: {
+            sha256: current.blob_sha256,
+            nativeEvidence: current.native_evidence || {},
+            reviewEvidence: current.review_evidence || {},
+            rowRevision: Number(current.row_revision),
+          },
+          after: {
+            sha256,
+            mediaType: storedMediaType,
+            width: inspected.width,
+            height: inspected.height,
+            byteLength: req.body.length,
+            nativeEvidencePreserved: preserveNativeEvidence,
+            reviewEvidence: {},
+            rowRevision: Number(current.row_revision) + 1,
+          },
+        });
+        return currentMediaCatalogRevision(client);
+      });
+      res.status(200).json({ version: publicMediaVersion(await dbMediaVersionRow(id)), catalogRevision });
+    } catch (error) {
+      sendMediaMutationError(res, error, 'media_content_upload_failed');
+    }
+  },
+);
+
+function gameOwnedReviewSurfaceUrl(req, raw) {
+  const value = boundedMediaText(raw, '', 2048);
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const requestOrigin = String(req.get('origin') || '').trim().replace(/\/+$/, '');
+    const sameOrigin = requestOrigin
+      ? url.origin === requestOrigin
+      : url.host.toLowerCase() === String(req.get('host') || '').toLowerCase();
+    if (!sameOrigin || (url.protocol !== 'http:' && url.protocol !== 'https:') || url.pathname !== '/studio' || url.hash) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function validateMediaReviewProofSnapshot(client, current, evidence, surfaceUrl) {
+  if (current.domain !== 'terrain') {
+    const contract = mediaAcceptanceContract(current);
+    if (contract.mode === 'group') {
+      if (
+        evidence.schema !== 'live-media-owner-group-proof-v1' || evidence.canonicalScale !== 1
+        || !runtimeSemanticText(evidence.surfaceKind, 160) || !Array.isArray(evidence.selectedCandidates)
+        || !Array.isArray(evidence.slotSnapshots) || !isObjectRecord(evidence.acceptanceGroup)
+        || evidence.acceptanceGroup.groupId !== contract.groupId
+        || canonicalJson(evidence.acceptanceGroup.requiredSlots) !== canonicalJson(contract.requiredSlots)
+      ) throw mediaMutationError('invalid_media_review_proof', 409, 'typed group owner proof is incomplete');
+      const selected = evidence.selectedCandidates.filter(isObjectRecord);
+      const snapshots = evidence.slotSnapshots.filter(isObjectRecord);
+      const selectedBySlot = new Map(selected.map((item) => [item.slot, item]));
+      const snapshotBySlot = new Map(snapshots.map((item) => [item.slot, item]));
+      if (
+        selected.length !== contract.requiredSlots.length || selectedBySlot.size !== contract.requiredSlots.length
+        || snapshots.length !== contract.requiredSlots.length || snapshotBySlot.size !== contract.requiredSlots.length
+      ) throw mediaMutationError('invalid_media_review_proof', 409, 'group proof must cover each slot exactly once');
+      const slotResult = await client.query(
+        'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = ANY($1::text[]) ORDER BY slot',
+        [contract.requiredSlots],
+      );
+      const selectedIds = [];
+      if (slotResult.rows.length !== contract.requiredSlots.length) throw mediaMutationError('media_slot_not_found', 404);
+      for (const slotRow of slotResult.rows) {
+        const selectedRow = selectedBySlot.get(slotRow.slot);
+        const snapshot = snapshotBySlot.get(slotRow.slot);
+        const selectedId = mediaVersionId(selectedRow?.versionId);
+        if (
+          !selectedId || !snapshot || Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+          || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+        ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: slotRow.slot, reason: 'group slot snapshot mismatch' });
+        selectedIds.push(selectedId);
+      }
+      const candidateResult = await client.query(
+        `SELECT id, slot, status, blob_sha256, row_revision
+           FROM media_versions WHERE id = ANY($1::uuid[]) ORDER BY slot`,
+        [selectedIds],
+      );
+      if (candidateResult.rows.length !== contract.requiredSlots.length) throw mediaMutationError('invalid_media_review_proof', 409, 'group candidates are incomplete');
+      for (const row of candidateResult.rows) {
+        const selectedRow = selectedBySlot.get(row.slot);
+        if (
+          row.status !== 'candidate' || String(row.id) !== selectedRow?.versionId || row.blob_sha256 !== selectedRow?.sha256
+          || Number(row.row_revision) !== Number(selectedRow?.rowRevision)
+        ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: row.slot, reason: 'group candidate snapshot mismatch' });
+      }
+      return;
+    }
+    if (
+      evidence.schema !== 'live-media-owner-proof-v1' || mediaVersionId(evidence.versionId) !== current.id
+      || mediaSha(evidence.contentSha256) !== current.blob_sha256 || evidence.slot !== current.slot
+      || evidence.canonicalScale !== 1 || !runtimeSemanticText(evidence.surfaceKind, 160)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, 'typed owner proof does not match this candidate');
+    return;
+  }
+  if (
+    evidence.schema !== 'terrain-surface-canonical-board-proof-v1'
+    || evidence.surfaceUrl !== surfaceUrl || evidence.renderer !== 'BoardLabBoard/BoardTerrainLayer'
+    || evidence.canonicalScale !== 1 || evidence.assetLocalScale !== 1
+    || evidence.spatialResampling !== false || evidence.deterministicProof !== true
+    || !Array.isArray(evidence.selectedCandidates) || !Array.isArray(evidence.slotSnapshots)
+  ) throw mediaMutationError('invalid_media_review_proof', 409, 'canonical terrain proof fields are incomplete');
+
+  const contract = mediaAcceptanceContract(current);
+  assertRequiredMediaAcceptanceContract(current, contract);
+  const requiredSlots = contract.mode === 'group' ? contract.requiredSlots : [current.slot];
+  const selected = evidence.selectedCandidates.filter(isObjectRecord);
+  const selectedBySlot = new Map(selected.map((item) => [item.slot, item]));
+  const snapshots = evidence.slotSnapshots.filter(isObjectRecord);
+  const snapshotBySlot = new Map(snapshots.map((item) => [item.slot, item]));
+  if (contract.mode === 'group') {
+    if (
+      selected.length !== requiredSlots.length || selectedBySlot.size !== requiredSlots.length
+      || snapshots.length !== requiredSlots.length || snapshotBySlot.size !== requiredSlots.length
+      || evidence.abruptExposedEdge !== true
+      || canonicalJson(evidence.exposedFaces) !== canonicalJson(['south', 'east'])
+      || requiredSlots.some((slot) => (
+        canonicalJson(selectedBySlot.get(slot)?.faces) !== canonicalJson(['south', 'east'])
+      ))
+      || !Array.isArray(evidence.acceptanceGroups)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, 'group terrain proof must cover every required face exactly once');
+    const group = evidence.acceptanceGroups.find((item) => (
+      isObjectRecord(item) && item.groupId === contract.groupId
+      && canonicalJson(item.requiredSlots) === canonicalJson(requiredSlots)
+    ));
+    if (!group) throw mediaMutationError('invalid_media_review_proof', 409, 'terrain proof is missing its acceptance group');
+  }
+  const slotResult = await client.query(
+    'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = ANY($1::text[]) ORDER BY slot',
+    [requiredSlots],
+  );
+  if (slotResult.rows.length !== requiredSlots.length) throw mediaMutationError('media_slot_not_found', 404);
+  const selectedIds = [];
+  for (const slotRow of slotResult.rows) {
+    const proofSlot = selectedBySlot.get(slotRow.slot);
+    const proofSnapshot = snapshotBySlot.get(slotRow.slot);
+    const proofId = mediaVersionId(proofSlot?.versionId);
+    if (
+      !proofSlot || !proofSnapshot || !proofId || mediaSha(proofSlot.sha256) === null
+      || Number(proofSnapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (proofSnapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: slotRow.slot, reason: 'slot snapshot mismatch' });
+    selectedIds.push(proofId);
+  }
+  const candidateResult = await client.query(
+    `SELECT id, slot, status, blob_sha256, row_revision
+       FROM media_versions WHERE id = ANY($1::uuid[]) ORDER BY slot`,
+    [selectedIds],
+  );
+  if (candidateResult.rows.length !== requiredSlots.length) throw mediaMutationError('invalid_media_review_proof', 409, 'proof candidates are incomplete');
+  for (const row of candidateResult.rows) {
+    const proof = selectedBySlot.get(row.slot);
+    if (
+      row.status !== 'candidate' || String(row.id) !== proof?.versionId || row.blob_sha256 !== proof?.sha256
+      || Number(row.row_revision) !== Number(proof?.rowRevision)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: row.slot, reason: 'candidate snapshot mismatch' });
+  }
+}
+
+function mediaReviewRequest(req) {
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  if (raw.approved !== true) throw mediaMutationError('media_review_approval_required', 400);
+  const notes = boundedMediaText(raw.notes, '', 4000);
+  const surfaceUrl = gameOwnedReviewSurfaceUrl(req, raw.surfaceUrl ?? raw.surface_url);
+  const evidence = mediaJsonObject(raw.evidence, {});
+  if (!notes || !surfaceUrl || !evidence || !Object.keys(evidence).length) {
+    throw mediaMutationError('invalid_media_review', 400, 'notes, same-origin Studio surfaceUrl, and non-empty evidence are required');
+  }
+  return { raw, notes, surfaceUrl, evidence };
+}
+
+async function approveMediaReviewBatch(items, review, actorEmail, { allowGroup = true } = {}) {
+  const normalized = items.map((item) => ({
+    id: mediaVersionId(item?.id),
+    expectedRevision: Number.isInteger(item?.expectedRevision) && item.expectedRevision >= 0
+      ? item.expectedRevision : null,
+  }));
+  if (
+    !normalized.length || normalized.length > 256
+    || normalized.some((item) => !item.id || item.expectedRevision === null)
+    || new Set(normalized.map((item) => item.id)).size !== normalized.length
+  ) throw mediaMutationError('invalid_media_review_batch', 400);
+  const reviewBatchId = crypto.randomUUID();
+  const result = await withMediaCatalogTransaction(async (client) => {
+    const expectedById = new Map(normalized.map((item) => [item.id, item.expectedRevision]));
+    const rows = [];
+    for (const id of [...expectedById.keys()].sort()) {
+      const current = await dbMediaVersionRow(id, client, true);
+      if (!current) throw mediaMutationError('media_version_not_found', 404, { id });
+      assertMediaRevision(current, expectedById.get(id));
+      if (current.status !== 'candidate') throw mediaMutationError('media_version_locked', 409, { id, status: current.status });
+      if (!current.blob_sha256) throw mediaMutationError('media_content_required', 409, { id });
+      rows.push(current);
+    }
+    const grouped = rows.map((row) => ({ row, contract: mediaAcceptanceContract(row) }))
+      .filter((item) => item.contract.mode === 'group');
+    if (grouped.length) {
+      const contract = grouped[0].contract;
+      if (!allowGroup) throw mediaMutationError('media_group_review_batch_required', 409, contract);
+      const slots = rows.map((row) => row.slot).sort();
+      if (
+        grouped.length !== rows.length || grouped.some((item) => (
+          item.contract.groupId !== contract.groupId
+          || canonicalJson(item.contract.requiredSlots) !== canonicalJson(contract.requiredSlots)
+        )) || canonicalJson(slots) !== canonicalJson(contract.requiredSlots)
+      ) throw mediaMutationError('media_group_review_incomplete', 409, contract);
+    } else if (rows.length !== 1) {
+      throw mediaMutationError('media_review_batch_requires_one_acceptance_group', 409);
+    }
+    for (const row of rows) await validateMediaReviewProofSnapshot(client, row, review.evidence, review.surfaceUrl);
+    const approvedAt = new Date().toISOString();
+    for (const row of rows) {
+      const reviewEvidence = {
+        approved: true,
+        approvedBy: actorEmail,
+        approvedAt,
+        contentSha256: row.blob_sha256,
+        notes: review.notes,
+        surfaceUrl: review.surfaceUrl,
+        evidence: review.evidence,
+        reviewBatchId,
+      };
+      await client.query(
+        `UPDATE media_versions SET review_evidence = $2::jsonb, row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $3 WHERE id = $1`,
+        [row.id, JSON.stringify(reviewEvidence), actorEmail],
+      );
+      await logMediaEvent(client, row, rows.length === 1 ? 'owner-review-approved' : 'owner-review-approved-batch', actorEmail, {
+        reviewEvidence,
+      });
+    }
+    return {
+      ids: rows.map((row) => String(row.id)),
+      catalogRevision: await currentMediaCatalogRevision(client),
+    };
+  });
+  return {
+    reviewBatchId,
+    catalogRevision: result.catalogRevision,
+    versions: await Promise.all(result.ids.map(async (id) => publicMediaVersion(await dbMediaVersionRow(id)))),
+  };
+}
+
+app.post('/api/admin/media-versions/review-batch', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    const review = mediaReviewRequest(req);
+    if (!Array.isArray(review.raw.items)) throw mediaMutationError('invalid_media_review_batch', 400);
+    res.status(200).json(await approveMediaReviewBatch(review.raw.items, review, user.email));
+  } catch (error) {
+    sendMediaMutationError(res, error, 'media_review_batch_failed');
+  }
+});
+
+app.post('/api/admin/media-versions/:id/review', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = mediaVersionId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_media_version_id' }); return; }
+  try {
+    const expected = requireMediaExpectedRevision(req);
+    const result = await approveMediaReviewBatch(
+      [{ id, expectedRevision: expected }], mediaReviewRequest(req), user.email, { allowGroup: false },
+    );
+    res.status(200).json({
+      version: result.versions[0],
+      catalogRevision: result.catalogRevision,
+      reviewBatchId: result.reviewBatchId,
+    });
+  } catch (error) {
+    sendMediaMutationError(res, error, 'media_review_failed');
+  }
+});
+
+function mediaAcceptanceContract(row) {
+  const raw = isObjectRecord(row.slot_metadata?.acceptance) ? row.slot_metadata.acceptance : null;
+  if (!raw || raw.mode === undefined || raw.mode === 'standalone') return { mode: 'standalone' };
+  if (raw.mode !== 'group') throw mediaMutationError('media_slot_acceptance_contract_invalid', 409, { slot: row.slot });
+  const groupId = boundedMediaText(raw.groupId ?? raw.group_id, '', 160);
+  const rawSlots = raw.requiredSlots ?? raw.required_slots;
+  if (!groupId || !Array.isArray(rawSlots) || rawSlots.length < 2 || rawSlots.length > 256) {
+    throw mediaMutationError('media_slot_acceptance_contract_invalid', 409, { slot: row.slot });
+  }
+  const requiredSlots = rawSlots.map(mediaSlotId).sort();
+  if (requiredSlots.some((slot) => !slot) || new Set(requiredSlots).size !== requiredSlots.length || !requiredSlots.includes(row.slot)) {
+    throw mediaMutationError('media_slot_acceptance_contract_invalid', 409, { slot: row.slot });
+  }
+  return { mode: 'group', groupId, requiredSlots };
+}
+
+function requiredMediaAcceptanceContract(row) {
+  if (!WATER_SIDE_REQUIRED_SLOTS.includes(row.slot)) return null;
+  return {
+    mode: 'group',
+    groupId: 'terrain/water/side-v1',
+    requiredSlots: [...WATER_SIDE_REQUIRED_SLOTS],
+  };
+}
+
+function assertRequiredMediaAcceptanceContract(row, actual) {
+  const required = requiredMediaAcceptanceContract(row);
+  if (!required) return;
+  if (
+    actual.mode !== required.mode || actual.groupId !== required.groupId
+    || canonicalJson(actual.requiredSlots) !== canonicalJson(required.requiredSlots)
+  ) {
+    throw mediaMutationError('media_required_group_contract_missing', 409, {
+      slot: row.slot,
+      required,
+    });
+  }
+}
+
+function assertTerrainAcceptanceProof(rows, slotById, contract = null) {
+  if (!rows.length || rows.some((row) => row.domain !== 'terrain')) return;
+  const expectedSlots = contract?.mode === 'group' ? contract.requiredSlots : rows.map((row) => row.slot).sort();
+  const expectedBySlot = new Map(rows.map((row) => [row.slot, row]));
+  let sharedProof = null;
+  for (const row of rows) {
+    const proof = row.review_evidence?.evidence;
+    if (!isObjectRecord(proof)) throw mediaMutationError('media_owner_review_required', 409, { slot: row.slot, reason: 'terrain proof missing' });
+    const snapshot = Array.isArray(proof.slotSnapshots)
+      ? proof.slotSnapshots.find((item) => isObjectRecord(item) && item.slot === row.slot) : null;
+    const slot = slotById.get(row.slot);
+    if (
+      !isObjectRecord(snapshot) || !slot || Number(snapshot.rowRevision) !== Number(slot.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slot.active_version_id ? String(slot.active_version_id) : null)
+    ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
+    const ownProof = Array.isArray(proof.selectedCandidates)
+      ? proof.selectedCandidates.find((item) => isObjectRecord(item) && item.slot === row.slot) : null;
+    if (
+      !isObjectRecord(ownProof) || ownProof.versionId !== row.id || ownProof.sha256 !== row.blob_sha256
+      || Number(ownProof.rowRevision) + 1 !== Number(row.row_revision)
+      || (contract?.mode === 'group'
+        && canonicalJson(ownProof.faces) !== canonicalJson(['south', 'east']))
+    ) throw mediaMutationError('media_review_candidate_snapshot_stale', 409, { slot: row.slot });
+    if (contract?.mode === 'group') {
+      const canonical = canonicalJson(proof);
+      if (sharedProof === null) sharedProof = canonical;
+      if (canonical !== sharedProof) throw mediaMutationError('media_group_review_proof_mismatch', 409, { groupId: contract.groupId });
+    }
+  }
+  if (contract?.mode !== 'group') return;
+  const proof = rows[0].review_evidence.evidence;
+  const selected = Array.isArray(proof.selectedCandidates) ? proof.selectedCandidates.filter(isObjectRecord) : [];
+  const selectedBySlot = new Map(selected.map((item) => [item.slot, item]));
+  if (
+    selected.length !== expectedSlots.length || selectedBySlot.size !== expectedSlots.length
+    || expectedSlots.some((slot) => !selectedBySlot.has(slot) || !expectedBySlot.has(slot))
+  ) throw mediaMutationError('media_group_review_proof_incomplete', 409, { groupId: contract.groupId });
+  for (const slot of expectedSlots) {
+    const selectedRow = selectedBySlot.get(slot);
+    const current = expectedBySlot.get(slot);
+    if (
+      selectedRow.versionId !== current.id || selectedRow.sha256 !== current.blob_sha256
+      || Number(selectedRow.rowRevision) + 1 !== Number(current.row_revision)
+    ) throw mediaMutationError('media_group_review_proof_stale', 409, { groupId: contract.groupId, slot });
+  }
+}
+
+function assertGroupedOwnerAcceptanceProof(rows, slotById, contract) {
+  if (!rows.length || rows.every((row) => row.domain === 'terrain')) return;
+  let sharedProof = null;
+  const bySlot = new Map(rows.map((row) => [row.slot, row]));
+  for (const row of rows) {
+    const proof = row.review_evidence?.evidence;
+    if (!isObjectRecord(proof) || proof.schema !== 'live-media-owner-group-proof-v1') {
+      throw mediaMutationError('media_group_review_proof_mismatch', 409, { groupId: contract.groupId });
+    }
+    const canonical = canonicalJson(proof);
+    if (sharedProof === null) sharedProof = canonical;
+    if (canonical !== sharedProof) throw mediaMutationError('media_group_review_proof_mismatch', 409, { groupId: contract.groupId });
+  }
+  const proof = rows[0].review_evidence.evidence;
+  const selected = proof.selectedCandidates.filter(isObjectRecord);
+  const snapshots = proof.slotSnapshots.filter(isObjectRecord);
+  const selectedBySlot = new Map(selected.map((item) => [item.slot, item]));
+  const snapshotBySlot = new Map(snapshots.map((item) => [item.slot, item]));
+  if (
+    selected.length !== contract.requiredSlots.length || selectedBySlot.size !== contract.requiredSlots.length
+    || snapshots.length !== contract.requiredSlots.length || snapshotBySlot.size !== contract.requiredSlots.length
+    || contract.requiredSlots.some((slot) => !bySlot.has(slot))
+  ) throw mediaMutationError('media_group_review_proof_incomplete', 409, { groupId: contract.groupId });
+  for (const slotName of contract.requiredSlots) {
+    const row = bySlot.get(slotName);
+    const slot = slotById.get(slotName);
+    const selectedRow = selectedBySlot.get(slotName);
+    const snapshot = snapshotBySlot.get(slotName);
+    if (
+      !slot || !selectedRow || !snapshot || selectedRow.versionId !== row.id || selectedRow.sha256 !== row.blob_sha256
+      || Number(selectedRow.rowRevision) + 1 !== Number(row.row_revision)
+      || Number(snapshot.rowRevision) !== Number(slot.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slot.active_version_id ? String(slot.active_version_id) : null)
+    ) throw mediaMutationError('media_group_review_proof_stale', 409, { groupId: contract.groupId, slot: slotName });
+  }
+}
+
+async function acceptMediaVersionBatch(items, actorEmail) {
+  const batchId = crypto.randomUUID();
+  const normalized = items.map((item) => ({
+    id: mediaVersionId(item && item.id),
+    expectedRevision: Number.isInteger(item && item.expectedRevision) && item.expectedRevision >= 0
+      ? item.expectedRevision : null,
+    expectedSlotRevision: Number.isInteger(item && item.expectedSlotRevision) && item.expectedSlotRevision >= 0
+      ? item.expectedSlotRevision : null,
+    expectedActiveVersionId: item && Object.prototype.hasOwnProperty.call(item, 'expectedActiveVersionId')
+      ? (item.expectedActiveVersionId === null ? null : (mediaVersionId(item.expectedActiveVersionId) || undefined))
+      : undefined,
+  }));
+  if (
+    !normalized.length || normalized.length > 256 || normalized.some((item) => (
+      !item.id || item.expectedRevision === null || item.expectedSlotRevision === null
+      || item.expectedActiveVersionId === undefined
+    ))
+    || new Set(normalized.map((item) => item.id)).size !== normalized.length
+  ) throw mediaMutationError('invalid_media_accept_batch', 400);
+
+  // Verify immutable objects before opening the pointer transaction. The
+  // no-delete Blob role + retention make a successful preflight durable; the
+  // transaction then rechecks candidate revision/hash and slot CAS before swap.
+  const preflightRows = [];
+  for (const item of normalized) {
+    const row = await dbMediaVersionRow(item.id);
+    if (!row) throw mediaMutationError('media_version_not_found', 404, { id: item.id });
+    assertMediaRevision(row, item.expectedRevision);
+    if (row.status !== 'candidate' || !row.blob_sha256) {
+      throw mediaMutationError('media_accept_requires_candidate_content', 409, { id: item.id, status: row.status });
+    }
+    preflightRows.push(row);
+  }
+  const uniquePreflightBlobs = new Map(preflightRows.map((row) => [row.blob_sha256, row]));
+  await Promise.all([...uniquePreflightBlobs.values()].map(verifyLiveMediaBlobPresent));
+
+  const result = await withMediaCatalogTransaction(async (client) => {
+    const rows = [];
+    for (const item of [...normalized].sort((a, b) => a.id.localeCompare(b.id))) {
+      const current = await dbMediaVersionRow(item.id, client, true);
+      if (!current) throw mediaMutationError('media_version_not_found', 404, { id: item.id });
+      assertMediaRevision(current, item.expectedRevision);
+      if (current.status !== 'candidate') throw mediaMutationError('media_version_locked', 409, { id: item.id, status: current.status });
+      if (!current.slot || !current.blob_sha256) throw mediaMutationError('media_accept_requires_slotted_content', 409, { id: item.id });
+      if (!publicMediaTypeAllowed(current.media_type)) {
+        throw mediaMutationError('media_type_not_public_runtime', 409, { id: item.id, mediaType: current.media_type });
+      }
+      const provenanceIssue = mediaProvenanceIssue(current);
+      if (provenanceIssue) throw mediaMutationError('media_provenance_required', 409, { id: item.id, reason: provenanceIssue });
+      const nativeIssue = nativeMediaEvidenceIssue(current);
+      if (nativeIssue) throw mediaMutationError('media_native_evidence_required', 409, { id: item.id, reason: nativeIssue });
+      const reviewIssue = reviewedMediaEvidenceIssue(current);
+      if (reviewIssue) throw mediaMutationError('media_owner_review_required', 409, { id: item.id, reason: reviewIssue });
+      const projectionIssue = mediaDomainProjectionIssue(current);
+      if (projectionIssue) throw mediaMutationError('media_domain_projection_invalid', 409, { id: item.id, reason: projectionIssue });
+      current.accept_request = item;
+      rows.push(current);
+    }
+    if (new Set(rows.map((row) => row.slot)).size !== rows.length) {
+      throw mediaMutationError('media_accept_batch_duplicate_slot', 409);
+    }
+
+    const slots = rows.map((row) => row.slot).sort();
+    const slotResult = await client.query(
+      `SELECT slot, active_version_id, lifecycle_state, domain, role, metadata, row_revision
+         FROM media_slots WHERE slot = ANY($1::text[]) ORDER BY slot FOR UPDATE`,
+      [slots],
+    );
+    if (slotResult.rows.length !== slots.length) throw mediaMutationError('media_slot_not_found', 404);
+    const slotById = new Map(slotResult.rows.map((row) => [row.slot, row]));
+    for (const row of rows) {
+      const slotRow = slotById.get(row.slot);
+      if (slotRow.lifecycle_state === 'retired') throw mediaMutationError('media_slot_retired', 409, { slot: row.slot });
+      if (Number(slotRow.row_revision) !== row.accept_request.expectedSlotRevision) {
+        throw mediaMutationError('media_slot_conflict', 409, {
+          slot: row.slot,
+          currentRevision: Number(slotRow.row_revision),
+          currentActiveVersionId: slotRow.active_version_id ? String(slotRow.active_version_id) : null,
+        });
+      }
+      const currentActiveVersionId = slotRow.active_version_id ? String(slotRow.active_version_id) : null;
+      if (currentActiveVersionId !== row.accept_request.expectedActiveVersionId) {
+        throw mediaMutationError('media_slot_pointer_conflict', 409, {
+          slot: row.slot,
+          currentRevision: Number(slotRow.row_revision),
+          currentActiveVersionId,
+        });
+      }
+      if (row.domain !== slotRow.domain || row.role !== slotRow.role) {
+        throw mediaMutationError('media_slot_projection_mismatch', 409, { slot: row.slot });
+      }
+      row.slot_metadata = slotRow.metadata;
+    }
+
+    for (const row of rows) {
+      if (row.domain === 'terrain' && mediaAcceptanceContract(row).mode === 'standalone') {
+        assertTerrainAcceptanceProof([row], slotById);
+      }
+    }
+
+    const bySlot = new Map(rows.map((row) => [row.slot, row]));
+    const grouped = new Map();
+    for (const row of rows) {
+      const contract = mediaAcceptanceContract(row);
+      assertRequiredMediaAcceptanceContract(row, contract);
+      if (contract.mode !== 'group') continue;
+      if (!grouped.has(contract.groupId)) grouped.set(contract.groupId, { required: contract.requiredSlots, rows: [] });
+      const group = grouped.get(contract.groupId);
+      if (JSON.stringify(group.required) !== JSON.stringify(contract.requiredSlots)) {
+        throw mediaMutationError('media_group_contract_mismatch', 409, { groupId: contract.groupId });
+      }
+      group.rows.push(row);
+    }
+    for (const [groupId, group] of grouped) {
+      const missingSlots = group.required.filter((slot) => !bySlot.has(slot));
+      if (missingSlots.length) throw mediaMutationError('media_group_incomplete', 409, { groupId, missingSlots });
+      for (const slot of group.required) {
+        const memberContract = mediaAcceptanceContract(bySlot.get(slot));
+        if (memberContract.mode !== 'group' || memberContract.groupId !== groupId) {
+          throw mediaMutationError('media_group_contract_mismatch', 409, { groupId, slot });
+        }
+      }
+      const [first] = group.rows;
+      for (const row of group.rows) {
+        if (
+          row.domain !== first.domain || row.role !== first.role || row.media_type !== first.media_type
+          || Number(row.width) !== Number(first.width) || Number(row.height) !== Number(first.height)
+        ) throw mediaMutationError('media_group_projection_mismatch', 409, { groupId, slot: row.slot });
+      }
+      assertTerrainAcceptanceProof(group.rows, slotById, {
+        mode: 'group', groupId, requiredSlots: group.required,
+      });
+      assertGroupedOwnerAcceptanceProof(group.rows, slotById, {
+        mode: 'group', groupId, requiredSlots: group.required,
+      });
+    }
+    if (rows.length === 1 && mediaAcceptanceContract(rows[0]).mode === 'group') {
+      throw mediaMutationError('media_group_accept_required', 409, {
+        groupId: mediaAcceptanceContract(rows[0]).groupId,
+        requiredSlots: mediaAcceptanceContract(rows[0]).requiredSlots,
+      });
+    }
+
+    const activeBySlot = new Map(slotResult.rows.map((row) => [row.slot, row.active_version_id ? String(row.active_version_id) : null]));
+    for (const row of rows) {
+      const previousId = activeBySlot.get(row.slot);
+      if (previousId && previousId !== String(row.id)) {
+        await client.query(
+          `UPDATE media_versions SET status = 'archived', row_revision = row_revision + 1,
+             updated_at = now(), updated_by = $2 WHERE id = $1`,
+          [previousId, actorEmail],
+        );
+      }
+      await client.query(
+        `UPDATE media_versions SET status = 'accepted', row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $2 WHERE id = $1`,
+        [row.id, actorEmail],
+      );
+      await client.query(
+        'UPDATE media_blobs SET published_at = COALESCE(published_at, now()) WHERE sha256 = $1',
+        [row.blob_sha256],
+      );
+      await client.query(
+        `UPDATE media_slots SET active_version_id = $2, lifecycle_state = 'active',
+           activated_at = COALESCE(activated_at, now()), row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $3 WHERE slot = $1`,
+        [row.slot, row.id, actorEmail],
+      );
+      await logMediaEvent(client, row, rows.length === 1 ? 'accepted' : 'accepted-batch', actorEmail, {
+        batchId, previousVersionId: previousId, sha256: row.blob_sha256,
+      });
+    }
+    return { catalogRevision: await bumpMediaCatalog(client), ids: rows.map((row) => String(row.id)) };
+  }, { invalidatePublic: true });
+  return {
+    catalogRevision: result.catalogRevision,
+    batchId,
+    versions: await Promise.all(result.ids.map(async (id) => publicMediaVersion(await dbMediaVersionRow(id)))),
+  };
+}
+
+app.post('/api/admin/media-versions/accept-batch', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    const raw = isObjectRecord(req.body) ? req.body : {};
+    if (!Array.isArray(raw.items)) throw mediaMutationError('invalid_media_accept_batch', 400);
+    const result = await acceptMediaVersionBatch(raw.items, user.email);
+    res.status(200).json(result);
+  } catch (error) {
+    sendMediaMutationError(res, error, 'media_accept_batch_failed');
+  }
+});
+
+app.post('/api/admin/media-versions/:id/accept', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = mediaVersionId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_media_version_id' }); return; }
+  try {
+    const expected = requireMediaExpectedRevision(req);
+    const raw = isObjectRecord(req.body) ? req.body : {};
+    const result = await acceptMediaVersionBatch([{
+      id,
+      expectedRevision: expected,
+      expectedSlotRevision: raw.expectedSlotRevision,
+      expectedActiveVersionId: Object.prototype.hasOwnProperty.call(raw, 'expectedActiveVersionId')
+        ? raw.expectedActiveVersionId : undefined,
+    }], user.email);
+    res.status(200).json({ version: result.versions[0], catalogRevision: result.catalogRevision, batchId: result.batchId });
+  } catch (error) {
+    sendMediaMutationError(res, error, 'media_accept_failed');
+  }
+});
+
+app.post('/api/admin/media-versions/:id/archive', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = mediaVersionId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_media_version_id' }); return; }
+  try {
+    const expected = requireMediaExpectedRevision(req);
+    const raw = isObjectRecord(req.body) ? req.body : {};
+    const reason = boundedMediaText(raw.reason, '', 4000);
+    const evidence = mediaJsonObject(raw.evidence, {});
+    if (!reason || !evidence || !Object.keys(evidence).length) {
+      throw mediaMutationError('media_archive_evidence_required', 400);
+    }
+    const catalogRevision = await withMediaCatalogTransaction(async (client) => {
+      const current = await dbMediaVersionRow(id, client, true);
+      if (!current) throw mediaMutationError('media_version_not_found', 404);
+      assertMediaRevision(current, expected);
+      if (current.status !== 'candidate') throw mediaMutationError('media_version_locked', 409, { status: current.status });
+      if (current.slot) {
+        const active = await client.query('SELECT active_version_id FROM media_slots WHERE slot = $1 FOR UPDATE', [current.slot]);
+        if (String(active.rows[0]?.active_version_id || '') === id) throw mediaMutationError('active_media_version_cannot_archive', 409);
+      }
+      await client.query(
+        `UPDATE media_versions SET status = 'archived', row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $2 WHERE id = $1`,
+        [id, user.email],
+      );
+      await logMediaEvent(client, current, current.blob_sha256 ? 'candidate-archived' : 'candidate-abandoned', user.email, {
+        reason,
+        evidence,
+        sha256: current.blob_sha256,
+        rowRevision: Number(current.row_revision),
+      });
+      return currentMediaCatalogRevision(client);
+    });
+    res.status(200).json({ version: publicMediaVersion(await dbMediaVersionRow(id)), catalogRevision });
+  } catch (error) {
+    sendMediaMutationError(res, error, 'media_archive_failed');
+  }
+});
+
+function parseMediaRange(raw, length) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(String(raw || '').trim());
+  if (!match || (!match[1] && !match[2])) return null;
+  let start;
+  let end;
+  if (!match[1]) {
+    const suffix = Number(match[2]);
+    if (!Number.isInteger(suffix) || suffix < 1) return null;
+    start = Math.max(0, length - suffix);
+    end = length - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Number(match[2]) : length - 1;
+  }
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= length || end < start) return null;
+  return { start, end: Math.min(end, length - 1) };
+}
+
+async function serveImmutableMedia(req, res, record, { privateRead = false } = {}) {
+  // Verify/load the object before setting any successful immutable response
+  // metadata. A missing or corrupt object must produce a no-store error, never
+  // a cacheable 503 carrying the asset's Content-Type/ETag.
+  const buffer = await mediaBytesBySha(record.sha256, record);
+  if (!buffer) { res.status(404).setHeader('Cache-Control', 'no-store'); res.send('not found'); return; }
+  const etag = `"${record.sha256}"`;
+  res.setHeader('ETag', etag);
+  res.setHeader('Cache-Control', privateRead ? 'private, no-store' : 'public, max-age=31536000, immutable');
+  res.setHeader('Content-Type', record.media_type);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  if (
+    privateRead && !record.media_type.startsWith('image/') && !record.media_type.startsWith('audio/')
+    && !record.media_type.startsWith('video/') && !record.media_type.startsWith('font/')
+  ) res.setHeader('Content-Disposition', `attachment; filename="${record.sha256}"`);
+  if (record.media_type === 'image/svg+xml') res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; style-src 'unsafe-inline'");
+  if (req.headers['if-none-match'] === etag) { res.status(304).end(); return; }
+  res.setHeader('Accept-Ranges', 'bytes');
+  if (req.headers.range) {
+    const range = parseMediaRange(req.headers.range, buffer.length);
+    if (!range) {
+      res.setHeader('Content-Range', `bytes */${buffer.length}`);
+      res.status(416).end();
+      return;
+    }
+    const body = buffer.subarray(range.start, range.end + 1);
+    res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${buffer.length}`);
+    res.setHeader('Content-Length', String(body.length));
+    res.status(206).end(body);
+    return;
+  }
+  res.setHeader('Content-Length', String(buffer.length));
+  res.status(200).end(buffer);
+}
+
+// Once an accepted or imported bridge hash has been published it remains
+// readable for honest immutable caching, historical pointers, and optional
+// read-only test-slot snapshots. Candidate and source hashes never become public.
+app.get(/^\/api\/media\/([0-9a-f]{64})$/, async (req, res) => {
+  const sha256 = mediaSha(req.params[0]);
+  try {
+    const record = sha256 ? await mediaBlobRecord(sha256, { publicOnly: true }) : null;
+    if (!record) { res.setHeader('Cache-Control', 'no-store'); res.status(404).send('not found'); return; }
+    await serveImmutableMedia(req, res, record);
+  } catch (error) {
+    console.error('public immutable media read failed:', error && error.message);
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(503).json({ error: 'media_unavailable' });
+  }
+});
+
+app.get(/^\/api\/admin\/media\/([0-9a-f]{64})$/, async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const sha256 = mediaSha(req.params[0]);
+  try {
+    const record = sha256 ? await mediaBlobRecord(sha256) : null;
+    if (!record) { res.setHeader('Cache-Control', 'private, no-store'); res.status(404).send('not found'); return; }
+    await serveImmutableMedia(req, res, record, { privateRead: true });
+  } catch (error) {
+    console.error('admin immutable media read failed:', error && error.message);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(503).json({ error: 'media_unavailable' });
   }
 });
 
@@ -5105,10 +8369,7 @@ function unitBlobKey(sha256) {
 }
 
 function unitBlobLocalPath(blobKey) {
-  const root = path.resolve(unitAssetStorageDir);
-  const target = path.resolve(root, ...String(blobKey).split('/'));
-  if (target !== root && !target.startsWith(`${root}${path.sep}`)) throw new Error('invalid unit blob key');
-  return target;
+  return contentAddressedLocalPath(unitAssetStorageDir, blobKey, 'unit');
 }
 
 function unitStorageConfigured() {
@@ -5118,11 +8379,7 @@ function unitStorageConfigured() {
 function azureUnitContainer() {
   if (unitAssetContainerClient) return unitAssetContainerClient;
   if (!unitAssetContainerUrl) throw new Error('UNIT_ASSET_CONTAINER_URL is not configured');
-  const { BlobServiceClient } = require('@azure/storage-blob');
-  const { DefaultAzureCredential } = require('@azure/identity');
-  const url = new URL(unitAssetContainerUrl);
-  const service = new BlobServiceClient(`${url.protocol}//${url.host}`, new DefaultAzureCredential());
-  unitAssetContainerClient = service.getContainerClient(decodeURIComponent(url.pathname.replace(/^\/+/, '')));
+  unitAssetContainerClient = createAzureContainerClient(unitAssetContainerUrl);
   return unitAssetContainerClient;
 }
 
@@ -5340,17 +8597,25 @@ function assertUnitRevision(row, expected) {
 }
 
 async function dbReadUnitCatalog({ includeArchived = false, queryable = null } = {}) {
-  if (!queryable) await ensureDbReady();
-  const db = queryable || pool;
-  const [stateResult, familyResult, assetResult, spriteResult] = await Promise.all([
-    db.query('SELECT revision, updated_at FROM unit_catalog_state WHERE singleton = true'),
-    db.query(
+  let client = null;
+  let db = queryable;
+  if (!db) {
+    await ensureDbReady();
+    client = await pool.connect();
+    db = client;
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  }
+  try {
+    const stateResult = await db.query(
+      'SELECT revision, updated_at FROM unit_catalog_state WHERE singleton = true',
+    );
+    const familyResult = await db.query(
       `SELECT family, accepted_asset_id, display_scale_percent, row_revision, updated_at, updated_by
          FROM unit_families
         ORDER BY array_position($1::text[], family)`,
       [UNIT_FAMILY_IDS],
-    ),
-    db.query(
+    );
+    const assetResult = await db.query(
       `SELECT id, family, label, method, notes, acceptance_block_reason, status, footprint_shape,
               source_canvas_width, source_canvas_height, source_footprint_px,
               anchor_x, anchor_y, row_revision, created_at, updated_at, updated_by
@@ -5358,19 +8623,18 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
         WHERE $1::boolean OR status <> 'archived'
         ORDER BY family, created_at DESC`,
       [includeArchived],
-    ),
-    db.query(
+    );
+    const spriteResult = await db.query(
       `SELECT s.asset_id, s.palette, s.direction, s.sha256, s.width, s.height, s.byte_length
          FROM unit_sprites s
          JOIN unit_assets a ON a.id = s.asset_id
         WHERE $1::boolean OR a.status <> 'archived'
         ORDER BY s.asset_id, s.palette, s.direction`,
       [includeArchived],
-    ),
-  ]);
+    );
 
-  const acceptedIds = new Set(familyResult.rows.map((row) => row.accepted_asset_id).filter(Boolean).map(String));
-  const assets = assetResult.rows.map((row) => ({
+    const acceptedIds = new Set(familyResult.rows.map((row) => row.accepted_asset_id).filter(Boolean).map(String));
+    const assets = assetResult.rows.map((row) => ({
     id: String(row.id),
     family: row.family,
     label: row.label,
@@ -5388,46 +8652,56 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
     nativeScalePercent: nativeUnitScalePercent(row.source_canvas_width, row.source_canvas_height),
     anchor: { x: Number(row.anchor_x), y: Number(row.anchor_y) },
     rowRevision: Number(row.row_revision),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: nullableTimestampString(row.created_at),
+    updatedAt: nullableTimestampString(row.updated_at),
     updatedBy: row.updated_by,
     sprites: {},
     spriteCount: 0,
     complete: false,
-  }));
-  const byId = new Map(assets.map((asset) => [asset.id, asset]));
-  for (const row of spriteResult.rows) {
-    const asset = byId.get(String(row.asset_id));
-    if (!asset) continue;
-    if (!asset.sprites[row.palette]) asset.sprites[row.palette] = {};
-    asset.sprites[row.palette][row.direction] = {
+    }));
+    const byId = new Map(assets.map((asset) => [asset.id, asset]));
+    for (const row of spriteResult.rows) {
+      const asset = byId.get(String(row.asset_id));
+      if (!asset) continue;
+      if (!asset.sprites[row.palette]) asset.sprites[row.palette] = {};
+      asset.sprites[row.palette][row.direction] = {
       url: `/api/unit-sprites/${row.sha256}.png`,
       sha256: row.sha256,
       width: Number(row.width),
       height: Number(row.height),
       byteLength: Number(row.byte_length),
-    };
-    asset.spriteCount += 1;
-  }
-  for (const asset of assets) {
-    asset.complete = UNIT_PALETTE_IDS.every((palette) =>
-      UNIT_DIRECTION_IDS.every((direction) => Boolean(asset.sprites[palette]?.[direction])));
-  }
+      };
+      asset.spriteCount += 1;
+    }
+    for (const asset of assets) {
+      asset.complete = UNIT_PALETTE_IDS.every((palette) =>
+        UNIT_DIRECTION_IDS.every((direction) => Boolean(asset.sprites[palette]?.[direction])));
+    }
 
-  return {
-    schemaVersion: UNIT_CATALOG_SCHEMA_VERSION,
-    revision: Number(stateResult.rows[0]?.revision || 0),
-    updatedAt: stateResult.rows[0]?.updated_at || null,
-    families: familyResult.rows.map((row) => ({
+    const body = {
+      schemaVersion: UNIT_CATALOG_SCHEMA_VERSION,
+      revision: Number(stateResult.rows[0]?.revision || 0),
+      updatedAt: nullableTimestampString(stateResult.rows[0]?.updated_at),
+      families: familyResult.rows.map((row) => ({
       family: row.family,
       acceptedAssetId: row.accepted_asset_id ? String(row.accepted_asset_id) : null,
       displayScalePercent: Number(row.display_scale_percent),
       rowRevision: Number(row.row_revision),
-      updatedAt: row.updated_at,
+      updatedAt: nullableTimestampString(row.updated_at),
       updatedBy: row.updated_by,
-    })),
-    assets,
-  };
+      })),
+      assets,
+    };
+    if (client) await client.query('COMMIT');
+    return body;
+  } catch (error) {
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    }
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
 }
 
 async function publicUnitCatalog() {
@@ -5479,10 +8753,29 @@ async function unitSpriteBytes(sha256, record = null) {
   return png;
 }
 
-async function thumbnailDynamicSprite(src) {
-  const match = /^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/.exec(String(src || ''));
-  if (!match) return null;
-  return unitSpriteBytes(match[1]);
+async function thumbnailDynamicSprite(src, mediaCatalog = null) {
+  const value = String(src || '').split('?', 1)[0];
+  const unitMatch = /^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/.exec(value);
+  if (unitMatch) return unitSpriteBytes(unitMatch[1]);
+  const immutableMatch = /^\/api\/media\/([0-9a-f]{64})$/.exec(value);
+  if (immutableMatch) {
+    const snapshotAllows = mediaCatalog
+      ? mediaCatalog.slots.some((slot) => slot.media?.sha256 === immutableMatch[1])
+      : Boolean(await mediaBlobRecord(immutableMatch[1], { publicOnly: true }));
+    if (!snapshotAllows) return null;
+    const record = await mediaBlobRecord(immutableMatch[1]);
+    return record ? mediaBytesBySha(immutableMatch[1], record) : null;
+  }
+  if (value.startsWith('/assets/') && !value.startsWith('/assets/level-thumb/')) {
+    let slot = null;
+    try {
+      slot = mediaSlotId(value.slice('/assets/'.length).split('/').map(decodeURIComponent).join('/'));
+    } catch { slot = null; }
+    if (!slot) return null;
+    const resolved = await resolveMediaSlotBytes(slot, mediaCatalog);
+    return resolved ? resolved.buffer : null;
+  }
+  return null;
 }
 
 app.get(/^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/, async (req, res) => {
@@ -5589,7 +8882,7 @@ app.patch('/api/admin/unit-assets/:id', async (req, res) => {
 });
 
 app.put('/api/admin/unit-assets/:id/sprites/:palette/:direction', async (req, res) => {
-  const user = await requireAdmin(req, res);
+  const user = req.rawUploadAdmin || await requireAdmin(req, res);
   if (!user) return;
   const id = unitAssetId(req.params.id);
   const palette = unitPaletteId(req.params.palette);
@@ -5879,8 +9172,9 @@ app.post('/api/maps/publish', async (req, res) => {
     if (!level || typeof level !== 'object') { res.status(404).json({ error: 'level_not_found' }); return; }
     let contentHash = null;
     try {
-      const renderInputs = await applyThumbnailRenderInputs();
-      contentHash = serverRender && thumbnailVersion(serverRender.boardHashForLevel(level), renderInputs);
+      contentHash = serverRender && await withThumbnailRenderInputs((renderInputs) => (
+        thumbnailVersion(serverRender.boardHashForLevel(level), renderInputs)
+      ));
     } catch { contentHash = null; }
     const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, contentHash);
     res.status(200).json({ public_id: publicId, url: `${publicOrigin}/play?map=${publicId}` });
@@ -5969,14 +9263,12 @@ app.use((req, res, next) => {
 //   - HTML (the app shell / SPA fallback): no-cache, so a new deploy is always
 //     picked up on the next navigation.
 //   - Vite content-hashed bundles: emitted as flat files directly under
-//     assets/ with a content hash in the name (e.g. assets/index-Cy4ekEXV.js).
+//     app-code/ with a content hash in the name (e.g. app-code/index-Cy4ekEXV.js).
 //     The name changes whenever the bytes change, so these are immutable for a
-//     year. Public assets always live in nested subdirs (assets/ui, assets/
-//     fonts, ...), never flat under assets/, so they never match this rule.
-//   - Everything else (public images/fonts/audio/json): a modest 1h TTL that
-//     trims repeat-visit payload but stays short enough that a hot static
-//     override (STATIC_FRONTEND_DIR) is reflected to clients quickly.
-const VITE_HASHED_ASSET = /^assets\/[^/]+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
+//     year. `/assets/*` is not static at all; the live-media backend route owns it.
+//   - Other public app code: a modest 1h TTL that trims repeat-visit payload but
+//     stays short enough that a hot static override is reflected quickly.
+const VITE_HASHED_ASSET = /^app-code\/[^/]+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
 function makeStaticCacheHeaders(rootDir) {
   return (res, filePath) => {
     const rel = path.relative(rootDir, filePath).split(path.sep).join('/');
@@ -5996,7 +9288,9 @@ function makeStaticCacheHeaders(rootDir) {
 // A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
 // JS, no auth). The SPA fallback injects per-level og:/twitter: tags, and og:image points at an
 // on-demand board render served here. Officials resolve from the LIVE DB; user maps from public_maps.
-// A render/resolve failure degrades to the branded default image.
+// Generic pages use the branded default-image semantic slot. A targeted level
+// thumbnail never masks missing content/media with it: missing targets are 404
+// and renderer/catalog/media failures are explicit 503s.
 const OG_SITE_NAME = 'Chess Tactics';
 const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
 const DEFAULT_OG_IMAGE = '/assets/og/default.png';
@@ -6047,42 +9341,77 @@ async function officialWorkspace() {
   } catch { /* DB unreachable — fall through to the last-good real read below, else empty */ }
   return _officialCache.ws || { campaigns: [], levels: {} };
 }
-const THUMBNAIL_PROP_SEATS_TTL_MS = 60 * 1000;
-let _thumbnailPropSeatsCache = { at: 0, data: null, revision: 0 }; // last SUCCESSFUL DB read
+const {
+  thumbnailAvailabilityCatalogFromRows,
+  thumbnailSourceAvailability,
+} = require(path.join(bakedBackendDir, 'thumbnailAvailability'));
+let _thumbnailMediaAvailabilityCache = { revision: null, catalog: null };
 async function thumbnailPropSeats() {
-  const now = Date.now();
-  if (_thumbnailPropSeatsCache.data && now - _thumbnailPropSeatsCache.at < THUMBNAIL_PROP_SEATS_TTL_MS) {
-    return _thumbnailPropSeatsCache;
-  }
-  try {
-    const doc = await dbGetPropSeats('default');
-    const data = doc && doc.data && typeof doc.data === 'object' ? doc.data : {};
-    _thumbnailPropSeatsCache = {
-      at: now,
-      data,
-      revision: Number.isInteger(doc && doc.revision) ? doc.revision : 0,
-    };
-    return _thumbnailPropSeatsCache;
-  } catch { /* DB unreachable — fall through to the last-good seats below, else baseline */ }
-  return _thumbnailPropSeatsCache.data ? _thumbnailPropSeatsCache : { at: now, data: {}, revision: 0 };
+  return requirePropSeatsDocument('default', await dbGetPropSeats('default'));
 }
-async function applyThumbnailRenderInputs() {
-  const seats = await thumbnailPropSeats();
-  if (serverRender && typeof serverRender.applyPropSeatOverrides === 'function') {
-    try { serverRender.applyPropSeatOverrides(seats.data); } catch { /* keep the renderer's last-good seats */ }
+async function thumbnailMediaAvailabilityCatalog(mediaCatalog) {
+  if (!mediaCatalog) return null;
+  const expectedRevision = Number(mediaCatalog.revision || 0);
+  if (
+    _thumbnailMediaAvailabilityCache.catalog
+    && _thumbnailMediaAvailabilityCache.revision === expectedRevision
+  ) return _thumbnailMediaAvailabilityCache.catalog;
+  try {
+    await ensureDbReady();
+    // One statement gives policy rows and their catalog revision from the same
+    // PostgreSQL snapshot. Public catalogs omit unavailable decorative slots;
+    // thumbnails still need those slots' DB-owned fail-soft policy.
+    const { rows } = await pool.query(
+      `SELECT state.revision AS catalog_revision, s.slot, s.availability_policy
+         FROM media_catalog_state state
+         LEFT JOIN media_slots s ON true
+        WHERE state.singleton = true
+        ORDER BY s.slot`,
+    );
+    const catalog = thumbnailAvailabilityCatalogFromRows(mediaCatalog, rows);
+    if (catalog === mediaCatalog) return mediaCatalog;
+    _thumbnailMediaAvailabilityCache = { revision: expectedRevision, catalog };
+    return catalog;
+  } catch {
+    // The deliverable catalog still classifies every active version. Unknown
+    // sources fail closed as critical in the renderer adapter.
+    return mediaCatalog;
   }
-  if (!serverRender || typeof serverRender.applyLiveUnitCatalog !== 'function') {
-    throw new Error('unit catalog renderer is unavailable');
+}
+async function loadThumbnailRenderInputs() {
+  const [mediaCatalog, seats, unitCatalog] = await Promise.all([
+    publicMediaCatalog(),
+    thumbnailPropSeats(),
+    publicUnitCatalog(),
+  ]);
+  const unitCatalogRevision = unitCatalog.revision || 0;
+  const mediaCatalogRevision = mediaCatalog.revision || 0;
+  const mediaAvailability = await thumbnailMediaAvailabilityCatalog(mediaCatalog);
+  return {
+    propSeatsRevision: seats.revision || 0,
+    unitCatalogRevision,
+    mediaCatalogRevision,
+    mediaCatalog,
+    mediaAvailability,
+    propSeats: seats.data,
+    unitCatalog,
+  };
+}
+async function withThumbnailRenderInputs(task) {
+  if (!serverRender || typeof serverRender.applyServerRenderSnapshot !== 'function') {
+    throw new Error('complete live renderer snapshot validator is unavailable');
   }
-  const catalog = await publicUnitCatalog();
-  serverRender.applyLiveUnitCatalog(catalog);
-  const unitCatalogRevision = catalog.revision || 0;
-  return { propSeatsRevision: seats.revision || 0, unitCatalogRevision };
+  const renderInputs = await loadThumbnailRenderInputs();
+  return withServerRenderCriticalSection(async () => {
+    serverRender.applyServerRenderSnapshot(renderInputs);
+    return task(renderInputs);
+  });
 }
 function thumbnailVersion(boardHash, renderInputs) {
   const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
   const unitCatalogRevision = renderInputs && renderInputs.unitCatalogRevision ? `uc${renderInputs.unitCatalogRevision}` : '';
-  return [boardHash, propSeatsRevision, unitCatalogRevision].filter(Boolean).join('-');
+  const mediaCatalogRevision = renderInputs && renderInputs.mediaCatalogRevision ? `mc${renderInputs.mediaCatalogRevision}` : '';
+  return [boardHash, propSeatsRevision, unitCatalogRevision, mediaCatalogRevision].filter(Boolean).join('-');
 }
 function playScreenName(input) {
   if (serverRender && typeof serverRender.playRouteScreenName === 'function') {
@@ -6129,8 +9458,9 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
 
 // On-demand board thumbnail: /assets/level-thumb/<id>.png (?v=<hash> only busts caches).
 // Registered before express.static so the .png is not handled by the SPA asset guard.
-const _thumbCache = new Map(); // `${id}:${hash}` -> Buffer
-const THUMB_CACHE_MAX = 200;
+const { ByteWeightedAsyncCache } = require(path.join(bakedBackendDir, 'byteWeightedCache'));
+const THUMB_CACHE_MAX_BYTES = 24 * 1024 * 1024;
+const _thumbCache = new ByteWeightedAsyncCache({ maxBytes: THUMB_CACHE_MAX_BYTES });
 app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
   const id = String(req.params[0] || '');
   const isOfficial = OFFICIAL_WORKSPACE_ID_PATTERN.test(id);
@@ -6138,34 +9468,54 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
   const campaignId = typeof req.query.campaignId === 'string' ? req.query.campaignId : null;
   if (!isOfficial && !isMap) { res.status(404).send('not found'); return; }
   try {
-    if (!serverRender) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
+    if (!serverRender) { res.status(503).json({ error: 'thumbnail_renderer_unavailable' }); return; }
     const target = await resolveShareTarget(isOfficial ? { levelId: id, campaignId } : { mapId: id });
-    if (!target) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
-    const renderInputs = await applyThumbnailRenderInputs();
-    const plan = serverRender.levelRenderPlan(target.level);
-    const cacheKey = `${id}:${campaignId || ''}:${thumbnailVersion(plan.contentHash, renderInputs)}`;
-    let png = _thumbCache.get(cacheKey);
-    if (!png) {
-      const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
-      const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
-      png = await renderLevelCard({
-        plan,
-        frontendDir,
-        title: target.title,
-        subtitle: target.subtitle,
-        screenName: target.screenName,
-        backgroundSrc,
-        loadDynamicSprite: thumbnailDynamicSprite,
+    if (!target) { res.status(404).send('not found'); return; }
+    const png = await withThumbnailRenderInputs(async (renderInputs) => {
+      const plan = serverRender.levelRenderPlan(target.level);
+      const cacheKey = `${id}:${campaignId || ''}:${thumbnailVersion(plan.contentHash, renderInputs)}`;
+      return _thumbCache.getOrCreate(cacheKey, async () => {
+        const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
+        const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
+        return renderLevelCard({
+          plan,
+          title: target.title,
+          subtitle: target.subtitle,
+          screenName: target.screenName,
+          backgroundSrc,
+          loadDynamicSprite: (src) => thumbnailDynamicSprite(src, renderInputs.mediaCatalog),
+          mediaCatalogRevision: renderInputs.mediaCatalogRevision,
+          sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
+        });
       });
-      if (_thumbCache.size >= THUMB_CACHE_MAX) _thumbCache.delete(_thumbCache.keys().next().value);
-      _thumbCache.set(cacheKey, png);
-    }
+    });
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.status(200).end(png);
   } catch (error) {
     console.error('level-thumb render failed:', error && error.message);
-    res.redirect(302, DEFAULT_OG_IMAGE);
+    res.status(503).json({ error: 'thumbnail_render_unavailable' });
+  }
+});
+
+// Stable semantic asset resolution. This is deliberately before every static
+// middleware so an absent DB slot can never fall through to a packaged file.
+// The level-thumbnail route above is the sole dynamic /assets namespace carveout.
+app.get(/^\/assets\/(?!level-thumb\/)(.+)$/, async (req, res) => {
+  let slot = null;
+  try {
+    const encoded = req.path.slice('/assets/'.length);
+    slot = mediaSlotId(encoded.split('/').map(decodeURIComponent).join('/'));
+  } catch { slot = null; }
+  if (!slot) { res.setHeader('Cache-Control', 'no-store'); res.status(404).send('not found'); return; }
+  try {
+    const record = await publicMediaSlotById(slot);
+    if (!record || !record.media) { res.setHeader('Cache-Control', 'no-store'); res.status(404).send('not found'); return; }
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    res.setHeader('Location', record.media.immutableUrl);
+    res.status(302).end();
+  } catch (error) {
+    dbUnavailable(res, 'asset slot resolution failed', error, 'asset_slot_unavailable');
   }
 });
 
@@ -6186,8 +9536,9 @@ async function ogTagsFor(req) {
       const key = mapId || levelId;
       let hash = '';
       try {
-        const renderInputs = await applyThumbnailRenderInputs();
-        hash = thumbnailVersion(serverRender.boardHashForLevel(target.level), renderInputs);
+        hash = await withThumbnailRenderInputs((renderInputs) => (
+          thumbnailVersion(serverRender.boardHashForLevel(target.level), renderInputs)
+        ));
       } catch { hash = ''; }
       const imageParams = new URLSearchParams();
       if (hash) imageParams.set('v', hash);
@@ -6266,19 +9617,18 @@ function startServer() {
   });
 }
 
-// Configure the durable store, then start serving. The game (static + /play)
-// must stay up even if the database is unreachable or behind schema, so a
-// DB/schema-readiness failure is logged and surfaced as 503 on the persistence
-// endpoints — it never blocks startup, and ensureDbReady() retries on the next
-// request.
+// Configure the durable store, then start the recoverable process. A database or
+// schema failure does not crash-loop the pod: `/health` remains live and
+// ensureDbReady() retries. `/ready` stays 503, however, so Kubernetes never sends
+// game traffic to a process that cannot resolve its live assets.
 pool = buildPool();
 if (pool) {
   pool.on('error', (error) => console.error('postgres pool error:', error));
   ensureDbReady()
     .then(() => console.log(`postgres ready (mode=${databaseUrl ? 'connection-string' : 'workload-identity'}, schema=${schemaMigrationMode}); ${schemaReadyMessage()}`))
-    .catch((error) => console.error('postgres init failed; persistence endpoints will return 503 until it recovers or schema is prepared:', error))
+    .catch((error) => console.error('postgres init failed; application readiness will remain 503 until it recovers or schema is prepared:', error))
     .finally(startServer);
 } else {
-  console.warn('no database configured (set DATABASE_URL, or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_USER); persistence endpoints will return 503');
+  console.warn('no database configured (set DATABASE_URL, or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_USER); application readiness will remain 503');
   startServer();
 }

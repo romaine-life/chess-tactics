@@ -6,13 +6,15 @@ Blender owns the model, camera, contact point, and all eight 45-degree facings.
 It renders directly into the requested delivery frame. No generated frame is
 cropped, resized, resampled, or passed through image generation.
 
-The Unit Art Filter editor reads these raw frames, applies a same-grid filter,
-and can upload the reviewed result as an ordinary storage-backed candidate.
+The tool fetches private source media through the generic live-media admin
+client into an OS temporary directory. The Unit Art Filter editor reads the raw
+frames, applies a same-grid filter, and can upload the reviewed result as an
+ordinary storage-backed candidate.
 
 Examples:
-  python scripts/generate-unit-art.py render pawn --target 51x61
-  python scripts/generate-unit-art.py render rook --target 57x67 --force
-  python scripts/generate-unit-art.py render all --handoff C:/path/unit-sizes.json
+  python scripts/generate-unit-art.py render pawn --target 51x61 --renderer-root <code-dir> --source-manifest <temp.json> --api-base http://localhost:3000
+  python scripts/generate-unit-art.py render rook --target 57x67 --renderer-root <code-dir> --source-manifest <temp.json> --api-base http://localhost:3000 --force
+  python scripts/generate-unit-art.py render all --handoff C:/path/unit-sizes.json --renderer-root <code-dir> --source-manifest <temp.json> --api-base http://localhost:3000
   python scripts/generate-unit-art.py verify pawn --target 51x61
 """
 
@@ -25,6 +27,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -59,43 +62,32 @@ DIRECTION_YAWS = {
 PIECES: dict[str, dict[str, Any]] = {
     "pawn": {
         "label": "Pawn",
-        "renderer": "docs/art/unit-concepts/blender-units/pawn-helmet/render_pawn_helmet.py",
-        "sources": [
-            "docs/art/unit-concepts/source-assets/pawn-helmet/Pawn.stl",
-            "docs/art/unit-concepts/source-assets/pawn-helmet/helmet.dae",
-        ],
+        "rendererName": "pawn-helmet/render_pawn_helmet.py",
         "anchor": (0.5, 0.80241),
     },
     "rook": {
         "label": "Rook",
-        "renderer": "docs/art/unit-concepts/blender-units/rook-claude/render_rook_ruinwall.py",
-        "sources": ["docs/art/unit-concepts/blender-units/rook-claude/units/rook-ruinwall/model.blend"],
+        "rendererName": "rook-claude/render_rook_ruinwall.py",
         "anchor": (0.5, 0.80241),
     },
     "knight": {
         "label": "Knight",
-        "renderer": "docs/art/unit-concepts/blender-units/knight-fur/render_knight_fur.py",
-        "sources": [
-            "docs/art/unit-concepts/source-assets/knight/wooden-chess-knight-side-b/12936_Wooden_Chess_Knight_Side_B_V2_l3.obj",
-        ],
+        "rendererName": "knight-fur/render_knight_fur.py",
         "anchor": (0.5, 0.80241),
     },
     "bishop": {
         "label": "Bishop",
-        "renderer": "docs/art/unit-concepts/blender-units/bishop-mitre/render_bishop_mitre.py",
-        "sources": ["docs/art/unit-concepts/blender-units/bishop-mitre/bishop_mitre.blend"],
+        "rendererName": "bishop-mitre/render_bishop_mitre.py",
         "anchor": (0.5, 0.80241),
     },
     "queen": {
         "label": "Queen",
-        "renderer": "docs/art/unit-concepts/blender-units/queen-tiara/render_queen_tiara.py",
-        "sources": ["docs/art/unit-concepts/blender-units/queen-tiara/queen_tiara.blend"],
+        "rendererName": "queen-tiara/render_queen_tiara.py",
         "anchor": (0.5, 0.80241),
     },
     "king": {
         "label": "King",
-        "renderer": "docs/art/unit-concepts/blender-units/king-crown/render_king_crown.py",
-        "sources": ["docs/art/unit-concepts/blender-units/king-crown/king_crown.blend"],
+        "rendererName": "king-crown/render_king_crown.py",
         "anchor": (0.5, 0.80241),
     },
 }
@@ -139,6 +131,43 @@ def read_handoff(path: Path) -> dict[str, tuple[int, int]]:
             fail(f"handoff is missing {piece}.nativeTargetPx")
         targets[piece] = parse_target(f"{native.get('w', 0)}x{native.get('h', 0)}")
     return targets
+
+
+def read_source_manifest(path: Path) -> dict[str, list[dict[str, str]]]:
+    """Read backend archive identities supplied outside the repository.
+
+    Shape: {"schemaVersion": 1, "pieces": {"pawn": {"sources": [
+      {"sourcePath": "<backend archival identity>", "name": "<local name>",
+       "env": "<optional renderer variable>"}]}}}
+    """
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"could not read source manifest {path}: {exc}")
+    if raw.get("schemaVersion") != 1 or not isinstance(raw.get("pieces"), dict):
+        fail("source manifest must be schemaVersion 1 with a pieces object")
+    result: dict[str, list[dict[str, str]]] = {}
+    for piece, entry in raw["pieces"].items():
+        if piece not in PIECES or not isinstance(entry, dict) or not isinstance(entry.get("sources"), list):
+            continue
+        sources: list[dict[str, str]] = []
+        for source in entry["sources"]:
+            if not isinstance(source, dict):
+                fail(f"invalid source manifest entry for {piece}")
+            source_path = source.get("sourcePath")
+            name = source.get("name")
+            env = source.get("env")
+            if not isinstance(source_path, str) or not source_path or not isinstance(name, str) or not name:
+                fail(f"source entries for {piece} require sourcePath and name")
+            if Path(name).name != name:
+                fail(f"source entry name must be a basename for {piece}: {name}")
+            if env is not None and (not isinstance(env, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]*", env)):
+                fail(f"invalid source environment variable for {piece}: {env}")
+            sources.append({"sourcePath": source_path, "name": name, **({"env": env} if env else {})})
+        if not sources:
+            fail(f"source manifest has no sources for {piece}")
+        result[piece] = sources
+    return result
 
 
 def requested_targets(args: argparse.Namespace) -> list[tuple[str, tuple[int, int]]]:
@@ -223,7 +252,7 @@ def existing_manifest(piece: str, size: tuple[int, int]) -> dict[str, Any] | Non
     except (OSError, json.JSONDecodeError):
         return None
     if (
-        manifest.get("schemaVersion") != 2
+        manifest.get("schemaVersion") != 3
         or manifest.get("piece") != piece
         or manifest.get("authoredRaster") != {"width": size[0], "height": size[1]}
         or manifest.get("deliveryRaster") != {"width": size[0], "height": size[1]}
@@ -233,25 +262,96 @@ def existing_manifest(piece: str, size: tuple[int, int]) -> dict[str, Any] | Non
     return manifest
 
 
-def validate_sources(piece: str) -> tuple[Path, list[Path]]:
-    renderer = ROOT / PIECES[piece]["renderer"]
-    sources = [ROOT / relative for relative in PIECES[piece]["sources"]]
-    missing = [path for path in [renderer, *sources] if not path.is_file()]
-    if missing:
-        fail("canonical Blender source is incomplete:\n  " + "\n  ".join(os.fspath(path) for path in missing))
-    return renderer, sources
+def fetch_sources(
+    piece: str,
+    source_directory: Path,
+    api_base: str,
+    cookie: str | None,
+    renderer_root: Path,
+    sources: list[dict[str, str]],
+) -> tuple[Path, dict[str, str], list[dict[str, Any]]]:
+    renderer = renderer_root / PIECES[piece]["rendererName"]
+    if not renderer.is_file():
+        fail(f"canonical Blender render algorithm is missing: {renderer}")
+    node = os.environ.get("NODE_BIN") or shutil.which("node")
+    client = ROOT / "frontend" / "scripts" / "live-media-admin-client.mjs"
+    if not node or not client.is_file():
+        fail("live-media source retrieval requires Node and frontend/scripts/live-media-admin-client.mjs")
+    source_directory.mkdir(parents=True, exist_ok=True)
+    source_environment = {"UNIT_ART_SOURCE_DIR": os.fspath(source_directory)}
+    source_records: list[dict[str, Any]] = []
+    for source in sources:
+        destination = source_directory / source["name"]
+        command = [
+            node,
+            os.fspath(client),
+            "fetch-source",
+            "--api-base",
+            api_base,
+            "--source-path",
+            source["sourcePath"],
+            "--domain",
+            "unit-art",
+            "--out",
+            os.fspath(destination),
+        ]
+        if cookie:
+            command.extend(["--cookie", cookie])
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if completed.returncode:
+            fail(f"could not fetch private Unit Art source {source['sourcePath']}:\n{completed.stdout}")
+        if source.get("env"):
+            source_environment[source["env"]] = os.fspath(destination)
+        source_records.append({
+            "sourcePath": source["sourcePath"],
+            "sha256": sha256(destination),
+            "byteLength": destination.stat().st_size,
+        })
+    return renderer, source_environment, source_records
 
 
-def render(piece: str, size: tuple[int, int], blender: Path, force: bool) -> dict[str, Any]:
+def render(
+    piece: str,
+    size: tuple[int, int],
+    blender: Path,
+    force: bool,
+    api_base: str,
+    cookie: str | None,
+    renderer_root: Path,
+    sources: list[dict[str, str]],
+) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix=f"unit-art-{piece}-sources-") as temporary:
+        renderer, source_environment, source_records = fetch_sources(
+            piece, Path(temporary), api_base, cookie, renderer_root, sources,
+        )
+        return render_with_sources(piece, size, blender, force, renderer, source_environment, source_records)
+
+
+def render_with_sources(
+    piece: str,
+    size: tuple[int, int],
+    blender: Path,
+    force: bool,
+    renderer: Path,
+    source_environment: dict[str, str],
+    source_records: list[dict[str, Any]],
+) -> dict[str, Any]:
     directory = run_directory(piece, size)
     raw = directory / "raw"
     cached = existing_manifest(piece, size)
-    if cached is not None and not force:
+    if cached is not None and cached.get("sources") == source_records and not force:
         validate_frames(raw, size)
         print(f"NATIVE_RENDER_CACHED {piece} {size[0]}x{size[1]} -> {raw}")
         return cached
 
-    renderer, sources = validate_sources(piece)
     resolved_raw = raw.resolve()
     resolved_output = OUTPUT_ROOT.resolve()
     if not resolved_raw.is_relative_to(resolved_output):
@@ -265,6 +365,7 @@ def render(piece: str, size: tuple[int, int], blender: Path, force: bool) -> dic
         "UNIT_ART_OUTPUT_DIR": os.fspath(resolved_raw),
         "UNIT_ART_FRAME_WIDTH": str(size[0]),
         "UNIT_ART_FRAME_HEIGHT": str(size[1]),
+        **source_environment,
     }
     command = [os.fspath(blender), "--background", "--python", os.fspath(renderer)]
     completed = subprocess.run(
@@ -298,12 +399,13 @@ def render(piece: str, size: tuple[int, int], blender: Path, force: bool) -> dic
     frames = validate_frames(raw, size)
     directory.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "kind": "blender-native-raster",
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "piece": piece,
-        "renderer": os.fspath(renderer.relative_to(ROOT)).replace("\\", "/"),
-        "sources": [os.fspath(path.relative_to(ROOT)).replace("\\", "/") for path in sources],
+        "renderer": os.fspath(renderer.relative_to(ROOT)).replace("\\", "/")
+        if renderer.is_relative_to(ROOT) else os.fspath(renderer),
+        "sources": source_records,
         "blenderExecutable": os.fspath(blender),
         "authoredRaster": {"width": size[0], "height": size[1]},
         "deliveryRaster": {"width": size[0], "height": size[1]},
@@ -344,6 +446,10 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--handoff", help="Unit Studio unitSizeDraft v2 JSON")
         if name == "render":
             command.add_argument("--blender", help="Path to Blender; otherwise auto-detected")
+            command.add_argument("--renderer-root", required=True, help="Directory containing the Git-owned Blender renderer scripts")
+            command.add_argument("--source-manifest", required=True, help="Temporary JSON of backend source identities and renderer environment bindings")
+            command.add_argument("--api-base", default=os.environ.get("LIVE_MEDIA_API_BASE"), help="Backend origin containing the private source catalog (or LIVE_MEDIA_API_BASE)")
+            command.add_argument("--cookie", default=os.environ.get("LIVE_MEDIA_COOKIE"), help="Authenticated admin Cookie header value (or LIVE_MEDIA_COOKIE)")
             command.add_argument("--force", action="store_true", help="Discard a valid cached raw render")
     return root
 
@@ -351,11 +457,20 @@ def parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = parser().parse_args()
     targets = requested_targets(args)
+    if args.command == "render" and not args.api_base:
+        fail("render requires --api-base or LIVE_MEDIA_API_BASE so source media comes from the backend")
     blender = find_blender(args.blender) if args.command == "render" else None
+    renderer_root = Path(args.renderer_root).resolve() if args.command == "render" else None
+    sources_by_piece = read_source_manifest(Path(args.source_manifest).resolve()) if args.command == "render" else {}
     for piece, size in targets:
         if args.command == "render":
-            assert blender is not None
-            render(piece, size, blender, args.force)
+            assert blender is not None and renderer_root is not None
+            if piece not in sources_by_piece:
+                fail(f"source manifest has no entry for requested piece {piece}")
+            render(
+                piece, size, blender, args.force, args.api_base, args.cookie,
+                renderer_root, sources_by_piece[piece],
+            )
         else:
             verify(piece, size)
 

@@ -10,7 +10,7 @@ import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 // portrait AND the roster slots both render through it, so framing/fill/crop are defined once and
 // never re-derived per surface. See docs/portrait-contract.md.
 import { UnitPortrait, loadCrops, STORAGE_KEY, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
-import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
+import { runtimePortraitMasterSrc } from './portraitCandidates';
 import { useConfirm } from './shared/ConfirmDialog';
 import { BackGlyph, RestartGlyph, NewGlyph } from './shared/actionGlyphs';
 import { NavButton } from './shared/NavButton';
@@ -360,7 +360,10 @@ export function SkirmishHud({
                   crop={portraitCrops[focused.type as PortraitPiece]}
                   backdrop={focusedPortraitBackdrop}
                   className="unit-portrait--hud"
-                  method={PRODUCTION_PORTRAIT_METHOD}
+                  masterUrl={runtimePortraitMasterSrc(
+                    focused.type as PortraitPiece,
+                    paletteForSide(focused.side, focused.palette) as PortraitPalette,
+                  )}
                 />
               ) : (
                 <div className="unit-portrait unit-portrait--hud" style={{ display: 'grid', placeItems: 'center' }}>
@@ -407,7 +410,10 @@ export function SkirmishHud({
                           palette={paletteForSide(piece.side, piece.palette) as PortraitPalette}
                           crop={portraitCrops[piece.type as PortraitPiece]}
                           className="unit-portrait--roster"
-                          method={PRODUCTION_PORTRAIT_METHOD}
+                          masterUrl={runtimePortraitMasterSrc(
+                            piece.type as PortraitPiece,
+                            paletteForSide(piece.side, piece.palette) as PortraitPalette,
+                          )}
                         />
                       ) : (
                         <UnitBadge piece={piece} />

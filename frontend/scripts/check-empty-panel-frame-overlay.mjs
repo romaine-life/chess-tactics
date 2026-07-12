@@ -2,11 +2,12 @@
 // Guard for ADR-0081/0069/0070: empty outer control-panel frames must be overlays, not
 // layout borders that reserve a fake colored moat; house chrome in the focused
 // skirmish/editor control panels must consume outer/inner role variables instead
-// of local frame PNGs and widths.
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+// of local frame paths and widths. Media bytes and candidate-source validation
+// belong to the live backend; this repository guard inspects code-owned geometry
+// and consumer wiring only.
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PNG } from 'pngjs';
 
 const frontend = fileURLToPath(new URL('..', import.meta.url));
 const css = readFileSync(join(frontend, 'src/style.css'), 'utf8').replace(/\r\n/g, '\n');
@@ -22,10 +23,7 @@ const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8
 const installedChromeCss = readFileSync(join(frontend, 'src/ui/useInstalledChromeCss.ts'), 'utf8');
 const victoryConditionsEditor = readFileSync(join(frontend, 'src/ui/VictoryConditionsEditor.tsx'), 'utf8');
 const confirmDialog = readFileSync(join(frontend, 'src/ui/shared/ConfirmDialog.tsx'), 'utf8');
-const explodeCandidates = readFileSync(join(frontend, 'scripts/explode-chrome-candidate-sheets.mjs'), 'utf8');
 const registry = readFileSync(join(frontend, 'config/nine-slice-registry.json'), 'utf8');
-const kitManifest = readFileSync(join(frontend, 'src/ui/design/kitManifest.json'), 'utf8');
-const kitProvenance = readFileSync(join(frontend, 'src/ui/design/kitProvenance.json'), 'utf8');
 const failures = [];
 
 function blockFor(selector) {
@@ -38,11 +36,6 @@ function ruleContains(selector, token) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`(?:^|\\n)${escaped}\\s*\\{[^}]*${escapedToken}`).test(css);
-}
-
-function pngSize(path) {
-  const png = PNG.sync.read(readFileSync(path));
-  return { width: png.width, height: png.height };
 }
 
 const rail = blockFor('.level-editor-screen .skirmish-hud');
@@ -214,11 +207,11 @@ if (!/CHROME_LAB_STORAGE_VERSION\s*=\s*3/.test(chromeLab)
   failures.push('Chrome Lab must migrate v2 tuning while dropping obsolete geometry fields');
 }
 if (!/function\s+defaultRailFitForSource[\s\S]*?source\.kind === 'rail-repeat'\)\s*return 'tile';/.test(chromeRuntime)
-  || chromeLabDefaults.inner?.railSourceId !== 'inner-rails-repeat-v4-02'
+  || chromeLabDefaults.inner?.railSourceId !== 'ui/chrome/inner/rail.png'
   || chromeLabDefaults.inner?.railFit !== 'tile') {
   failures.push('Chrome Lab repeat rail sources must default to tile, not stretch-crush long seam strips into side rails');
 }
-if (chromeLabDefaults.outer?.railSourceId !== 'outer-rails-v3-01'
+if (chromeLabDefaults.outer?.railSourceId !== 'ui/chrome/outer/rail.png'
   || chromeLabDefaults.outer?.railFit !== 'stretch'
   || !/function\s+borderImageRepeatForTune[\s\S]*?tune\.railFit === 'tile'\s*\?\s*'repeat'\s*:\s*'stretch'/.test(chromeRuntime)
   || /repeat stretch/.test(chromeRuntime)) {
@@ -242,41 +235,13 @@ if (!/(?:export\s+)?const\s+DEFAULT_DIVIDER_ATOM_SIZE\s*=\s*17\s*;/.test(chromeR
 if (/DIVIDER_TEE_SOURCES/.test(chromeRuntime + chromeLab) || /divider-atoms-img2img-t-v[12]-/.test(chromeRuntime + chromeLab) || /divider-atoms-img2img-socket-v1-/.test(chromeRuntime + chromeLab)) {
   failures.push('Chrome Lab divider picker must not expose T/socket joint candidates as normal cover-atom choices');
 }
-if (!/function\s+validateResizePolicy/.test(explodeCandidates)
-  || !/function\s+validateNaturalSize/.test(explodeCandidates)
-  || !/targetMax requires resizePolicy/.test(explodeCandidates)
-  || !/not writing downscaled candidates/.test(explodeCandidates)) {
-  failures.push('Chrome candidate explosion must reject target-sized sheet assets without an explicit resize policy and natural source-size range');
+if (!/dividerJointSources\s+as\s+liveDividerJointSources/.test(chromeRuntime)
+  || !/export\s+function\s+dividerJointSources/.test(chromeRuntime)
+  || chromeLabDefaults.divider?.atomSourceId !== 'ui/chrome/divider/joint.png') {
+  failures.push('Chrome Lab divider picker must use backend candidates and the canonical installed divider slot');
 }
-if (!/const\s+DIRECT_SETS\s*=/.test(explodeCandidates)
-  || !/divider-atoms-pixellab-cover-v1[\s\S]*naturalSize:\s*\[\s*17\s*,\s*17\s*\]/.test(explodeCandidates)
-  || !/divider-atoms-codex-style-cover-v1[\s\S]*naturalSize:\s*\[\s*17\s*,\s*17\s*\]/.test(explodeCandidates)
-  || !/not writing resized candidates/.test(explodeCandidates)) {
-  failures.push('Chrome candidate explosion must copy native divider atom files with exact-size validation, not resize them');
-}
-if (!/divider-atoms-pixellab-cover-v1/.test(chromeRuntime)
-  || !/divider-atoms-codex-style-cover-v1/.test(chromeRuntime)
-  || chromeLabDefaults.divider?.atomSourceId !== 'divider-atoms-pixellab-cover-v1-21') {
-  failures.push('Chrome Lab divider picker must expose native 17px PixelLab and Codex-style divider cover atoms and default to the curated cover atom');
-}
-const validateNativeDividerAtomDir = (dir, expectedCount, label) => {
-  if (!existsSync(dir)) {
-    failures.push(`missing native ${label} divider atom source directory`);
-    return;
-  }
-  const files = readdirSync(dir).filter((file) => file.endsWith('.png')).sort();
-  if (files.length !== expectedCount) failures.push(`native ${label} divider atom source directory must contain ${expectedCount} curated atoms, got ${files.length}`);
-  for (const file of files) {
-    const size = pngSize(join(dir, file));
-    if (size.width !== 17 || size.height !== 17) {
-      failures.push(`native ${label} divider atom ${file} must be 17x17, got ${size.width}x${size.height}`);
-    }
-  }
-};
-validateNativeDividerAtomDir(join(frontend, 'public/assets/ui/chrome-candidates/pixellab-v1/divider-cover-atoms-17'), 52, 'PixelLab');
-validateNativeDividerAtomDir(join(frontend, 'public/assets/ui/chrome-candidates/pixellab-v1/divider-cover-atoms-codex-style-17'), 55, 'Codex-style');
-if (chromeLabDefaults.outer?.atomSourceId !== 'outer-atoms-img2img-32-v1-08'
-  || chromeLabDefaults.inner?.atomSourceId !== 'inner-atoms-img2img-micro-v2-10'
+if (chromeLabDefaults.outer?.atomSourceId !== 'ui/chrome/outer/atom.png'
+  || chromeLabDefaults.inner?.atomSourceId !== 'ui/chrome/inner/atom.png'
   || chromeLabDefaults.inner?.atomX !== -3
   || chromeLabDefaults.inner?.atomY !== -8) {
   failures.push('Chrome Lab atom defaults must use the right-sized outer atom family instead of retired oversized/undersized atoms');
@@ -337,7 +302,7 @@ if (!/useInstalledChromeCss\(\)/.test(skirmish)
   || !/dangerouslySetInnerHTML=\{\{\s*__html:\s*installedChromeCss\s*\}\}/.test(skirmish)) {
   failures.push('live Skirmish must inject the same installed shared chrome family CSS');
 }
-if (/divider-atoms-v1/.test(chromeRuntime + chromeLab) || existsSync(join(frontend, 'public/assets/ui/chrome-candidates/divider-atoms-v1'))) {
+if (/divider-atoms-v1/.test(chromeRuntime + chromeLab)) {
   failures.push('Chrome Lab divider picker must not expose the retired code-drawn divider-atoms-v1 placeholders');
 }
 for (const id of [
@@ -529,7 +494,7 @@ for (const selector of [
 if (/generate-divider-atom-candidates/.test(readFileSync(join(frontend, 'package.json'), 'utf8'))) {
   failures.push('Chrome Lab divider atoms must not be regenerated from code-drawn placeholder geometry');
 }
-if (!/(?:export\s+)?const\s+DIVIDER_JOINT_PREVIEW_BOX\s*=/.test(chromeRuntime) || !/className="chrome-lab-divider-atom-stage"/.test(chromeLab)) {
+if (!/export\s+function\s+dividerJointPreviewBox/.test(chromeRuntime) || !/className="chrome-lab-divider-atom-stage"/.test(chromeLab)) {
   failures.push('Chrome Lab divider picker must lock the source preview seat to the largest available joint source');
 }
 if (!/function\s+sourcePreviewBox/.test(chromeRuntime) || !/className="chrome-lab-source-stage"/.test(chromeLab)) {
@@ -543,24 +508,12 @@ if (/Joint size locked/.test(chromeLab) || !/atomSize:\s*numberFrom\(value\.atom
 }
 for (const [label, text] of [
   ['nine-slice registry', registry],
-  ['kit manifest', kitManifest],
-  ['kit provenance', kitProvenance],
   ['Chrome Lab', chromeLab],
   ['chrome family runtime', chromeRuntime],
   ['chrome unit registry', chromeUnitRegistry],
 ]) {
   if (/codex-parts-outer-(?:tee|divider)|codex-parts-outer-tee-natural/.test(text)) {
     failures.push(`${label} must not reference the retired cropped codex-parts outer tee/divider assets`);
-  }
-}
-for (const path of [
-  'public/assets/ui/kit/codex-parts-outer-tee.png',
-  'public/assets/ui/kit/codex-parts-outer-divider.png',
-  'public/assets/ui/kit/atoms/codex-parts-outer-tee-natural.png',
-  'config/nine-slice/codex-parts-outer-divider.json',
-]) {
-  if (existsSync(join(frontend, path))) {
-    failures.push(`retired cropped outer tee/divider artifact must not exist: ${path}`);
   }
 }
 const frameSliceMatch = chromeRuntime.match(/function\s+frameSliceForTune[\s\S]*?\n\}/);

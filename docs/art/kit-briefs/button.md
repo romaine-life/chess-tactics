@@ -1,5 +1,11 @@
 # Kit Art Brief — Button (pilot component)
 
+> **Live-storage workflow (ADR-0085).** Paths below identify archived source
+> records and semantic slots; they are not repository files. Fetch each reference
+> by its original `sourcePath` with `frontend/scripts/live-media-admin-client.mjs
+> fetch-source`, work only in an OS-temporary directory, and upload each result as
+> a candidate. Never write media into this repository.
+
 Self-contained brief for the art generator. Needs no context beyond this file
 and the referenced image. Goal: produce a clean, transparent, **9-slice-ready**
 button frame in the accepted Settings art style — NOT a crop of the concept.
@@ -67,6 +73,8 @@ do not block on them now.)
 
 ## Deliverables
 
-Drop the PNGs in `frontend/public/assets/ui/kit/` (create it). I will then
-define patch margins, register them in the catalog, and place them in the kit
-board next to the concept for your sign-off.
+Upload the 1× and 2× PNG candidates to their `ui/kit/<name>.png` semantic
+slots, with generator provenance and native-size evidence. Define patch margins
+as code-owned geometry, then mount the exact candidate versions in the kit board
+for sign-off. Acceptance is a backend transaction after that proof; a local file
+or manifest is never promotion.

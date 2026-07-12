@@ -1,4 +1,6 @@
 {
+  "authority": "historical-provenance-only",
+  "runtime_authority": "backend-live-media-catalog",
   "date": "2026-07-10",
   "decision": "ADR-0040 compliant replacement: deterministic rail/vertex geometry plus generated/source visible pixels",
   "production_status": "calibration_bridge_non_production_under_ADR_0076",

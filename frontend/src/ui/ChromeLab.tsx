@@ -1,13 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode } from 'react';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { useInjectedStyle } from './dressing/useInjectedStyle';
 import { useWindowScaledPreview } from './useWindowScaledPreview';
 import {
   chromeSourceById,
   chromeSourcesFor,
+  installChromeAdminCatalog,
   type ChromeCandidateSource,
   type ChromeRole,
 } from './chromeCandidateSources';
+import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
   ChromeUnitAuditViewer,
   ChromeUnitSpecimen,
@@ -29,8 +31,6 @@ import {
   CHROME_FILL_MODE_OPTIONS,
   CHROME_FILL_SURFACES,
   CHROME_FILL_TINTS,
-  DIVIDER_JOINT_PREVIEW_BOX,
-  DIVIDER_JOINT_SOURCES,
   EMPTY_DIVIDER,
   EMPTY_FRAME,
   NO_ATOM_SOURCE_ID,
@@ -42,8 +42,11 @@ import {
   defaultRailFitForSource,
   dividerDefault,
   dividerAtomAlignmentReadout,
+  dividerJointPreviewBox,
   dividerJointSourceById,
+  dividerJointSources,
   frameCss,
+  installedChromeTuningPayload,
   roleDefault,
   roleAtomAlignmentReadout,
   sourcePreviewBox,
@@ -239,7 +242,7 @@ function roleRailSourceId(role: ChromeRole, value: unknown, fallback: string): s
 
 function dividerAtomSourceId(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback;
-  return DIVIDER_JOINT_SOURCES.some((source) => source.id === value) ? value : fallback;
+  return dividerJointSources().some((source) => source.id === value) ? value : fallback;
 }
 
 function roleTuneFromStorage(role: ChromeRole, value: unknown): RoleTune {
@@ -355,10 +358,6 @@ function saveChromeLabState(targetId: string, state: ChromeLabTuneState): void {
   }
 }
 
-function chromeLabTuningPayload(target: string, outer: RoleTune, inner: RoleTune, divider: DividerTune): { target: string; outer: RoleTune; inner: RoleTune; divider: DividerTune } {
-  return { target, outer, inner, divider };
-}
-
 async function saveChromeLabDefaultsToDisk(payload: { target: string; outer: RoleTune; inner: RoleTune; divider: DividerTune }): Promise<string> {
   const response = await fetch('/__chrome-lab/defaults', {
     method: 'POST',
@@ -390,7 +389,9 @@ function SourcePreview({ source, box }: { source: ChromeCandidateSource | null; 
       </div>
       {source ? (
         <dl className="al-meta">
+          <div><dt>Authority</dt><dd>{source.authority === 'installed-slot' ? 'Installed backend slot' : `Backend ${source.versionStatus}`}</dd></div>
           <div><dt>Source</dt><dd>{source.sourceSheetLabel}</dd></div>
+          <div><dt>Source identity</dt><dd>{source.sourceSheetPath}</dd></div>
           <div><dt>Candidate</dt><dd>{source.componentIndex + 1} / {source.componentCount}</dd></div>
           <div><dt>Size</dt><dd>{source.width} x {source.height}</dd></div>
           {isCapped ? <div><dt>Preview</dt><dd>{displayBox.width} x {displayBox.height} cap</dd></div> : null}
@@ -402,7 +403,8 @@ function SourcePreview({ source, box }: { source: ChromeCandidateSource | null; 
 
 function sourceOptionLabel(source: ChromeCandidateSource): string {
   const mark = source.recommended ? ' *' : '';
-  return `${source.label}${mark}`;
+  const authority = source.authority === 'installed-slot' ? 'installed' : source.versionStatus;
+  return `${source.label}${mark} [${authority}]`;
 }
 
 function cycleSourceId(sources: ChromeCandidateSource[], currentId: string, delta: number): string {
@@ -967,13 +969,14 @@ function RoleChromeControls({
 }
 
 function DividerJointPreview({ source }: { source: DividerJointSource }): ReactElement {
+  const previewBox = dividerJointPreviewBox();
   return (
     <div className="chrome-lab-crop-row">
       <div
         className="chrome-lab-divider-atom-stage"
         style={{
-          width: `${DIVIDER_JOINT_PREVIEW_BOX.width}px`,
-          height: `${DIVIDER_JOINT_PREVIEW_BOX.height}px`,
+          width: `${previewBox.width}px`,
+          height: `${previewBox.height}px`,
         }}
       >
         {source.src ? <img className="chrome-lab-divider-atom-canvas" src={source.src} alt="" draggable={false} /> : null}
@@ -995,11 +998,12 @@ function DividerControls({
   railFit: RailFit;
   embedded?: boolean;
 }): ReactElement {
+  const sources = dividerJointSources();
   const source = dividerJointSourceById(tune.atomSourceId);
-  const sourceIndex = DIVIDER_JOINT_SOURCES.findIndex((entry) => entry.id === tune.atomSourceId);
+  const sourceIndex = sources.findIndex((entry) => entry.id === tune.atomSourceId);
   const cycleSource = (delta: number): void => {
     const base = sourceIndex >= 0 ? sourceIndex : 1;
-    const next = DIVIDER_JOINT_SOURCES[(base + delta + DIVIDER_JOINT_SOURCES.length) % DIVIDER_JOINT_SOURCES.length];
+    const next = sources[(base + delta + sources.length) % sources.length];
     onTune({ atomSourceId: next.id });
   };
   const defaults = dividerDefault();
@@ -1025,7 +1029,7 @@ function DividerControls({
           <label className="tileset-category-select">
             <span>Joint atom</span>
             <select value={tune.atomSourceId} onChange={(event) => onTune({ atomSourceId: event.target.value })}>
-              {DIVIDER_JOINT_SOURCES.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
+              {sources.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
             </select>
           </label>
           <div className="chrome-lab-cycle">
@@ -1312,7 +1316,78 @@ export function ChromeLabCatalog({
   );
 }
 
-export function ChromeLabViewer({
+type ChromeAdminSourceState =
+  | { status: 'loading'; count: 0; revision: null; error: null }
+  | { status: 'error'; count: 0; revision: null; error: string }
+  | { status: 'ready'; count: number; revision: number; error: null };
+
+function useChromeAdminSources(): [ChromeAdminSourceState, () => void] {
+  const [state, setState] = useState<ChromeAdminSourceState>({
+    status: 'loading',
+    count: 0,
+    revision: null,
+    error: null,
+  });
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const refresh = useCallback(() => {
+    setState((current) => current.status === 'ready'
+      ? current
+      : { status: 'loading', count: 0, revision: null, error: null });
+    void fetchAdminLiveMediaCatalog().then((catalog) => {
+      if (!mounted.current) return;
+      const count = installChromeAdminCatalog(catalog);
+      setState({ status: 'ready', count, revision: catalog.revision, error: null });
+    }).catch((error: unknown) => {
+      if (mounted.current) setState({
+        status: 'error',
+        count: 0,
+        revision: null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+  return [state, refresh];
+}
+
+export function ChromeLabViewer(props: {
+  targetId?: string;
+  onTargetId: (id: string) => void;
+  header?: ReactNode;
+  zoomControl?: ReactNode;
+  zoom?: number;
+}): ReactElement {
+  const [sourceState, refresh] = useChromeAdminSources();
+  if (sourceState.status === 'loading') {
+    return <div className="tileset-empty-state" role="status">Loading Chrome candidates from the backend...</div>;
+  }
+  if (sourceState.status === 'error') {
+    return (
+      <div className="tileset-empty-state" role="alert">
+        <p>Chrome candidates could not be loaded: {sourceState.error}</p>
+        <button type="button" className="tileset-view-action" onClick={refresh}>Retry backend catalog</button>
+      </div>
+    );
+  }
+  const sourceStatus = (
+    <div className="chrome-lab-source-status" aria-live="polite">
+      <span>{sourceState.count} backend candidate{sourceState.count === 1 ? '' : 's'} · catalog r{sourceState.revision}</span>
+      <button type="button" className="tileset-view-action" onClick={refresh}>Refresh candidates</button>
+    </div>
+  );
+  return (
+    <ChromeLabReadyViewer
+      {...props}
+      header={<>{props.header}{sourceStatus}</>}
+    />
+  );
+}
+
+function ChromeLabReadyViewer({
   targetId,
   onTargetId,
   header,
@@ -1404,7 +1479,7 @@ function ChromeLabUnitViewer({
 
   const css = frameCss(outer, inner, outerFrame, innerFrame, dividerRender);
   const copyJson = async (): Promise<void> => {
-    const payload = JSON.stringify(chromeLabTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, divider), null, 2);
+    const payload = JSON.stringify(installedChromeTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, divider), null, 2);
     setExportText(payload);
     try {
       await navigator.clipboard.writeText(payload);
@@ -1417,7 +1492,7 @@ function ChromeLabUnitViewer({
   const saveDefaults = async (): Promise<void> => {
     setSaveMsg('saving...');
     try {
-      const path = await saveChromeLabDefaultsToDisk(chromeLabTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, divider));
+      const path = await saveChromeLabDefaultsToDisk(installedChromeTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, divider));
       setSaveMsg(`saved ${path}`);
     } catch (error) {
       setSaveMsg(`error: ${error instanceof Error ? error.message : String(error)}`);
@@ -1657,7 +1732,7 @@ function ChromeLabPageViewer({
     setDivider(defaults.divider);
   };
   const copyJson = async (): Promise<void> => {
-    const payload = JSON.stringify(chromeLabTuningPayload(target.id, outer, inner, divider), null, 2);
+    const payload = JSON.stringify(installedChromeTuningPayload(target.id, outer, inner, divider), null, 2);
     try {
       await navigator.clipboard.writeText(payload);
       setCopied(true);
@@ -1669,7 +1744,7 @@ function ChromeLabPageViewer({
   const saveDefaults = async (): Promise<void> => {
     setSaveMsg('saving...');
     try {
-      const path = await saveChromeLabDefaultsToDisk(chromeLabTuningPayload(target.id, outer, inner, divider));
+      const path = await saveChromeLabDefaultsToDisk(installedChromeTuningPayload(target.id, outer, inner, divider));
       setSaveMsg(`saved ${path}`);
     } catch (error) {
       setSaveMsg(`error: ${error instanceof Error ? error.message : String(error)}`);

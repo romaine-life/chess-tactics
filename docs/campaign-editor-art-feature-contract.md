@@ -20,7 +20,7 @@ controls are backed by real behavior and real data.
 
 ## Source Of Truth
 
-- Visual target: `docs/art/ui-screen-concepts/02-campaign-editor.png` (feature reference; the
+- Visual target: `/assets/ui/campaign-editor-concept.png` from the live media catalog (feature reference; the
   chrome now follows the shared settings shell, not this screen's bespoke panels — see ADR-0065).
 - Live route: `/editor` (the nested board editor is `/editor/level`).
 - Reusable chrome: the shared settings shell (`.settings-*` in `frontend/src/style.css`) + the

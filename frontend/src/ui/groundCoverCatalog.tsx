@@ -33,31 +33,33 @@ const GROUND_COVER_META: Record<GroundCoverId, { label: string; badge: string; n
 
 export const GROUND_COVER_IDS: readonly GroundCoverId[] = ['grass', 'water', 'sand'];
 
-export const GROUND_COVER_ASSETS: readonly GroundCoverCatalogAsset[] = GROUND_COVER_IDS.map((id) => {
-  const set = groundCoverSet(id);
-  if (!set) throw new Error(`Missing ground-cover set: ${id}`);
-  return {
-    id,
-    terrainLabel: terrainLabels[id],
-    set,
-    ...GROUND_COVER_META[id],
-  };
-});
+// Modules load before main.tsx applies the backend catalog. Keep only semantic
+// UI identity eager; resolve each live set through a getter after startup.
+export const GROUND_COVER_ASSETS: readonly GroundCoverCatalogAsset[] = GROUND_COVER_IDS.map((id) => ({
+  id,
+  terrainLabel: terrainLabels[id],
+  get set(): CoverSet {
+    const set = groundCoverSet(id);
+    if (!set) throw new Error(`Missing live ground-cover set: ${id}`);
+    return set;
+  },
+  ...GROUND_COVER_META[id],
+}));
 
 export const groundCoverAsset = (id: string | undefined): GroundCoverCatalogAsset =>
   GROUND_COVER_ASSETS.find((asset) => asset.id === id) ?? GROUND_COVER_ASSETS[0];
 
 function tuftStyle(asset: GroundCoverCatalogAsset, meta: CoverVariantMeta, x: number, y: number): CSSProperties {
-  const sheetW = meta.frameW * asset.set.frameCount;
+  const sheetW = meta.frameWidth * asset.set.frameCount;
   return {
     left: `${x}%`,
     top: `${y}%`,
-    width: meta.frameW,
-    height: meta.frameH,
+    width: meta.frameWidth,
+    height: meta.frameHeight,
     marginLeft: -meta.baseX,
     marginTop: -meta.baseY,
-    backgroundImage: `url(${asset.set.basePath}/v${meta.id}.png)`,
-    backgroundSize: `${sheetW}px ${meta.frameH}px`,
+    backgroundImage: `url(${meta.src})`,
+    backgroundSize: `${sheetW}px ${meta.frameHeight}px`,
     ['--gc-travel' as string]: `${-sheetW}px`,
   } as CSSProperties;
 }

@@ -11,20 +11,19 @@
 // python steps, exactly like forge-studio-switcher-icons.mjs. Method-verified against the
 // ROLLOUT (image_generation_call), never stdout (kit-forge.md).
 //
-//   node scripts/forge-titlebar-wall.mjs [rail boss]
+//   node scripts/forge-titlebar-wall.mjs [band rail tee cross] --ref <fetched.png> --slot-prefix <slot> -- <upload options>
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 import { runCodex, imageGenVerdict, sessionImage } from './codex-imagegen.mjs';
 import { trimToEdge } from './forge-atom.mjs'; // pure pngjs helper — no machine paths
+import { optionValue, splitGeneratorArgs, uploadGeneratedCandidate } from './upload-generated-candidate.mjs';
 
-const FRONTEND = fileURLToPath(new URL('..', import.meta.url));
-const OUT_DIR = join(FRONTEND, 'public/assets/ui/titlebar');
-const TMP = join(FRONTEND, 'tmp-forge-titlebar');
-const REF = join(OUT_DIR, 'band-studded.png'); // the shipped horizontal rule = style seed
+const TMP = mkdtempSync(join(tmpdir(), 'forge-titlebar-run-'));
+const OUT_DIR = join(TMP, 'out');
+let REF;
 const VENV_PY = process.env.FORGE_PY || join(TMP, 'venv', 'Scripts', 'python.exe');
 const REMOVE_CHROMA = join(process.env.CODEX_HOME || join(process.env.USERPROFILE || process.env.HOME, '.codex'),
   'skills', '.system', 'imagegen', 'scripts', 'remove_chroma_key.py');
@@ -217,12 +216,6 @@ async function forgeOne(name, spec, maxTries) {
   const rawCopy = join(TMP, `${name}-raw.png`);
   mkdirSync(TMP, { recursive: true });
   mkdirSync(OUT_DIR, { recursive: true });
-  if (process.env.REUSE_RAW === '1' && existsSync(rawCopy)) {
-    process.stdout.write(`\n[${name}] REUSE_RAW — reprocessing saved raw (no generation)\n`);
-    const r = finish(name, spec, rawCopy);
-    console.log(r.ok ? `  ✓ ${spec.out} ${r.dim}, ${Math.round(r.frac * 100)}% transparent (reused)` : `  ✗ ${r.reason}`);
-    return { name, ok: r.ok, out: r.out };
-  }
   const keys = ['#00ff00', '#ff00ff']; // green first (iron carries no green); alternate on collision
   let prior = '';
   for (let attempt = 1; attempt <= maxTries; attempt++) {
@@ -242,7 +235,13 @@ async function forgeOne(name, spec, maxTries) {
     if (!raw) { console.log('  no generated image in session dir; retrying'); continue; }
     copyFileSync(raw, rawCopy);
     const r = finish(name, spec, rawCopy);
-    if (r.ok) { console.log(`  ✓ ${spec.out} — ${r.dim}, ${Math.round(r.frac * 100)}% transparent (image_generation_call verified)`); return { name, ok: true, out: r.out }; }
+    if (r.ok) {
+      const provenance = join(TMP, `${name}-provenance.json`);
+      writeFileSync(provenance, `${JSON.stringify({ generator: 'forge-titlebar-wall', threadId: verdict.tid, part: name }, null, 2)}\n`);
+      uploadGeneratedCandidate(r.out, [...uploadArgs, '--provenance-json', provenance], `${slotPrefix}/${spec.out}`);
+      console.log(`  ✓ ${spec.out} — ${r.dim}, ${Math.round(r.frac * 100)}% transparent (uploaded)`);
+      return { name, ok: true, out: `${slotPrefix}/${spec.out}` };
+    }
     console.log(`  ✗ ${r.reason} — retrying`);
     if (r.collision) { prior = `the cutout came out ${Math.round(r.frac * 100)}% transparent — ${key} likely appeared in the iron and punched holes. Keep the iron free of ${key}.`; }
     else if (r.asym) { prior = `your strap was SIDE-LIT — one side came out brighter than the other, as if the light came from the side. It must be lit from STRAIGHT ABOVE: the left and right halves identical, flat even strap face, no bright edge on either side, only the round rivets glinting on their tops.`; }
@@ -251,11 +250,18 @@ async function forgeOne(name, spec, maxTries) {
   return { name, ok: false };
 }
 
-const argv = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-const names = argv.length ? argv.filter((a) => SPECS[a]) : ['band', 'rail', 'plate'];
-console.log(`forge-titlebar-wall: ${names.join(', ')} (ref = band-studded.png)`);
+const { toolArgs, uploadArgs } = splitGeneratorArgs(process.argv.slice(2));
+const slotPrefix = optionValue(toolArgs, '--slot-prefix').replace(/\/+$/, '');
+REF = optionValue(toolArgs, '--ref');
+if (!slotPrefix || !REF || !existsSync(REF) || !uploadArgs.length) throw new Error('forge-titlebar-wall requires --ref, --slot-prefix, and live-media options after --');
+const valueIndexes = new Set();
+for (const name of ['--slot-prefix', '--ref']) { const index = toolArgs.indexOf(name); valueIndexes.add(index); valueIndexes.add(index + 1); }
+const argv = toolArgs.filter((_, index) => !valueIndexes.has(index)).filter((a) => !a.startsWith('--'));
+const names = argv.length ? argv.filter((a) => SPECS[a]) : ['band', 'rail', 'tee', 'cross'];
+console.log(`forge-titlebar-wall: ${names.join(', ')} (ref = ${REF})`);
 const results = [];
 for (const n of names) results.push(await forgeOne(n, SPECS[n], 3));
 console.log(`\n==== ${results.filter((r) => r.ok).length}/${results.length} forged ====`);
 for (const r of results) console.log(`  ${r.ok ? '✓' : '✗'} ${r.name}${r.ok ? ` -> ${r.out}` : ''}`);
+rmSync(TMP, { recursive: true, force: true });
 process.exit(results.every((r) => r.ok) ? 0 : 1);

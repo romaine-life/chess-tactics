@@ -13,12 +13,12 @@ used as the mask, so the rich material fills the exact torn shape.
 """
 import os
 import importlib.util
+import argparse
+from pathlib import Path
 import numpy as np
 from PIL import Image, ImageOps
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SURF = os.path.normpath(os.path.join(HERE, '..', 'public', 'assets', 'tiles', 'surface'))
-EXPLORE = os.path.normpath(os.path.join(HERE, '..', 'public', 'assets', 'tiles', 'explore'))
 FAMILIES = ['grass', 'dirt', 'stone', 'sand', 'pebble']
 
 # import rich_side() from the hyphenated module
@@ -26,27 +26,33 @@ _spec = importlib.util.spec_from_file_location('pts', os.path.join(HERE, 'projec
 pts = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(pts)
 
 
-def build(fam):
-    mask = np.array(Image.open(f'{SURF}/{fam}-edge-side.png').convert('RGBA'))  # frayed silhouette (alpha)
-    base_top = Image.open(f'{SURF}/{fam}-0-top.png').convert('RGBA')
-    slab0 = Image.open(f'{EXPLORE}/{fam}-side-slab-0.png').convert('RGBA')
-    slab1 = Image.open(f'{EXPLORE}/{fam}-side-slab-1.png').convert('RGBA')
+def build(fam, surface_dir, material_dir, output_dir):
+    mask = np.array(Image.open(surface_dir / f'{fam}-edge-side.png').convert('RGBA'))
+    base_top = Image.open(surface_dir / f'{fam}-0-top.png').convert('RGBA')
+    slab0 = Image.open(material_dir / f'{fam}-side-slab-0.png').convert('RGBA')
+    slab1 = Image.open(material_dir / f'{fam}-side-slab-1.png').convert('RGBA')
     materials = [slab0, slab1, ImageOps.mirror(slab0)]  # 3 distinct faces
     for v, mat in enumerate(materials):
         side_img = Image.fromarray(pts.rich_side(mat, mask), 'RGBA')
-        side_img.save(f'{SURF}/{fam}-edge-{v}-side.png')
-        base_top.save(f'{SURF}/{fam}-edge-{v}-top.png')
+        side_img.save(output_dir / f'{fam}-edge-{v}-side.png')
+        base_top.save(output_dir / f'{fam}-edge-{v}-top.png')
         comb = Image.new('RGBA', (96, 180), (0, 0, 0, 0))
         comb.alpha_composite(side_img)   # side under
         comb.alpha_composite(base_top)   # top over
-        comb.save(f'{SURF}/{fam}-edge-{v}.png')
+        comb.save(output_dir / f'{fam}-edge-{v}.png')
     print(f'{fam}: wrote {len(materials)} edge variants')
 
 
 def main():
-    import sys
-    for fam in (sys.argv[1:] or FAMILIES):
-        build(fam)
+    parser = argparse.ArgumentParser(description='Project rich edge candidates in a temporary workspace.')
+    parser.add_argument('--surface-dir', required=True, type=Path)
+    parser.add_argument('--material-dir', required=True, type=Path)
+    parser.add_argument('--out-dir', required=True, type=Path, help='Upload outputs with live-media-admin-client.mjs')
+    parser.add_argument('families', nargs='*', default=FAMILIES)
+    args = parser.parse_args()
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    for family in args.families:
+        build(family, args.surface_dir, args.material_dir, args.out_dir)
 
 
 if __name__ == '__main__':

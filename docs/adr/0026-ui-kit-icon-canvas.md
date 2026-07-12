@@ -1,5 +1,5 @@
 ---
-status: "accepted; display-scaling clause superseded by ADR-0076"
+status: "accepted; display-scaling clause superseded by ADR-0076; asset-storage clauses superseded by ADR-0085"
 date: 2026-06-27
 deciders: Nelson, Claude
 ---

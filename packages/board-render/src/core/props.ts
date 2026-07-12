@@ -8,8 +8,7 @@
 // Anchor convention: (x,y) is the min-(x,y) cell of the footprint (smallest x AND smallest y).
 // No rotation in v1, so a prop serialises as a single entry at its anchor.
 
-import propSeats from './propSeats.json';
-import { structureArtAsset } from './structureArt';
+import { structureArtAsset, structureRasterDimensions } from './structureArt';
 
 export type PropKind = 'tree' | 'house' | 'rock';
 export type StructurePlacement = 'prop' | 'doodad';
@@ -38,12 +37,12 @@ export interface PropSprite {
 }
 
 // Per-prop seat tuning (contact anchor + render scale) — eye-tuned in /prop-lab, whose
-// Save writes propSeats.json back through the dev server. The original anchors were
+// Save replaces the complete live DB document. The original anchors were
 // alpha-bbox measurements of the cropped renders (bbox bottom = the base's FRONT corner,
 // which the renderer then seats on the footprint's ground CENTRE — hence props that
-// floated until tuned). The JSON is the single source of truth for these values.
+// floated until tuned). `prop_seats/default` is the single source of truth.
 //
-// A propSeats.json entry with a `base` is a SIZE VARIANT (ADR-0059 "share base"): it reuses the
+// A live seat entry with a `base` is a SIZE VARIANT (ADR-0059 "share base"): it reuses the
 // base prop's PNG + gameplay footprint and differs ONLY by its own seat (scale + anchor). A
 // variant is a distinct prop id, so placement/serialisation need no change; it just gets its own
 // PROP_DEFS entry synthesized from the base. Authored by eye in /prop-lab.
@@ -66,27 +65,102 @@ export type PropSeatEntry = {
 };
 export type PropSeatMap = Record<string, PropSeatEntry>;
 
-// The committed baseline — the always-render seed (ADR-0061). Live DB overrides (loaded async by
-// net/propSeats loadLiveSeats) are layered ON TOP per propId via {...baseline, ...dbSeats}; the
-// baseline stays authoritative for presence so props always compose, even with zero DB.
-const BASELINE_SEATS = propSeats as PropSeatMap;
+// These six identities and their gameplay semantics remain code-owned. Their
+// anchors, scale, footprint tuning, variants, and authored structures come from
+// the one complete `prop_seats/default` live document.
+export const REQUIRED_PROP_SEAT_IDS = ['oak', 'cottage', 'cabin', 'lodge', 'rock', 'fieldstone'] as const;
 const DEFAULT_FOOTPRINT = 2;
 
-// The CURRENT seat map — starts as the baseline, replaced in place by applyLiveSeats when the DB
-// overlay arrives. `let` so the derivation below always reads the live map.
-let SEATS: PropSeatMap = BASELINE_SEATS;
+// There is intentionally no packaged seed or last-good fallback. Application
+// startup and server thumbnails hydrate this before importing/rendering a board.
+let SEATS: PropSeatMap | null = null;
 
-/** The CURRENT (baseline ∪ live-override) seat map that PROP_DEFS is derived from. Read this — not
- *  the static propSeats.json import — anywhere that must agree with the live PROP_DEFS (e.g. the
- *  /prop-lab "saved" baseline), or a DB-overridden / DB-only prop reads back its stale committed
- *  value (or is absent entirely, and indexing it throws). Returns the live map by reference. */
+/** The complete live map that PROP_DEFS is derived from. */
 export function currentSeats(): PropSeatMap {
+  if (!SEATS) throw new Error('prop seats are not hydrated');
   return SEATS;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isSource(value: unknown): value is StructureSourceRef {
+  return isRecord(value)
+    && (value.kind === 'asset' || value.kind === 'prop' || value.kind === 'doodad')
+    && typeof value.id === 'string'
+    && value.id.length > 0;
+}
+
+/** Reject a partial or malformed DB snapshot before it can replace renderer state. */
+export function assertPropSeatMap(value: unknown): asserts value is PropSeatMap {
+  if (!isRecord(value)) throw new Error('invalid prop seats: document must be an object map');
+  for (const id of REQUIRED_PROP_SEAT_IDS) {
+    if (!Object.hasOwn(value, id)) throw new Error(`invalid prop seats: required prop "${id}" is missing`);
+  }
+  for (const [id, raw] of Object.entries(value)) {
+    if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new Error(`invalid prop seats: prop id "${id}" is not a lowercase slug`);
+    if (!isRecord(raw)) throw new Error(`invalid prop seats: seat "${id}" must be an object`);
+    if (!Number.isFinite(raw.anchorX) || !Number.isFinite(raw.anchorY)) {
+      throw new Error(`invalid prop seats: seat "${id}" needs numeric anchorX/anchorY`);
+    }
+    if (!(Number.isFinite(raw.scale) && Number(raw.scale) > 0)) {
+      throw new Error(`invalid prop seats: seat "${id}" needs a positive scale`);
+    }
+    for (const dim of ['w', 'h'] as const) {
+      if (Object.hasOwn(raw, dim) && !(Number.isInteger(raw[dim]) && Number(raw[dim]) >= 1)) {
+        throw new Error(`invalid prop seats: seat "${id}" ${dim} must be a positive integer`);
+      }
+    }
+    if (Object.hasOwn(raw, 'base')) {
+      if (typeof raw.base !== 'string' || !Object.hasOwn(value, raw.base)) {
+        throw new Error(`invalid prop seats: seat "${id}" base must reference this document`);
+      }
+      if (!(REQUIRED_PROP_SEAT_IDS as readonly string[]).includes(raw.base)) {
+        throw new Error(`invalid prop seats: seat "${id}" base must reference a code-owned base prop`);
+      }
+      if ((REQUIRED_PROP_SEAT_IDS as readonly string[]).includes(id)) {
+        throw new Error(`invalid prop seats: required prop "${id}" cannot be a variant`);
+      }
+    }
+    if (Object.hasOwn(raw, 'placement') && raw.placement !== 'prop' && raw.placement !== 'doodad') {
+      throw new Error(`invalid prop seats: seat "${id}" placement is invalid`);
+    }
+    if (Object.hasOwn(raw, 'base') && Object.hasOwn(raw, 'placement')) {
+      throw new Error(`invalid prop seats: seat "${id}" cannot be both a variant and authored placement`);
+    }
+    if (Object.hasOwn(raw, 'source') && !isSource(raw.source)) {
+      throw new Error(`invalid prop seats: seat "${id}" source is invalid`);
+    }
+    if (Object.hasOwn(raw, 'parts')) {
+      if (!Array.isArray(raw.parts) || raw.parts.length === 0 || raw.parts.some((part) => !isStructurePart(part))) {
+        throw new Error(`invalid prop seats: seat "${id}" parts are invalid`);
+      }
+    }
+    if (raw.placement && !Object.hasOwn(raw, 'source') && !Object.hasOwn(raw, 'parts')) {
+      throw new Error(`invalid prop seats: seat "${id}" authored placement needs source or parts`);
+    }
+    if (!(REQUIRED_PROP_SEAT_IDS as readonly string[]).includes(id) && !raw.base && !raw.placement) {
+      throw new Error(`invalid prop seats: seat "${id}" must be a variant or authored placement`);
+    }
+    if (Object.hasOwn(raw, 'kind') && raw.kind !== 'tree' && raw.kind !== 'house' && raw.kind !== 'rock') {
+      throw new Error(`invalid prop seats: seat "${id}" kind is invalid`);
+    }
+    if (Object.hasOwn(raw, 'terrains') && (!Array.isArray(raw.terrains) || raw.terrains.some((terrain) => typeof terrain !== 'string' || !terrain))) {
+      throw new Error(`invalid prop seats: seat "${id}" terrains are invalid`);
+    }
+    if (Object.hasOwn(raw, 'blocking') && typeof raw.blocking !== 'boolean') {
+      throw new Error(`invalid prop seats: seat "${id}" blocking must be boolean`);
+    }
+    if (Object.hasOwn(raw, 'label') && typeof raw.label !== 'string') {
+      throw new Error(`invalid prop seats: seat "${id}" label must be a string`);
+    }
+  }
 }
 
 function seat(seats: PropSeatMap, id: string): { anchorX: number; anchorY: number; scale: number } {
   const s = seats[id];
-  if (!s) throw new Error(`propSeats.json has no seat for prop "${id}"`);
+  if (!s) throw new Error(`prop seats document has no seat for prop "${id}"`);
   return { anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale };
 }
 const footW = (seats: PropSeatMap, id: string): number => seats[id]?.w ?? DEFAULT_FOOTPRINT;
@@ -124,11 +198,14 @@ export interface PlacedProp {
   propId: string;
 }
 
-// The BASE props. All ship at a 2×2 gameplay footprint; each frame's w/h are facts of the
-// shipped PNGs (assets/props/<id>/{back,front}.png) while the contact anchor + scale come from
-// the seat map (baseline propSeats.json, eye-tuned in /prop-lab, plus live DB overrides). Each
-// base is its own sprite asset + catalog family.
+// The BASE props. Semantic/gameplay definitions stay in code; raster dimensions
+// come from the hydrated active live-media slots and tuning comes from the DB map.
 function baseDefs(seats: PropSeatMap): PropDef[] {
+  const sprite = (id: string) => {
+    const art = structureArtAsset(id);
+    if (!art) throw new Error(`required structure art definition "${id}" is missing`);
+    return { w: art.sprite.w, h: art.sprite.h, ...seat(seats, id) };
+  };
   return [
     {
       id: 'oak',
@@ -141,7 +218,7 @@ function baseDefs(seats: PropSeatMap): PropDef[] {
       spriteId: 'oak',
       spriteSource: { kind: 'asset', id: 'oak' },
       family: 'oak',
-      sprite: { w: 192, h: 300, ...seat(seats, 'oak') },
+      sprite: sprite('oak'),
     },
     {
       id: 'cottage',
@@ -154,23 +231,23 @@ function baseDefs(seats: PropSeatMap): PropDef[] {
       spriteId: 'cottage',
       spriteSource: { kind: 'asset', id: 'cottage' },
       family: 'cottage',
-      sprite: { w: 177, h: 184, ...seat(seats, 'cottage') },
+      sprite: sprite('cottage'),
     },
     // Houses — the stylized keeper set. `cottage` above is the low-poly mesh render; these two are
     // gated Codex img2img RESTYLES of real Blender captures (photoreal meshes read "too realistic"
     // raw, so the cabin/green-roof shapes are kept but re-skinned to pixel-art). Method-verified via
     // imageGenVerdict (rollout image_generation_call), NOT code-drawn.
-    { id: 'cabin', label: 'Log cabin', kind: 'house', w: footW(seats, 'cabin'), h: footH(seats, 'cabin'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'cabin', spriteSource: { kind: 'asset', id: 'cabin' }, family: 'cabin', sprite: { w: 220, h: 176, ...seat(seats, 'cabin') } },
-    { id: 'lodge', label: 'Green-roof house', kind: 'house', w: footW(seats, 'lodge'), h: footH(seats, 'lodge'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'lodge', spriteSource: { kind: 'asset', id: 'lodge' }, family: 'lodge', sprite: { w: 210, h: 177, ...seat(seats, 'lodge') } },
+    { id: 'cabin', label: 'Log cabin', kind: 'house', w: footW(seats, 'cabin'), h: footH(seats, 'cabin'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'cabin', spriteSource: { kind: 'asset', id: 'cabin' }, family: 'cabin', sprite: sprite('cabin') },
+    { id: 'lodge', label: 'Green-roof house', kind: 'house', w: footW(seats, 'lodge'), h: footH(seats, 'lodge'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'lodge', spriteSource: { kind: 'asset', id: 'lodge' }, family: 'lodge', sprite: sprite('lodge') },
     // Rocks — 1×1 blocking boulders: the placeable impassable-cell obstacle (the old editor's rock
     // terrain swatch, reborn as a prop so the rules engine stays untouched). Same gated Codex restyle
     // pipeline as cabin/lodge, from the two staged /rocks meshes (see SOURCES.md). Native-res PNGs;
-    // tile-fit is the `scale` in propSeats.json (eye-tunable in /prop-lab), not a baked-small sprite.
-    { id: 'rock', label: 'Rock', kind: 'rock', w: footW(seats, 'rock'), h: footH(seats, 'rock'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'rock', spriteSource: { kind: 'asset', id: 'rock' }, family: 'rock', sprite: { w: 40, h: 45, ...seat(seats, 'rock') } },
+    // tile-fit is the live seat `scale` (eye-tunable in /prop-lab), not a baked-small sprite.
+    { id: 'rock', label: 'Rock', kind: 'rock', w: footW(seats, 'rock'), h: footH(seats, 'rock'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'rock', spriteSource: { kind: 'asset', id: 'rock' }, family: 'rock', sprite: sprite('rock') },
     // Named 'fieldstone' (not 'granite') to avoid colliding with the obstacle-piece sprite variant
     // ROCK_VARIANTS=['boulder','granite'] under /assets/units/rock/ (render/SkirmishBoard.tsx) — a
     // separate system from these placeable props. Both derive from the same round-boulder mesh.
-    { id: 'fieldstone', label: 'Fieldstone', kind: 'rock', w: footW(seats, 'fieldstone'), h: footH(seats, 'fieldstone'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'fieldstone', spriteSource: { kind: 'asset', id: 'fieldstone' }, family: 'fieldstone', sprite: { w: 51, h: 47, ...seat(seats, 'fieldstone') } },
+    { id: 'fieldstone', label: 'Fieldstone', kind: 'rock', w: footW(seats, 'fieldstone'), h: footH(seats, 'fieldstone'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'fieldstone', spriteSource: { kind: 'asset', id: 'fieldstone' }, family: 'fieldstone', sprite: sprite('fieldstone') },
   ];
 }
 
@@ -184,7 +261,7 @@ function variantDefs(seats: PropSeatMap, bases: readonly PropDef[]): PropDef[] {
     if (s.placement) continue;
     if (!s.base) continue;
     const base = byId.get(s.base);
-    if (!base) throw new Error(`prop variant "${id}" in propSeats.json references unknown base "${s.base}"`);
+    if (!base) throw new Error(`prop variant "${id}" references unknown base "${s.base}"`);
     out.push({
       ...base, // inherit kind/blocking/terrains/spriteId/family from the base
       id,
@@ -197,8 +274,6 @@ function variantDefs(seats: PropSeatMap, bases: readonly PropDef[]): PropDef[] {
   }
   return out;
 }
-
-const DOODAD_SOURCE_SPRITE = { w: 96, h: 180, anchorX: 48, anchorY: 69 } as const;
 
 const isStructureSource = (value: unknown): value is StructureSourceRef =>
   !!value
@@ -240,7 +315,12 @@ function authoredPropDefs(seats: PropSeatMap, sourceProps: readonly PropDef[]): 
     const source = parts[0].source;
     const sourceProp = source.kind === 'prop' ? byId.get(source.id) : undefined;
     const sourceArt = source.kind === 'asset' ? structureArtAsset(source.id) : undefined;
-    const sourceSprite = sourceArt?.sprite ?? sourceProp?.sprite ?? DOODAD_SOURCE_SPRITE;
+    const sourceSprite = source.kind === 'asset'
+      ? sourceArt?.sprite
+      : source.kind === 'prop'
+        ? sourceProp?.sprite
+        : { ...structureRasterDimensions(`/assets/doodads/${source.id}`), anchorX: s.anchorX, anchorY: s.anchorY };
+    if (!sourceSprite) throw new Error(`authored prop "${id}" source "${source.id}" is unavailable`);
     const sourceTerrains = sourceArt?.terrains ?? sourceProp?.terrains ?? ['grass', 'dirt', 'stone'];
     const sourceKind = sourceProp?.kind ?? sourceArt?.propKind ?? (sourceArt?.kind === 'tree' || sourceArt?.kind === 'rock' ? sourceArt.kind : 'house');
     out.push({
@@ -267,36 +347,24 @@ function deriveDefs(seats: PropSeatMap): PropDef[] {
   return [...bases, ...variants, ...authoredPropDefs(seats, [...bases, ...variants])];
 }
 
-// `let`, not `const`: applyLiveSeats re-derives this in place when the DB overlay arrives. Consumers
-// import the live binding, so a re-render after hydrate picks up the overridden seats. Baseline-only
-// at module load, so props render immediately with zero DB.
-export let PROP_DEFS: readonly PropDef[] = deriveDefs(SEATS);
+// Consumers import this live binding. It remains empty until one complete DB
+// document is validated and applied; there is no implicit production fixture.
+export let PROP_DEFS: readonly PropDef[] = [];
 
-// Overlay live DB seats on the committed baseline, per propId ({...baseline, ...overrides} so
-// newly-added baseline props still appear even if the DB row predates them), then re-derive
-// PROP_DEFS. Called once at boot from net/propSeats before the first board render. Ignores a
-// nullish/empty overlay (leaves the baseline in place). Returns whether anything changed.
-export function applyLiveSeats(overrides: PropSeatMap | null | undefined): boolean {
-  if (!overrides || Object.keys(overrides).length === 0) return false;
-  const merged = { ...BASELINE_SEATS, ...overrides };
-  // Never throw at this boundary (ADR-0061): the DB can hold a map the client can't derive — e.g. a
-  // hand-authored variant whose base is itself another variant, which deriveDefs rejects. On any
-  // such failure keep the last-good SEATS/PROP_DEFS (the baseline at boot) rather than half-applying.
-  let derived: readonly PropDef[];
-  try {
-    derived = deriveDefs(merged);
-  } catch {
-    return false;
-  }
-  SEATS = merged;
+export function applyPropSeats(value: unknown): boolean {
+  assertPropSeatMap(value);
+  const seats = value as PropSeatMap;
+  const derived = deriveDefs(seats);
+  SEATS = seats;
   PROP_DEFS = derived;
   return true;
 }
 
-export function resetLiveSeats(): boolean {
-  if (SEATS === BASELINE_SEATS) return false;
-  SEATS = BASELINE_SEATS;
-  PROP_DEFS = deriveDefs(SEATS);
+/** Test/process reset only: returns the renderer to its explicit unhydrated state. */
+export function resetPropSeats(): boolean {
+  if (!SEATS) return false;
+  SEATS = null;
+  PROP_DEFS = [];
   return true;
 }
 
@@ -306,6 +374,7 @@ export function resetLiveSeats(): boolean {
  * a forward-compat prop saved by a newer client must not silently become an oak.
  */
 export function propDef(id: string): PropDef | undefined {
+  if (!SEATS) throw new Error('prop seats are not hydrated');
   return PROP_DEFS.find((def) => def.id === id);
 }
 

@@ -179,11 +179,9 @@ export function DividerLab({ assetId, onAssetId, header }: { assetId?: string; o
   const asset = useMemo(() => BAR_ASSETS.find((entry) => entry.id === selectedAssetId) ?? BAR_ASSETS[0], [selectedAssetId]);
   const defaultForSelected = useMemo(() => defaultCfg(selectedAssetId), [selectedAssetId]);
   const [cfg, setCfg] = useState<Cfg>(() => defaultCfg(initialAssetId));
-  const [saveNote, setSaveNote] = useState('');
   const [barImages, setBarImages] = useState<BarImages | null>(null);
   useEffect(() => {
     setCfg(defaultForSelected);
-    setSaveNote('');
   }, [defaultForSelected]);
   useEffect(() => {
     let live = true;
@@ -205,17 +203,6 @@ export function DividerLab({ assetId, onAssetId, header }: { assetId?: string; o
   const innerW = panelW - 2 * cfg.frameWidth;
   const exportPayload = { asset: selectedAssetId, ...cfg };
   const exportJson = JSON.stringify(exportPayload, null, 2);
-  const saveDivider = async () => {
-    setSaveNote('Saving...');
-    try {
-      const r = await fetch('/__nine-slice/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: exportJson });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.ok) throw new Error(j.error || `Save failed (${r.status})`);
-      setSaveNote(`Saved ${j.written?.join(', ') ?? `${selectedAssetId}.png`}`);
-    } catch (e) {
-      setSaveNote(String(e instanceof Error ? e.message : e));
-    }
-  };
 
   // Render the junction in the same coordinate system the bake uses: scale the full authored atom
   // frame, then seat that cap by reach/jx/jy. Transparent atom padding participates, like corners.
@@ -298,11 +285,9 @@ export function DividerLab({ assetId, onAssetId, header }: { assetId?: string; o
             </div>
             <button type="button" style={ST.resetAll} onClick={() => setCfg(defaultForSelected)}>↺ Reset to saved</button>
             <div style={ST.sectionHead}>Export</div>
-            <p style={ST.hint}>Your tuned placement is the production config. Save writes it to disk and rebakes the shipped divider in dev.</p>
+            <p style={ST.hint}>Copy the tuned deterministic geometry for review. Runtime media and accepted pointers remain owned by the live backend catalog.</p>
             <textarea readOnly value={exportJson} style={ST.exportBox} onFocus={(e) => e.currentTarget.select()} aria-label="Divider settings JSON" />
-            {import.meta.env.DEV ? <button type="button" style={ST.save} onClick={saveDivider}>Save divider</button> : null}
             <button type="button" style={ST.copy} onClick={() => navigator.clipboard?.writeText(exportJson)}>Copy settings JSON</button>
-            {saveNote ? <p style={ST.hint}>{saveNote}</p> : null}
             <div style={ST.offsets}>
               <div style={ST.fpHead}>Inspect</div>
               {[['asset', selectedAssetId], ['junction', asset.junctionStyle ?? 'gold'], ['tee sprite', layer ? `${layer.canvas.width}×${layer.canvas.height}` : '…'], ['branch row', layer ? layer.branch.toFixed(1) : '…'], ['rail col', layer ? String(layer.railCol) : '…'], ['tee scale', `${scale.toFixed(2)}×`], ['bar span ≈', `${innerW + 2 * cfg.reach}px`], ['panel inner', `${innerW}px`]].map(([k, v]) => (
@@ -331,7 +316,6 @@ const ST: Record<string, CSSProperties> = {
   hint: { fontSize: 13, color: '#9fc4d5', margin: 0, textTransform: 'none', fontWeight: 400, letterSpacing: 0, lineHeight: 1.45 },
   resetAll: { padding: '9px 0', background: '#241a2b', color: '#e6c8ef', border: '1px solid #6b4f78', borderRadius: 6, cursor: 'pointer', fontSize: 13 },
   exportBox: { width: '100%', minHeight: 150, flexShrink: 0, resize: 'vertical', background: '#0a0f1c', color: '#dbe9ff', border: '1px solid #2a3c5e', borderRadius: 4, fontFamily: 'ui-monospace, monospace', fontSize: 12, padding: 8, boxSizing: 'border-box' },
-  save: { padding: '8px 0', background: '#6b4f1d', color: '#fff2c4', border: '1px solid #d5a34a', borderRadius: 4, cursor: 'pointer' },
   copy: { padding: '8px 0', background: '#1d5f9e', color: '#fff', border: '1px solid #4fbdf0', borderRadius: 4, cursor: 'pointer' },
   offsets: { display: 'grid', gap: 3, padding: '8px 10px', background: '#0a0f1c', border: '1px solid #1b2740', borderRadius: 6 },
   offsetRow: { display: 'grid', gridTemplateColumns: '100px minmax(0, 1fr)', columnGap: 8, alignItems: 'baseline' },

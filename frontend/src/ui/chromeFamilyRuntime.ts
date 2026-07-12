@@ -1,5 +1,7 @@
 import {
+  CHROME_LIVE_SLOTS,
   chromeSourceById,
+  dividerJointSources as liveDividerJointSources,
   type ChromeCandidateSource,
   type ChromeRole,
 } from './chromeCandidateSources';
@@ -53,51 +55,22 @@ export const CHROME_FILL_SURFACES = [
 export type DividerJointSource = Pick<ChromeCandidateSource, 'id' | 'label' | 'src' | 'width' | 'height'>;
 export type SourcePreviewBox = { width: number; height: number };
 
-const PIXELLAB_DIVIDER_COVER_SOURCE_COUNT = 52;
-const CODEX_STYLE_DIVIDER_COVER_SOURCE_COUNT = 55;
-
-function dividerCoverSources(setId: string, label: string, count: number): DividerJointSource[] {
-  return Array.from({ length: count }, (_, index) => {
-    const number = String(index + 1).padStart(2, '0');
-    return {
-      id: `${setId}-${number}`,
-      label: `${label} ${number}`,
-      src: `/assets/ui/chrome-candidates/exploded/${setId}/candidate-${number}.png`,
-      width: 17,
-      height: 17,
-    };
-  });
+export function dividerJointSources(): DividerJointSource[] {
+  return [
+    { id: NO_ATOM_SOURCE_ID, label: 'None', src: '', width: 0, height: 0 },
+    ...liveDividerJointSources(),
+  ];
 }
 
-const PIXELLAB_DIVIDER_COVER_SOURCES = dividerCoverSources(
-  'divider-atoms-pixellab-cover-v1',
-  'Divider PixelLab cover',
-  PIXELLAB_DIVIDER_COVER_SOURCE_COUNT,
-);
-
-const CODEX_STYLE_DIVIDER_COVER_SOURCES = dividerCoverSources(
-  'divider-atoms-codex-style-cover-v1',
-  'Divider Codex-style cover',
-  CODEX_STYLE_DIVIDER_COVER_SOURCE_COUNT,
-);
-
-const DIVIDER_COVER_SOURCES = [
-  ...PIXELLAB_DIVIDER_COVER_SOURCES,
-  ...CODEX_STYLE_DIVIDER_COVER_SOURCES,
-] satisfies DividerJointSource[];
-
-export const DIVIDER_JOINT_SOURCES = [
-  { id: NO_ATOM_SOURCE_ID, label: 'None', src: '', width: 0, height: 0 },
-  ...DIVIDER_COVER_SOURCES,
-] satisfies DividerJointSource[];
-
-export const DIVIDER_JOINT_PREVIEW_BOX = DIVIDER_JOINT_SOURCES.reduce<{ width: number; height: number }>(
-  (box, source) => ({
-    width: Math.max(box.width, source.width),
-    height: Math.max(box.height, source.height),
-  }),
-  { width: DEFAULT_DIVIDER_ATOM_SIZE, height: DEFAULT_DIVIDER_ATOM_SIZE },
-);
+export function dividerJointPreviewBox(): SourcePreviewBox {
+  return dividerJointSources().reduce<SourcePreviewBox>(
+    (box, source) => ({
+      width: Math.max(box.width, source.width),
+      height: Math.max(box.height, source.height),
+    }),
+    { width: DEFAULT_DIVIDER_ATOM_SIZE, height: DEFAULT_DIVIDER_ATOM_SIZE },
+  );
+}
 
 export function sourcePreviewBox(sources: readonly Pick<ChromeCandidateSource, 'width' | 'height'>[], fallback: SourcePreviewBox = { width: 24, height: 24 }): SourcePreviewBox {
   return sources.reduce<SourcePreviewBox>(
@@ -163,6 +136,42 @@ export type DividerTune = {
   atomCoverY?: number;
   atomPreviewMode?: AtomPreviewMode;
 };
+
+export type ChromeTuningPayload = {
+  target: string;
+  outer: RoleTune;
+  inner: RoleTune;
+  divider: DividerTune;
+};
+
+/**
+ * Export code-owned geometry without ever serializing an auditioned backend
+ * version UUID as installed media authority.
+ */
+export function installedChromeTuningPayload(
+  target: string,
+  outer: RoleTune,
+  inner: RoleTune,
+  divider: DividerTune,
+): ChromeTuningPayload {
+  return {
+    target,
+    outer: {
+      ...outer,
+      atomSourceId: CHROME_LIVE_SLOTS.outerAtom,
+      railSourceId: CHROME_LIVE_SLOTS.outerRail,
+    },
+    inner: {
+      ...inner,
+      atomSourceId: CHROME_LIVE_SLOTS.innerAtom,
+      railSourceId: CHROME_LIVE_SLOTS.innerRail,
+    },
+    divider: {
+      ...divider,
+      atomSourceId: CHROME_LIVE_SLOTS.dividerJoint,
+    },
+  };
+}
 
 export type FrameRender = {
   url: string;
@@ -470,7 +479,8 @@ function renderCornerAtomDataUrl(atom: HTMLCanvasElement, atomSize: number, flip
 }
 
 export function dividerJointSourceById(id: string): DividerJointSource {
-  return DIVIDER_JOINT_SOURCES.find((source) => source.id === id) ?? DIVIDER_JOINT_SOURCES[0];
+  const sources = dividerJointSources();
+  return sources.find((source) => source.id === id) ?? sources[0];
 }
 
 function renderFrameBaseCanvas(tune: RoleTune, rail: HTMLCanvasElement): { canvas: HTMLCanvasElement; slice: number; frameSize: number } {

@@ -40,6 +40,31 @@ block. Use the packs' full content: **displacement/height maps** for real surfac
 doodads. Source packs ship all of these; rendering only the base-color flat was the bug
 this contract corrects.
 
+### Exposed faces and abrupt cuts
+
+Per [ADR-0087](adr/0087-exposed-terrain-faces-own-independent-edge-treatments.md),
+side topology is face-level. The fixed camera sees logical south and east: south
+is exposed when `(x, y + 1)` is void, and east when `(x + 1, y)` is void. The
+canonical 96x180 side frame stores south in columns `0..47` and east in columns
+`48..95`; a compositor draws only the exposed half. A per-face override may
+select a different material for a mural, story feature, transition treatment,
+or explicit waterfall. An override never makes an interior face visible.
+
+`packages/board-render/src/render/terrainSides.ts` is the shared topology,
+material-fallback, and source-half authority. Gameplay, Studio/editor views,
+client bakes, and server thumbnails must consume it rather than inventing local
+exposure rules.
+
+Abruptness comes from occupancy; treatment comes from live media. Ordinary Water
+at a map cut uses generated native pixels for a thin meniscus over dark
+substrate. A waterfall is an explicit connected feature, not the fallback for
+every Water/void boundary.
+
+The runtime's two-pixel top dilation is seam-repair geometry. It is clipped to
+the union of occupied logical diamonds, including holes, and must never paint a
+top-color apron outside the map. A visible lip or cap is authored side media,
+not generic renderer padding.
+
 ## Composed terrain and macrotiles
 
 The runtime board is one composed terrain canvas, but its source data remains layered:
@@ -60,23 +85,26 @@ mask instead of discarding the whole composite. Resizing still rejects placement
 fit. The logical cells remain available to movement, selection, roads, cover, and objects whether
 their tops come from the composite or the underlying 1x1 terrain.
 
-PixelLab owns the top-down material idea, not board geometry. Raw sources live in
-`docs/art/pixellab-runs/macro-tiles/`; `frontend/scripts/build-macro-tiles.py` crops and
-projects them into the canonical 96x54 cell plane. The bake seals projection misses and requires
-every pixel in the projected footprint to be opaque, then gives each source a controlled palette
-tie to its production terrain family. There is no alpha apron. Whole placements suppress every
-underlying 1x1 top; broken placements use the same canonical cell diamonds as a clip mask so only
-the requested 1x1 tops return. The editor, play route, read-only viewers, and server thumbnail plan
-all consume the same persisted placements, break masks, and catalog. The static
-macrotile catalog intentionally omits water: water joins only after macrotiles can animate in
-lockstep with the terrain family, so a larger tile never turns a living water field into a frozen
-slab.
+Generated media owns the top-down material idea, not board geometry. Source and
+candidate bytes are private live-media records. Deterministic projection code runs
+in a temporary workspace, projects a candidate into the canonical 96×54 cell
+plane, seals projection misses, and requires every pixel in the projected
+footprint to be opaque before uploading the result to its semantic macrotile
+slot. There is no alpha apron and no repository bake path.
 
-The static catalog is a declared matrix, not a hand-maintained flat list. Grass, dirt, stone,
-pebble, and sand each provide four curated material motifs at `2x2`, `2x3`, `3x3`, `4x3`, and
-`4x4`; the runtime and bake expand that matrix into concrete asset IDs. Generate cycles through
-the footprint sizes that fit a region and uses each motif before repeating it, so adding catalog
-depth produces visible board variety instead of repeatedly selecting the largest available tile.
+Whole placements suppress every underlying 1×1 top; broken placements use the
+same canonical cell diamonds as a clip mask so only the requested 1×1 tops
+return. The editor, play route, read-only viewers, and server thumbnails consume
+the same persisted placements, break masks, and live catalog revision. Water
+joins only after macrotiles can animate in lockstep with its terrain family, so a
+larger tile never turns a living water field into a frozen slab.
+
+The typed terrain projection declares a matrix rather than a hand-maintained
+static manifest. Grass, dirt, stone, pebble, and sand each provide curated motifs
+at `2×2`, `2×3`, `3×3`, `4×3`, and `4×4`; catalog metadata expands that matrix
+into stable semantic slots. Generate cycles through the footprint sizes that fit
+a region and uses each motif before repeating it, so adding catalog depth
+produces visible board variety instead of repeatedly selecting the largest tile.
 Each Generate terrain row owns its own composite-coverage and breakup controls. Coverage sets the
 target share of that generated section drawn from macrotiles; breakup is a seeded per-cell chance
 to expose the socket-solved 1x1 terrain beneath each accepted placement. The Tile palette exposes

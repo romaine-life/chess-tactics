@@ -1,4 +1,6 @@
 {
+  "authority": "historical-provenance-only",
+  "runtime_authority": "backend-live-media-catalog",
   "schema_version": 1,
   "date": "2026-07-10",
   "production_status": "candidate_bakeoff_review_ready_not_live",

@@ -5,7 +5,6 @@ import { structureArtAsset, structureArtHalfSrc, type StructureSplitMode } from 
 import { doodadAsset } from '../ui/doodadCatalog';
 import { objectBaseZIndex, structureBackZIndex, structureFrontZIndex } from './sceneDepth';
 
-const DOODAD_SPRITE = { w: 96, h: 180, anchorX: 48, anchorY: 69 } as const;
 export type { StructureSplitMode } from '../core/structureArt';
 
 export function propZBracket(ax: number, ay: number, w: number, h: number): { base: number; back: number; front: number } {
@@ -58,9 +57,19 @@ export function structureSourceHalfSrc(source: StructureSourceRef, half: 'back' 
 }
 
 export function structureSourceSprite(source: StructureSourceRef): { w: number; h: number; anchorX: number; anchorY: number; scale?: number } {
-  if (source.kind === 'asset') return structureArtAsset(source.id)?.sprite ?? DOODAD_SPRITE;
-  if (source.kind === 'prop') return propDef(source.id)?.sprite ?? DOODAD_SPRITE;
-  return doodadAsset(source.id).sprite ?? DOODAD_SPRITE;
+  if (source.kind === 'asset') {
+    const sprite = structureArtAsset(source.id)?.sprite;
+    if (!sprite) throw new Error(`structure art source "${source.id}" is unavailable`);
+    return sprite;
+  }
+  if (source.kind === 'prop') {
+    const sprite = propDef(source.id)?.sprite;
+    if (!sprite) throw new Error(`prop source "${source.id}" is unavailable`);
+    return sprite;
+  }
+  const sprite = doodadAsset(source.id).sprite;
+  if (!sprite) throw new Error(`doodad source "${source.id}" has no live raster geometry`);
+  return sprite;
 }
 
 export function structureSourceSplitMode(source: StructureSourceRef): StructureSplitMode {

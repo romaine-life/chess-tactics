@@ -11,7 +11,6 @@ import {
   unitArtForId,
   unitAnchorFraction,
   hasDirectionSprite,
-  MISSING_DIRECTION_SPRITE,
   type UnitAsset,
   type Direction,
   type Faction,
@@ -34,6 +33,13 @@ import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 import { macroTileAsset, macroTileBreakIndices, macroTileFrame, macroTileOwnedCellIndices, resolveMacroTilePlacements } from '../core/macroTiles';
+import {
+  TERRAIN_SIDE_FACE_COLUMN,
+  TERRAIN_SIDE_FACES,
+  resolveTerrainSideExposure,
+  resolveTerrainSideFaces,
+  resolveTerrainSideMaterials,
+} from './terrainSides';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
 const TILE_FRAME_H = TILE_FRAME_HEIGHT;
@@ -53,7 +59,18 @@ const TERRAIN_FEATURE_DEPTH_OFFSET = 3000;
 export const UNIT_IMG_MAX_W = 78;
 export const UNIT_IMG_MAX_H = 92;
 
+export type BoardDrawLayer = 'terrain' | 'linear-feature' | 'scene';
+
+export interface BoardSpriteAnimation {
+  kind: 'ground-cover-sway';
+  frameCount: number;
+  durationMs: number;
+  phase: number;
+}
+
 export interface BoardDrawOp {
+  /** Semantic ownership used by composed renderers; never infer this from `src`. */
+  layer: BoardDrawLayer;
   src: string;
   dx: number;
   dy: number;
@@ -67,8 +84,24 @@ export interface BoardDrawOp {
   sy?: number;
   sw?: number;
   sh?: number;
+  /** Code-owned playback policy over catalog-declared sprite-sheet geometry. */
+  animation?: BoardSpriteAnimation;
   /** Board-space polygon paths used to expose broken cells inside a composite terrain image. */
   clipPolygons?: number[][];
+}
+
+export function isBoardDrawOpInLayer(
+  op: BoardDrawOp,
+  ...layers: readonly BoardDrawLayer[]
+): boolean {
+  return layers.includes(op.layer);
+}
+
+export function withoutBoardDrawLayers<TOp extends BoardDrawOp>(
+  ops: readonly TOp[],
+  ...layers: readonly BoardDrawLayer[]
+): TOp[] {
+  return ops.filter((op) => !isBoardDrawOpInLayer(op, ...layers));
 }
 
 export interface BakeBounds {
@@ -116,14 +149,15 @@ function pushStructureDrawOps(
   const fullW = sourceSprite.w * scale;
   const fullH = sourceSprite.h * scale;
   if (structureSourceSplitMode(source) !== 'flat-contact') {
-    ops.push({ src: structureSourceHalfSrc(source, 'back'), dx, dy, dw: fullW, dh: fullH, z: backZ });
-    ops.push({ src: structureSourceHalfSrc(source, 'front'), dx, dy, dw: fullW, dh: fullH, z: frontZ });
+    ops.push({ layer: 'scene', src: structureSourceHalfSrc(source, 'back'), dx, dy, dw: fullW, dh: fullH, z: backZ });
+    ops.push({ layer: 'scene', src: structureSourceHalfSrc(source, 'front'), dx, dy, dw: fullW, dh: fullH, z: frontZ });
     return;
   }
 
   const clips = flatContactClipRects({ w: sourceSprite.w, h: sourceSprite.h, anchorY });
   if (clips.back.sh > 0) {
     ops.push({
+      layer: 'scene',
       src: structureSourceHalfSrc(source, 'back'),
       sx: clips.back.sx,
       sy: clips.back.sy,
@@ -138,6 +172,7 @@ function pushStructureDrawOps(
   }
   if (clips.front.sh > 0) {
     ops.push({
+      layer: 'scene',
       src: structureSourceHalfSrc(source, 'front'),
       sx: clips.front.sx,
       sy: clips.front.sy,
@@ -160,6 +195,7 @@ function pushFenceDrawOps(
   const { left, top } = boardLabCellPosition(cell);
   const z = fenceOverlayZIndex(cell);
   ops.push({
+    layer: 'scene',
     src: fenceFrameSrc(fence.material, fence.mask),
     dx: left - TILE_STEP_X,
     dy: top - TILE_EQUATOR,
@@ -173,6 +209,7 @@ function pushFencePostDrawOp(ops: BoardDrawOp[], post: ResolvedFencePost): void 
   const { left, top: vertexCellTop } = boardLabCellPosition(post);
   const top = vertexCellTop - TILE_STEP_Y;
   ops.push({
+    layer: 'scene',
     src: fencePostSrc(post.material),
     dx: left - TILE_STEP_X,
     dy: top - TILE_EQUATOR,
@@ -221,18 +258,39 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       const tile = board.cells[key] ? resolveTile(board.cells[key]) : undefined;
       if (tile) {
         const frameSrc = assetFrameSrc(tile, 0);
-        const drawSide = !occupiedTerrain.has(`${x + 1},${y}`) || !occupiedTerrain.has(`${x},${y + 1}`);
-        if (drawSide) {
-          ops.push({ src: frameSrc.replace(/\.png$/, '-side.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
+        const sideFaces = resolveTerrainSideFaces(
+          resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupiedTerrain.has(`${nextX},${nextY}`)),
+          resolveTerrainSideMaterials(tile, undefined, (source) => (
+            assetFrameSrc(source, 0).replace(/\.png$/, '-side.png')
+          )),
+        );
+        for (const face of TERRAIN_SIDE_FACES) {
+          const { exposed, material } = sideFaces[face];
+          if (!exposed || !material) continue;
+          const faceX = TERRAIN_SIDE_FACE_COLUMN[face] * TILE_STEP_X;
+          ops.push({
+            layer: 'terrain',
+            src: material,
+            sx: faceX,
+            sy: 0,
+            sw: TILE_STEP_X,
+            sh: TILE_FRAME_H,
+            dx: frameX + faceX,
+            dy: frameY,
+            dw: TILE_STEP_X,
+            dh: TILE_FRAME_H,
+            z: zIndex,
+          });
         }
         if (!macroOwnedTerrain.has(key)) {
-          ops.push({ src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
+          ops.push({ layer: 'terrain', src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
         }
       }
 
       const feature = overlays[key];
       if (feature) {
         ops.push({
+          layer: 'linear-feature',
           src: featureFrameSrc(feature.kind, feature.material, feature.mask),
           dx: frameX,
           dy: frameY,
@@ -246,6 +304,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       if (wall) {
         const wallZ = wallOverlayZIndex({ x, y });
         ops.push({
+          layer: 'scene',
           src: wallFrameSrc(wall.material, wall.mask),
           dx: left - WALL_ANCHOR_X,
           dy: top - WALL_ANCHOR_Y,
@@ -258,8 +317,11 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
           const maskBit = face === 'west' ? 8 : 1;
           if (!(wall.mask & maskBit)) continue;
           for (const slot of wallArtSlotsForFace(faceStyles?.[face], face)) {
-            const faceAsset = slotSource(slot).faces[face];
+            const source = slotSource(slot);
+            if (!source) continue;
+            const faceAsset = source.faces[face];
             ops.push({
+              layer: 'scene',
               src: faceAsset.src,
               dx: left - WALL_ANCHOR_X + slot.x - faceAsset.mountX * slot.scale,
               dy: top - WALL_ANCHOR_Y + slot.y - faceAsset.mountY * slot.scale,
@@ -295,6 +357,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       ? macroTileOwnedCellIndices(placement, board.cols, board.rows).map((index) => terrainCellClipPolygon(index, board.cols))
       : undefined;
     ops.push({
+      layer: 'terrain',
       src: asset.src,
       dx: left + frame.left,
       dy: top + frame.top,
@@ -340,24 +403,27 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       const direction = placement.direction as Direction;
       const src = hasDirectionSprite(unit, direction)
         ? unit.sprite(placement.faction as Faction, direction)
-        : MISSING_DIRECTION_SPRITE;
-      const scale = unit.defaultScale / 100;
-      const nativeScale = unit.nativeScalePercent / 100;
-      const seatW = UNIT_SEAT_W * nativeScale * scale;
-      const seatH = UNIT_SEAT_H * nativeScale * scale;
-      const imageW = Math.min(UNIT_IMG_MAX_W, unit.footprint.sourceCanvasPx) * scale;
-      const imageH = Math.min(UNIT_IMG_MAX_H, unit.footprint.sourceCanvasHeightPx) * scale;
-      const seatX = left - unitAnchorFraction(unit.unitAnchorX) * seatW;
-      const seatY = top - unitAnchorFraction(unit.unitAnchorY) * seatH;
-      ops.push({
-        src,
-        dx: seatX + (seatW - imageW) / 2,
-        dy: seatY + (seatH - imageH) / 2,
-        dw: imageW,
-        dh: imageH,
-        z: base,
-        contain: true,
-      });
+        : null;
+      if (src) {
+        const scale = unit.defaultScale / 100;
+        const nativeScale = unit.nativeScalePercent / 100;
+        const seatW = UNIT_SEAT_W * nativeScale * scale;
+        const seatH = UNIT_SEAT_H * nativeScale * scale;
+        const imageW = Math.min(UNIT_IMG_MAX_W, unit.footprint.sourceCanvasPx) * scale;
+        const imageH = Math.min(UNIT_IMG_MAX_H, unit.footprint.sourceCanvasHeightPx) * scale;
+        const seatX = left - unitAnchorFraction(unit.unitAnchorX) * seatW;
+        const seatY = top - unitAnchorFraction(unit.unitAnchorY) * seatH;
+        ops.push({
+          layer: 'scene',
+          src,
+          dx: seatX + (seatW - imageW) / 2,
+          dy: seatY + (seatH - imageH) / 2,
+          dw: imageW,
+          dh: imageH,
+          z: base,
+          contain: true,
+        });
+      }
     }
   }
 
@@ -406,17 +472,24 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       const meta = set.variants.find((v) => v.id === tuft.variant);
       if (!meta) continue;
       ops.push({
-        src: `${set.basePath}/v${tuft.variant}.png`,
+        layer: 'scene',
+        src: meta.src,
         sx: 0,
         sy: 0,
-        sw: meta.frameW,
-        sh: meta.frameH,
+        sw: meta.frameWidth,
+        sh: meta.frameHeight,
         dx: left + tuft.dx - meta.baseX,
         dy: top + tuft.dy - meta.baseY,
-        dw: meta.frameW,
-        dh: meta.frameH,
+        dw: meta.frameWidth,
+        dh: meta.frameHeight,
         z: groundCoverZIndex(cell, tuft.dy),
         flipX: tuft.flip,
+        animation: {
+          kind: 'ground-cover-sway',
+          frameCount: set.frameCount,
+          durationMs: 1140,
+          phase: tuft.phase,
+        },
       });
     }
   }

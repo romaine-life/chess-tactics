@@ -1,65 +1,46 @@
-# Tile pipeline — surface-swap tileset
+# Terrain media authoring
 
-The production terrain tiles are **surface-swap** tiles: a Blender-derived isometric
-**edge** with a separately-generated flat **top** dropped into the top diamond, and the
-side faces **palette-tied** to the top so the block reads as one material. This sidesteps
-the fact that PixelLab can't reliably draw our iso top face — Blender owns the geometry,
-PixelLab only paints a flat material (which it does well).
+Terrain pixels are live-storage-backed under
+[ADR-0085](../../docs/adr/0085-runtime-assets-are-live-storage-backed.md).
+This directory no longer contains a production bake that writes tile PNGs into
+`frontend/public` or source/review images into `docs/art`.
 
-8 variants × 6 families (`grass dirt stone pebble sand water`), wired in
-`src/art/tileset.ts` from `public/assets/tiles/surface/<fam>-<n>.png`. Rendered crisp
-(`image-rendering: pixelated`, style.css).
+## Ownership boundary
 
-## Inputs (committed, in-repo)
+- Git owns the 96×180 projection constants, alpha/mask geometry, socket rules,
+  prompts, and text provenance.
+- Postgres owns semantic terrain slots, candidate metadata, review evidence,
+  active/accepted pointers, and catalog revisions.
+- Private Blob Storage owns source, candidate, review, and accepted media
+  bytes.
+- `/assets/<slot>` is a backend route. It is never a path under `public`.
 
-| What | Where |
-| --- | --- |
-| Raw flat top-down surface pools (16/family) | `docs/art/pixellab-runs/surfaces/<fam>/tile_<i>.png` |
-| Blender-derived iso edges (codexfilter pixelation) | `public/assets/tiles/pixel/<fam>-codexfilter.png` |
-| Curation map (which raw index → which variant) | `CURATION_MAP` in `build-surface-tiles.py` |
-| Production output | `public/assets/tiles/surface/<fam>-<n>.png` |
+Terrain slots declare their role explicitly: top, side, animation sheet,
+feature overlay, wall/fence face, prop, or preview. Code and level data retain
+the stable slot id; they never retain a local filename or content hash.
 
-Tile geometry: 96×180 canvas; top diamond apex (48,41) · right (96,68) · front-tip (48,95)
-· left (0,68). The flat square surface maps onto that diamond via an affine (square→rhombus).
+## Authoring workflow
 
-## To add or replace tiles
+1. Generate or fetch source pixels into an operating-system temporary directory
+   outside the repository.
+2. Apply the repository's deterministic projection/mask transforms there. The
+   low-level path-parameterized transforms in this directory are not publishers.
+3. Create a candidate with the shared live-media admin client, then upload each
+   exact output byte stream to its semantic slot.
+4. Mount those candidate versions in the real board renderer at canonical 1×.
+5. Record owner review through the backend and accept the complete typed terrain
+   set transactionally.
+6. Delete the temporary workspace. Do not copy any source, proof, candidate, or
+   accepted image into the repository.
 
-1. **Generate** a flat top-down surface pool with the PixelLab MCP. One `create_tiles_pro`
-   call per family returns ~16 variations. Params that produce a flat, projectable material:
-   ```
-   tile_type=square_topdown, tile_view=top-down, tile_view_angle=90,
-   tile_depth_ratio=0, tile_size=64, outline_mode=segmentation
-   description: "Flat top-down seamless <X> ground material, viewed straight from
-     directly above, no outline border, tileable. 1). … 2). … 3). … 4). …"
-   ```
-   Download the `storage_urls` from `get_tiles_pro` into
-   `docs/art/pixellab-runs/surfaces/<fam>/tile_<i>.png`.
+Multi-output families must use one run id in their provenance and must be
+validated as a complete domain set before acceptance. A contact sheet is
+supplementary; it is not review evidence or promotion.
 
-2. **Curate** — drop near-black / empty / single-feature surfaces; keep the ground-reading
-   ones. `python scripts/tile-contact-sheet.py <dir> out.png` builds a labeled 4×4 sheet to
-   pick from; review them applied to the edge at `/surface-lab` (Tiles view).
+## Retired pipeline
 
-3. **Build** — put the chosen pool indices in `CURATION_MAP` and run:
-   ```
-   python scripts/build-surface-tiles.py
-   ```
-   This projects → composites onto the edge → palette-ties the sides → writes the production
-   set. It's deterministic: re-running reproduces the tiles byte-for-byte.
-
-4. **Review** the result on a real board at `/surface-lab` (Board view; Smooth/Crisp,
-   zoom, re-roll). The board uses the game's own renderer, so seating/tessellation match.
-
-## Scripts
-
-- `build-surface-tiles.py` — the production build (raw + map → tiles). Source of truth.
-- `project-tile-surface.py` — the square→diamond projection as a standalone single-tile tool.
-- `tile-contact-sheet.py` — contact sheet of a surface pool for curation.
-
-## Decisions on record
-
-- **Seam:** palette-tie the sides to the top (beat rim-lip / "both" after reviewing all six
-  families on a board). The palette-tie lives in `build-surface-tiles.py`.
-- **Render:** crisp/`pixelated`, not bilinear — the old `auto` was a holdover from the
-  retired 3D-render tiles and blurred the pixel art.
-- The raw PixelLab **blocks** (whole-tile, abandoned) and the legacy **textured** Blender
-  tiles are non-production — see `src/art/nonProductionTiles.ts`.
+The previous `build-*`, `forge-*`, and Git-hash guard scripts were deleted at
+the ADR-0085 cutover. They depended on committed input pools, emitted directly
+into `frontend/public/assets`, and treated manifests or filenames as production
+registration. No Git-input/Git-output publisher mode remains. Do not restore
+one as a seed, fallback, or regeneration path.

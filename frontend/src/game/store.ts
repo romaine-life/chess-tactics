@@ -15,7 +15,7 @@ import { kingSideOf, objectiveContextForLevel, objectiveSummary, victoryRulesFor
 import type { Level, ObjectiveType, TimeControl, VictoryRules } from '../core/level';
 import { DEFAULT_TIME_CONTROL } from '../core/clock';
 import { terrainAt } from '../core/terrain';
-import { ARRIVAL_BAKED, playArrival, playTerrain } from '../sfx';
+import { playArrival, playTerrain } from '../sfx';
 import { createSkirmish, type SkirmishOptions } from './setup';
 import { persistMatch, type PersistedMatch } from './matchPersistence';
 import { loadShippedAiWeights } from '../net/aiWeights';
@@ -941,7 +941,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       .forEach((pc, i) => {
         const delay = SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER;
         playLandingSfx(env, pc.x, pc.y, delay, 0.7);
-        scheduleSessionEffect(() => playArrival({ gain: ARRIVAL_BAKED.gain }), delay);
+        scheduleSessionEffect(() => playArrival({ unitIndex: i }), delay);
       });
     // Snapshot the fresh board immediately, so a reload before the first move
     // resumes THIS game rather than re-rolling a different random start.
@@ -1026,7 +1026,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       .forEach((pc, i) => {
         const delay = SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER;
         playLandingSfx(env, pc.x, pc.y, delay, 0.7);
-        scheduleSessionEffect(() => playArrival({ gain: 0.55 }), delay);
+        scheduleSessionEffect(() => playArrival({ unitIndex: i }), delay);
       });
   },
 

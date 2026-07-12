@@ -13,7 +13,7 @@ export interface DoodadAsset {
    *  the same vocabulary tiles carry. The board brush HARD-gates on this: a doodad only places on
    *  a tile whose family is in this list (a grass tuft refuses stone/water). Empty ⇒ places nowhere. */
   terrains: string[];
-  /** ground-contact-anchored sprite halves (96x180, anchor at pixel 48,69). */
+  /** Ground-contact-anchored sprite halves; raster size comes from live media. */
   back: string;
   front: string;
   /** Optional frame geometry for authored doodads that share non-doodad source art. */
@@ -32,17 +32,17 @@ const sourceSpritePath = (source: StructureSourceRef, half: 'back' | 'front'): s
   }
   return `/assets/props/${def?.spriteId ?? source.id}/${half}.png`;
 };
-const DOODAD_SPRITE = { w: 96, h: 180, anchorX: 48, anchorY: 69, scale: 1 } as const;
 const sprite = (id: string, half: 'back' | 'front') => structureArtHalfSrc(id, half);
 const doodadFromArt = (id: string, label: string): DoodadAsset => {
   const art = structureArtAsset(id);
-  const spriteFrame = art?.sprite ?? DOODAD_SPRITE;
+  if (!art) throw new Error(`required doodad art definition "${id}" is missing`);
+  const spriteFrame = art.sprite;
   const source: StructureSourceRef = { kind: 'asset', id };
   return {
     id,
     label,
     status: 'render',
-    terrains: art?.terrains ?? [],
+    terrains: art.terrains,
     back: sourceSpritePath(source, 'back'),
     front: sourceSpritePath(source, 'front'),
     sprite: spriteFrame,
@@ -54,18 +54,21 @@ const doodadFromArt = (id: string, label: string): DoodadAsset => {
 // Grass tuft retired: ambient grass is now the general ground-cover tile feature
 // (core/groundCover + the board scene canvas), not a placed doodad. The glossary keeps the
 // grass-tuft sprites only as a static figure illustrating the back/front split.
-export const BASE_DOODAD_ASSETS: DoodadAsset[] = [
-  doodadFromArt('boulder', 'Boulder'),
-  doodadFromArt('stump', 'Tree stump'),
-  doodadFromArt('fern', 'Fern'),
-  doodadFromArt('flower', 'Flower'),
+export const DOODAD_ASSETS = [
+  { id: 'boulder', label: 'Boulder' },
+  { id: 'stump', label: 'Tree stump' },
+  { id: 'fern', label: 'Fern' },
+  { id: 'flower', label: 'Flower' },
 ];
 
-export const DOODAD_ASSETS: DoodadAsset[] = BASE_DOODAD_ASSETS;
+function baseDoodadAssets(): DoodadAsset[] {
+  return DOODAD_ASSETS.map(({ id, label }) => doodadFromArt(id, label));
+}
 
 export function currentDoodadAssets(): DoodadAsset[] {
-  const byBaseId = new Map(BASE_DOODAD_ASSETS.map((asset) => [asset.id, asset]));
-  const byId = new Map(BASE_DOODAD_ASSETS.map((asset) => [asset.id, asset]));
+  const bases = baseDoodadAssets();
+  const byBaseId = new Map(bases.map((asset) => [asset.id, asset]));
+  const byId = new Map(bases.map((asset) => [asset.id, asset]));
   for (const [id, seat] of Object.entries(currentSeats())) {
     if (seat.placement !== 'doodad') continue;
     const parts = structurePartsFromSeat(seat);
@@ -74,7 +77,8 @@ export function currentDoodadAssets(): DoodadAsset[] {
     const sourceArt = source.kind === 'asset' ? structureArtAsset(source.id) : undefined;
     const sourceProp = source.kind === 'prop' ? propDef(source.id) : undefined;
     const sourceDoodad = source.kind === 'doodad' ? byBaseId.get(source.id) : undefined;
-    const sourceGeometry = sourceArt?.sprite ?? sourceProp?.sprite ?? sourceDoodad?.sprite ?? DOODAD_SPRITE;
+    const sourceGeometry = sourceArt?.sprite ?? sourceProp?.sprite ?? sourceDoodad?.sprite;
+    if (!sourceGeometry) throw new Error(`doodad "${id}" source "${source.id}" has no live raster geometry`);
     const sourceTerrains = sourceArt?.terrains ?? sourceProp?.terrains ?? sourceDoodad?.terrains ?? ['grass', 'dirt', 'stone'];
     byId.set(id, {
       id,
@@ -91,4 +95,7 @@ export function currentDoodadAssets(): DoodadAsset[] {
   return [...byId.values()];
 }
 
-export const doodadAsset = (id: string): DoodadAsset => currentDoodadAssets().find((d) => d.id === id) ?? BASE_DOODAD_ASSETS[0];
+export const doodadAsset = (id: string): DoodadAsset => {
+  const assets = currentDoodadAssets();
+  return assets.find((d) => d.id === id) ?? assets[0];
+};

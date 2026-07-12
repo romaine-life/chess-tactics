@@ -32,8 +32,9 @@ npm start
 Open `http://localhost:3000`.
 
 The browser app is built by Vite. Express serves `frontend/dist` as the baked
-frontend; source files live under `frontend/src`, and stable public assets live
-under `frontend/public`.
+frontend; source files live under `frontend/src`. Runtime media resolves through
+backend-owned semantic `/assets/<slot>` routes backed by Postgres and private
+object storage. `frontend/public` is limited to non-media code and legal text.
 
 ## Production Links
 
@@ -60,6 +61,9 @@ The server uses `auth.romaine.life` for Microsoft sign-in. Optional env:
 - `FRONTEND_DIR` defaults to the built `frontend/dist` directory.
 - `STATIC_FRONTEND_DIR` defaults to `/var/run/chess-tactics-static-override`.
 - `HOT_BACKEND_DIR` defaults to `/var/run/chess-tactics-hot`.
+- `LIVE_MEDIA_CONTAINER_URL` selects the private production object store.
+- `LIVE_MEDIA_STORAGE_DIR` selects isolated local/test object storage; it is
+  mutually exclusive with the container URL and requires a disposable database.
 - `SCHEMA_MIGRATIONS` controls DB schema readiness:
   `check` (default, read-only), `auto` (apply missing migrations), or `off`
   (skip readiness checks).
@@ -74,15 +78,16 @@ runtime wiring are exercised from the same image that PR CI proved.
 
 ## Persistence
 
-Durable game/design data (levels, campaigns, campaign workspaces, design
-portfolios, and live Unit Art metadata) lives in **Azure Database for
-PostgreSQL**, reached passwordless via Entra workload identity. Unit Art PNGs are
-content-addressed in the private `unit-assets` Blob container; other code-owned
-assets remain under `frontend/public/assets`. The database is self-provisioned by
-this repo's `tofu/`. Local backend startup defaults to read-only schema checks;
+Durable game/design data and live asset metadata live in **Azure Database for
+PostgreSQL**, reached passwordlessly through Entra workload identity. Runtime,
+review, candidate, and source-media bytes are content-addressed in private Blob
+Storage; the backend resolves their database-owned semantic slots. No runtime
+media is shipped from `frontend/public`. The database and storage are
+self-provisioned by this repo's `tofu/`. Local backend startup defaults to read-only schema checks;
 set `SCHEMA_MIGRATIONS=auto` when you intentionally want to apply missing
 migrations to a local database. See
-[docs/persistence.md](docs/persistence.md) for the schema, auth model, backups,
+[docs/persistence.md](docs/persistence.md) and
+[docs/runtime-asset-contract.md](docs/runtime-asset-contract.md) for the schema, auth model, backups,
 failure behavior, and the one post-`tofu apply` value to pin.
 
 New board-unit geometry has one supported entry point: `python
@@ -114,9 +119,18 @@ npm run check   # node checks + vitest + tsc
 
 ## Deploy
 
-The app is deployed from `k8s/` by ArgoCD. CI builds and pushes
-`romainecr.azurecr.io/chess-tactics:app-<content-fingerprint>` and updates the
-Deployment image tag. Trusted test-slot CI runs also create a unique lookup tag
-such as `ci-pr-<pr>-run-<run>-attempt-<attempt>` that points at the same ACR
-manifest; those lookup tags are for Glimmung test-slot resolution, not chart
-values.
+The app is deployed from `k8s/` by ArgoCD. PR CI bakes the prospective release
+version and computes a fingerprint over the complete tracked Docker inputs,
+explicit `linux/amd64` platform, Buildx version, and resolved base-image digest.
+It pushes new bytes to a run-scoped staging tag, then publishes
+`romainecr.azurecr.io/chess-tactics:app-<content-fingerprint>` without force and
+locks that ACR tag against overwrite and deletion. An existing fingerprint
+identity is never rewritten to different bytes.
+
+The CI summary gives the digest-pinned image to inspect and an exact `gh pr
+comment` command. Run that command only after owner verification. Its marker
+binds the PR head, complete fingerprint, and `sha256:` manifest digest. On merge,
+Build and Deploy recomputes the fingerprint, resolves its immutable identity,
+requires an exact approval marker from a repository owner/member/collaborator,
+and writes that digest-pinned reference to the Argo-tracked `prod` branch. It
+never rebuilds for production and never treats a mutable lookup tag as approval.

@@ -5,9 +5,8 @@ backend/generated/
 npm-debug.log
 .DS_Store
 
-# BGM / large media is hosted in Azure Blob Storage (see tofu/ + docs/bgm-audio.md),
-# never committed to the repo or baked into the image. The committed manifest
-# (frontend/public/assets/audio/bgm-manifest.json) points at the blob container.
+# BGM and all other media are hosted in backend-owned storage (see tofu/ and the
+# runtime asset contract), never committed to the repo or baked into the image.
 *.mp3
 
 # OpenTofu local working artifacts. Provider versions + the lockfile are injected

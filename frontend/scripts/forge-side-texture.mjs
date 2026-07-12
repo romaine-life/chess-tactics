@@ -5,18 +5,12 @@
 // (so codex never draws our iso angle — the known PixelLab/codex iso failure) and bakes the
 // upper-left lighting. Art direction per the rich-side research (ADR-0039 side layer).
 //
-//   node frontend/scripts/forge-side-texture.mjs [grass dirt stone sand pebble] | --all [--n 3] [--tries 2]
-//
-// Output (exploration): frontend/public/assets/tiles/explore/<fam>-side-slab.png
-import { mkdtempSync, rmSync, copyFileSync, writeFileSync, mkdirSync } from 'node:fs';
+//   node frontend/scripts/forge-side-texture.mjs [families] --slot-prefix <slot> -- <upload options>
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { CODEX, runCodex, imageGenVerdict, sessionImage } from './codex-imagegen.mjs';
-
-const FRONTEND = fileURLToPath(new URL('..', import.meta.url));
-const OUT = join(FRONTEND, 'public/assets/tiles/explore');
-const EVID = join(FRONTEND, 'tmp-forge-evidence');
+import { optionValue, splitGeneratorArgs, uploadGeneratedCandidate } from './upload-generated-candidate.mjs';
 
 // Flat front-view cliff cross-sections. "no isometric skew" — the projection adds the angle.
 const SPECS = [
@@ -72,8 +66,6 @@ async function forgeOne(spec, maxTries, ref) {
         ? '\n\nVISUAL REFERENCE: an attached photo of a real mountainside is provided. Use it as reference for the rock shapes, strata, weathering, and the grass/rock colour — but RE-RENDER the scene as the pixel-art cliff cross-section described above. Do NOT copy the photo literally and keep zero photographic detail; it informs the forms only.'
         : '');
       const { out: jsonl } = await runCodex(work, text, ref);
-      mkdirSync(EVID, { recursive: true });
-      writeFileSync(join(EVID, `side-${spec.name}-try${attempt}.jsonl`), jsonl);
       const verdict = imageGenVerdict(jsonl);
       if (!verdict.ok) {
         console.log(`  ${spec.name} try ${attempt}: METHOD ✗ — ${verdict.reason}`);
@@ -86,10 +78,11 @@ async function forgeOne(spec, maxTries, ref) {
         prior = 'you generated an image but it could not be located; generate again and leave the output in the default folder.';
         continue;
       }
-      mkdirSync(OUT, { recursive: true });
       const file = `${spec.name}-side-slab-${spec.idx}.png`;
-      copyFileSync(shipped, join(OUT, file));
-      console.log(`  ${spec.name} try ${attempt}: image_generation_call ✓ -> explore/${file}`);
+      const provenance = join(work, 'provenance.json');
+      writeFileSync(provenance, `${JSON.stringify({ generator: 'forge-side-texture', threadId: verdict.tid, family: spec.name, index: spec.idx }, null, 2)}\n`);
+      uploadGeneratedCandidate(shipped, [...uploadArgs, '--provenance-json', provenance], `${slotPrefix}/${file}`);
+      console.log(`  ${spec.name} try ${attempt}: image_generation_call ✓ -> ${slotPrefix}/${file}`);
       return { name: spec.name, pass: true, tries: attempt };
     } finally {
       rmSync(work, { recursive: true, force: true });
@@ -98,7 +91,11 @@ async function forgeOne(spec, maxTries, ref) {
   return { name: spec.name, pass: false, tries: maxTries };
 }
 
-const argv = process.argv.slice(2);
+const { toolArgs, uploadArgs } = splitGeneratorArgs(process.argv.slice(2));
+const slotPrefix = optionValue(toolArgs, '--slot-prefix').replace(/\/+$/, '');
+if (!slotPrefix || !uploadArgs.length) throw new Error('forge-side-texture requires --slot-prefix and live-media options after --');
+const prefixIndex = toolArgs.indexOf('--slot-prefix');
+const argv = toolArgs.filter((_, index) => index !== prefixIndex && index !== prefixIndex + 1);
 const flag = (n, def) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : def; };
 const n = Math.max(1, parseInt(flag('--n', '3'), 10));
 const maxTries = Math.max(1, parseInt(flag('--tries', '2'), 10));

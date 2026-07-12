@@ -1,5 +1,6 @@
 export {
-  applyPropSeatOverrides,
+  applyLiveMediaCatalog,
+  hydratePropSeats,
   boardHashForLevel,
   levelRenderPlan,
   playRouteScreenName,

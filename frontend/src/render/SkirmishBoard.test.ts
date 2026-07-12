@@ -42,6 +42,23 @@ const exactBoard = (): EditorBoard => {
 };
 
 describe('buildSkirmishBoard', () => {
+  it('uses the continuity mural for generated gameplay perimeter faces', () => {
+    const generated = createSkirmish({ seed: 1, size: { cols: 3, rows: 4 } });
+    const game = {
+      ...generated,
+      terrain: Array.from({ length: 12 }, (_, index) => ({
+        x: index % 3,
+        y: Math.floor(index / 3),
+        terrain: 'grass' as const,
+        elevation: 0,
+      })),
+    };
+    const corner = buildSkirmishBoard(game, 1).cells.find((cell) => cell.x === 2 && cell.y === 3)!;
+
+    expect(corner.sideAssets?.east?.id).toBe('grass-mural-3');
+    expect(corner.sideAssets?.south?.id).toBe('grass-mural-0');
+  });
+
   it('uses exact tile ids from saved boardCode instead of seed-picked variants', () => {
     const painted = exactBoard();
     const level = editorBoardToLevel(painted, { id: 'saved-map', name: 'Saved Map' });
@@ -69,6 +86,7 @@ describe('pieceOp', () => {
     const op = pieceOp(rock, { left: 36, top: 86 * 0.78 });
 
     expect(op?.src).toContain('/assets/units/rock/');
+    expect(op?.layer).toBe('scene');
     expect(op?.dx).toBe(0);
     expect(op?.dy).toBe(0);
   });

@@ -47,9 +47,19 @@ be accepted as production art.
 The canonical entry point is below.
 
 ```powershell
-python scripts/generate-unit-art.py render pawn --target 51x61
+python scripts/generate-unit-art.py render pawn --target 51x61 `
+  --renderer-root <Git-renderer-code-directory> `
+  --source-manifest <temporary-backend-source-manifest.json> `
+  --api-base http://127.0.0.1:3000
 python scripts/generate-unit-art.py verify pawn --target 51x61
 ```
+
+The render command has no repository media fallback. `--source-manifest` is a
+temporary schema-version-1 export of backend archival identities, grouped as
+`pieces.<piece>.sources[]` with `sourcePath`, a local `name`, and the optional
+renderer `env` binding. `--renderer-root` names Git-owned Blender algorithm code;
+the client fetches every model/texture into OS temp storage and records the
+verified source hashes in `render.json`.
 
 For several genuinely new pieces, pass the Unit Studio handoff JSON to `render
 all --handoff <file>`. The command writes eight exact Blender frames and
@@ -71,8 +81,8 @@ with no spatial resampling and a passing live-board review, is acceptance-eligib
 Direct image generation, whole-sheet restyling/slicing, and the old south-concept
 fan-out are retired for board units. Downscaling is allowed only as this explicit,
 deterministic calibration recapture of an accepted complete asset, never as the
-final production raster. Local authoring output must not be written under
-`frontend/public`.
+final production raster. Local authoring output stays in the ignored
+`.unit-art-output` handoff and must then be uploaded as a live-media candidate.
 
 ## Historical Archive
 

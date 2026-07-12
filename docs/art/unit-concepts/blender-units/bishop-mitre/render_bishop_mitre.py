@@ -6,23 +6,21 @@ The mitre was hand-fitted onto the bishop's head in Blender, so the source of tr
 the assembled `bishop_mitre.blend` (navy Staunton bishop FBX + mitre OBJ, positioned,
 rigged to an empty, true-isometric contract camera baked in). This opens it, renders
 the 8 directions, and prints the seating anchor.
-Output defaults to .unit-art-output/bishop/navy-blue/<direction>.png. The canonical
-pipeline supplies UNIT_ART_OUTPUT_DIR plus UNIT_ART_FRAME_WIDTH/HEIGHT and Blender
+The canonical pipeline fetches the private blend into a temporary directory and
+supplies UNIT_ART_BLEND, UNIT_ART_OUTPUT_DIR, and frame dimensions. Blender
 writes that exact delivery raster without a resize stage.
 
 The mitre's front peak gives the bishop a per-direction facing (peak -> game-south at yaw 0).
 """
 import bpy, os, math, mathutils, numpy as np
 from bpy_extras.object_utils import world_to_camera_view
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
-    ROOT = ROOT.parent
-BLEND = str(ROOT / "docs/art/unit-concepts/blender-units/bishop-mitre/bishop_mitre.blend")
-OUT = os.environ.get("UNIT_ART_OUTPUT_DIR", str(ROOT / ".unit-art-output/bishop/navy-blue"))
-FRAME_WIDTH = int(os.environ.get("UNIT_ART_FRAME_WIDTH", "512"))
-FRAME_HEIGHT = int(os.environ.get("UNIT_ART_FRAME_HEIGHT", "512"))
+BLEND = os.environ.get("UNIT_ART_BLEND")
+OUT = os.environ.get("UNIT_ART_OUTPUT_DIR")
+if not BLEND or not OUT:
+    raise RuntimeError("run through generate-unit-art.py; private bishop source and output are required")
+FRAME_WIDTH = int(os.environ["UNIT_ART_FRAME_WIDTH"])
+FRAME_HEIGHT = int(os.environ["UNIT_ART_FRAME_HEIGHT"])
 if not (1 <= FRAME_WIDTH <= 4096 and 1 <= FRAME_HEIGHT <= 4096):
     raise RuntimeError("UNIT_ART_FRAME_WIDTH/HEIGHT must be between 1 and 4096")
 os.makedirs(OUT, exist_ok=True)

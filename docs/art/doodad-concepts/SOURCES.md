@@ -1,17 +1,29 @@
 # Doodad sources
 
 Doodads are split-layer props (see the `split-layer doodad` glossary entry). Each is
-rendered from a CC0 source mesh through the split recipe. The **meshes live outside git**
-(large, CC0, re-fetchable) — this table + the fetch script + the recipe are the recoverable
-record, per the repo's asset source-of-truth rule (pointer + recipe, not binaries in git).
+rendered from a CC0 source mesh through the split recipe. Exact mesh and texture bytes are
+private archived live-media versions: Postgres owns their source paths/provenance and the
+backend object store owns their hashes. The provider table and recipe in Git are useful
+text provenance, but they are not a substitute for archiving the bytes actually rendered.
 
-**Re-fetch a mesh** (into the asset-sources tree, not the repo):
+**Archive a provider model** (no durable local source tree is written):
 
 ```
-node frontend/scripts/fetch-ph-model.mjs <slug> <outDir> [1k]
+node frontend/scripts/fetch-ph-model.mjs <slug> --api-base <backend> [--resolution 1k]
 ```
 
-**Render the halves** (drops straight into `<DoodadSprite>`):
+**Fetch an exact archived source into an OS temporary render workspace:**
+
+```
+node frontend/scripts/live-media-admin-client.mjs fetch-source \
+  --api-base <backend> \
+  --source-path providers/polyhaven/<slug>/<file> \
+  --domain prop \
+  --out <os-temp>/<slug>/<file>
+```
+
+**Render the halves** into that temporary workspace, then upload each output as a
+candidate for its canonical semantic slot (rendering never writes runtime pixels to Git):
 
 ```
 blender -b -P docs/art/doodad-concepts/render_doodad_gltf.py -- <out.png> <gltf> <scale> <back|front>
@@ -54,16 +66,20 @@ House art is STYLIZED, never photoreal (he reads scanned-mesh renders as "too re
 2. **Photoreal mesh → gated Codex RESTYLE** (e.g. `cabin`, `lodge`). Keep the real shape/iso, re-skin
    to pixel-art. Render a Blender capture as above, then:
    ```
-   node frontend/scripts/forge-prop-restyle.mjs <capture.png> <out.png>
+   node frontend/scripts/forge-prop-restyle.mjs <capture.png> [attempts] -- \
+     --api-base <backend> --cookie <cookie> --slot <slot> \
+     --domain prop --role sprite --label <label>
    ```
    This goes through `codex-imagegen.mjs` → `imageGenVerdict` (rollout `image_generation_call`), so a
-   code-drawn run is REJECTED (never call `codex.exe` raw). Output is flat-green → chroma-keyed to
-   alpha; the existing bridge then crops to content, downscales to ~210px wide, re-binarises alpha,
-   and measures the anchor. Under [ADR-0076](../../adr/0076-scaling-is-calibration-production-art-is-native-1x.md),
-   that downscaled result is calibration work, not accepted production art; regenerate at the
-   approved native footprint before acceptance.
+   code-drawn run is REJECTED (never call `codex.exe` raw). The command uses an OS-temporary
+   workspace, converts flat green to alpha, and uploads the result directly as a non-active live
+   candidate; it does not write an output or bridge into Git. Any crop, resample, or anchor-tuning
+   pass remains calibration work under
+   [ADR-0076](../../adr/0076-scaling-is-calibration-production-art-is-native-1x.md), not accepted
+   production art. Regenerate at the approved native footprint before acceptance.
 
-Output `/assets/props/<propId>/{back,front}.png` (flat sprites use the same image for both halves).
+Canonical output slots are `/assets/props/<propId>/{back,front}.png` (flat sprites use the
+same image for both halves). The URL is backend-resolved; it is not a repository path.
 
 | prop id | kind  | footprint | pipeline | source mesh (CC0) | notes |
 |---------|-------|-----------|----------|-------------------|-------|
@@ -74,9 +90,10 @@ Output `/assets/props/<propId>/{back,front}.png` (flat sprites use the same imag
 | rock    | rock  | 1×1       | Codex restyle of capture | `boulder-rock-3d-model-free` `Meshy_AI_Layered_Mossy_Boulder…glb` (user-supplied `/rocks`) | 1×1 blocking obstacle — the placeable rock (mossy layered). 40px native @ `scale 1` baseline |
 | fieldstone | rock | 1×1     | Codex restyle of capture | `lone-granite-boulder-stone` `round-boulder.fbx` (user-supplied `/rocks`) | 1×1 blocking obstacle — round weathered boulder. 51px native @ `scale 1` baseline. NOT named `granite`: that id is the obstacle-piece sprite variant (`/assets/units/rock/granite/`), a separate system |
 
-Source meshes for the houses arrived as zips in the repo-root `houses/` staging folder (outside
-git); the 4th, `dae-diorama-forest-loner`, is a `.rar` and needs an extractor. The two rock meshes
-arrived the same way in `/rocks`. 1×1 props must FIT WITHIN THEIR TILE (owner call, 2026-07-02):
+Historically, house and rock source archives arrived in repo-root staging folders outside Git.
+That workflow is retired: any surviving staging archive must be uploaded as a private source
+version, hash-verified through the backend, and removed before use. 1×1 props must FIT WITHIN
+THEIR TILE (owner call, 2026-07-02):
 the base sits inside the 96px cell diamond with margin.
 
 Sizing baseline (owner call, 2026-07-03): a small 1×1 prop is baked at ~its on-board size so its
@@ -90,4 +107,5 @@ native replacements render at asset-local scale `1`.)
 Fences are NOT props — they are gameplay-blocking, edge-keyed barriers resolved by
 `featureAutotile.ts`. Runtime art uses three deterministic E/S rail masks plus generated
 automatic or author-placed vertex-post sprites for wood and stone. The active sources, topology, proofs, and bake
-live in `docs/art/fence-concepts/SOURCES.md`, not in this doodad recipe.
+are described in `docs/art/fence-concepts/SOURCES.md`; their pixels, proofs, and lifecycle live
+in the backend catalog rather than that documentation tree.

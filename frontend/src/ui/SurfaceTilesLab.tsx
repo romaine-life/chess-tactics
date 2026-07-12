@@ -1,15 +1,39 @@
-import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { TERRAIN_SIDE_FACES, resolveTerrainSideExposure } from '@chess-tactics/board-render';
 import { tileAssets, tileFamilies, edgeTiles, muralTiles, edgeFeatures, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
+import { terrainSideSrc, terrainTopSrc } from '../render/BoardTerrainLayer';
+import { isUnauthorized } from '../net/auth';
+import { loadLiveMediaCatalog } from '../net/liveMedia';
+import {
+  acceptLiveMediaVersions,
+  fetchAdminLiveMediaCatalog,
+  reviewLiveMediaVersions,
+  type AdminLiveMediaCatalog,
+} from '../net/liveMediaAdmin';
 import { ViewPane } from './shared/ViewPane';
+import {
+  candidateVersionsForSlot,
+  isReviewedForCurrentContent,
+  isReviewedForCurrentSurfaceSnapshot,
+  selectedSurfaceOverrides,
+  surfaceAcceptanceGroups,
+  surfaceAcceptanceItems,
+  surfaceFamilySlots,
+  surfaceReviewBatch,
+  surfaceReviewProofEvidence,
+  surfaceSlotPrefix,
+  waterSideCanonicalProofBoard,
+} from './surfaceLiveMediaReview';
 
 // Inspector for the production surface-swap BOARD tileset (Blender edge + flat PixelLab top;
 // scripts/build-surface-tiles.py, ADR-0039/0040) as an embedded Studio Viewer kind (ADR-0058).
 // NOTE: distinct from the `surface` viewer kind, which is UI background-panel textures — these
 // are the iso board tiles under /assets/tiles/surface/. Board/grid in `.al-lab-main`, every
 // control in the one `.tileset-view-controls` panel, reached from the Tileset Surfaces catalog.
-// Pure inspector — nothing committed is edited (ADR-0057 N/A).
+// Runtime pixels stay backend-owned: this surface previews authenticated
+// candidates and records review/acceptance through ADR-0085 transactions.
 
 export const SURFACE_TILE_FAMILIES = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'] as const;
 type Family = (typeof SURFACE_TILE_FAMILIES)[number];
@@ -47,11 +71,121 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
   const [crisp, setCrisp] = useState(true);
   // Story features are PARKED (ADR-0041) — default OFF so the board shows the continuity mural.
   const [story, setStory] = useState(false);
+  const [canonicalProof, setCanonicalProof] = useState(true);
+  const [adminCatalog, setAdminCatalog] = useState<AdminLiveMediaCatalog | null>(null);
+  const [adminState, setAdminState] = useState<'loading' | 'ready' | 'unauthorized' | 'error'>('loading');
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [selectedVersionBySlot, setSelectedVersionBySlot] = useState<Record<string, string>>({});
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [mutation, setMutation] = useState<'reviewing' | 'accepting' | null>(null);
+  const [mutationNotice, setMutationNotice] = useState<string | null>(null);
+  const [previewState, setPreviewState] = useState<{
+    key: string;
+    status: 'idle' | 'loading' | 'ready' | 'error';
+    error?: string;
+  }>({ key: '', status: 'idle' });
+
+  const refreshAdminCatalog = useCallback(async (): Promise<AdminLiveMediaCatalog | null> => {
+    setAdminState((state) => (state === 'ready' ? state : 'loading'));
+    try {
+      const catalog = await fetchAdminLiveMediaCatalog();
+      setAdminCatalog(catalog);
+      setAdminState('ready');
+      setAdminError(null);
+      return catalog;
+    } catch (error) {
+      if (isUnauthorized(error)) {
+        setAdminCatalog(null);
+        setAdminState('unauthorized');
+        setAdminError(null);
+      } else {
+        setAdminState('error');
+        setAdminError(error instanceof Error ? error.message : String(error));
+      }
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshAdminCatalog();
+  }, [refreshAdminCatalog]);
+
+  const familySlots = useMemo(
+    () => adminCatalog ? surfaceFamilySlots(adminCatalog, fam) : [],
+    [adminCatalog, fam],
+  );
+  const acceptanceGroups = useMemo(
+    () => adminCatalog ? surfaceAcceptanceGroups(adminCatalog, fam) : [],
+    [adminCatalog, fam],
+  );
+  const groupRequiredSlots = useMemo(
+    () => new Set(acceptanceGroups.flatMap((group) => group.requiredSlots)),
+    [acceptanceGroups],
+  );
+
+  // A grouped acceptance surface is useful only if every member is visible.
+  // Pick the newest candidate for each required slot, while preserving an
+  // explicit owner selection (including a just-accepted version after CAS).
+  useEffect(() => {
+    if (!adminCatalog || acceptanceGroups.length === 0) return;
+    const versions = new Map(adminCatalog.versions.map((version) => [version.id, version]));
+    const slots = new Map(adminCatalog.slots.map((slot) => [slot.slot, slot]));
+    setSelectedVersionBySlot((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const slot of groupRequiredSlots) {
+        const selected = versions.get(next[slot]);
+        if (selected?.slot === slot && selected.media && (selected.status === 'candidate' || selected.status === 'accepted')) continue;
+        const candidate = candidateVersionsForSlot(adminCatalog, slot)[0];
+        const active = versions.get(slots.get(slot)?.activeVersionId ?? '');
+        const nextId = candidate?.id ?? (active?.slot === slot && active.media ? active.id : '');
+        if (next[slot] !== nextId) {
+          if (nextId) next[slot] = nextId;
+          else delete next[slot];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [acceptanceGroups, adminCatalog, groupRequiredSlots]);
+
+  const familySelection = useMemo(() => Object.fromEntries(
+    Object.entries(selectedVersionBySlot).filter(([slot]) => slot.startsWith(surfaceSlotPrefix(fam))),
+  ), [fam, selectedVersionBySlot]);
+  const selectedOverrides = useMemo(
+    () => selectedSurfaceOverrides(adminCatalog, familySelection),
+    [adminCatalog, familySelection],
+  );
+  const reviewBatch = useMemo(
+    () => adminCatalog ? surfaceReviewBatch(adminCatalog, familySelection) : { versions: [], groups: [], missingSlots: [] },
+    [adminCatalog, familySelection],
+  );
+  const candidateRows = useMemo(() => {
+    if (!adminCatalog) return [];
+    const versionById = new Map(adminCatalog.versions.map((version) => [version.id, version]));
+    return familySlots.filter((slot) => (
+      groupRequiredSlots.has(slot.slot)
+      || candidateVersionsForSlot(adminCatalog, slot.slot).length > 0
+      || Boolean(versionById.get(familySelection[slot.slot]))
+    ));
+  }, [adminCatalog, familySelection, familySlots, groupRequiredSlots]);
+  const slotById = useMemo(
+    () => new Map((adminCatalog?.slots ?? []).map((slot) => [slot.slot, slot])),
+    [adminCatalog],
+  );
+  const reviewedCount = reviewBatch.versions.filter((version) => (
+    isReviewedForCurrentSurfaceSnapshot(version, version.slot ? slotById.get(version.slot) : undefined)
+  )).length;
+  const batchComplete = reviewBatch.versions.length > 0 && reviewBatch.missingSlots.length === 0;
+  const batchReviewed = batchComplete && reviewedCount === reviewBatch.versions.length;
+  const busy = mutation !== null;
 
   const COLS = 11;
   const ROWS = 9;
   const board = useMemo(
-    () => solveSocketBoard({
+    () => canonicalProof && fam === 'water'
+      ? waterSideCanonicalProofBoard(tileFamilies.water)
+      : solveSocketBoard({
       assets: tileAssets as readonly TileAsset[],
       terrainMap: Array.from({ length: COLS * ROWS }, () => fam),
       seed,
@@ -62,17 +196,204 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
       muralEdges: muralTiles,
       edgeFeatures: story ? edgeFeatures : undefined,
     }),
-    [fam, seed, story],
+    [canonicalProof, fam, seed, story],
   );
+  const mountedStableSlots = useMemo(() => {
+    const occupied = new Set(board.cells.filter((cell) => cell.asset).map((cell) => `${cell.x}-${cell.y}`));
+    const slots = new Set<string>();
+    for (const cell of board.cells) {
+      if (!cell.asset) continue;
+      slots.add(terrainTopSrc(cell.asset.src, cell.asset.topAnimFrames));
+      const exposure = resolveTerrainSideExposure(
+        cell,
+        (x, y) => occupied.has(`${x}-${y}`),
+      );
+      for (const face of TERRAIN_SIDE_FACES) {
+        if (!exposure[face]) continue;
+        slots.add(terrainSideSrc((cell.sideAssets?.[face] ?? cell.asset).src));
+      }
+    }
+    return slots;
+  }, [board]);
+  const unmountedSelectedSlots = reviewBatch.versions
+    .map((version) => version.slot)
+    .filter((slot): slot is string => Boolean(slot) && !mountedStableSlots.has(`/assets/${slot}`));
+  const previewKey = reviewBatch.versions
+    .map((version) => `${version.id}:${version.media?.sha256 ?? ''}:${version.media?.url ?? ''}`)
+    .join('|');
+
+  // The canvas renderer intentionally fails soft while loading an image. The
+  // acceptance surface cannot: decode every authenticated candidate URL and
+  // wait two frames so the real terrain canvas has painted those same bytes.
+  useEffect(() => {
+    if (!previewKey || reviewBatch.versions.length === 0) {
+      setPreviewState({ key: '', status: 'idle' });
+      return undefined;
+    }
+    let cancelled = false;
+    setPreviewState({ key: previewKey, status: 'loading' });
+    const decode = (version: typeof reviewBatch.versions[number]): Promise<void> => new Promise((resolve, reject) => {
+      if (!version.media?.url || !version.media.mediaType.startsWith('image/')) {
+        reject(new Error(`${version.slot ?? version.id} is not a previewable image.`));
+        return;
+      }
+      const image = new Image();
+      image.decoding = 'async';
+      image.onload = () => image.naturalWidth > 0 && image.naturalHeight > 0
+        ? resolve()
+        : reject(new Error(`${version.slot ?? version.id} decoded without dimensions.`));
+      image.onerror = () => reject(new Error(`${version.slot ?? version.id} could not load its authenticated media URL.`));
+      image.src = version.media.url;
+    });
+    void Promise.all(reviewBatch.versions.map(decode)).then(async () => {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())));
+      if (!cancelled) setPreviewState({ key: previewKey, status: 'ready' });
+    }).catch((error: unknown) => {
+      if (!cancelled) setPreviewState({
+        key: previewKey,
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [previewKey, reviewBatch.versions]);
+
+  const candidateBytesReady = previewState.key === previewKey && previewState.status === 'ready';
+  const proofMounted = view === 'board' && canonicalProof && unmountedSelectedSlots.length === 0 && candidateBytesReady;
+
+  const selectCandidate = (slot: string, id: string): void => {
+    setSelectedVersionBySlot((current) => {
+      if (!id) {
+        const next = { ...current };
+        delete next[slot];
+        return next;
+      }
+      return { ...current, [slot]: id };
+    });
+    setMutationNotice(null);
+  };
+
+  const handleReview = async (): Promise<void> => {
+    if (!adminCatalog || !proofMounted || !batchComplete || !reviewNotes.trim()) return;
+    setMutation('reviewing');
+    setMutationNotice(null);
+    const surfaceUrl = window.location.href;
+    const stale = new Set(reviewBatch.versions.filter((version) => (
+      !isReviewedForCurrentSurfaceSnapshot(version, version.slot ? slotById.get(version.slot) : undefined)
+    )).map((version) => version.id));
+    const assigned = new Set<string>();
+    const reviewBatches = reviewBatch.groups.flatMap((group) => {
+      const versions = reviewBatch.versions.filter((version) => version.slot && group.requiredSlots.includes(version.slot));
+      if (!versions.some((version) => stale.has(version.id))) return [];
+      versions.forEach((version) => assigned.add(version.id));
+      return [{ versions, groups: [group] }];
+    });
+    for (const version of reviewBatch.versions) {
+      if (stale.has(version.id) && !assigned.has(version.id)) reviewBatches.push({ versions: [version], groups: [] });
+    }
+    try {
+      let reviewedCount = 0;
+      for (const batch of reviewBatches) {
+        const slots = batch.versions.flatMap((version) => {
+          const slot = version.slot ? slotById.get(version.slot) : undefined;
+          return slot ? [slot] : [];
+        });
+        await reviewLiveMediaVersions({
+          versions: batch.versions,
+          notes: reviewNotes.trim(),
+          surfaceUrl,
+          evidence: surfaceReviewProofEvidence({
+            family: fam,
+            surfaceUrl,
+            versions: batch.versions,
+            slots,
+            groups: batch.groups,
+          }),
+        });
+        reviewedCount += batch.versions.length;
+      }
+      const refreshed = await refreshAdminCatalog();
+      const success = reviewedCount
+        ? `Recorded hash-pinned owner review for ${reviewedCount} candidate${reviewedCount === 1 ? '' : 's'}.`
+        : 'Every selected candidate already has review evidence for its current hash.';
+      setMutationNotice(refreshed ? success : `${success} Admin catalog refresh failed; refresh before acceptance.`);
+    } catch (error) {
+      setMutationNotice(`Review failed: ${error instanceof Error ? error.message : String(error)}`);
+      await refreshAdminCatalog();
+    } finally {
+      setMutation(null);
+    }
+  };
+
+  const handleAccept = async (): Promise<void> => {
+    if (!adminCatalog || !proofMounted || !batchReviewed) return;
+    setMutation('accepting');
+    setMutationNotice(null);
+    try {
+      const result = await acceptLiveMediaVersions(surfaceAcceptanceItems(adminCatalog, reviewBatch.versions));
+      let publicCatalogFresh = true;
+      try {
+        await loadLiveMediaCatalog();
+      } catch {
+        publicCatalogFresh = false;
+      }
+      const refreshed = await refreshAdminCatalog();
+      const warnings = [
+        refreshed ? '' : 'admin catalog refresh failed',
+        publicCatalogFresh ? '' : 'public catalog refresh failed',
+      ].filter(Boolean);
+      setMutationNotice(
+        `Accepted atomic batch ${result.batchId.slice(0, 8)} at catalog revision ${result.catalogRevision}.${warnings.length ? ` ${warnings.join('; ')}.` : ''}`,
+      );
+    } catch (error) {
+      setMutationNotice(`Acceptance failed: ${error instanceof Error ? error.message : String(error)}`);
+      await refreshAdminCatalog();
+    } finally {
+      setMutation(null);
+    }
+  };
+
+  const effectiveZoom = canonicalProof ? 1 : zoom;
+  // Translation preserves native 1x pixels and remains available so both long
+  // proof edges can be inspected in a narrow Studio pane. Only zoom is locked.
+  const effectivePan = pan;
 
   return (
     <>
       <style>{STL_CSS}</style>
       <section className={`al-lab-main ${view === 'board' ? 'stl-board-main' : ''}`.trim()} aria-label="Surface tileset preview">
         {view === 'board' ? (
-          <ViewPane kind="board" ariaLabel="Surface tileset viewport" zoom={zoom} pan={pan} minZoom={0.5} maxZoom={3} onZoomChange={setZoom} onPanChange={setPan}>
-            <BoardLabBoard board={board} assetFrameSrc={(a) => a.src} boardZoom={zoom} boardPan={pan}
-              className={`stl-board-surface ${crisp ? 'is-crisp' : ''}`} ariaLabel="Surface tileset board preview" />
+          <ViewPane kind="board" ariaLabel="Surface tileset viewport" zoom={effectiveZoom} pan={effectivePan} minZoom={0.5} maxZoom={3}
+            onZoomChange={canonicalProof ? () => {} : setZoom} onPanChange={setPan}>
+            <BoardLabBoard
+              board={board}
+              assetFrameSrc={(a) => a.src}
+              terrainSrcOverride={(stableSrc) => selectedOverrides.get(stableSrc)}
+              boardZoom={effectiveZoom}
+              boardPan={effectivePan}
+              className={`stl-board-surface ${crisp ? 'is-crisp' : ''} ${canonicalProof ? 'is-canonical-proof' : ''}`}
+              ariaLabel={canonicalProof && fam === 'water'
+                ? 'Canonical one-times Water side candidate proof with all eight variants on both exposed faces'
+                : 'Surface tileset board preview'}
+              renderCellOverlay={canonicalProof && fam === 'water'
+                ? ({ cell }) => {
+                  const labels = [
+                    ...(cell.y === 7 ? [`S${cell.x + 1}`] : []),
+                    ...(cell.x === 7 ? [`E${cell.y + 1}`] : []),
+                  ];
+                  return labels.length ? (
+                    <span
+                      className="stl-proof-index"
+                      aria-label={`Water side ${labels.join(' and ')} candidate proof`}
+                    >
+                      {labels.join(' · ')}
+                    </span>
+                  ) : null;
+                }
+                : undefined}
+            />
           </ViewPane>
         ) : (
           <div className="stl-grid" key={fam}>
@@ -99,19 +420,110 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
             {view === 'board' ? (
               <>
                 <label className="tileset-catalog-zoom">
-                  <span>Zoom</span>
-                  <input type="range" min={0.5} max={3} step={0.05} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
+                  <span>Zoom{canonicalProof ? ' · canonical 1×' : ''}</span>
+                  <input type="range" min={0.5} max={3} step={0.05} value={effectiveZoom} disabled={canonicalProof} onChange={(e) => setZoom(Number(e.target.value))} />
                 </label>
                 <div className="stl-toggles">
-                  <button type="button" className="stl-toggle" onClick={() => setSeed((s) => (s % 9999) + 1)} title="Re-roll the board tiles">↻ Re-roll</button>
+                  <button type="button" className={`stl-toggle ${canonicalProof ? 'is-on' : ''}`} onClick={() => setCanonicalProof((value) => !value)}
+                    title="Lock asset-local scale to 1 and use the deterministic acceptance board">Canonical 1×</button>
+                  <button type="button" className="stl-toggle" disabled={canonicalProof} onClick={() => setSeed((s) => (s % 9999) + 1)} title="Re-roll the board tiles">↻ Re-roll</button>
                   <button type="button" className={`stl-toggle ${crisp ? 'is-on' : ''}`} onClick={() => setCrisp((v) => !v)} title="Nearest-neighbour (pixelated) vs smooth">Crisp</button>
-                  <button type="button" className={`stl-toggle ${story ? 'is-on' : ''}`} onClick={() => setStory((v) => !v)} title="Parked story edge-features (ADR-0041)">Story</button>
+                  <button type="button" disabled={canonicalProof} className={`stl-toggle ${story ? 'is-on' : ''}`} onClick={() => setStory((v) => !v)} title="Parked story edge-features (ADR-0041)">Story</button>
                 </div>
+                {canonicalProof && fam === 'water' ? (
+                  <p className="stl-note stl-proof-note">South and east are fixed at native 1×: Water side slots 0–7 appear exactly once per face, in order.</p>
+                ) : null}
               </>
             ) : (
               <p className="stl-note">Each card pairs a baked production tile with the flat top-down surface it was projected from.</p>
             )}
           </div>
+        </section>
+
+        <section className="tileset-inspector-section stl-live-review" aria-label="Live terrain candidate review">
+          <div className="stl-live-review-head">
+            <h2>Live candidates</h2>
+            <button type="button" className="stl-refresh" disabled={busy || adminState === 'loading'} onClick={() => void refreshAdminCatalog()}>Refresh</button>
+          </div>
+          {adminState === 'loading' ? <p className="stl-note">Loading backend lifecycle…</p> : null}
+          {adminState === 'unauthorized' ? <p className="stl-note">The board remains public. Sign in as an admin to inspect, review, or accept private candidates.</p> : null}
+          {adminState === 'error' ? <p className="stl-live-error">Admin catalog unavailable: {adminError}</p> : null}
+          {adminState === 'ready' && adminCatalog ? (
+            <div className="stl-live-stack">
+              <p className="stl-live-revision">
+                Catalog r{adminCatalog.revision} · {adminCatalog.updatedAt ? new Date(adminCatalog.updatedAt).toLocaleString() : 'not activated'}
+              </p>
+              {acceptanceGroups.map((group) => (
+                <p className="stl-live-group" key={group.groupId}>
+                  Atomic group <strong>{group.groupId}</strong> · {group.requiredSlots.length} required slots
+                </p>
+              ))}
+              {candidateRows.length === 0 ? (
+                <p className="stl-note">No private {cap(fam)} surface candidates are waiting in the backend.</p>
+              ) : candidateRows.map((slot) => {
+                const candidates = candidateVersionsForSlot(adminCatalog, slot.slot);
+                const selectedId = familySelection[slot.slot] ?? '';
+                const selected = adminCatalog.versions.find((version) => version.id === selectedId && version.slot === slot.slot);
+                const options = selected && !candidates.some((version) => version.id === selected.id)
+                  ? [selected, ...candidates]
+                  : candidates;
+                return (
+                  <label className={`stl-candidate-row ${groupRequiredSlots.has(slot.slot) ? 'is-required' : ''}`} key={slot.slot}>
+                    <span className="stl-candidate-slot">{slot.slot.slice('tiles/surface/'.length)}</span>
+                    <span className="stl-slot-life">
+                      {slot.lifecycleState} · slot r{slot.rowRevision} · {slot.versionStatus ?? 'no active'}
+                    </span>
+                    <select value={selectedId} disabled={busy} onChange={(event) => selectCandidate(slot.slot, event.target.value)} aria-label={`Candidate for ${slot.slot}`}>
+                      <option value="">Select candidate…</option>
+                      {options.map((version) => (
+                        <option key={version.id} value={version.id}>
+                          {version.status} · {version.label} · {version.media?.sha256.slice(0, 8)} · r{version.rowRevision}
+                        </option>
+                      ))}
+                    </select>
+                    {selected ? (
+                      <span className={`stl-candidate-state ${isReviewedForCurrentSurfaceSnapshot(selected, slot) ? 'is-reviewed' : ''}`}>
+                        {selected.status} · {selected.media?.sha256.slice(0, 12)} · version r{selected.rowRevision}
+                        {isReviewedForCurrentSurfaceSnapshot(selected, slot)
+                          ? ' · reviewed for current hash + slot'
+                          : isReviewedForCurrentContent(selected) ? ' · review stale after slot change' : ''}
+                      </span>
+                    ) : groupRequiredSlots.has(slot.slot) ? <span className="stl-candidate-missing">Required candidate missing</span> : null}
+                  </label>
+                );
+              })}
+
+              {reviewBatch.missingSlots.length ? (
+                <p className="stl-candidate-missing">Atomic group incomplete: {reviewBatch.missingSlots.map((slot) => slot.split('/').at(-1)).join(', ')}</p>
+              ) : null}
+              {unmountedSelectedSlots.length ? (
+                <p className="stl-candidate-missing">Not mounted by this board proof: {unmountedSelectedSlots.map((slot) => slot.split('/').at(-1)).join(', ')}</p>
+              ) : null}
+              {previewState.key === previewKey && previewState.status === 'loading' ? (
+                <p className="stl-note">Decoding authenticated candidate bytes in the board renderer…</p>
+              ) : null}
+              {previewState.key === previewKey && previewState.status === 'error' ? (
+                <p className="stl-live-error">Candidate preview failed: {previewState.error}</p>
+              ) : null}
+              <label className="stl-review-notes">
+                <span>Owner review notes</span>
+                <textarea value={reviewNotes} disabled={busy} rows={3} maxLength={4000}
+                  placeholder="What was inspected on the canonical board proof?" onChange={(event) => setReviewNotes(event.target.value)} />
+              </label>
+              <p className="stl-live-summary">
+                {reviewBatch.versions.length} selected · {reviewedCount} hash + slot-current reviews · candidate bytes {candidateBytesReady ? 'decoded' : 'pending'} · canonical proof {proofMounted ? 'mounted' : 'required'}
+              </p>
+              <div className="stl-live-actions">
+                <button type="button" className="stl-toggle" disabled={busy || !proofMounted || !batchComplete || !reviewNotes.trim()} onClick={() => void handleReview()}>
+                  {mutation === 'reviewing' ? 'Recording…' : `Record review${reviewBatch.versions.length ? ` (${reviewBatch.versions.length})` : ''}`}
+                </button>
+                <button type="button" className="stl-toggle stl-accept" disabled={busy || !proofMounted || !batchReviewed} onClick={() => void handleAccept()}>
+                  {mutation === 'accepting' ? 'Accepting…' : `Accept atomically${reviewBatch.versions.length ? ` (${reviewBatch.versions.length})` : ''}`}
+                </button>
+              </div>
+              {mutationNotice ? <p className={/^(Review|Acceptance) failed:/.test(mutationNotice) ? 'stl-live-error' : 'stl-live-success'}>{mutationNotice}</p> : null}
+            </div>
+          ) : null}
         </section>
       </aside>
     </>
@@ -143,5 +555,37 @@ const STL_CSS = `
   background: #111a2c; color: #cfe3ff; border: 1px solid #2a3c5e; border-radius: 5px; }
 .stl-toggle:hover { background: #17223a; }
 .stl-toggle.is-on { background: #1d3354; border-color: #3f74c0; color: #eaf3ff; }
+.stl-toggle:disabled { cursor: default; opacity: .48; }
 .stl-note { margin: 0; font-size: 12px; color: #8197ad; line-height: 1.45; }
+.stl-proof-note { color: #9fc7e8; }
+.stl-proof-index { display: grid; place-items: center; width: 18px; height: 18px; transform: translate(-9px, 51px);
+  border: 1px solid rgba(115, 209, 255, .8); border-radius: 50%; background: rgba(3, 15, 24, .86);
+  color: #dff6ff; font: 800 10px/1 var(--ds-font-sans, system-ui, sans-serif); }
+.stl-live-review { border-top: 1px solid rgba(67, 127, 179, .3); }
+.stl-live-review-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.stl-live-review-head h2 { margin: 0; }
+.stl-refresh { min-height: 26px; padding: 4px 8px; border: 1px solid #2a3c5e; border-radius: 4px;
+  background: #111a2c; color: #cfe3ff; cursor: pointer; font: inherit; font-size: 11px; }
+.stl-refresh:disabled { cursor: default; opacity: .48; }
+.stl-live-stack { display: grid; gap: 9px; }
+.stl-live-revision, .stl-live-summary { margin: 0; color: #8ba8c2; font-size: 10px; line-height: 1.4; }
+.stl-live-group { margin: 0; padding: 7px; border: 1px solid rgba(68, 155, 202, .38); border-radius: 4px;
+  background: rgba(20, 57, 78, .35); color: #acd8ef; font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
+.stl-candidate-row { display: grid; gap: 3px; padding: 7px; border: 1px solid rgba(60, 82, 112, .54); border-radius: 4px;
+  background: rgba(8, 17, 30, .72); }
+.stl-candidate-row.is-required { border-left: 3px solid #4da4cf; }
+.stl-candidate-slot { color: #d8eaff; font: 700 10px/1.25 var(--ds-font-mono, monospace); overflow-wrap: anywhere; }
+.stl-slot-life, .stl-candidate-state { color: #7890aa; font-size: 9px; line-height: 1.35; overflow-wrap: anywhere; }
+.stl-candidate-state.is-reviewed { color: #8ed6b2; }
+.stl-candidate-row select { width: 100%; min-width: 0; height: 28px; border: 1px solid #2a3c5e; border-radius: 4px;
+  background: #0d1728; color: #d8eaff; font: inherit; font-size: 10px; }
+.stl-candidate-missing, .stl-live-error, .stl-live-success { margin: 0; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.stl-candidate-missing, .stl-live-error { color: #ffaaa3; }
+.stl-live-success { color: #8ed6b2; }
+.stl-review-notes { display: grid; gap: 4px; color: #9fb3ca; font-size: 10px; }
+.stl-review-notes textarea { box-sizing: border-box; width: 100%; resize: vertical; min-height: 58px; padding: 7px;
+  border: 1px solid #2a3c5e; border-radius: 4px; background: #0a1321; color: #e4eef9; font: 11px/1.35 var(--ds-font-sans, system-ui, sans-serif); }
+.stl-live-actions { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.stl-live-actions .stl-toggle { width: 100%; height: auto; min-height: 30px; white-space: normal; line-height: 1.2; }
+.stl-live-actions .stl-accept:not(:disabled) { border-color: #4a9f79; background: #163a2b; color: #dff9ec; }
 `;

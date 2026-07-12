@@ -17,8 +17,10 @@
 // Edge handedness: right = rot90(scaled edge), left = flipH(right), bottom =
 // flipV(top) — every mirror/rotation AFTER scaling, identical to the Node bake.
 //
-// In dev, Save writes config/nine-slice/<asset>.json and regenerates the asset
-// (via the Vite dev endpoint). Routing follows repo convention (lazy in App.tsx).
+// The editor reads code-owned geometry from config/nine-slice and previews it
+// against live media slots. In dev, Save geometry updates only those JSON shape
+// files; it never writes media or promotion state to Git.
+// Routing follows repo convention (lazy in App.tsx).
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import nineSliceRegistry from '../../config/nine-slice-registry.json';
 import { SURFACE_ASSETS } from './surfaceCatalog';
@@ -50,6 +52,16 @@ type Asset = { id: string; label: string; corner: string; edge: string; fill: st
 // corner/fill, so the frame path only ever sees the full atom set.
 type RegAsset = { label: string; theme?: string; kind?: string; sides?: string; atoms: { corner?: string; edge?: string; fill?: string }; frame: Frame; carve?: boolean; flipSides?: boolean; variants: { out: string }[] };
 const REGISTRY = (nineSliceRegistry as { assets: Record<string, RegAsset> }).assets;
+const CONFIG_MODULES = import.meta.glob('../../config/nine-slice/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, unknown>;
+const CONFIG_BY_ASSET = Object.values(CONFIG_MODULES).reduce<Record<string, object>>((result, raw) => {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && typeof (raw as { asset?: unknown }).asset === 'string') {
+    result[(raw as { asset: string }).asset] = raw;
+  }
+  return result;
+}, {});
 // `bar` (divider) and `junction` (tee/cross) assets are composed straight from atoms with no
 // per-corner geometry, so this 3×3 corner editor can't calibrate them — their pixels are fully
 // determined by construction. Excluded here (a frame needs the full corner/edge/fill triple).
@@ -554,28 +566,21 @@ export function NineSliceLab({ assetId, onAssetId, header, zoom = 1 }: { assetId
     return () => { live = false; };
   }, [previewSurfaceName]);
 
-  // Hydrate from the on-disk config (dev) the first time each asset is opened, so the
-  // editor reflects what's actually baked — not stale localStorage or defaults. This
-  // is what stops a fresh editor from saving default values over your real config.
+  // Hydrate from the bundled code-owned geometry the first time each asset is opened,
+  // so the editor reflects its authoritative shape rather than stale localStorage.
   const hydrated = useRef<Set<string>>(new Set());
   // The saved/baked config each asset was hydrated from — a per-control "Reset" reverts to THIS
   // (its shipped value), mirroring the dressing rooms, rather than to a bare zero. Falls back to
   // DEFAULT_EDIT when no config has loaded (fresh asset / production, where there's no hydrate).
   const baselineRef = useRef<Record<string, EditState>>({});
   useEffect(() => {
-    if (!((import.meta as { env?: { DEV?: boolean } }).env?.DEV) || hydrated.current.has(aid)) return;
-    let live = true;
-    fetch(`/__nine-slice/config?asset=${aid}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (!live || !j.ok || !j.config) return;
-        hydrated.current.add(aid);
-        const hydratedEdit = normalizedEdit(j.config);
-        baselineRef.current[aid] = hydratedEdit;
-        setEdits((prev) => ({ ...prev, [aid]: hydratedEdit }));
-      })
-      .catch(() => {});
-    return () => { live = false; };
+    if (hydrated.current.has(aid)) return;
+    const config = CONFIG_BY_ASSET[aid];
+    if (!config) return;
+    hydrated.current.add(aid);
+    const hydratedEdit = normalizedEdit(config);
+    baselineRef.current[aid] = hydratedEdit;
+    setEdits((prev) => ({ ...prev, [aid]: hydratedEdit }));
   }, [aid]);
 
   const update = (mut: (cur: EditState) => EditState) => setEdits((prev) => {
@@ -914,24 +919,29 @@ export function NineSliceLab({ assetId, onAssetId, header, zoom = 1 }: { assetId
   const selIsCorner = (CORNERS as string[]).includes(sel);
   const membersOff = layer === 'cool' && !memberCorners && !memberPipe && !selIsCorner;
 
-  // Save straight to the on-disk config + regenerate the asset, via the dev-only
-  // Vite endpoint. import.meta.env.DEV gates the button; the endpoint only exists
-  // while `vite` is serving — so this whole path is dev-only by construction.
   const isDev = Boolean((import.meta as { env?: { DEV?: boolean } }).env?.DEV);
   const [saveMsg, setSaveMsg] = useState('');
   const [importJson, setImportJson] = useState('');
   const [importMsg, setImportMsg] = useState('');
-  const saveToDisk = async () => {
-    setSaveMsg('saving…');
+  const saveGeometry = async () => {
+    setSaveMsg('saving geometry…');
     try {
-      const r = await fetch('/__nine-slice/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: exportJson });
-      const j = await r.json();
-      if (j.ok) baselineRef.current[aid] = edit; // the just-saved config is the new reset baseline
-      const scope = j.theme ? `${j.theme} family (${j.family?.members?.length ?? family.length} frames)` : j.asset;
-      // The endpoint pushes a live page reload after a save, so the app shows it
-      // everywhere on navigation — this message is a brief confirmation before that.
-      setSaveMsg(j.ok ? `saved ${scope} · applying live across the app…` : `error: ${j.error}`);
-    } catch (e) { setSaveMsg(`error: ${String(e)}`); }
+      const response = await fetch('/__nine-slice/geometry', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: exportJson,
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      if (result.mediaWritten !== false || result.promotionChanged !== false) {
+        throw new Error('geometry endpoint crossed the live-media ownership boundary');
+      }
+      baselineRef.current[aid] = edit;
+      const scope = result.theme ? `${result.theme} geometry + ${result.asset} boxes` : `${result.asset} geometry`;
+      setSaveMsg(`saved ${scope} · no media or promotion changed`);
+    } catch (error) {
+      setSaveMsg(`error: ${String(error)}`);
+    }
   };
   const applyImportJson = (mode: 'current' | 'named') => {
     const text = importJson.trim();
@@ -1130,7 +1140,7 @@ export function NineSliceLab({ assetId, onAssetId, header, zoom = 1 }: { assetId
                   these boxes up against real pixels; consumers pad/clip by the result.
                   They bake into NO pixels — they ride in the config + generated CSS. */}
               <span style={ST.sectionHead}>Hand-off boxes{asset.theme ? ` · ${asset.label} only` : ''} — you calibrate, code consumes</span>
-              <p style={ST.hint}>These are <b>per-frame</b>{asset.theme ? ' (unlike the shared Shape)' : ''} — they don't touch the frame art, just mark where consumers start their content and stop their backing. Save writes them to the config + generated CSS.</p>
+              <p style={ST.hint}>These are <b>per-frame</b>{asset.theme ? ' (unlike the shared Shape)' : ''} — they don't touch the frame art, just mark where consumers start their content and stop their backing. Export keeps this code-owned geometry separate from live media.</p>
               <label style={ST.toggle}>
                 <input type="checkbox" checked={showContent} onChange={(e) => setShowContent(e.target.checked)} />
                 <span style={{ color: '#5cff9e' }}>■</span> <b>Content box</b>&nbsp;— where text / icons start
@@ -1200,10 +1210,11 @@ export function NineSliceLab({ assetId, onAssetId, header, zoom = 1 }: { assetId
           <button type="button" style={ST.resetAll} onClick={resetAll}>↺ Reset all adjustments</button>
           {isDev && (
             <>
-              <button type="button" style={ST.save} onClick={saveToDisk}>{asset.theme ? `💾 Save ${asset.theme} family (${family.length}) + apply live` : '💾 Save to disk + regenerate (dev)'}</button>
+              <button type="button" style={ST.save} onClick={saveGeometry}>{asset.theme ? `💾 Save ${asset.theme} geometry + ${aid} boxes` : '💾 Save geometry (dev)'}</button>
               {saveMsg && <div style={{ ...ST.hint, color: saveMsg.startsWith('error') ? '#ff9aa8' : '#9affc4' }}>{saveMsg}</div>}
             </>
           )}
+          <p style={ST.hint}>Save writes deterministic geometry only. Publishing frame pixels requires a reviewed live-media candidate and backend acceptance.</p>
           <details style={ST.details}>
             <summary style={ST.summary}>Import JSON</summary>
             <div style={ST.detailsBody}>

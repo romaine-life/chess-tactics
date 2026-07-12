@@ -39,38 +39,35 @@ existing one. That is the disease this standard ends.
    source PNG (corners + edges + stretchable center) scales to any element size.
    No `background-size: 100% 100%`. No per-size baked frames (no more
    `setting-row-frame` *and* `setting-row-tall-frame`). No `slice-*` mini-assets.
-2. **One metadata source — patch margins in a manifest** (the existing
-   `asset-catalog.json` model). Every framed asset declares
-   `{ top, right, bottom, left }` margins; the renderer reads them. Delete the
-   duplicate per-feature manifests once their assets are folded in.
+2. **One metadata source — patch margins in the live UI-kit projection.** Every
+   framed asset declares `{ top, right, bottom, left }` margins; the renderer
+   reads them from the backend catalog. Delete duplicate static manifests once
+   their assets are folded in.
 3. **One renderer — a shared `<Frame>` component (or one CSS utility class
    family)** that takes an asset id + state and emits the `border-image` rule
    from the manifest margins. No surface hand-writes `border-image` again.
 4. **One icon mechanism + one icon set.** `gear`, `rook-blue`, `rook-red`, and
    the chess pieces are currently redrawn 3–4× across `main-menu/`, `skirmish/`,
    `utility/`, and `settings/`. Consolidate to one set referenced everywhere.
-5. **Generate the art (method-verified); the concept is the style reference.**
+5. **Generate live-media candidates (method-verified); the concept is the style reference.**
    (Updated by [ADR-0011](adr/0011-chrome-art-generated-not-extracted.md) — this
    point used to say "extract the original," an early stopgap that beat codex's
    *code-drawn* redraws but produced dirty, asymmetric crops.) Chrome art is now
    produced by **codex img2img generation, verified via an `image_generation_call`
-   event** (see [kit-forge.md](kit-forge.md)), or **assembled from codex-generated
-   atoms** (`buildFrameParts` in `scripts/nine-slice-kit.mjs`; the standalone
-   `assemble-frame.mjs` is retired — see ADR-0054). The accepted concept art is the style/palette
-   reference fed into generation and the review target — **not** a crop source.
+   event** (see [kit-forge.md](kit-forge.md)), or assembled from generated atoms
+   by deterministic geometry in a temporary workspace. The accepted concept art
+   is the style/palette reference fed into generation and the review target —
+   **not** a crop source. Exact candidate bytes upload to live storage; no forge
+   or assembler writes into the repository.
    Do not procedurally redraw chrome in code/CSS, and do not extract whole- or
    per-slice crops from the concept.
 6. **Never patch with bespoke CSS.** CSS composes, positions, and state-switches
    art; it never recreates bevels, frames, glows, or corners with gradients.
-7. **Every generator self-gates with `verifyAsset` — no asset is "good" by
-   eyeball.** Each `generate-kit-*.mjs` runs `frontend/scripts/verify-kit-asset.mjs`
-   on what it wrote and THROWS on the clipping class: a fully-transparent column/
-   row, broken left/right symmetry (for mirrored assets), or a border that isn't
-   continuous along an edge (corners present but the side clipped). This exists
-   because eyeballing a stretched render repeatedly missed real clips (half-black
-   button, clipped row bottom, open-sided neutral) that a pixel scan caught
-   instantly. The gate covers *mechanical* defects only — faithfulness, seams,
-   and "is this the right region" still need human review.
+7. **Every uploaded candidate is mechanically validated — no asset is "good" by
+   eyeball alone.** The typed UI-kit validator rejects wrong dimensions, clipped
+   borders, broken required symmetry, incomplete edges, or invalid alpha before
+   review. Mechanical validation does not decide faithfulness or visual quality;
+   those still require owner review of the exact candidate in the live surface.
 
 ## Canonical type catalog
 
@@ -119,12 +116,12 @@ The canonical CSS shape for every framed control (what `<Frame>` emits):
 State is a data attribute swapping `border-image-source`. This is exactly the
 Lobbies/`utility-*` pattern, generalized and fed by the manifest.
 
-## Asset + folder convention
+## Asset + slot convention
 
-- One shared kit folder: `frontend/public/assets/ui/kit/` with one
-  `manifest.json` (type, variant, state, patch margins per asset).
-- Per-feature folders keep only feature-unique art (shields, board frames).
-- Source-of-truth concepts stay in `docs/art/ui-screen-concepts/`.
+- One shared `ui/kit/*` semantic namespace with typed catalog metadata (type,
+  variant, state, patch margins per asset).
+- Per-feature slot namespaces keep only feature-unique art (shields, board frames).
+- Source concepts are private live-media versions with provenance.
 
 ## Migration map + order
 
@@ -133,15 +130,16 @@ review + preview). The owner is evolving those under intense UI needs and will
 style them to the app separately. Do not touch.
 
 1. **Build the kit + `<Frame>` renderer** from the Settings art, re-cut to true
-   9-slice with a `kit/manifest.json`. Prove it on Settings and Lobbies (already
+   9-slice with typed `ui/kit/*` backend-catalog metadata. Prove it on Settings and Lobbies (already
    closest) — they should look identical before/after but scale correctly.
 2. **Skirmish** — highest payoff: 173 rules, 0 asset frames today. Reframe all
    chrome (panels, action buttons, rows, tabs, bars) onto the kit.
-3. **Campaign editor** — delete `slice-*` assets and the duplicate `manifest.json`;
+3. **Campaign editor** — retire `slice-*` slots and delete the duplicate static manifest;
    rebuild `ce-*` chrome on the kit; keep shields + preview frame.
 4. **Level editor** — replace the flat-CSS `le-*` chrome with kit frames.
-5. **Retire** orphaned/duplicate assets (`slice-*`, per-size baked frames,
-   redundant icon copies) and collapse the per-feature manifests into the kit.
+5. **Retire** orphaned/duplicate slots (`slice-*`, per-size baked frames,
+   redundant icon copies) and collapse per-feature metadata into the live kit
+   projection.
 
 ## Acceptance gates (per migrated surface)
 

@@ -1,14 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { writeFile, mkdir } from 'node:fs/promises';
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { nineSliceDevSave } from './scripts/vite-nine-slice-plugin.mjs';
+import { nineSliceGeometrySave } from './scripts/vite-nine-slice-geometry-plugin.mjs';
 
 // Stamp build/server provenance into the bundle so Settings → About can always
 // say exactly what's serving this page. Every build carries the app's semver
@@ -43,94 +42,11 @@ function buildInfo() {
 
 // The legacy vanilla entry (index.html -> /src/app.js) is unchanged; the React
 // plugin only adds JSX/TSX handling for the new surfaces we migrate onto.
-// nineSliceDevSave is a dev-serve-only endpoint for the 9-slice editor's Save.
-
-// Dev-only endpoint: the doodad editor POSTs a composition here and it lands on disk
-// under public/assets/doodads/compositions/<name>.json (served + in the repo), so
-// "Save" writes a file instead of forcing a download every time.
-function doodadCompositionSave() {
-  return {
-    name: 'doodad-composition-save',
-    apply: 'serve',
-    configureServer(server) {
-      server.middlewares.use('/__save-doodad', (req, res) => {
-        if (req.method !== 'POST') { res.statusCode = 405; res.end('POST only'); return; }
-        let body = '';
-        req.on('data', (chunk) => { body += chunk; });
-        req.on('end', async () => {
-          try {
-            const { name, data } = JSON.parse(body);
-            const safe = String(name || 'untitled').replace(/[^a-z0-9_-]/gi, '-').slice(0, 60);
-            const rel = `public/assets/doodads/compositions/${safe}.json`;
-            const out = join(process.cwd(), rel);
-            await mkdir(dirname(out), { recursive: true });
-            await writeFile(out, JSON.stringify(data, null, 2));
-            res.statusCode = 200;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ok: true, path: rel }));
-          } catch (err) {
-            res.statusCode = 500;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ok: false, error: String(err) }));
-          }
-        });
-      });
-    },
-  };
-}
-
-// Dev-only endpoint for Chrome Lab's "Save defaults" button. The lab owns live
-// tuning in localStorage while the user experiments; this writes the accepted
-// state to config/chrome-lab-defaults.json so the runtime imports the same values
-// after refresh, without hand-copying JSON through Codex.
-function chromeLabDefaultsSave() {
-  return {
-    name: 'chrome-lab-defaults-save',
-    apply: 'serve',
-    configureServer(server) {
-      server.middlewares.use('/__chrome-lab/defaults', (req, res, next) => {
-        if (req.method !== 'POST') return next();
-        let body = '';
-        req.on('data', (chunk) => { body += chunk; if (body.length > 1e6) req.destroy(); });
-        req.on('end', async () => {
-          const send = (code, obj) => {
-            res.statusCode = code;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(obj));
-          };
-          try {
-            const parsed = JSON.parse(body || '{}');
-            if (!parsed || typeof parsed !== 'object' || !parsed.outer || !parsed.inner || !parsed.divider) {
-              send(400, { ok: false, error: 'expected { target, outer, inner, divider }' });
-              return;
-            }
-            const payload = {
-              _doc: "Committed Chrome Lab tuning. Chrome Lab's Save defaults button writes this file in dev; chromeFamilyRuntime imports it so live surfaces and the lab share one source of truth.",
-              target: typeof parsed.target === 'string' ? parsed.target : 'level-editor',
-              outer: parsed.outer,
-              inner: parsed.inner,
-              divider: parsed.divider,
-            };
-            const rel = 'config/chrome-lab-defaults.json';
-            const out = join(process.cwd(), rel);
-            await mkdir(dirname(out), { recursive: true });
-            await writeFile(out, `${JSON.stringify(payload, null, 2)}\n`);
-            server.ws.send({ type: 'full-reload' });
-            send(200, { ok: true, path: rel });
-          } catch (err) {
-            send(500, { ok: false, error: String(err?.message || err) });
-          }
-        });
-      });
-    },
-  };
-}
-
 // NOTE: the dev-only `/__prop-seat/save` + `/__prop-seat/delete` file-writing endpoints were RETIRED
 // in ADR-0061 step 3. /prop-lab Save now PUTs the live seat map to the DB (PUT /api/prop-seats/default,
-// admin-gated, instant-live) instead of writing src/core/propSeats.json on disk; base/variant integrity
-// moved server-side into that PUT's validation (backend/server.js validatePropSeatsData). The committed
-// propSeats.json stays as the always-render baseline, kept in sync by the DB→file bake-back cron.
+// admin-gated, instant-live) instead of writing a repository file; base/variant integrity
+// moved server-side into that PUT's validation (backend/server.js validatePropSeatsData).
+// ADR-0085 later deleted the committed baseline and made the complete DB row authoritative.
 
 // Dev-only stand-in for the backend's /api/bgm. Local dev has no backend process,
 // so this proxies the DEPLOYED backend's playlist (which lists the blob container
@@ -416,6 +332,29 @@ function prodBackend(port) {
 
       const start = () => {
         let ready = false;
+        const liveMediaStorageDir = process.env.LIVE_MEDIA_STORAGE_DIR || '';
+        const defaultLiveMediaSeedOrigin = 'https://chess.romaine.life';
+        if (liveMediaStorageDir && !String(process.env.DATABASE_URL || '').trim()) {
+          fatal('LIVE_MEDIA_STORAGE_DIR requires a disposable DATABASE_URL; refusing to pair local media bytes with production Postgres.');
+          return;
+        }
+        if (liveMediaStorageDir) {
+          let databaseHost = '';
+          try { databaseHost = new URL(process.env.DATABASE_URL).hostname.toLowerCase(); } catch {
+            fatal('LIVE_MEDIA_STORAGE_DIR requires a valid disposable DATABASE_URL.');
+            return;
+          }
+          if (!['localhost', '127.0.0.1', '::1'].includes(databaseHost)) {
+            fatal(`LIVE_MEDIA_STORAGE_DIR requires a loopback Postgres URL in local development, not ${databaseHost}.`);
+            return;
+          }
+        }
+        if (liveMediaStorageDir && (
+          process.env.POSTGRES_HOST || process.env.POSTGRES_DATABASE || process.env.POSTGRES_DB || process.env.POSTGRES_USER
+        )) {
+          fatal('LIVE_MEDIA_STORAGE_DIR cannot be combined with production Postgres host settings.');
+          return;
+        }
         const watchdog = setTimeout(() => {
           if (!ready && child) fatal(`Backend never became ready within ${BOOT_TIMEOUT_MS / 1000}s (still starting, or hung).`);
         }, BOOT_TIMEOUT_MS);
@@ -425,14 +364,24 @@ function prodBackend(port) {
           cwd: backendDir,
           env: {
             ...process.env,
-            POSTGRES_HOST: process.env.POSTGRES_HOST || 'chess-tactics-pg.postgres.database.azure.com',
-            POSTGRES_DATABASE: process.env.POSTGRES_DATABASE || 'chess_tactics',
-            POSTGRES_USER: process.env.POSTGRES_USER || 'nelson-devops-project@outlook.com',
+            POSTGRES_HOST: liveMediaStorageDir ? '' : (process.env.POSTGRES_HOST || 'chess-tactics-pg.postgres.database.azure.com'),
+            POSTGRES_DATABASE: liveMediaStorageDir ? '' : (process.env.POSTGRES_DATABASE || 'chess_tactics'),
+            POSTGRES_USER: liveMediaStorageDir ? '' : (process.env.POSTGRES_USER || 'nelson-devops-project@outlook.com'),
             DEV_AUTH: '1',
             DEV_AUTH_EMAIL: process.env.DEV_AUTH_EMAIL || 'nelson@romaine.life',
             DEV_AUTH_NAME: process.env.DEV_AUTH_NAME || 'Nelson',
             ADMIN_EMAILS: process.env.ADMIN_EMAILS || 'nelson@romaine.life',
             UNIT_ASSET_CONTAINER_URL: process.env.UNIT_ASSET_CONTAINER_URL || 'https://chesstacticsmedia.blob.core.windows.net/unit-assets',
+            // Local developers may opt into an isolated directory + disposable
+            // DATABASE_URL. In that mode seed through the public backend and do
+            // not silently retain credentials to the production Blob container.
+            LIVE_MEDIA_STORAGE_DIR: liveMediaStorageDir,
+            LIVE_MEDIA_SEED_CATALOG_URL: process.env.LIVE_MEDIA_SEED_CATALOG_URL
+              ?? (liveMediaStorageDir ? `${defaultLiveMediaSeedOrigin}/api/asset-catalog` : ''),
+            LIVE_MEDIA_SEED_MEDIA_BASE_URL: process.env.LIVE_MEDIA_SEED_MEDIA_BASE_URL
+              ?? (liveMediaStorageDir ? `${defaultLiveMediaSeedOrigin}/api/media` : ''),
+            LIVE_MEDIA_CONTAINER_URL: process.env.LIVE_MEDIA_CONTAINER_URL
+              ?? (liveMediaStorageDir ? '' : 'https://chesstacticsmedia.blob.core.windows.net/live-media'),
             PORT: String(port),
           },
           stdio: ['ignore', 'pipe', 'pipe'],
@@ -483,7 +432,16 @@ export default defineConfig(async ({ command }) => {
     ? (noBackend ? [bgmDevMock(), officialCampaignsDevProxy(), devAuthMock()] : [prodBackend(backendPort)])
     : [];
   return {
-    plugins: [react(), buildInfo(), doodadCompositionSave(), chromeLabDefaultsSave(), nineSliceDevSave(), ...devApiPlugins],
-    ...(useBackend ? { server: { proxy: { '/api': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, ws: true } } } } : {}),
+    plugins: [react(), buildInfo(), nineSliceGeometrySave(), ...devApiPlugins],
+    // `/assets/*` belongs exclusively to backend-resolved live media. Keep
+    // executable Vite chunks in a disjoint namespace so production code can
+    // never be mistaken for a semantic media slot.
+    build: { assetsDir: 'app-code' },
+    ...(useBackend ? { server: { proxy: {
+      '/api': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, ws: true },
+      // `/assets/*` is a stable semantic-slot route owned by the backend's live
+      // media catalog. Never let Vite's public directory mask a missing DB slot.
+      '/assets': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false },
+    } } } : {}),
   };
 });

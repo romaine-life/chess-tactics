@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { BoardSceneLayer } from './BoardSceneLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
 import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
+import { immutableBoardLabTerrainSrc } from './BoardLabBoard';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
 import { featureFrameSrc } from '../art/tileset';
 import { resolveFeatureOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
@@ -9,6 +10,12 @@ import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDens
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 import { resolveMacroTilePlacements } from '../core/macroTiles';
+import {
+  resolveTerrainSideExposure,
+  resolveTerrainSideFaces,
+  resolveTerrainSideMaterials,
+  type TerrainSideExposure,
+} from '@chess-tactics/board-render';
 
 // THE shared, non-interactive board renderer — one source of truth for how an EditorBoard
 // draws (terrain through one composed canvas layer; units, doodads, props, fences, walls, wall art,
@@ -42,7 +49,7 @@ export function studioTerrainCanvasCell({
   feature,
   animationFrame,
   hidden,
-  drawSide,
+  sideExposure,
 }: {
   key: string;
   x: number;
@@ -51,18 +58,24 @@ export function studioTerrainCanvasCell({
   feature: ResolvedFeatureOverlay | undefined;
   animationFrame: number;
   hidden?: BoardLayerVisibility;
-  drawSide: boolean;
+  sideExposure: TerrainSideExposure;
 }): TerrainCanvasCell {
   const frameSrc = tileAsset && !hidden?.tile ? assetFrameSrc(tileAsset, animationFrame) : undefined;
   return {
     key,
     x,
     y,
-    topSrc: frameSrc ? terrainTopSrc(frameSrc, tileAsset?.topAnimFrames) : undefined,
-    sideSrc: frameSrc ? terrainSideSrc(frameSrc) : undefined,
+    topSrc: frameSrc ? immutableBoardLabTerrainSrc(terrainTopSrc(frameSrc, tileAsset?.topAnimFrames)) : undefined,
+    sideFaces: resolveTerrainSideFaces(
+      sideExposure,
+      resolveTerrainSideMaterials(
+        tileAsset && !hidden?.tile ? tileAsset : undefined,
+        undefined,
+        (asset) => immutableBoardLabTerrainSrc(terrainSideSrc(assetFrameSrc(asset, animationFrame))),
+      ),
+    ),
     featureSrc: feature ? featureFrameSrc(feature.kind, feature.material, feature.mask) : undefined,
     topAnimFrames: tileAsset?.topAnimFrames,
-    drawSide,
   };
 }
 
@@ -136,8 +149,8 @@ export function StudioReadOnlyBoard({
     for (let x = 0; x < board.cols; x += 1) {
       const key = `${x},${y}`;
       const tileAsset = board.cells[key] ? resolveTileAsset(board.cells[key]) : undefined;
-      const drawSide = !!tileAsset && (!occupied.has(`${x + 1},${y}`) || !occupied.has(`${x},${y + 1}`));
-      terrainCells.push(studioTerrainCanvasCell({ key, x, y, tileAsset, feature: featureOverlays[key], animationFrame, drawSide }));
+      const sideExposure = resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupied.has(`${nextX},${nextY}`));
+      terrainCells.push(studioTerrainCanvasCell({ key, x, y, tileAsset, feature: featureOverlays[key], animationFrame, sideExposure }));
       gridCells.push({
         key,
         x,

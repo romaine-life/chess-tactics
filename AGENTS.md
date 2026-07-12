@@ -47,7 +47,7 @@ contracts whenever the task vocabulary suggests one.
 | --- | --- |
 | Product and gameplay intent | [`docs/game-concept.md`](docs/game-concept.md) and relevant entries in the ADR decision log |
 | Board, terrain, tiles, and projection | [`docs/board-render-contract.md`](docs/board-render-contract.md), [`docs/tile-ruleset.md`](docs/tile-ruleset.md), [`docs/blender-projection-contract.md`](docs/blender-projection-contract.md), and [`frontend/scripts/TILE_PIPELINE.md`](frontend/scripts/TILE_PIPELINE.md) |
-| Generated visual art and runtime visual assets | [`docs/asset-generation-contract.md`](docs/asset-generation-contract.md), [`docs/asset-terminology.md`](docs/asset-terminology.md), and the relevant portrait, background, UI, or tile contract |
+| Generated visual art and runtime visual assets | [`docs/runtime-asset-contract.md`](docs/runtime-asset-contract.md), [`docs/asset-generation-contract.md`](docs/asset-generation-contract.md), [`docs/asset-terminology.md`](docs/asset-terminology.md), and the relevant portrait, background, UI, or tile contract |
 | UI, chrome, Studio, and editors | [`docs/ui-art-direction.md`](docs/ui-art-direction.md), [`docs/ui-kit-standard.md`](docs/ui-kit-standard.md), and [`docs/studio-control-architecture.md`](docs/studio-control-architecture.md) |
 | Content, persistence, and authentication | [`docs/persistence.md`](docs/persistence.md) and the ADRs governing the affected content system |
 | Backend, multiplayer, and local server work | `CLAUDE.md` and the relevant backend smoke tests |
@@ -74,6 +74,13 @@ contracts whenever the task vocabulary suggests one.
   merely an agent-chosen result. Put judgment behind reachable viewers, editors,
   steppers, comparisons, and controls with legible state. See
   [ADR-0071](docs/adr/0071-the-deliverable-is-the-instrument.md).
+- Runtime, review, candidate, and source-media binaries are live-storage-backed.
+  Git may own code, deterministic geometry, prompts, and text provenance, but it
+  must not own media bytes, accepted pointers, or a packaged fallback. Promotion
+  is an admin backend transaction; generation tools upload candidates instead of
+  writing runtime art into the repository. See
+  [ADR-0085](docs/adr/0085-runtime-assets-are-live-storage-backed.md) and the
+  [runtime asset contract](docs/runtime-asset-contract.md).
 - Any board or level offered through the UI must use the canonical content
   system. Do not hide a broken or unavailable source behind compiled-in demo
   data, shadow catalogs, or fallback viewer states. See

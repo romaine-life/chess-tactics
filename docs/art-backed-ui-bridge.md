@@ -12,18 +12,18 @@ opens `/play/select/skirmish`, `/play/select/levels`, or
 ## Contract
 
 - `docs/ui-art-direction.md` remains the binding art direction source.
-- `frontend/public/assets/ui/*.png` are the Vite public concept screens served
-  at `/assets/ui/*`.
-- `docs/art/ui-screen-concepts/*.png` are the saved source references.
-- `frontend/public/assets/ui/main-menu-aspirational.png` remains the approved
+- Live semantic slots under `/assets/ui/*` are backend-resolved concept and
+  runtime screens.
+- Private source-media versions preserve the former UI-screen concept inputs.
+- `/assets/ui/main-menu-aspirational.png` remains the approved
   main menu composition reference.
-- `frontend/public/assets/ui/main-menu/background-scene-v1.png` is the live
+- `/assets/ui/main-menu/background-scene-v1.png` is the live
   scenic main-menu background. It is a generated background-only image with no
   baked text, panels, buttons, profile UI, news UI, dock UI, board, grid,
   playable platform, or chess pieces.
-- `frontend/public/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
+- `/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
   title-only render crop for the live main menu brand plate.
-- `frontend/public/assets/ui/main-menu/secondary/*.png` contains the narrowed
+- `/assets/ui/main-menu/secondary/*` contains the narrowed
   generated secondary chrome set imported from the follow-up art pass: profile
   panel, status panel, legacy daily/news panel frames, legacy dock chrome, and
   the source contact sheet. The daily/news frames and dock chrome are no longer
@@ -41,8 +41,8 @@ opens `/play/select/skirmish`, `/play/select/levels`, or
   crops on the live main menu. The earlier *generated*
   `main-menu-*-chrome-v1.png` bitmaps (regenerated approximations that had
   drifted from the concept) were retired end-to-end (guarded by
-  `frontend/scripts/check-no-chrome-bitmaps.mjs`).
-- `frontend/public/assets/ui/main-menu-button-art-*.png` also includes generated
+  `frontend/scripts/check-no-committed-media.mjs`).
+- `/assets/ui/main-menu-button-art-*` also includes generated
   no-text button candidates used by the main menu asset review board.
 - `frontend/src/app.js` owns the `ART_SCREENS` manifest, image paths, and hotspot
   action wiring.

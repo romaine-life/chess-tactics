@@ -1,10 +1,11 @@
-// Shared kit for baking /nine-slice-editor configs into committed assets.
+// Shared pure geometry/assembly algorithm for baking nine-slice candidates in
+// an explicit OS temporary workspace. It never publishes or promotes media.
 //
 // One place defines, per asset: which atoms it uses, its frame size, and which
 // output PNGs (incl. palette-swapped variants like the cyan active state). The
-// apply CLI (apply-nine-slice.mjs) and the per-asset generators both go through
-// buildAsset(), so there is a SINGLE bake implementation and the editor's offsets
-// can't diverge between tools.
+// candidate uploader and per-asset generators both go through buildAsset(), so
+// there is a SINGLE bake implementation and the editor's offsets can't diverge
+// between tools.
 //
 // Config shape (ADR-0054): per-element ABSOLUTES — exactly the render degrees of
 // freedom, nothing layered or dead. All positions are inward-positive in each
@@ -23,15 +24,22 @@
 // bracket/bracketCorners) is folded into absolutes on read — the renderer only
 // ever saw the sums.
 import { PNG } from 'pngjs';
-import { readFileSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const ATOMS = `${root}public/assets/ui/kit/atoms/`;
-export const KIT = `${root}public/assets/ui/kit/`;
-// Transparent-interior "line" variants (ornament only) live here, beside panel-line.png.
+const mediaRoot = process.env.NINE_SLICE_MEDIA_WORKSPACE ? resolve(process.env.NINE_SLICE_MEDIA_WORKSPACE) : '';
+if (mediaRoot) {
+  const rel = relative(resolve(tmpdir()), mediaRoot);
+  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('NINE_SLICE_MEDIA_WORKSPACE must be an OS temporary directory');
+}
+const ATOMS = mediaRoot ? `${join(mediaRoot, 'atoms')}${sep}` : '';
+export const KIT = mediaRoot ? `${join(mediaRoot, 'kit')}${sep}` : '';
+// Transparent-interior "line" candidate outputs share this temporary directory.
 // They are the fix for the 9-slice fill problem (see bakeLine / ADR-0034).
-export const LINE_DIR = `${root}public/assets/ui/explore/frames/`;
+export const LINE_DIR = mediaRoot ? `${join(mediaRoot, 'lines')}${sep}` : '';
 export const CONFIG_DIR = `${root}config/nine-slice/`;
 
 // Single source of truth — the SAME registry the in-app editor and the catalog
@@ -50,7 +58,10 @@ export const REGISTRY = Object.fromEntries(Object.entries(REG.assets).map(([id, 
 
 const hex = (r, g, b) => `${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 const isWarm = (r, g, b, a) => a > 40 && r > b + 15; // gold ramp is warm; keyline/navy are cool
-const loadAtom = (n) => PNG.sync.read(readFileSync(`${ATOMS}${n}.png`));
+const loadAtom = (n) => {
+  if (!ATOMS) throw new Error('set NINE_SLICE_MEDIA_WORKSPACE to a fetched temporary atom workspace');
+  return PNG.sync.read(readFileSync(`${ATOMS}${n}.png`));
+};
 const MIN_SCALE = 0.25;
 const DEFAULT_BRACKET_SCALE = 1;
 const DEFAULT_FRAME_SCALE = 1;
@@ -408,17 +419,6 @@ export function swapPalette(src, map) {
   return o;
 }
 
-export const SAVE_LOG = `${CONFIG_DIR}save-log.jsonl`;
-
-// Append-only audit trail of every bake, so a save is detectable on the filesystem
-// (not just in the browser). Each line: when, where it came from, the asset, the
-// exact config written, and the output files. Read SAVE_LOG to see what changed.
-export function logSave(source, asset, cfg, written) {
-  const entry = { ts: new Date().toISOString(), source, asset, config: cfg, written };
-  try { mkdirSync(CONFIG_DIR, { recursive: true }); appendFileSync(SAVE_LOG, `${JSON.stringify(entry)}\n`); } catch { /* logging must never break a bake */ }
-  return entry;
-}
-
 export function normalizeConfig(c) {
   // Returns the CANONICAL shape (see file header): per-element absolutes. A legacy
   // config (global+residual fields) folds in transparently; a canonical config
@@ -494,10 +494,6 @@ function pickShape(obj) { const o = {}; for (const k of SHAPE_FIELDS) if (obj &&
 export function themeOf(assetId) { return REGISTRY[assetId]?.theme ?? null; }
 export function assetsInTheme(theme) { return Object.keys(REGISTRY).filter((id) => REGISTRY[id].theme === theme); }
 export function loadTheme(theme) { try { return JSON.parse(readFileSync(`${THEME_DIR}${theme}.json`, 'utf8')); } catch { return {}; } }
-export function saveTheme(theme, shape) {
-  mkdirSync(THEME_DIR, { recursive: true });
-  writeFileSync(`${THEME_DIR}${theme}.json`, `${JSON.stringify({ theme, ...normalizeShape(shape) }, null, 2)}\n`);
-}
 // Normalize just the shape half of a config (what a theme file stores), reusing the
 // full normalizer so a theme file is always the canonical shape.
 function normalizeShape(shape) { return pickShape(normalizeConfig({ ...shape, asset: '_theme' })); }
@@ -522,9 +518,9 @@ export function loadConfig(assetId) {
 }
 
 // Bake an asset to in-memory PNGs WITHOUT writing — the pure core shared by
-// buildAsset (which writes) and the bake parity test (which compares the result
-// against the committed PNGs), so the writer and the test can never disagree about
-// what a config bakes to. Returns { variants:[{out, png, inspect, inspectPng}], warns, note }.
+// buildAsset (which writes only to an OS-temporary candidate workspace) and callers
+// that verify an upload before sending it to live media storage. Returns
+// { variants:[{out, png, inspect, inspectPng}], warns, note }.
 // Bake a `bar` (divider) asset: the horizontal-rail primitive (buildBar), one output per
 // variant with its optional palette swap. Bars carry no corner/pipe geometry, so this is a
 // self-contained path that never touches the frame normalizer or the corner atom.
@@ -606,9 +602,13 @@ export function bakeAsset(assetId, cfgRaw) {
   return { variants, warns, note };
 }
 
-// Bake one asset from its config and WRITE the variant PNGs (and any inspection
-// atom). Returns { written, warns, note } for the caller to report.
+// Bake one asset into the configured OS-temporary media workspace. A caller must
+// upload each exact output through the live-media candidate API.
 export function buildAsset(assetId, cfgRaw) {
+  if (!KIT || !ATOMS || !LINE_DIR) throw new Error('set NINE_SLICE_MEDIA_WORKSPACE before writing candidate media');
+  mkdirSync(KIT, { recursive: true });
+  mkdirSync(ATOMS, { recursive: true });
+  mkdirSync(LINE_DIR, { recursive: true });
   const { variants, warns, note } = bakeAsset(assetId, cfgRaw);
   const written = [];
   for (const v of variants) {
@@ -669,57 +669,4 @@ export function bakeLine(assetId, swap) {
   const clearFill = new PNG({ width: fillAtom.width, height: fillAtom.height }); clearFill.data.fill(0);
   const { w, h } = rec.frame;
   return buildFrameParts(base, bracket, edge, clearFill, cfg, w, h, !!rec.flipSides);
-}
-
-// Compare a freshly baked variant PNG to its committed file on disk, returning a
-// plain serializable result so a (type-checked) test can assert bake parity without
-// importing pngjs/fs/Buffer itself. Used by the nine-slice bake regression test.
-export function diffCommitted(out, freshPng, dir = KIT) {
-  const committed = PNG.sync.read(readFileSync(`${dir}${out}`));
-  const sameSize = committed.width === freshPng.width && committed.height === freshPng.height;
-  return {
-    out,
-    sameSize,
-    samePixels: sameSize && Buffer.compare(committed.data, freshPng.data) === 0,
-    committed: { w: committed.width, h: committed.height },
-    fresh: { w: freshPng.width, h: freshPng.height },
-  };
-}
-
-// Write the generated stylesheet that carries each asset's `content` into CSS as a
-// custom property the consuming rule reads (e.g. .settings-tab padding). This is how
-// `content` reaches the live element — same source of truth as the PNGs (the config).
-// Aggregates ALL assets so the file is complete; called after any bake.
-export function writeGeneratedCss() {
-  const lines = [];
-  for (const [id, rec] of Object.entries(REGISTRY)) {
-    if (rec.kind === 'bar') {
-      let cfg; try { cfg = loadConfig(id); } catch { continue; }
-      const metrics = barMetrics(id, cfg);
-      const prefix = `--kit-${id}`;
-      if (Number.isFinite(cfg.frameWidth)) {
-        const sourceSlice = rec.railSource === 'edge' ? loadAtom(rec.atoms.edge).height : 24;
-        lines.push(`  ${prefix}-frame-w: ${cfg.frameWidth}px; /* ${id} · divider host frame width */`);
-        lines.push(`  ${prefix}-frame-scale: ${(cfg.frameWidth / sourceSlice).toFixed(6)}; /* ${id} · host frame width / source rail height */`);
-      }
-      if (Number.isFinite(cfg.reach)) lines.push(`  ${prefix}-reach: ${cfg.reach}px; /* ${id} · divider bleed from content box to rail */`);
-      lines.push(`  ${prefix}-cap: ${metrics.cap}px; /* ${id} · 1-D border-image cap width */`);
-      lines.push(`  ${prefix}-cap-slice: ${metrics.cap}; /* ${id} · unitless border-image slice */`);
-      if (Number.isFinite(metrics.height)) lines.push(`  ${prefix}-height: ${metrics.height}px; /* ${id} · rendered divider strip height */`);
-      continue;
-    }
-    if (!rec.consume) continue;
-    let cfg; try { cfg = loadConfig(id); } catch { continue; }
-    lines.push(`  ${rec.consume.cssVar}: ${cfg.content}px; /* ${id} · ${rec.consume.selector} */`);
-    // The FILL box rides alongside `content` — same source (config), same opt-in consumption:
-    // the inset from the footprint where a backing surface behind the frame stops (the frame may
-    // bleed outside it). Named by swapping `-content-` → `-fill-` off the content var.
-    const fillVar = rec.consume.cssVar.replace('-content-', '-fill-');
-    lines.push(`  ${fillVar}: ${cfg.fill}px; /* ${id} · opt-in: footprint-px where a backing surface stops */`);
-  }
-  const css = `/* GENERATED by nine-slice-kit (apply-nine-slice / dev Save) — do not edit by hand.\n   Source of truth: config/nine-slice/<asset>.json */\n:root {\n${lines.join('\n')}\n}\n`;
-  const dir = `${root}src/generated/`;
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(`${dir}nine-slice.css`, css);
-  return 'src/generated/nine-slice.css';
 }

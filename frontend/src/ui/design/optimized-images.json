@@ -1,5 +1,5 @@
 {
-  "_comment": "Single source of truth for the main-menu first-visit image-optimization pass. The optimizer script (frontend/scripts/optimize-main-menu-assets.mjs) reads `targets` to emit deterministic AVIF + WebP derivatives next to each PNG source; the runtime (catalogData.imageSetFor / style.css / MainMenu.tsx <picture>) prefers those derivatives with the original PNG kept as the universal fallback. PNG sources stay checked in and authoritative. To regenerate: `npm --prefix frontend run optimize:assets`.",
+  "_comment": "Renderer preference list for live-media format slots. The backend catalog owns each active AVIF, WebP, and PNG version; this file contains no accepted pointer and no filesystem fallback.",
   "schemaVersion": 1,
   "targets": [
     {

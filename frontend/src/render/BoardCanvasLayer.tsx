@@ -4,8 +4,6 @@ import {
   type BoardDrawOp,
 } from '@chess-tactics/board-render';
 
-const GROUND_COVER_ANIM_MS = 1140;
-
 type CanvasImage = HTMLImageElement;
 
 const imageCache = new Map<string, Promise<CanvasImage>>();
@@ -30,14 +28,16 @@ function imageReady(image: CanvasImage | undefined): image is CanvasImage {
 }
 
 export function isAnimatedGroundCoverOp(op: BoardDrawOp): boolean {
-  return op.src.includes('/assets/groundcover/') && op.sw != null;
+  return op.animation?.kind === 'ground-cover-sway' && op.animation.frameCount > 1 && op.sw != null;
 }
 
-function liveSx(op: BoardDrawOp, image: CanvasImage, timeMs: number): number {
+function liveSx(op: BoardDrawOp, _image: CanvasImage, timeMs: number): number {
   if (!isAnimatedGroundCoverOp(op) || !op.sw) return op.sx ?? 0;
-  const frameCount = Math.max(1, Math.floor((image.naturalWidth || op.sw) / op.sw));
-  const phase = ((op.dx * 17 + op.dy * 29) % frameCount + frameCount) % frameCount;
-  const frame = Math.floor((((timeMs / GROUND_COVER_ANIM_MS) + phase / frameCount) % 1) * frameCount);
+  const animation = op.animation!;
+  const frameCount = Math.max(1, Math.floor(animation.frameCount));
+  const durationMs = Math.max(1, animation.durationMs);
+  const phase = ((animation.phase % frameCount) + frameCount) % frameCount;
+  const frame = Math.floor((((timeMs / durationMs) + phase / frameCount) % 1) * frameCount);
   return frame * op.sw;
 }
 
@@ -190,6 +190,7 @@ function opSignature(op: BoardDrawOp): string {
     op.contain ? 1 : 0,
     op.flipX ? 1 : 0,
     op.opacity ?? '',
+    op.animation ? `${op.animation.kind},${op.animation.frameCount},${op.animation.durationMs},${op.animation.phase}` : '',
     op.clipPolygons?.map((polygon) => polygon.join(',')).join(';') ?? '',
   ].join(':');
 }

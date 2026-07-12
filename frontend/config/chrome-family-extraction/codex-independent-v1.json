@@ -1,10 +1,10 @@
 {
   "id": "codex-independent-v1",
-  "sourceDir": "docs/art/chrome-junction-candidates/codex-independent-v1/sources",
-  "outDir": "docs/art/chrome-junction-candidates/codex-independent-v1",
-  "atomsDir": "frontend/public/assets/ui/kit/atoms",
+  "mediaAuthority": "live-backend",
+  "workspaceInputs": "caller-provided temporary directory",
+  "workspaceOutputs": "archive sources and upload candidates through the live-media admin API",
   "keyOut": "magenta",
-  "contactSheet": "source-parts-sheet-alpha.png",
+  "reviewArtifact": "private live-media review version",
   "families": [
     {
       "id": "outer",

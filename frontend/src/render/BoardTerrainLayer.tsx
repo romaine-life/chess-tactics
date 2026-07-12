@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, type CSSProperties, type ReactElement } fro
 import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
 import { macroTileAsset, macroTileBreakIndices, macroTileFrame, type MacroTilePlacement } from '../core/macroTiles';
 import { boardLabCellPosition } from './boardProjection';
+import {
+  TERRAIN_SIDE_FACE_COLUMN,
+  TERRAIN_SIDE_FACES,
+  type TerrainSideFace,
+  type TerrainSideFaces,
+} from '@chess-tactics/board-render';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
 const TILE_FRAME_H = TILE_FRAME_HEIGHT;
@@ -14,10 +20,9 @@ export interface TerrainCanvasCell {
   x: number;
   y: number;
   topSrc?: string;
-  sideSrc?: string;
+  sideFaces?: TerrainSideFaces<string>;
   featureSrc?: string;
   topAnimFrames?: number;
-  drawSide?: boolean;
 }
 
 export interface TerrainCanvasMacroTile {
@@ -121,10 +126,12 @@ function terrainSignature(cells: readonly TerrainCanvasCell[], macroTiles: reado
       cell.x,
       cell.y,
       cell.topSrc ?? '',
-      cell.sideSrc ?? '',
       cell.featureSrc ?? '',
       cell.topAnimFrames ?? 0,
-      cell.drawSide ? 1 : 0,
+      ...TERRAIN_SIDE_FACES.flatMap((face) => [
+        cell.sideFaces?.[face].exposed ? 1 : 0,
+        cell.sideFaces?.[face].material ?? '',
+      ]),
     ].join(':'))
     .join('|');
   const macroTileSignature = macroTiles
@@ -147,12 +154,36 @@ export function macroTileOwnedCellKeys(macroTiles: readonly TerrainCanvasMacroTi
   return owned;
 }
 
+export type TerrainTopFootprintDiamond = readonly [
+  { x: number; y: number },
+  { x: number; y: number },
+  { x: number; y: number },
+  { x: number; y: number },
+];
+
+/** Canonical logical top footprint used to clip the seam-repair pass. */
+export function terrainTopFootprintDiamonds(cells: readonly TerrainCanvasCell[]): TerrainTopFootprintDiamond[] {
+  return cells.flatMap((cell) => {
+    if (!cell.topSrc) return [];
+    const { left, top } = boardLabCellPosition(cell);
+    return [[
+      { x: left, y: top - TILE_STEP_Y },
+      { x: left + TILE_STEP_X, y: top },
+      { x: left, y: top + TILE_STEP_Y },
+      { x: left - TILE_STEP_X, y: top },
+    ] as TerrainTopFootprintDiamond];
+  });
+}
+
 function uniqueSources(cells: readonly TerrainCanvasCell[], macroTiles: readonly TerrainCanvasMacroTile[]): string[] {
   const urls = new Set<string>();
   const macroOwned = macroTileOwnedCellKeys(macroTiles);
   for (const cell of cells) {
     if (cell.topSrc && !macroOwned.has(`${cell.x},${cell.y}`)) urls.add(cell.topSrc);
-    if (cell.sideSrc && cell.drawSide !== false) urls.add(cell.sideSrc);
+    for (const face of TERRAIN_SIDE_FACES) {
+      const side = cell.sideFaces?.[face];
+      if (side?.exposed && side.material) urls.add(side.material);
+    }
     if (cell.featureSrc) urls.add(cell.featureSrc);
   }
   for (const macroTile of macroTiles) urls.add(macroTile.src);
@@ -273,19 +304,47 @@ function drawTopFrame(
   ctx.drawImage(image, dx, dy, TILE_FRAME_W, TILE_FRAME_H);
 }
 
-function drawCellSide(
+export interface TerrainSideDrawSlice {
+  face: TerrainSideFace;
+  src: string;
+  sourceX: number;
+  destinationX: number;
+  width: number;
+}
+
+export function terrainSideDrawSlices(cell: TerrainCanvasCell): TerrainSideDrawSlice[] {
+  return TERRAIN_SIDE_FACES.flatMap((face) => {
+    const side = cell.sideFaces?.[face];
+    if (!side?.exposed || !side.material) return [];
+    const x = TERRAIN_SIDE_FACE_COLUMN[face] * TILE_STEP_X;
+    return [{ face, src: side.material, sourceX: x, destinationX: x, width: TILE_STEP_X }];
+  });
+}
+
+function drawCellSides(
   ctx: CanvasRenderingContext2D,
   cell: TerrainCanvasCell,
   bounds: TerrainBounds,
   images: ReadonlyMap<string, HTMLImageElement>,
 ): void {
-  if (!cell.sideSrc || cell.drawSide === false) return;
-  const side = images.get(cell.sideSrc);
-  if (!imageReady(side)) return;
   const { left, top } = boardLabCellPosition(cell);
   const dx = left - TILE_STEP_X - bounds.left;
   const dy = top - TILE_EQUATOR - bounds.top;
-  ctx.drawImage(side, dx, dy, TILE_FRAME_W, TILE_FRAME_H);
+  for (const slice of terrainSideDrawSlices(cell)) {
+    const side = images.get(slice.src);
+    if (!imageReady(side)) continue;
+    ctx.drawImage(
+      side,
+      slice.sourceX,
+      0,
+      slice.width,
+      TILE_FRAME_H,
+      dx + slice.destinationX,
+      dy,
+      slice.width,
+      TILE_FRAME_H,
+    );
+  }
 }
 
 function drawCellTop(
@@ -383,12 +442,25 @@ function drawFrame(
   const macroOwned = macroTileOwnedCellKeys(macroTiles);
 
   for (const cell of ordered) {
-    drawCellSide(ctx, cell, bounds, images);
+    drawCellSides(ctx, cell, bounds, images);
   }
 
+  // The dilated pass exists only to seal internal raster seams. Clip it to the union of
+  // canonical occupied diamonds so it cannot paint a top-colour apron beyond the grid.
+  ctx.save();
+  ctx.beginPath();
+  for (const [north, east, south, west] of terrainTopFootprintDiamonds(cells)) {
+    ctx.moveTo(north.x - bounds.left, north.y - bounds.top);
+    ctx.lineTo(east.x - bounds.left, east.y - bounds.top);
+    ctx.lineTo(south.x - bounds.left, south.y - bounds.top);
+    ctx.lineTo(west.x - bounds.left, west.y - bounds.top);
+    ctx.closePath();
+  }
+  ctx.clip();
   for (const cell of ordered) {
     if (!macroOwned.has(`${cell.x},${cell.y}`)) drawCellTop(ctx, cell, bounds, images, timeMs, true);
   }
+  ctx.restore();
 
   for (const cell of ordered) {
     if (!macroOwned.has(`${cell.x},${cell.y}`)) drawCellTop(ctx, cell, bounds, images, timeMs, false);

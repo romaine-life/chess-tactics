@@ -2,8 +2,8 @@
 
 Run with:  blender --background --python render_knight_fur.py
 
-Produces .unit-art-output/knight/navy-blue/<direction>.png by default at the
-true-isometric contract angle (45 yaw / 35.264 elevation / orthographic, fixed camera,
+The canonical pipeline fetches the private OBJ/MTL/texture bundle into a
+temporary directory and renders at the true-isometric contract angle (45 yaw / 35.264 elevation / orthographic, fixed camera,
 piece rotated per direction). The wood-grain diffuse is dropped and replaced with a
 procedural navy "hint of fur" coat (smooth muzzle, fur only on the coat — not the
 pedestal base or the sculpted mane). See docs/blender-projection-contract.md.
@@ -19,15 +19,13 @@ Orientation gotchas this script handles (each cost an iteration to find):
   - bake the centering translation so the turntable pivots on the vertical axis.
 """
 import bpy, math, mathutils, os, numpy as np
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
-    ROOT = ROOT.parent
-OBJ = str(ROOT / "docs/art/unit-concepts/source-assets/knight/wooden-chess-knight-side-b/12936_Wooden_Chess_Knight_Side_B_V2_l3.obj")
-OUT = os.environ.get("UNIT_ART_OUTPUT_DIR", str(ROOT / ".unit-art-output/knight/navy-blue"))
-FRAME_WIDTH = int(os.environ.get("UNIT_ART_FRAME_WIDTH", "512"))
-FRAME_HEIGHT = int(os.environ.get("UNIT_ART_FRAME_HEIGHT", "512"))
+OBJ = os.environ.get("UNIT_ART_KNIGHT_OBJ")
+OUT = os.environ.get("UNIT_ART_OUTPUT_DIR")
+if not OBJ or not OUT:
+    raise RuntimeError("run through generate-unit-art.py; private knight bundle and output are required")
+FRAME_WIDTH = int(os.environ["UNIT_ART_FRAME_WIDTH"])
+FRAME_HEIGHT = int(os.environ["UNIT_ART_FRAME_HEIGHT"])
 if not (1 <= FRAME_WIDTH <= 4096 and 1 <= FRAME_HEIGHT <= 4096):
     raise RuntimeError("UNIT_ART_FRAME_WIDTH/HEIGHT must be between 1 and 4096")
 os.makedirs(OUT, exist_ok=True)
