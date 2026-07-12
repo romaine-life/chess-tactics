@@ -4,16 +4,91 @@
 // the exact protocol logic (the worker shell touches `self`, which node can't import).
 //
 // Owner grammar (the control spec this module implements): STEP = one game, STEP N,
-// RUN to the configured budget, STOP between games, RESET = a fresh session. No
-// pause/resume machinery — TD's atomic unit is ONE game (ms-fast), so a stop between
-// games commits cleanly; that is the whole transport.
+// RUN to the configured budget, STOP between games, NEW RUN = a fresh session (the
+// old one stays in the level's run library). No pause/resume machinery — TD's atomic
+// unit is ONE game (ms-fast), so a stop between games commits cleanly; that is the
+// whole transport.
 
 import type { Level } from '../core/level';
+import type { Side } from '../core/types';
+import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
 import {
   DEFAULT_PROBE_GAMES,
-  createTrainingSession, derivedSeeds, evaluateVsRandom, runTrainingGames, summarizeSeeds,
+  createTrainingSession, derivedSeeds, evaluateVsRandom, runTrainingGames, scheduleAt, summarizeSeeds,
   type SeedSummary, type TdGameRecord, type TrainOptions, type TrainSessionState, type ValueWeights,
 } from '../game/tdValues';
+
+/** One adoption event: the learned values that were made this level's live AI. */
+export interface TdAdoptionRecord {
+  /** ISO timestamp of the adoption. */
+  at: string;
+  /** The full encoded eval vector that went live (encodeWeights order). */
+  vector: number[];
+  /** The pawn = 1 piece values that were adopted, for display/audit. */
+  pieceValues: ValueWeights;
+  /** Games trained when adopted, and the seeds behind the numbers. */
+  fromGames: number;
+  seeds: number[];
+  source: 'seed-mean' | 'live-weights';
+  /** Which run the adoption came from (absent on pre-library adoptions). */
+  runId?: number;
+  runName?: string;
+}
+
+/** The autosave payload one run accumulates — everything the pane shows. The OPTS
+ * travel with the state: a session is a position inside a fixed schedule, so
+ * restoring one without its exact options would corrupt the run. (Also the exact
+ * shape of the retired single-document `tdSession` blob field, which migrates into
+ * the run library as Run 1.) */
+export interface TdSessionDoc {
+  opts: TrainOptions;
+  seedCount: number;
+  session: TdSession;
+  probeLog: TdProbe[];
+  summary: SeedSummary | null;
+  kept: boolean;
+  adoption?: TdAdoptionRecord;
+}
+
+/** One saved run — the experiment-tracking primitive (MLflow / W&B's "run"): frozen
+ * settings plus everything they produced, wrapped with identity so a level can hold
+ * MANY and the owner can tweak a knob, run again, and compare. */
+export interface TdRunDoc extends TdSessionDoc {
+  id: number;
+  name: string;
+  /** ISO — absent on the run migrated from the pre-library single-document format. */
+  createdAt?: string;
+}
+
+/** A level's run library, account-scoped in the opening-books blob. `activeId` is
+ * the run the pane has open; absent = the pane is on a fresh, not-yet-recorded run.
+ * Ids never rewind (stable handles, the opening-book idiom). */
+export interface TdRunsDoc {
+  nextId: number;
+  activeId?: number;
+  runs: TdRunDoc[];
+}
+
+/** Write the pane's autosave payload into its run: update in place when `runId`
+ * names an existing run (identity and any adoption preserved — a plain autosave
+ * payload never carries adoption; tdAdopt passes one explicitly), else record a NEW
+ * run named after its id. Returns the grown library and the run as written. */
+export function upsertTdRun(
+  lib: TdRunsDoc | undefined,
+  payload: TdSessionDoc,
+  runId: number | null,
+): { lib: TdRunsDoc; run: TdRunDoc } {
+  const cur: TdRunsDoc = lib ?? { nextId: 1, runs: [] };
+  const existing = runId !== null ? cur.runs.find((r) => r.id === runId) : undefined;
+  if (existing) {
+    const adoption = payload.adoption ?? existing.adoption;
+    const run: TdRunDoc = { ...existing, ...payload, ...(adoption ? { adoption } : {}) };
+    return { lib: { ...cur, activeId: run.id, runs: cur.runs.map((r) => (r.id === run.id ? run : r)) }, run };
+  }
+  const id = cur.nextId;
+  const run: TdRunDoc = { id, name: `Run ${id}`, createdAt: new Date().toISOString(), ...payload };
+  return { lib: { nextId: id + 1, activeId: id, runs: [...cur.runs, run] }, run };
+}
 
 /** Everything a command needs beside the level: the engine options plus how many
  * independent seeds the completion mean ± spread folds. The anneal schedules lerp
@@ -33,6 +108,17 @@ export interface TdProbe {
   winRate: number;
 }
 
+/** One line of the run's ledger: what game N was, and exactly what it changed. */
+export interface TdLedgerRow {
+  game: number;
+  winner: Side | 'draw';
+  plies: number;
+  /** The exploration the game was played under (annealed at its game index). */
+  epsilon: number;
+  /** Per-type weight change this game's update landed (post − pre, logit units). */
+  delta: ValueWeights;
+}
+
 /** The complete mutable state between commands (JSON-safe, structured-cloneable). */
 export interface TdSession {
   train: TrainSessionState;
@@ -43,6 +129,9 @@ export interface TdSession {
    * data (ply-by-ply via replayStates). Observation only: never read back by the
    * learning, so its presence cannot perturb the chunked === batch equivalence. */
   lastGame?: TdGameRecord | null;
+  /** One row per game, in order — the run's accounting (observation only, like
+   * lastGame). Grows with the run; persistence caps it to the newest window. */
+  ledger?: TdLedgerRow[];
 }
 
 /** Cooperation hooks: the worker yields between games so a STOP message can land;
@@ -53,7 +142,7 @@ export interface TdControl {
 }
 
 export function freshTdSession(opts: TrainOptions): TdSession {
-  return { train: createTrainingSession(opts), probe: null, lastGame: null };
+  return { train: createTrainingSession(opts), probe: null, lastGame: null, ledger: [] };
 }
 
 /** trainValues' probe defaulting (shared constant, not a re-stated literal):
@@ -85,6 +174,8 @@ export async function advanceTd(
   while (cur.train.game < target) {
     if (control?.shouldStop?.()) return { session: cur, stopped: true };
     let lastGame = cur.lastGame ?? null;
+    const prevGame = cur.train.game;
+    const prevWeights = cur.train.weights;
     const train = runTrainingGames(level, opts, cur.train, 1, (record) => { lastGame = record; });
     let latest = cur.probe;
     // trainValues' probe story exactly: on the cadence when one is set, and ALWAYS once
@@ -93,7 +184,19 @@ export async function advanceTd(
     if (probe.games > 0 && ((probe.every > 0 && train.game % probe.every === 0) || train.game === opts.games)) {
       latest = { game: train.game, winRate: evaluateVsRandom(level, train.weights, probe.games, { maxPlies: opts.maxPlies }) };
     }
-    cur = { train, probe: latest, lastGame };
+    // The ledger: what this game was, and exactly what its update moved. Built per
+    // game HERE (display frames may be throttled downstream, but the session sees
+    // every game). Observation only — never read back by the learning.
+    let ledger = cur.ledger ?? [];
+    if (lastGame && train.game > prevGame) {
+      const delta = {} as ValueWeights;
+      for (const t of PLAYABLE_PIECE_TYPES) delta[t] = train.weights[t] - prevWeights[t];
+      ledger = [...ledger, {
+        game: train.game, winner: lastGame.winner, plies: lastGame.plies,
+        epsilon: scheduleAt(opts, prevGame).epsilon, delta,
+      }];
+    }
+    cur = { train, probe: latest, lastGame, ledger };
     onProgress?.(cur);
     if (control?.afterGame) await control.afterGame();
   }
