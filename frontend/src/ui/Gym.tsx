@@ -532,16 +532,25 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const blobRef = useRef(blob); blobRef.current = blob;
   const activeIdRef = useRef(activeId); activeIdRef.current = activeId;
 
+  // A failed account save must be VISIBLE, not just logged — otherwise training
+  // continues for hours against a dead persistence path (e.g. an oversized blob or
+  // a server error) and the loss is only discovered on reload.
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   // Persist + set state together — every meaningful change goes through here. The
-  // save is fire-and-forget (never blocks the UI); a signed-out/failed save is
-  // swallowed after logging, matching Game Lab's saved-runs behavior.
+  // save is fire-and-forget (never blocks the UI); a signed-out save is swallowed
+  // after flipping the signed-in hint, matching Game Lab's saved-runs behavior;
+  // any other failure raises the visible save-error line until a save succeeds.
   const commit = useCallback((next: BooksBlob) => {
     blobRef.current = next;
     setBlob(next);
     if (levelId) {
-      void saveOpeningBooks(levelId, next).catch((error) => {
+      saveOpeningBooks(levelId, next).then(() => setSaveError(null)).catch((error) => {
         if (error instanceof HttpError && error.status === 401) setSignedIn(false);
-        else console.warn('opening-books save failed', error);
+        else {
+          console.warn('opening-books save failed', error);
+          setSaveError(`Account save FAILED (${error instanceof HttpError ? `HTTP ${error.status}` : 'network error'}) — changes since the last successful save exist only in this tab; the next change retries.`);
+        }
       });
     }
   }, [levelId]);
@@ -871,7 +880,10 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const tdKnobsRef = useRef(tdKnobs); tdKnobsRef.current = tdKnobs;
   const tdFlushRef = useRef<((keepalive: boolean) => void) | null>(null);
   useEffect(() => {
-    if (!levelId || !tdSession) { tdFlushRef.current = null; return undefined; }
+    // While the account blob is still loading, saving would clobber the server-side
+    // library with this tab's empty one (the transport is gated on the same flag,
+    // so a session can't normally exist here — belt and braces for the race).
+    if (!levelId || !tdSession || loadingBooks) { tdFlushRef.current = null; return undefined; }
     const buildNext = (): { blob: BooksBlob; run: TdRunDoc } => {
       const payload: TdSessionDoc = {
         opts: tdOptionsOf(tdKnobsRef.current), seedCount: tdKnobsRef.current.seedCount,
@@ -902,7 +914,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
       }
     };
     return () => clearTimeout(id);
-  }, [levelId, tdSession, tdProbeLog, tdSummary, tdKept, commit]);
+  }, [levelId, tdSession, tdProbeLog, tdSummary, tdKept, loadingBooks, commit]);
   useEffect(() => {
     const flush = (): void => { tdFlushRef.current?.(true); };
     window.addEventListener('pagehide', flush);
@@ -1414,50 +1426,62 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     const adoptedRun: TdRunDoc = { ...run, adoption };
     tdDocRef.current = adoptedRun;
     if (tdRunIdRef.current !== run.id) { tdRunIdRef.current = run.id; setTdRunId(run.id); }
+    // The record lands twice on purpose: on the run (history) and at blob level
+    // (the LIVE record — it must survive even deleting the run it came from).
     commit({
-      ...blobRef.current, adoptedWeights: vec,
+      ...blobRef.current, adoptedWeights: vec, tdAdoption: adoption,
       tdRuns: { ...lib, runs: lib.runs.map((r) => (r.id === run.id ? adoptedRun : r)) },
     });
   }, [levelId, tdAdoptPreview, tdGamesDone, tdSummary, tdSess, tdProbeLog, tdKept, commit]);
-  // Clearing takes the adoption OUT OF FORCE but keeps every run's adoption record —
-  // that is history ("this run went live on the 14th"), and the audit box keys the
-  // LIVE record by matching vectors, so a cleared one no longer shows as active.
+  // Clearing takes the adoption OUT OF FORCE (vector + live record) but keeps every
+  // run's own adoption record — that is history ("this run went live on the 14th").
   const tdClearAdoption = useCallback(() => {
     if (!levelId) return;
     setAdoptedWeights(levelId, null);
     setAdoptedVec(null);
-    const { adoptedWeights: _cleared, ...rest } = blobRef.current;
+    const { adoptedWeights: _cleared, tdAdoption: _record, ...rest } = blobRef.current;
     commit(rest);
   }, [levelId, commit]);
   // What the live opponent will actually use on this level, resolved tier by tier —
-  // the audit read. `adoptedVec` mirrors localStorage + the account blob; the run it
-  // came from is found by matching the recorded vector (JSON round-trips preserve
-  // the exact doubles, so equality is sound).
+  // the audit read. `adoptedVec` mirrors localStorage + the account blob; the live
+  // record is the blob-level one (falling back to a vector-match scan over the runs
+  // for documents adopted before the blob-level slot existed). Vector equality is
+  // sound: JSON round-trips preserve the exact doubles. A record whose vector no
+  // longer matches (e.g. the Training tab adopted later) is correctly ignored.
   const tdLiveAi = useMemo(() => {
     const shipped = levelId ? readShippedVector(levelId) : null;
     const vec = adoptedVec ?? shipped;
     const sameVec = (a: number[], b: number[]): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
-    const fromRun = adoptedVec
-      ? (blob.tdRuns?.runs ?? []).find((r) => r.adoption && sameVec(r.adoption.vector, adoptedVec)) ?? null
+    const record = adoptedVec
+      ? (blob.tdAdoption && sameVec(blob.tdAdoption.vector, adoptedVec)
+        ? blob.tdAdoption
+        : (blob.tdRuns?.runs ?? []).find((r) => r.adoption && sameVec(r.adoption.vector, adoptedVec))?.adoption ?? null)
       : null;
     const tier = adoptedVec
-      ? (fromRun ? 'adopted — from this pane' : 'adopted — from the Training tab')
+      ? (record ? 'adopted — from this pane' : 'adopted — from the Training tab')
       : shipped ? 'globally shipped' : 'built-in defaults';
     let pieceValues = DEFAULT_EVAL_WEIGHTS.pieceValues;
     if (vec) { try { pieceValues = decodeWeights(vec).pieceValues; } catch { /* fall back to defaults */ } }
+    const fromRunId = record?.runId ?? null;
+    const runStillExists = fromRunId !== null && (blob.tdRuns?.runs ?? []).some((r) => r.id === fromRunId);
     return {
       tier, pieceValues, hasAdoption: !!adoptedVec,
-      adoption: fromRun?.adoption ?? null,
-      fromRunId: fromRun?.id ?? null, fromRunName: fromRun?.name ?? null,
+      adoption: record ?? null,
+      fromRunId: runStillExists ? fromRunId : null,
+      fromRunName: record?.runName ? `${record.runName}${runStillExists || fromRunId === null ? '' : ' (deleted)'}` : null,
     };
-  }, [levelId, adoptedVec, blob.tdRuns]);
+  }, [levelId, adoptedVec, blob.tdRuns, blob.tdAdoption]);
 
   // ⇄ compare — the experiment-tracking read: every saved run side by side, one
   // column per run. Settings rows that DIFFER across runs are highlighted (they are
   // the experiment); values are the seed-fold mean when a run folded, live weights
   // otherwise. Read straight from the library (autosave keeps the open run fresh).
   const tdCompareView: ReactElement | null = tdCompare && tdRunList.length ? (() => {
-    const runs = tdRunList;
+    // The OPEN run's column reads the LIVE pane state — the blob copy trails it by
+    // the autosave debounce (and by the whole run while frames stream continuously).
+    const runs = tdRunList.map((r) => (r.id === tdRunId
+      ? { ...r, session: tdSess, probeLog: tdProbeLog, summary: tdSummary, kept: tdKept }
+      : r));
     const optRows: Array<{ label: string; get: (r: TdRunDoc) => string }> = [
       { label: 'games budget', get: (r) => String(r.opts.games) },
       { label: 'master seed', get: (r) => String(r.opts.seed) },
@@ -1523,7 +1547,9 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   {runs.map((r) => {
                     const na = untouchedIn(r, t);
                     const rel = relByRun.get(r.id);
-                    return <td key={r.id} className={na ? 'na' : ''}>{na ? '—' : rel ? rel[t].toFixed(2) : valueOf(r)[t].toFixed(3)}</td>;
+                    // A run whose pawn weight can't normalize shows raw logits —
+                    // labeled per cell, never passed off as a pawn = 1 number.
+                    return <td key={r.id} className={na ? 'na' : ''}>{na ? '—' : rel ? rel[t].toFixed(2) : `${valueOf(r)[t].toFixed(3)} (logit)`}</td>;
                   })}
                 </tr>
               ))}
@@ -2388,7 +2414,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                 <div className="gym-bookmgr" aria-label="Run library">
                   <label className="gl-field">Run
                     <select value={tdRunId ?? ''} onChange={(e) => tdOpenRun(Number(e.target.value))}
-                      disabled={tdBusy || tdRunList.length === 0}
+                      disabled={tdBusy || loadingBooks || tdRunList.length === 0}
                       title="The level's run library — every run stays until you delete it; switching restores that run whole (a dealt-but-unfinished game re-deals identically)">
                       {tdRunId === null ? <option value="">— new run (recorded at its first game) —</option> : null}
                       {tdRunList.map((r) => (
@@ -2407,20 +2433,21 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                     </label>
                   ) : null}
                   <div className="gym-bookmgr-btns">
-                    <button type="button" className="new" onClick={tdNewRun} disabled={tdBusy || (tdRunId === null && !tdStarted && !tdWalking)}
+                    <button type="button" className="new" onClick={tdNewRun} disabled={tdBusy || loadingBooks || (tdRunId === null && !tdStarted && !tdWalking)}
                       title="Shelve this run in the library and start the next experiment — settings unfreeze, so tweak a knob and run again">+ New run</button>
                     <button type="button" className="del" onClick={tdDeleteRun}
-                      disabled={tdBusy || (tdRunId === null && !tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)}
+                      disabled={tdBusy || loadingBooks || (tdRunId === null && !tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)}
                       title="Delete this run from the library — the one discard (the level's adopted AI, if any, stays until cleared in the audit box)">Delete run</button>
                     <button type="button" onClick={() => { setTdCompare((c) => !c); setTdHelp(false); }} aria-pressed={tdCompare} disabled={tdRunList.length < 2}
                       title="Every saved run side by side — settings, outcomes, learned values">⇄ compare</button>
                   </div>
                   <span className="gym-count">{tdRunList.length} run{tdRunList.length === 1 ? '' : 's'} for this level — every run stays until deleted.</span>
+                  {saveError ? <p className="gym-error">{saveError}</p> : null}
                 </div>
                 <div className="gym-run-row">
-                  <button type="button" onClick={tdAdvance} disabled={!tdReady || tdBusy || (tdComplete && !tdWalking)}
+                  <button type="button" onClick={tdAdvance} disabled={!tdReady || tdBusy || loadingBooks || (tdComplete && !tdWalking)}
                     title={tdWalking ? 'Play the next ply — the update lands on the final one' : 'Deal the next training game; each press after plays one ply'}>⏭ step</button>
-                  <button type="button" onClick={() => tdSend(Math.max(1, tdStepN))} disabled={!tdReady || tdBusy || tdComplete}
+                  <button type="button" onClick={() => tdSend(Math.max(1, tdStepN))} disabled={!tdReady || tdBusy || loadingBooks || tdComplete}
                     title="Play N whole games at full speed">⏭ games</button>
                   <input className="gym-td-stepn-input" type="number" min={1} max={100000} value={tdStepN} list="gym-td-step-presets"
                     onChange={(e) => setTdStepN(Math.max(1, Math.floor(Number(e.target.value) || 1)))} aria-label="Games per batch step" />
@@ -2429,11 +2456,11 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   </datalist>
                 </div>
                 <div className="gym-run-row">
-                  <button type="button" className="play gym-td-watch-btn" onClick={() => { tdWatchScopeRef.current = 'run'; setTdWatching((w) => !w); }} disabled={!tdReady || (tdComplete && !tdWalking)}
+                  <button type="button" className="play gym-td-watch-btn" onClick={() => { tdWatchScopeRef.current = 'run'; setTdWatching((w) => !w); }} disabled={!tdReady || loadingBooks || (tdComplete && !tdWalking)}
                     title={tdWatching ? 'Pause — the game in play keeps its place' : 'The system plays by itself, one step per beat: each ply on the board, the update landing at every game’s end, game after game, until you pause'}>
                     {tdWatching ? '⏸ pause' : '▶ watch'}
                   </button>
-                  <button type="button" onClick={() => { setTdWatching(false); tdSend('run'); }} disabled={!tdReady || tdBusy || (tdComplete && tdSummary !== null)}
+                  <button type="button" onClick={() => { setTdWatching(false); tdSend('run'); }} disabled={!tdReady || tdBusy || loadingBooks || (tdComplete && tdSummary !== null)}
                     title="Full speed, no animation — plays the remaining budget in seconds; same numbers, bit for bit">▶ run</button>
                   <button type="button" onClick={() => { setTdWatching(false); tdStop(); }} disabled={!tdBusy && !tdWatching}>⏹ stop</button>
                 </div>

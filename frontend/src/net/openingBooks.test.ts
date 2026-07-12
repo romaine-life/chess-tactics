@@ -110,32 +110,59 @@ describe('saveOpeningBooks', () => {
     expect(traj[399].step).toBe(499); // newest kept
   });
 
-  it('round-trips the TD run library and caps each run (probe log + ledger, newest windows)', async () => {
-    const doc = {
+  it('round-trips the TD run library and caps each run — deep ledger window for the OPEN run, short for shelved, rows rounded to display precision', async () => {
+    const mkDoc = (ledgerLen: number) => ({
       opts: { games: 600, seed: 1 }, seedCount: 3,
       session: {
         train: { game: 50, weights: { pawn: 0.1 }, outcomes: { playerWins: 1, draws: 49, enemyWins: 0 } },
         probe: null, lastGame: null,
-        ledger: Array.from({ length: 2100 }, (_, i) => ({ game: i + 1, winner: 'draw', plies: 3, epsilon: 0.5, delta: {} })),
+        ledger: Array.from({ length: ledgerLen }, (_, i) => ({
+          game: i + 1, winner: 'draw', plies: 3,
+          epsilon: 0.123456789, delta: { pawn: 0.000123456789, knight: -0.05000000001 },
+        })),
       },
       probeLog: Array.from({ length: 450 }, (_, i) => ({ game: (i + 1) * 25, winRate: 0.5 })),
       summary: null, kept: false,
-    };
-    const lib = { nextId: 3, activeId: 2, runs: [{ id: 2, name: 'Run 2', ...doc }] };
+    });
+    const lib = { nextId: 4, activeId: 2, runs: [{ id: 2, name: 'Run 2', ...mkDoc(2100) }, { id: 3, name: 'Run 3', ...mkDoc(2100) }] };
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: true }));
     await saveOpeningBooks('lvl-td', { nextId: 1, books: [], tdRuns: lib } as never);
     const sent = JSON.parse(fetchMock.mock.calls[0][1].body);
-    const run = sent.data.tdRuns.runs[0];
+    const [open, shelved] = sent.data.tdRuns.runs;
     expect(sent.data.tdRuns.activeId).toBe(2);
-    expect(run.session.train.game).toBe(50);
-    expect(run.probeLog).toHaveLength(400);              // newest window kept
-    expect(run.probeLog[0].game).toBe(51 * 25);          // oldest 50 dropped
-    expect(run.session.ledger).toHaveLength(2000);       // ledger window
-    expect(run.session.ledger[0].game).toBe(101);
+    expect(open.session.train.game).toBe(50);
+    expect(open.probeLog).toHaveLength(400);              // newest window kept
+    expect(open.probeLog[0].game).toBe(51 * 25);          // oldest 50 dropped
+    expect(open.session.ledger).toHaveLength(2000);       // open run: deep window
+    expect(open.session.ledger[0].game).toBe(101);
+    expect(shelved.session.ledger).toHaveLength(400);     // shelved run: short window
+    expect(shelved.session.ledger[0].game).toBe(1701);
+    // Ledger rows store display precision, not 17-digit doubles.
+    expect(open.session.ledger[0].epsilon).toBe(0.123457);
+    expect(open.session.ledger[0].delta).toEqual({ pawn: 0.000123, knight: -0.05 });
 
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], tdRuns: lib } }));
     const loaded = await loadOpeningBooks('lvl-td');
     expect(loaded.tdRuns?.runs[0].session.train.game).toBe(50);
+  });
+
+  it('drops malformed runs on load (the pane trusts every run in the library) and passes tdAdoption through', async () => {
+    const good = {
+      id: 2, name: 'Run 2',
+      opts: { games: 10, seed: 1 }, seedCount: 1,
+      session: { train: { game: 5, weights: {}, outcomes: { playerWins: 0, draws: 5, enemyWins: 0 } }, probe: null, lastGame: null },
+      probeLog: [], summary: null, kept: false,
+    };
+    const mangled = { id: 3, name: 'Run 3', opts: { games: 10, seed: 1 }, session: {} }; // no session.train
+    const adoption = { at: 't', vector: [1, 2], pieceValues: {}, fromGames: 5, seeds: [1], source: 'live-weights', runId: 2, runName: 'Run 2' };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], tdRuns: { nextId: 4, activeId: 2, runs: [good, mangled] }, tdAdoption: adoption } }));
+    const loaded = await loadOpeningBooks('lvl-dirty');
+    expect(loaded.tdRuns?.runs.map((r) => r.id)).toEqual([2]);
+    expect(loaded.tdAdoption).toEqual(adoption);
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: true }));
+    await saveOpeningBooks('lvl-dirty', loaded);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).data.tdAdoption).toEqual(adoption);
   });
 
   it('migrates the retired single-run tdSession field into the library as Run 1 on load, and never writes it back', async () => {
@@ -150,6 +177,8 @@ describe('saveOpeningBooks', () => {
     const loaded = await loadOpeningBooks('lvl-legacy');
     expect(loaded.tdSession).toBeUndefined();
     expect(loaded.tdRuns).toEqual({ nextId: 2, activeId: 1, runs: [{ id: 1, name: 'Run 1', ...doc }] });
+    // The legacy live adoption record is hoisted to the blob-level slot, named.
+    expect(loaded.tdAdoption).toEqual({ ...doc.adoption, runId: 1, runName: 'Run 1' });
 
     // The migrated shape is what persists — the legacy field is gone from the PUT.
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: true }));

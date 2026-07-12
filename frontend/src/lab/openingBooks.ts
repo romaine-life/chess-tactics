@@ -15,7 +15,7 @@ import { encodeWeights } from '../game/tuning';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
 import type { BookPosition, OpeningBookSettings } from '../game/openingBook';
 import type { SpsaStepGameRecord } from '../game/tuning';
-import type { TdRunsDoc, TdSessionDoc } from './tdSession';
+import type { TdAdoptionRecord, TdRunsDoc, TdSessionDoc } from './tdSession';
 
 /** One point on a book's convergence curve — the worker's step output. Game outcomes
  * (this step's decisive/draw split) are optional so trajectories persisted before they
@@ -77,17 +77,41 @@ export interface BooksBlob {
   /** The Piece-values learner's run library (lab/tdSession.ts): every run the owner
    * has recorded on this level, autosaved so closing the tab never discards one. */
   tdRuns?: TdRunsDoc;
+  /** The LIVE adoption record beside `adoptedWeights` — the audit box's source, kept
+   * at blob level so it survives deleting the run it came from (each run also keeps
+   * its own copy as history). Cleared with the adoption. */
+  tdAdoption?: TdAdoptionRecord;
+}
+
+/** A persisted run/legacy document the pane can actually restore and render (the
+ * picker and compare dereference session.train and opts unguarded). */
+export function isRestorableTdDoc(doc: TdSessionDoc | undefined | null): doc is TdSessionDoc {
+  return !!(doc && doc.session && doc.session.train && doc.opts && typeof doc.opts.games === 'number');
+}
+
+/** Drop runs a malformed blob can't render (defense at the load boundary — the UI
+ * trusts every run in the library). */
+export function sanitizeTdRuns(lib: TdRunsDoc): TdRunsDoc {
+  const runs = lib.runs.filter((r) => typeof r.id === 'number' && isRestorableTdDoc(r));
+  return runs.length === lib.runs.length ? lib : { ...lib, runs };
 }
 
 /** Migrate the retired single-run `tdSession` field into the run library: the old
- * document becomes Run 1 (its adoption, summary, and Kept mark intact). A blob that
- * already has a library just drops the stale legacy field. Pure — the net client
- * applies it on load, and the next save persists the migrated shape. */
+ * document becomes Run 1 (its adoption, summary, and Kept mark intact), and its
+ * adoption record — if any — is hoisted to the blob-level live-adoption slot (the
+ * old format only kept a record while it was in force). A malformed legacy doc is
+ * dropped (the old code ignored it too); a blob that already has a library just
+ * drops the stale legacy field. Pure — the net client applies it on load, and the
+ * next save persists the migrated shape. */
 export function migrateTdRuns(blob: BooksBlob): BooksBlob {
   if (!blob.tdSession) return blob;
   const { tdSession, ...rest } = blob;
-  if (rest.tdRuns) return rest;
-  return { ...rest, tdRuns: { nextId: 2, activeId: 1, runs: [{ id: 1, name: 'Run 1', ...tdSession }] } };
+  if (rest.tdRuns || !isRestorableTdDoc(tdSession)) return rest;
+  return {
+    ...rest,
+    tdRuns: { nextId: 2, activeId: 1, runs: [{ id: 1, name: 'Run 1', ...tdSession }] },
+    ...(tdSession.adoption && !rest.tdAdoption ? { tdAdoption: { ...tdSession.adoption, runId: 1, runName: 'Run 1' } } : {}),
+  };
 }
 
 /** Default generation settings for a brand-new book (small, so a step lands fast). */
