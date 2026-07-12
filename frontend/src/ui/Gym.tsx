@@ -196,6 +196,12 @@ const GYM_CSS = `
 .gym-score-row .n { color:#5c6875; font:12px ui-monospace,monospace; text-align:right; padding-right:4px; }
 .gym-score-row .gap { color:#5c6875; font:12px ui-monospace,monospace; padding:3px 6px; }
 .gym-score-start { margin-bottom:2px; }
+/* The game ledger: one row per game, newest first, scrolling in place. */
+.gym-td-ledger { flex:0 0 auto; display:flex; flex-direction:column; gap:4px; }
+.gym-td-ledger-wrap { max-height:220px; overflow-y:auto; }
+.gym-td-ledger td.w { color:#5ad19a; } .gym-td-ledger td.d { color:#e0b24a; } .gym-td-ledger td.l { color:#e0685f; }
+.gym-td-ledger td.delta { text-align:right; white-space:nowrap; }
+.gym-td-ledger td.delta.up { color:#5ad19a; } .gym-td-ledger td.delta.dn { color:#e0685f; } .gym-td-ledger td.delta.z { color:#5c6875; }
 /* Adopt + live-AI audit blocks. */
 .gym-td-adopt, .gym-td-liveai { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; }
 .gym-td-liveai { border-top:1px solid #29323f; padding-top:10px; }
@@ -1109,6 +1115,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setReplayFocus((focus) => !focus);
   }, [replayFocus]);
   const tdLastGame = tdSess.lastGame ?? null;
+  const tdLedger = tdSess.ledger ?? [];
   useEffect(() => {
     const hasReplay = mode === 'train' ? !!selectedLatestGame : mode === 'values' ? !!tdLastGame : false;
     if (!hasReplay) setReplayFocus(false);
@@ -1771,6 +1778,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                       <li><b>W · D · L</b> — training outcomes. Variety is signal; all-draws means the board is giving the learner no gradient.</li>
                       <li><b>vs random</b> — every 25 games, greedy-with-current-values plays 16 seeded games against a fixed random opponent
                         (0.5 = parity, 1.0 = sweep). The history line under W·D·L is the learning curve as numbers.</li>
+                      <li><b>Game ledger</b> — one row per game, newest first: result (cap-length draws marked), plies, the ε it played
+                        under, and the exact per-piece weight change its update landed. The run&apos;s accounting, game by game.</li>
                       <li><b>Learned values — live</b> — weights separating from the equal start; Δ is the last displayed update; greyed
                         rows never received signal; pawn&nbsp;=&nbsp;1 ratios are the reading.</li>
                       <li><b>At completion</b> — the run refolds across sibling seeds into mean&nbsp;±&nbsp;spread next to the chess
@@ -1846,6 +1855,33 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                       {tdProbeLog.map((p) => (
                         <span key={p.game}>@{p.game} <b className="gym-num">{p.winRate.toFixed(3)}</b></span>
                       ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {tdLedger.length ? (
+                  <div className="gym-td-ledger" aria-label="Game ledger">
+                    <h3>Game ledger <span className="gym-hint">— one row per game, newest first; Δ = what that game&apos;s update moved</span></h3>
+                    <div className="gym-td-table-wrap gym-td-ledger-wrap">
+                      <table className="gym-td-table">
+                        <thead><tr><th>#</th><th>result</th><th>plies</th><th>ε</th><th>Δ P</th><th>Δ N</th><th>Δ B</th><th>Δ R</th><th>Δ Q</th><th>Δ K</th></tr></thead>
+                        <tbody>
+                          {[...tdLedger].reverse().map((row) => (
+                            <tr key={row.game}>
+                              <td className="gym-num">{row.game}</td>
+                              <td className={row.winner === 'player' ? 'w' : row.winner === 'draw' ? 'd' : 'l'}>
+                                {row.winner === 'player' ? 'win' : row.winner === 'draw' ? (row.plies >= (tdKnobs.maxPlies || Infinity) ? 'draw (cap)' : 'draw') : 'loss'}
+                              </td>
+                              <td className="gym-num">{row.plies}</td>
+                              <td className="gym-num">{row.epsilon.toFixed(2)}</td>
+                              {PLAYABLE_PIECE_TYPES.map((t) => {
+                                const d = tdDeltaCell(row.delta[t]);
+                                return <td key={t} className={`delta ${d.cls}`}>{d.txt}</td>;
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 ) : null}

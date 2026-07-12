@@ -9,9 +9,11 @@
 // games commits cleanly; that is the whole transport.
 
 import type { Level } from '../core/level';
+import type { Side } from '../core/types';
+import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
 import {
   DEFAULT_PROBE_GAMES,
-  createTrainingSession, derivedSeeds, evaluateVsRandom, runTrainingGames, summarizeSeeds,
+  createTrainingSession, derivedSeeds, evaluateVsRandom, runTrainingGames, scheduleAt, summarizeSeeds,
   type SeedSummary, type TdGameRecord, type TrainOptions, type TrainSessionState, type ValueWeights,
 } from '../game/tdValues';
 
@@ -61,6 +63,17 @@ export interface TdProbe {
   winRate: number;
 }
 
+/** One line of the run's ledger: what game N was, and exactly what it changed. */
+export interface TdLedgerRow {
+  game: number;
+  winner: Side | 'draw';
+  plies: number;
+  /** The exploration the game was played under (annealed at its game index). */
+  epsilon: number;
+  /** Per-type weight change this game's update landed (post − pre, logit units). */
+  delta: ValueWeights;
+}
+
 /** The complete mutable state between commands (JSON-safe, structured-cloneable). */
 export interface TdSession {
   train: TrainSessionState;
@@ -71,6 +84,9 @@ export interface TdSession {
    * data (ply-by-ply via replayStates). Observation only: never read back by the
    * learning, so its presence cannot perturb the chunked === batch equivalence. */
   lastGame?: TdGameRecord | null;
+  /** One row per game, in order — the run's accounting (observation only, like
+   * lastGame). Grows with the run; persistence caps it to the newest window. */
+  ledger?: TdLedgerRow[];
 }
 
 /** Cooperation hooks: the worker yields between games so a STOP message can land;
@@ -81,7 +97,7 @@ export interface TdControl {
 }
 
 export function freshTdSession(opts: TrainOptions): TdSession {
-  return { train: createTrainingSession(opts), probe: null, lastGame: null };
+  return { train: createTrainingSession(opts), probe: null, lastGame: null, ledger: [] };
 }
 
 /** trainValues' probe defaulting (shared constant, not a re-stated literal):
@@ -113,6 +129,8 @@ export async function advanceTd(
   while (cur.train.game < target) {
     if (control?.shouldStop?.()) return { session: cur, stopped: true };
     let lastGame = cur.lastGame ?? null;
+    const prevGame = cur.train.game;
+    const prevWeights = cur.train.weights;
     const train = runTrainingGames(level, opts, cur.train, 1, (record) => { lastGame = record; });
     let latest = cur.probe;
     // trainValues' probe story exactly: on the cadence when one is set, and ALWAYS once
@@ -121,7 +139,19 @@ export async function advanceTd(
     if (probe.games > 0 && ((probe.every > 0 && train.game % probe.every === 0) || train.game === opts.games)) {
       latest = { game: train.game, winRate: evaluateVsRandom(level, train.weights, probe.games, { maxPlies: opts.maxPlies }) };
     }
-    cur = { train, probe: latest, lastGame };
+    // The ledger: what this game was, and exactly what its update moved. Built per
+    // game HERE (display frames may be throttled downstream, but the session sees
+    // every game). Observation only — never read back by the learning.
+    let ledger = cur.ledger ?? [];
+    if (lastGame && train.game > prevGame) {
+      const delta = {} as ValueWeights;
+      for (const t of PLAYABLE_PIECE_TYPES) delta[t] = train.weights[t] - prevWeights[t];
+      ledger = [...ledger, {
+        game: train.game, winner: lastGame.winner, plies: lastGame.plies,
+        epsilon: scheduleAt(opts, prevGame).epsilon, delta,
+      }];
+    }
+    cur = { train, probe: latest, lastGame, ledger };
     onProgress?.(cur);
     if (control?.afterGame) await control.afterGame();
   }

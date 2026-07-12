@@ -44,9 +44,18 @@ export async function saveOpeningBooks(levelId: string, blob: BooksBlob, keepali
     nextId: blob.nextId,
     books: blob.books.map((b) => ({ ...b, session: capSessionForStorage(b.session) })),
     ...(blob.adoptedWeights ? { adoptedWeights: blob.adoptedWeights } : {}),
-    // Bound the TD document too: the probe log is its only unbounded part (one entry
-    // per probe cadence) — keep the newest window.
-    ...(blob.tdSession ? { tdSession: { ...blob.tdSession, probeLog: blob.tdSession.probeLog.slice(-400) } } : {}),
+    // Bound the TD document: the probe log and the per-game ledger grow with the run —
+    // keep the newest windows.
+    ...(blob.tdSession ? {
+      tdSession: {
+        ...blob.tdSession,
+        probeLog: blob.tdSession.probeLog.slice(-400),
+        session: {
+          ...blob.tdSession.session,
+          ...(blob.tdSession.session.ledger ? { ledger: blob.tdSession.session.ledger.slice(-2000) } : {}),
+        },
+      },
+    } : {}),
   };
   await request<{ ok: boolean }>('PUT', `/api/opening-books/${encodeURIComponent(levelId)}`, { data: capped }, keepalive);
 }
