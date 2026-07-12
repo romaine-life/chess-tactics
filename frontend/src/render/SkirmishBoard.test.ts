@@ -6,7 +6,7 @@ import { tileFamilies } from '../art/tileset';
 import { createSkirmish } from '../game/setup';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
-import { buildSkirmishBoard, pieceOp, skirmishTileClickIntent } from './SkirmishBoard';
+import { buildSkirmishBoard, pieceOp, skirmishArmyOverlaySet, skirmishTileClickIntent } from './SkirmishBoard';
 
 afterEach(() => resetLiveUnitCatalog());
 
@@ -100,15 +100,36 @@ describe('skirmishTileClickIntent', () => {
     });
   });
 
-  it('keeps moves, friendly selection, and opponent focus ahead of cancellation', () => {
-    expect(skirmishTileClickIntent(2, 2, [{ x: 2, y: 2 }], { id: 'enemy-1', side: 'enemy' }, 'player')).toEqual({ kind: 'move' });
-    expect(skirmishTileClickIntent(1, 1, [], { id: 'player-2', side: 'player' }, 'player')).toEqual({
+  it.each([
+    ['player', 'enemy'],
+    ['enemy', 'player'],
+  ] as const)('keeps moves, own-side selection, and opponent focus ahead of cancellation for the %s seat', (localSide, opponent) => {
+    expect(skirmishTileClickIntent(2, 2, [{ x: 2, y: 2 }], { id: 'opponent-1', side: opponent }, localSide)).toEqual({ kind: 'move' });
+    expect(skirmishTileClickIntent(1, 1, [], { id: 'own-2', side: localSide }, localSide)).toEqual({
       kind: 'select',
-      pieceId: 'player-2',
+      pieceId: 'own-2',
     });
-    expect(skirmishTileClickIntent(6, 6, [], { id: 'enemy-1', side: 'enemy' }, 'player')).toEqual({
+    expect(skirmishTileClickIntent(6, 6, [], { id: 'opponent-1', side: opponent }, localSide)).toEqual({
       kind: 'focus',
-      pieceId: 'enemy-1',
+      pieceId: 'opponent-1',
     });
+  });
+});
+
+describe('skirmishArmyOverlaySet', () => {
+  const pieces: Piece[] = [
+    { id: 'player-rook', side: 'player', type: 'rook', x: 1, y: 2, startY: 2, alive: true },
+    { id: 'enemy-rook', side: 'enemy', type: 'rook', x: 6, y: 5, startY: 5, alive: true },
+  ];
+
+  it.each([
+    ['player', 'enemy', '1,2', '6,5'],
+    ['enemy', 'player', '6,5', '1,2'],
+  ] as const)('keeps Your/Opponent overlay ownership correct for the %s seat', (localSide, opponent, ownCell, opponentCell) => {
+    const own = skirmishArmyOverlaySet(pieces, localSide, (piece) => [{ x: piece.x, y: piece.y }]);
+    const remote = skirmishArmyOverlaySet(pieces, opponent, (piece) => [{ x: piece.x, y: piece.y }]);
+
+    expect([...own]).toEqual([ownCell]);
+    expect([...remote]).toEqual([opponentCell]);
   });
 });

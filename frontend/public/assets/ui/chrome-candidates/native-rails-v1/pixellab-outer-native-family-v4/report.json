@@ -1,0 +1,68 @@
+{
+  "id": "pixellab-outer-native-family-v4",
+  "provider": "pixellab-ui-panel",
+  "role": "outer",
+  "fit": "long",
+  "nativeThickness": 12,
+  "sourceSheet": "../docs/art/chrome-native-rails/v1/attempts/pixellab-outer-native-family-panel-v4-source.png",
+  "extraction": "fixed-transparent-source-lanes-1:1-no-resize",
+  "accepted": [
+    {
+      "file": "top-horizontal.png",
+      "sourceBounds": {
+        "x": 17,
+        "y": 30,
+        "w": 159,
+        "h": 12
+      },
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-outer-native-family-v4/top-horizontal.png",
+      "orientation": "horizontal",
+      "width": 159,
+      "height": 12,
+      "seam": null
+    },
+    {
+      "file": "bottom-horizontal.png",
+      "sourceBounds": {
+        "x": 17,
+        "y": 150,
+        "w": 159,
+        "h": 12
+      },
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-outer-native-family-v4/bottom-horizontal.png",
+      "orientation": "horizontal",
+      "width": 159,
+      "height": 12,
+      "seam": null
+    },
+    {
+      "file": "left-vertical.png",
+      "sourceBounds": {
+        "x": 30,
+        "y": 42,
+        "w": 12,
+        "h": 110
+      },
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-outer-native-family-v4/left-vertical.png",
+      "orientation": "vertical",
+      "width": 12,
+      "height": 110,
+      "seam": null
+    },
+    {
+      "file": "right-vertical.png",
+      "sourceBounds": {
+        "x": 151,
+        "y": 42,
+        "w": 12,
+        "h": 110
+      },
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-outer-native-family-v4/right-vertical.png",
+      "orientation": "vertical",
+      "width": 12,
+      "height": 110,
+      "seam": null
+    }
+  ],
+  "rejected": []
+}

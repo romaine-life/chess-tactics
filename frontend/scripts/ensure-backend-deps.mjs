@@ -20,12 +20,18 @@ if (backendDepsMarkers.every((marker) => existsSync(marker))) {
 const installArgs = existsSync(backendLockfile) ? ['ci'] : ['install'];
 console.log(`[backend deps] installing backend dependencies with npm ${installArgs.join(' ')} for this worktree...`);
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const install = spawnSync(npmCommand, installArgs, {
+const npmCommand = process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : 'npm';
+const npmArgs = process.platform === 'win32' ? ['/d', '/s', '/c', 'npm', ...installArgs] : installArgs;
+const install = spawnSync(npmCommand, npmArgs, {
   cwd: backendDir,
   env: process.env,
   stdio: 'inherit',
 });
+
+if (install.error) {
+  console.error(`[backend deps] failed to run ${npmCommand}: ${install.error.message}`);
+  process.exit(1);
+}
 
 if (install.status !== 0) {
   process.exit(install.status ?? 1);

@@ -1,8 +1,14 @@
 ---
-status: "accepted"
+status: "accepted; production render-scale publication superseded by ADR-0076"
 date: 2026-07-03
 deciders: Nelson, Claude
 ---
+
+> **Production render-scale publication superseded by
+> [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md) (2026-07-10).**
+> DB-backed seat/anchor/footprint tuning, baseline fallback, and bake-back stand.
+> A prop's scale value now calibrates its required native footprint; publishing a
+> fractional scale is not production art acceptance without native regeneration.
 
 # ADR-0061: Prop seats are DB-tuned live content — committed baseline + live DB overrides + bake-back
 

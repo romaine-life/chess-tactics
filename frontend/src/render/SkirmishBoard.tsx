@@ -4,20 +4,21 @@ import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } fro
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
-import { attackedSquares, blockedCandidateSquares, enemyThreats, legalMoves, livingPieces } from '../core/rules';
+import { attackedSquares, blockedCandidateSquares, legalMoves, livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
+import { clientSide, opponentSide } from '../game/clientPerspective';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
 import { boundsForOps, drawBoardOps, isAnimatedGroundCoverOp, loadCanvasImage } from './BoardCanvasLayer';
 import { objectBaseZIndex } from './sceneDepth';
 import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardArtReveal } from './boardArtReady';
 import { groundCoverSet } from '../core/groundCover';
-import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
-import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay, type ResolvedWallOverlay } from '../core/featureAutotile';
+import { featureFrameSrc, fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
+import { resolveFeatureOverlays, resolveFenceOverlays, resolveFencePosts, resolveWallOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay, type ResolvedFencePost, type ResolvedWallOverlay } from '../core/featureAutotile';
 import { wallArtSrcs } from '../core/wallArt';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 import { unitAnchorFraction, unitAssetById } from '../ui/unitCatalog';
@@ -102,6 +103,19 @@ export function skirmishTileClickIntent(
   if (occupant?.side === localSide) return { kind: 'select', pieceId: occupant.id };
   if (occupant && occupant.side !== 'neutral') return { kind: 'focus', pieceId: occupant.id };
   return { kind: 'clear-selection' };
+}
+
+/** Union one simulation side's overlay cells. The caller chooses sides through client perspective. */
+export function skirmishArmyOverlaySet(
+  pieces: readonly Piece[],
+  side: Side,
+  tilesFor: (piece: Piece) => readonly Vec[],
+): Set<string> {
+  const out = new Set<string>();
+  for (const piece of livingPieces(pieces, side)) {
+    for (const tile of tilesFor(piece)) out.add(`${tile.x},${tile.y}`);
+  }
+  return out;
 }
 
 function terrainMapForGame(game: GameState): TileFamilyId[] {
@@ -209,6 +223,7 @@ function sceneBoardForSkirmish(
     coverTypes: exactBoard?.coverTypes ?? coverTypes,
     features: exactBoard?.features ?? {},
     fences: exactBoard?.fences ?? {},
+    fencePosts: exactBoard?.fencePosts ?? {},
     walls: exactBoard?.walls ?? {},
     wallArt: exactBoard?.wallArt ?? {},
     featureCuts: exactBoard?.featureCuts ?? {},
@@ -302,12 +317,14 @@ function collectBoardArt(
   board: SocketBoardResult<TileAsset>,
   livePieces: readonly Piece[],
   fenceOverlays: ReadonlyMap<string, ResolvedFenceOverlay>,
+  fencePosts: ReadonlyMap<string, ResolvedFencePost>,
   wallOverlays: ReadonlyMap<string, ResolvedWallOverlay>,
   wallArtUrls: readonly string[],
   sceneUrls: readonly string[],
 ): { urls: string[]; signature: string } {
   const tiles = new Set<string>();
   for (const fence of fenceOverlays.values()) tiles.add(fenceFrameSrc(fence.material, fence.mask));
+  for (const post of fencePosts.values()) tiles.add(fencePostSrc(post.material));
   for (const wall of wallOverlays.values()) tiles.add(wallFrameSrc(wall.material, wall.mask));
   for (const url of wallArtUrls) tiles.add(url);
   for (const url of sceneUrls) tiles.add(url);
@@ -726,7 +743,7 @@ function SkirmishSceneLayer({
   );
 }
 
-export function SkirmishBoard() {
+export function SkirmishBoard({ interactive = true }: { interactive?: boolean } = {}) {
   // Board-view state lives in the shared view store so the HUD's "View" tab owns
   // the controls and the playfield stays clean of floating buttons.
   const showMoves = useSkirmishView((s) => s.showMoves);
@@ -762,7 +779,9 @@ export function SkirmishBoard() {
   // The side THIS client controls: 'player' in single-player, or its lobby seat in
   // netplay (host='player', guest='enemy'). Interaction (selecting, move highlights,
   // committing) is gated to this side, not the literal 'player'.
-  const localSide: Side = net ? net.localSide : 'player';
+  const localSide = clientSide(net);
+  const remoteSide = opponentSide(localSide);
+  const netMovePending = !!net?.pendingMove;
   // Selection can also be cleared outside this component (for example, the HUD's R shortcut).
   // Mirror that into the provisional premove selection so "Deselect all" removes every ring and
   // target set without discarding premove steps that are already queued.
@@ -797,10 +816,19 @@ export function SkirmishBoard() {
   } | null>(null);
   const [dropHoverKey, setDropHoverKey] = useState<string | null>(null);
   const [dropAimKey, setDropAimKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (interactive) return;
+    dragRef.current = null;
+    setDrag(null);
+    setDropAimKey(null);
+    setDropHoverKey(null);
+    setPremoveSelectedId(null);
+  }, [interactive]);
   const [noHopId, setNoHopId] = useState<string | null>(null);
-  // Single-player premove input is open while the enemy owns the turn AND for the short
-  // post-reply landing beat before live player control resumes.
-  const premoveMode = !net && (game.turn === 'enemy' || premoveInputOpen) && !game.winner;
+  // Premove input is open while the opposing seat owns the turn and for the short
+  // post-reply landing beat before live control resumes. This is client input in both
+  // solo and lobby play; the authoritative move still commits through the store/relay.
+  const premoveMode = (game.turn === remoteSide || premoveInputOpen) && !game.winner;
   // The ghost rides the cursor imperatively (per frame, no board re-render). When a drag-related
   // re-render DOES happen (pick-up, or the drop-target cell changing), React would otherwise
   // reset the ghost's inline position — so re-apply the last cursor after each such commit,
@@ -813,10 +841,10 @@ export function SkirmishBoard() {
     }
   }, [drag, dropHoverKey, dropAimKey]);
   const selectedMoves = useMemo(() => {
-    if (premoveMode || pendingPromotion || game.turn !== localSide || game.winner) return [];
+    if (premoveMode || pendingPromotion || netMovePending || game.turn !== localSide || game.winner) return [];
     const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === localSide);
     return piece ? legalMoves(piece, game.pieces, game.size, env) : [];
-  }, [env, game.pieces, game.size, game.turn, game.winner, pendingPromotion, premoveMode, selectedId, localSide]);
+  }, [env, game.pieces, game.size, game.turn, game.winner, netMovePending, pendingPromotion, premoveMode, selectedId, localSide]);
   const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
   const exactBoard = useMemo(() => resolveBoardCode(game), [game.boardCode, game.size.cols, game.size.rows]);
   const ambientSceneCover = !exactBoard;
@@ -825,6 +853,9 @@ export function SkirmishBoard() {
   // E/S rail). Keyed "x,y" to match resolveFenceOverlays; empty for a generated/fence-free board.
   const fenceOverlays = useMemo<ReadonlyMap<string, ResolvedFenceOverlay>>(() => {
     return exactBoard ? resolveFenceOverlays(exactBoard.fences ?? {}) : new Map();
+  }, [exactBoard]);
+  const fencePosts = useMemo<ReadonlyMap<string, ResolvedFencePost>>(() => {
+    return exactBoard ? resolveFencePosts(exactBoard.fences ?? {}, exactBoard.fencePosts ?? {}) : new Map();
   }, [exactBoard]);
   const wallOverlays = useMemo<ReadonlyMap<string, ResolvedWallOverlay>>(() => {
     return exactBoard ? resolveWallOverlays(exactBoard.walls ?? {}, { cols: game.size.cols, rows: game.size.rows }) : new Map();
@@ -843,7 +874,10 @@ export function SkirmishBoard() {
   // Hold the board hidden until its whole art set has decoded, then fade it in as one
   // unit — no per-tile popcorn (see render/boardArtReady). The signature is the tile set
   // (stable across moves), so this arms once per board/seed, not on every move.
-  const boardArt = useMemo(() => collectBoardArt(board, livePieces, fenceOverlays, wallOverlays, wallArtUrls, sceneUrls), [board, livePieces, fenceOverlays, wallOverlays, wallArtUrls, sceneUrls]);
+  const boardArt = useMemo(
+    () => collectBoardArt(board, livePieces, fenceOverlays, fencePosts, wallOverlays, wallArtUrls, sceneUrls),
+    [board, fenceOverlays, fencePosts, livePieces, sceneUrls, wallArtUrls, wallOverlays],
+  );
   const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
   // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
   // the tile signature so a new skirmish/replay re-arms it, but moves (signature stable) don't.
@@ -871,35 +905,34 @@ export function SkirmishBoard() {
   );
   const overlayMoves = focusPiece ? focusedMoves : selectedMoves;
   const moveSet = useMemo(() => new Set((showMoves ? overlayMoves : []).map((move) => `${move.x},${move.y}`)), [overlayMoves, showMoves]);
+  // Army-wide display layers driven by the in-match shortcut grid. Canonical sides stay
+  // fixed on the board; only which side means "your" or "opponent" changes per client.
+  const armyLayer = (enabled: boolean, tilesFor: (piece: Piece) => readonly Vec[], side: Side) => (
+    enabled ? skirmishArmyOverlaySet(game.pieces, side, tilesFor) : new Set<string>()
+  );
   const threatSet = useMemo(() => {
     if (!showEnemyAttacks) return new Set<string>();
-    const tiles = focusPiece?.side === 'enemy' ? attackedSquares(focusPiece, game.pieces, game.size, env) : enemyThreats(game.pieces, game.size, env);
-    return new Set(tiles.map((tile) => `${tile.x},${tile.y}`));
-  }, [env, focusPiece, game.pieces, game.size, showEnemyAttacks]);
+    if (focusPiece?.side === remoteSide) {
+      return new Set(attackedSquares(focusPiece, game.pieces, game.size, env).map((tile) => `${tile.x},${tile.y}`));
+    }
+    return armyLayer(true, (piece) => attackedSquares(piece, game.pieces, game.size, env), remoteSide);
+  }, [env, focusPiece, game.pieces, game.size, remoteSide, showEnemyAttacks]);
   const blockedSet = useMemo(() => {
     if (!showBlocked || !focusPiece) return new Set<string>();
     const legal = new Set(overlayMoves.map((move) => `${move.x},${move.y}`));
     return new Set(blockedCandidateSquares(focusPiece, game.pieces, game.size, env).filter((tile) => !legal.has(`${tile.x},${tile.y}`)).map((tile) => `${tile.x},${tile.y}`));
   }, [env, focusPiece, game.pieces, game.size, overlayMoves, showBlocked]);
-  // Army-wide display layers driven by the in-match shortcut grid: each is the union
-  // over one whole side of that kind of square, independent of the focused piece.
-  const armyLayer = (enabled: boolean, tilesFor: (p: Piece) => Vec[], side: 'player' | 'enemy') => {
-    if (!enabled) return new Set<string>();
-    const out = new Set<string>();
-    for (const p of livingPieces(game.pieces, side)) for (const t of tilesFor(p)) out.add(`${t.x},${t.y}`);
-    return out;
-  };
-  const enemyMoveSet = useMemo(
-    () => armyLayer(showEnemyMoves, (p) => legalMoves(p, game.pieces, game.size, env), 'enemy'),
-    [env, game.pieces, game.size, showEnemyMoves],
+  const opponentMoveSet = useMemo(
+    () => armyLayer(showEnemyMoves, (piece) => legalMoves(piece, game.pieces, game.size, env), remoteSide),
+    [env, game.pieces, game.size, remoteSide, showEnemyMoves],
   );
-  const playerAttackSet = useMemo(
-    () => armyLayer(showPlayerAttacks, (p) => attackedSquares(p, game.pieces, game.size, env), 'player'),
-    [env, game.pieces, game.size, showPlayerAttacks],
+  const localAttackSet = useMemo(
+    () => armyLayer(showPlayerAttacks, (piece) => attackedSquares(piece, game.pieces, game.size, env), localSide),
+    [env, game.pieces, game.size, localSide, showPlayerAttacks],
   );
-  const playerMoveSet = useMemo(
-    () => armyLayer(showPlayerMoves, (p) => legalMoves(p, game.pieces, game.size, env), 'player'),
-    [env, game.pieces, game.size, showPlayerMoves],
+  const localMoveSet = useMemo(
+    () => armyLayer(showPlayerMoves, (piece) => legalMoves(piece, game.pieces, game.size, env), localSide),
+    [env, game.pieces, game.size, localSide, showPlayerMoves],
   );
   const promotionZoneSet = useMemo(
     () => new Set((showPromotionZones ? game.promotionZones ?? [] : []).map((cell) => `${cell.x},${cell.y}`)),
@@ -909,43 +942,45 @@ export function SkirmishBoard() {
   // Premoves: while the opponent is thinking or visibly landing a reply, the board accepts
   // a queued chain that fires one-per-turn as live control returns. The chain is built on the
   // PROVISIONAL board (current board + the moves already queued), so a later step sees the
-  // piece where its earlier steps left it. See game/premoves. Single-player only: a netplay
-  // opponent has no local AI reply to drain the queue on, and the local seat may even BE
-  // 'enemy', so the store keeps this off the netplay path.
-  const provGame = useMemo(() => provisionalBoard(game, premoves), [game, premoves]);
-  const premoveChain = useMemo(() => premoveArrows(game, premoves), [game, premoves]);
+  // piece where its earlier steps left it. See game/premoves. Projection is scoped to the
+  // side this client commands, whether that canonical side is `player` or `enemy`.
+  const provGame = useMemo(() => provisionalBoard(game, premoves, localSide), [game, localSide, premoves]);
+  const premoveChain = useMemo(() => premoveArrows(game, premoves, localSide), [game, localSide, premoves]);
   const premoveTargetSet = useMemo(
-    () => (premoveMode ? new Set(premoveTargets(game, premoves, premoveSelectedId).map((m) => `${m.x},${m.y}`)) : new Set<string>()),
-    [premoveMode, game, premoves, premoveSelectedId],
+    () => (premoveMode ? new Set(premoveTargets(game, premoves, premoveSelectedId, localSide).map((move) => `${move.x},${move.y}`)) : new Set<string>()),
+    [premoveMode, game, localSide, premoves, premoveSelectedId],
   );
   const premoveDestSet = useMemo(() => new Set(premoveChain.map((a) => `${a.to.x},${a.to.y}`)), [premoveChain]);
   const premoveSelKey = useMemo(() => {
     if (!premoveMode || !premoveSelectedId) return null;
-    const p = provGame.pieces.find((q) => q.id === premoveSelectedId && q.alive && q.side === 'player');
+    const p = provGame.pieces.find((piece) => piece.id === premoveSelectedId && piece.alive && piece.side === localSide);
     return p ? `${p.x},${p.y}` : null;
-  }, [premoveMode, premoveSelectedId, provGame.pieces]);
+  }, [localSide, premoveMode, premoveSelectedId, provGame.pieces]);
   const showStoreSelection = !premoveMode || !premoveSelectedId;
   // Pieces with a queued premove get TWO ghosts: the real piece dimmed in place (before) and a
   // translucent copy on its planned square (after). The before/origin square is also a precise
   // handle for continuing that unit's premove when several after-ghosts share one tile.
-  const premovedIds = useMemo(() => new Set(premoves.map((s) => s.pieceId)), [premoves]);
+  const premovedIds = useMemo(() => {
+    const owned = new Set(game.pieces.filter((piece) => piece.alive && piece.side === localSide).map((piece) => piece.id));
+    return new Set(premoves.filter((step) => owned.has(step.pieceId)).map((step) => step.pieceId));
+  }, [game.pieces, localSide, premoves]);
   const premovedOriginPieceAt = (x: number, y: number): Piece | null =>
-    game.pieces.find((p) => p.alive && p.side === 'player' && premovedIds.has(p.id) && p.x === x && p.y === y) ?? null;
+    game.pieces.find((piece) => piece.alive && piece.side === localSide && premovedIds.has(piece.id) && piece.x === x && piece.y === y) ?? null;
   // Ghost units grouped by the square they land on — a ghost on every square each premoved unit
   // passes through, and when several units plan the same square they SHARE it (the tile splits
   // between them, up to 4) rather than one hiding the others.
-  const afterGhosts = useMemo(() => premoveGhosts(game, premoves), [game, premoves]);
+  const afterGhosts = useMemo(() => premoveGhosts(game, premoves, localSide), [game, localSide, premoves]);
   const sharedPremoveGhostKeys = useMemo(
     () => new Set(afterGhosts.filter((group) => group.pieces.length > 1).map((group) => group.key)),
     [afterGhosts],
   );
-  const provisionalPlayerPieceAt = (x: number, y: number): Piece | null => {
+  const provisionalLocalPieceAt = (x: number, y: number): Piece | null => {
     const key = `${x},${y}`;
     if (sharedPremoveGhostKeys.has(key)) return null;
-    return provGame.pieces.find((piece) => piece.alive && piece.side === 'player' && piece.x === x && piece.y === y) ?? null;
+    return provGame.pieces.find((piece) => piece.alive && piece.side === localSide && piece.x === x && piece.y === y) ?? null;
   };
   const premoveDraggablePieceAt = (x: number, y: number): Piece | null =>
-    premovedOriginPieceAt(x, y) ?? provisionalPlayerPieceAt(x, y);
+    premovedOriginPieceAt(x, y) ?? provisionalLocalPieceAt(x, y);
 
   // The chain-building selection is only meaningful during the opponent's turn; when it
   // ends (a premove fires, or the player regains a live turn) drop it so the next enemy
@@ -969,6 +1004,13 @@ export function SkirmishBoard() {
   );
 
   const handleTile = (x: number, y: number) => {
+    if (!interactive) {
+      // A secondary same-seat tab remains useful for inspection, but cannot build a
+      // selection, drag, premove, promotion, or move gesture.
+      const inspected = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
+      if (inspected) focus(inspected.id);
+      return;
+    }
     // Opponent's turn: clicks build the premove chain instead of being ignored.
     if (pendingPromotion) return;
     if (premoveMode) {
@@ -987,7 +1029,7 @@ export function SkirmishBoard() {
       // A single unshared provisional ghost selects that unit to continue premoving.
       // Shared ghost stacks are intentionally not picked from the stack; use the
       // original piece square to choose the exact unit.
-      const here = provisionalPlayerPieceAt(x, y);
+      const here = provisionalLocalPieceAt(x, y);
       if (here) {
         setPremoveSelectedId(here.id);
         select(here.id);
@@ -1053,6 +1095,7 @@ export function SkirmishBoard() {
   const onCellPointerDown = (cx: number, cy: number, event: ReactPointerEvent<HTMLButtonElement>) => {
     // Right-click-and-hold always pans the board (ViewPane) — never swallow it, even on a unit.
     if (event.button === 2) return;
+    if (!interactive) return;
     // Left press stays on the cell: stop it bubbling so ViewPane doesn't start a pan.
     event.stopPropagation();
     // One drag at a time: while a gesture is armed, ignore any second concurrent pointer (a
@@ -1061,10 +1104,10 @@ export function SkirmishBoard() {
     // Don't let a press start a drag before the board is even visible (cold load = opacity:0
     // but still hit-testable) — you'd be dragging a piece you can't see.
     if (pendingPromotion || game.winner || !boardReady) return;
-    // On your turn a drag MOVES from the live board; on the opponent's turn (premoveMode:
-    // single-player only) it queues a PREMOVE from the provisional board. That makes a queued
+    // On your turn a drag MOVES from the live board; on the opponent's turn it queues a
+    // PREMOVE from the provisional board. That makes a queued
     // after-ghost draggable from the square the player already moved it to.
-    const canMove = game.turn === localSide && !premoveMode;
+    const canMove = game.turn === localSide && !premoveMode && !netMovePending;
     if (!canMove && !premoveMode) return;
     const piece = premoveMode
       ? premoveDraggablePieceAt(cx, cy)
@@ -1087,7 +1130,7 @@ export function SkirmishBoard() {
       startY: event.clientY,
       active: false,
       targets: new Set(
-        (canMove ? legalMoves(piece, game.pieces, game.size, env) : premoveTargets(game, premoves, piece.id))
+        (canMove ? legalMoves(piece, game.pieces, game.size, env) : premoveTargets(game, premoves, piece.id, localSide))
           .map((m) => `${m.x},${m.y}`),
       ),
       src: pieceImageSrc(piece),
@@ -1192,7 +1235,11 @@ export function SkirmishBoard() {
   };
 
   return (
-    <div data-testid="skirmish-board" className={`skirmish-board-lab ${boardReady ? '' : 'is-board-loading'} ${drag ? 'is-dragging' : ''}`.trim()}>
+    <div
+      data-testid="skirmish-board"
+      data-interactive={interactive ? 'true' : 'false'}
+      className={`skirmish-board-lab ${boardReady ? '' : 'is-board-loading'} ${drag ? 'is-dragging' : ''} ${interactive ? '' : 'is-read-only'}`.trim()}
+    >
       <ViewPane
         kind="board"
         ariaLabel="Skirmish board viewport"
@@ -1230,10 +1277,10 @@ export function SkirmishBoard() {
             if (!cell.asset && !cell.missing) return null;
             const key = `${cell.x},${cell.y}`;
             const state = [
-              playerMoveSet.has(key) ? 'is-player-move' : '',
+              localMoveSet.has(key) ? 'is-player-move' : '',
               promotionZoneSet.has(key) ? 'is-promotion-zone' : '',
-              enemyMoveSet.has(key) ? 'is-enemy-move' : '',
-              playerAttackSet.has(key) ? 'is-player-attack' : '',
+              opponentMoveSet.has(key) ? 'is-enemy-move' : '',
+              localAttackSet.has(key) ? 'is-player-attack' : '',
               moveSet.has(key) || dragTargetSet.has(key) ? 'is-move' : '',
               threatSet.has(key) ? 'is-threat' : '',
               blockedSet.has(key) ? 'is-blocked-candidate' : '',

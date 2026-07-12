@@ -79,6 +79,53 @@ function doodadCompositionSave() {
   };
 }
 
+// Dev-only endpoint for Chrome Lab's "Save defaults" button. The lab owns live
+// tuning in localStorage while the user experiments; this writes the accepted
+// state to config/chrome-lab-defaults.json so the runtime imports the same values
+// after refresh, without hand-copying JSON through Codex.
+function chromeLabDefaultsSave() {
+  return {
+    name: 'chrome-lab-defaults-save',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__chrome-lab/defaults', (req, res, next) => {
+        if (req.method !== 'POST') return next();
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; if (body.length > 1e6) req.destroy(); });
+        req.on('end', async () => {
+          const send = (code, obj) => {
+            res.statusCode = code;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(obj));
+          };
+          try {
+            const parsed = JSON.parse(body || '{}');
+            if (!parsed || typeof parsed !== 'object' || !parsed.outer || !parsed.inner || !parsed.divider) {
+              send(400, { ok: false, error: 'expected { target, outer, inner, divider }' });
+              return;
+            }
+            const payload = {
+              _doc: "Committed Chrome Lab tuning. Chrome Lab's Save defaults button writes this file in dev; chromeFamilyRuntime imports it so live surfaces and the lab share one source of truth.",
+              target: typeof parsed.target === 'string' ? parsed.target : 'level-editor',
+              outer: parsed.outer,
+              inner: parsed.inner,
+              divider: parsed.divider,
+            };
+            const rel = 'config/chrome-lab-defaults.json';
+            const out = join(process.cwd(), rel);
+            await mkdir(dirname(out), { recursive: true });
+            await writeFile(out, `${JSON.stringify(payload, null, 2)}\n`);
+            server.ws.send({ type: 'full-reload' });
+            send(200, { ok: true, path: rel });
+          } catch (err) {
+            send(500, { ok: false, error: String(err?.message || err) });
+          }
+        });
+      });
+    },
+  };
+}
+
 // NOTE: the dev-only `/__prop-seat/save` + `/__prop-seat/delete` file-writing endpoints were RETIRED
 // in ADR-0061 step 3. /prop-lab Save now PUTs the live seat map to the DB (PUT /api/prop-seats/default,
 // admin-gated, instant-live) instead of writing src/core/propSeats.json on disk; base/variant integrity
@@ -436,7 +483,7 @@ export default defineConfig(async ({ command }) => {
     ? (noBackend ? [bgmDevMock(), officialCampaignsDevProxy(), devAuthMock()] : [prodBackend(backendPort)])
     : [];
   return {
-    plugins: [react(), buildInfo(), doodadCompositionSave(), nineSliceDevSave(), ...devApiPlugins],
+    plugins: [react(), buildInfo(), doodadCompositionSave(), chromeLabDefaultsSave(), nineSliceDevSave(), ...devApiPlugins],
     ...(useBackend ? { server: { proxy: { '/api': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, ws: true } } } } : {}),
   };
 });

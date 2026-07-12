@@ -1,0 +1,38 @@
+[
+  {
+    "slug": "large-outer-pixellab-ui",
+    "args": {
+      "name": "ct-large-outer-gold-iron-chrome-candidate",
+      "description": "pixel-art fantasy strategy game UI chrome: large outer rectangular panel or window frame, chunky aged gold corner brackets like carved metal caps, dark gunmetal blue-black beveled rails, ornate mechanical gothic trim, crisp hard pixels, transparent interior and exterior, no text, no icons, no characters. Rails should feel alive and handcrafted like organic forged metal, suitable for slicing into corners, long side strips, T junctions, and cross junctions.",
+      "color_palette": "aged gold, dark gunmetal, navy black, pale edge highlights",
+      "elements": [
+        "window",
+        "panel"
+      ],
+      "width": 512,
+      "height": 320,
+      "no_background": true,
+      "seed": 70601
+    },
+    "queuedAt": "2026-07-06T05:49:45.140Z",
+    "responseText": "id: f7040db9-0821-41dd-b3d1-32f158ea276e\ndescription: pixel-art fantasy strategy game UI chrome: large outer rectangular panel or window frame, chunky aged gold corner brackets like carved metal caps, dark gunmetal blue-black beveled rails, ornate mechanical gothic trim, crisp hard pixels, transparent interior and exterior, no text, no icons, no characters. Rails should feel alive and handcrafted like organic forged metal, suitable for slicing into corners, long side strips, T junctions, and cross junctions.\nmode: ui-panel (512x320px)\ncost: 40 generations\nstatus: processing (~30-90s)\n\nhint: get_ui_asset(ui_asset_id=\"f7040db9-0821-41dd-b3d1-32f158ea276e\")"
+  },
+  {
+    "slug": "small-inner-pixellab-ui",
+    "args": {
+      "name": "ct-small-inner-gold-iron-chrome-candidate",
+      "description": "pixel-art fantasy strategy game UI chrome: smaller inner control frame set for buttons and nested panels, compact aged gold corner brackets, dark gunmetal blue-black beveled rails, crisp hard pixels, transparent interior and exterior, no text, no icons, no characters. Similar visual language to the large outer frame but lighter and tighter, suitable for slicing into smaller corners, rails, T junctions, and cross junctions.",
+      "color_palette": "aged gold, dark gunmetal, navy black, pale edge highlights",
+      "elements": [
+        "panel",
+        "toolbar"
+      ],
+      "width": 384,
+      "height": 224,
+      "no_background": true,
+      "seed": 70602
+    },
+    "queuedAt": "2026-07-06T05:49:50.240Z",
+    "responseText": "id: 37ee740e-1a43-4c18-90a3-bf0603a8a01f\ndescription: pixel-art fantasy strategy game UI chrome: smaller inner control frame set for buttons and nested panels, compact aged gold corner brackets, dark gunmetal blue-black beveled rails, crisp hard pixels, transparent interior and exterior, no text, no icons, no characters. Similar visual language to the large outer frame but lighter and tighter, suitable for slicing into smaller corners, rails, T junctions, and cross junctions.\nmode: ui-panel (384x224px)\ncost: 25 generations\nstatus: processing (~30-90s)\n\nhint: get_ui_asset(ui_asset_id=\"37ee740e-1a43-4c18-90a3-bf0603a8a01f\")"
+  }
+]

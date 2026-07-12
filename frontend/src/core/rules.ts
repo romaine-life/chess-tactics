@@ -1,9 +1,10 @@
 // The rules engine: pure functions over game state. Ported faithfully from the
 // legacy app.js implementation (pawn/knight/bishop/queen movement, rocks as
 // obstacles, side-based pawns, threat = enemy attacked squares, capture/promote/
-// last-side-standing) — but deterministic and immutable.
+// move settlement) — but deterministic and immutable. Match outcomes live in
+// core/adjudication, because only that layer has the level's authored rules.
 
-import type { BoardSize, CastleRule, EnemyIntent, GameEvent, GameState, LastMove, Move, PawnPromotionRule, Piece, PieceType, PromotionPieceType, Side, UnitFacing, Vec, Winner } from './types';
+import type { BoardSize, CastleRule, EnemyIntent, GameEvent, GameState, LastMove, Move, PawnPromotionRule, Piece, PieceType, PromotionPieceType, Side, UnitFacing, Vec } from './types';
 import { PROMOTION_PIECE_TYPES } from './types';
 import type { Rng } from './rng';
 import { buildTerrainIndex, canTraverse, elevationAt, haltsTravel, type TerrainIndex } from './terrain';
@@ -582,8 +583,9 @@ function promotionChoice(rule: PawnPromotionRule, requested: PromotionPieceType 
 
 /**
  * Apply a move to the state, returning a NEW state plus the events it produced.
- * Handles capture, pawn promotion, victory (last side standing), and turn
- * hand-off. Pure: the input state is never mutated.
+ * Handles capture, pawn promotion, history, and turn hand-off. Match outcomes are
+ * deliberately absent: `settleCommittedPosition` applies the level's exact rules
+ * after the move is committed. Pure: the input state is never mutated.
  */
 export function applyMove(state: GameState, pieceId: string, move: Move, options: ApplyOptions = {}): ApplyResult {
   const events: GameEvent[] = [];
@@ -672,15 +674,12 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
     if (newlyThreatened > 0) piece.threatsMade = (piece.threatsMade ?? 0) + newlyThreatened;
   }
 
-  let winner: Winner = state.winner;
+  // Move mechanics never decide the match. In particular, removing the final
+  // opposing piece is not implicitly a win: an authored VictoryRules override may
+  // deliberately omit elimination. The committed-position adjudicator owns every
+  // outcome and applies the level's exact rule list after this move settles.
   let turn = state.turn;
-  const players = livingPieces(pieces, 'player').length;
-  const enemies = livingPieces(pieces, 'enemy').length;
-  if (!players || !enemies) {
-    winner = players ? 'player' : 'enemy';
-    turn = 'done';
-    events.push({ kind: 'victory', winner });
-  } else if (piece.side === 'player' || piece.side === 'enemy') {
+  if (piece.side === 'player' || piece.side === 'enemy') {
     const other: Side = piece.side === 'player' ? 'enemy' : 'player';
     turn = other;
   }
@@ -693,7 +692,7 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
     ? { halfmoveClock: tookPiece || movedPieceType === 'pawn' ? 0 : (state.halfmoveClock ?? 0) + 1 }
     : undefined;
 
-  return { state: { ...state, pieces, winner, turn, lastMove, ...clockField }, events };
+  return { state: { ...state, pieces, turn, lastMove, ...clockField }, events };
 }
 
 const POSITION_TYPE_CODE: Record<PieceType, string> = {

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { encodeBoard, decodeBoard, type EditorBoard } from './boardCode';
 
+const encodeWire = (wire: unknown): string => btoa(JSON.stringify(wire))
+  .replace(/\+/g, '-')
+  .replace(/\//g, '_')
+  .replace(/=+$/, '');
+
 const emptyBoard = (over: Partial<EditorBoard> = {}): EditorBoard => ({
   cols: 6,
   rows: 5,
@@ -57,6 +62,50 @@ describe('boardCode round-trip', () => {
     expect(encodeBoard(emptyBoard({ fences: {} }))).toBe(encodeBoard(emptyBoard()));
     // an old code with no `fe` decodes fences to an empty map (back-compat contract).
     expect(decodeBoard(encodeBoard(emptyBoard()))!.fences).toEqual({});
+  });
+
+  it('round-trips standalone and boundary fence posts independently from fence rails', () => {
+    const board = emptyBoard({
+      fencePosts: {
+        '0,0': 'wood',
+        '3,2': 'stone',
+        '6,5': 'stone',
+      },
+    });
+    const decoded = decodeBoard(encodeBoard(board));
+    expect(decoded?.fencePosts).toEqual(board.fencePosts);
+    expect(decoded?.fences).toEqual({});
+  });
+
+  it('omits an empty post map and decodes a pre-post code to an empty map', () => {
+    expect(encodeBoard(emptyBoard({ fencePosts: {} }))).toBe(encodeBoard(emptyBoard()));
+    expect(decodeBoard(encodeBoard(emptyBoard()))?.fencePosts).toEqual({});
+  });
+
+  it('sanitizes post material and exact inclusive vertex keys on decode', () => {
+    const decoded = decodeBoard(encodeWire({
+      c: 6,
+      r: 5,
+      fp: {
+        '0,0': 'wood',
+        '6,5': 'stone',
+        '3,2': 'wood',
+        '-1,0': 'wood',
+        '7,5': 'stone',
+        '1,6': 'wood',
+        '1.5,2': 'wood',
+        '01,2': 'wood',
+        '1, 2': 'wood',
+        '1,2,3': 'wood',
+        '2,2': 'iron',
+        '4,4': 1,
+      },
+    }));
+    expect(decoded?.fencePosts).toEqual({
+      '0,0': 'wood',
+      '6,5': 'stone',
+      '3,2': 'wood',
+    });
   });
 
   it('encodes a wall-free board byte-identically to a code that predates walls', () => {

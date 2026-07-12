@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateObjective, evaluateVictory, victoryRulesForObjective, objectiveContextForLevel, objectiveSummary, kingSideOf, DEFAULT_SURVIVE_TURNS, MODE_NAME, type ObjectiveContext } from './objectives';
+import { evaluateObjective, evaluateVictory, victoryRulesForLevel, victoryRulesForObjective, objectiveContextForLevel, objectiveSummary, kingSideOf, DEFAULT_SURVIVE_TURNS, MODE_NAME, type ObjectiveContext } from './objectives';
 import { createBlankLevel, type VictoryRules } from './level';
 import type { GameState, Piece, PieceType, Side } from './types';
 
@@ -165,6 +165,23 @@ describe('victoryRulesForObjective (preset expansion)', () => {
         expect(evaluateVictory(g, victoryRulesForObjective(obj, ctx), ctx)).toBe(evaluateObjective(g, obj, ctx));
       }
     }
+  });
+});
+
+describe('victoryRulesForLevel', () => {
+  it('gives an authored override authority over the objective preset', () => {
+    const level = createBlankLevel('authored');
+    const authored: VictoryRules = [
+      { name: 'Only this rule', if: [{ kind: 'turnLimit', turns: 3 }], do: [{ kind: 'win', side: 'enemy' }] },
+    ];
+    level.victory = authored;
+    expect(victoryRulesForLevel(level)).toBe(authored);
+  });
+
+  it('expands the objective only when no authored rules exist', () => {
+    const level = { ...createBlankLevel('preset'), objective: 'survive' as const, surviveTurns: 4 };
+    const ctx = objectiveContextForLevel(level);
+    expect(victoryRulesForLevel(level, ctx)).toEqual(victoryRulesForObjective('survive', ctx));
   });
 });
 

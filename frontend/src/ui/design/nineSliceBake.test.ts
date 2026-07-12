@@ -138,16 +138,20 @@ describe('divider bar geometry (ADR-0063: authored three-way tee cap + edge rail
   it('has at least one bar asset registered', () => expect(bars.length).toBeGreaterThan(0));
   for (const id of bars) {
     it(`${id}: tall tee stubs, full-width rail, hollow interior, gold three-way tees, mirror-symmetric`, () => {
-      const png = bakeAsset(id, loadConfig(id)).variants[0].png; // bakes at the committed junction size
+      const cfg = loadConfig(id);
+      const png = bakeAsset(id, cfg).variants[0].png; // bakes at the committed junction size
       const { width: W, height: H } = png;
       const cap = barCapWidth(id);
+      if (Number.isFinite(cfg.dividerH)) expect(H, 'bar height must honor the tuned dividerH from config').toBe(Math.round(cfg.dividerH));
       const op = (x: number, y: number) => png.data[(y * W + x) * 4 + 3] > 40;
       const warm = (x: number, y: number) => { const i = (y * W + x) * 4; return png.data[i + 3] > 40 && png.data[i] > png.data[i + 2] + 15; };
       // Longest contiguous opaque vertical run in a column — the authored spine tapers at its tips,
-      // so it spans MOST (not literally all) of the height; a tee stub is a near-full-height run.
+      // and dividerH may add transparent breathing room around it. Tie the stub threshold to the
+      // cap/tee scale, not to the full strip height.
       const colRun = (x: number) => { let best = 0, run = 0; for (let y = 0; y < H; y++) { if (op(x, y)) { run++; if (run > best) best = run; } else run = 0; } return best; };
       const rowFull = (y: number) => { for (let x = 0; x < W; x++) if (!op(x, y)) return false; return true; };
-      const anyColTall = (x0: number, x1: number) => { for (let x = x0; x < x1; x++) if (colRun(x) >= 0.7 * H) return true; return false; };
+      const minStubRun = Math.max(12, Math.floor(cap * 0.8));
+      const anyColTall = (x0: number, x1: number) => { for (let x = x0; x < x1; x++) if (colRun(x) >= minStubRun) return true; return false; };
       const countWarm = (x0: number, x1: number) => { let n = 0; for (let y = 0; y < H; y++) for (let x = x0; x < x1; x++) if (warm(x, y)) n++; return n; };
       // Left + right tee stubs (a tall vertical spine inside each cap slice, seating on the side rail).
       expect(anyColTall(0, cap), 'left tee stub missing (no tall vertical spine in the left cap)').toBe(true);
@@ -158,11 +162,17 @@ describe('divider bar geometry (ADR-0063: authored three-way tee cap + edge rail
       // Hollow interior: a top corner of the middle span (between the caps) is transparent, so the
       // bar is a thin rail, not a filled box that would read as a solid band.
       expect(op(Math.floor(W / 2), 0), 'interior is filled — a bar must be a thin rail, not a box').toBe(false);
-      // The three-way CORNER: each cap carries the gold bracket (warm pixels), and the interior
-      // between the caps does NOT (the gold only lives at the two junctions).
-      expect(countWarm(0, cap), 'left cap has no gold bracket — the three-way corner is missing').toBeGreaterThan(0);
-      expect(countWarm(W - cap, W), 'right cap has no gold bracket — the three-way corner is missing').toBeGreaterThan(0);
-      expect(countWarm(cap, W - cap), 'gold bled into the middle — the corner must stay at the junctions').toBe(0);
+      if (REGISTRY[id].junctionStyle === 'natural') {
+        // Atomless bars deliberately have no gold junction overlay: the rail merge itself is
+        // the artwork. Do not apply the old warm-pixel heuristic here; natural steel highlights
+        // can be warm without being a gold atom.
+      } else {
+        // The three-way CORNER: each cap carries the gold bracket (warm pixels), and the interior
+        // between the caps does NOT (the gold only lives at the two junctions).
+        expect(countWarm(0, cap), 'left cap has no gold bracket — the three-way corner is missing').toBeGreaterThan(0);
+        expect(countWarm(W - cap, W), 'right cap has no gold bracket — the three-way corner is missing').toBeGreaterThan(0);
+        expect(countWarm(cap, W - cap), 'gold bled into the middle — the corner must stay at the junctions').toBe(0);
+      }
       // Horizontal mirror symmetry: the two ends are mirror twins (left tee == right tee). This
       // is the structural guarantee. (NOT vertical: the corner atom has a top-bottom bevel + notch,
       // so the tee inherits a slight top-bottom character by design — that IS the corner treatment.)

@@ -8,6 +8,8 @@ import {
 import type { EditorBoard } from '../ui/boardCode';
 import { BoardCanvasLayer } from './BoardCanvasLayer';
 
+export type BoardSceneOpsTransform = (ops: readonly BoardDrawOp[], board: EditorBoard) => BoardDrawOp[];
+
 function isTerrainOp(op: BoardDrawOp): boolean {
   return op.src.includes('/assets/tiles/surface/') || op.src.includes('/assets/tiles/macro-tiles/');
 }
@@ -32,6 +34,7 @@ export function BoardSceneLayer({
   coverSeed = 1234,
   ambientCover = false,
   omitTerrain = true,
+  transformOps,
 }: {
   board: EditorBoard;
   hidden?: { tile: boolean; unit: boolean; doodad: boolean };
@@ -39,16 +42,19 @@ export function BoardSceneLayer({
   ambientCover?: boolean;
   /** Terrain and road/river features are already owned by BoardTerrainLayer. */
   omitTerrain?: boolean;
+  /** Review-only visual substitution applied before the one globally depth-sorted scene canvas. */
+  transformOps?: BoardSceneOpsTransform;
 }): ReactElement | null {
   const sourceBoard = useMemo(() => visualBoard(board, hidden), [board, hidden]);
   const contentHash = useMemo(() => `${boardContentHash(sourceBoard)}|cover:${coverSeed}|ambient:${ambientCover ? 1 : 0}`, [ambientCover, coverSeed, sourceBoard]);
   const bounds = useMemo(() => boardBounds(sourceBoard, { ambientCover, coverSeed }), [ambientCover, contentHash, coverSeed, sourceBoard]);
   const ops = useMemo(() => {
     const all = boardDrawOps(sourceBoard, { ambientCover, coverSeed });
+    const transformed = transformOps ? transformOps(all, sourceBoard) : all;
     return omitTerrain
-      ? all.filter((op) => !isTerrainOp(op) && !isLinearFeatureOp(op))
-      : all.filter((op) => !(hidden?.tile && isTerrainOp(op)));
-  }, [ambientCover, contentHash, coverSeed, hidden?.tile, omitTerrain, sourceBoard]);
+      ? transformed.filter((op) => !isTerrainOp(op) && !isLinearFeatureOp(op))
+      : transformed.filter((op) => !(hidden?.tile && isTerrainOp(op)));
+  }, [ambientCover, contentHash, coverSeed, hidden?.tile, omitTerrain, sourceBoard, transformOps]);
 
   return <BoardCanvasLayer ops={ops} bounds={bounds} />;
 }

@@ -166,10 +166,12 @@ For genuinely new Blender-authored unit art:
 5. Store `sourceCanvasPx`, `sourceCanvasHeightPx`, `sourceFootprintPx`, `unitAnchorX`, and `unitAnchorY`.
 6. Keep old AI/generated art as historical reference, not active app catalog entries.
 
-For a size-only revision of accepted art:
+For a size-only calibration of accepted art:
 
 1. Treat the complete accepted 6-palette x 8-direction asset as the immutable visual source.
 2. Preserve source aspect ratio inside the Unit Studio delivery raster and reduce with deterministic premultiplied-alpha area sampling.
 3. Scale `sourceFootprintPx` by the same horizontal canvas ratio and preserve the accepted anchor.
 4. Record source asset id, source dimensions, contained dimensions, delivery dimensions, and `spatialResampling: true` in candidate provenance.
-5. Review the delivery pixels on the board before accepting. At logical `100%`, the accepted result is drawn 1:1.
+5. Review those calibration pixels on the board to settle the target delivery dimensions; do not accept the resampled candidate.
+6. Re-render the complete family from its Blender source directly at the calibrated target dimensions and verify that no spatial resampling occurred.
+7. Review and accept only that native render. At logical `100%`, the accepted result is drawn 1:1.

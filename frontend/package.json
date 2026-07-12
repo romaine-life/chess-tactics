@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "node scripts/ensure-backend-deps.mjs && npm --prefix ../packages/board-render run build",
-    "dev": "vite --host 0.0.0.0",
+    "dev": "node scripts/start-vite-dev.mjs",
     "build": "vite build",
     "build:trainer": "vite build --config vite.trainer.config.js",
     "build:board-render": "npm --prefix ../packages/board-render run build",
@@ -18,12 +17,20 @@
     "units:native": "python ../scripts/generate-unit-art.py",
     "optimize:assets": "node scripts/optimize-main-menu-assets.mjs",
     "campaign:assets": "node scripts/generate-campaign-editor-ui-assets.mjs",
+    "chrome:explode-candidates": "node scripts/explode-chrome-candidate-sheets.mjs && python scripts/extract-stone-frame-rails.py",
+    "chrome:extract-stone-frame-rails": "python scripts/extract-stone-frame-rails.py",
+    "chrome:native-rail-templates": "node scripts/create-native-rail-templates.mjs",
+    "chrome:forge-native-rail-family": "node scripts/forge-native-rail-family.mjs",
+    "chrome:import-native-rails": "node scripts/import-native-rail-attempt.mjs",
+    "chrome:review-native-rail-family": "node scripts/build-native-rail-review.mjs",
+    "chrome:screen-native-rails": "node scripts/screen-native-rail-directory.mjs",
+    "chrome:rebuild-native-rail-manifest": "node scripts/rebuild-native-rail-candidate-manifest.mjs",
     "visual:screenshot": "node scripts/screenshot-local-page.mjs",
     "visual:health": "node scripts/check-local-server.mjs",
     "assets:repair:terrain-top-bleed": "python scripts/repair-surface-top-bleed.py",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "node --check src/bgm.js && node scripts/check-no-chrome-bitmaps.mjs && node scripts/check-bgm-shuffle.mjs && node scripts/check-sprites.mjs && node scripts/check-imagegen-gate.mjs && node scripts/check-light-art-chrome.mjs && node scripts/check-titlebar-rule-kit.mjs && node scripts/check-titlebar-actions.mjs && node scripts/check-no-dev-data-seam.mjs && node scripts/check-no-committed-unit-art.mjs && vitest run && tsc --noEmit"
+    "check": "node --check src/bgm.js && node scripts/check-no-chrome-bitmaps.mjs && node scripts/check-bgm-shuffle.mjs && node scripts/check-sprites.mjs && node scripts/check-imagegen-gate.mjs && node scripts/check-fence-art-pipeline.mjs && node scripts/check-light-art-chrome.mjs && node scripts/check-titlebar-rule-kit.mjs && node scripts/check-titlebar-actions.mjs && node scripts/check-empty-panel-frame-overlay.mjs && node scripts/check-no-dev-data-seam.mjs && node scripts/check-no-committed-unit-art.mjs && vitest run && tsc --noEmit"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

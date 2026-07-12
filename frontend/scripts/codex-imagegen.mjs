@@ -51,7 +51,8 @@ export const CODEX = resolveCodex();
 export function runCodex(cwd, text, ref) {
   return new Promise((res) => {
     const args = ['exec', '--json', '--sandbox', 'workspace-write', '--skip-git-repo-check', '-C', cwd];
-    if (ref) args.push('-i', ref);
+    const refs = Array.isArray(ref) ? ref : (ref ? [ref] : []);
+    if (refs.length) args.push('-i', ...refs);
     const p = spawn(CODEX, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     p.stdout.on('data', (d) => { out += d; });

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import {
+  BAKE_GEOMETRY,
   boardContentHash,
   boardDrawOps,
   uniqueDrawSrcs,
@@ -10,7 +11,7 @@ import {
 import { roadEdgeKey } from '../core/featureAutotile';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
-import { objectBaseZIndex, structureBackZIndex } from './sceneDepth';
+import { fencePostZIndex, objectBaseZIndex, structureBackZIndex } from './sceneDepth';
 import type { EditorBoard } from '../ui/boardCode';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
@@ -106,6 +107,14 @@ describe('boardContentHash — stability + sensitivity', () => {
     expect(boardContentHash(before)).not.toBe(boardContentHash(after));
   });
 
+  it('changes when an explicit fence post is added or changes material', () => {
+    const before = blank();
+    const wood: EditorBoard = { ...blank(), fencePosts: { '2,2': 'wood' } };
+    const stone: EditorBoard = { ...blank(), fencePosts: { '2,2': 'stone' } };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(wood));
+    expect(boardContentHash(wood)).not.toBe(boardContentHash(stone));
+  });
+
   it('changes when an edge wall is added', () => {
     const before = blank();
     const after: EditorBoard = { ...blank(), walls: { [roadEdgeKey(1, 0, 1, -1)]: 'stone' } };
@@ -154,6 +163,23 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
       cover: { '0,0': 'filled' },
     };
     expect(uniqueDrawSrcs(board).some((src) => src.includes('groundcover'))).toBe(true);
+  });
+
+  it('deduplicates shared fence post artwork while retaining the rail frame', () => {
+    const board: EditorBoard = {
+      ...blank(),
+      fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' },
+    };
+    const srcs = uniqueDrawSrcs(board);
+    expect(srcs).toContain('/assets/tiles/feature/fence-wood-2.png');
+    expect(srcs.filter((src) => src === '/assets/tiles/feature/fence-wood-post.png')).toHaveLength(1);
+    expect(boardDrawOps(board).filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png')).toHaveLength(2);
+  });
+
+  it('includes standalone explicitly-authored posts without requiring a rail', () => {
+    const board: EditorBoard = { ...blank(), fencePosts: { '2,2': 'stone' } };
+    expect(uniqueDrawSrcs(board)).toEqual(['/assets/tiles/feature/fence-stone-post.png']);
+    expect(boardDrawOps(board)).toHaveLength(1);
   });
 
   it('a doodad contributes its back AND front halves as distinct srcs', () => {
@@ -315,24 +341,138 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     };
     const ops = boardDrawOps(board);
     const fence = ops.find((op) => op.src === '/assets/tiles/feature/fence-wood-2.png');
+    const posts = ops.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png');
     const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 1, y: 1 }));
     const nearUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 2, y: 1 }));
     const coverOps = ops.filter((op) => op.src.includes('/assets/groundcover/'));
     const doodadBack = ops.find((op) => op.src === '/assets/doodads/boulder/back.png');
     const doodadFront = ops.find((op) => op.src === '/assets/doodads/boulder/front.png');
     expect(fence).toBeDefined();
+    expect(posts).toHaveLength(2);
+    const ownerLeft = 0;
+    const ownerTop = 2 * TILE_TEMPLATE.stepY;
+    expect(posts.map((post) => `${post.dx},${post.dy}`).sort()).toEqual([
+      `${ownerLeft},${ownerTop - BAKE_GEOMETRY.TILE_EQUATOR}`,
+      `${ownerLeft - BAKE_GEOMETRY.TILE_STEP_X},${ownerTop + BAKE_GEOMETRY.TILE_STEP_Y - BAKE_GEOMETRY.TILE_EQUATOR}`,
+    ].sort());
     expect(ownerUnit).toBeDefined();
     expect(nearUnit).toBeDefined();
     expect(coverOps.length).toBeGreaterThan(0);
     expect(doodadBack).toBeDefined();
     expect(doodadFront).toBeDefined();
     expect(fence!.z).toBe(fenceOverlayZIndex({ x: 1, y: 1 }));
+    const rightPost = posts.find((post) => post.dx === ownerLeft);
+    const frontPost = posts.find((post) => post.dx === ownerLeft - BAKE_GEOMETRY.TILE_STEP_X);
+    expect(rightPost?.z).toBe(fencePostZIndex({ x: 2, y: 1 }));
+    expect(frontPost?.z).toBe(fencePostZIndex({ x: 2, y: 2 }));
+    expect(rightPost?.z).toBe(fence!.z + 0.5);
+    expect(frontPost?.z).toBe(fence!.z + 1.5);
+    expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(rightPost!));
+    expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(frontPost!));
     expect(fence!.z).toBeGreaterThan(Math.max(...coverOps.map((op) => op.z)));
     expect(fence!.z).toBeLessThan(ownerUnit!.z);
     expect(fence!.z).toBeLessThan(nearUnit!.z);
     expect(fence!.z).toBeLessThan(doodadBack!.z);
     expect(fence!.z).toBeLessThan(doodadFront!.z);
     expect(doodadBack!.z).toBe(structureBackZIndex({ x: 1, y: 1 }));
+  });
+
+  it('puts both endpoints of E- and S-rails behind their capping posts', () => {
+    for (const [edge, src] of [
+      [roadEdgeKey(1, 1, 2, 1), '/assets/tiles/feature/fence-wood-2.png'],
+      [roadEdgeKey(1, 1, 1, 2), '/assets/tiles/feature/fence-wood-4.png'],
+    ] as const) {
+      const ops = boardDrawOps({ ...blank(4, 4), fences: { [edge]: 'wood' } });
+      const rail = ops.find((op) => op.src === src)!;
+      const posts = ops.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png');
+      const [rear, front] = [...posts].sort((a, b) => a.z - b.z);
+
+      expect(posts).toHaveLength(2);
+      expect(rear.z).toBe(rail.z + 0.5);
+      expect(front.z).toBe(rail.z + 1.5);
+      expect(ops.indexOf(rail)).toBeLessThan(ops.indexOf(rear));
+      expect(ops.indexOf(rail)).toBeLessThan(ops.indexOf(front));
+    }
+  });
+
+  it('draws one explicit junction post in front of every incident rail', () => {
+    const board: EditorBoard = {
+      ...blank(5, 5),
+      fences: {
+        [roadEdgeKey(1, 1, 2, 1)]: 'wood',
+        [roadEdgeKey(1, 1, 1, 2)]: 'wood',
+        [roadEdgeKey(1, 2, 2, 2)]: 'wood',
+        [roadEdgeKey(2, 1, 2, 2)]: 'wood',
+      },
+      fencePosts: { '2,2': 'wood' },
+    };
+    const ops = boardDrawOps(board);
+    const postZ = fencePostZIndex({ x: 2, y: 2 });
+    const post = ops.find((op) => op.src === '/assets/tiles/feature/fence-wood-post.png' && op.z === postZ)!;
+    const incidentRails = ops.filter((op) => op.src.startsWith('/assets/tiles/feature/fence-wood-') && !op.src.endsWith('-post.png'));
+
+    expect(incidentRails).toHaveLength(3);
+    expect(incidentRails.every((rail) => rail.z < post.z)).toBe(true);
+    expect(Math.max(...incidentRails.map((rail) => rail.z))).toBe(post.z - 0.5);
+  });
+
+  it('draws north/west boundary fences from phantom owners and posts at canonical vertices', () => {
+    const board: EditorBoard = {
+      ...blank(4, 4),
+      fences: {
+        [roadEdgeKey(2, 0, 2, -1)]: 'wood',
+        [roadEdgeKey(0, 2, -1, 2)]: 'stone',
+      },
+    };
+    const ops = boardDrawOps(board);
+    const northRail = ops.find((op) => op.src === '/assets/tiles/feature/fence-wood-4.png');
+    const westRail = ops.find((op) => op.src === '/assets/tiles/feature/fence-stone-2.png');
+    const woodPosts = ops.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png');
+    const stonePosts = ops.filter((op) => op.src === '/assets/tiles/feature/fence-stone-post.png');
+
+    expect(northRail).toBeDefined();
+    expect(westRail).toBeDefined();
+    expect(northRail!.z).toBe(fenceOverlayZIndex({ x: 2, y: -1 }));
+    expect(westRail!.z).toBe(fenceOverlayZIndex({ x: -1, y: 2 }));
+    expect(woodPosts).toHaveLength(2);
+    expect(stonePosts).toHaveLength(2);
+    expect(woodPosts.map((post) => post.z).sort()).toEqual([
+      fencePostZIndex({ x: 2, y: 0 }),
+      fencePostZIndex({ x: 3, y: 0 }),
+    ].sort());
+    expect(stonePosts.map((post) => post.z).sort()).toEqual([
+      fencePostZIndex({ x: 0, y: 2 }),
+      fencePostZIndex({ x: 0, y: 3 }),
+    ].sort());
+    expect(woodPosts.map((post) => `${post.dx},${post.dy}`).sort()).toEqual(['48,-41', '96,-14']);
+    expect(stonePosts.map((post) => `${post.dx},${post.dy}`).sort()).toEqual(['-144,-41', '-192,-14'].sort());
+  });
+
+  it('draws one explicit post at a shared junction and lets authored material win', () => {
+    const board: EditorBoard = {
+      ...blank(),
+      fences: {
+        [roadEdgeKey(0, 0, 1, 0)]: 'wood',
+        [roadEdgeKey(0, 0, 0, 1)]: 'wood',
+        [roadEdgeKey(0, 1, 1, 1)]: 'wood',
+      },
+      fencePosts: { '1,1': 'stone' },
+    };
+    const ops = boardDrawOps(board);
+    expect(ops.filter((op) => op.src === '/assets/tiles/feature/fence-stone-post.png')).toHaveLength(1);
+    expect(ops.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png')).toHaveLength(3);
+  });
+
+  it('replaces an automatic endpoint with one explicit post instead of drawing both', () => {
+    const board: EditorBoard = {
+      ...blank(),
+      fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' },
+      fencePosts: { '2,1': 'stone' },
+    };
+    const postOps = boardDrawOps(board).filter((op) => op.src.endsWith('-post.png'));
+    expect(postOps).toHaveLength(2);
+    expect(postOps.filter((op) => op.src === '/assets/tiles/feature/fence-stone-post.png')).toHaveLength(1);
+    expect(postOps.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png')).toHaveLength(1);
   });
 
   it('draws north/west perimeter walls with the wall frame anchor', () => {

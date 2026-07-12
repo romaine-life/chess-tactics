@@ -191,6 +191,10 @@ export const featureFrameSrc = (kind: FeatureKind, material: FeatureMaterial, ma
 export const fenceFrameSrc = (material: FenceMaterial, mask: number): string =>
   `/assets/tiles/feature/fence-${material}-${mask}.png`;
 
+/** Direction-neutral post artwork, seated once at a canonical fence vertex. */
+export const fencePostSrc = (material: FenceMaterial): string =>
+  `/assets/tiles/feature/fence-${material}-post.png`;
+
 // A per-cell WALL frame: walls on a board-perimeter cell's OWN N(1)/W(8) diamond
 // sides (mask ∈ {1,8,9}). Only northmost/westmost map edges use these frames.
 // Baked by scripts/build-wall-tiles.py from generated material. These are tall
@@ -208,6 +212,10 @@ export const featureThumbSrc = (kind: FeatureKind, material: FeatureMaterial): s
 /** Square preview icon for the fence palette/brush (baked alongside the fence frames). */
 export const fenceThumbSrc = (material: FenceMaterial): string =>
   `/assets/tiles/feature/fence-${material}-thumb.png`;
+
+/** Square preview icon for a direction-neutral authored/automatic fence post. */
+export const fencePostThumbSrc = (material: FenceMaterial): string =>
+  `/assets/tiles/feature/fence-${material}-post-thumb.png`;
 
 /** Square preview icon for the wall palette/brush (baked alongside the wall frames). */
 export const wallThumbSrc = (material: WallMaterial): string =>

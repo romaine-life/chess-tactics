@@ -1,10 +1,16 @@
 ---
-status: "accepted"
+status: "accepted; production recapture acceptance clause superseded by ADR-0076"
 date: 2026-07-10
 deciders: Nelson, Codex
 ---
 
 # ADR-0075: Unit orientation and accepted-sprite recapture
+
+> **Supersession note:** [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md)
+> supersedes only this record's permission to accept a spatially resampled recapture.
+> Blender-owned orientation, complete accepted-family sourcing, aspect-preserving
+> premultiplied recapture, and its provenance requirements remain accepted as a
+> calibration workflow.
 
 ## Context
 

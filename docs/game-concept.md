@@ -192,18 +192,17 @@ useful raw material, not canon. For future contributors:
   mechanic *as a core identity* (that was the Into-the-Breach framing — it may
   survive only as optional, occasional board flavor, never the spine); the
   README's "anchors / telegraphs / six breaches" flavor line.
-- **Gap to close for a real prototype:** the live skirmish currently runs
-  *last-side-standing without check*. The baseline this doc mandates — **real
-  check / checkmate** — is **not yet implemented**, and is the foundational
-  gameplay work.
+- **Shipped (ADR-0072/0077):** live play now has check, checkmate, stalemate,
+  authored 50-move/threefold draws, and one committed-position adjudicator shared
+  by solo, lobby, AI, self-play and search. `applyMove` owns mechanics only; ordered
+  authored/preset victory rules decide product outcomes before chess terminal rules.
 - **Shipped (ADR-0050):** authored **win-rule modes** are now real — the editor
   selects the objective (Last Man Standing / King Assault / Rival Kings / Survive /
   Reach), an orthogonal **random-placement** toggle (roster + spawn zones) is
   authorable, and saves gate on **playability rules** (each side has a piece; King
   modes have the right king count; random placement has enough usable spawn tiles).
-  Win checks are still **capture-based**, so King Assault / Rival Kings resolve on
-  the king being *captured*, not on **check / checkmate** — which stays unbuilt
-  (see the gap above). Board floor dropped to 1×1.
+  King-capture events remain authored win paths, while checkmate/stalemate are the
+  shared chess terminal layer. Board floor dropped to 1×1.
 
 ## 13. v1 scope — the first cut
 

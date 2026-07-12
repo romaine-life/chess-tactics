@@ -6,7 +6,7 @@ import {
   TILE_STEP_Y,
 } from '../art/projectionContract';
 import { studioFamilies, assetFrameSrc, type StudioAsset } from '../ui/studioBoard';
-import { featureFrameSrc, fenceFrameSrc, wallFrameSrc } from '../art/tileset';
+import { featureFrameSrc, fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
 import {
   unitArtForId,
   unitAnchorFraction,
@@ -17,10 +17,17 @@ import {
   type Faction,
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays } from '../core/featureAutotile';
+import {
+  resolveFeatureOverlays,
+  resolveFenceOverlays,
+  resolveFencePosts,
+  resolveWallOverlays,
+  type ResolvedFenceOverlay,
+  type ResolvedFencePost,
+} from '../core/featureAutotile';
 import { resolveWallArtFaces, slotSource, wallArtSlotsForFace } from '../core/wallArt';
 import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './structureGeometry';
-import { fenceOverlayZIndex, groundCoverZIndex, objectBaseZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
+import { fenceOverlayZIndex, fencePostZIndex, groundCoverZIndex, objectBaseZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
 import { propDef, type StructureSourceRef } from '../core/props';
 import { densityFieldAt, groundCoverSet, resolveGroundCover, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
@@ -145,6 +152,36 @@ function pushStructureDrawOps(
   }
 }
 
+function pushFenceDrawOps(
+  ops: BoardDrawOp[],
+  cell: { x: number; y: number },
+  fence: ResolvedFenceOverlay,
+): void {
+  const { left, top } = boardLabCellPosition(cell);
+  const z = fenceOverlayZIndex(cell);
+  ops.push({
+    src: fenceFrameSrc(fence.material, fence.mask),
+    dx: left - TILE_STEP_X,
+    dy: top - TILE_EQUATOR,
+    dw: TILE_FRAME_W,
+    dh: TILE_FRAME_H,
+    z,
+  });
+}
+
+function pushFencePostDrawOp(ops: BoardDrawOp[], post: ResolvedFencePost): void {
+  const { left, top: vertexCellTop } = boardLabCellPosition(post);
+  const top = vertexCellTop - TILE_STEP_Y;
+  ops.push({
+    src: fencePostSrc(post.material),
+    dx: left - TILE_STEP_X,
+    dy: top - TILE_EQUATOR,
+    dw: TILE_FRAME_W,
+    dh: TILE_FRAME_H,
+    z: fencePostZIndex(post),
+  });
+}
+
 export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {}): BoardDrawOp[] {
   const ops: BoardDrawOp[] = [];
 
@@ -152,6 +189,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   const isExit = (edge: string): boolean => board.featureExits[edge] === true;
   const overlays = resolveFeatureOverlays(board.features, isSevered, isExit);
   const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
+  const fencePosts = resolveFencePosts(board.fences ?? {}, board.fencePosts ?? {});
   const wallBounds = { cols: board.cols, rows: board.rows };
   const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
   const wallFaceStyles = resolveWallArtFaces(board.wallArt, wallBounds);
@@ -204,7 +242,6 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
         });
       }
 
-      const fence = fenceOverlays.get(key);
       const wall = wallOverlays.get(key);
       if (wall) {
         const wallZ = wallOverlayZIndex({ x, y });
@@ -233,18 +270,19 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
           }
         }
       }
-
-      if (fence) {
-        ops.push({
-          src: fenceFrameSrc(fence.material, fence.mask),
-          dx: frameX,
-          dy: frameY,
-          dw: TILE_FRAME_W,
-          dh: TILE_FRAME_H,
-          z: fenceOverlayZIndex({ x, y }),
-        });
-      }
     }
+  }
+
+  // Posts cap their incident rails at a positive half-depth bias. Keep insertion order only as a
+  // secondary deterministic tie breaker; numeric z owns the visible ordering.
+  for (const post of fencePosts.values()) pushFencePostDrawOp(ops, post);
+  // Fence owners can be off-board phantom cells for north/west boundary rails. Iterating the
+  // resolved map (instead of looking fences up only while walking in-bounds tiles) paints those
+  // rails. Posts resolve separately by canonical vertex, so a shared corner/join is drawn once.
+  for (const [key, fence] of fenceOverlays) {
+    const [x, y] = key.split(',').map(Number);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    pushFenceDrawOps(ops, { x, y }, fence);
   }
 
   for (const placement of acceptedMacroTiles) {
@@ -411,6 +449,7 @@ export function boardContentHash(board: RenderBoard): string {
     `ct:${sortedEntries(board.coverTypes ?? {})}`,
     `f:${sortedEntries(board.features)}`,
     `fe:${sortedEntries(board.fences ?? {})}`,
+    `fp:${sortedEntries(board.fencePosts ?? {})}`,
     `wl:${sortedEntries(board.walls ?? {})}`,
     `wa:${sortedEntries(board.wallArt ?? {})}`,
     `x:${sortedEntries(board.featureCuts)}`,
