@@ -6158,9 +6158,10 @@ async function dbReadMediaCatalog({
   const client = await pool.connect();
   try {
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-    const [stateResult, slotResult] = await Promise.all([
-      client.query('SELECT revision, updated_at FROM media_catalog_state WHERE singleton = true'),
-      client.query(
+    const stateResult = await client.query(
+      'SELECT revision, updated_at FROM media_catalog_state WHERE singleton = true',
+    );
+    const slotResult = await client.query(
       `SELECT s.slot, s.domain, s.role, s.availability_policy, s.lifecycle_state,
               s.active_version_id, s.activated_at, s.retired_at, s.retirement_evidence,
               s.metadata AS slot_metadata, s.row_revision AS slot_revision,
@@ -6171,8 +6172,7 @@ async function dbReadMediaCatalog({
          LEFT JOIN media_versions v ON v.id = s.active_version_id AND v.slot = s.slot
          LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
         ORDER BY s.slot`,
-    ),
-    ]);
+    );
     const usableActive = (row) => (
       row.lifecycle_state === 'active' && row.version_id && row.sha256
       && ['accepted', 'legacy-bridge'].includes(row.version_status)
@@ -8606,15 +8606,16 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
   }
   try {
-    const [stateResult, familyResult, assetResult, spriteResult] = await Promise.all([
-      db.query('SELECT revision, updated_at FROM unit_catalog_state WHERE singleton = true'),
-      db.query(
+    const stateResult = await db.query(
+      'SELECT revision, updated_at FROM unit_catalog_state WHERE singleton = true',
+    );
+    const familyResult = await db.query(
       `SELECT family, accepted_asset_id, display_scale_percent, row_revision, updated_at, updated_by
          FROM unit_families
         ORDER BY array_position($1::text[], family)`,
       [UNIT_FAMILY_IDS],
-      ),
-      db.query(
+    );
+    const assetResult = await db.query(
       `SELECT id, family, label, method, notes, acceptance_block_reason, status, footprint_shape,
               source_canvas_width, source_canvas_height, source_footprint_px,
               anchor_x, anchor_y, row_revision, created_at, updated_at, updated_by
@@ -8622,16 +8623,15 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
         WHERE $1::boolean OR status <> 'archived'
         ORDER BY family, created_at DESC`,
       [includeArchived],
-      ),
-      db.query(
+    );
+    const spriteResult = await db.query(
       `SELECT s.asset_id, s.palette, s.direction, s.sha256, s.width, s.height, s.byte_length
          FROM unit_sprites s
          JOIN unit_assets a ON a.id = s.asset_id
         WHERE $1::boolean OR a.status <> 'archived'
         ORDER BY s.asset_id, s.palette, s.direction`,
       [includeArchived],
-      ),
-    ]);
+    );
 
     const acceptedIds = new Set(familyResult.rows.map((row) => row.accepted_asset_id).filter(Boolean).map(String));
     const assets = assetResult.rows.map((row) => ({
