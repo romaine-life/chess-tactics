@@ -146,7 +146,7 @@ describe('saveOpeningBooks', () => {
     expect(loaded.tdRuns?.runs[0].session.train.game).toBe(50);
   });
 
-  it('drops malformed runs on load (the pane trusts every run in the library) and passes tdAdoption through', async () => {
+  it('drops malformed runs on load (the pane trusts every run in the library) and passes a sanitized levelAi through', async () => {
     const good = {
       id: 2, name: 'Run 2',
       opts: { games: 10, seed: 1 }, seedCount: 1,
@@ -155,17 +155,40 @@ describe('saveOpeningBooks', () => {
     };
     const mangled = { id: 3, name: 'Run 3', opts: { games: 10, seed: 1 }, session: {} }; // no session.train
     const adoption = { at: 't', vector: [1, 2], pieceValues: {}, fromGames: 5, seeds: [1], source: 'live-weights', runId: 2, runName: 'Run 2' };
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], tdRuns: { nextId: 4, activeId: 2, runs: [good, mangled] }, tdAdoption: adoption } }));
+    const levelAi = {
+      live: 'material-search',
+      approaches: {
+        'material-search': { vector: [1, 2], adoption },
+        ghost: { vector: 'not-a-vector' }, // malformed sibling — dropped at the load boundary
+      },
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], tdRuns: { nextId: 4, activeId: 2, runs: [good, mangled] }, levelAi } }));
     const loaded = await loadOpeningBooks('lvl-dirty');
     expect(loaded.tdRuns?.runs.map((r) => r.id)).toEqual([2]);
-    expect(loaded.tdAdoption).toEqual(adoption);
+    expect(loaded.levelAi).toEqual({ live: 'material-search', approaches: { 'material-search': { vector: [1, 2], adoption } } });
 
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: true }));
     await saveOpeningBooks('lvl-dirty', loaded);
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body).data.tdAdoption).toEqual(adoption);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).data.levelAi).toEqual(loaded.levelAi);
   });
 
-  it('migrates the retired single-run tdSession field into the library as Run 1 on load, and never writes it back', async () => {
+  it('migrates the retired bare-vector adoption (adoptedWeights + tdAdoption) into levelAi on load, and never writes the old fields back', async () => {
+    const adoption = { at: 't', vector: [1, 2], pieceValues: {}, fromGames: 5, seeds: [1], source: 'live-weights', runId: 2, runName: 'Run 2' };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], adoptedWeights: [1, 2], tdAdoption: adoption } }));
+    const loaded = await loadOpeningBooks('lvl-vec');
+    expect(loaded.adoptedWeights).toBeUndefined();
+    expect(loaded.tdAdoption).toBeUndefined();
+    expect(loaded.levelAi).toEqual({ live: 'material-search', approaches: { 'material-search': { vector: [1, 2], adoption } } });
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: true }));
+    await saveOpeningBooks('lvl-vec', loaded);
+    const sent = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(sent.data.adoptedWeights).toBeUndefined();
+    expect(sent.data.tdAdoption).toBeUndefined();
+    expect(sent.data.levelAi.live).toBe('material-search');
+  });
+
+  it('migrates the retired single-run tdSession field into the library as Run 1 on load, its in-force adoption riding the whole chain into levelAi, and never writes it back', async () => {
     const doc = {
       opts: { games: 600, seed: 1 }, seedCount: 3,
       session: { train: { game: 600, weights: { pawn: 0.1 }, outcomes: { playerWins: 70, draws: 457, enemyWins: 73 } }, probe: null, lastGame: null },
@@ -173,20 +196,29 @@ describe('saveOpeningBooks', () => {
       summary: null, kept: true,
       adoption: { at: 'then', vector: [1], pieceValues: {}, fromGames: 600, seeds: [1], source: 'live-weights' },
     };
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], tdSession: doc } }));
+    // The oldest persisted shape: single document + the bare in-force vector.
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], tdSession: doc, adoptedWeights: [1] } }));
     const loaded = await loadOpeningBooks('lvl-legacy');
     expect(loaded.tdSession).toBeUndefined();
     expect(loaded.tdRuns).toEqual({ nextId: 2, activeId: 1, runs: [{ id: 1, name: 'Run 1', ...doc }] });
-    // The legacy live adoption record is hoisted to the blob-level slot, named.
-    expect(loaded.tdAdoption).toEqual({ ...doc.adoption, runId: 1, runName: 'Run 1' });
+    // The legacy record chains: doc.adoption → the blob-level slot (named Run 1) →
+    // the material-search approach config, where it now lives.
+    expect(loaded.tdAdoption).toBeUndefined();
+    expect(loaded.levelAi).toEqual({
+      live: 'material-search',
+      approaches: { 'material-search': { vector: [1], adoption: { ...doc.adoption, runId: 1, runName: 'Run 1' } } },
+    });
 
-    // The migrated shape is what persists — the legacy field is gone from the PUT.
+    // The migrated shape is what persists — the legacy fields are gone from the PUT.
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: true }));
     await saveOpeningBooks('lvl-legacy', loaded);
     const sent = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(sent.data.tdSession).toBeUndefined();
+    expect(sent.data.adoptedWeights).toBeUndefined();
+    expect(sent.data.tdAdoption).toBeUndefined();
     expect(sent.data.tdRuns.runs[0].kept).toBe(true);
     expect(sent.data.tdRuns.runs[0].adoption.fromGames).toBe(600);
+    expect(sent.data.levelAi.approaches['material-search'].adoption.runName).toBe('Run 1');
   });
 
   it('a blob with BOTH fields keeps the library and drops the stale legacy field', async () => {

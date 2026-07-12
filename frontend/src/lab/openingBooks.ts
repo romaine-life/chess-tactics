@@ -13,6 +13,7 @@
 
 import { encodeWeights } from '../game/tuning';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
+import { MATERIAL_SEARCH, type AiApproachId } from '../game/aiApproach';
 import type { BookPosition, OpeningBookSettings } from '../game/openingBook';
 import type { SpsaStepGameRecord } from '../game/tuning';
 import type { TdAdoptionRecord, TdRunsDoc, TdSessionDoc } from './tdSession';
@@ -62,14 +63,37 @@ export interface OpeningBook {
   split?: { holdout: number[] };
 }
 
+/** One approach's OWN tuned parameter set. Each approach keeps its own config —
+ * pointing the level at another approach must never destroy this one's tuning. */
+export interface AiApproachConfig {
+  /** The approach's tuned parameter vector (encodeWeights order for material-search).
+   * This is the durable, account-scoped copy; game/adoptedWeights mirrors the LIVE
+   * approach's vector into a local cache the live AI reads synchronously. */
+  vector: number[];
+  /** Provenance when the Piece-values pane set the values (names the run; survives
+   * deleting the run it came from — each run also keeps its own copy as history).
+   * Absent when the Training tab's SPRT champion set them. */
+  adoption?: TdAdoptionRecord;
+}
+
+/** The level's AI as the owner set it: WHICH named approach is in force (`live`,
+ * absent = stock AI — shipped or default values) plus every approach's own config
+ * (game/aiApproach.ts is the registry). Setting an AI is always the whole pointer:
+ * approach + its parameters + provenance, never a bare weight vector. */
+export interface LevelAiDoc {
+  live?: AiApproachId;
+  approaches: Partial<Record<AiApproachId, AiApproachConfig>>;
+}
+
 /** The per-level persisted blob: an id counter and the level's books. */
 export interface BooksBlob {
   nextId: number;
   books: OpeningBook[];
-  /** The eval-weight vector the owner ADOPTED for this level's live enemy AI (from a
-   * gym champion that passed SPRT validation, or the Piece-values pane's learned
-   * values), or absent if none is adopted. This is the durable, account-scoped copy;
-   * game/adoptedWeights mirrors it into a local cache the live AI reads synchronously. */
+  /** The level's AI document — the named approach in force and each approach's own
+   * tuned parameters. */
+  levelAi?: LevelAiDoc;
+  /** RETIRED bare-vector adoption (the pre-approach format): read for migration
+   * only, never written. migrateLevelAi folds it into `levelAi` on load. */
   adoptedWeights?: number[];
   /** RETIRED single-run field (the pre-library format): read for migration only,
    * never written. migrateTdRuns folds it into `tdRuns` as Run 1 on load. */
@@ -77,9 +101,9 @@ export interface BooksBlob {
   /** The Piece-values learner's run library (lab/tdSession.ts): every run the owner
    * has recorded on this level, autosaved so closing the tab never discards one. */
   tdRuns?: TdRunsDoc;
-  /** The LIVE adoption record beside `adoptedWeights` — the audit box's source, kept
-   * at blob level so it survives deleting the run it came from (each run also keeps
-   * its own copy as history). Cleared with the adoption. */
+  /** RETIRED blob-level live adoption record beside `adoptedWeights` (pre-approach
+   * format): read for migration only, never written. Lives on inside the approach
+   * config (levelAi.approaches[..].adoption). */
   tdAdoption?: TdAdoptionRecord;
 }
 
@@ -99,7 +123,8 @@ export function sanitizeTdRuns(lib: TdRunsDoc): TdRunsDoc {
 /** Migrate the retired single-run `tdSession` field into the run library: the old
  * document becomes Run 1 (its adoption, summary, and Kept mark intact), and its
  * adoption record — if any — is hoisted to the blob-level live-adoption slot (the
- * old format only kept a record while it was in force). A malformed legacy doc is
+ * old format only kept a record while it was in force; migrateLevelAi then folds
+ * that slot into the approach config). A malformed legacy doc is
  * dropped (the old code ignored it too); a blob that already has a library just
  * drops the stale legacy field. Pure — the net client applies it on load, and the
  * next save persists the migrated shape. */
@@ -111,6 +136,64 @@ export function migrateTdRuns(blob: BooksBlob): BooksBlob {
     ...rest,
     tdRuns: { nextId: 2, activeId: 1, runs: [{ id: 1, name: 'Run 1', ...tdSession }] },
     ...(tdSession.adoption && !rest.tdAdoption ? { tdAdoption: { ...tdSession.adoption, runId: 1, runName: 'Run 1' } } : {}),
+  };
+}
+
+const sameVec = (a: number[], b: number[]): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
+
+/** Point the level's AI at `id`, replacing THAT approach's config. Other
+ * approaches' configs are untouched — setting an AI is repointing, never
+ * overwriting a sibling's tuning. */
+export function setLevelAiApproach(blob: BooksBlob, id: AiApproachId, config: AiApproachConfig): BooksBlob {
+  return { ...blob, levelAi: { live: id, approaches: { ...blob.levelAi?.approaches, [id]: config } } };
+}
+
+/** Drop one approach's config (the owner cleared it). If it was the live one the
+ * level falls back to stock; an emptied document is removed entirely. */
+export function clearLevelAiApproach(blob: BooksBlob, id: AiApproachId): BooksBlob {
+  const cur = blob.levelAi;
+  if (!cur) return blob;
+  const { [id]: _dropped, ...approaches } = cur.approaches;
+  const { levelAi: _doc, ...rest } = blob;
+  if (Object.keys(approaches).length === 0) return rest;
+  return { ...rest, levelAi: { ...(cur.live !== undefined && cur.live !== id ? { live: cur.live } : {}), approaches } };
+}
+
+/** Load-boundary defense for the level-AI document (the resolver mirror and audit
+ * box trust it): drop configs without an all-numeric vector, unset `live` when it
+ * points at a missing approach, drop an emptied document. Same object when clean. */
+export function sanitizeLevelAi(doc: LevelAiDoc): LevelAiDoc | undefined {
+  const src = doc.approaches && typeof doc.approaches === 'object' ? doc.approaches : {};
+  const entries = (Object.entries(src) as Array<[AiApproachId, AiApproachConfig | undefined]>)
+    .filter((e): e is [AiApproachId, AiApproachConfig] =>
+      !!e[1] && Array.isArray(e[1].vector) && e[1].vector.every((v) => typeof v === 'number'));
+  if (!entries.length) return undefined;
+  const liveOk = doc.live !== undefined && entries.some(([id]) => id === doc.live);
+  if (doc.approaches === src && entries.length === Object.keys(src).length && (doc.live === undefined || liveOk)) return doc;
+  return { ...(liveOk ? { live: doc.live } : {}), approaches: Object.fromEntries(entries) as LevelAiDoc['approaches'] };
+}
+
+/** Migrate the retired bare-vector adoption fields (`adoptedWeights` + the
+ * blob-level `tdAdoption` record) into the level-AI document: the vector becomes
+ * the material-search approach's config — live, since the old format only stored a
+ * vector while it was in force — carrying the adoption record when its vector
+ * matches (the old read path applied the same guard: a stale record beside a
+ * Training-tab vector was ignored). Orphaned fields (a record without a vector, or
+ * either beside an existing `levelAi`) just drop. Pure — the net client applies it
+ * on load AFTER migrateTdRuns (which hoists a pre-library document's record up to
+ * `tdAdoption` first), and the next save persists the migrated shape. */
+export function migrateLevelAi(blob: BooksBlob): BooksBlob {
+  if (blob.adoptedWeights === undefined && blob.tdAdoption === undefined) return blob;
+  const { adoptedWeights, tdAdoption, ...rest } = blob;
+  if (rest.levelAi || !Array.isArray(adoptedWeights)) return rest;
+  const adoption = tdAdoption && Array.isArray(tdAdoption.vector) && sameVec(tdAdoption.vector, adoptedWeights)
+    ? tdAdoption : undefined;
+  return {
+    ...rest,
+    levelAi: {
+      live: MATERIAL_SEARCH,
+      approaches: { [MATERIAL_SEARCH]: { vector: adoptedWeights, ...(adoption ? { adoption } : {}) } },
+    },
   };
 }
 

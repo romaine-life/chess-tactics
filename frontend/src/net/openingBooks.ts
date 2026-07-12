@@ -4,7 +4,10 @@
 // Replaces the former per-browser localStorage store.
 
 import { HttpError } from './http';
-import { emptyBlob, capSessionForStorage, migrateTdRuns, sanitizeTdRuns, type BooksBlob } from '../lab/openingBooks';
+import {
+  emptyBlob, capSessionForStorage, migrateLevelAi, migrateTdRuns, sanitizeLevelAi, sanitizeTdRuns,
+  type BooksBlob,
+} from '../lab/openingBooks';
 import type { TdLedgerRow, TdRunDoc } from '../lab/tdSession';
 
 // One fetch core (mirrors net/campaignWorkspace.ts): same credentials + JSON +
@@ -24,22 +27,25 @@ async function request<T>(method: string, path: string, body?: unknown, keepaliv
 }
 
 /** Load a level's books for the signed-in account (empty blob if none stored).
- * The retired single-run `tdSession` field migrates into the `tdRuns` library here,
- * and the library is sanitized (malformed runs dropped) — so every consumer sees
- * the one current, renderable shape.
+ * The retired fields migrate here — the single-run `tdSession` into the `tdRuns`
+ * library, then the bare `adoptedWeights`/`tdAdoption` pair into the `levelAi`
+ * approach document — and both documents are sanitized (malformed entries dropped),
+ * so every consumer sees the one current, renderable shape.
  * Throws HttpError on non-ok (e.g. 401 signed-out) so the caller decides. */
 export async function loadOpeningBooks(levelId: string): Promise<BooksBlob> {
   const data = await request<{ data?: Partial<BooksBlob> }>('GET', `/api/opening-books/${encodeURIComponent(levelId)}`);
   const blob = data.data;
   if (!blob || !Array.isArray(blob.books)) return emptyBlob();
-  return migrateTdRuns({
+  const levelAi = blob.levelAi && typeof blob.levelAi === 'object' ? sanitizeLevelAi(blob.levelAi) : undefined;
+  return migrateLevelAi(migrateTdRuns({
     nextId: typeof blob.nextId === 'number' ? blob.nextId : 1,
     books: blob.books,
+    ...(levelAi ? { levelAi } : {}),
     ...(Array.isArray(blob.adoptedWeights) ? { adoptedWeights: blob.adoptedWeights } : {}),
     ...(blob.tdSession && typeof blob.tdSession === 'object' ? { tdSession: blob.tdSession } : {}),
     ...(blob.tdRuns && typeof blob.tdRuns === 'object' && Array.isArray(blob.tdRuns.runs) ? { tdRuns: sanitizeTdRuns(blob.tdRuns) } : {}),
     ...(blob.tdAdoption && typeof blob.tdAdoption === 'object' ? { tdAdoption: blob.tdAdoption } : {}),
-  });
+  }));
 }
 
 // Whole-library PUTs meet a hard backend body cap (express.json 4mb), so storage is
@@ -82,9 +88,8 @@ export async function saveOpeningBooks(levelId: string, blob: BooksBlob, keepali
   const capped: BooksBlob = {
     nextId: blob.nextId,
     books: blob.books.map((b) => ({ ...b, session: capSessionForStorage(b.session) })),
-    ...(blob.adoptedWeights ? { adoptedWeights: blob.adoptedWeights } : {}),
+    ...(blob.levelAi ? { levelAi: blob.levelAi } : {}),
     ...(blob.tdRuns ? { tdRuns: { ...blob.tdRuns, runs: blob.tdRuns.runs.map((r) => capTdRun(r, r.id === blob.tdRuns?.activeId)) } } : {}),
-    ...(blob.tdAdoption ? { tdAdoption: blob.tdAdoption } : {}),
   };
   await request<{ ok: boolean }>('PUT', `/api/opening-books/${encodeURIComponent(levelId)}`, { data: capped }, keepalive);
 }

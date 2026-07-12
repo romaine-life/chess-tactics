@@ -17,6 +17,12 @@ import type { RecordedMove } from './selfplay';
 
 const SAN_LETTER: Record<string, string> = { pawn: '', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', king: 'K' };
 
+/** The chess initial for a piece type, for compact value labels (pawn = 'P'; SAN
+ * proper writes pawns bare, hence the separate map). Knight is 'N' — a first-letter
+ * uppercase would collide with king. */
+export const pieceInitial = (type: string): string =>
+  type === 'pawn' ? 'P' : (SAN_LETTER[type] ?? type.charAt(0).toUpperCase());
+
 const fileOf = (x: number): string => String.fromCharCode(97 + x);
 const squareOf = (x: number, y: number, rows: number): string => `${fileOf(x)}${rows - y}`;
 
