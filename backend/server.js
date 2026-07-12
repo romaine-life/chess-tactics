@@ -1310,6 +1310,13 @@ function timestampString(value, fallback = new Date().toISOString()) {
   return fallback;
 }
 
+function nullableTimestampString(value) {
+  if (value === null || value === undefined) return null;
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(parsed.getTime())) throw new Error('invalid database timestamp');
+  return parsed.toISOString();
+}
+
 function campaignFromRow(row) {
   if (!row || !isObjectRecord(row.body)) return null;
   const fallbackUpdatedAt = timestampString(row.updated_at);
@@ -5412,8 +5419,8 @@ function publicSfxProfile(row) {
     data: row.data,
     clientSchemaVersion: Number(row.client_schema_version),
     revision: Number(row.revision),
-    createdAt: row.created_at || null,
-    updatedAt: row.updated_at || null,
+    createdAt: nullableTimestampString(row.created_at),
+    updatedAt: nullableTimestampString(row.updated_at),
     updatedBy: row.updated_by || null,
   };
 }
@@ -6113,8 +6120,8 @@ function publicMediaSlot(row) {
     availabilityPolicy: row.availability_policy,
     lifecycleState: row.lifecycle_state,
     activeVersionId: row.active_version_id ? String(row.active_version_id) : null,
-    activatedAt: row.activated_at || null,
-    retiredAt: row.retired_at || null,
+    activatedAt: nullableTimestampString(row.activated_at),
+    retiredAt: nullableTimestampString(row.retired_at),
     rowRevision: Number(row.slot_revision),
     metadata: publicMediaSlotMetadata(row),
     versionStatus: hasActiveMedia ? row.version_status : null,
@@ -6207,7 +6214,7 @@ async function dbReadMediaCatalog({
     const body = {
     schemaVersion: MEDIA_CATALOG_SCHEMA_VERSION,
     revision: Number(stateResult.rows[0]?.revision || 0),
-    updatedAt: stateResult.rows[0]?.updated_at || null,
+    updatedAt: nullableTimestampString(stateResult.rows[0]?.updated_at),
     slots: (includeVersions
       ? slotResult.rows
        : slotResult.rows.filter((row) => (
@@ -6244,8 +6251,8 @@ async function dbReadMediaCatalog({
       nativeEvidence: row.native_evidence || {},
       reviewEvidence: row.review_evidence || {},
       rowRevision: Number(row.row_revision),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      createdAt: nullableTimestampString(row.created_at),
+      updatedAt: nullableTimestampString(row.updated_at),
       updatedBy: row.updated_by,
       media: row.blob_sha256 ? {
         url: row.status === 'accepted' || row.status === 'legacy-bridge'
@@ -6270,7 +6277,8 @@ async function dbReadMediaCatalog({
       body.events = rows.map((row) => ({
       id: Number(row.id), slot: row.slot, sourcePath: row.source_path,
       versionId: row.version_id ? String(row.version_id) : null,
-      action: row.action, actorEmail: row.actor_email, details: row.details || {}, createdAt: row.created_at,
+      action: row.action, actorEmail: row.actor_email, details: row.details || {},
+      createdAt: nullableTimestampString(row.created_at),
       }));
       body.eventsPage = {
         limit: eventLimit,
@@ -8644,8 +8652,8 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
     nativeScalePercent: nativeUnitScalePercent(row.source_canvas_width, row.source_canvas_height),
     anchor: { x: Number(row.anchor_x), y: Number(row.anchor_y) },
     rowRevision: Number(row.row_revision),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: nullableTimestampString(row.created_at),
+    updatedAt: nullableTimestampString(row.updated_at),
     updatedBy: row.updated_by,
     sprites: {},
     spriteCount: 0,
@@ -8673,13 +8681,13 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
     const body = {
       schemaVersion: UNIT_CATALOG_SCHEMA_VERSION,
       revision: Number(stateResult.rows[0]?.revision || 0),
-      updatedAt: stateResult.rows[0]?.updated_at || null,
+      updatedAt: nullableTimestampString(stateResult.rows[0]?.updated_at),
       families: familyResult.rows.map((row) => ({
       family: row.family,
       acceptedAssetId: row.accepted_asset_id ? String(row.accepted_asset_id) : null,
       displayScalePercent: Number(row.display_scale_percent),
       rowRevision: Number(row.row_revision),
-      updatedAt: row.updated_at,
+      updatedAt: nullableTimestampString(row.updated_at),
       updatedBy: row.updated_by,
       })),
       assets,
