@@ -54,6 +54,7 @@ test('release workflows preserve immutable candidate and explicit approval gates
 
   assert.doesNotMatch(production, /uses: docker\/build-push-action/);
   assert.doesNotMatch(production, /sha-\$\{|sha-<pr-head>/);
+  assert.match(production, /permissions:[\s\S]*issues:\s*read[\s\S]*pull-requests:\s*read/);
   assert.match(production, /exact-image-approval\.mjs verify/);
   assert.match(production, /--fingerprint "\$\{FINGERPRINT\}"/);
   assert.match(production, /DEPLOY_IMAGE_REF=\$\{image_ref\}/);
