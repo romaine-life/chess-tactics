@@ -57,4 +57,3 @@ Git-owned runtime configuration and localStorage-copy-to-source workflow.
 - Browser drafts are recoverable editing state, not production authority.
 - Missing backend configuration is visibly unavailable and audibly silent.
 - Profile editing cannot manufacture acceptance for unreviewed recording bytes.
-

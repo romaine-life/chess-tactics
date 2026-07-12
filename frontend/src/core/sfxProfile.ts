@@ -138,4 +138,3 @@ export function currentLiveSfxProfile(): SfxProfile | null {
 export function resetLiveSfxProfile(): void {
   activeDocument = null;
 }
-

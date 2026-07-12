@@ -42,4 +42,3 @@ describe('live SFX profile', () => {
     expect(() => assertSfxProfile(unknown)).toThrow(/declared sound set/);
   });
 });
-

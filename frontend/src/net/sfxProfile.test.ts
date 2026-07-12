@@ -46,4 +46,3 @@ describe('SFX profile network client', () => {
     expect(currentLiveSfxProfileDocument()?.revision).toBe(5);
   });
 });
-
