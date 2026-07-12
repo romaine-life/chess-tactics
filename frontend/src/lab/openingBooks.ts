@@ -15,6 +15,7 @@ import { encodeWeights } from '../game/tuning';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
 import type { BookPosition, OpeningBookSettings } from '../game/openingBook';
 import type { SpsaStepGameRecord } from '../game/tuning';
+import type { TdRunsDoc, TdSessionDoc } from './tdSession';
 
 /** One point on a book's convergence curve — the worker's step output. Game outcomes
  * (this step's decisive/draw split) are optional so trajectories persisted before they
@@ -70,9 +71,23 @@ export interface BooksBlob {
    * values), or absent if none is adopted. This is the durable, account-scoped copy;
    * game/adoptedWeights mirrors it into a local cache the live AI reads synchronously. */
   adoptedWeights?: number[];
-  /** The Piece-values learner's session as a durable document (lab/tdSession.ts):
-   * the run autosaves here so closing the tab never discards learning. */
-  tdSession?: import('./tdSession').TdSessionDoc;
+  /** RETIRED single-run field (the pre-library format): read for migration only,
+   * never written. migrateTdRuns folds it into `tdRuns` as Run 1 on load. */
+  tdSession?: TdSessionDoc;
+  /** The Piece-values learner's run library (lab/tdSession.ts): every run the owner
+   * has recorded on this level, autosaved so closing the tab never discards one. */
+  tdRuns?: TdRunsDoc;
+}
+
+/** Migrate the retired single-run `tdSession` field into the run library: the old
+ * document becomes Run 1 (its adoption, summary, and Kept mark intact). A blob that
+ * already has a library just drops the stale legacy field. Pure — the net client
+ * applies it on load, and the next save persists the migrated shape. */
+export function migrateTdRuns(blob: BooksBlob): BooksBlob {
+  if (!blob.tdSession) return blob;
+  const { tdSession, ...rest } = blob;
+  if (rest.tdRuns) return rest;
+  return { ...rest, tdRuns: { nextId: 2, activeId: 1, runs: [{ id: 1, name: 'Run 1', ...tdSession }] } };
 }
 
 /** Default generation settings for a brand-new book (small, so a step lands fast). */

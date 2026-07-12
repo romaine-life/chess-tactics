@@ -4,9 +4,10 @@
 // the exact protocol logic (the worker shell touches `self`, which node can't import).
 //
 // Owner grammar (the control spec this module implements): STEP = one game, STEP N,
-// RUN to the configured budget, STOP between games, RESET = a fresh session. No
-// pause/resume machinery — TD's atomic unit is ONE game (ms-fast), so a stop between
-// games commits cleanly; that is the whole transport.
+// RUN to the configured budget, STOP between games, NEW RUN = a fresh session (the
+// old one stays in the level's run library). No pause/resume machinery — TD's atomic
+// unit is ONE game (ms-fast), so a stop between games commits cleanly; that is the
+// whole transport.
 
 import type { Level } from '../core/level';
 import type { Side } from '../core/types';
@@ -29,12 +30,16 @@ export interface TdAdoptionRecord {
   fromGames: number;
   seeds: number[];
   source: 'seed-mean' | 'live-weights';
+  /** Which run the adoption came from (absent on pre-library adoptions). */
+  runId?: number;
+  runName?: string;
 }
 
-/** The values pane's session as a durable, account-scoped document — saved into the
- * level's opening-books blob (one JSONB per owner+level; the backend passes it
- * through). The OPTS travel with the state: a session is a position inside a fixed
- * schedule, so restoring one without its exact options would corrupt the run. */
+/** The autosave payload one run accumulates — everything the pane shows. The OPTS
+ * travel with the state: a session is a position inside a fixed schedule, so
+ * restoring one without its exact options would corrupt the run. (Also the exact
+ * shape of the retired single-document `tdSession` blob field, which migrates into
+ * the run library as Run 1.) */
 export interface TdSessionDoc {
   opts: TrainOptions;
   seedCount: number;
@@ -43,6 +48,46 @@ export interface TdSessionDoc {
   summary: SeedSummary | null;
   kept: boolean;
   adoption?: TdAdoptionRecord;
+}
+
+/** One saved run — the experiment-tracking primitive (MLflow / W&B's "run"): frozen
+ * settings plus everything they produced, wrapped with identity so a level can hold
+ * MANY and the owner can tweak a knob, run again, and compare. */
+export interface TdRunDoc extends TdSessionDoc {
+  id: number;
+  name: string;
+  /** ISO — absent on the run migrated from the pre-library single-document format. */
+  createdAt?: string;
+}
+
+/** A level's run library, account-scoped in the opening-books blob. `activeId` is
+ * the run the pane has open; absent = the pane is on a fresh, not-yet-recorded run.
+ * Ids never rewind (stable handles, the opening-book idiom). */
+export interface TdRunsDoc {
+  nextId: number;
+  activeId?: number;
+  runs: TdRunDoc[];
+}
+
+/** Write the pane's autosave payload into its run: update in place when `runId`
+ * names an existing run (identity and any adoption preserved — a plain autosave
+ * payload never carries adoption; tdAdopt passes one explicitly), else record a NEW
+ * run named after its id. Returns the grown library and the run as written. */
+export function upsertTdRun(
+  lib: TdRunsDoc | undefined,
+  payload: TdSessionDoc,
+  runId: number | null,
+): { lib: TdRunsDoc; run: TdRunDoc } {
+  const cur: TdRunsDoc = lib ?? { nextId: 1, runs: [] };
+  const existing = runId !== null ? cur.runs.find((r) => r.id === runId) : undefined;
+  if (existing) {
+    const adoption = payload.adoption ?? existing.adoption;
+    const run: TdRunDoc = { ...existing, ...payload, ...(adoption ? { adoption } : {}) };
+    return { lib: { ...cur, activeId: run.id, runs: cur.runs.map((r) => (r.id === run.id ? run : r)) }, run };
+  }
+  const id = cur.nextId;
+  const run: TdRunDoc = { id, name: `Run ${id}`, createdAt: new Date().toISOString(), ...payload };
+  return { lib: { nextId: id + 1, activeId: id, runs: [...cur.runs, run] }, run };
 }
 
 /** Everything a command needs beside the level: the engine options plus how many

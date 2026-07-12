@@ -24,7 +24,7 @@ import type { GymRequest, GymResponse } from '../lab/gymWorker';
 import type { StepProgress } from '../lab/gymStep';
 import type { ValState } from '../lab/validate';
 import type { TdProbe, TdRequest, TdResponse, TdRunConfig, TdSession } from '../lab/tdWorker';
-import { freshTdSession, type TdAdoptionRecord, type TdSessionDoc } from '../lab/tdSession';
+import { freshTdSession, upsertTdRun, type TdAdoptionRecord, type TdRunDoc, type TdSessionDoc } from '../lab/tdSession';
 import {
   DEFAULT_PROBE_GAMES, DEFAULT_TRAIN_OPTIONS, pawnRelativeValues, previewNextGame, scheduleAt,
   type SeedSummary, type TdGameRecord, type TrainOptions, type ValueWeights,
@@ -223,6 +223,18 @@ const GYM_CSS = `
 .gym-td-help li { margin:3px 0; }
 .gym-td-help b { color:#e7ebf0; }
 .gym-td-help-keys b { font-family:ui-monospace,monospace; background:#161d26; border:1px solid #29323f; border-radius:4px; padding:1px 5px; }
+/* ⇄ compare — one column per run; row-label th cells stick LEFT (not top), section
+   rows band the table, and highlighted rows mark settings that differ across runs. */
+.gym-td-compare { flex:1 1 auto; min-height:0; overflow-y:auto; padding-right:8px; }
+.gym-td-compare > .gym-hint { display:block; margin:4px 0 10px; }
+.gym-td-compare-table thead th { text-align:right; white-space:nowrap; }
+.gym-td-compare-table thead th:first-child { left:0; z-index:2; }
+.gym-td-compare-table thead th.is-open { color:#8ff0dc; }
+.gym-td-compare-table tbody th { position:sticky; top:auto; left:0; background:#0b1016; color:#93a0b0; text-align:left; font-weight:600; padding:5px 12px; border-bottom:1px solid #141b23; white-space:nowrap; }
+.gym-td-compare-table tbody td { white-space:nowrap; }
+.gym-td-compare-table tr.sect th { position:sticky; left:0; background:#161d26; color:#5c6875; text-align:left; padding-top:8px; white-space:normal; }
+.gym-td-compare-table tr.differs th, .gym-td-compare-table tr.differs td { color:#e0b24a; }
+.gym-td-compare-table td.na { color:#5c6875; }
 /* Watch tempo. */
 .gym-td-speed { display:flex; align-items:center; gap:8px; font-size:12px; color:#93a0b0; margin-top:2px; }
 .gym-td-speed input[type=range] { flex:1 1 auto; min-width:0; }
@@ -571,16 +583,18 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
           setAdoptedWeights(levelId, loaded.adoptedWeights);
           setAdoptedVec(loaded.adoptedWeights);
         }
-        // Restore the Piece-values session document — the run continues exactly where
-        // it stood (its OPTS restore with it: a session is a position inside a fixed
-        // schedule, so the knobs must be the ones it was trained under). The doc also
-        // parks in a ref: the TD worker-init effect keys on the LEVEL object, which
-        // often resolves after this blob, and its reset would wipe the restore — it
-        // re-applies from the ref instead.
-        const doc = loaded.tdSession;
-        if (doc && doc.session?.train && doc.opts && typeof doc.opts.games === 'number') {
-          tdDocRef.current = doc;
-          tdApplyDoc(doc);
+        // Restore the run library's OPEN run — it continues exactly where it stood
+        // (its OPTS restore with it: a session is a position inside a fixed schedule,
+        // so the knobs must be the ones it was trained under). The run also parks in
+        // a ref: the TD worker-init effect keys on the LEVEL object, which often
+        // resolves after this blob, and its reset would wipe the restore — it
+        // re-applies from the ref instead. (loadOpeningBooks already migrated any
+        // pre-library single document into `tdRuns` as Run 1.)
+        const lib = loaded.tdRuns;
+        const open = lib?.runs.find((r) => r.id === lib.activeId);
+        if (open && open.session?.train && open.opts && typeof open.opts.games === 'number') {
+          tdDocRef.current = open;
+          tdApplyDoc(open);
         }
       })
       .catch((error) => {
@@ -682,6 +696,14 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const [tdProbeLog, setTdProbeLog] = useState<TdProbe[]>([]);
   // The pane's own documentation ("how this works") as a full-pane view.
   const [tdHelp, setTdHelp] = useState(false);
+  // Run comparison ("what did that knob buy?") as a full-pane view: every saved run
+  // side by side — settings, outcomes, learned values.
+  const [tdCompare, setTdCompare] = useState(false);
+  // Which run in the level's library the pane has open; null = a fresh run that has
+  // not recorded anything yet (its first game creates it). Ref-mirrored for the
+  // autosave timer, which may allocate the id itself.
+  const [tdRunId, setTdRunId] = useState<number | null>(null);
+  const tdRunIdRef = useRef<number | null>(tdRunId); tdRunIdRef.current = tdRunId;
   // Watch tempo — the delay between beats, on a log scale down to one beat per frame.
   const [tdBeatMs, setTdBeatMs] = useState(250);
   // Watch scope: 'run' keeps dealing new games; 'game' (the stage's ▶ play out) stops
@@ -705,22 +727,25 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const tdWorkerRef = useRef<Worker | null>(null);
   // Freshest session for the send handlers (the ref pattern the SPSA wiring uses).
   const tdSessionRef = useRef<TdSession | null>(tdSession); tdSessionRef.current = tdSession;
-  // The level's restored/last-saved session document. The books load and the worker
+  // The pane's open run as last restored/saved. The books load and the worker
   // init race (blob vs level fetch); whichever runs last re-applies from here.
-  const tdDocRef = useRef<TdSessionDoc | null>(null);
-  const tdApplyDoc = useCallback((doc: TdSessionDoc) => {
-    setTdKnobs(tdKnobsOfDoc(doc.opts, doc.seedCount));
-    setTdSession(doc.session);
-    setTdProbeLog(Array.isArray(doc.probeLog) ? doc.probeLog : []);
-    setTdSummary(doc.summary ?? null);
-    setTdKept(doc.kept === true);
-    tdShownRef.current = { game: doc.session.train.game, weights: doc.session.train.weights };
+  const tdDocRef = useRef<TdRunDoc | null>(null);
+  const tdApplyDoc = useCallback((run: TdRunDoc) => {
+    setTdRunId(run.id);
+    setTdKnobs(tdKnobsOfDoc(run.opts, run.seedCount));
+    setTdSession(run.session);
+    setTdProbeLog(Array.isArray(run.probeLog) ? run.probeLog : []);
+    setTdSummary(run.summary ?? null);
+    setTdKept(run.kept === true);
+    tdShownRef.current = { game: run.session.train.game, weights: run.session.train.weights };
   }, []);
 
-  // RESET: back to a fresh session derived from the engine baseline (ADR-0057) — the
-  // weights return to the all-equal start and the knobs unfreeze. Knob VALUES are kept
-  // here (every knob carries its own per-control ↺, and "↺ settings" restores them all).
+  // Fresh pane: back to a fresh session derived from the engine baseline (ADR-0057) —
+  // the weights return to the all-equal start and the knobs unfreeze. Knob VALUES are
+  // kept (every knob carries its own per-control ↺, and "↺ settings" restores them
+  // all). Detaches from any run (tdApplyDoc re-attaches); saved runs are untouched.
   const tdReset = useCallback(() => {
+    setTdRunId(null); setTdCompare(false);
     setTdSession(null); setTdSummary(null); setTdKept(false); setTdDiscarded(false);
     setTdStopped(false); setTdError(null); setTdSummarizing(null); setTdBusy(false);
     setTdDelta(null); tdShownRef.current = null; setTdReplayPly(0);
@@ -835,59 +860,119 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   // knob mid-walk would silently make the walked game and the learned game differ.
   const tdKnobsFrozen = tdStarted || tdBusy || tdSummary !== null || tdPending !== null;
 
-  // --- The session as a web-backed document -----------------------------------
-  // Every meaningful change autosaves into the level's account blob via the same
-  // commit path the opening books use; the load effect above restores it. The save
-  // is a TRAILING DEBOUNCE — event-driven, nothing polls: each change arms a
-  // one-shot timer and cancels the previous, so a run's ~10 progress frames/second
-  // coalesce into one whole-blob PUT instead of hundreds. The debounce tail is
-  // covered by a pagehide flush below, so closing the tab mid-window loses nothing.
+  // --- The run as a web-backed document in the level's run library -------------
+  // Every meaningful change autosaves into the pane's run inside the account blob,
+  // via the same commit path the opening books use; the load effect above restores
+  // the open run. The save is a TRAILING DEBOUNCE — event-driven, nothing polls:
+  // each change arms a one-shot timer and cancels the previous, so a run's ~10
+  // progress frames/second coalesce into one whole-blob PUT instead of hundreds.
+  // The debounce tail is covered by a pagehide flush below, so closing the tab
+  // mid-window loses nothing. A fresh pane's FIRST save records a new run.
   const tdKnobsRef = useRef(tdKnobs); tdKnobsRef.current = tdKnobs;
-  const tdFlushRef = useRef<(() => void) | null>(null);
+  const tdFlushRef = useRef<((keepalive: boolean) => void) | null>(null);
   useEffect(() => {
     if (!levelId || !tdSession) { tdFlushRef.current = null; return undefined; }
-    const buildDoc = (): TdSessionDoc => {
-      const prior = blobRef.current.tdSession;
-      return {
+    const buildNext = (): { blob: BooksBlob; run: TdRunDoc } => {
+      const payload: TdSessionDoc = {
         opts: tdOptionsOf(tdKnobsRef.current), seedCount: tdKnobsRef.current.seedCount,
         session: tdSession, probeLog: tdProbeLog, summary: tdSummary, kept: tdKept,
-        ...(prior?.adoption ? { adoption: prior.adoption } : {}),
       };
+      const { lib, run } = upsertTdRun(blobRef.current.tdRuns, payload, tdRunIdRef.current);
+      // A first save allocated the run — attach the pane to it immediately (the ref
+      // now, so a racing flush reuses the id; the state for the rail's picker).
+      tdDocRef.current = run;
+      if (tdRunIdRef.current !== run.id) { tdRunIdRef.current = run.id; setTdRunId(run.id); }
+      return { blob: { ...blobRef.current, tdRuns: lib }, run };
     };
     const id = setTimeout(() => {
       tdFlushRef.current = null;
-      const doc = buildDoc();
-      tdDocRef.current = doc;
-      commit({ ...blobRef.current, tdSession: doc });
+      commit(buildNext().blob);
     }, 1200);
-    // The pending save, flushable NOW with a keepalive PUT that outlives the tab.
-    tdFlushRef.current = () => {
+    // The pending save, flushable NOW: keepalive = a PUT that outlives the tab
+    // (pagehide); otherwise the normal commit path (run switches flush through it).
+    tdFlushRef.current = (keepalive: boolean) => {
       clearTimeout(id);
       tdFlushRef.current = null;
-      const doc = buildDoc();
-      tdDocRef.current = doc;
-      const next = { ...blobRef.current, tdSession: doc };
-      blobRef.current = next;
-      void saveOpeningBooks(levelId, next, true).catch(() => { /* best effort at teardown */ });
+      const next = buildNext().blob;
+      if (keepalive) {
+        blobRef.current = next;
+        void saveOpeningBooks(levelId, next, true).catch(() => { /* best effort at teardown */ });
+      } else {
+        commit(next);
+      }
     };
     return () => clearTimeout(id);
   }, [levelId, tdSession, tdProbeLog, tdSummary, tdKept, commit]);
   useEffect(() => {
-    const flush = (): void => { tdFlushRef.current?.(); };
+    const flush = (): void => { tdFlushRef.current?.(true); };
     window.addEventListener('pagehide', flush);
     return () => window.removeEventListener('pagehide', flush);
   }, []);
 
-  // Reset = discard the run, including its stored document (the level's ADOPTION is
-  // separate and survives — clearing that is the audit box's explicit button).
-  const tdDiscardRun = useCallback(() => {
+  // The level's run library (source of truth: the account blob).
+  const tdRunList = blob.tdRuns?.runs ?? [];
+  const tdActiveRun = tdRunId !== null ? tdRunList.find((r) => r.id === tdRunId) ?? null : null;
+
+  // + New run: shelve the open run (flush its pending save) and detach onto a fresh
+  // pane with the settings unfrozen — tweak a knob and run the next experiment. The
+  // shelved run stays in the library; the fresh run is recorded on its first game.
+  const tdNewRun = useCallback(() => {
+    tdFlushRef.current?.(false);
     tdDocRef.current = null;
     tdReset();
-    if (blobRef.current.tdSession) {
-      const { tdSession: _dropped, ...rest } = blobRef.current;
-      commit(rest);
+    // Drop the open-run pointer so a reload lands on the fresh pane too.
+    if (blobRef.current.tdRuns?.activeId !== undefined) {
+      const { activeId: _off, ...lib } = blobRef.current.tdRuns;
+      commit({ ...blobRef.current, tdRuns: lib });
     }
   }, [tdReset, commit]);
+
+  // Open a saved run: flush the current one, then restore the picked one whole
+  // (session, settings, probe history, result table). Disabled while learning —
+  // a worker reply landing after a switch would write onto the wrong run.
+  const tdOpenRun = useCallback((id: number) => {
+    if (id === tdRunIdRef.current) return;
+    tdFlushRef.current?.(false);
+    const run = blobRef.current.tdRuns?.runs.find((r) => r.id === id);
+    if (!run) return;
+    tdReset();
+    tdDocRef.current = run;
+    tdApplyDoc(run);
+    if (blobRef.current.tdRuns) commit({ ...blobRef.current, tdRuns: { ...blobRef.current.tdRuns, activeId: id } });
+  }, [tdReset, tdApplyDoc, commit]);
+
+  // Delete the open run from the library (the one destructive verb — every other
+  // path keeps history). Lands on the newest remaining run, or a fresh pane. The
+  // level's ADOPTION is separate and survives — clearing it is the audit box's
+  // explicit button.
+  const tdDeleteRun = useCallback(() => {
+    const id = tdRunIdRef.current;
+    tdDocRef.current = null;
+    tdReset();
+    const lib = blobRef.current.tdRuns;
+    if (!lib || id === null || !lib.runs.some((r) => r.id === id)) return;
+    const remaining = lib.runs.filter((r) => r.id !== id);
+    const open = remaining.length ? remaining[remaining.length - 1] : null;
+    if (open) {
+      commit({ ...blobRef.current, tdRuns: { ...lib, runs: remaining, activeId: open.id } });
+      tdDocRef.current = open;
+      tdApplyDoc(open);
+    } else {
+      // Library emptied: keep it (nextId never rewinds — ids stay stable handles).
+      commit({ ...blobRef.current, tdRuns: { nextId: lib.nextId, runs: [] } });
+    }
+  }, [tdReset, tdApplyDoc, commit]);
+
+  // Rename the open run (commits on blur/Enter — never per keystroke, each commit
+  // is a whole-blob PUT).
+  const tdRenameRun = useCallback((name: string) => {
+    const id = tdRunIdRef.current;
+    const lib = blobRef.current.tdRuns;
+    const trimmed = name.trim();
+    if (id === null || !lib || !trimmed) return;
+    if (lib.runs.find((r) => r.id === id)?.name === trimmed) return;
+    commit({ ...blobRef.current, tdRuns: { ...lib, runs: lib.runs.map((r) => (r.id === id ? { ...r, name: trimmed } : r)) } });
+  }, [commit]);
 
   // STEP deals the next game (start position, learning NOT yet applied). Pure main-thread
   // preview — the worker only gets involved at the commit, and replays bit-identically.
@@ -1312,40 +1397,143 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setAdoptedVec(vec);
     const adopted = {} as ValueWeights;
     for (const row of tdAdoptPreview) adopted[row.type] = row.adopted;
+    // The adoption is recorded ON its run (provenance: the audit box names the run),
+    // saving the pane's freshest state with it — a fresh pane records its run here.
+    const payload: TdSessionDoc = {
+      opts: tdOptionsOf(tdKnobsRef.current), seedCount: tdKnobsRef.current.seedCount,
+      session: tdSess, probeLog: tdProbeLog, summary: tdSummary, kept: tdKept,
+    };
+    const { lib, run } = upsertTdRun(blobRef.current.tdRuns, payload, tdRunIdRef.current);
     const adoption: TdAdoptionRecord = {
       at: new Date().toISOString(), vector: vec, pieceValues: adopted,
       fromGames: tdGamesDone,
       seeds: tdSummary ? tdSummary.seeds : [tdKnobsRef.current.seed],
       source: tdSummary ? 'seed-mean' : 'live-weights',
+      runId: run.id, runName: run.name,
     };
-    const doc: TdSessionDoc = {
-      opts: tdOptionsOf(tdKnobsRef.current), seedCount: tdKnobsRef.current.seedCount,
-      session: tdSess, probeLog: tdProbeLog, summary: tdSummary, kept: tdKept, adoption,
-    };
-    tdDocRef.current = doc;
-    commit({ ...blobRef.current, adoptedWeights: vec, tdSession: doc });
+    const adoptedRun: TdRunDoc = { ...run, adoption };
+    tdDocRef.current = adoptedRun;
+    if (tdRunIdRef.current !== run.id) { tdRunIdRef.current = run.id; setTdRunId(run.id); }
+    commit({
+      ...blobRef.current, adoptedWeights: vec,
+      tdRuns: { ...lib, runs: lib.runs.map((r) => (r.id === run.id ? adoptedRun : r)) },
+    });
   }, [levelId, tdAdoptPreview, tdGamesDone, tdSummary, tdSess, tdProbeLog, tdKept, commit]);
+  // Clearing takes the adoption OUT OF FORCE but keeps every run's adoption record —
+  // that is history ("this run went live on the 14th"), and the audit box keys the
+  // LIVE record by matching vectors, so a cleared one no longer shows as active.
   const tdClearAdoption = useCallback(() => {
     if (!levelId) return;
     setAdoptedWeights(levelId, null);
     setAdoptedVec(null);
     const { adoptedWeights: _cleared, ...rest } = blobRef.current;
-    const doc = rest.tdSession ? { ...rest.tdSession } : undefined;
-    if (doc) delete doc.adoption;
-    commit({ ...rest, ...(doc ? { tdSession: doc } : {}) });
+    commit(rest);
   }, [levelId, commit]);
   // What the live opponent will actually use on this level, resolved tier by tier —
-  // the audit read. `adoptedVec` mirrors localStorage + the account blob.
+  // the audit read. `adoptedVec` mirrors localStorage + the account blob; the run it
+  // came from is found by matching the recorded vector (JSON round-trips preserve
+  // the exact doubles, so equality is sound).
   const tdLiveAi = useMemo(() => {
     const shipped = levelId ? readShippedVector(levelId) : null;
     const vec = adoptedVec ?? shipped;
+    const sameVec = (a: number[], b: number[]): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
+    const fromRun = adoptedVec
+      ? (blob.tdRuns?.runs ?? []).find((r) => r.adoption && sameVec(r.adoption.vector, adoptedVec)) ?? null
+      : null;
     const tier = adoptedVec
-      ? (blob.tdSession?.adoption ? 'adopted — from this pane' : 'adopted — from the Training tab')
+      ? (fromRun ? 'adopted — from this pane' : 'adopted — from the Training tab')
       : shipped ? 'globally shipped' : 'built-in defaults';
     let pieceValues = DEFAULT_EVAL_WEIGHTS.pieceValues;
     if (vec) { try { pieceValues = decodeWeights(vec).pieceValues; } catch { /* fall back to defaults */ } }
-    return { tier, pieceValues, adoption: blob.tdSession?.adoption ?? null, hasAdoption: !!adoptedVec };
-  }, [levelId, adoptedVec, blob.tdSession]);
+    return {
+      tier, pieceValues, hasAdoption: !!adoptedVec,
+      adoption: fromRun?.adoption ?? null,
+      fromRunId: fromRun?.id ?? null, fromRunName: fromRun?.name ?? null,
+    };
+  }, [levelId, adoptedVec, blob.tdRuns]);
+
+  // ⇄ compare — the experiment-tracking read: every saved run side by side, one
+  // column per run. Settings rows that DIFFER across runs are highlighted (they are
+  // the experiment); values are the seed-fold mean when a run folded, live weights
+  // otherwise. Read straight from the library (autosave keeps the open run fresh).
+  const tdCompareView: ReactElement | null = tdCompare && tdRunList.length ? (() => {
+    const runs = tdRunList;
+    const optRows: Array<{ label: string; get: (r: TdRunDoc) => string }> = [
+      { label: 'games budget', get: (r) => String(r.opts.games) },
+      { label: 'master seed', get: (r) => String(r.opts.seed) },
+      { label: 'seeds for ± spread', get: (r) => String(r.seedCount) },
+      { label: 'update rule', get: (r) => (r.opts.monteCarlo ? 'Monte-Carlo' : 'TD(λ)') },
+      { label: 'λ trace decay', get: (r) => (r.opts.lambda ?? DEFAULT_TRAIN_OPTIONS.lambda).toFixed(2) },
+      { label: 'ε start → end', get: (r) => `${(r.opts.epsilon?.start ?? DEFAULT_TRAIN_OPTIONS.epsilon.start).toFixed(2)} → ${(r.opts.epsilon?.end ?? DEFAULT_TRAIN_OPTIONS.epsilon.end).toFixed(2)}` },
+      { label: 'α start → end', get: (r) => `${(r.opts.alpha?.start ?? DEFAULT_TRAIN_OPTIONS.alpha.start).toFixed(3)} → ${(r.opts.alpha?.end ?? DEFAULT_TRAIN_OPTIONS.alpha.end).toFixed(3)}` },
+      { label: 'ply cap', get: (r) => String(r.opts.maxPlies ?? DEFAULT_TRAIN_OPTIONS.maxPlies) },
+      { label: 'initial weight', get: (r) => String(r.opts.initialWeight ?? DEFAULT_TRAIN_OPTIONS.initialWeight) },
+      { label: 'probe cadence', get: (r) => `every ${r.opts.probeEvery ?? 0} × ${r.opts.probeGames ?? 0}` },
+    ];
+    const valueOf = (r: TdRunDoc): ValueWeights => (r.summary ? r.summary.mean : r.session.train.weights);
+    const relByRun = new Map(runs.map((r) => [r.id, tdHasPawns ? pawnRelativeValues(valueOf(r)) : null]));
+    const untouchedIn = (r: TdRunDoc, t: (typeof PLAYABLE_PIECE_TYPES)[number]): boolean => {
+      const iw = r.opts.initialWeight ?? DEFAULT_TRAIN_OPTIONS.initialWeight;
+      return r.summary ? r.summary.mean[t] === iw && r.summary.spread[t] === 0 : r.session.train.weights[t] === iw;
+    };
+    const sect = (label: string): ReactElement => (
+      <tr className="sect"><th colSpan={runs.length + 1}>{label}</th></tr>
+    );
+    return (
+      <div className="gym-td-compare" aria-label="Compare runs">
+        <div className="gym-td-help-head">
+          <h3>Compare runs</h3>
+          <button type="button" className="gym-replay-focus-btn" onClick={() => setTdCompare(false)}>✕ close</button>
+        </div>
+        <p className="gym-hint">One column per saved run. Settings that differ between runs are highlighted — those are the experiment; the value rows answer what the change bought.</p>
+        <div className="gym-td-table-wrap">
+          <table className="gym-td-table gym-td-compare-table">
+            <thead>
+              <tr>
+                <th />
+                {runs.map((r) => (
+                  <th key={r.id} className={r.id === tdRunId ? 'is-open' : ''}>
+                    {r.name}{r.id === tdRunId ? ' · open' : ''}{tdLiveAi.fromRunId === r.id ? ' · LIVE AI' : ''}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr><th>created</th>{runs.map((r) => <td key={r.id}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}</td>)}</tr>
+              <tr><th>progress</th>{runs.map((r) => <td key={r.id}>{r.session.train.game >= r.opts.games ? '✓ ' : ''}{r.session.train.game}/{r.opts.games}</td>)}</tr>
+              {sect('settings — highlighted rows differ')}
+              {optRows.map(({ label, get }) => {
+                const vals = runs.map(get);
+                const differs = new Set(vals).size > 1;
+                return (
+                  <tr key={label} className={differs ? 'differs' : ''}>
+                    <th>{label}</th>
+                    {vals.map((v, i) => <td key={runs[i].id}>{v}</td>)}
+                  </tr>
+                );
+              })}
+              {sect('outcome')}
+              <tr><th>W · D · L</th>{runs.map((r) => <td key={r.id}>{r.session.train.outcomes.playerWins} · {r.session.train.outcomes.draws} · {r.session.train.outcomes.enemyWins}</td>)}</tr>
+              <tr><th>vs random</th>{runs.map((r) => <td key={r.id}>{r.session.probe ? `${r.session.probe.winRate.toFixed(3)} @ ${r.session.probe.game}` : '—'}</td>)}</tr>
+              {sect(`learned values ${tdHasPawns ? '(pawn = 1)' : '(raw logit)'} — seed-fold mean when folded, live weights otherwise; — = no signal; king is a mate indicator, never adopted`)}
+              <tr><th>values from</th>{runs.map((r) => <td key={r.id}>{r.summary ? `fold of ${r.summary.perSeed.length} seed${r.summary.perSeed.length === 1 ? '' : 's'}` : 'live weights'}</td>)}</tr>
+              {PLAYABLE_PIECE_TYPES.map((t) => (
+                <tr key={t}>
+                  <th>{t}</th>
+                  {runs.map((r) => {
+                    const na = untouchedIn(r, t);
+                    const rel = relByRun.get(r.id);
+                    return <td key={r.id} className={na ? 'na' : ''}>{na ? '—' : rel ? rel[t].toFixed(2) : valueOf(r)[t].toFixed(3)}</td>;
+                  })}
+                </tr>
+              ))}
+              <tr><th>adopted</th>{runs.map((r) => <td key={r.id}>{r.adoption ? `${new Date(r.adoption.at).toLocaleDateString()} @ ${r.adoption.fromGames}g${tdLiveAi.fromRunId === r.id ? ' · LIVE' : ' (not in force)'}` : '—'}</td>)}</tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  })() : null;
 
   // The board renders pixel art 1:1 whenever the stage has content — the shared
   // read-only renderer is the Level Editor's render core, and its art is authored for
@@ -1786,15 +1974,20 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                         defaults: small spread = a real value of this board, large spread = seed noise.</li>
                     </ul>
 
-                    <h4>What is saved</h4>
+                    <h4>Runs — the experiment log</h4>
                     <p>
-                      <b>The run is a document on your account.</b> Everything that matters — games played, the weights, the probe
-                      history, the result table and its Kept mark, and any adoption you made — autosaves (about a second after each
-                      change) into this level&apos;s account storage, and is restored when you return, on any device. <b>Reset is the
-                      only discard</b>: it deletes the run&apos;s document (the level&apos;s adopted AI, if any, survives until you clear
-                      it in the audit box). One deliberate exception: a dealt-but-unfinished game is not stored — it re-deals
-                      identically from the same seed, so nothing is lost. And determinism still holds underneath: a run&apos;s whole
-                      identity is (board, master seed, settings); the same seed replays the same games to the same values.
+                      <b>Every run is a document on your account, and the level keeps a library of them.</b> A run freezes its
+                      settings (the schedules anneal over its whole budget) and accumulates everything it produced — games played,
+                      the weights, the probe history, the game ledger, the result table and its Kept mark, and any adoption made
+                      from it. It autosaves (about a second after each change) and restores when you return, on any device. The
+                      <b> Run</b> picker on the right is the library: <b>+ New run</b> shelves the open run and unfreezes the
+                      settings — tweak one knob, run again, and <b>⇄ compare</b> puts every run side by side to answer what the
+                      change bought. That loop — change one thing, re-run, compare — is the whole method; ML tools call it
+                      <b> experiment tracking</b> (MLflow, Weights &amp; Biases), and the run is its unit. <b>Delete run is the only
+                      discard</b> (the level&apos;s adopted AI, if any, survives until you clear it in the audit box). One deliberate
+                      exception: a dealt-but-unfinished game is not stored — it re-deals identically from the same seed, so nothing
+                      is lost. And determinism still holds underneath: a run&apos;s whole identity is (board, master seed, settings);
+                      the same seed replays the same games to the same values.
                     </p>
 
                     <h4>Becoming a level&apos;s AI — setting and auditing it</h4>
@@ -1806,8 +1999,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                       default, marked), and Adopt writes them into the same per-level slot the Training tab&apos;s champion uses — the
                       very next enemy reply plays under them. <b>Auditing:</b> the &ldquo;This level&apos;s live AI&rdquo; box always
                       shows which tier is active, the exact piece values in force next to the defaults, and the adoption record
-                      (when, from which seeds, at how many games). &ldquo;clear adoption&rdquo; returns the level to shipped weights
-                      or defaults.
+                      (when, <i>from which run</i>, from which seeds, at how many games). &ldquo;clear adoption&rdquo; returns the
+                      level to shipped weights or defaults — the run keeps its adoption record as history.
                     </p>
 
                     <h4>Keys</h4>
@@ -1816,6 +2009,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                       (view only — nothing un-learns) · <b>Home/End</b> first/latest
                     </p>
                   </div>
+                ) : tdCompareView ? (
+                  tdCompareView
                 ) : (
                   <div className={`gym-td-split ${tdReplayPanel ? 'has-stage' : ''}`.trim()}>
                   <div className="gym-td-left">
@@ -1946,7 +2141,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                         <span className="gym-hint">Keep marks this result in the saved run; Discard clears the table (the run&apos;s numbers stay). The whole run autosaves to your account either way.</span>
                       </div>
                     ) : (
-                      <p className="gym-hint">Kept — saved with the run on your account; Reset discards the run.</p>
+                      <p className="gym-hint">Kept — saved with the run on your account; it stays in the run library until deleted.</p>
                     )}
                   </div>
                 ) : null}
@@ -1990,7 +2185,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                       <p className="gym-td-liveai-vals dim">defaults: {PLAYABLE_PIECE_TYPES.map((t) => `${t.charAt(0).toUpperCase()} ${DEFAULT_EVAL_WEIGHTS.pieceValues[t]}`).join(' · ')}</p>
                     ) : null}
                     {tdLiveAi.adoption ? (
-                      <p className="gym-hint">adopted {new Date(tdLiveAi.adoption.at).toLocaleString()} — {tdLiveAi.adoption.source === 'seed-mean' ? `mean of seeds ${tdLiveAi.adoption.seeds.join(', ')}` : `live weights (seed ${tdLiveAi.adoption.seeds.join(', ')})`} at {tdLiveAi.adoption.fromGames} games</p>
+                      <p className="gym-hint">adopted {new Date(tdLiveAi.adoption.at).toLocaleString()}{tdLiveAi.fromRunName ? <> — from <b>{tdLiveAi.fromRunName}</b></> : null} — {tdLiveAi.adoption.source === 'seed-mean' ? `mean of seeds ${tdLiveAi.adoption.seeds.join(', ')}` : `live weights (seed ${tdLiveAi.adoption.seeds.join(', ')})`} at {tdLiveAi.adoption.fromGames} games</p>
                     ) : null}
                     {tdLiveAi.hasAdoption ? (
                       <div className="gym-adopt-row">
@@ -2190,6 +2385,38 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
 
             {mode === 'values' && level ? (
               <>
+                <div className="gym-bookmgr" aria-label="Run library">
+                  <label className="gl-field">Run
+                    <select value={tdRunId ?? ''} onChange={(e) => tdOpenRun(Number(e.target.value))}
+                      disabled={tdBusy || tdRunList.length === 0}
+                      title="The level's run library — every run stays until you delete it; switching restores that run whole (a dealt-but-unfinished game re-deals identically)">
+                      {tdRunId === null ? <option value="">— new run (recorded at its first game) —</option> : null}
+                      {tdRunList.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {`${r.name} — ${r.opts.games}g · seed ${r.opts.seed} · ${r.session.train.game >= r.opts.games ? '✓ done' : `game ${r.session.train.game}/${r.opts.games}`}${tdLiveAi.fromRunId === r.id ? ' · LIVE AI' : ''}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {tdActiveRun ? (
+                    <label className="gl-field">run name
+                      <input key={tdActiveRun.id} type="text" maxLength={60} defaultValue={tdActiveRun.name}
+                        onBlur={(e) => tdRenameRun(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                        aria-label="Rename this run" />
+                    </label>
+                  ) : null}
+                  <div className="gym-bookmgr-btns">
+                    <button type="button" className="new" onClick={tdNewRun} disabled={tdBusy || (tdRunId === null && !tdStarted && !tdWalking)}
+                      title="Shelve this run in the library and start the next experiment — settings unfreeze, so tweak a knob and run again">+ New run</button>
+                    <button type="button" className="del" onClick={tdDeleteRun}
+                      disabled={tdBusy || (tdRunId === null && !tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)}
+                      title="Delete this run from the library — the one discard (the level's adopted AI, if any, stays until cleared in the audit box)">Delete run</button>
+                    <button type="button" onClick={() => { setTdCompare((c) => !c); setTdHelp(false); }} aria-pressed={tdCompare} disabled={tdRunList.length < 2}
+                      title="Every saved run side by side — settings, outcomes, learned values">⇄ compare</button>
+                  </div>
+                  <span className="gym-count">{tdRunList.length} run{tdRunList.length === 1 ? '' : 's'} for this level — every run stays until deleted.</span>
+                </div>
                 <div className="gym-run-row">
                   <button type="button" onClick={tdAdvance} disabled={!tdReady || tdBusy || (tdComplete && !tdWalking)}
                     title={tdWalking ? 'Play the next ply — the update lands on the final one' : 'Deal the next training game; each press after plays one ply'}>⏭ step</button>
@@ -2209,8 +2436,6 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   <button type="button" onClick={() => { setTdWatching(false); tdSend('run'); }} disabled={!tdReady || tdBusy || (tdComplete && tdSummary !== null)}
                     title="Full speed, no animation — plays the remaining budget in seconds; same numbers, bit for bit">▶ run</button>
                   <button type="button" onClick={() => { setTdWatching(false); tdStop(); }} disabled={!tdBusy && !tdWatching}>⏹ stop</button>
-                  <button type="button" onClick={tdDiscardRun} disabled={tdBusy || (!tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)}
-                    title="Discard this run and its saved document (the level's adopted AI, if any, stays until cleared in the audit box)">↺ reset</button>
                 </div>
                 <label className="gym-td-speed" title="Watch tempo — steps per second; Max is a step every frame">
                   <span>speed</span>
@@ -2219,17 +2444,17 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                   <b className="gym-num">{tdBeatReadout(tdBeatMs)}</b>
                 </label>
                 <div className="gym-run-row">
-                  <button type="button" onClick={() => setTdHelp((h) => !h)} aria-pressed={tdHelp}
-                    title="What this algorithm is, how to read its progress, what is saved, and how it becomes a level's AI">? how this works</button>
+                  <button type="button" onClick={() => { setTdHelp((h) => !h); setTdCompare(false); }} aria-pressed={tdHelp}
+                    title="What this algorithm is, how to read its progress, how runs are saved and compared, and how one becomes a level's AI">? how this works</button>
                 </div>
                 {!tdReady ? <p className="gym-hint">Preparing learner…</p>
                   : tdWatching ? <p className="gym-hint">Watching — the system plays by itself, one step per beat; each game&apos;s update lands as it ends. Pause (or ⏹) any time; nothing is ever half-applied.</p>
                   : tdBusy ? <p className="gym-hint">{tdSummarizing ? 'Folding sibling seeds into the mean ± spread table…' : 'Playing training games — Stop lands between games, nothing half-applied.'}</p>
-                  : tdWalking ? <p className="gym-hint">Game {tdPending?.game} is in play — each ⏭ step plays one ply (⏩ to end finishes it); its weight update lands when the game ends. ⏭ games / Run consume it as the batch&apos;s first game; Reset discards it unlearned.</p>
-                  : tdComplete && tdSummary === null && tdDiscarded ? <p className="gym-hint">Result discarded — the run&apos;s numbers stay. Run recomputes the mean ± spread table; Reset starts a new run.</p>
-                  : tdComplete && tdSummary === null ? <p className="gym-hint">Budget done but the seed fold was stopped — Run finishes the mean ± spread table, or Reset.</p>
-                  : tdComplete ? <p className="gym-hint">Budget complete. Keep or Discard the result in the main pane; Reset starts a new run.</p>
-                  : tdStarted ? <p className="gym-hint">Paused at game {tdGamesDone}. Settings are frozen mid-run (the schedules anneal over the whole budget) — Reset to change them.</p>
+                  : tdWalking ? <p className="gym-hint">Game {tdPending?.game} is in play — each ⏭ step plays one ply (⏩ to end finishes it); its weight update lands when the game ends. ⏭ games / Run consume it as the batch&apos;s first game; + New run discards it unlearned.</p>
+                  : tdComplete && tdSummary === null && tdDiscarded ? <p className="gym-hint">Result discarded — the run&apos;s numbers stay. Run recomputes the mean ± spread table; + New run starts the next experiment.</p>
+                  : tdComplete && tdSummary === null ? <p className="gym-hint">Budget done but the seed fold was stopped — Run finishes the mean ± spread table, or + New run.</p>
+                  : tdComplete ? <p className="gym-hint">Budget complete. Keep or Discard the result in the main pane; + New run starts the next experiment — this run stays in the library, and ⇄ compare puts them side by side.</p>
+                  : tdStarted ? <p className="gym-hint">Paused at game {tdGamesDone}. Settings are frozen per run (the schedules anneal over the whole budget) — + New run to change them.</p>
                   : null}
 
                 <h3>Learner settings</h3>
@@ -2238,7 +2463,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                     plus the blanket "↺ all settings" below. Master seed is VIEW state (the
                     ADR's named exemption), so it carries none and the blanket keeps it. */}
                 <fieldset className="gym-td-knobs" disabled={tdKnobsFrozen}>
-                  <label className="gl-field"><span>games budget<InfoTip label="games budget">How many self-play training games one run plays. The exploration (ε) and learning-rate (α) schedules anneal across THIS whole budget, so it is fixed once a run starts — Reset to change it.</InfoTip></span>
+                  <label className="gl-field"><span>games budget<InfoTip label="games budget">How many self-play training games one run plays. The exploration (ε) and learning-rate (α) schedules anneal across THIS whole budget, so it is fixed once a run starts — + New run to change it.</InfoTip></span>
                     <div className="pages-ctl-row">
                       <input type="number" min={1} max={100000} value={tdKnobs.games} onChange={(e) => setTdKnob({ games: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} />
                       {ctlReset(() => setTdKnob({ games: TD_KNOB_DEFAULTS.games }))}

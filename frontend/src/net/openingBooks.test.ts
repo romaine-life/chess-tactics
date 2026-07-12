@@ -110,23 +110,67 @@ describe('saveOpeningBooks', () => {
     expect(traj[399].step).toBe(499); // newest kept
   });
 
-  it('round-trips the TD session document and caps its probe log', async () => {
+  it('round-trips the TD run library and caps each run (probe log + ledger, newest windows)', async () => {
     const doc = {
       opts: { games: 600, seed: 1 }, seedCount: 3,
-      session: { train: { game: 50, weights: { pawn: 0.1 }, outcomes: { playerWins: 1, draws: 49, enemyWins: 0 } }, probe: null, lastGame: null },
+      session: {
+        train: { game: 50, weights: { pawn: 0.1 }, outcomes: { playerWins: 1, draws: 49, enemyWins: 0 } },
+        probe: null, lastGame: null,
+        ledger: Array.from({ length: 2100 }, (_, i) => ({ game: i + 1, winner: 'draw', plies: 3, epsilon: 0.5, delta: {} })),
+      },
       probeLog: Array.from({ length: 450 }, (_, i) => ({ game: (i + 1) * 25, winRate: 0.5 })),
       summary: null, kept: false,
     };
+    const lib = { nextId: 3, activeId: 2, runs: [{ id: 2, name: 'Run 2', ...doc }] };
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: true }));
-    await saveOpeningBooks('lvl-td', { nextId: 1, books: [], tdSession: doc } as never);
+    await saveOpeningBooks('lvl-td', { nextId: 1, books: [], tdRuns: lib } as never);
     const sent = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(sent.data.tdSession.session.train.game).toBe(50);
-    expect(sent.data.tdSession.probeLog).toHaveLength(400);      // newest window kept
-    expect(sent.data.tdSession.probeLog[0].game).toBe(51 * 25);  // oldest 50 dropped
+    const run = sent.data.tdRuns.runs[0];
+    expect(sent.data.tdRuns.activeId).toBe(2);
+    expect(run.session.train.game).toBe(50);
+    expect(run.probeLog).toHaveLength(400);              // newest window kept
+    expect(run.probeLog[0].game).toBe(51 * 25);          // oldest 50 dropped
+    expect(run.session.ledger).toHaveLength(2000);       // ledger window
+    expect(run.session.ledger[0].game).toBe(101);
 
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], tdSession: doc } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], tdRuns: lib } }));
     const loaded = await loadOpeningBooks('lvl-td');
-    expect(loaded.tdSession?.session.train.game).toBe(50);
+    expect(loaded.tdRuns?.runs[0].session.train.game).toBe(50);
+  });
+
+  it('migrates the retired single-run tdSession field into the library as Run 1 on load, and never writes it back', async () => {
+    const doc = {
+      opts: { games: 600, seed: 1 }, seedCount: 3,
+      session: { train: { game: 600, weights: { pawn: 0.1 }, outcomes: { playerWins: 70, draws: 457, enemyWins: 73 } }, probe: null, lastGame: null },
+      probeLog: [{ game: 600, winRate: 0.8125 }],
+      summary: null, kept: true,
+      adoption: { at: 'then', vector: [1], pieceValues: {}, fromGames: 600, seeds: [1], source: 'live-weights' },
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], tdSession: doc } }));
+    const loaded = await loadOpeningBooks('lvl-legacy');
+    expect(loaded.tdSession).toBeUndefined();
+    expect(loaded.tdRuns).toEqual({ nextId: 2, activeId: 1, runs: [{ id: 1, name: 'Run 1', ...doc }] });
+
+    // The migrated shape is what persists — the legacy field is gone from the PUT.
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: true }));
+    await saveOpeningBooks('lvl-legacy', loaded);
+    const sent = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(sent.data.tdSession).toBeUndefined();
+    expect(sent.data.tdRuns.runs[0].kept).toBe(true);
+    expect(sent.data.tdRuns.runs[0].adoption.fromGames).toBe(600);
+  });
+
+  it('a blob with BOTH fields keeps the library and drops the stale legacy field', async () => {
+    const mk = (game: number) => ({
+      opts: { games: 10, seed: 1 }, seedCount: 1,
+      session: { train: { game, weights: {}, outcomes: { playerWins: 0, draws: game, enemyWins: 0 } }, probe: null, lastGame: null },
+      probeLog: [], summary: null, kept: false,
+    });
+    const lib = { nextId: 4, activeId: 3, runs: [{ id: 3, name: 'Run 3', ...mk(7) }] };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { nextId: 1, books: [], tdSession: mk(2), tdRuns: lib } }));
+    const loaded = await loadOpeningBooks('lvl-both');
+    expect(loaded.tdSession).toBeUndefined();
+    expect(loaded.tdRuns).toEqual(lib);
   });
 
   it('throws HttpError on a non-ok response', async () => {
