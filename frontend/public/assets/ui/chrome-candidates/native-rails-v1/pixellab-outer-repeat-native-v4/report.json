@@ -1,0 +1,790 @@
+{
+  "id": "pixellab-outer-repeat-native-v4",
+  "provider": "pixellab-object-style",
+  "role": "outer",
+  "fit": "repeat",
+  "nativeThickness": 12,
+  "sourceDir": "../docs/art/chrome-native-rails/v1/attempts/pixellab-outer-32-v4-horizontal-11plus",
+  "accepted": [
+    {
+      "file": "frame-4.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-outer-repeat-native-v4/01-horizontal-frame-4.png",
+      "orientation": "horizontal",
+      "width": 30,
+      "height": 12,
+      "seam": {
+        "averageDelta": 17.775,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-5.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-outer-repeat-native-v4/02-horizontal-frame-5.png",
+      "orientation": "horizontal",
+      "width": 30,
+      "height": 12,
+      "seam": {
+        "averageDelta": 14.225,
+        "alphaMismatches": 0
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "file": "frame-0.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 39.125,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-1.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 38.7,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-10.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 22.85,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-11.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 23.8,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-12.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-13.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-14.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-15.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-16.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-17.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-18.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 35.6,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-19.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-2.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 26.325,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-20.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-21.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 14
+      },
+      "reason": "painted thickness 14px, expected exactly 12px"
+    },
+    {
+      "file": "frame-22.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-23.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-24.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-25.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-26.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 39.125,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-27.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 14
+      },
+      "reason": "painted thickness 14px, expected exactly 12px"
+    },
+    {
+      "file": "frame-28.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 14
+      },
+      "reason": "painted thickness 14px, expected exactly 12px"
+    },
+    {
+      "file": "frame-29.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 37.95,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-3.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 27.375,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-30.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 40.075,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-31.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 14
+      },
+      "reason": "painted thickness 14px, expected exactly 12px"
+    },
+    {
+      "file": "frame-32.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 14
+      },
+      "reason": "painted thickness 14px, expected exactly 12px"
+    },
+    {
+      "file": "frame-33.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-34.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 45.125,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-35.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 36.9,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-36.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 42,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-37.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 39.1,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-38.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 42.15,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-39.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 42.75,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-40.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 35.975,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-41.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 38.05,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-42.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 42.525,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-43.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 45,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-44.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 45.725,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-45.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 38.75,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-46.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 41.5,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-47.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 40.425,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-48.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 34.6,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-49.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 40.7,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-50.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 37.775,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-51.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 44.675,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-52.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 41.175,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-53.png",
+      "bounds": {
+        "x": 1,
+        "y": 9,
+        "w": 30,
+        "h": 14
+      },
+      "reason": "painted thickness 14px, expected exactly 12px"
+    },
+    {
+      "file": "frame-54.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 40.775,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-55.png",
+      "bounds": {
+        "x": 1,
+        "y": 9,
+        "w": 30,
+        "h": 14
+      },
+      "reason": "painted thickness 14px, expected exactly 12px"
+    },
+    {
+      "file": "frame-56.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 42.675,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-57.png",
+      "bounds": {
+        "x": 1,
+        "y": 9,
+        "w": 30,
+        "h": 14
+      },
+      "reason": "painted thickness 14px, expected exactly 12px"
+    },
+    {
+      "file": "frame-58.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 47.275,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-59.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-6.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-60.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 14
+      },
+      "reason": "painted thickness 14px, expected exactly 12px"
+    },
+    {
+      "file": "frame-61.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-62.png",
+      "bounds": {
+        "x": 1,
+        "y": 9,
+        "w": 30,
+        "h": 15
+      },
+      "reason": "painted thickness 15px, expected exactly 12px"
+    },
+    {
+      "file": "frame-63.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-7.png",
+      "bounds": {
+        "x": 1,
+        "y": 8,
+        "w": 30,
+        "h": 16
+      },
+      "reason": "painted thickness 16px, expected exactly 12px"
+    },
+    {
+      "file": "frame-8.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 38.1,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    },
+    {
+      "file": "frame-9.png",
+      "bounds": {
+        "x": 1,
+        "y": 10,
+        "w": 30,
+        "h": 12
+      },
+      "seam": {
+        "averageDelta": 40.625,
+        "alphaMismatches": 0
+      },
+      "reason": "repeat seam failed"
+    }
+  ]
+}

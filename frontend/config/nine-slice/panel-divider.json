@@ -1,5 +1,9 @@
 {
   "asset": "panel-divider",
-  "scale": 1.2,
+  "frameWidth": 16,
+  "reach": 14,
+  "dividerH": 34,
+  "scale": 1.05,
+  "jx": -1,
   "jy": 1
 }

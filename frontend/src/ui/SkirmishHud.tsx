@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
@@ -125,6 +125,10 @@ function CountPip({ side, count }: { side: Side; count: number }) {
 }
 
 type SkirmishHudProps = {
+  className?: string;
+  style?: CSSProperties;
+  /** Audit/embedded surfaces can retain tab interaction without installing match-wide shortcuts. */
+  enableGlobalShortcuts?: boolean;
   /** Show the (+) button — free skirmish or single-player test/attempt loops. */
   canStartNewSkirmish?: boolean;
   /** In-place restart of the CURRENT battle (campaign level or free skirmish). Non-null only
@@ -146,6 +150,9 @@ type SkirmishHudProps = {
 };
 
 export function SkirmishHud({
+  className = '',
+  style,
+  enableGlobalShortcuts = true,
   canStartNewSkirmish = true,
   onRestart = null,
   restartLabel = 'Restart',
@@ -211,6 +218,7 @@ export function SkirmishHud({
   // goes stale (no re-binding per zoom change). Ignores typing fields and modifier
   // combos so it never steals browser/OS shortcuts.
   useEffect(() => {
+    if (!enableGlobalShortcuts) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
@@ -228,7 +236,7 @@ export function SkirmishHud({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [enableGlobalShortcuts]);
 
   const selected = game.pieces.find((p) => p.id === selectedId && p.alive) ?? null;
   const focused = game.pieces.find((p) => p.id === focusedId && p.alive) ?? selected;
@@ -247,9 +255,18 @@ export function SkirmishHud({
     : game.turn === localSide ? 'Your turn' : opponentTurnLabel;
 
   return (
-    <aside data-testid="skirmish-hud" className="skirmish-hud" aria-label="Skirmish command HUD">
+    <aside
+      data-testid="skirmish-hud"
+      data-chrome-unit="outer-panel"
+      data-chrome-consumer="skirmish-hud"
+      className={`skirmish-hud le-outer-panel ${className}`.trim()}
+      style={style}
+      aria-label="Skirmish command HUD"
+    >
       {/* Portals to <body>; render anywhere. Only visible while a resign confirm is open. */}
       {dialog}
+      <span className="le-outer-panel-fill" aria-hidden="true" />
+      <div className="le-outer-panel-content">
       <section className="skirmish-score-panel" aria-label="Turn summary">
         <div>
           <span className="skirmish-eyebrow">Status</span>
@@ -572,6 +589,7 @@ export function SkirmishHud({
             </div>
           </section>
         )}
+      </div>
       </div>
     </aside>
   );

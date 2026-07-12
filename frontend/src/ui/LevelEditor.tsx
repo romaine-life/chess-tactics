@@ -3,7 +3,7 @@
 // the heavy library studios + manifests live in TilePreview.tsx and are never
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { DoodadSprite } from '../render/BoardDoodad';
@@ -12,7 +12,6 @@ import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../c
 import { FenceOverlayLayer, WallOverlayLayer } from '../render/FenceOverlayLayer';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
-import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
 import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
@@ -20,6 +19,7 @@ import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
+import { HouseSelect } from './shared/HouseSelect';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import {
   levelEditorHrefWithRouteState,
@@ -46,6 +46,7 @@ import {
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { HomepageBackdrop } from './HomepageBackdrop';
+import { useInstalledChromeCss } from './useInstalledChromeCss';
 import {
   directionCompassCells,
   hasDirectionSprite,
@@ -92,6 +93,7 @@ import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
 import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
+import { LevelEditorControlsPanel, LevelEditorEventsOverlay } from './LevelEditorChromeConsumers';
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -884,10 +886,6 @@ function uniqueEventName(base: string, events: readonly LevelEvent[]): string {
   }
 }
 
-function SelectFrame({ children, className = '' }: { children: ReactNode; className?: string }): ReactElement {
-  return <div className={`le-select-wrap ${className}`.trim()}>{children}</div>;
-}
-
 function LevelEventsEditor({ value, zones, onChange, templates }: {
   value: LevelEvents;
   zones: EventZoneOption[];
@@ -951,8 +949,8 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
           ))}
         </div>
         <div className="le-cond-add le-rule-add">
-          <button type="button" className="le-seg-btn le-add-event" onClick={addSpawn}>+ Spawn</button>
-          <button type="button" className="le-seg-btn le-add-event" onClick={addPromotion}>+ Promotion</button>
+          <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-add-event" onClick={addSpawn}>+ Spawn</button>
+          <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-add-event" onClick={addPromotion}>+ Promotion</button>
         </div>
       </div>
       <div className="le-md-detail">
@@ -969,27 +967,29 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Faction</span>
-              <SelectFrame>
-                <select className="le-layer-select le-faction-select" value={spawnAction.side} aria-label="Spawn faction"
-                  onChange={(e) => {
-                    const side = e.target.value as 'player' | 'enemy';
-                    const nextAction = { ...spawnAction, side, zoneIds: spawnAction.zoneIds.length ? spawnAction.zoneIds : defaultZoneIds() };
-                    setEvent(selected, replaceEventAction(event, nextAction));
-                  }}>
-                  <option value="player">Player</option>
-                  <option value="enemy">Enemy</option>
-                </select>
-              </SelectFrame>
+              <HouseSelect
+                value={spawnAction.side}
+                ariaLabel="Spawn faction"
+                options={[
+                  { value: 'player', label: 'Player' },
+                  { value: 'enemy', label: 'Enemy' },
+                ]}
+                onChange={(side) => {
+                  const nextAction = { ...spawnAction, side, zoneIds: spawnAction.zoneIds.length ? spawnAction.zoneIds : defaultZoneIds() };
+                  setEvent(selected, replaceEventAction(event, nextAction));
+                }}
+              />
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
-              <SelectFrame>
-                <select className="le-layer-select" value={spawnAction.zoneIds[0] ?? ''} aria-label="Spawn zone"
-                  onChange={(e) => setEvent(selected, replaceEventAction(event, { ...spawnAction, zoneIds: e.target.value ? [e.target.value] : [] }))}>
-                  {zones.length === 0 ? <option value="">No zones painted</option> : null}
-                  {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}
-                </select>
-              </SelectFrame>
+              <HouseSelect
+                value={spawnAction.zoneIds[0] ?? ''}
+                ariaLabel="Spawn zone"
+                options={zones.length === 0
+                  ? [{ value: '', label: 'No zones painted', disabled: true }]
+                  : zones.map((zone) => ({ value: zone.id, label: zone.label }))}
+                onChange={(zoneId) => setEvent(selected, replaceEventAction(event, { ...spawnAction, zoneIds: zoneId ? [zoneId] : [] }))}
+              />
             </div>
             <h3 className="le-victory-head">Roster</h3>
             {PLAYABLE_PIECE_TYPES.map((type) => (
@@ -1003,7 +1003,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               </div>
             ))}
             <div className="le-rule-then">
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : event && promotionTrigger && promotesTriggeringUnit ? (
@@ -1019,27 +1019,30 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Unit</span>
-              <SelectFrame>
-                <select className="le-layer-select le-faction-select" value={promotionTrigger.unit.side ?? 'any'} aria-label="Promotion faction"
-                  onChange={(e) => {
-                    const side = e.target.value === 'any' ? undefined : e.target.value as 'player' | 'enemy';
-                    setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side }, zoneId: promotionTrigger.zoneId } });
-                  }}>
-                  <option value="player">Player pawn</option>
-                  <option value="enemy">Enemy pawn</option>
-                  <option value="any">Any pawn</option>
-                </select>
-              </SelectFrame>
+              <HouseSelect
+                value={promotionTrigger.unit.side ?? 'any'}
+                ariaLabel="Promotion faction"
+                options={[
+                  { value: 'player', label: 'Player pawn' },
+                  { value: 'enemy', label: 'Enemy pawn' },
+                  { value: 'any', label: 'Any pawn' },
+                ]}
+                onChange={(nextSide) => {
+                  const side = nextSide === 'any' ? undefined : nextSide;
+                  setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side }, zoneId: promotionTrigger.zoneId } });
+                }}
+              />
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
-              <SelectFrame>
-                <select className="le-layer-select" value={promotionTrigger.zoneId} aria-label="Promotion zone"
-                  onChange={(e) => setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: promotionTrigger.unit, zoneId: e.target.value } })}>
-                  {zones.length === 0 ? <option value="">No zones painted</option> : null}
-                  {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}
-                </select>
-              </SelectFrame>
+              <HouseSelect
+                value={promotionTrigger.zoneId}
+                ariaLabel="Promotion zone"
+                options={zones.length === 0
+                  ? [{ value: '', label: 'No zones painted', disabled: true }]
+                  : zones.map((zone) => ({ value: zone.id, label: zone.label }))}
+                onChange={(zoneId) => setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: promotionTrigger.unit, zoneId } })}
+              />
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Target</span>
@@ -1050,7 +1053,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               <output className="le-event-readout" aria-label="Event action">Promote</output>
             </div>
             <div className="le-rule-then">
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : <p className="le-board-note">Select an event or add one on the left.</p>}
@@ -1497,6 +1500,7 @@ export function LevelEditor(): ReactElement {
   // It takes precedence over a campaign level (it's the explicit "inspect this exact board").
   const loadedBoard = useMemo(() => readBoardParam(), []);
   const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const isChromeLabPreview = useMemo(() => urlParams.get('chromeLab') === '1', [urlParams]);
   const urlTimeControl = useMemo(() => readTimeControlParams(urlParams), [urlParams]);
   const urlEvents = useMemo(() => readLevelEventsParam(urlParams), [urlParams]);
   const urlVictory = useMemo(() => readVictoryRulesParam(urlParams), [urlParams]);
@@ -1516,6 +1520,7 @@ export function LevelEditor(): ReactElement {
   const initialGeneratedRegions = initialBoard?.generatedRegions ?? [];
   const needsCampaignHydration = Boolean(routeParams.levelId && !loadedBoard && !localDraft && !initialCampaignLevel);
   const [editorReady, setEditorReady] = useState(!needsCampaignHydration);
+  const installedChromeCss = useInstalledChromeCss(!isChromeLabPreview);
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
   const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
   const [boardRows, setBoardRows] = useState(initialBoard?.rows ?? LE_ROWS);
@@ -2543,8 +2548,8 @@ export function LevelEditor(): ReactElement {
     }
     if (playerFaction === faction) setPlayerFactionWithHistory(null);
   };
-  const onFactionControlChange = (faction: UnitPalette) => (event: ChangeEvent<HTMLSelectElement>): void => {
-    setFactionControl(faction, event.currentTarget.value as FactionControl);
+  const onFactionControlChange = (faction: UnitPalette) => (control: FactionControl): void => {
+    setFactionControl(faction, control);
   };
 
   // Save the painted board. Campaign path: serialize into the resolved level id and write it
@@ -3120,6 +3125,7 @@ export function LevelEditor(): ReactElement {
     <div className="level-editor-root">
       <HomepageBackdrop />
       <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" ready={editorReady}>
+        {installedChromeCss ? <style data-level-editor-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
         {confirmDialog}
         {/* The title bar carries NO editor status (no level name, no save-state chip) — the
             owner removed the center cluster: that's ambient chrome noise while editing, and
@@ -3186,18 +3192,11 @@ export function LevelEditor(): ReactElement {
             </ViewPane>
           </div>
           {eventsOpen ? (
-            <div className="le-events-overlay" role="dialog" aria-label="Level events editor">
-              <div className="le-events-head">
-                <h2>Events</h2>
-                <div className="le-events-head-actions">
-                  <div className="le-seg le-events-tabs" role="tablist" aria-label="Event editor sections">
-                    <button type="button" role="tab" aria-selected={eventsTab === 'victory'} className={`le-seg-btn ${eventsTab === 'victory' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('victory')}>Victory rules</button>
-                    <button type="button" role="tab" aria-selected={eventsTab === 'other'} className={`le-seg-btn ${eventsTab === 'other' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('other')}>Other events</button>
-                  </div>
-                  <button type="button" className="le-seg-btn le-events-done" onClick={() => setEventsOpen(false)}>Done</button>
-                </div>
-              </div>
-              {eventsTab === 'victory' ? (
+            <LevelEditorEventsOverlay
+              tab={eventsTab}
+              onTabChange={setEventsTab}
+              onDone={() => setEventsOpen(false)}
+              victoryContent={(
                 <VictoryConditionsEditor
                   value={victory}
                   factions={victoryFactions}
@@ -3207,24 +3206,27 @@ export function LevelEditor(): ReactElement {
                       <h3 className="le-victory-head">Template</h3>
                       <p className="le-board-note">Add a victory template. Existing events stay in place; use Clear first when you want a clean replacement.</p>
                       <div className="le-template-apply">
-                        <SelectFrame className="le-template-select-wrap">
-                          <select className="le-layer-select" aria-label="Victory template" title={MODE_DESCRIPTION[templateChoice]}
-                            value={templateChoice} onChange={(e) => setTemplateChoice(e.target.value as ObjectiveType)}>
-                            {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
-                          </select>
-                        </SelectFrame>
-                        <button type="button" className="le-seg-btn" onClick={() => {
+                        <HouseSelect
+                          className="le-template-select-wrap"
+                          ariaLabel="Victory template"
+                          title={MODE_DESCRIPTION[templateChoice]}
+                          value={templateChoice}
+                          options={OBJECTIVE_TYPES.map((mode) => ({ value: mode, label: MODE_NAME[mode], title: MODE_DESCRIPTION[mode] }))}
+                          onChange={setTemplateChoice}
+                        />
+                        <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => {
                           const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
                           const templateRules = victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) });
                           setVictory((prev) => appendRules(prev, templateRules));
                         }}>Add template</button>
-                        <button type="button" className="le-seg-btn danger" disabled={victory.length === 0} onClick={() => setVictory([])}>Clear rules</button>
+                        <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger" disabled={victory.length === 0} onClick={() => setVictory([])}>Clear rules</button>
                       </div>
                       <p className="le-board-note">Events run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
                     </div>
                   )}
                 />
-              ) : (
+              )}
+              otherContent={(
                 <LevelEventsEditor
                   value={events}
                   zones={eventZoneOptions}
@@ -3234,83 +3236,42 @@ export function LevelEditor(): ReactElement {
                       <h3 className="le-victory-head">Template</h3>
                       <p className="le-board-note">Add a non-victory event template. Existing events stay in place; use Clear first when you want a clean replacement.</p>
                       <div className="le-template-apply">
-                        <SelectFrame className="le-template-select-wrap">
-                          <select className="le-layer-select" aria-label="Other event template"
-                            value={otherTemplateChoice} onChange={(e) => setOtherTemplateChoice(e.target.value as OtherEventTemplateId)}>
-                            {OTHER_EVENT_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}
-                          </select>
-                        </SelectFrame>
-                        <button type="button" className="le-seg-btn" onClick={addOtherEventTemplate}>Add template</button>
-                        <button type="button" className="le-seg-btn danger" disabled={events.length === 0} onClick={clearOtherEvents}>Clear events</button>
+                        <HouseSelect
+                          className="le-template-select-wrap"
+                          ariaLabel="Other event template"
+                          value={otherTemplateChoice}
+                          options={OTHER_EVENT_TEMPLATES.map((template) => ({ value: template.id, label: template.label }))}
+                          onChange={setOtherTemplateChoice}
+                        />
+                        <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={addOtherEventTemplate}>Add template</button>
+                        <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger" disabled={events.length === 0} onClick={clearOtherEvents}>Clear events</button>
                       </div>
                       <p className="le-board-note">Clear affects only this events list and any zones used only by those events.</p>
                     </div>
                   )}
                 />
               )}
-            </div>
+            />
           ) : null}
         </div>
 
-      <aside className="skirmish-hud" aria-label="Editor controls">
-        <section className="skirmish-card">
-          <h2>Layer</h2>
-          <SelectFrame>
-            <select
-              className="le-layer-select"
-              aria-label="Editor layer"
-              value={layer}
-              onChange={(e) => selectLayer(e.target.value as LayerKey)}
-            >
-              {LEVEL_EDITOR_LAYER_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id} disabled={isLayerOptionDisabled(option.id)}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </SelectFrame>
-        </section>
-
-        {/* Pinned editor ACTIONS dock: the universal edit controls — tools plus Undo/Redo — stay
-            above the sole scroll region, visible on every layer without overlaying the board.
-            Test and Save/Publish are session verbs, so they live with the save workflow. */}
-        <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
-          <h2>Actions</h2>
-          <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
-            <button type="button" className={`le-seg-btn ${tool === 'select' ? 'active' : ''}`.trim()} onClick={() => setTool('select')} title="Select" aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'brush' ? 'active' : ''}`.trim()} onClick={() => setTool('brush')} title="Brush" aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')} title="Erase" aria-label="Erase"><span className="le-ico ic-eraser" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'move' ? 'active' : ''}`.trim()} onClick={() => setTool('move')} title="Move — drag a placed unit or prop to a new cell." aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
-            <span className="le-action-toolbar-divider" aria-hidden="true" />
-            <button
-              type="button"
-              className="le-seg-btn le-icon-btn"
-              onClick={undoBoard}
-              disabled={!undoStack.length}
-              aria-label="Undo"
-              title={undoStack.length ? 'Undo the last board edit.' : 'Nothing to undo.'}
-            ><span className="le-ico ic-undo" aria-hidden="true" /></button>
-            <button
-              type="button"
-              className="le-seg-btn le-icon-btn"
-              onClick={redoBoard}
-              disabled={!redoStack.length}
-              aria-label="Redo"
-              title={redoStack.length ? 'Redo the last undone edit.' : 'Nothing to redo.'}
-            ><span className="le-ico ic-redo" aria-hidden="true" /></button>
-          </div>
-          {/* Live-test: play THIS board against the AI now, no save. Lives in the always-visible
-              Actions dock (not a layer-gated card) so a recipient of a shared /level-editor?board=…
-              link can test-play on sight; the test returns here (returnTo) so it's a loop, not a
-              one-way trip. Gated on playability, like Save/Test. */}
-          {playBoardHref ? (
-            <NavButton className="le-seg-btn le-play-board" data-testid="le-play-board" to={playBoardHref} title="Play this exact board against the AI now — no save (a Test Board; set a CPU-delay floor in the game's Controls tab). ‹ Back returns you here.">▶ Play test</NavButton>
-          ) : (
-            <button type="button" className="le-seg-btn le-play-board" disabled title="Add a player and an enemy piece (clear the playability issues in the Status layer) to live-test this board.">▶ Play test</button>
-          )}
-        </section>
-
-        <KitScroll className="le-hud-scroll">
+      <LevelEditorControlsPanel
+        layer={layer}
+        layerOptions={LEVEL_EDITOR_LAYER_OPTIONS.map((option) => ({
+          id: option.id,
+          label: option.label,
+          disabled: isLayerOptionDisabled(option.id),
+        }))}
+        onLayerChange={selectLayer}
+        tool={tool === 'region' ? 'select' : tool}
+        onToolChange={setTool}
+        canUndo={undoStack.length > 0}
+        canRedo={redoStack.length > 0}
+        onUndo={undoBoard}
+        onRedo={redoBoard}
+        playBoardHref={playBoardHref ?? undefined}
+        playBoardEnabled={Boolean(playBoardHref)}
+      >
         {layer === 'status' ? (
           <>
           {/* Playability list (ADR-0050): while any violation exists Save is disabled and the
@@ -3330,7 +3291,7 @@ export function LevelEditor(): ReactElement {
                   <li key={v.code} className="le-violation">
                     <span className="le-violation-msg">{v.message}</span>
                     {v.code === 'P3_UNITS_NOT_EMPTY' ? (
-                      <button type="button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
+                      <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
                     ) : null}
                   </li>
                 ))}
@@ -3354,10 +3315,11 @@ export function LevelEditor(): ReactElement {
                 blocking layer via explainBlockedSave. */}
             <div className="le-board-actions le-status-actions">
               {canTest && testHref ? (
-                <NavButton className="le-seg-btn" data-testid="le-test" to={testHref} title="Play-test this level (progress is not recorded).">Test</NavButton>
+                <NavButton className="le-seg-btn" data-chrome-unit="inner-text-button" data-testid="le-test" to={testHref} title="Play-test this level (progress is not recorded).">Test</NavButton>
               ) : (
                 <button
                   type="button"
+                  data-chrome-unit="inner-text-button"
                   className="le-seg-btn"
                   data-testid="le-test"
                   disabled
@@ -3371,6 +3333,7 @@ export function LevelEditor(): ReactElement {
               )}
               <button
                 type="button"
+                data-chrome-unit="inner-text-button"
                 className={`le-seg-btn ${canSave ? 'active' : 'is-blocked'}`.trim()}
                 data-testid="le-save"
                 aria-label={canSave ? saveLabel : `${saveButtonLabel}: ${saveBlockedMessage}`}
@@ -3417,10 +3380,10 @@ export function LevelEditor(): ReactElement {
             <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
             <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
             <div className="le-board-actions">
-              <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
-              <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
-              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board — the recipient can edit AND live-test it.">Copy Link</button>
-              <button type="button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board — the recipient can edit AND live-test it.">Copy Link</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
             </div>
             <input
               className="le-board-link-input"
@@ -3431,7 +3394,7 @@ export function LevelEditor(): ReactElement {
               placeholder="Paste board link"
               aria-label="Board link"
             />
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /editor/level?board=... link and replace this editor board with it.">Load board link</button>
+            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /editor/level?board=... link and replace this editor board with it.">Load board link</button>
           </section>
           <section className="skirmish-card le-level-settings">
             <h2>Level Settings</h2>
@@ -3451,14 +3414,12 @@ export function LevelEditor(): ReactElement {
                         <b>{boardFactionCounts[faction]}</b>
                       </span>
                       <span className="le-faction-fields">
-                        <select
-                          className="le-faction-select"
+                        <HouseSelect
                           value={playerFaction === faction ? 'player' : 'cpu'}
-                          aria-label={`${LE_FACTION_LABELS[faction]} control`}
+                          ariaLabel={`${LE_FACTION_LABELS[faction]} control`}
+                          options={controlOptions}
                           onChange={onFactionControlChange(faction)}
-                        >
-                          {controlOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                        </select>
+                        />
                         <DirectionPopover
                           value={directionForFaction(faction)}
                           label={`${LE_FACTION_LABELS[faction]} default facing`}
@@ -3480,20 +3441,18 @@ export function LevelEditor(): ReactElement {
             <h2>Generate terrain</h2>
             <p className="le-board-note">Carve a saved region — or the whole board — into terrain regions. Add regions and dial each one's share (they rebalance to 100 − buffer); each becomes one contiguous area. Then Generate.</p>
             <div className="le-gen-unit-row">
-              <label className="le-gen-unit-select">
+              <div className="le-gen-unit-select">
                 <span>Region</span>
-                <select
-                  className="le-gen-region-terrain"
+                <HouseSelect
                   value={activeGeneratedRegionId ?? ''}
-                  onChange={(event) => selectGeneratedRegionUnit(event.target.value)}
-                  aria-label="Saved generated region"
-                >
-                  <option value="">New selection</option>
-                  {generatedRegions.map((region) => (
-                    <option key={region.id} value={region.id}>{region.name} · {region.cells.length}</option>
-                  ))}
-                </select>
-              </label>
+                  ariaLabel="Saved generated region"
+                  options={[
+                    { value: '', label: 'New selection' },
+                    ...generatedRegions.map((region) => ({ value: region.id, label: `${region.name} · ${region.cells.length}` })),
+                  ]}
+                  onChange={selectGeneratedRegionUnit}
+                />
+              </div>
               {activeGeneratedRegion ? (
                 <button
                   type="button"
@@ -3507,26 +3466,26 @@ export function LevelEditor(): ReactElement {
             <div className="le-gen-scope">
               <button
                 type="button"
+                data-chrome-unit="inner-text-button"
                 className={`le-seg-btn ${tool === 'region' ? 'active' : ''}`.trim()}
                 onClick={() => setTool(tool === 'region' ? 'select' : 'region')}
                 title="Click an already-drawn clump to select its whole same-terrain patch. Click this button again to stop."
               >{tool === 'region' ? 'Selecting…' : 'Select region'}</button>
               <span className="le-gen-scope-label">{regionSelection.size > 0 ? `${activeGeneratedRegion?.name ?? 'Selection'} · ${regionSelection.size} cells` : 'Whole board'}</span>
-              {regionSelection.size > 0 ? <button type="button" className="le-seg-btn" onClick={clearRegion} title="Clear the selection — Generate will cover the whole board.">Clear</button> : null}
+              {regionSelection.size > 0 ? <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={clearRegion} title="Clear the selection — Generate will cover the whole board.">Clear</button> : null}
             </div>
             {tool === 'region' ? <p className="le-board-note">Click a drawn clump to select its whole same-terrain patch. Generate fills the selection; everything outside it stays put.</p> : null}
             <div className="le-gen-regions" role="group" aria-label="Terrain regions">
               {scatterSections.map((sec) => (
                 <div className="le-gen-region-group" key={sec.id}>
                   <div className="le-gen-region">
-                    <select
-                      className="le-gen-region-terrain"
+                    <HouseSelect
+                      className="le-gen-region-select"
                       value={sec.terrain}
-                      onChange={(event) => setSectionTerrain(sec.id, event.target.value as TileFamilyId)}
-                      aria-label="Region terrain"
-                    >
-                      {LE_SCATTER_FAMILIES.map((family) => <option key={family.id} value={family.id}>{family.label}</option>)}
-                    </select>
+                      ariaLabel="Region terrain"
+                      options={LE_SCATTER_FAMILIES.map((family) => ({ value: family.id, label: family.label }))}
+                      onChange={(terrain) => setSectionTerrain(sec.id, terrain)}
+                    />
                     <input
                       type="range"
                       className="le-gen-region-slider"
@@ -3549,9 +3508,13 @@ export function LevelEditor(): ReactElement {
                           <button type="button" className="le-gen-cover-caret-btn" onClick={() => toggleCoverEntryExpand(sec.id, c.id)} aria-expanded={c.expanded} aria-label={c.expanded ? 'Collapse cover settings' : 'Expand cover settings'}>
                             <span className="le-gen-cover-caret" aria-hidden="true">{c.expanded ? '▾' : '▸'}</span>
                           </button>
-                          <select className="le-gen-region-terrain" value={c.type} onChange={(event) => setCoverType(sec.id, c.id, event.target.value as GroundCoverId)} aria-label="Cover set">
-                            {LE_COVER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                          </select>
+                          <HouseSelect
+                            className="le-gen-cover-select"
+                            value={c.type}
+                            ariaLabel="Cover set"
+                            options={LE_COVER_TYPES.map((t) => ({ value: t.id, label: t.label }))}
+                            onChange={(type) => setCoverType(sec.id, c.id, type)}
+                          />
                           <button type="button" className="le-gen-icon" onClick={() => removeCover(sec.id, c.id)} title="Remove this cover">×</button>
                         </div>
                         {c.expanded ? (
@@ -3569,10 +3532,10 @@ export function LevelEditor(): ReactElement {
                 </div>
               ))}
             </div>
-            <button type="button" className="le-seg-btn le-gen-add" onClick={addSection} title="Add another terrain region and rebalance the shares.">+ Add terrain region</button>
+            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-gen-add" onClick={addSection} title="Add another terrain region and rebalance the shares.">+ Add terrain region</button>
             <SliderRow label={`Randomness buffer · ${scatterBuffer}%`} value={scatterBuffer} set={setScatterBufferBalanced} min={0} max={60} step={1} nudge={1} dflt={0} />
             <SliderRow label="Edge roughness" value={scatterWiggle} set={setScatterWiggle} min={0} max={1} step={0.05} nudge={0.05} dflt={0.5} />
-            <button type="button" className="le-seg-btn le-gen-run" style={{ width: '100%', marginTop: 8 }} onClick={generateScatter} title="Roll a fresh layout into the selection (or the whole board) and autotile it.">Generate</button>
+            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-gen-run" style={{ width: '100%', marginTop: 8 }} onClick={generateScatter} title="Roll a fresh layout into the selection (or the whole board) and autotile it.">Generate</button>
           </section>
         </>) : layer === 'rules' ? (<>
           <section className="skirmish-card">
@@ -3580,7 +3543,7 @@ export function LevelEditor(): ReactElement {
             {/* ADR-0064: the rule authoring lives in a full-size overlay over the board (this panel is
                 too narrow) — see the .le-events-overlay below. This card is just the entry point. */}
             <p className="le-board-note">How this level is won, lost, deployed, and promoted. {victory.length} victory event{victory.length === 1 ? '' : 's'} and {events.length} other event{events.length === 1 ? '' : 's'} set.</p>
-            <button type="button" className="le-seg-btn le-events-open" onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
+            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-events-open" onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
           </section>
 
           <section className="skirmish-card">
@@ -3689,11 +3652,11 @@ export function LevelEditor(): ReactElement {
               ))}
             </div>
             <div className="le-seg">
-              <button type="button" className={`le-seg-btn ${coverBrushDensity === 'sparse' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('sparse')}>Sparse</button>
-              <button type="button" className={`le-seg-btn ${coverBrushDensity === 'filled' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('filled')}>Filled</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={`le-seg-btn ${coverBrushDensity === 'sparse' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('sparse')}>Sparse</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={`le-seg-btn ${coverBrushDensity === 'filled' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('filled')}>Filled</button>
             </div>
             <p className="le-board-note">Brush paints {coverBrushDensity} {coverBrushAsset.label} on any tile; Erase clears a tile. The cover scatters from the density.</p>
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
+            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
             <p className="le-board-note">{coverCount} tile{coverCount === 1 ? '' : 's'} with cover.</p>
           </section>
         ) : null}
@@ -3707,20 +3670,15 @@ export function LevelEditor(): ReactElement {
                 <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Previous zone" title="Previous zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(-1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
                 </button>
-                <SelectFrame>
-                  <select
-                    className="le-layer-select"
-                    value={activeZone?.id ?? ''}
-                    disabled={!activeZone}
-                    onChange={(event) => selectZoneEntry(event.target.value)}
-                    aria-label="Selected zone"
-                  >
-                    {activeZone ? null : <option value="">None</option>}
-                    {boardZoneEntries.map((zone, index) => (
-                      <option key={zone.id} value={zone.id}>{zoneDisplayName(zone, index)}</option>
-                    ))}
-                  </select>
-                </SelectFrame>
+                <HouseSelect
+                  value={activeZone?.id ?? ''}
+                  disabled={!activeZone}
+                  ariaLabel="Selected zone"
+                  options={activeZone
+                    ? boardZoneEntries.map((zone, index) => ({ value: zone.id, label: zoneDisplayName(zone, index) }))
+                    : [{ value: '', label: 'None', disabled: true }]}
+                  onChange={selectZoneEntry}
+                />
                 <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Next zone" title="Next zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
                 </button>
@@ -3775,6 +3733,7 @@ export function LevelEditor(): ReactElement {
                 <button
                   type="button"
                   key={faction}
+                  data-chrome-unit="inner-text-button"
                   className={`le-seg-btn ${unitFaction === faction ? 'active' : ''}`.trim()}
                   onClick={() => setUnitFaction(faction)}
                 >{LE_FACTION_LABELS[faction]}</button>
@@ -4037,8 +3996,8 @@ export function LevelEditor(): ReactElement {
           <section className="skirmish-card">
             <h2>Tile Fill</h2>
             <div className="le-seg">
-              <button type="button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank terrain cells with the current tile brush.">Empty</button>
-              <button type="button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole terrain layer with the current tile brush.">Whole</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank terrain cells with the current tile brush.">Empty</button>
+              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole terrain layer with the current tile brush.">Whole</button>
             </div>
           </section>
         ) : null}
@@ -4046,7 +4005,7 @@ export function LevelEditor(): ReactElement {
         {brushKind !== 'tile' ? (
           <section className="skirmish-card">
             <h2>Layer Actions</h2>
-            <button type="button" className="le-seg-btn danger" style={{ width: '100%' }} onClick={clearActiveLayer} title={brushKind === 'zone' ? 'Clear the selected zone entry.' : `Clear every ${brushKind === 'wallart' ? 'wall art' : brushKind} placement from this board.`}>Clear {brushKind === 'zone' ? 'active zone' : brushKind === 'wallart' ? 'wall art' : brushKind}</button>
+            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger" style={{ width: '100%' }} onClick={clearActiveLayer} title={brushKind === 'zone' ? 'Clear the selected zone entry.' : `Clear every ${brushKind === 'wallart' ? 'wall art' : brushKind} placement from this board.`}>Clear {brushKind === 'zone' ? 'active zone' : brushKind === 'wallart' ? 'wall art' : brushKind}</button>
           </section>
         ) : null}
 
@@ -4119,8 +4078,7 @@ export function LevelEditor(): ReactElement {
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{zoneCount}</b> zones · <b>{zonedTileCount}</b> zoned tiles · {boardCols}×{boardRows}
         </div>
         ) : null}
-        </KitScroll>
-      </aside>
+      </LevelEditorControlsPanel>
       </ArtRouteChrome>
     </div>
   );

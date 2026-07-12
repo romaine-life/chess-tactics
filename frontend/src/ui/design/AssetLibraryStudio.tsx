@@ -180,7 +180,7 @@ function findAsset(name: string): Found | null {
 // `header` slot) above a read-only Details readout (provenance/gate). Assets are
 // inspected, not manipulated, so this is the Viewer destination, not the board
 // Lab. It renders [main][aside] straight into the shell to match every other mode.
-export function AssetLab({ name, header, onEditFrame, onOpenDivider }: { name: string; header?: ReactNode; onEditFrame?: (editorAssetId: string) => void; onOpenDivider?: () => void }): ReactElement {
+export function AssetLab({ name, header, onEditFrame, onOpenDivider }: { name: string; header?: ReactNode; onEditFrame?: (editorAssetId: string) => void; onOpenDivider?: (dividerAssetId: string) => void }): ReactElement {
   const found = name ? findAsset(name) : null;
   const item = found?.item;
   const itemName = found ? (found.kind === 'structure' ? found.item.id : found.item.name) : undefined;
@@ -188,6 +188,9 @@ export function AssetLab({ name, header, onEditFrame, onOpenDivider }: { name: s
   const itemH = found ? (found.kind === 'structure' ? found.item.sprite.h : found.item.h) : undefined;
   const prov = itemName && forged(itemName) ? PROV.assets[itemName] : null;
   const editableFrameId = itemName ? EDITOR_ASSET[itemName] : undefined;
+  const dividerAssetId = itemName
+    ? Object.entries(REG_ASSETS).find(([, asset]) => asset.kind === 'bar' && asset.variants.some((variant) => variant.out.replace(/\.png$/, '') === itemName))?.[0]
+    : undefined;
   const glyph = found?.kind === 'glyph' ? found.item : null;
   return (
     <>
@@ -227,12 +230,12 @@ export function AssetLab({ name, header, onEditFrame, onOpenDivider }: { name: s
                 onClick={() => onEditFrame(editableFrameId)}
                 style={{ display: 'block', width: '100%', padding: '9px 12px', textAlign: 'center', background: '#1d5f9e', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}
               >✎ Edit in 9-slice editor</button>
-            ) : itemName === 'panel-divider' && onOpenDivider ? (
+            ) : dividerAssetId && onOpenDivider ? (
               // A divider is a junction, not a box — it only reads assembled. Its interactive,
               // inspectable home is the divider Viewer (DividerLab), not this read-only card (ADR-0063).
               <button
                 type="button"
-                onClick={onOpenDivider}
+                onClick={() => onOpenDivider(dividerAssetId)}
                 style={{ display: 'block', width: '100%', padding: '9px 12px', textAlign: 'center', background: '#6b4f1d', color: '#fff2c4', border: '1px solid #d5a34a', borderRadius: 4, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}
               >◫ Open divider viewer</button>
             ) : found?.kind === 'frame' ? (

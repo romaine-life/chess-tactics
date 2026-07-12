@@ -4,7 +4,7 @@
   "summary": {
     "pass": 47,
     "total": 47,
-    "frames": 15
+    "frames": 28
   },
   "groups": [
     {
@@ -545,48 +545,6 @@
   ],
   "frames": [
     {
-      "name": "panel",
-      "url": "/assets/ui/kit/panel.png",
-      "w": 72,
-      "h": 72
-    },
-    {
-      "name": "row",
-      "url": "/assets/ui/kit/row.png",
-      "w": 160,
-      "h": 112
-    },
-    {
-      "name": "button-neutral",
-      "url": "/assets/ui/kit/button-neutral.png",
-      "w": 72,
-      "h": 72
-    },
-    {
-      "name": "button-primary",
-      "url": "/assets/ui/kit/button-primary.png",
-      "w": 72,
-      "h": 72
-    },
-    {
-      "name": "button-danger",
-      "url": "/assets/ui/kit/button-danger.png",
-      "w": 72,
-      "h": 72
-    },
-    {
-      "name": "mode-button",
-      "url": "/assets/ui/kit/mode-button.png",
-      "w": 72,
-      "h": 72
-    },
-    {
-      "name": "mode-button-active",
-      "url": "/assets/ui/kit/mode-button-active.png",
-      "w": 72,
-      "h": 72
-    },
-    {
       "name": "field-input",
       "url": "/assets/ui/kit/field-input.png",
       "w": 198,
@@ -617,10 +575,118 @@
       "h": 12
     },
     {
+      "name": "mode-button",
+      "url": "/assets/ui/kit/mode-button.png",
+      "w": 72,
+      "h": 72
+    },
+    {
+      "name": "mode-button-active",
+      "url": "/assets/ui/kit/mode-button-active.png",
+      "w": 72,
+      "h": 72
+    },
+    {
+      "name": "button-neutral",
+      "url": "/assets/ui/kit/button-neutral.png",
+      "w": 72,
+      "h": 72
+    },
+    {
+      "name": "button-primary",
+      "url": "/assets/ui/kit/button-primary.png",
+      "w": 72,
+      "h": 72
+    },
+    {
+      "name": "button-danger",
+      "url": "/assets/ui/kit/button-danger.png",
+      "w": 72,
+      "h": 72
+    },
+    {
+      "name": "panel",
+      "url": "/assets/ui/kit/panel.png",
+      "w": 72,
+      "h": 72
+    },
+    {
+      "name": "row",
+      "url": "/assets/ui/kit/row.png",
+      "w": 160,
+      "h": 112
+    },
+    {
+      "name": "row-active",
+      "url": "/assets/ui/kit/row-active.png",
+      "w": 160,
+      "h": 112
+    },
+    {
       "name": "panel-divider",
       "url": "/assets/ui/kit/panel-divider.png",
       "w": 64,
-      "h": 30
+      "h": 34
+    },
+    {
+      "name": "codex-outer-panel",
+      "url": "/assets/ui/kit/codex-outer-panel.png",
+      "w": 512,
+      "h": 384
+    },
+    {
+      "name": "codex-outer-divider",
+      "url": "/assets/ui/kit/codex-outer-divider.png",
+      "w": 512,
+      "h": 112
+    },
+    {
+      "name": "codex-outer-tee",
+      "url": "/assets/ui/kit/codex-outer-tee.png",
+      "w": 218,
+      "h": 195
+    },
+    {
+      "name": "codex-outer-cross",
+      "url": "/assets/ui/kit/codex-outer-cross.png",
+      "w": 236,
+      "h": 325
+    },
+    {
+      "name": "codex-parts-outer-panel",
+      "url": "/assets/ui/kit/codex-parts-outer-panel.png",
+      "w": 512,
+      "h": 384
+    },
+    {
+      "name": "codex-parts-outer-cross",
+      "url": "/assets/ui/kit/codex-parts-outer-cross.png",
+      "w": 245,
+      "h": 245
+    },
+    {
+      "name": "codex-parts-inner-panel",
+      "url": "/assets/ui/kit/codex-parts-inner-panel.png",
+      "w": 256,
+      "h": 192
+    },
+    {
+      "name": "codex-parts-inner-divider",
+      "url": "/assets/ui/kit/codex-parts-inner-divider.png",
+      "w": 320,
+      "h": 160
+    },
+    {
+      "name": "codex-parts-inner-tee",
+      "url": "/assets/ui/kit/codex-parts-inner-tee.png",
+      "w": 87,
+      "h": 148
+    },
+    {
+      "name": "codex-parts-inner-cross",
+      "url": "/assets/ui/kit/codex-parts-inner-cross.png",
+      "w": 148,
+      "h": 148
     },
     {
       "name": "tee",
