@@ -239,6 +239,76 @@
       "tries": 1,
       "method": "image-generator (verified)",
       "gate": "pass"
+    },
+    "codex-outer-panel": {
+      "group": "frames",
+      "forged": "2026-07-06",
+      "tries": 1,
+      "method": "Codex chrome family sheet -> extractor -> atom-built 9-slice",
+      "gate": "bake parity"
+    },
+    "codex-outer-divider": {
+      "group": "frames",
+      "forged": "2026-07-06",
+      "tries": 1,
+      "method": "Codex chrome family sheet -> atomless natural T + authored rail bar",
+      "gate": "bake parity"
+    },
+    "codex-outer-tee": {
+      "group": "frames",
+      "forged": "2026-07-06",
+      "tries": 1,
+      "method": "Codex chrome family sheet -> atomless natural T crop",
+      "gate": "bake parity"
+    },
+    "codex-outer-cross": {
+      "group": "frames",
+      "forged": "2026-07-06",
+      "tries": 1,
+      "method": "Codex chrome family sheet -> atomless natural cross crop",
+      "gate": "bake parity"
+    },
+    "codex-parts-outer-panel": {
+      "group": "frames",
+      "forged": "2026-07-06",
+      "tries": 1,
+      "method": "Independent generated corner atom + rail source -> extractor -> atom-built 9-slice",
+      "gate": "bake parity"
+    },
+    "codex-parts-outer-cross": {
+      "group": "frames",
+      "forged": "2026-07-06",
+      "tries": 1,
+      "method": "Independent generated atomless cross source",
+      "gate": "bake parity"
+    },
+    "codex-parts-inner-panel": {
+      "group": "frames",
+      "forged": "2026-07-06",
+      "tries": 1,
+      "method": "Independent generated small corner atom + small rail source -> extractor -> atom-built 9-slice",
+      "gate": "bake parity"
+    },
+    "codex-parts-inner-divider": {
+      "group": "frames",
+      "forged": "2026-07-06",
+      "tries": 1,
+      "method": "Independent generated small rail + atomless cross-derived T -> authored rail bar",
+      "gate": "bake parity"
+    },
+    "codex-parts-inner-tee": {
+      "group": "frames",
+      "forged": "2026-07-06",
+      "tries": 1,
+      "method": "Independent small atomless cross source -> derived left-side T crop",
+      "gate": "bake parity"
+    },
+    "codex-parts-inner-cross": {
+      "group": "frames",
+      "forged": "2026-07-06",
+      "tries": 1,
+      "method": "Independent generated small atomless cross source",
+      "gate": "bake parity"
     }
   },
   "note": "Settings icon set re-forged onto the ADR-0026 64x64 canvas. The 15 content glyphs were regenerated through forge-atom's clean pipeline and method-verified (a real image_generation_call in the rollout, not a PIL/SVG hand-draw). lyre/bell were re-canvased from their already-approved forge-atom output (pixels preserved, centered on 64). brand-shield is the 256x256 source-sprite exception (ADR-0026) and was intentionally not re-forged."

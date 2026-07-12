@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const KIT = `${root}public/assets/ui/kit/`;
 const URLBASE = '/assets/ui/kit/';
+const REGISTRY = JSON.parse(readFileSync(`${root}config/nine-slice-registry.json`, 'utf8'));
 const listPng = (d) => (existsSync(d) ? readdirSync(d).filter((f) => f.endsWith('.png') && !f.includes('@2x')).sort() : []);
 
 // mirrors verifyGlyph() in verify-kit-asset.mjs: magenta despill + edge bleed
@@ -42,7 +43,13 @@ const groups = [
   items: listPng(`${KIT}${g.dir}`).map((f) => ({ name: f.replace('.png', ''), url: `${URLBASE}${g.dir}/${f}`, ...glyph(`${KIT}${g.dir}/${f}`) })),
 }));
 
-const frameNames = ['panel', 'row', 'button-neutral', 'button-primary', 'button-danger', 'mode-button', 'mode-button-active', 'field-input', 'field-select', 'icon-button', 'icon-button-active', 'toggle-track', 'toggle-knob', 'divider', 'panel-divider', 'tee', 'cross'];
+const legacyFrameNames = [
+  'field-input', 'field-select', 'icon-button', 'icon-button-active',
+  'toggle-track', 'toggle-knob', 'divider',
+];
+const registeredFrameNames = Object.values(REGISTRY.assets)
+  .flatMap((asset) => asset.variants.map((variant) => variant.out.replace(/\.png$/, '')));
+const frameNames = [...new Set([...legacyFrameNames, ...registeredFrameNames])];
 const frames = frameNames.filter((n) => existsSync(`${KIT}${n}.png`)).map((n) => ({ name: n, url: `${URLBASE}${n}.png`, ...dims(`${KIT}${n}.png`) }));
 
 const allGlyphs = groups.flatMap((g) => g.items);

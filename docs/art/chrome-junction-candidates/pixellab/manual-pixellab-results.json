@@ -1,0 +1,24 @@
+[
+  {
+    "slug": "large-outer-pixellab-ui",
+    "id": "f7040db9-0821-41dd-b3d1-32f158ea276e",
+    "polledAt": "2026-07-06T05:51:48.310Z",
+    "responseText": "status: completed\nid: f7040db9-0821-41dd-b3d1-32f158ea276e\nname: ct-large-outer-gold-iron-chrome-candidate\nsize: 512x320px\nimage: https://backblaze.pixellab.ai/file/pixellab-characters/ui/3b4f0480-f3cc-4383-b662-7259f13e2d7d/f7040db9-0821-41dd-b3d1-32f158ea276e/full.png\ndownload: https://api.pixellab.ai/mcp/ui-assets/f7040db9-0821-41dd-b3d1-32f158ea276e/download",
+    "urls": [
+      "https://backblaze.pixellab.ai/file/pixellab-characters/ui/3b4f0480-f3cc-4383-b662-7259f13e2d7d/f7040db9-0821-41dd-b3d1-32f158ea276e/full.png",
+      "https://api.pixellab.ai/mcp/ui-assets/f7040db9-0821-41dd-b3d1-32f158ea276e/download"
+    ],
+    "saved": "docs\\art\\chrome-junction-candidates\\pixellab\\large-outer-pixellab-ui.png"
+  },
+  {
+    "slug": "small-inner-pixellab-ui",
+    "id": "37ee740e-1a43-4c18-90a3-bf0603a8a01f",
+    "polledAt": "2026-07-06T05:51:52.303Z",
+    "responseText": "status: completed\nid: 37ee740e-1a43-4c18-90a3-bf0603a8a01f\nname: ct-small-inner-gold-iron-chrome-candidate\nsize: 384x224px\nimage: https://backblaze.pixellab.ai/file/pixellab-characters/ui/3b4f0480-f3cc-4383-b662-7259f13e2d7d/37ee740e-1a43-4c18-90a3-bf0603a8a01f/full.png\ndownload: https://api.pixellab.ai/mcp/ui-assets/37ee740e-1a43-4c18-90a3-bf0603a8a01f/download",
+    "urls": [
+      "https://backblaze.pixellab.ai/file/pixellab-characters/ui/3b4f0480-f3cc-4383-b662-7259f13e2d7d/37ee740e-1a43-4c18-90a3-bf0603a8a01f/full.png",
+      "https://api.pixellab.ai/mcp/ui-assets/37ee740e-1a43-4c18-90a3-bf0603a8a01f/download"
+    ],
+    "saved": "docs\\art\\chrome-junction-candidates\\pixellab\\small-inner-pixellab-ui.png"
+  }
+]

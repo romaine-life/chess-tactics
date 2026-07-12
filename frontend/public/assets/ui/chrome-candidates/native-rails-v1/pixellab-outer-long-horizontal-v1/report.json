@@ -1,0 +1,21 @@
+{
+  "id": "pixellab-outer-long-horizontal-v1",
+  "provider": "pixellab-ui",
+  "role": "outer",
+  "fit": "long",
+  "nativeThickness": 12,
+  "sourceDir": "../docs/art/chrome-native-rails/v1/attempts/pixellab-outer-long-horizontal-v1",
+  "accepted": [],
+  "rejected": [
+    {
+      "file": "full.png",
+      "bounds": {
+        "x": 6,
+        "y": 86,
+        "w": 500,
+        "h": 21
+      },
+      "reason": "painted thickness 21px, expected exactly 12px"
+    }
+  ]
+}

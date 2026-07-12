@@ -48,9 +48,11 @@ import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
 import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
 import { navigateApp, readValidatedReturnTo } from './navigation';
+import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { PLAY_SKIRMISH_SELECTOR_HREF, playCampaignSelectorHref } from './playHubRoute';
 
 export function Skirmish() {
+  const installedChromeCss = useInstalledChromeCss();
   const routeSearch = window.location.search;
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
   const routeCampaignId = routeParams.get('campaignId');
@@ -894,6 +896,7 @@ export function Skirmish() {
 
   return (
     <div data-testid="skirmish" className="skirmish-screen" style={screenStyle}>
+      {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
       {/* Title bar lives in the app shell now; the in-game live status portals into its
           center section (turn/objective read from the game store, in scope here). The
           brand + account cluster are rendered by the shell bar itself. */}

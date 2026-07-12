@@ -1,0 +1,47 @@
+{
+  "id": "outer-v3-01-baked-12px-v1",
+  "provider": "controlled-production-downscale",
+  "role": "outer",
+  "fit": "repeat",
+  "nativeThickness": 12,
+  "sourceSheet": "/public/assets/ui/chrome-candidates/exploded/outer-rails-v3/candidate-01.png",
+  "extraction": "lanczos-downscale-once-to-final-rail-thickness",
+  "sourceSize": {
+    "width": 947,
+    "height": 95
+  },
+  "scale": 0.12631578947368421,
+  "resampled": true,
+  "resampleMethod": "lanczos",
+  "accepted": [
+    {
+      "file": "rail-horizontal.png",
+      "sourceBounds": {
+        "x": 0,
+        "y": 0,
+        "w": 947,
+        "h": 95
+      },
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/outer-v3-01-baked-12px-v1/rail-horizontal.png",
+      "orientation": "horizontal",
+      "width": 120,
+      "height": 12,
+      "seam": null
+    },
+    {
+      "file": "rail-vertical.png",
+      "sourceBounds": {
+        "x": 0,
+        "y": 0,
+        "w": 947,
+        "h": 95
+      },
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/outer-v3-01-baked-12px-v1/rail-vertical.png",
+      "orientation": "vertical",
+      "width": 12,
+      "height": 120,
+      "seam": null
+    }
+  ],
+  "rejected": []
+}

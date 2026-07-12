@@ -105,9 +105,10 @@ function ConfirmDialog({
         <h2>{title}</h2>
         <div className="confirm-body">{message}</div>
         <div className="confirm-actions">
-          <button type="button" className="le-seg-btn" onClick={onCancel}>{cancelLabel}</button>
+          <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={onCancel}>{cancelLabel}</button>
           <button
             type="button"
+            data-chrome-unit="inner-text-button"
             className={`le-seg-btn ${tone === 'danger' ? 'danger' : 'active'}`}
             data-testid="confirm-accept"
             onClick={onConfirm}

@@ -16,6 +16,8 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   scrollbar: 'Scrollbar',
   slider: 'Slider',
   page: 'Page',
+  chromelab: 'Chrome Lab',
+  raillab: 'Rail Lab',
   tileside: 'Tile Sides',
   walldecor: 'Wall Art Sources',
   wallart: 'Wall Art',

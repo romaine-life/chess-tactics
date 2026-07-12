@@ -63,6 +63,7 @@ import {
 } from './levelEditorPersistence';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { HomepageBackdrop } from './HomepageBackdrop';
+import { useInstalledChromeCss } from './useInstalledChromeCss';
 import {
   directionCompassCells,
   hasDirectionSprite,
@@ -1973,6 +1974,8 @@ export function LevelEditor(): ReactElement {
   // It takes precedence over a campaign level (it's the explicit "inspect this exact board").
   const loadedBoard = useMemo(() => readBoardParam(), []);
   const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const isChromeLabPreview = useMemo(() => urlParams.get('chromeLab') === '1', [urlParams]);
+  const installedChromeCss = useInstalledChromeCss(!isChromeLabPreview);
   const fenceArtReviewEnabled = urlParams.get('artReview') === FENCE_ART_REVIEW_ID;
   const initialFenceArtwork = fenceArtKit(urlParams.get('fenceArt')) ?? FENCE_ART_KITS[0];
   const urlTimeControl = useMemo(() => readTimeControlParams(urlParams), [urlParams]);
@@ -4739,6 +4742,7 @@ export function LevelEditor(): ReactElement {
     <div className="level-editor-root">
       <HomepageBackdrop />
       <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" ready={editorReady}>
+        {installedChromeCss ? <style data-level-editor-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
         {confirmDialog}
         {/* The title bar carries NO editor status (no level name, no save-state chip) — the
             owner removed the center cluster: that's ambient chrome noise while editing, and

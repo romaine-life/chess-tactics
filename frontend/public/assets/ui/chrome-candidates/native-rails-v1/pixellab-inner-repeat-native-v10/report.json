@@ -1,0 +1,675 @@
+{
+  "id": "pixellab-inner-repeat-native-v10",
+  "provider": "pixellab-object-style",
+  "role": "inner",
+  "fit": "repeat",
+  "nativeThickness": 7,
+  "sourceDir": "../docs/art/chrome-native-rails/v1/attempts/pixellab-inner-33-v10-style-fuller",
+  "accepted": [
+    {
+      "file": "frame-1.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/01-vertical-frame-1.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 6.75,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-13.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/02-vertical-frame-13.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 2,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-15.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/03-vertical-frame-15.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 2.7857142857142856,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-17.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/04-vertical-frame-17.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 3.7857142857142856,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-21.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/05-vertical-frame-21.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 4.821428571428571,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-23.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/06-vertical-frame-23.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 9.321428571428571,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-25.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/07-vertical-frame-25.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 7.535714285714286,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-29.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/08-vertical-frame-29.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 6.107142857142857,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-31.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/09-vertical-frame-31.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 4.464285714285714,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-33.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/10-vertical-frame-33.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 7.071428571428571,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-37.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/11-vertical-frame-37.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 7.571428571428571,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-39.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/12-vertical-frame-39.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 3.857142857142857,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-41.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/13-vertical-frame-41.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 12.535714285714286,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-45.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/14-vertical-frame-45.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 5.392857142857143,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-47.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/15-vertical-frame-47.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 1.3214285714285714,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-49.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/16-vertical-frame-49.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 2.0714285714285716,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-5.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/17-vertical-frame-5.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 8.107142857142858,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-53.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/18-vertical-frame-53.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 7.392857142857143,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-57.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/19-vertical-frame-57.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 4.214285714285714,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-61.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/20-vertical-frame-61.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 9.25,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-63.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/21-vertical-frame-63.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 8.071428571428571,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-7.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/22-vertical-frame-7.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 4.142857142857143,
+        "alphaMismatches": 0
+      }
+    },
+    {
+      "file": "frame-9.png",
+      "src": "/assets/ui/chrome-candidates/native-rails-v1/pixellab-inner-repeat-native-v10/23-vertical-frame-9.png",
+      "orientation": "vertical",
+      "width": 7,
+      "height": 22,
+      "seam": {
+        "averageDelta": 2.25,
+        "alphaMismatches": 0
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "file": "frame-0.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-10.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-11.png",
+      "bounds": {
+        "x": 14,
+        "y": 6,
+        "w": 6,
+        "h": 22
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-12.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-14.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-16.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-18.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-19.png",
+      "bounds": {
+        "x": 14,
+        "y": 6,
+        "w": 6,
+        "h": 22
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-2.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-20.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-22.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-24.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-26.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-27.png",
+      "bounds": {
+        "x": 14,
+        "y": 6,
+        "w": 6,
+        "h": 22
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-28.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-3.png",
+      "bounds": {
+        "x": 14,
+        "y": 6,
+        "w": 6,
+        "h": 22
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-30.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-32.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-34.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-35.png",
+      "bounds": {
+        "x": 14,
+        "y": 6,
+        "w": 6,
+        "h": 22
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-36.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-38.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-4.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-40.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-42.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-43.png",
+      "bounds": {
+        "x": 14,
+        "y": 6,
+        "w": 6,
+        "h": 22
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-44.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-46.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-48.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-50.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-51.png",
+      "bounds": {
+        "x": 14,
+        "y": 6,
+        "w": 6,
+        "h": 22
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-52.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-54.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-55.png",
+      "bounds": {
+        "x": 14,
+        "y": 6,
+        "w": 6,
+        "h": 22
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-56.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-58.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-59.png",
+      "bounds": {
+        "x": 14,
+        "y": 6,
+        "w": 6,
+        "h": 22
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-6.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-60.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-62.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    },
+    {
+      "file": "frame-8.png",
+      "bounds": {
+        "x": 5,
+        "y": 14,
+        "w": 22,
+        "h": 6
+      },
+      "reason": "painted thickness 6px, expected exactly 7px"
+    }
+  ]
+}
