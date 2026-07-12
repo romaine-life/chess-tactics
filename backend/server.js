@@ -5731,14 +5731,19 @@ async function mediaBytesBySha(sha256, record = null, { publicOnly = false } = {
 }
 
 async function verifyLiveMediaBlobPresent(record) {
-  return liveMediaReadBudget.run(Number(record.byte_length), async (abortSignal) => {
-    const buffer = await readLiveMediaBlob(record, {
+  const sha256 = mediaSha(record?.sha256 ?? record?.blob_sha256);
+  if (!sha256 || !record?.blob_key) {
+    throw mediaMutationError('media_object_verification_failed', 409, { sha256: sha256 || null });
+  }
+  const blobRecord = record.sha256 === sha256 ? record : { ...record, sha256 };
+  return liveMediaReadBudget.run(Number(blobRecord.byte_length), async (abortSignal) => {
+    const buffer = await readLiveMediaBlob(blobRecord, {
       allowSeed: false,
       abortSignal,
     });
     const digest = crypto.createHash('sha256').update(buffer).digest('hex');
-    if (digest !== record.sha256 || buffer.length !== Number(record.byte_length)) {
-      throw mediaMutationError('media_object_verification_failed', 409, { sha256: record.sha256 });
+    if (digest !== sha256 || buffer.length !== Number(blobRecord.byte_length)) {
+      throw mediaMutationError('media_object_verification_failed', 409, { sha256 });
     }
   });
 }
