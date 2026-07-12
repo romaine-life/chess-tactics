@@ -288,17 +288,17 @@ jobs:
           PR_HEAD_SHA: ${{ steps.source.outputs.sha }}
           FINGERPRINT: ${{ steps.fingerprint.outputs.fingerprint }}
           IMAGE_DIGEST: ${{ steps.candidate.outputs.digest }}
+          TRUSTED_APPROVER_IDS: ${{ vars.EXACT_IMAGE_APPROVER_IDS }}
         run: |
           set +e
-          output="$(gh pr view "${PR_NUMBER}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --json comments \
-            --jq '.comments' \
+          output="$(gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
             | node scripts/exact-image-approval.mjs verify \
                 --comments - \
                 --head "${PR_HEAD_SHA}" \
                 --fingerprint "${FINGERPRINT}" \
-                --digest "${IMAGE_DIGEST}" 2>&1)"
+                --digest "${IMAGE_DIGEST}" \
+                --trusted-user-ids "${TRUSTED_APPROVER_IDS}" 2>&1)"
           status=$?
           set -e
           printf '%s\n' "${output}"

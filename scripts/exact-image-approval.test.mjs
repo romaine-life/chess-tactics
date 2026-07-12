@@ -32,6 +32,18 @@ test('only exact markers from trusted REST or GraphQL repository relationships c
   );
 });
 
+test('an immutable configured user id remains trusted when association is viewer-relative', () => {
+  const marker = approvalMarker(expected);
+  const comments = [
+    { author_association: 'CONTRIBUTOR', body: marker, user: { id: 18473267, login: 'nelsong6' } },
+    { author_association: 'CONTRIBUTOR', body: marker, user: { id: 42, login: 'other' } },
+  ];
+  assert.deepEqual(
+    trustedApprovals(comments, expected, ['18473267']).map((comment) => comment.user.login),
+    ['nelsong6'],
+  );
+});
+
 test('paginated gh api output is flattened', () => {
   const marker = approvalMarker(expected);
   const pages = [[], [{ author_association: 'COLLABORATOR', body: `\n${marker}\n` }]];
@@ -41,14 +53,14 @@ test('paginated gh api output is flattened', () => {
 test('approval diagnostics expose no comment bodies', () => {
   const marker = approvalMarker(expected);
   assert.deepEqual(approvalDiagnostics([
-    { authorAssociation: 'MEMBER', body: marker, author: { login: 'nelson' } },
+    { authorAssociation: 'MEMBER', body: marker, author: { databaseId: 18473267, login: 'nelson' } },
     { authorAssociation: 'CONTRIBUTOR', body: `${marker} stale`, author: { login: 'outsider' } },
-  ], expected), {
+  ], expected, ['18473267']), {
     commentCount: 2,
     markerCount: 2,
     markers: [
-      { login: 'nelson', association: 'MEMBER', exact: true },
-      { login: 'outsider', association: 'CONTRIBUTOR', exact: false },
+      { login: 'nelson', userId: '18473267', association: 'MEMBER', exact: true, explicitlyTrusted: true },
+      { login: 'outsider', userId: null, association: 'CONTRIBUTOR', exact: false, explicitlyTrusted: false },
     ],
   });
 });
@@ -78,9 +90,9 @@ test('release workflows preserve immutable candidate and explicit approval gates
   assert.doesNotMatch(production, /sha-\$\{|sha-<pr-head>/);
   assert.match(production, /permissions:[\s\S]*issues:\s*read/);
   assert.match(production, /permissions:[\s\S]*pull-requests:\s*read/);
-  assert.match(production, /gh pr view "\$\{PR_NUMBER\}"[\s\S]*--json comments/);
-  assert.doesNotMatch(production, /issues\/\$\{PR_NUMBER\}\/comments/);
+  assert.match(production, /gh api --paginate --slurp[\s\S]*issues\/\$\{PR_NUMBER\}\/comments/);
   assert.match(production, /exact-image-approval\.mjs verify/);
+  assert.match(production, /--trusted-user-ids "\$\{TRUSTED_APPROVER_IDS\}"/);
   assert.match(production, /--fingerprint "\$\{FINGERPRINT\}"/);
   assert.match(production, /DEPLOY_IMAGE_REF=\$\{image_ref\}/);
   assert.match(production, /Candidate identity .* is not registry-locked/);
