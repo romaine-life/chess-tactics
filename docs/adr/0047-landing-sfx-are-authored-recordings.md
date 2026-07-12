@@ -1,7 +1,10 @@
 ---
-status: "accepted; Git-source and runtime-asset storage clauses superseded by ADR-0085"
+status: "accepted; storage and Git/local-copy config clauses superseded by ADR-0085 and ADR-0089"
 date: 2026-06-29
 deciders: Nelson, Claude
+partially_superseded_by:
+  - "[ADR-0085](0085-runtime-assets-are-live-storage-backed.md)"
+  - "[ADR-0089](0089-sfx-runtime-profile-is-db-authoritative.md)"
 ---
 
 # ADR-0047: Landing SFX are authored recordings, not code-synthesized

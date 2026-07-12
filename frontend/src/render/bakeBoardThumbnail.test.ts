@@ -15,10 +15,26 @@ import { fencePostZIndex, objectBaseZIndex, structureBackZIndex } from './sceneD
 import type { EditorBoard } from '../ui/boardCode';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
-import { withoutBoardDrawLayers, type BoardDrawOp } from '@chess-tactics/board-render';
+import {
+  applyLiveMediaCatalog,
+  resetPropSeats,
+  resetLiveMediaCatalog,
+  withoutBoardDrawLayers,
+  type BoardDrawOp,
+} from '@chess-tactics/board-render';
+import { testGroundCoverCatalog, testStructureMediaSlots, testWallDecorMediaSlots } from '../test/liveMediaCatalog';
+import { applyTestPropSeats } from '../test/livePropSeats';
 
-beforeAll(() => applyLiveUnitCatalog(testLiveUnitCatalog()));
-afterAll(() => resetLiveUnitCatalog());
+beforeAll(() => {
+  applyLiveUnitCatalog(testLiveUnitCatalog());
+  applyLiveMediaCatalog(testGroundCoverCatalog([...testStructureMediaSlots(), ...testWallDecorMediaSlots()]));
+  applyTestPropSeats();
+});
+afterAll(() => {
+  resetPropSeats();
+  resetLiveUnitCatalog();
+  resetLiveMediaCatalog();
+});
 
 // Coverage (opaque fraction) of a rect under an opacity predicate — the property object-fit:cover
 // relies on: a crop that's ~fully opaque cannot show a transparent corner as sky.
@@ -40,6 +56,7 @@ const blank = (cols = 4, rows = 4): EditorBoard => ({
 // production unit, a doodad).
 const TILE = 'grass-surf-0';
 const UNIT = { unitId: 'rook', direction: 'south', faction: 'navy-blue' };
+const GRASS_COVER_SRC = `/api/media/${'a'.repeat(64)}`;
 
 describe('boardContentHash — stability + sensitivity', () => {
   it('is stable across object-key insertion order (canonicalised)', () => {
@@ -152,7 +169,7 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
     expect(sideOps.filter((op) => op.sx === 0 && op.sw === 48 && op.dw === 48)).toHaveLength(2);
     expect(sideOps.filter((op) => op.sx === 48 && op.sw === 48 && op.dw === 48)).toHaveLength(2);
     // Exact editor boards do not invent ambient cover when their authored cover map is empty.
-    expect(srcs.some((s) => s.includes('groundcover'))).toBe(false);
+    expect(srcs).not.toContain(GRASS_COVER_SRC);
   });
 
   it('returns no srcs for a blank (untiled) board', () => {
@@ -166,7 +183,7 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
       cells: { '0,0': TILE },
       cover: { '0,0': 'filled' },
     };
-    expect(uniqueDrawSrcs(board).some((src) => src.includes('groundcover'))).toBe(true);
+    expect(uniqueDrawSrcs(board)).toContain(GRASS_COVER_SRC);
   });
 
   it('deduplicates shared fence post artwork while retaining the rail frame', () => {
@@ -372,7 +389,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const posts = ops.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png');
     const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 1, y: 1 }));
     const nearUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 2, y: 1 }));
-    const coverOps = ops.filter((op) => op.src.includes('/assets/groundcover/'));
+    const coverOps = ops.filter((op) => op.src === GRASS_COVER_SRC);
     const doodadBack = ops.find((op) => op.src === '/assets/doodads/boulder/back.png');
     const doodadFront = ops.find((op) => op.src === '/assets/doodads/boulder/front.png');
     expect(fence).toBeDefined();
@@ -552,7 +569,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     };
     const ops = boardDrawOps(board);
     const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-8.png');
-    const art = ops.find((op) => op.src === '/assets/wall-decor/banner-tattered-west.png');
+    const art = ops.find((op) => op.src === testWallDecorMediaSlots()[1].media.immutableUrl);
     const structureBack = ops.find((op) => op.src === '/assets/props/fieldstone/back.png');
 
     expect(wall).toBeDefined();

@@ -39,7 +39,7 @@
           "guideInset": 0,
           "width": 1536,
           "height": 1024,
-          "styleReference": "public/assets/ui/chrome-candidates/exploded/outer-rails-v3/candidate-01.png",
+          "styleReference": "/assets/ui/chrome/outer/rail.png",
           "patterns": [
             {
               "idPrefix": "horizontal",
@@ -119,7 +119,7 @@
           "guideInset": 0,
           "width": 1536,
           "height": 1024,
-          "styleReference": "public/assets/ui/chrome-candidates/exploded/inner-rails-repeat-v4/candidate-02.png",
+          "styleReference": "/assets/ui/chrome/inner/rail.png",
           "patterns": [
             {
               "idPrefix": "horizontal",

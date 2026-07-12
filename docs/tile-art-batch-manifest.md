@@ -22,7 +22,9 @@ Required output:
 - Grass base tile.
 - Stone base tile.
 - Water base tile.
-- One contact sheet showing all bases at `1x`, `2x`, and in a small board patch.
+- One private review version showing all bases at `1x`, `2x`, and in a small
+  board patch. It supplements, but does not replace, exact-candidate review in
+  the real board renderer.
 
 Priorities:
 
@@ -87,7 +89,8 @@ Each accepted transition must include:
 
 ## Normalization Gates
 
-Before an asset can enter `canonical-true-iso` or equivalent production folders, verify:
+Before a candidate can become acceptance-eligible for the
+`tiles/canonical-true-iso/*` semantic namespace, verify:
 
 - Canvas is exactly `96x140px`.
 - Top diamond aligns to the canonical template.
@@ -96,6 +99,10 @@ Before an asset can enter `canonical-true-iso` or equivalent production folders,
 - Pixel rendering holds up at intended board scale with image smoothing disabled.
 - Palette and contrast fit beside the current Grass, Stone, and Water base tiles.
 - No accidental chess pieces, UI fragments, labels, shadows outside bounds, or crop artifacts.
+
+Those names identify backend slots, not production folders. Inputs and outputs
+stay in an outside-repository temporary workspace until the exact bytes are
+uploaded as live-media versions; no batch step copies media into Git.
 
 ## Acceptance Criteria
 

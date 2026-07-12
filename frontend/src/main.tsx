@@ -7,7 +7,6 @@ import './style.css';
 // and fill boxes as CSS variables without baking or promoting media.
 import './generated/nine-slice.css';
 import { createRoot } from 'react-dom/client';
-import { App } from './ui/App';
 import { armForColdHome, isMainMenuPath } from './ui/shell/coldReveal';
 // @ts-ignore — bgm.js is untyped legacy JS, imported for its side-effecting init.
 import { initBgm } from './bgm.js';
@@ -17,6 +16,7 @@ import { loadLiveSeats } from './net/propSeats';
 import { loadLiveWallArt } from './net/wallArt';
 import { loadLiveUnitCatalog } from './net/unitAssets';
 import { loadLiveMediaCatalog } from './net/liveMedia';
+import { loadLiveSfxProfile } from './net/sfxProfile';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
 
@@ -59,7 +59,7 @@ if (isMainMenuPath(window.location.pathname)) {
 armForColdHome();
 
 try { initBgm(); } catch { /* background music is decorative */ }
-// Arm the procedural terrain SFX on the first user gesture (mirrors initBgm). Only
+// Arm authored terrain SFX on the first user gesture (mirrors initBgm). Only
 // attaches listeners — no AudioContext until a gesture, so it's cheap + autoplay-safe.
 try { primeSfx(); } catch { /* sound effects are decorative */ }
 
@@ -69,15 +69,23 @@ if (root) {
   reactRoot.render(<main className="app-startup-status" role="status">Loading live assets...</main>);
 
   void Promise.all([loadLiveMediaCatalog(), loadLiveUnitCatalog()])
-    .then(() => {
+    .then(async () => {
+      // Prop/doodad definitions derive active raster dimensions from the media
+      // snapshot, so media must be installed before the complete seat document.
+      // App is intentionally imported only after both authorities are hydrated:
+      // modules that derive prop shelves at import time can never observe [] or
+      // a packaged fallback.
+      await loadLiveSeats();
+      // SFX are decorative: hydrate their DB-owned profile before importing the
+      // Studio/runtime consumers, but keep honest silence when the row is missing
+      // or temporarily unavailable. There is no committed profile fallback.
+      await loadLiveSfxProfile().catch(() => false);
       assertInstalledChromeSlots();
       initUnitSizeTuning();
+      const { App } = await import('./ui/App');
       reactRoot.render(<App />);
-      // Placement metadata remains independently live. Media and Unit Art are
-      // deliberately absent from this fail-soft group: the app does not render without them.
-      void loadLiveSeats()
-        .then((changed) => { if (changed) reactRoot.render(<App />); })
-        .catch(() => { /* prop seats retain their ADR-0061 baseline */ });
+      // Wall art is explicitly decorative. Media, Unit Art, and prop seats are
+      // absent from this fail-soft group: the app does not render without them.
       void loadLiveWallArt()
         .then((changed) => { if (changed) reactRoot.render(<App />); })
         .catch(() => { /* wall art is decorative */ });

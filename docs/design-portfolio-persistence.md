@@ -41,6 +41,8 @@ hot backend directory, then the static override directory, then the runtime
 directory, and finally `/tmp`. That makes draft values survive backend reloads
 in a running test slot without committing them to git.
 
-The committed source of truth remains the markdown acceptance profile. A draft
-decision becomes durable project policy only when the relevant profile document
-is updated and committed.
+This portfolio store is an editing ledger for design discussion; it cannot
+accept media, activate a runtime version, or become an accepted-pointer source
+of truth. Markdown may record durable visual criteria and rationale, but media
+review evidence and accepted pointers are Postgres-owned backend state under
+`docs/runtime-asset-contract.md`.

@@ -1,0 +1,87 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  applyServerRenderSnapshot,
+  resetLiveMediaCatalog,
+  resetLiveUnitCatalog,
+  resetPropSeats,
+  type LiveMediaCatalog,
+  type PropSeatMap,
+} from '@chess-tactics/board-render';
+import {
+  testGroundCoverCatalog,
+  testInstalledChromeMediaSlots,
+  testStructureMediaSlots,
+} from '../test/liveMediaCatalog';
+import { TEST_PROP_SEATS } from '../test/livePropSeats';
+import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
+
+function completeSnapshot() {
+  return {
+    mediaCatalog: testGroundCoverCatalog([
+      ...testStructureMediaSlots(),
+      ...testInstalledChromeMediaSlots(),
+    ]),
+    propSeats: structuredClone(TEST_PROP_SEATS),
+    unitCatalog: testLiveUnitCatalog(),
+  };
+}
+
+afterEach(() => {
+  resetLiveUnitCatalog();
+  resetPropSeats();
+  resetLiveMediaCatalog();
+});
+
+describe('availability-critical server renderer snapshot', () => {
+  it('accepts the same complete projections required by browser startup', () => {
+    expect(() => applyServerRenderSnapshot(completeSnapshot())).not.toThrow();
+  });
+
+  it('rejects incomplete ground cover', () => {
+    const snapshot = completeSnapshot();
+    snapshot.mediaCatalog.slots = snapshot.mediaCatalog.slots.filter((slot) => (
+      !slot.slot.startsWith('groundcover/water/')
+    ));
+    expect(() => applyServerRenderSnapshot(snapshot)).toThrow(/water/);
+  });
+
+  it('rejects a missing installed Chrome role', () => {
+    const snapshot = completeSnapshot();
+    snapshot.mediaCatalog.slots = snapshot.mediaCatalog.slots.filter((slot) => (
+      slot.slot !== 'ui/chrome/divider/joint.png'
+    ));
+    expect(() => applyServerRenderSnapshot(snapshot)).toThrow(/divider\/joint/);
+  });
+
+  it('rejects a prop document whose authored source has no live raster slots', () => {
+    const snapshot = completeSnapshot();
+    snapshot.propSeats = {
+      ...snapshot.propSeats,
+      'invalid-live-source': {
+        placement: 'prop',
+        source: { kind: 'asset', id: 'missing-source' },
+        anchorX: 1,
+        anchorY: 1,
+        scale: 1,
+      },
+    } satisfies PropSeatMap;
+    expect(() => applyServerRenderSnapshot(snapshot)).toThrow(/source "missing-source" is unavailable/);
+  });
+
+  it('rejects incomplete accepted Unit Art', () => {
+    const snapshot = completeSnapshot();
+    snapshot.unitCatalog.assets[0].complete = false;
+    expect(() => applyServerRenderSnapshot(snapshot)).toThrow(/accepted asset is incomplete/);
+  });
+
+  it('does not treat an empty catalog as ready', () => {
+    const snapshot = completeSnapshot();
+    snapshot.mediaCatalog = {
+      schemaVersion: 1,
+      revision: 0,
+      updatedAt: null,
+      slots: [],
+    } satisfies LiveMediaCatalog;
+    expect(() => applyServerRenderSnapshot(snapshot)).toThrow(/ground-cover|critical/);
+  });
+});

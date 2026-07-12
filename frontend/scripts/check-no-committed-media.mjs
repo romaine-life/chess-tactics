@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -38,28 +37,31 @@ export const SYNTHETIC_TEST_MEDIA_ROOTS = [
 ];
 export const SYNTHETIC_TEST_MEDIA_MAX_BYTES = 16 * 1024;
 
-// Stage 1 of the one-time ADR-0085 cutover must be deployable before the
-// migration commit deletes these bytes. This fingerprint is not a general
-// media allowlist: the caller must opt into this exact snapshot, and any path,
-// size, or content-hash change leaves every legacy-media violation active.
-export const FROZEN_LEGACY_CUTOVER = Object.freeze({
-  count: 3984,
-  bytes: 428728479,
-  sha256: 'c4ed900d39d9be8721ff2ea1fae6ff1f70bb89c7ca2ce8555d5e63b78c263106',
-});
-
-export const CUTOVER_IMPORTER_PATH = 'frontend/scripts/migrate-live-assets.mjs';
-const CUTOVER_IMPORT_INPUT_PATHS = new Set([
+// These one-time migration tools and frozen catalogs were deliberately deleted
+// with the completed ADR-0085 cutover. Treat their exact paths as permanently
+// retired so a future change cannot recreate the Git-backed authority.
+const RETIRED_GIT_MEDIA_PATHS = [
+  'frontend/scripts/migrate-live-assets.mjs',
+  'frontend/scripts/migrate-live-assets.test.mjs',
   'frontend/config/native-rail-families.json',
   'frontend/src/ui/chromeCandidateManifest.json',
   'frontend/src/ui/nativeRailCandidateManifest.json',
-]);
-const CUTOVER_TEMPORARY_PATHS = [
-  CUTOVER_IMPORTER_PATH,
-  'frontend/scripts/migrate-live-assets.test.mjs',
-  ...CUTOVER_IMPORT_INPUT_PATHS,
+  'frontend/src/core/propSeats.json',
+  'packages/board-render/src/core/propSeats.json',
+  'frontend/src/ui/design/wallDecorManifest.json',
+  'packages/board-render/src/ui/design/wallDecorManifest.json',
 ];
+const PUBLIC_ROOT_PREFIX = 'frontend/public/';
 const PUBLIC_ASSET_PREFIX = 'frontend/public/assets/';
+const ALLOWED_PUBLIC_EXECUTABLE_FILES = new Set([
+  'frontend/public/ambience/ambience-rain.wasm',
+  'frontend/public/ambience/client.js',
+  'frontend/public/ambience/manifest.json',
+  'frontend/public/ambience/sim.js',
+  'frontend/public/ambience/wasm_exec.js',
+  'frontend/public/ambience/wasm_runtime.js',
+]);
+const PUBLIC_LEGAL_TEXT = /^frontend\/public\/legal\/fonts\/(?:README\.md|[^/]+\/[^/]+\.(?:md|txt))$/i;
 
 const SCRIPT_EXTENSIONS = new Set(['.cjs', '.js', '.mjs', '.mts', '.ps1', '.py', '.sh', '.ts']);
 const SCRIPT_PATH = /^(?:backend\/scripts\/|docs\/art\/|frontend\/scripts\/|scripts\/|tools\/)|(?:^|\/)vite\.config\.(?:js|mjs|ts)$/;
@@ -98,6 +100,7 @@ const CANONICAL_CHROME_SOURCE_SLOTS = new Set([
   'ui/chrome/divider/joint.png',
 ]);
 const STATIC_POINTER_AUTHORITY = /["']status["']\s*:\s*["'](?:accepted_for_future_use|promoted|production-accepted)["']|accepted_and_frozen|owner_accepted|["']production_status["']\s*:|registeredForProduction["']?\s*[:=]\s*true|productionAccepted["']?\s*[:=]\s*true|["']accepted(?:Asset|Pointer|Version)Id?["']\s*:\s*["'][^"']+["']|accepted-surfaces\.json|(?:frontend\/public|\.\.\/public)\/asset-catalog\.json/i;
+const STATIC_POINTER_CONFIG_AUTHORITY = /\b(?:registeredForProduction|productionAccepted)\s*[:=]\s*true\b|\bproduction_status\s*[:=]\s*["']?(?:accepted|promoted|production)|\baccepted(?:Asset|Pointer|Version)Id?\s*[:=]\s*["']?[A-Za-z0-9]/i;
 const STATIC_CANDIDATE_LIFECYCLE = /(?:RIGHT_CANDIDATES|CANDIDATE_ROOT|ARCHIVE_ROOT|category\s*:\s*["'](?:candidate|archived)["'])[\s\S]{0,12000}(?:\/assets\/|\.png|\.webp|\.wav)/i;
 const GENERATED_CANDIDATE_CATALOG_NAME = /candidate[^/]*(?:manifest|catalog|database)|(?:manifest|catalog|database)[^/]*candidate/i;
 const GENERATED_CANDIDATE_CATALOG_MARKER = /["']generatedBy["']\s*:/i;
@@ -107,18 +110,67 @@ const CHROME_INSTALLED_SELECTOR_PATH = /(?:^|\/)(?=[^/]*chrome)(?=[^/]*(?:accept
 const CHROME_INSTALLED_CONTEXT = /\b(?:acceptedChrome|committedChrome|installedChrome|productionChrome|useInstalledChromeCss)\w*/i;
 const CHROME_SOURCE_SELECTOR_LITERAL = /["']?((?:atom|rail)SourceId|(?:outer|inner|divider)(?:Atom|Rail)Source(?:Id|Path|Slot|Url)?)["']?\s*[:=]\s*["'`]([^"'`]+)["'`]/gi;
 const GENERATED_CHROME_SOURCE_PATH = /(?:^|\/)assets\/ui\/chrome-candidates(?:\/|$)|(?:^|\/)ui\/chrome-candidates(?:\/|$)/i;
+const SCROLLBAR_AUTHORITY_PATH = /(?:^|\/)[^/]*scrollbar[^/]*\.(?:c?js|mjs|mts|ts|tsx)$/i;
+const STATIC_SCROLLBAR_ROSTER = /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::[^=\n]+)?=\s*\[[\s\S]{0,12000}\b(?:name|label|approach|material|file|src|url)\s*:/i;
+const STATIC_SCROLLBAR_MEDIA_ROW = /\{[^{}]{0,600}\b(?:file|src|url)\s*:\s*["'`](?:\/assets\/)?ui\/scrollbars\//i;
 const OLD_PUBLIC_ASSET_FILESYSTEM = /(?:frontend\/)?public\/assets(?:\/|\b)/i;
 const OLD_DEDICATED_SOURCE_FILESYSTEM = /frontend\/scripts\/groundcover\/src(?:\/|\b)/i;
 const BACKEND_SOURCE_PATH_IDENTIFIER = /(?:["']sourcePath["']|\bsourcePath)\s*:/;
-const GUARD_OR_CUTOVER_INSPECTORS = new Set([
+const MEDIA_GUARD_INSPECTORS = new Set([
   'frontend/scripts/check-empty-panel-frame-overlay.mjs',
   'frontend/scripts/check-no-committed-media.mjs',
   'frontend/scripts/check-no-committed-media.test.mjs',
   'frontend/scripts/live-media-admin-client.mjs',
   'frontend/scripts/live-media-admin-client.test.mjs',
-  'frontend/scripts/migrate-live-assets.mjs',
-  'frontend/scripts/migrate-live-assets.test.mjs',
 ]);
+const FINAL_CUTOVER_MARKER_EXEMPTIONS = new Set([
+  'frontend/scripts/check-no-committed-media.mjs',
+  'frontend/scripts/check-no-committed-media.test.mjs',
+]);
+const TEST_SOURCE_PATH = /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)|\.test\.[^.\/]+$|(?:^|\/)[^\/]*smoke-test\.js$/;
+const CUTOVER_SCAFFOLD_SOURCE_PATH = /^(?:backend\/|frontend\/(?:config|scripts|src)\/|k8s\/|\.github\/workflows\/)|^(?:Dockerfile|backend\/package\.json|frontend\/package\.json)$/;
+const STATIC_AUTHORITY_SOURCE_PATH = /^(?:backend\/|frontend\/(?:config|scripts|src)\/|packages\/|k8s\/|\.github\/|scripts\/|tools\/)/;
+const STATIC_AUTHORITY_CODE_EXTENSION = /\.(?:c?js|json|mjs|mts|ts|tsx)$/;
+const STATIC_AUTHORITY_CONFIG_EXTENSION = /\.(?:jsonl|toml|ya?ml)$/;
+const RUNTIME_MEDIA_POINTER_SOURCE_PATH = /^(?:backend\/|frontend\/(?:config|src)\/|packages\/)/;
+const HARDCODED_IMMUTABLE_MEDIA_URL = /\/api\/media\/[0-9a-f]{64}\b/i;
+const RETIRED_CUTOVER_SOURCE_MARKERS = [
+  {
+    pattern: /LIVE_MEDIA_(?:SERVING|IMPORT)_ENABLED|liveMedia(?:Serving|Import)Enabled/,
+    detail: 'temporary live-media serving/import switch remains after final cutover',
+  },
+  {
+    pattern: /(?:media-versions[^"'`\n]{0,160}\/bridge\b|legacy_media_import_closed|media_bridge_(?:requires|failed|migration)|legacy-bridge-activated[^"'`\n]{0,160}app\.(?:post|put|patch))/,
+    detail: 'retired legacy-bridge creation capability remains after final cutover',
+  },
+  {
+    // Reading imported bridges remains supported. Creating one does not: catch
+    // the durable mutation even if a future endpoint/helper is renamed and no
+    // longer contains the old `/bridge` route or cutover flag vocabulary.
+    pattern: /(?:\bUPDATE\s+media_versions[\s\S]{0,1200}?\bSET[\s\S]{0,600}?\bstatus\s*=\s*["']legacy-bridge["']|\bINSERT\s+INTO\s+media_versions[\s\S]{0,2000}?["']legacy-bridge["']|\bstatus\s*[:=]\s*["']legacy-bridge["']|\blegacy-bridge-activated\b)/i,
+    detail: 'retired legacy-bridge creation capability remains after final cutover',
+  },
+  {
+    pattern: /legacyThumbnailAssetBytes|path\.join\(frontendDir,\s*["']assets["']|legacyAssetRecord|if\s*\(!liveMediaServingEnabled\)\s*\{\s*next\(\)/,
+    detail: 'packaged frontend media reader remains after final cutover',
+  },
+  {
+    pattern: /--allow-frozen-cutover|--allow-cutover-importer/,
+    detail: 'CI still permits the retired Git-media cutover snapshot',
+  },
+  {
+    pattern: /propSeats\.json|applyPropSeatOverrides|THUMBNAIL_PROP_SEATS_TTL_MS|_thumbnailPropSeatsCache/,
+    detail: 'committed or last-good prop-seat fallback remains after DB-only cutover',
+  },
+  {
+    pattern: /wallDecorManifest(?:\.json|_default)?/,
+    detail: 'committed wall-decoration media manifest remains after live-catalog cutover',
+  },
+  {
+    pattern: /\b(?:SAMPLE_GAINS|TERRAIN_SAMPLE|ARRIVAL_BAKED|SFX_ASSETS)\b|Copy for Claude|(?:bake[^\n]{0,80}(?:SFX|sound)|(?:SFX|sound)[^\n]{0,80}bake)/i,
+    detail: 'hardcoded or copy-to-source SFX profile authority remains after DB profile cutover',
+  },
+];
 const CODE_OWNED_PRODUCTION_SELECTOR = /\bPRODUCTION_[A-Z0-9_]*(?:ASSET|METHOD)(?:_ID)?\b\s*(?::[^=\n]+)?=\s*["'`][^"'`]+["'`]/;
 const CODE_OWNED_PRODUCTION_FLAG = /\bproduction\s*:\s*true\b/;
 const CODE_OWNED_ACCEPTED_PROFILE = /\bstatus\s*:\s*["'](?:accepted|native-pass|promoted|production-accepted)["']\s*,|\b(?:label|statusLabel)\s*:\s*["']Accepted(?:\s|·|["'])/i;
@@ -464,7 +516,7 @@ function chromeConfigSelectorReason(source) {
 
 export function chromeInstalledSourceAuthorityReason(relativePath, source) {
   const normalized = normalizeRepoPath(relativePath);
-  if (GUARD_OR_CUTOVER_INSPECTORS.has(normalized)) return null;
+  if (MEDIA_GUARD_INSPECTORS.has(normalized)) return null;
   const installedContext = CHROME_INSTALLED_SELECTOR_PATH.test(normalized)
     || CHROME_INSTALLED_CONTEXT.test(source);
   if (!installedContext) return null;
@@ -477,49 +529,55 @@ export function chromeInstalledSourceAuthorityReason(relativePath, source) {
   return null;
 }
 
+export function scrollbarStaticAuthorityReason(relativePath, source) {
+  const normalized = normalizeRepoPath(relativePath);
+  if (MEDIA_GUARD_INSPECTORS.has(normalized) || TEST_SOURCE_PATH.test(normalized)) return null;
+  const pathContext = SCROLLBAR_AUTHORITY_PATH.test(normalized);
+  const preferredCopy = /\bscrollbars?\b[^\n]{0,180}\bpreferred\b|\bpreferred\b[^\n]{0,180}\bscrollbars?\b/i.test(source);
+  if ((pathContext && /\bpreferred\b/i.test(source)) || preferredCopy) {
+    return 'committed scrollbar preferred/default authority remains outside the backend catalog';
+  }
+  if (STATIC_SCROLLBAR_MEDIA_ROW.test(source) || (pathContext && STATIC_SCROLLBAR_ROSTER.test(source))) {
+    return 'committed scrollbar browse roster remains instead of deriving membership from the backend catalog';
+  }
+  return null;
+}
+
 export function isStaticPromotionAuthority(relativePath, source) {
   const normalized = normalizeRepoPath(relativePath);
-  if (GUARD_OR_CUTOVER_INSPECTORS.has(normalized)) return false;
+  if (MEDIA_GUARD_INSPECTORS.has(normalized)) return false;
   if (STATIC_POINTER_FILES.has(normalized)) return true;
-  if (!/\.(?:c?js|json|mjs|mts|ts|tsx)$/.test(normalized)) return false;
+  if (
+    !STATIC_AUTHORITY_CODE_EXTENSION.test(normalized)
+    && !(STATIC_AUTHORITY_SOURCE_PATH.test(normalized) && STATIC_AUTHORITY_CONFIG_EXTENSION.test(normalized))
+  ) return false;
   if (/(?:^|\/)(?:test|tests|__tests__)(?:\/|$)|\.test\.[^.]+$/.test(normalized)) return false;
   if (isStaticCandidateDatabase(normalized, source)) return true;
   if (chromeInstalledSourceAuthorityReason(normalized, source)) return true;
+  if (scrollbarStaticAuthorityReason(normalized, source)) return true;
   if (/"authority"\s*:\s*"historical-provenance-only"/.test(source)) return false;
-  return STATIC_POINTER_AUTHORITY.test(source) || STATIC_CANDIDATE_LIFECYCLE.test(source)
+  return STATIC_POINTER_AUTHORITY.test(source)
+    || (STATIC_AUTHORITY_CONFIG_EXTENSION.test(normalized) && STATIC_POINTER_CONFIG_AUTHORITY.test(source))
+    || STATIC_CANDIDATE_LIFECYCLE.test(source)
     || codeOwnedAssetRegistryAuthority(normalized, source);
 }
 
 function finalCutoverScaffoldViolations(repoRoot, trackedFiles) {
-  const tracked = new Set(trackedFiles.map(normalizeRepoPath));
-  const checks = [
-    {
-      path: 'backend/server.js',
-      pattern: /LIVE_MEDIA_(?:SERVING|IMPORT)_ENABLED|liveMedia(?:Serving|Import)Enabled|\/bridge["']/,
-      detail: 'temporary serving/import flag or bridge endpoint remains after final cutover',
-    },
-    {
-      path: 'backend/server.js',
-      pattern: /legacyThumbnailAssetBytes|path\.join\(frontendDir,\s*["']assets["']|legacyAssetRecord|if\s*\(!liveMediaServingEnabled\)\s*\{\s*next\(\)/,
-      detail: 'packaged frontend media reader remains after final cutover',
-    },
-    {
-      path: 'k8s/templates/deployment.yaml',
-      pattern: /LIVE_MEDIA_(?:SERVING|IMPORT)_ENABLED/,
-      detail: 'deployment still carries temporary media cutover flags',
-    },
-    {
-      path: 'frontend/package.json',
-      pattern: /--allow-frozen-cutover|--allow-cutover-importer/,
-      detail: 'CI still permits the frozen Git-media cutover snapshot',
-    },
-  ];
   const violations = [];
-  for (const check of checks) {
-    if (!tracked.has(check.path)) continue;
-    const target = path.join(repoRoot, check.path);
-    if (!fs.existsSync(target) || !check.pattern.test(fs.readFileSync(target, 'utf8'))) continue;
-    violations.push({ kind: 'temporary-cutover-scaffold', path: check.path, detail: check.detail });
+  for (const relativePath of trackedFiles.map(normalizeRepoPath)) {
+    const scriptLike = SCRIPT_EXTENSIONS.has(path.posix.extname(relativePath).toLowerCase());
+    if (
+      !CUTOVER_SCAFFOLD_SOURCE_PATH.test(relativePath) && !scriptLike
+    ) continue;
+    if (TEST_SOURCE_PATH.test(relativePath) || FINAL_CUTOVER_MARKER_EXEMPTIONS.has(relativePath)) continue;
+    const target = path.join(repoRoot, relativePath);
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) continue;
+    const bytes = fs.readFileSync(target);
+    const source = trackedTextSource(bytes);
+    if (source === null) continue;
+    const issue = RETIRED_CUTOVER_SOURCE_MARKERS.find(({ pattern }) => pattern.test(source));
+    if (!issue) continue;
+    violations.push({ kind: 'temporary-cutover-scaffold', path: relativePath, detail: issue.detail });
   }
   return violations;
 }
@@ -552,7 +610,7 @@ function builtMediaViolations(repoRoot) {
 
 export function committedMediaWriterReason(relativePath, source) {
   const normalized = normalizeRepoPath(relativePath);
-  if (GUARD_OR_CUTOVER_INSPECTORS.has(normalized)) return null;
+  if (MEDIA_GUARD_INSPECTORS.has(normalized)) return null;
   if (!SCRIPT_EXTENSIONS.has(path.posix.extname(normalized).toLowerCase()) || !SCRIPT_PATH.test(normalized)) return null;
   if (!source.split(/\r?\n/).some(lineMentionsCommittedMediaDestination)) return null;
 
@@ -589,8 +647,8 @@ export function committedMediaWriterReason(relativePath, source) {
 
 export function committedMediaFilesystemAssumptionReason(relativePath, source) {
   const normalized = normalizeRepoPath(relativePath);
-  if (GUARD_OR_CUTOVER_INSPECTORS.has(normalized)) return null;
-  if (!SCRIPT_EXTENSIONS.has(path.posix.extname(normalized).toLowerCase()) || !SCRIPT_PATH.test(normalized)) return null;
+  if (MEDIA_GUARD_INSPECTORS.has(normalized)) return null;
+  if (!SCRIPT_EXTENSIONS.has(path.posix.extname(normalized).toLowerCase())) return null;
   const lines = source.split(/\r?\n/);
   const sourceRootVariables = new Set();
   for (const line of lines) {
@@ -611,22 +669,6 @@ export function committedMediaFilesystemAssumptionReason(relativePath, source) {
   return null;
 }
 
-export function frozenCutoverSnapshot(entries) {
-  const normalized = entries.map((entry) => ({
-    path: normalizeRepoPath(entry.path),
-    byteLength: Number(entry.byteLength),
-    sha256: String(entry.sha256).toLowerCase(),
-  })).sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
-  const serialized = normalized
-    .map((entry) => `${entry.path}\t${entry.byteLength}\t${entry.sha256}`)
-    .join('\n');
-  return {
-    count: normalized.length,
-    bytes: normalized.reduce((total, entry) => total + entry.byteLength, 0),
-    sha256: crypto.createHash('sha256').update(serialized, 'utf8').digest('hex'),
-  };
-}
-
 export function listTrackedFiles(repoRoot = defaultRepoRoot) {
   const output = execFileSync('git', ['ls-files', '-z'], {
     cwd: repoRoot,
@@ -636,97 +678,16 @@ export function listTrackedFiles(repoRoot = defaultRepoRoot) {
   return output.split('\0').filter(Boolean).map(normalizeRepoPath);
 }
 
-function gitNulPaths(repoRoot, args) {
-  const output = execFileSync('git', args, {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  return output.split('\0').filter(Boolean).map(normalizeRepoPath);
-}
-
-function headBlobIndex(repoRoot, head) {
-  const output = execFileSync('git', ['ls-tree', '-r', '-l', '-z', head], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const sizes = new Map();
-  const objectIds = new Map();
-  for (const record of output.split('\0')) {
-    if (!record) continue;
-    const separator = record.indexOf('\t');
-    if (separator < 0) continue;
-    const metadata = record.slice(0, separator).trim().split(/\s+/);
-    if (metadata[1] !== 'blob' || !/^[0-9a-f]{40,64}$/.test(metadata[2] || '')) continue;
-    const size = Number(metadata.at(-1));
-    if (!Number.isSafeInteger(size) || size < 0) continue;
-    const relativePath = normalizeRepoPath(record.slice(separator + 1));
-    sizes.set(relativePath, size);
-    objectIds.set(relativePath, metadata[2]);
-  }
-  return { sizes, objectIds };
-}
-
-// Git's clean/smudge filters can make a clean checkout byte-different from the
-// committed blob (notably LF blobs checked out as CRLF on Windows). The frozen
-// cutover fingerprints committed bytes, while ordinary guard diagnostics must
-// continue to inspect the actual working tree. Avoid `git show` for the common
-// case: only a clean path whose size proves it differs from HEAD needs a blob
-// read, and cache that exceptional read for the life of this guard run.
-export function createCanonicalGitByteReader(repoRoot = defaultRepoRoot) {
-  const head = execFileSync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-  }).trim();
-  const changedPaths = new Set(gitNulPaths(
-    repoRoot,
-    ['diff', '--no-ext-diff', '--name-only', '-z', head, '--'],
-  ));
-  const { sizes: canonicalBlobSizes, objectIds: canonicalBlobObjectIds } = headBlobIndex(repoRoot, head);
-  const canonicalBlobCache = new Map();
-
-  const read = (relativePath, suppliedWorkingBytes) => {
-    const normalized = normalizeRepoPath(relativePath);
-    const workingBytes = suppliedWorkingBytes ?? fs.readFileSync(path.join(repoRoot, normalized));
-    if (!Buffer.isBuffer(workingBytes)) {
-      throw new TypeError(`Working bytes for ${normalized} must be a Buffer`);
-    }
-    if (changedPaths.has(normalized)) return workingBytes;
-    const canonicalSize = canonicalBlobSizes.get(normalized);
-    if (canonicalSize === undefined || canonicalSize === workingBytes.length) return workingBytes;
-    if (canonicalBlobCache.has(normalized)) return canonicalBlobCache.get(normalized);
-    const objectId = canonicalBlobObjectIds.get(normalized);
-    if (!objectId) throw new Error(`Canonical Git blob identity is missing for ${normalized}`);
-    // Address the object directly. `git show HEAD:path` makes Git probe the
-    // revision argument as a filesystem name first and can hit Windows' legacy
-    // path-length limit when the checkout itself is deeply nested.
-    const canonicalBytes = execFileSync('git', ['cat-file', 'blob', objectId], {
-      cwd: repoRoot,
-      encoding: null,
-      maxBuffer: Math.max(64 * 1024 * 1024, canonicalSize + 1024),
-    });
-    if (canonicalBytes.length !== canonicalSize) {
-      throw new Error(`Canonical Git blob size changed for ${normalized}: expected ${canonicalSize}, read ${canonicalBytes.length}`);
-    }
-    canonicalBlobCache.set(normalized, canonicalBytes);
-    return canonicalBytes;
-  };
-
-  return { head, changedPaths, canonicalBlobSizes, canonicalBlobObjectIds, read };
-}
-
 export function collectNoCommittedMediaViolations({
   repoRoot = defaultRepoRoot,
-  trackedFiles = listTrackedFiles(repoRoot),
-  allowCutoverImporter = false,
-  allowFrozenCutover = '',
+  trackedFiles = null,
+  builtOutputOnly = false,
 } = {}) {
-  let violations = [];
-  const frozenEntries = [];
-  const canonicalGitBytes = allowFrozenCutover ? createCanonicalGitByteReader(repoRoot) : null;
+  if (builtOutputOnly) return builtMediaViolations(repoRoot);
+  const resolvedTrackedFiles = trackedFiles ?? listTrackedFiles(repoRoot);
+  const violations = [];
 
-  for (const relativePath of trackedFiles) {
+  for (const relativePath of resolvedTrackedFiles) {
     const absolutePath = path.join(repoRoot, relativePath);
     // A local deletion is the desired migration patch even before it is staged.
     // CI's index will no longer contain the file after the deletion is committed.
@@ -734,14 +695,6 @@ export function collectNoCommittedMediaViolations({
 
     const bytes = fs.readFileSync(absolutePath);
     const byteLength = bytes.length;
-    const addFrozenEntry = () => {
-      const canonicalBytes = canonicalGitBytes.read(relativePath, bytes);
-      frozenEntries.push({
-        path: relativePath,
-        byteLength: canonicalBytes.length,
-        sha256: crypto.createHash('sha256').update(canonicalBytes).digest('hex'),
-      });
-    };
     // Extensions are only a convenience, never the security boundary. Inspect
     // every tracked payload so renaming a PNG/SVG/ZIP-backed source to `.dat`
     // or removing its extension cannot reopen the Git-backed asset path.
@@ -749,7 +702,6 @@ export function collectNoCommittedMediaViolations({
     let source = null;
     if (media) {
       if (!isAllowedSyntheticTestMedia(relativePath, byteLength)) {
-        if (allowFrozenCutover) addFrozenEntry();
         violations.push({
           kind: 'tracked-media',
           path: relativePath,
@@ -759,16 +711,23 @@ export function collectNoCommittedMediaViolations({
       }
     }
     if (relativePath.startsWith(PUBLIC_ASSET_PREFIX) && !media) {
-      if (allowFrozenCutover) addFrozenEntry();
       violations.push({
         kind: 'tracked-public-asset-file',
         path: relativePath,
         detail: `${byteLength} committed bytes under the retired public asset root`,
         byteLength,
       });
-    }
-    if (allowFrozenCutover && CUTOVER_IMPORT_INPUT_PATHS.has(relativePath)) {
-      addFrozenEntry();
+    } else if (
+      relativePath.startsWith(PUBLIC_ROOT_PREFIX) && !media
+      && !ALLOWED_PUBLIC_EXECUTABLE_FILES.has(relativePath)
+      && !PUBLIC_LEGAL_TEXT.test(relativePath)
+    ) {
+      violations.push({
+        kind: 'tracked-public-file',
+        path: relativePath,
+        detail: `${byteLength} committed bytes outside the explicit deploy-owned code/legal allowlist`,
+        byteLength,
+      });
     }
 
     if (!media) {
@@ -785,16 +744,18 @@ export function collectNoCommittedMediaViolations({
       }
     }
 
-    const permittedFrozenImportInput = allowCutoverImporter && CUTOVER_IMPORT_INPUT_PATHS.has(relativePath);
-    if (!permittedFrozenImportInput && isStaticPromotionAuthority(relativePath, '')) {
+    if (isStaticPromotionAuthority(relativePath, '')) {
       violations.push({
         kind: 'static-promotion-authority',
         path: relativePath,
         detail: 'committed catalog/manifest cannot own production promotion state',
       });
-    } else if (/\.(?:c?js|json|mjs|mts|ts|tsx)$/.test(relativePath)) {
+    } else if (
+      STATIC_AUTHORITY_CODE_EXTENSION.test(relativePath)
+      || (STATIC_AUTHORITY_SOURCE_PATH.test(relativePath) && STATIC_AUTHORITY_CONFIG_EXTENSION.test(relativePath))
+    ) {
       const staticSource = source ?? fs.readFileSync(absolutePath, 'utf8');
-      if (!permittedFrozenImportInput && isStaticPromotionAuthority(relativePath, staticSource)) {
+      if (isStaticPromotionAuthority(relativePath, staticSource)) {
         violations.push({
           kind: 'static-promotion-authority',
           path: relativePath,
@@ -803,62 +764,54 @@ export function collectNoCommittedMediaViolations({
       }
     }
 
+    if (
+      source !== null
+      && RUNTIME_MEDIA_POINTER_SOURCE_PATH.test(relativePath)
+      && !TEST_SOURCE_PATH.test(relativePath)
+      && HARDCODED_IMMUTABLE_MEDIA_URL.test(source)
+    ) {
+      violations.push({
+        kind: 'hardcoded-immutable-media-pointer',
+        path: relativePath,
+        detail: 'runtime source pins an immutable media hash instead of resolving a semantic live slot',
+      });
+    }
+
     const extension = path.posix.extname(relativePath).toLowerCase();
-    if (SCRIPT_EXTENSIONS.has(extension) && SCRIPT_PATH.test(relativePath)) {
+    if (SCRIPT_EXTENSIONS.has(extension)) {
       const scriptSource = source ?? fs.readFileSync(absolutePath, 'utf8');
-      const reason = committedMediaWriterReason(relativePath, scriptSource);
-      if (reason) violations.push({ kind: 'committed-media-writer', path: relativePath, detail: reason });
       const assumption = committedMediaFilesystemAssumptionReason(relativePath, scriptSource);
       if (assumption) {
         violations.push({ kind: 'committed-media-filesystem-assumption', path: relativePath, detail: assumption });
       }
-      if (
-        EXTERNAL_SOURCE_FETCHER_PATH.test(relativePath) && /\bfetch\s*\(/.test(scriptSource)
-        && !/\b(?:archiveSourceBytes|uploadCandidateBytes)\b/.test(scriptSource)
-      ) {
-        violations.push({
-          kind: 'external-source-fetcher-bypass',
-          path: relativePath,
-          detail: 'external source fetcher does not archive the exact bytes through the backend media API',
-        });
+      if (SCRIPT_PATH.test(relativePath)) {
+        const reason = committedMediaWriterReason(relativePath, scriptSource);
+        if (reason) violations.push({ kind: 'committed-media-writer', path: relativePath, detail: reason });
+        if (
+          EXTERNAL_SOURCE_FETCHER_PATH.test(relativePath) && /\bfetch\s*\(/.test(scriptSource)
+          && !/\b(?:archiveSourceBytes|uploadCandidateBytes)\b/.test(scriptSource)
+        ) {
+          violations.push({
+            kind: 'external-source-fetcher-bypass',
+            path: relativePath,
+            detail: 'external source fetcher does not archive the exact bytes through the backend media API',
+          });
+        }
       }
     }
   }
 
-  if (!allowCutoverImporter) {
-    for (const temporaryPath of CUTOVER_TEMPORARY_PATHS) {
-      if (!fs.existsSync(path.join(repoRoot, temporaryPath))) continue;
-      violations.push({
-        kind: 'temporary-cutover-tool',
-        path: temporaryPath,
-        detail: 'run/test the one-time migration, then delete this tool or frozen input before cutover',
-      });
-    }
+  for (const retiredPath of RETIRED_GIT_MEDIA_PATHS) {
+    if (!fs.existsSync(path.join(repoRoot, retiredPath))) continue;
+    violations.push({
+      kind: 'retired-git-media-path',
+      path: retiredPath,
+      detail: 'one-time Git-media migration authority must not be recreated',
+    });
   }
 
-  // Strict mode is the deletion-complete invariant. The two explicit cutover
-  // allowances suppress this only for the exact frozen stage-one import release.
-  if (!allowFrozenCutover && !allowCutoverImporter) {
-    violations.push(...finalCutoverScaffoldViolations(repoRoot, trackedFiles));
-    violations.push(...builtMediaViolations(repoRoot));
-  }
-
-  if (allowFrozenCutover) {
-    const actual = frozenCutoverSnapshot(frozenEntries);
-    const expected = FROZEN_LEGACY_CUTOVER;
-    if (allowFrozenCutover === expected.sha256
-      && actual.count === expected.count
-      && actual.bytes === expected.bytes
-      && actual.sha256 === expected.sha256) {
-      violations = violations.filter((violation) => !['tracked-media', 'tracked-public-asset-file'].includes(violation.kind));
-    } else {
-      violations.push({
-        kind: 'frozen-cutover-mismatch',
-        path: '<repository>',
-        detail: `exact frozen legacy cutover mismatch: ${JSON.stringify({ expected, actual, suppliedDigest: allowFrozenCutover })}`,
-      });
-    }
-  }
+  violations.push(...finalCutoverScaffoldViolations(repoRoot, resolvedTrackedFiles));
+  violations.push(...builtMediaViolations(repoRoot));
 
   return violations.sort((left, right) => left.kind.localeCompare(right.kind) || left.path.localeCompare(right.path));
 }
@@ -890,17 +843,11 @@ export function summarizeTrackedMedia(violations) {
 }
 
 function parseCli(argv) {
-  const options = { repoRoot: defaultRepoRoot, allowCutoverImporter: false, allowFrozenCutover: '', json: false };
+  const options = { repoRoot: defaultRepoRoot, builtOutputOnly: false, json: false };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
-    if (value === '--allow-cutover-importer') options.allowCutoverImporter = true;
-    else if (value === '--allow-frozen-cutover') {
-      options.allowFrozenCutover = argv[++index] ?? '';
-      if (!/^[a-f0-9]{64}$/.test(options.allowFrozenCutover)) {
-        throw new Error('--allow-frozen-cutover requires the exact 64-character frozen snapshot digest');
-      }
-    }
-    else if (value === '--json') options.json = true;
+    if (value === '--json') options.json = true;
+    else if (value === '--built-output-only') options.builtOutputOnly = true;
     else if (value === '--repo-root') options.repoRoot = path.resolve(argv[++index] ?? '');
     else throw new Error(`Unknown option: ${value}`);
   }
@@ -925,8 +872,8 @@ function runCli() {
       for (const entry of entries) console.error(`  ${entry.path} — ${entry.detail}`);
     }
   } else {
-    console.log(options.allowFrozenCutover
-      ? `No-committed-media guard OK under exact temporary frozen cutover ${options.allowFrozenCutover}.`
+    console.log(options.builtOutputOnly
+      ? 'No-committed-media build guard OK: frontend/dist contains no packaged media.'
       : 'No-committed-media guard OK: Git contains no production/review/source media or committed-media producers.');
   }
   if (violations.length) process.exitCode = 1;

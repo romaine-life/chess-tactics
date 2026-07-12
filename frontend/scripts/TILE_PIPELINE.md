@@ -11,7 +11,7 @@ This directory no longer contains a production bake that writes tile PNGs into
   prompts, and text provenance.
 - Postgres owns semantic terrain slots, candidate metadata, review evidence,
   active/accepted pointers, and catalog revisions.
-- Private object storage owns source, candidate, review, and accepted media
+- Private Blob Storage owns source, candidate, review, and accepted media
   bytes.
 - `/assets/<slot>` is a backend route. It is never a path under `public`.
 
@@ -21,7 +21,8 @@ the stable slot id; they never retain a local filename or content hash.
 
 ## Authoring workflow
 
-1. Generate or fetch source pixels into an operating-system temporary directory.
+1. Generate or fetch source pixels into an operating-system temporary directory
+   outside the repository.
 2. Apply the repository's deterministic projection/mask transforms there. The
    low-level path-parameterized transforms in this directory are not publishers.
 3. Create a candidate with the shared live-media admin client, then upload each
@@ -41,4 +42,5 @@ supplementary; it is not review evidence or promotion.
 The previous `build-*`, `forge-*`, and Git-hash guard scripts were deleted at
 the ADR-0085 cutover. They depended on committed input pools, emitted directly
 into `frontend/public/assets`, and treated manifests or filenames as production
-registration. Do not restore them as seed, fallback, or regeneration paths.
+registration. No Git-input/Git-output publisher mode remains. Do not restore
+one as a seed, fallback, or regeneration path.

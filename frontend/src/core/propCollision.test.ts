@@ -1,9 +1,21 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
+import { applyLiveMediaCatalog, resetLiveMediaCatalog } from '@chess-tactics/board-render';
 import type { BoardSize, GameState, Piece, PieceType, Side } from './types';
 import { applyMove, isEnemy, legalMoves, livingPieces } from './rules';
-import { propCells, propDef } from './props';
+import { propCells, propDef, resetPropSeats } from './props';
+import { applyTestPropSeats } from '../test/livePropSeats';
+import { testGroundCoverCatalog, testStructureMediaSlots } from '../test/liveMediaCatalog';
 
 const SIZE: BoardSize = { cols: 8, rows: 8 };
+
+beforeAll(() => {
+  applyLiveMediaCatalog(testGroundCoverCatalog(testStructureMediaSlots()));
+  applyTestPropSeats();
+});
+afterAll(() => {
+  resetPropSeats();
+  resetLiveMediaCatalog();
+});
 
 function P(side: Side, type: PieceType, x: number, y: number, extra: Partial<Piece> = {}): Piece {
   return { id: `${side}-${type}-${x}-${y}`, side, type, x, y, alive: true, startY: side === 'player' ? 7 : 0, ...extra };

@@ -9,7 +9,9 @@ const { Pool } = require('pg');
 // the baked backend dir instead of this process' __dirname.
 const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
 const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
+const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
 const {
+  liveCatalogReadinessIssue,
   nativeMediaEvidenceIssue,
   preservesNativeEvidenceForUpload,
 } = require(path.join(bakedBackendDir, 'liveMediaPolicy'));
@@ -19,6 +21,7 @@ try {
 } catch (error) {
   console.error('board-render package unavailable; level thumbnails will return 503:', error && error.message);
 }
+const withServerRenderCriticalSection = createRenderCriticalSection();
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -101,26 +104,7 @@ const liveMediaContainerUrl = (process.env.LIVE_MEDIA_CONTAINER_URL || '').repla
 const liveMediaStorageDir = String(process.env.LIVE_MEDIA_STORAGE_DIR || '').trim();
 const liveMediaSeedCatalogUrl = String(process.env.LIVE_MEDIA_SEED_CATALOG_URL || '').trim();
 const liveMediaSeedBaseUrl = String(process.env.LIVE_MEDIA_SEED_MEDIA_BASE_URL || '').trim().replace(/\/+$/, '');
-function liveMediaServingFlag(raw) {
-  const value = String(raw ?? '').trim().toLowerCase();
-  if (!value || value === 'false') return false;
-  if (value === 'true') return true;
-  throw new Error('LIVE_MEDIA_SERVING_ENABLED must be true or false');
-}
-function liveMediaImportFlag(raw) {
-  const value = String(raw ?? '').trim().toLowerCase();
-  if (!value || value === 'false') return false;
-  if (value === 'true') return true;
-  throw new Error('LIVE_MEDIA_IMPORT_ENABLED must be true or false');
-}
-// One-time cutover scaffold: false leaves the legacy static namespace in place
-// while migration 18 + admin import run; true switches stable /assets resolution
-// and thumbnails to live media. The final deletion-complete cutover removes this
-// flag and its legacy branch rather than retaining a permanent fallback switch.
-const liveMediaServingEnabled = liveMediaServingFlag(process.env.LIVE_MEDIA_SERVING_ENABLED);
-// One-time migration capability. Production enables this only for the staged
-// Git cutover; the deletion-complete release removes the endpoint and flag.
-const liveMediaImportEnabled = liveMediaImportFlag(process.env.LIVE_MEDIA_IMPORT_ENABLED);
+const propSeatsSeedUrl = String(process.env.PROP_SEATS_SEED_URL || '').trim();
 // Raw uploads are deliberately capped well below the pod's 256 MiB memory
 // limit. The current migration inventory peaks below 12 MiB; larger future
 // objects need a streaming upload path instead of raising this buffered limit.
@@ -149,6 +133,9 @@ function validateLiveMediaEnvironment() {
   }
   if ((liveMediaSeedCatalogUrl || liveMediaSeedBaseUrl) && (!liveMediaStorageDir || liveMediaContainerUrl)) {
     throw new Error('live media seed URLs require isolated LIVE_MEDIA_STORAGE_DIR storage');
+  }
+  if (propSeatsSeedUrl && (!liveMediaStorageDir || liveMediaContainerUrl || process.env.LIVE_MEDIA_ISOLATED_DATABASE !== 'test-slot')) {
+    throw new Error('PROP_SEATS_SEED_URL is allowed only for an isolated test-slot data plane');
   }
   if (liveMediaStorageDir && !path.isAbsolute(liveMediaStorageDir)) {
     throw new Error('LIVE_MEDIA_STORAGE_DIR must be an absolute path');
@@ -184,6 +171,7 @@ function validateLiveMediaEnvironment() {
   for (const [name, value] of [
     ['LIVE_MEDIA_SEED_CATALOG_URL', liveMediaSeedCatalogUrl],
     ['LIVE_MEDIA_SEED_MEDIA_BASE_URL', liveMediaSeedBaseUrl],
+    ['PROP_SEATS_SEED_URL', propSeatsSeedUrl],
   ]) {
     if (!value) continue;
     let url;
@@ -435,10 +423,9 @@ const MIGRATIONS = [
     version: 9,
     name: 'prop seats global tier',
     // The global PROP-SEAT tuning tier (ADR-0061): one upserted row per id (PK id
-    // alone ⇒ global, cloning official_campaigns), holding a map of propId → seat
-    // {anchorX,anchorY,scale,w?,h?,base?}. Public GET / admin-gated PUT. The committed
-    // propSeats.json is the always-render BASELINE the client overlays this row over,
-    // so props never depend on this row (an empty/missing row = "no overrides").
+    // alone ⇒ global, cloning official_campaigns), holding the complete map of
+    // propId → seat {anchorX,anchorY,scale,w?,h?,base?}. Public GET / admin-gated
+    // PUT. ADR-0085 removed the committed baseline; `default` is required live content.
     sql: `
       CREATE TABLE IF NOT EXISTS prop_seats (
         id                    text        PRIMARY KEY,
@@ -906,6 +893,24 @@ const MIGRATIONS = [
         ON media_asset_events (slot, created_at DESC, id DESC);
     `,
   },
+  {
+    version: 19,
+    name: 'global SFX profile',
+    // One complete, owner-editable SFX document. The row is intentionally not
+    // seeded: absence means decorative silence, while sound-set identity, mix
+    // gains, terrain assignments, and arrival behavior remain DB-authoritative.
+    sql: `
+      CREATE TABLE IF NOT EXISTS sfx_profiles (
+        id                    text        PRIMARY KEY CHECK (id = 'default'),
+        data                  jsonb       NOT NULL,
+        client_schema_version integer     NOT NULL CHECK (client_schema_version = 1),
+        revision              bigint      NOT NULL DEFAULT 0 CHECK (revision >= 0),
+        created_at            timestamptz NOT NULL DEFAULT now(),
+        updated_at            timestamptz NOT NULL DEFAULT now(),
+        updated_by            text
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -1027,6 +1032,7 @@ async function prepareDbSchema() {
   }
   if (unitAssetSeedCatalogUrl) await seedUnitCatalogFromLiveSource();
   if (liveMediaSeedCatalogUrl) await seedLiveMediaCatalogFromLiveSource();
+  if (propSeatsSeedUrl) await seedPropSeatsFromLiveSource();
   if (schemaMigrationMode !== 'off') {
     const activeMedia = await pool.query("SELECT count(*) AS count FROM media_slots WHERE lifecycle_state = 'active'");
     if (Number(activeMedia.rows[0]?.count) > 0 && !liveMediaStorageConfigured()) {
@@ -4947,12 +4953,14 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
 });
 
 // --- Prop-seat tuning (global) tier (ADR-0061) -----------------------------
-// Live-tunable prop geometry: a map of propId → seat {anchorX,anchorY,scale,w?,h?,base?}.
-// Public GET / requireAdmin PUT, cloning official_campaigns. The committed propSeats.json is
-// the always-render BASELINE the client overlays this row over — an empty/missing row just
-// means "no overrides" (props still render), so props/`play` never depend on this row.
+// Live-tunable prop geometry: one complete map of propId → seat
+// {anchorX,anchorY,scale,w?,h?,base?}. Public GET / requireAdmin PUT, cloning
+// official_campaigns. ADR-0085 supersedes ADR-0061's committed baseline: a
+// missing or invalid `default` row is unavailable content, never an empty overlay.
 const PROP_SEATS_STORE_SCHEMA_VERSION = 1;
+const PROP_SEATS_LOCK_KEY = 4300193003;
 const PROP_SEATS_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
+const REQUIRED_PROP_SEAT_IDS = Object.freeze(['oak', 'cottage', 'cabin', 'lodge', 'rock', 'fieldstone']);
 function propSeatsRowId(raw) {
   const id = String(raw || '').trim();
   return PROP_SEATS_ROW_ID_PATTERN.test(id) ? id : null;
@@ -4963,8 +4971,13 @@ const PROP_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 // Validate the seat map shape + base/variant integrity: every entry has numeric anchors and a
 // positive scale, optional positive-integer w/h, and any `base` must reference another entry IN
 // THE SAME document (no orphan size-variant — the server-side analog of /prop-lab base-protection).
-function validatePropSeatsData(data) {
+function validatePropSeatsData(data, { requireComplete = false } = {}) {
   if (!isObjectRecord(data)) return 'prop seats must be an object map of propId → seat';
+  if (requireComplete) {
+    for (const id of REQUIRED_PROP_SEAT_IDS) {
+      if (!Object.hasOwn(data, id)) return `required prop seat "${id}" is missing`;
+    }
+  }
   for (const [id, seat] of Object.entries(data)) {
     if (!PROP_ID_PATTERN.test(id)) return `prop id "${id}" must be a lowercase slug`;
     if (!isObjectRecord(seat)) return `seat "${id}" must be an object`;
@@ -4977,7 +4990,7 @@ function validatePropSeatsData(data) {
       if (!Array.isArray(seat.parts) || seat.parts.length < 1) return `seat "${id}" parts must be a non-empty array`;
       for (const [index, part] of seat.parts.entries()) {
         if (!isObjectRecord(part)) return `seat "${id}" part ${index + 1} must be an object`;
-        if (!isObjectRecord(part.source) || (part.source.kind !== 'asset' && part.source.kind !== 'prop' && part.source.kind !== 'doodad') || typeof part.source.id !== 'string') {
+        if (!isObjectRecord(part.source) || (part.source.kind !== 'asset' && part.source.kind !== 'prop' && part.source.kind !== 'doodad') || typeof part.source.id !== 'string' || !part.source.id) {
           return `seat "${id}" part ${index + 1} needs an asset/prop/doodad source`;
         }
         if (!Number.isFinite(part.anchorX) || !Number.isFinite(part.anchorY)) return `seat "${id}" part ${index + 1} needs numeric anchorX/anchorY`;
@@ -4987,6 +5000,38 @@ function validatePropSeatsData(data) {
     if (Object.hasOwn(seat, 'base') && (typeof seat.base !== 'string' || !Object.hasOwn(data, seat.base))) {
       return `seat "${id}" base "${seat.base}" must reference an existing prop in the same document`;
     }
+    if (Object.hasOwn(seat, 'base') && !REQUIRED_PROP_SEAT_IDS.includes(seat.base)) {
+      return `seat "${id}" base "${seat.base}" must reference a code-owned base prop`;
+    }
+    if (REQUIRED_PROP_SEAT_IDS.includes(id) && (Object.hasOwn(seat, 'base') || Object.hasOwn(seat, 'placement'))) {
+      return `required prop seat "${id}" cannot be a variant or authored placement`;
+    }
+    if (Object.hasOwn(seat, 'placement') && seat.placement !== 'prop' && seat.placement !== 'doodad') {
+      return `seat "${id}" placement must be prop or doodad`;
+    }
+    if (Object.hasOwn(seat, 'base') && Object.hasOwn(seat, 'placement')) {
+      return `seat "${id}" cannot be both a variant and authored placement`;
+    }
+    if (Object.hasOwn(seat, 'source') && (
+      !isObjectRecord(seat.source)
+      || (seat.source.kind !== 'asset' && seat.source.kind !== 'prop' && seat.source.kind !== 'doodad')
+      || typeof seat.source.id !== 'string'
+      || !seat.source.id
+    )) return `seat "${id}" source must be an asset/prop/doodad source`;
+    if (seat.placement && !Object.hasOwn(seat, 'source') && !Object.hasOwn(seat, 'parts')) {
+      return `seat "${id}" authored placement needs source or parts`;
+    }
+    if (!REQUIRED_PROP_SEAT_IDS.includes(id) && !seat.base && !seat.placement) {
+      return `seat "${id}" must be a variant or authored placement`;
+    }
+    if (Object.hasOwn(seat, 'kind') && seat.kind !== 'tree' && seat.kind !== 'house' && seat.kind !== 'rock') {
+      return `seat "${id}" kind is invalid`;
+    }
+    if (Object.hasOwn(seat, 'terrains') && (!Array.isArray(seat.terrains) || seat.terrains.some((terrain) => typeof terrain !== 'string' || !terrain))) {
+      return `seat "${id}" terrains must be non-empty strings`;
+    }
+    if (Object.hasOwn(seat, 'blocking') && typeof seat.blocking !== 'boolean') return `seat "${id}" blocking must be boolean`;
+    if (Object.hasOwn(seat, 'label') && typeof seat.label !== 'string') return `seat "${id}" label must be a string`;
   }
   return null;
 }
@@ -5000,33 +5045,111 @@ async function dbGetPropSeats(id) {
   return rows[0] || null;
 }
 
-async function dbUpsertPropSeats(id, input) {
+async function dbSavePropSeats(id, input, expectedRevision) {
   await ensureDbReady();
-  const { rows } = await pool.query(
-    `INSERT INTO prop_seats (id, data, client_schema_version, revision, updated_by)
-       VALUES ($1, $2::jsonb, $3, 1, $4)
-     ON CONFLICT (id) DO UPDATE SET
-       data = EXCLUDED.data,
-       client_schema_version = EXCLUDED.client_schema_version,
-       revision = prop_seats.revision + 1,
-       updated_at = now(),
-       updated_by = EXCLUDED.updated_by
-     RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
-    [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
-  );
-  return rows[0];
-}
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // A row lock cannot serialize two concurrent creates when the row is absent.
+    // The advisory transaction lock closes that gap; FOR UPDATE then protects the
+    // existing row while its compare-and-swap token is checked and advanced.
+    await client.query('SELECT pg_advisory_xact_lock($1)', [PROP_SEATS_LOCK_KEY]);
+    const current = await client.query(
+      `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by
+         FROM prop_seats WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    const row = current.rows[0] || null;
+    if ((!row && expectedRevision !== null) || (row && Number(row.revision) !== expectedRevision)) {
+      const error = new Error('prop_seats_revision_conflict');
+      error.propSeatsConflict = true;
+      error.currentRevision = row ? Number(row.revision) : null;
+      throw error;
+    }
 
+    let saved;
+    let created = false;
+    if (!row) {
+      created = true;
+      saved = await client.query(
+        `INSERT INTO prop_seats (id, data, client_schema_version, revision, updated_by)
+           VALUES ($1, $2::jsonb, $3, 1, $4)
+         RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+      );
+    } else {
+      saved = await client.query(
+        `UPDATE prop_seats SET data = $2::jsonb, client_schema_version = $3,
+            revision = revision + 1, updated_at = now(), updated_by = $4
+          WHERE id = $1
+        RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+      );
+    }
+    await client.query('COMMIT');
+    return { row: saved.rows[0], created };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 function publicPropSeatsDocument(id, document) {
   return {
     id,
-    data: isObjectRecord(document && document.data) ? document.data : {},
+    data: document.data,
     client_schema_version: document && Object.hasOwn(document, 'client_schema_version') ? document.client_schema_version : null,
     revision: Number.isInteger(document && document.revision) ? document.revision : 0,
     created_at: document && document.created_at ? document.created_at : null,
     updated_at: document && document.updated_at ? document.updated_at : null,
     updated_by: document && document.updated_by ? document.updated_by : null,
   };
+}
+
+function requirePropSeatsDocument(id, document) {
+  if (!document) throw new Error(`required prop seats document "${id}" is missing`);
+  const issue = validatePropSeatsData(document.data, { requireComplete: id === 'default' });
+  if (issue) throw new Error(`required prop seats document "${id}" is invalid: ${issue}`);
+  return document;
+}
+
+async function seedPropSeatsFromLiveSource() {
+  const existing = await pool.query(
+    'SELECT data, client_schema_version, revision, created_at, updated_at, updated_by FROM prop_seats WHERE id = $1',
+    ['default'],
+  );
+  if (existing.rows[0]) {
+    // A restarted validation slot keeps its isolated edits and does not depend
+    // on the live source once the complete row has been copied successfully.
+    requirePropSeatsDocument('default', existing.rows[0]);
+    return;
+  }
+  const response = await fetch(propSeatsSeedUrl, { signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error(`prop seats seed returned ${response.status}`);
+  const bytes = await readFetchBodyAtMost(response, 2 * 1024 * 1024, 'prop seats seed');
+  let body;
+  try { body = JSON.parse(bytes.toString('utf8')); } catch { throw new Error('prop seats seed is not valid JSON'); }
+  const portfolio = isObjectRecord(body?.portfolio) ? body.portfolio : null;
+  const revision = Number(portfolio?.revision);
+  const issue = validatePropSeatsData(portfolio?.data, { requireComplete: true });
+  if (!portfolio || issue || !Number.isSafeInteger(revision) || revision < 0) {
+    throw new Error(`prop seats seed document is invalid${issue ? `: ${issue}` : ''}`);
+  }
+  const clientSchemaVersion = portfolio.client_schema_version === null
+    || Number.isInteger(portfolio.client_schema_version)
+    ? portfolio.client_schema_version : null;
+  await pool.query(
+    `INSERT INTO prop_seats (id, data, client_schema_version, revision, updated_by)
+       VALUES ('default', $1::jsonb, $2, $3, 'live-prop-seats-seed')
+     ON CONFLICT (id) DO NOTHING`,
+    [JSON.stringify(portfolio.data), clientSchemaVersion, revision],
+  );
+  const { rows } = await pool.query(
+    'SELECT data, client_schema_version, revision, created_at, updated_at, updated_by FROM prop_seats WHERE id = $1',
+    ['default'],
+  );
+  requirePropSeatsDocument('default', rows[0] || null);
 }
 
 app.get('/api/prop-seats/:id', async (req, res) => {
@@ -5036,7 +5159,7 @@ app.get('/api/prop-seats/:id', async (req, res) => {
     return;
   }
   try {
-    const document = await dbGetPropSeats(id);
+    const document = requirePropSeatsDocument(id, await dbGetPropSeats(id));
     res.status(200).json({
       portfolio: publicPropSeatsDocument(id, document),
       store_schema_version: PROP_SEATS_STORE_SCHEMA_VERSION,
@@ -5055,26 +5178,42 @@ app.put('/api/prop-seats/:id', async (req, res) => {
     return;
   }
   const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const expectedRevision = raw.expectedRevision === null
+    ? null
+    : Number.isInteger(raw.expectedRevision) && raw.expectedRevision >= 0
+      ? raw.expectedRevision
+      : undefined;
+  if (expectedRevision === undefined) {
+    res.status(400).json({
+      error: 'invalid_prop_seats_write',
+      details: 'expectedRevision is required (null creates only when absent; an integer must match the current revision)',
+    });
+    return;
+  }
   if (!isObjectRecord(raw.data)) {
     res.status(400).json({ error: 'prop_seats_data_object_required' });
     return;
   }
-  const validationError = validatePropSeatsData(raw.data);
+  const validationError = validatePropSeatsData(raw.data, { requireComplete: id === 'default' });
   if (validationError) {
     res.status(400).json({ error: 'invalid_prop_seats', details: validationError });
     return;
   }
   try {
-    const document = await dbUpsertPropSeats(id, {
+    const saved = await dbSavePropSeats(id, {
       data: raw.data,
       client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
       updated_by: user.email,
-    });
-    res.status(200).json({
-      portfolio: publicPropSeatsDocument(id, document),
+    }, expectedRevision);
+    res.status(saved.created ? 201 : 200).json({
+      portfolio: publicPropSeatsDocument(id, saved.row),
       store_schema_version: PROP_SEATS_STORE_SCHEMA_VERSION,
     });
   } catch (error) {
+    if (error && error.propSeatsConflict) {
+      res.status(409).json({ error: 'prop_seats_revision_conflict', currentRevision: error.currentRevision });
+      return;
+    }
     dbUnavailable(res, 'prop seats write failed', error, 'prop_seats_store_unavailable');
   }
 });
@@ -5198,6 +5337,185 @@ app.put('/api/wall-art/:id', async (req, res) => {
     });
   } catch (error) {
     dbUnavailable(res, 'wall art write failed', error, 'wall_art_store_unavailable');
+  }
+});
+
+// --- Global SFX profile ----------------------------------------------------
+// Recording bytes are live-media slots; this complete JSON document owns the
+// semantic sound-set metadata/mix and gameplay assignments. It is deliberately
+// not seeded from code. Missing state means decorative silence and an unavailable
+// Studio editor, never a compiled fallback.
+const SFX_PROFILE_SCHEMA_VERSION = 1;
+const SFX_PROFILE_ID = 'default';
+const SFX_SOUND_SET_KEY = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const SFX_ASSIGNABLE_TERRAINS = ['grass', 'water', 'sand', 'stone', 'road', 'bridge', 'dirt', 'pebble'];
+const SFX_PROFILE_LOCK_KEY = 4300193002;
+
+function exactSfxKeys(value, expected) {
+  if (!isObjectRecord(value)) return false;
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  return actual.length === wanted.length && actual.every((key, index) => key === wanted[index]);
+}
+
+function sfxRequiredText(value, max) {
+  return typeof value === 'string' && Boolean(value.trim()) && value.length <= max;
+}
+
+function sfxGain(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 2;
+}
+
+function validateSfxProfileData(data) {
+  if (!exactSfxKeys(data, ['schemaVersion', 'soundSets', 'terrainAssignments', 'arrival'])) {
+    return 'profile must contain exactly schemaVersion, soundSets, terrainAssignments, and arrival';
+  }
+  if (data.schemaVersion !== SFX_PROFILE_SCHEMA_VERSION) return 'schemaVersion must be 1';
+  if (!isObjectRecord(data.soundSets)) return 'soundSets must be an object';
+  const soundKeys = Object.keys(data.soundSets).sort();
+  if (soundKeys.length < 1 || soundKeys.length > 64) return 'soundSets must contain 1-64 entries';
+  for (const key of soundKeys) {
+    if (!SFX_SOUND_SET_KEY.test(key)) return `sound set "${key}" must be a lowercase semantic key`;
+    const sound = data.soundSets[key];
+    if (!exactSfxKeys(sound, ['label', 'character', 'build', 'gain'])) {
+      return `sound set "${key}" must contain exactly label, character, build, and gain`;
+    }
+    if (!sfxRequiredText(sound.label, 100)) return `sound set "${key}" label is required (max 100)`;
+    if (!sfxRequiredText(sound.character, 400)) return `sound set "${key}" character is required (max 400)`;
+    if (!sfxRequiredText(sound.build, 400)) return `sound set "${key}" build is required (max 400)`;
+    if (!sfxGain(sound.gain)) return `sound set "${key}" gain must be from 0 to 2`;
+  }
+  if (!exactSfxKeys(data.terrainAssignments, SFX_ASSIGNABLE_TERRAINS)) {
+    return 'terrainAssignments must contain every assignable terrain exactly once';
+  }
+  for (const terrain of SFX_ASSIGNABLE_TERRAINS) {
+    const sample = data.terrainAssignments[terrain];
+    if (sample !== null && (typeof sample !== 'string' || !Object.hasOwn(data.soundSets, sample))) {
+      return `terrain assignment "${terrain}" must reference a declared sound set or null`;
+    }
+  }
+  if (!exactSfxKeys(data.arrival, ['sample', 'gain', 'firing'])) {
+    return 'arrival must contain exactly sample, gain, and firing';
+  }
+  if (data.arrival.sample !== null
+    && (typeof data.arrival.sample !== 'string' || !Object.hasOwn(data.soundSets, data.arrival.sample))) {
+    return 'arrival.sample must reference a declared sound set or null';
+  }
+  if (!sfxGain(data.arrival.gain)) return 'arrival.gain must be from 0 to 2';
+  if (!['per-unit', 'once'].includes(data.arrival.firing)) return 'arrival.firing must be per-unit or once';
+  return null;
+}
+
+function publicSfxProfile(row) {
+  return {
+    id: SFX_PROFILE_ID,
+    data: row.data,
+    clientSchemaVersion: Number(row.client_schema_version),
+    revision: Number(row.revision),
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    updatedBy: row.updated_by || null,
+  };
+}
+
+async function dbGetSfxProfile() {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by
+       FROM sfx_profiles WHERE id = $1`,
+    [SFX_PROFILE_ID],
+  );
+  return rows[0] || null;
+}
+
+async function dbSaveSfxProfile(data, expectedRevision, actorEmail) {
+  await ensureDbReady();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock($1)', [SFX_PROFILE_LOCK_KEY]);
+    const current = await client.query(
+      `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by
+         FROM sfx_profiles WHERE id = $1 FOR UPDATE`,
+      [SFX_PROFILE_ID],
+    );
+    const row = current.rows[0] || null;
+    if ((!row && expectedRevision !== null) || (row && Number(row.revision) !== expectedRevision)) {
+      const error = new Error('sfx_profile_conflict');
+      error.sfxProfileConflict = true;
+      error.currentRevision = row ? Number(row.revision) : null;
+      throw error;
+    }
+    let saved;
+    let created = false;
+    if (!row) {
+      created = true;
+      saved = await client.query(
+        `INSERT INTO sfx_profiles (id, data, client_schema_version, revision, updated_by)
+         VALUES ($1, $2::jsonb, $3, 0, $4)
+         RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [SFX_PROFILE_ID, JSON.stringify(data), SFX_PROFILE_SCHEMA_VERSION, actorEmail],
+      );
+    } else {
+      saved = await client.query(
+        `UPDATE sfx_profiles SET data = $2::jsonb, client_schema_version = $3,
+            revision = revision + 1, updated_at = now(), updated_by = $4
+          WHERE id = $1
+        RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [SFX_PROFILE_ID, JSON.stringify(data), SFX_PROFILE_SCHEMA_VERSION, actorEmail],
+      );
+    }
+    await client.query('COMMIT');
+    return { row: saved.rows[0], created };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+app.get('/api/sfx-profiles/:id', async (req, res) => {
+  if (req.params.id !== SFX_PROFILE_ID) { res.status(400).json({ error: 'invalid_sfx_profile_id' }); return; }
+  try {
+    const row = await dbGetSfxProfile();
+    if (!row) { res.setHeader('Cache-Control', 'no-store'); res.status(404).json({ error: 'sfx_profile_not_found' }); return; }
+    const issue = validateSfxProfileData(row.data);
+    if (issue || Number(row.client_schema_version) !== SFX_PROFILE_SCHEMA_VERSION) {
+      throw new Error(`stored SFX profile is invalid: ${issue || 'client schema version mismatch'}`);
+    }
+    const etag = `"sfx-profile-${Number(row.revision)}"`;
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) { res.status(304).end(); return; }
+    res.status(200).json({ profile: publicSfxProfile(row) });
+  } catch (error) {
+    dbUnavailable(res, 'SFX profile read failed', error, 'sfx_profile_unavailable');
+  }
+});
+
+app.put('/api/sfx-profiles/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  if (req.params.id !== SFX_PROFILE_ID) { res.status(400).json({ error: 'invalid_sfx_profile_id' }); return; }
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  const expectedRevision = raw.expectedRevision === null
+    ? null : Number.isInteger(raw.expectedRevision) && raw.expectedRevision >= 0 ? raw.expectedRevision : undefined;
+  if (expectedRevision === undefined || raw.clientSchemaVersion !== SFX_PROFILE_SCHEMA_VERSION) {
+    res.status(400).json({ error: 'invalid_sfx_profile_write', details: 'expectedRevision and clientSchemaVersion are required' });
+    return;
+  }
+  const issue = validateSfxProfileData(raw.data);
+  if (issue) { res.status(400).json({ error: 'invalid_sfx_profile', details: issue }); return; }
+  try {
+    const saved = await dbSaveSfxProfile(raw.data, expectedRevision, user.email);
+    res.status(saved.created ? 201 : 200).json({ profile: publicSfxProfile(saved.row) });
+  } catch (error) {
+    if (error && error.sfxProfileConflict) {
+      res.status(409).json({ error: 'sfx_profile_conflict', currentRevision: error.currentRevision });
+      return;
+    }
+    dbUnavailable(res, 'SFX profile write failed', error, 'sfx_profile_unavailable');
   }
 });
 
@@ -6044,34 +6362,40 @@ async function verifyLiveMediaStoreReadiness(record) {
 async function liveMediaReadiness() {
   await ensureDbReady();
 
-  // Do a fresh catalog read on every probe. `dbReady` records successful schema
-  // initialization, but readiness must also detect a database or catalog that
-  // became unavailable after startup. During the temporary stage-1 import only,
-  // serving remains Git-backed and partial bridge groups are allowed; the final
-  // live-only image removes that flag and always takes the strict public branch.
-  let catalogRevision;
-  if (liveMediaServingEnabled) {
-    const catalog = await dbReadMediaCatalog();
-    catalogRevision = Number(catalog.revision);
-  } else {
-    const state = await pool.query('SELECT revision FROM media_catalog_state WHERE singleton = true');
-    if (!state.rows[0]) throw new Error('live media catalog state is missing');
-    catalogRevision = Number(state.rows[0].revision);
-  }
+  // Read all three DB authorities afresh. Public endpoints may use short-lived
+  // caches, but a Kubernetes probe must observe current catalog state and run
+  // the exact typed renderer projections that browser boot/thumbnails require.
+  const [catalog, propSeatsRow, unitCatalog] = await Promise.all([
+    dbReadMediaCatalog(),
+    dbGetPropSeats('default'),
+    dbReadUnitCatalog(),
+  ]);
+  const propSeats = requirePropSeatsDocument('default', propSeatsRow);
+  const propSeatsRevision = Number(propSeats.revision);
+  const unitCatalogRevision = Number(unitCatalog.revision);
+  const catalogIssue = liveCatalogReadinessIssue(catalog, { requireCritical: true });
+  if (catalogIssue) throw new Error(catalogIssue);
+  const catalogRevision = Number(catalog.revision);
 
-  const sample = await pool.query(
-    `SELECT b.sha256, b.blob_key, b.media_type, b.byte_length
-       FROM media_slots s
-       JOIN media_versions v ON v.id = s.active_version_id AND v.slot = s.slot
-       JOIN media_blobs b ON b.sha256 = v.blob_sha256
-      WHERE s.lifecycle_state = 'active'
-        AND v.status IN ('accepted', 'legacy-bridge')
-      ORDER BY CASE WHEN s.availability_policy = 'critical' THEN 0 ELSE 1 END,
-               b.byte_length, s.slot
-      LIMIT 1`,
-  );
-  await verifyLiveMediaStoreReadiness(sample.rows[0] || null);
-  return { catalogRevision };
+  if (!serverRender || typeof serverRender.applyServerRenderSnapshot !== 'function') {
+    throw new Error('complete live renderer snapshot validator is unavailable');
+  }
+  await withServerRenderCriticalSection(() => {
+    serverRender.applyServerRenderSnapshot({
+      mediaCatalog: catalog,
+      propSeats: propSeats.data,
+      unitCatalog,
+    });
+  });
+
+  const sampleSlot = [...catalog.slots].sort((left, right) => (
+    Number(right.availabilityPolicy === 'critical') - Number(left.availabilityPolicy === 'critical')
+    || Number(left.media.byteLength) - Number(right.media.byteLength)
+    || left.slot.localeCompare(right.slot)
+  ))[0];
+  const sample = sampleSlot ? await mediaBlobRecord(sampleSlot.media.sha256, { publicOnly: true }) : null;
+  await verifyLiveMediaStoreReadiness(sample);
+  return { catalogRevision, propSeatsRevision, unitCatalogRevision };
 }
 
 async function publicMediaSlotById(slot) {
@@ -6309,6 +6633,10 @@ const VISUAL_MEDIA_DOMAINS = new Set([
 const WATER_SIDE_REQUIRED_SLOTS = Object.freeze(
   Array.from({ length: 8 }, (_, index) => `tiles/surface/water-${index}-side.png`),
 );
+const GROUND_COVER_SLOT_PATTERN = /^groundcover\/(grass|water|sand)\/v(0|[1-9][0-9]*)\.png$/;
+const GROUND_COVER_RUNTIME_KEYS = Object.freeze([
+  'terrain', 'id', 'frameWidth', 'frameHeight', 'frameCount', 'baseX', 'baseY', 'contentWidth',
+]);
 
 function runtimeInteger(value, { min = 0, max = 32768 } = {}) {
   return Number.isInteger(value) && value >= min && value <= max ? value : null;
@@ -6323,7 +6651,12 @@ function runtimeSemanticText(value, max = 160) {
 function runtimeMetadataProjection(row) {
   const metadata = isObjectRecord(row.version_metadata) ? row.version_metadata
     : isObjectRecord(row.metadata) ? row.metadata : {};
-  if (metadata.runtime === undefined) return { value: {} };
+  const groundCoverSlot = GROUND_COVER_SLOT_PATTERN.exec(String(row.slot || ''));
+  if (metadata.runtime === undefined) {
+    return groundCoverSlot
+      ? { error: 'ground-cover slots require metadata.runtime.groundCover' }
+      : { value: {} };
+  }
   if (!isObjectRecord(metadata.runtime)) return { error: 'metadata.runtime must be an object' };
   const raw = metadata.runtime;
   const allowed = new Set([
@@ -6331,7 +6664,7 @@ function runtimeMetadataProjection(row) {
     'frameWidth', 'frameHeight', 'frameCount', 'anchorX', 'anchorY', 'durationMs', 'loop',
   ]);
   if (row.domain === 'terrain') {
-    for (const key of ['logicalTerrain', 'face', 'projection', 'alphaOwnership']) allowed.add(key);
+    for (const key of ['logicalTerrain', 'face', 'projection', 'alphaOwnership', 'groundCover']) allowed.add(key);
   }
   if (row.domain === 'ui-kit') {
     for (const key of ['nativeRole', 'slice']) allowed.add(key);
@@ -6367,6 +6700,48 @@ function runtimeMetadataProjection(row) {
   if (raw.loop !== undefined) {
     if (typeof raw.loop !== 'boolean') return { error: 'metadata.runtime.loop must be boolean' };
     value.loop = raw.loop;
+  }
+  if (raw.groundCover !== undefined || groundCoverSlot) {
+    if (!groundCoverSlot || row.domain !== 'terrain') {
+      return { error: 'metadata.runtime.groundCover is allowed only on a registered ground-cover terrain slot' };
+    }
+    if (!isObjectRecord(raw.groundCover)) return { error: 'metadata.runtime.groundCover must be an object' };
+    const unsupportedRuntime = Object.keys(raw).filter((key) => key !== 'groundCover');
+    if (unsupportedRuntime.length) {
+      return { error: `ground-cover metadata.runtime contains unsupported keys: ${unsupportedRuntime.sort().join(', ')}` };
+    }
+    const unsupportedGroundCover = Object.keys(raw.groundCover)
+      .filter((key) => !GROUND_COVER_RUNTIME_KEYS.includes(key));
+    if (unsupportedGroundCover.length) {
+      return { error: `metadata.runtime.groundCover contains unsupported keys: ${unsupportedGroundCover.sort().join(', ')}` };
+    }
+    const terrain = mediaName(raw.groundCover.terrain);
+    const slotTerrain = groundCoverSlot[1];
+    if (!terrain || terrain !== slotTerrain) {
+      return { error: 'metadata.runtime.groundCover.terrain must match the semantic slot' };
+    }
+    const id = runtimeInteger(raw.groundCover.id, { min: 0, max: 32768 });
+    if (id === null || id !== Number(groundCoverSlot[2])) {
+      return { error: 'metadata.runtime.groundCover.id must match the semantic slot' };
+    }
+    const frameWidth = runtimeInteger(raw.groundCover.frameWidth, { min: 1, max: 32768 });
+    const frameHeight = runtimeInteger(raw.groundCover.frameHeight, { min: 1, max: 32768 });
+    const frameCount = runtimeInteger(raw.groundCover.frameCount, { min: 1, max: 32768 });
+    if (frameWidth === null || frameHeight === null || frameCount === null) {
+      return { error: 'metadata.runtime.groundCover frame geometry must use positive bounded integers' };
+    }
+    const baseX = runtimeInteger(raw.groundCover.baseX, { min: 0, max: 32767 });
+    const baseY = runtimeInteger(raw.groundCover.baseY, { min: 0, max: 32767 });
+    if (baseX === null || baseX >= frameWidth || baseY === null || baseY >= frameHeight) {
+      return { error: 'metadata.runtime.groundCover base anchor must lie inside one frame' };
+    }
+    const contentWidth = runtimeInteger(raw.groundCover.contentWidth, { min: 1, max: 32768 });
+    if (contentWidth === null || contentWidth > frameWidth) {
+      return { error: 'metadata.runtime.groundCover.contentWidth must fit inside one frame' };
+    }
+    value.groundCover = {
+      terrain, id, frameWidth, frameHeight, frameCount, baseX, baseY, contentWidth,
+    };
   }
   if (row.domain === 'terrain') {
     if (raw.logicalTerrain !== undefined) {
@@ -6422,12 +6797,12 @@ function publicRuntimeVersionMetadata(row) {
   return Object.keys(projected.value).length ? { runtime: projected.value } : {};
 }
 
-function mediaDomainProjectionIssue(row, { legacyBridge = false } = {}) {
+function mediaDomainProjectionIssue(row) {
   const runtime = runtimeMetadataProjection(row);
   if (runtime.error) return runtime.error;
   const knownDomain = VISUAL_MEDIA_DOMAINS.has(row.domain) || row.domain === 'font' || row.domain === 'sfx';
-  if (!knownDomain && !legacyBridge) return `runtime acceptance requires a registered domain projection, not ${row.domain}`;
-  if (!legacyBridge && row.domain !== 'terrain') {
+  if (!knownDomain) return `runtime acceptance requires a registered domain projection, not ${row.domain}`;
+  if (row.domain !== 'terrain') {
     return `${row.domain} candidates remain bridge-only until their typed completeness validator and game-owned review instrument exist`;
   }
   if (row.domain === 'font' && !PUBLIC_FONT_MEDIA_TYPES.has(row.media_type)) return 'font slots require an allowed font media type';
@@ -6448,6 +6823,19 @@ function mediaDomainProjectionIssue(row, { legacyBridge = false } = {}) {
   }
   if (row.domain !== 'terrain') return null;
 
+  const groundCoverSlot = GROUND_COVER_SLOT_PATTERN.exec(String(row.slot || ''));
+  if (groundCoverSlot) {
+    if (row.role !== 'media') return 'ground-cover slots require the terrain media role';
+    if (row.media_type !== 'image/png') return 'ground-cover sheets require image/png';
+    const projection = runtime.value.groundCover;
+    if (!projection) return 'ground-cover slots require the typed runtime projection';
+    if (
+      Number(row.width) !== projection.frameWidth * projection.frameCount
+      || Number(row.height) !== projection.frameHeight
+    ) return 'ground-cover runtime metadata does not match uploaded sheet geometry';
+    return 'ground-cover candidates remain bridge-only until their game-owned exact-byte review instrument exists';
+  }
+
   const suffixRole = row.slot?.endsWith('-top-anim.png') ? 'animation'
     : row.slot?.endsWith('-top.png') ? 'top'
       : row.slot?.endsWith('-side.png') ? 'side' : null;
@@ -6455,7 +6843,7 @@ function mediaDomainProjectionIssue(row, { legacyBridge = false } = {}) {
   if (['top', 'side', 'animation'].includes(row.role) && !suffixRole) {
     return `terrain ${row.role} role requires a matching semantic slot suffix`;
   }
-  if (!legacyBridge && !WATER_SIDE_REQUIRED_SLOTS.includes(row.slot)) {
+  if (!WATER_SIDE_REQUIRED_SLOTS.includes(row.slot)) {
     return 'terrain acceptance is currently registered only for the atomic Water side projection';
   }
   if (suffixRole && row.media_type !== 'image/png') return 'projected terrain faces require image/png';
@@ -6480,19 +6868,6 @@ function mediaDomainProjectionIssue(row, { legacyBridge = false } = {}) {
   }
   if (runtime.value.frameCount !== undefined && expectedFrameCount !== null && runtime.value.frameCount !== expectedFrameCount) {
     return 'terrain runtime frameCount does not match uploaded geometry';
-  }
-  return null;
-}
-
-function legacyBridgeEvidenceIssue(row) {
-  const migration = isObjectRecord(row.provenance?.migration) ? row.provenance.migration : {};
-  if (migration.kind !== 'git-media-cutover') return 'migration.kind must be git-media-cutover';
-  if (migration.byteExact !== true) return 'migration.byteExact must be true';
-  if (mediaSha(migration.sha256) !== row.blob_sha256) return 'migration.sha256 must equal the uploaded content hash';
-  if (!boundedMediaText(migration.repositoryCommit, '', 160)) return 'migration.repositoryCommit is required';
-  const originalPath = mediaSourcePath(migration.originalRepositoryPath);
-  if (!originalPath || !row.source_path || originalPath !== row.source_path) {
-    return 'migration.originalRepositoryPath must equal the version sourcePath';
   }
   return null;
 }
@@ -7346,68 +7721,6 @@ app.post('/api/admin/media-versions/:id/review', async (req, res) => {
   }
 });
 
-app.post('/api/admin/media-versions/:id/bridge', async (req, res) => {
-  const user = await requireAdmin(req, res);
-  if (!user) return;
-  if (!liveMediaImportEnabled) {
-    res.status(410).json({ error: 'legacy_media_import_closed' });
-    return;
-  }
-  const id = mediaVersionId(req.params.id);
-  if (!id) { res.status(400).json({ error: 'invalid_media_version_id' }); return; }
-  try {
-    const expected = requireMediaExpectedRevision(req);
-    const preflight = await dbMediaVersionRow(id);
-    if (!preflight) throw mediaMutationError('media_version_not_found', 404);
-    assertMediaRevision(preflight, expected);
-    if (preflight.status !== 'candidate' || !preflight.blob_sha256) {
-      throw mediaMutationError('media_bridge_requires_candidate_content', 409);
-    }
-    await verifyLiveMediaBlobPresent(preflight);
-    const catalogRevision = await withMediaCatalogTransaction(async (client) => {
-      const current = await dbMediaVersionRow(id, client, true);
-      if (!current) throw mediaMutationError('media_version_not_found', 404);
-      assertMediaRevision(current, expected);
-      if (current.status !== 'candidate') throw mediaMutationError('media_version_locked', 409, { status: current.status });
-      if (!current.slot || !current.blob_sha256) throw mediaMutationError('media_bridge_requires_slotted_content', 409);
-      if (!publicMediaTypeAllowed(current.media_type)) throw mediaMutationError('media_type_not_public_runtime', 409, current.media_type);
-      const projectionIssue = mediaDomainProjectionIssue(current, { legacyBridge: true });
-      if (projectionIssue) throw mediaMutationError('media_domain_projection_invalid', 409, { id, reason: projectionIssue });
-      const bridgeEvidenceIssue = legacyBridgeEvidenceIssue(current);
-      if (bridgeEvidenceIssue) throw mediaMutationError('media_bridge_migration_evidence_required', 409, bridgeEvidenceIssue);
-      assertRequiredMediaAcceptanceContract(current, mediaAcceptanceContract(current));
-      const slotResult = await client.query(
-        'SELECT active_version_id, lifecycle_state FROM media_slots WHERE slot = $1 FOR UPDATE',
-        [current.slot],
-      );
-      if (!slotResult.rows[0]) throw mediaMutationError('media_slot_not_found', 404);
-      if (slotResult.rows[0].lifecycle_state !== 'staging' || slotResult.rows[0].active_version_id) {
-        throw mediaMutationError('media_bridge_requires_staging_slot', 409);
-      }
-      await client.query(
-        `UPDATE media_versions SET status = 'legacy-bridge', row_revision = row_revision + 1,
-           updated_at = now(), updated_by = $2 WHERE id = $1`,
-        [id, user.email],
-      );
-      await client.query(
-        'UPDATE media_blobs SET published_at = COALESCE(published_at, now()) WHERE sha256 = $1',
-        [current.blob_sha256],
-      );
-      await client.query(
-        `UPDATE media_slots SET active_version_id = $2, lifecycle_state = 'active',
-           activated_at = COALESCE(activated_at, now()), row_revision = row_revision + 1,
-           updated_at = now(), updated_by = $3 WHERE slot = $1`,
-        [current.slot, id, user.email],
-      );
-      await logMediaEvent(client, current, 'legacy-bridge-activated', user.email, { sha256: current.blob_sha256 });
-      return bumpMediaCatalog(client);
-    }, { invalidatePublic: true });
-    res.status(200).json({ version: publicMediaVersion(await dbMediaVersionRow(id)), catalogRevision });
-  } catch (error) {
-    sendMediaMutationError(res, error, 'media_bridge_failed');
-  }
-});
-
 function mediaAcceptanceContract(row) {
   const raw = isObjectRecord(row.slot_metadata?.acceptance) ? row.slot_metadata.acceptance : null;
   if (!raw || raw.mode === undefined || raw.mode === 'standalone') return { mode: 'standalone' };
@@ -7841,11 +8154,9 @@ async function serveImmutableMedia(req, res, record, { privateRead = false } = {
   res.status(200).end(buffer);
 }
 
-// Public immutable hash reads stay available during the staged import so the
-// importer and ephemeral-slot seeder can verify published pointers byte-for-byte.
-// Only the stable /assets namespace and thumbnails are cut over by the one-time
-// serving flag. Once a hash has been published it remains readable for honest
-// immutable caching and lazy test-slot snapshots; candidates never become public.
+// Once an accepted or imported bridge hash has been published it remains
+// readable for honest immutable caching, historical pointers, and optional
+// read-only test-slot snapshots. Candidate and source hashes never become public.
 app.get(/^\/api\/media\/([0-9a-f]{64})$/, async (req, res) => {
   const sha256 = mediaSha(req.params[0]);
   try {
@@ -8274,17 +8585,24 @@ function assertUnitRevision(row, expected) {
 }
 
 async function dbReadUnitCatalog({ includeArchived = false, queryable = null } = {}) {
-  if (!queryable) await ensureDbReady();
-  const db = queryable || pool;
-  const [stateResult, familyResult, assetResult, spriteResult] = await Promise.all([
-    db.query('SELECT revision, updated_at FROM unit_catalog_state WHERE singleton = true'),
-    db.query(
+  let client = null;
+  let db = queryable;
+  if (!db) {
+    await ensureDbReady();
+    client = await pool.connect();
+    db = client;
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  }
+  try {
+    const [stateResult, familyResult, assetResult, spriteResult] = await Promise.all([
+      db.query('SELECT revision, updated_at FROM unit_catalog_state WHERE singleton = true'),
+      db.query(
       `SELECT family, accepted_asset_id, display_scale_percent, row_revision, updated_at, updated_by
          FROM unit_families
         ORDER BY array_position($1::text[], family)`,
       [UNIT_FAMILY_IDS],
-    ),
-    db.query(
+      ),
+      db.query(
       `SELECT id, family, label, method, notes, acceptance_block_reason, status, footprint_shape,
               source_canvas_width, source_canvas_height, source_footprint_px,
               anchor_x, anchor_y, row_revision, created_at, updated_at, updated_by
@@ -8292,19 +8610,19 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
         WHERE $1::boolean OR status <> 'archived'
         ORDER BY family, created_at DESC`,
       [includeArchived],
-    ),
-    db.query(
+      ),
+      db.query(
       `SELECT s.asset_id, s.palette, s.direction, s.sha256, s.width, s.height, s.byte_length
          FROM unit_sprites s
          JOIN unit_assets a ON a.id = s.asset_id
         WHERE $1::boolean OR a.status <> 'archived'
         ORDER BY s.asset_id, s.palette, s.direction`,
       [includeArchived],
-    ),
-  ]);
+      ),
+    ]);
 
-  const acceptedIds = new Set(familyResult.rows.map((row) => row.accepted_asset_id).filter(Boolean).map(String));
-  const assets = assetResult.rows.map((row) => ({
+    const acceptedIds = new Set(familyResult.rows.map((row) => row.accepted_asset_id).filter(Boolean).map(String));
+    const assets = assetResult.rows.map((row) => ({
     id: String(row.id),
     family: row.family,
     label: row.label,
@@ -8328,40 +8646,50 @@ async function dbReadUnitCatalog({ includeArchived = false, queryable = null } =
     sprites: {},
     spriteCount: 0,
     complete: false,
-  }));
-  const byId = new Map(assets.map((asset) => [asset.id, asset]));
-  for (const row of spriteResult.rows) {
-    const asset = byId.get(String(row.asset_id));
-    if (!asset) continue;
-    if (!asset.sprites[row.palette]) asset.sprites[row.palette] = {};
-    asset.sprites[row.palette][row.direction] = {
+    }));
+    const byId = new Map(assets.map((asset) => [asset.id, asset]));
+    for (const row of spriteResult.rows) {
+      const asset = byId.get(String(row.asset_id));
+      if (!asset) continue;
+      if (!asset.sprites[row.palette]) asset.sprites[row.palette] = {};
+      asset.sprites[row.palette][row.direction] = {
       url: `/api/unit-sprites/${row.sha256}.png`,
       sha256: row.sha256,
       width: Number(row.width),
       height: Number(row.height),
       byteLength: Number(row.byte_length),
-    };
-    asset.spriteCount += 1;
-  }
-  for (const asset of assets) {
-    asset.complete = UNIT_PALETTE_IDS.every((palette) =>
-      UNIT_DIRECTION_IDS.every((direction) => Boolean(asset.sprites[palette]?.[direction])));
-  }
+      };
+      asset.spriteCount += 1;
+    }
+    for (const asset of assets) {
+      asset.complete = UNIT_PALETTE_IDS.every((palette) =>
+        UNIT_DIRECTION_IDS.every((direction) => Boolean(asset.sprites[palette]?.[direction])));
+    }
 
-  return {
-    schemaVersion: UNIT_CATALOG_SCHEMA_VERSION,
-    revision: Number(stateResult.rows[0]?.revision || 0),
-    updatedAt: stateResult.rows[0]?.updated_at || null,
-    families: familyResult.rows.map((row) => ({
+    const body = {
+      schemaVersion: UNIT_CATALOG_SCHEMA_VERSION,
+      revision: Number(stateResult.rows[0]?.revision || 0),
+      updatedAt: stateResult.rows[0]?.updated_at || null,
+      families: familyResult.rows.map((row) => ({
       family: row.family,
       acceptedAssetId: row.accepted_asset_id ? String(row.accepted_asset_id) : null,
       displayScalePercent: Number(row.display_scale_percent),
       rowRevision: Number(row.row_revision),
       updatedAt: row.updated_at,
       updatedBy: row.updated_by,
-    })),
-    assets,
-  };
+      })),
+      assets,
+    };
+    if (client) await client.query('COMMIT');
+    return body;
+  } catch (error) {
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    }
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
 }
 
 async function publicUnitCatalog() {
@@ -8413,24 +8741,10 @@ async function unitSpriteBytes(sha256, record = null) {
   return png;
 }
 
-async function legacyThumbnailAssetBytes(src) {
-  let decoded = null;
-  try { decoded = String(src).split('/').map(decodeURIComponent).join('/'); } catch { decoded = null; }
-  if (!decoded || !decoded.startsWith('/assets/') || decoded.split('/').some((segment) => segment === '..')) return null;
-  const root = path.resolve(frontendDir);
-  const target = path.resolve(root, `.${decoded}`);
-  if (!target.startsWith(`${root}${path.sep}`)) return null;
-  try { return await fs.promises.readFile(target); } catch (error) {
-    if (error.code === 'ENOENT') return null;
-    throw error;
-  }
-}
-
 async function thumbnailDynamicSprite(src, mediaCatalog = null) {
   const value = String(src || '').split('?', 1)[0];
   const unitMatch = /^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/.exec(value);
   if (unitMatch) return unitSpriteBytes(unitMatch[1]);
-  if (!liveMediaServingEnabled && value.startsWith('/assets/')) return legacyThumbnailAssetBytes(value);
   const immutableMatch = /^\/api\/media\/([0-9a-f]{64})$/.exec(value);
   if (immutableMatch) {
     const snapshotAllows = mediaCatalog
@@ -8846,8 +9160,9 @@ app.post('/api/maps/publish', async (req, res) => {
     if (!level || typeof level !== 'object') { res.status(404).json({ error: 'level_not_found' }); return; }
     let contentHash = null;
     try {
-      const renderInputs = await applyThumbnailRenderInputs();
-      contentHash = serverRender && thumbnailVersion(serverRender.boardHashForLevel(level), renderInputs);
+      contentHash = serverRender && await withThumbnailRenderInputs((renderInputs) => (
+        thumbnailVersion(serverRender.boardHashForLevel(level), renderInputs)
+      ));
     } catch { contentHash = null; }
     const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, contentHash);
     res.status(200).json({ public_id: publicId, url: `${publicOrigin}/play?map=${publicId}` });
@@ -9018,25 +9333,9 @@ const {
   thumbnailAvailabilityCatalogFromRows,
   thumbnailSourceAvailability,
 } = require(path.join(bakedBackendDir, 'thumbnailAvailability'));
-const THUMBNAIL_PROP_SEATS_TTL_MS = 60 * 1000;
-let _thumbnailPropSeatsCache = { at: 0, data: null, revision: 0 }; // last SUCCESSFUL DB read
 let _thumbnailMediaAvailabilityCache = { revision: null, catalog: null };
 async function thumbnailPropSeats() {
-  const now = Date.now();
-  if (_thumbnailPropSeatsCache.data && now - _thumbnailPropSeatsCache.at < THUMBNAIL_PROP_SEATS_TTL_MS) {
-    return _thumbnailPropSeatsCache;
-  }
-  try {
-    const doc = await dbGetPropSeats('default');
-    const data = doc && doc.data && typeof doc.data === 'object' ? doc.data : {};
-    _thumbnailPropSeatsCache = {
-      at: now,
-      data,
-      revision: Number.isInteger(doc && doc.revision) ? doc.revision : 0,
-    };
-    return _thumbnailPropSeatsCache;
-  } catch { /* DB unreachable — fall through to the last-good seats below, else baseline */ }
-  return _thumbnailPropSeatsCache.data ? _thumbnailPropSeatsCache : { at: now, data: {}, revision: 0 };
+  return requirePropSeatsDocument('default', await dbGetPropSeats('default'));
 }
 async function thumbnailMediaAvailabilityCatalog(mediaCatalog) {
   if (!mediaCatalog) return null;
@@ -9067,19 +9366,14 @@ async function thumbnailMediaAvailabilityCatalog(mediaCatalog) {
     return mediaCatalog;
   }
 }
-async function applyThumbnailRenderInputs() {
-  const seats = await thumbnailPropSeats();
-  if (serverRender && typeof serverRender.applyPropSeatOverrides === 'function') {
-    try { serverRender.applyPropSeatOverrides(seats.data); } catch { /* keep the renderer's last-good seats */ }
-  }
-  if (!serverRender || typeof serverRender.applyLiveUnitCatalog !== 'function') {
-    throw new Error('unit catalog renderer is unavailable');
-  }
-  const catalog = await publicUnitCatalog();
-  serverRender.applyLiveUnitCatalog(catalog);
-  const unitCatalogRevision = catalog.revision || 0;
-  const mediaCatalog = liveMediaServingEnabled ? await publicMediaCatalog() : null;
-  const mediaCatalogRevision = mediaCatalog?.revision || 0;
+async function loadThumbnailRenderInputs() {
+  const [mediaCatalog, seats, unitCatalog] = await Promise.all([
+    publicMediaCatalog(),
+    thumbnailPropSeats(),
+    publicUnitCatalog(),
+  ]);
+  const unitCatalogRevision = unitCatalog.revision || 0;
+  const mediaCatalogRevision = mediaCatalog.revision || 0;
   const mediaAvailability = await thumbnailMediaAvailabilityCatalog(mediaCatalog);
   return {
     propSeatsRevision: seats.revision || 0,
@@ -9087,7 +9381,19 @@ async function applyThumbnailRenderInputs() {
     mediaCatalogRevision,
     mediaCatalog,
     mediaAvailability,
+    propSeats: seats.data,
+    unitCatalog,
   };
+}
+async function withThumbnailRenderInputs(task) {
+  if (!serverRender || typeof serverRender.applyServerRenderSnapshot !== 'function') {
+    throw new Error('complete live renderer snapshot validator is unavailable');
+  }
+  const renderInputs = await loadThumbnailRenderInputs();
+  return withServerRenderCriticalSection(async () => {
+    serverRender.applyServerRenderSnapshot(renderInputs);
+    return task(renderInputs);
+  });
 }
 function thumbnailVersion(boardHash, renderInputs) {
   const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
@@ -9153,22 +9459,22 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
     if (!serverRender) { res.status(503).json({ error: 'thumbnail_renderer_unavailable' }); return; }
     const target = await resolveShareTarget(isOfficial ? { levelId: id, campaignId } : { mapId: id });
     if (!target) { res.status(404).send('not found'); return; }
-    const renderInputs = await applyThumbnailRenderInputs();
-    const plan = serverRender.levelRenderPlan(target.level);
-    const cacheKey = `${id}:${campaignId || ''}:${thumbnailVersion(plan.contentHash, renderInputs)}`;
-    const png = await _thumbCache.getOrCreate(cacheKey, async () => {
-      const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
-      const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
-      return renderLevelCard({
-        plan,
-        frontendDir,
-        title: target.title,
-        subtitle: target.subtitle,
-        screenName: target.screenName,
-        backgroundSrc,
-        loadDynamicSprite: (src) => thumbnailDynamicSprite(src, renderInputs.mediaCatalog),
-        mediaCatalogRevision: renderInputs.mediaCatalogRevision,
-        sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
+    const png = await withThumbnailRenderInputs(async (renderInputs) => {
+      const plan = serverRender.levelRenderPlan(target.level);
+      const cacheKey = `${id}:${campaignId || ''}:${thumbnailVersion(plan.contentHash, renderInputs)}`;
+      return _thumbCache.getOrCreate(cacheKey, async () => {
+        const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
+        const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
+        return renderLevelCard({
+          plan,
+          title: target.title,
+          subtitle: target.subtitle,
+          screenName: target.screenName,
+          backgroundSrc,
+          loadDynamicSprite: (src) => thumbnailDynamicSprite(src, renderInputs.mediaCatalog),
+          mediaCatalogRevision: renderInputs.mediaCatalogRevision,
+          sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
+        });
       });
     });
     res.setHeader('Content-Type', 'image/png');
@@ -9183,8 +9489,7 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
 // Stable semantic asset resolution. This is deliberately before every static
 // middleware so an absent DB slot can never fall through to a packaged file.
 // The level-thumbnail route above is the sole dynamic /assets namespace carveout.
-app.get(/^\/assets\/(?!level-thumb\/)(.+)$/, async (req, res, next) => {
-  if (!liveMediaServingEnabled) { next(); return; }
+app.get(/^\/assets\/(?!level-thumb\/)(.+)$/, async (req, res) => {
   let slot = null;
   try {
     const encoded = req.path.slice('/assets/'.length);
@@ -9219,8 +9524,9 @@ async function ogTagsFor(req) {
       const key = mapId || levelId;
       let hash = '';
       try {
-        const renderInputs = await applyThumbnailRenderInputs();
-        hash = thumbnailVersion(serverRender.boardHashForLevel(target.level), renderInputs);
+        hash = await withThumbnailRenderInputs((renderInputs) => (
+          thumbnailVersion(serverRender.boardHashForLevel(target.level), renderInputs)
+        ));
       } catch { hash = ''; }
       const imageParams = new URLSearchParams();
       if (hash) imageParams.set('v', hash);

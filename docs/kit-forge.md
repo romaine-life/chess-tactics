@@ -11,6 +11,11 @@ ids, palette transforms, prompts, and text provenance. Source images, atoms,
 candidate frames, contact sheets, and accepted frames belong to private object
 storage, with their lifecycle and active pointers in Postgres.
 
+Surviving deterministic generation and assembly tools accept fetched inputs and
+write candidate output only in explicit outside-repository temporary
+workspaces. A Git-input/Git-output mode is not a supported authoring or
+publication path.
+
 ## Method verification
 
 A real Codex image-generation run emits an `image_generation_call` in its full

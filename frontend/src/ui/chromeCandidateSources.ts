@@ -1,4 +1,6 @@
 import {
+  assertInstalledChromeLiveMediaAvailable,
+  INSTALLED_CHROME_LIVE_SLOTS,
   liveMediaForSlot,
   resolvedLiveMediaUrl,
 } from '@chess-tactics/board-render';
@@ -12,24 +14,13 @@ export type ChromeCandidateRole = ChromeRole | 'divider';
 export type ChromeCandidateKind = 'atom' | 'rail-repeat' | 'rail-long' | 'rail-sheet';
 export type ImageSize = { w: number; h: number };
 
-export const CHROME_LIVE_SLOTS = {
-  outerAtom: 'ui/chrome/outer/atom.png',
-  outerRail: 'ui/chrome/outer/rail.png',
-  innerAtom: 'ui/chrome/inner/atom.png',
-  innerRail: 'ui/chrome/inner/rail.png',
-  dividerJoint: 'ui/chrome/divider/joint.png',
-} as const;
+export const CHROME_LIVE_SLOTS = INSTALLED_CHROME_LIVE_SLOTS;
 
 export type ChromeLiveSlot = (typeof CHROME_LIVE_SLOTS)[keyof typeof CHROME_LIVE_SLOTS];
 
 /** Fail startup instead of silently falling back to source-owned Chrome pixels. */
 export function assertInstalledChromeSlots(): void {
-  for (const slot of Object.values(CHROME_LIVE_SLOTS)) {
-    const active = liveMediaForSlot(slot);
-    if (!active.media.mediaType.startsWith('image/') || !active.media.width || !active.media.height) {
-      throw new Error(`Installed Chrome slot ${slot} is not a dimensioned backend image`);
-    }
-  }
+  assertInstalledChromeLiveMediaAvailable();
 }
 
 export type ChromeCandidateSource = {
@@ -188,9 +179,9 @@ export function installChromeAdminCatalog(catalog: AdminLiveMediaCatalog): numbe
   for (const version of catalog.versions) {
     if (version.status !== 'candidate') continue;
     if (!version.media?.url) continue;
-    // The importer creates a second legacy-bridge version for each selected
-    // installed source. It carries the same candidate metadata plus this
-    // activation marker; the semantic installed slot already represents it.
+    // The completed cutover created a second legacy-bridge version for each
+    // selected installed source. It carries the same candidate metadata plus
+    // this activation marker; the semantic installed slot already represents it.
     if (isRecord(version.metadata.chromeDefaultActivation)) continue;
     const metadata = chromeCandidateMetadata(version);
     if (!metadata) continue;

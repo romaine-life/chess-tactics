@@ -4,3 +4,5 @@ npm-debug.log
 .github
 README.md
 frontend/dist
+frontend/trainer-bundle
+packages/board-render/dist

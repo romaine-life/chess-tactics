@@ -1,7 +1,14 @@
 import type { Level } from './core/level';
 import { DEFAULT_BACKGROUND_SET } from './art/backgroundSets';
 import { levelToEditorBoard } from './core/levelBoard';
-import { applyLiveSeats, resetLiveSeats, type PropSeatMap } from './core/props';
+import { applyPropSeats, currentSeats, type PropSeatMap } from './core/props';
+import {
+  applyLiveMediaCatalog,
+  assertCriticalLiveMediaAvailable,
+  assertInstalledChromeLiveMediaAvailable,
+  type LiveMediaCatalog,
+} from './art/liveMediaCatalog';
+import { applyLiveUnitCatalog, type LiveUnitCatalog } from './ui/unitCatalog';
 import { boardBounds, boardContentHash, boardDrawOps, boardSocialFramingBounds, type BakeBounds, type BoardDrawOp } from './render/renderPlan';
 
 export type ServerDrawOp = BoardDrawOp;
@@ -14,6 +21,7 @@ export interface ServerRenderPlan {
 }
 
 export function levelRenderPlan(level: Level): ServerRenderPlan {
+  currentSeats();
   const board = levelToEditorBoard(level);
   return {
     ops: boardDrawOps(board),
@@ -24,12 +32,34 @@ export function levelRenderPlan(level: Level): ServerRenderPlan {
 }
 
 export function boardHashForLevel(level: Level): string {
+  currentSeats();
   return boardContentHash(levelToEditorBoard(level));
 }
 
-export function applyPropSeatOverrides(overrides: PropSeatMap | null | undefined): boolean {
-  if (!overrides || Object.keys(overrides).length === 0) return resetLiveSeats();
-  return applyLiveSeats(overrides);
+export function hydratePropSeats(seats: PropSeatMap): boolean {
+  return applyPropSeats(seats);
+}
+
+export interface ServerRenderSnapshot {
+  mediaCatalog: LiveMediaCatalog;
+  propSeats: PropSeatMap;
+  unitCatalog: LiveUnitCatalog;
+}
+
+/**
+ * Install and validate every availability-critical renderer authority.
+ *
+ * The backend calls this only while holding its renderer critical section.
+ * Keeping the projection in board-render makes readiness and thumbnails use
+ * the same ground-cover, Chrome, prop-raster, and Unit Art validators as the
+ * browser rather than maintaining a weaker server-only checklist.
+ */
+export function applyServerRenderSnapshot(snapshot: ServerRenderSnapshot): void {
+  applyLiveMediaCatalog(snapshot.mediaCatalog);
+  assertCriticalLiveMediaAvailable();
+  assertInstalledChromeLiveMediaAvailable();
+  applyPropSeats(snapshot.propSeats);
+  applyLiveUnitCatalog(snapshot.unitCatalog);
 }
 
 export function worldBackgroundSrc(): string {

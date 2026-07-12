@@ -119,9 +119,18 @@ npm run check   # node checks + vitest + tsc
 
 ## Deploy
 
-The app is deployed from `k8s/` by ArgoCD. CI builds and pushes
-`romainecr.azurecr.io/chess-tactics:app-<content-fingerprint>` and updates the
-Deployment image tag. Trusted test-slot CI runs also create a unique lookup tag
-such as `ci-pr-<pr>-run-<run>-attempt-<attempt>` that points at the same ACR
-manifest; those lookup tags are for Glimmung test-slot resolution, not chart
-values.
+The app is deployed from `k8s/` by ArgoCD. PR CI bakes the prospective release
+version and computes a fingerprint over the complete tracked Docker inputs,
+explicit `linux/amd64` platform, Buildx version, and resolved base-image digest.
+It pushes new bytes to a run-scoped staging tag, then publishes
+`romainecr.azurecr.io/chess-tactics:app-<content-fingerprint>` without force and
+locks that ACR tag against overwrite and deletion. An existing fingerprint
+identity is never rewritten to different bytes.
+
+The CI summary gives the digest-pinned image to inspect and an exact `gh pr
+comment` command. Run that command only after owner verification. Its marker
+binds the PR head, complete fingerprint, and `sha256:` manifest digest. On merge,
+Build and Deploy recomputes the fingerprint, resolves its immutable identity,
+requires an exact approval marker from a repository owner/member/collaborator,
+and writes that digest-pinned reference to the Argo-tracked `prod` branch. It
+never rebuilds for production and never treats a mutable lookup tag as approval.

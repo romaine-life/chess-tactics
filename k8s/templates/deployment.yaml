@@ -121,22 +121,17 @@ spec:
               value: {{ required "liveMedia.seedCatalogUrl is required for test slots" .Values.liveMedia.seedCatalogUrl | quote }}
             - name: LIVE_MEDIA_SEED_MEDIA_BASE_URL
               value: {{ required "liveMedia.seedMediaBaseUrl is required for test slots" .Values.liveMedia.seedMediaBaseUrl | quote }}
+            # The complete prop-seat document is required content too. Test
+            # slots copy it once into their throwaway Postgres; they never read
+            # a Git baseline or production database directly.
+            - name: PROP_SEATS_SEED_URL
+              value: {{ required "propSeats.seedUrl is required for test slots" .Values.propSeats.seedUrl | quote }}
             {{- else }}
             # Private generic runtime/review/source media. The backend resolves
             # stable same-origin slots and writes immutable objects using the
             # pod's workload identity.
             - name: LIVE_MEDIA_CONTAINER_URL
               value: {{ required "liveMedia.containerUrl is required for production" .Values.liveMedia.containerUrl | quote }}
-            {{- end }}
-            # Temporary stage-1 cutover gate. The final no-media commit deletes
-            # this variable and the backend's legacy branch together.
-            - name: LIVE_MEDIA_SERVING_ENABLED
-              value: "false"
-            {{- if ne (include "chess-tactics.isTestEnv" .) "true" }}
-            # Temporary stage-1 importer capability. Final cutover deletes this
-            # flag and the backend bridge mutation route.
-            - name: LIVE_MEDIA_IMPORT_ENABLED
-              value: "true"
             {{- end }}
             # Deployed backends intentionally own schema rollout. Local backend
             # defaults to read-only schema checks unless explicitly opted into auto.

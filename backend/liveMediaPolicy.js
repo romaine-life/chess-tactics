@@ -38,4 +38,15 @@ function preservesNativeEvidenceForUpload(current, { sha256, mediaType, width, h
   }) === null;
 }
 
-module.exports = { nativeMediaEvidenceIssue, preservesNativeEvidenceForUpload };
+function liveCatalogReadinessIssue(catalog, { requireCritical = false } = {}) {
+  if (!catalog || !Array.isArray(catalog.slots)) return 'live media catalog is missing slots';
+  if (!requireCritical) return null;
+  const hasCritical = catalog.slots.some((slot) => (
+    slot?.lifecycleState === 'active'
+    && slot?.availabilityPolicy === 'critical'
+    && slot?.media?.sha256
+  ));
+  return hasCritical ? null : 'live media catalog has no active critical slot';
+}
+
+module.exports = { liveCatalogReadinessIssue, nativeMediaEvidenceIssue, preservesNativeEvidenceForUpload };

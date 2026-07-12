@@ -5,14 +5,12 @@ import {
   liveMediaSlotUrl,
   liveMediaSlotsWithPrefix,
   resetLiveMediaCatalog,
+  type LiveMediaSlot,
 } from '@chess-tactics/board-render';
+import { testGroundCoverCatalog } from '../test/liveMediaCatalog';
 
 const sha = 'b'.repeat(64);
-const validCatalog = () => ({
-  schemaVersion: 1,
-  revision: 1,
-  updatedAt: null,
-  slots: [{
+const panelSlot = (): LiveMediaSlot => ({
     slot: 'ui/kit/panel.png',
     domain: 'ui-kit',
     role: 'panel',
@@ -34,8 +32,19 @@ const validCatalog = () => ({
       height: 96,
       byteLength: 1200,
     },
-  }],
 });
+const validCatalog = () => {
+  const catalog = testGroundCoverCatalog([panelSlot()]);
+  catalog.revision = 1;
+  catalog.updatedAt = null;
+  return catalog;
+};
+
+const panel = (catalog: ReturnType<typeof validCatalog>) => {
+  const slot = catalog.slots.find((entry) => entry.slot === 'ui/kit/panel.png');
+  if (!slot) throw new Error('synthetic panel slot is missing');
+  return slot;
+};
 
 afterEach(() => resetLiveMediaCatalog());
 
@@ -49,7 +58,7 @@ describe('live media catalog', () => {
 
   it('rejects an immutable URL whose hash does not match', () => {
     const catalog = validCatalog();
-    catalog.slots[0].media.immutableUrl = `/api/media/${'c'.repeat(64)}`;
+    panel(catalog).media.immutableUrl = `/api/media/${'c'.repeat(64)}`;
     expect(() => applyLiveMediaCatalog(catalog)).toThrow(/immutable URL/);
   });
 
@@ -59,15 +68,15 @@ describe('live media catalog', () => {
 
   it('keeps a legacy bridge explicitly non-production-eligible', () => {
     const catalog = validCatalog();
-    catalog.slots[0].versionStatus = 'legacy-bridge';
-    catalog.slots[0].productionEligible = false;
+    panel(catalog).versionStatus = 'legacy-bridge';
+    panel(catalog).productionEligible = false;
     expect(applyLiveMediaCatalog(catalog)).toBe(true);
     expect(liveMediaForSlot('ui/kit/panel.png').versionStatus).toBe('legacy-bridge');
   });
 
   it('rejects a legacy bridge mislabeled as production eligible', () => {
     const catalog = validCatalog();
-    catalog.slots[0].versionStatus = 'legacy-bridge';
+    panel(catalog).versionStatus = 'legacy-bridge';
     expect(() => applyLiveMediaCatalog(catalog)).toThrow(/falsely production eligible/);
   });
 });

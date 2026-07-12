@@ -44,9 +44,9 @@ function buildInfo() {
 // plugin only adds JSX/TSX handling for the new surfaces we migrate onto.
 // NOTE: the dev-only `/__prop-seat/save` + `/__prop-seat/delete` file-writing endpoints were RETIRED
 // in ADR-0061 step 3. /prop-lab Save now PUTs the live seat map to the DB (PUT /api/prop-seats/default,
-// admin-gated, instant-live) instead of writing src/core/propSeats.json on disk; base/variant integrity
-// moved server-side into that PUT's validation (backend/server.js validatePropSeatsData). The committed
-// propSeats.json stays as the always-render baseline, kept in sync by the DB→file bake-back cron.
+// admin-gated, instant-live) instead of writing a repository file; base/variant integrity
+// moved server-side into that PUT's validation (backend/server.js validatePropSeatsData).
+// ADR-0085 later deleted the committed baseline and made the complete DB row authoritative.
 
 // Dev-only stand-in for the backend's /api/bgm. Local dev has no backend process,
 // so this proxies the DEPLOYED backend's playlist (which lists the blob container

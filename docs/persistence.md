@@ -18,6 +18,8 @@ Durable document and live-content tables are created by the inline migrations in
 | `level_working_copies` | one durable working copy per signed-in owner + workspace + level | `/api/editor-documents` | sign-in required; official workspaces also require admin |
 | `campaigns` | per signed-in owner (`PK (owner_email, id)`) | `/api/campaigns`, `/api/campaigns/:id`, `/api/campaigns/:id/levels` | sign-in required |
 | `design_portfolios` | global, by id | `/api/design-portfolios/:id` | GET public, PUT requires sign-in (designer) |
+| `prop_seats` | one complete global prop geometry/tuning document (`default`) | `/api/prop-seats/default` | GET public, PUT requires admin |
+| `sfx_profiles` | one complete global SFX metadata/mix/assignment document (`default`) | `/api/sfx-profiles/default` | GET public, optimistic PUT requires admin |
 | `unit_families` / `unit_assets` / `unit_sprites` | global live Unit Art catalog | `/api/unit-catalog`, `/api/admin/unit-assets` | GET public, mutations require admin |
 | `unit_catalog_state` / `unit_asset_events` | Unit Art revision and audit history | internal | admin mutations write them |
 | `media_slots` / `media_versions` / `media_blobs` | shared live-media substrate and active pointers | `/api/asset-catalog`, `/api/media/:sha`, `/assets/:slot`, `/api/admin/media-assets` | GET public, mutations require admin |
@@ -26,6 +28,13 @@ Durable document and live-content tables are created by the inline migrations in
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or
 overwrite the other's. Writes upsert and bump a `revision`.
+
+The global `prop_seats/default` document is also compare-and-swap protected.
+Its admin PUT must send `expectedRevision`: `null` creates only when the row is
+absent, while an integer must match the revision returned by GET or the write
+returns `409 prop_seats_revision_conflict` with `currentRevision`. PropSeatLab
+keeps the startup revision and advances it only from a successful save response,
+so sequential edits cannot silently overwrite a newer document.
 
 ## Level editor working copies
 
@@ -137,6 +146,13 @@ Unit Art remains a typed catalog over the same ownership model. BGM retains its
 existing Blob-index/range-streaming projection. See
 [`runtime-asset-contract.md`](runtime-asset-contract.md).
 
+The SFX runtime profile is a separate typed document projection over live-media
+recording slots. It owns labels/descriptions, sound-set gains, terrain
+assignments, and arrival behavior, with a compare-and-swap revision on admin
+Save. Its migration creates no default row: absence is decorative silence and
+Studio-unavailable state, while localStorage is only a revision-bound unsaved
+draft. See [ADR-0089](adr/0089-sfx-runtime-profile-is-db-authoritative.md).
+
 What is **not** in Postgres (deliberate, see "Boundaries"): the `lobbies`
 matchmaking map.
 
@@ -191,13 +207,18 @@ intentionally want that run to advance the local database schema.
 
 ## Failure behavior
 
-The game (`/`, `/play`) and static serving do **not** depend on the database, so
-a DB outage must never take the site down. `/health` (liveness/readiness) stays
-DB-independent; the persistence endpoints return **503** with a logged error
-when the database is unavailable or behind the required schema. In `check` mode,
-a behind/missing schema is reported as `schema_migration_required`; in `auto`
-mode, `ensureDbReady()` retries migrations on the next request (self-healing
-after a transient outage). Startup never blocks on the DB.
+HTML and deploy-owned executable chunks can still be served during a database
+outage, and `/health` remains a process-only liveness probe. The playable app is
+intentionally database-dependent: `/ready`, the complete `prop_seats/default`
+document, the live asset catalog, stable
+`/assets/<slot>` routes, and catalog-backed thumbnails fail closed when Postgres,
+the required critical catalog, or Blob Storage is unavailable. Persistence
+endpoints likewise return **503** with a logged error when the database is
+unavailable or behind the required schema. In `check` mode, a behind/missing
+schema is reported as `schema_migration_required`; in `auto` mode,
+`ensureDbReady()` retries migrations on the next request (self-healing after a
+transient outage). Startup never blocks on the DB, but Kubernetes readiness keeps
+an unready process out of service.
 
 ## Backups & break-glass
 
@@ -239,7 +260,12 @@ differs) and must never touch prod data, so the chart renders an **ephemeral
 in-cluster Postgres** (`k8s/templates/postgres-testslot.yaml`, `postgres:16-alpine`
 on `emptyDir`) for slots only, and points the app at it via `DATABASE_URL`. The
 data dies with the slot. The chart also sets `SCHEMA_MIGRATIONS=auto`, so the
-throwaway DB is prepared by the app before endpoint tests run.
+throwaway DB is prepared by the app before endpoint tests run. At startup, the
+slot copies the public Unit Art/media catalogs and the complete
+`prop_seats/default` document into that isolated database; immutable media bytes
+are fetched by hash into local object storage as needed. This is a read-only
+validation projection with no production credentials or write-back path, not a
+second owner-facing content environment or a release authority.
 
 ## CI
 

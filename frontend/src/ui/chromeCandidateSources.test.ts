@@ -6,6 +6,7 @@ import {
   type LiveMediaCatalog,
 } from '@chess-tactics/board-render';
 import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMediaAdmin';
+import { testGroundCoverCatalog } from '../test/liveMediaCatalog';
 import {
   CHROME_LIVE_SLOTS,
   assertInstalledChromeSlots,
@@ -19,11 +20,7 @@ import {
 const slots = Object.values(CHROME_LIVE_SLOTS);
 
 function publicCatalog(): LiveMediaCatalog {
-  return {
-    schemaVersion: 1,
-    revision: 12,
-    updatedAt: null,
-    slots: slots.map((slot, index) => {
+  const catalog = testGroundCoverCatalog(slots.map((slot, index) => {
       const sha = String(index + 1).repeat(64);
       return {
         slot,
@@ -48,8 +45,10 @@ function publicCatalog(): LiveMediaCatalog {
           byteLength: 100,
         },
       };
-    }),
-  };
+    }));
+  catalog.revision = 12;
+  catalog.updatedAt = null;
+  return catalog;
 }
 
 function adminVersion(id: string, enriched = true): AdminLiveMediaVersion {

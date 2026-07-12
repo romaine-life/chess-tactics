@@ -170,7 +170,7 @@ export function wallArtSlotsForFace(artId: string | undefined, face: WallDecorFa
   return wallArt(artId)?.slots.filter((slot) => slot.face === face) ?? [];
 }
 
-export function slotSource(slot: WallArtSlot): WallDecorAsset {
+export function slotSource(slot: WallArtSlot): WallDecorAsset | undefined {
   return wallDecorAsset(slot.sourceId);
 }
 
@@ -186,7 +186,10 @@ export function wallArtSrcs(
   const faces = resolveWallArtFaces(placements, bounds);
   for (const faceMap of faces.values()) {
     for (const face of ['west', 'north'] as const) {
-      for (const slot of wallArtSlotsForFace(faceMap[face], face)) urls.add(slotSource(slot).faces[face].src);
+      for (const slot of wallArtSlotsForFace(faceMap[face], face)) {
+        const source = slotSource(slot);
+        if (source) urls.add(source.faces[face].src);
+      }
     }
   }
   return [...urls];

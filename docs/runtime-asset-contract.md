@@ -44,9 +44,18 @@ Each projection validates its own completeness and geometry before acceptance:
 
 - Unit Art: family, palette, direction, anchor, and native footprint.
 - Terrain: top, side, animation, alpha ownership, projection, face semantics.
+- Ground cover: every `groundcover/<terrain>/v<id>.png` version declares its
+  terrain/id, frame dimensions/count, base anchor, and content width in
+  `versionMetadata.runtime.groundCover`. Browser boards and server thumbnails
+  hydrate the same shared renderer projection from the applied catalog; frame
+  geometry is not duplicated in a generated source module.
 - UI kit: state/slice geometry and native roles.
-- Props, walls, backgrounds, portraits, SFX, fonts, and OG media: their declared
+- Props, walls, backgrounds, portraits, fonts, and OG media: their declared
   component and availability contracts.
+- SFX: recording bytes resolve from live media slots. The complete revisioned
+  `sfx_profiles/default` document owns sound-set metadata/gains, all landable-
+  terrain assignments, and arrival sample/gain/firing. Missing profile state is
+  decorative silence and an unavailable editor, never a committed default.
 - BGM: its existing backend/Blob playlist and range-streaming contract.
 
 The browser, Studio, client image bakes, and server thumbnails must observe one
@@ -69,6 +78,31 @@ failure. There is no committed or generic-art fallback.
 Browser `localStorage`, a Git manifest, a contact sheet, or copying a file cannot
 perform step 5.
 
+### Implemented promotion coverage
+
+Repository and runtime authority cutover is complete: every migrated runtime
+slot resolves through a Postgres pointer and private Blob bytes, and every
+domain can receive non-active candidates or private source archives. Typed
+owner promotion is currently complete only where a domain-owned validator and
+exact-byte review instrument exist:
+
+| Projection | Runtime authority | Candidate ingress | Review and promotion |
+| --- | --- | --- | --- |
+| Board Unit Art | Unit Art Postgres catalog + private Blob | Unit Art APIs | Complete; atomic family acceptance after palette, direction, geometry, and native-pixel checks |
+| Water side faces | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; all eight faces are reviewed on the canonical board and accepted atomically |
+| Other terrain and generic media domains | Shared live-media catalog + private Blob | Shared single/batch APIs | Deliberately blocked until that projection has a typed completeness validator, domain-owned exact-byte review instrument, backend proof validation, and atomic acceptance/rollback tests |
+| BGM | Backend-listed private Blob container | Blob administration | Existing range-streaming projection; intentionally not the generic candidate lifecycle |
+
+The remaining promotion docket is UI kit/Chrome; remaining terrain; props,
+walls, rocks, and atlases; portraits, backgrounds, and social media; then fonts
+and SFX. A generic proof payload or network helper is not a review instrument,
+and must not be used to bypass a missing domain projection.
+
+The SFX profile editor is a configuration instrument, not an audio acceptance
+instrument. It saves the DB document with optimistic revision control; browser
+storage retains only an unsaved draft. Changing a profile reference cannot make
+a candidate recording public or production-eligible.
+
 ## Generation and editing
 
 Generation tools may use temporary local files during an active run. Their
@@ -86,6 +120,13 @@ hashes. These commands deliberately cannot review, accept, or activate media.
 Those judgment operations remain reachable only through the game-owned backend
 review instrument.
 
+`frontend/scripts/build-groundcover.mjs` accepts only outside-repository source,
+tile, and output workspaces. It emits one outside-repository
+`live-media-candidate-batch-v1` manifest whose candidate records carry the typed
+ground-cover runtime metadata, and can upload that same batch when given
+`--api-base`. It never writes a runtime directory or generated TypeScript
+catalog.
+
 ## Tests and development
 
 - The backend is required; no offline media fallback is permitted.
@@ -99,6 +140,11 @@ review instrument.
 - Automated tests may use transient databases and local object storage for
   generated fixtures. Optional preview tooling may project immutable public
   reads, but it cannot write, promote, or supply cutover evidence.
+- Deployed validation slots copy the public Unit Art/media catalogs and the
+  complete `prop_seats/default` document once into their throwaway Postgres and
+  local object-store implementation. That read-only projection never runs in
+  production, never writes back to the live data plane, and is not a second
+  owner-facing content environment.
 - Unit tests use generated/synthetic fixture bytes and injected catalog records.
   Production media is not committed as a test fixture.
 
@@ -115,16 +161,16 @@ CI rejects:
 - static catalogs or manifest flags used as accepted-pointer authority;
 - fallback selection of committed, cached prior, or generic art.
 
-The one-time legacy importer is a migration tool, not a seed path. It is removed
-after every object and pointer is verified in live storage. Existing runtime
-slots are served as `legacy-bridge`; source/review bytes are private archives;
-and files that were only Chrome review candidates become non-active candidate
-versions. Five historically installed Chrome parts are additionally mapped to
-canonical `ui/chrome/...` bridge slots so generated candidate filenames no
-longer select live art. The importer never marks a version accepted and has no
-review or acceptance input. A bridge pointer is named `active`, never
-`accepted`, and its catalog entry is explicitly non-production-eligible;
-storage cutover cannot legitimize its pixels.
+The one-time legacy importer completed the byte-exact cutover and was deleted;
+it is not a seed path and there is no API for creating another bridge. Existing
+runtime slots remain readable as `legacy-bridge`; source/review bytes are private
+archives; and files that were only Chrome review candidates are non-active
+candidate versions. Five historically installed Chrome parts are additionally
+mapped to canonical `ui/chrome/...` bridge slots so generated candidate
+filenames no longer select live art. The completed importer never marked a
+version accepted and had no review or acceptance input. A bridge pointer is
+named `active`, never `accepted`, and its catalog entry is explicitly
+non-production-eligible; storage cutover cannot legitimize its pixels.
 
 The one-time infrastructure ordering, one-data-plane bootstrap, immutable proof,
 and owner-verification gates are documented in the

@@ -61,6 +61,13 @@ export const UNIT_IMG_MAX_H = 92;
 
 export type BoardDrawLayer = 'terrain' | 'linear-feature' | 'scene';
 
+export interface BoardSpriteAnimation {
+  kind: 'ground-cover-sway';
+  frameCount: number;
+  durationMs: number;
+  phase: number;
+}
+
 export interface BoardDrawOp {
   /** Semantic ownership used by composed renderers; never infer this from `src`. */
   layer: BoardDrawLayer;
@@ -77,6 +84,8 @@ export interface BoardDrawOp {
   sy?: number;
   sw?: number;
   sh?: number;
+  /** Code-owned playback policy over catalog-declared sprite-sheet geometry. */
+  animation?: BoardSpriteAnimation;
   /** Board-space polygon paths used to expose broken cells inside a composite terrain image. */
   clipPolygons?: number[][];
 }
@@ -308,7 +317,9 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
           const maskBit = face === 'west' ? 8 : 1;
           if (!(wall.mask & maskBit)) continue;
           for (const slot of wallArtSlotsForFace(faceStyles?.[face], face)) {
-            const faceAsset = slotSource(slot).faces[face];
+            const source = slotSource(slot);
+            if (!source) continue;
+            const faceAsset = source.faces[face];
             ops.push({
               layer: 'scene',
               src: faceAsset.src,
@@ -462,17 +473,23 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       if (!meta) continue;
       ops.push({
         layer: 'scene',
-        src: `${set.basePath}/v${tuft.variant}.png`,
+        src: meta.src,
         sx: 0,
         sy: 0,
-        sw: meta.frameW,
-        sh: meta.frameH,
+        sw: meta.frameWidth,
+        sh: meta.frameHeight,
         dx: left + tuft.dx - meta.baseX,
         dy: top + tuft.dy - meta.baseY,
-        dw: meta.frameW,
-        dh: meta.frameH,
+        dw: meta.frameWidth,
+        dh: meta.frameHeight,
         z: groundCoverZIndex(cell, tuft.dy),
         flipX: tuft.flip,
+        animation: {
+          kind: 'ground-cover-sway',
+          frameCount: set.frameCount,
+          durationMs: 1140,
+          phase: tuft.phase,
+        },
       });
     }
   }

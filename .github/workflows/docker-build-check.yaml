@@ -21,9 +21,9 @@ jobs:
   test-and-build:
     name: Test and build app image
     runs-on: ubuntu-latest
-    # Main builds use the production federated identity; branch dispatches and
-    # prebuilds use the dev identity so Azure OIDC subjects match Glimmung.
-    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+    # PR candidates and manual prebuilds use the dev identity. Only the separate
+    # main-push deployment workflow may enter the production environment.
+    environment: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
     env:
       REGISTRY: romainecr.azurecr.io
       IMAGE: chess-tactics
@@ -86,6 +86,7 @@ jobs:
           cache-dependency-path: |
             backend/package-lock.json
             frontend/package-lock.json
+            packages/board-render/package-lock.json
 
       - name: Test app
         working-directory: backend
@@ -95,12 +96,38 @@ jobs:
           npm ci
           npm test
 
+      - name: Test exact-image release gate
+        run: node --test scripts/exact-image-approval.test.mjs
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
 
-      # Same-repo PRs and workflow_dispatch publish/reuse the app's canonical
-      # content fingerprint tag, then create a unique CI lookup tag that points
-      # at the same manifest for Glimmung-managed test-slot deploys. Fork PRs
+      # Bake the same prospective patch version that a merged PR will receive
+      # in Build and Deploy. This makes the owner-verified branch image's bytes
+      # identical to the image production is allowed to promote.
+      - name: Compute prospective release version (patch)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force origin '+refs/heads/prod:refs/remotes/origin/prod'
+          prod_ver="$(git show origin/prod:k8s/Chart.yaml 2>/dev/null \
+            | sed -n 's/^appVersion:[[:space:]]*"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' | head -1)"
+          base_ver="$(node -p "require('./frontend/package.json').version")"
+          backend_ver="$(node -p "require('./backend/package.json').version")"
+          board_render_ver="$(node -p "require('./packages/board-render/package.json').version")"
+          floor="$(printf '%s\n%s\n%s\n%s\n' "${prod_ver:-0.0.0}" "${base_ver}" "${backend_ver}" "${board_render_ver}" | sort -V | tail -1)"
+          IFS=. read -r MA MI PA <<<"${floor}"
+          new_version="${MA}.${MI}.$((PA + 1))"
+          (cd frontend && npm version "${new_version}" --no-git-tag-version --allow-same-version >/dev/null)
+          (cd backend  && npm version "${new_version}" --no-git-tag-version --allow-same-version >/dev/null)
+          (cd packages/board-render && npm version "${new_version}" --no-git-tag-version --allow-same-version >/dev/null)
+          echo "APP_VERSION=${new_version}" >> "$GITHUB_ENV"
+          echo "Candidate release v${new_version} (prod ${prod_ver:-none} / package floors ${base_ver}, ${backend_ver}, ${board_render_ver})" >> "$GITHUB_STEP_SUMMARY"
+
+      # Same-repo PRs and workflow_dispatch publish/reuse the app's immutable
+      # full-input fingerprint identity. A new image is first pushed under a
+      # run-scoped staging tag, then bound to the fingerprint without --force.
+      # Fork PRs
       # skip login + push (see the build-only step below) — forks can't mint the
       # repo's OIDC token, and we must not hand them registry creds.
       # Reuses build-and-deploy.yaml's exact azure/login (OIDC) + `az acr login`.
@@ -125,54 +152,124 @@ jobs:
             --image app \
             --dockerfile Dockerfile \
             --context . \
-            --paths 'Dockerfile .dockerignore backend frontend'
+            --paths 'Dockerfile .dockerignore backend frontend packages/board-render' \
+            --platform linux/amd64 \
+            --base-images 'node:20-alpine'
 
-      - name: Check existing image tag
+      - name: Inspect immutable candidate identity
         id: image
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         shell: bash
         run: |
           set -euo pipefail
           tag="${{ steps.fingerprint.outputs.proof_tag }}"
-          if az acr repository show-tags \
+          digest="$(az acr repository show \
               --name romainecr \
-              --repository "${IMAGE}" \
-              --query "[?@=='${tag}'] | [0]" \
-              --output tsv | grep -qx "${tag}"; then
+              --image "${IMAGE}:${tag}" \
+              --query digest \
+              --output tsv 2>/dev/null || true)"
+          if [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "target_exists=true" >>"${GITHUB_OUTPUT}"
-            echo "Found reusable image: ${REGISTRY}/${IMAGE}:${tag}"
+            echo "digest=${digest}" >>"${GITHUB_OUTPUT}"
+            echo "Found immutable candidate ${REGISTRY}/${IMAGE}:${tag}@${digest}"
+          elif [[ -n "${digest}" ]]; then
+            echo "::error::Registry returned an invalid digest for ${REGISTRY}/${IMAGE}:${tag}: ${digest}"
+            exit 1
           else
             echo "target_exists=false" >>"${GITHUB_OUTPUT}"
+            echo "staging_tag=candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >>"${GITHUB_OUTPUT}"
             echo "No image found for app fingerprint ${{ steps.fingerprint.outputs.fingerprint }}"
           fi
 
-      - name: Build and push image
+      - name: Build and push run-scoped candidate
+        id: build
         if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && steps.image.outputs.target_exists != 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            NODE_BASE=${{ steps.fingerprint.outputs.resolved_base_ref }}
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.fingerprint.outputs.proof_tag }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.image.outputs.staging_tag }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=max
 
-      - name: Tag app image by commit
-        # Commit-addressed alias of the fingerprint manifest so Glimmung's
-        # deploy-image resolver looks the image up by the verified commit SHA.
-        # Additive alongside the CI lookup tag during the sha-alias migration;
-        # the run-scoped lookup tag is removed once the resolver reads sha-<commit>.
+      - name: Bind and report immutable candidate
+        id: candidate
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         shell: bash
+        env:
+          EXISTING_DIGEST: ${{ steps.image.outputs.digest }}
+          BUILT_DIGEST: ${{ steps.build.outputs.digest }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
         run: |
           set -euo pipefail
-          canonical="${{ steps.fingerprint.outputs.proof_tag }}"
-          commit_tag="sha-${{ steps.source.outputs.sha }}"
-          az acr import --name romainecr \
-            --source "${REGISTRY}/${IMAGE}:${canonical}" \
-            --image "${IMAGE}:${commit_tag}" \
-            --force
-          echo "Tagged ${REGISTRY}/${IMAGE}:${commit_tag} -> ${canonical}"
+          tag="${{ steps.fingerprint.outputs.proof_tag }}"
+          digest="${EXISTING_DIGEST}"
+          if [[ -z "${digest}" ]]; then
+            if [[ ! "${BUILT_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::The run-scoped build did not report an immutable manifest digest."
+              exit 1
+            fi
+            # No --force: an existing fingerprint identity is never rewritten.
+            # A concurrent publisher may win; that is safe only when it bound
+            # the exact same bytes.
+            az acr import --name romainecr \
+              --source "${REGISTRY}/${IMAGE}@${BUILT_DIGEST}" \
+              --image "${IMAGE}:${tag}" >/dev/null 2>&1 || true
+            digest="$(az acr repository show \
+              --name romainecr \
+              --image "${IMAGE}:${tag}" \
+              --query digest \
+              --output tsv 2>/dev/null || true)"
+            if [[ "${digest}" != "${BUILT_DIGEST}" ]]; then
+              echo "::error::Immutable identity collision: ${REGISTRY}/${IMAGE}:${tag} resolves to ${digest:-nothing}, but this build produced ${BUILT_DIGEST}. The existing identity was not overwritten."
+              exit 1
+            fi
+          fi
+
+          # Lock the ACR tag itself after binding. Production also checks this
+          # registry attribute, so immutability does not rely only on every
+          # future publisher remembering to omit --force.
+          az acr repository update \
+            --name romainecr \
+            --image "${IMAGE}:${tag}" \
+            --write-enabled false \
+            --delete-enabled false >/dev/null
+          locked="$(az acr repository show \
+            --name romainecr \
+            --image "${IMAGE}:${tag}" \
+            --output json)"
+          locked_digest="$(printf '%s' "${locked}" | jq -r '.digest // empty')"
+          locked_write="$(printf '%s' "${locked}" | jq -r '.changeableAttributes.writeEnabled')"
+          locked_delete="$(printf '%s' "${locked}" | jq -r '.changeableAttributes.deleteEnabled')"
+          if [[ "${locked_digest}" != "${digest}" || "${locked_write}" != "false" || "${locked_delete}" != "false" ]]; then
+            echo "::error::ACR did not lock ${REGISTRY}/${IMAGE}:${tag} to ${digest}."
+            exit 1
+          fi
+
+          ref="${REGISTRY}/${IMAGE}@${digest}"
+          marker="$(node scripts/exact-image-approval.mjs marker \
+            --head '${{ steps.source.outputs.sha }}' \
+            --fingerprint '${{ steps.fingerprint.outputs.fingerprint }}' \
+            --digest "${digest}")"
+          {
+            echo "digest=${digest}"
+            echo "ref=${ref}"
+          } >>"${GITHUB_OUTPUT}"
+          {
+            echo "## Exact candidate image"
+            echo
+            echo "Verify \`${ref}\`. The fingerprint identity \`${REGISTRY}/${IMAGE}:${tag}\` is registry-locked against overwrite and deletion."
+            echo
+            echo "After owner verification, record the approval on PR #${PR_NUMBER:-<number>}:"
+            echo
+            echo '```sh'
+            printf 'gh pr comment %s --body '\''%s'\''\n' "${PR_NUMBER:-<number>}" "${marker}"
+            echo '```'
+          } >>"${GITHUB_STEP_SUMMARY}"
 
       - name: Build image without pushing (fork PRs)
         # Fork PRs stay build-only: no ACR login, no push. This preserves the
@@ -182,6 +279,9 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            NODE_BASE=${{ steps.fingerprint.outputs.resolved_base_ref }}
           push: false
           load: false
           cache-from: type=gha

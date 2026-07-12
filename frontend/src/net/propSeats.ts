@@ -1,49 +1,64 @@
-// Client for the live prop-seat overlay (ADR-0061). The committed propSeats.json is the always-render
-// BASELINE; a global DB row (public GET) supplies LIVE OVERRIDES layered on top per propId. This
-// mirrors loadOfficialCampaigns in net/campaignWorkspace — public read, admin write. Reads NEVER
-// throw: props must render with zero DB, so any error/miss just leaves the baseline in place.
+// Client for the complete live prop-seat document. ADR-0085 supersedes
+// ADR-0061's committed baseline/overlay: the DB row is the only authority and a
+// missing or malformed read is an application-startup failure.
 
-import { applyLiveSeats, type PropSeatMap } from '../core/props';
+import { applyPropSeats, assertPropSeatMap, type PropSeatMap } from '../core/props';
 import { HttpError } from './http';
 
 const PROP_SEATS_ID = 'default';
+let observedRevision: number | null = null;
 
-function asSeatMap(value: unknown): PropSeatMap {
-  return value && typeof value === 'object' ? (value as PropSeatMap) : {};
-}
-
-// Fetch the live seat overrides (public GET, prop_seats envelope: {portfolio:{data}}). A synthesized
-// -empty miss yields {} — the overlay is a no-op and the baseline stands. Returns the overrides so
-// the server-thumbnail/other callers can reuse; never throws.
-export async function fetchLiveSeats(): Promise<PropSeatMap> {
-  try {
-    const res = await fetch(`/api/prop-seats/${PROP_SEATS_ID}`, { cache: 'no-cache' });
-    if (!res.ok) return {};
-    const body = (await res.json()) as { portfolio?: { data?: unknown } };
-    return asSeatMap(body.portfolio?.data);
-  } catch {
-    return {};
+function liveSeatsDocumentFrom(value: unknown): { data: PropSeatMap; revision: number } {
+  const body = value as { portfolio?: { data?: unknown; revision?: unknown } };
+  const data = body?.portfolio?.data;
+  const revision = body?.portfolio?.revision;
+  assertPropSeatMap(data);
+  if (!Number.isSafeInteger(revision) || Number(revision) < 0) {
+    throw new Error('prop seats response revision is invalid');
   }
+  return { data, revision: Number(revision) };
 }
 
-// Boot hydrate: fetch the live overrides and overlay them on the baseline, re-deriving PROP_DEFS.
-// Fail-soft — a DB outage / empty row leaves the committed baseline in place. Returns whether the
-// overlay changed anything, so the caller can trigger a re-render only when it matters.
+export function currentLiveSeatsRevision(): number | null {
+  return observedRevision;
+}
+
+export function resetLiveSeatsRevision(): void {
+  observedRevision = null;
+}
+
+// Fetch and validate the one complete public document before exposing it.
+export async function fetchLiveSeats(): Promise<PropSeatMap> {
+  const res = await fetch(`/api/prop-seats/${PROP_SEATS_ID}`, { cache: 'no-cache' });
+  if (!res.ok) throw await HttpError.fromResponse('load-prop-seats', res);
+  const document = liveSeatsDocumentFrom(await res.json());
+  observedRevision = document.revision;
+  return document.data;
+}
+
+// Boot hydrate replaces renderer state with the complete DB snapshot. It throws
+// on fetch, schema, completeness, or live-raster projection failure.
 export async function loadLiveSeats(): Promise<boolean> {
-  const overrides = await fetchLiveSeats();
-  return applyLiveSeats(overrides);
+  const seats = await fetchLiveSeats();
+  return applyPropSeats(seats);
 }
 
-// Publish the live seat overrides (admin-only PUT). 401→sign-in, 403→admin-required, 503→retry are
+// Publish the complete live seat document (admin-only PUT). 401→sign-in, 403→admin-required, 503→retry are
 // surfaced via HttpError.status for the caller (/prop-lab Save) to map — see Step 3.
 export async function saveLiveSeats(seats: PropSeatMap): Promise<{ revision: number }> {
+  assertPropSeatMap(seats);
+  if (observedRevision === null) {
+    throw new Error('prop seats cannot be saved before their live revision is loaded');
+  }
+  const expectedRevision = observedRevision;
   const res = await fetch(`/api/prop-seats/${PROP_SEATS_ID}`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ data: seats }),
+    body: JSON.stringify({ data: seats, expectedRevision }),
   });
-  if (!res.ok) throw new HttpError('save-prop-seats', res.status);
-  const body = (await res.json()) as { portfolio?: { revision?: number } };
-  return { revision: body.portfolio?.revision ?? 0 };
+  if (!res.ok) throw await HttpError.fromResponse('save-prop-seats', res);
+  const document = liveSeatsDocumentFrom(await res.json());
+  observedRevision = document.revision;
+  return { revision: document.revision };
 }

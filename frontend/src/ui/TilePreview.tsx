@@ -585,7 +585,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Which pipeline tile the embedded Tile Pipeline compare (Viewer 'tilecompare' kind) shows.
   const [selectedTileCompareId, setSelectedTileCompareId] = useState(initialRoute.selectedTileCompareId ?? COMPARE_TILES[0].id);
   const [selectedGroundCoverId, setSelectedGroundCoverId] = useState<GroundCoverId>(groundCoverAsset(initialRoute.selectedGroundCoverId).id);
-  const [selectedWallDecorId, setSelectedWallDecorId] = useState<string>(wallDecorAsset(initialRoute.selectedWallDecorId).id);
+  const [selectedWallDecorId, setSelectedWallDecorId] = useState<string>(wallDecorAsset(initialRoute.selectedWallDecorId)?.id ?? '');
   const [selectedWallArtId, setSelectedWallArtId] = useState<string>(wallArt(initialRoute.selectedWallArtId)?.id ?? wallArtItems()[0].id);
   const [fenceAdminCatalog, setFenceAdminCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [fenceCatalogError, setFenceCatalogError] = useState<string | null>(null);
@@ -756,7 +756,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.selectedGlossaryName) setSelectedGlossaryName(route.selectedGlossaryName);
       if (route.selectedTileSideId) setSelectedTileSideId(route.selectedTileSideId);
       if (route.selectedGroundCoverId) setSelectedGroundCoverId(groundCoverAsset(route.selectedGroundCoverId).id);
-      if (route.selectedWallDecorId) setSelectedWallDecorId(wallDecorAsset(route.selectedWallDecorId).id);
+      if (route.selectedWallDecorId) {
+        const decor = wallDecorAsset(route.selectedWallDecorId);
+        if (decor) setSelectedWallDecorId(decor.id);
+      }
       if (route.selectedWallArtId) setSelectedWallArtId(wallArt(route.selectedWallArtId)?.id ?? wallArtItems()[0].id);
       if (route.selectedFenceArtworkId) setSelectedFenceArtworkId(route.selectedFenceArtworkId);
       if (route.selectedGameLabLevelId) setSelectedGameLabLevelId(route.selectedGameLabLevelId);
@@ -953,8 +956,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setStudioMode('viewer');
   };
   const openWallArtDraftFromSource = (sourceId: string): void => {
-    setSelectedWallDecorId(wallDecorAsset(sourceId).id);
-    setWallArtDraftSourceId(wallDecorAsset(sourceId).id);
+    const decor = wallDecorAsset(sourceId);
+    if (!decor) return;
+    setSelectedWallDecorId(decor.id);
+    setWallArtDraftSourceId(decor.id);
     setViewerKind('wallart');
     setStudioMode('viewer');
   };
@@ -1170,7 +1175,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     id: 'groundcover',
     label: 'Ground Cover',
     assets: GROUND_COVER_ASSETS,
-    card: (cover) => ({ img: `${cover.set.basePath}/v${cover.set.variants[0]?.id ?? 0}.png`, title: cover.label, badge: cover.badge }),
+    card: (cover) => ({ img: cover.set.variants[0]?.src ?? '', title: cover.label, badge: cover.badge }),
     cardMedia: (cover) => <GroundCoverPreview asset={cover} zoom={zoom} />,
     sections: (visible) => [{ id: 'groundcover', label: 'Ground Cover', assets: [...visible] }],
     query: {
@@ -1203,14 +1208,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     id: 'walldecor',
     label: 'Wall Art Sources',
     assets: WALL_DECOR_ASSETS,
-    card: (decor) => ({ img: decor.src, title: decor.label, badge: decor.badge }),
+    card: (decor) => ({ img: decor.src, title: decor.label, badge: WALL_DECOR_KIND_LABELS[decor.kind] }),
     cardMedia: (decor) => <WallDecorPreview asset={decor} zoom={zoom} />,
     sections: (visible) => [{ id: 'walldecor', label: 'Wall Art Sources', assets: [...visible] }],
     query: {
       value: wallDecorSearch,
       set: setWallDecorSearch,
       placeholder: 'banner, relief, lantern...',
-      match: (decor, q) => [decor.label, decor.kind, decor.badge, decor.method, decor.notes].join(' ').toLowerCase().includes(q),
+      match: (decor, q) => [decor.label, decor.kind, WALL_DECOR_KIND_LABELS[decor.kind]].join(' ').toLowerCase().includes(q),
     },
     zoom: { value: zoom, set: setZoom, min: 0.75, max: 1.6, step: 0.05, cssVar: '--tile-zoom' },
     filters: [
@@ -1718,13 +1723,13 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: <CatalogControls type={wallsCatalogType} />,
     },
     {
-      id: 'scrollbars', label: 'Scrollbars', hint: 'Scrollbar-grip candidates — carved wooden elements. PixelLab is the current preferred default.',
+      id: 'scrollbars', label: 'Scrollbars', hint: 'Scrollbar grips from the live media catalog. Browse and exercise the exact backend bytes.',
       main: <ScrollbarLibraryStudio search={scrollbarSearch} zoom={zoom} selected={selectedScrollbarName} onSelect={setSelectedScrollbarName} />,
       controls: (
         <>
           <label className="tileset-catalog-search">
             <span>Search</span>
-            <input type="search" value={scrollbarSearch} onChange={(event) => setScrollbarSearch(event.target.value)} placeholder="scrollbar, approach…" />
+            <input type="search" value={scrollbarSearch} onChange={(event) => setScrollbarSearch(event.target.value)} placeholder="scrollbar id, preview kind…" />
           </label>
           <label className="tileset-catalog-zoom">
             <span>Zoom</span>

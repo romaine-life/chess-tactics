@@ -2,7 +2,11 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { nativeMediaEvidenceIssue, preservesNativeEvidenceForUpload } = require('./liveMediaPolicy');
+const {
+  liveCatalogReadinessIssue,
+  nativeMediaEvidenceIssue,
+  preservesNativeEvidenceForUpload,
+} = require('./liveMediaPolicy');
 
 const originalSha = 'a'.repeat(64);
 const replacementSha = 'b'.repeat(64);
@@ -42,4 +46,15 @@ test('same-dimension replacement bytes clear stale native evidence', () => {
     width: 96,
     height: 180,
   }), true);
+});
+
+test('container-backed readiness requires at least one active critical live slot', () => {
+  assert.equal(liveCatalogReadinessIssue({ slots: [] }), null);
+  assert.match(liveCatalogReadinessIssue({ slots: [] }, { requireCritical: true }), /no active critical slot/);
+  assert.match(liveCatalogReadinessIssue({
+    slots: [{ lifecycleState: 'active', availabilityPolicy: 'decorative', media: { sha256: originalSha } }],
+  }, { requireCritical: true }), /no active critical slot/);
+  assert.equal(liveCatalogReadinessIssue({
+    slots: [{ lifecycleState: 'active', availabilityPolicy: 'critical', media: { sha256: originalSha } }],
+  }, { requireCritical: true }), null);
 });

@@ -347,7 +347,10 @@ function collectBoardArt(
     const cover = cell.groundCover;
     if (cover) {
       const set = groundCoverSet(cell.terrain);
-      if (set) for (const tuft of cover.tufts) tiles.add(`${set.basePath}/v${tuft.variant}.png`);
+      if (set) for (const tuft of cover.tufts) {
+        const variant = set.variants.find((entry) => entry.id === tuft.variant);
+        if (variant) tiles.add(variant.src);
+      }
     }
   }
   const units = new Set<string>();

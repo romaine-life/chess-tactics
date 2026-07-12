@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { currentLiveMediaCatalog, resetLiveMediaCatalog } from '@chess-tactics/board-render';
 import { loadLiveMediaCatalog } from './liveMedia';
+import { testGroundCoverCatalog } from '../test/liveMediaCatalog';
 
 const catalog = {
-  schemaVersion: 1,
+  ...testGroundCoverCatalog(),
   revision: 4,
   updatedAt: '2026-07-11T00:00:00.000Z',
-  slots: [{
+  slots: [...testGroundCoverCatalog().slots, {
     slot: 'tiles/surface/water-default-side.png',
     domain: 'terrain',
     role: 'side',

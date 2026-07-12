@@ -1,5 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
+import { applyLiveMediaCatalog, resetLiveMediaCatalog, resetPropSeats } from '@chess-tactics/board-render';
 import { createSkirmish } from './setup';
+import { applyTestPropSeats } from '../test/livePropSeats';
+import { testGroundCoverCatalog, testStructureMediaSlots } from '../test/liveMediaCatalog';
+
+beforeAll(() => {
+  applyLiveMediaCatalog(testGroundCoverCatalog(testStructureMediaSlots()));
+  applyTestPropSeats();
+});
+afterAll(() => {
+  resetPropSeats();
+  resetLiveMediaCatalog();
+});
 import { legalMoves, livingPieces } from '../core/rules';
 import { isPassableTerrain } from '../core/terrain';
 import { createBlankLevel, type Level } from '../core/level';

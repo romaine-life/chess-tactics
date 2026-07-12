@@ -32,7 +32,8 @@ Portrait masters, candidates, review images, and accepted delivery rasters are
 stored in private object storage. Postgres owns their typed portrait metadata,
 review evidence, active/accepted pointers, and revisions. Runtime portrait
 components resolve stable backend routes such as the semantic role for a piece
-and palette; `/assets/...` is not a filesystem path.
+and palette; `/assets/...` is a backend semantic-slot address, never a
+filesystem or `frontend/public` path.
 
 The Selected Unit card, roster, Portrait editor, Studio, and server rendering
 must all resolve the same catalog revision. A missing critical portrait slot is

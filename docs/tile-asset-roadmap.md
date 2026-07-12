@@ -53,9 +53,10 @@ The canonical board tile geometry is locked unless a deliberate art-direction de
 
 Source of truth:
 
-- `frontend/src/art/tileTemplate.ts`
-- `frontend/scripts/generate-tile-template.mjs`
-- live template slots under `/assets/tiles/canonical-template/`
+- Deterministic geometry: `frontend/src/art/tileTemplate.ts`.
+- Template media: stable backend semantic slots under
+  `/assets/tiles/canonical-template/`; these are catalog routes, not public
+  files or repository output directories.
 - Socket contract: `frontend/src/core/tileSockets.ts`
 - Board generation: `frontend/src/core/tileBoardGenerator.ts`
 - Coverage diagnostics: `frontend/src/core/tileCoverage.ts`
@@ -188,22 +189,27 @@ Pass criteria:
 
 Implementation notes:
 
-- Prototype generator: `frontend/scripts/generate-animated-tile-prototypes.mjs`
-- NPM command: `npm run tiles:animated`
+- Candidate transform: `frontend/scripts/build-water-anim.py`. It reads fetched
+  source pixels and writes candidate sheets only in an explicit
+  outside-repository temporary workspace; the exact sheets are then uploaded to
+  their live semantic slots.
 - Studio assets can declare optional animation metadata; renderers resolve the current frame without changing socket rules or geometry.
 - Tileset Studio view mode includes frame-by-frame controls for animated assets: play or pause, previous or next frame, and a scrubber.
 - Current prototype is deliberately subtle and should be judged in board context before expanding to more families.
 
 ## Tooling Notes
 
-Deterministic geometry/generation entry points create temporary outputs, then
-upload live candidates:
+The Git-input/Git-output publisher modes and their production-folder targets are
+retired. Reusable deterministic transforms take explicit outside-repository
+input and output paths, then the live-media client uploads the exact candidate
+bytes. Representative entry points are:
 
-- `frontend/scripts/generate-clean-canonical-tiles.mjs`
-- `frontend/scripts/extract-concept-materials.mjs`
-- `frontend/scripts/generate-tile-template.mjs`
+- `frontend/scripts/project-tile-surface.py`
+- `frontend/scripts/split-tiles.py`
+- `frontend/scripts/build-water-anim.py`
+- `frontend/scripts/live-media-admin-client.mjs`
 
-Current live semantic namespaces:
+Current live semantic namespaces (backend slots, not folders):
 
 - `tiles/canonical-true-iso/*` — normalized production-role slots.
 - `tiles/canonical-clean/*`

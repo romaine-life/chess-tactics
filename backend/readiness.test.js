@@ -65,8 +65,6 @@ test('liveness stays up while readiness fails closed on an unavailable database'
     PORT: String(port),
     DATABASE_URL: 'postgres://readiness:readiness@127.0.0.1:1/readiness',
     LIVE_MEDIA_STORAGE_DIR: path.join(tempRoot, 'live-media'),
-    LIVE_MEDIA_SERVING_ENABLED: 'true',
-    LIVE_MEDIA_IMPORT_ENABLED: 'false',
     SCHEMA_MIGRATIONS: 'auto',
     BAKED_BACKEND_DIR: __dirname,
     FRONTEND_DIR: path.join(tempRoot, 'frontend'),

@@ -27,9 +27,10 @@ All terrain tiles must use the canonical board footprint:
 
 Source of truth:
 
-- `frontend/src/art/tileTemplate.ts`
-- `frontend/scripts/generate-tile-template.mjs`
-- backend terrain-template slots under `/assets/tiles/canonical-template/`
+- Deterministic geometry: `frontend/src/art/tileTemplate.ts`.
+- Template media: stable backend semantic slots under
+  `/assets/tiles/canonical-template/`. These addresses are live catalog routes,
+  never files under `frontend/public` or another repository directory.
 
 ## Exposed Face Contract
 

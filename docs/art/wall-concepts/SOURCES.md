@@ -8,4 +8,6 @@ The retired wall bake read media from this directory and wrote frames into
 `frontend/public`; both sides of that filesystem pipeline were deleted at the
 ADR-0085 cutover. New material candidates are projected in a temporary
 workspace, uploaded to typed wall slots, and reviewed through the game-owned
-wall instrument before backend acceptance.
+wall instrument before backend acceptance. The resulting `/assets/...`
+addresses are stable backend semantic slots, never files restored under
+`frontend/public`.

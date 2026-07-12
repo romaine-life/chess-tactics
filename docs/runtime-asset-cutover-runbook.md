@@ -31,12 +31,12 @@ cutover does not create or seed a second owner-facing asset database. CI may
 still create a transient synthetic Postgres as a test-process implementation
 detail; it is not a content environment or release gate.
 
-The substrate image has one temporary rollout variable,
+The historical stage-1 substrate image had one temporary rollout variable,
 `LIVE_MEDIA_SERVING_ENABLED=false`. While false, migration/admin/catalog and
-immutable verification routes are live, but `/assets/*` and thumbnail asset
-loads still use the packaged pre-cutover bytes. Only the stage-1 image may
-contain this branch. The final no-media image deletes both the variable and the
-legacy branch; this is not a permanent fallback switch.
+immutable verification routes were live, but `/assets/*` and thumbnail asset
+loads used the packaged pre-cutover bytes. Only that frozen stage image contained
+the branch. The final image has neither the variable nor the legacy branch; this
+cannot be used as a fallback switch.
 
 ## Why this cannot be one blind deploy
 
@@ -112,12 +112,14 @@ cases; the operator does not create or seed another asset database. The smoke
 must cover:
 
 - migration 18 from an empty database and idempotent re-entry;
-- candidate creation, byte upload, owner review and candidate acceptance,
-  legacy-bridge activation, archive,
+- candidate creation, byte upload, owner review, candidate acceptance, archive,
+  and rejection of the retired bridge-creation route;
   optimistic revision conflicts, and catalog revision bumps;
 - stable-slot redirect and immutable byte delivery;
 - hash, byte length, media type, and image-dimension rejection;
 - critical incomplete state returning an explicit availability error;
+- missing, partial, or invalid `prop_seats/default` failing both its public read
+  and `/ready`, with tests installing a complete synthetic document explicitly;
 - rejection of incompatible directory/container/seed combinations;
 - generated-fixture reads with hash verification and atomic local writes.
 
@@ -135,11 +137,14 @@ ServiceAccount, production Postgres variables, `LIVE_MEDIA_CONTAINER_URL`, and
 `SCHEMA_MIGRATIONS=auto`, but has **no Service, HTTPRoute, or Ingress**. Reach it
 only through `kubectl port-forward`.
 
-Run the exact same-repository PR image published by `Docker Build Check`. Set
-`LIVE_MEDIA_SERVING_ENABLED=true` and `LIVE_MEDIA_IMPORT_ENABLED=true` on this
-unserved pod. Serving must be enabled inside the pod because the importer proves
-stable semantic routes after the complete catalog exists; the pod remains
-unreachable except through the operator's local port-forward.
+The completed bootstrap ran the exact same-repository stage PR image published
+by `Docker Build Check`. That frozen unserved pod set
+`LIVE_MEDIA_SERVING_ENABLED=true` and `LIVE_MEDIA_IMPORT_ENABLED=true` so the
+one-time importer could create bridge rows and prove stable semantic routes after
+the complete catalog existed. The final image deletes both flags and the bridge
+mutation route, so this import procedure cannot be rerun from normal application
+code. The stage pod remained unreachable except through the operator's local
+port-forward.
 
 For the one import session, loopback dev auth may identify the allowlisted admin;
 send the mock session cookie over the port-forward. Never place that pod behind a
@@ -147,8 +152,8 @@ Service, and delete it immediately after import. An actual owner session cookie 
 also valid and avoids dev auth. Do not merge or deploy the media-bearing
 substrate image to the normal live Service.
 
-The temporary importer runs from the frozen source checkout, not from the pod. It
-must:
+The deleted temporary importer ran from the frozen source checkout, not from the
+pod. Its completion proof required it to:
 
 1. create each deterministic slot/version through the admin API;
 2. upload bytes and require the server's recorded hash/length/type/dimensions to
@@ -189,6 +194,16 @@ availability policy, acceptance contract, candidate metadata, native evidence,
 disposition, and migration provenance must match; an extra or accepted migration
 version fails proof.
 
+The same unserved bootstrap must confirm `GET /api/prop-seats/default` returns a
+complete document containing the six code-owned base identities (`oak`,
+`cottage`, `cabin`, `lodge`, `rock`, and `fieldstone`). ADR-0085 deleted the two
+committed seat baselines: the frontend, `/ready`, and server thumbnails all fail
+closed without this row. If the pre-cutover live row is absent, migrate the exact
+complete document once through the admin PUT while the frozen checkout still
+exists, record its response revision and content hash in cutover evidence, and
+then delete that checkout. This is an operator-owned data migration, never a
+runtime seed or DB→Git bake-back path.
+
 Delete the bootstrap pod. Start a fresh unserved pod against the same live
 Postgres/Blob state and re-run the verifier to prove the catalog and bytes did
 not live only in process or pod storage.
@@ -217,10 +232,49 @@ packaged-filesystem reader, cutover allowances, static Studio media inventories,
 renamed/embedded media signatures, and any media copied into `frontend/dist`.
 
 Push the final deletion commit to the same application PR and wait for `Docker
-Build Check` to publish its exact `sha-<commit>` image. Run that image as another
-unserved pod using the live app database, Blob container, and ServiceAccount,
-with import disabled and with the temporary serving flag absent. Port-forward it
-to a local origin and run the verifier:
+Build Check` to bake the same prospective patch version production will use. It
+publishes one immutable `app-<complete-input-fingerprint>` identity without
+force, locks that ACR tag against overwrite and deletion, and reports the
+digest-pinned image in the workflow summary. Run the final pod from that digest,
+never from a lookup tag. The fingerprint covers the tracked Docker inputs,
+explicit build platform, Buildx version, and resolved base-image digest.
+Do not backfill the ground-cover runtime metadata while any old served backend is
+running. The old image does not understand `metadata.runtime.groundCover`; once
+it observes a catalog revision containing those keys it rejects the catalog and
+returns 503. Conversely, the final image requires the typed metadata before its
+catalog can become ready. There is therefore no version overlap in which both
+images can serve this catalog shape.
+
+This zero-user, one-live-data-plane cutover uses an explicit reversible
+maintenance window. It is not a universal zero-downtime rollout. Record the
+normal deployment's desired replica count and prepare both the forward and
+inverse ground-cover transactions before opening the window, then proceed in
+this order:
+
+1. Start the digest-pinned final image as an unserved pod against the live app
+   Postgres and Blob container, using the normal ServiceAccount and
+   `SCHEMA_MIGRATIONS=auto`. It must have no Service, HTTPRoute, Ingress, import
+   capability, or serving switch. Migration 19 may create the additive SFX
+   profile table, but the pod is expected to remain not ready until the existing
+   ground-cover versions have typed runtime metadata.
+2. Scale every old served application workload to zero. Prove no old backend pod
+   remains by checking both the workload replicas and every pod selected by the
+   live Service; do not infer completion from the scale command returning.
+3. In one database transaction, lock the exact active ground-cover versions
+   identified by the frozen inventory, verify their slots and content hashes,
+   and add only their exact typed `metadata.runtime.groundCover` records. Do not
+   create a version, upload a blob, change a stable pointer, or change a version
+   status. Write an audit event for each changed version and bump the media
+   catalog revision exactly once after the complete set validates.
+4. Through the port-forwarded final backend's admin API, create the complete
+   revisioned `sfx_profiles/default` document from the frozen pre-cutover
+   configuration and record its revision and content hash. Migration 19 never
+   seeds this document from Git. The old image ignores both the additive table
+   and profile, but the final image must not substitute a committed SFX default
+   if the row is absent; runtime sound remains honestly silent until this step.
+5. Delete the migration-auto pod and start a fresh unserved pod at the same exact
+   image digest with `SCHEMA_MIGRATIONS=check`. Require readiness, port-forward
+   it to a local origin, and run the full verifier:
 
 ```powershell
 cd backend
@@ -228,8 +282,9 @@ $env:LIVE_MEDIA_COOKIE = '<owner session cookie>'
 npm run media:verify-cutover -- --origin http://127.0.0.1:3000 --inventory C:\path\live-media-inventory.json --json
 ```
 
-Restart the final candidate pod and repeat a critical-slot pass at the pinned
-catalog revision:
+6. Restart that final candidate pod once more in migration-check mode and repeat
+   a critical-slot pass at the pinned catalog revision. Confirm the restarted
+   pod is still the recorded immutable digest rather than a mutable tag:
 
 ```powershell
 npm run media:verify-cutover -- --origin http://127.0.0.1:3000 --critical-only --expect-revision <revision>
@@ -249,24 +304,60 @@ Then verify the real application, not only the API:
 
 User verification of this exact port-forwarded final image is the release gate.
 It reads and writes the one live app data plane; no copied catalog participates.
+The normal Service intentionally remains unavailable during this inspection.
+
+If the owner rejects the candidate or the cutover is abandoned, stop the final
+pod, transactionally remove only the newly added
+`metadata.runtime.groundCover` keys from the same verified versions, write the
+inverse audit events, and bump the catalog revision once. Do not remove immutable
+blobs, versions, pointers, statuses, migration 19, or the SFX profile: the old
+image ignores the additive SFX state. Restore the recorded old replica count and
+prove the old image is ready before ending the maintenance window. This is a
+reversible cutover operation, not a supported post-cutover steady state.
 
 ## Stage 6: production cutover
 
-Immediately before rollout:
+After the owner explicitly verifies the digest-pinned final pod, run the exact
+`gh pr comment` command printed in `Docker Build Check`'s summary. It records a
+machine-readable marker in this form:
+
+```text
+<!-- exact-image-approval:v1 head=<PR-head-SHA> fingerprint=<64-hex-fingerprint> digest=sha256:<64-hex-digest> -->
+```
+
+Do not write that marker before verification and do not hand-edit its identity
+fields. Immediately before rollout:
 
 1. rerun the production verifier with the frozen inventory;
 2. confirm the final image digest is the user-verified unserved-pod digest;
-3. confirm OpenTofu and migration 18 are already applied;
+3. confirm OpenTofu, migration 18, migration 19, the typed ground-cover metadata,
+   and `sfx_profiles/default` are present in the one live data plane;
 4. confirm `npm run check:media-final` passes after a fresh production build,
    with no importer/frozen exception;
-5. confirm there were no media-authoring changes after inventory freeze.
+5. confirm there were no media-authoring changes after inventory freeze;
+6. confirm the old deployment is still at zero and the inverse ground-cover
+   transaction remains available until the final deployment is healthy.
 
-Merge the application PR so the normal build/deploy workflow publishes that
-same source to the `prod` deployment branch. Verify the live app's
+Merge the application PR so the normal build/deploy workflow promotes that exact
+verified image rather than rebuilding it. On a merged PR, the workflow recomputes
+the complete release fingerprint, requires its ACR identity to remain
+registry-locked, and requires a trusted PR comment that exactly binds the merged PR's head SHA,
+fingerprint, and resolved digest. It then writes that full digest-pinned image
+reference to the `prod` deployment branch. A changed prospective version, source
+input, Buildx version, platform, base-image digest, or registry binding fails
+deployment and requires a fresh candidate build, final-pod verification, and
+approval marker. Restore normal service with the exact digest-pinned final
+deployment and require its desired replicas to become ready before ending the
+maintenance window. Do not accept or activate the pending Water batch while the
+normal Service is unavailable. After service is restored, verify the live app's
 `/api/asset-catalog`, every immutable
 object, representative stable slots, the real board/Studio routes, and an on-demand
 level thumbnail. Watch 404/503 rates for `/assets` and `/api/media`, catalog-load
 failures, Blob authorization failures, and pod memory/restarts.
+
+Only after that production verification may the owner-approved Water candidate
+group be accepted atomically. Water acceptance is an art-pointer transaction,
+not part of the compatibility-critical ground-cover/SFX maintenance window.
 
 The final state has no seed variables in production and no repository media path.
 Rollback of bad art is an accepted-pointer transaction. Application rollback must
@@ -282,8 +373,12 @@ Retain outside Git or in the normal operational evidence store:
 - frozen inventory and its SHA-256;
 - importer final report;
 - bootstrap and final-candidate verifier JSON reports;
+- old-pod scale-to-zero proof plus the forward/inverse ground-cover transaction
+  manifests and their single catalog-revision bumps;
+- `sfx_profiles/default` revision and content hash;
 - final image digest and catalog revision;
 - user verification route/evidence;
+- final deployment readiness and normal-Service restoration proof;
 - final no-committed-media guard output.
 
 Only then may the cutover be called complete.

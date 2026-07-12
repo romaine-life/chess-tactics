@@ -1,20 +1,20 @@
-# The content fingerprint image tag is bumped by
-# .github/workflows/build-and-deploy.yaml on every push to main (via sed on
-# this file).
+# Build and Deploy replaces this value with the full, digest-pinned image ref
+# already built and verified on the merged PR. Non-production lanes may still
+# supply an ordinary content-fingerprint tag.
 image:
   repository: romainecr.azurecr.io/chess-tactics
-  # Quoted so YAML never reinterprets image tag characters.
+  # Quoted so YAML never reinterprets tag or digest-reference characters.
   tag: "app-d8b760f7bd2277a16d792ec4c39d158d2482445670540d88a3ac2626789318aa"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
 # (backend/server.js reads these as env; deployment.yaml wires them onto the
 # container). Written by .github/workflows/build-and-deploy.yaml on every push to
-# main — the SAME commit that bumps the image tag above — via
+# main — the SAME commit that pins the image reference above — via
 # scripts/write-build-info.mjs (a targeted per-line replace, so these are the only
 # lines it touches). Deliberately carried in the manifest, NOT baked into the
-# image: the tag is a pure content fingerprint and a content-identical rebuild is
-# skipped, so baking these in would let a reused image show a stale PR. Empty by
+# image: the deployed ref is content-addressed and can be reused, so baking these
+# in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
   prTitle: "Persistent menu shell: button column stays; Settings / Campaign / Editor drill in"
@@ -151,6 +151,12 @@ liveMedia:
   # credentials or makes production writable.
   seedCatalogUrl: "https://chess.romaine.life/api/asset-catalog"
   seedMediaBaseUrl: "https://chess.romaine.life/api/media"
+
+# Test-slot-only source for the required complete live placement document. The
+# backend copies it into isolated ephemeral Postgres at startup; production
+# never sets this variable and has no runtime seed path.
+propSeats:
+  seedUrl: "https://chess.romaine.life/api/prop-seats/default"
 
 ingress:
   gatewayName: main

@@ -1,25 +1,50 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import crypto from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import {
-  FROZEN_LEGACY_CUTOVER,
   SYNTHETIC_TEST_MEDIA_MAX_BYTES,
   chromeInstalledSourceAuthorityReason,
   collectNoCommittedMediaViolations,
   committedMediaFilesystemAssumptionReason,
   committedMediaWriterReason,
-  createCanonicalGitByteReader,
   embeddedMediaLiteralReason,
-  frozenCutoverSnapshot,
   isAllowedSyntheticTestMedia,
   isMediaPath,
   isStaticPromotionAuthority,
+  scrollbarStaticAuthorityReason,
 } from './check-no-committed-media.mjs';
 
 describe('no-committed-media guard', () => {
+  it('rejects scrollbar preferred state and committed browse rosters but permits stable preview geometry', () => {
+    const oldRoster = [
+      'export const SCROLLBAR_ASSETS = [',
+      "  { name: 'oak-pixellab', file: '/assets/ui/scrollbars/oak-pixellab.png', kind: 'sprite', preferred: true },",
+      "  { name: 'oak-forge', file: '/assets/ui/scrollbars/oak-forge.png', kind: 'sprite' },",
+      '];',
+    ].join('\n');
+    expect(scrollbarStaticAuthorityReason('frontend/src/ui/scrollbarCatalog.ts', oldRoster)).toMatch(/preferred\/default/);
+    expect(isStaticPromotionAuthority('frontend/src/ui/scrollbarCatalog.ts', oldRoster)).toBe(true);
+
+    const renamedRoster = [
+      'const grips = [',
+      "  { name: 'oak-pixellab', label: 'Oak PixelLab', kind: 'sprite' },",
+      "  { name: 'oak-forge', label: 'Oak Forge', kind: 'sprite' },",
+      '];',
+    ].join('\n');
+    expect(scrollbarStaticAuthorityReason('frontend/src/ui/scrollbarBrowser.ts', renamedRoster)).toMatch(/browse roster/);
+    expect(isStaticPromotionAuthority('frontend/src/ui/scrollbarBrowser.ts', renamedRoster)).toBe(true);
+
+    const geometryOnly = [
+      'const PREVIEW_KIND_BY_STABLE_SLOT = {',
+      "  'ui/scrollbars/oak-pixellab.png': 'sprite',",
+      "  'ui/scrollbars/oak-forge.png': 'sprite',",
+      '} as const;',
+    ].join('\n');
+    expect(scrollbarStaticAuthorityReason('frontend/src/ui/scrollbarCatalog.ts', geometryOnly)).toBeNull();
+    expect(isStaticPromotionAuthority('frontend/src/ui/scrollbarCatalog.ts', geometryOnly)).toBe(false);
+  });
+
   it('covers runtime formats and editable source-art formats', () => {
     expect(isMediaPath('frontend/public/assets/tiles/water.png')).toBe(true);
     expect(isMediaPath('docs/art/source/terrain.blend')).toBe(true);
@@ -176,114 +201,6 @@ describe('no-committed-media guard', () => {
     )).toBeNull();
   });
 
-  it('fingerprints the exact frozen cutover set by canonical path, size, and content hash', () => {
-    expect(frozenCutoverSnapshot([
-      { path: 'b.png', byteLength: 2, sha256: 'b'.repeat(64) },
-      { path: 'a.png', byteLength: 1, sha256: 'a'.repeat(64) },
-    ])).toEqual({
-      count: 2,
-      bytes: 3,
-      sha256: 'fa965ad94a918980402d90489c5423d380aa486d237f9c306666bd9102443868',
-    });
-    expect(FROZEN_LEGACY_CUTOVER).toEqual({
-      count: 3984,
-      bytes: 428728479,
-      sha256: 'c4ed900d39d9be8721ff2ea1fae6ff1f70bb89c7ca2ce8555d5e63b78c263106',
-    });
-  });
-
-  it('freezes canonical Git blobs across CRLF checkouts and uses working bytes for modifications', () => {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'canonical-git-bytes-test-'));
-    const relativePath = 'frontend/public/assets/crlf-catalog.json';
-    const absolutePath = path.join(repoRoot, relativePath);
-    const canonicalLf = Buffer.from('{"row":1}\n{"row":2}\n', 'utf8');
-    const checkoutCrlf = Buffer.from('{"row":1}\r\n{"row":2}\r\n', 'utf8');
-    const git = (args) => execFileSync('git', args, {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const cutoverRun = () => {
-      const violations = collectNoCommittedMediaViolations({
-        repoRoot,
-        trackedFiles: [relativePath],
-        allowFrozenCutover: FROZEN_LEGACY_CUTOVER.sha256,
-      });
-      const mismatch = violations.find((violation) => violation.kind === 'frozen-cutover-mismatch');
-      expect(mismatch).toBeDefined();
-      return {
-        actual: JSON.parse(mismatch.detail.slice(mismatch.detail.indexOf('{'))).actual,
-        violations,
-      };
-    };
-    try {
-      git(['init', '--quiet']);
-      git(['config', 'user.email', 'guard@example.test']);
-      git(['config', 'user.name', 'Media guard test']);
-      git(['config', 'core.autocrlf', 'false']);
-      git(['config', 'core.safecrlf', 'false']);
-      git(['config', 'commit.gpgSign', 'false']);
-      fs.writeFileSync(
-        path.join(repoRoot, '.gitattributes'),
-        `${relativePath} text eol=crlf\n`,
-      );
-      fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-      fs.writeFileSync(absolutePath, canonicalLf);
-      git(['add', '.gitattributes', relativePath]);
-      git(['commit', '--quiet', '-m', 'fixture']);
-      fs.rmSync(absolutePath);
-      git(['checkout', '--quiet', '--', relativePath]);
-
-      const workingBytes = fs.readFileSync(absolutePath);
-      expect(workingBytes.equals(checkoutCrlf)).toBe(true);
-      expect(git(['status', '--porcelain'])).toBe('');
-
-      const reader = createCanonicalGitByteReader(repoRoot);
-      expect(reader.head).toMatch(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/);
-      expect(reader.changedPaths.has(relativePath)).toBe(false);
-      expect(reader.canonicalBlobSizes.get(relativePath)).toBe(canonicalLf.length);
-      const canonicalBytes = reader.read(relativePath, workingBytes);
-      expect(canonicalBytes.equals(canonicalLf)).toBe(true);
-      expect(reader.read(relativePath, workingBytes)).toBe(canonicalBytes);
-      const attributesWorkingBytes = fs.readFileSync(path.join(repoRoot, '.gitattributes'));
-      expect(reader.read('.gitattributes', attributesWorkingBytes)).toBe(attributesWorkingBytes);
-
-      const expectedCanonicalSnapshot = frozenCutoverSnapshot([{
-        path: relativePath,
-        byteLength: canonicalLf.length,
-        sha256: crypto.createHash('sha256').update(canonicalLf).digest('hex'),
-      }]);
-      const cleanRun = cutoverRun();
-      expect(cleanRun.actual).toEqual(expectedCanonicalSnapshot);
-      expect(cleanRun.violations).toContainEqual(expect.objectContaining({
-        kind: 'tracked-public-asset-file',
-        path: relativePath,
-        byteLength: workingBytes.length,
-      }));
-
-      const modifiedWorkingBytes = Buffer.from('{"row":1}\r\n{"row":2}\r\n{"row":3}\r\n', 'utf8');
-      fs.writeFileSync(absolutePath, modifiedWorkingBytes);
-      const modifiedReader = createCanonicalGitByteReader(repoRoot);
-      expect(modifiedReader.changedPaths.has(relativePath)).toBe(true);
-      expect(modifiedReader.read(relativePath, modifiedWorkingBytes)).toBe(modifiedWorkingBytes);
-      const expectedModifiedSnapshot = frozenCutoverSnapshot([{
-        path: relativePath,
-        byteLength: modifiedWorkingBytes.length,
-        sha256: crypto.createHash('sha256').update(modifiedWorkingBytes).digest('hex'),
-      }]);
-      const modifiedRun = cutoverRun();
-      expect(modifiedRun.actual).toEqual(expectedModifiedSnapshot);
-      expect(modifiedRun.violations).toContainEqual(expect.objectContaining({
-        kind: 'tracked-public-asset-file',
-        path: relativePath,
-        byteLength: modifiedWorkingBytes.length,
-      }));
-      expect(expectedModifiedSnapshot.sha256).not.toBe(expectedCanonicalSnapshot.sha256);
-    } finally {
-      fs.rmSync(repoRoot, { recursive: true, force: true });
-    }
-  });
-
   it('rejects committed promotion authority without rejecting live-catalog code or tests', () => {
     expect(isStaticPromotionAuthority('frontend/src/asset-catalog.json', '{}')).toBe(true);
     expect(isStaticPromotionAuthority(
@@ -327,6 +244,14 @@ describe('no-committed-media guard', () => {
     expect(isStaticPromotionAuthority(
       'frontend/src/ui/SceneAnimLab.tsx',
       "const RIGHT_CANDIDATES = { water: [{ category: 'candidate', sheet: '/assets/candidate.png' }] };",
+    )).toBe(true);
+    expect(isStaticPromotionAuthority(
+      'frontend/config/asset-catalog.yaml',
+      'registeredForProduction: true\nacceptedAssetId: frozen-pointer',
+    )).toBe(true);
+    expect(isStaticPromotionAuthority(
+      'frontend/config/asset-catalog.toml',
+      'productionAccepted = true',
     )).toBe(true);
   });
 
@@ -465,6 +390,236 @@ describe('no-committed-media guard', () => {
     }
   });
 
+  it('rejects cutover switches and packaged readers moved out of server.js', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'moved-cutover-scaffold-test-'));
+    const write = (relativePath, value) => {
+      const target = path.join(repoRoot, relativePath);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, value, 'utf8');
+    };
+    try {
+      write('backend/liveMediaToggle.js', "export const enabled = process.env.LIVE_MEDIA_IMPORT_ENABLED;");
+      write('backend/liveMediaFallback.js', "export const root = path.join(frontendDir, 'assets');");
+      const trackedFiles = ['backend/liveMediaToggle.js', 'backend/liveMediaFallback.js'];
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles })).toEqual([
+        expect.objectContaining({ kind: 'temporary-cutover-scaffold', path: 'backend/liveMediaFallback.js' }),
+        expect.objectContaining({ kind: 'temporary-cutover-scaffold', path: 'backend/liveMediaToggle.js' }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a renamed backend mutation that can create another legacy bridge', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'renamed-bridge-mutation-test-'));
+    const target = path.join(repoRoot, 'backend', 'mediaImportAdmin.js');
+    const toolTarget = path.join(repoRoot, 'scripts', 'reactivate-media.mjs');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.mkdirSync(path.dirname(toolTarget), { recursive: true });
+    fs.writeFileSync(target, [
+      "app.post('/api/admin/media-versions/:id/imported', async (req, res) => {",
+      "  await pool.query(`UPDATE media_versions SET status = 'legacy-bridge' WHERE id = $1`, [req.params.id]);",
+      '  res.sendStatus(204);',
+      '});',
+    ].join('\n'), 'utf8');
+    fs.writeFileSync(
+      toolTarget,
+      "await sql(`UPDATE media_versions SET status = 'legacy-bridge' WHERE id = $1`, [id]);\n",
+      'utf8',
+    );
+    try {
+      expect(collectNoCommittedMediaViolations({
+        repoRoot,
+        trackedFiles: ['backend/mediaImportAdmin.js', 'scripts/reactivate-media.mjs'],
+      })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          path: 'backend/mediaImportAdmin.js',
+          detail: 'retired legacy-bridge creation capability remains after final cutover',
+        }),
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          path: 'scripts/reactivate-media.mjs',
+          detail: 'retired legacy-bridge creation capability remains after final cutover',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects public-root catalogs, immutable hash pins, and bridge methods in the canonical client', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'renamed-live-authority-test-'));
+    const write = (relativePath, value) => {
+      const target = path.join(repoRoot, relativePath);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, value, 'utf8');
+    };
+    const sha = 'a'.repeat(64);
+    const trackedFiles = [
+      'frontend/public/media/catalog.json',
+      'frontend/public/ambience/client.js',
+      'frontend/public/legal/fonts/test/OFL.txt',
+      'frontend/src/pinnedMedia.ts',
+      'frontend/scripts/live-media-admin-client.mjs',
+    ];
+    write(trackedFiles[0], JSON.stringify({ slot: 'ui/panel.png', hash: sha }));
+    write(trackedFiles[1], 'export const executable = true;');
+    write(trackedFiles[2], 'Synthetic license text');
+    write(trackedFiles[3], `export const media = '/api/media/${sha}';`);
+    write(trackedFiles[4], "export const bridge = (id) => fetch(`/api/admin/media-versions/${id}/bridge`, { method: 'POST' });");
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles })).toEqual([
+        expect.objectContaining({
+          kind: 'hardcoded-immutable-media-pointer',
+          path: 'frontend/src/pinnedMedia.ts',
+        }),
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          path: 'frontend/scripts/live-media-admin-client.mjs',
+        }),
+        expect.objectContaining({
+          kind: 'tracked-public-file',
+          path: 'frontend/public/media/catalog.json',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('checks Docker build output explicitly without requiring Git metadata', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'built-output-only-media-test-'));
+    const cleanChunk = path.join(repoRoot, 'frontend', 'dist', 'app-code', 'index.js');
+    const disguisedMedia = path.join(repoRoot, 'frontend', 'dist', 'app-code', 'payload.dat');
+    fs.mkdirSync(path.dirname(cleanChunk), { recursive: true });
+    fs.writeFileSync(cleanChunk, 'export const ready = true;\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, builtOutputOnly: true })).toEqual([]);
+      fs.writeFileSync(disguisedMedia, Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        Buffer.alloc(16, 0),
+      ]));
+      expect(collectNoCommittedMediaViolations({ repoRoot, builtOutputOnly: true })).toEqual([
+        expect.objectContaining({ kind: 'built-media', path: 'frontend/dist/app-code/payload.dat' }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('permanently rejects recreation of the retired Git-media importer', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-git-media-path-test-'));
+    const relativePath = 'frontend/scripts/migrate-live-assets.mjs';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, '// one-time importer must stay deleted\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ kind: 'retired-git-media-path', path: relativePath }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    'frontend/src/core/propSeats.json',
+    'packages/board-render/src/core/propSeats.json',
+  ])('permanently rejects recreation of the retired prop-seat baseline %s', (relativePath) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-prop-seat-path-test-'));
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, '{}\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ kind: 'retired-git-media-path', path: relativePath }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    'frontend/src/ui/design/wallDecorManifest.json',
+    'packages/board-render/src/ui/design/wallDecorManifest.json',
+  ])('permanently rejects recreation of the retired wall-decoration manifest %s', (relativePath) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-wall-decor-path-test-'));
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, '{}\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ kind: 'retired-git-media-path', path: relativePath }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a renamed runtime import of the retired wall-decoration manifest', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-wall-decor-import-test-'));
+    const relativePath = 'packages/board-render/src/core/legacyWallDecor.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "import manifest from '../design/wallDecorManifest.json';\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          path: relativePath,
+          detail: 'committed wall-decoration media manifest remains after live-catalog cutover',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a moved prop-seat overlay or last-good fallback implementation', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-prop-seat-fallback-test-'));
+    const relativePath = 'packages/board-render/src/core/legacySeats.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, 'export function applyPropSeatOverrides(value) { return value; }\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          path: relativePath,
+          detail: 'committed or last-good prop-seat fallback remains after DB-only cutover',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    'const SAMPLE_GAINS = { grass: 0.5 };',
+    "const TERRAIN_SAMPLE = { grass: 'grass' };",
+    "export const ARRIVAL_BAKED = { sample: 'arrival' };",
+    'export const SFX_ASSETS = [];',
+    "button.textContent = 'Copy for Claude'; // bake SFX into source",
+  ])('rejects retired hardcoded/copy-to-source SFX authority: %s', (source) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-sfx-profile-test-'));
+    const relativePath = 'frontend/src/sfxLegacy.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${source}\n`, 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          path: relativePath,
+          detail: 'hardcoded or copy-to-source SFX profile authority remains after DB profile cutover',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it('rejects external source fetchers that bypass backend archival', () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'no-committed-source-fetch-test-'));
     const relativePath = 'frontend/scripts/fetch-art-source.mjs';
@@ -475,7 +630,6 @@ describe('no-committed-media guard', () => {
       const violations = collectNoCommittedMediaViolations({
         repoRoot,
         trackedFiles: [relativePath],
-        allowCutoverImporter: true,
       });
       expect(violations).toEqual([expect.objectContaining({ kind: 'external-source-fetcher-bypass', path: relativePath })]);
     } finally {
@@ -521,7 +675,7 @@ describe('no-committed-media guard', () => {
       const tarBytes = Buffer.alloc(512, 0);
       tarBytes.write('ustar', 257, 'ascii');
       write(trackedFiles[10], tarBytes);
-      const violations = collectNoCommittedMediaViolations({ repoRoot, trackedFiles, allowCutoverImporter: true });
+      const violations = collectNoCommittedMediaViolations({ repoRoot, trackedFiles });
       expect(violations.map(({ kind, path: violationPath }) => `${kind}:${violationPath}`)).toEqual([
         'committed-media-filesystem-assumption:frontend/scripts/build-review.mjs',
         'committed-media-writer:frontend/scripts/build-review.mjs',

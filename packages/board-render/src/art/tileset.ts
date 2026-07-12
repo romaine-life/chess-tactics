@@ -56,9 +56,10 @@ const PRODUCTION_VARIANTS: ProductionVariant[] = Array.from({ length: 8 }, (_, n
   probability: n === 0 ? 1 : 0.8,
 }));
 
-// Water tops are ANIMATED: each variant ships a ripple sheet (`water-<n>-top-anim.png`,
-// frames left-to-right) baked by scripts/build-water-anim.mjs from PixelLab v3 frames
-// generated at the native 96x180 footprint. Other families stay static.
+// Water tops resolve a ripple-sheet semantic slot (`water-<n>-top-anim.png`, frames
+// left-to-right). frontend/scripts/build-water-anim.py produces candidate sheets from
+// fetched PixelLab v3 frames in an outside-repository temporary workspace; the exact
+// native-96x180 results are uploaded to live storage. Other families stay static.
 const WATER_TOP_ANIM_FRAMES = 8;
 
 const surfaceTile = (family: TileFamilyId, variant: ProductionVariant): TileAsset => ({

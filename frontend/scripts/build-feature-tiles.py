@@ -262,7 +262,8 @@ def bake_feature(kind, material, total, source=None, bank_w=BANK_W):
 
 # River bank-treatment comparison variants (NOT shipped): bake extra throwaway materials from
 # the SAME water source so they can be rendered side-by-side via ?board. Run with --compare;
-# delete river-water{nb,wide}-*.png before committing.
+# keep river-water{nb,wide}-*.png in the outside-repository temporary comparison
+# workspace; never commit them or upload them as production candidates.
 COMPARE = [('river', 'waternb', 'water', 0), ('river', 'waterwide', 'water', 11)]
 
 

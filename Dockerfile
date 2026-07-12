@@ -1,4 +1,5 @@
-FROM node:20-alpine AS frontend-build
+ARG NODE_BASE=node:20-alpine
+FROM ${NODE_BASE} AS frontend-build
 
 WORKDIR /app
 
@@ -12,7 +13,7 @@ RUN npm --prefix frontend run build
 # DOM-free engine bundle for the headless training Job (backend/train-worker.mjs).
 RUN npm --prefix frontend run build:trainer
 
-FROM node:20-alpine
+FROM ${NODE_BASE}
 
 WORKDIR /app
 

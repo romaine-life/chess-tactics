@@ -376,7 +376,7 @@ async function loadSpriteWithAvailability(assetStore, src, loadDynamicSprite, re
   }
 }
 
-async function loadSprite(frontendDir, src, loadDynamicSprite, revision, availabilityPolicy) {
+async function loadSprite(src, loadDynamicSprite, revision, availabilityPolicy) {
   return loadSpriteWithAvailability(
     thumbnailAssetStore,
     src,
@@ -409,7 +409,6 @@ function drawTiledImage(ctx, img, x, y, width, height, tileWidth, tileHeight) {
 
 async function paintBackground(
   ctx,
-  frontendDir,
   backgroundSrc,
   loadDynamicSprite,
   mediaCatalogRevision,
@@ -417,7 +416,6 @@ async function paintBackground(
 ) {
   if (!backgroundSrc) throw new Error('live world background slot is missing');
   const world = await loadSprite(
-    frontendDir,
     backgroundSrc,
     loadDynamicSprite,
     mediaCatalogRevision,
@@ -447,7 +445,6 @@ async function paintBackground(
 
 async function paintTitleBar(
   ctx,
-  frontendDir,
   screenName,
   loadDynamicSprite,
   mediaCatalogRevision,
@@ -461,7 +458,6 @@ async function paintTitleBar(
     '/assets/ui/kit/icons/brand-shield.png',
   ], SPRITE_LOAD_CONCURRENCY, (src) => (
     loadSprite(
-      frontendDir,
       src,
       loadDynamicSprite,
       mediaCatalogRevision,
@@ -501,7 +497,6 @@ async function paintTitleBar(
 
 async function renderLevelCard({
   plan,
-  frontendDir,
   title,
   subtitle,
   screenName,
@@ -524,7 +519,6 @@ async function renderLevelCard({
 
   await paintBackground(
     ctx,
-    frontendDir,
     backgroundSrc,
     loadDynamicSprite,
     renderRevision,
@@ -546,7 +540,6 @@ async function renderLevelCard({
   const uniqueSources = [...new Set(ops.map((op) => op.src))];
   const loadedImages = await mapWithConcurrency(uniqueSources, SPRITE_LOAD_CONCURRENCY, (src) => (
     loadSprite(
-      frontendDir,
       src,
       loadDynamicSprite,
       renderRevision,
@@ -610,7 +603,6 @@ async function renderLevelCard({
 
   await paintTitleBar(
     ctx,
-    frontendDir,
     screenName || 'Level',
     loadDynamicSprite,
     renderRevision,

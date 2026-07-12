@@ -4,13 +4,10 @@ import { tileFamilies } from '../art/tileset';
 import { baseSocketsForFamily } from '../core/tileSockets';
 import type { SocketBoardCell } from '../core/tileBoardGenerator';
 import { boardLabTerrainCanvasCells, immutableBoardLabTerrainSrc, resolveBoardLabTerrainSrc } from './BoardLabBoard';
+import { testGroundCoverCatalog } from '../test/liveMediaCatalog';
 
 function hydrateSlot(slot: string, sha256 = 'a'.repeat(64)): void {
-  applyLiveMediaCatalog({
-    schemaVersion: 1,
-    revision: 9,
-    updatedAt: '2026-07-11T00:00:00.000Z',
-    slots: [{
+  const catalog = testGroundCoverCatalog([{
       slot,
       domain: 'terrain',
       role: slot.includes('-side.') ? 'side' : 'animation',
@@ -32,8 +29,10 @@ function hydrateSlot(slot: string, sha256 = 'a'.repeat(64)): void {
         height: 180,
         byteLength: 512,
       },
-    }],
-  });
+    }]);
+  catalog.revision = 9;
+  catalog.updatedAt = '2026-07-11T00:00:00.000Z';
+  applyLiveMediaCatalog(catalog);
 }
 
 afterEach(() => resetLiveMediaCatalog());

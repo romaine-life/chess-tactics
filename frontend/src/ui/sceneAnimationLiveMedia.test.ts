@@ -3,6 +3,7 @@ import { applyLiveMediaCatalog, resetLiveMediaCatalog } from '@chess-tactics/boa
 import { SCENE_ANIMS } from './SceneBackdrop';
 import { sceneAnimationVariants } from './SceneAnimLab';
 import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMediaAdmin';
+import { testGroundCoverCatalog } from '../test/liveMediaCatalog';
 
 const activeVersionId = '00000000-0000-4000-8000-000000000001';
 const candidateVersionId = '00000000-0000-4000-8000-000000000002';
@@ -43,11 +44,7 @@ afterEach(() => resetLiveMediaCatalog());
 
 describe('scene animation live-media lifecycle', () => {
   it('derives active, candidate, and archived variants from backend snapshots', () => {
-    applyLiveMediaCatalog({
-      schemaVersion: 1,
-      revision: 4,
-      updatedAt: null,
-      slots: [{
+    const publicCatalog = testGroundCoverCatalog([{
         slot: region.slot,
         domain: 'ui-kit',
         role: 'animation',
@@ -69,8 +66,10 @@ describe('scene animation live-media lifecycle', () => {
           height: region.h,
           byteLength: 100,
         },
-      }],
-    });
+      }]);
+    publicCatalog.revision = 4;
+    publicCatalog.updatedAt = null;
+    applyLiveMediaCatalog(publicCatalog);
     const adminCatalog: AdminLiveMediaCatalog = {
       schemaVersion: 1,
       revision: 4,

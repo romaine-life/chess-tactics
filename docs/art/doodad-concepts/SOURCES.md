@@ -66,14 +66,17 @@ House art is STYLIZED, never photoreal (he reads scanned-mesh renders as "too re
 2. **Photoreal mesh → gated Codex RESTYLE** (e.g. `cabin`, `lodge`). Keep the real shape/iso, re-skin
    to pixel-art. Render a Blender capture as above, then:
    ```
-   node frontend/scripts/forge-prop-restyle.mjs <capture.png> <out.png>
+   node frontend/scripts/forge-prop-restyle.mjs <capture.png> [attempts] -- \
+     --api-base <backend> --cookie <cookie> --slot <slot> \
+     --domain prop --role sprite --label <label>
    ```
    This goes through `codex-imagegen.mjs` → `imageGenVerdict` (rollout `image_generation_call`), so a
-   code-drawn run is REJECTED (never call `codex.exe` raw). Output is flat-green → chroma-keyed to
-   alpha; the existing bridge then crops to content, downscales to ~210px wide, re-binarises alpha,
-   and measures the anchor. Under [ADR-0076](../../adr/0076-scaling-is-calibration-production-art-is-native-1x.md),
-   that downscaled result is calibration work, not accepted production art; regenerate at the
-   approved native footprint before acceptance.
+   code-drawn run is REJECTED (never call `codex.exe` raw). The command uses an OS-temporary
+   workspace, converts flat green to alpha, and uploads the result directly as a non-active live
+   candidate; it does not write an output or bridge into Git. Any crop, resample, or anchor-tuning
+   pass remains calibration work under
+   [ADR-0076](../../adr/0076-scaling-is-calibration-production-art-is-native-1x.md), not accepted
+   production art. Regenerate at the approved native footprint before acceptance.
 
 Canonical output slots are `/assets/props/<propId>/{back,front}.png` (flat sprites use the
 same image for both halves). The URL is backend-resolved; it is not a repository path.

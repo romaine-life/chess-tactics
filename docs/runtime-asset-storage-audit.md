@@ -63,6 +63,31 @@ candidate databases, installed candidate selectors, filesystem readers, and
 committed-media writers so the same parallel-branch pattern fails once this
 cutover lands.
 
+## Final repository and runtime-authority cutover (2026-07-12)
+
+The deletion pass removes all 3,984 frozen Git inputs (428,728,479 canonical
+bytes), the one-time importer and its test, the two serving/import switches, the
+packaged-file thumbnail reader, and the bridge-creation API. It preserves only
+code-owned geometry, masks, prompts, and text provenance beneath the former art
+trees. The existing `legacy-bridge` rows remain readable and replaceable because
+they are live database state; normal application code cannot create another one.
+
+The guard's frozen-fingerprint and importer allowances were themselves deleted.
+CI runs its unconditional tracked-source checks in `npm run check`, then
+`npm run build` runs an explicit output-only pass after Vite emits `dist` (the
+Docker build context intentionally has no `.git` metadata). The operator's
+post-build `check:media-final` combines both views. A fresh production build
+reports zero tracked, embedded, packaged, static-authority, writer,
+filesystem-assumption, or cutover-scaffold violations.
+
+This completes the storage/runtime cutover, not every domain's owner-operated
+acceptance instrument. Unit Art and the atomic Water side projection are
+contract-complete for promotion. Other migrated domains are live-backed and can
+receive candidates, but acceptance remains fail-closed until each domain adds
+the typed validator, exact-byte review surface, backend proof validation, and
+atomic tests required by ADR-0085. The current coverage and ordered docket live
+in [`runtime-asset-contract.md`](runtime-asset-contract.md#implemented-promotion-coverage).
+
 ## Why the problem recurred
 
 This was policy-driven rather than a single stray fallback.
@@ -116,9 +141,9 @@ catalogs:
 - Generation and editing tools upload candidates. They do not write production
   media into the repository.
 
-## Enforcement gap to close
+## Enforcement invariant
 
-The migration is incomplete until all of the following are true:
+The completed migration keeps all of the following true:
 
 - tracked runtime media is rejected repository-wide, not just for units;
 - production code and CSS cannot treat `/assets/...` as a filesystem path;
@@ -128,7 +153,7 @@ The migration is incomplete until all of the following are true:
   revision;
 - accepted pointers and review evidence exist only in live storage;
 - source and rejected-candidate binaries leave Git for private object storage;
-- the one-time importer is removed after its verified cutover.
+- the one-time importer remains deleted after its verified cutover.
 
 ADR-0085 records this as the repository-wide decision. Domain visual and geometry
 rules remain valid; only their Git/filesystem storage clauses are superseded.
