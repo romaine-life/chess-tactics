@@ -308,8 +308,11 @@ if (/divider-atoms-v1/.test(chromeRuntime + chromeLab)) {
 for (const id of [
   'outer-panel',
   'inner-box',
+  'inner-asset-swatch',
   'inner-locked-rectangle',
   'inner-text-button',
+  'inner-toggle',
+  'inner-list-row',
   'inner-tool-square',
   'inner-select-tool',
   'inner-brush-tool',
@@ -337,13 +340,27 @@ for (const id of [
 if (/CHROME_UNIT_CLASS_SEGMENTS/.test(chromeUnitRegistry) || !/\.map\(\(entry\) => entry\.name\)/.test(chromeUnitRegistry)) {
   failures.push('chrome unit class paths must be built from each registry entry name, not a parallel segment map');
 }
+if (!/function\s+chromeUnitClassNames/.test(chromeUnitRegistry)
+  || !/\.\.\.chromeUnitAncestorChain\(unit\)\.map\(\(entry\) => entry\.name\)/.test(chromeUnitRegistry)
+  || !/unit\.name/.test(chromeUnitRegistry)) {
+  failures.push('registered chrome units must emit their real ancestor-to-leaf DOM classes');
+}
+if (!/chromeUnitRoleSelectors/.test(chromeRuntime)
+  || !/chromeUnitScopedSelectors/.test(chromeRuntime)
+  || !/chromeFamilyRoleSelectors\('inner'\)/.test(chromeRuntime)
+  || /const\s+innerControlSelectors\s*=\s*`/.test(chromeRuntime)) {
+  failures.push('generated chrome runtime must derive live inner targets from the chrome unit registry, not a parallel selector literal');
+}
 if (!/function\s+chromeUnitsInHierarchyOrder/.test(chromeUnitRegistry) || !/childrenByParent/.test(chromeUnitRegistry)) {
   failures.push('chrome unit registry must expose a hierarchy-order helper so parents render before children');
 }
 const registryIndex = (id) => chromeUnitRegistry.indexOf(`id: '${id}'`);
 for (const [parent, child] of [
+  ['inner-box', 'inner-asset-swatch'],
   ['inner-box', 'inner-locked-rectangle'],
   ['inner-locked-rectangle', 'inner-text-button'],
+  ['inner-locked-rectangle', 'inner-toggle'],
+  ['inner-locked-rectangle', 'inner-list-row'],
   ['inner-locked-rectangle', 'inner-tool-square'],
   ['inner-tool-square', 'inner-select-tool'],
   ['inner-tool-square', 'inner-brush-tool'],
@@ -381,9 +398,12 @@ if (!/id:\s*'inner-dropdown'[\s\S]*?name:\s*'dropdown'[\s\S]*?parentId:\s*'inner
 }
 for (const [id, kind, content] of [
   ['inner-box', 'template', 'none'],
+  ['inner-asset-swatch', 'template', 'slot'],
   ['inner-locked-rectangle', 'template', 'slot'],
   ['inner-tool-square', 'template', 'slot'],
   ['inner-text-button', 'template', 'slot'],
+  ['inner-toggle', 'template', 'slot'],
+  ['inner-list-row', 'template', 'slot'],
   ['inner-select-tool', 'implementation', 'fixed'],
   ['inner-brush-tool', 'implementation', 'fixed'],
   ['inner-erase-tool', 'implementation', 'fixed'],
@@ -664,7 +684,8 @@ if (!chromeRuntime.includes('const outerAtomOutset = cssPx(outerFrame.atomOverla
 if (!chromeRuntime.includes('--le-outer-atom-outset: ${outerAtomOutset} !important;')) {
   failures.push('generated chrome runtime must publish the outer atom outset to live chrome consumers');
 }
-if (!/const\s+familySurface\s*=\s*':is\(\.level-editor-screen, \.skirmish-screen\)'/.test(chromeRuntime)
+if (!/const\s+familySurface\s*=\s*CHROME_FAMILY_SURFACE_SELECTOR/.test(chromeRuntime)
+  || !/CHROME_FAMILY_SURFACE_SELECTOR\s*=\s*':is\(\.level-editor-screen, \.skirmish-screen, \.chrome-family-surface\)'/.test(chromeRuntime)
   || !chromeRuntime.includes('${familySurface} .le-outer-panel::before')
   || !/cornerAtomOverlayCss\(`\$\{familySurface\} \.le-outer-panel`/.test(chromeRuntime)) {
   failures.push('generated chrome runtime must target the shared outer-panel class for frame and atom rendering');
@@ -676,7 +697,57 @@ if (!/function\s+selectorListParts/.test(chromeRuntime)
 if (/\.level-editor-screen \.le-events-overlay\s*\{[\s\S]*?border-image-source/.test(chromeRuntime)) {
   failures.push('generated chrome runtime must not keep a special events-overlay outer chrome branch');
 }
-if (!/skirmish-hud le-outer-panel/.test(levelEditorChromeConsumers) || !/le-events-overlay le-outer-panel/.test(levelEditorChromeConsumers)) {
+
+// The audit specimen is not the product integration. The normal, ready Level Editor
+// controls branch and events overlay must render the same shared consumers that Chrome
+// Audit renders, and the controls consumer itself must own the complete outer-panel
+// composition. Keep these checks scoped to the component/function that owns each
+// responsibility so a fixture or sibling cannot accidentally satisfy the live contract.
+const levelEditorChromeImports = [
+  ...levelEditor.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]\.\/LevelEditorChromeConsumers['"]/g),
+];
+if (!levelEditorChromeImports.some((match) => /\bLevelEditorControlsPanel\b/.test(match[1]))) {
+  failures.push('live Level Editor must import LevelEditorControlsPanel from LevelEditorChromeConsumers');
+}
+if (!levelEditorChromeImports.some((match) => /\bLevelEditorEventsOverlay\b/.test(match[1]))) {
+  failures.push('live Level Editor must import LevelEditorEventsOverlay from LevelEditorChromeConsumers');
+}
+if (!/\{editorLoadError\s*\?[\s\S]*?\)\s*:\s*\(\s*(?:\/\*[\s\S]*?\*\/\s*)*<LevelEditorControlsPanel\b/.test(levelEditor)) {
+  failures.push('live Level Editor normal controls path must render the shared LevelEditorControlsPanel consumer');
+}
+if (!/\{eventsOpen\s*\?\s*\(\s*(?:\/\*[\s\S]*?\*\/\s*)*<LevelEditorEventsOverlay\b/.test(levelEditor)) {
+  failures.push('live Level Editor open-events path must render the shared LevelEditorEventsOverlay consumer');
+}
+const rawLevelEditorControlAside = [...levelEditor.matchAll(/<aside\b[^>]*>/g)]
+  .some((match) => /\bskirmish-hud\b/.test(match[0]) && /aria-label\s*=\s*['"]Editor controls['"]/.test(match[0]));
+if (rawLevelEditorControlAside) {
+  failures.push('live Level Editor must not restore a raw parallel skirmish-hud controls aside; render LevelEditorControlsPanel');
+}
+const rawLevelEditorEventsOverlay = [...levelEditor.matchAll(/<div\b[^>]*>/g)]
+  .some((match) => /\ble-events-overlay\b/.test(match[0]) && /role\s*=\s*['"]dialog['"]/.test(match[0]));
+if (rawLevelEditorEventsOverlay) {
+  failures.push('live Level Editor must not restore a raw parallel le-events-overlay dialog; render LevelEditorEventsOverlay');
+}
+
+const levelEditorControlsPanelStart = levelEditorChromeConsumers.indexOf('export function LevelEditorControlsPanel');
+const levelEditorControlsPanelEnd = levelEditorChromeConsumers.indexOf('export function LevelEditorEventsOverlay', levelEditorControlsPanelStart);
+const levelEditorControlsPanel = levelEditorControlsPanelStart >= 0 && levelEditorControlsPanelEnd > levelEditorControlsPanelStart
+  ? levelEditorChromeConsumers.slice(levelEditorControlsPanelStart, levelEditorControlsPanelEnd)
+  : '';
+const levelEditorControlsPanelAside = levelEditorControlsPanel.match(/<aside\b[^>]*>/)?.[0] ?? '';
+if (!levelEditorControlsPanel) {
+  failures.push('missing shared LevelEditorControlsPanel implementation');
+} else if (!/chromeUnitClassNames\('outer-panel',\s*'skirmish-hud',\s*'le-outer-panel',\s*className\)/.test(levelEditorControlsPanel)
+  || !/data-chrome-unit="outer-panel"/.test(levelEditorControlsPanelAside)
+  || !/data-chrome-consumer="level-editor-controls"/.test(levelEditorControlsPanelAside)
+  || !/className=\{rootClassName\}/.test(levelEditorControlsPanelAside)
+  || !/<span className="le-outer-panel-fill"/.test(levelEditorControlsPanel)
+  || !/<div className="le-outer-panel-content le-outer-panel-content--titled"/.test(levelEditorControlsPanel)) {
+  failures.push('shared LevelEditorControlsPanel must own the canonical skirmish-hud le-outer-panel fill/content structure');
+}
+
+if (!/chromeUnitClassNames\('outer-panel',\s*'skirmish-hud',\s*'le-outer-panel',\s*className\)/.test(levelEditorChromeConsumers)
+  || !/chromeUnitClassNames\('outer-panel',\s*'le-events-overlay',\s*'le-outer-panel',\s*className\)/.test(levelEditorChromeConsumers)) {
   failures.push('level editor outer chrome consumers must instantiate the shared le-outer-panel class');
 }
 if (!/data-chrome-unit="outer-panel"/.test(skirmishHud)

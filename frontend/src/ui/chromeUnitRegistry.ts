@@ -35,8 +35,11 @@ export type ChromeUnitStateModel =
 export type ChromeUnitId =
   | 'outer-panel'
   | 'inner-box'
+  | 'inner-asset-swatch'
   | 'inner-locked-rectangle'
   | 'inner-text-button'
+  | 'inner-toggle'
+  | 'inner-list-row'
   | 'inner-tool-square'
   | 'inner-select-tool'
   | 'inner-brush-tool'
@@ -144,10 +147,47 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     defaultHeight: 112,
     minHeight: 44,
     maxHeight: 320,
-    selectors: [],
+    selectors: [
+      '[data-chrome-unit="inner-box"]',
+      '.le-violations',
+      '.le-status-current',
+      '.le-material-values',
+      '.le-status-entry',
+      '.unit-portrait',
+      '.skirmish-service-record',
+    ],
     usage: [
       'Base free-form primitive for inner-role controls',
       'Concrete inner controls inherit their geometry contract from child classes',
+    ],
+  },
+  {
+    id: 'inner-asset-swatch',
+    name: 'asset-swatch',
+    label: 'Inner asset swatch',
+    role: 'inner',
+    dimensionPolicy: 'free-form',
+    controlPolicy: 'width-height',
+    catalogKind: 'template',
+    contentPolicy: 'slot',
+    tone: 'neutral',
+    stateModel: 'toggle',
+    badge: 'asset choice',
+    token: '--le-chrome-inner-rail-w',
+    parentId: 'inner-box',
+    defaultWidth: 84,
+    minWidth: 64,
+    maxWidth: 180,
+    defaultHeight: 78,
+    minHeight: 56,
+    maxHeight: 220,
+    selectors: [
+      '.le-swatch',
+      '[data-chrome-unit="inner-asset-swatch"]',
+    ],
+    usage: [
+      'Level Editor unit, terrain, prop, doodad, cover, wall, and feature choices',
+      'Asset preview buttons whose content dimensions remain feature-owned',
     ],
   },
   {
@@ -168,6 +208,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     minWidth: 96,
     maxWidth: 520,
     selectors: [
+      '[data-chrome-unit="inner-locked-rectangle"]',
       '.le-seg-btn',
       '.le-faction-select',
       '.le-board-link-input',
@@ -250,6 +291,61 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     ],
   },
   {
+    id: 'inner-toggle',
+    name: 'toggle',
+    label: 'Inner toggle',
+    role: 'inner',
+    dimensionPolicy: 'locked-height-variable-width',
+    controlPolicy: 'width-only',
+    catalogKind: 'template',
+    contentPolicy: 'slot',
+    tone: 'neutral',
+    stateModel: 'toggle',
+    badge: 'on / off',
+    token: '--le-inner-control-h',
+    parentId: 'inner-locked-rectangle',
+    defaultWidth: 124,
+    minWidth: 88,
+    maxWidth: 320,
+    selectors: [
+      '.settings-toggle',
+      '[data-chrome-unit="inner-toggle"]',
+    ],
+    usage: [
+      'Binary settings and Level Editor choices',
+      'Off and on states of the shared inner control frame',
+    ],
+  },
+  {
+    id: 'inner-list-row',
+    name: 'list-row',
+    label: 'Inner list row',
+    role: 'inner',
+    dimensionPolicy: 'locked-height-variable-width',
+    controlPolicy: 'width-only',
+    catalogKind: 'template',
+    contentPolicy: 'slot',
+    tone: 'neutral',
+    stateModel: 'toggle',
+    badge: 'selectable row',
+    token: '--le-inner-control-h',
+    parentId: 'inner-locked-rectangle',
+    defaultWidth: 260,
+    minWidth: 160,
+    maxWidth: 620,
+    selectors: [
+      '.le-md-item',
+      '.house-select-option',
+      '.palette-select-option',
+      '[data-chrome-unit="inner-list-row"]',
+    ],
+    usage: [
+      'Rules and event master-detail list rows',
+      'House and palette dropdown option rows',
+      'Selectable named rows with trailing status text',
+    ],
+  },
+  {
     id: 'inner-tool-square',
     name: 'tool-square',
     label: 'Inner tool square',
@@ -267,12 +363,15 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
       '.le-seg-icons .le-seg-btn',
       '.le-icon-btn',
       '.le-action-toolbar .le-seg-btn',
+      '.le-gen-cover-caret-btn',
+      '[data-chrome-unit="inner-tool-square"]',
     ],
     usage: [
       'Square child of the locked-height rectangle contract',
       'Level Editor tool picker',
       'Undo/redo history controls',
       'Small icon-only action controls',
+      'Generator cover disclosure control',
     ],
   },
   {
@@ -430,6 +529,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     selectors: [
       '.settings-stepper .settings-chrome-button',
       '.le-zone-stepper-button.settings-chrome-button',
+      '[data-chrome-unit="inner-plus-key"]',
     ],
     usage: [
       'Stepper increment key',
@@ -453,6 +553,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     selectors: [
       '.settings-stepper .settings-chrome-button',
       '.le-zone-stepper-button.settings-chrome-button',
+      '[data-chrome-unit="inner-minus-key"]',
     ],
     usage: [
       'Stepper decrement key',
@@ -511,6 +612,54 @@ export function chromeUnitClassPath(unit: ChromeUnitSpec): string {
   return [...chromeUnitAncestorChain(unit), unit]
     .map((entry) => entry.name)
     .join('.');
+}
+
+/**
+ * Returns the real DOM classes for a registered unit, from its root ancestor to
+ * the concrete leaf. Consumers keep their legacy layout classes as extras while
+ * the shared ancestry becomes the runtime chrome contract.
+ */
+export function chromeUnitClassNames(
+  id: ChromeUnitId,
+  ...extras: Array<string | false | null | undefined>
+): string {
+  const unit = chromeUnitById(id);
+  const names = [
+    ...chromeUnitAncestorChain(unit).map((entry) => entry.name),
+    unit.name,
+    ...extras.filter((extra): extra is string => typeof extra === 'string'),
+  ];
+  const uniqueNames = new Set<string>();
+  for (const name of names) {
+    for (const token of name.trim().split(/\s+/)) {
+      if (token) uniqueNames.add(token);
+    }
+  }
+  return [...uniqueNames].join(' ');
+}
+
+export function chromeUnitSelectors(id: ChromeUnitId): string[] {
+  const unit = chromeUnitById(id);
+  return [`.${unit.name}`, ...unit.selectors];
+}
+
+/**
+ * The role root class is first so real hierarchy consumers are the primary
+ * target. Registered legacy selectors follow for compatibility during migration.
+ */
+export function chromeUnitRoleSelectors(role: ChromeRole): string[] {
+  const rootId: ChromeUnitId = role === 'outer' ? 'outer-panel' : 'inner-box';
+  const selectors = [
+    `.${chromeUnitById(rootId).name}`,
+    ...CHROME_UNIT_REGISTRY
+      .filter((entry) => entry.role === role)
+      .flatMap((entry) => entry.selectors),
+  ];
+  return [...new Set(selectors)];
+}
+
+export function chromeUnitScopedSelectors(scope: string, selectors: readonly string[]): string {
+  return selectors.map((selector) => `${scope} ${selector}`).join(',\n');
 }
 
 export function chromeUnitsInHierarchyOrder(): ChromeUnitSpec[] {

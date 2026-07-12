@@ -8,6 +8,7 @@ import {
   type StudioFamilyId,
 } from '@chess-tactics/board-render/ui/studioBoard';
 import { directionCompassCells, rookDirectionLabel, type Direction } from './unitCatalog';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
 
 export {
   assetFrameSrc,
@@ -44,12 +45,26 @@ export function FacingCompass({ direction, onSelect, onRotate, available }: {
     <div className="unit-facing-compass" aria-label="Unit facing (8-way)">
       {directionCompassCells.map((cell) =>
         cell === 'center' ? (
-          <button key="center" type="button" className="unit-facing-cell unit-facing-rotate" onClick={onRotate} title="Rotate clockwise" aria-label="Rotate clockwise">↻</button>
+          <button
+            key="center"
+            type="button"
+            data-chrome-unit="inner-tool-square"
+            className={chromeUnitClassNames('inner-tool-square', 'unit-facing-cell', 'unit-facing-rotate')}
+            onClick={onRotate}
+            title="Rotate clockwise"
+            aria-label="Rotate clockwise"
+          >↻</button>
         ) : (
           <button
             key={cell}
             type="button"
-            className={`unit-facing-cell${direction === cell ? ' is-active' : ''}${available && !available(cell) ? ' is-unavailable' : ''}`}
+            data-chrome-unit="inner-tool-square"
+            className={chromeUnitClassNames(
+              'inner-tool-square',
+              'unit-facing-cell',
+              direction === cell ? 'is-active' : '',
+              available && !available(cell) ? 'is-unavailable' : '',
+            )}
             disabled={available ? !available(cell) : false}
             onClick={() => onSelect(cell)}
             title={`Face ${cell}`}

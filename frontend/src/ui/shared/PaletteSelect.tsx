@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
 import { UNIT_PALETTE_LABELS, UNIT_PALETTES, type UnitPalette } from '../../core/pieces';
+import { chromeUnitClassNames } from '../chromeUnitRegistry';
 
 export function PaletteSelect({
   value,
@@ -68,7 +69,8 @@ export function PaletteSelect({
     <div ref={rootRef} className={`palette-select ${open ? 'is-open' : ''} ${className}`.trim()}>
       <button
         type="button"
-        className="palette-select-trigger"
+        data-chrome-unit="inner-dropdown"
+        className={chromeUnitClassNames('inner-dropdown', 'palette-select-trigger')}
         aria-label={ariaLabel}
         aria-expanded={open}
         aria-controls={listId}
@@ -87,7 +89,8 @@ export function PaletteSelect({
             <button
               key={palette}
               type="button"
-              className={`palette-select-option ${palette === value ? 'is-active' : ''}`.trim()}
+              data-chrome-unit="inner-list-row"
+              className={chromeUnitClassNames('inner-list-row', 'palette-select-option', palette === value && 'is-active')}
               role="option"
               aria-selected={palette === value}
               onClick={() => select(palette)}

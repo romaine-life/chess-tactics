@@ -9,6 +9,7 @@
 //   return (<>{dialog}{/* the rest of the screen */}</>);
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { chromeUnitClassNames } from '../chromeUnitRegistry';
 
 export type ConfirmTone = 'primary' | 'danger';
 
@@ -96,7 +97,7 @@ function ConfirmDialog({
 
   return createPortal(
     <div
-      className="confirm-scrim"
+      className="confirm-scrim chrome-family-surface"
       role="presentation"
       // Click the dimmed board (outside the panel) to cancel — the friendly out.
       onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}
@@ -105,11 +106,16 @@ function ConfirmDialog({
         <h2>{title}</h2>
         <div className="confirm-body">{message}</div>
         <div className="confirm-actions">
-          <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={onCancel}>{cancelLabel}</button>
           <button
             type="button"
             data-chrome-unit="inner-text-button"
-            className={`le-seg-btn ${tone === 'danger' ? 'danger' : 'active'}`}
+            className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+            onClick={onCancel}
+          >{cancelLabel}</button>
+          <button
+            type="button"
+            data-chrome-unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tone === 'danger' ? 'danger' : 'active')}
             data-testid="confirm-accept"
             onClick={onConfirm}
           >{confirmLabel}</button>

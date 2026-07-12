@@ -5,6 +5,11 @@ import {
   type ChromeCandidateSource,
   type ChromeRole,
 } from './chromeCandidateSources';
+import {
+  chromeUnitRoleSelectors,
+  chromeUnitScopedSelectors,
+  chromeUnitSelectors,
+} from './chromeUnitRegistry';
 import committedChromeLabDefaults from '../../config/chrome-lab-defaults.json';
 
 export type RailFit = 'stretch' | 'tile';
@@ -31,6 +36,7 @@ export const ATOM_TURNS = [0, 1, 2, 3] as const;
 export const ATOM_TURN_LABELS = ['0 deg', '90 deg', '180 deg', '270 deg'] as const;
 export const ATOM_ALIGNMENT_MODES = ['manual', 'rail-center', 'anchor', 'edge-cover'] as const;
 export const ATOM_PREVIEW_MODES = ['live', 'baked', 'debug'] as const;
+export const CHROME_FAMILY_SURFACE_SELECTOR = ':is(.level-editor-screen, .skirmish-screen, .chrome-family-surface)';
 export const CHROME_FILL_MODE_OPTIONS = [
   { id: 'none', label: 'None' },
   { id: 'tint', label: 'Tint' },
@@ -764,6 +770,10 @@ function appendPseudoToSelectorList(selector: string, pseudo: string): string {
   return selectorListParts(selector).map((part) => `${part}${pseudo}`).join(',\n');
 }
 
+export function chromeFamilyRoleSelectors(role: ChromeRole): string {
+  return chromeUnitScopedSelectors(CHROME_FAMILY_SURFACE_SELECTOR, chromeUnitRoleSelectors(role));
+}
+
 function cornerAtomOverlayCss(selector: string, overlay: AtomOverlayRender | null, options: { forcePosition?: boolean; pseudo?: '::before' | '::after' } = {}): string {
   const pseudo = options.pseudo ?? '::after';
   const overlaySelector = appendPseudoToSelectorList(selector, pseudo);
@@ -869,7 +879,7 @@ ${atomCss}
 
 export function frameCss(outer: RoleTune, inner: RoleTune, outerFrame: FrameRender, innerFrame: FrameRender, divider: DividerRender): string {
   if (!outerFrame.url || !innerFrame.url) return '';
-  const familySurface = ':is(.level-editor-screen, .skirmish-screen)';
+  const familySurface = CHROME_FAMILY_SURFACE_SELECTOR;
   const outerRailWidth = renderedRailThickness(outer);
   const innerRailWidth = renderedRailThickness(inner);
   const outerContentInset = roleContentInset(outer);
@@ -879,27 +889,19 @@ export function frameCss(outer: RoleTune, inner: RoleTune, outerFrame: FrameRend
   const innerAtomRightOverhang = cssPx(Math.max(0, -(innerFrame.atomOverlay?.rightX ?? 0)));
   const innerAtomLeftFootprint = cssPx(innerFrame.atomOverlay?.leftFootprint ?? 0);
   const innerAtomRightFootprint = cssPx(innerFrame.atomOverlay?.rightFootprint ?? 0);
-  const innerSelectFrameSelectors = `${familySurface} .le-select-wrap,
-${familySurface} .le-layer-select-wrap,
-${familySurface} .le-event-select-wrap`;
-  const innerControlSelectors = `${familySurface} .le-seg-btn,
-${familySurface} .le-faction-select,
-${familySurface} .settings-chrome-button,
-${familySurface} .settings-toggle,
-${familySurface} .settings-stepper .settings-chrome-button,
-${familySurface} .le-board-link-input,
-${familySurface} .le-violations,
-${familySurface} .le-status-current,
-${familySurface} .le-material-values,
-${familySurface} .le-status-entry,
-${familySurface} .unit-portrait,
-${familySurface} .skirmish-service-record`;
-  const innerChromeFrameSelectors = `${familySurface} .le-seg-btn,
-${familySurface} .le-faction-select,
-${innerSelectFrameSelectors},
-${familySurface} .settings-chrome-button,
-${familySurface} .settings-toggle,
-${familySurface} .settings-stepper .settings-chrome-button`;
+  const innerRoleSelectors = chromeUnitRoleSelectors('inner');
+  const innerDropdownSelectors = new Set(chromeUnitSelectors('inner-dropdown'));
+  const innerSelectFrameSelectors = chromeUnitScopedSelectors(
+    familySurface,
+    chromeUnitSelectors('inner-dropdown'),
+  );
+  const innerControlSelectors = chromeUnitScopedSelectors(
+    familySurface,
+    innerRoleSelectors
+      .filter((selector) => !innerDropdownSelectors.has(selector))
+      .map((selector) => selector === '.inner-box' ? '.inner-box:not(.dropdown)' : selector),
+  );
+  const innerChromeFrameSelectors = chromeFamilyRoleSelectors('inner');
   return `
 ${familySurface} {
   --le-chrome-outer-rail-w: ${outerRailWidth}px !important;
@@ -955,18 +957,11 @@ ${innerChromeFrameSelectors} {
   border-image-repeat: ${borderImageRepeatForTune(inner)} !important;
 ${chromeFillCss(inner)}
 }
-${familySurface} .le-board-link-input,
-${familySurface} .le-violations,
-${familySurface} .le-status-current,
-${familySurface} .le-material-values,
-${familySurface} .le-status-entry,
-${familySurface} .unit-portrait,
-${familySurface} .skirmish-service-record {
-  border-image-source: url("${innerFrame.url}") !important;
-  border-image-slice: ${innerFrame.slice} !important;
-  border-image-width: ${innerRailWidth}px !important;
-  border-image-repeat: ${borderImageRepeatForTune(inner)} !important;
-${chromeFillCss(inner)}
+${familySurface} .inner-box:is(.active, .is-active, [aria-pressed="true"]) {
+  border-image-source: var(--skirmish-chrome-inner-control-active-image) !important;
+}
+${familySurface} .inner-box.danger {
+  border-image-source: var(--skirmish-chrome-inner-control-danger-image) !important;
 }
 ${cornerAtomOverlayCss(innerControlSelectors, innerFrame.atomOverlay, { forcePosition: true })}
 ${cornerAtomOverlayCss(innerSelectFrameSelectors, innerFrame.atomOverlay, { forcePosition: true, pseudo: '::before' })}
