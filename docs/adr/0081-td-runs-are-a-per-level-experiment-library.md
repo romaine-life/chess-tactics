@@ -35,16 +35,29 @@ TensorBoard runs.)
 - **Compare is a first-class view.** One column per run; settings rows that differ
   are highlighted (they are the experiment); outcomes and pawn = 1 learned values
   (seed-fold mean when folded, live weights otherwise) sit side by side.
-- **Adoption records carry provenance.** `TdAdoptionRecord.runId/runName` say which
-  run went live; the audit box names it. Clearing an adoption removes the level's
-  adopted vector but KEEPS every run's adoption record as history — the live record
-  is identified by exact vector match (JSON round-trips preserve doubles).
+- **Adoption records carry provenance, delete-proof.** `TdAdoptionRecord.runId/
+  runName` say which run went live. The LIVE record is stored at blob level
+  (`BooksBlob.tdAdoption`) so the audit box survives deleting the run it came from
+  (shown "(deleted)"); each run also keeps its own copy as history. Clearing an
+  adoption removes the vector + live record, keeps per-run history; the live record
+  is validated by exact vector match (JSON round-trips preserve doubles), so a
+  later Training-tab adoption correctly demotes it.
 - **Legacy migrates on load.** `migrateTdRuns` (lab/openingBooks.ts, applied in
   net/openingBooks.ts `loadOpeningBooks`) folds the retired `tdSession` field into
-  the library as `Run 1`, contents intact; the field is never written again. A blob
-  holding both keeps the library and drops the stale legacy field.
-- **Storage stays bounded per run** (net client caps: probeLog −400, ledger −2000,
-  the opening-book traj-cap idiom). No run-count cap; runs are small next to books.
+  the library as `Run 1`, contents intact, hoisting its adoption record to the
+  blob-level slot; the field is never written again. A blob holding both keeps the
+  library and drops the stale legacy field. Malformed legacy docs are dropped, and
+  `sanitizeTdRuns` drops malformed runs at the load boundary — the picker/compare
+  dereference every run unguarded.
+- **Storage stays bounded against the backend's 4mb body cap** (every autosave PUTs
+  the whole blob). Per run: probeLog −400; ledger rows rounded to display precision
+  (6dp — full doubles tripled row size for digits nothing reads); the OPEN run
+  keeps a 2000-row ledger window, shelved runs 400. A mature run is ~50KB, so the
+  cap fits ~60 runs. A non-401 save failure raises a visible error line in the run
+  manager (silent persistence death was the review's top finding). The pagehide
+  keepalive flush stays best-effort (~64KB browser quota); the debounced saves are
+  the durable path. The TD transport + autosave are gated on the books load
+  settling, so a first save can never clobber the server library with an empty one.
 
 ## Consequences
 
