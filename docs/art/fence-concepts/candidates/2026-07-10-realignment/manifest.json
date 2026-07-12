@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-10",
+  "batch_id": "fence-realignment-2026-07-10",
+  "adrs": ["ADR-0040", "ADR-0076"],
+  "builder": "docs/art/fence-concepts/candidates/2026-07-10-realignment/build_game_surface_previews.py",
+  "owner_decisions": {
+    "pixellab_stone_rail": {
+      "decision": "accepted_and_frozen",
+      "scope": "future_bishop_passable_art",
+      "source": "docs/art/fence-concepts/candidates/2026-07-10/pixellab/stone-rail-48x32-v2.png",
+      "source_sha256": "4bdbc2f4bdfff0e736b4de98796363b0415aae3f35517f2e3c356c05c48b6998",
+      "shown_e_sha256": "b5895225c48b8e281a269dd3a0843b93ae1747f24f00f415a9219f6e5c456f6e",
+      "shown_s_sha256": "fa56aa41713a16d16879ee143ef67464b5ebca3fec5bc1d9231e4c6b4ef84748",
+      "post": null,
+      "post_decision": "owner_accepted_rail_only_no_post",
+      "changed_in_this_batch": false
+    },
+    "pixellab_stone_post_trials": {
+      "decision": "rejected_all",
+      "reason": "The accepted PixelLab stone fence is intentionally rail-only and does not get a post."
+    },
+    "blender_stone": {
+      "decision": "rejected",
+      "reason": "Owner rejected the noisy photoscan/shader appearance."
+    }
+  },
+  "canonical_board_edge_contract": {
+    "frame": [96, 180],
+    "E_contact_path": [[48, 95], [96, 68]],
+    "S_contact_path": [[0, 68], [48, 95]],
+    "absolute_midline_slope": 0.5625,
+    "accepted_guard_tolerance": 0.08,
+    "alpha_x_ranges": {
+      "E": [48, 96],
+      "S": [0, 48]
+    }
+  },
+  "active_kits": [
+    "pixellab-stone-rail-r2",
+    "pixellab-wood-canonical-r2",
+    "codex-wood-canonical-r2",
+    "codex-stone-canonical-r2"
+  ],
+  "active_kit_assets": [
+    {
+      "id": "pixellab-stone-rail-r2",
+      "board_edge_alignment": "not_claimed",
+      "rails": {
+        "E": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10/pixellab-stone-rail-e.png", "sha256": "b5895225c48b8e281a269dd3a0843b93ae1747f24f00f415a9219f6e5c456f6e"},
+        "S": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10/pixellab-stone-rail-s.png", "sha256": "fa56aa41713a16d16879ee143ef67464b5ebca3fec5bc1d9231e4c6b4ef84748"}
+      },
+      "post": null,
+      "post_policy": "intentionally_none"
+    },
+    {
+      "id": "pixellab-wood-canonical-r2",
+      "board_edge_alignment": "claimed",
+      "spatial_resampling": false,
+      "rails": {
+        "E": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10-realignment/pixellab-wood-canonical-r2-rail-e.png", "sha256": "964013ff71b3c341f3d33db602d24e4fe19ed7d01dc23bc3553863bb92eebd7e"},
+        "S": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10-realignment/pixellab-wood-canonical-r2-rail-s.png", "sha256": "78dc3d432d4b5329c5e8e44663b8336a35e56aae9976868243a757d27d75d995"}
+      },
+      "post": {
+        "source": {"path": "docs/art/fence-concepts/candidates/2026-07-10/pixellab/wood-post-32x32.png", "sha256": "6e5c069a175e0294cecb640153a52068e5d40396403f2dd7bb38dbb4f6140ba6"},
+        "selected_output": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10/pixellab-wood-post.png", "sha256": "67e6085a6a70de18f4d884376807ddeabe2fb550736486240f53161df8e9fa30"},
+        "frame_anchor_y": 68
+      }
+    },
+    {
+      "id": "codex-wood-canonical-r2",
+      "board_edge_alignment": "claimed",
+      "shown_preview_spatial_resampling": true,
+      "production_eligibility": false,
+      "rails": {
+        "E": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10-realignment/codex-wood-canonical-r2-rail-e.png", "sha256": "b8bde7c540dd43c004ab351d81a3c35d7445666a2de071ed63835e144b041d4e"},
+        "S": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10-realignment/codex-wood-canonical-r2-rail-s.png", "sha256": "ac6380f038ac2d8535c191b1ae5844392a08e47e39c41bf3d6bfa95d5276fccb"}
+      },
+      "post": {
+        "source": {"path": "docs/art/fence-concepts/candidates/2026-07-10-realignment/codex/wood-kit-canonical-alpha.png", "sha256": "d261245eb97db2087fd4e50076287fffac47ba18964fb0774784a427ce9bb983", "role": "post_component_in_alpha_sheet"},
+        "selected_output": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10-realignment/codex-wood-canonical-r2-post.png", "sha256": "9d7a1d62ef78d505888a32d9afd5661a97805e805a547425839c7f9159339679"},
+        "frame_anchor_y": 68
+      }
+    },
+    {
+      "id": "codex-stone-canonical-r2",
+      "board_edge_alignment": "claimed",
+      "shown_preview_spatial_resampling": true,
+      "production_eligibility": false,
+      "rails": {
+        "E": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10-realignment/codex-stone-canonical-r2-rail-e.png", "sha256": "6beafea3e7b890f08fe8e0cf83361dd45eddfba26656db1aa31ba8d0f53b9011"},
+        "S": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10-realignment/codex-stone-canonical-r2-rail-s.png", "sha256": "f025e0e6a9d8368be8cfe9cd4d0ec85df4bbba998631e46ab9647c5c6ee374e3"}
+      },
+      "post": {
+        "source": {"path": "docs/art/fence-concepts/candidates/2026-07-10-realignment/codex/stone-kit-canonical-alpha.png", "sha256": "95b1efb2da61d2767df39c385d6ce71daf13db2abac18df2dbbaa2861f33637c", "role": "post_component_in_alpha_sheet"},
+        "selected_output": {"path": "frontend/public/assets/tiles/feature/candidates/2026-07-10-realignment/codex-stone-canonical-r2-post.png", "sha256": "3c4a34e7cf628ef5cfa85cfca218cbb8ea6a97de6f8a2c42b55162b375124c03"},
+        "frame_anchor_y": 68
+      }
+    }
+  ],
+  "pixellab": {
+    "stone_post_rejected_trials": {
+      "source_object_id": "eb235a49-c997-4c8e-a11d-60d502ee6863",
+      "tool": "create_1_direction_object",
+      "style_reference": "docs/art/fence-concepts/candidates/2026-07-10/pixellab/stone-rail-48x32-v2.png",
+      "output_canvas": [48, 48],
+      "decision": "rejected_all_owner_selected_rail_only",
+      "rejected_trials": [
+        {
+          "frame_index": 0,
+          "object_id": "108eac12-5a19-4faf-8998-cee3be344430",
+          "role": "pale_post_trial",
+          "source": "docs/art/fence-concepts/candidates/2026-07-10-realignment/pixellab/stone-post-pale-r2-48x48.png",
+          "opaque_bbox": [16, 12, 32, 37],
+          "opaque_size": [16, 25],
+          "sha256": "0a22eb0cba2260ee075e175230673a9cecf85fc3cab3c61f94def9d2c10ebc17"
+        },
+        {
+          "frame_index": 5,
+          "object_id": "1500b1c1-649e-4f2b-9d1b-6802a644c1c6",
+          "role": "compact_post_trial",
+          "source": "docs/art/fence-concepts/candidates/2026-07-10-realignment/pixellab/stone-post-compact-r2-48x48.png",
+          "opaque_bbox": [17, 15, 31, 34],
+          "opaque_size": [14, 19],
+          "sha256": "06235866b59257491edfe65ea0950c0d78ddbf09033c4173bb9df78e3706fc30"
+        }
+      ],
+      "transform_chain": ["native PixelLab generation", "translation", "transparent padding"],
+      "spatial_resampling": false
+    },
+    "wood_canonical": {
+      "method": "ADR-0040 deterministic geometry with generated material",
+      "pixel_source": "docs/art/wall-concepts/materials/pixellab/wood-palisade.png",
+      "pixel_source_sha256": "dab300b658e7a195026a04760c5eac0a6023333f40f51b59c7e2ca0cc4dc4a91",
+      "pixel_source_generation": {
+        "tool": "create_tiles_pro",
+        "tile_id": "33f3529a-0331-4511-a714-39426fa3d5f8",
+        "source_record": "docs/art/wall-concepts/runs/wall-material-runs-2026-07-06.json"
+      },
+      "post_source": "docs/art/fence-concepts/candidates/2026-07-10/pixellab/wood-post-32x32.png",
+      "post_source_sha256": "6e5c069a175e0294cecb640153a52068e5d40396403f2dd7bb38dbb4f6140ba6",
+      "transform_chain": ["1:1 material tiling", "deterministic rail masks", "orientation shading", "mirroring", "translation", "transparent padding"],
+      "spatial_resampling": false,
+      "projection_guard": "pass",
+      "outputs": [
+        {"role": "rail_e", "path": "frontend/public/assets/tiles/feature/candidates/2026-07-10-realignment/pixellab-wood-canonical-r2-rail-e.png", "sha256": "964013ff71b3c341f3d33db602d24e4fe19ed7d01dc23bc3553863bb92eebd7e"},
+        {"role": "rail_s", "path": "frontend/public/assets/tiles/feature/candidates/2026-07-10-realignment/pixellab-wood-canonical-r2-rail-s.png", "sha256": "78dc3d432d4b5329c5e8e44663b8336a35e56aae9976868243a757d27d75d995"},
+        {"role": "post", "path": "frontend/public/assets/tiles/feature/candidates/2026-07-10-realignment/pixellab-wood-canonical-r2-post.png", "sha256": "67e6085a6a70de18f4d884376807ddeabe2fb550736486240f53161df8e9fa30"}
+      ]
+    },
+    "rejected_attempts": [
+      {"object_id": "accdd534-a2e0-432f-b4f0-57f3ee8fb75a", "role": "wood_rail", "result": "clean 48px span but slope 0.479 misses canonical pitch", "source": "docs/art/fence-concepts/candidates/2026-07-10-realignment/pixellab/wood-rail-canonical-64x64.png", "dimensions": [64, 64], "sha256": "fcae700ed68454b00fbcbba765a21c4e332914ad621a99e44bb84b2b9271b950"},
+      {"object_id": "6de2b9a7-668b-41ef-9309-067dd9fd4507", "role": "wood_rail", "result": "slope 0.324 plus forbidden ground strip", "source": "docs/art/fence-concepts/candidates/2026-07-10-realignment/pixellab/wood-rail-oversteep-r2-64x64.png", "dimensions": [64, 64], "sha256": "a8191054696c031f5093429b8dbe90f4432666c33e40bd71d1d4a9f502e8e004"},
+      {"object_id": "32a2b7d9-4d5c-449e-94d4-96ec0a782b88", "role": "wood_rail_review_pack", "result": "all 16 frames remained 21.7-25.0 degrees; pack dismissed"},
+      {"object_id": "0db16d16-76ec-4560-8f4c-5b1bd99aff4b", "role": "stone_post", "result": "19x26, larger than requested", "source": "docs/art/fence-concepts/candidates/2026-07-10-realignment/pixellab/stone-post-small-32x32.png", "dimensions": [32, 32], "sha256": "a1a3f876d3145a40e047612e5e6d46217930fdb3644c654388c56564d35281f2"},
+      {"object_id": "41987e8b-8e69-4f1e-b640-1c0c5773e064", "role": "stone_post", "result": "21x26, larger than requested", "source": "docs/art/fence-concepts/candidates/2026-07-10-realignment/pixellab/stone-post-slim-32x32.png", "dimensions": [32, 32], "sha256": "aaf3bfa014e9ed701828ddb0c35c88dbfc2b6136a799afac12df1ee62504c10e"},
+      {"object_id": "ae6e9739-c5d9-4fb8-b595-7f09c428fc70", "role": "stone_post_style_match", "result": "rewrote the full reference despite custom mask; rejected", "source": "docs/art/fence-concepts/candidates/2026-07-10-realignment/pixellab/stone-post-masked-attempt-96x96.png", "dimensions": [96, 180], "sha256": "ae659253a965dab25173749a7c05b4ca7474d859acea2bb269d581b5257dd8bb"}
+    ]
+  },
+  "codex": {
+    "tool": "OpenAI built-in image generation",
+    "prompts": "docs/art/fence-concepts/candidates/2026-07-10-realignment/codex/PROMPTS.md",
+    "production_status": "calibration_only",
+    "spatial_resampling": true,
+    "resampling_scope": "shown_game_surface_previews",
+    "wood": {
+      "generation_id": "exec-e1f73502-7b8f-448a-a4df-0f98c609782e",
+      "raw": {"path": "docs/art/fence-concepts/candidates/2026-07-10-realignment/codex/wood-kit-canonical-raw.png", "sha256": "2ea62d5a9ffe8fa86e95b77ed7548ec075e7933ce7f36bfee006d14d422933f8"},
+      "alpha": {"path": "docs/art/fence-concepts/candidates/2026-07-10-realignment/codex/wood-kit-canonical-alpha.png", "sha256": "d261245eb97db2087fd4e50076287fffac47ba18964fb0774784a427ce9bb983"},
+      "source_midline_slope": -0.626,
+      "shown_rail_size": [48, 46],
+      "projection_guard": "pass"
+    },
+    "stone": {
+      "generation_id": "exec-c5edd766-50a7-4f8d-9136-aa32c48e9f23",
+      "raw": {"path": "docs/art/fence-concepts/candidates/2026-07-10-realignment/codex/stone-kit-canonical-raw.png", "sha256": "a182b8d53b60f1bfe3ac20380032db0ac669010076284a06cac393f4df343a13"},
+      "alpha": {"path": "docs/art/fence-concepts/candidates/2026-07-10-realignment/codex/stone-kit-canonical-alpha.png", "sha256": "95b1efb2da61d2767df39c385d6ce71daf13db2abac18df2dbbaa2861f33637c"},
+      "source_midline_slope": -0.620,
+      "shown_rail_size": [48, 35],
+      "projection_guard": "pass"
+    }
+  }
+}

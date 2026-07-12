@@ -3,15 +3,27 @@
 // the heavy library studios + manifests live in TilePreview.tsx and are never
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
-import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
-import { DoodadSprite } from '../render/BoardDoodad';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
-import { FenceOverlayLayer, WallOverlayLayer } from '../render/FenceOverlayLayer';
+import { BoardSceneLayer } from '../render/BoardSceneLayer';
+import {
+  FENCE_ART_REVIEW_ID,
+  transformFenceArtReviewOps,
+} from './fenceArtReview';
+import {
+  FENCE_ART_KITS,
+  cycleFenceArtKit,
+  fenceArtKit,
+  type FenceArtKit,
+} from './fenceCandidateProfiles';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
-import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
+import { BoardGridLayer } from '../render/BoardGridLayer';
+import { BoardTerrainLayer, terrainCanvasMacroTiles, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
+import { studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
+import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
 import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
@@ -19,7 +31,7 @@ import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
-import { HouseSelect } from './shared/HouseSelect';
+import { PaletteSelect } from './shared/PaletteSelect';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import {
   levelEditorHrefWithRouteState,
@@ -29,21 +41,26 @@ import {
   type LevelEditorBrushKind,
   type LevelEditorLayerKey,
 } from './levelEditorRoute';
-import { APP_NAVIGATION_EVENT, navigateApp } from './navigation';
+import { APP_NAVIGATION_EVENT, navigateApp, registerAppNavigationBlocker } from './navigation';
+import { levelEditorExitAction } from './levelEditorExit';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { WallArtPreview } from './WallArtLab';
-import { readBoardParam, encodeBoard, decodeBoardLinkInput, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell } from './boardCode';
+import { readBoardParam, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell } from './boardCode';
 import { removeZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
 import {
-  appendLevelEventsParam,
-  appendTimeControlParams,
-  appendVictoryRulesParam,
+  currentBoardTestHref,
   readLevelEventsParam,
   readTimeControlParams,
   readVictoryRulesParam,
 } from './playtestRoute';
-import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
+import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft, type LevelEditorDraft } from './levelEditorDraft';
+import { levelEditorLevelSignature, normalizedLevelEditorSignature } from './levelEditorSignature';
+import {
+  editorDocumentWorkspaceForLevelId,
+  levelEditorHrefForDocument,
+  shouldRestoreLocalEditorRecovery,
+} from './levelEditorPersistence';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
@@ -54,6 +71,9 @@ import {
   rookDirectionLabel,
   rookDirections,
   unitAssets,
+  unitAssetById,
+  unitArtForId,
+  unitFamilyForId,
   type Direction,
   type Faction,
   type UnitAsset,
@@ -65,35 +85,61 @@ import {
   type StudioAsset,
   type StudioFamily,
 } from './studioBoard';
-import { featureThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
-import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
+import { featureThumbSrc, fencePostThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
+import { resolveFeatureOverlays, resolveFencePosts, fenceVertexKey as canonicalFenceVertexKey, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, wallArtBadge, wallArtItems, wallArtLabel, wallArtSpanEdges, wallArtSpanForId, type WallArtId } from '../core/wallArt';
 import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
 import { scatterTerrainDetailed } from '../core/terrainScatter';
 import { createRng } from '../core/rng';
+import {
+  DEFAULT_MACRO_TILE_BREAKUP,
+  DEFAULT_MACRO_TILE_DENSITY,
+  breakMacroTilesAtCell,
+  generateMacroTiles,
+  macroTileAsset,
+  macroTileAssets,
+  macroTileCellIndices,
+  macroTileFrame,
+  resolveMacroTilePlacements,
+  type MacroTileAsset,
+  type MacroTilePlacement,
+} from '../core/macroTiles';
 import { SliderRow } from './dressing/SliderRow';
-import { GroundCoverLayer } from '../render/GroundCoverLayer';
-import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
-import { UNIT_PALETTES, type UnitPalette } from '../core/pieces';
+import { objectBaseZIndex, structureFrontZIndex } from '../render/sceneDepth';
+import { groundCoverSet, type GroundCoverDensity } from '../core/groundCover';
+import { UNIT_PALETTE_LABELS, UNIT_PALETTES, isUnitPalette, type UnitPalette } from '../core/pieces';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
+import { createFromLevel } from '../game/setup';
+import { attackedSquares, blockedCandidateSquares, enemyThreats, gameEnv, legalMoves, type MoveEnv } from '../core/rules';
+import type { GameState, Move, Piece, Vec } from '../core/types';
 import { OBJECTIVE_LABEL } from '../core/objectives';
 import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
-import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
-import { publishMap } from '../net/maps';
-import { HttpError } from '../net/http';
-import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
+import { tierOf, mapSaveError } from '../campaign/save';
+import { fetchMeStatus, goSignIn, signInHref, type AuthUser } from '../net/auth';
+import {
+  autosaveEditorDocument,
+  autosaveEditorDocumentOnPageHide,
+  createEditorDocument,
+  discardEditorDocumentChanges,
+  isEditorDocumentBaselineConflict,
+  isEditorDocumentConflict,
+  loadEditorDocument,
+  resolveEditorDocument,
+  saveEditorDocument,
+  type EditorDocument,
+} from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, ZONE_COLORS, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
-import { ensureDefaultSkirmishProfileLevel } from './skirmishProfiles';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
-import { LevelEditorControlsPanel, LevelEditorEventsOverlay } from './LevelEditorChromeConsumers';
+import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -104,6 +150,80 @@ type BoardUnitPlacement = {
 type MoveSubject =
   | { kind: 'unit'; x: number; y: number }
   | { kind: 'prop'; x: number; y: number; propId: string };
+
+type FencePaintTarget = 'rail' | 'post';
+type FenceVertexCorner = 'back' | 'right' | 'front' | 'left';
+
+const FENCE_VERTEX_CORNERS: ReadonlyArray<{
+  id: FenceVertexCorner;
+  label: string;
+  dx: 0 | 1;
+  dy: 0 | 1;
+  unitX: 0 | 0.5 | 1;
+  unitY: 0 | 0.5 | 1;
+  hintTop: string;
+}> = [
+  { id: 'back', label: 'Back', dx: 0, dy: 0, unitX: 0.5, unitY: 0, hintTop: 'var(--iso-tile-surface-top)' },
+  { id: 'right', label: 'Right', dx: 1, dy: 0, unitX: 1, unitY: 0.5, hintTop: 'calc(var(--iso-tile-surface-top) + var(--iso-tile-height) / 2)' },
+  { id: 'front', label: 'Front', dx: 1, dy: 1, unitX: 0.5, unitY: 1, hintTop: 'calc(var(--iso-tile-surface-top) + var(--iso-tile-height))' },
+  { id: 'left', label: 'Left', dx: 0, dy: 1, unitX: 0, unitY: 0.5, hintTop: 'calc(var(--iso-tile-surface-top) + var(--iso-tile-height) / 2)' },
+];
+
+const fenceVertexKey = (x: number, y: number, corner: FenceVertexCorner): string => {
+  const target = FENCE_VERTEX_CORNERS.find((candidate) => candidate.id === corner)!;
+  return canonicalFenceVertexKey(x + target.dx, y + target.dy);
+};
+
+type BoardViewOverlayFlags = {
+  showMoves: boolean;
+  showEnemyAttacks: boolean;
+  showBlocked: boolean;
+  showPromotionZones: boolean;
+};
+
+type BoardTacticalPreview = {
+  moveSet: Set<string>;
+  threatSet: Set<string>;
+  blockedSet: Set<string>;
+  promotionZoneSet: Set<string>;
+  focusKey: string | null;
+};
+
+const emptyTacticalPreview = (): BoardTacticalPreview => ({
+  moveSet: new Set(),
+  threatSet: new Set(),
+  blockedSet: new Set(),
+  promotionZoneSet: new Set(),
+  focusKey: null,
+});
+
+const vecKey = (vec: Vec): string => `${vec.x},${vec.y}`;
+const vecSet = (tiles: readonly Vec[]): Set<string> => new Set(tiles.map(vecKey));
+
+function tacticalPreviewForGame(
+  game: GameState | null,
+  env: MoveEnv | null,
+  focusPiece: Piece | null,
+  flags: BoardViewOverlayFlags,
+): BoardTacticalPreview {
+  if (!game || !env) return emptyTacticalPreview();
+  const focusMoves: Move[] = focusPiece ? legalMoves(focusPiece, game.pieces, game.size, env) : [];
+  const moveSet = flags.showMoves ? vecSet(focusMoves) : new Set<string>();
+  const threatSet = flags.showEnemyAttacks
+    ? vecSet(focusPiece?.side === 'enemy' ? attackedSquares(focusPiece, game.pieces, game.size, env) : enemyThreats(game.pieces, game.size, env))
+    : new Set<string>();
+  const legal = new Set(focusMoves.map(vecKey));
+  const blockedSet = flags.showBlocked && focusPiece
+    ? vecSet(blockedCandidateSquares(focusPiece, game.pieces, game.size, env).filter((tile) => !legal.has(vecKey(tile))))
+    : new Set<string>();
+  return {
+    moveSet,
+    threatSet,
+    blockedSet,
+    promotionZoneSet: flags.showPromotionZones ? vecSet(game.promotionZones ?? []) : new Set<string>(),
+    focusKey: focusPiece ? `${focusPiece.x},${focusPiece.y}` : null,
+  };
+}
 
 // Unified editable board: every Studio view renders through this. It's a full
 // clickable grid seeded from whatever was loaded (a tile, a transition, a
@@ -116,15 +236,24 @@ function StudioEditableBoard({
   units: placedUnits,
   doodads: placedDoodads,
   props: placedProps = {},
+  macroTiles: placedMacroTiles = [],
   features: placedFeatures = {},
   fences: placedFences = {},
+  fencePosts: placedFencePosts = {},
+  fenceArtwork,
   walls: placedWalls = {},
   wallArt: placedWallArt = {},
+  cover: placedCover = {},
+  coverTypes: placedCoverTypes = {},
+  coverSeed = 1234,
   fenceTool = false,
+  fencePaintTarget = 'rail',
   wallTool = false,
   wallArtTool = false,
   onPaintEdge,
   onEraseEdge,
+  onPaintPost,
+  onErasePost,
   onPaintWallEdge,
   onEraseWallEdge,
   onPaintWallArtEdge,
@@ -138,6 +267,8 @@ function StudioEditableBoard({
   selectedCell,
   boardZoom,
   boardPan,
+  showGrid = false,
+  tacticalPreview,
   animationFrame,
   onPaint,
   onErase,
@@ -145,7 +276,7 @@ function StudioEditableBoard({
   onMove,
   canMoveTo,
   propBrush,
-  overlay,
+  macroTileBrush,
   hidden,
   regionCells,
   onRegionStart,
@@ -157,16 +288,30 @@ function StudioEditableBoard({
   doodads: Record<string, { doodadId: string }>;
   /** Multi-cell props keyed by ANCHOR cell "x,y" -> {propId}. */
   props?: Record<string, { propId: string }>;
+  /** Opaque multi-cell terrain tops that replace the covered 1x1 top sprites. */
+  macroTiles?: readonly MacroTilePlacement[];
   /** Linear-feature overlays (roads + rivers) keyed by "x,y" -> {kind, material, mask}. */
   features?: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
   /** Edge fences keyed by shared-edge key (roadEdgeKey) -> fence material — drawn as edge rails. */
   fences?: Record<string, FenceMaterial>;
+  /** Positive authored fence posts keyed by logical grid vertex "x,y" -> material. */
+  fencePosts?: Record<string, FenceMaterial>;
+  /** Exact route-gated artwork kit; geometry remains ordinary wood/stone board data. */
+  fenceArtwork?: FenceArtKit;
   /** Edge walls keyed by shared-edge key (roadEdgeKey) -> material; valid only on the north/west map perimeter. */
   walls?: Record<string, WallMaterial>;
   /** Wall art keyed by anchor edge; spans across N north/west perimeter wall edges. */
   wallArt?: Record<string, WallArtId>;
+  /** Painted ground-cover densities keyed by cell. */
+  cover?: Record<string, GroundCoverDensity>;
+  /** Optional per-cell ground-cover family overrides. */
+  coverTypes?: Record<string, TileFamilyId>;
+  /** Scatter seed for live ground-cover placement. */
+  coverSeed?: number;
   /** When true, the brush paints EDGES (fences) not cells: hover picks the nearest diamond edge. */
   fenceTool?: boolean;
+  /** Which fence primitive the fence brush targets: a diamond edge rail or a logical grid vertex post. */
+  fencePaintTarget?: FencePaintTarget;
   /** When true, the brush paints EDGES (walls) not cells: hover picks the nearest diamond edge. */
   wallTool?: boolean;
   /** When true, the brush paints EDGES (wall art) not cells: hover picks the nearest diamond edge. */
@@ -175,6 +320,10 @@ function StudioEditableBoard({
   onPaintEdge?: (edgeKey: string) => void;
   /** Remove a fence from an edge. */
   onEraseEdge?: (edgeKey: string) => void;
+  /** Add an authored post at a logical grid vertex. */
+  onPaintPost?: (vertexKey: string) => void;
+  /** Remove only the authored post at a vertex; an automatic open-end post may remain. */
+  onErasePost?: (vertexKey: string) => void;
   /** Add a wall on an edge; only the northmost and westmost map edges render. */
   onPaintWallEdge?: (edgeKey: string) => void;
   /** Remove a wall from an edge. */
@@ -193,6 +342,8 @@ function StudioEditableBoard({
   selectedCell: { x: number; y: number } | null;
   boardZoom: number;
   boardPan: { x: number; y: number };
+  showGrid?: boolean;
+  tacticalPreview?: BoardTacticalPreview;
   animationFrame: number;
   onPaint: (x: number, y: number) => void;
   onErase: (x: number, y: number) => void;
@@ -203,7 +354,8 @@ function StudioEditableBoard({
   canMoveTo?: (subject: MoveSubject, to: { x: number; y: number }) => boolean;
   /** When the prop brush is armed: its def + a placeability test, used for the footprint hover. */
   propBrush?: { def: PropDef; canPlaceAt: (ax: number, ay: number) => boolean } | null;
-  overlay?: ReactNode;
+  /** When a composite terrain brush is armed, preview its full footprint at the hovered anchor. */
+  macroTileBrush?: MacroTileAsset | null;
   /** Per-layer visibility — a true value hides that layer's elements on the board. */
   hidden?: { tile: boolean; unit: boolean; doodad: boolean };
   /** Cells currently selected ("x,y" keys) — drawn as a tinted diamond overlay. */
@@ -216,12 +368,17 @@ function StudioEditableBoard({
   // The unit/prop picked up under the Move tool, held while the pointer drags to a destination.
   // It's state (not a ref) so source/target highlights re-render as you drag.
   const [movingFrom, setMovingFrom] = useState<MoveSubject | null>(null);
-  // Edge-fence painting: which diamond side is under the cursor (the rail will drop there).
+  // Fence painting previews either the nearest diamond side (rail) or nearest logical corner
+  // (post). A shared corner canonicalizes to one vertex key from every adjoining tile.
   const [hoverEdge, setHoverEdge] = useState<{ x: number; y: number; edge: FeatureEdge } | null>(null);
-  const edgeTool = fenceTool || wallTool || wallArtTool;
-  const fenceOverlayMap = resolveFenceOverlays(placedFences);
+  const [hoverPost, setHoverPost] = useState<{ x: number; y: number; corner: FenceVertexCorner } | null>(null);
+  const fencePostTool = fenceTool && fencePaintTarget === 'post';
+  const placementTargetTool = fenceTool || wallTool || wallArtTool;
+  useEffect(() => {
+    setHoverEdge(null);
+    setHoverPost(null);
+  }, [fencePaintTarget]);
   const wallBounds = { cols, rows };
-  const wallOverlayMap = resolveWallOverlays(placedWalls, wallBounds);
   const applyTool = (x: number, y: number) => {
     if (tool === 'brush') onPaint(x, y);
     else if (tool === 'erase') onErase(x, y);
@@ -245,6 +402,25 @@ function StudioEditableBoard({
     const dy = e.clientY - (rect.top + rect.height / 2);
     return dy < 0 ? (dx >= 0 ? 'N' : 'W') : (dx >= 0 ? 'E' : 'S');
   };
+  // Normalize against the hit diamond before comparing distances. Its rendered frame is wider
+  // than it is tall, so raw screen-pixel distance would make Back/Front swallow the side corners.
+  const vertexAtPointer = (e: { currentTarget: Element; clientX: number; clientY: number }): FenceVertexCorner => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / (rect.width || 1);
+    const py = (e.clientY - rect.top) / (rect.height || 1);
+    let nearest = FENCE_VERTEX_CORNERS[0];
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const candidate of FENCE_VERTEX_CORNERS) {
+      const dx = px - candidate.unitX;
+      const dy = py - candidate.unitY;
+      const distance = dx * dx + dy * dy;
+      if (distance < nearestDistance) {
+        nearest = candidate;
+        nearestDistance = distance;
+      }
+    }
+    return nearest.id;
+  };
   // Toggle an edge barrier on the diamond edge under the cursor (brush adds, erase/right-click removes).
   const applyBarrierAt = (x: number, y: number, edge: FeatureEdge, erasing: boolean): void => {
     const { key } = edgeTarget(x, y, edge);
@@ -260,6 +436,11 @@ function StudioEditableBoard({
     }
     if (erasing) onEraseEdge?.(key);
     else onPaintEdge?.(key);
+  };
+  const applyFencePostAt = (x: number, y: number, corner: FenceVertexCorner, erasing: boolean): void => {
+    const key = fenceVertexKey(x, y, corner);
+    if (erasing) onErasePost?.(key);
+    else onPaintPost?.(key);
   };
   // The two diamond-side endpoints (in a 0..100 viewBox over the hit diamond) for the edge hint.
   const EDGE_LINE: Record<FeatureEdge, [number, number, number, number]> = {
@@ -290,12 +471,17 @@ function StudioEditableBoard({
   };
 
   const hoverBarrierEdge = (x: number, y: number, edge: FeatureEdge): void => {
+    setHoverPost(null);
     const { key } = edgeTarget(x, y, edge);
     if ((wallTool || wallArtTool) && !isNorthWestBoundaryWallEdge(key, { cols, rows })) {
       setHoverEdge(null);
       return;
     }
     setHoverEdge({ x, y, edge });
+  };
+  const hoverFencePost = (x: number, y: number, corner: FenceVertexCorner): void => {
+    setHoverEdge(null);
+    setHoverPost({ x, y, corner });
   };
 
   const finishMoveAt = (to: { x: number; y: number } | null): void => {
@@ -309,16 +495,32 @@ function StudioEditableBoard({
   // same anchor/cell or off-board), then clear the paint/move latches. Fired on pointer-up over the board.
   const endInteraction = () => finishMoveAt(hoverCell);
 
-  // The editor is an adapter over the shared StudioReadOnlyBoard render path (the same cell
-  // art + sprite seating the Campaign Editor's read-only viewer uses): it supplies the SHARED
-  // tile/feature art via `studioCellArt`, then layers its own interaction chrome — the selection
+  // The editor is an adapter over the shared StudioReadOnlyBoard render path: it supplies
+  // terrain to the composed canvas layer, then layers its own interaction chrome — the selection
   // ring and the paint/erase/select hit target — on top per cell.
   const cells: TileGridCell[] = [];
+  const terrainCells: TerrainCanvasCell[] = [];
+  const occupiedTiles = new Set(
+    Object.entries(placed)
+      .filter(([, id]) => !!resolveAsset(id))
+      .map(([key]) => key),
+  );
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < cols; x += 1) {
       const key = `${x},${y}`;
       const assetId = placed[key];
       const asset = assetId ? resolveAsset(assetId) : undefined;
+      const drawSide = !!asset && (!occupiedTiles.has(`${x + 1},${y}`) || !occupiedTiles.has(`${x},${y + 1}`));
+      terrainCells.push(studioTerrainCanvasCell({
+        key,
+        x,
+        y,
+        tileAsset: asset,
+        feature: placedFeatures[key],
+        animationFrame,
+        hidden,
+        drawSide,
+      }));
       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
       // Move-tool feedback reuses the built-in diamond tile-ring (not an axis-aligned box): the
       // picked-up object's footprint, plus the cell under the cursor tinted by whether a drop is legal.
@@ -326,7 +528,17 @@ function StudioEditableBoard({
       const isMoveFrom = tool === 'move' && movingCells.has(key);
       const isMoveTo = tool === 'move' && !!movingFrom && !isMoveFrom && hoverCell?.x === x && hoverCell?.y === y;
       const moveDroppable = isMoveTo && movingFrom ? (canMoveTo ? canMoveTo(movingFrom, { x, y }) : true) : false;
-      const fenceHere = edgeTool && hoverEdge?.x === x && hoverEdge?.y === y ? hoverEdge.edge : null;
+      const fenceHere = placementTargetTool && !fencePostTool && hoverEdge?.x === x && hoverEdge?.y === y ? hoverEdge.edge : null;
+      const postHere = fencePostTool && hoverPost?.x === x && hoverPost?.y === y
+        ? FENCE_VERTEX_CORNERS.find((corner) => corner.id === hoverPost.corner) ?? null
+        : null;
+      const tacticalState = tacticalPreview ? [
+        tacticalPreview.promotionZoneSet.has(key) ? 'is-promotion-zone' : '',
+        tacticalPreview.moveSet.has(key) ? 'is-move' : '',
+        tacticalPreview.threatSet.has(key) ? 'is-threat' : '',
+        tacticalPreview.blockedSet.has(key) ? 'is-blocked-candidate' : '',
+        tacticalPreview.focusKey === key ? 'is-focused-piece' : '',
+      ].filter(Boolean).join(' ') : '';
       cells.push({
         key,
         x,
@@ -334,7 +546,6 @@ function StudioEditableBoard({
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
-            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key], animationFrame, hidden, x, y })}
             {/* Zone tint: a translucent diamond seated on the tile EQUATOR — it reuses the exact
                 seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
                 which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
@@ -349,6 +560,14 @@ function StudioEditableBoard({
                 <line x1={EDGE_LINE[fenceHere][0]} y1={EDGE_LINE[fenceHere][1]} x2={EDGE_LINE[fenceHere][2]} y2={EDGE_LINE[fenceHere][3]} />
               </svg>
             ) : null}
+            {postHere ? (
+              <span
+                className="le-fence-post-hint"
+                style={{ left: `${postHere.unitX * 100}%`, top: postHere.hintTop }}
+                aria-hidden="true"
+              />
+            ) : null}
+            {tacticalState ? <span className={`le-tactical-cell ${tacticalState}`} aria-hidden="true" /> : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             {isMoveFrom ? <span className="tileset-cell-ring is-move-from" aria-hidden="true" /> : null}
             {isMoveTo ? <span className={`tileset-cell-ring ${moveDroppable ? 'is-move-ok' : 'is-move-blocked'}`} aria-hidden="true" /> : null}
@@ -357,9 +576,9 @@ function StudioEditableBoard({
               onPointerDown={(event) => {
                 if (event.button === 2) return; // right-click erases via onContextMenu
                 event.stopPropagation(); // don't let the ViewPane start a pan while editing
-                if (edgeTool && (tool === 'brush' || tool === 'erase')) {
-                  // Barrier tools paint EDGES: toggle the diamond side under the cursor.
-                  applyBarrierAt(x, y, edgeAtPointer(event), tool === 'erase');
+                if (placementTargetTool && (tool === 'brush' || tool === 'erase')) {
+                  if (fencePostTool) applyFencePostAt(x, y, vertexAtPointer(event), tool === 'erase');
+                  else applyBarrierAt(x, y, edgeAtPointer(event), tool === 'erase');
                   return;
                 }
                 if (tool === 'move') {
@@ -380,15 +599,23 @@ function StudioEditableBoard({
                 if (tool !== 'select') paintingRef.current = true;
                 applyTool(x, y);
               }}
-              onPointerEnter={() => { setHoverCell({ x, y }); if (!edgeTool && paintingRef.current) applyTool(x, y); }}
-              onPointerMove={edgeTool ? (event) => hoverBarrierEdge(x, y, edgeAtPointer(event)) : undefined}
+              onPointerEnter={() => { setHoverCell({ x, y }); if (!placementTargetTool && paintingRef.current) applyTool(x, y); }}
+              onPointerMove={placementTargetTool ? (event) => {
+                if (fencePostTool) hoverFencePost(x, y, vertexAtPointer(event));
+                else hoverBarrierEdge(x, y, edgeAtPointer(event));
+              } : undefined}
               onPointerUp={(event) => {
                 if (tool === 'move' && movingFrom) {
                   event.stopPropagation();
                   finishMoveAt({ x, y });
                 }
               }}
-              onContextMenu={(event) => { event.preventDefault(); if (edgeTool) applyBarrierAt(x, y, edgeAtPointer(event), true); else onErase(x, y); }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                if (fencePostTool) applyFencePostAt(x, y, vertexAtPointer(event), true);
+                else if (placementTargetTool) applyBarrierAt(x, y, edgeAtPointer(event), true);
+                else onErase(x, y);
+              }}
             />
           </>
         ),
@@ -396,44 +623,37 @@ function StudioEditableBoard({
     }
   }
 
-  // Units + doodads render at GRID level via the SHARED seat (.board-unit-seat) and the
-  // shared <DoodadSprite> through `studioBoardSprites` — exactly the same seating the read-only
-  // viewer uses, so they can't drift. The editor injects a transparent doodad hit target
-  // alongside each prop: the doodad stands UP above its foot cell and the shared sprite is
-  // pointer-events:none, so clicking the visible body would otherwise fall through to the cell
-  // behind it. The hit routes the tool to the doodad's OWN cell; transparent in brush mode so
-  // painting still flows to the tiles underneath, catching clicks only while erasing/selecting.
-  const overlaySprites: ReactNode[] = studioBoardSprites({
-    units: placedUnits,
-    doodads: placedDoodads,
-    resolveUnit,
-    resolveDoodad,
-    hidden,
-    renderDoodadExtra: ({ x: cx, y: cy, left, top, zIndex }) => (
-      <span
-        key={`dd-hit-${cx},${cy}`}
-        className="tileset-doodad-hit"
-        style={{ position: 'absolute', left, top, zIndex: zIndex + 20002, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' || tool === 'move' || movingFrom ? 'none' : 'auto' }}
-        onPointerDown={(event) => {
-          if (event.button === 2) return;
-          event.stopPropagation();
-          if (tool !== 'select') paintingRef.current = true;
-          applyTool(cx, cy);
-        }}
-        onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
-      />
-    ),
-  });
+  // Board art now renders through BoardSceneLayer. These remaining DOM nodes are editor-only
+  // hit targets for tall bodies whose visible pixels extend beyond their owning tile.
+  const overlaySprites: ReactNode[] = [];
+  if (!hidden?.doodad) {
+    for (const key of Object.keys(placedDoodads)) {
+      const [cx, cy] = key.split(',').map(Number);
+      const { left, top } = boardLabCellPosition({ x: cx, y: cy });
+      overlaySprites.push(
+        <span
+          key={`dd-hit-${cx},${cy}`}
+          className="tileset-doodad-hit"
+          style={{ position: 'absolute', left, top, zIndex: objectBaseZIndex({ x: cx, y: cy }) + 2, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' || tool === 'move' || movingFrom ? 'none' : 'auto' }}
+          onPointerDown={(event) => {
+            if (event.button === 2) return;
+            event.stopPropagation();
+            if (tool !== 'select') paintingRef.current = true;
+            applyTool(cx, cy);
+          }}
+          onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
+        />,
+      );
+    }
+  }
 
-  // Multi-cell props: the tall PropSprite (back/front halves) seated over its footprint, plus a
-  // Studio-only hit target spanning the footprint's screen bbox so a click on the prop body routes
-  // select/erase to the OWNING ANCHOR (the shared sprite is pointer-events:none, so otherwise the
-  // click falls through to whatever cell is behind it).
+  // Multi-cell props use a Studio-only hit target spanning the footprint's screen bbox so a click
+  // on the prop body routes select/erase to the OWNING ANCHOR.
   for (const [key, placement] of Object.entries(placedProps)) {
+    if (hidden?.doodad) continue;
     const def = resolveProp(placement.propId);
     if (!def) continue; // unknown prop id — skip (matches the renderer/collision skip)
     const [ax, ay] = key.split(',').map(Number);
-    overlaySprites.push(<PropSprite key={`prop-${key}`} prop={{ x: ax, y: ay, propId: placement.propId }} def={def} />);
     // Footprint screen bbox: project all footprint cell centres, take their extent, pad to the
     // diamond half-width/height. zIndex above the front-most cell's sprite so clicks land on it.
     const cells = propCells(ax, ay, def);
@@ -442,7 +662,7 @@ function StudioEditableBoard({
     const maxLeft = Math.max(...pts.map((p) => p.left));
     const minTop = Math.min(...pts.map((p) => p.top));
     const maxTop = Math.max(...pts.map((p) => p.top));
-    const frontZ = (ax + def.w - 1) + (ay + def.h - 1) + 20000;
+    const frontZ = structureFrontZIndex({ x: ax + def.w - 1, y: ay + def.h - 1 });
     overlaySprites.push(
       <span
         key={`prop-hit-${key}`}
@@ -515,6 +735,80 @@ function StudioEditableBoard({
     );
   }
 
+  if (macroTileBrush && tool === 'brush' && hoverCell) {
+    const placeable = hoverCell.x + macroTileBrush.columns <= cols && hoverCell.y + macroTileBrush.rows <= rows;
+    for (let dy = 0; dy < macroTileBrush.rows; dy += 1) {
+      for (let dx = 0; dx < macroTileBrush.columns; dx += 1) {
+        const x = hoverCell.x + dx;
+        const y = hoverCell.y + dy;
+        if (x >= cols || y >= rows) continue;
+        const { left, top, zIndex } = boardLabCellPosition({ x, y });
+        overlaySprites.push(
+          <span
+            key={`macro-ghostcell-${x},${y}`}
+            className={`le-prop-ghost-cell ${placeable ? 'is-ok' : 'is-blocked'}`}
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left,
+              top,
+              zIndex: zIndex + 19000,
+              width: TILE_TEMPLATE.stepX * 2,
+              height: TILE_TEMPLATE.stepY * 2,
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              clipPath: 'polygon(50% 0, 100% 50%, 50% 100%, 0 50%)',
+              boxShadow: `inset 0 0 0 2px ${placeable ? 'rgba(80,220,140,.95)' : 'rgba(240,90,90,.95)'}`,
+              background: placeable ? 'rgba(80,220,140,.12)' : 'rgba(240,90,90,.18)',
+            }}
+          />,
+        );
+      }
+    }
+    const anchor = boardLabCellPosition(hoverCell);
+    const frame = macroTileFrame(macroTileBrush);
+    overlaySprites.push(
+      <img
+        key="macro-ghost-sprite"
+        src={macroTileBrush.src}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        style={{
+          position: 'absolute',
+          left: anchor.left + frame.left,
+          top: anchor.top + frame.top,
+          width: frame.width,
+          height: frame.height,
+          opacity: placeable ? 0.62 : 0.22,
+          imageRendering: 'pixelated',
+          pointerEvents: 'none',
+          zIndex: 19001,
+        }}
+      />,
+    );
+  }
+
+  const sceneBoard: EditorBoard = {
+    cols,
+    rows,
+    cells: placed,
+    macroTiles: [...placedMacroTiles],
+    units: placedUnits,
+    doodads: placedDoodads,
+    props: placedProps,
+    cover: placedCover,
+    coverTypes: placedCoverTypes,
+    features: placedFeatures as EditorBoard['features'],
+    fences: placedFences,
+    fencePosts: placedFencePosts,
+    walls: placedWalls,
+    wallArt: placedWallArt,
+    featureCuts: {},
+    featureExits: {},
+    zones: {},
+  };
+
   return (
     <TileGrid
       cells={cells}
@@ -522,12 +816,26 @@ function StudioEditableBoard({
       ariaLabel="Editable tile board"
       boardZoom={boardZoom}
       boardPan={boardPan}
+      backgroundLayer={(
+        <>
+          <BoardTerrainLayer
+            cells={terrainCells}
+            macroTiles={hidden?.tile ? [] : terrainCanvasMacroTiles(placedMacroTiles)}
+          />
+          <BoardSceneLayer
+            board={sceneBoard}
+            hidden={hidden}
+            coverSeed={coverSeed}
+            ambientCover={false}
+            omitTerrain
+            transformOps={fenceArtwork ? ((ops, board) => transformFenceArtReviewOps(ops, board, fenceArtwork)) : undefined}
+          />
+        </>
+      )}
       onPointerUp={endInteraction}
-      onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
+      onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); setHoverPost(null); }}
     >
-      {overlay}
-      <WallOverlayLayer overlays={wallOverlayMap} wallArt={placedWallArt} bounds={wallBounds} />
-      <FenceOverlayLayer overlays={fenceOverlayMap} />
+      {showGrid ? <BoardGridLayer cells={cells} /> : null}
       {overlaySprites}
     </TileGrid>
   );
@@ -555,6 +863,28 @@ const leFamilyAssets = studioFamilies.reduce((acc, family) => {
 }, {} as Record<TileFamilyId, readonly StudioAsset[]>);
 const leAllTiles = studioFamilies.flatMap((family) => family.assets);
 const leFamilyOfTile = (id: string): StudioFamily | undefined => studioFamilies.find((family) => family.assets.some((asset) => asset.id === id));
+const leMacroTileFootprints = [...new Set(macroTileAssets.map((asset) => `${asset.columns}x${asset.rows}`))];
+const leMacroTilesFor = (family: TileFamilyId, footprint: string): readonly MacroTileAsset[] =>
+  macroTileAssets.filter((asset) => asset.family === family && `${asset.columns}x${asset.rows}` === footprint);
+const validMacroTilesForBoard = (board: EditorBoard): MacroTilePlacement[] => {
+  const known = resolveMacroTilePlacements({
+    placements: board.macroTiles,
+    columns: board.cols,
+    rows: board.rows,
+    familyAt: (x, y) => leFamilyOfTile(board.cells[`${x},${y}`] ?? '')?.id,
+  });
+  const unknown = (board.macroTiles ?? []).filter((placement) =>
+    !macroTileAsset(placement.assetId)
+    && Number.isInteger(placement.x)
+    && Number.isInteger(placement.y)
+    && placement.x >= 0
+    && placement.y >= 0
+    && placement.x < board.cols
+    && placement.y < board.rows,
+  );
+  return [...known, ...unknown]
+    .sort((a, b) => a.y - b.y || a.x - b.x || a.assetId.localeCompare(b.assetId));
+};
 // The terrain families the Generate (scatter) panel offers as toggles, in display order.
 const LE_SCATTER_FAMILIES: ReadonlyArray<{ id: TileFamilyId; label: string }> = [
   { id: 'grass', label: 'Grass' },
@@ -574,13 +904,21 @@ const DEFAULT_COVER: CoverKnobs = { amount: 0.6, amountRandom: 0.3, density: 0.4
 // SET (decoupled from terrain) plus its own scatter knobs. `expanded` is UI state. Per cell the
 // first listed entry whose Coverage roll hits wins, so several entries read as a MIX across the region.
 type CoverEntry = { id: number; type: GroundCoverId; expanded: boolean; knobs: CoverKnobs };
-type ScatterRow = { id: number; terrain: TileFamilyId; share: number; locked: boolean; covers: CoverEntry[] };
+type ScatterRow = {
+  id: number;
+  terrain: TileFamilyId;
+  share: number;
+  locked: boolean;
+  covers: CoverEntry[];
+  macroTileDensity: number;
+  macroTileBreakup: number;
+};
 // The three ground-cover sets that have art, offered on every region regardless of its terrain.
 const LE_COVER_TYPES = GROUND_COVER_ASSETS;
 const isGroundCoverId = (id: string): id is GroundCoverId => GROUND_COVER_ASSETS.some((asset) => asset.id === id);
 const defaultScatterRows = (): ScatterRow[] => [
-  { id: 0, terrain: 'grass', share: 60, locked: false, covers: [{ id: 1, type: 'grass', expanded: false, knobs: { ...DEFAULT_COVER } }] },
-  { id: 1, terrain: 'stone', share: 40, locked: false, covers: [] },
+  { id: 0, terrain: 'grass', share: 60, locked: false, covers: [{ id: 1, type: 'grass', expanded: false, knobs: { ...DEFAULT_COVER } }], macroTileDensity: DEFAULT_MACRO_TILE_DENSITY, macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP },
+  { id: 1, terrain: 'stone', share: 40, locked: false, covers: [], macroTileDensity: DEFAULT_MACRO_TILE_DENSITY, macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP },
 ];
 const regionCellSort = (a: string, b: string): number => {
   const [ax, ay] = a.split(',').map(Number);
@@ -596,6 +934,8 @@ const scatterRowsToGeneratedSections = (rows: ScatterRow[]): BoardGeneratedRegio
     share: row.share,
     locked: row.locked || undefined,
     covers: row.covers.map((cover) => ({ type: cover.type, knobs: { ...cover.knobs } })),
+    macroTileDensity: row.macroTileDensity,
+    macroTileBreakup: row.macroTileBreakup,
   }));
 const nextGeneratedRegionName = (regions: readonly BoardGeneratedRegion[]): string => {
   const used = new Set(regions.map((region) => region.name));
@@ -680,18 +1020,15 @@ const leSeedBoard = (): Record<string, string> => {
   for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile.id;
   return cells;
 };
-const LE_FACTION_LABELS: Record<UnitPalette, string> = {
-  'navy-blue': 'Navy',
-  crimson: 'Crimson',
-  golden: 'Golden',
-  emerald: 'Emerald',
-};
+const LE_FACTION_LABELS = UNIT_PALETTE_LABELS;
 type FactionDirections = Partial<Record<UnitPalette, Direction>>;
 const DEFAULT_FACTION_DIRECTIONS: Record<UnitPalette, Direction> = {
   'navy-blue': 'north',
   crimson: 'south',
   golden: 'north',
   emerald: 'south',
+  black: 'south',
+  white: 'north',
 };
 const normalizeFactionDirections = (directions?: BoardFactionDirections): FactionDirections =>
   Object.fromEntries(
@@ -701,8 +1038,6 @@ const normalizeFactionDirections = (directions?: BoardFactionDirections): Factio
   ) as FactionDirections;
 const factionDefaultDirection = (faction: UnitPalette, directions: FactionDirections): Direction =>
   directions[faction] ?? DEFAULT_FACTION_DIRECTIONS[faction];
-const isUnitPalette = (value: unknown): value is UnitPalette =>
-  typeof value === 'string' && (UNIT_PALETTES as readonly string[]).includes(value);
 const sideDefaultFaction = (
   side: 'player' | 'enemy',
   playerFaction: UnitPalette | null,
@@ -735,7 +1070,7 @@ const CHESS_MATERIAL_POINT_VALUE: Record<PlayablePieceType, number> = {
 };
 const MATERIAL_VALUE_NOTE = 'P=1 / N,B=3 / R=5 / Q=9';
 const materialPointsForUnitId = (unitId: string): number => {
-  const type = (leUnitAssets.find((unit) => unit.id === unitId) ?? unitAssets.find((unit) => unit.id === unitId))?.family;
+  const type = unitFamilyForId(unitId);
   return type ? CHESS_MATERIAL_POINT_VALUE[type] : 0;
 };
 
@@ -775,17 +1110,26 @@ const MODE_DESCRIPTION: Record<ObjectiveType, string> = {
 
 const OTHER_EVENT_TEMPLATES = [
   { id: 'pawn-promotion', label: 'Pawn promotion' },
+  { id: 'castling', label: 'Castling' },
+  { id: 'chess-draws', label: 'Chess draws' },
 ] as const;
 type OtherEventTemplateId = typeof OTHER_EVENT_TEMPLATES[number]['id'];
 
-// A stable fingerprint of an editor board, the basis of the real dirty flag: encodeBoard is
-// deterministic + lossless, so two boards encode identically iff they're the same board.
-// The dirty-flag signature of a whole Level: its name, lossless boardCode, and the ADR-0050 mode
-// fields (which don't ride in boardCode). ONE formula, used both for the live current-state
-// signature and for the just-saved / just-loaded baseline, so a freshly hydrated level reads clean
-// and a mode/name change (not just a board paint) marks it dirty.
-const levelSignature = (level: Level): string =>
-  JSON.stringify([level.name, level.boardCode ?? '', level.objective, level.placement ?? 'fixed', level.surviveTurns ?? '', level.roster ?? {}, level.timeControl ?? '', level.victory ?? '', effectiveLevelEvents(level)]);
+const levelFromDraft = (draft: LevelEditorDraft, base: Level): Level => editorBoardToLevel(draft.board, {
+  id: base.id,
+  name: draft.levelName,
+  objective: draft.objective,
+  surviveTurns: draft.objective === 'survive' ? draft.surviveTurns : undefined,
+  timeControl: draft.timeControl,
+  victory: draft.victory,
+  events: draft.events,
+  notes: base.notes,
+  difficulty: base.difficulty,
+  economy: base.economy,
+  theme: base.theme,
+  previousTerrain: base.layers.terrain,
+});
+
 // The undo/redo history signature of an editor board (boardCode is deterministic + lossless, so two
 // boards encode identically iff equal); plus a deep clone + the history-stack depth cap.
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
@@ -854,8 +1198,15 @@ type EventZoneOption = { id: string; label: string };
 
 const primaryEventAction = (event: LevelEvent): LevelEventAction | undefined => event.do[0];
 
+const EVENT_KIND_FALLBACK_LABEL: Record<string, string> = {
+  spawn: 'Setup spawn',
+  promote: 'Pawn promotion',
+  castle: 'Castling',
+  'chess-draws': 'Chess draws',
+};
+
 const eventName = (event: LevelEvent, index: number): string =>
-  event.name?.trim() || (primaryEventAction(event)?.kind === 'spawn' ? `Setup spawn ${index + 1}` : `Pawn promotion ${index + 1}`);
+  event.name?.trim() || `${EVENT_KIND_FALLBACK_LABEL[primaryEventAction(event)?.kind ?? ''] ?? 'Event'} ${index + 1}`;
 
 function replaceEventAction(event: LevelEvent, nextAction: LevelEventAction): LevelEvent {
   const nextDo = event.do.some((action) => action.kind === nextAction.kind)
@@ -886,6 +1237,10 @@ function uniqueEventName(base: string, events: readonly LevelEvent[]): string {
   }
 }
 
+function SelectFrame({ children, className = '' }: { children: ReactNode; className?: string }): ReactElement {
+  return <div className={`le-select-wrap ${className}`.trim()}>{children}</div>;
+}
+
 function LevelEventsEditor({ value, zones, onChange, templates }: {
   value: LevelEvents;
   zones: EventZoneOption[];
@@ -896,6 +1251,8 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
   const selected = value.length ? Math.min(sel, value.length - 1) : -1;
   const event = selected >= 0 ? value[selected] : null;
   const spawnAction = event?.do.find((action): action is SpawnEventAction => action.kind === 'spawn') ?? null;
+  const castleAction = event?.do.find((action): action is CastleEventAction => action.kind === 'castle') ?? null;
+  const chessDrawsAction = event?.do.find((action): action is ChessDrawsEventAction => action.kind === 'chess-draws') ?? null;
   const promotionTrigger = event?.trigger.kind === 'unit-enters-zone' ? event.trigger : null;
   const promotesTriggeringUnit = Boolean(event?.do.some((action) => action.kind === 'promote' && action.target.kind === 'triggering-unit'));
   const firstZone = zones[0]?.id ?? '';
@@ -939,7 +1296,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
       <div className="le-md-list">
         {templates}
         <h3 className="le-victory-head">Events</h3>
-        {value.length === 0 ? <p className="le-board-warning">No setup or promotion events yet.</p> : null}
+        {value.length === 0 ? <p className="le-board-warning">No events yet.</p> : null}
         <div className="le-md-rules">
           {value.map((item, index) => (
             <button type="button" key={index} className={`le-md-item ${index === selected ? 'active' : ''}`.trim()} onClick={() => setSel(index)}>
@@ -949,8 +1306,8 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
           ))}
         </div>
         <div className="le-cond-add le-rule-add">
-          <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-add-event" onClick={addSpawn}>+ Spawn</button>
-          <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-add-event" onClick={addPromotion}>+ Promotion</button>
+          <button type="button" className="le-seg-btn le-add-event" onClick={addSpawn}>+ Spawn</button>
+          <button type="button" className="le-seg-btn le-add-event" onClick={addPromotion}>+ Promotion</button>
         </div>
       </div>
       <div className="le-md-detail">
@@ -967,29 +1324,27 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Faction</span>
-              <HouseSelect
-                value={spawnAction.side}
-                ariaLabel="Spawn faction"
-                options={[
-                  { value: 'player', label: 'Player' },
-                  { value: 'enemy', label: 'Enemy' },
-                ]}
-                onChange={(side) => {
-                  const nextAction = { ...spawnAction, side, zoneIds: spawnAction.zoneIds.length ? spawnAction.zoneIds : defaultZoneIds() };
-                  setEvent(selected, replaceEventAction(event, nextAction));
-                }}
-              />
+              <SelectFrame>
+                <select className="le-layer-select le-faction-select" value={spawnAction.side} aria-label="Spawn faction"
+                  onChange={(e) => {
+                    const side = e.target.value as 'player' | 'enemy';
+                    const nextAction = { ...spawnAction, side, zoneIds: spawnAction.zoneIds.length ? spawnAction.zoneIds : defaultZoneIds() };
+                    setEvent(selected, replaceEventAction(event, nextAction));
+                  }}>
+                  <option value="player">Player</option>
+                  <option value="enemy">Enemy</option>
+                </select>
+              </SelectFrame>
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
-              <HouseSelect
-                value={spawnAction.zoneIds[0] ?? ''}
-                ariaLabel="Spawn zone"
-                options={zones.length === 0
-                  ? [{ value: '', label: 'No zones painted', disabled: true }]
-                  : zones.map((zone) => ({ value: zone.id, label: zone.label }))}
-                onChange={(zoneId) => setEvent(selected, replaceEventAction(event, { ...spawnAction, zoneIds: zoneId ? [zoneId] : [] }))}
-              />
+              <SelectFrame>
+                <select className="le-layer-select" value={spawnAction.zoneIds[0] ?? ''} aria-label="Spawn zone"
+                  onChange={(e) => setEvent(selected, replaceEventAction(event, { ...spawnAction, zoneIds: e.target.value ? [e.target.value] : [] }))}>
+                  {zones.length === 0 ? <option value="">No zones painted</option> : null}
+                  {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}
+                </select>
+              </SelectFrame>
             </div>
             <h3 className="le-victory-head">Roster</h3>
             {PLAYABLE_PIECE_TYPES.map((type) => (
@@ -1003,7 +1358,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               </div>
             ))}
             <div className="le-rule-then">
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : event && promotionTrigger && promotesTriggeringUnit ? (
@@ -1019,30 +1374,27 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Unit</span>
-              <HouseSelect
-                value={promotionTrigger.unit.side ?? 'any'}
-                ariaLabel="Promotion faction"
-                options={[
-                  { value: 'player', label: 'Player pawn' },
-                  { value: 'enemy', label: 'Enemy pawn' },
-                  { value: 'any', label: 'Any pawn' },
-                ]}
-                onChange={(nextSide) => {
-                  const side = nextSide === 'any' ? undefined : nextSide;
-                  setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side }, zoneId: promotionTrigger.zoneId } });
-                }}
-              />
+              <SelectFrame>
+                <select className="le-layer-select le-faction-select" value={promotionTrigger.unit.side ?? 'any'} aria-label="Promotion faction"
+                  onChange={(e) => {
+                    const side = e.target.value === 'any' ? undefined : e.target.value as 'player' | 'enemy';
+                    setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side }, zoneId: promotionTrigger.zoneId } });
+                  }}>
+                  <option value="player">Player pawn</option>
+                  <option value="enemy">Enemy pawn</option>
+                  <option value="any">Any pawn</option>
+                </select>
+              </SelectFrame>
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
-              <HouseSelect
-                value={promotionTrigger.zoneId}
-                ariaLabel="Promotion zone"
-                options={zones.length === 0
-                  ? [{ value: '', label: 'No zones painted', disabled: true }]
-                  : zones.map((zone) => ({ value: zone.id, label: zone.label }))}
-                onChange={(zoneId) => setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: promotionTrigger.unit, zoneId } })}
-              />
+              <SelectFrame>
+                <select className="le-layer-select" value={promotionTrigger.zoneId} aria-label="Promotion zone"
+                  onChange={(e) => setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: promotionTrigger.unit, zoneId: e.target.value } })}>
+                  {zones.length === 0 ? <option value="">No zones painted</option> : null}
+                  {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}
+                </select>
+              </SelectFrame>
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Target</span>
@@ -1053,7 +1405,61 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               <output className="le-event-readout" aria-label="Event action">Promote</output>
             </div>
             <div className="le-rule-then">
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+            </div>
+          </div>
+        ) : event && castleAction ? (
+          <div className="le-rule">
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Event name</span>
+              <input className="le-text-input" value={event.name ?? ''} placeholder={`Event ${selected + 1}`} aria-label="Event name"
+                onChange={(e) => setEvent(selected, { ...event, name: e.target.value })} />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Faction</span>
+              <output className="le-event-readout" aria-label="Castle faction">{castleAction.side === 'player' ? 'Player' : 'Enemy'}</output>
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">King</span>
+              <output className="le-event-readout" aria-label="Castle king squares">({castleAction.king.x}, {castleAction.king.y}) → ({castleAction.kingTo.x}, {castleAction.kingTo.y})</output>
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Rook</span>
+              <output className="le-event-readout" aria-label="Castle rook squares">({castleAction.rook.x}, {castleAction.rook.y}) → ({castleAction.rookTo.x}, {castleAction.rookTo.y})</output>
+            </div>
+            <p className="le-board-note">
+              In play the castle is offered while the king and rook sit unmoved on their squares, the path is clear,
+              and the king isn't in or moving through check. Moved the pieces or changed the Player faction? Remove
+              this event and re-add the Castling template.
+            </p>
+            <div className="le-rule-then">
+              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+            </div>
+          </div>
+        ) : event && chessDrawsAction ? (
+          <div className="le-rule">
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Event name</span>
+              <input className="le-text-input" value={event.name ?? ''} placeholder={`Event ${selected + 1}`} aria-label="Event name"
+                onChange={(e) => setEvent(selected, { ...event, name: e.target.value })} />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">50-move rule</span>
+              <Toggle checked={chessDrawsAction.fiftyMove === true} label="Toggle the 50-move rule"
+                onChange={(enabled) => setEvent(selected, replaceEventAction(event, { ...chessDrawsAction, fiftyMove: enabled }))} />
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Threefold repetition</span>
+              <Toggle checked={chessDrawsAction.threefold === true} label="Toggle threefold repetition"
+                onChange={(enabled) => setEvent(selected, replaceEventAction(event, { ...chessDrawsAction, threefold: enabled }))} />
+            </div>
+            <p className="le-board-note">
+              50-move rule: 50 full moves with no capture or pawn move end the game as a draw. Threefold repetition:
+              the same position occurring three times ends it as a draw. Both match chess exactly, in live play and
+              for the training AI.
+            </p>
+            <div className="le-rule-then">
+              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : <p className="le-board-note">Select an event or add one on the left.</p>}
@@ -1202,15 +1608,21 @@ function FenceConnections({
   cols,
   rows,
   fences,
+  posts,
   onPaint,
   onErase,
+  onPaintPost,
+  onErasePost,
 }: {
   cell: { x: number; y: number };
   cols: number;
   rows: number;
   fences: Record<string, FenceMaterial>;
+  posts: Record<string, FenceMaterial>;
   onPaint: (edge: string) => void;
   onErase: (edge: string) => void;
+  onPaintPost: (vertex: string) => void;
+  onErasePost: (vertex: string) => void;
 }): ReactElement {
   const V = { apex: [64, 14], right: [114, 48], bottom: [64, 82], left: [14, 48] } as const;
   const EDGE_GEO: Record<string, readonly [readonly [number, number], readonly [number, number]]> = {
@@ -1219,8 +1631,15 @@ function FenceConnections({
     S: [V.bottom, V.left],
     W: [V.left, V.apex],
   };
+  const VERTEX_GEO: Record<FenceVertexCorner, readonly [number, number]> = {
+    back: V.apex,
+    right: V.right,
+    front: V.bottom,
+    left: V.left,
+  };
+  const resolvedPosts = resolveFencePosts(fences, posts);
   return (
-    <svg className="le-roadconn" viewBox="0 0 128 96" role="group" aria-label="Fence edges for the selected tile">
+    <svg className="le-roadconn" viewBox="0 0 128 96" role="group" aria-label="Fence rails and posts for the selected tile">
       <polygon points={`${V.apex} ${V.right} ${V.bottom} ${V.left}`} fill="rgba(8,20,28,.55)" stroke="rgba(82,142,170,.35)" strokeWidth="1" />
       {FEATURE_DIRS.map((dir) => {
         const nx = cell.x + dir.dx;
@@ -1252,6 +1671,35 @@ function FenceConnections({
           >
             <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="20" strokeLinecap="round" />
             <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={material ? '7' : '5'} strokeLinecap="round" strokeDasharray={material ? undefined : neighborOnBoard ? '4 7' : '2 6'} />
+          </g>
+        );
+      })}
+      {FENCE_VERTEX_CORNERS.map((corner) => {
+        const vertex = fenceVertexKey(cell.x, cell.y, corner.id);
+        const explicitMaterial = posts[vertex];
+        const resolved = resolvedPosts.get(vertex);
+        const state = explicitMaterial ? 'explicit' : resolved?.source === 'automatic' ? 'automatic' : 'none';
+        const material = explicitMaterial ?? resolved?.material;
+        const [cx, cy] = VERTEX_GEO[corner.id];
+        const toggle = (): void => (explicitMaterial ? onErasePost(vertex) : onPaintPost(vertex));
+        const label = explicitMaterial
+          ? `Remove authored ${FENCE_MATERIAL_LABELS[explicitMaterial]} post from ${corner.label} vertex`
+          : resolved?.source === 'automatic'
+          ? `Author a post at ${corner.label} vertex; an automatic ${FENCE_MATERIAL_LABELS[resolved.material]} open-end post is already present`
+          : `Add post to ${corner.label} vertex`;
+        return (
+          <g
+            key={`post-${corner.id}`}
+            className={`le-fenceconn-post is-${state}${material ? ` is-${material}` : ''}`}
+            role="button"
+            aria-label={label}
+            aria-pressed={Boolean(explicitMaterial)}
+            tabIndex={0}
+            onClick={toggle}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+          >
+            <circle cx={cx} cy={cy} r="13" fill="transparent" />
+            <circle className="le-fenceconn-post-mark" cx={cx} cy={cy} r={state === 'explicit' ? 6 : 5} />
           </g>
         );
       })}
@@ -1458,6 +1906,28 @@ const formatDifficulty = (difficulty: string | undefined): string => {
 type StatusTone = 'info' | 'success' | 'warning' | 'error';
 type StatusLogEntry = { id: number; tone: StatusTone; message: string; detail?: string; at: string };
 const STATUS_LOG_LIMIT = 24;
+const EDITOR_SIGN_IN_RECOVERY_INTENT_KEY = 'ct:level-editor-sign-in-recovery:v1';
+const EDITOR_HYDRATION_WAIT_MS = 5_000;
+
+type EditorSignInRecoveryIntent = { draftKey: string; savedAt: number };
+
+const readEditorSignInRecoveryIntent = (): EditorSignInRecoveryIntent | null => {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(EDITOR_SIGN_IN_RECOVERY_INTENT_KEY) ?? 'null') as Partial<EditorSignInRecoveryIntent> | null;
+    return value
+      && typeof value.draftKey === 'string'
+      && typeof value.savedAt === 'number'
+      && Number.isFinite(value.savedAt)
+      ? { draftKey: value.draftKey, savedAt: value.savedAt }
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearEditorSignInRecoveryIntent = (): void => {
+  try { window.sessionStorage.removeItem(EDITOR_SIGN_IN_RECOVERY_INTENT_KEY); } catch { /* blocked storage */ }
+};
 
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
@@ -1489,9 +1959,13 @@ export function LevelEditor(): ReactElement {
   // (board-link / blank) board with no campaign target.
   const routeParams = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
+    const rawDocumentRevision = Number(params.get('docRev'));
+    const legacyMapId = params.get('map') ?? undefined;
     return {
       campaignId: params.get('campaignId') ?? undefined,
       levelId: params.get('levelId') ?? undefined,
+      documentId: params.get('document') ?? (legacyMapId ? `legacy-${legacyMapId}` : undefined),
+      documentRevision: Number.isSafeInteger(rawDocumentRevision) && rawDocumentRevision >= 1 ? rawDocumentRevision : undefined,
       returnTo: params.get('returnTo') ?? undefined,
       boardCode: params.get('board') ?? undefined,
     };
@@ -1501,27 +1975,102 @@ export function LevelEditor(): ReactElement {
   const loadedBoard = useMemo(() => readBoardParam(), []);
   const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const isChromeLabPreview = useMemo(() => urlParams.get('chromeLab') === '1', [urlParams]);
+  const installedChromeCss = useInstalledChromeCss(!isChromeLabPreview);
+  const fenceArtReviewEnabled = urlParams.get('artReview') === FENCE_ART_REVIEW_ID;
+  const initialFenceArtwork = fenceArtKit(urlParams.get('fenceArt')) ?? FENCE_ART_KITS[0];
   const urlTimeControl = useMemo(() => readTimeControlParams(urlParams), [urlParams]);
   const urlEvents = useMemo(() => readLevelEventsParam(urlParams), [urlParams]);
   const urlVictory = useMemo(() => readVictoryRulesParam(urlParams), [urlParams]);
+  const urlLevelName = useMemo(() => urlParams.get('name')?.trim() || undefined, [urlParams]);
+  const urlSurviveTurns = useMemo(() => {
+    const value = Number(urlParams.get('survive'));
+    return Number.isSafeInteger(value) && value >= 1 ? value : undefined;
+  }, [urlParams]);
   const urlObjective = useMemo(() => {
     const raw = urlParams.get('obj');
     return (OBJECTIVE_TYPES as readonly string[]).includes(raw ?? '') ? raw as ObjectiveType : undefined;
   }, [urlParams]);
-  const draftKey = useMemo(() => levelEditorDraftKey({ levelId: routeParams.levelId, boardCode: routeParams.boardCode }), [routeParams.levelId, routeParams.boardCode]);
-  const localDraft = useMemo(() => readLevelEditorDraft(draftKey), [draftKey]);
+  const initialDraftKey = useMemo(
+    () => levelEditorDraftKey({ levelId: routeParams.levelId, boardCode: routeParams.boardCode }),
+    [routeParams.levelId, routeParams.boardCode],
+  );
+  const [draftKey, setDraftKey] = useState(initialDraftKey);
+  // Unscoped legacy/browser-only recovery is not applied until auth resolves. Signed-in cloud
+  // documents use an account+document key below, so switching accounts cannot cross-load drafts.
+  const unscopedLocalDraft = useMemo(() => readLevelEditorDraft(initialDraftKey), [initialDraftKey]);
+  // levelId names the canonical Save/campaign-play target; the opaque `document` URL parameter
+  // names the private working copy globally. Thumbnails and gameplay never read that working copy.
+  const initialTargetLevel = useMemo(
+    () => routeParams.levelId ? useCampaigns.getState().levels[routeParams.levelId] : undefined,
+    [routeParams.levelId],
+  );
+  const initialTargetSig = useMemo(
+    () => initialTargetLevel ? normalizedLevelEditorSignature(initialTargetLevel) : null,
+    [initialTargetLevel],
+  );
+  const draftHasCampaignAssignment = unscopedLocalDraft?.campaignId !== undefined;
+  const initialCampaignAssignmentId = draftHasCampaignAssignment
+    ? unscopedLocalDraft?.campaignId ?? ''
+    : routeParams.campaignId ?? '';
+  // Campaign membership is staged alongside the working document and committed only by Save.
+  const [campaignAssignmentId, setCampaignAssignmentId] = useState(initialCampaignAssignmentId);
+  const [savedCampaignAssignmentId, setSavedCampaignAssignmentId] = useState('');
+  const [campaignAssignmentHydrated, setCampaignAssignmentHydrated] = useState(!routeParams.levelId);
+  const recoveredCampaignAssignmentRef = useRef(draftHasCampaignAssignment);
+  // Recovery content is never silently discarded because its saved baseline changed. We restore
+  // it as the document source, then compare it with the current canonical target below.
+  const [localDraft] = useState<LevelEditorDraft | null>(() => null);
   const initialCampaignLevel = useMemo(
-    () => (!localDraft && !loadedBoard && routeParams.levelId ? useCampaigns.getState().levels[routeParams.levelId] : undefined),
-    [loadedBoard, localDraft, routeParams.levelId],
+    () => (!loadedBoard ? initialTargetLevel : undefined),
+    [initialTargetLevel, loadedBoard],
   );
   const initialCampaignBoard = useMemo(() => initialCampaignLevel ? levelToEditorBoard(initialCampaignLevel) : undefined, [initialCampaignLevel]);
   const initialBoard = localDraft?.board ?? loadedBoard ?? initialCampaignBoard;
   const initialFactionDirections = normalizeFactionDirections(initialBoard?.factionDirections);
   const initialGeneratedRegions = initialBoard?.generatedRegions ?? [];
-  const needsCampaignHydration = Boolean(routeParams.levelId && !loadedBoard && !localDraft && !initialCampaignLevel);
-  const [editorReady, setEditorReady] = useState(!needsCampaignHydration);
-  const installedChromeCss = useInstalledChromeCss(!isChromeLabPreview);
+  // Do not expose an editable board until the durable document has had a chance to resolve. On a
+  // signed-out/offline visit we deliberately fall back to the browser recovery copy instead.
+  const [editorReady, setEditorReady] = useState(false);
+  const [targetBaselineResolved, setTargetBaselineResolved] = useState(!routeParams.levelId || Boolean(initialTargetLevel));
+  const [editorDocument, setEditorDocument] = useState<EditorDocument | null>(null);
+  const [editorLoadError, setEditorLoadError] = useState<{ title: string; detail: string; signIn?: boolean; retry?: boolean } | null>(null);
+  const [cloudSaveState, setCloudSaveState] = useState<'loading' | 'local' | 'pending' | 'saving' | 'saved' | 'error' | 'conflict'>('loading');
+  const [cloudSaveDetail, setCloudSaveDetail] = useState<string | null>(null);
+  const [localBackupAvailable, setLocalBackupAvailable] = useState<boolean | null>(null);
+  const [authReachable, setAuthReachable] = useState<boolean | null>(null);
+  const [documentLoadAttempt, setDocumentLoadAttempt] = useState(0);
+  const [userWorkspaceHydration, setUserWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [officialWorkspaceHydration, setOfficialWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const signInForEditor = (): void => {
+    const recovery = readLevelEditorDraft(draftKey);
+    let intentStored = false;
+    if (recovery) {
+      try {
+        window.sessionStorage.setItem(EDITOR_SIGN_IN_RECOVERY_INTENT_KEY, JSON.stringify({
+          draftKey,
+          savedAt: recovery.savedAt,
+        } satisfies EditorSignInRecoveryIntent));
+        intentStored = true;
+      } catch { /* Fall through to a separate sign-in tab; never abandon the only copy. */ }
+    }
+    if (!dirty || (recovery && intentStored)) {
+      goSignIn();
+      return;
+    }
+
+    // With no durable same-tab handoff, keep the live editor mounted and authenticate in a
+    // separate tab. Returning focus retries auth and uploads the in-memory candidate safely.
+    signInHandoffPendingRef.current = true;
+    const signInWindow = window.open(signInHref('/editor'), '_blank', 'noopener,noreferrer');
+    if (!signInWindow) {
+      signInHandoffPendingRef.current = false;
+      reportStatus('Sign-in tab was blocked.', 'warning', 'Keep this editor open and allow pop-ups before trying again.');
+      return;
+    }
+    reportStatus('Sign-in opened in another tab.', 'info', 'Keep this editor open. Return here after signing in; cloud sync will retry without discarding this work.');
+  };
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
+  const [boardMacroTiles, setBoardMacroTiles] = useState<MacroTilePlacement[]>(() => initialBoard ? validMacroTilesForBoard(initialBoard) : []);
   const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
   const [boardRows, setBoardRows] = useState(initialBoard?.rows ?? LE_ROWS);
   const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() =>
@@ -1530,6 +2079,8 @@ export function LevelEditor(): ReactElement {
   const [boardFactionDirections, setBoardFactionDirections] = useState<FactionDirections>(() => initialFactionDirections);
   const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move' | 'region'>(toolForLayer(initialLayer));
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
+  const [macroTileBrushId, setMacroTileBrushId] = useState<string | null>(null);
+  const [macroTileFootprint, setMacroTileFootprint] = useState(leMacroTileFootprints[0] ?? '2x2');
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   // Marquee region selection — the scope a Generate fills. "x,y" cell keys; empty ⇒ whole board.
   const [regionSelection, setRegionSelection] = useState<Set<string>>(() => new Set());
@@ -1545,6 +2096,11 @@ export function LevelEditor(): ReactElement {
   const [scatterWiggle, setScatterWiggle] = useState(0.5);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [showGrid, setShowGrid] = useState(false);
+  const [showMoves, setShowMoves] = useState(true);
+  const [showEnemyAttacks, setShowEnemyAttacks] = useState(true);
+  const [showBlocked, setShowBlocked] = useState(false);
+  const [showPromotionZones, setShowPromotionZones] = useState(false);
   const [brushKind, setBrushKind] = useState<BrushKind>(initialBrushKind);
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((initialBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
@@ -1570,7 +2126,14 @@ export function LevelEditor(): ReactElement {
   // Edge fences (ADR): a wall on the boundary between two tiles, keyed by the shared-edge key
   // (roadEdgeKey) -> material. Painted per-edge, not per-cell; blocks crossing that edge in play.
   const [boardFences, setBoardFences] = useState<Record<string, FenceMaterial>>(initialBoard?.fences ?? {});
-  const [fenceBrushMaterial, setFenceBrushMaterial] = useState<FenceMaterial>(DEFAULT_FENCE_MATERIAL);
+  // Positive authored posts live at logical grid vertices. Automatic degree-one open-end posts are
+  // still derived from the rails; these entries only add/override posts and may stand alone.
+  const [boardFencePosts, setBoardFencePosts] = useState<Record<string, FenceMaterial>>(initialBoard?.fencePosts ?? {});
+  const [selectedFenceArtworkId, setSelectedFenceArtworkId] = useState(initialFenceArtwork.id);
+  const activeFenceArtwork = fenceArtReviewEnabled ? (fenceArtKit(selectedFenceArtworkId) ?? initialFenceArtwork) : undefined;
+  const [fenceBrushMaterial, setFenceBrushMaterial] = useState<FenceMaterial>(() =>
+    fenceArtReviewEnabled ? initialFenceArtwork.material : DEFAULT_FENCE_MATERIAL);
+  const [fencePaintTarget, setFencePaintTarget] = useState<FencePaintTarget>('rail');
   // Edge walls use fence-style edge keys, but the editor accepts only the map's northmost
   // and westmost perimeter edges.
   const [boardWalls, setBoardWalls] = useState<Record<string, WallMaterial>>(() =>
@@ -1630,53 +2193,89 @@ export function LevelEditor(): ReactElement {
   // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
   // schema defaults so it reads exactly like a blank createBlankLevel.
   const [objective, setObjective] = useState<ObjectiveType>(localDraft?.objective ?? initialCampaignLevel?.objective ?? urlObjective ?? 'capture-all');
-  const [surviveTurns, setSurviveTurns] = useState<number>(localDraft?.surviveTurns ?? initialCampaignLevel?.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
+  const [surviveTurns, setSurviveTurns] = useState<number>(localDraft?.surviveTurns ?? initialCampaignLevel?.surviveTurns ?? urlSurviveTurns ?? DEFAULT_SURVIVE_TURNS);
   // The battle clock (ADR-0053) — off by default; when on, the level carries a TimeControl and the
   // skirmish runs the player's chess clock (the enemy is untimed). Seeded like the other RULES
   // fields: a restored draft (present ⇒ on, with its authored seconds) beats the campaign level.
   const initialTimeControl = localDraft?.timeControl ?? initialCampaignLevel?.timeControl ?? urlTimeControl;
-  const [clockEnabled, setClockEnabled] = useState<boolean>(
+  const [clockEnabled, setClockEnabledState] = useState<boolean>(
     localDraft ? localDraft.timeControl !== undefined : initialCampaignLevel ? initialCampaignLevel.timeControl !== undefined : urlTimeControl !== undefined,
   );
-  const [clockInitialSeconds, setClockInitialSeconds] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
-  const [clockIncrementSeconds, setClockIncrementSeconds] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
+  const [clockInitialSeconds, setClockInitialSecondsState] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
+  const [clockIncrementSeconds, setClockIncrementSecondsState] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
   // Victory conditions (ADR-0064): `victory` is the working win/lose lists — always the truth for
   // this level's outcome, edited in the RULES panel. Seeded from the objective preset for a level
   // that never customized them; a level stores `victory` only when the lists diverge from that
   // preset (see victoryForSave), which keeps preset levels' bodies clean and out of the dirty check.
-  const [victory, setVictory] = useState<VictoryRules>(
+  const [victory, setVictoryState] = useState<VictoryRules>(
     localDraft?.victory ?? initialCampaignLevel?.victory ?? urlVictory ?? victoryRulesForObjective(objective, { surviveTurns }),
   );
-  const [events, setEvents] = useState<LevelEvents>(() =>
+  const [events, setEventsState] = useState<LevelEvents>(() =>
     normalizeLevelEvents(localDraft?.events ?? (initialCampaignLevel ? effectiveLevelEvents(initialCampaignLevel) : urlEvents ?? [])),
   );
   // The victory-events editor opens as a full-size overlay over the board — the narrow control
   // panel can't give rule authoring room to breathe. The panel stays put; a button opens this.
-  const [eventsOpen, setEventsOpen] = useState(false);
+  const [eventsOpen, setEventsOpen] = useState(() => Boolean(window.history.state?.levelEditorRules));
   // The template dropdown choices append event rows; Clear is the explicit page-local reset.
-  const [templateChoice, setTemplateChoice] = useState<ObjectiveType>(objective);
+  const [templateChoice, setTemplateChoiceState] = useState<ObjectiveType>(objective);
   const [otherTemplateChoice, setOtherTemplateChoice] = useState<OtherEventTemplateId>('pawn-promotion');
   // The events overlay's tab: victory rules (win/lose events) vs other events (spawn/promotion).
   const [eventsTab, setEventsTab] = useState<'victory' | 'other'>('victory');
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
-  // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
-  // the title bar; `savedSig` is the board signature at last save, the basis of the dirty chip.
-  const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId);
-  const [levelName, setLevelName] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? 'Untitled level');
-  const [savedSig, setSavedSig] = useState<string | null>(localDraft?.savedSig ?? (initialCampaignLevel ? levelSignature(initialCampaignLevel) : null));
+  // through; `editingId` may differ once a cold board is saved (Phase 3). The name is edited in
+  // Status, beside the save workflow; `savedSig` is the level signature at last save, the dirty basis.
+  const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId ?? localDraft?.editingId);
+  const [levelName, setLevelNameState] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? urlLevelName ?? 'Untitled level');
+  const levelNameForSave = useMemo(() => levelName.trim() || 'Untitled level', [levelName]);
+  const [savedSig, setSavedSig] = useState<string | null>(initialTargetSig ?? localDraft?.savedSig ?? null);
   // Set true once a campaign level has been hydrated into the board state; the baseline effect
   // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
   // clean even for a legacy level whose derived boardCode differs from its saved one).
   const needsBaselineRef = useRef(false);
+  // Which rules-panel fields the user has explicitly authored. The mount-time document
+  // loads resolve asynchronously, and the ADR-0046 entrance failsafe makes the editor
+  // interactive while they are still in flight — so every user-facing rules setter routes
+  // through an authoring wrapper below, and a late seed skips whatever the user already
+  // authored instead of silently clobbering it (see levelEditorRulesSeed.ts). The raw
+  // set*State setters stay reserved for document loads/seeds.
+  const authoredRulesRef = useRef<Set<AuthoredRulesField>>(new Set());
+  // Set when a seed withheld authored fields: the clean baseline below must then anchor on
+  // the seeded DOCUMENT's rules (via seededBaselineLevel), not the merged on-screen state,
+  // so the user's authored delta reads dirty and flows into drafts/saves.
+  const seedSkewRef = useRef<LevelRulesSeed | null>(null);
+  const authorRulesField = <T,>(field: AuthoredRulesField, set: Dispatch<SetStateAction<T>>) =>
+    (next: SetStateAction<T>): void => { authoredRulesRef.current.add(field); set(next); };
+  const setVictory = authorRulesField('victory', setVictoryState);
+  const setEvents = authorRulesField('events', setEventsState);
+  const setLevelName = authorRulesField('name', setLevelNameState);
+  const setClockEnabled = authorRulesField('clock', setClockEnabledState);
+  const setClockInitialSeconds = authorRulesField('clock', setClockInitialSecondsState);
+  const setClockIncrementSeconds = authorRulesField('clock', setClockIncrementSecondsState);
+  const setTemplateChoice = authorRulesField('templateChoice', setTemplateChoiceState);
   const [quietDraftRestore] = useState(() => consumeNewBuildReloadIntent());
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
   const [saving, setSaving] = useState(false);
   const [me, setMe] = useState<AuthUser | null>(null);
-  const [boardLinkDraft, setBoardLinkDraft] = useState('');
+  const isAdmin = Boolean(me?.is_admin);
   const { ask, dialog: confirmDialog } = useConfirm();
   const didMountRouteSync = useRef(false);
+  const documentRevisionRef = useRef<number | null>(null);
+  const lastCloudSyncedSigRef = useRef<string | null>(null);
+  const autosaveInFlightRef = useRef(false);
+  const autosavePromiseRef = useRef<Promise<void> | null>(null);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const documentConflictRef = useRef(false);
+  const documentConflictKindRef = useRef<'revision' | 'baseline' | 'recovery' | null>(null);
+  const preserveUnscopedRecoveryIntentRef = useRef(false);
+  const offlineRecoveryLevelRef = useRef<Level | null>(null);
+  const offlineRecoverySavedSigRef = useRef<string | null>(null);
+  const rulesHistorySentinelRef = useRef(Boolean(window.history.state?.levelEditorRules));
+  const eventsOpenRef = useRef(eventsOpen);
+  eventsOpenRef.current = eventsOpen;
+  const departureFlushSigRef = useRef<string | null>(null);
+  const signInHandoffPendingRef = useRef(false);
 
   useEffect(() => {
     if (!didMountRouteSync.current) {
@@ -1704,6 +2303,15 @@ export function LevelEditor(): ReactElement {
       setLayer(nextLayer);
       setTool(toolForLayer(nextLayer));
       setBrushKind(brushKindForRouteState(nextLayer, routeState.brushKind));
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('artReview') === FENCE_ART_REVIEW_ID) {
+        const nextArtwork = fenceArtKit(params.get('fenceArt'));
+        if (nextArtwork) {
+          setSelectedFenceArtworkId(nextArtwork.id);
+          setFenceBrushMaterial(nextArtwork.material);
+          if (!nextArtwork.post) setFencePaintTarget('rail');
+        }
+      }
     };
     window.addEventListener('popstate', syncFromRoute);
     window.addEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
@@ -1732,20 +2340,69 @@ export function LevelEditor(): ReactElement {
     const entry: StatusLogEntry = { id: statusLogSeq.current, tone, message, detail, at };
     setStatusLog((prev) => [entry, ...prev].slice(0, STATUS_LOG_LIMIT));
   };
+  // Apply a level document's rules-panel state. A LOAD is the user explicitly opening a
+  // document: it replaces everything and resets authorship. A SEED is a mount-time load
+  // resolving late (campaign hydrate / working-copy fetch): fields the user authored while it was
+  // in flight are kept — both orderings then converge on "loaded document + the user's
+  // edit" — and seedSkewRef records the seeded rules so the clean-baseline capture can
+  // still anchor on the document.
+  const applyLevelRules = (level: Level, mode: 'seed' | 'load'): void => {
+    if (mode === 'load') authoredRulesRef.current.clear();
+    const guarded = guardRulesSeed(levelRulesSeed(level), authoredRulesRef.current);
+    const seed = guarded.seed;
+    setObjective(seed.objective);
+    setSurviveTurns(seed.surviveTurns);
+    if (guarded.apply.templateChoice) setTemplateChoiceState(seed.objective);
+    if (guarded.apply.clock) {
+      setClockEnabledState(seed.clock.enabled);
+      setClockInitialSecondsState(seed.clock.initialSeconds);
+      setClockIncrementSecondsState(seed.clock.incrementSeconds);
+    }
+    if (guarded.apply.victory) setVictoryState(seed.victory);
+    if (guarded.apply.events) setEventsState(seed.events);
+    if (guarded.apply.name) setLevelNameState(seed.name);
+    seedSkewRef.current = mode === 'seed' && guarded.skippedAuthored ? seed : null;
+  };
+
+  const applyLevelDocument = (level: Level, options: { editingId?: string; clean?: boolean; seed?: boolean } = {}): void => {
+    const board = levelToEditorBoard(level);
+    setBoardCols(board.cols);
+    setBoardRows(board.rows);
+    setBoardCells(board.cells);
+    setBoardMacroTiles(validMacroTilesForBoard(board));
+    setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
+    setBoardDoodads(board.doodads);
+    setBoardProps(board.props);
+    setBoardCover(board.cover);
+    setBoardCoverTypes(board.coverTypes ?? {});
+    setBoardFeatures(board.features);
+    setBoardFences(board.fences ?? {});
+    setBoardFencePosts(board.fencePosts ?? {});
+    setBoardWalls(perimeterWalls(board.walls, board.cols, board.rows));
+    setBoardWallArt(perimeterWallArt(board.wallArt, board.cols, board.rows));
+    setFeatureCuts(board.featureCuts);
+    setFeatureExits(board.featureExits);
+    setBoardZoneEntries(zoneEntriesForBoard(board));
+    setGeneratedRegions(board.generatedRegions ?? []);
+    setActiveGeneratedRegionId(null);
+    setRegionSelection(new Set());
+    setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
+    setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
+    setUndoStack([]);
+    setRedoStack([]);
+    applyLevelRules(level, options.seed ? 'seed' : 'load');
+    setEditingId(options.editingId);
+    if (options.clean !== false) {
+      setSavedSig(normalizedLevelEditorSignature(level));
+      needsBaselineRef.current = true;
+    }
+  };
 
   useEffect(() => {
     if (quietDraftRestore) return;
     if (!localDraft || (routeParams.levelId && !loadedBoard)) return;
-    reportStatus('Restored unsaved local draft.', 'success', 'This browser saved it before the refresh.');
+    reportStatus('Restored editor draft.', 'success', 'This browser kept the latest working copy.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Who's signed in — for the publish confirm/label copy. The server's requireAdmin is the
-  // real gate (a non-admin save of an official level fails closed → 403 surfaced below).
-  useEffect(() => {
-    let active = true;
-    fetchMe().then((user) => { if (active) setMe(user); }).catch(() => {});
-    return () => { active = false; };
   }, []);
 
   // Go full-bleed like Skirmish (is-immersive): #root owns the whole viewport so the
@@ -1756,85 +2413,12 @@ export function LevelEditor(): ReactElement {
     return () => shell?.classList.remove('is-immersive');
   }, []);
 
-  // Cold deep-link / campaign path: hydrate the shared store (idempotent), then — unless a
-  // `?board=` override was supplied — seed the board from the resolved level and mark it
-  // clean. Falls through to the blank/board-link board when no level resolves.
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        await ensureCampaignsHydrated();
-      } catch {
-        // The editor can still show the blank/local board; don't leave the fade held forever.
-      }
-      if (!active) return;
-      ensureDefaultSkirmishProfileLevel();
-      if (loadedBoard || !routeParams.levelId) {
-        setEditorReady(true);
-        return;
-      }
-      const level = useCampaigns.getState().levels[routeParams.levelId];
-      if (!level) {
-        setEditorReady(true);
-        return;
-      }
-      if (localDraft) {
-        setEditingId(level.id);
-        setSavedSig(levelSignature(level));
-        if (!quietDraftRestore) reportStatus('Restored unsaved local draft.', 'success', `Save will update "${level.name}".`);
-        setEditorReady(true);
-        return;
-      }
-      const board = levelToEditorBoard(level);
-      setBoardCols(board.cols);
-      setBoardRows(board.rows);
-      setBoardCells(board.cells);
-      setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
-      setBoardDoodads(board.doodads);
-      setBoardProps(board.props);
-      setBoardCover(board.cover);
-      setBoardCoverTypes(board.coverTypes ?? {});
-      setBoardFeatures(board.features);
-      setBoardFences(board.fences ?? {});
-      setBoardWalls(perimeterWalls(board.walls, board.cols, board.rows));
-      setBoardWallArt(perimeterWallArt(board.wallArt, board.cols, board.rows));
-      setFeatureCuts(board.featureCuts);
-      setFeatureExits(board.featureExits);
-      setBoardZoneEntries(zoneEntriesForBoard(board));
-      setGeneratedRegions(board.generatedRegions ?? []);
-      setActiveGeneratedRegionId(null);
-      setRegionSelection(new Set());
-      setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
-      setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
-      setUndoStack([]);
-      setRedoStack([]);
-      // Restore the rule fields from the Level so the Rules panel opens on what was authored.
-      // Defaults mirror createBlankLevel (capture-all, DEFAULT_SURVIVE_TURNS).
-      setObjective(level.objective);
-      setTemplateChoice(level.objective);
-      setSurviveTurns(level.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
-      setClockEnabled(level.timeControl !== undefined);
-      setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
-      setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
-      setVictory(level.victory ?? victoryRulesForObjective(level.objective, { surviveTurns: level.surviveTurns ?? DEFAULT_SURVIVE_TURNS }));
-      setEvents(effectiveLevelEvents(level));
-      setEditingId(level.id);
-      setLevelName(level.name);
-      // Defer the clean-baseline capture to the effect below: it reads the SETTLED signature, so a
-      // legacy level (derived boardCode) doesn't spuriously read dirty the instant it loads.
-      needsBaselineRef.current = true;
-      setEditorReady(true);
-    })();
-    return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const resolveAsset = (id: string): StudioAsset | undefined => leAllTiles.find((asset) => asset.id === id);
-  // The current painted board as a single EditorBoard — the one shape both the board link
-  // and the level save serialize from, so they can never describe different boards.
+  // The current painted board as a single EditorBoard — the one shape both the transient
+  // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -1842,6 +2426,7 @@ export function LevelEditor(): ReactElement {
     setBoardCols(board.cols);
     setBoardRows(board.rows);
     setBoardCells(board.cells);
+    setBoardMacroTiles(validMacroTilesForBoard(board));
     setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
     setBoardDoodads(board.doodads);
     setBoardProps(board.props);
@@ -1849,6 +2434,7 @@ export function LevelEditor(): ReactElement {
     setBoardCoverTypes(board.coverTypes ?? {});
     setBoardFeatures(board.features);
     setBoardFences(board.fences ?? {});
+    setBoardFencePosts(board.fencePosts ?? {});
     setBoardWalls(perimeterWalls(board.walls, board.cols, board.rows));
     setBoardWallArt(perimeterWallArt(board.wallArt, board.cols, board.rows));
     setFeatureCuts(board.featureCuts);
@@ -1865,11 +2451,12 @@ export function LevelEditor(): ReactElement {
   };
   const commitEditorBoard = (next: EditorBoard, selection?: { x: number; y: number } | null): boolean => {
     const current = currentEditorBoardRef.current;
-    if (boardSignature(next) === boardSignature(current)) return false;
+    const normalized = { ...next, macroTiles: validMacroTilesForBoard(next) };
+    if (boardSignature(normalized) === boardSignature(current)) return false;
     setUndoStack((prev) => [...prev, cloneEditorBoard(current)].slice(-HISTORY_LIMIT));
     setRedoStack([]);
-    currentEditorBoardRef.current = next;
-    applyEditorBoard(next);
+    currentEditorBoardRef.current = normalized;
+    applyEditorBoard(normalized);
     if (selection !== undefined) setSelectedCell(selection);
     return true;
   };
@@ -1906,7 +2493,8 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
   const brushAsset = resolveAsset(brushId) ?? leDefaultTile;
-  const resolveUnitAsset = (id: string): UnitAsset | undefined => leUnitAssets.find((unit) => unit.id === id) ?? unitAssets.find((unit) => unit.id === id);
+  const macroTileBrushAsset = macroTileBrushId ? macroTileAsset(macroTileBrushId) : undefined;
+  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitArtForId(id);
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? leUnitAssets[0];
   const directionForFaction = (faction: UnitPalette): Direction => factionDefaultDirection(faction, boardFactionDirections);
   const setUnitFaction = (faction: UnitPalette): void => {
@@ -2050,6 +2638,28 @@ export function LevelEditor(): ReactElement {
       commitEditorBoard(withZoneEntries(next, updated));
       return;
     }
+    if (macroTileBrushAsset) {
+      const placement = { assetId: macroTileBrushAsset.id, x, y };
+      const footprint = macroTileCellIndices(placement, boardCols, boardRows);
+      if (footprint.length !== macroTileBrushAsset.columns * macroTileBrushAsset.rows) return;
+      const footprintSet = new Set(footprint);
+      next.macroTiles = (next.macroTiles ?? []).filter((existing) =>
+        !macroTileCellIndices(existing, boardCols, boardRows).some((index) => footprintSet.has(index)),
+      );
+      const familyTiles = leFamilyAssets[macroTileBrushAsset.family];
+      if (!familyTiles?.length) return;
+      for (const index of footprint) {
+        const cellKey = `${index % boardCols},${Math.floor(index / boardCols)}`;
+        const existingFamily = leFamilyOfTile(next.cells[cellKey] ?? '')?.id;
+        if (existingFamily !== macroTileBrushAsset.family) {
+          next.cells[cellKey] = familyTiles[(index + x * 17 + y * 29) % familyTiles.length].id;
+        }
+      }
+      next.macroTiles.push(placement);
+      commitEditorBoard(next, { x, y });
+      return;
+    }
+    next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
     next.cells[key] = brushAsset.id;
     commitEditorBoard(next);
   };
@@ -2092,9 +2702,28 @@ export function LevelEditor(): ReactElement {
       commitEditorBoard(withZoneEntries(next, updated));
       return;
     }
+    next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
     delete next.cells[key];
     commitEditorBoard(next);
   };
+  const selectFenceArtwork = (id: string): void => {
+    const artwork = fenceArtKit(id);
+    if (!artwork) return;
+    setSelectedFenceArtworkId(artwork.id);
+    setFenceBrushMaterial(artwork.material);
+    if (!artwork.post) setFencePaintTarget('rail');
+    setBrushKind('fence');
+    setLayer('fence');
+    setTool('brush');
+    const url = new URL(window.location.href);
+    url.searchParams.set('artReview', FENCE_ART_REVIEW_ID);
+    url.searchParams.set('fenceArt', artwork.id);
+    navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
+  };
+  const stepFenceArtwork = (delta: -1 | 1): void => {
+    selectFenceArtwork(cycleFenceArtKit(selectedFenceArtworkId, delta).id);
+  };
+
   // Edge-fence paint/erase — the fence tool targets the shared edge under the cursor (roadEdgeKey),
   // not a cell. Add stamps the current brush material; erase drops the edge. Both ride undo/redo.
   const paintFenceEdge = (edgeKey: string): void => {
@@ -2109,6 +2738,22 @@ export function LevelEditor(): ReactElement {
     const fences = { ...(next.fences ?? {}) };
     delete fences[edgeKey];
     next.fences = fences;
+    commitEditorBoard(next);
+  };
+  const paintFencePost = (vertexKey: string): void => {
+    const [vx, vy] = vertexKey.split(',').map(Number);
+    if (!Number.isInteger(vx) || !Number.isInteger(vy) || vx < 0 || vy < 0 || vx > boardCols || vy > boardRows) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    next.fencePosts = { ...(next.fencePosts ?? {}), [vertexKey]: fenceBrushMaterial };
+    commitEditorBoard(next);
+  };
+  const eraseFencePost = (vertexKey: string): void => {
+    const current = currentEditorBoardRef.current.fencePosts ?? {};
+    if (!(vertexKey in current)) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const posts = { ...(next.fencePosts ?? {}) };
+    delete posts[vertexKey];
+    next.fencePosts = posts;
     commitEditorBoard(next);
   };
   const wallEdgeCanRender = (edgeKey: string): boolean =>
@@ -2167,13 +2812,13 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, macroTiles: [], units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, fencePosts: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
     setActiveGeneratedRegionId(null);
     setRegionSelection(new Set());
   };
   const clearActiveLayer = (): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    if (brushKind === 'tile') next.cells = {};
+    if (brushKind === 'tile') { next.cells = {}; next.macroTiles = []; }
     else if (brushKind === 'unit') next.units = {};
     else if (brushKind === 'doodad') next.doodads = {};
     else if (brushKind === 'prop') next.props = {};
@@ -2185,7 +2830,7 @@ export function LevelEditor(): ReactElement {
         Object.assign(next, withZoneEntries(next, updated));
       }
     }
-    else if (brushKind === 'fence') next.fences = {};
+    else if (brushKind === 'fence') { next.fences = {}; next.fencePosts = {}; }
     else if (brushKind === 'wall') { next.walls = {}; next.wallArt = {}; }
     else if (brushKind === 'wallart') next.wallArt = {};
     else if (featureKind) {
@@ -2202,10 +2847,13 @@ export function LevelEditor(): ReactElement {
   };
   const fillBoard = (mode: 'empty' | 'all'): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    if (mode === 'all') next.cells = {};
+    if (mode === 'all') { next.cells = {}; next.macroTiles = []; }
       for (let y = 0; y < boardRows; y += 1) for (let x = 0; x < boardCols; x += 1) {
         const key = `${x},${y}`;
-        if (mode === 'all' || !(key in next.cells)) next.cells[key] = brushAsset.id;
+        if (mode === 'all' || !(key in next.cells)) {
+          if (mode === 'empty') next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
+          next.cells[key] = brushAsset.id;
+        }
       }
     commitEditorBoard(next);
   };
@@ -2220,6 +2868,7 @@ export function LevelEditor(): ReactElement {
     });
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     next.cells = Object.fromEntries(generated.cells.map((cell) => [`${cell.x},${cell.y}`, cell.asset?.id ?? leDefaultTile.id]));
+    next.macroTiles = [];
     commitEditorBoard(next, null);
   };
   const activeGeneratedRegion = useMemo(
@@ -2230,7 +2879,8 @@ export function LevelEditor(): ReactElement {
     const [x, y] = key.split(',').map(Number);
     return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < cols && y < rows;
   };
-  const hydrateGeneratedRegionSections = (sections: BoardGeneratedRegionSection[]): ScatterRow[] => {
+  const hydrateGeneratedRegionSections = (sections: BoardGeneratedRegionSection[], legacyDensity?: number): ScatterRow[] => {
+    const existingSections = sections.length > 0;
     const source = sections.length ? sections : scatterRowsToGeneratedSections(defaultScatterRows());
     return source.map((section) => ({
       id: (scatterIdRef.current += 1),
@@ -2242,6 +2892,8 @@ export function LevelEditor(): ReactElement {
           ? [{ id: (coverIdRef.current += 1), type: cover.type, expanded: false, knobs: { ...cover.knobs } }]
           : []
       )),
+      macroTileDensity: section.macroTileDensity ?? legacyDensity ?? DEFAULT_MACRO_TILE_DENSITY,
+      macroTileBreakup: section.macroTileBreakup ?? (existingSections ? 0 : DEFAULT_MACRO_TILE_BREAKUP),
     }));
   };
   const makeGeneratedRegionUnit = (
@@ -2269,7 +2921,7 @@ export function LevelEditor(): ReactElement {
     setRegionSelection(new Set(cells));
     setScatterBuffer(region.buffer);
     setScatterWiggle(region.wiggle);
-    setScatterSections(normalizeToTotal(hydrateGeneratedRegionSections(region.sections), 100 - region.buffer));
+    setScatterSections(normalizeToTotal(hydrateGeneratedRegionSections(region.sections, region.macroTileDensity), 100 - region.buffer));
   };
   const removeGeneratedRegionUnit = (id: string): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -2336,7 +2988,15 @@ export function LevelEditor(): ReactElement {
     const id = (scatterIdRef.current += 1);
     const dct = defaultCoverType(terrain);
     const covers = dct ? [{ id: (coverIdRef.current += 1), type: dct, expanded: false, knobs: { ...DEFAULT_COVER } }] : [];
-    return [...normalizeToTotal(prev, Math.max(0, total - share)), { id, terrain, share, locked: false, covers }];
+    return [...normalizeToTotal(prev, Math.max(0, total - share)), {
+      id,
+      terrain,
+      share,
+      locked: false,
+      covers,
+      macroTileDensity: DEFAULT_MACRO_TILE_DENSITY,
+      macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP,
+    }];
   });
   const removeSection = (id: number): void =>
     setScatterSections((prev) => (prev.length <= 1 ? prev : normalizeToTotal(prev.filter((s) => s.id !== id), 100 - scatterBuffer)));
@@ -2360,6 +3020,14 @@ export function LevelEditor(): ReactElement {
     setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, type } : c)) } : s)));
   const setCoverKnob = (sectionId: number, coverId: number, knob: keyof CoverKnobs, value: number): void =>
     setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, knobs: { ...c.knobs, [knob]: Math.max(0, Math.min(1, value)) } } : c)) } : s)));
+  const setSectionMacroTileDensity = (sectionId: number, value: number): void =>
+    setScatterSections((prev) => prev.map((section) => section.id === sectionId
+      ? { ...section, macroTileDensity: Math.max(0, Math.min(1, value)) }
+      : section));
+  const setSectionMacroTileBreakup = (sectionId: number, value: number): void =>
+    setScatterSections((prev) => prev.map((section) => section.id === sectionId
+      ? { ...section, macroTileBreakup: Math.max(0, Math.min(1, value)) }
+      : section));
   // Fill the selected region (or the whole board when nothing is selected) by dividing the area
   // among the terrain regions by share, then autotile through the socket solver — the same solve
   // path Randomize uses. A region-scoped generate leaves every out-of-region cell untouched.
@@ -2393,6 +3061,23 @@ export function LevelEditor(): ReactElement {
     });
     const solved = solveSocketBoard({ assets: leTileAssets, terrainMap, seed, columns: cols, rows, familyAssets: leFamilyAssets });
     const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const generatedMacroTiles = generateMacroTiles({
+      terrainMap,
+      columns: cols,
+      rows,
+      seed,
+      sectionOf,
+      densityBySection: scatterSections.map((section) => section.macroTileDensity),
+      breakupBySection: scatterSections.map((section) => section.macroTileBreakup),
+      region,
+    });
+    const rewrittenCells = region ?? new Set(Array.from({ length: cols * rows }, (_, index) => index));
+    const preservedMacroTiles = (next.macroTiles ?? []).filter((placement) => {
+      const cells = macroTileCellIndices(placement, cols, rows);
+      if (cells.length > 0) return !cells.some((index) => rewrittenCells.has(index));
+      return !rewrittenCells.has(placement.y * cols + placement.x);
+    });
+    next.macroTiles = [...preservedMacroTiles, ...generatedMacroTiles];
     let savedRegion: BoardGeneratedRegion | null = null;
     if (selectedRegionCells.length > 0) {
       const regions = next.generatedRegions ?? [];
@@ -2444,8 +3129,7 @@ export function LevelEditor(): ReactElement {
   // board's assigned palette (ADR-0064). Maps to the engine's player/enemy side; true multi-faction
   // (two distinct enemies) is future work.
   const victoryFactions = useMemo((): FactionOption[] => {
-    const label = (p: string): string =>
-      (({ 'navy-blue': 'Navy', crimson: 'Crimson', golden: 'Golden', emerald: 'Emerald' }) as Record<string, string>)[p] ?? p;
+    const label = (p: string): string => (isUnitPalette(p) ? LE_FACTION_LABELS[p] : p);
     const enemyPalette = Object.values(boardUnits).map((u) => u.faction).find((f) => f && f !== playerFaction);
     return [
       { side: 'player', label: playerFaction ? label(playerFaction) : 'You (Player)' },
@@ -2470,58 +3154,818 @@ export function LevelEditor(): ReactElement {
   // The live candidate Level — the exact document a Save would persist — recomputed from the board
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
+  const candidateMetadataSource = editorDocument?.level ?? initialTargetLevel;
   const candidateLevel = useMemo(
-    () => editorBoardToLevel(currentEditorBoard, { id: editingId ?? 'draft', name: levelName, ...modeMeta }),
-    [currentEditorBoard, editingId, levelName, modeMeta],
+    () => editorBoardToLevel(currentEditorBoard, {
+      id: editingId ?? 'draft',
+      name: levelNameForSave,
+      ...modeMeta,
+      notes: candidateMetadataSource?.notes,
+      difficulty: candidateMetadataSource?.difficulty,
+      economy: candidateMetadataSource?.economy,
+      theme: candidateMetadataSource?.theme,
+      previousTerrain: candidateMetadataSource?.layers.terrain,
+    }),
+    [candidateMetadataSource, currentEditorBoard, editingId, levelNameForSave, modeMeta],
   );
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
   const playability = useMemo(() => validatePlayability(candidateLevel), [candidateLevel]);
+  const previewPlayerFaction = useMemo<UnitPalette | null>(() => {
+    if (playerFaction) return playerFaction;
+    for (let y = 0; y < boardRows; y += 1) {
+      for (let x = 0; x < boardCols; x += 1) {
+        const faction = boardUnits[`${x},${y}`]?.faction;
+        if (isUnitPalette(faction)) return faction;
+      }
+    }
+    return null;
+  }, [boardCols, boardRows, boardUnits, playerFaction]);
+  const tacticalPreviewLevel = useMemo<Level | null>(() => {
+    if (!previewPlayerFaction) return null;
+    return editorBoardToLevel(
+      { ...currentEditorBoard, playerFaction: previewPlayerFaction },
+      { id: editingId ?? 'draft-preview', name: levelNameForSave, ...modeMeta },
+    );
+  }, [currentEditorBoard, editingId, levelNameForSave, modeMeta, previewPlayerFaction]);
+  const tacticalPreviewGame = useMemo<GameState | null>(() => {
+    if (!tacticalPreviewLevel) return null;
+    const game = createFromLevel(tacticalPreviewLevel, 1);
+    const authoredPieceIds = new Set(tacticalPreviewLevel.layers.units.map((unit, index) => `${unit.side}-${unit.type}-${index}`));
+    return {
+      ...game,
+      pieces: game.pieces.filter((piece) => authoredPieceIds.has(piece.id) || piece.id.startsWith('prop-')),
+    };
+  }, [tacticalPreviewLevel]);
+  const tacticalPreviewEnv = useMemo<MoveEnv | null>(
+    () => tacticalPreviewGame ? { ...gameEnv(tacticalPreviewGame), lastMove: tacticalPreviewGame.lastMove } : null,
+    [tacticalPreviewGame],
+  );
+  const tacticalFocusPiece = useMemo<Piece | null>(() => {
+    if (!tacticalPreviewGame) return null;
+    const selected = selectedCell
+      ? tacticalPreviewGame.pieces.find((piece) =>
+          piece.alive &&
+          (piece.side === 'player' || piece.side === 'enemy') &&
+          piece.x === selectedCell.x &&
+          piece.y === selectedCell.y,
+        )
+      : null;
+    return selected ?? tacticalPreviewGame.pieces.find((piece) => piece.alive && piece.side === 'player') ?? null;
+  }, [selectedCell, tacticalPreviewGame]);
+  const tacticalPreview = useMemo(
+    () => tacticalPreviewForGame(tacticalPreviewGame, tacticalPreviewEnv, tacticalFocusPiece, {
+      showMoves,
+      showEnemyAttacks,
+      showBlocked,
+      showPromotionZones,
+    }),
+    [showBlocked, showEnemyAttacks, showMoves, showPromotionZones, tacticalFocusPiece, tacticalPreviewEnv, tacticalPreviewGame],
+  );
   const targetLevelId = editingId ?? routeParams.levelId;
+  const campaigns = useCampaigns((s) => s.campaigns);
   const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
-  // Real dirty flag: the board has unsaved changes when its signature differs from the one
+  useEffect(() => {
+    if (campaignAssignmentHydrated || !targetLevelId || !targetLevel) return;
+    const resolvedCampaignId = campaigns.find((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId))?.id ?? '';
+    if (!recoveredCampaignAssignmentRef.current) setCampaignAssignmentId(resolvedCampaignId);
+    setSavedCampaignAssignmentId(resolvedCampaignId);
+    setCampaignAssignmentHydrated(true);
+  }, [campaignAssignmentHydrated, campaigns, targetLevel, targetLevelId]);
+  const assignedCampaign = campaignAssignmentId
+    ? campaigns.find((campaign) => campaign.id === campaignAssignmentId) ?? null
+    : null;
+  const eligibleCampaigns = useMemo(
+    () => campaigns.filter((campaign) => !targetLevelId || tierOf(campaign.id) === tierOf(targetLevelId)),
+    [campaigns, targetLevelId],
+  );
+  const officialCampaignOptions = eligibleCampaigns.filter((campaign) => campaign.origin === 'official');
+  const privateCampaignOptions = eligibleCampaigns.filter((campaign) => campaign.origin !== 'official');
+  // Real dirty flag: the working draft differs when its signature or staged campaign assignment
+  // no longer matches the last canonical Save.
   // captured at the last save. The signature folds in rules/settings/events through the candidate
   // level, so event edits mark the level dirty, not just board paint.
-  const currentSig = useMemo(() => levelSignature(candidateLevel), [candidateLevel]);
+  const currentSig = useMemo(() => levelEditorLevelSignature(candidateLevel), [candidateLevel]);
   // Standalone / board-link editors do not have a saved Level document to compare against. Capture
   // the very first rendered signature and keep that as the clean baseline; otherwise a first
   // event-template edit can become the baseline if the seeding effect runs after that edit.
   const standaloneBaselineSigRef = useRef<string | null>(routeParams.levelId ? null : currentSig);
-  const dirty = savedSig === null
-    ? currentSig !== (standaloneBaselineSigRef.current ?? currentSig)
-    : currentSig !== savedSig;
+  const levelDirty = editorDocument?.never_saved
+    ? true
+    : savedSig !== null
+    ? currentSig !== savedSig
+    : editorDocument
+    ? editorDocument.dirty || currentSig !== levelEditorLevelSignature(editorDocument.level)
+    : currentSig !== (standaloneBaselineSigRef.current ?? currentSig);
+  const campaignAssignmentDirty = campaignAssignmentHydrated && campaignAssignmentId !== savedCampaignAssignmentId;
+  const dirty = levelDirty || campaignAssignmentDirty;
+  const currentSigRef = useRef(currentSig);
+  currentSigRef.current = currentSig;
+  const initialCandidateRef = useRef(candidateLevel);
+  const currentCandidateRef = useRef(candidateLevel);
+  currentCandidateRef.current = candidateLevel;
+  const savedSigRef = useRef(savedSig);
+  savedSigRef.current = savedSig;
+  const editorDocumentRef = useRef(editorDocument);
+  editorDocumentRef.current = editorDocument;
+  const signedInRef = useRef(Boolean(me?.signed_in));
+  signedInRef.current = Boolean(me?.signed_in);
   // Establish the clean baseline signature. Two ways in: a standalone board (no campaign level)
   // seeds from its first-render signature; a campaign level seeds it AFTER hydrate has settled the
   // board state (needsBaselineRef, captured from the live currentSig so it always matches). Depends
   // on currentSig so the post-hydrate capture fires once the seeded state has flowed through.
   useEffect(() => {
-    if (needsBaselineRef.current) { needsBaselineRef.current = false; setSavedSig(currentSig); return; }
+    if (needsBaselineRef.current) {
+      needsBaselineRef.current = false;
+      // A seed that withheld user-authored fields must not adopt the merged on-screen state
+      // as clean: anchor the baseline on the seeded DOCUMENT's rules instead, so exactly the
+      // user's authored delta reads dirty (and keeps flowing into drafts / the Save).
+      const skew = seedSkewRef.current;
+      seedSkewRef.current = null;
+      setSavedSig(skew ? levelEditorLevelSignature(seededBaselineLevel(candidateLevel, skew)) : currentSig);
+      return;
+    }
     if (savedSig === null && !routeParams.levelId) setSavedSig(standaloneBaselineSigRef.current ?? currentSig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSig]);
 
-  useEffect(() => {
-    if (savedSig === null) return;
-    if (!dirty) {
-      clearLevelEditorDraft(draftKey);
-      return;
+  useLayoutEffect(() => {
+    // localStorage is a crash/offline fallback only. The status UI never calls this a cloud save;
+    // durable progress is acknowledged solely by the revisioned editor-document endpoint below.
+    if (!editorReady || editorLoadError) return;
+    const existingRecovery = editorDocument ? null : readLevelEditorDraft(draftKey);
+    const ownerEmail = editorDocument
+      ? me?.email?.trim().toLowerCase()
+      : existingRecovery?.ownerEmail;
+    if (editorDocument) {
+      if (!ownerEmail) return;
+      const expectedKey = levelEditorDraftKey({ documentId: editorDocument.document_id, ownerEmail });
+      if (draftKey !== expectedKey) return;
     }
-    writeLevelEditorDraft(draftKey, {
-      savedAt: Date.now(),
-      savedSig,
+    const savedAt = Date.now();
+    const draft: LevelEditorDraft = {
+      savedAt,
+      savedSig: savedSig ?? standaloneBaselineSigRef.current ?? '',
+      documentId: editorDocument?.document_id ?? existingRecovery?.documentId,
+      ownerEmail,
+      documentRevision: editorDocument
+        ? documentRevisionRef.current ?? undefined
+        : existingRecovery?.documentRevision,
+      cloudSignature: editorDocument
+        ? lastCloudSyncedSigRef.current ?? undefined
+        : existingRecovery?.cloudSignature,
+      recoveryConflict: documentConflictRef.current || existingRecovery?.recoveryConflict || undefined,
+      editingId: targetLevelId,
       board: currentEditorBoard,
-      levelName,
+      levelName: levelNameForSave,
+      campaignId: campaignAssignmentId || null,
       objective,
       surviveTurns,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
       victory: victoryForSave,
       events: eventsForSave,
-    });
-  }, [currentEditorBoard, dirty, draftKey, levelName, objective, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
+    };
+    const wrote = writeLevelEditorDraft(draftKey, draft);
+    setLocalBackupAvailable(wrote);
+    // A recovery being claimed after sign-in stays protected until it has a scoped browser copy
+    // and a durable cloud document. If the cloud call is temporarily down, keep the intent's
+    // timestamp in lockstep with subsequent edits instead of invalidating it on the next reload.
+    if (wrote && preserveUnscopedRecoveryIntentRef.current && draftKey === initialDraftKey) {
+      try {
+        window.sessionStorage.setItem(EDITOR_SIGN_IN_RECOVERY_INTENT_KEY, JSON.stringify({
+          draftKey,
+          savedAt,
+        } satisfies EditorSignInRecoveryIntent));
+      } catch { /* The browser copy still exists even if sessionStorage is unavailable. */ }
+    }
+  }, [campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
 
-  const isCampaignLevel = useCampaigns((s) =>
-    Boolean(routeParams.campaignId || (targetLevelId && s.campaigns.some((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId)))),
-  );
+  const closeEventsEditor = (): void => {
+    eventsOpenRef.current = false;
+    setEventsOpen(false);
+    if (rulesHistorySentinelRef.current) {
+      rulesHistorySentinelRef.current = false;
+      window.history.back();
+    }
+  };
+
+  // Give the nested Rules editor one same-document history entry. That makes native/hardware
+  // Back collapse Rules even after a cold editor load; the following Back can then leave.
+  useLayoutEffect(() => {
+    if (!eventsOpen || rulesHistorySentinelRef.current) return;
+    eventsOpenRef.current = true;
+    const state = window.history.state;
+    window.history.pushState({
+      ...(state && typeof state === 'object' ? state as Record<string, unknown> : {}),
+      levelEditorRules: true,
+    }, '', window.location.href);
+    rulesHistorySentinelRef.current = true;
+  }, [eventsOpen]);
+
+  useEffect(() => {
+    const collapseRulesFromHistory = (): void => {
+      if (!rulesHistorySentinelRef.current) return;
+      rulesHistorySentinelRef.current = false;
+      eventsOpenRef.current = false;
+      setEventsOpen(false);
+    };
+    window.addEventListener('popstate', collapseRulesFromHistory);
+    return () => window.removeEventListener('popstate', collapseRulesFromHistory);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!eventsOpen) return undefined;
+
+    return registerAppNavigationBlocker((attempt) => {
+      const action = levelEditorExitAction({
+        destinationHref: attempt.href,
+        replace: attempt.replace,
+        rulesEditorOpen: eventsOpenRef.current,
+        source: attempt.source,
+      });
+      if (action === 'allow') return false;
+      if (action === 'close-rules-editor') {
+        closeEventsEditor();
+        return true;
+      }
+      return false;
+    });
+  }, [eventsOpen]);
+
+  // Resolve one durable, account-owned working copy and put its globally unique document id in
+  // the editor URL. This prevents per-account level ids such as `l1` from colliding when a URL is
+  // pasted into another account. Copying the address bar is absent from this flow and mutates
+  // nothing; access remains owner/admin gated independently of possession of the URL.
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const hydration = ensureCampaignsHydrated()
+        .then((result) => {
+          if (active) {
+            setUserWorkspaceHydration(result.userWorkspace === 'unavailable' ? 'unavailable' : 'ready');
+            setOfficialWorkspaceHydration(result.officialAvailable ? 'ready' : 'unavailable');
+          }
+          return result;
+        })
+        .catch(() => {
+          if (active) {
+            setUserWorkspaceHydration('unavailable');
+            setOfficialWorkspaceHydration('unavailable');
+          }
+          return undefined;
+        });
+      const authRequest = fetchMeStatus();
+      let hydrationTimer: number | undefined;
+      await Promise.race([
+        hydration,
+        new Promise<void>((resolve) => {
+          hydrationTimer = window.setTimeout(resolve, EDITOR_HYDRATION_WAIT_MS);
+        }),
+      ]);
+      if (hydrationTimer !== undefined) window.clearTimeout(hydrationTimer);
+      const auth = await authRequest;
+      const user = auth.user;
+      if (!active) return;
+      setMe(user);
+      setAuthReachable(auth.reachable);
+      if (user.signed_in) signInHandoffPendingRef.current = false;
+
+      const requestedLevelId = routeParams.levelId;
+      const canonical = requestedLevelId ? useCampaigns.getState().levels[requestedLevelId] : undefined;
+      if (canonical) {
+        setSavedSig(normalizedLevelEditorSignature(canonical));
+        setTargetBaselineResolved(true);
+      }
+      const currentUnscopedDraft = readLevelEditorDraft(initialDraftKey) ?? unscopedLocalDraft;
+      const recoveryIntent = user.signed_in && !routeParams.documentId
+        ? readEditorSignInRecoveryIntent()
+        : null;
+      const claimedUnscopedDraft = recoveryIntent
+        && recoveryIntent.draftKey === initialDraftKey
+        && currentUnscopedDraft
+        && recoveryIntent.savedAt === currentUnscopedDraft.savedAt
+        ? currentUnscopedDraft
+        : null;
+
+      if (!auth.reachable) {
+        if (routeParams.documentId) {
+          setEditorLoadError({
+            title: 'Cloud working copy unavailable',
+            detail: 'The private document could not be reached. Reconnect and retry; no other level was substituted.',
+            retry: true,
+          });
+          setCloudSaveState('error');
+          setCloudSaveDetail('Waiting to reconnect to your account.');
+          setTargetBaselineResolved(false);
+          setEditorReady(true);
+          return;
+        }
+        if (currentUnscopedDraft) {
+          const recovered = levelFromDraft(currentUnscopedDraft, canonical ?? initialCandidateRef.current);
+          applyLevelDocument(recovered, {
+            editingId: canonical?.id ?? currentUnscopedDraft.editingId,
+            clean: false,
+            seed: true,
+          });
+          setSavedSig(canonical ? normalizedLevelEditorSignature(canonical) : currentUnscopedDraft.savedSig);
+        } else if (canonical && !loadedBoard) {
+          applyLevelDocument(canonical, { editingId: canonical.id, clean: true, seed: true });
+        }
+        offlineRecoveryLevelRef.current = currentUnscopedDraft
+          ? levelFromDraft(currentUnscopedDraft, canonical ?? initialCandidateRef.current)
+          : canonical ?? initialCandidateRef.current;
+        offlineRecoverySavedSigRef.current = canonical
+          ? normalizedLevelEditorSignature(canonical)
+          : currentUnscopedDraft?.savedSig ?? savedSigRef.current;
+        setCloudSaveState('local');
+        setCloudSaveDetail(null);
+        setTargetBaselineResolved(!requestedLevelId || Boolean(canonical));
+        setEditorReady(true);
+        return;
+      }
+      if (user.signed_in && routeParams.documentId) clearEditorSignInRecoveryIntent();
+      if (user.signed_in && recoveryIntent && !claimedUnscopedDraft) clearEditorSignInRecoveryIntent();
+
+      if (!user.signed_in) {
+        if (routeParams.documentId) {
+          setEditorLoadError({
+            title: 'Sign in to open this editor document',
+            detail: 'The URL identifies a private cloud working copy. Sign in with the account that owns it.',
+            signIn: true,
+          });
+          setCloudSaveState('local');
+          setCloudSaveDetail(null);
+          setEditorReady(true);
+          return;
+        }
+        if (currentUnscopedDraft) {
+          const recovered = levelFromDraft(currentUnscopedDraft, canonical ?? initialCandidateRef.current);
+          applyLevelDocument(recovered, {
+            editingId: canonical?.id ?? currentUnscopedDraft.editingId,
+            clean: false,
+            seed: true,
+          });
+          setSavedSig(canonical ? normalizedLevelEditorSignature(canonical) : currentUnscopedDraft.savedSig);
+          if (!quietDraftRestore) reportStatus('Restored browser recovery copy.', 'success', 'Sign in to sync it across devices.');
+        } else if (canonical && !loadedBoard) {
+          applyLevelDocument(canonical, { editingId: canonical.id, clean: true, seed: true });
+        }
+        setCloudSaveState('local');
+        setCloudSaveDetail('Sign in to sync this working copy across devices.');
+        setTargetBaselineResolved(!requestedLevelId || Boolean(canonical));
+        setEditorReady(true);
+        return;
+      }
+
+      if (claimedUnscopedDraft) preserveUnscopedRecoveryIntentRef.current = true;
+      try {
+        const sessionRecoveryLevel = offlineRecoveryLevelRef.current;
+        const createSeed = claimedUnscopedDraft
+          ? levelFromDraft(claimedUnscopedDraft, initialCandidateRef.current)
+          : sessionRecoveryLevel ?? initialCandidateRef.current;
+        const doc = routeParams.documentId
+          ? await loadEditorDocument(routeParams.documentId)
+          : requestedLevelId
+          ? await resolveEditorDocument(requestedLevelId, editorDocumentWorkspaceForLevelId(requestedLevelId))
+          : await createEditorDocument(createSeed);
+        if (!active) return;
+
+        const ownerEmail = user.email?.trim().toLowerCase() ?? '';
+        const scopedDraftKey = ownerEmail
+          ? levelEditorDraftKey({ documentId: doc.document_id, ownerEmail })
+          : null;
+        const rawScopedDraft = scopedDraftKey ? readLevelEditorDraft(scopedDraftKey) : null;
+        const scopedDraft = rawScopedDraft
+          && rawScopedDraft.documentId === doc.document_id
+          && rawScopedDraft.ownerEmail === ownerEmail
+          && rawScopedDraft.editingId === doc.level_id
+          ? rawScopedDraft
+          : null;
+        const recoveryDraft = scopedDraft ?? claimedUnscopedDraft;
+        if (recoveryDraft?.campaignId !== undefined) {
+          recoveredCampaignAssignmentRef.current = true;
+          setCampaignAssignmentId(recoveryDraft.campaignId ?? '');
+        }
+        const documentSig = levelEditorLevelSignature(doc.level);
+        const localLevel = recoveryDraft
+          ? levelFromDraft(recoveryDraft, doc.level)
+          : sessionRecoveryLevel
+          ? { ...sessionRecoveryLevel, id: doc.level_id }
+          : null;
+        const localSig = localLevel ? levelEditorLevelSignature(localLevel) : undefined;
+        const initialLevel = { ...initialCandidateRef.current, id: doc.level_id };
+        const initialSig = levelEditorLevelSignature(initialLevel);
+        const restoreClaimedDraft = Boolean(
+          claimedUnscopedDraft
+          && localLevel
+          && localSig !== documentSig
+          && !doc.dirty
+          && claimedUnscopedDraft.savedSig === normalizedLevelEditorSignature(doc.level),
+        );
+        const restoreOfflineSession = Boolean(
+          sessionRecoveryLevel
+          && localLevel
+          && localSig !== documentSig
+          && !doc.dirty
+          && offlineRecoverySavedSigRef.current === normalizedLevelEditorSignature(doc.level),
+        );
+        const restoreLocal = restoreClaimedDraft || restoreOfflineSession || Boolean(scopedDraft && localLevel && shouldRestoreLocalEditorRecovery({
+          localSignature: localSig,
+          documentSignature: documentSig,
+          localSavedAt: scopedDraft.savedAt,
+          documentUpdatedAt: doc.updated_at,
+          localDocumentRevision: scopedDraft.documentRevision,
+          documentRevision: doc.revision,
+          localCloudSignature: scopedDraft.cloudSignature,
+          localRecoveryConflict: scopedDraft.recoveryConflict,
+        }));
+        const localDiverged = Boolean(localLevel && localSig !== documentSig);
+        const localRecoveryConflict = localDiverged && !restoreLocal;
+        const routeSnapshotDiverged = Boolean(loadedBoard && initialSig !== documentSig);
+        const routeSnapshotSafe = !routeParams.documentId || routeParams.documentRevision === doc.revision;
+        const restoreRouteSnapshot = routeSnapshotDiverged && routeSnapshotSafe;
+        const routeRecoveryConflict = routeSnapshotDiverged && !routeSnapshotSafe;
+        const recoveryConflict = localRecoveryConflict || routeRecoveryConflict || doc.baseline_conflict;
+        const recoveredLevel = routeSnapshotDiverged
+          ? initialLevel
+          : localDiverged && localLevel
+          ? localLevel
+          : doc.level;
+        const shouldRecover = restoreLocal || restoreRouteSnapshot || recoveryConflict;
+
+        documentRevisionRef.current = doc.revision;
+        lastCloudSyncedSigRef.current = documentSig;
+        documentConflictRef.current = recoveryConflict;
+        documentConflictKindRef.current = doc.baseline_conflict
+          ? 'baseline'
+          : recoveryConflict
+          ? 'recovery'
+          : null;
+        setEditorLoadError(null);
+        setEditorDocument(doc);
+        setEditingId(doc.level_id);
+        setTargetBaselineResolved(true);
+
+        const resolvedCanonical = useCampaigns.getState().levels[doc.level_id];
+        if (resolvedCanonical) {
+          setSavedSig(normalizedLevelEditorSignature(resolvedCanonical));
+        } else if (!doc.dirty && doc.has_saved_baseline) {
+          setSavedSig(normalizedLevelEditorSignature(doc.level));
+        } else if (doc.never_saved) {
+          setSavedSig(standaloneBaselineSigRef.current ?? documentSig);
+        } else if (scopedDraft?.savedSig) {
+          setSavedSig(scopedDraft.savedSig);
+        }
+
+        applyLevelDocument(shouldRecover ? recoveredLevel : doc.level, {
+          editingId: doc.level_id,
+          clean: false,
+          seed: true,
+        });
+
+        if (scopedDraftKey && scopedDraftKey !== draftKey) setDraftKey(scopedDraftKey);
+        if (claimedUnscopedDraft && scopedDraftKey && ownerEmail) {
+          const migrated = writeLevelEditorDraft(scopedDraftKey, {
+            ...claimedUnscopedDraft,
+            documentId: doc.document_id,
+            ownerEmail,
+            documentRevision: doc.revision,
+            cloudSignature: documentSig,
+            recoveryConflict: recoveryConflict || undefined,
+            editingId: doc.level_id,
+          });
+          if (migrated) {
+            preserveUnscopedRecoveryIntentRef.current = false;
+            clearEditorSignInRecoveryIntent();
+            clearLevelEditorDraft(initialDraftKey);
+          }
+        }
+        offlineRecoveryLevelRef.current = null;
+        offlineRecoverySavedSigRef.current = null;
+        navigateApp(levelEditorHrefForDocument(window.location.href, {
+          levelId: doc.level_id,
+          documentId: doc.document_id,
+        }, { keepRecoverySnapshot: shouldRecover }), { replace: true, scroll: false });
+
+        setCloudSaveState(recoveryConflict ? 'conflict' : shouldRecover ? 'pending' : 'saved');
+        setCloudSaveDetail(recoveryConflict
+          ? doc.baseline_conflict
+            ? 'The saved level changed after this working copy branched. Your progress is preserved; autosave is paused until you discard or resolve it.'
+            : 'This browser recovery was based on an older cloud revision. It is preserved here, and autosave is paused.'
+          : null);
+        setEditorReady(true);
+        reportStatus(
+          doc.baseline_conflict ? 'Saved-position conflict preserved.' : recoveryConflict ? 'Recovery conflict preserved.' : shouldRecover ? 'Recovered newer browser edits.' : 'Working copy loaded.',
+          recoveryConflict ? 'warning' : 'success',
+          recoveryConflict
+            ? 'No cloud or canonical data was overwritten. Discard changes restores the last saved position.'
+            : shouldRecover
+            ? 'They will be written to the durable working copy automatically.'
+            : doc.dirty
+            ? 'Your autosaved progress is separate from the saved level until you choose Save.'
+            : 'Progress is saved to your account.',
+        );
+      } catch (error) {
+        if (!active) return;
+        if (routeParams.documentId) {
+          const status = (error as { status?: number }).status;
+          const ownerEmail = user.email?.trim().toLowerCase() ?? '';
+          const failedDocumentDraftKey = ownerEmail
+            ? levelEditorDraftKey({ documentId: routeParams.documentId, ownerEmail })
+            : null;
+          const failedDocumentDraft = failedDocumentDraftKey
+            ? readLevelEditorDraft(failedDocumentDraftKey)
+            : null;
+          const scopedRecovery = failedDocumentDraft
+            && failedDocumentDraft.documentId === routeParams.documentId
+            && failedDocumentDraft.ownerEmail === ownerEmail
+            ? failedDocumentDraft
+            : null;
+          if (scopedRecovery && status !== 403 && status !== 404) {
+            const recovered = levelFromDraft(scopedRecovery, canonical ?? initialCandidateRef.current);
+            applyLevelDocument(recovered, {
+              editingId: scopedRecovery.editingId ?? canonical?.id,
+              clean: false,
+              seed: true,
+            });
+            if (scopedRecovery.editingId) setEditingId(scopedRecovery.editingId);
+            if (failedDocumentDraftKey) setDraftKey(failedDocumentDraftKey);
+            offlineRecoveryLevelRef.current = recovered;
+            offlineRecoverySavedSigRef.current = scopedRecovery.savedSig;
+            setEditorLoadError(null);
+            setCloudSaveState('error');
+            setCloudSaveDetail('Cloud autosave is unavailable. The current editor remains open and will retry after reconnection.');
+            setTargetBaselineResolved(Boolean(canonical) || !routeParams.levelId);
+            setEditorReady(true);
+            return;
+          }
+          setEditorLoadError({
+            title: status === 403 || status === 404 ? 'No access to this editor document' : 'Editor document unavailable',
+            detail: status === 403 || status === 404
+              ? 'Sign in with the account that owns this working copy.'
+              : 'The working copy could not be reached. No other level was substituted for it.',
+            retry: status !== 403 && status !== 404,
+          });
+          setCloudSaveState('error');
+          setCloudSaveDetail(null);
+          setTargetBaselineResolved(false);
+          setEditorReady(true);
+          return;
+        }
+        if (claimedUnscopedDraft) {
+          const recovered = levelFromDraft(claimedUnscopedDraft, canonical ?? initialCandidateRef.current);
+          applyLevelDocument(recovered, {
+            editingId: canonical?.id ?? claimedUnscopedDraft.editingId,
+            clean: false,
+            seed: true,
+          });
+          setSavedSig(canonical ? normalizedLevelEditorSignature(canonical) : claimedUnscopedDraft.savedSig);
+          offlineRecoveryLevelRef.current = recovered;
+          offlineRecoverySavedSigRef.current = claimedUnscopedDraft.savedSig;
+        } else if (offlineRecoveryLevelRef.current) {
+          applyLevelDocument(offlineRecoveryLevelRef.current, {
+            editingId: offlineRecoveryLevelRef.current.id,
+            clean: false,
+            seed: true,
+          });
+        } else if (canonical && !loadedBoard) {
+          applyLevelDocument(canonical, { editingId: canonical.id, clean: true, seed: true });
+        }
+        setCloudSaveState('error');
+        setCloudSaveDetail('Cloud autosave is unavailable. The current editor remains open; reconnect to retry.');
+        setTargetBaselineResolved(!requestedLevelId || Boolean(canonical));
+        setEditorReady(true);
+        reportStatus('Cloud autosave is unavailable.', 'warning', (error as Error).message);
+      }
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentLoadAttempt]);
+
+  const retryCloudDocument = (): void => {
+    if (editorDocument) {
+      setCloudSaveState((state) => state === 'error' ? 'pending' : state);
+      setCloudSaveDetail(null);
+      return;
+    }
+    if (editorReady && !editorLoadError) {
+      offlineRecoveryLevelRef.current = currentCandidateRef.current;
+      offlineRecoverySavedSigRef.current = savedSigRef.current;
+    }
+    setEditorLoadError(null);
+    setEditorReady(false);
+    setCloudSaveState('loading');
+    setCloudSaveDetail(null);
+    setDocumentLoadAttempt((attempt) => attempt + 1);
+  };
+
+  // Debounced, serialized compare-and-swap autosave. A conflict never overwrites either side:
+  // the current board stays in memory/local recovery and the server's newer revision is surfaced.
+  useEffect(() => {
+    if (!editorReady || !editorDocument || !me?.signed_in || saving) return undefined;
+    if (cloudSaveState === 'conflict' || cloudSaveState === 'error') return undefined;
+    if (autosaveInFlightRef.current) return undefined;
+    if (lastCloudSyncedSigRef.current === currentSig) {
+      setCloudSaveState('saved');
+      setCloudSaveDetail(null);
+      return undefined;
+    }
+    setCloudSaveState('pending');
+    const timer = window.setTimeout(() => {
+      autosaveTimerRef.current = null;
+      if (autosaveInFlightRef.current) return;
+      const revision = documentRevisionRef.current;
+      if (revision === null) return;
+      const signatureAtSave = currentSig;
+      const levelAtSave = candidateLevel;
+      autosaveInFlightRef.current = true;
+      setCloudSaveState('saving');
+      const request = autosaveEditorDocument(
+        editorDocument.document_id,
+        levelAtSave,
+        revision,
+      )
+        .then((doc) => {
+          documentRevisionRef.current = doc.revision;
+          lastCloudSyncedSigRef.current = signatureAtSave;
+          if (doc.baseline_conflict) {
+            documentConflictRef.current = true;
+            documentConflictKindRef.current = 'baseline';
+            setEditorDocument(doc);
+            setCloudSaveState('conflict');
+            setCloudSaveDetail('The saved level changed outside this working copy. Your current progress was preserved and autosave is paused.');
+            reportStatus(
+              'Autosave paused because the saved position changed.',
+              'warning',
+              'Discard changes restores the latest saved position; no canonical data was overwritten.',
+            );
+            return;
+          }
+          documentConflictRef.current = false;
+          documentConflictKindRef.current = null;
+          setEditorDocument(doc);
+          setCloudSaveDetail(null);
+          setCloudSaveState(currentSigRef.current === signatureAtSave ? 'saved' : 'pending');
+        })
+        .catch((error: unknown) => {
+          if (isEditorDocumentConflict(error)) {
+            documentRevisionRef.current = error.document.revision;
+            documentConflictRef.current = true;
+            documentConflictKindRef.current = isEditorDocumentBaselineConflict(error) ? 'baseline' : 'revision';
+            setEditorDocument(error.document);
+            setCloudSaveState('conflict');
+            setCloudSaveDetail(isEditorDocumentBaselineConflict(error)
+              ? 'The saved level changed outside this working copy. Your current progress was not overwritten.'
+              : 'Another tab or device saved a newer revision. The current editor was not overwritten.');
+            reportStatus(
+              isEditorDocumentBaselineConflict(error) ? 'Autosave paused because the saved position changed.' : 'Autosave paused for a revision conflict.',
+              'warning',
+              'Your current editor remains open; Discard changes restores the latest saved position.',
+            );
+            return;
+          }
+          setCloudSaveState('error');
+          setCloudSaveDetail('Cloud autosave was interrupted. Keep this tab open if browser recovery is unavailable.');
+          reportStatus('Cloud autosave failed.', 'warning', (error as Error).message);
+        })
+        .finally(() => {
+          autosaveInFlightRef.current = false;
+          autosavePromiseRef.current = null;
+        });
+      autosavePromiseRef.current = request;
+    }, 700);
+    autosaveTimerRef.current = timer;
+    return () => {
+      window.clearTimeout(timer);
+      if (autosaveTimerRef.current === timer) autosaveTimerRef.current = null;
+    };
+  }, [candidateLevel, cloudSaveState, currentSig, editorDocument, editorReady, me?.signed_in, saving]);
+
+  useEffect(() => {
+    const retry = (): void => {
+      if (editorDocumentRef.current) {
+        setCloudSaveState((state) => state === 'error' ? 'pending' : state);
+        return;
+      }
+      retryCloudDocument();
+    };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [editorDocument, editorLoadError, editorReady]);
+
+  useEffect(() => {
+    const retryAfterSignIn = (): void => {
+      if (!signInHandoffPendingRef.current) return;
+      retryCloudDocument();
+    };
+    window.addEventListener('focus', retryAfterSignIn);
+    return () => window.removeEventListener('focus', retryAfterSignIn);
+  }, [editorDocument, editorLoadError, editorReady]);
+
+  // A route change must not manufacture a 700 ms loss window. Normal autosaves themselves use
+  // keepalive, and this departure flush sends the latest unsent snapshot. If an older write is
+  // already in flight during an in-app unmount, the latest write is chained after its CAS ack.
+  useEffect(() => {
+    const flushLatest = (pageHiding: boolean): void => {
+      const doc = editorDocumentRef.current;
+      const revision = documentRevisionRef.current;
+      const signature = currentSigRef.current;
+      if (
+        !doc
+        || !signedInRef.current
+        || revision === null
+        || documentConflictRef.current
+        || signature === lastCloudSyncedSigRef.current
+        || signature === departureFlushSigRef.current
+      ) return;
+      departureFlushSigRef.current = signature;
+      if (pageHiding) {
+        autosaveEditorDocumentOnPageHide(doc.document_id, currentCandidateRef.current, revision);
+      } else {
+        void autosaveEditorDocument(doc.document_id, currentCandidateRef.current, revision).catch(() => undefined);
+      }
+    };
+    const flushAfterCurrentWrite = (pageHiding: boolean): void => {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      const inFlight = autosavePromiseRef.current;
+      if (inFlight && pageHiding) {
+        // Page freeze may prevent promise continuations from running. Send the latest snapshot
+        // now as a best-effort peer to the older in-flight CAS; browser recovery is already sync.
+        flushLatest(true);
+      } else if (inFlight) void inFlight.then(
+        () => flushLatest(pageHiding),
+        () => flushLatest(pageHiding),
+      );
+      else flushLatest(pageHiding);
+    };
+    const onPageHide = (): void => flushAfterCurrentWrite(true);
+    const onPageShow = (event: PageTransitionEvent): void => {
+      if (!event.persisted) return;
+      const doc = editorDocumentRef.current;
+      const observedRevision = documentRevisionRef.current;
+      if (!doc || observedRevision === null || !signedInRef.current) return;
+      departureFlushSigRef.current = null;
+      void loadEditorDocument(doc.document_id)
+        .then((serverDocument) => {
+          const serverSignature = levelEditorLevelSignature(serverDocument.level);
+          const liveSignature = currentSigRef.current;
+          documentRevisionRef.current = serverDocument.revision;
+          lastCloudSyncedSigRef.current = serverSignature;
+          setEditorDocument(serverDocument);
+          if (serverDocument.baseline_conflict) {
+            documentConflictRef.current = true;
+            documentConflictKindRef.current = 'baseline';
+            setCloudSaveState('conflict');
+            setCloudSaveDetail('The saved position changed while this page was in the background. Your editor was preserved.');
+          } else if (serverSignature === liveSignature) {
+            documentConflictRef.current = false;
+            documentConflictKindRef.current = null;
+            setCloudSaveState('saved');
+            setCloudSaveDetail(null);
+          } else if (serverDocument.revision === observedRevision) {
+            setCloudSaveState('pending');
+            setCloudSaveDetail(null);
+          } else {
+            documentConflictRef.current = true;
+            documentConflictKindRef.current = 'revision';
+            setCloudSaveState('conflict');
+            setCloudSaveDetail('The working copy advanced while this page was in the background. Your current editor was preserved.');
+          }
+        })
+        .catch(() => {
+          setCloudSaveState('error');
+          setCloudSaveDetail('Cloud sync could not be checked after returning to this page. Retry when connected.');
+        });
+    };
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
+      flushAfterCurrentWrite(false);
+    };
+  }, []);
+
+  // A Test-return board is a one-shot recovery envelope. Keep it in the URL until that exact
+  // snapshot is acknowledged, then consume it so refresh/history can never replay stale pixels
+  // over a newer cloud revision.
+  useEffect(() => {
+    if (!editorDocument || cloudSaveState !== 'saved' || lastCloudSyncedSigRef.current !== currentSig) return;
+    if (!isLevelEditorRoutePath(window.location.pathname)) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('board')) return;
+    navigateApp(levelEditorHrefForDocument(window.location.href, {
+      levelId: editorDocument.level_id,
+      documentId: editorDocument.document_id,
+    }), { replace: true, scroll: false });
+  }, [cloudSaveState, currentSig, editorDocument]);
+
+  // The staged selector is the source of truth here: choosing a campaign immediately turns on
+  // campaign-only requirements (notably Player faction) before the association is published.
+  const isCampaignLevel = Boolean(campaignAssignmentId);
   const boardFactionCounts = useMemo<Record<UnitPalette, number>>(() => {
     const counts = Object.fromEntries(UNIT_PALETTES.map((faction) => [faction, 0])) as Record<UnitPalette, number>;
     for (const unit of Object.values(boardUnits)) counts[unit.faction] += 1;
@@ -2548,16 +3992,73 @@ export function LevelEditor(): ReactElement {
     }
     if (playerFaction === faction) setPlayerFactionWithHistory(null);
   };
-  const onFactionControlChange = (faction: UnitPalette) => (control: FactionControl): void => {
-    setFactionControl(faction, control);
+  const onFactionControlChange = (faction: UnitPalette) => (event: ChangeEvent<HTMLSelectElement>): void => {
+    setFactionControl(faction, event.currentTarget.value as FactionControl);
+  };
+  const browserRecoverySafetyDetail = localBackupAvailable === true
+    ? 'A browser recovery copy is available.'
+    : localBackupAvailable === false
+    ? 'Browser recovery is unavailable; keep this tab open.'
+    : 'The current editor remains open while recovery storage is checked.';
+  const syncSavedLevelRoute = (levelId: string): void => {
+    if (!isLevelEditorRoutePath(window.location.pathname)) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('levelId', levelId);
+    if (campaignAssignmentId) url.searchParams.set('campaignId', campaignAssignmentId);
+    else url.searchParams.delete('campaignId');
+    navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
   };
 
-  // Save the painted board. Campaign path: serialize into the resolved level id and write it
-  // back into the store, then route by TIER — an official (`off-`) level publishes to all
-  // players (confirmed); a private/unassigned level saves to the user workspace. The server's
-  // requireAdmin is the real gate; a non-admin official save fails closed (403 surfaced here).
+  // Save promotes the exact current working copy into the canonical workspace transactionally.
+  // Only the acknowledged response enters the shared store, which keeps thumbnails and gameplay
+  // pinned to the last successful Save/Publish rather than the autosaved working document.
   const saveLevel = async (): Promise<void> => {
     if (saving) return;
+    if (!me?.signed_in) {
+      if (authReachable === false) {
+        reportStatus('Cloud is unavailable.', 'warning', browserRecoverySafetyDetail);
+        retryCloudDocument();
+        return;
+      }
+      signInForEditor();
+      return;
+    }
+    if (!editorDocument || !targetLevelId || documentRevisionRef.current === null) {
+      reportStatus('Cloud working copy is unavailable.', 'warning', browserRecoverySafetyDetail);
+      if (me?.signed_in || authReachable === false) retryCloudDocument();
+      return;
+    }
+    if (documentConflictRef.current) {
+      reportStatus(
+        documentConflictKindRef.current === 'baseline' ? 'The saved position changed outside this working copy.' : 'Resolve the revision conflict before saving.',
+        'warning',
+        `Discard changes restores the latest saved position. ${browserRecoverySafetyDetail}`,
+      );
+      return;
+    }
+    const savingOfficialTier = editorDocument.workspace_kind === 'official';
+    const persistenceHydration = savingOfficialTier ? officialWorkspaceHydration : userWorkspaceHydration;
+    if (persistenceHydration !== 'ready' || !campaignAssignmentHydrated) {
+      const workspaceLabel = savingOfficialTier ? 'Official campaigns' : 'Your workspace';
+      reportStatus(
+        persistenceHydration === 'unavailable' ? `${workspaceLabel} unavailable.` : `${workspaceLabel} still loading.`,
+        persistenceHydration === 'unavailable' ? 'warning' : 'info',
+        'Editing and working-copy autosave remain safe, but canonical Save is paused until campaign data is available.',
+      );
+      return;
+    }
+    const state = useCampaigns.getState();
+    const targetCampaign = campaignAssignmentId
+      ? state.campaigns.find((campaign) => campaign.id === campaignAssignmentId)
+      : undefined;
+    if (campaignAssignmentId && !targetCampaign) {
+      reportStatus('Campaign is unavailable.', 'error', 'Choose another campaign, or leave the level unassigned.');
+      return;
+    }
+    if (targetCampaign && tierOf(targetCampaign.id) !== tierOf(targetLevelId)) {
+      reportStatus('Campaign tier does not match this level.', 'error', 'Move private levels only among private campaigns, and official levels only among official campaigns.');
+      return;
+    }
     // Playability is the save gate (ADR-0050): never persist a rule-violating level. The button is
     // disabled while violations exist, but re-check here so a programmatic call can't slip past.
     if (!playability.ok) return;
@@ -2566,35 +4067,13 @@ export function LevelEditor(): ReactElement {
       setLayer('board');
       return;
     }
-    const targetId = targetLevelId;
-    if (!targetId) {
-      // Cold path (no campaign level): a standalone board authored outside a campaign.
-      // Mint a fresh per-user level id (`l<n>`) and write it into the user workspace — never
-      // an `off-` id (INV8). createUnassignedLevel stamps the minted id onto the level and
-      // returns it; the editor then tracks that id so subsequent saves write back to it.
-      const newLevel = editorBoardToLevel(currentEditorBoard, { id: 'new', name: levelName, ...modeMeta });
-      const newId = useCampaigns.getState().createUnassignedLevel(newLevel);
-      setEditingId(newId);
-      setSaving(true);
-      try {
-        await saveUserWorkspace();
-        reportStatus('Saved to server.', 'success');
-        setSavedSig(currentSig);
-      } catch (e) {
-        const mapped = mapSaveError(e);
-        if ('action' in mapped) { goSignIn(); return; }
-        reportStatus(mapped.message, 'error');
-      } finally {
-        setSaving(false);
-      }
-      return;
-    }
     // Carry the existing level's authored metadata (objective/difficulty/economy/notes/theme)
-    // so a board save doesn't reset them; only the painted board + name are re-derived here.
-    const existing = useCampaigns.getState().levels[targetId];
+    // so a board save doesn't reset them. The working document is the fallback for a brand-new
+    // unassigned level that has not entered the canonical store yet.
+    const existing = useCampaigns.getState().levels[targetLevelId] ?? editorDocument.level;
     const level = editorBoardToLevel(currentEditorBoard, {
-      id: targetId,
-      name: levelName,
+      id: targetLevelId,
+      name: levelNameForSave,
       notes: existing?.notes,
       // The Rules panel is the source of truth for objective, battle settings, and authored events;
       // setup spawning is explicit events, not the legacy placement/roster fields.
@@ -2606,7 +4085,6 @@ export function LevelEditor(): ReactElement {
       // republishing a legacy official (no boardCode) doesn't flatten those surfaces to grass.
       previousTerrain: existing?.layers.terrain,
     });
-    useCampaigns.getState().replaceLevel(level);
     const official = tierOf(level.id) === 'official';
     if (official && !(await ask({
       title: 'Publish to all players?',
@@ -2614,90 +4092,131 @@ export function LevelEditor(): ReactElement {
       confirmLabel: 'Publish',
       cancelLabel: 'Cancel',
     }))) return;
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
     setSaving(true);
     try {
-      if (official) {
-        const { revision } = await publishOfficialWorkspace();
-        reportStatus(`Published revision ${revision}.`, 'success');
-      } else {
-        await saveUserWorkspace();
-        reportStatus('Saved to server.', 'success');
+      if (autosavePromiseRef.current) await autosavePromiseRef.current;
+      if (documentConflictRef.current) {
+        reportStatus('Save stopped by a revision conflict.', 'warning', 'No canonical data was changed.');
+        return;
       }
-      setSavedSig(currentSig);
+      const revision = documentRevisionRef.current;
+      if (revision === null) throw new Error('working copy revision unavailable');
+      const saved = await saveEditorDocument(
+        editorDocument.document_id,
+        revision,
+        level,
+        campaignAssignmentId || null,
+      );
+      const doc = saved.document;
+      if (saved.workspace_revision !== null) {
+        if (doc.workspace_kind === 'official') {
+          useCampaigns.getState().setOfficialWorkspaceRevision(saved.workspace_revision);
+        } else {
+          useCampaigns.getState().setUserWorkspaceRevision(saved.workspace_revision);
+        }
+      }
+      documentRevisionRef.current = doc.revision;
+      documentConflictRef.current = false;
+      documentConflictKindRef.current = null;
+      lastCloudSyncedSigRef.current = levelEditorLevelSignature(doc.level);
+      setEditorDocument(doc);
+      const acknowledgedSig = levelEditorLevelSignature(doc.level);
+      const stillMatchesAcknowledgement = currentSigRef.current === acknowledgedSig;
+      setCloudSaveState(stillMatchesAcknowledgement ? 'saved' : 'pending');
+      setCloudSaveDetail(null);
+      // This is the canonical boundary: no optimistic mutation before the server succeeds.
+      useCampaigns.getState().replaceLevel(doc.level);
+      useCampaigns.getState().assignLevelToCampaign(doc.level_id, campaignAssignmentId || null);
+      setSavedSig(normalizedLevelEditorSignature(doc.level));
+      setSavedCampaignAssignmentId(campaignAssignmentId);
+      setTargetBaselineResolved(true);
+      if (stillMatchesAcknowledgement) clearLevelEditorDraft(draftKey);
+      syncSavedLevelRoute(doc.level_id);
+      reportStatus(official ? 'Published.' : 'Saved.', 'success', 'The thumbnail and campaign play now use this position.');
     } catch (e) {
+      if (isEditorDocumentConflict(e)) {
+        documentRevisionRef.current = e.document.revision;
+        documentConflictRef.current = true;
+        documentConflictKindRef.current = isEditorDocumentBaselineConflict(e) ? 'baseline' : 'revision';
+        setEditorDocument(e.document);
+        setCloudSaveState('conflict');
+        setCloudSaveDetail(isEditorDocumentBaselineConflict(e)
+          ? 'The canonical saved position changed. Your working progress was preserved and nothing was overwritten.'
+          : 'Another tab or device saved a newer revision. No canonical data was overwritten.');
+        reportStatus(
+          isEditorDocumentBaselineConflict(e) ? 'Save stopped because the saved position changed.' : 'Save stopped by a revision conflict.',
+          'warning',
+          `Your current editor remains open. ${browserRecoverySafetyDetail}`,
+        );
+        return;
+      }
       const mapped = mapSaveError(e);
-      if ('action' in mapped) { goSignIn(); return; }
+      if ('action' in mapped) { signInForEditor(); return; }
       reportStatus(mapped.message, 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  // Export the whole board as a /editor/level?board=<code> link (round-trips via boardCode.ts).
-  const copyBoardLink = (): void => {
-    const code = encodeBoard(currentEditorBoard);
-    void navigator.clipboard?.writeText(`${window.location.origin}/editor/level?board=${code}`);
-    reportStatus('Copied board link.', 'success');
-  };
-  // Publish this map to the server and copy a public /play?map=<id> link. Unlike the board-code
-  // link, this one UNFURLS on Discord (the server can resolve it) and is a short, stable URL anyone
-  // can play. Requires the map to be saved & clean (publish reads the stored copy) and signed in (a
-  // public link needs an owner).
-  const [sharing, setSharing] = useState(false);
-  const copyShareLink = async (): Promise<void> => {
-    if (sharing) return;
-    if (!editingId || dirty) {
-      reportStatus('Save this map first.', 'warning', dirty ? 'You have unsaved changes — Save, then Share Link.' : 'Give it a name and Save, then Share Link.');
+  const discardChanges = async (): Promise<void> => {
+    if (!editorDocument || !targetLevelId || !editorDocument.has_saved_baseline) return;
+    if (!me?.signed_in || documentRevisionRef.current === null) {
+      reportStatus('Cloud working copy is unavailable.', 'warning', 'Reconnect before discarding changes.');
       return;
     }
-    setSharing(true);
+    if (!(await ask({
+      title: 'Discard changes?',
+      message: 'Restore the working copy to the last saved position? This deliberately removes all unsaved editor progress for this level.',
+      confirmLabel: 'Discard changes',
+      cancelLabel: 'Keep editing',
+    }))) return;
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    setSaving(true);
     try {
-      const { url } = await publishMap(editingId);
-      await navigator.clipboard?.writeText(url);
-      reportStatus('Copied share link.', 'success', 'Anyone with the link can preview and play this map.');
-    } catch (err) {
-      if (err instanceof HttpError && err.status === 401) {
-        reportStatus('Sign in to share.', 'warning', 'A public share link needs a signed-in owner.');
-      } else if (err instanceof HttpError && err.status === 404) {
-        reportStatus('Save this map first.', 'warning', 'The saved copy wasn’t found — Save, then Share Link.');
+      if (autosavePromiseRef.current) await autosavePromiseRef.current;
+      const revision = documentRevisionRef.current;
+      if (revision === null) throw new Error('working copy revision unavailable');
+      const doc = await discardEditorDocumentChanges(
+        editorDocument.document_id,
+        revision,
+      );
+      documentRevisionRef.current = doc.revision;
+      documentConflictRef.current = false;
+      documentConflictKindRef.current = null;
+      lastCloudSyncedSigRef.current = levelEditorLevelSignature(doc.level);
+      setEditorDocument(doc);
+      setCloudSaveState('saved');
+      setCloudSaveDetail(null);
+      useCampaigns.getState().replaceLevel(doc.level);
+      applyLevelDocument(doc.level, { editingId: doc.level_id, clean: true });
+      setSavedSig(normalizedLevelEditorSignature(doc.level));
+      setTargetBaselineResolved(true);
+      setCampaignAssignmentId(savedCampaignAssignmentId);
+      clearLevelEditorDraft(draftKey);
+      reportStatus('Changes discarded.', 'success', 'The editor again matches the saved thumbnail and campaign position.');
+    } catch (error) {
+      if (isEditorDocumentConflict(error)) {
+        documentRevisionRef.current = error.document.revision;
+        documentConflictRef.current = true;
+        setEditorDocument(error.document);
+        setCloudSaveState('conflict');
+        setCloudSaveDetail('The working copy changed in another tab. Review and choose Discard changes again.');
+        reportStatus('Discard stopped by a revision conflict.', 'warning', 'Nothing was discarded.');
       } else {
-        reportStatus('Couldn’t create a share link.', 'error');
+        reportStatus('Discard failed.', 'error', (error as Error).message);
       }
     } finally {
-      setSharing(false);
+      setSaving(false);
     }
   };
-  const loadBoardLink = (): void => {
-    setLayer('status');
-    setTool('select');
-    const input = boardLinkDraft.trim();
-    if (!input) {
-      reportStatus('Paste a board link first.', 'warning', 'Open Board, paste a /editor/level?board=... link or raw board code, then press Load board link.');
-      return;
-    }
-    const decoded = decodeBoardLinkInput(input);
-    if (!decoded) {
-      reportStatus('Could not load board link.', 'error', 'Paste a Level Editor board link that contains ?board=, or paste the raw board code.');
-      return;
-    }
-    const next = cloneEditorBoard(decoded);
-    if (!next.playerFaction || !(UNIT_PALETTES as readonly string[]).includes(next.playerFaction)) next.playerFaction = null;
-    if (savedSig === null) setSavedSig(boardSignature(currentEditorBoardRef.current));
-    const changed = commitEditorBoard(next, null);
-    if (!changed) {
-      reportStatus('Board link already matches this board.', 'info', dirty ? 'There are still unsaved changes.' : 'Save remains unavailable until the board changes.');
-      return;
-    }
-    setActiveGeneratedRegionId(null);
-    setRegionSelection(new Set());
-    const detail = isCampaignLevel && !next.playerFaction
-      ? 'Choose a Player faction before saving this campaign level.'
-      : targetLevelId
-      ? `Save will overwrite "${levelName}".`
-      : 'Save will create a workspace level.';
-    setBoardLinkDraft('');
-    reportStatus(`Loaded board link (${next.cols}x${next.rows}).`, 'success', detail);
-  };
+
   const selectLayer = (nextLayer: LayerKey): void => {
     if (isLayerOptionDisabled(nextLayer)) return;
     setLayer(nextLayer);
@@ -2765,8 +4284,59 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(withZoneEntries(board, entries), null);
     setEvents(nextEvents);
   };
+  // Scan the painted board for castleable king-rook pairs (see castlingTemplate.ts) and
+  // append one castle event per pair, squares baked in — mirrors the promotion template's
+  // read-the-live-board pattern, but needs no zones so only the events list changes.
+  const addCastlingTemplate = (): void => {
+    const board = currentEditorBoardRef.current;
+    const boardPlayerFaction = isUnitPalette(board.playerFaction) ? board.playerFaction : playerFaction;
+    // Castle events bake a player/enemy side, but the SAVE maps units to sides by the
+    // assigned Player faction (levelBoard.sideForFaction) — guessing here while it's unset
+    // would silently invert every pair once the author assigns it. Refuse instead.
+    if (!boardPlayerFaction) {
+      reportStatus('Assign a Player faction before adding castling.', 'error', 'Castle events are tagged player/enemy by faction. Set the Player faction first so each king-rook pair lands on the right side.');
+      return;
+    }
+    const player = boardPlayerFaction;
+    const units: CastleTemplateUnit[] = [];
+    for (const [key, placement] of Object.entries(board.units as Record<string, BoardUnitPlacement>)) {
+      const [x, y] = key.split(',').map(Number);
+      const type = unitFamilyForId(placement.unitId);
+      if (type !== 'king' && type !== 'rook') continue;
+      units.push({ x, y, type, side: placement.faction === player ? 'player' : 'enemy' });
+    }
+    const pairs = computeCastleTemplatePairs(units);
+    if (!pairs.length) {
+      reportStatus('No castleable king-rook pairs on the board.', 'error', 'Castling needs a king and a rook of one side on the same rank or file, at least 3 squares apart.');
+      return;
+    }
+    let nextEvents = events.slice();
+    for (const pair of pairs) {
+      nextEvents = [...nextEvents, {
+        id: uniqueEventId(pair.name, nextEvents),
+        name: uniqueEventName(pair.name, nextEvents),
+        trigger: { kind: 'setup' },
+        do: [pair.action],
+      }];
+    }
+    setEvents(nextEvents);
+    reportStatus(`Added ${pairs.length} castling event${pairs.length === 1 ? '' : 's'}.`, 'success');
+  };
+  // One event that arms both chess draw rules; the detail pane's toggles narrow it.
+  const addChessDrawsTemplate = (): void => {
+    const name = uniqueEventName('Chess draws', events);
+    setEvents([...events, {
+      id: uniqueEventId('chess-draws', events),
+      name,
+      trigger: { kind: 'setup' },
+      do: [{ kind: 'chess-draws', fiftyMove: true, threefold: true }],
+    }]);
+    reportStatus('Added chess draw rules (50-move rule + threefold repetition).', 'success');
+  };
   const addOtherEventTemplate = (): void => {
     if (otherTemplateChoice === 'pawn-promotion') addPawnPromotionTemplate();
+    else if (otherTemplateChoice === 'castling') addCastlingTemplate();
+    else if (otherTemplateChoice === 'chess-draws') addChessDrawsTemplate();
   };
   // One-click "Clear pieces": drop every painted unit, offered next to setup-spawn validation
   // when events are dealing the starting forces.
@@ -2803,6 +4373,10 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next, to);
   };
   const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
+  const resetBoardView = (): void => {
+    setViewZoom(1);
+    setViewPan({ x: 0, y: 0 });
+  };
   // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
   // tiles/units — and a now-offboard selection — whose coordinates fall outside the new
   // bounds, so nothing keeps rendering or counting off the edge of the board.
@@ -2882,6 +4456,18 @@ export function LevelEditor(): ReactElement {
       }
       if (dropped) nextBoard.fences = next;
     }
+    // Posts live on grid VERTICES, whose valid domain includes the far outer boundary
+    // (0..cols, 0..rows). This deliberately differs from the half-open cell bounds above.
+    {
+      const next: Record<string, FenceMaterial> = {};
+      let dropped = false;
+      for (const [vertex, material] of Object.entries(nextBoard.fencePosts ?? {})) {
+        const [vx, vy] = vertex.split(',').map(Number);
+        if (Number.isInteger(vx) && Number.isInteger(vy) && vx >= 0 && vy >= 0 && vx <= nextCols && vy <= nextRows) next[vertex] = material;
+        else dropped = true;
+      }
+      if (dropped) nextBoard.fencePosts = next;
+    }
     // Walls are perimeter-only; after a resize, keep just the northmost/westmost edges
     // that are still valid on the new board bounds.
     {
@@ -2953,21 +4539,6 @@ export function LevelEditor(): ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCell, boardProps]);
   const coverCount = Object.keys(boardCover).length;
-  // Resolve the painted cover into concrete tufts (once, here — not per render). Re-roll
-  // bumps coverSeed to reshuffle every cell's scatter while keeping the same densities.
-  const coverCells = useMemo(() => {
-    const list: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover: GroundCover }> = [];
-    for (const [key, density] of Object.entries(boardCover)) {
-      const [x, y] = key.split(',').map(Number);
-      const tileId = boardCells[key];
-      const tileTerrain = tileId ? (leFamilyOfTile(tileId)?.id as TileFamilyId | undefined) : undefined;
-      // Cover set: the per-cell override if present (cover decoupled from terrain), else the tile's own terrain.
-      const coverType = boardCoverTypes[key] ?? tileTerrain;
-      if (!coverType || !groundCoverSet(coverType)) continue;
-      list.push({ x, y, terrain: coverType, groundCover: { density, tufts: rollGroundCover(coverType, x, y, coverSeed, density) } });
-    }
-    return list;
-  }, [boardCover, boardCoverTypes, boardCells, coverSeed]);
   const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedZones = selectedCell
     ? boardZoneEntries
@@ -3031,52 +4602,107 @@ export function LevelEditor(): ReactElement {
   // Tier of the level under edit drives the Save verb (INV6): an official (`off-`) level
   // PUBLISHES to all players; a private/unassigned level just SAVES. A level only resolves a
   // tier once a target id is known (campaign path); a fresh standalone board saves as private.
-  const isOfficialTarget = targetLevelId ? tierOf(targetLevelId) === 'official' : false;
+  const isOfficialTarget = targetLevelId
+    ? tierOf(targetLevelId) === 'official'
+    : Boolean(assignedCampaign && tierOf(assignedCampaign.id) === 'official');
   const saveLabel = isOfficialTarget ? 'Publish to all players' : 'Save';
-  const isAdmin = Boolean(me?.is_admin);
+  const cloudDocumentAvailable = Boolean(me?.signed_in && editorDocument && targetLevelId && targetBaselineResolved);
+  const targetSaveUnavailable = !cloudDocumentAvailable;
   // Save (user save AND official publish) is gated on ZERO playability violations (ADR-0050) — the
   // editor gives full freedom to mess the board up, but blocks persisting a rule-breaking level —
-  // AND on main's conditions: something to save (dirty), no in-flight save, and (campaign levels) a
-  // resolved Player faction.
-  const canSave = !saving && dirty && !needsPlayerFaction && playability.ok;
+  // AND on main's conditions: hydrated workspace/association context, something to save (dirty),
+  // no in-flight save, and (campaign levels) a resolved Player faction.
+  const persistenceHydration = isOfficialTarget ? officialWorkspaceHydration : userWorkspaceHydration;
+  const saveContextReady = persistenceHydration === 'ready' && campaignAssignmentHydrated;
+  const canSave = saveContextReady && !saving && !targetSaveUnavailable && !documentConflictRef.current && dirty && !needsPlayerFaction && playability.ok;
   const saveBlockedMessage = saving
     ? 'Save is already in progress.'
+    : !me?.signed_in && authReachable === false
+    ? 'Reconnect to save this level.'
+    : !me?.signed_in
+    ? 'Sign in to save this level.'
+    : documentConflictRef.current
+    ? 'Save is paused because another tab or device has a newer revision.'
+    : targetSaveUnavailable
+    ? 'Save is blocked because the cloud working copy is unavailable.'
+    : persistenceHydration === 'unavailable'
+    ? isOfficialTarget ? 'Official campaigns are unavailable.' : 'Your workspace is unavailable.'
+    : !saveContextReady
+    ? 'Workspace is still loading.'
     : !playability.ok
     ? 'Save is blocked by playability issues.'
     : needsPlayerFaction
     ? 'Save is blocked because this campaign level needs a Player faction.'
     : !dirty && targetLevelId
-    ? 'Save is disabled because this level has no unsaved board changes.'
+    ? 'Save is disabled because this draft already matches the saved level.'
     : !dirty
-    ? 'Save is disabled because this standalone board has no unsaved changes.'
+    ? 'Save is disabled because this standalone draft has no new changes.'
     : '';
   const saveBlockedDetail = saving
     ? 'Wait for the current save to finish.'
+    : !me?.signed_in && authReachable === false
+    ? browserRecoverySafetyDetail
+    : !me?.signed_in
+    ? `${browserRecoverySafetyDetail} Sign in to sync and save it.`
+    : documentConflictRef.current
+    ? `Your current editor remains open. Discard changes restores the latest saved position. ${browserRecoverySafetyDetail}`
+    : targetSaveUnavailable
+    ? `Reconnect to restore cloud autosave. ${browserRecoverySafetyDetail}`
+    : persistenceHydration === 'unavailable'
+    ? `Working-copy autosave remains safe, but Save is locked to protect the canonical workspace. ${browserRecoverySafetyDetail}`
+    : !saveContextReady
+    ? 'Editing is ready; Save will unlock as soon as your campaigns finish loading.'
     : !playability.ok
     ? 'Resolve the issues in the Fix-before-saving list above, then Save.'
     : needsPlayerFaction
     ? 'Open Board > Level Settings, then assign Player to one board faction.'
     : !dirty && targetLevelId
-    ? 'Make an edit, or use Board > Load board link to paste a board and overwrite this target.'
+    ? 'Make an edit to create a new saved position.'
     : !dirty
-    ? 'Make an edit or use Board > Load board link; then Save will create a workspace level.'
+    ? 'Make an edit; then Save will create the canonical level.'
     : '';
   const explainBlockedSave = (): void => {
     if (!saveBlockedMessage) return;
     // Playability blocks stay on 'status': the Fix-before-saving list renders there, beside Save.
     setLayer(needsPlayerFaction && playability.ok ? 'board' : 'status');
     setTool('select');
-    reportStatus(saveBlockedMessage, saving ? 'info' : 'warning', saveBlockedDetail);
+    reportStatus(saveBlockedMessage, saving || persistenceHydration === 'loading' ? 'info' : 'warning', saveBlockedDetail);
   };
-  // Save-state label priority (Status card fallback): saving → blocked-by-violations →
-  // needs-player → dirty → clean.
-  const saveStateLabel = saving ? 'Saving…' : !playability.ok ? 'Fix issues to save' : needsPlayerFaction ? 'Needs Player' : dirty ? 'Unsaved' : 'No changes';
+  const progressStateLabel = cloudSaveState === 'loading'
+    ? 'Opening working copy…'
+    : cloudSaveState === 'local'
+    ? localBackupAvailable === true
+      ? 'Saved in this browser'
+      : localBackupAvailable === false
+      ? 'Browser recovery unavailable'
+      : 'Saving in this browser…'
+    : cloudSaveState === 'pending' || cloudSaveState === 'saving'
+    ? 'Saving progress…'
+    : cloudSaveState === 'saved'
+    ? 'Progress saved'
+    : cloudSaveState === 'conflict'
+    ? 'Autosave paused'
+    : 'Cloud autosave interrupted';
+  const hasDiscardableChanges = Boolean(
+    editorDocument?.has_saved_baseline
+    && (dirty || documentConflictRef.current),
+  );
   // Button text should name the available action or the current blocker. In particular, a clean
   // official level should not look like it is waiting to publish.
   const saveButtonLabel = canSave
     ? saveLabel
     : saving
     ? 'Saving…'
+    : !me?.signed_in
+    ? 'Sign in to save'
+    : documentConflictRef.current
+    ? 'Revision conflict'
+    : targetSaveUnavailable
+    ? 'Working copy unavailable'
+    : persistenceHydration === 'unavailable'
+    ? 'Unavailable'
+    : !saveContextReady
+    ? 'Loading…'
     : !playability.ok
     ? 'Fix issues'
     : needsPlayerFaction
@@ -3084,36 +4710,27 @@ export function LevelEditor(): ReactElement {
     : !dirty
     ? 'No changes'
     : saveLabel;
-  // Test-Play is enabled only for a SAVED (clean, in-store), violation-free level with a resolvable
-  // id: /play resolves the level from the store, so an unsaved board would test-play the stale
-  // saved version. mode=test skips progress recording. See below (button title explains the state).
-  const canTest = Boolean(targetLevelId) && playability.ok && !dirty && savedSig !== null;
-  const testHref = canTest ? (() => {
-    const params = new URLSearchParams({ levelId: targetLevelId as string, mode: 'test' });
-    if (routeParams.campaignId) params.set('campaignId', routeParams.campaignId);
-    params.set('returnTo', `${window.location.pathname}${window.location.search}${window.location.hash}`);
-    return `/play?${params.toString()}`;
-  })() : undefined;
-  // "Play" a Test Board: play the CURRENT (possibly unsaved) board against the AI right now via
-  // the ephemeral ?board= link — the position rides the URL, so unlike Test it needs no saved
-  // level and is gated only on playability. mode=test keeps it non-persisted and surfaces the
-  // Test Board's CPU-delay control in the HUD. returnTo carries the SAME board back, so ending
-  // (or leaving) the test lands you in the editor on the identical position (encode/decode is
-  // lossless) — this is what makes a shared /level-editor?board=<code> link a live-test loop.
-  const playBoardHref = useMemo(() => {
+  // Test always means the board the author is looking at. The exact current snapshot rides the URL,
+  // so saving/publishing is persistence—not permission to iterate. The return link keeps the
+  // durable level target while carrying this exact in-progress snapshot back to the editor.
+  const testHref = useMemo(() => {
     if (!playability.ok) return undefined;
-    const code = encodeBoard(currentEditorBoard);
-    const timeControl = clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined;
-    const backParams = new URLSearchParams({ board: code, obj: objective });
-    appendTimeControlParams(backParams, timeControl);
-    appendLevelEventsParam(backParams, eventsForSave);
-    appendVictoryRulesParam(backParams, victoryForSave);
-    const playParams = new URLSearchParams({ board: code, obj: objective, mode: 'test', returnTo: `/editor/level?${backParams.toString()}` });
-    appendTimeControlParams(playParams, timeControl);
-    appendLevelEventsParam(playParams, eventsForSave);
-    appendVictoryRulesParam(playParams, victoryForSave);
-    return `/play?${playParams.toString()}`;
-  }, [playability.ok, currentEditorBoard, objective, clockEnabled, clockInitialSeconds, clockIncrementSeconds, eventsForSave, victoryForSave]);
+    return currentBoardTestHref({
+      boardCode: encodeBoard(currentEditorBoard),
+      levelName: levelNameForSave,
+      objective,
+      surviveTurns,
+      timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
+      events: eventsForSave,
+      victory: victoryForSave,
+      editorSearch: window.location.search,
+      campaignId: routeParams.campaignId,
+      levelId: targetLevelId,
+      documentRevision: editorDocument?.revision,
+      editorReturnTo: routeParams.returnTo,
+      layer,
+    });
+  }, [clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, editorDocument?.revision, eventsForSave, layer, levelNameForSave, objective, playability.ok, routeParams.campaignId, routeParams.returnTo, surviveTurns, targetLevelId, victoryForSave]);
 
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
@@ -3134,7 +4751,8 @@ export function LevelEditor(): ReactElement {
         {editorReady ? <TitleBarSlot region="actions">
           {/* Only the RETURN nav rides the global title bar now (‹ Catalog / ‹ Back). The
               workspace ACTIONS live in the editor's OWN chrome — tools + Undo/Redo in the pinned
-              dock (.le-actions-dock), Test + Save/Publish in the Status layer card — because
+              dock (.le-actions-dock), Test in that always-visible dock, and Save/Publish in
+              the Status layer card — because
               document verbs belong in the editor's toolbar, not global chrome (the
               Unity/Unreal/Godot/Blender convention). The bar stays brand + return-nav +
               account cluster, matching Settings. */}
@@ -3144,59 +4762,96 @@ export function LevelEditor(): ReactElement {
           </TitleBarActions>
         </TitleBarSlot> : null}
 
-        <div className="skirmish-field">
+        <div className="skirmish-field" inert={!editorReady || saving ? true : undefined} aria-busy={!editorReady || saving || undefined}>
           <div className="skirmish-board-frame">
+            {activeFenceArtwork ? (
+              <div className="le-fence-review-banner" data-testid="fence-candidate-editor-review">
+                <strong>Fence artwork drawing · {activeFenceArtwork.label}</strong>
+                <span>{activeFenceArtwork.statusLabel} · {activeFenceArtwork.post ? 'draw rails/posts anywhere' : 'rail-only artwork'} · cycle artwork in Fence controls</span>
+              </div>
+            ) : null}
             <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
-              <div className="tileset-view-board-content is-board">
-                <StudioEditableBoard
-                  cols={boardCols}
-                  rows={boardRows}
-                  cells={boardCells}
-                  units={boardUnits}
-                  doodads={boardDoodads}
-                  props={boardProps}
-                  features={featureOverlays}
-                  zones={visibleZones}
-                  resolveAsset={resolveAsset}
-                  resolveUnit={resolveUnitAsset}
-                  resolveDoodad={resolveDoodadAsset}
-                  resolveProp={resolvePropDef}
-                  tool={tool}
-                  selectedCell={selectedCell}
-                  boardZoom={viewZoom}
-                  boardPan={viewPan}
-                  animationFrame={animationFrame}
-                  onPaint={paintCell}
-                  onErase={eraseCell}
-                  onSelect={selectCell}
-                  onMove={moveObject}
-                  canMoveTo={canMoveObjectTo}
-                  fences={boardFences}
-                  fenceTool={fenceTool}
-                  onPaintEdge={paintFenceEdge}
-                  onEraseEdge={eraseFenceEdge}
-                  walls={boardWalls}
-                  wallTool={wallTool}
-                  onPaintWallEdge={paintWallEdge}
-                  onEraseWallEdge={eraseWallEdge}
-                  wallArt={boardWallArt}
-                  wallArtTool={wallArtTool}
-                  onPaintWallArtEdge={paintWallArtEdge}
-                  onEraseWallArtEdge={eraseWallArtEdge}
-                  propBrush={brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
-                  overlay={<GroundCoverLayer cells={coverCells} />}
-                  regionCells={regionSelection}
-                  onRegionStart={regionSelectPatch}
-                />
+              <div className="tileset-view-board-content is-board" data-art-review={activeFenceArtwork ? FENCE_ART_REVIEW_ID : undefined} data-fence-art={activeFenceArtwork?.id}>
+                {editorLoadError ? (
+                  <div className="tileset-view-empty" role="status" aria-live="polite">
+                    <h2>{editorLoadError.title}</h2>
+                    <p>{editorLoadError.detail}</p>
+                    {editorLoadError.signIn ? (
+                      <button type="button" className="le-seg-btn" onClick={signInForEditor}>Sign in</button>
+                    ) : null}
+                    {editorLoadError.retry ? (
+                      <button type="button" className="le-seg-btn" onClick={retryCloudDocument}>Retry</button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <StudioEditableBoard
+                    cols={boardCols}
+                    rows={boardRows}
+                    cells={boardCells}
+                    macroTiles={boardMacroTiles}
+                    units={boardUnits}
+                    doodads={boardDoodads}
+                    props={boardProps}
+                    features={featureOverlays}
+                    zones={visibleZones}
+                    resolveAsset={resolveAsset}
+                    resolveUnit={resolveUnitAsset}
+                    resolveDoodad={resolveDoodadAsset}
+                    resolveProp={resolvePropDef}
+                    tool={tool}
+                    selectedCell={selectedCell}
+                    boardZoom={viewZoom}
+                    boardPan={viewPan}
+                    showGrid={showGrid}
+                    tacticalPreview={tacticalPreview}
+                    animationFrame={animationFrame}
+                    onPaint={paintCell}
+                    onErase={eraseCell}
+                    onSelect={selectCell}
+                    onMove={moveObject}
+                    canMoveTo={canMoveObjectTo}
+                    fences={boardFences}
+                    fencePosts={boardFencePosts}
+                    fenceArtwork={activeFenceArtwork}
+                    cover={boardCover}
+                    coverTypes={boardCoverTypes}
+                    coverSeed={coverSeed}
+                    fenceTool={fenceTool}
+                    fencePaintTarget={fencePaintTarget}
+                    onPaintEdge={paintFenceEdge}
+                    onEraseEdge={eraseFenceEdge}
+                    onPaintPost={paintFencePost}
+                    onErasePost={eraseFencePost}
+                    walls={boardWalls}
+                    wallTool={wallTool}
+                    onPaintWallEdge={paintWallEdge}
+                    onEraseWallEdge={eraseWallEdge}
+                    wallArt={boardWallArt}
+                    wallArtTool={wallArtTool}
+                    onPaintWallArtEdge={paintWallArtEdge}
+                    onEraseWallArtEdge={eraseWallArtEdge}
+                    propBrush={brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
+                    macroTileBrush={brushKind === 'tile' ? macroTileBrushAsset : null}
+                    regionCells={regionSelection}
+                    onRegionStart={regionSelectPatch}
+                  />
+                )}
               </div>
             </ViewPane>
           </div>
           {eventsOpen ? (
-            <LevelEditorEventsOverlay
-              tab={eventsTab}
-              onTabChange={setEventsTab}
-              onDone={() => setEventsOpen(false)}
-              victoryContent={(
+            <div className="le-events-overlay" role="dialog" aria-label="Level events editor">
+              <div className="le-events-head">
+                <h2>Events</h2>
+                <div className="le-events-head-actions">
+                  <div className="le-seg le-events-tabs" role="tablist" aria-label="Event editor sections">
+                    <button type="button" role="tab" aria-selected={eventsTab === 'victory'} className={`le-seg-btn ${eventsTab === 'victory' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('victory')}>Victory rules</button>
+                    <button type="button" role="tab" aria-selected={eventsTab === 'other'} className={`le-seg-btn ${eventsTab === 'other' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('other')}>Other events</button>
+                  </div>
+                  <button type="button" className="le-seg-btn le-events-done" onClick={closeEventsEditor}>Done</button>
+                </div>
+              </div>
+              {eventsTab === 'victory' ? (
                 <VictoryConditionsEditor
                   value={victory}
                   factions={victoryFactions}
@@ -3206,27 +4861,24 @@ export function LevelEditor(): ReactElement {
                       <h3 className="le-victory-head">Template</h3>
                       <p className="le-board-note">Add a victory template. Existing events stay in place; use Clear first when you want a clean replacement.</p>
                       <div className="le-template-apply">
-                        <HouseSelect
-                          className="le-template-select-wrap"
-                          ariaLabel="Victory template"
-                          title={MODE_DESCRIPTION[templateChoice]}
-                          value={templateChoice}
-                          options={OBJECTIVE_TYPES.map((mode) => ({ value: mode, label: MODE_NAME[mode], title: MODE_DESCRIPTION[mode] }))}
-                          onChange={setTemplateChoice}
-                        />
-                        <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => {
+                        <SelectFrame className="le-template-select-wrap">
+                          <select className="le-layer-select" aria-label="Victory template" title={MODE_DESCRIPTION[templateChoice]}
+                            value={templateChoice} onChange={(e) => setTemplateChoice(e.target.value as ObjectiveType)}>
+                            {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
+                          </select>
+                        </SelectFrame>
+                        <button type="button" className="le-seg-btn" onClick={() => {
                           const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
                           const templateRules = victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) });
                           setVictory((prev) => appendRules(prev, templateRules));
                         }}>Add template</button>
-                        <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger" disabled={victory.length === 0} onClick={() => setVictory([])}>Clear rules</button>
+                        <button type="button" className="le-seg-btn danger" disabled={victory.length === 0} onClick={() => setVictory([])}>Clear rules</button>
                       </div>
                       <p className="le-board-note">Events run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
                     </div>
                   )}
                 />
-              )}
-              otherContent={(
+              ) : (
                 <LevelEventsEditor
                   value={events}
                   zones={eventZoneOptions}
@@ -3236,42 +4888,97 @@ export function LevelEditor(): ReactElement {
                       <h3 className="le-victory-head">Template</h3>
                       <p className="le-board-note">Add a non-victory event template. Existing events stay in place; use Clear first when you want a clean replacement.</p>
                       <div className="le-template-apply">
-                        <HouseSelect
-                          className="le-template-select-wrap"
-                          ariaLabel="Other event template"
-                          value={otherTemplateChoice}
-                          options={OTHER_EVENT_TEMPLATES.map((template) => ({ value: template.id, label: template.label }))}
-                          onChange={setOtherTemplateChoice}
-                        />
-                        <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={addOtherEventTemplate}>Add template</button>
-                        <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger" disabled={events.length === 0} onClick={clearOtherEvents}>Clear events</button>
+                        <SelectFrame className="le-template-select-wrap">
+                          <select className="le-layer-select" aria-label="Other event template"
+                            value={otherTemplateChoice} onChange={(e) => setOtherTemplateChoice(e.target.value as OtherEventTemplateId)}>
+                            {OTHER_EVENT_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}
+                          </select>
+                        </SelectFrame>
+                        <button type="button" className="le-seg-btn" onClick={addOtherEventTemplate}>Add template</button>
+                        <button type="button" className="le-seg-btn danger" disabled={events.length === 0} onClick={clearOtherEvents}>Clear events</button>
                       </div>
                       <p className="le-board-note">Clear affects only this events list and any zones used only by those events.</p>
                     </div>
                   )}
                 />
               )}
-            />
+            </div>
           ) : null}
         </div>
 
-      <LevelEditorControlsPanel
-        layer={layer}
-        layerOptions={LEVEL_EDITOR_LAYER_OPTIONS.map((option) => ({
-          id: option.id,
-          label: option.label,
-          disabled: isLayerOptionDisabled(option.id),
-        }))}
-        onLayerChange={selectLayer}
-        tool={tool === 'region' ? 'select' : tool}
-        onToolChange={setTool}
-        canUndo={undoStack.length > 0}
-        canRedo={redoStack.length > 0}
-        onUndo={undoBoard}
-        onRedo={redoBoard}
-        playBoardHref={playBoardHref ?? undefined}
-        playBoardEnabled={Boolean(playBoardHref)}
-      >
+      {editorLoadError ? (
+      <aside className="skirmish-hud" aria-label="Editor document access" inert={!editorReady || saving ? true : undefined}>
+        <section className="skirmish-card le-status-card">
+          <h2>Document</h2>
+          <div className="le-status-current is-blocked">
+            <strong>{editorLoadError.title}</strong>
+            <span>{editorLoadError.detail}</span>
+          </div>
+          {editorLoadError.signIn ? (
+            <button type="button" className="le-seg-btn" style={{ width: '100%' }} onClick={signInForEditor}>Sign in</button>
+          ) : null}
+          {editorLoadError.retry ? (
+            <button type="button" className="le-seg-btn" style={{ width: '100%' }} onClick={retryCloudDocument}>Retry</button>
+          ) : null}
+        </section>
+      </aside>
+      ) : (
+      <aside className="skirmish-hud" aria-label="Editor controls" inert={!editorReady || saving ? true : undefined} aria-busy={!editorReady || saving || undefined}>
+        <section className="skirmish-card">
+          <h2>Layer</h2>
+          <SelectFrame>
+            <select
+              className="le-layer-select"
+              aria-label="Editor layer"
+              value={layer}
+              onChange={(e) => selectLayer(e.target.value as LayerKey)}
+            >
+              {LEVEL_EDITOR_LAYER_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id} disabled={isLayerOptionDisabled(option.id)}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </SelectFrame>
+        </section>
+
+        {/* Pinned editor ACTIONS dock: tools, Undo/Redo, and current-board Test stay above the sole
+            scroll region, visible on every layer without overlaying the board. */}
+        <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
+          <h2>Actions</h2>
+          <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
+            <button type="button" className={`le-seg-btn ${tool === 'select' ? 'active' : ''}`.trim()} onClick={() => setTool('select')} title="Select" aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></button>
+            <button type="button" className={`le-seg-btn ${tool === 'brush' ? 'active' : ''}`.trim()} onClick={() => setTool('brush')} title="Brush" aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></button>
+            <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')} title="Erase" aria-label="Erase"><span className="le-ico ic-eraser" aria-hidden="true" /></button>
+            <button type="button" className={`le-seg-btn ${tool === 'move' ? 'active' : ''}`.trim()} onClick={() => setTool('move')} title="Move — drag a placed unit or prop to a new cell." aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
+            <span className="le-action-toolbar-divider" aria-hidden="true" />
+            <button
+              type="button"
+              className="le-seg-btn le-icon-btn"
+              onClick={undoBoard}
+              disabled={!undoStack.length}
+              aria-label="Undo"
+              title={undoStack.length ? 'Undo the last board edit.' : 'Nothing to undo.'}
+            ><span className="le-ico ic-undo" aria-hidden="true" /></button>
+            <button
+              type="button"
+              className="le-seg-btn le-icon-btn"
+              onClick={redoBoard}
+              disabled={!redoStack.length}
+              aria-label="Redo"
+              title={redoStack.length ? 'Redo the last undone edit.' : 'Nothing to redo.'}
+            ><span className="le-ico ic-redo" aria-hidden="true" /></button>
+          </div>
+          {/* Test the exact board on screen, saved or not. It lives in the always-visible Actions
+              dock and returns to the same editor target, making edit → test → back one loop. */}
+          {testHref ? (
+            <NavButton className="le-seg-btn le-play-board" data-testid="le-test" to={testHref} title="Test this exact board against the AI now. No save is required; ‹ Back returns you here.">Test</NavButton>
+          ) : (
+            <button type="button" className="le-seg-btn le-play-board" data-testid="le-test" disabled title="Add a player and an enemy piece (clear the playability issues in the Status layer) to test this board.">Test</button>
+          )}
+        </section>
+
+        <KitScroll className="le-hud-scroll">
         {layer === 'status' ? (
           <>
           {/* Playability list (ADR-0050): while any violation exists Save is disabled and the
@@ -3287,11 +4994,11 @@ export function LevelEditor(): ReactElement {
             <section className="skirmish-card le-violations" aria-label="Playability issues" data-testid="le-violations">
               <h2>Fix before saving</h2>
               <ul className="le-violation-list">
-                {playability.violations.map((v) => (
-                  <li key={v.code} className="le-violation">
+                {playability.violations.map((v, index) => (
+                  <li key={`${v.code}-${index}`} className="le-violation">
                     <span className="le-violation-msg">{v.message}</span>
                     {v.code === 'P3_UNITS_NOT_EMPTY' ? (
-                      <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
+                      <button type="button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
                     ) : null}
                   </li>
                 ))}
@@ -3300,45 +5007,93 @@ export function LevelEditor(): ReactElement {
           ) : null}
           <section className="skirmish-card le-status-card" aria-live="polite">
             <h2>Status</h2>
-            {/* The level's identity lives here now, not in the title bar. */}
-            <div className="le-status-level" aria-label="Level">
-              <span className="le-level-name">{levelName}</span>
+            {/* The level's identity lives with the save workflow, not duplicated in Board settings. */}
+            <div className="le-status-level">
+              <label className="le-status-name-field">
+                <span className="le-settings-label">Name</span>
+                <input
+                  className="le-text-input le-level-name-input"
+                  value={levelName}
+                  aria-label="Level name"
+                  placeholder="Untitled level"
+                  maxLength={80}
+                  onChange={(event) => setLevelName(event.target.value)}
+                  onBlur={() => setLevelNameState(levelNameForSave)}
+                />
+              </label>
               {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
             </div>
-            <div className={`le-status-current ${canSave ? 'is-ready' : 'is-blocked'}`}>
-              <strong>{canSave ? 'Ready to save' : saveBlockedMessage || saveStateLabel}</strong>
-              {canSave ? <span>{isOfficialTarget ? 'Publishing will update the official campaigns.' : 'The current board has unsaved changes.'}</span> : <span>{saveBlockedDetail}</span>}
+            {isAdmin ? (
+              <div className="le-status-name-field le-status-campaign-field">
+                <span className="le-settings-label">Campaign</span>
+                <SelectFrame>
+                  <select
+                    className="le-layer-select"
+                    data-testid="le-campaign-select"
+                    value={campaignAssignmentId}
+                    aria-label="Campaign"
+                    disabled={!campaignAssignmentHydrated || saving}
+                    onChange={(event) => setCampaignAssignmentId(event.currentTarget.value)}
+                  >
+                    <option value="">Unassigned</option>
+                    {officialCampaignOptions.length ? (
+                      <optgroup label="Official campaigns">
+                        {officialCampaignOptions.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+                      </optgroup>
+                    ) : null}
+                    {privateCampaignOptions.length ? (
+                      <optgroup label="Your campaigns">
+                        {privateCampaignOptions.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+                      </optgroup>
+                    ) : null}
+                  </select>
+                </SelectFrame>
+                <span className="le-board-note">Admin only · Save or publish to apply this assignment.</span>
+              </div>
+            ) : null}
+            <div className={`le-status-current ${cloudSaveState === 'error' || cloudSaveState === 'conflict' ? 'is-blocked' : 'is-ready'}`}>
+              <strong>{progressStateLabel}</strong>
+              <span>{cloudSaveDetail ?? (
+                cloudSaveState === 'saved'
+                  ? 'Your working copy is safely stored in your account.'
+                  : cloudSaveState === 'local'
+                  ? localBackupAvailable === true
+                    ? 'This browser has a recovery copy, but it is not synced across devices.'
+                    : localBackupAvailable === false
+                    ? 'Browser storage is blocked or full. Keep this tab open, or sign in and retry cloud sync.'
+                    : 'Writing a browser recovery copy…'
+                  : 'Edits are saved automatically without changing the saved thumbnail or campaign position.'
+              )}</span>
             </div>
-            {/* The save-workflow verbs live HERE with the state that explains them (the pinned
-                dock above keeps only Undo/Redo). Gating is preserved verbatim — /play reads the
-                STORED level, so Test stays Save-gated; a blocked Save click still routes to the
-                blocking layer via explainBlockedSave. */}
+            {/* Persistence controls live here with the state that explains them. Test is the
+                always-visible current-board action above; Save/Publish remains independently gated. */}
             <div className="le-board-actions le-status-actions">
-              {canTest && testHref ? (
-                <NavButton className="le-seg-btn" data-chrome-unit="inner-text-button" data-testid="le-test" to={testHref} title="Play-test this level (progress is not recorded).">Test</NavButton>
-              ) : (
+              {cloudSaveState === 'error' ? (
                 <button
                   type="button"
-                  data-chrome-unit="inner-text-button"
                   className="le-seg-btn"
-                  data-testid="le-test"
-                  disabled
-                  title={
-                    !playability.ok ? 'Fix the playability issues listed above to test-play.'
-                    : dirty ? 'Save the level first — Test plays the saved version.'
-                    : !targetLevelId ? 'Save the level first to test-play it.'
-                    : 'Test-play unavailable.'
-                  }
-                >Test</button>
-              )}
+                  data-testid="le-retry-cloud-sync"
+                  disabled={saving}
+                  onClick={retryCloudDocument}
+                >Retry cloud sync</button>
+              ) : null}
+              {editorDocument?.has_saved_baseline ? (
+                <button
+                  type="button"
+                  className="le-seg-btn"
+                  data-testid="le-discard-changes"
+                  disabled={!hasDiscardableChanges || saving}
+                  title={hasDiscardableChanges ? 'Revert the working copy to the last saved position.' : 'The working copy already matches the saved position.'}
+                  onClick={() => void discardChanges()}
+                >Discard changes</button>
+              ) : null}
               <button
                 type="button"
-                data-chrome-unit="inner-text-button"
                 className={`le-seg-btn ${canSave ? 'active' : 'is-blocked'}`.trim()}
                 data-testid="le-save"
                 aria-label={canSave ? saveLabel : `${saveButtonLabel}: ${saveBlockedMessage}`}
                 title={canSave ? (isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.') : `${saveBlockedMessage} ${saveBlockedDetail}`.trim()}
-                onClick={() => { if (canSave) void saveLevel(); else explainBlockedSave(); }}
+                onClick={() => { if (canSave || !me?.signed_in) void saveLevel(); else explainBlockedSave(); }}
               >{saveButtonLabel}</button>
             </div>
             <div className="le-material-values" aria-label="Team material point values">
@@ -3380,21 +5135,9 @@ export function LevelEditor(): ReactElement {
             <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
             <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
             <div className="le-board-actions">
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board — the recipient can edit AND live-test it.">Copy Link</button>
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
+              <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
+              <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, path, fence rail, post, wall, and wall artwork from the board.">Clear</button>
             </div>
-            <input
-              className="le-board-link-input"
-              type="text"
-              value={boardLinkDraft}
-              onChange={(event) => setBoardLinkDraft(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Enter') loadBoardLink(); }}
-              placeholder="Paste board link"
-              aria-label="Board link"
-            />
-            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /editor/level?board=... link and replace this editor board with it.">Load board link</button>
           </section>
           <section className="skirmish-card le-level-settings">
             <h2>Level Settings</h2>
@@ -3414,12 +5157,14 @@ export function LevelEditor(): ReactElement {
                         <b>{boardFactionCounts[faction]}</b>
                       </span>
                       <span className="le-faction-fields">
-                        <HouseSelect
+                        <select
+                          className="le-faction-select"
                           value={playerFaction === faction ? 'player' : 'cpu'}
-                          ariaLabel={`${LE_FACTION_LABELS[faction]} control`}
-                          options={controlOptions}
+                          aria-label={`${LE_FACTION_LABELS[faction]} control`}
                           onChange={onFactionControlChange(faction)}
-                        />
+                        >
+                          {controlOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
                         <DirectionPopover
                           value={directionForFaction(faction)}
                           label={`${LE_FACTION_LABELS[faction]} default facing`}
@@ -3441,18 +5186,20 @@ export function LevelEditor(): ReactElement {
             <h2>Generate terrain</h2>
             <p className="le-board-note">Carve a saved region — or the whole board — into terrain regions. Add regions and dial each one's share (they rebalance to 100 − buffer); each becomes one contiguous area. Then Generate.</p>
             <div className="le-gen-unit-row">
-              <div className="le-gen-unit-select">
+              <label className="le-gen-unit-select">
                 <span>Region</span>
-                <HouseSelect
+                <select
+                  className="le-gen-region-terrain"
                   value={activeGeneratedRegionId ?? ''}
-                  ariaLabel="Saved generated region"
-                  options={[
-                    { value: '', label: 'New selection' },
-                    ...generatedRegions.map((region) => ({ value: region.id, label: `${region.name} · ${region.cells.length}` })),
-                  ]}
-                  onChange={selectGeneratedRegionUnit}
-                />
-              </div>
+                  onChange={(event) => selectGeneratedRegionUnit(event.target.value)}
+                  aria-label="Saved generated region"
+                >
+                  <option value="">New selection</option>
+                  {generatedRegions.map((region) => (
+                    <option key={region.id} value={region.id}>{region.name} · {region.cells.length}</option>
+                  ))}
+                </select>
+              </label>
               {activeGeneratedRegion ? (
                 <button
                   type="button"
@@ -3466,26 +5213,26 @@ export function LevelEditor(): ReactElement {
             <div className="le-gen-scope">
               <button
                 type="button"
-                data-chrome-unit="inner-text-button"
                 className={`le-seg-btn ${tool === 'region' ? 'active' : ''}`.trim()}
                 onClick={() => setTool(tool === 'region' ? 'select' : 'region')}
                 title="Click an already-drawn clump to select its whole same-terrain patch. Click this button again to stop."
               >{tool === 'region' ? 'Selecting…' : 'Select region'}</button>
               <span className="le-gen-scope-label">{regionSelection.size > 0 ? `${activeGeneratedRegion?.name ?? 'Selection'} · ${regionSelection.size} cells` : 'Whole board'}</span>
-              {regionSelection.size > 0 ? <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={clearRegion} title="Clear the selection — Generate will cover the whole board.">Clear</button> : null}
+              {regionSelection.size > 0 ? <button type="button" className="le-seg-btn" onClick={clearRegion} title="Clear the selection — Generate will cover the whole board.">Clear</button> : null}
             </div>
             {tool === 'region' ? <p className="le-board-note">Click a drawn clump to select its whole same-terrain patch. Generate fills the selection; everything outside it stays put.</p> : null}
             <div className="le-gen-regions" role="group" aria-label="Terrain regions">
               {scatterSections.map((sec) => (
                 <div className="le-gen-region-group" key={sec.id}>
                   <div className="le-gen-region">
-                    <HouseSelect
-                      className="le-gen-region-select"
+                    <select
+                      className="le-gen-region-terrain"
                       value={sec.terrain}
-                      ariaLabel="Region terrain"
-                      options={LE_SCATTER_FAMILIES.map((family) => ({ value: family.id, label: family.label }))}
-                      onChange={(terrain) => setSectionTerrain(sec.id, terrain)}
-                    />
+                      onChange={(event) => setSectionTerrain(sec.id, event.target.value as TileFamilyId)}
+                      aria-label="Region terrain"
+                    >
+                      {LE_SCATTER_FAMILIES.map((family) => <option key={family.id} value={family.id}>{family.label}</option>)}
+                    </select>
                     <input
                       type="range"
                       className="le-gen-region-slider"
@@ -3501,6 +5248,12 @@ export function LevelEditor(): ReactElement {
                     <button type="button" className={`le-gen-icon ${sec.locked ? 'active' : ''}`.trim()} onClick={() => toggleSectionLock(sec.id)} aria-pressed={sec.locked} title={sec.locked ? 'Unlock — let this region rebalance' : 'Lock — keep this region fixed while others move'}>{sec.locked ? '🔒' : '🔓'}</button>
                     <button type="button" className="le-gen-icon" onClick={() => removeSection(sec.id)} disabled={scatterSections.length <= 1} title="Remove this region">×</button>
                   </div>
+                  {macroTileAssets.some((asset) => asset.family === sec.terrain) ? (
+                    <div className="le-gen-macro">
+                      <SliderRow label={`Composite coverage · ${Math.round(sec.macroTileDensity * 100)}%`} value={sec.macroTileDensity} set={(value) => setSectionMacroTileDensity(sec.id, value)} min={0} max={1} step={0.05} nudge={0.05} dflt={DEFAULT_MACRO_TILE_DENSITY} />
+                      <SliderRow label={`Breakup randomness · ${Math.round(sec.macroTileBreakup * 100)}%`} value={sec.macroTileBreakup} set={(value) => setSectionMacroTileBreakup(sec.id, value)} min={0} max={1} step={0.05} nudge={0.05} dflt={DEFAULT_MACRO_TILE_BREAKUP} />
+                    </div>
+                  ) : null}
                   <div className="le-gen-cover">
                     {sec.covers.map((c) => (
                       <div className="le-gen-cover-entry" key={c.id}>
@@ -3508,13 +5261,9 @@ export function LevelEditor(): ReactElement {
                           <button type="button" className="le-gen-cover-caret-btn" onClick={() => toggleCoverEntryExpand(sec.id, c.id)} aria-expanded={c.expanded} aria-label={c.expanded ? 'Collapse cover settings' : 'Expand cover settings'}>
                             <span className="le-gen-cover-caret" aria-hidden="true">{c.expanded ? '▾' : '▸'}</span>
                           </button>
-                          <HouseSelect
-                            className="le-gen-cover-select"
-                            value={c.type}
-                            ariaLabel="Cover set"
-                            options={LE_COVER_TYPES.map((t) => ({ value: t.id, label: t.label }))}
-                            onChange={(type) => setCoverType(sec.id, c.id, type)}
-                          />
+                          <select className="le-gen-region-terrain" value={c.type} onChange={(event) => setCoverType(sec.id, c.id, event.target.value as GroundCoverId)} aria-label="Cover set">
+                            {LE_COVER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                          </select>
                           <button type="button" className="le-gen-icon" onClick={() => removeCover(sec.id, c.id)} title="Remove this cover">×</button>
                         </div>
                         {c.expanded ? (
@@ -3532,10 +5281,10 @@ export function LevelEditor(): ReactElement {
                 </div>
               ))}
             </div>
-            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-gen-add" onClick={addSection} title="Add another terrain region and rebalance the shares.">+ Add terrain region</button>
+            <button type="button" className="le-seg-btn le-gen-add" onClick={addSection} title="Add another terrain region and rebalance the shares.">+ Add terrain region</button>
             <SliderRow label={`Randomness buffer · ${scatterBuffer}%`} value={scatterBuffer} set={setScatterBufferBalanced} min={0} max={60} step={1} nudge={1} dflt={0} />
             <SliderRow label="Edge roughness" value={scatterWiggle} set={setScatterWiggle} min={0} max={1} step={0.05} nudge={0.05} dflt={0.5} />
-            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-gen-run" style={{ width: '100%', marginTop: 8 }} onClick={generateScatter} title="Roll a fresh layout into the selection (or the whole board) and autotile it.">Generate</button>
+            <button type="button" className="le-seg-btn le-gen-run" style={{ width: '100%', marginTop: 8 }} onClick={generateScatter} title="Roll a fresh layout into the selection (or the whole board) and autotile it.">Generate</button>
           </section>
         </>) : layer === 'rules' ? (<>
           <section className="skirmish-card">
@@ -3543,7 +5292,7 @@ export function LevelEditor(): ReactElement {
             {/* ADR-0064: the rule authoring lives in a full-size overlay over the board (this panel is
                 too narrow) — see the .le-events-overlay below. This card is just the entry point. */}
             <p className="le-board-note">How this level is won, lost, deployed, and promoted. {victory.length} victory event{victory.length === 1 ? '' : 's'} and {events.length} other event{events.length === 1 ? '' : 's'} set.</p>
-            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-events-open" onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
+            <button type="button" className="le-seg-btn le-events-open" onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
           </section>
 
           <section className="skirmish-card">
@@ -3622,14 +5371,18 @@ export function LevelEditor(): ReactElement {
                 : wallArtTool
                 ? wallArtBrush ? <WallArtPreview art={wallArtBrush} zoom={0.46} /> : null
                 : fenceTool
-                ? <img src={fenceThumbSrc(fenceBrushMaterial)} alt="" draggable={false} />
+                ? <img src={activeFenceArtwork
+                  ? (fencePaintTarget === 'post' ? (activeFenceArtwork.post ?? activeFenceArtwork.railE) : activeFenceArtwork.railE)
+                  : (fencePaintTarget === 'post' ? fencePostThumbSrc(fenceBrushMaterial) : fenceThumbSrc(fenceBrushMaterial))} alt="" draggable={false} />
                 : featureKind
                 ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
+                : macroTileBrushAsset
+                ? <img className="le-thumb-macro" src={macroTileBrushAsset.src} alt="" draggable={false} />
                 : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : wallTool ? `${WALL_MATERIAL_LABELS[wallBrushMaterial]} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : wallTool ? `${WALL_MATERIAL_LABELS[wallBrushMaterial]} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${activeFenceArtwork?.label ?? FENCE_MATERIAL_LABELS[fenceBrushMaterial]} · ${fencePaintTarget}` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : macroTileBrushAsset?.label ?? brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? `fence · ${fencePaintTarget === 'post' ? 'vertex' : 'edge'}` : featureKind ? `feature · ${featureKind}` : macroTileBrushAsset ? `composite tile · ${macroTileBrushAsset.columns}×${macroTileBrushAsset.rows}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -3652,11 +5405,11 @@ export function LevelEditor(): ReactElement {
               ))}
             </div>
             <div className="le-seg">
-              <button type="button" data-chrome-unit="inner-text-button" className={`le-seg-btn ${coverBrushDensity === 'sparse' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('sparse')}>Sparse</button>
-              <button type="button" data-chrome-unit="inner-text-button" className={`le-seg-btn ${coverBrushDensity === 'filled' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('filled')}>Filled</button>
+              <button type="button" className={`le-seg-btn ${coverBrushDensity === 'sparse' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('sparse')}>Sparse</button>
+              <button type="button" className={`le-seg-btn ${coverBrushDensity === 'filled' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('filled')}>Filled</button>
             </div>
             <p className="le-board-note">Brush paints {coverBrushDensity} {coverBrushAsset.label} on any tile; Erase clears a tile. The cover scatters from the density.</p>
-            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
+            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
             <p className="le-board-note">{coverCount} tile{coverCount === 1 ? '' : 's'} with cover.</p>
           </section>
         ) : null}
@@ -3670,15 +5423,20 @@ export function LevelEditor(): ReactElement {
                 <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Previous zone" title="Previous zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(-1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
                 </button>
-                <HouseSelect
-                  value={activeZone?.id ?? ''}
-                  disabled={!activeZone}
-                  ariaLabel="Selected zone"
-                  options={activeZone
-                    ? boardZoneEntries.map((zone, index) => ({ value: zone.id, label: zoneDisplayName(zone, index) }))
-                    : [{ value: '', label: 'None', disabled: true }]}
-                  onChange={selectZoneEntry}
-                />
+                <SelectFrame>
+                  <select
+                    className="le-layer-select"
+                    value={activeZone?.id ?? ''}
+                    disabled={!activeZone}
+                    onChange={(event) => selectZoneEntry(event.target.value)}
+                    aria-label="Selected zone"
+                  >
+                    {activeZone ? null : <option value="">None</option>}
+                    {boardZoneEntries.map((zone, index) => (
+                      <option key={zone.id} value={zone.id}>{zoneDisplayName(zone, index)}</option>
+                    ))}
+                  </select>
+                </SelectFrame>
                 <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Next zone" title="Next zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
                 </button>
@@ -3728,16 +5486,14 @@ export function LevelEditor(): ReactElement {
         {brushKind === 'unit' ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Paint Faction</h2>
-            <div className="le-seg">
-              {UNIT_PALETTES.map((faction) => (
-                <button
-                  type="button"
-                  key={faction}
-                  data-chrome-unit="inner-text-button"
-                  className={`le-seg-btn ${unitFaction === faction ? 'active' : ''}`.trim()}
-                  onClick={() => setUnitFaction(faction)}
-                >{LE_FACTION_LABELS[faction]}</button>
-              ))}
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Faction</span>
+              <PaletteSelect
+                className="le-faction-palette-select"
+                value={unitFaction}
+                aria-label="Paint faction"
+                onChange={setUnitFaction}
+              />
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Default facing</span>
@@ -3871,28 +5627,89 @@ export function LevelEditor(): ReactElement {
         ) : fenceTool ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Fence</h2>
-            <div className="le-pal-group">
-              <span className="le-pal-grouplabel">Rail</span>
-              <div className="le-swatches">
-                {FENCE_MATERIALS.map((mat) => (
-                  <button
-                    type="button"
-                    key={`fence-${mat}`}
-                    className={`le-swatch ${fenceBrushMaterial === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
-                    title={FENCE_MATERIAL_LABELS[mat]}
-                    onClick={() => { setFenceBrushMaterial(mat); setBrushKind('fence'); setLayer('fence'); setTool('brush'); }}
-                  >
-                    <img src={fenceThumbSrc(mat)} alt="" draggable={false} />
-                    <small>{FENCE_MATERIAL_LABELS[mat]}</small>
+            {activeFenceArtwork ? (
+              <div className="le-pal-group le-fence-artwork-picker">
+                <span className="le-pal-grouplabel">Artwork</span>
+                <div className="le-fence-artwork-cycle">
+                  <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Previous fence artwork" title="Previous fence artwork" onClick={() => stepFenceArtwork(-1)}>
+                    <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
                   </button>
-                ))}
+                  <SelectFrame>
+                    <select className="le-layer-select" value={activeFenceArtwork.id} onChange={(event) => selectFenceArtwork(event.target.value)} aria-label="Fence artwork">
+                      {FENCE_ART_KITS.map((artwork) => <option key={artwork.id} value={artwork.id}>{artwork.label}</option>)}
+                    </select>
+                  </SelectFrame>
+                  <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Next fence artwork" title="Next fence artwork" onClick={() => stepFenceArtwork(1)}>
+                    <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
+                  </button>
+                </div>
+                <div className={`le-fence-artwork-preview ${activeFenceArtwork.post ? '' : 'is-rail-only'}`.trim()} data-fence-artwork={activeFenceArtwork.id}>
+                  <img src={activeFenceArtwork.railE} alt="East rail" draggable={false} />
+                  <img src={activeFenceArtwork.railS} alt="South rail" draggable={false} />
+                  {activeFenceArtwork.post ? <img src={activeFenceArtwork.post} alt="Post" draggable={false} /> : null}
+                </div>
+                <div className={`le-fence-artwork-status is-${activeFenceArtwork.status}`}>
+                  <strong>{activeFenceArtwork.statusLabel}</strong>
+                  <span>{activeFenceArtwork.note}</span>
+                </div>
+              </div>
+            ) : null}
+            <div className="le-pal-group">
+              <span className="le-pal-grouplabel">Place</span>
+              <div className="le-seg" role="group" aria-label="Fence paint target">
+                <button type="button" className={`le-seg-btn ${fencePaintTarget === 'rail' ? 'active' : ''}`.trim()} aria-pressed={fencePaintTarget === 'rail'} onClick={() => { setFencePaintTarget('rail'); setTool('brush'); }}>Rails</button>
+                <button
+                  type="button"
+                  className={`le-seg-btn ${fencePaintTarget === 'post' ? 'active' : ''}`.trim()}
+                  aria-pressed={fencePaintTarget === 'post'}
+                  disabled={Boolean(activeFenceArtwork && !activeFenceArtwork.post)}
+                  title={activeFenceArtwork && !activeFenceArtwork.post ? 'This artwork is intentionally rail-only.' : undefined}
+                  onClick={() => { setFencePaintTarget('post'); setTool('brush'); }}
+                >Posts</button>
               </div>
             </div>
+            {activeFenceArtwork ? (
+              <div className="le-fence-material-readout">
+                <span>New-stroke geometry</span>
+                <strong>{FENCE_MATERIAL_LABELS[activeFenceArtwork.material]}</strong>
+              </div>
+            ) : (
+              <div className="le-pal-group">
+                <span className="le-pal-grouplabel">Material</span>
+                <div className="le-swatches">
+                  {FENCE_MATERIALS.map((mat) => (
+                    <button
+                      type="button"
+                      key={`fence-${mat}`}
+                      className={`le-swatch ${fenceBrushMaterial === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                      title={FENCE_MATERIAL_LABELS[mat]}
+                      onClick={() => { setFenceBrushMaterial(mat); setBrushKind('fence'); setLayer('fence'); setTool('brush'); }}
+                    >
+                      <img src={fencePaintTarget === 'post' ? fencePostThumbSrc(mat) : fenceThumbSrc(mat)} alt="" draggable={false} />
+                      <small>{FENCE_MATERIAL_LABELS[mat]}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <p className="le-board-note">
-              Hover a tile and the nearest <strong>edge</strong> highlights; click to drop a rail on that edge
-              (right-click or the Erase tool removes it). Boundary rails are visual; a fenced edge between
-              two board tiles can&rsquo;t be crossed — both tiles stay walkable, and knights hop it (like water).
+              {fencePaintTarget === 'rail' ? <>
+                Hover a tile and the nearest <strong>edge</strong> highlights; click to drop a rail on that edge
+                (right-click or the Erase tool removes it). Boundary rails are visual; a fenced edge between
+                two board tiles can&rsquo;t be crossed — both tiles stay walkable, and knights hop it (like water).
+              </> : <>
+                Hover a tile and the nearest <strong>corner</strong> highlights; click to author a post at that shared
+                grid vertex. Posts may stand alone. Right-click or Erase removes only the authored post; an automatic
+                post still appears wherever exactly one rail ends.
+              </>}
             </p>
+            {activeFenceArtwork ? (
+              <p className="le-board-note">
+                {activeFenceArtwork.post
+                  ? 'Artwork cycling restyles the same authored rails and posts without changing their saved collision geometry or production status.'
+                  : 'This accepted artwork is rail-only. Saved post geometry is left unchanged but intentionally hidden, and post authoring is unavailable while this kit is selected.'}
+              </p>
+            ) : null}
           </section>
         ) : featureKind ? (
           <section className="skirmish-card le-brush-panel">
@@ -3937,7 +5754,44 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : brushKind === 'tile' ? (
           <section className="skirmish-card le-brush-panel">
-            <h2>Palette</h2>
+            <h2>Composite terrain</h2>
+            <SelectFrame>
+              <select
+                className="le-layer-select"
+                aria-label="Composite terrain footprint"
+                value={macroTileFootprint}
+                onChange={(event) => {
+                  setMacroTileFootprint(event.target.value);
+                  setMacroTileBrushId(null);
+                }}
+              >
+                {leMacroTileFootprints.map((footprint) => <option key={footprint} value={footprint}>{footprint}</option>)}
+              </select>
+            </SelectFrame>
+            {studioFamilies.map((family) => {
+              const assets = leMacroTilesFor(family.id, macroTileFootprint);
+              if (!assets.length) return null;
+              return (
+                <div className="le-pal-group" key={`macro-${family.id}`}>
+                  <span className="le-pal-grouplabel">{family.label}</span>
+                  <div className="le-swatches">
+                    {assets.map((asset) => (
+                      <button
+                        type="button"
+                        key={asset.id}
+                        className={`le-swatch le-macro-swatch ${macroTileBrushId === asset.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        title={`${asset.label} · ${asset.columns}×${asset.rows}`}
+                        onClick={() => { setMacroTileBrushId(asset.id); setTool('brush'); }}
+                      >
+                        <img src={asset.src} alt="" draggable={false} />
+                        <small>{asset.label.replace(` ${asset.columns}x${asset.rows}`, '')}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            <h2 className="le-card-subhead">Single tiles</h2>
               {leTileGroups.map(({ family, tiles }) => (
                 <div className="le-pal-group" key={family.id}>
                   <span className="le-pal-grouplabel">{family.label}</span>
@@ -3946,9 +5800,9 @@ export function LevelEditor(): ReactElement {
                       <button
                         type="button"
                         key={tile.id}
-                        className={`le-swatch ${brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        className={`le-swatch ${macroTileBrushId === null && brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
                         title={tile.label}
-                        onClick={() => { setBrushId(tile.id); setTool('brush'); }}
+                        onClick={() => { setMacroTileBrushId(null); setBrushId(tile.id); setTool('brush'); }}
                       >
                         <img src={tile.src} alt="" draggable={false} />
                         <small>{tile.label}</small>
@@ -3978,9 +5832,9 @@ export function LevelEditor(): ReactElement {
 
         {fenceTool && selectedCell ? (
           <section className="skirmish-card">
-            <h2>Fence edges</h2>
-            <FenceConnections cell={selectedCell} cols={boardCols} rows={boardRows} fences={boardFences} onPaint={paintFenceEdge} onErase={eraseFenceEdge} />
-            <p className="le-board-note">Click an edge to select or clear the fence on that side of the selected tile. Outer board edges place boundary rails.</p>
+            <h2>Fence layout</h2>
+            <FenceConnections cell={selectedCell} cols={boardCols} rows={boardRows} fences={boardFences} posts={boardFencePosts} onPaint={paintFenceEdge} onErase={eraseFenceEdge} onPaintPost={paintFencePost} onErasePost={eraseFencePost} />
+            <p className="le-board-note">Click an edge to toggle its rail or a corner dot to toggle an authored post. Dashed corner dots are automatic open ends; removing an authored post falls back to automatic behavior.</p>
           </section>
         ) : null}
 
@@ -3992,12 +5846,12 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : null}
 
-        {brushKind === 'tile' ? (
+        {brushKind === 'tile' && !macroTileBrushAsset ? (
           <section className="skirmish-card">
             <h2>Tile Fill</h2>
             <div className="le-seg">
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank terrain cells with the current tile brush.">Empty</button>
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole terrain layer with the current tile brush.">Whole</button>
+              <button type="button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank terrain cells with the current tile brush.">Empty</button>
+              <button type="button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole terrain layer with the current tile brush.">Whole</button>
             </div>
           </section>
         ) : null}
@@ -4005,7 +5859,7 @@ export function LevelEditor(): ReactElement {
         {brushKind !== 'tile' ? (
           <section className="skirmish-card">
             <h2>Layer Actions</h2>
-            <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger" style={{ width: '100%' }} onClick={clearActiveLayer} title={brushKind === 'zone' ? 'Clear the selected zone entry.' : `Clear every ${brushKind === 'wallart' ? 'wall art' : brushKind} placement from this board.`}>Clear {brushKind === 'zone' ? 'active zone' : brushKind === 'wallart' ? 'wall art' : brushKind}</button>
+            <button type="button" className="le-seg-btn danger" style={{ width: '100%' }} onClick={clearActiveLayer} title={brushKind === 'zone' ? 'Clear the selected zone entry.' : brushKind === 'fence' ? 'Clear every fence rail and authored post from this board.' : `Clear every ${brushKind === 'wallart' ? 'wall art' : brushKind} placement from this board.`}>Clear {brushKind === 'zone' ? 'active zone' : brushKind === 'wallart' ? 'wall art' : brushKind === 'fence' ? 'fences & posts' : brushKind}</button>
           </section>
         ) : null}
 
@@ -4014,18 +5868,26 @@ export function LevelEditor(): ReactElement {
         {/* Board-page-only zoom readout — a whole-workspace setting, not per-brush. Zoom is also
             reachable anywhere via the mouse wheel over the board. */}
         {layer === 'board' ? (
-        <section className="skirmish-card">
-          <h2>Display</h2>
-          <div className="le-ctrlrow">
-            <span className="le-ctrllabel">Zoom</span>
-            <Stepper
-              value={Math.round(viewZoom * 100)}
-              suffix="%"
-              decreaseLabel="Zoom out"
-              increaseLabel="Zoom in"
-              onDecrease={() => adjustZoom(-0.2)}
-              onIncrease={() => adjustZoom(0.2)}
-            />
+        <section className="skirmish-card skirmish-view-card" aria-label="Board view">
+          <h2>Board View</h2>
+          <div className="skirmish-view-group">
+            <span className="skirmish-eyebrow">Zoom</span>
+            <div className="skirmish-view-row">
+              <button type="button" className="app-header-button" onClick={() => adjustZoom(-0.1)} aria-label="Zoom out">−</button>
+              <span className="skirmish-zoom-readout">{Math.round(viewZoom * 100)}%</span>
+              <button type="button" className="app-header-button" onClick={() => adjustZoom(0.1)} aria-label="Zoom in">+</button>
+              <button type="button" className="app-header-button" onClick={resetBoardView}>Reset</button>
+            </div>
+          </div>
+          <div className="skirmish-view-group">
+            <span className="skirmish-eyebrow">Overlays</span>
+            <div className="skirmish-view-row">
+              <button type="button" className={`app-header-button ${showMoves ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowMoves((value) => !value)} aria-pressed={showMoves}>Moves</button>
+              <button type="button" className={`app-header-button ${showEnemyAttacks ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowEnemyAttacks((value) => !value)} aria-pressed={showEnemyAttacks}>Attacks</button>
+              <button type="button" className={`app-header-button ${showBlocked ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowBlocked((value) => !value)} aria-pressed={showBlocked}>Blocks</button>
+              <button type="button" className={`app-header-button ${showPromotionZones ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowPromotionZones((value) => !value)} aria-pressed={showPromotionZones}>Promotion</button>
+              <button type="button" className={`app-header-button ${showGrid ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowGrid((value) => !value)} aria-pressed={showGrid}>Grid</button>
+            </div>
           </div>
         </section>
         ) : null}
@@ -4078,7 +5940,9 @@ export function LevelEditor(): ReactElement {
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{zoneCount}</b> zones · <b>{zonedTileCount}</b> zoned tiles · {boardCols}×{boardRows}
         </div>
         ) : null}
-      </LevelEditorControlsPanel>
+        </KitScroll>
+      </aside>
+      )}
       </ArtRouteChrome>
     </div>
   );

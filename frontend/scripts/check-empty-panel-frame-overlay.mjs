@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Guard for ADR-0068/0069/0070: empty outer control-panel frames must be overlays, not
+// Guard for ADR-0081/0069/0070: empty outer control-panel frames must be overlays, not
 // layout borders that reserve a fake colored moat; house chrome in the focused
 // skirmish/editor control panels must consume outer/inner role variables instead
 // of local frame PNGs and widths.
@@ -787,7 +787,7 @@ if (!focused) {
 }
 
 if (failures.length) {
-  console.error('\n✗ empty panel frame/chrome guard FAILED (ADR-0068/0069/0070):');
+  console.error('\n✗ empty panel frame/chrome guard FAILED (ADR-0081/0069/0070):');
   for (const failure of failures) console.error('  - ' + failure);
   process.exit(1);
 }

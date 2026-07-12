@@ -69,6 +69,15 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
     expect(levelToEditorBoard(level).fences).toEqual(board.fences);
   });
 
+  it('round-trips standalone authored fence posts only through boardCode', () => {
+    const board = filledBoard(4, 4);
+    board.fencePosts = { '0,0': 'wood', '2,2': 'stone', '4,4': 'wood' };
+
+    const level = editorBoardToLevel(board, { id: 'l15', name: 'Fence posts' });
+    expect(level.layers.fences).toEqual([]);
+    expect(levelToEditorBoard(level).fencePosts).toEqual(board.fencePosts);
+  });
+
   it('projects and saves only north/west perimeter walls', () => {
     const board = filledBoard(4, 4);
     const north = roadEdgeKey(0, 0, 0, -1);
@@ -85,14 +94,16 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
 
   it('maps only the assigned player faction to player and leaves unassigned maps CPU-only', () => {
     const board = filledBoard(4, 4);
-    board.playerFaction = 'emerald';
+    board.playerFaction = 'white';
     board.units = {
-      '0,0': { unitId: 'rook-blender-v4-calibrated', direction: 'south', faction: 'emerald' },
-      '1,0': { unitId: 'knight-fur', direction: 'south', faction: 'crimson' },
+      '0,0': { unitId: 'rook', direction: 'south', faction: 'white' },
+      '1,0': { unitId: 'knight', direction: 'south', faction: 'black' },
     };
     const assigned = editorBoardToLevel(board, { id: 'l6', name: 'Faction' });
     expect(assigned.layers.units.find((unit) => unit.x === 0)?.side).toBe('player');
+    expect(assigned.layers.units.find((unit) => unit.x === 0)?.palette).toBe('white');
     expect(assigned.layers.units.find((unit) => unit.x === 1)?.side).toBe('enemy');
+    expect(assigned.layers.units.find((unit) => unit.x === 1)?.palette).toBe('black');
 
     const unassigned = editorBoardToLevel({ ...board, playerFaction: null }, { id: 'l7', name: 'Neutral' });
     expect(unassigned.layers.units.every((unit) => unit.side === 'enemy')).toBe(true);
@@ -161,7 +172,9 @@ describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
       boardCode: undefined,
       layers: { ...saved.layers, fences: [edge] },
     };
-    expect(levelToEditorBoard(legacy).fences).toEqual({ [edge]: 'wood' });
+    const reopened = levelToEditorBoard(legacy);
+    expect(reopened.fences).toEqual({ [edge]: 'wood' });
+    expect(reopened.fencePosts).toEqual({});
   });
 });
 

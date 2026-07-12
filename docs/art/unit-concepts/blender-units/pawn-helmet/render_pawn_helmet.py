@@ -7,7 +7,9 @@ archer's helmet (helmet.dae, COLLADA parsed by hand since Blender 5.x has no
 COLLADA importer). Both navy-styled, rendered at the true-isometric contract
 angle (45 yaw / 35.264 elevation / ortho). The pawn body is symmetric; the helmet
 visor gives each direction a real facing (visor -> game-south at yaw 0).
-Output -> frontend/public/assets/units/pawn/blender-render-helmet/<direction>.png
+Output defaults to .unit-art-output/pawn/navy-blue/<direction>.png. The canonical
+pipeline supplies UNIT_ART_OUTPUT_DIR plus UNIT_ART_FRAME_WIDTH/HEIGHT so Blender's
+first raster is already the delivery frame. This renderer never resizes a frame.
 """
 import bpy, os, math, mathutils, numpy as np
 import xml.etree.ElementTree as ET
@@ -19,7 +21,11 @@ while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 SRC = ROOT / "docs/art/unit-concepts/source-assets/pawn-helmet"
 STL = str(SRC / "Pawn.stl"); DAE = str(SRC / "helmet.dae")
-OUT = str(ROOT / "frontend/public/assets/units/pawn/blender-render-helmet")
+OUT = os.environ.get("UNIT_ART_OUTPUT_DIR", str(ROOT / ".unit-art-output/pawn/navy-blue"))
+FRAME_WIDTH = int(os.environ.get("UNIT_ART_FRAME_WIDTH", "512"))
+FRAME_HEIGHT = int(os.environ.get("UNIT_ART_FRAME_HEIGHT", "512"))
+if not (1 <= FRAME_WIDTH <= 4096 and 1 <= FRAME_HEIGHT <= 4096):
+    raise RuntimeError("UNIT_ART_FRAME_WIDTH/HEIGHT must be between 1 and 4096")
 os.makedirs(OUT, exist_ok=True)
 WIDTH_FACTOR = 3.0; Z_OFFSET = 0.04
 
@@ -126,7 +132,8 @@ cam.rotation_euler=(mathutils.Vector((0,0,1.0))-cam.location).to_track_quat("-Z"
 cam.data.type="ORTHO"; cam.data.ortho_scale=2.7
 s.render.engine="CYCLES"; s.cycles.samples=48; s.cycles.use_denoising=True
 s.view_settings.view_transform="Standard"
-s.render.resolution_x=s.render.resolution_y=512; s.render.film_transparent=True; s.render.image_settings.file_format="PNG"
+s.render.resolution_x=FRAME_WIDTH; s.render.resolution_y=FRAME_HEIGHT; s.render.resolution_percentage=100
+s.render.film_transparent=True; s.render.image_settings.file_format="PNG"; s.render.image_settings.color_mode="RGBA"
 
 # rig (parent both), 8-direction turntable
 rig = bpy.data.objects.new("rig", None); s.collection.objects.link(rig)

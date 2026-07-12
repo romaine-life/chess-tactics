@@ -16,10 +16,11 @@
 
 import type { GameState, Move, Piece, PieceType, Side, Vec, Winner } from './types';
 import type { MoveEnv } from './rules';
-import { applyMove, attackedSquares, legalMoves, livingPieces, sideInCheck } from './rules';
-import { evaluateObjective, type ObjectiveContext } from './objectives';
-import type { ObjectiveType } from './level';
+import { applyMove, attackedSquares, legalMoves, livingPieces, positionKey } from './rules';
+import { ruleOutcome, type ObjectiveContext } from './objectives';
+import type { ObjectiveType, VictoryRules } from './level';
 import type { Rng } from './rng';
+import { adjudicateCommittedPosition } from './adjudication';
 
 /**
  * Every number the evaluation uses. Hand-seeded defaults; the whole point of the
@@ -78,6 +79,9 @@ export const DEFAULT_EVAL_WEIGHTS: EvalWeights = {
 /** Objective framing the search needs beyond the raw state. */
 export interface SearchContext {
   objective: ObjectiveType;
+  /** Exact authored override or expanded objective preset. Search terminality must
+   * never reconstruct this from `objective` and silently ignore level.victory. */
+  victoryRules: VictoryRules;
   /** Static objective context (survive clock target, reach cells, kingSide). */
   ctx: ObjectiveContext;
   /** Player→enemy rounds already elapsed (the survive clock's current reading). */
@@ -115,8 +119,13 @@ const DEFAULT_EPSILON = 0.25;
 // can't recurse unbounded (the node budget is the other, global, backstop).
 const QUIESCE_MAX_PLY = 8;
 
-/** Terminal score magnitude; ply-adjusted so faster wins (and later losses) rank higher. */
-const WIN_SCORE = 10_000;
+/** Terminal score magnitude; ply-adjusted so faster wins (and later losses) rank higher.
+ * Exported for the solver's proof fork: a quiescence leaf score at/above (WIN_SCORE -
+ * WIN_SCORE_PLY_SLACK) is a proven mate, and (WIN_SCORE - |score|) recovers its DTM ply. */
+export const WIN_SCORE = 10_000;
+/** Any |score| above this came from a terminalScore (WIN_SCORE - ply), never the static
+ * eval — the boundary the solver uses to tell a proven mate leaf from a heuristic bound. */
+export const WIN_SCORE_PLY_SLACK = 1_000;
 
 export interface ChosenAction {
   pieceId: string;
@@ -198,51 +207,64 @@ export function evaluateGameState(state: GameState, sctx: SearchContext, weights
     score += values[e.type] * (defended ? weights.hangingDefended : weights.hangingUndefended);
   }
 
-  // Objective terms: distance gradients that point each side at what the MODE
-  // says matters. These are what make the opponent visibly play the objective.
-  const { objective, ctx } = sctx;
-  const playerKing = players.find((p) => p.type === 'king');
-  const enemyKing = enemies.find((p) => p.type === 'king');
+  // Objective gradients come from the EXACT ordered rule list, not the headline
+  // objective enum. Terminal search already uses these rules; deriving its horizon
+  // guidance from them too prevents an authored Reach/protect/deadline level from
+  // quietly steering according to an unrelated preset until the goal is one ply away.
+  const cells = sctx.ctx.reachCells ?? [];
+  const deadlineRules = sctx.victoryRules.some((rule) => rule.if.some((condition) => condition.kind === 'turnLimit'));
+  for (const rule of sctx.victoryRules) {
+    const outcome = ruleOutcome(rule);
+    if (outcome !== 'player' && outcome !== 'enemy') continue;
+    const sign = outcome === 'player' ? 1 : -1;
 
-  if (objective === 'capture-king') {
-    if ((ctx.kingSide ?? 'enemy') === 'enemy') {
-      // Player hunts the enemy King; the enemy guards him.
-      if (enemyKing) {
-        for (const p of players) score -= weights.advance * cheb(p, enemyKing);
-        for (const e of enemies) {
-          if (e !== enemyKing) score += weights.guard * cheb(e, enemyKing);
+    for (const condition of rule.if) {
+      if (condition.kind === 'turnLimit') {
+        score += sign * weights.surviveClock * Math.min(sctx.turnsElapsed, condition.turns);
+        continue;
+      }
+
+      if (condition.kind === 'reach') {
+        if (!cells.length) continue;
+        const runners = condition.side === 'player' ? players : enemies;
+        const defenders = condition.side === 'player' ? enemies : players;
+        let runner = Infinity;
+        for (const piece of runners) {
+          if (piece.type === 'pawn') runner = Math.min(runner, nearestCellDistance(piece, cells));
+        }
+        if (runner !== Infinity) score -= sign * weights.reachProgress * runner;
+        // A defender close to the destination obstructs the rule's eventual winner.
+        for (const defender of defenders) {
+          score += sign * weights.reachGarrison * nearestCellDistance(defender, cells);
+        }
+        continue;
+      }
+
+      const targetArmy = condition.side === 'player' ? players : enemies;
+      const attackers = condition.side === 'player' ? enemies : players;
+      const targets = condition.filter?.type
+        ? targetArmy.filter((piece) => piece.type === condition.filter?.type)
+        : targetArmy;
+      if (!targets.length) continue; // the canonical terminal oracle handles the fired rule
+
+      // Full-force elimination under a clock is a race, so retain the deliberately
+      // stronger Survive urgency; other elimination rules use the normal advance pull.
+      const approachWeight = deadlineRules && !condition.filter ? weights.surviveUrgency : weights.advance;
+      for (const attacker of attackers) {
+        score -= sign * approachWeight * nearestDistance(attacker, targets);
+      }
+
+      // A filtered royal/designated-piece rule also values its own-side screen:
+      // guards close to the target improve the target side's chances, which helps
+      // the player exactly when the rule's declared outcome says it should.
+      if (condition.filter) {
+        for (const target of targets) {
+          for (const defender of targetArmy) {
+            if (defender.id !== target.id) score += sign * weights.guard * cheb(defender, target);
+          }
         }
       }
-    } else if (playerKing) {
-      // Mirrored: enemy hunts the player's King; the player guards him.
-      for (const e of enemies) score += weights.advance * cheb(e, playerKing);
-      for (const p of players) {
-        if (p !== playerKing) score -= weights.guard * cheb(p, playerKing);
-      }
     }
-  } else if (objective === 'rival-kings') {
-    if (enemyKing) for (const p of players) score -= weights.advance * cheb(p, enemyKing);
-    if (playerKing) for (const e of enemies) score += weights.advance * cheb(e, playerKing);
-  } else if (objective === 'survive') {
-    // The enemy is the one racing the clock: strong pull onto the player's force.
-    for (const e of enemies) score += weights.surviveUrgency * nearestDistance(e, players);
-    // Each banked round is worth something even before the clock terminates.
-    score += weights.surviveClock * Math.min(sctx.turnsElapsed, ctx.surviveTurns ?? sctx.turnsElapsed);
-  } else if (objective === 'reach') {
-    const cells = ctx.reachCells ?? [];
-    if (cells.length) {
-      // Only the best runner's progress counts — the mode is one breakthrough.
-      let runner = Infinity;
-      for (const p of players) runner = Math.min(runner, nearestCellDistance(p, cells));
-      if (runner !== Infinity) score -= weights.reachProgress * runner;
-      // Garrison: enemies want to stand between the runner and the zone.
-      for (const e of enemies) score += weights.reachGarrison * nearestCellDistance(e, cells);
-    }
-    for (const e of enemies) score += 0.5 * weights.advance * nearestDistance(e, players);
-  } else {
-    // capture-all (and the default): mutual aggression — close distance, force trades.
-    for (const p of players) score -= weights.advance * nearestDistance(p, enemies);
-    for (const e of enemies) score += weights.advance * nearestDistance(e, players);
   }
 
   return score;
@@ -254,7 +276,17 @@ interface RootEntry {
   score: number;
 }
 
-interface SearchState {
+// ─── Solver reuse surface (ADR-0069 Phase 4) ────────────────────────────────────────
+// The board solver's search-mode weak-solver (core/solver/search) forks this file's
+// negamax/quiescence with proof tracking. To do so soundly it must reuse the EXACT
+// budget check, capture ordering, terminal scoring, leaf quiescence, and SearchState
+// shape — a divergent copy would silently disagree with the live engine. The exports
+// in this commented block are that shared surface; they add zero behavior (they are the
+// same symbols, only now visible). `makeSearchState` is the ONE construction path so the
+// solver builds an identical state (adopted by searchBestAction below, grep-verified as
+// the only construction site).
+
+export interface SearchState {
   nodes: number;
   deadline: number;
   maxNodes: number;
@@ -262,10 +294,38 @@ interface SearchState {
   weights: EvalWeights;
   terrainEnv: MoveEnv['terrain'];
   fences: MoveEnv['fences'];
+  castleRules: MoveEnv['castleRules'];
   sctx: SearchContext;
+  /**
+   * Position keys of the current line's ancestor nodes (threefold repetition along the
+   * search path, on top of the game's committed positionCounts). Maintained push/pop by
+   * negamax; only used when the game enforces threefold. Quiescence never repeats a
+   * position (every q-move is a capture), so it neither reads nor extends this.
+   */
+  path: string[];
 }
 
-function outOfBudget(s: SearchState): boolean {
+/** Build a SearchState — the single construction path the live search and the solver's
+ * proof-tracking fork share, so both count budget and score leaves identically. `env`
+ * supplies the static terrain + fences (its `lastMove` is ignored — negamax threads
+ * per-ply lastMove itself). No time budget ⇒ Infinity deadline (deterministic). */
+export function makeSearchState(env: MoveEnv, sctx: SearchContext, opts: SearchOptions = {}): SearchState {
+  return {
+    nodes: 0,
+    deadline: opts.timeBudgetMs != null ? Date.now() + opts.timeBudgetMs : Infinity,
+    maxNodes: opts.maxNodes ?? DEFAULT_MAX_NODES,
+    aborted: false,
+    weights: opts.weights ?? DEFAULT_EVAL_WEIGHTS,
+    terrainEnv: env.terrain,
+    fences: env.fences,
+    castleRules: env.castleRules,
+    sctx,
+    // Search-path repetition ledger (ADR-0072): fresh per state, reset per root line.
+    path: [],
+  };
+}
+
+export function outOfBudget(s: SearchState): boolean {
   if (s.nodes >= s.maxNodes || ((s.nodes & 1023) === 0 && Date.now() > s.deadline)) {
     s.aborted = true;
     return true;
@@ -273,16 +333,32 @@ function outOfBudget(s: SearchState): boolean {
   return false;
 }
 
-function terminalScore(winner: Winner, ply: number): number {
+export function terminalScore(winner: Winner, ply: number): number {
   if (winner === 'player') return WIN_SCORE - ply;
   if (winner === 'enemy') return -(WIN_SCORE - ply);
   return 0; // draw
 }
 
-function captureValue(move: Move, pieces: readonly Piece[], values: Record<PieceType, number>): number {
+export function captureValue(move: Move, pieces: readonly Piece[], values: Record<PieceType, number>): number {
   if (!move.capture) return -1;
   const target = pieces.find((p) => p.id === move.capture);
   return target ? values[target.type] : -1;
+}
+
+/** The canonical committed-position oracle, adapted to search's cached frame. */
+function adjudicatedWinner(
+  s: SearchState,
+  state: GameState,
+  env: MoveEnv,
+  turnsElapsed: number,
+): Winner {
+  if (state.winner) return state.winner;
+  return adjudicateCommittedPosition(state, {
+    victoryRules: s.sctx.victoryRules,
+    ctx: s.sctx.ctx,
+    turnsElapsed,
+    env,
+  })?.winner ?? null;
 }
 
 /**
@@ -297,7 +373,7 @@ function captureValue(move: Move, pieces: readonly Piece[], values: Record<Piece
  * it drops in at `depth === 0`. Adds NO randomness and reuses the exact `captureValue`
  * ordering + `legalMoves` generation negamax uses, so seeds still replay identically.
  */
-function quiesce(
+export function quiesce(
   s: SearchState,
   state: GameState,
   lastMove: GameState['lastMove'],
@@ -309,11 +385,11 @@ function quiesce(
 ): number {
   if (outOfBudget(s)) return 0;
   const color = state.turn === 'player' ? 1 : -1;
-  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, lastMove };
+  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, castleRules: s.castleRules, lastMove };
 
-  // Same terminal check as negamax, BEFORE stand-pat: a King capture inside the
-  // exchange must resolve as a mate via the objective, not as a bag of material.
-  const winner = state.winner ?? evaluateObjective(state, s.sctx.objective, { ...s.sctx.ctx, turnsElapsed });
+  // Same canonical terminal check as negamax, BEFORE stand-pat: an authored
+  // rule/checkmate/draw inside the exchange must resolve as the result, not material.
+  const winner = adjudicatedWinner(s, state, env, turnsElapsed);
   if (winner) return color * terminalScore(winner, ply);
 
   // Stand-pat: declining all captures is a legal option in a quiet search, so the
@@ -381,40 +457,49 @@ function negamax(
   if (outOfBudget(s)) return 0;
   const color = state.turn === 'player' ? 1 : -1;
 
-  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, lastMove };
-  const winner = state.winner ?? evaluateObjective(state, s.sctx.objective, { ...s.sctx.ctx, turnsElapsed });
+  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, castleRules: s.castleRules, lastMove };
+  const winner = adjudicatedWinner(s, state, env, turnsElapsed);
   if (winner) return color * terminalScore(winner, ply);
-  if (depth === 0) return quiesce(s, state, lastMove, ply, alpha, beta, turnsElapsed, QUIESCE_MAX_PLY);
 
   const side = state.turn as Side;
+  // Chess draw rules (when the game enforces them) are terminal INSIDE the search too,
+  // so the engine steers into a saving repetition and never shuffles into one blindly.
+  // Threefold counts committed occurrences (positionCounts) plus this line's ancestors.
+  const drawRules = state.drawRules;
+  let nodeKey: string | null = null;
+  if (drawRules?.threefold) {
+    nodeKey = positionKey(state, env);
+    let seen = (state.positionCounts?.[nodeKey] ?? 0) + 1;
+    for (const key of s.path) if (key === nodeKey) seen += 1;
+    if (seen >= 3) return 0;
+  }
+  if (depth === 0) return quiesce(s, state, lastMove, ply, alpha, beta, turnsElapsed, QUIESCE_MAX_PLY);
+
   const entries: { piece: Piece; move: Move }[] = [];
   for (const piece of livingPieces(state.pieces, side)) {
     for (const move of legalMoves(piece, state.pieces, state.size, env)) entries.push({ piece, move });
   }
-  if (!entries.length) {
-    // No legal action: checkmate if the stuck side's King is attacked (a loss
-    // for that side), else stalemate — mirroring the store's terminalIfStuck.
-    if (sideInCheck(state, side, env)) {
-      const mated: Winner = side === 'player' ? 'enemy' : 'player';
-      return color * terminalScore(mated, ply);
-    }
-    return 0;
-  }
+  // The canonical adjudicator above already resolved checkmate/stalemate, so a
+  // live node always has an action. Keep a defensive draw return for malformed
+  // custom states rather than recursing an empty list.
+  if (!entries.length) return 0;
   entries.sort(
     (a, b) => captureValue(b.move, state.pieces, s.weights.pieceValues) - captureValue(a.move, state.pieces, s.weights.pieceValues),
   );
 
   let best = -Infinity;
+  if (nodeKey !== null) s.path.push(nodeKey);
   for (const entry of entries) {
     s.nodes += 1;
     const res = applyMove(state, entry.piece.id, entry.move);
     const roundDone = state.turn === 'enemy' && res.state.turn === 'player';
     const v = -negamax(s, res.state, res.state.lastMove, depth - 1, ply + 1, -beta, -alpha, turnsElapsed + (roundDone ? 1 : 0));
-    if (s.aborted) return 0;
+    if (s.aborted) { if (nodeKey !== null) s.path.pop(); return 0; }
     if (v > best) best = v;
     if (v > alpha) alpha = v;
     if (alpha >= beta) break;
   }
+  if (nodeKey !== null) s.path.pop();
   return best;
 }
 
@@ -447,19 +532,11 @@ export function searchBestAction(
   }
   if (!roots.length) return null;
 
-  const s: SearchState = {
-    nodes: 0,
-    // No time budget ⇒ Infinity deadline: search is bounded by maxDepth + maxNodes
-    // only, which is deterministic (so a seed replays identically). A finite budget
-    // is a live-play responsiveness cap; frozen-clock tests leave it out.
-    deadline: opts.timeBudgetMs != null ? Date.now() + opts.timeBudgetMs : Infinity,
-    maxNodes: opts.maxNodes ?? DEFAULT_MAX_NODES,
-    aborted: false,
-    weights,
-    terrainEnv: env.terrain,
-    fences: env.fences,
-    sctx,
-  };
+  // No time budget ⇒ Infinity deadline: search is bounded by maxDepth + maxNodes only,
+  // which is deterministic (so a seed replays identically). A finite budget is a live-play
+  // responsiveness cap; frozen-clock tests leave it out. Built via the shared factory so the
+  // solver's proof fork constructs a byte-identical state.
+  const s: SearchState = makeSearchState(env, sctx, { ...opts, weights });
 
   let completed: RootEntry[] | null = null;
   let completedDepth = 0;
@@ -470,6 +547,7 @@ export function searchBestAction(
     const scored: RootEntry[] = [];
     for (const root of roots) {
       s.nodes += 1;
+      s.path.length = 0; // fresh line per root move (an abort can leave keys behind)
       const res = applyMove(state, root.piece.id, root.move);
       const roundDone = state.turn === 'enemy' && res.state.turn === 'player';
       const v = -negamax(s, res.state, res.state.lastMove, depth - 1, 1, -Infinity, Infinity, sctx.turnsElapsed + (roundDone ? 1 : 0));

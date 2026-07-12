@@ -1,8 +1,14 @@
 ---
-status: "accepted"
+status: "accepted; production render-scale publication superseded by ADR-0076"
 date: 2026-07-03
 deciders: Nelson, Claude
 ---
+
+> **Production render-scale publication superseded by
+> [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md) (2026-07-10).**
+> DB-backed seat/anchor/footprint tuning, baseline fallback, and bake-back stand.
+> A prop's scale value now calibrates its required native footprint; publishing a
+> fractional scale is not production art acceptance without native regeneration.
 
 # ADR-0061: Prop seats are DB-tuned live content — committed baseline + live DB overrides + bake-back
 
@@ -27,8 +33,8 @@ the change stick.
 Two constraints from the code shape the design. `frontend/src/core/props.ts`
 imports the seats **synchronously** (`import propSeats from './propSeats.json'`)
 and **throws** if any `PROP_DEFS` entry has no seat — props are composed at module
-load and must always render. And `backend/generated/board-render.cjs` embeds its
-**own** copy of the seats for server-side level thumbnails. So the seats can't
+load and must always render. The shared `@chess-tactics/board-render` package
+also carries that baseline for server-side level thumbnails. So the seats can't
 simply move to an async-only DB fetch, and any live change must reach the
 thumbnail renderer too or thumbnails drift from the live look.
 
@@ -187,10 +193,11 @@ test encodes.
   the officials tier, don't fork).
 - Contrast: unlike ADR-0038's `official.json` (deleted, because empty officials is
   valid), `propSeats.json` **stays** as the required render baseline.
-- Code touchpoints: `frontend/src/core/props.ts` (sync baseline import + overlay),
+- Code touchpoints: `packages/board-render/src/core/props.ts` (sync baseline import
+  + overlay, re-exported through `frontend/src/core/props.ts`),
   `frontend/src/ui/PropSeatLab.tsx` (Save → PUT), `frontend/vite.config.js`
   (`propSeatSave`/`propSeatDelete` retire), `backend/server.js` (new tier + migration,
-  mirrors `official_campaigns`), `backend/generated/board-render.cjs` (thumbnail
-  overlay), `frontend/src/core/props.test.ts` (baseline ∪ overlay invariant).
+  mirrors `official_campaigns`), `@chess-tactics/board-render` (thumbnail overlay),
+  `frontend/src/core/props.test.ts` (baseline ∪ overlay invariant).
 - Direction + intent: the `props-to-db-direction` design note; the locked
   instant-live edit model.

@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -17,6 +17,36 @@ if (badArg) {
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const frontendDir = path.resolve(scriptDir, '..');
+const npmBin = process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : 'npm';
+const npmArgs = (...args) => (process.platform === 'win32' ? ['/d', '/s', '/c', 'npm', ...args] : args);
+
+const setupCommands = [
+  [process.execPath, ['scripts/ensure-backend-deps.mjs'], frontendDir],
+  [npmBin, npmArgs('--prefix', '../packages/board-render', 'run', 'build'), frontendDir],
+];
+
+for (const [command, args, cwd] of setupCommands) {
+  const result = spawnSync(command, args, {
+    cwd,
+    stdio: 'inherit',
+    env: process.env,
+  });
+
+  if (result.error) {
+    console.error(`[dev server] Failed to start setup command: ${command}`);
+    console.error(result.error.message);
+    process.exit(1);
+  }
+
+  if (result.signal) {
+    process.kill(process.pid, result.signal);
+  }
+
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+}
+
 const viteBin = path.join(frontendDir, 'node_modules', 'vite', 'bin', 'vite.js');
 const viteArgs = [viteBin, '--host', '0.0.0.0', ...forwardedArgs];
 
@@ -33,4 +63,3 @@ child.on('exit', (code, signal) => {
   }
   process.exit(code ?? 0);
 });
-

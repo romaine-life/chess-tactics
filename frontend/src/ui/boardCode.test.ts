@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { encodeBoard, decodeBoard, type EditorBoard } from './boardCode';
 
+const encodeWire = (wire: unknown): string => btoa(JSON.stringify(wire))
+  .replace(/\+/g, '-')
+  .replace(/\//g, '_')
+  .replace(/=+$/, '');
+
 const emptyBoard = (over: Partial<EditorBoard> = {}): EditorBoard => ({
   cols: 6,
   rows: 5,
@@ -59,6 +64,50 @@ describe('boardCode round-trip', () => {
     expect(decodeBoard(encodeBoard(emptyBoard()))!.fences).toEqual({});
   });
 
+  it('round-trips standalone and boundary fence posts independently from fence rails', () => {
+    const board = emptyBoard({
+      fencePosts: {
+        '0,0': 'wood',
+        '3,2': 'stone',
+        '6,5': 'stone',
+      },
+    });
+    const decoded = decodeBoard(encodeBoard(board));
+    expect(decoded?.fencePosts).toEqual(board.fencePosts);
+    expect(decoded?.fences).toEqual({});
+  });
+
+  it('omits an empty post map and decodes a pre-post code to an empty map', () => {
+    expect(encodeBoard(emptyBoard({ fencePosts: {} }))).toBe(encodeBoard(emptyBoard()));
+    expect(decodeBoard(encodeBoard(emptyBoard()))?.fencePosts).toEqual({});
+  });
+
+  it('sanitizes post material and exact inclusive vertex keys on decode', () => {
+    const decoded = decodeBoard(encodeWire({
+      c: 6,
+      r: 5,
+      fp: {
+        '0,0': 'wood',
+        '6,5': 'stone',
+        '3,2': 'wood',
+        '-1,0': 'wood',
+        '7,5': 'stone',
+        '1,6': 'wood',
+        '1.5,2': 'wood',
+        '01,2': 'wood',
+        '1, 2': 'wood',
+        '1,2,3': 'wood',
+        '2,2': 'iron',
+        '4,4': 1,
+      },
+    }));
+    expect(decoded?.fencePosts).toEqual({
+      '0,0': 'wood',
+      '6,5': 'stone',
+      '3,2': 'wood',
+    });
+  });
+
   it('encodes a wall-free board byte-identically to a code that predates walls', () => {
     expect(encodeBoard(emptyBoard({ walls: {} }))).toBe(encodeBoard(emptyBoard()));
     expect(decodeBoard(encodeBoard(emptyBoard()))!.walls).toEqual({});
@@ -88,17 +137,34 @@ describe('boardCode round-trip', () => {
       cells: ['1,1', '2,1', '1,2'],
       buffer: 12,
       wiggle: 0.35,
+      macroTileDensity: 0.65,
       sections: [
         {
           terrain: 'water',
           share: 70,
           locked: true,
           covers: [{ type: 'water', knobs: { amount: 0.8, amountRandom: 0.1, density: 0.5, densityRandom: 0.2 } }],
+          macroTileDensity: 0,
+          macroTileBreakup: 0,
         },
-        { terrain: 'sand', share: 30, covers: [] },
+        { terrain: 'sand', share: 30, covers: [], macroTileDensity: 0.8, macroTileBreakup: 0.25 },
       ],
     }];
     expect(decodeBoard(encodeBoard(emptyBoard({ generatedRegions })))!.generatedRegions).toEqual(generatedRegions);
+  });
+
+  it('round-trips macrotile placements', () => {
+    const macroTiles = [
+      { assetId: 'grass-soft-bands-3x3', x: 1, y: 1, breaks: [1, 4, 7] },
+      { assetId: 'future-macrotile', x: 4, y: 3, breaks: [2, 8] },
+    ];
+    const decoded = decodeBoard(encodeBoard(emptyBoard({ macroTiles })))!;
+    expect(decoded.macroTiles).toEqual(macroTiles);
+  });
+
+  it('encodes a macrotile-free board byte-identically to a code that predates macrotiles', () => {
+    expect(encodeBoard(emptyBoard({ macroTiles: [] }))).toBe(encodeBoard(emptyBoard()));
+    expect(decodeBoard(encodeBoard(emptyBoard()))!.macroTiles).toEqual([]);
   });
 
   it('round-trips cover type overrides for grass painted on non-grass tiles', () => {

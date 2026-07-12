@@ -2,11 +2,10 @@
   "id": "rook-ruinwall",
   "name": "Ruinwall",
   "basePiece": "rook",
-  "tentative": true,
+  "tentative": false,
   "sourceRender": "v7-rough-rock-one-shear",
   "description": "Rough-hewn rock surface with a single sheared corner pillar.",
-  "sprite": "south.png",
   "model": "model.blend",
-  "isolated": "Standalone candidate. Not wired into the app; does not affect the production rook unit at frontend/public/assets/units/rook.",
+  "acceptedSource": "Blender structure source for the accepted live rook in Unit Art.",
   "attribution": null
 }

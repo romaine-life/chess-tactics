@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove, terminalIfStuck, sideHasLegalMove, shouldStartFreshSkirmish, setNetResignSink } from './store';
-import { livingPieces } from '../core/rules';
+import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from './store';
+import { legalMoves, livingPieces } from '../core/rules';
 import type { MoveEnv } from '../core/rules';
 import type { GameState, Piece, PieceType, Side } from '../core/types';
 import { createBlankLevel } from '../core/level';
+import { settleCommittedPosition } from '../core/adjudication';
+import type { PlayingSide } from './clientPerspective';
+import { loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence';
 
 // A handful of tests here compute one or two full enemy replies, each of which runs
 // the rung-1 search AI (core/ai searchEnemyMove) synchronously and DELIBERATELY with
@@ -20,13 +23,31 @@ vi.setConfig({ testTimeout: 20_000 });
 // drive both that reply and the battle clock deterministically. The search enemy
 // carries no wall-clock budget in the live store (LIVE_SEARCH is node-bounded), so
 // a frozen Date can't make it run away — it terminates on maxNodes, deterministically.
-beforeEach(() => vi.useFakeTimers());
+function testStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() { return values.size; },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => Array.from(values.keys())[index] ?? null,
+    removeItem: (key) => { values.delete(key); },
+    setItem: (key, value) => { values.set(key, value); },
+  };
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubGlobal('localStorage', testStorage());
+});
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
   // The store is a module singleton shared across tests; a test that sets an authored victory
   // override (ADR-0064) must not leak it into the next test's preset eval. Reset the victory state.
   useSkirmish.setState({ victoryOverride: null, resultDetail: null, pendingPromotion: null });
+  setNetMoveSink(null);
+  setNetResignSink(null);
+  vi.unstubAllGlobals();
 });
 
 function playFirstMove(seed: number) {
@@ -218,10 +239,31 @@ describe('shouldStartFreshSkirmish (resume vs restart on re-entry)', () => {
     expect(shouldStartFreshSkirmish(onLevelA, 'B')).toBe(true); // different level → fresh
     expect(shouldStartFreshSkirmish(onLevelA, null)).toBe(true); // level → free skirmish → fresh
   });
+
+  it('always rebuilds when leaving netplay, even for the same level id', () => {
+    const state = {
+      started: true,
+      levelId: 'A',
+      game: { winner: null } as GameState,
+      net: { lobbyId: 'L1', localSide: 'player' as const, moveCount: 0, pendingMove: null, terminalResult: null },
+    };
+    expect(shouldStartFreshSkirmish(state, 'A')).toBe(true);
+  });
 });
 
 function piece(id: string, side: Side, type: PieceType, x: number, y: number): Piece {
   return { id, side, type, x, y, alive: true, startY: y };
+}
+
+function playableNetLevel() {
+  const level = createBlankLevel('net-1', 'Net', 8, 8);
+  level.layers.units = [
+    { side: 'player', type: 'king', x: 0, y: 7 },
+    { side: 'player', type: 'rook', x: 1, y: 7 },
+    { side: 'enemy', type: 'king', x: 7, y: 0 },
+    { side: 'enemy', type: 'rook', x: 6, y: 0 },
+  ];
+  return level;
 }
 
 /** Load a hand-built board into the store as the active capture-king skirmish.
@@ -253,7 +295,7 @@ describe('skirmish store: capture-king objective', () => {
     expect(game.winner).toBe('player');
     expect(game.turn).toBe('done');
     expect(game.pieces.find((p) => p.id === 'ep')?.alive).toBe(true); // lesser enemy still on the board
-    expect(log[0]).toMatch(/King is captured/i);
+    expect(log[0]).toBe('Victory — The opposing King was captured.');
   });
 
   it('does not win when a non-royal enemy is captured — the game continues', () => {
@@ -271,8 +313,8 @@ describe('skirmish store: capture-king objective', () => {
 
 describe('skirmish store: rival-kings + direction-aware capture-king copy', () => {
   it('rival-kings: capturing the enemy King wins with the rival-King wording', () => {
-    // The surviving enemy pawn matters: it keeps the core last-side-standing rule out
-    // of the way so the RIVAL-KINGS objective (not a wipe) is what decides the game.
+    // The surviving pawn proves this is the RIVAL-KINGS authored rule rather than
+    // the preset's separate full-force elimination condition.
     const game: GameState = {
       size: { cols: 8, rows: 8 },
       pieces: [piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 7, 7), piece('ek', 'enemy', 'king', 0, 5), piece('ep', 'enemy', 'pawn', 7, 2)],
@@ -283,7 +325,7 @@ describe('skirmish store: rival-kings + direction-aware capture-king copy', () =
     useSkirmish.getState().tryMoveTo(0, 5); // rook takes the rival King
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('player');
-    expect(s.log[0]).toBe('Victory — the rival King is captured.');
+    expect(s.log[0]).toBe('Victory — The opposing King was captured.');
   });
 
   it('capture-king with kingSide=player: losing the King reads as the King falling, not a wipe', () => {
@@ -299,14 +341,14 @@ describe('skirmish store: rival-kings + direction-aware capture-king copy', () =
     useSkirmish.getState().tryMoveTo(0, 5); // any legal pawn step
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('enemy');
-    expect(s.log[0]).toBe('Defeat — your King has fallen.');
+    expect(s.log[0]).toBe('Defeat — Your King was captured.');
   });
 });
 
 describe('skirmish store: authored victory names the fired rule (ADR-0064)', () => {
   it('an authored win reads by its rule name, not the mode label — in the log and resultDetail', () => {
-    // AUTHORED to win by capturing the enemy KING while the enemy still fields a pawn — so the core
-    // last-side-standing rule (a full wipe) does NOT fire, and the authored rule is what decides.
+    // AUTHORED to win by capturing the enemy KING while the enemy still fields a pawn, so this
+    // exact named rule — not a full-force preset condition — is what decides.
     // The result must read by the authored rule name ("Storm the keep"), not an objective preset.
     const game: GameState = {
       size: { cols: 8, rows: 8 },
@@ -531,7 +573,7 @@ describe('checkmate ends the game the instant it is delivered', () => {
   });
 });
 
-describe('soft-lock guard (no manual End Turn)', () => {
+describe('canonical settled-position guard (no manual End Turn)', () => {
   const OPEN_ENV: MoveEnv = { terrain: undefined, lastMove: undefined };
   const stateOf = (pieces: Piece[], cols: number, rows: number): GameState => ({
     size: { cols, rows },
@@ -544,21 +586,17 @@ describe('soft-lock guard (no manual End Turn)', () => {
     // 1-wide board: the lone pawn is blocked head-on by the enemy King (pawns do not
     // capture forward) and has no diagonal capture available off the board's edges.
     const trapped = stateOf([piece('p', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 0, 0)], 1, 2);
-    expect(playerHasLegalMove(trapped, OPEN_ENV)).toBe(false);
-
-    const res = resolveIfPlayerStuck(trapped, OPEN_ENV);
-    expect(res.stuck).toBe(true);
-    expect(res.game.winner).toBe('draw');
-    expect(res.game.turn).toBe('done');
+    const res = settleCommittedPosition(trapped, { victoryRules: [], env: OPEN_ENV });
+    expect(res.adjudication).toEqual({ kind: 'stalemate', winner: 'draw', rule: null, side: 'player' });
+    expect(res.state.winner).toBe('draw');
+    expect(res.state.turn).toBe('done');
   });
 
   it('leaves a state untouched when the player can still move', () => {
     const free = stateOf([piece('p', 'player', 'pawn', 0, 2), piece('ek', 'enemy', 'king', 0, 0)], 1, 3);
-    expect(playerHasLegalMove(free, OPEN_ENV)).toBe(true);
-
-    const res = resolveIfPlayerStuck(free, OPEN_ENV);
-    expect(res.stuck).toBe(false);
-    expect(res.game).toBe(free); // unchanged reference
+    const res = settleCommittedPosition(free, { victoryRules: [], env: OPEN_ENV });
+    expect(res.adjudication).toBeNull();
+    expect(res.state).toBe(free); // unchanged reference
   });
 
   it('a checkmated player (king in check with no escape) loses, not draws', () => {
@@ -570,13 +608,10 @@ describe('soft-lock guard (no manual End Turn)', () => {
       piece('r2', 'enemy', 'rook', 1, 5),
       piece('ek', 'enemy', 'king', 2, 5),
     ], 3, 6);
-    expect(playerHasLegalMove(mated, OPEN_ENV)).toBe(false);
-
-    const res = resolveIfPlayerStuck(mated, OPEN_ENV);
-    expect(res.stuck).toBe(true);
-    expect(res.checkmate).toBe(true);
-    expect(res.game.winner).toBe('enemy');
-    expect(res.game.turn).toBe('done');
+    const res = settleCommittedPosition(mated, { victoryRules: [], env: OPEN_ENV });
+    expect(res.adjudication).toEqual({ kind: 'checkmate', winner: 'enemy', rule: null, side: 'player' });
+    expect(res.state.winner).toBe('enemy');
+    expect(res.state.turn).toBe('done');
   });
 
   it('a stalemated player (king has no move but is NOT in check) still draws', () => {
@@ -588,46 +623,54 @@ describe('soft-lock guard (no manual End Turn)', () => {
       piece('r2', 'enemy', 'rook', 5, 1),
       piece('ek', 'enemy', 'king', 5, 5),
     ], 6, 6);
-    expect(playerHasLegalMove(stuck, OPEN_ENV)).toBe(false);
-
-    const res = resolveIfPlayerStuck(stuck, OPEN_ENV);
-    expect(res.stuck).toBe(true);
-    expect(res.checkmate).toBe(false);
-    expect(res.game.winner).toBe('draw');
-    expect(res.game.turn).toBe('done');
+    const res = settleCommittedPosition(stuck, { victoryRules: [], env: OPEN_ENV });
+    expect(res.adjudication).toEqual({ kind: 'stalemate', winner: 'draw', rule: null, side: 'player' });
+    expect(res.state.winner).toBe('draw');
+    expect(res.state.turn).toBe('done');
   });
 
-  it('terminalIfStuck resolves the ENEMY to move: checkmate hands the win to the player', () => {
+  it('resolves the ENEMY to move: checkmate hands the win to the player', () => {
     const g = { ...stateOf([
       piece('ek', 'enemy', 'king', 0, 0),
       piece('r1', 'player', 'rook', 0, 5), // checks down column 0
       piece('r2', 'player', 'rook', 1, 5), // seals column 1
       piece('pk', 'player', 'king', 2, 5),
     ], 3, 6), turn: 'enemy' as const };
-    expect(sideHasLegalMove(g, 'enemy', OPEN_ENV)).toBe(false);
-    expect(terminalIfStuck(g, OPEN_ENV)).toEqual({ winner: 'player', checkmate: true, side: 'enemy' });
+    expect(settleCommittedPosition(g, { victoryRules: [], env: OPEN_ENV }).adjudication)
+      .toEqual({ winner: 'player', kind: 'checkmate', rule: null, side: 'enemy' });
   });
 
-  it('terminalIfStuck resolves the ENEMY to move: stalemate is a draw', () => {
+  it('resolves the ENEMY to move: stalemate is a draw', () => {
     const g = { ...stateOf([
       piece('ek', 'enemy', 'king', 0, 0),
       piece('r1', 'player', 'rook', 1, 5), // seals column 1
       piece('r2', 'player', 'rook', 5, 1), // seals row 1
       piece('pk', 'player', 'king', 5, 5),
     ], 6, 6), turn: 'enemy' as const };
-    expect(sideHasLegalMove(g, 'enemy', OPEN_ENV)).toBe(false);
-    expect(terminalIfStuck(g, OPEN_ENV)).toEqual({ winner: 'draw', checkmate: false, side: 'enemy' });
+    expect(settleCommittedPosition(g, { victoryRules: [], env: OPEN_ENV }).adjudication)
+      .toEqual({ winner: 'draw', kind: 'stalemate', rule: null, side: 'enemy' });
   });
 
-  it('terminalIfStuck returns null while the side to move can still move', () => {
+  it('returns null while the side to move can still move', () => {
     const g = { ...stateOf([piece('ek', 'enemy', 'king', 0, 0), piece('pk', 'player', 'king', 5, 5)], 6, 6), turn: 'enemy' as const };
-    expect(terminalIfStuck(g, OPEN_ENV)).toBeNull();
+    expect(settleCommittedPosition(g, { victoryRules: [], env: OPEN_ENV }).adjudication).toBeNull();
   });
 
-  it('never fires off the player turn or after the game is decided', () => {
+  it('ends a movable position as a draw when the chess draw rules say so', () => {
+    const base = { ...stateOf([piece('ek', 'enemy', 'king', 0, 0), piece('pk', 'player', 'king', 5, 5)], 6, 6), turn: 'enemy' as const };
+    const clocked = { ...base, drawRules: { fiftyMove: true }, halfmoveClock: 100 };
+    expect(settleCommittedPosition(clocked, { victoryRules: [], env: OPEN_ENV }).adjudication)
+      .toEqual({ winner: 'draw', kind: 'fifty-move', rule: null, side: 'enemy' });
+    // Without the authored rule the same clock means nothing (back-compat).
+    expect(settleCommittedPosition({ ...base, halfmoveClock: 100 }, { victoryRules: [], env: OPEN_ENV }).adjudication).toBeNull();
+  });
+
+  it('does not invent a second adjudication after the game is decided', () => {
     const trapped = stateOf([piece('p', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 0, 0)], 1, 2);
-    expect(resolveIfPlayerStuck({ ...trapped, turn: 'enemy' }, OPEN_ENV).stuck).toBe(false);
-    expect(resolveIfPlayerStuck({ ...trapped, winner: 'player', turn: 'done' }, OPEN_ENV).stuck).toBe(false);
+    const decided = { ...trapped, winner: 'player' as const, turn: 'done' as const };
+    const res = settleCommittedPosition(decided, { victoryRules: [], env: OPEN_ENV });
+    expect(res.adjudication).toBeNull();
+    expect(res.state).toBe(decided);
   });
 });
 
@@ -689,6 +732,20 @@ describe('skirmish store: premoves', () => {
     expect(useSkirmish.getState().game.turn).toBe('player');
     expect(useSkirmish.getState().selectedId).toBe('pr');
     expect(useSkirmish.getState().focusedId).toBe('pr');
+  });
+
+  it('preserves an explicitly cleared selection through the opponent reply', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7); // selected mover is pk; reply is now staged
+
+    useSkirmish.getState().select(null); // mirrors clicking away from every unit
+    expect(useSkirmish.getState().selectedId).toBeNull();
+    expect(useSkirmish.getState().focusedId).toBeNull();
+
+    vi.runAllTimers();
+    expect(useSkirmish.getState().game.turn).toBe('player');
+    expect(useSkirmish.getState().selectedId).toBeNull();
+    expect(useSkirmish.getState().focusedId).toBeNull();
   });
 
   it('keeps the premove unit selected during the fire beat after the reply', () => {
@@ -778,6 +835,32 @@ describe('skirmish store: premoves', () => {
     expect(s.game.turn).toBe('player');
   });
 
+  it('fires a queued recapture after the enemy captures a friendly-occupied square', () => {
+    loadBoard([
+      piece('pk', 'player', 'king', 0, 7),
+      piece('pr', 'player', 'rook', 0, 4),
+      piece('bait', 'player', 'pawn', 4, 4),
+      piece('er', 'enemy', 'rook', 4, 0), // greedy reply: er takes bait on the recapture square
+      piece('ek', 'enemy', 'king', 7, 0),
+    ], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7); // safe king step -> opponent's turn
+    useSkirmish.getState().queueMove('pr', 4, 4);
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 4, y: 4 }]);
+
+    vi.advanceTimersByTime(520); // enemy reply lands; the premove waits for its visible beat
+    const afterReply = useSkirmish.getState();
+    expect(afterReply.game.pieces.find((p) => p.id === 'bait')?.alive).toBe(false);
+    expect(afterReply.game.pieces.find((p) => p.id === 'er')).toMatchObject({ x: 4, y: 4, alive: true });
+    expect(afterReply.premoveInputOpen).toBe(true);
+
+    vi.advanceTimersByTime(621); // fire the queued recapture, but not the next enemy reply
+    const afterRecapture = useSkirmish.getState();
+    expect(afterRecapture.game.pieces.find((p) => p.id === 'pr')).toMatchObject({ x: 4, y: 4, alive: true });
+    expect(afterRecapture.game.pieces.find((p) => p.id === 'er')?.alive).toBe(false);
+    expect(afterRecapture.premoves).toEqual([]);
+    expect(afterRecapture.game.turn).toBe('enemy');
+  });
+
   it('clearPremoves drops the whole queued chain', () => {
     loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
     useSkirmish.getState().tryMoveTo(1, 7);
@@ -813,6 +896,269 @@ describe('skirmish store: premoves', () => {
   });
 });
 
+describe('skirmish store: multiplayer session parity', () => {
+  it.each([
+    ['player', 'Victory — The opposing force was eliminated.', 'The opposing force was eliminated'],
+    ['enemy', 'Defeat — Your force was eliminated.', 'Your force was eliminated'],
+  ] as const)('settles an already-terminal initial board from the %s seat', (localSide, copy, detail) => {
+    const level = createBlankLevel('terminal-net', 'Terminal Net', 8, 8);
+    level.objective = 'capture-all';
+    level.layers.units = [{ side: 'player', type: 'king', x: 0, y: 7 }];
+
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide, level, seed: 7 });
+
+    const state = useSkirmish.getState();
+    expect(state.game).toMatchObject({ winner: 'player', turn: 'done' });
+    expect(state.log[0]).toBe(copy);
+    expect(state.resultDetail).toBe(detail);
+    expect(state.net?.terminalResult).toEqual({ expectedMoveCount: 0, winner: 'player', reason: 'victory-rule' });
+  });
+
+  it('cancels a staged solo reply when a lobby match replaces the session', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    const solo = useSkirmish.getState();
+    const mover = livingPieces(solo.game.pieces, 'player')
+      .find((candidate) => legalMoves(candidate, solo.game.pieces, solo.game.size, solo.env).length > 0);
+    expect(mover).toBeTruthy();
+    useSkirmish.getState().select(mover!.id);
+    useSkirmish.getState().setTestMode(true);
+    useSkirmish.getState().setTestMinCpuDelay(3000);
+    const move = useSkirmish.getState().movesForSelected()[0];
+    useSkirmish.getState().tryMoveTo(move.x, move.y);
+    expect(useSkirmish.getState().game.turn).toBe('enemy');
+    const oldEpoch = useSkirmish.getState().sessionEpoch;
+
+    useSkirmish.setState({ premoves: [{ pieceId: mover!.id, x: move.x, y: move.y }], premoveInputOpen: true });
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'player', level: playableNetLevel(), seed: 7 });
+    const netGame = useSkirmish.getState().game;
+    const netEpoch = useSkirmish.getState().sessionEpoch;
+    expect(netEpoch).toBeGreaterThan(oldEpoch);
+    expect(useSkirmish.getState()).toMatchObject({
+      premoves: [], premoveInputOpen: false, testMode: false, testMinCpuDelayMs: 0, clock: null,
+    });
+
+    vi.advanceTimersByTime(5000);
+    expect(useSkirmish.getState().game).toBe(netGame);
+    expect(useSkirmish.getState().sessionEpoch).toBe(netEpoch);
+    expect(useSkirmish.getState().net?.moveCount).toBe(0);
+  });
+
+  it('allows only one pending intent, restores it after rejection, and clears it on the matching echo', () => {
+    const sent: Array<{
+      pieceId: string;
+      move: { x: number; y: number; promotion?: 'queen' | 'rook' | 'bishop' | 'knight' };
+      expected: number;
+      intentId: string;
+    }> = [];
+    setNetMoveSink((pieceId, move, expected, intentId) => { sent.push({ pieceId, move, expected, intentId }); });
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'player', level: playableNetLevel(), seed: 7 });
+    const before = useSkirmish.getState();
+    const selected = before.selectedId!;
+    const move = before.movesForSelected()[0];
+    expect(move).toBeTruthy();
+
+    before.tryMoveTo(move.x, move.y);
+    useSkirmish.getState().tryMoveTo(move.x, move.y);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ pieceId: selected, expected: 0, move: { x: move.x, y: move.y } });
+    expect(sent[0].intentId).toMatch(/^[-\w]+$/);
+    expect(useSkirmish.getState().net?.pendingMove?.intentId).toBe(sent[0].intentId);
+    expect(useSkirmish.getState().game).toBe(before.game); // server echo owns the apply
+    expect(useSkirmish.getState().selectedId).toBe(selected);
+    expect(useSkirmish.getState().net?.pendingMove?.expectedMoveCount).toBe(0);
+    expect(useSkirmish.getState().net?.pendingMove?.uncertain).toBe(false);
+
+    useSkirmish.getState().rejectNetMove(1); // stale recovery cannot unlock a newer intent
+    expect(useSkirmish.getState().net?.pendingMove).not.toBeNull();
+    useSkirmish.getState().markNetMoveUncertain(1); // stale failure cannot mark it either
+    expect(useSkirmish.getState().net?.pendingMove?.uncertain).toBe(false);
+    useSkirmish.getState().markNetMoveUncertain(0);
+    expect(useSkirmish.getState().net?.pendingMove?.uncertain).toBe(true);
+    useSkirmish.getState().rejectNetMove(0);
+    expect(useSkirmish.getState().net?.pendingMove).toBeNull();
+    expect(useSkirmish.getState().selectedId).toBe(selected);
+    expect(useSkirmish.getState().movesForSelected().length).toBeGreaterThan(0);
+
+    useSkirmish.getState().tryMoveTo(move.x, move.y);
+    expect(sent).toHaveLength(2);
+    expect(sent[1].intentId).not.toBe(sent[0].intentId);
+    useSkirmish.getState().applyRemoteMove(sent[1].pieceId, sent[1].move, sent[1].intentId);
+    expect(useSkirmish.getState().net).toMatchObject({ moveCount: 1, pendingMove: null });
+    expect(useSkirmish.getState().selectedId).toBe(selected);
+
+    // Choosing another owned piece during the opponent turn survives their relay too.
+    const localRook = useSkirmish.getState().game.pieces.find((candidate) => candidate.side === 'player' && candidate.type === 'rook')!;
+    useSkirmish.getState().select(localRook.id);
+    const current = useSkirmish.getState();
+    const opponent = livingPieces(current.game.pieces, 'enemy')
+      .find((candidate) => legalMoves(candidate, current.game.pieces, current.game.size, current.env).some((candidateMove) => !candidateMove.capture))!;
+    const opponentMove = legalMoves(opponent, current.game.pieces, current.game.size, current.env).find((candidateMove) => !candidateMove.capture)!;
+    useSkirmish.getState().applyRemoteMove(opponent.id, opponentMove);
+    expect(useSkirmish.getState().selectedId).toBe(localRook.id);
+    expect(useSkirmish.getState().focusedId).toBe(localRook.id);
+  });
+
+  it('restores one durable relay identity after reload and clears it on authoritative echo', () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      get length() { return values.size; },
+      clear: () => values.clear(),
+      getItem: (key: string) => values.get(key) ?? null,
+      key: (index: number) => Array.from(values.keys())[index] ?? null,
+      removeItem: (key: string) => { values.delete(key); },
+      setItem: (key: string, value: string) => { values.set(key, value); },
+    } satisfies Storage);
+
+    const level = playableNetLevel();
+    useSkirmish.getState().newNetMatch({ lobbyId: 'reload-lobby', localSide: 'player', level, seed: 7 });
+    const beforeReload = useSkirmish.getState();
+    const pieceId = beforeReload.selectedId!;
+    const legal = beforeReload.movesForSelected()[0];
+    const move = { x: legal.x, y: legal.y };
+    persistNetIntent({
+      lobbyId: 'reload-lobby',
+      localSide: 'player',
+      intentId: 'stable-across-reload',
+      expectedMoveCount: 0,
+      pieceId,
+      move,
+      createdAt: Date.now(),
+    });
+
+    useSkirmish.getState().newNetMatch({ lobbyId: 'reload-lobby', localSide: 'player', level, seed: 7 });
+    expect(useSkirmish.getState().net?.pendingMove).toMatchObject({
+      intentId: 'stable-across-reload', expectedMoveCount: 0, uncertain: true,
+    });
+    useSkirmish.getState().applyRemoteMove(pieceId, move, 'stable-across-reload');
+    expect(useSkirmish.getState().net).toMatchObject({ moveCount: 1, pendingMove: null });
+    expect(loadPersistedNetIntent('reload-lobby', 'player')).toBeNull();
+  });
+
+  it('fails closed instead of sending an unjournaled multiplayer move', () => {
+    vi.stubGlobal('localStorage', {
+      length: 0,
+      clear: () => {},
+      getItem: () => null,
+      key: () => null,
+      removeItem: () => {},
+      setItem: () => { throw new DOMException('storage denied', 'QuotaExceededError'); },
+    } satisfies Storage);
+    const sent = vi.fn();
+    setNetMoveSink(sent);
+    useSkirmish.getState().newNetMatch({ lobbyId: 'no-storage', localSide: 'player', level: playableNetLevel(), seed: 7 });
+    const before = useSkirmish.getState();
+    const move = before.movesForSelected()[0];
+    before.tryMoveTo(move.x, move.y);
+
+    expect(sent).not.toHaveBeenCalled();
+    expect(useSkirmish.getState().net?.pendingMove).toBeNull();
+    expect(useSkirmish.getState().game).toBe(before.game);
+    expect(useSkirmish.getState().log[0]).toContain('browser storage is unavailable');
+  });
+
+  it('drains an enemy-seat promotion premove with the chosen promotion through the relay', () => {
+    const sent: Array<{ pieceId: string; move: { x: number; y: number; promotion?: 'queen' | 'rook' | 'bishop' | 'knight' }; expected: number }> = [];
+    setNetMoveSink((pieceId, move, expected) => { sent.push({ pieceId, move, expected }); });
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'enemy', level: playableNetLevel(), seed: 7 });
+    const game: GameState = {
+      size: { cols: 8, rows: 8 },
+      pieces: [
+        piece('pk', 'player', 'king', 0, 0),
+        piece('pr', 'player', 'rook', 1, 0),
+        piece('ep', 'enemy', 'pawn', 4, 6),
+        piece('ek', 'enemy', 'king', 7, 7),
+      ],
+      promotionRules: [{ side: 'enemy', cells: [{ x: 4, y: 7 }], choices: ['queen', 'knight'] }],
+      turn: 'player',
+      winner: null,
+    };
+    useSkirmish.setState({
+      game,
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'capture-all',
+      objectiveCtx: {},
+      selectedId: 'ep',
+      focusedId: 'ep',
+      premoves: [],
+      premoveInputOpen: false,
+    });
+
+    useSkirmish.getState().queueMove('ep', 4, 7);
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ mode: 'premove', pieceId: 'ep' });
+    useSkirmish.getState().choosePromotion('knight');
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'ep', x: 4, y: 7, promotion: 'knight' }]);
+
+    useSkirmish.getState().applyRemoteMove('pk', { x: 0, y: 1 });
+    expect(useSkirmish.getState().net?.moveCount).toBe(1);
+    vi.advanceTimersByTime(621);
+    expect(sent).toEqual([{ pieceId: 'ep', move: { x: 4, y: 7, promotion: 'knight' }, expected: 1 }]);
+    expect(useSkirmish.getState().game.pieces.find((candidate) => candidate.id === 'ep')).toMatchObject({ type: 'pawn', x: 4, y: 6 });
+    expect(useSkirmish.getState().net?.pendingMove?.expectedMoveCount).toBe(1);
+
+    useSkirmish.getState().applyRemoteMove('ep', sent[0].move);
+    expect(useSkirmish.getState().game.pieces.find((candidate) => candidate.id === 'ep')).toMatchObject({ type: 'knight', x: 4, y: 7 });
+    expect(useSkirmish.getState().net).toMatchObject({ moveCount: 2, pendingMove: null });
+  });
+
+  it('retains a move-derived terminal result at its exact authoritative relay count', () => {
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'enemy', level: playableNetLevel(), seed: 7 });
+    useSkirmish.setState({
+      game: {
+        size: { cols: 8, rows: 8 },
+        pieces: [piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 7, 7), piece('ek', 'enemy', 'king', 0, 5)],
+        turn: 'player',
+        winner: null,
+      },
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'capture-king',
+      objectiveCtx: { kingSide: 'enemy' },
+      victoryOverride: null,
+      selectedId: null,
+      focusedId: null,
+    });
+
+    useSkirmish.getState().applyRemoteMove('pr', { x: 0, y: 5 });
+
+    const state = useSkirmish.getState();
+    expect(state.game).toMatchObject({ winner: 'player', turn: 'done' });
+    expect(state.net?.terminalResult).toEqual({ expectedMoveCount: 1, winner: 'player', reason: 'victory-rule' });
+    expect(state.log[0]).toBe('Defeat — Your King was captured.');
+  });
+
+  it('invalidates and clears all lobby-owned local state when its route is left', () => {
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'enemy', level: playableNetLevel(), seed: 7 });
+    const beforeEpoch = useSkirmish.getState().sessionEpoch;
+    useSkirmish.setState({
+      premoves: [{ pieceId: 'queued', x: 1, y: 2 }],
+      premoveInputOpen: true,
+      testMode: true,
+      testMinCpuDelayMs: 1234,
+    });
+
+    useSkirmish.getState().leaveNetSession('some-other-lobby');
+    expect(useSkirmish.getState().net?.lobbyId).toBe('L1');
+    useSkirmish.getState().leaveNetSession('L1');
+
+    expect(useSkirmish.getState()).toMatchObject({
+      started: false,
+      levelId: null,
+      victoryOverride: null,
+      resultDetail: null,
+      turnsElapsed: 0,
+      net: null,
+      selectedId: null,
+      focusedId: null,
+      pendingPromotion: null,
+      premoves: [],
+      premoveInputOpen: false,
+      testMode: false,
+      testMinCpuDelayMs: 0,
+      clock: null,
+    });
+    expect(useSkirmish.getState().sessionEpoch).toBeGreaterThan(beforeEpoch);
+  });
+});
+
 describe('local resign', () => {
   it('ends a single-player board immediately as a defeat', () => {
     useSkirmish.getState().newSkirmish({ seed: 5 });
@@ -828,7 +1174,7 @@ describe('local resign', () => {
   });
 
   it('does not decide a netplay match locally', () => {
-    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'player', level: createBlankLevel('net-1', 'Net'), seed: 7 });
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'player', level: playableNetLevel(), seed: 7 });
     useSkirmish.getState().resignLocal();
 
     expect(useSkirmish.getState().game.winner).toBeNull();
@@ -836,8 +1182,8 @@ describe('local resign', () => {
 });
 
 describe('netplay resign', () => {
-  const netMatch = (localSide: Side) =>
-    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide, level: createBlankLevel('net-1', 'Net'), seed: 7 });
+  const netMatch = (localSide: PlayingSide) =>
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide, level: playableNetLevel(), seed: 7 });
 
   afterEach(() => setNetResignSink(null));
 
@@ -886,5 +1232,23 @@ describe('netplay resign', () => {
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('player');
     expect(s.log[0]).toMatch(/you resigned/i);
+  });
+
+  it('lets the first authoritative resignation resolve a different local disputed verdict', () => {
+    netMatch('player');
+    useSkirmish.setState((state) => ({
+      game: { ...state.game, winner: 'enemy', turn: 'done' },
+      net: state.net ? {
+        ...state.net,
+        terminalResult: { expectedMoveCount: 0, winner: 'enemy', reason: 'victory-rule' },
+      } : null,
+    }));
+
+    useSkirmish.getState().concludeNet('player', 'resign');
+    const resolved = useSkirmish.getState();
+    expect(resolved.game.winner).toBe('player');
+    expect(resolved.net?.terminalResult).toBeNull();
+    expect(resolved.net?.authoritativeResult).toEqual({ winner: 'player', reason: 'resign' });
+    expect(resolved.log[0]).toMatch(/opponent resigned/i);
   });
 });

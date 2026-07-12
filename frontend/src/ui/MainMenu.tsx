@@ -2,16 +2,16 @@ import { lazy, Suspense, useEffect, useState, useSyncExternalStore, type ReactEl
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { Settings } from './Settings';
-import { Campaign } from './Campaign';
+import { PlayMenu } from './PlayMenu';
 import { Lobbies } from './Lobbies';
 import { NavButton } from './shared/NavButton';
 import { FittedTabLabel } from './shared/FittedTabLabel';
+import { isPlaySelectorPath, PLAY_SKIRMISH_SELECTOR_HREF } from './playHubRoute';
 
-// The Editor and Solo Skirmish picker are heavier / code-split out of the menu bundle — lazy-loaded
-// only when their destination opens, inside a LOCAL Suspense so the fallback shows in the destination
-// column (not the whole menu). Settings/Campaign are light enough to import directly.
+// The Editor is heavier / code-split out of the menu bundle — lazy-loaded only when its
+// destination opens, inside a LOCAL Suspense so the fallback shows in the destination column
+// (not the whole menu). Settings, Play, and Lobbies are light enough to import directly.
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
-const SkirmishMapPickerRoute = lazy(() => import('./SkirmishMapPicker').then((m) => ({ default: m.SkirmishMapPickerRoute })));
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
 
@@ -26,7 +26,6 @@ const STONE_SURFACE = '/assets/ui/surfaces/baseline-stone-blue.avif';
 const TITLE_SURFACE = '/assets/ui/surfaces/hybrid-wood-oak.png';
 
 const MODE_HREFS: Record<string, string> = {
-  'solo-skirmish': '/skirmish',
   'campaign-editor': '/editor',
   lobbies: '/lobbies',
   settings: '/settings',
@@ -36,21 +35,21 @@ interface MenuTab { slug: string; label: string; href: string; iconSlug: string 
 
 // Product-menu relabels applied over MENU_MODES (which stays the untouched design-catalog
 // source of truth — its widget assets keep their 'campaign-editor'/'level-editor' names).
-// The Editor (/editor) IS the app's single "Editor": level authoring is reached from inside
-// it (Edit Board / + New Board), so the rail presents it simply as "Editor" and no longer
-// carries a separate top-level "Level Editor" tab. The nested level editor (/editor/level)
-// still exists — it's just no longer a front door, only reached by drilling into a level.
-const MENU_TAB_LABELS: Record<string, string> = { 'campaign-editor': 'Editor' };
-const MENU_HIDDEN_SLUGS = new Set(['level-editor']);
+// "Editor" remains the campaign/workspace organizer; its pinned actions include the
+// no-decisions shortcut into a blank standalone board.
+const MENU_TAB_LABELS: Record<string, string> = {
+  'campaign-editor': 'Editor',
+};
 
-// The main-menu rail. The Campaign (play) mode is menu-only — not a design-catalog
-// widget — so it lives here rather than in MENU_MODES (the catalog's source of
-// truth). It leads the rail as the headline mode and sits apart from the Editor
-// so the shared placeholder icon doesn't read as a duplicate of an adjacent
-// tab. Temp icon: reuses the campaign-editor carving until a dedicated 'campaign'
-// carving is forged.
+const MENU_HIDDEN_SLUGS = new Set(['solo-skirmish', 'level-editor']);
+
+// The main-menu rail. Play is the one player-facing entry for Skirmish, standalone
+// Levels, and Campaigns (ADR-0074). It is menu-only rather than a design-catalog
+// widget, so MENU_MODES stays the untouched catalog source of truth. The existing
+// sword carving is the semantic Play mark; the retired separate Campaign and Solo
+// Skirmish entries do not remain as hidden navigation parallels.
 const MENU_TABS: MenuTab[] = [
-  { slug: 'campaign', label: 'Campaign', href: '/campaign', iconSlug: 'campaign-editor' },
+  { slug: 'play', label: 'Play', href: PLAY_SKIRMISH_SELECTOR_HREF, iconSlug: 'solo-skirmish' },
   ...MENU_MODES
     .filter((mode) => !MENU_HIDDEN_SLUGS.has(mode.slug))
     .map((mode) => ({
@@ -95,22 +94,20 @@ function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?:
 }
 
 // Which menu destinations render INSIDE the persistent shell (their own columns beside the pinned
-// button column) vs. navigate away to a full screen. Menu-family destinations (Settings, Campaign)
-// live in the shell; heavy gameplay/editor surfaces (Skirmish, Level Editor) take the whole screen.
-type ShellDest = 'settings' | 'campaign' | 'editor' | 'skirmish' | 'lobbies';
-const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', campaign: '/campaign', editor: '/editor', skirmish: '/skirmish', lobbies: '/lobbies' };
-const DEST_LABEL: Record<ShellDest, string> = { settings: 'Settings', campaign: 'Campaign', editor: 'Editor', skirmish: 'Solo skirmish', lobbies: 'Lobbies' };
+// button column) vs. navigate away to a full screen. Settings, Play, Editor, and Lobbies live in
+// the shell; the selected live board and nested Level Editor take the whole screen.
+type ShellDest = 'settings' | 'play' | 'editor' | 'lobbies';
+const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', play: PLAY_SKIRMISH_SELECTOR_HREF, editor: '/editor', lobbies: '/lobbies' };
+const DEST_LABEL: Record<ShellDest, string> = { settings: 'Settings', play: 'Play', editor: 'Editor', lobbies: 'Lobbies' };
 // How long the destination panel fades in/out. Matches --ds-duration-fade (the ONE shared fade
 // speed, ADR-0046) — same as the Settings panel crossfade + the screen entrance.
 const DEST_FADE_MS = 350;
 function shellDest(path: string): ShellDest | null {
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
-  if (path === '/campaign' || path.startsWith('/campaign/')) return 'campaign';
+  if (isPlaySelectorPath(path)) return 'play';
   // The Editor is a settings-twin now (ADR-0065): canonical /editor + legacy /campaigns-next·/campaigns.
-  // The NESTED level editor (/editor/level) is a separate heavy full screen — NOT a shell dest.
+  // The board editor (/editor/level) is a separate heavy full screen — NOT a shell dest.
   if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return 'editor';
-  // Solo Skirmish is the map/mode PICKER (a settings-twin); the live board (/play) is full-screen.
-  if (path === '/skirmish') return 'skirmish';
   // Lobbies is a single ACTION column (tab → action) — host/join + the lobby list.
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return 'lobbies';
   return null;
@@ -195,7 +192,7 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings.
           The rail is placed by the shared .settings-shell rule alone (ADR-0062) — no
           home-only position class — so its buttons line up pixel-for-pixel with the
-          Settings/Campaign rails at every width. */}
+          Settings/Play rails at every width. */}
       <div className={`settings-screen main-menu-twin-screen app-shell-bar-pad ${renderedDest ? 'has-dest' : ''}`.trim()} data-dest={renderedDest ?? undefined}>
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
@@ -204,10 +201,9 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
           {renderedDest ? (
             <div className={`menu-dest ${leaving ? 'is-leaving' : ''}`.trim()} key={renderedDest} aria-label={DEST_LABEL[renderedDest]}>
               {renderedDest === 'settings' ? <Settings embedded />
-                : renderedDest === 'campaign' ? <Campaign embedded />
+                : renderedDest === 'play' ? <PlayMenu />
                 : renderedDest === 'lobbies' ? <Lobbies embedded />
-                : renderedDest === 'editor' ? <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><CampaignEditor embedded /></Suspense>
-                : <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><SkirmishMapPickerRoute embedded /></Suspense>}
+                : <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><CampaignEditor embedded /></Suspense>}
             </div>
           ) : null}
         </ArtRouteChrome>

@@ -24,7 +24,7 @@ const divider: DividerRender = {
   atomOverlay: null,
 };
 
-describe('chrome family geometry ownership (ADR-0070)', () => {
+describe('chrome family geometry ownership (ADR-0083)', () => {
   it('keeps derived frame geometry and invisible rail seats out of authored state', () => {
     for (const role of ['outer', 'inner'] as const) {
       const tune = roleDefault(role);

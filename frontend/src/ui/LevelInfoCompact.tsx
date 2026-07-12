@@ -5,10 +5,12 @@
 // there is no editing grid; this is the whole readout, not a header above one.
 import { type ReactElement } from 'react';
 import type { Level, ZoneType } from '../core/level';
-import { MODE_NAME, objectiveSummary } from '../core/objectives';
+import { MODE_NAME, objectiveContextForLevel, victoryRulesForLevel } from '../core/objectives';
 import { formatClockSeconds } from '../core/clock';
 import type { PieceType } from '../core/types';
 import { spawnEventsForLevel } from '../core/levelEvents';
+import { objectiveBriefingForSide } from '../game/objectiveBriefing';
+import type { PlayingSide } from '../game/clientPerspective';
 
 const PIECE_ORDER: PieceType[] = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn', 'rock', 'random-rock'];
 const PIECE_LABEL: Record<PieceType, string> = {
@@ -62,10 +64,12 @@ export function kingSideForLevel(level: Level): 'player' | 'enemy' {
   return hasKing('player') && !hasKing('enemy') ? 'player' : 'enemy';
 }
 
-/** The win-rule goal line for a level's Rules row / level-select subtitle — mode name plus
- * the direction-aware summary (so a player-held-King King Assault reads "Protect your King"). */
-export function levelObjectiveLine(level: Level): string {
-  return `${MODE_NAME[level.objective]} — ${objectiveSummary(level.objective, kingSideForLevel(level))}`;
+/** The rules line for a level selector or lobby seat. Both the goal and danger come from the
+ * exact rule list; `perspectiveSide` changes only the client projection, never the simulation. */
+export function levelObjectiveLine(level: Level, perspectiveSide: PlayingSide = 'player'): string {
+  const ctx = { ...objectiveContextForLevel(level), kingSide: kingSideForLevel(level) };
+  const rules = victoryRulesForLevel(level, ctx);
+  return `${MODE_NAME[level.objective]} — ${objectiveBriefingForSide(rules, perspectiveSide).summary}`;
 }
 
 function Roster({ counts, tone, label }: { counts: PieceCounts; tone: string; label: string }): ReactElement {

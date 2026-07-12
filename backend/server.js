@@ -4,6 +4,17 @@ const crypto = require('crypto');
 const express = require('express');
 const { Pool } = require('pg');
 
+// Shared DOM-free board-render geometry. server.js is hot-copied to and run
+// from a temp dir by supervisor.js, so sibling backend assets must resolve from
+// the baked backend dir instead of this process' __dirname.
+const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
+let serverRender = null;
+try {
+  serverRender = require('@chess-tactics/board-render');
+} catch (error) {
+  console.error('board-render package unavailable; level thumbnails will use the default image:', error && error.message);
+}
+
 const app = express();
 const port = process.env.PORT || 3000;
 const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend', 'dist');
@@ -16,6 +27,24 @@ const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life')
 // (k8s/templates/deployment.yaml:17 `replicas: 1`, a hard invariant) — a second
 // pod would split the lobby state and the relay. No Redis; in-memory is fine for v1.
 const lobbies = new Map();
+const parsedLobbyTombstoneTtl = Number.parseInt(process.env.LOBBY_TOMBSTONE_TTL_MS, 10);
+const LOBBY_TOMBSTONE_TTL_MS = Number.isFinite(parsedLobbyTombstoneTtl) && parsedLobbyTombstoneTtl > 0
+  ? parsedLobbyTombstoneTtl
+  : 5 * 60 * 1000;
+
+// Production derives lobby eligibility only from the canonical official workspace.
+// The DB-free protocol smoke has no workspace store, so tests may inject a tiny metadata
+// map only under an explicit test process. Merely setting the metadata variable in any
+// non-test environment has no effect.
+let lobbyTestLevelMetadata = null;
+if (process.env.NODE_ENV === 'test' && process.env.LOBBY_TEST_LEVEL_METADATA) {
+  try {
+    const parsed = JSON.parse(process.env.LOBBY_TEST_LEVEL_METADATA);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) lobbyTestLevelMetadata = parsed;
+  } catch (error) {
+    console.warn('LOBBY_TEST_LEVEL_METADATA is invalid JSON and will be ignored:', error.message);
+  }
+}
 // SSE subscribers. Global list channel (lobby list changed) and per-lobby game
 // channels. Each per-lobby entry is { res, email } so the lobby frame can be
 // projected per-viewer (your_side / viewer_role depend on the viewer's email).
@@ -44,6 +73,19 @@ const BGM_CACHE_TTL_MS = 5 * 60 * 1000;
 let bgmCache = { tracks: null, expiry: 0 };
 let bgmContainerClient = null; // lazily built Azure ContainerClient (list mode only)
 
+// Live Unit Studio art. Metadata and accepted pointers live in Postgres; PNG
+// bytes are content-addressed in this private container. UNIT_ASSET_STORAGE_DIR
+// is the deterministic local/CI implementation of the same blob-key contract.
+const unitAssetContainerUrl = (process.env.UNIT_ASSET_CONTAINER_URL || '').replace(/\/+$/, '');
+const unitAssetStorageDir = String(process.env.UNIT_ASSET_STORAGE_DIR || '').trim();
+const unitAssetSeedCatalogUrl = String(process.env.UNIT_ASSET_SEED_CATALOG_URL || '').trim();
+const UNIT_ASSET_MAX_BYTES = 10 * 1024 * 1024;
+const UNIT_SPRITE_CACHE_MAX_BYTES = Math.max(
+  0,
+  Number.parseInt(process.env.UNIT_SPRITE_CACHE_BYTES || '', 10) || 24 * 1024 * 1024,
+);
+let unitAssetContainerClient = null;
+
 // Game Lab runs carry whole recorded-game batches (validateLabRun allows up to
 // ~8 MB of JSON), far past the global 256kb ceiling. Mount their larger parser
 // first: once it has consumed the body, the global parser below sees the
@@ -53,6 +95,9 @@ app.use('/api/lab-runs', express.json({ limit: '10mb' }));
 // Training run specs embed a whole level object (+ optionally a generated book), so
 // they exceed the 256kb global ceiling; mount a larger parser first, like lab-runs.
 app.use('/api/train-runs', express.json({ limit: '10mb' }));
+// Solve run specs embed a whole level object (SolveSpec.level), same as train-runs, so
+// they exceed the 256kb global ceiling; mount a larger parser first.
+app.use('/api/solve-runs', express.json({ limit: '10mb' }));
 // Opening-book blobs carry every book's capped training trajectory (up to a few
 // hundred points each across several books), which can exceed the global 256kb
 // ceiling. Mount a larger parser first, same as lab-runs; the global parser below
@@ -62,6 +107,13 @@ app.use('/api/opening-books', express.json({ limit: '4mb' }));
 // docs, each carrying a full per-cell terrain array + boardCode), so it grows well past the
 // 256kb ceiling. Mount a larger parser first, same as lab-runs; the global parser below skips it.
 app.use('/api/official-campaigns', express.json({ limit: '10mb' }));
+// Editor documents hold one complete Level working copy. They need the same
+// headroom as a single level document (boardCode + layer arrays).
+app.use('/api/editor-documents', express.json({ limit: '4mb' }));
+// Sprite upload routes send one PNG as the request body. Mount this before the
+// global JSON parser; it only consumes image/png, so candidate metadata requests
+// continue through to express.json below.
+app.use('/api/admin/unit-assets', express.raw({ type: 'image/png', limit: '10mb' }));
 app.use(express.json({ limit: '256kb' }));
 
 // ---------------------------------------------------------------------------
@@ -326,6 +378,289 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 13,
+    name: 'live editor maps and misc pool',
+    // Live editor maps: a public-by-link Level document for the Level Editor.
+    // owner_email gates writes; public_id gates reads. Anonymous/agent-created rows
+    // live in the misc pool and expire unless somebody saves/adopts them.
+    sql: `
+      CREATE TABLE IF NOT EXISTS editor_maps (
+        public_id   text        PRIMARY KEY,
+        owner_email text,
+        anonymous_user_hash text,
+        anonymous_label text,
+        edit_key_hash text,
+        listed      boolean     NOT NULL DEFAULT false,
+        name        text,
+        body        jsonb       NOT NULL,
+        revision    integer     NOT NULL DEFAULT 0,
+        saved_at    timestamptz,
+        saved_by    text,
+        expires_at  timestamptz,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS editor_maps_owner_idx ON editor_maps (owner_email, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS editor_maps_anonymous_idx ON editor_maps (anonymous_user_hash, updated_at DESC)
+        WHERE anonymous_user_hash IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS editor_maps_misc_idx ON editor_maps (expires_at, updated_at DESC)
+        WHERE listed = true AND saved_at IS NULL;
+      CREATE TABLE IF NOT EXISTS editor_map_audit_events (
+        id                  bigserial   PRIMARY KEY,
+        public_id           text        NOT NULL REFERENCES editor_maps(public_id) ON DELETE CASCADE,
+        action              text        NOT NULL,
+        actor_email         text,
+        anonymous_user_hash text,
+        anonymous_label     text,
+        created_at          timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS editor_map_audit_public_idx ON editor_map_audit_events (public_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS editor_map_audit_anonymous_idx ON editor_map_audit_events (anonymous_user_hash, created_at DESC)
+        WHERE anonymous_user_hash IS NOT NULL;
+    `,
+  },
+  {
+    version: 14,
+    name: 'live unit art catalog',
+    // Six stable chess-piece families point at their currently accepted art.
+    // Candidate rows are replaceable art sets, not gameplay identities: levels
+    // continue to mean pawn/rook/etc. regardless of which sprite set is live.
+    // PNG bytes live in Azure Blob Storage; Postgres owns only catalog metadata,
+    // geometry, content hashes, acceptance, and the audit trail.
+    sql: `
+      CREATE TABLE IF NOT EXISTS unit_assets (
+        id                      uuid        PRIMARY KEY,
+        family                  text        NOT NULL CHECK (family IN ('pawn', 'rook', 'knight', 'bishop', 'queen', 'king')),
+        label                   text        NOT NULL,
+        method                  text        NOT NULL DEFAULT 'Imported',
+        notes                   text        NOT NULL DEFAULT '',
+        status                  text        NOT NULL DEFAULT 'candidate' CHECK (status IN ('candidate', 'archived')),
+        footprint_shape         text        NOT NULL DEFAULT 'circle' CHECK (footprint_shape IN ('circle', 'square')),
+        source_canvas_width     integer     NOT NULL CHECK (source_canvas_width > 0 AND source_canvas_width <= 4096),
+        source_canvas_height    integer     NOT NULL CHECK (source_canvas_height > 0 AND source_canvas_height <= 4096),
+        source_footprint_px     numeric     NOT NULL CHECK (source_footprint_px > 0 AND source_footprint_px <= 4096),
+        anchor_x                numeric     NOT NULL DEFAULT 0.5 CHECK (anchor_x >= 0 AND anchor_x <= 1),
+        anchor_y                numeric     NOT NULL DEFAULT 0.80241 CHECK (anchor_y >= 0 AND anchor_y <= 1),
+        row_revision            integer     NOT NULL DEFAULT 0,
+        created_at              timestamptz NOT NULL DEFAULT now(),
+        updated_at              timestamptz NOT NULL DEFAULT now(),
+        updated_by              text,
+        UNIQUE (id, family)
+      );
+
+      CREATE TABLE IF NOT EXISTS unit_families (
+        family                  text        PRIMARY KEY CHECK (family IN ('pawn', 'rook', 'knight', 'bishop', 'queen', 'king')),
+        accepted_asset_id       uuid,
+        display_scale_percent   integer     NOT NULL DEFAULT 100 CHECK (display_scale_percent >= 60 AND display_scale_percent <= 140),
+        row_revision            integer     NOT NULL DEFAULT 0,
+        updated_at              timestamptz NOT NULL DEFAULT now(),
+        updated_by              text,
+        FOREIGN KEY (accepted_asset_id, family) REFERENCES unit_assets (id, family)
+      );
+
+      CREATE TABLE IF NOT EXISTS unit_sprites (
+        asset_id                uuid        NOT NULL REFERENCES unit_assets (id) ON DELETE CASCADE,
+        palette                 text        NOT NULL CHECK (palette IN ('navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white')),
+        direction               text        NOT NULL CHECK (direction IN ('north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west')),
+        sha256                  text        NOT NULL CHECK (char_length(sha256) = 64),
+        blob_key                text        NOT NULL,
+        content_type            text        NOT NULL DEFAULT 'image/png' CHECK (content_type = 'image/png'),
+        width                   integer     NOT NULL CHECK (width > 0 AND width <= 4096),
+        height                  integer     NOT NULL CHECK (height > 0 AND height <= 4096),
+        byte_length             integer     NOT NULL CHECK (byte_length > 0 AND byte_length <= 10485760),
+        created_at              timestamptz NOT NULL DEFAULT now(),
+        updated_at              timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (asset_id, palette, direction)
+      );
+      CREATE INDEX IF NOT EXISTS unit_assets_family_status_idx ON unit_assets (family, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS unit_sprites_sha_idx ON unit_sprites (sha256);
+
+      CREATE TABLE IF NOT EXISTS unit_catalog_state (
+        singleton               boolean     PRIMARY KEY DEFAULT true CHECK (singleton),
+        revision                bigint      NOT NULL DEFAULT 0,
+        updated_at              timestamptz NOT NULL DEFAULT now()
+      );
+      INSERT INTO unit_catalog_state (singleton) VALUES (true) ON CONFLICT (singleton) DO NOTHING;
+
+      INSERT INTO unit_families (family) VALUES
+        ('pawn'), ('rook'), ('knight'), ('bishop'), ('queen'), ('king')
+      ON CONFLICT (family) DO NOTHING;
+
+      CREATE TABLE IF NOT EXISTS unit_asset_events (
+        id                      bigserial   PRIMARY KEY,
+        family                  text        NOT NULL,
+        asset_id                uuid,
+        action                  text        NOT NULL,
+        actor_email             text,
+        details                 jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        created_at              timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS unit_asset_events_family_idx ON unit_asset_events (family, created_at DESC);
+    `,
+  },
+  {
+    version: 15,
+    name: 'solve runs',
+    // Account-scoped headless BOARD-SOLVER runs (ADR-0069 §5), mirroring train_runs.
+    // `spec` is the immutable SolveSpec (level + bounds + mode) the solver Job reads;
+    // `body` is the progressively-patched result (feasibility, tightening rootBounds,
+    // proven census, final rootValue + piece values + tablebase ref); `status` is
+    // pending|running|done|error|cancelled; `job_name` is the k8s Job the backend
+    // launched (so a cancel can delete it). DELETE is cancel-not-purge (keeps body).
+    sql: `
+      CREATE TABLE IF NOT EXISTS solve_runs (
+        id          text        PRIMARY KEY,
+        owner_email text        NOT NULL,
+        spec        jsonb       NOT NULL,
+        body        jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        status      text        NOT NULL DEFAULT 'pending',
+        job_name    text,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS solve_runs_owner_idx ON solve_runs (owner_email, created_at DESC);
+    `,
+  },
+  {
+    version: 16,
+    name: 'durable account-owned level working copies',
+    // A working copy is private account data with an opaque global document id;
+    // account-local level ids (l1, l2, ...) are not safe URL identities. It never
+    // expires and is never public-by-link.
+    // revision is the compare-and-swap token; saved_revision equals revision exactly
+    // when the working copy is known to match the canonical saved Level. baseline_hash
+    // identifies the canonical Level the working copy was based on, so a later external
+    // workspace write cannot be silently overwritten by a stale editor document.
+    //
+    // Preserve signed-in v13 rows: newest per real user/official level, and every
+    // standalone "draft" under a unique legacy id. Then remove the superseded
+    // public/edit-key subsystem.
+    sql: `
+      CREATE TABLE IF NOT EXISTS level_working_copies (
+        document_id     text        PRIMARY KEY,
+        owner_email     text        NOT NULL,
+        workspace_kind  text        NOT NULL CHECK (workspace_kind IN ('user', 'official')),
+        workspace_id    text        NOT NULL,
+        level_id        text        NOT NULL,
+        body            jsonb       NOT NULL,
+        revision        bigint      NOT NULL DEFAULT 1 CHECK (revision >= 1),
+        saved_revision  bigint      NOT NULL DEFAULT 0 CHECK (saved_revision >= 0 AND saved_revision <= revision),
+        baseline_hash   text,
+        created_at      timestamptz NOT NULL DEFAULT now(),
+        updated_at      timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (owner_email, workspace_kind, workspace_id, level_id),
+        CHECK (
+          (workspace_kind = 'user' AND workspace_id = 'campaign') OR
+          (workspace_kind = 'official' AND char_length(workspace_id) > 0)
+        )
+      );
+      CREATE INDEX IF NOT EXISTS level_working_copies_owner_updated_idx
+        ON level_working_copies (owner_email, updated_at DESC);
+
+      ALTER TABLE level_working_copies
+        ADD COLUMN IF NOT EXISTS baseline_hash text;
+
+      ALTER TABLE campaign_workspaces
+        ADD COLUMN IF NOT EXISTS revision bigint NOT NULL DEFAULT 0;
+
+      WITH migratable AS (
+        SELECT
+          em.*,
+          CASE
+            -- The old editor created unrelated standalone maps with the shared
+            -- placeholder id "draft". Give each one a distinct account-local id
+            -- so the uniqueness constraint cannot collapse recoverable work.
+            WHEN COALESCE(em.body->>'id', '') = 'draft'
+              OR COALESCE(em.body->>'id', '') !~ '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$'
+              THEN 'legacy-' || em.public_id
+            ELSE em.body->>'id'
+          END AS migrated_level_id,
+          CASE WHEN COALESCE(em.body->>'id', '') ~ '^off-' THEN 'official' ELSE 'user' END AS migrated_workspace_kind,
+          CASE WHEN COALESCE(em.body->>'id', '') ~ '^off-' THEN 'default' ELSE 'campaign' END AS migrated_workspace_id
+        FROM editor_maps em
+        WHERE em.owner_email IS NOT NULL
+          AND jsonb_typeof(em.body) = 'object'
+          AND em.public_id ~ '^[abcdefghijkmnpqrstuvwxyz23456789]{8,24}$'
+      ), ranked AS (
+        SELECT
+          migratable.*,
+          row_number() OVER (
+            PARTITION BY owner_email, migrated_workspace_kind, migrated_workspace_id, migrated_level_id
+            ORDER BY updated_at DESC, public_id
+          ) AS level_rank
+        FROM migratable
+      ), prepared AS (
+        SELECT
+          ranked.*,
+          jsonb_set(ranked.body, '{id}', to_jsonb(migrated_level_id), true) AS migrated_body,
+          CASE
+            WHEN migrated_workspace_kind = 'official'
+              THEN (oc.data->'levels')->migrated_level_id
+            ELSE (cw.body->'levels')->migrated_level_id
+          END AS canonical_body
+        FROM ranked
+        LEFT JOIN campaign_workspaces cw
+          ON migrated_workspace_kind = 'user' AND cw.owner_email = ranked.owner_email
+        LEFT JOIN official_campaigns oc
+          ON migrated_workspace_kind = 'official' AND oc.id = migrated_workspace_id
+        WHERE level_rank = 1
+      )
+      INSERT INTO level_working_copies
+        (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash, created_at, updated_at)
+      SELECT
+        'legacy-' || public_id,
+        owner_email,
+        migrated_workspace_kind,
+        migrated_workspace_id,
+        migrated_level_id,
+        migrated_body,
+        CASE
+          WHEN canonical_body IS NOT NULL AND canonical_body <> migrated_body THEN GREATEST(revision, 2)
+          ELSE GREATEST(revision, 1)
+        END,
+        CASE
+          WHEN canonical_body = migrated_body THEN GREATEST(revision, 1)
+          -- Synthetic revision 1 represents the canonical baseline; revision
+          -- 2+ is the recovered differing draft. This keeps saved_revision=0
+          -- reserved for documents that truly have never had a saved Level.
+          WHEN canonical_body IS NOT NULL THEN 1
+          ELSE 0
+        END,
+        md5(canonical_body::text),
+        created_at,
+        updated_at
+      FROM prepared
+      ON CONFLICT (owner_email, workspace_kind, workspace_id, level_id) DO NOTHING;
+
+      DROP TABLE IF EXISTS editor_map_audit_events;
+      DROP TABLE IF EXISTS editor_maps;
+    `,
+  },
+  {
+    version: 17,
+    name: 'block spatially resampled unit acceptance',
+    // ADR-0076 keeps accepted-sprite recapture as a calibration instrument but forbids
+    // promoting its resized pixels. This server-owned flag is monotonic: editing the human
+    // method/notes later cannot erase the reason a candidate is ineligible for production.
+    sql: `
+      ALTER TABLE unit_assets
+        ADD COLUMN IF NOT EXISTS acceptance_block_reason text;
+
+      UPDATE unit_assets
+         SET acceptance_block_reason = 'spatial-resampling'
+       WHERE acceptance_block_reason IS NULL
+         AND (
+           method = 'Accepted sprite smooth recapture'
+           OR notes ~ '"pipeline"[[:space:]]*:[[:space:]]*"accepted-sprite-recapture"'
+           OR notes ~ '"spatialResampling"[[:space:]]*:[[:space:]]*true'
+         );
+
+      ALTER TABLE unit_assets
+        ADD CONSTRAINT unit_assets_acceptance_block_reason_check
+        CHECK (acceptance_block_reason IS NULL OR acceptance_block_reason = 'spatial-resampling');
+    `,
+  },
 ];
 
 let pool = null;
@@ -439,15 +774,13 @@ async function checkMigrations() {
 
 async function prepareDbSchema() {
   if (schemaMigrationMode === 'off') {
-    dbReady = true;
-    return;
-  }
-  if (schemaMigrationMode === 'auto') {
+    // The caller explicitly owns schema readiness.
+  } else if (schemaMigrationMode === 'auto') {
     await runMigrations();
-    dbReady = true;
-    return;
+  } else {
+    await checkMigrations();
   }
-  await checkMigrations();
+  if (unitAssetSeedCatalogUrl) await seedUnitCatalogFromLiveSource();
   dbReady = true;
 }
 
@@ -559,8 +892,10 @@ function publicLobbyUser(user) {
   };
 }
 
-function publicLobby(lobby, viewerEmail) {
-  return {
+function publicLobby(lobby, viewerEmail, { includeLevelSnapshot = false } = {}) {
+  const reports = lobby.resultReports || {};
+  const viewerSide = lobbySideForEmail(lobby, viewerEmail);
+  const projected = {
     id: lobby.id,
     name: lobby.name,
     phase: lobby.phase,
@@ -574,14 +909,24 @@ function publicLobby(lobby, viewerEmail) {
     },
     viewer_role: viewerEmail === lobby.host.email ? 'host' : (lobby.guest && viewerEmail === lobby.guest.email ? 'guest' : 'observer'),
     level_id: lobby.levelId ?? null,
+    level_timed: typeof lobby.levelTimed === 'boolean' ? lobby.levelTimed : null,
+    level_name: lobby.levelName ?? null,
+    level_objective: lobby.levelObjective ?? null,
     seed: lobby.seed ?? null,
     move_count: lobby.moves ? lobby.moves.length : 0,
-    // Terminal outcome (resignation) in board terms, or null while the match is live.
+    // Terminal outcome in canonical board terms, or null while the match is live.
     result: lobby.result ?? null,
-    your_side: viewerEmail === lobby.host.email
-      ? 'player'
-      : (lobby.guest && viewerEmail === lobby.guest.email ? 'enemy' : null),
+    // A deterministic result is authoritative only after both occupied seats report the
+    // exact same outcome. Expose the pending state without leaking either private report.
+    result_pending: !lobby.result && !lobby.resultDisputed && Boolean(reports.player || reports.enemy),
+    result_disputed: !lobby.result && Boolean(lobby.resultDisputed),
+    your_side: viewerSide,
   };
+  if (includeLevelSnapshot && viewerSide) {
+    projected.level_snapshot = lobby.levelSnapshot ?? null;
+    projected.level_fingerprint = lobby.levelFingerprint ?? null;
+  }
+  return projected;
 }
 
 function isObjectRecord(value) {
@@ -1129,6 +1474,7 @@ async function requireDesignPortfolioWriter(req, res) {
 }
 
 function activeLobbies() {
+  purgeExpiredLobbyTombstones();
   return Array.from(lobbies.values())
     .filter((lobby) => lobby.phase !== 'closed')
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -1136,6 +1482,106 @@ function activeLobbies() {
 
 function userActiveLobby(email) {
   return activeLobbies().find((lobby) => lobby.host.email === email || (lobby.guest && lobby.guest.email === email)) || null;
+}
+
+function userRecoverableLobbies(email) {
+  purgeExpiredLobbyTombstones();
+  return Array.from(lobbies.values())
+    .filter((lobby) => {
+      if (lobby.phase !== 'closed') return false;
+      const side = lobbySideForEmail(lobby, email);
+      return Boolean(side && !(lobby.departed && lobby.departed[side]));
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function lobbySideForEmail(lobby, email) {
+  if (lobby.host && lobby.host.email === email) return 'player';
+  if (lobby.guest && lobby.guest.email === email) return 'enemy';
+  return null;
+}
+
+function touchLobby(lobby) {
+  lobby.stateRevision = Number.isInteger(lobby.stateRevision) ? lobby.stateRevision + 1 : 1;
+  lobby.updatedAt = new Date().toISOString();
+}
+
+function lobbyStateMatches(lobby, expected) {
+  const current = lobbies.get(expected.id);
+  if (current !== lobby) return false;
+  if (lobby.stateRevision !== expected.revision) return false;
+  if (lobby.phase !== expected.phase) return false;
+  if ((lobby.host && lobby.host.email) !== expected.hostEmail) return false;
+  if ((lobby.guest && lobby.guest.email) !== expected.guestEmail) return false;
+  if (Object.hasOwn(expected, 'levelId') && lobby.levelId !== expected.levelId) return false;
+  return true;
+}
+
+function endLobbyStreams(lobbyId) {
+  const subs = lobbyChannelSubscribers.get(lobbyId);
+  if (!subs) return;
+  for (const sub of subs) {
+    try { sub.res.end(); } catch { /* already closed */ }
+  }
+  lobbyChannelSubscribers.delete(lobbyId);
+}
+
+// Closing a lobby turns its retained snapshot, moves, and result reports into
+// seat-private recovery data. Observers admitted while the lobby was public must
+// be disconnected before the first closed frame is broadcast.
+function restrictClosedLobbyStreams(lobby) {
+  if (lobby.phase !== 'closed') return;
+  const subs = lobbyChannelSubscribers.get(lobby.id);
+  if (!subs) return;
+  for (const sub of [...subs]) {
+    if (lobbySideForEmail(lobby, sub.email)) continue;
+    subs.delete(sub);
+    try { sub.res.end(); } catch { /* already closed */ }
+  }
+  if (subs.size === 0) lobbyChannelSubscribers.delete(lobby.id);
+}
+
+function deleteLobbyRecord(lobby, notify = true) {
+  endLobbyStreams(lobby.id);
+  lobbies.delete(lobby.id);
+  if (notify) broadcastLobbies();
+}
+
+function purgeExpiredLobbyTombstones() {
+  const now = Date.now();
+  let changed = false;
+  for (const lobby of lobbies.values()) {
+    if (lobby.phase !== 'closed' || !lobby.closedAt) continue;
+    const closedAt = Date.parse(lobby.closedAt);
+    if (Number.isFinite(closedAt) && now - closedAt >= LOBBY_TOMBSTONE_TTL_MS) {
+      endLobbyStreams(lobby.id);
+      lobbies.delete(lobby.id);
+      changed = true;
+    }
+  }
+  if (changed) broadcastLobbies();
+}
+
+function lobbyRecord(id) {
+  purgeExpiredLobbyTombstones();
+  return lobbies.get(id) || null;
+}
+
+function bothLobbySeatsDeparted(lobby) {
+  // A two-seat tombstone can be collected immediately once both original participants
+  // acknowledge it. A host-only tombstone remains until TTL because no enemy identity
+  // ever existed to acknowledge the second canonical seat.
+  return Boolean(
+    lobby.guest
+    && lobby.departed
+    && lobby.departed.player
+    && lobby.departed.enemy,
+  );
+}
+
+function isStartedLobbyLifecycle(lobby) {
+  return lobby.phase === 'started'
+    || (lobby.phase === 'closed' && lobby.closedFromPhase === 'started');
 }
 
 // ---------------------------------------------------------------------------
@@ -1186,7 +1632,10 @@ function broadcastToLobby(lobbyId, frame) {
 // Push the current lobby state to every game-channel subscriber, each correctly
 // projected for its own viewer. Use after any lobby-state change (start/leave/etc).
 function broadcastLobbyState(lobby) {
-  broadcastToLobby(lobby.id, (sub) => ({ type: 'lobby', lobby: publicLobby(lobby, sub.email) }));
+  broadcastToLobby(lobby.id, (sub) => ({
+    type: 'lobby',
+    lobby: publicLobby(lobby, sub.email, { includeLevelSnapshot: true }),
+  }));
 }
 
 const SSE_HEADERS = {
@@ -1409,9 +1858,11 @@ app.patch('/api/auth/me', async (req, res) => {
 app.get('/api/lobbies', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
+  const current = userActiveLobby(user.email);
   res.status(200).json({
     lobbies: activeLobbies().map((lobby) => publicLobby(lobby, user.email)),
-    current: userActiveLobby(user.email) ? publicLobby(userActiveLobby(user.email), user.email) : null,
+    current: current ? publicLobby(current, user.email) : null,
+    recoverable: userRecoverableLobbies(user.email).map((lobby) => publicLobby(lobby, user.email)),
   });
 });
 
@@ -1420,7 +1871,7 @@ app.post('/api/lobbies', async (req, res) => {
   if (!user) return;
   const existing = userActiveLobby(user.email);
   if (existing) {
-    res.status(200).json({ lobby: publicLobby(existing, user.email) });
+    res.status(200).json({ lobby: publicLobby(existing, user.email, { includeLevelSnapshot: true }) });
     return;
   }
   const now = new Date().toISOString();
@@ -1431,16 +1882,26 @@ app.post('/api/lobbies', async (req, res) => {
     phase: 'waiting',
     createdAt: now,
     updatedAt: now,
+    stateRevision: 0,
     host: user,
     guest: null,
     levelId: null,
+    levelTimed: null,
+    levelName: null,
+    levelObjective: null,
+    levelSnapshot: null,
+    levelFingerprint: null,
     seed: null,
     moves: [],
-    // Terminal outcome from a non-move event (a player resigning). `null` while the
-    // match is live; once set, both clients read it off the lobby frame and end the
-    // game — so it survives reconnect/late-join the way the move log does. Checkmate/
-    // stalemate/objective ends stay purely client-side (deterministic replay).
+    // Terminal outcome reported by deterministic gameplay or caused by resignation.
+    // Once set, both clients read it off the lobby frame, so it survives reconnect and
+    // late join the way the authoritative move log does.
     result: null,
+    resultReports: { player: null, enemy: null },
+    resultDisputed: false,
+    departed: { player: false, enemy: false },
+    closedAt: null,
+    closedFromPhase: null,
   };
   lobbies.set(id, lobby);
   broadcastLobbies();
@@ -1470,18 +1931,18 @@ app.get('/api/lobbies/events', async (req, res) => {
 app.get('/api/lobbies/:id', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby || (lobby.phase === 'closed' && !lobbySideForEmail(lobby, user.email))) {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
   }
-  res.status(200).json({ lobby: publicLobby(lobby, user.email) });
+  res.status(200).json({ lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) });
 });
 
 app.post('/api/lobbies/:id/join', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
+  const lobby = lobbyRecord(req.params.id);
   if (!lobby || lobby.phase === 'closed') {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
@@ -1500,18 +1961,52 @@ app.post('/api/lobbies/:id/join', async (req, res) => {
     return;
   }
   lobby.guest = user;
+  lobby.departed.enemy = false;
   lobby.phase = 'ready';
-  lobby.updatedAt = new Date().toISOString();
+  touchLobby(lobby);
   broadcastLobbies();
   broadcastLobbyState(lobby);
   res.status(200).json({ lobby: publicLobby(lobby, user.email) });
 });
 
-// Host picks the level (before start). phase must be waiting|ready.
+async function canonicalLobbyLevelMetadata(levelId) {
+  if (process.env.NODE_ENV === 'test' && lobbyTestLevelMetadata) {
+    const testEntry = lobbyTestLevelMetadata[levelId];
+    if (isObjectRecord(testEntry) && isObjectRecord(testEntry.level)) {
+      if (Number.isInteger(testEntry.delayMs) && testEntry.delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, testEntry.delayMs));
+      }
+      return { timed: Boolean(testEntry.level.timeControl), level: testEntry.level };
+    }
+  }
+  // Do not use the OG/thumbnail last-good cache here. Match authority must read the
+  // current canonical document at both selection and Start and fail closed on DB loss.
+  try {
+    const document = await dbGetOfficialCampaigns('default');
+    const data = document && document.data;
+    const level = data && isObjectRecord(data.levels) && data.levels[levelId];
+    if (!isObjectRecord(level)) return null;
+    return { timed: Boolean(level.timeControl), level };
+  } catch (error) {
+    console.warn('canonical lobby level lookup failed:', error.message);
+    return null;
+  }
+}
+
+function immutableLobbyLevelSnapshot(level) {
+  const serialized = JSON.stringify(level);
+  return {
+    level: JSON.parse(serialized),
+    fingerprint: `sha256:${crypto.createHash('sha256').update(serialized).digest('hex')}`,
+  };
+}
+
+// Host picks a canonical official level (before start). Timing eligibility is derived
+// server-side from that level; request metadata is never trusted.
 app.post('/api/lobbies/:id/level', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
+  const lobby = lobbyRecord(req.params.id);
   if (!lobby || lobby.phase === 'closed') {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
@@ -1524,13 +2019,35 @@ app.post('/api/lobbies/:id/level', async (req, res) => {
     res.status(409).json({ error: 'lobby_already_started' });
     return;
   }
-  const levelId = req.body && typeof req.body.levelId === 'string' ? req.body.levelId.trim() : '';
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const levelId = typeof body.levelId === 'string' ? body.levelId.trim() : '';
   if (!levelId) {
     res.status(400).json({ error: 'missing_level_id' });
     return;
   }
+  const expectedState = {
+    id: lobby.id,
+    revision: lobby.stateRevision,
+    phase: lobby.phase,
+    hostEmail: lobby.host.email,
+    guestEmail: lobby.guest && lobby.guest.email,
+  };
+  const metadata = await canonicalLobbyLevelMetadata(levelId);
+  if (!lobbyStateMatches(lobby, expectedState)) {
+    res.status(409).json({ error: 'lobby_state_changed' });
+    return;
+  }
+  if (!metadata) {
+    res.status(404).json({ error: 'level_not_found' });
+    return;
+  }
   lobby.levelId = levelId;
-  lobby.updatedAt = new Date().toISOString();
+  lobby.levelTimed = metadata.timed;
+  lobby.levelName = typeof metadata.level.name === 'string' ? metadata.level.name : levelId;
+  lobby.levelObjective = typeof metadata.level.objective === 'string' ? metadata.level.objective : null;
+  lobby.levelSnapshot = null;
+  lobby.levelFingerprint = null;
+  touchLobby(lobby);
   broadcastLobbies();
   broadcastLobbyState(lobby);
   res.status(200).json({ lobby: publicLobby(lobby, user.email) });
@@ -1539,13 +2056,26 @@ app.post('/api/lobbies/:id/level', async (req, res) => {
 app.post('/api/lobbies/:id/start', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby) {
     res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  if (lobby.phase === 'closed') {
+    const isSeated = Boolean(lobbySideForEmail(lobby, user.email));
+    res.status(isSeated ? 409 : 404).json({ error: isSeated ? 'lobby_closed' : 'lobby_not_found' });
     return;
   }
   if (lobby.host.email !== user.email) {
     res.status(403).json({ error: 'host_only' });
+    return;
+  }
+  if (lobby.phase === 'started') {
+    res.status(409).json({ error: 'lobby_already_started' });
+    return;
+  }
+  if (lobby.phase !== 'ready') {
+    res.status(409).json({ error: 'lobby_not_ready' });
     return;
   }
   if (!lobby.guest) {
@@ -1556,80 +2086,291 @@ app.post('/api/lobbies/:id/start', async (req, res) => {
     res.status(409).json({ error: 'no_level' });
     return;
   }
+  const selectedLevelId = lobby.levelId;
+  const expectedState = {
+    id: lobby.id,
+    revision: lobby.stateRevision,
+    phase: 'ready',
+    hostEmail: lobby.host.email,
+    guestEmail: lobby.guest && lobby.guest.email,
+    levelId: selectedLevelId,
+  };
+  // Re-resolve at the transition boundary: official content can be republished between
+  // selection and Start, so cached eligibility is presentation only, never authority.
+  const currentLevelMetadata = await canonicalLobbyLevelMetadata(selectedLevelId);
+  if (!lobbyStateMatches(lobby, expectedState)) {
+    res.status(409).json({ error: 'lobby_state_changed' });
+    return;
+  }
+  if (!currentLevelMetadata) {
+    res.status(409).json({ error: 'level_not_found' });
+    return;
+  }
+  lobby.levelTimed = currentLevelMetadata.timed;
+  lobby.levelName = typeof currentLevelMetadata.level.name === 'string'
+    ? currentLevelMetadata.level.name
+    : selectedLevelId;
+  lobby.levelObjective = typeof currentLevelMetadata.level.objective === 'string'
+    ? currentLevelMetadata.level.objective
+    : null;
+  if (lobby.levelTimed) {
+    touchLobby(lobby);
+    broadcastLobbies();
+    broadcastLobbyState(lobby);
+    res.status(409).json({ error: 'timed_level_unsupported' });
+    return;
+  }
+  const pinnedLevel = immutableLobbyLevelSnapshot(currentLevelMetadata.level);
+  lobby.levelSnapshot = pinnedLevel.level;
+  lobby.levelFingerprint = pinnedLevel.fingerprint;
   // Lock a positive-integer seed for deterministic shared placement (crypto so it
   // is not predictable). Both clients build the identical board from (level, seed).
   lobby.seed = 1 + (crypto.randomInt ? crypto.randomInt(900000) : Math.floor(Math.random() * 900000));
-  // Fresh match: drop any relayed moves and terminal result from a prior game played in
-  // this lobby (a lobby is reusable — e.g. a guest leaves after a match and a new one
-  // joins), so both clients start from an empty log rather than backfilling the old game.
+  // Initialize the one match owned by this ready lobby. A started lobby cannot be reset;
+  // rematch requires a new coordinated server operation.
   lobby.moves = [];
   lobby.result = null;
+  lobby.resultReports = { player: null, enemy: null };
+  lobby.resultDisputed = false;
+  lobby.departed = { player: false, enemy: false };
+  lobby.closedAt = null;
+  lobby.closedFromPhase = null;
   lobby.phase = 'started';
-  lobby.updatedAt = new Date().toISOString();
+  touchLobby(lobby);
   broadcastLobbies();
   broadcastLobbyState(lobby);
-  res.status(200).json({ lobby: publicLobby(lobby, user.email) });
+  res.status(200).json({ lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) });
 });
+
+const LOBBY_INTENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const LOBBY_PROMOTIONS = new Set(['queen', 'rook', 'bishop', 'knight']);
+
+function sameLobbyRelayMove(a, b) {
+  return Boolean(
+    a && b
+    && a.x === b.x
+    && a.y === b.y
+    && (a.promotion ?? null) === (b.promotion ?? null),
+  );
+}
 
 // Relay one applyMove. Caller must be host/guest; lobby must be started. The
 // server does NOT validate chess legality — clients do (deterministic replay).
 app.post('/api/lobbies/:id/moves', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby) {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
   }
-  const isHost = lobby.host.email === user.email;
-  const isGuest = lobby.guest && lobby.guest.email === user.email;
-  if (!isHost && !isGuest) {
+  const callerSide = lobbySideForEmail(lobby, user.email);
+  if (!callerSide) {
     res.status(409).json({ error: 'not_in_lobby' });
     return;
   }
-  if (lobby.phase !== 'started') {
-    res.status(409).json({ error: 'lobby_not_started' });
-    return;
-  }
-  // The match is already decided by a resignation — no further moves are relayed. (A
-  // well-behaved client stops sending once its board shows a winner; this guards a
-  // stale/racing POST from re-opening a finished game.)
-  if (lobby.result) {
-    res.status(409).json({ error: 'match_over' });
-    return;
-  }
   const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const expectedMoveCount = body.expectedMoveCount;
+  if (!Number.isInteger(expectedMoveCount) || expectedMoveCount < 0) {
+    res.status(400).json({ error: 'bad_expected_move_count', move_count: lobby.moves.length });
+    return;
+  }
+  const intentId = body.intentId;
+  if (typeof intentId !== 'string' || !LOBBY_INTENT_ID_PATTERN.test(intentId)) {
+    res.status(400).json({ error: 'bad_intent_id' });
+    return;
+  }
   const pieceId = typeof body.pieceId === 'string' ? body.pieceId : '';
   const move = body.move;
   if (
     !pieceId ||
     !move || typeof move !== 'object' || Array.isArray(move) ||
     typeof move.x !== 'number' || !Number.isFinite(move.x) ||
-    typeof move.y !== 'number' || !Number.isFinite(move.y)
+    typeof move.y !== 'number' || !Number.isFinite(move.y) ||
+    (move.promotion !== undefined && !LOBBY_PROMOTIONS.has(move.promotion))
   ) {
     res.status(400).json({ error: 'bad_move' });
+    return;
+  }
+  const relayMove = move.promotion === undefined
+    ? { x: move.x, y: move.y }
+    : { x: move.x, y: move.y, promotion: move.promotion };
+
+  // Intent identity is checked before terminal/count/turn gates. An HTTP retry of the
+  // original body therefore returns the original ordered event even though its expected
+  // index is now stale; reusing the id for any different request is a protocol conflict.
+  const priorIntent = lobby.moves.find((event) => event.intentId === intentId);
+  if (priorIntent) {
+    const identical = priorIntent.side === callerSide
+      && priorIntent.i === expectedMoveCount
+      && priorIntent.pieceId === pieceId
+      && sameLobbyRelayMove(priorIntent.move, relayMove);
+    if (!identical) {
+      res.status(409).json({ error: 'intent_id_conflict', move_count: lobby.moves.length, move: priorIntent });
+      return;
+    }
+    res.status(200).json({ move: priorIntent });
+    return;
+  }
+
+  if (lobby.phase === 'closed') {
+    res.status(409).json({ error: 'lobby_closed' });
+    return;
+  }
+  if (lobby.phase !== 'started') {
+    res.status(409).json({ error: 'lobby_not_started' });
+    return;
+  }
+
+  // The match is already decided by a published deterministic result or resignation —
+  // no new intents are relayed. This guards a stale/racing POST from re-opening it.
+  if (lobby.result) {
+    res.status(409).json({ error: 'match_over' });
+    return;
+  }
+  if (lobby.resultDisputed) {
+    res.status(409).json({ error: 'result_disputed', move_count: lobby.moves.length });
+    return;
+  }
+  const pendingReports = lobby.resultReports || {};
+  if (pendingReports.player || pendingReports.enemy) {
+    res.status(409).json({ error: 'result_pending', move_count: lobby.moves.length });
+    return;
+  }
+  // expectedMoveCount gates only a genuinely new intent.
+  if (expectedMoveCount !== lobby.moves.length) {
+    res.status(409).json({ error: 'stale_move', move_count: lobby.moves.length });
     return;
   }
   // Turn integrity: the client store applies moves without AP mode, so every move flips
   // the turn — strict one-move-per-turn alternation. Host ('player') therefore posts at
   // EVEN relay indices, guest ('enemy') at odd. Reject a post from the side whose turn it
   // isn't, so a tampered/misbehaving client can't move out of turn (which desyncs boards).
-  const expectHost = lobby.moves.length % 2 === 0;
-  if (isHost !== expectHost) {
+  const expectedSide = lobby.moves.length % 2 === 0 ? 'player' : 'enemy';
+  if (callerSide !== expectedSide) {
     res.status(409).json({ error: 'not_your_turn' });
     return;
   }
   const event = {
     i: lobby.moves.length,
-    side: isHost ? 'player' : 'enemy',
+    side: callerSide,
+    intentId,
     pieceId,
-    move,
+    move: relayMove,
   };
   lobby.moves.push(event);
-  lobby.updatedAt = new Date().toISOString();
+  touchLobby(lobby);
   broadcastToLobby(lobby.id, { type: 'move', move: event });
   res.status(200).json({ move: event });
 });
+
+const LOBBY_PLAYING_SIDES = new Set(['player', 'enemy']);
+const LOBBY_DRAW_REASONS = new Set(['stalemate', 'fifty-move', 'threefold']);
+const LOBBY_WIN_REASONS = new Set(['victory-rule', 'checkmate']);
+
+function sameLobbyResult(a, b) {
+  return Boolean(a && b && a.winner === b.winner && a.reason === b.reason);
+}
+
+function sameLobbyResultReport(a, b) {
+  return Boolean(
+    a && b
+    && a.expectedMoveCount === b.expectedMoveCount
+    && sameLobbyResult(a, b),
+  );
+}
+
+// Persist and publish an authoritative terminal result while the current seats/phase
+// still exist. Deterministic callers reach this only after matching two-seat consensus;
+// explicit resignation/Leave are server-authored concessions and clear any dispute.
+function publishLobbyResult(lobby, result) {
+  if (lobby.result) return sameLobbyResult(lobby.result, result) ? 'identical' : 'conflict';
+  lobby.result = result;
+  lobby.resultDisputed = false;
+  touchLobby(lobby);
+  broadcastLobbyState(lobby);
+  broadcastLobbies();
+  return 'published';
+}
+
+function parseDeterministicLobbyResult(lobby, raw) {
+  const body = isObjectRecord(raw) ? raw : {};
+  const expectedMoveCount = body.expectedMoveCount;
+  if (!Number.isInteger(expectedMoveCount) || expectedMoveCount < 0) {
+    return { status: 400, body: { error: 'bad_expected_move_count', move_count: lobby.moves.length } };
+  }
+  if (expectedMoveCount !== lobby.moves.length) {
+    return { status: 409, body: { error: 'stale_result', move_count: lobby.moves.length } };
+  }
+
+  const winner = body.winner;
+  const reason = body.reason;
+  const isDraw = winner === 'draw' && LOBBY_DRAW_REASONS.has(reason);
+  const isWin = LOBBY_PLAYING_SIDES.has(winner) && LOBBY_WIN_REASONS.has(reason);
+  if (!isDraw && !isWin) {
+    return { status: 400, body: { error: 'bad_result' } };
+  }
+  return { report: { expectedMoveCount, winner, reason } };
+}
+
+function recordDeterministicLobbyResult(lobby, reportingSide, raw) {
+  const parsed = parseDeterministicLobbyResult(lobby, raw);
+  if (!parsed.report) return parsed;
+  const reports = lobby.resultReports || (lobby.resultReports = { player: null, enemy: null });
+  const previous = reports[reportingSide];
+  if (previous) {
+    if (!sameLobbyResultReport(previous, parsed.report)) {
+      return {
+        status: 409,
+        body: { error: 'conflicting_result_report', move_count: lobby.moves.length, report: previous },
+      };
+    }
+    // Critical for SSE stability: a same-seat retry is a read-only acknowledgement.
+    return {
+      report: previous,
+      publication: lobby.result ? 'published' : (lobby.resultDisputed ? 'disputed' : 'pending'),
+    };
+  }
+
+  if (lobby.result) {
+    return {
+      status: 409,
+      body: { error: 'match_over', move_count: lobby.moves.length, result: lobby.result },
+    };
+  }
+
+  const otherSide = reportingSide === 'player' ? 'enemy' : 'player';
+  const other = reports[otherSide];
+  if (other && !sameLobbyResultReport(other, parsed.report)) {
+    // Both deterministic clients have stopped on different terminal states. Preserve
+    // both immutable reports and freeze the exact prefix for explicit user resolution.
+    reports[reportingSide] = parsed.report;
+    lobby.resultDisputed = true;
+    touchLobby(lobby);
+    broadcastLobbyState(lobby);
+    broadcastLobbies();
+    return {
+      status: 409,
+      body: {
+        error: 'conflicting_result_report',
+        move_count: lobby.moves.length,
+        report: other,
+        result_disputed: true,
+      },
+    };
+  }
+
+  reports[reportingSide] = parsed.report;
+  if (other) {
+    publishLobbyResult(lobby, { winner: parsed.report.winner, reason: parsed.report.reason });
+    return { report: parsed.report, publication: 'published' };
+  }
+
+  touchLobby(lobby);
+  broadcastLobbyState(lobby);
+  broadcastLobbies();
+  return { report: parsed.report, publication: 'pending' };
+}
 
 // Resign the match. Caller must be host/guest; lobby must be started. Records a
 // terminal result (the OTHER side wins) on the lobby and pushes it to both clients
@@ -1639,7 +2380,7 @@ app.post('/api/lobbies/:id/moves', async (req, res) => {
 app.post('/api/lobbies/:id/resign', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
+  const lobby = lobbyRecord(req.params.id);
   if (!lobby || lobby.phase === 'closed') {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
@@ -1655,22 +2396,49 @@ app.post('/api/lobbies/:id/resign', async (req, res) => {
     return;
   }
   // Idempotent: a double-tap (or both players racing to resign) keeps the first result.
-  if (!lobby.result) {
-    lobby.result = { winner: isHost ? 'enemy' : 'player', reason: 'resign' };
-    lobby.updatedAt = new Date().toISOString();
-    broadcastLobbyState(lobby);
-    broadcastLobbies();
-  }
-  res.status(200).json({ lobby: publicLobby(lobby, user.email) });
+  publishLobbyResult(lobby, {
+    winner: isHost ? 'enemy' : 'player',
+    reason: 'resign',
+  });
+  res.status(200).json({ lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) });
 });
 
-// Backfill relayed moves since index N (reconnect / late join). Same visibility
-// as GET /api/lobbies/:id (host/guest/observer — lobby exists & not closed).
+// Publish a terminal outcome reached by deterministic gameplay. Either seated client
+// may report it, but it must describe the exact authoritative relay index. Identical
+// reports are idempotent; a conflicting report is surfaced instead of replacing the
+// first result.
+app.post('/api/lobbies/:id/result', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby) {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  const reportingSide = lobbySideForEmail(lobby, user.email);
+  if (!reportingSide) {
+    res.status(403).json({ error: 'not_in_lobby' });
+    return;
+  }
+  if (!isStartedLobbyLifecycle(lobby)) {
+    res.status(409).json({ error: 'lobby_not_started' });
+    return;
+  }
+  const accepted = recordDeterministicLobbyResult(lobby, reportingSide, req.body);
+  if (!accepted.report) {
+    res.status(accepted.status).json(accepted.body);
+    return;
+  }
+  res.status(200).json({ lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) });
+});
+
+// Backfill relayed moves since index N. Open lobbies are observer-readable; closed
+// tombstones retain backfill only for their two original seats.
 app.get('/api/lobbies/:id/moves', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby || (lobby.phase === 'closed' && !lobbySideForEmail(lobby, user.email))) {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
   }
@@ -1679,13 +2447,13 @@ app.get('/api/lobbies/:id/moves', async (req, res) => {
   res.status(200).json({ moves: lobby.moves.slice(since) });
 });
 
-// PER-LOBBY game SSE channel. Auth; lobby must exist & be open. Sends the current
-// lobby frame immediately (projected for this viewer), then move + lobby frames.
+// PER-LOBBY game SSE channel. Open lobbies admit observers; a closed tombstone admits
+// original seats only. Sends the current projected frame immediately, then live frames.
 app.get('/api/lobbies/:id/events', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby || (lobby.phase === 'closed' && !lobbySideForEmail(lobby, user.email))) {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
   }
@@ -1698,7 +2466,7 @@ app.get('/api/lobbies/:id/events', async (req, res) => {
   }
   subs.add(sub);
   // Immediate current-state frame so the client has state without a refetch.
-  sseWrite(res, `data: ${JSON.stringify({ type: 'lobby', lobby: publicLobby(lobby, user.email) })}\n\n`);
+  sseWrite(res, `data: ${JSON.stringify({ type: 'lobby', lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) })}\n\n`);
   req.on('close', () => {
     clearInterval(heartbeat);
     const set = lobbyChannelSubscribers.get(lobby.id);
@@ -1712,40 +2480,79 @@ app.get('/api/lobbies/:id/events', async (req, res) => {
 app.post('/api/lobbies/:id/leave', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const lobby = lobbies.get(req.params.id);
-  if (!lobby || lobby.phase === 'closed') {
+  const lobby = lobbyRecord(req.params.id);
+  if (!lobby) {
     res.status(404).json({ error: 'lobby_not_found' });
     return;
   }
-  if (lobby.host.email === user.email) {
-    lobby.phase = 'closed';
-    lobby.updatedAt = new Date().toISOString();
-    // Notify game-channel subscribers (guest sees the lobby close) before dropping it.
-    broadcastLobbyState(lobby);
-    // Proactively end the per-lobby SSE streams so their heartbeats/timers don't linger
-    // against a now-deleted lobby (ending each res fires its own 'close' handler, which
-    // clears the heartbeat and removes the sub). Otherwise it only self-heals whenever the
-    // guest's socket eventually drops.
-    const subs = lobbyChannelSubscribers.get(lobby.id);
-    if (subs) {
-      for (const sub of subs) { try { sub.res.end(); } catch { /* already closed */ } }
-      lobbyChannelSubscribers.delete(lobby.id);
+  const leavingSide = lobbySideForEmail(lobby, user.email);
+  if (!leavingSide) {
+    res.status(403).json({ error: 'not_in_lobby' });
+    return;
+  }
+
+  const leaveBody = isObjectRecord(req.body) ? req.body : {};
+  const hasCompletion = ['expectedMoveCount', 'winner', 'reason']
+    .some((key) => Object.prototype.hasOwnProperty.call(leaveBody, key));
+  if (hasCompletion) {
+    if (!isStartedLobbyLifecycle(lobby)) {
+      res.status(409).json({ error: 'lobby_not_started' });
+      return;
     }
-    lobbies.delete(lobby.id);
+    // Completion is one seat's report, not authority. It suppresses resignation for this
+    // navigation, but only an independent matching report from the other seat publishes.
+    const accepted = recordDeterministicLobbyResult(lobby, leavingSide, leaveBody);
+    if (!accepted.report) {
+      res.status(accepted.status).json(accepted.body);
+      return;
+    }
+  }
+
+  // Preserve the pregame guest-leave behavior: no match exists, so the seat can simply
+  // reopen. Once a match starts, neither identity is removed; the closed tombstone owns
+  // the move/result history until both original participants acknowledge it or TTL.
+  if (leavingSide === 'enemy' && (lobby.phase === 'waiting' || lobby.phase === 'ready')) {
+    lobby.guest = null;
+    lobby.departed.enemy = false;
+    lobby.phase = 'waiting';
+    touchLobby(lobby);
     broadcastLobbies();
+    broadcastLobbyState(lobby);
+    res.status(200).json({ lobby: publicLobby(lobby, user.email, { includeLevelSnapshot: true }) });
+    return;
+  }
+
+  const isLiveLifecycle = isStartedLobbyLifecycle(lobby);
+  // A completion-bearing Leave is a normal-finish report. Without one, explicit Leave
+  // from a live lifecycle remains resignation and is published before the tombstone.
+  if (!hasCompletion && isLiveLifecycle && lobby.guest && !lobby.result) {
+    publishLobbyResult(lobby, {
+      winner: leavingSide === 'player' ? 'enemy' : 'player',
+      reason: 'resign',
+    });
+  }
+
+  if (lobby.phase !== 'closed') {
+    lobby.closedFromPhase = lobby.phase;
+    lobby.phase = 'closed';
+    lobby.closedAt = new Date().toISOString();
+  }
+  lobby.departed = lobby.departed || { player: false, enemy: false };
+  lobby.departed[leavingSide] = true;
+  touchLobby(lobby);
+  const snapshot = publicLobby(lobby, user.email, { includeLevelSnapshot: true });
+  restrictClosedLobbyStreams(lobby);
+  broadcastLobbyState(lobby);
+  broadcastLobbies();
+
+  if (bothLobbySeatsDeparted(lobby)) {
+    deleteLobbyRecord(lobby);
     res.status(204).end();
     return;
   }
-  if (lobby.guest && lobby.guest.email === user.email) {
-    lobby.guest = null;
-    lobby.phase = 'waiting';
-    lobby.updatedAt = new Date().toISOString();
-    broadcastLobbies();
-    broadcastLobbyState(lobby);
-    res.status(200).json({ lobby: publicLobby(lobby, user.email) });
-    return;
-  }
-  res.status(403).json({ error: 'not_in_lobby' });
+
+  if (leavingSide === 'player') res.status(204).end();
+  else res.status(200).json({ lobby: snapshot });
 });
 
 app.get('/api/campaigns', async (req, res) => {
@@ -2120,6 +2927,29 @@ function validateWorkspacePromoteAction(action, label, triggerKind) {
   return null;
 }
 
+/** Structural check for an ADR-0072 castle action — mirror of the frontend's
+ * levelEventActionErrors (core/level.ts). Shape/enum only; alignment and board bounds
+ * stay editor-side like the other gameplay gates. */
+function validateWorkspaceCastleAction(action, label, triggerKind) {
+  if (triggerKind !== 'setup') return `${label}.kind castle requires setup trigger`;
+  if (action.side !== 'player' && action.side !== 'enemy') return `${label}.side is invalid`;
+  for (const field of ['king', 'rook', 'kingTo', 'rookTo']) {
+    const cell = action[field];
+    if (!cell || typeof cell !== 'object' || Array.isArray(cell) || !isFiniteInteger(cell.x) || !isFiniteInteger(cell.y)) {
+      return `${label}.${field} is invalid`;
+    }
+  }
+  return null;
+}
+
+/** Structural check for an ADR-0072 chess-draws action (50-move rule / threefold repetition flags). */
+function validateWorkspaceChessDrawsAction(action, label, triggerKind) {
+  if (triggerKind !== 'setup') return `${label}.kind chess-draws requires setup trigger`;
+  if (action.fiftyMove !== undefined && typeof action.fiftyMove !== 'boolean') return `${label}.fiftyMove is invalid`;
+  if (action.threefold !== undefined && typeof action.threefold !== 'boolean') return `${label}.threefold is invalid`;
+  return null;
+}
+
 function validateWorkspaceEvents(events, key) {
   if (!Array.isArray(events)) return `levels.${key}.events is invalid`;
   for (let i = 0; i < events.length; i += 1) {
@@ -2158,6 +2988,12 @@ function validateWorkspaceEvents(events, key) {
       } else if (action.kind === 'promote') {
         const promoteErr = validateWorkspacePromoteAction(action, actionLabel, event.trigger.kind);
         if (promoteErr) return promoteErr;
+      } else if (action.kind === 'castle') {
+        const castleErr = validateWorkspaceCastleAction(action, actionLabel, event.trigger.kind);
+        if (castleErr) return castleErr;
+      } else if (action.kind === 'chess-draws') {
+        const drawsErr = validateWorkspaceChessDrawsAction(action, actionLabel, event.trigger.kind);
+        if (drawsErr) return drawsErr;
       } else {
         return `${actionLabel}.kind is invalid`;
       }
@@ -2388,30 +3224,805 @@ app.put('/api/levels/:id', async (req, res) => {
   }
 });
 
+// --- Durable Level editor documents ---------------------------------------
+// One private, non-expiring working copy per (account, workspace, level). An
+// opaque global document id is the address. Copying that address has no backend
+// effect; only these explicit editor persistence calls mutate state (ADR-0068).
+const USER_EDITOR_WORKSPACE_ID = 'campaign';
+const EDITOR_DOCUMENT_ID_PATTERN = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|legacy-[abcdefghijkmnpqrstuvwxyz23456789]{8,24})$/i;
+const EDITOR_DOCUMENT_COLUMNS = 'document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash, created_at, updated_at';
+
+function editorDocumentId(raw) {
+  const id = String(raw || '').trim();
+  return EDITOR_DOCUMENT_ID_PATTERN.test(id) ? id : '';
+}
+
+function editorDocumentWorkspace(raw) {
+  const source = isObjectRecord(raw) ? raw : {};
+  const nested = isObjectRecord(source.workspace) ? source.workspace : {};
+  const kind = String(source.workspace_kind ?? nested.kind ?? 'user').trim().toLowerCase();
+  if (kind === 'user') return { kind, id: USER_EDITOR_WORKSPACE_ID };
+  if (kind !== 'official') return { error: 'invalid_editor_workspace' };
+  const id = officialCampaignsRowId(source.workspace_id ?? nested.id);
+  return id ? { kind, id } : { error: 'invalid_official_campaign_id' };
+}
+
+function editorDocumentRevision(raw) {
+  return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 1 ? raw : null;
+}
+
+function editorDocumentLevel(raw, levelId, { rewriteId = false } = {}) {
+  if (!isObjectRecord(raw)) return { error: 'invalid_level_body' };
+  if (!rewriteId && raw.id !== levelId) {
+    return { error: 'invalid_level_body', details: `levels.${levelId}.id must match its workspace key` };
+  }
+  const level = { ...raw, id: levelId };
+  const details = validateWorkspaceLevel(level, levelId);
+  return details ? { error: 'invalid_level_body', details } : { level };
+}
+
+function publicEditorDocument(row) {
+  const revision = Number(row && row.revision) || 0;
+  const savedRevision = Number(row && row.saved_revision) || 0;
+  const hasSavedBaseline = Boolean(row && row.baseline_hash);
+  return {
+    document_id: row.document_id,
+    level_id: row.level_id,
+    workspace_kind: row.workspace_kind,
+    workspace_id: row.workspace_id,
+    level: isObjectRecord(row.body) ? row.body : {},
+    revision,
+    saved_revision: savedRevision,
+    dirty: revision !== savedRevision,
+    has_saved_baseline: hasSavedBaseline,
+    never_saved: !hasSavedBaseline,
+    baseline_conflict: Boolean(row && row.baseline_conflict),
+    created_at: row.created_at ?? null,
+    updated_at: row.updated_at ?? null,
+  };
+}
+
+function publicEditorDocumentSummary(row) {
+  const revision = Number(row && row.revision) || 0;
+  const savedRevision = Number(row && row.saved_revision) || 0;
+  const hasSavedBaseline = Boolean(row && row.baseline_hash);
+  return {
+    document_id: row.document_id,
+    level_id: row.level_id,
+    workspace_kind: row.workspace_kind,
+    workspace_id: row.workspace_id,
+    name: typeof row.name === 'string' ? row.name : '',
+    revision,
+    saved_revision: savedRevision,
+    dirty: revision !== savedRevision,
+    has_saved_baseline: hasSavedBaseline,
+    never_saved: !hasSavedBaseline,
+    created_at: row.created_at ?? null,
+    updated_at: row.updated_at ?? null,
+  };
+}
+
+function editorDocumentError(statusCode, code, row = null, details = null) {
+  const error = new Error(code);
+  error.statusCode = statusCode;
+  error.responseCode = code;
+  error.row = row;
+  error.details = details;
+  return error;
+}
+
+function respondEditorDocumentError(res, error, operation) {
+  if (error && error.statusCode && error.responseCode) {
+    res.status(error.statusCode).json({
+      error: error.responseCode,
+      ...(error.details ? { details: error.details } : {}),
+      ...(error.row ? { document: publicEditorDocument(error.row) } : {}),
+    });
+    return;
+  }
+  dbUnavailable(res, `editor document ${operation} failed`, error, 'editor_document_store_unavailable');
+}
+
+async function withEditorDocumentTransaction(fn) {
+  await ensureDbReady();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const value = await fn(client);
+    await client.query('COMMIT');
+    return value;
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function dbGetEditorDocument(ownerEmail, documentId, client = pool) {
+  await ensureDbReady();
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_DOCUMENT_COLUMNS}
+       FROM level_working_copies
+      WHERE owner_email = $1 AND document_id = $2`,
+    [ownerEmail, documentId],
+  );
+  return rows[0] || null;
+}
+
+async function dbListEditorDocuments(ownerEmail, {
+  includeOfficial = false,
+  status = 'all',
+  limit = 100,
+  offset = 0,
+} = {}) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT document_id, workspace_kind, workspace_id, level_id,
+            body->>'name' AS name, revision, saved_revision, baseline_hash, created_at, updated_at
+       FROM level_working_copies
+      WHERE owner_email = $1
+        AND ($2::boolean OR workspace_kind = 'user')
+        AND (
+          $3::text = 'all' OR
+          ($3::text = 'dirty' AND revision <> saved_revision) OR
+          ($3::text = 'never-saved' AND baseline_hash IS NULL)
+        )
+      ORDER BY (revision <> saved_revision) DESC, updated_at DESC, document_id
+      LIMIT $4 OFFSET $5`,
+    [ownerEmail, includeOfficial, status, limit + 1, offset],
+  );
+  return rows;
+}
+
+async function dbGetEditorDocumentByLevel(ownerEmail, workspace, levelId, client = pool, { lock = false } = {}) {
+  await ensureDbReady();
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_DOCUMENT_COLUMNS}
+       FROM level_working_copies
+      WHERE owner_email = $1 AND workspace_kind = $2 AND workspace_id = $3 AND level_id = $4
+      ${lock ? 'FOR UPDATE' : ''}`,
+    [ownerEmail, workspace.kind, workspace.id, levelId],
+  );
+  return rows[0] || null;
+}
+
+async function dbLockEditorDocument(client, ownerEmail, documentId) {
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_DOCUMENT_COLUMNS}
+       FROM level_working_copies
+      WHERE owner_email = $1 AND document_id = $2
+      FOR UPDATE`,
+    [ownerEmail, documentId],
+  );
+  return rows[0] || null;
+}
+
+function assertEditorDocumentRevision(row, expectedRevision) {
+  if (!row) throw editorDocumentError(404, 'editor_document_not_found');
+  if (Number(row.revision) !== expectedRevision) {
+    throw editorDocumentError(409, 'editor_document_revision_conflict', row);
+  }
+}
+
+async function dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock = false } = {}) {
+  if (workspace.kind === 'user') {
+    const { rows } = await client.query(
+      `SELECT body, updated_at, md5(((body->'levels')->$2)::text) AS level_hash
+         FROM campaign_workspaces WHERE owner_email = $1${lock ? ' FOR UPDATE' : ''}`,
+      [ownerEmail, levelId],
+    );
+    const body = isObjectRecord(rows[0] && rows[0].body) ? rows[0].body : null;
+    const levels = body && isObjectRecord(body.levels) ? body.levels : null;
+    return {
+      level: levels && isObjectRecord(levels[levelId]) ? levels[levelId] : null,
+      hash: rows[0] && rows[0].level_hash ? rows[0].level_hash : null,
+      body,
+      row: rows[0] || null,
+    };
+  }
+  const { rows } = await client.query(
+    `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by,
+            md5(((data->'levels')->$2)::text) AS level_hash
+       FROM official_campaigns WHERE id = $1${lock ? ' FOR UPDATE' : ''}`,
+    [workspace.id, levelId],
+  );
+  const body = isObjectRecord(rows[0] && rows[0].data) ? rows[0].data : null;
+  const levels = body && isObjectRecord(body.levels) ? body.levels : null;
+  return {
+    level: levels && isObjectRecord(levels[levelId]) ? levels[levelId] : null,
+    hash: rows[0] && rows[0].level_hash ? rows[0].level_hash : null,
+    body,
+    row: rows[0] || null,
+  };
+}
+
+function editorDocumentIsDirty(row) {
+  return Number(row && row.revision) !== Number(row && row.saved_revision);
+}
+
+function editorDocumentBaselineChanged(row, canonical) {
+  return (row && row.baseline_hash ? row.baseline_hash : null) !== (canonical && canonical.hash ? canonical.hash : null);
+}
+
+async function dbJsonbHash(client, value) {
+  const { rows } = await client.query('SELECT md5(($1::jsonb)::text) AS hash', [JSON.stringify(value)]);
+  return rows[0] && rows[0].hash ? rows[0].hash : null;
+}
+
+async function dbReconcileEditorDocument(client, row, { lockCanonical = true } = {}) {
+  if (!row) throw editorDocumentError(404, 'editor_document_not_found');
+  const workspace = { kind: row.workspace_kind, id: row.workspace_id };
+  const canonical = await dbCanonicalLevel(client, row.owner_email, workspace, row.level_id, { lock: lockCanonical });
+  if (!editorDocumentBaselineChanged(row, canonical)) return { ...row, baseline_conflict: false };
+
+  // A clean document has no work to preserve, so follow the newer canonical
+  // Level automatically. A dirty document keeps its body and reports the
+  // divergence; only Discard may deliberately replace it.
+  if (editorDocumentIsDirty(row) || !canonical.level) {
+    return { ...row, baseline_conflict: true };
+  }
+  const parsed = editorDocumentLevel(canonical.level, row.level_id);
+  if (parsed.error) throw editorDocumentError(409, 'saved_level_invalid', row, parsed.details);
+  const { rows } = await client.query(
+    `UPDATE level_working_copies
+        SET body = $3::jsonb,
+            revision = revision + 1,
+            saved_revision = revision + 1,
+            baseline_hash = $4,
+            updated_at = now()
+      WHERE owner_email = $1 AND document_id = $2
+      RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+    [row.owner_email, row.document_id, JSON.stringify(parsed.level), canonical.hash],
+  );
+  return { ...rows[0], baseline_conflict: false };
+}
+
+async function dbResolveEditorDocument(ownerEmail, workspace, levelId) {
+  return withEditorDocumentTransaction(async (client) => {
+    let row = await dbGetEditorDocumentByLevel(ownerEmail, workspace, levelId, client, { lock: true });
+    if (row) return { row: await dbReconcileEditorDocument(client, row), created: false };
+    const canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
+    if (!canonical.level) throw editorDocumentError(404, 'saved_level_not_found');
+    const parsed = editorDocumentLevel(canonical.level, levelId);
+    if (parsed.error) throw editorDocumentError(409, 'saved_level_invalid', null, parsed.details);
+    const inserted = await client.query(
+      `INSERT INTO level_working_copies
+         (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, 1, 1, $7)
+       ON CONFLICT (owner_email, workspace_kind, workspace_id, level_id) DO NOTHING
+       RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [crypto.randomUUID(), ownerEmail, workspace.kind, workspace.id, levelId, JSON.stringify(parsed.level), canonical.hash],
+    );
+    row = inserted.rows[0] || await dbGetEditorDocumentByLevel(ownerEmail, workspace, levelId, client, { lock: true });
+    return {
+      row: inserted.rows[0] ? { ...inserted.rows[0], baseline_conflict: false } : await dbReconcileEditorDocument(client, row),
+      created: Boolean(inserted.rows[0]),
+    };
+  });
+}
+
+function nextUserLevelId(workspaceBody, workingLevelIds) {
+  let max = 0n;
+  const usedNumericSuffixes = new Set();
+  const ids = [
+    ...Object.keys(isObjectRecord(workspaceBody && workspaceBody.levels) ? workspaceBody.levels : {}),
+    ...(Array.isArray(workspaceBody && workspaceBody.campaigns)
+      ? workspaceBody.campaigns.map((campaign) => campaign && campaign.id)
+      : []),
+    ...workingLevelIds,
+  ];
+  for (const raw of ids) {
+    const match = /^[cl](\d+)$/.exec(String(raw || ''));
+    // Generated ids are at most 80 characters (`l` + 79 digits). Longer
+    // imported/campaign ids cannot collide and must not trigger a huge BigInt parse.
+    if (!match || match[1].length > 79) continue;
+    const value = BigInt(match[1]);
+    usedNumericSuffixes.add(value.toString());
+    if (value > max) max = value;
+  }
+  const next = max + 1n;
+  if (`l${next}`.length <= 80) return `l${next}`;
+
+  // A malicious or imported 79-digit suffix can exhaust the increasing end of
+  // the id format, but it must not make Number round or emit an invalid 81-char
+  // id. With a finite set of existing rows, one of the first N+1 suffixes is free.
+  for (let candidate = 1n; candidate <= BigInt(usedNumericSuffixes.size + 1); candidate += 1n) {
+    if (!usedNumericSuffixes.has(candidate.toString())) return `l${candidate}`;
+  }
+  throw editorDocumentError(409, 'level_id_allocation_failed');
+}
+
+async function dbCreateEditorDocument(ownerEmail, initialLevel) {
+  return withEditorDocumentTransaction(async (client) => {
+    // Serialize allocation per owner without a separate mutable counter table.
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [ownerEmail]);
+    await client.query(
+      `INSERT INTO campaign_workspaces (owner_email, body)
+       VALUES ($1, '{"campaigns":[],"levels":{}}'::jsonb)
+       ON CONFLICT (owner_email) DO NOTHING`,
+      [ownerEmail],
+    );
+    const workspaceResult = await client.query(
+      'SELECT body FROM campaign_workspaces WHERE owner_email = $1 FOR UPDATE',
+      [ownerEmail],
+    );
+    const workspaceBody = isObjectRecord(workspaceResult.rows[0] && workspaceResult.rows[0].body)
+      ? workspaceResult.rows[0].body
+      : { campaigns: [], levels: {} };
+    const workingResult = await client.query(
+      "SELECT level_id FROM level_working_copies WHERE owner_email = $1 AND workspace_kind = 'user' AND workspace_id = 'campaign'",
+      [ownerEmail],
+    );
+    const levelId = nextUserLevelId(workspaceBody, workingResult.rows.map((row) => row.level_id));
+    const parsed = editorDocumentLevel(initialLevel, levelId, { rewriteId: true });
+    if (parsed.error) throw editorDocumentError(400, parsed.error, null, parsed.details);
+    const { rows } = await client.query(
+      `INSERT INTO level_working_copies
+         (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash)
+       VALUES ($1, $2, 'user', 'campaign', $3, $4::jsonb, 1, 0, NULL)
+       RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [crypto.randomUUID(), ownerEmail, levelId, JSON.stringify(parsed.level)],
+    );
+    return rows[0];
+  });
+}
+
+async function dbLoadEditorDocument(ownerEmail, documentId) {
+  return withEditorDocumentTransaction(async (client) => {
+    const row = await dbLockEditorDocument(client, ownerEmail, documentId);
+    if (!row) return null;
+    return dbReconcileEditorDocument(client, row);
+  });
+}
+
+async function dbAnnotateEditorDocumentBaseline(row, client = pool) {
+  if (!row) return row;
+  const workspace = { kind: row.workspace_kind, id: row.workspace_id };
+  const canonical = await dbCanonicalLevel(client, row.owner_email, workspace, row.level_id);
+  return { ...row, baseline_conflict: editorDocumentBaselineChanged(row, canonical) };
+}
+
+async function dbAutosaveEditorDocument(ownerEmail, documentId, expectedRevision, level) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `UPDATE level_working_copies
+        SET body = $4::jsonb,
+            revision = revision + 1,
+            saved_revision = CASE
+              WHEN md5(($4::jsonb)::text) = baseline_hash THEN revision + 1
+              ELSE saved_revision
+            END,
+            updated_at = now()
+      WHERE owner_email = $1 AND document_id = $2 AND revision = $3
+      RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+    [ownerEmail, documentId, expectedRevision, JSON.stringify(level)],
+  );
+  if (rows[0]) return dbAnnotateEditorDocumentBaseline(rows[0]);
+  const current = await dbGetEditorDocument(ownerEmail, documentId);
+  if (!current) throw editorDocumentError(404, 'editor_document_not_found');
+  throw editorDocumentError(409, 'editor_document_revision_conflict', await dbAnnotateEditorDocumentBaseline(current));
+}
+
+function editorDocumentCampaignsWithAssignment(campaigns, levelId, level, campaignId) {
+  if (campaignId === undefined) return campaigns;
+  const target = campaignId === null
+    ? null
+    : campaigns.find((campaign) => campaign.id === campaignId);
+  if (campaignId !== null && !target) {
+    throw editorDocumentError(409, 'campaign_not_found', null, `campaign ${campaignId} is not in this workspace`);
+  }
+  if (target && target.id.startsWith('off-') !== levelId.startsWith('off-')) {
+    throw editorDocumentError(409, 'campaign_tier_mismatch');
+  }
+
+  return campaigns.map((campaign) => {
+    const priorRef = campaign.levels.find((ref) => ref.levelId === levelId);
+    const withoutLevel = campaign.levels
+      .filter((ref) => ref.levelId !== levelId)
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .map((ref, ordinal) => ({ ...ref, ordinal }));
+    if (campaign.id !== target?.id) return { ...campaign, levels: withoutLevel };
+    return {
+      ...campaign,
+      levels: [
+        ...withoutLevel,
+        {
+          ...(priorRef || {}),
+          levelId,
+          ordinal: withoutLevel.length,
+          objective: level.objective,
+        },
+      ],
+    };
+  });
+}
+
+async function dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, level, campaignId) {
+  let canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
+  if (workspace.kind === 'user' && !canonical.row) {
+    // Materialize and lock the owner's workspace before merging a first-saved
+    // unassigned Level. This prevents a concurrent workspace write from being
+    // replaced by a snapshot built from an assumed empty row.
+    await client.query(
+      `INSERT INTO campaign_workspaces (owner_email, body)
+       VALUES ($1, '{"campaigns":[],"levels":{}}'::jsonb)
+       ON CONFLICT (owner_email) DO NOTHING`,
+      [ownerEmail],
+    );
+    canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
+  }
+  const existing = canonical.body || { campaigns: [], levels: {} };
+  const existingCampaigns = Array.isArray(existing.campaigns) ? existing.campaigns : [];
+  const nextBody = {
+    campaigns: editorDocumentCampaignsWithAssignment(existingCampaigns, levelId, level, campaignId),
+    levels: { ...(isObjectRecord(existing.levels) ? existing.levels : {}), [levelId]: level },
+  };
+  const validation = validateWorkspaceBody(nextBody);
+  if (validation) throw editorDocumentError(409, 'canonical_workspace_invalid', null, validation);
+  if (workspace.kind === 'user') {
+    const { rows } = await client.query(
+      `INSERT INTO campaign_workspaces (owner_email, body, revision)
+       VALUES ($1, $2::jsonb, 1)
+       ON CONFLICT (owner_email) DO UPDATE SET
+         body = EXCLUDED.body,
+         revision = campaign_workspaces.revision + 1,
+         updated_at = now()
+       RETURNING revision`,
+      [ownerEmail, JSON.stringify(nextBody)],
+    );
+    return Number(rows[0].revision);
+  }
+  const idError = validateOfficialWorkspaceIds(nextBody);
+  if (idError) throw editorDocumentError(400, 'invalid_official_ids', null, idError);
+  if (!canonical.row) throw editorDocumentError(404, 'official_workspace_not_found');
+  const { rows } = await client.query(
+    `UPDATE official_campaigns
+        SET data = $2::jsonb, revision = revision + 1, updated_at = now(), updated_by = $3
+      WHERE id = $1
+      RETURNING revision`,
+    [workspace.id, JSON.stringify(nextBody), ownerEmail],
+  );
+  return Number(rows[0].revision);
+}
+
+async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, requestedLevel, campaignId) {
+  return withEditorDocumentTransaction(async (client) => {
+    const current = await dbLockEditorDocument(client, ownerEmail, documentId);
+    assertEditorDocumentRevision(current, expectedRevision);
+    const workspace = { kind: current.workspace_kind, id: current.workspace_id };
+    const levelId = current.level_id;
+    const level = requestedLevel || current.body;
+    if (workspace.kind === 'user') {
+      // PostgreSQL cannot row-lock an absent workspace. Materialize the empty
+      // owner row first so a concurrent whole-workspace insert must serialize
+      // before the baseline check for a never-saved document.
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [ownerEmail]);
+      await client.query(
+        `INSERT INTO campaign_workspaces (owner_email, body)
+         VALUES ($1, '{"campaigns":[],"levels":{}}'::jsonb)
+         ON CONFLICT (owner_email) DO NOTHING`,
+        [ownerEmail],
+      );
+    }
+    const canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
+    if (editorDocumentBaselineChanged(current, canonical)) {
+      throw editorDocumentError(
+        409,
+        'editor_document_baseline_conflict',
+        { ...current, baseline_conflict: true },
+        'canonical Level changed after this working copy was based on it',
+      );
+    }
+    const workspaceRevision = await dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, level, campaignId);
+    const baselineHash = await dbJsonbHash(client, level);
+    const { rows } = await client.query(
+      `UPDATE level_working_copies
+          SET body = $3::jsonb,
+              revision = revision + 1,
+              saved_revision = revision + 1,
+              baseline_hash = $4,
+              updated_at = now()
+        WHERE owner_email = $1 AND document_id = $2
+        RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [ownerEmail, documentId, JSON.stringify(level), baselineHash],
+    );
+    return { row: rows[0], workspaceRevision };
+  });
+}
+
+async function dbDiscardEditorDocument(ownerEmail, documentId, expectedRevision) {
+  return withEditorDocumentTransaction(async (client) => {
+    const current = await dbLockEditorDocument(client, ownerEmail, documentId);
+    assertEditorDocumentRevision(current, expectedRevision);
+    const workspace = { kind: current.workspace_kind, id: current.workspace_id };
+    const levelId = current.level_id;
+    const canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
+    if (!canonical.level) throw editorDocumentError(409, 'no_saved_level');
+    const parsed = editorDocumentLevel(canonical.level, levelId);
+    if (parsed.error) throw editorDocumentError(409, 'saved_level_invalid', null, parsed.details);
+    const { rows } = await client.query(
+      `UPDATE level_working_copies
+          SET body = $3::jsonb,
+              revision = revision + 1,
+              saved_revision = revision + 1,
+              baseline_hash = $4,
+              updated_at = now()
+        WHERE owner_email = $1 AND document_id = $2
+        RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [ownerEmail, documentId, JSON.stringify(parsed.level), canonical.hash],
+    );
+    return rows[0];
+  });
+}
+
+function editorDocumentResolveRequest(req, res) {
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  const workspace = editorDocumentWorkspace(raw);
+  if (workspace.error) { res.status(400).json({ error: workspace.error }); return null; }
+  const rawLevelId = raw.level_id;
+  const levelId = rawLevelId === undefined || rawLevelId === null || rawLevelId === '' ? '' : levelStoreId(rawLevelId);
+  if (rawLevelId && !levelId) { res.status(400).json({ error: 'invalid_level_id' }); return null; }
+  return { raw, workspace, levelId };
+}
+
+function editorDocumentOperationRequest(req, res) {
+  const documentId = editorDocumentId(req.params.documentId);
+  if (!documentId) { res.status(400).json({ error: 'invalid_editor_document_id' }); return null; }
+  return { documentId, raw: isObjectRecord(req.body) ? req.body : {} };
+}
+
+function editorDocumentListRequest(req, res) {
+  const status = String(req.query.status || 'all').trim().toLowerCase();
+  if (!['all', 'dirty', 'never-saved'].includes(status)) {
+    res.status(400).json({ error: 'invalid_editor_document_status' });
+    return null;
+  }
+  const parseInteger = (raw, fallback) => {
+    if (raw === undefined) return fallback;
+    const text = String(raw);
+    if (!/^\d+$/.test(text)) return null;
+    const value = Number(text);
+    return Number.isSafeInteger(value) ? value : null;
+  };
+  const limit = parseInteger(req.query.limit, 100);
+  const offset = parseInteger(req.query.offset, 0);
+  if (limit === null || limit < 1 || limit > 200 || offset === null || offset < 0) {
+    res.status(400).json({ error: 'invalid_editor_document_page' });
+    return null;
+  }
+  return { status, limit, offset };
+}
+
+async function requireEditorDocumentUser(req, res, workspace) {
+  const user = await requireUser(req, res);
+  if (!user) return null;
+  if (workspace.kind === 'official' && !isAdminEmail(user.email)) {
+    res.status(403).json({ error: 'admin_required' });
+    return null;
+  }
+  return user;
+}
+
+function editorDocumentRowIsAuthorized(row, user, res) {
+  if (row.workspace_kind === 'official' && !isAdminEmail(user.email)) {
+    res.status(403).json({ error: 'admin_required' });
+    return false;
+  }
+  return true;
+}
+
+app.post('/api/editor-documents/resolve', async (req, res) => {
+  const input = editorDocumentResolveRequest(req, res);
+  if (!input) return;
+  const user = await requireEditorDocumentUser(req, res, input.workspace);
+  if (!user) return;
+  try {
+    if (!input.levelId) {
+      if (input.workspace.kind !== 'user') { res.status(400).json({ error: 'level_id_required' }); return; }
+      if (!isObjectRecord(input.raw.level)) { res.status(400).json({ error: 'invalid_level_body' }); return; }
+      const row = await dbCreateEditorDocument(user.email, input.raw.level);
+      res.status(201).json({ document: publicEditorDocument(row) });
+      return;
+    }
+    const result = await dbResolveEditorDocument(user.email, input.workspace, input.levelId);
+    res.status(result.created ? 201 : 200).json({ document: publicEditorDocument(result.row) });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'resolve');
+  }
+});
+
+app.get('/api/editor-documents', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const page = editorDocumentListRequest(req, res);
+  if (!page) return;
+  try {
+    const rows = await dbListEditorDocuments(user.email, {
+      includeOfficial: isAdminEmail(user.email),
+      ...page,
+    });
+    const hasMore = rows.length > page.limit;
+    const documents = rows.slice(0, page.limit).map(publicEditorDocumentSummary);
+    res.status(200).json({
+      documents,
+      next_offset: hasMore ? page.offset + page.limit : null,
+    });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'list');
+  }
+});
+
+app.get('/api/editor-documents/:documentId', async (req, res) => {
+  const input = editorDocumentOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const stored = await dbGetEditorDocument(user.email, input.documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, user, res)) return;
+    const row = await dbLoadEditorDocument(user.email, input.documentId);
+    if (!row) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    res.status(200).json({ document: publicEditorDocument(row) });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'read');
+  }
+});
+
+app.put('/api/editor-documents/:documentId', async (req, res) => {
+  const input = editorDocumentOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const revision = editorDocumentRevision(input.raw.revision);
+  if (revision === null) { res.status(400).json({ error: 'revision_required' }); return; }
+  try {
+    const current = await dbGetEditorDocument(user.email, input.documentId);
+    if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    const parsed = editorDocumentLevel(input.raw.level, current.level_id);
+    if (parsed.error) { res.status(400).json({ error: parsed.error, ...(parsed.details ? { details: parsed.details } : {}) }); return; }
+    const row = await dbAutosaveEditorDocument(user.email, input.documentId, revision, parsed.level);
+    res.status(200).json({ document: publicEditorDocument(row) });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'autosave');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/save', async (req, res) => {
+  const input = editorDocumentOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const revision = editorDocumentRevision(input.raw.revision);
+  if (revision === null) { res.status(400).json({ error: 'revision_required' }); return; }
+  try {
+    const current = await dbGetEditorDocument(user.email, input.documentId);
+    if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    let level = null;
+    if (Object.hasOwn(input.raw, 'level')) {
+      const parsed = editorDocumentLevel(input.raw.level, current.level_id);
+      if (parsed.error) { res.status(400).json({ error: parsed.error, ...(parsed.details ? { details: parsed.details } : {}) }); return; }
+      level = parsed.level;
+    }
+    let campaignId;
+    if (Object.hasOwn(input.raw, 'campaign_id')) {
+      if (input.raw.campaign_id === null) {
+        campaignId = null;
+      } else if (typeof input.raw.campaign_id === 'string' && input.raw.campaign_id.trim() && input.raw.campaign_id.length <= 200) {
+        campaignId = input.raw.campaign_id.trim();
+      } else {
+        res.status(400).json({ error: 'invalid_campaign_id' });
+        return;
+      }
+    }
+    const saved = await dbSaveEditorDocument(user.email, input.documentId, revision, level, campaignId);
+    res.status(200).json({
+      document: publicEditorDocument(saved.row),
+      workspace_revision: saved.workspaceRevision,
+    });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'save');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/discard', async (req, res) => {
+  const input = editorDocumentOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const revision = editorDocumentRevision(input.raw.revision);
+  if (revision === null) { res.status(400).json({ error: 'revision_required' }); return; }
+  try {
+    const current = await dbGetEditorDocument(user.email, input.documentId);
+    if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    const row = await dbDiscardEditorDocument(user.email, input.documentId, revision);
+    res.status(200).json({ document: publicEditorDocument(row) });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'discard');
+  }
+});
+
 // Campaign-editor workspace persistence (Phase 4 cont.): the whole campaign +
 // level set as one per-user document in the Postgres `campaign_workspaces`
 // table (one row per signed-in owner).
 async function dbGetWorkspace(ownerEmail) {
   await ensureDbReady();
   const { rows } = await pool.query(
-    'SELECT body, updated_at FROM campaign_workspaces WHERE owner_email = $1',
+    'SELECT body, revision, updated_at FROM campaign_workspaces WHERE owner_email = $1',
     [ownerEmail],
   );
   return rows[0] || null;
 }
 
-async function dbPutWorkspace(ownerEmail, body) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    `INSERT INTO campaign_workspaces (owner_email, body)
-       VALUES ($1, $2::jsonb)
-     ON CONFLICT (owner_email) DO UPDATE SET
-       body = EXCLUDED.body,
-       updated_at = now()
-     RETURNING updated_at`,
-    [ownerEmail, JSON.stringify(body)],
-  );
-  return rows[0].updated_at;
+function campaignWorkspaceRevision(raw) {
+  return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 ? raw : null;
+}
+
+function publicCampaignWorkspace(row) {
+  const body = row && isObjectRecord(row.body) ? row.body : { campaigns: [], levels: {} };
+  return {
+    campaigns: Array.isArray(body.campaigns) ? body.campaigns : [],
+    levels: isObjectRecord(body.levels) ? body.levels : {},
+    revision: Number(row && row.revision) || 0,
+    updated_at: row && row.updated_at ? row.updated_at : null,
+  };
+}
+
+async function dbPutWorkspace(ownerEmail, body, expectedRevision) {
+  return withEditorDocumentTransaction(async (client) => {
+    // Uses the same owner lock as new editor-document id allocation, so a whole
+    // workspace write cannot race the scan and claim a newly allocated level id.
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [ownerEmail]);
+    const currentResult = await client.query(
+      'SELECT body, revision, updated_at FROM campaign_workspaces WHERE owner_email = $1 FOR UPDATE',
+      [ownerEmail],
+    );
+    const current = currentResult.rows[0] || null;
+    if ((Number(current && current.revision) || 0) !== expectedRevision) {
+      return { conflict: 'revision', row: current };
+    }
+
+    const levelIds = Object.keys(body.levels);
+    if (levelIds.length) {
+      const reserved = await client.query(
+        `SELECT document_id, level_id
+           FROM level_working_copies
+          WHERE owner_email = $1
+            AND workspace_kind = 'user'
+            AND workspace_id = 'campaign'
+            AND baseline_hash IS NULL
+            AND saved_revision = 0
+            AND level_id = ANY($2::text[])
+          ORDER BY level_id`,
+        [ownerEmail, levelIds],
+      );
+      if (reserved.rows.length) return { conflict: 'reserved', row: current, reserved: reserved.rows };
+    }
+
+    if (!current) {
+      const { rows } = await client.query(
+        `INSERT INTO campaign_workspaces (owner_email, body, revision)
+         VALUES ($1, $2::jsonb, 1)
+         RETURNING body, revision, updated_at`,
+        [ownerEmail, JSON.stringify(body)],
+      );
+      return { row: rows[0] };
+    }
+    const { rows } = await client.query(
+      `UPDATE campaign_workspaces
+          SET body = $2::jsonb,
+              revision = revision + 1,
+              updated_at = now()
+        WHERE owner_email = $1
+        RETURNING body, revision, updated_at`,
+      [ownerEmail, JSON.stringify(body)],
+    );
+    return { row: rows[0] };
+  });
 }
 
 app.get('/api/campaign-workspace', async (req, res) => {
@@ -2419,12 +4030,7 @@ app.get('/api/campaign-workspace', async (req, res) => {
   if (!user) return;
   try {
     const row = await dbGetWorkspace(user.email);
-    const body = row && row.body ? row.body : { campaigns: [], levels: {} };
-    res.status(200).json({
-      campaigns: Array.isArray(body.campaigns) ? body.campaigns : [],
-      levels: body.levels && typeof body.levels === 'object' ? body.levels : {},
-      updated_at: row ? row.updated_at : null,
-    });
+    res.status(200).json(publicCampaignWorkspace(row));
   } catch (error) {
     dbUnavailable(res, 'campaign workspace read failed', error, 'workspace_unavailable');
   }
@@ -2434,14 +4040,36 @@ app.put('/api/campaign-workspace', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
   const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const expectedRevision = campaignWorkspaceRevision(raw.revision);
+  if (expectedRevision === null) {
+    res.status(400).json({ error: 'workspace_revision_required' });
+    return;
+  }
   const validationError = validateWorkspaceBody(raw);
   if (validationError) {
     res.status(400).json({ error: 'invalid_workspace', details: validationError });
     return;
   }
   try {
-    const updatedAt = await dbPutWorkspace(user.email, { campaigns: raw.campaigns, levels: raw.levels });
-    res.status(200).json({ ok: true, campaigns: raw.campaigns.length, updated_at: updatedAt });
+    const result = await dbPutWorkspace(
+      user.email,
+      { campaigns: raw.campaigns, levels: raw.levels },
+      expectedRevision,
+    );
+    if (result.conflict === 'revision') {
+      res.status(409).json({ error: 'workspace_revision_conflict', workspace: publicCampaignWorkspace(result.row) });
+      return;
+    }
+    if (result.conflict === 'reserved') {
+      res.status(409).json({
+        error: 'workspace_level_reserved',
+        level_ids: result.reserved.map((entry) => entry.level_id),
+        workspace: publicCampaignWorkspace(result.row),
+      });
+      return;
+    }
+    const workspace = publicCampaignWorkspace(result.row);
+    res.status(200).json({ ok: true, campaigns: workspace.campaigns.length, revision: workspace.revision, updated_at: workspace.updated_at });
   } catch (error) {
     dbUnavailable(res, 'campaign workspace write failed', error, 'workspace_unavailable');
   }
@@ -2534,6 +4162,52 @@ async function dbSetTrainRunJob(id, jobName, status) {
 async function dbDeleteTrainRun(ownerEmail, id) {
   await ensureDbReady();
   const { rowCount } = await pool.query('DELETE FROM train_runs WHERE owner_email = $1 AND id = $2', [ownerEmail, id]);
+  return rowCount > 0;
+}
+
+// ── Board-solver runs (headless cluster solving) ──────────────────────────────
+// Two DISTINCT projections (F4): the list omits `body` + `job_name` (heavy + private);
+// the single-row read includes them.
+async function dbListSolveRuns(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, spec, status, created_at, updated_at FROM solve_runs WHERE owner_email = $1 ORDER BY created_at DESC LIMIT 100',
+    [ownerEmail],
+  );
+  return rows;
+}
+
+async function dbGetSolveRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, spec, body, status, job_name, created_at, updated_at FROM solve_runs WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return rows[0] || null;
+}
+
+async function dbInsertSolveRun(ownerEmail, id, spec) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'INSERT INTO solve_runs (id, owner_email, spec) VALUES ($1, $2, $3::jsonb) RETURNING created_at',
+    [id, ownerEmail, JSON.stringify(spec)],
+  );
+  return rows[0].created_at;
+}
+
+async function dbSetSolveRunJob(id, jobName, status) {
+  await ensureDbReady();
+  await pool.query('UPDATE solve_runs SET job_name = $2, status = $3, updated_at = now() WHERE id = $1', [id, jobName, status]);
+}
+
+// Cancel-not-purge (ADR §5, ruling 8): mark cancelled but KEEP the partial body so the
+// run stays viewable. The k8s Job is deleted separately in the DELETE route.
+async function dbCancelSolveRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rowCount } = await pool.query(
+    "UPDATE solve_runs SET status = 'cancelled', updated_at = now() WHERE owner_email = $1 AND id = $2",
+    [ownerEmail, id],
+  );
   return rowCount > 0;
 }
 
@@ -2689,6 +4363,83 @@ app.delete('/api/train-runs/:id', async (req, res) => {
   }
 });
 
+// ── Board-solver runs: launch a headless bounded/anytime solve Job, read status,
+// cancel ─── Clone of /api/train-runs (ADR-0069 §5). POST persists the SolveSpec then
+// creates a k8s Job on the trainer pool running `node backend/solve-worker.mjs` (the
+// worker reads its own solve_runs row via SOLVE_RUN_ID and JSONB-patches progress
+// back). In local dev (not in-cluster) the row persists as 'pending' and isn't launched.
+app.post('/api/solve-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const spec = req.body && typeof req.body === 'object' ? req.body : null;
+  if (!spec || !spec.level || typeof spec.level !== 'object') {
+    res.status(400).json({ error: 'invalid_solve_spec', details: 'spec.level (a level object) is required' });
+    return;
+  }
+  const id = crypto.randomUUID();
+  try {
+    await dbInsertSolveRun(user.email, id, spec);
+  } catch (error) {
+    dbUnavailable(res, 'solve run write failed', error, 'solve_runs_unavailable');
+    return;
+  }
+  try {
+    const k8s = await import('./solve/k8s.mjs');
+    if (k8s.inCluster()) {
+      const jobName = await k8s.createSolverJob(id);
+      await dbSetSolveRunJob(id, jobName, 'running');
+      res.status(200).json({ ok: true, id, status: 'running', job: jobName });
+    } else {
+      res.status(200).json({ ok: true, id, status: 'pending', note: 'not in-cluster: run persisted but not launched' });
+    }
+  } catch (error) {
+    try { await dbSetSolveRunJob(id, null, 'error'); } catch { /* best effort */ }
+    console.error('solve job launch failed', error);
+    res.status(502).json({ error: 'solve_launch_failed', id, details: String((error && error.message) || error) });
+  }
+});
+
+app.get('/api/solve-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    res.status(200).json({ runs: await dbListSolveRuns(user.email) });
+  } catch (error) {
+    dbUnavailable(res, 'solve run list failed', error, 'solve_runs_unavailable');
+  }
+});
+
+app.get('/api/solve-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const run = await dbGetSolveRun(user.email, req.params.id);
+    if (!run) { res.status(404).json({ error: 'run_not_found' }); return; }
+    res.status(200).json(run);
+  } catch (error) {
+    dbUnavailable(res, 'solve run read failed', error, 'solve_runs_unavailable');
+  }
+});
+
+// Cancel-not-purge (ADR §5, ruling 8): delete the k8s Job (stops the run, releases the
+// node) then mark the row `cancelled` while KEEPING the partial body — the client/UI
+// treat a cancelled run as still-viewable. A hard-purge is intentionally NOT offered.
+app.delete('/api/solve-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const run = await dbGetSolveRun(user.email, req.params.id);
+    if (run && run.job_name) {
+      try { const k8s = await import('./solve/k8s.mjs'); await k8s.deleteSolverJob(run.job_name); }
+      catch (e) { console.warn('solver job delete failed', e && e.message); }
+    }
+    await dbCancelSolveRun(user.email, req.params.id);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    dbUnavailable(res, 'solve run delete failed', error, 'solve_runs_unavailable');
+  }
+});
+
 // Training Gym opening-book persistence: account-scoped, one blob row per (owner,
 // level) in the Postgres `opening_books` table, mirroring the per-owner
 // campaign_workspaces model. `data` is the level's whole BooksBlob {nextId, books}.
@@ -2807,21 +4558,44 @@ async function dbGetOfficialCampaigns(id) {
   return rows[0] || null;
 }
 
-async function dbUpsertOfficialCampaigns(id, input) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    `INSERT INTO official_campaigns (id, data, client_schema_version, revision, updated_by)
-       VALUES ($1, $2::jsonb, $3, 1, $4)
-     ON CONFLICT (id) DO UPDATE SET
-       data = EXCLUDED.data,
-       client_schema_version = EXCLUDED.client_schema_version,
-       revision = official_campaigns.revision + 1,
-       updated_at = now(),
-       updated_by = EXCLUDED.updated_by
-     RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
-    [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
-  );
-  return rows[0];
+async function dbUpsertOfficialCampaigns(id, input, expectedRevision) {
+  return withEditorDocumentTransaction(async (client) => {
+    // Row locks cannot serialize two first writers while the row is absent.
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('official-campaigns:' || $1, 0))",
+      [id],
+    );
+    const currentResult = await client.query(
+      `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by
+         FROM official_campaigns WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    const current = currentResult.rows[0] || null;
+    if ((Number(current && current.revision) || 0) !== expectedRevision) {
+      return { conflict: 'revision', row: current };
+    }
+    if (!current) {
+      const { rows } = await client.query(
+        `INSERT INTO official_campaigns (id, data, client_schema_version, revision, updated_by)
+         VALUES ($1, $2::jsonb, $3, 1, $4)
+         RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+      );
+      return { row: rows[0] };
+    }
+    const { rows } = await client.query(
+      `UPDATE official_campaigns
+          SET data = $2::jsonb,
+              client_schema_version = $3,
+              revision = revision + 1,
+              updated_at = now(),
+              updated_by = $4
+        WHERE id = $1
+        RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+      [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+    );
+    return { row: rows[0] };
+  });
 }
 
 function publicOfficialCampaignsDocument(id, document) {
@@ -2862,6 +4636,11 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
     return;
   }
   const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const expectedRevision = campaignWorkspaceRevision(raw.revision);
+  if (expectedRevision === null) {
+    res.status(400).json({ error: 'official_campaign_revision_required' });
+    return;
+  }
   if (!isObjectRecord(raw.data)) {
     res.status(400).json({ error: 'official_campaign_data_object_required' });
     return;
@@ -2877,13 +4656,21 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
     return;
   }
   try {
-    const document = await dbUpsertOfficialCampaigns(id, {
+    const result = await dbUpsertOfficialCampaigns(id, {
       data: { campaigns: raw.data.campaigns, levels: raw.data.levels },
       client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
       updated_by: user.email,
-    });
+    }, expectedRevision);
+    if (result.conflict === 'revision') {
+      res.status(409).json({
+        error: 'official_campaign_revision_conflict',
+        portfolio: publicOfficialCampaignsDocument(id, result.row),
+        store_schema_version: OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION,
+      });
+      return;
+    }
     res.status(200).json({
-      portfolio: publicOfficialCampaignsDocument(id, document),
+      portfolio: publicOfficialCampaignsDocument(id, result.row),
       store_schema_version: OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION,
     });
   } catch (error) {
@@ -3146,6 +4933,857 @@ app.put('/api/wall-art/:id', async (req, res) => {
   }
 });
 
+// --- Live unit-art catalog -------------------------------------------------
+// Gameplay has exactly six stable unit identities. Candidate assets are Studio
+// records that can be accepted for one of those identities; no asset UUID is
+// ever written into gameplay state. Sprite bytes are immutable/content-addressed
+// while these rows provide the editable mapping and render geometry.
+const UNIT_CATALOG_SCHEMA_VERSION = 1;
+const UNIT_FAMILY_IDS = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'king'];
+const UNIT_PALETTE_IDS = ['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white'];
+const UNIT_DIRECTION_IDS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+const UNIT_FAMILY_SET = new Set(UNIT_FAMILY_IDS);
+const UNIT_PALETTE_SET = new Set(UNIT_PALETTE_IDS);
+const UNIT_DIRECTION_SET = new Set(UNIT_DIRECTION_IDS);
+const UNIT_ASSET_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UNIT_SPRITE_SHA_PATTERN = /^[0-9a-f]{64}$/;
+const UNIT_CATALOG_CACHE_TTL_MS = 5 * 1000;
+let unitCatalogCache = { at: 0, body: null };
+const unitSpriteBufferCache = new Map();
+let unitSpriteBufferCacheBytes = 0;
+
+function unitAssetId(raw) {
+  const id = String(raw || '').trim();
+  return UNIT_ASSET_ID_PATTERN.test(id) ? id.toLowerCase() : null;
+}
+
+function unitFamilyId(raw) {
+  const family = String(raw || '').trim().toLowerCase();
+  return UNIT_FAMILY_SET.has(family) ? family : null;
+}
+
+function unitPaletteId(raw) {
+  const palette = String(raw || '').trim().toLowerCase();
+  return UNIT_PALETTE_SET.has(palette) ? palette : null;
+}
+
+function unitDirectionId(raw) {
+  const direction = String(raw || '').trim().toLowerCase();
+  return UNIT_DIRECTION_SET.has(direction) ? direction : null;
+}
+
+function boundedUnitText(raw, fallback, max) {
+  if (raw === undefined) return fallback;
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  return value.length <= max ? value : null;
+}
+
+function finiteUnitNumber(raw, fallback, min, max) {
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= min && value <= max ? value : null;
+}
+
+function integerUnitNumber(raw, fallback, min, max) {
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= min && value <= max ? value : null;
+}
+
+function nativeUnitScalePercent(sourceCanvasWidth, sourceCanvasHeight) {
+  if (!serverRender || typeof serverRender.nativeScalePercentFromCanvas !== 'function') {
+    throw new Error('board-render native scale contract is unavailable');
+  }
+  return serverRender.nativeScalePercentFromCanvas(Number(sourceCanvasWidth), Number(sourceCanvasHeight));
+}
+
+function unitAssetAcceptanceBlockReason(asset, currentReason = null) {
+  if (currentReason) return currentReason;
+  if (!serverRender || typeof serverRender.unitAssetProductionEligibility !== 'function') {
+    throw new Error('board-render unit production eligibility contract is unavailable');
+  }
+  const eligibility = serverRender.unitAssetProductionEligibility(asset);
+  return eligibility.eligible ? null : eligibility.reason;
+}
+
+function validateUnitAssetInput(raw, current = null) {
+  if (!isObjectRecord(raw)) return { error: 'unit asset metadata must be an object' };
+  const family = current ? current.family : unitFamilyId(raw.family);
+  if (!family) return { error: 'family must be pawn, rook, knight, bishop, queen, or king' };
+  const label = boundedUnitText(raw.label, current ? current.label : '', 80);
+  if (label === null || !label) return { error: 'label must be 1-80 characters' };
+  const method = boundedUnitText(raw.method, current ? current.method : 'Imported', 80);
+  if (method === null || !method) return { error: 'method must be 1-80 characters' };
+  const notes = boundedUnitText(raw.notes, current ? current.notes : '', 2000);
+  if (notes === null) return { error: 'notes must be at most 2000 characters' };
+  const footprintShape = String(raw.footprintShape ?? raw.footprint_shape ?? current?.footprint_shape ?? 'circle');
+  if (footprintShape !== 'circle' && footprintShape !== 'square') return { error: 'footprintShape must be circle or square' };
+  const sourceCanvasWidth = integerUnitNumber(
+    raw.sourceCanvasWidth ?? raw.source_canvas_width,
+    current ? Number(current.source_canvas_width) : 512,
+    1,
+    4096,
+  );
+  const sourceCanvasHeight = integerUnitNumber(
+    raw.sourceCanvasHeight ?? raw.source_canvas_height,
+    current ? Number(current.source_canvas_height) : 512,
+    1,
+    4096,
+  );
+  const sourceFootprintPx = finiteUnitNumber(
+    raw.sourceFootprintPx ?? raw.source_footprint_px,
+    current ? Number(current.source_footprint_px) : 150,
+    1,
+    4096,
+  );
+  const anchorX = finiteUnitNumber(raw.anchorX ?? raw.anchor_x, current ? Number(current.anchor_x) : 0.5, 0, 1);
+  const anchorY = finiteUnitNumber(raw.anchorY ?? raw.anchor_y, current ? Number(current.anchor_y) : 0.80241, 0, 1);
+  if (sourceCanvasWidth === null || sourceCanvasHeight === null) return { error: 'source canvas dimensions must be integers from 1-4096' };
+  if (sourceFootprintPx === null) return { error: 'sourceFootprintPx must be between 1 and 4096' };
+  if (anchorX === null || anchorY === null) return { error: 'anchor coordinates must be between 0 and 1' };
+  return {
+    value: {
+      family,
+      label,
+      method,
+      notes,
+      footprintShape,
+      sourceCanvasWidth,
+      sourceCanvasHeight,
+      sourceFootprintPx,
+      anchorX,
+      anchorY,
+    },
+  };
+}
+
+function requestExpectedRevision(req) {
+  const rawBody = isObjectRecord(req.body) ? req.body : {};
+  const bodyValue = rawBody.expectedRevision ?? rawBody.expected_revision;
+  if (Number.isInteger(bodyValue) && bodyValue >= 0) return bodyValue;
+  const rawHeader = String(req.headers['if-match'] || '').trim().replace(/^W\//, '').replace(/^"|"$/g, '');
+  if (/^\d+$/.test(rawHeader)) return Number(rawHeader);
+  return null;
+}
+
+function unitMutationError(code, status, details = null) {
+  const error = new Error(code);
+  error.unitCode = code;
+  error.httpStatus = status;
+  error.unitDetails = details;
+  return error;
+}
+
+function sendUnitMutationError(res, error, fallbackCode) {
+  if (error && error.unitCode) {
+    const body = { error: error.unitCode };
+    if (error.unitDetails !== null) body.details = error.unitDetails;
+    res.status(error.httpStatus || 400).json(body);
+    return;
+  }
+  dbUnavailable(res, fallbackCode.replace(/_/g, ' '), error, fallbackCode);
+}
+
+function inspectUnitPng(buffer) {
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  if (!Buffer.isBuffer(buffer) || buffer.length < 33 || !buffer.subarray(0, 8).equals(signature)) {
+    return { error: 'body must be a PNG image' };
+  }
+  if (buffer.toString('ascii', 12, 16) !== 'IHDR') return { error: 'PNG is missing its IHDR header' };
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  if (width < 1 || height < 1 || width > 4096 || height > 4096) {
+    return { error: 'PNG dimensions must be between 1 and 4096 pixels' };
+  }
+  if (buffer.length > UNIT_ASSET_MAX_BYTES) return { error: 'PNG exceeds the 10 MB limit' };
+  return { width, height };
+}
+
+function unitBlobKey(sha256) {
+  return `sprites/${sha256.slice(0, 2)}/${sha256}.png`;
+}
+
+function unitBlobLocalPath(blobKey) {
+  const root = path.resolve(unitAssetStorageDir);
+  const target = path.resolve(root, ...String(blobKey).split('/'));
+  if (target !== root && !target.startsWith(`${root}${path.sep}`)) throw new Error('invalid unit blob key');
+  return target;
+}
+
+function unitStorageConfigured() {
+  return Boolean(unitAssetStorageDir || unitAssetContainerUrl);
+}
+
+function azureUnitContainer() {
+  if (unitAssetContainerClient) return unitAssetContainerClient;
+  if (!unitAssetContainerUrl) throw new Error('UNIT_ASSET_CONTAINER_URL is not configured');
+  const { BlobServiceClient } = require('@azure/storage-blob');
+  const { DefaultAzureCredential } = require('@azure/identity');
+  const url = new URL(unitAssetContainerUrl);
+  const service = new BlobServiceClient(`${url.protocol}//${url.host}`, new DefaultAzureCredential());
+  unitAssetContainerClient = service.getContainerClient(decodeURIComponent(url.pathname.replace(/^\/+/, '')));
+  return unitAssetContainerClient;
+}
+
+async function writeUnitBlob(blobKey, buffer, sha256) {
+  if (unitAssetStorageDir) {
+    const target = unitBlobLocalPath(blobKey);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    if (!fs.existsSync(target)) fs.writeFileSync(target, buffer);
+    return;
+  }
+  const block = azureUnitContainer().getBlockBlobClient(blobKey);
+  try {
+    await block.uploadData(buffer, {
+      conditions: { ifNoneMatch: '*' },
+      blobHTTPHeaders: {
+        blobContentType: 'image/png',
+        blobCacheControl: 'public, max-age=31536000, immutable',
+      },
+      metadata: { sha256 },
+    });
+  } catch (error) {
+    const status = error && (error.statusCode || error.status);
+    if (status !== 409 && status !== 412 && error.code !== 'BlobAlreadyExists') throw error;
+  }
+}
+
+async function readUnitBlob(blobKey) {
+  if (unitAssetStorageDir) return fs.promises.readFile(unitBlobLocalPath(blobKey));
+  return azureUnitContainer().getBlobClient(blobKey).downloadToBuffer();
+}
+
+function cachedUnitSprite(sha256) {
+  const entry = unitSpriteBufferCache.get(sha256);
+  if (!entry) return null;
+  unitSpriteBufferCache.delete(sha256);
+  unitSpriteBufferCache.set(sha256, entry);
+  return entry.buffer;
+}
+
+function cacheUnitSprite(sha256, buffer) {
+  if (!UNIT_SPRITE_CACHE_MAX_BYTES || buffer.length > UNIT_SPRITE_CACHE_MAX_BYTES) return;
+  const prior = unitSpriteBufferCache.get(sha256);
+  if (prior) {
+    unitSpriteBufferCacheBytes -= prior.buffer.length;
+    unitSpriteBufferCache.delete(sha256);
+  }
+  unitSpriteBufferCache.set(sha256, { buffer });
+  unitSpriteBufferCacheBytes += buffer.length;
+  while (unitSpriteBufferCacheBytes > UNIT_SPRITE_CACHE_MAX_BYTES && unitSpriteBufferCache.size) {
+    const oldestKey = unitSpriteBufferCache.keys().next().value;
+    const oldest = unitSpriteBufferCache.get(oldestKey);
+    unitSpriteBufferCache.delete(oldestKey);
+    unitSpriteBufferCacheBytes -= oldest.buffer.length;
+  }
+}
+
+async function seedUnitCatalogFromLiveSource() {
+  if (!unitAssetStorageDir) {
+    throw new Error('UNIT_ASSET_SEED_CATALOG_URL requires ephemeral UNIT_ASSET_STORAGE_DIR');
+  }
+  if (!serverRender || typeof serverRender.assertLiveUnitCatalog !== 'function') {
+    throw new Error('board-render catalog validator is unavailable');
+  }
+
+  const catalogUrl = new URL(unitAssetSeedCatalogUrl);
+  const response = await fetch(catalogUrl, { signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error(`unit catalog seed returned ${response.status}`);
+  const catalog = await response.json();
+  serverRender.assertLiveUnitCatalog(catalog);
+
+  const assetsById = new Map(catalog.assets.map((asset) => [asset.id, asset]));
+  const accepted = catalog.families.map((family) => ({
+    family,
+    asset: assetsById.get(family.acceptedAssetId),
+  }));
+  const spritesBySha = new Map();
+  for (const { asset } of accepted) {
+    for (const palette of UNIT_PALETTE_IDS) for (const direction of UNIT_DIRECTION_IDS) {
+      const sprite = asset.sprites[palette][direction];
+      spritesBySha.set(sprite.sha256, sprite);
+    }
+  }
+
+  const downloads = [...spritesBySha.values()];
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < downloads.length) {
+      const sprite = downloads[cursor++];
+      const blobKey = unitBlobKey(sprite.sha256);
+      if (fs.existsSync(unitBlobLocalPath(blobKey))) continue;
+      const spriteUrl = new URL(sprite.url, catalogUrl);
+      if (spriteUrl.origin !== catalogUrl.origin) throw new Error('unit catalog seed sprite changed origin');
+      const spriteResponse = await fetch(spriteUrl, { signal: AbortSignal.timeout(30_000) });
+      if (!spriteResponse.ok) throw new Error(`unit sprite seed returned ${spriteResponse.status}`);
+      const png = Buffer.from(await spriteResponse.arrayBuffer());
+      const inspected = inspectUnitPng(png);
+      if (inspected.error) throw new Error(`unit sprite seed is invalid: ${inspected.error}`);
+      const digest = crypto.createHash('sha256').update(png).digest('hex');
+      if (digest !== sprite.sha256) throw new Error('unit sprite seed hash mismatch');
+      await writeUnitBlob(blobKey, png, digest);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(12, downloads.length) }, () => worker()));
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const { family, asset } of accepted) {
+      const acceptanceBlockReason = unitAssetAcceptanceBlockReason(asset, asset.acceptanceBlockReason);
+      await client.query(
+        `INSERT INTO unit_assets (
+           id, family, label, method, notes, acceptance_block_reason, status, footprint_shape,
+           source_canvas_width, source_canvas_height, source_footprint_px,
+           anchor_x, anchor_y, row_revision, updated_by
+         ) VALUES ($1, $2, $3, $4, $5, $6, 'candidate', $7, $8, $9, $10, $11, $12, $13, 'live-catalog-seed')
+         ON CONFLICT (id) DO UPDATE SET
+           family = EXCLUDED.family, label = EXCLUDED.label, method = EXCLUDED.method,
+           notes = EXCLUDED.notes, status = 'candidate', footprint_shape = EXCLUDED.footprint_shape,
+           acceptance_block_reason = COALESCE(unit_assets.acceptance_block_reason, EXCLUDED.acceptance_block_reason),
+           source_canvas_width = EXCLUDED.source_canvas_width,
+           source_canvas_height = EXCLUDED.source_canvas_height,
+           source_footprint_px = EXCLUDED.source_footprint_px,
+           anchor_x = EXCLUDED.anchor_x, anchor_y = EXCLUDED.anchor_y,
+           row_revision = EXCLUDED.row_revision, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+        [asset.id, asset.family, asset.label, asset.method, asset.notes, acceptanceBlockReason, asset.footprint.shape,
+          asset.footprint.sourceCanvasWidth, asset.footprint.sourceCanvasHeight,
+          asset.footprint.sourceFootprintPx, asset.anchor.x, asset.anchor.y, asset.rowRevision],
+      );
+      for (const palette of UNIT_PALETTE_IDS) for (const direction of UNIT_DIRECTION_IDS) {
+        const sprite = asset.sprites[palette][direction];
+        await client.query(
+          `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (asset_id, palette, direction) DO UPDATE SET
+             sha256 = EXCLUDED.sha256, blob_key = EXCLUDED.blob_key,
+             width = EXCLUDED.width, height = EXCLUDED.height,
+             byte_length = EXCLUDED.byte_length, updated_at = now()`,
+          [asset.id, palette, direction, sprite.sha256, unitBlobKey(sprite.sha256),
+            sprite.width, sprite.height, sprite.byteLength],
+        );
+      }
+      await client.query(
+        `UPDATE unit_families SET accepted_asset_id = $2, display_scale_percent = $3,
+           row_revision = $4, updated_at = now(), updated_by = 'live-catalog-seed'
+         WHERE family = $1`,
+        [family.family, asset.id, family.displayScalePercent, family.rowRevision],
+      );
+    }
+    await client.query(
+      'UPDATE unit_catalog_state SET revision = GREATEST(revision, $1), updated_at = now() WHERE singleton = true',
+      [catalog.revision],
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  invalidateUnitCatalogCache();
+  console.log(`seeded ${accepted.length} live unit families into ephemeral storage`);
+}
+
+function invalidateUnitCatalogCache() {
+  unitCatalogCache = { at: 0, body: null };
+}
+
+async function withUnitCatalogTransaction(fn) {
+  await ensureDbReady();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    invalidateUnitCatalogCache();
+    return result;
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function bumpUnitCatalog(client) {
+  const { rows } = await client.query(
+    'UPDATE unit_catalog_state SET revision = revision + 1, updated_at = now() WHERE singleton = true RETURNING revision',
+  );
+  return Number(rows[0]?.revision || 0);
+}
+
+async function logUnitAssetEvent(client, family, assetIdValue, action, actorEmail, details = {}) {
+  await client.query(
+    `INSERT INTO unit_asset_events (family, asset_id, action, actor_email, details)
+       VALUES ($1, $2, $3, $4, $5::jsonb)`,
+    [family, assetIdValue, action, actorEmail, JSON.stringify(details)],
+  );
+}
+
+async function dbUnitAssetRow(id, queryable = pool, lock = false) {
+  const { rows } = await queryable.query(
+    `SELECT id, family, label, method, notes, acceptance_block_reason, status, footprint_shape,
+            source_canvas_width, source_canvas_height, source_footprint_px,
+            anchor_x, anchor_y, row_revision, created_at, updated_at, updated_by
+       FROM unit_assets WHERE id = $1${lock ? ' FOR UPDATE' : ''}`,
+    [id],
+  );
+  return rows[0] || null;
+}
+
+function assertUnitRevision(row, expected) {
+  if (expected !== null && Number(row.row_revision) !== expected) {
+    throw unitMutationError('unit_asset_conflict', 409, { currentRevision: Number(row.row_revision) });
+  }
+}
+
+async function dbReadUnitCatalog({ includeArchived = false, queryable = null } = {}) {
+  if (!queryable) await ensureDbReady();
+  const db = queryable || pool;
+  const [stateResult, familyResult, assetResult, spriteResult] = await Promise.all([
+    db.query('SELECT revision, updated_at FROM unit_catalog_state WHERE singleton = true'),
+    db.query(
+      `SELECT family, accepted_asset_id, display_scale_percent, row_revision, updated_at, updated_by
+         FROM unit_families
+        ORDER BY array_position($1::text[], family)`,
+      [UNIT_FAMILY_IDS],
+    ),
+    db.query(
+      `SELECT id, family, label, method, notes, acceptance_block_reason, status, footprint_shape,
+              source_canvas_width, source_canvas_height, source_footprint_px,
+              anchor_x, anchor_y, row_revision, created_at, updated_at, updated_by
+         FROM unit_assets
+        WHERE $1::boolean OR status <> 'archived'
+        ORDER BY family, created_at DESC`,
+      [includeArchived],
+    ),
+    db.query(
+      `SELECT s.asset_id, s.palette, s.direction, s.sha256, s.width, s.height, s.byte_length
+         FROM unit_sprites s
+         JOIN unit_assets a ON a.id = s.asset_id
+        WHERE $1::boolean OR a.status <> 'archived'
+        ORDER BY s.asset_id, s.palette, s.direction`,
+      [includeArchived],
+    ),
+  ]);
+
+  const acceptedIds = new Set(familyResult.rows.map((row) => row.accepted_asset_id).filter(Boolean).map(String));
+  const assets = assetResult.rows.map((row) => ({
+    id: String(row.id),
+    family: row.family,
+    label: row.label,
+    method: row.method,
+    notes: row.notes,
+    acceptanceBlockReason: row.acceptance_block_reason,
+    status: row.status,
+    accepted: acceptedIds.has(String(row.id)),
+    footprint: {
+      shape: row.footprint_shape,
+      sourceCanvasWidth: Number(row.source_canvas_width),
+      sourceCanvasHeight: Number(row.source_canvas_height),
+      sourceFootprintPx: Number(row.source_footprint_px),
+    },
+    nativeScalePercent: nativeUnitScalePercent(row.source_canvas_width, row.source_canvas_height),
+    anchor: { x: Number(row.anchor_x), y: Number(row.anchor_y) },
+    rowRevision: Number(row.row_revision),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    updatedBy: row.updated_by,
+    sprites: {},
+    spriteCount: 0,
+    complete: false,
+  }));
+  const byId = new Map(assets.map((asset) => [asset.id, asset]));
+  for (const row of spriteResult.rows) {
+    const asset = byId.get(String(row.asset_id));
+    if (!asset) continue;
+    if (!asset.sprites[row.palette]) asset.sprites[row.palette] = {};
+    asset.sprites[row.palette][row.direction] = {
+      url: `/api/unit-sprites/${row.sha256}.png`,
+      sha256: row.sha256,
+      width: Number(row.width),
+      height: Number(row.height),
+      byteLength: Number(row.byte_length),
+    };
+    asset.spriteCount += 1;
+  }
+  for (const asset of assets) {
+    asset.complete = UNIT_PALETTE_IDS.every((palette) =>
+      UNIT_DIRECTION_IDS.every((direction) => Boolean(asset.sprites[palette]?.[direction])));
+  }
+
+  return {
+    schemaVersion: UNIT_CATALOG_SCHEMA_VERSION,
+    revision: Number(stateResult.rows[0]?.revision || 0),
+    updatedAt: stateResult.rows[0]?.updated_at || null,
+    families: familyResult.rows.map((row) => ({
+      family: row.family,
+      acceptedAssetId: row.accepted_asset_id ? String(row.accepted_asset_id) : null,
+      displayScalePercent: Number(row.display_scale_percent),
+      rowRevision: Number(row.row_revision),
+      updatedAt: row.updated_at,
+      updatedBy: row.updated_by,
+    })),
+    assets,
+  };
+}
+
+async function publicUnitCatalog() {
+  const now = Date.now();
+  if (unitCatalogCache.body && now - unitCatalogCache.at < UNIT_CATALOG_CACHE_TTL_MS) return unitCatalogCache.body;
+  const body = await dbReadUnitCatalog();
+  unitCatalogCache = { at: now, body };
+  return body;
+}
+
+async function sendFreshUnitCatalog(res, status = 200, includeArchived = false) {
+  const catalog = includeArchived ? await dbReadUnitCatalog({ includeArchived: true }) : await publicUnitCatalog();
+  res.status(status).json(catalog);
+}
+
+app.get('/api/unit-catalog', async (req, res) => {
+  try {
+    const catalog = await publicUnitCatalog();
+    const etag = `"unit-catalog-${catalog.revision}"`;
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end();
+      return;
+    }
+    res.status(200).json(catalog);
+  } catch (error) {
+    dbUnavailable(res, 'unit catalog read failed', error, 'unit_catalog_unavailable');
+  }
+});
+
+async function unitSpriteRecord(sha256) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT blob_key, byte_length FROM unit_sprites WHERE sha256 = $1 LIMIT 1',
+    [sha256],
+  );
+  return rows[0] || null;
+}
+
+async function unitSpriteBytes(sha256, record = null) {
+  let png = cachedUnitSprite(sha256);
+  if (png) return png;
+  const sprite = record || await unitSpriteRecord(sha256);
+  if (!sprite) return null;
+  if (!unitStorageConfigured()) throw new Error('unit asset storage is not configured');
+  png = await readUnitBlob(sprite.blob_key);
+  cacheUnitSprite(sha256, png);
+  return png;
+}
+
+async function thumbnailDynamicSprite(src) {
+  const match = /^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/.exec(String(src || ''));
+  if (!match) return null;
+  return unitSpriteBytes(match[1]);
+}
+
+app.get(/^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/, async (req, res) => {
+  const sha256 = String(req.params[0] || '').toLowerCase();
+  if (!UNIT_SPRITE_SHA_PATTERN.test(sha256)) { res.status(404).send('not found'); return; }
+  try {
+    const record = await unitSpriteRecord(sha256);
+    if (!record) { res.status(404).send('not found'); return; }
+    const etag = `"${sha256}"`;
+    if (req.headers['if-none-match'] === etag) {
+      res.setHeader('ETag', etag);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.status(304).end();
+      return;
+    }
+    const png = await unitSpriteBytes(sha256, record);
+    if (!png) { res.status(404).send('not found'); return; }
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Length', String(png.length));
+    res.status(200).end(png);
+  } catch (error) {
+    console.error('unit sprite read failed:', error && error.message);
+    res.status(503).json({ error: 'unit_sprite_unavailable' });
+  }
+});
+
+app.get('/api/admin/unit-assets', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    await sendFreshUnitCatalog(res, 200, true);
+  } catch (error) {
+    dbUnavailable(res, 'unit catalog admin read failed', error, 'unit_catalog_unavailable');
+  }
+});
+
+app.post('/api/admin/unit-assets', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const validated = validateUnitAssetInput(isObjectRecord(req.body) ? req.body : {});
+  if (validated.error) { res.status(400).json({ error: 'invalid_unit_asset', details: validated.error }); return; }
+  const id = crypto.randomUUID();
+  const asset = validated.value;
+  try {
+    const acceptanceBlockReason = unitAssetAcceptanceBlockReason(asset);
+    await withUnitCatalogTransaction(async (client) => {
+      await client.query(
+        `INSERT INTO unit_assets (
+           id, family, label, method, notes, acceptance_block_reason, footprint_shape, source_canvas_width,
+           source_canvas_height, source_footprint_px, anchor_x, anchor_y, updated_by
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [id, asset.family, asset.label, asset.method, asset.notes, acceptanceBlockReason, asset.footprintShape,
+          asset.sourceCanvasWidth, asset.sourceCanvasHeight, asset.sourceFootprintPx,
+          asset.anchorX, asset.anchorY, user.email],
+      );
+      await logUnitAssetEvent(client, asset.family, id, 'created', user.email, { acceptanceBlockReason });
+      await bumpUnitCatalog(client);
+    });
+    res.setHeader('Location', `/api/admin/unit-assets/${id}`);
+    const catalog = await dbReadUnitCatalog({ includeArchived: true });
+    res.status(201).json({ assetId: id, catalog });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_asset_create_failed');
+  }
+});
+
+app.patch('/api/admin/unit-assets/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = unitAssetId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_unit_asset_id' }); return; }
+  const expected = requestExpectedRevision(req);
+  try {
+    await withUnitCatalogTransaction(async (client) => {
+      const current = await dbUnitAssetRow(id, client, true);
+      if (!current) throw unitMutationError('unit_asset_not_found', 404);
+      assertUnitRevision(current, expected);
+      const validated = validateUnitAssetInput(isObjectRecord(req.body) ? req.body : {}, current);
+      if (validated.error) throw unitMutationError('invalid_unit_asset', 400, validated.error);
+      const asset = validated.value;
+      const acceptanceBlockReason = unitAssetAcceptanceBlockReason(asset, current.acceptance_block_reason);
+      await client.query(
+        `UPDATE unit_assets SET
+           label = $2, method = $3, notes = $4, acceptance_block_reason = $5, footprint_shape = $6,
+           source_canvas_width = $7, source_canvas_height = $8,
+           source_footprint_px = $9, anchor_x = $10, anchor_y = $11,
+           row_revision = row_revision + 1, updated_at = now(), updated_by = $12
+         WHERE id = $1`,
+        [id, asset.label, asset.method, asset.notes, acceptanceBlockReason, asset.footprintShape,
+          asset.sourceCanvasWidth, asset.sourceCanvasHeight, asset.sourceFootprintPx,
+          asset.anchorX, asset.anchorY, user.email],
+      );
+      await logUnitAssetEvent(client, current.family, id, 'metadata-updated', user.email, { acceptanceBlockReason });
+      await bumpUnitCatalog(client);
+    });
+    const catalog = await dbReadUnitCatalog({ includeArchived: true });
+    res.status(200).json({ assetId: id, catalog });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_asset_update_failed');
+  }
+});
+
+app.put('/api/admin/unit-assets/:id/sprites/:palette/:direction', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = unitAssetId(req.params.id);
+  const palette = unitPaletteId(req.params.palette);
+  const direction = unitDirectionId(req.params.direction);
+  if (!id || !palette || !direction) { res.status(400).json({ error: 'invalid_unit_sprite_address' }); return; }
+  if (!unitStorageConfigured()) { res.status(503).json({ error: 'unit_asset_storage_unavailable' }); return; }
+  const inspected = inspectUnitPng(req.body);
+  if (inspected.error) { res.status(400).json({ error: 'invalid_unit_sprite', details: inspected.error }); return; }
+  const expected = requestExpectedRevision(req);
+  try {
+    await ensureDbReady();
+    const before = await dbUnitAssetRow(id);
+    if (!before) throw unitMutationError('unit_asset_not_found', 404);
+    assertUnitRevision(before, expected);
+    if (inspected.width !== Number(before.source_canvas_width) || inspected.height !== Number(before.source_canvas_height)) {
+      throw unitMutationError('unit_sprite_canvas_mismatch', 400, {
+        expected: { width: Number(before.source_canvas_width), height: Number(before.source_canvas_height) },
+        actual: { width: inspected.width, height: inspected.height },
+      });
+    }
+    const familyRow = await pool.query('SELECT accepted_asset_id FROM unit_families WHERE family = $1', [before.family]);
+    if (String(familyRow.rows[0]?.accepted_asset_id || '') === id) {
+      throw unitMutationError('accepted_unit_asset_locked', 409, 'Create a candidate before replacing accepted sprite frames.');
+    }
+    const sha256 = crypto.createHash('sha256').update(req.body).digest('hex');
+    const blobKey = unitBlobKey(sha256);
+    await writeUnitBlob(blobKey, req.body, sha256);
+    const result = await withUnitCatalogTransaction(async (client) => {
+      const current = await dbUnitAssetRow(id, client, true);
+      if (!current) throw unitMutationError('unit_asset_not_found', 404);
+      assertUnitRevision(current, expected);
+      if (current.status === 'archived') throw unitMutationError('unit_asset_archived', 409);
+      const lockedFamily = await client.query(
+        'SELECT accepted_asset_id FROM unit_families WHERE family = $1 FOR UPDATE',
+        [current.family],
+      );
+      if (String(lockedFamily.rows[0]?.accepted_asset_id || '') === id) {
+        throw unitMutationError('accepted_unit_asset_locked', 409, 'Create a candidate before replacing accepted sprite frames.');
+      }
+      await client.query(
+        `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (asset_id, palette, direction) DO UPDATE SET
+           sha256 = EXCLUDED.sha256, blob_key = EXCLUDED.blob_key,
+           width = EXCLUDED.width, height = EXCLUDED.height,
+           byte_length = EXCLUDED.byte_length, updated_at = now()`,
+        [id, palette, direction, sha256, blobKey, inspected.width, inspected.height, req.body.length],
+      );
+      const updated = await client.query(
+        `UPDATE unit_assets SET row_revision = row_revision + 1, updated_at = now(), updated_by = $2
+          WHERE id = $1 RETURNING row_revision`,
+        [id, user.email],
+      );
+      await logUnitAssetEvent(client, current.family, id, 'sprite-uploaded', user.email, { palette, direction, sha256 });
+      const catalogRevision = await bumpUnitCatalog(client);
+      return { rowRevision: Number(updated.rows[0].row_revision), catalogRevision };
+    });
+    res.status(200).json({
+      assetId: id,
+      palette,
+      direction,
+      rowRevision: result.rowRevision,
+      catalogRevision: result.catalogRevision,
+      sprite: { url: `/api/unit-sprites/${sha256}.png`, sha256, width: inspected.width, height: inspected.height, byteLength: req.body.length },
+    });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_sprite_upload_failed');
+  }
+});
+
+app.patch('/api/admin/unit-families/:family', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const family = unitFamilyId(req.params.family);
+  if (!family) { res.status(400).json({ error: 'invalid_unit_family' }); return; }
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  const scale = integerUnitNumber(raw.displayScalePercent ?? raw.display_scale_percent, null, 60, 140);
+  if (scale === null) { res.status(400).json({ error: 'invalid_unit_scale', details: 'displayScalePercent must be an integer from 60-140' }); return; }
+  const expected = requestExpectedRevision(req);
+  try {
+    await withUnitCatalogTransaction(async (client) => {
+      const { rows } = await client.query('SELECT row_revision FROM unit_families WHERE family = $1 FOR UPDATE', [family]);
+      if (!rows[0]) throw unitMutationError('unit_family_not_found', 404);
+      if (expected !== null && Number(rows[0].row_revision) !== expected) {
+        throw unitMutationError('unit_family_conflict', 409, { currentRevision: Number(rows[0].row_revision) });
+      }
+      await client.query(
+        `UPDATE unit_families SET display_scale_percent = $2, row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $3 WHERE family = $1`,
+        [family, scale, user.email],
+      );
+      await logUnitAssetEvent(client, family, null, 'display-scale-published', user.email, { displayScalePercent: scale });
+      await bumpUnitCatalog(client);
+    });
+    const catalog = await dbReadUnitCatalog({ includeArchived: true });
+    res.status(200).json({ family, catalog });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_family_update_failed');
+  }
+});
+
+app.post('/api/admin/unit-assets/:id/accept', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = unitAssetId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_unit_asset_id' }); return; }
+  const expected = requestExpectedRevision(req);
+  try {
+    await withUnitCatalogTransaction(async (client) => {
+      const asset = await dbUnitAssetRow(id, client, true);
+      if (!asset) throw unitMutationError('unit_asset_not_found', 404);
+      assertUnitRevision(asset, expected);
+      if (asset.acceptance_block_reason) {
+        throw unitMutationError('unit_asset_calibration_only', 409, {
+          reason: asset.acceptance_block_reason,
+          adr: 'ADR-0076',
+        });
+      }
+      const { rows: spriteRows } = await client.query(
+        'SELECT palette, direction FROM unit_sprites WHERE asset_id = $1',
+        [id],
+      );
+      const present = new Set(spriteRows.map((row) => `${row.palette}/${row.direction}`));
+      const missing = [];
+      for (const palette of UNIT_PALETTE_IDS) for (const direction of UNIT_DIRECTION_IDS) {
+        if (!present.has(`${palette}/${direction}`)) missing.push(`${palette}/${direction}`);
+      }
+      if (missing.length) throw unitMutationError('unit_asset_incomplete', 409, { missing });
+      const familyResult = await client.query(
+        'SELECT accepted_asset_id, row_revision FROM unit_families WHERE family = $1 FOR UPDATE',
+        [asset.family],
+      );
+      const nativeScalePercent = nativeUnitScalePercent(asset.source_canvas_width, asset.source_canvas_height);
+      const previousId = familyResult.rows[0]?.accepted_asset_id ? String(familyResult.rows[0].accepted_asset_id) : null;
+      if (previousId && previousId !== id) {
+        await client.query(
+          `UPDATE unit_assets SET status = 'archived', row_revision = row_revision + 1,
+             updated_at = now(), updated_by = $2 WHERE id = $1`,
+          [previousId, user.email],
+        );
+      }
+      await client.query(
+        `UPDATE unit_assets SET status = 'candidate', row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $2 WHERE id = $1`,
+        [id, user.email],
+      );
+      await client.query(
+        `UPDATE unit_families SET accepted_asset_id = $2, display_scale_percent = $3,
+           row_revision = row_revision + 1, updated_at = now(), updated_by = $4 WHERE family = $1`,
+        [asset.family, id, nativeScalePercent, user.email],
+      );
+      await logUnitAssetEvent(client, asset.family, id, 'accepted', user.email, {
+        previousAssetId: previousId,
+        displayScalePercent: nativeScalePercent,
+      });
+      await bumpUnitCatalog(client);
+    });
+    const catalog = await dbReadUnitCatalog({ includeArchived: true });
+    res.status(200).json({ assetId: id, catalog });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_asset_accept_failed');
+  }
+});
+
+app.post('/api/admin/unit-assets/:id/archive', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = unitAssetId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_unit_asset_id' }); return; }
+  const expected = requestExpectedRevision(req);
+  try {
+    await withUnitCatalogTransaction(async (client) => {
+      const asset = await dbUnitAssetRow(id, client, true);
+      if (!asset) throw unitMutationError('unit_asset_not_found', 404);
+      assertUnitRevision(asset, expected);
+      const familyResult = await client.query('SELECT accepted_asset_id FROM unit_families WHERE family = $1 FOR UPDATE', [asset.family]);
+      if (String(familyResult.rows[0]?.accepted_asset_id || '') === id) {
+        throw unitMutationError('accepted_unit_asset_cannot_archive', 409, 'Accept another candidate first.');
+      }
+      await client.query(
+        `UPDATE unit_assets SET status = 'archived', row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $2 WHERE id = $1`,
+        [id, user.email],
+      );
+      await logUnitAssetEvent(client, asset.family, id, 'archived', user.email);
+      await bumpUnitCatalog(client);
+    });
+    const catalog = await dbReadUnitCatalog({ includeArchived: true });
+    res.status(200).json({ assetId: id, catalog });
+  } catch (error) {
+    sendUnitMutationError(res, error, 'unit_asset_archive_failed');
+  }
+});
+
 // Global shipped per-level AI weights (ship-to-everyone). Public GET returns the whole
 // map (every player's live AI reads it before falling back to DEFAULT weights);
 // admin-gated PUT sets one level's vector, or clears it with { weights: null }. A
@@ -3180,7 +5818,7 @@ app.put('/api/ai-weights/:levelId', async (req, res) => {
 // public_id and snapshots the level into public_maps, which the UNAUTH GET /api/maps/:id and the OG
 // thumbnail path read. Officials keep their global off-* ids and are unaffected.
 const PUBLIC_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'; // no 0/o/1/l ambiguity
-const PUBLIC_ID_RE = /^[a-hjkmnp-z2-9]{8,24}$/;
+const PUBLIC_ID_RE = new RegExp(`^[${PUBLIC_ID_ALPHABET}]{8,24}$`);
 function newPublicId() {
   const bytes = crypto.randomBytes(12);
   let out = '';
@@ -3239,8 +5877,12 @@ app.post('/api/maps/publish', async (req, res) => {
     const level = row && row.body && row.body.levels && typeof row.body.levels === 'object'
       ? row.body.levels[levelId] : null;
     if (!level || typeof level !== 'object') { res.status(404).json({ error: 'level_not_found' }); return; }
-    // content_hash was only a server-thumbnail cache-buster; that path is gone, so it's null now.
-    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, null);
+    let contentHash = null;
+    try {
+      const renderInputs = await applyThumbnailRenderInputs();
+      contentHash = serverRender && thumbnailVersion(serverRender.boardHashForLevel(level), renderInputs);
+    } catch { contentHash = null; }
+    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, contentHash);
     res.status(200).json({ public_id: publicId, url: `${publicOrigin}/play?map=${publicId}` });
   } catch (error) {
     dbUnavailable(res, 'map publish failed', error, 'map_store_unavailable');
@@ -3350,11 +5992,11 @@ function makeStaticCacheHeaders(rootDir) {
   };
 }
 
-// --- Open Graph unfurl ------------------------------------------------------
+// --- Open Graph unfurl + on-demand board thumbnails -------------------------
 // A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
-// JS, no auth). The SPA fallback injects per-level og:/twitter: title/description tags; og:image is
-// the branded default card. (Per-level server-rendered preview images were removed — the in-app
-// thumbnails are client-baked and nothing else consumed the server render path.)
+// JS, no auth). The SPA fallback injects per-level og:/twitter: tags, and og:image points at an
+// on-demand board render served here. Officials resolve from the LIVE DB; user maps from public_maps.
+// A render/resolve failure degrades to the branded default image.
 const OG_SITE_NAME = 'Chess Tactics';
 const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
 const DEFAULT_OG_IMAGE = '/assets/og/default.png';
@@ -3405,8 +6047,54 @@ async function officialWorkspace() {
   } catch { /* DB unreachable — fall through to the last-good real read below, else empty */ }
   return _officialCache.ws || { campaigns: [], levels: {} };
 }
-// Resolve a share reference to { level, title, subtitle, description }. Officials read the on-disk
-// baked file (sync, no DB); user maps read public_maps (async). Returns null when unresolvable.
+const THUMBNAIL_PROP_SEATS_TTL_MS = 60 * 1000;
+let _thumbnailPropSeatsCache = { at: 0, data: null, revision: 0 }; // last SUCCESSFUL DB read
+async function thumbnailPropSeats() {
+  const now = Date.now();
+  if (_thumbnailPropSeatsCache.data && now - _thumbnailPropSeatsCache.at < THUMBNAIL_PROP_SEATS_TTL_MS) {
+    return _thumbnailPropSeatsCache;
+  }
+  try {
+    const doc = await dbGetPropSeats('default');
+    const data = doc && doc.data && typeof doc.data === 'object' ? doc.data : {};
+    _thumbnailPropSeatsCache = {
+      at: now,
+      data,
+      revision: Number.isInteger(doc && doc.revision) ? doc.revision : 0,
+    };
+    return _thumbnailPropSeatsCache;
+  } catch { /* DB unreachable — fall through to the last-good seats below, else baseline */ }
+  return _thumbnailPropSeatsCache.data ? _thumbnailPropSeatsCache : { at: now, data: {}, revision: 0 };
+}
+async function applyThumbnailRenderInputs() {
+  const seats = await thumbnailPropSeats();
+  if (serverRender && typeof serverRender.applyPropSeatOverrides === 'function') {
+    try { serverRender.applyPropSeatOverrides(seats.data); } catch { /* keep the renderer's last-good seats */ }
+  }
+  if (!serverRender || typeof serverRender.applyLiveUnitCatalog !== 'function') {
+    throw new Error('unit catalog renderer is unavailable');
+  }
+  const catalog = await publicUnitCatalog();
+  serverRender.applyLiveUnitCatalog(catalog);
+  const unitCatalogRevision = catalog.revision || 0;
+  return { propSeatsRevision: seats.revision || 0, unitCatalogRevision };
+}
+function thumbnailVersion(boardHash, renderInputs) {
+  const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
+  const unitCatalogRevision = renderInputs && renderInputs.unitCatalogRevision ? `uc${renderInputs.unitCatalogRevision}` : '';
+  return [boardHash, propSeatsRevision, unitCatalogRevision].filter(Boolean).join('-');
+}
+function playScreenName(input) {
+  if (serverRender && typeof serverRender.playRouteScreenName === 'function') {
+    try { return serverRender.playRouteScreenName({ path: '/play', ...input }); } catch { /* fall back below */ }
+  }
+  if (input && input.mapId) return 'Community Map';
+  if (input && input.campaignId && input.levelId) return 'Campaign';
+  if (input && input.levelId) return 'Official Level';
+  return 'Skirmish';
+}
+// Resolve a share reference to { level, title, subtitle, description }. Officials read the live
+// official workspace cache; user maps read public_maps. Returns null when unresolvable.
 async function resolveShareTarget({ levelId, campaignId, mapId }) {
   if (mapId) {
     const row = await dbGetPublicMap(mapId).catch(() => null);
@@ -3415,12 +6103,13 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
     const objective = OG_MODE_NAME[level.objective] || null;
     return {
       level,
+      screenName: playScreenName({ mapId }),
       title: row.name || level.name || OG_SITE_NAME,
       subtitle: objective ? `Community map · ${objective}` : 'Community map',
       description: objective ? `A community-made ${objective} map.` : OG_DEFAULT_DESC,
     };
   }
-  if (levelId && /^off-[a-z-]+$/.test(levelId)) {
+  if (levelId && OFFICIAL_WORKSPACE_ID_PATTERN.test(levelId)) {
     const ws = await officialWorkspace();
     const level = Object.hasOwn(ws.levels, levelId) && ws.levels[levelId] && typeof ws.levels[levelId] === 'object'
       ? ws.levels[levelId] : null;
@@ -3429,6 +6118,7 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
     const objective = OG_MODE_NAME[level.objective] || null;
     return {
       level,
+      screenName: playScreenName({ levelId, campaignId: campaign ? campaignId : null }),
       title: campaign && campaign.name ? `${level.name} — ${campaign.name}` : (level.name || OG_SITE_NAME),
       subtitle: [campaign && campaign.name, objective].filter(Boolean).join(' · ') || null,
       description: level.notes || (campaign && campaign.name ? `A level in ${campaign.name}.` : OG_DEFAULT_DESC),
@@ -3436,6 +6126,48 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
   }
   return null;
 }
+
+// On-demand board thumbnail: /assets/level-thumb/<id>.png (?v=<hash> only busts caches).
+// Registered before express.static so the .png is not handled by the SPA asset guard.
+const _thumbCache = new Map(); // `${id}:${hash}` -> Buffer
+const THUMB_CACHE_MAX = 200;
+app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
+  const id = String(req.params[0] || '');
+  const isOfficial = OFFICIAL_WORKSPACE_ID_PATTERN.test(id);
+  const isMap = PUBLIC_ID_RE.test(id);
+  const campaignId = typeof req.query.campaignId === 'string' ? req.query.campaignId : null;
+  if (!isOfficial && !isMap) { res.status(404).send('not found'); return; }
+  try {
+    if (!serverRender) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
+    const target = await resolveShareTarget(isOfficial ? { levelId: id, campaignId } : { mapId: id });
+    if (!target) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
+    const renderInputs = await applyThumbnailRenderInputs();
+    const plan = serverRender.levelRenderPlan(target.level);
+    const cacheKey = `${id}:${campaignId || ''}:${thumbnailVersion(plan.contentHash, renderInputs)}`;
+    let png = _thumbCache.get(cacheKey);
+    if (!png) {
+      const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
+      const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
+      png = await renderLevelCard({
+        plan,
+        frontendDir,
+        title: target.title,
+        subtitle: target.subtitle,
+        screenName: target.screenName,
+        backgroundSrc,
+        loadDynamicSprite: thumbnailDynamicSprite,
+      });
+      if (_thumbCache.size >= THUMB_CACHE_MAX) _thumbCache.delete(_thumbCache.keys().next().value);
+      _thumbCache.set(cacheKey, png);
+    }
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.status(200).end(png);
+  } catch (error) {
+    console.error('level-thumb render failed:', error && error.message);
+    res.redirect(302, DEFAULT_OG_IMAGE);
+  }
+});
 
 async function ogTagsFor(req) {
   const origin = publicOrigin; // TRUSTED canonical origin, never the spoofable Host header
@@ -3450,7 +6182,19 @@ async function ogTagsFor(req) {
   if (target) {
     title = target.title || OG_SITE_NAME;
     description = target.description || target.subtitle || OG_DEFAULT_DESC;
-    // og:image stays the branded default card — per-level server-rendered previews were removed.
+    if (serverRender) {
+      const key = mapId || levelId;
+      let hash = '';
+      try {
+        const renderInputs = await applyThumbnailRenderInputs();
+        hash = thumbnailVersion(serverRender.boardHashForLevel(target.level), renderInputs);
+      } catch { hash = ''; }
+      const imageParams = new URLSearchParams();
+      if (hash) imageParams.set('v', hash);
+      if (campaignId && key === levelId) imageParams.set('campaignId', campaignId);
+      const qs = imageParams.toString();
+      image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${qs ? `?${qs}` : ''}`;
+    }
   }
   const url = `${origin}${req.originalUrl}`;
   const meta = [

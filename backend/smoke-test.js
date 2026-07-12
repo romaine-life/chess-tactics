@@ -152,6 +152,7 @@ const child = spawn(process.execPath, ['supervisor.js'], {
   cwd: __dirname,
   env: {
     ...process.env,
+    NODE_ENV: 'test',
     AUTH_BASE_URL: `http://127.0.0.1:${authPort}`,
     PORT: String(port),
     PUBLIC_ORIGIN: 'https://chess.romaine.life',
@@ -161,9 +162,13 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     BGM_READ_URL: `http://127.0.0.1:${bgmPort}`,
     HOT_BACKEND_DIR: hotBackendDir,
     STATIC_FRONTEND_DIR: hotStaticDir,
+    LOBBY_TEST_LEVEL_METADATA: JSON.stringify({
+      'off-l-smoke-timed': { level: { id: 'off-l-smoke-timed', name: 'Smoke Timed Level', objective: 'survive', timeControl: { initialSeconds: 60, incrementSeconds: 0 } } },
+    }),
     // The mock auth returns player@example.com for any non-rival session; make that
     // the official-campaigns admin so the requireAdmin path is exercised (ADR-0038).
     ADMIN_EMAILS: 'player@example.com',
+    UNIT_ASSET_STORAGE_DIR: path.join(hotRoot, 'unit-assets'),
     // Smoke-test databases are throwaway/reset by this file, so schema mutation is
     // intentional here even though local backend startup defaults to read-only check.
     SCHEMA_MIGRATIONS: 'auto',
@@ -181,7 +186,28 @@ child.stderr.on('data', (chunk) => {
   output += chunk.toString();
 });
 
-function request(method, path, headers = {}, body = null) {
+function waitForProcessExit(proc, timeoutMs = 5000) {
+  if (!proc || proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, timeoutMs);
+    proc.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+function closeHttpServer(server) {
+  return new Promise((resolve) => {
+    try {
+      server.close(() => resolve());
+    } catch {
+      resolve();
+    }
+  });
+}
+
+function request(method, path, headers = {}, body = null, timeoutMs = 1000) {
   return new Promise((resolve, reject) => {
     const req = http.request({ hostname: '127.0.0.1', port, method, path, headers }, (res) => {
       let body = '';
@@ -192,15 +218,15 @@ function request(method, path, headers = {}, body = null) {
       res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, body }));
     });
     req.on('error', reject);
-    req.setTimeout(1000, () => {
+    req.setTimeout(timeoutMs, () => {
       req.destroy(new Error(`Timed out requesting ${path}`));
     });
     req.end(body);
   });
 }
 
-function get(path, headers) {
-  return request('GET', path, headers);
+function get(path, headers, timeoutMs) {
+  return request('GET', path, headers, null, timeoutMs);
 }
 
 // Open a long-lived SSE stream and expose its parsed `data:` frames. Unlike request()
@@ -268,7 +294,8 @@ function openSse(path, headers = {}) {
 // server applies migrations before it begins listening (and /health gates on
 // that), so waitForServer() has already returned by the time this runs.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats');
+  await queryDb('TRUNCATE levels, campaign_workspaces, level_working_copies, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
+  await queryDb("INSERT INTO unit_catalog_state (singleton) VALUES (true); INSERT INTO unit_families (family) VALUES ('pawn'), ('rook'), ('knight'), ('bishop'), ('queen'), ('king');");
 }
 
 async function queryDb(sql, params = []) {
@@ -282,17 +309,138 @@ async function queryDb(sql, params = []) {
   }
 }
 
+function inlineMigrationSql(version) {
+  const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  const marker = `version: ${version},`;
+  const markerOffset = source.indexOf(marker);
+  if (markerOffset === -1) throw new Error(`Could not find inline migration ${version}`);
+  const sqlMarker = 'sql: `';
+  const sqlOffset = source.indexOf(sqlMarker, markerOffset);
+  if (sqlOffset === -1) throw new Error(`Could not find SQL for inline migration ${version}`);
+  const sqlStart = sqlOffset + sqlMarker.length;
+  const sqlEnd = source.indexOf('`,', sqlStart);
+  if (sqlEnd === -1) throw new Error(`Could not find end of inline migration ${version}`);
+  return source.slice(sqlStart, sqlEnd);
+}
+
+async function validateEditorMigration16Preservation() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_editor_migration_16');
+    await client.query('SET LOCAL search_path TO smoke_editor_migration_16');
+    await client.query(`
+      CREATE TABLE campaign_workspaces (
+        owner_email text PRIMARY KEY,
+        body jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE official_campaigns (
+        id text PRIMARY KEY,
+        data jsonb NOT NULL
+      );
+      CREATE TABLE public_maps (
+        public_id text PRIMARY KEY,
+        body jsonb NOT NULL
+      );
+      CREATE TABLE editor_maps (
+        public_id text PRIMARY KEY,
+        owner_email text,
+        body jsonb NOT NULL,
+        revision integer NOT NULL DEFAULT 0,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE editor_map_audit_events (
+        id bigserial PRIMARY KEY,
+        public_id text NOT NULL REFERENCES editor_maps(public_id) ON DELETE CASCADE
+      );
+    `);
+    await client.query(
+      'INSERT INTO campaign_workspaces (owner_email, body) VALUES ($1, $2::jsonb)',
+      [
+        'player@example.com',
+        JSON.stringify({ campaigns: [], levels: { l7: { id: 'l7', name: 'Canonical L7' } } }),
+      ],
+    );
+    await client.query(
+      "INSERT INTO official_campaigns (id, data) VALUES ('default', $1::jsonb)",
+      [JSON.stringify({ campaigns: [], levels: { 'off-l-one': { id: 'off-l-one', name: 'Canonical Official' } } })],
+    );
+    await client.query(`INSERT INTO public_maps (public_id, body) VALUES ('abcdefgh', '{"kept":true}'::jsonb)`);
+    const legacyRows = [
+      ['abcdefgh', 'player@example.com', { id: 'draft', name: 'Standalone A' }, 3, '2026-01-01T00:00:00Z'],
+      ['jkmnpqrs', 'player@example.com', { id: 'draft', name: 'Standalone B' }, 4, '2026-01-02T00:00:00Z'],
+      ['tuvwxyz2', 'player@example.com', { id: 'off-l-one', name: 'Official Working Copy' }, 5, '2026-01-03T00:00:00Z'],
+      ['23456789', 'player@example.com', { id: 'l7', name: 'Older L7 Working Copy' }, 2, '2026-01-01T00:00:00Z'],
+      ['bcdefghj', 'player@example.com', { id: 'l7', name: 'Newest L7 Working Copy' }, 6, '2026-01-04T00:00:00Z'],
+      ['kmnpqrst', null, { id: 'draft', name: 'Anonymous Must Not Become Account Data' }, 7, '2026-01-05T00:00:00Z'],
+    ];
+    for (const [publicId, ownerEmail, body, revision, updatedAt] of legacyRows) {
+      await client.query(
+        `INSERT INTO editor_maps (public_id, owner_email, body, revision, created_at, updated_at)
+         VALUES ($1, $2, $3::jsonb, $4, $5::timestamptz, $5::timestamptz)`,
+        [publicId, ownerEmail, JSON.stringify(body), revision, updatedAt],
+      );
+    }
+
+    await client.query(inlineMigrationSql(16));
+    const migrated = await client.query(
+      `SELECT document_id, owner_email, workspace_kind, workspace_id, level_id, body,
+              revision, saved_revision, baseline_hash
+         FROM level_working_copies
+        ORDER BY document_id`,
+    );
+    const byDocument = new Map(migrated.rows.map((row) => [row.document_id, row]));
+    const standaloneA = byDocument.get('legacy-abcdefgh');
+    const standaloneB = byDocument.get('legacy-jkmnpqrs');
+    const official = byDocument.get('legacy-tuvwxyz2');
+    const newestReal = byDocument.get('legacy-bcdefghj');
+    if (
+      migrated.rows.length !== 4 ||
+      !standaloneA || standaloneA.level_id !== 'legacy-abcdefgh' || standaloneA.body.id !== 'legacy-abcdefgh' || Number(standaloneA.saved_revision) !== 0 ||
+      !standaloneB || standaloneB.level_id !== 'legacy-jkmnpqrs' || standaloneB.body.id !== 'legacy-jkmnpqrs' || Number(standaloneB.saved_revision) !== 0 ||
+      !official || official.workspace_kind !== 'official' || official.workspace_id !== 'default' || official.level_id !== 'off-l-one' || !official.baseline_hash || Number(official.saved_revision) !== 1 ||
+      !newestReal || newestReal.level_id !== 'l7' || newestReal.body.name !== 'Newest L7 Working Copy' || !newestReal.baseline_hash || Number(newestReal.saved_revision) !== 1 ||
+      byDocument.has('legacy-23456789') || byDocument.has('legacy-kmnpqrst')
+    ) {
+      throw new Error(`Migration 16 did not preserve signed-in legacy editor rows safely: ${JSON.stringify(migrated.rows)}`);
+    }
+    const retired = await client.query(
+      `SELECT to_regclass('editor_maps') AS maps,
+              to_regclass('editor_map_audit_events') AS events,
+              (SELECT body->>'kept' FROM public_maps WHERE public_id = 'abcdefgh') AS published_kept,
+              (SELECT revision FROM campaign_workspaces WHERE owner_email = 'player@example.com') AS workspace_revision`,
+    );
+    if (
+      retired.rows[0].maps ||
+      retired.rows[0].events ||
+      retired.rows[0].published_kept !== 'true' ||
+      Number(retired.rows[0].workspace_revision) !== 0
+    ) {
+      throw new Error(`Migration 16 retired the wrong schema objects: ${JSON.stringify(retired.rows[0])}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function waitForServer() {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
       throw new Error(`Server exited early with ${child.exitCode}\n${output}`);
     }
     try {
       const response = await get('/health');
       if (response.statusCode === 200 && response.body === 'ok') return;
-    } catch (_error) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    } catch (_error) { /* keep polling while the server starts */ }
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Server did not become healthy\n${output}`);
 }
@@ -305,9 +453,8 @@ async function waitForHotBackend() {
     try {
       const response = await get('/__hot_backend');
       if (response.statusCode === 200 && response.body === 'hot-backend-ok') return;
-    } catch (_error) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    } catch (_error) { /* keep polling while the supervisor restarts */ }
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Hot backend did not become active\n${output}`);
 }
@@ -319,7 +466,38 @@ async function main() {
   if (!fs.existsSync(path.join(hotBackendDir, 'server.js'))) {
     throw new Error('Supervisor did not initialize the hot backend entrypoint');
   }
+  await validateEditorMigration16Preservation();
   await resetDb();
+  const editorSchema = await queryDb(
+     `SELECT
+       to_regclass('public.level_working_copies') AS working_copies,
+       to_regclass('public.editor_maps') AS retired_editor_maps,
+       to_regclass('public.editor_map_audit_events') AS retired_editor_map_events,
+       to_regclass('public.public_maps') AS public_play_maps,
+       EXISTS (
+         SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'level_working_copies'
+            AND column_name = 'baseline_hash'
+       ) AS has_baseline_hash,
+       EXISTS (
+         SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'campaign_workspaces'
+            AND column_name = 'revision'
+       ) AS has_workspace_revision`,
+  );
+  const editorSchemaRow = editorSchema.rows[0];
+  if (
+    !editorSchemaRow.working_copies ||
+    editorSchemaRow.retired_editor_maps ||
+    editorSchemaRow.retired_editor_map_events ||
+    !editorSchemaRow.public_play_maps ||
+    editorSchemaRow.has_baseline_hash !== true ||
+    editorSchemaRow.has_workspace_revision !== true
+  ) {
+    throw new Error(`Unexpected editor persistence schema: ${JSON.stringify(editorSchemaRow)}`);
+  }
 
   const root = await get('/');
   if (root.statusCode !== 200 || !root.body.includes('Chess Tactics')) {
@@ -368,8 +546,9 @@ async function main() {
     '/level-editor/skeleton',
     '/design/level-editor/render',
     '/design/level-editor/render/hotspots',
-    '/skirmish',
-    '/skirmish/skeleton',
+    '/play/select/skirmish',
+    '/play/select/levels',
+    '/play/select/campaign/off-c-crown-valoria',
     '/design/skirmish/render',
     '/design/skirmish/render/hotspots',
   ];
@@ -424,6 +603,186 @@ async function main() {
   const playerHash = crypto.createHash('md5').update('player@example.com').digest('hex');
   if (!String(signedInBody.gravatar_url).includes(`/avatar/${playerHash}`) || signedInBody.avatar_url !== signedInBody.gravatar_url) {
     throw new Error(`Signed-in user did not include Gravatar avatar data: ${signedIn.body}`);
+  }
+
+  // Live unit catalog: stable six-family metadata, raw PNG upload, immutable
+  // sprite reads, optimistic scale edits, completeness-gated acceptance, and
+  // archive visibility all run against the disposable DB + local blob directory.
+  const emptyUnitCatalog = await get('/api/unit-catalog');
+  const emptyUnitBody = JSON.parse(emptyUnitCatalog.body);
+  if (emptyUnitCatalog.statusCode !== 200 || emptyUnitBody.families.length !== 6 || emptyUnitBody.assets.length !== 0) {
+    throw new Error(`Unexpected empty unit catalog: ${emptyUnitCatalog.statusCode} ${emptyUnitCatalog.body}`);
+  }
+  const unitMetadata = {
+    family: 'pawn',
+    label: 'Smoke pawn candidate',
+    method: 'Smoke test',
+    notes: 'Disposable candidate',
+    footprintShape: 'circle',
+    sourceCanvasWidth: 512,
+    sourceCanvasHeight: 512,
+    sourceFootprintPx: 150,
+    anchorX: 0.5,
+    anchorY: 0.78,
+  };
+  const anonymousUnitCreate = await request(
+    'POST', '/api/admin/unit-assets', { 'content-type': 'application/json' }, JSON.stringify(unitMetadata), 5000,
+  );
+  if (anonymousUnitCreate.statusCode !== 401) throw new Error(`Anonymous unit create should be 401: ${anonymousUnitCreate.statusCode}`);
+  const adminJson = { 'content-type': 'application/json', cookie: 'better-auth.session=abc' };
+  const createdUnit = await request('POST', '/api/admin/unit-assets', adminJson, JSON.stringify(unitMetadata), 5000);
+  if (createdUnit.statusCode !== 201) throw new Error(`Unit candidate create failed: ${createdUnit.statusCode} ${createdUnit.body}`);
+  const firstUnitId = JSON.parse(createdUnit.body).assetId;
+  const pawnPng = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'public', 'assets', 'units', 'pawn', 'portrait', 'navy-blue.png'));
+  const uploadedUnit = await request(
+    'PUT',
+    `/api/admin/unit-assets/${firstUnitId}/sprites/navy-blue/south`,
+    { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' },
+    pawnPng,
+    5000,
+  );
+  if (uploadedUnit.statusCode !== 200 || JSON.parse(uploadedUnit.body).rowRevision !== 1) {
+    throw new Error(`Unit sprite upload failed: ${uploadedUnit.statusCode} ${uploadedUnit.body}`);
+  }
+  const uploadedSprite = JSON.parse(uploadedUnit.body).sprite;
+  const servedSprite = await get(uploadedSprite.url, {}, 5000);
+  if (servedSprite.statusCode !== 200 || servedSprite.headers.etag !== `"${uploadedSprite.sha256}"` || !String(servedSprite.headers['cache-control']).includes('immutable')) {
+    throw new Error(`Unit sprite immutable read failed: ${servedSprite.statusCode} ${JSON.stringify(servedSprite.headers)}`);
+  }
+  const cachedSprite = await get(uploadedSprite.url, { 'if-none-match': servedSprite.headers.etag }, 5000);
+  if (cachedSprite.statusCode !== 304) throw new Error(`Unit sprite conditional read should be 304: ${cachedSprite.statusCode}`);
+  const incompleteAccept = await request(
+    'POST', `/api/admin/unit-assets/${firstUnitId}/accept`, { ...adminJson, 'if-match': '"1"' }, '{}', 5000,
+  );
+  if (incompleteAccept.statusCode !== 409 || JSON.parse(incompleteAccept.body).error !== 'unit_asset_incomplete') {
+    throw new Error(`Incomplete unit acceptance should be rejected: ${incompleteAccept.statusCode} ${incompleteAccept.body}`);
+  }
+  const publishedScale = await request(
+    'PATCH', '/api/admin/unit-families/pawn', { ...adminJson, 'if-match': '"0"' }, JSON.stringify({ displayScalePercent: 112 }), 5000,
+  );
+  if (publishedScale.statusCode !== 200) throw new Error(`Unit scale publish failed: ${publishedScale.statusCode} ${publishedScale.body}`);
+  const archivedUnit = await request(
+    'POST', `/api/admin/unit-assets/${firstUnitId}/archive`, { ...adminJson, 'if-match': '"1"' }, '{}', 5000,
+  );
+  if (archivedUnit.statusCode !== 200) throw new Error(`Unit archive failed: ${archivedUnit.statusCode} ${archivedUnit.body}`);
+  const publicAfterArchive = JSON.parse((await get('/api/unit-catalog')).body);
+  if (publicAfterArchive.assets.some((asset) => asset.id === firstUnitId)) throw new Error('Archived unit leaked into public catalog');
+  const adminAfterArchive = await get('/api/admin/unit-assets', { cookie: 'better-auth.session=abc' }, 5000);
+  if (!JSON.parse(adminAfterArchive.body).assets.some((asset) => asset.id === firstUnitId && asset.status === 'archived')) {
+    throw new Error(`Archived unit missing from admin catalog: ${adminAfterArchive.body}`);
+  }
+
+  const secondUnit = await request(
+    'POST', '/api/admin/unit-assets', adminJson, JSON.stringify({ ...unitMetadata, label: 'Complete pawn candidate' }), 5000,
+  );
+  if (secondUnit.statusCode !== 201) throw new Error(`Second unit candidate create failed: ${secondUnit.statusCode} ${secondUnit.body}`);
+  const secondUnitId = JSON.parse(secondUnit.body).assetId;
+  const storedSprite = (await queryDb(
+    'SELECT sha256, blob_key, width, height, byte_length FROM unit_sprites WHERE asset_id = $1 LIMIT 1',
+    [firstUnitId],
+  )).rows[0];
+  const palettes = ['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white'];
+  const directions = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+  const seedCompleteUnitSprites = async (assetId) => {
+    const spriteParams = [];
+    const spriteValues = [];
+    for (const palette of palettes) for (const direction of directions) {
+      const base = spriteParams.length;
+      spriteParams.push(assetId, palette, direction, storedSprite.sha256, storedSprite.blob_key, storedSprite.width, storedSprite.height, storedSprite.byte_length);
+      spriteValues.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`);
+    }
+    await queryDb(
+      `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length) VALUES ${spriteValues.join(',')}`,
+      spriteParams,
+    );
+  };
+
+  const resampledUnit = await request('POST', '/api/admin/unit-assets', adminJson, JSON.stringify({
+    ...unitMetadata,
+    label: 'Calibration-only recapture',
+    method: 'Accepted sprite smooth recapture',
+    notes: JSON.stringify({ pipeline: 'accepted-sprite-recapture', spatialResampling: true }),
+  }), 5000);
+  if (resampledUnit.statusCode !== 201) throw new Error(`Resampled unit candidate create failed: ${resampledUnit.statusCode} ${resampledUnit.body}`);
+  const resampledUnitId = JSON.parse(resampledUnit.body).assetId;
+  await seedCompleteUnitSprites(resampledUnitId);
+  const blockedResampledAccept = await request(
+    'POST', `/api/admin/unit-assets/${resampledUnitId}/accept`, { ...adminJson, 'if-match': '"0"' }, '{}', 5000,
+  );
+  const blockedResampledBody = JSON.parse(blockedResampledAccept.body);
+  if (
+    blockedResampledAccept.statusCode !== 409
+    || blockedResampledBody.error !== 'unit_asset_calibration_only'
+    || blockedResampledBody.details?.reason !== 'spatial-resampling'
+  ) {
+    throw new Error(`Resampled unit acceptance should be blocked by ADR-0076: ${blockedResampledAccept.statusCode} ${blockedResampledAccept.body}`);
+  }
+  const scrubbedResampled = await request(
+    'PATCH', `/api/admin/unit-assets/${resampledUnitId}`, { ...adminJson, 'if-match': '"0"' },
+    JSON.stringify({ method: 'Blender', notes: 'metadata markers removed after recapture' }), 5000,
+  );
+  if (scrubbedResampled.statusCode !== 200) throw new Error(`Resampled metadata update failed: ${scrubbedResampled.statusCode} ${scrubbedResampled.body}`);
+  const scrubbedAsset = JSON.parse(scrubbedResampled.body).catalog.assets.find((asset) => asset.id === resampledUnitId);
+  if (scrubbedAsset?.acceptanceBlockReason !== 'spatial-resampling') {
+    throw new Error(`Resampled acceptance block was not monotonic: ${scrubbedResampled.body}`);
+  }
+  const stillBlockedResampledAccept = await request(
+    'POST', `/api/admin/unit-assets/${resampledUnitId}/accept`, { ...adminJson, 'if-match': '"1"' }, '{}', 5000,
+  );
+  if (stillBlockedResampledAccept.statusCode !== 409 || JSON.parse(stillBlockedResampledAccept.body).error !== 'unit_asset_calibration_only') {
+    throw new Error(`Edited resampled unit should remain blocked: ${stillBlockedResampledAccept.statusCode} ${stillBlockedResampledAccept.body}`);
+  }
+  const pawnBeforeNativeAccept = (await queryDb('SELECT accepted_asset_id FROM unit_families WHERE family = $1', ['pawn'])).rows[0];
+  if (pawnBeforeNativeAccept?.accepted_asset_id) throw new Error('Blocked recapture changed the accepted pawn pointer');
+
+  await seedCompleteUnitSprites(secondUnitId);
+  const acceptedUnit = await request(
+    'POST', `/api/admin/unit-assets/${secondUnitId}/accept`, { ...adminJson, 'if-match': '"0"' }, '{}', 5000,
+  );
+  if (acceptedUnit.statusCode !== 200) throw new Error(`Complete unit acceptance failed: ${acceptedUnit.statusCode} ${acceptedUnit.body}`);
+  // A renderer catalog is an all-six contract. Seed the other five accepted
+  // families directly in this disposable database using the same immutable PNG.
+  for (const family of ['rook', 'knight', 'bishop', 'queen', 'king']) {
+    const assetId = crypto.randomUUID();
+    await queryDb(
+      `INSERT INTO unit_assets (
+         id, family, label, method, notes, status, footprint_shape,
+         source_canvas_width, source_canvas_height, source_footprint_px,
+         anchor_x, anchor_y, row_revision, updated_by
+       ) SELECT $1, $2, initcap($2), 'Smoke seed', '', 'candidate', footprint_shape,
+                source_canvas_width, source_canvas_height, source_footprint_px,
+                anchor_x, anchor_y, 1, 'smoke-test'
+           FROM unit_assets WHERE id = $3`,
+      [assetId, family, secondUnitId],
+    );
+    await queryDb(
+      `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length)
+       SELECT $1, palette, direction, sha256, blob_key, width, height, byte_length
+         FROM unit_sprites WHERE asset_id = $2`,
+      [assetId, secondUnitId],
+    );
+    await queryDb(
+      `UPDATE unit_families SET accepted_asset_id = $2, row_revision = row_revision + 1,
+         updated_at = now(), updated_by = 'smoke-test' WHERE family = $1`,
+      [family, assetId],
+    );
+  }
+  await queryDb('UPDATE unit_catalog_state SET revision = revision + 1, updated_at = now() WHERE singleton = true');
+  const acceptedCatalog = JSON.parse((await get('/api/unit-catalog')).body);
+  const acceptedPawn = acceptedCatalog.families.find((family) => family.family === 'pawn');
+  if (
+    acceptedPawn.acceptedAssetId !== secondUnitId ||
+    acceptedPawn.displayScalePercent !== 100 ||
+    acceptedCatalog.families.some((family) => !family.acceptedAssetId) ||
+    acceptedCatalog.assets.filter((asset) => asset.accepted && asset.complete).length !== 6
+  ) {
+    throw new Error(`Accepted pawn pointer/native-scale mismatch: ${JSON.stringify(acceptedPawn)}`);
+  }
+  const rejectAcceptedArchive = await request(
+    'POST', `/api/admin/unit-assets/${secondUnitId}/archive`, { ...adminJson, 'if-match': '"1"' }, '{}', 5000,
+  );
+  if (rejectAcceptedArchive.statusCode !== 409 || JSON.parse(rejectAcceptedArchive.body).error !== 'accepted_unit_asset_cannot_archive') {
+    throw new Error(`Accepted unit archive should be rejected: ${rejectAcceptedArchive.statusCode} ${rejectAcceptedArchive.body}`);
   }
 
   // BGM playlist: the backend reads the (mocked) blob index.json and resolves
@@ -595,7 +954,7 @@ async function main() {
   const adminOfficialWrite = await request(
     'PUT', '/api/official-campaigns/default',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ data: officialWorkspace }),
+    JSON.stringify({ data: officialWorkspace, revision: emptyOfficialBody.portfolio.revision }),
   );
   const adminOfficialWriteBody = JSON.parse(adminOfficialWrite.body);
   if (
@@ -606,6 +965,14 @@ async function main() {
     adminOfficialWriteBody.portfolio.data.levels['off-l-test'].events[0].trigger.zoneId !== 'promotion-zone'
   ) {
     throw new Error(`Unexpected admin official write: ${adminOfficialWrite.statusCode} ${adminOfficialWrite.body}`);
+  }
+  const missingOfficialRevision = await request(
+    'PUT', '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: officialWorkspace }),
+  );
+  if (missingOfficialRevision.statusCode !== 400 || JSON.parse(missingOfficialRevision.body).error !== 'official_campaign_revision_required') {
+    throw new Error(`Official whole-workspace writes must carry an observed revision: ${missingOfficialRevision.statusCode} ${missingOfficialRevision.body}`);
   }
 
   // Public GET now returns the published officials — visible WITHOUT a session.
@@ -619,11 +986,29 @@ async function main() {
     throw new Error(`Official campaigns did not persist for public read: ${publishedOfficial.statusCode} ${publishedOfficial.body}`);
   }
 
+  const officialPlay = await get('/play?campaignId=off-c-test&levelId=off-l-test');
+  if (
+    officialPlay.statusCode !== 200 ||
+    !officialPlay.body.includes('Test Level') ||
+    !officialPlay.body.includes('/assets/level-thumb/off-l-test.png') ||
+    officialPlay.body.includes('/assets/og/default.png')
+  ) {
+    throw new Error(`Official play page should advertise the level thumbnail: ${officialPlay.statusCode}`);
+  }
+  const officialThumb = await get('/assets/level-thumb/off-l-test.png', undefined, 5000);
+  if (
+    officialThumb.statusCode !== 200 ||
+    !String(officialThumb.headers['content-type'] || '').includes('image/png') ||
+    officialThumb.body.length < 1000
+  ) {
+    throw new Error(`Official level thumbnail should render PNG: ${officialThumb.statusCode} ${officialThumb.headers['content-type'] || ''}`);
+  }
+
   // Non-off-prefixed ids are rejected (would collide the per-user id counter).
   const nonOffIdWrite = await request(
     'PUT', '/api/official-campaigns/default',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'c1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} } }),
+    JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'c1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} }, revision: 1 }),
   );
   if (nonOffIdWrite.statusCode !== 400 || JSON.parse(nonOffIdWrite.body).error !== 'invalid_official_ids') {
     throw new Error(`Non-off-prefixed official ids should be rejected: ${nonOffIdWrite.statusCode} ${nonOffIdWrite.body}`);
@@ -633,7 +1018,7 @@ async function main() {
   const digitOffIdWrite = await request(
     'PUT', '/api/official-campaigns/default',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'off-c-test1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} } }),
+    JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'off-c-test1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} }, revision: 1 }),
   );
   if (digitOffIdWrite.statusCode !== 400 || JSON.parse(digitOffIdWrite.body).error !== 'invalid_official_ids') {
     throw new Error(`Official ids with digits should be rejected: ${digitOffIdWrite.statusCode} ${digitOffIdWrite.body}`);
@@ -805,7 +1190,7 @@ async function main() {
 
   const emptyWorkspace = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
   const emptyWorkspaceBody = JSON.parse(emptyWorkspace.body);
-  if (emptyWorkspace.statusCode !== 200 || emptyWorkspaceBody.campaigns.length !== 0 || Object.keys(emptyWorkspaceBody.levels).length !== 0) {
+  if (emptyWorkspace.statusCode !== 200 || emptyWorkspaceBody.revision !== 0 || emptyWorkspaceBody.campaigns.length !== 0 || Object.keys(emptyWorkspaceBody.levels).length !== 0) {
     throw new Error(`Empty workspace should be empty: ${emptyWorkspace.statusCode} ${emptyWorkspace.body}`);
   }
 
@@ -835,6 +1220,11 @@ async function main() {
       units: [{ x: 0, y: 0, type: 'king', side: 'player' }],
     },
   };
+  const recoverableLegacyCanonical = {
+    ...workspaceLevel,
+    id: 'recoverable-legacy',
+    name: 'Recovered Saved Position',
+  };
   const workspaceDoc = {
     campaigns: [{
       formatVersion: 1,
@@ -844,15 +1234,26 @@ async function main() {
       chapters: 1,
       levels: [{ levelId: 'smoke-1', ordinal: 0, objective: 'capture-all', stars: 0 }],
     }],
-    levels: { 'smoke-1': workspaceLevel },
+    levels: {
+      'smoke-1': workspaceLevel,
+      'recoverable-legacy': recoverableLegacyCanonical,
+    },
   };
-  const savedWorkspace = await request(
+  const missingWorkspaceRevision = await request(
     'PUT', '/api/campaign-workspace',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
     JSON.stringify(workspaceDoc),
   );
+  if (missingWorkspaceRevision.statusCode !== 400 || JSON.parse(missingWorkspaceRevision.body).error !== 'workspace_revision_required') {
+    throw new Error(`Whole-workspace writes must carry an observed revision: ${missingWorkspaceRevision.statusCode} ${missingWorkspaceRevision.body}`);
+  }
+  const savedWorkspace = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ ...workspaceDoc, revision: emptyWorkspaceBody.revision }),
+  );
   const savedWorkspaceBody = JSON.parse(savedWorkspace.body);
-  if (savedWorkspace.statusCode !== 200 || savedWorkspaceBody.ok !== true || savedWorkspaceBody.campaigns !== 1) {
+  if (savedWorkspace.statusCode !== 200 || savedWorkspaceBody.ok !== true || savedWorkspaceBody.campaigns !== 1 || savedWorkspaceBody.revision !== 1) {
     throw new Error(`Unexpected workspace save: ${savedWorkspace.statusCode} ${savedWorkspace.body}`);
   }
 
@@ -862,6 +1263,7 @@ async function main() {
     loadedWorkspace.statusCode !== 200 ||
     loadedWorkspaceBody.campaigns.length !== 1 ||
     loadedWorkspaceBody.campaigns[0].name !== 'Smoke Campaign' ||
+    loadedWorkspaceBody.revision !== 1 ||
     !loadedWorkspaceBody.levels['smoke-1']
   ) {
     throw new Error(`Workspace did not persist: ${loadedWorkspace.statusCode} ${loadedWorkspace.body}`);
@@ -872,6 +1274,631 @@ async function main() {
   const rivalWorkspaceBody = JSON.parse(rivalWorkspace.body);
   if (rivalWorkspace.statusCode !== 200 || rivalWorkspaceBody.campaigns.length !== 0) {
     throw new Error(`Workspace should be scoped to owner: ${rivalWorkspace.statusCode} ${rivalWorkspace.body}`);
+  }
+
+  // A migrated v13 URL is translated client-side from ?map=<id> to the normal
+  // owner-scoped document id legacy-<id>. There is intentionally no public or
+  // edit-key compatibility endpoint: only the signed-in owner can recover it.
+  const legacyRecoveredLevel = {
+    ...workspaceLevel,
+    id: 'legacy-abcdefgh',
+    name: 'Recovered Legacy Draft',
+  };
+  await queryDb(
+    `INSERT INTO level_working_copies
+       (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash)
+     VALUES ('legacy-abcdefgh', 'player@example.com', 'user', 'campaign', 'legacy-abcdefgh', $1::jsonb, 3, 0, NULL)`,
+    [JSON.stringify(legacyRecoveredLevel)],
+  );
+  const canonicalBackedLegacyDraft = {
+    ...recoverableLegacyCanonical,
+    name: 'Recovered Dirty Draft',
+  };
+  await queryDb(
+    `INSERT INTO level_working_copies
+       (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash)
+     SELECT 'legacy-kmnpqrst', owner_email, 'user', 'campaign', 'recoverable-legacy', $2::jsonb, 3, 1,
+            md5(((body->'levels')->'recoverable-legacy')::text)
+       FROM campaign_workspaces
+      WHERE owner_email = $1`,
+    ['player@example.com', JSON.stringify(canonicalBackedLegacyDraft)],
+  );
+  const ownerReadsLegacyDocument = await get('/api/editor-documents/legacy-abcdefgh', { cookie: 'better-auth.session=abc' });
+  const ownerReadsLegacyBody = JSON.parse(ownerReadsLegacyDocument.body);
+  if (
+    ownerReadsLegacyDocument.statusCode !== 200 ||
+    ownerReadsLegacyBody.document.document_id !== 'legacy-abcdefgh' ||
+    ownerReadsLegacyBody.document.level_id !== 'legacy-abcdefgh' ||
+    ownerReadsLegacyBody.document.level.name !== 'Recovered Legacy Draft'
+  ) {
+    throw new Error(`Legacy editor URL did not recover the owner's private document: ${ownerReadsLegacyDocument.statusCode} ${ownerReadsLegacyDocument.body}`);
+  }
+  const rivalReadsLegacyDocument = await get('/api/editor-documents/legacy-abcdefgh', { cookie: 'better-auth.session=rival' });
+  if (rivalReadsLegacyDocument.statusCode !== 404) {
+    throw new Error(`Legacy editor document must remain private to its owner: ${rivalReadsLegacyDocument.statusCode} ${rivalReadsLegacyDocument.body}`);
+  }
+  const anonymousReadsLegacyDocument = await get('/api/editor-documents/legacy-abcdefgh');
+  if (anonymousReadsLegacyDocument.statusCode !== 401) {
+    throw new Error(`Legacy editor document must require sign-in: ${anonymousReadsLegacyDocument.statusCode} ${anonymousReadsLegacyDocument.body}`);
+  }
+  const unauthorizedOfficialLevel = { ...officialWorkspace.levels['off-l-test'], name: 'Must Not Reconcile Before Auth' };
+  await queryDb(
+    `INSERT INTO level_working_copies
+       (document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash)
+     VALUES ('legacy-jkmnpqrs', 'rival@example.com', 'official', 'default', 'off-l-test', $1::jsonb, 1, 1, 'stale-baseline')`,
+    [JSON.stringify(unauthorizedOfficialLevel)],
+  );
+  const nonAdminLoadsOwnedOfficialDocument = await get(
+    '/api/editor-documents/legacy-jkmnpqrs',
+    { cookie: 'better-auth.session=rival' },
+  );
+  if (nonAdminLoadsOwnedOfficialDocument.statusCode !== 403) {
+    throw new Error(`Stored official workspace must be authorized before reconcile: ${nonAdminLoadsOwnedOfficialDocument.statusCode} ${nonAdminLoadsOwnedOfficialDocument.body}`);
+  }
+  const untouchedUnauthorizedOfficial = await queryDb(
+    `SELECT body, revision, saved_revision, baseline_hash
+       FROM level_working_copies
+      WHERE document_id = 'legacy-jkmnpqrs'`,
+  );
+  if (
+    Number(untouchedUnauthorizedOfficial.rows[0].revision) !== 1 ||
+    Number(untouchedUnauthorizedOfficial.rows[0].saved_revision) !== 1 ||
+    untouchedUnauthorizedOfficial.rows[0].baseline_hash !== 'stale-baseline' ||
+    untouchedUnauthorizedOfficial.rows[0].body.name !== 'Must Not Reconcile Before Auth'
+  ) {
+    throw new Error(`Unauthorized GET mutated an official working copy: ${JSON.stringify(untouchedUnauthorizedOfficial.rows[0])}`);
+  }
+  const anonymousEditorDocumentList = await get('/api/editor-documents');
+  if (anonymousEditorDocumentList.statusCode !== 401) {
+    throw new Error(`Editor document discovery must require sign-in: ${anonymousEditorDocumentList.statusCode} ${anonymousEditorDocumentList.body}`);
+  }
+  const ownerEditorDocumentList = await get('/api/editor-documents', { cookie: 'better-auth.session=abc' });
+  const ownerEditorDocumentListBody = JSON.parse(ownerEditorDocumentList.body);
+  const standaloneLegacySummary = ownerEditorDocumentListBody.documents.find((entry) => entry.document_id === 'legacy-abcdefgh');
+  const canonicalBackedLegacySummary = ownerEditorDocumentListBody.documents.find((entry) => entry.document_id === 'legacy-kmnpqrst');
+  if (
+    ownerEditorDocumentList.statusCode !== 200 ||
+    ownerEditorDocumentListBody.documents.length !== 2 ||
+    !standaloneLegacySummary || standaloneLegacySummary.never_saved !== true || standaloneLegacySummary.has_saved_baseline !== false ||
+    !canonicalBackedLegacySummary || canonicalBackedLegacySummary.dirty !== true || canonicalBackedLegacySummary.never_saved !== false || canonicalBackedLegacySummary.has_saved_baseline !== true
+  ) {
+    throw new Error(`Owner could not discover private legacy editor work: ${ownerEditorDocumentList.statusCode} ${ownerEditorDocumentList.body}`);
+  }
+  const firstEditorDocumentPage = await get('/api/editor-documents?limit=1', { cookie: 'better-auth.session=abc' });
+  const firstEditorDocumentPageBody = JSON.parse(firstEditorDocumentPage.body);
+  const secondEditorDocumentPage = await get(
+    `/api/editor-documents?limit=1&offset=${firstEditorDocumentPageBody.next_offset}`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const secondEditorDocumentPageBody = JSON.parse(secondEditorDocumentPage.body);
+  if (
+    firstEditorDocumentPage.statusCode !== 200 ||
+    firstEditorDocumentPageBody.documents.length !== 1 ||
+    firstEditorDocumentPageBody.next_offset !== 1 ||
+    secondEditorDocumentPage.statusCode !== 200 ||
+    secondEditorDocumentPageBody.documents.length !== 1 ||
+    secondEditorDocumentPageBody.documents[0].document_id === firstEditorDocumentPageBody.documents[0].document_id
+  ) {
+    throw new Error(`Editor document discovery pagination lost a draft: ${firstEditorDocumentPage.body} / ${secondEditorDocumentPage.body}`);
+  }
+  const neverSavedEditorDocuments = await get(
+    '/api/editor-documents?status=never-saved',
+    { cookie: 'better-auth.session=abc' },
+  );
+  const neverSavedEditorDocumentsBody = JSON.parse(neverSavedEditorDocuments.body);
+  if (
+    neverSavedEditorDocuments.statusCode !== 200 ||
+    neverSavedEditorDocumentsBody.documents.length !== 1 ||
+    neverSavedEditorDocumentsBody.documents[0].document_id !== 'legacy-abcdefgh'
+  ) {
+    throw new Error(`Never-saved document filter was not baseline-aware: ${neverSavedEditorDocuments.statusCode} ${neverSavedEditorDocuments.body}`);
+  }
+  const rivalEditorDocumentList = await get('/api/editor-documents', { cookie: 'better-auth.session=rival' });
+  if (rivalEditorDocumentList.statusCode !== 200 || JSON.parse(rivalEditorDocumentList.body).documents.length !== 0) {
+    throw new Error(`Editor document discovery leaked another owner's work: ${rivalEditorDocumentList.statusCode} ${rivalEditorDocumentList.body}`);
+  }
+  const loadedCanonicalBackedLegacy = await get('/api/editor-documents/legacy-kmnpqrst', { cookie: 'better-auth.session=abc' });
+  const loadedCanonicalBackedLegacyBody = JSON.parse(loadedCanonicalBackedLegacy.body);
+  if (
+    loadedCanonicalBackedLegacy.statusCode !== 200 ||
+    loadedCanonicalBackedLegacyBody.document.level.name !== 'Recovered Dirty Draft' ||
+    loadedCanonicalBackedLegacyBody.document.has_saved_baseline !== true ||
+    loadedCanonicalBackedLegacyBody.document.never_saved !== false
+  ) {
+    throw new Error(`Canonical-backed migrated draft lost its Discard target: ${loadedCanonicalBackedLegacy.statusCode} ${loadedCanonicalBackedLegacy.body}`);
+  }
+  const discardCanonicalBackedLegacy = await request(
+    'POST', '/api/editor-documents/legacy-kmnpqrst/discard',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 3 }),
+  );
+  const discardCanonicalBackedLegacyBody = JSON.parse(discardCanonicalBackedLegacy.body);
+  if (
+    discardCanonicalBackedLegacy.statusCode !== 200 ||
+    discardCanonicalBackedLegacyBody.document.level.name !== 'Recovered Saved Position' ||
+    discardCanonicalBackedLegacyBody.document.revision !== 4 ||
+    discardCanonicalBackedLegacyBody.document.saved_revision !== 4 ||
+    discardCanonicalBackedLegacyBody.document.has_saved_baseline !== true
+  ) {
+    throw new Error(`Discard could not restore a migrated draft's canonical position: ${discardCanonicalBackedLegacy.statusCode} ${discardCanonicalBackedLegacy.body}`);
+  }
+
+  // --- Durable editor documents: private working copy, CAS autosave, explicit
+  //     save/discard, canonical workspace separation (ADR-0068) ---------------
+  const anonymousEditorResolve = await request(
+    'POST', '/api/editor-documents/resolve', { 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-1' }),
+  );
+  if (anonymousEditorResolve.statusCode !== 401) {
+    throw new Error(`Anonymous editor resolve should require sign-in: ${anonymousEditorResolve.statusCode} ${anonymousEditorResolve.body}`);
+  }
+
+  const resolvedEditor = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-1' }),
+  );
+  const resolvedEditorBody = JSON.parse(resolvedEditor.body);
+  const smokeDocumentId = resolvedEditorBody.document && resolvedEditorBody.document.document_id;
+  if (
+    resolvedEditor.statusCode !== 201 ||
+    typeof smokeDocumentId !== 'string' || !smokeDocumentId ||
+    resolvedEditorBody.document.level_id !== 'smoke-1' ||
+    resolvedEditorBody.document.workspace_kind !== 'user' ||
+    resolvedEditorBody.document.revision !== 1 ||
+    resolvedEditorBody.document.saved_revision !== 1 ||
+    resolvedEditorBody.document.dirty !== false
+  ) {
+    throw new Error(`Unexpected editor resolve: ${resolvedEditor.statusCode} ${resolvedEditor.body}`);
+  }
+
+  const draftLevel = { ...workspaceLevel, name: 'Autosaved Draft' };
+  const autosavedEditor = await request(
+    'PUT', `/api/editor-documents/${smokeDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 1, level: draftLevel }),
+  );
+  const autosavedEditorBody = JSON.parse(autosavedEditor.body);
+  if (
+    autosavedEditor.statusCode !== 200 ||
+    autosavedEditorBody.document.revision !== 2 ||
+    autosavedEditorBody.document.saved_revision !== 1 ||
+    autosavedEditorBody.document.dirty !== true ||
+    autosavedEditorBody.document.level.name !== 'Autosaved Draft'
+  ) {
+    throw new Error(`Unexpected editor autosave: ${autosavedEditor.statusCode} ${autosavedEditor.body}`);
+  }
+
+  // Autosave changes only the private working copy. Canonical workspace reads
+  // (and therefore thumbnails/gameplay) still see the last explicit Save.
+  const canonicalBeforeSave = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  if (JSON.parse(canonicalBeforeSave.body).levels['smoke-1'].name !== 'Smoke Level') {
+    throw new Error(`Editor autosave must not mutate the canonical workspace: ${canonicalBeforeSave.body}`);
+  }
+
+  const staleAutosave = await request(
+    'PUT', `/api/editor-documents/${smokeDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 1, level: { ...workspaceLevel, name: 'Stale Tab' } }),
+  );
+  const staleAutosaveBody = JSON.parse(staleAutosave.body);
+  if (
+    staleAutosave.statusCode !== 409 ||
+    staleAutosaveBody.error !== 'editor_document_revision_conflict' ||
+    staleAutosaveBody.document.revision !== 2 ||
+    staleAutosaveBody.document.level.name !== 'Autosaved Draft'
+  ) {
+    throw new Error(`Stale editor autosave should return the current document: ${staleAutosave.statusCode} ${staleAutosave.body}`);
+  }
+
+  const rivalEditorRead = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: 'better-auth.session=rival' });
+  if (rivalEditorRead.statusCode !== 404) {
+    throw new Error(`Editor documents must be account-scoped: ${rivalEditorRead.statusCode} ${rivalEditorRead.body}`);
+  }
+  // Per-owner level ids can collide. Give the rival their own `smoke-1` and
+  // prove the globally opaque document address still cannot cross accounts.
+  const rivalCollisionWorkspace = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    JSON.stringify({ campaigns: [], levels: { 'smoke-1': workspaceLevel }, revision: rivalWorkspaceBody.revision }),
+  );
+  if (rivalCollisionWorkspace.statusCode !== 200) {
+    throw new Error(`Could not create rival collision workspace: ${rivalCollisionWorkspace.statusCode} ${rivalCollisionWorkspace.body}`);
+  }
+  const rivalResolvedEditor = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'smoke-1' }),
+  );
+  const rivalResolvedEditorBody = JSON.parse(rivalResolvedEditor.body);
+  const rivalDocumentId = rivalResolvedEditorBody.document && rivalResolvedEditorBody.document.document_id;
+  if (
+    rivalResolvedEditor.statusCode !== 201 ||
+    rivalResolvedEditorBody.document.level_id !== 'smoke-1' ||
+    typeof rivalDocumentId !== 'string' || !rivalDocumentId || rivalDocumentId === smokeDocumentId
+  ) {
+    throw new Error(`Colliding owner level ids must receive distinct document ids: ${rivalResolvedEditor.statusCode} ${rivalResolvedEditor.body}`);
+  }
+  const playerReadsRivalDocument = await get(`/api/editor-documents/${rivalDocumentId}`, { cookie: 'better-auth.session=abc' });
+  if (playerReadsRivalDocument.statusCode !== 404) {
+    throw new Error(`Player must not resolve rival's opaque editor document: ${playerReadsRivalDocument.statusCode} ${playerReadsRivalDocument.body}`);
+  }
+
+  const discardedEditor = await request(
+    'POST', `/api/editor-documents/${smokeDocumentId}/discard`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 2 }),
+  );
+  const discardedEditorBody = JSON.parse(discardedEditor.body);
+  if (
+    discardedEditor.statusCode !== 200 ||
+    discardedEditorBody.document.revision !== 3 ||
+    discardedEditorBody.document.saved_revision !== 3 ||
+    discardedEditorBody.document.dirty !== false ||
+    discardedEditorBody.document.level.name !== 'Smoke Level'
+  ) {
+    throw new Error(`Discard should restore the canonical saved Level: ${discardedEditor.statusCode} ${discardedEditor.body}`);
+  }
+
+  const autosavedAgain = await request(
+    'PUT', `/api/editor-documents/${smokeDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 3, level: { ...workspaceLevel, name: 'Debounced Version' } }),
+  );
+  if (autosavedAgain.statusCode !== 200 || JSON.parse(autosavedAgain.body).document.revision !== 4) {
+    throw new Error(`Second autosave failed: ${autosavedAgain.statusCode} ${autosavedAgain.body}`);
+  }
+
+  // Save may carry the exact current in-memory Level. The server promotes it in
+  // the same transaction as the working-copy CAS, so a pending debounce cannot win.
+  const exactSaveLevel = { ...workspaceLevel, name: 'Exact Save Click' };
+  const savedEditor = await request(
+    'POST', `/api/editor-documents/${smokeDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 4, level: exactSaveLevel, campaign_id: null }),
+  );
+  const savedEditorBody = JSON.parse(savedEditor.body);
+  if (
+    savedEditor.statusCode !== 200 ||
+    savedEditorBody.document.revision !== 5 ||
+    savedEditorBody.document.saved_revision !== 5 ||
+    savedEditorBody.workspace_revision !== 2 ||
+    savedEditorBody.document.level.name !== 'Exact Save Click'
+  ) {
+    throw new Error(`Editor Save should promote the exact supplied Level: ${savedEditor.statusCode} ${savedEditor.body}`);
+  }
+  const canonicalAfterSave = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const canonicalAfterSaveBody = JSON.parse(canonicalAfterSave.body);
+  if (
+    canonicalAfterSaveBody.levels['smoke-1'].name !== 'Exact Save Click' ||
+    canonicalAfterSaveBody.revision !== 2 ||
+    canonicalAfterSaveBody.campaigns[0].levels.some((ref) => ref.levelId === 'smoke-1')
+  ) {
+    throw new Error(`Editor Save did not promote to canonical workspace: ${canonicalAfterSave.body}`);
+  }
+  const staleWholeWorkspaceSave = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ ...workspaceDoc, revision: loadedWorkspaceBody.revision }),
+  );
+  const staleWholeWorkspaceSaveBody = JSON.parse(staleWholeWorkspaceSave.body);
+  if (
+    staleWholeWorkspaceSave.statusCode !== 409 ||
+    staleWholeWorkspaceSaveBody.error !== 'workspace_revision_conflict' ||
+    staleWholeWorkspaceSaveBody.workspace.revision !== 2 ||
+    staleWholeWorkspaceSaveBody.workspace.levels['smoke-1'].name !== 'Exact Save Click'
+  ) {
+    throw new Error(`Stale whole-workspace Save could revert the canonical Level: ${staleWholeWorkspaceSave.statusCode} ${staleWholeWorkspaceSave.body}`);
+  }
+
+  // Canonical workspaces still have other legitimate writers. A clean editor
+  // document follows an externally changed canonical Level on its next load;
+  // a dirty one preserves its work but may not blindly overwrite that change.
+  const baselineLevelId = 'baseline-check';
+  const baselineCanonicalV1 = { ...workspaceLevel, id: baselineLevelId, name: 'Baseline Canonical V1' };
+  const workspaceForBaseline = canonicalAfterSaveBody;
+  workspaceForBaseline.levels[baselineLevelId] = baselineCanonicalV1;
+  const createBaselineCanonical = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(workspaceForBaseline),
+  );
+  if (createBaselineCanonical.statusCode !== 200) {
+    throw new Error(`Could not seed baseline-conflict Level: ${createBaselineCanonical.statusCode} ${createBaselineCanonical.body}`);
+  }
+  workspaceForBaseline.revision = JSON.parse(createBaselineCanonical.body).revision;
+  const baselineResolved = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: baselineLevelId }),
+  );
+  const baselineResolvedBody = JSON.parse(baselineResolved.body);
+  const baselineDocumentId = baselineResolvedBody.document && baselineResolvedBody.document.document_id;
+  if (
+    baselineResolved.statusCode !== 201 ||
+    typeof baselineDocumentId !== 'string' || !baselineDocumentId ||
+    baselineResolvedBody.document.baseline_conflict !== false
+  ) {
+    throw new Error(`Could not resolve baseline-conflict document: ${baselineResolved.statusCode} ${baselineResolved.body}`);
+  }
+
+  const baselineCanonicalV2 = { ...baselineCanonicalV1, name: 'Baseline Canonical V2' };
+  workspaceForBaseline.levels[baselineLevelId] = baselineCanonicalV2;
+  const externalCleanChange = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(workspaceForBaseline),
+  );
+  if (externalCleanChange.statusCode !== 200) {
+    throw new Error(`Could not apply external clean canonical change: ${externalCleanChange.statusCode} ${externalCleanChange.body}`);
+  }
+  workspaceForBaseline.revision = JSON.parse(externalCleanChange.body).revision;
+  const refreshedCleanDocument = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: baselineLevelId }),
+  );
+  const refreshedCleanBody = JSON.parse(refreshedCleanDocument.body);
+  if (
+    refreshedCleanDocument.statusCode !== 200 ||
+    refreshedCleanBody.document.revision !== 2 ||
+    refreshedCleanBody.document.saved_revision !== 2 ||
+    refreshedCleanBody.document.dirty !== false ||
+    refreshedCleanBody.document.baseline_conflict !== false ||
+    refreshedCleanBody.document.level.name !== 'Baseline Canonical V2'
+  ) {
+    throw new Error(`Clean editor document did not refresh from canonical: ${refreshedCleanDocument.statusCode} ${refreshedCleanDocument.body}`);
+  }
+
+  const baselineDraft = { ...baselineCanonicalV2, name: 'Preserve This Dirty Draft' };
+  const dirtyBaselineDocument = await request(
+    'PUT', `/api/editor-documents/${baselineDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 2, level: baselineDraft }),
+  );
+  if (dirtyBaselineDocument.statusCode !== 200 || JSON.parse(dirtyBaselineDocument.body).document.revision !== 3) {
+    throw new Error(`Could not autosave dirty baseline document: ${dirtyBaselineDocument.statusCode} ${dirtyBaselineDocument.body}`);
+  }
+  const baselineCanonicalV3 = { ...baselineCanonicalV2, name: 'Baseline Canonical V3 External' };
+  workspaceForBaseline.levels[baselineLevelId] = baselineCanonicalV3;
+  const externalDirtyChange = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(workspaceForBaseline),
+  );
+  if (externalDirtyChange.statusCode !== 200) {
+    throw new Error(`Could not apply external dirty canonical change: ${externalDirtyChange.statusCode} ${externalDirtyChange.body}`);
+  }
+  const loadedConflictedDocument = await get(`/api/editor-documents/${baselineDocumentId}`, { cookie: 'better-auth.session=abc' });
+  const loadedConflictedBody = JSON.parse(loadedConflictedDocument.body);
+  if (
+    loadedConflictedDocument.statusCode !== 200 ||
+    loadedConflictedBody.document.revision !== 3 ||
+    loadedConflictedBody.document.level.name !== 'Preserve This Dirty Draft' ||
+    loadedConflictedBody.document.baseline_conflict !== true
+  ) {
+    throw new Error(`Dirty editor document did not preserve/report canonical divergence: ${loadedConflictedDocument.statusCode} ${loadedConflictedDocument.body}`);
+  }
+  const rejectedBaselineSave = await request(
+    'POST', `/api/editor-documents/${baselineDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 3, level: baselineDraft }),
+  );
+  const rejectedBaselineSaveBody = JSON.parse(rejectedBaselineSave.body);
+  if (
+    rejectedBaselineSave.statusCode !== 409 ||
+    rejectedBaselineSaveBody.error !== 'editor_document_baseline_conflict' ||
+    rejectedBaselineSaveBody.document.level.name !== 'Preserve This Dirty Draft' ||
+    rejectedBaselineSaveBody.document.baseline_conflict !== true
+  ) {
+    throw new Error(`Stale baseline Save should preserve work and refuse promotion: ${rejectedBaselineSave.statusCode} ${rejectedBaselineSave.body}`);
+  }
+  const canonicalAfterRejectedBaselineSave = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  if (JSON.parse(canonicalAfterRejectedBaselineSave.body).levels[baselineLevelId].name !== 'Baseline Canonical V3 External') {
+    throw new Error(`Rejected baseline Save overwrote canonical content: ${canonicalAfterRejectedBaselineSave.body}`);
+  }
+  const discardedBaselineConflict = await request(
+    'POST', `/api/editor-documents/${baselineDocumentId}/discard`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 3 }),
+  );
+  const discardedBaselineConflictBody = JSON.parse(discardedBaselineConflict.body);
+  if (
+    discardedBaselineConflict.statusCode !== 200 ||
+    discardedBaselineConflictBody.document.revision !== 4 ||
+    discardedBaselineConflictBody.document.saved_revision !== 4 ||
+    discardedBaselineConflictBody.document.baseline_conflict !== false ||
+    discardedBaselineConflictBody.document.level.name !== 'Baseline Canonical V3 External'
+  ) {
+    throw new Error(`Discard did not adopt current canonical baseline: ${discardedBaselineConflict.statusCode} ${discardedBaselineConflict.body}`);
+  }
+
+  // Allocation must not round an imported numeric id through Number or emit an
+  // 81-character id when a 79-digit suffix rolls over. A bounded BigInt fallback
+  // chooses the first free suffix (c1 already exists, so this remains l2).
+  const maximumWidthNumericId = `l${'9'.repeat(79)}`;
+  await queryDb(
+    `UPDATE campaign_workspaces
+        SET body = jsonb_set(body, ARRAY['levels', $2]::text[], $3::jsonb, true)
+      WHERE owner_email = $1`,
+    [
+      'player@example.com',
+      maximumWidthNumericId,
+      JSON.stringify({ ...workspaceLevel, id: maximumWidthNumericId, name: 'Imported Maximum Numeric Id' }),
+    ],
+  );
+
+  // A new editor document receives its stable user level id from the server.
+  // It is durable immediately, but remains dirty until its first explicit Save.
+  const newEditor = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level: { ...workspaceLevel, id: 'client-placeholder', name: 'New Working Level' } }),
+  );
+  const newEditorBody = JSON.parse(newEditor.body);
+  const newDocumentId = newEditorBody.document && newEditorBody.document.document_id;
+  if (
+    newEditor.statusCode !== 201 ||
+    typeof newDocumentId !== 'string' || !newDocumentId || newDocumentId === smokeDocumentId ||
+    newEditorBody.document.level_id !== 'l2' ||
+    newEditorBody.document.level.id !== 'l2' ||
+    newEditorBody.document.revision !== 1 ||
+    newEditorBody.document.saved_revision !== 0 ||
+    newEditorBody.document.dirty !== true
+  ) {
+    throw new Error(`New editor document should get a server level id and start dirty: ${newEditor.statusCode} ${newEditor.body}`);
+  }
+  const recentAfterNewDocument = await get('/api/editor-documents', { cookie: 'better-auth.session=abc' });
+  const recentAfterNewDocumentBody = JSON.parse(recentAfterNewDocument.body);
+  const discoveredNewDocument = recentAfterNewDocumentBody.documents.find((entry) => entry.document_id === newDocumentId);
+  if (
+    recentAfterNewDocument.statusCode !== 200 ||
+    !discoveredNewDocument ||
+    discoveredNewDocument.level_id !== 'l2' ||
+    discoveredNewDocument.name !== 'New Working Level' ||
+    discoveredNewDocument.never_saved !== true
+  ) {
+    throw new Error(`Never-saved cloud document was not discoverable without its URL: ${recentAfterNewDocument.statusCode} ${recentAfterNewDocument.body}`);
+  }
+  const workspaceBeforeReservedCollision = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const workspaceBeforeReservedCollisionBody = JSON.parse(workspaceBeforeReservedCollision.body);
+  const reservedCollisionAttempt = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      ...workspaceBeforeReservedCollisionBody,
+      levels: {
+        ...workspaceBeforeReservedCollisionBody.levels,
+        l2: { ...newEditorBody.document.level, name: 'Unrelated Canonical Claim' },
+      },
+    }),
+  );
+  const reservedCollisionAttemptBody = JSON.parse(reservedCollisionAttempt.body);
+  if (
+    reservedCollisionAttempt.statusCode !== 409 ||
+    reservedCollisionAttemptBody.error !== 'workspace_level_reserved' ||
+    !Array.isArray(reservedCollisionAttemptBody.level_ids) ||
+    reservedCollisionAttemptBody.level_ids[0] !== 'l2' ||
+    reservedCollisionAttemptBody.workspace.levels.l2
+  ) {
+    throw new Error(`Whole-workspace writer claimed a never-saved document id: ${reservedCollisionAttempt.statusCode} ${reservedCollisionAttempt.body}`);
+  }
+  const discardNeverSaved = await request(
+    'POST', `/api/editor-documents/${newDocumentId}/discard`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 1 }),
+  );
+  if (discardNeverSaved.statusCode !== 409 || JSON.parse(discardNeverSaved.body).error !== 'no_saved_level') {
+    throw new Error(`Never-saved document should have no discard target: ${discardNeverSaved.statusCode} ${discardNeverSaved.body}`);
+  }
+  const newEditorAutosaveLevel = { ...workspaceLevel, id: 'l2', name: 'New Working Level Autosaved' };
+  const newEditorAutosave = await request(
+    'PUT', `/api/editor-documents/${newDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 1, level: newEditorAutosaveLevel }),
+  );
+  if (newEditorAutosave.statusCode !== 200 || JSON.parse(newEditorAutosave.body).document.revision !== 2) {
+    throw new Error(`New document autosave failed: ${newEditorAutosave.statusCode} ${newEditorAutosave.body}`);
+  }
+  const firstNewEditorSave = await request(
+    'POST', `/api/editor-documents/${newDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 2 }),
+  );
+  const firstNewEditorSaveBody = JSON.parse(firstNewEditorSave.body);
+  if (
+    firstNewEditorSave.statusCode !== 200 ||
+    firstNewEditorSaveBody.document.revision !== 3 ||
+    firstNewEditorSaveBody.document.saved_revision !== 3 ||
+    firstNewEditorSaveBody.workspace_revision !== 6 ||
+    firstNewEditorSaveBody.document.dirty !== false
+  ) {
+    throw new Error(`First Save should promote a new document: ${firstNewEditorSave.statusCode} ${firstNewEditorSave.body}`);
+  }
+  const workspaceWithNewLevel = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  if (JSON.parse(workspaceWithNewLevel.body).levels.l2.name !== 'New Working Level Autosaved') {
+    throw new Error(`First Save did not create the canonical Level: ${workspaceWithNewLevel.body}`);
+  }
+  const postSaveDraft = await request(
+    'PUT', `/api/editor-documents/${newDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 3, level: { ...newEditorAutosaveLevel, name: 'Throw This Away' } }),
+  );
+  if (postSaveDraft.statusCode !== 200 || JSON.parse(postSaveDraft.body).document.revision !== 4) {
+    throw new Error(`Post-save draft failed: ${postSaveDraft.statusCode} ${postSaveDraft.body}`);
+  }
+  const discardNewEditorDraft = await request(
+    'POST', `/api/editor-documents/${newDocumentId}/discard`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 4 }),
+  );
+  const discardNewEditorDraftBody = JSON.parse(discardNewEditorDraft.body);
+  if (
+    discardNewEditorDraft.statusCode !== 200 ||
+    discardNewEditorDraftBody.document.revision !== 5 ||
+    discardNewEditorDraftBody.document.saved_revision !== 5 ||
+    discardNewEditorDraftBody.document.level.name !== 'New Working Level Autosaved'
+  ) {
+    throw new Error(`Discard should restore the newly saved canonical Level: ${discardNewEditorDraft.statusCode} ${discardNewEditorDraft.body}`);
+  }
+
+  // Official working copies use the same CAS contract, but only admins may
+  // resolve or mutate them; the promoted workspace remains globally readable.
+  const nonAdminOfficialEditor = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'off-l-test', workspace_kind: 'official', workspace_id: 'default' }),
+  );
+  if (nonAdminOfficialEditor.statusCode !== 403) {
+    throw new Error(`Official editor document should require admin: ${nonAdminOfficialEditor.statusCode} ${nonAdminOfficialEditor.body}`);
+  }
+  const officialEditor = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'off-l-test', workspace_kind: 'official', workspace_id: 'default' }),
+  );
+  const officialEditorBody = JSON.parse(officialEditor.body);
+  const officialDocumentId = officialEditorBody.document && officialEditorBody.document.document_id;
+  if (officialEditor.statusCode !== 201 || typeof officialDocumentId !== 'string' || !officialDocumentId || officialEditorBody.document.level.name !== 'Test Level') {
+    throw new Error(`Official editor resolve failed: ${officialEditor.statusCode} ${officialEditor.body}`);
+  }
+  const officialEditorSave = await request(
+    'POST', `/api/editor-documents/${officialDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      revision: 1,
+      level: { ...officialWorkspace.levels['off-l-test'], name: 'Official Exact Save' },
+    }),
+  );
+  const officialEditorSaveBody = JSON.parse(officialEditorSave.body);
+  if (
+    officialEditorSave.statusCode !== 200 ||
+    officialEditorSaveBody.document.saved_revision !== 2 ||
+    officialEditorSaveBody.workspace_revision !== 2
+  ) {
+    throw new Error(`Official editor Save failed: ${officialEditorSave.statusCode} ${officialEditorSave.body}`);
+  }
+  const officialAfterEditorSave = await get('/api/official-campaigns/default');
+  const officialAfterEditorSaveBody = JSON.parse(officialAfterEditorSave.body);
+  if (
+    officialAfterEditorSaveBody.portfolio.data.levels['off-l-test'].name !== 'Official Exact Save' ||
+    officialAfterEditorSaveBody.portfolio.revision !== 2
+  ) {
+    throw new Error(`Official editor Save did not promote globally: ${officialAfterEditorSave.body}`);
+  }
+  const staleOfficialWorkspaceSave = await request(
+    'PUT', '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: officialWorkspace, revision: publishedOfficialBody.portfolio.revision }),
+  );
+  const staleOfficialWorkspaceSaveBody = JSON.parse(staleOfficialWorkspaceSave.body);
+  if (
+    staleOfficialWorkspaceSave.statusCode !== 409 ||
+    staleOfficialWorkspaceSaveBody.error !== 'official_campaign_revision_conflict' ||
+    staleOfficialWorkspaceSaveBody.portfolio.revision !== 2 ||
+    staleOfficialWorkspaceSaveBody.portfolio.data.levels['off-l-test'].name !== 'Official Exact Save'
+  ) {
+    throw new Error(`Stale official workspace Save could revert the canonical Level: ${staleOfficialWorkspaceSave.statusCode} ${staleOfficialWorkspaceSave.body}`);
   }
 
   // --- Game Lab runs (/api/lab-runs): per-user, DB-backed --------------------
@@ -1254,8 +2281,8 @@ async function main() {
     throw new Error(`Start without a level should 409 no_level: ${startNoLevel.statusCode} ${startNoLevel.body}`);
   }
 
-  // Only the host may pick the level; a missing levelId is a 400.
-  const rivalSetLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-crown-valoria-01' }));
+  // Only the host may pick a canonical official level; timing comes from its content.
+  const rivalSetLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-test' }));
   if (rivalSetLevel.statusCode !== 403) {
     throw new Error(`Guest should not be able to set the lobby level: ${rivalSetLevel.statusCode} ${rivalSetLevel.body}`);
   }
@@ -1263,9 +2290,25 @@ async function main() {
   if (missingLevelId.statusCode !== 400 || JSON.parse(missingLevelId.body).error !== 'missing_level_id') {
     throw new Error(`Setting a level without an id should 400 missing_level_id: ${missingLevelId.statusCode} ${missingLevelId.body}`);
   }
-  const setLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-crown-valoria-01' }));
+  const unknownCanonicalLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-missing-smoke' }));
+  if (unknownCanonicalLevel.statusCode !== 404 || JSON.parse(unknownCanonicalLevel.body).error !== 'level_not_found') {
+    throw new Error(`Unknown canonical level should 404 level_not_found: ${unknownCanonicalLevel.statusCode} ${unknownCanonicalLevel.body}`);
+  }
+  const setTimedLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-smoke-timed', timed: false }));
+  if (setTimedLevel.statusCode !== 200 || JSON.parse(setTimedLevel.body).lobby.level_timed !== true) {
+    throw new Error(`Unexpected timed-level response: ${setTimedLevel.statusCode} ${setTimedLevel.body}`);
+  }
+  const startTimedLevel = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  if (startTimedLevel.statusCode !== 409 || JSON.parse(startTimedLevel.body).error !== 'timed_level_unsupported') {
+    throw new Error(`Timed level should 409 timed_level_unsupported: ${startTimedLevel.statusCode} ${startTimedLevel.body}`);
+  }
+  // This id is intentionally absent from LOBBY_TEST_LEVEL_METADATA: Level and Start
+  // must resolve the exact DB-backed official document written earlier in this smoke.
+  const setLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-test', timed: true }));
   const setLevelBody = JSON.parse(setLevel.body);
-  if (setLevel.statusCode !== 200 || setLevelBody.lobby.level_id !== 'off-l-crown-valoria-01' || setLevelBody.lobby.your_side !== 'player') {
+  if (setLevel.statusCode !== 200 || setLevelBody.lobby.level_id !== 'off-l-test' || setLevelBody.lobby.level_timed !== false
+    || setLevelBody.lobby.level_name !== 'Official Exact Save' || setLevelBody.lobby.level_objective !== 'capture-all'
+    || setLevelBody.lobby.your_side !== 'player') {
     throw new Error(`Unexpected set-level response: ${setLevel.statusCode} ${setLevel.body}`);
   }
 
@@ -1277,27 +2320,27 @@ async function main() {
 
   // Relay moves. Host ('player') moves first (index 0), then guest ('enemy') at index 1 —
   // strict one-move-per-turn alternation is enforced server-side (host=even, guest=odd).
-  const hostMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-1', move: { x: 3, y: 4 } }));
+  const hostMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-host-0', expectedMoveCount: 0, pieceId: 'p-1', move: { x: 3, y: 4 } }));
   const hostMoveBody = JSON.parse(hostMove.body);
   if (hostMove.statusCode !== 200 || hostMoveBody.move.i !== 0 || hostMoveBody.move.side !== 'player' || hostMoveBody.move.pieceId !== 'p-1') {
     throw new Error(`Unexpected host move response: ${hostMove.statusCode} ${hostMove.body}`);
   }
   // Turn integrity: the host cannot move again out of turn (index 1 belongs to the guest).
-  const outOfTurn = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-2', move: { x: 1, y: 1 } }));
+  const outOfTurn = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-host-out-of-turn', expectedMoveCount: 1, pieceId: 'p-2', move: { x: 1, y: 1 } }));
   if (outOfTurn.statusCode !== 409 || JSON.parse(outOfTurn.body).error !== 'not_your_turn') {
     throw new Error(`Out-of-turn move should 409 not_your_turn: ${outOfTurn.statusCode} ${outOfTurn.body}`);
   }
-  const guestMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'e-1', move: { x: 3, y: 4 } }));
+  const guestMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-guest-1', expectedMoveCount: 1, pieceId: 'e-1', move: { x: 3, y: 4 } }));
   const guestMoveBody = JSON.parse(guestMove.body);
   if (guestMove.statusCode !== 200 || guestMoveBody.move.i !== 1 || guestMoveBody.move.side !== 'enemy' || guestMoveBody.move.pieceId !== 'e-1') {
     throw new Error(`Unexpected guest move response: ${guestMove.statusCode} ${guestMove.body}`);
   }
   // Payload validation runs before the turn check, so a malformed move is 400 bad_move.
-  const badMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-1', move: { x: 'nope' } }));
+  const badMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-bad-move', expectedMoveCount: 2, pieceId: 'p-1', move: { x: 'nope' } }));
   if (badMove.statusCode !== 400 || JSON.parse(badMove.body).error !== 'bad_move') {
     throw new Error(`Malformed move should 400 bad_move: ${badMove.statusCode} ${badMove.body}`);
   }
-  const outsiderMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'x-1', move: { x: 1, y: 1 } }));
+  const outsiderMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-outsider', expectedMoveCount: 2, pieceId: 'x-1', move: { x: 1, y: 1 } }));
   if (outsiderMove.statusCode !== 401) {
     throw new Error(`Anonymous move should require sign-in: ${outsiderMove.statusCode} ${outsiderMove.body}`);
   }
@@ -1308,7 +2351,7 @@ async function main() {
   }
   const startedList = await get('/api/lobbies', { cookie: 'better-auth.session=abc' });
   const startedListBody = JSON.parse(startedList.body);
-  if (startedList.statusCode !== 200 || startedListBody.current.move_count !== 2 || startedListBody.current.level_id !== 'off-l-crown-valoria-01') {
+  if (startedList.statusCode !== 200 || startedListBody.current.move_count !== 2 || startedListBody.current.level_id !== 'off-l-test') {
     throw new Error(`Started lobby should expose move_count/level_id: ${startedList.statusCode} ${startedList.body}`);
   }
 
@@ -1332,7 +2375,7 @@ async function main() {
     throw new Error(`Resigned lobby should expose the result to the host: ${resignedView.statusCode} ${resignedView.body}`);
   }
   // The match is over — further moves are rejected rather than re-opening a decided game.
-  const moveAfterResign = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-2', move: { x: 5, y: 5 } }));
+  const moveAfterResign = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-after-resign', expectedMoveCount: 2, pieceId: 'p-2', move: { x: 5, y: 5 } }));
   if (moveAfterResign.statusCode !== 409 || JSON.parse(moveAfterResign.body).error !== 'match_over') {
     throw new Error(`Move after resign should 409 match_over: ${moveAfterResign.statusCode} ${moveAfterResign.body}`);
   }
@@ -1342,16 +2385,15 @@ async function main() {
   if (hostResign.statusCode !== 200 || hostResignBody.lobby.result.winner !== 'player') {
     throw new Error(`Resign should be idempotent (first result kept): ${hostResign.statusCode} ${hostResign.body}`);
   }
-  // Re-starting the lobby begins a fresh match: the prior game's move log AND result are
-  // cleared, so a reused lobby never replays the old game or carries a stale outcome.
+  // Start is a one-shot ready→started transition; it cannot reset a live/finished match.
   const restart = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
   const restartBody = JSON.parse(restart.body);
-  if (restart.statusCode !== 200 || restartBody.lobby.phase !== 'started' || restartBody.lobby.move_count !== 0 || restartBody.lobby.result !== null) {
-    throw new Error(`Re-start should clear moves + result: ${restart.statusCode} ${restart.body}`);
+  if (restart.statusCode !== 409 || restartBody.error !== 'lobby_already_started') {
+    throw new Error(`Re-start should 409 lobby_already_started: ${restart.statusCode} ${restart.body}`);
   }
   const restartBackfill = await get(`/api/lobbies/${lobbyId}/moves?since=0`, { cookie: 'better-auth.session=abc' });
-  if (restartBackfill.statusCode !== 200 || JSON.parse(restartBackfill.body).moves.length !== 0) {
-    throw new Error(`Re-started lobby should have an empty move log: ${restartBackfill.statusCode} ${restartBackfill.body}`);
+  if (restartBackfill.statusCode !== 200 || JSON.parse(restartBackfill.body).moves.length !== 2) {
+    throw new Error(`Rejected Re-start must preserve move log: ${restartBackfill.statusCode} ${restartBackfill.body}`);
   }
 
   const redirect = await get('/api/auth/sign-in?returnTo=%2Fplay');
@@ -1389,11 +2431,11 @@ async function main() {
 }
 
 main()
-  .finally(() => {
+  .finally(async () => {
     child.kill();
-    mockAuth.close();
-    mockBgm.close();
-    fs.rmSync(hotRoot, { recursive: true, force: true });
+    await waitForProcessExit(child);
+    await Promise.all([closeHttpServer(mockAuth), closeHttpServer(mockBgm)]);
+    fs.rmSync(hotRoot, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
   })
   .catch((error) => {
     console.error(error);

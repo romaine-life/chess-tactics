@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { searchBestAction, searchEnemyMove, evaluateGameState, DEFAULT_EVAL_WEIGHTS, type SearchContext } from './ai';
+import {
+  searchBestAction, searchEnemyMove, evaluateGameState, DEFAULT_EVAL_WEIGHTS, type SearchContext,
+  makeSearchState, quiesce, captureValue, terminalScore, outOfBudget, WIN_SCORE, WIN_SCORE_PLY_SLACK,
+} from './ai';
 import { createRng } from './rng';
 import type { GameState, Piece, PieceType, Side } from './types';
+import { victoryRulesForObjective } from './objectives';
 
 function piece(id: string, side: Side, type: PieceType, x: number, y: number, extra: Partial<Piece> = {}): Piece {
   return { id, side, type, x, y, alive: true, startY: y, ...extra };
@@ -12,7 +16,11 @@ function state(pieces: Piece[], over: Partial<GameState> = {}): GameState {
 }
 
 function sctx(over: Partial<SearchContext> = {}): SearchContext {
-  return { objective: 'capture-all', ctx: {}, turnsElapsed: 0, ...over };
+  const merged = { objective: 'capture-all' as const, ctx: {}, turnsElapsed: 0, ...over };
+  return {
+    ...merged,
+    victoryRules: over.victoryRules ?? victoryRulesForObjective(merged.objective, merged.ctx),
+  };
 }
 
 // Node-bounded (no wall clock) so the search is deterministic under any timer setup.
@@ -34,6 +42,55 @@ describe('searchBestAction', () => {
     const chosen = searchBestAction(s, {}, sctx({ objective: 'rival-kings' }), null, FAST);
     expect(chosen).not.toBeNull();
     expect(chosen!.move).toMatchObject({ x: 7, y: 4, capture: 'p-king' });
+  });
+
+  it('searches the exact authored victory rules instead of the objective preset', () => {
+    // Same fork as above: the objective label/heuristic remains Rival Kings, but
+    // this authored level says eliminating the player's QUEEN wins. Search must
+    // therefore take the queen instead of silently solving the rival-kings preset.
+    const s = state([
+      piece('e-rook', 'enemy', 'rook', 0, 4),
+      piece('p-king', 'player', 'king', 7, 4),
+      piece('p-queen', 'player', 'queen', 0, 0),
+      piece('e-king', 'enemy', 'king', 7, 1),
+    ]);
+    const authored = [{
+      name: 'Take the Queen',
+      if: [{ kind: 'eliminate' as const, side: 'player' as const, filter: { type: 'queen' as const } }],
+      do: [{ kind: 'win' as const, side: 'enemy' as const }],
+    }];
+    const chosen = searchBestAction(
+      s,
+      {},
+      sctx({ objective: 'rival-kings', victoryRules: authored }),
+      null,
+      FAST,
+    );
+    expect(chosen).not.toBeNull();
+    expect(chosen!.move).toMatchObject({ x: 0, y: 0, capture: 'p-queen' });
+  });
+
+  it('derives horizon guidance from authored rules rather than the headline preset', () => {
+    const rules = [{
+      name: 'Enemy breakthrough',
+      if: [{ kind: 'reach' as const, side: 'enemy' as const }],
+      do: [{ kind: 'win' as const, side: 'enemy' as const }],
+    }];
+    const far = state([
+      piece('p-king', 'player', 'king', 7, 7),
+      piece('e-pawn', 'enemy', 'pawn', 3, 5),
+      piece('e-king', 'enemy', 'king', 0, 0),
+    ]);
+    const near = state(far.pieces.map((candidate) => candidate.id === 'e-pawn' ? { ...candidate, y: 1 } : candidate));
+    const context = sctx({
+      objective: 'capture-all',
+      victoryRules: rules,
+      ctx: { reachCells: [{ x: 3, y: 0 }] },
+    });
+
+    // Enemy progress toward its authored goal is bad for the player even though the
+    // stale headline objective says capture-all.
+    expect(evaluateGameState(near, context)).toBeLessThan(evaluateGameState(far, context));
   });
 
   it('declines a defended pawn when a free pawn is on offer', () => {
@@ -172,5 +229,77 @@ describe('evaluateGameState', () => {
     // Normalize away the guard pawn's material + distance terms by comparing the
     // victim's safety directly: reconstruct both scores minus material.
     expect(hangingPenalty).toBeLessThan(evaluateGameState(defended, sctx(), w) - w.pieceValues.pawn + 0.5);
+  });
+});
+
+// ─── Solver reuse surface (ADR-0069 Phase 4) — export stability ─────────────────────────
+// The board solver's proof-tracking fork reuses these exports; if a rename/signature drift
+// slips through, this pins the surface so the break shows here, not deep in the solver.
+describe('solver reuse surface exports (ADR-0069 Phase 4)', () => {
+  it('the reused symbols exist with stable shapes', () => {
+    expect(typeof makeSearchState).toBe('function');
+    expect(typeof quiesce).toBe('function');
+    expect(typeof captureValue).toBe('function');
+    expect(typeof terminalScore).toBe('function');
+    expect(typeof outOfBudget).toBe('function');
+    expect(WIN_SCORE).toBe(10_000);
+    expect(WIN_SCORE_PLY_SLACK).toBe(1_000);
+    // terminalScore(winner, ply) === ±(WIN_SCORE - ply); draw === 0.
+    expect(terminalScore('player', 3)).toBe(WIN_SCORE - 3);
+    expect(terminalScore('enemy', 3)).toBe(-(WIN_SCORE - 3));
+    expect(terminalScore('draw', 3)).toBe(0);
+    // captureValue: victim value for a capture, -1 for a non-capture.
+    const pieces = [piece('victim', 'player', 'rook', 4, 4)];
+    expect(captureValue({ x: 4, y: 4, capture: 'victim' }, pieces, DEFAULT_EVAL_WEIGHTS.pieceValues)).toBe(5);
+    expect(captureValue({ x: 4, y: 4 }, pieces, DEFAULT_EVAL_WEIGHTS.pieceValues)).toBe(-1);
+  });
+
+  it('makeSearchState builds a state the budget check reads (Infinity deadline with no time budget)', () => {
+    const s = makeSearchState({}, sctx(), { maxNodes: 10 });
+    expect(s.nodes).toBe(0);
+    expect(s.maxNodes).toBe(10);
+    expect(s.deadline).toBe(Infinity);
+    expect(outOfBudget(s)).toBe(false);
+    s.nodes = 10;
+    expect(outOfBudget(s)).toBe(true); // nodes >= maxNodes trips the budget.
+    expect(s.aborted).toBe(true);
+  });
+});
+
+describe('search sees the chess draw rules (ADR-0072)', () => {
+  it('scores every line as a dead draw when the next quiet move fills the 50-move clock', () => {
+    // Player queen up huge, but the clock sits at 99: whatever the enemy plays, the
+    // reply position has clock 100 and no capture available to reset it — the search
+    // must read the whole tree as 0 instead of the big material deficit.
+    const pieces = [
+      piece('p-queen', 'player', 'queen', 0, 7),
+      piece('p-king', 'player', 'king', 7, 7),
+      piece('e-king', 'enemy', 'king', 0, 0),
+    ];
+    const drawn = state(pieces, { drawRules: { fiftyMove: true }, halfmoveClock: 99 });
+    const withRule = searchBestAction(drawn, {}, sctx(), createRng(1), FAST)!;
+    expect(withRule.score).toBeCloseTo(0, 8); // exactly the draw score (±0)
+    // The same position without the authored rule is still a lost game for the enemy.
+    const losing = state(pieces, { halfmoveClock: 99 });
+    const noRule = searchBestAction(losing, {}, sctx(), createRng(1), FAST)!;
+    expect(noRule.score).toBeGreaterThan(1);
+  });
+
+  it('adjudicates a clock-filling CHECK as the draw it is, even at the search horizon (depth 1)', () => {
+    // Enemy is up a full queen at clock 99. The quiet queen check fills the clock — in
+    // committed play ruleDraw instantly declares the 50-move draw (the king has escapes),
+    // throwing the win away. Before the depth-0 fix, quiesce scored that node as +9
+    // material and depth-1 search happily played it; the pawn push (resets the clock,
+    // keeps the queen) is the only move that preserves the win.
+    const pieces = [
+      piece('p-king', 'player', 'king', 0, 0),
+      piece('e-queen', 'enemy', 'queen', 4, 1),
+      piece('e-king', 'enemy', 'king', 7, 7),
+      piece('e-pawn', 'enemy', 'pawn', 6, 3),
+    ];
+    const s = state(pieces, { drawRules: { fiftyMove: true }, halfmoveClock: 99 });
+    const chosen = searchBestAction(s, {}, sctx(), null, { maxDepth: 1, maxNodes: 50_000 })!;
+    expect(chosen.pieceId).toBe('e-pawn');
+    expect(chosen.score).toBeLessThan(-1); // player-positive: the enemy keeps its winning material
   });
 });

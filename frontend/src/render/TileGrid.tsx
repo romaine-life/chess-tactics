@@ -20,10 +20,10 @@ export interface TileGridCell {
    * Added to the cell's paint order (x+y). For a cell whose art PROTRUDES far past its own tile
    * into the cells in front — a bridge's near rail + pier hang ~2.5 rows below the equator — so the
    * front (higher-z) tiles don't paint over that overhang. Sorts identically among bumped cells, so
-   * a run stays correctly layered; kept small so it never climbs into the unit band (+20000).
+   * a run stays correctly layered; kept small so it never climbs into the object band.
    */
   zBump?: number;
-  /** Tile content: the <img>, a missing-tile label, plus any per-cell editor chrome. */
+  /** Per-cell DOM chrome: missing labels, selection rings, editor hit targets, etc. */
   children?: ReactNode;
 }
 
@@ -35,6 +35,8 @@ export interface TileGridProps {
   boardPan?: { x: number; y: number };
   onPointerUp?: PointerEventHandler<HTMLDivElement>;
   onPointerLeave?: PointerEventHandler<HTMLDivElement>;
+  /** A board-space layer drawn before per-cell DOM overlays (for composed terrain canvases). */
+  backgroundLayer?: ReactNode;
   /** A flat overlay layer drawn above every tile (highlights, hit targets). */
   renderCellOverlay?: (cell: TileGridCell, position: { left: number; top: number }) => ReactNode;
   children?: ReactNode;
@@ -55,6 +57,7 @@ export function TileGrid({
   boardPan = { x: 0, y: 0 },
   onPointerUp,
   onPointerLeave,
+  backgroundLayer,
   renderCellOverlay,
   children,
 }: TileGridProps) {
@@ -76,6 +79,7 @@ export function TileGrid({
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerLeave}
     >
+      {backgroundLayer}
       {cells.map((cell) => {
         const { left, top, zIndex } = boardLabCellPosition(cell);
         return (

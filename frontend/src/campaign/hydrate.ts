@@ -10,33 +10,55 @@
 // the prod "no campaigns" bug. See ADR-0038.
 
 import { useCampaigns } from './store';
-import { loadOfficialCampaigns, loadWorkspace } from '../net/campaignWorkspace';
+import { loadOfficialCampaignsResult, loadWorkspace } from '../net/campaignWorkspace';
+import { isUnauthorized } from '../net/auth';
 
-let hydrated = false;
-let inFlight: Promise<void> | null = null;
+export interface CampaignHydrationResult {
+  officialAvailable: boolean;
+  userWorkspace: 'loaded' | 'signed-out' | 'unavailable';
+}
 
-export function ensureCampaignsHydrated(): Promise<void> {
-  const state = useCampaigns.getState();
-  // Already populated (a fresh page load starts empty; an editor may have hydrated the
-  // store this SPA session) — reuse it rather than clobbering unsaved edits. There is no
-  // longer an official-authoring mode to rebuild around: the store is always the proper
-  // merged player view, so /play can always reuse it. An admin's unpublished official
-  // edits preview in /play — identical to how unsaved private edits already preview.
-  if (hydrated || state.campaigns.length) return Promise.resolve();
+export function isUserWorkspaceAvailable(status: CampaignHydrationResult['userWorkspace']): boolean {
+  // Signed-out is an authoritative empty private slice, not a failed load. Only an
+  // unavailable response leaves the selector unable to distinguish empty from unknown.
+  return status !== 'unavailable';
+}
+
+let officialAvailable = false;
+let userWorkspace: CampaignHydrationResult['userWorkspace'] = 'unavailable';
+let inFlight: Promise<CampaignHydrationResult> | null = null;
+
+export function ensureCampaignsHydrated(): Promise<CampaignHydrationResult> {
+  // Join the active load before inspecting partially-merged store state. The official slice is
+  // merged first, so checking it before inFlight would let a second caller return while the user
+  // workspace was still pending — exactly the unsafe window a standalone Save must avoid.
   if (inFlight) return inFlight;
+  const userReady = userWorkspace === 'loaded' || userWorkspace === 'signed-out';
+  // Once both slices are settled, reuse the store rather than clobbering unsaved edits. If just
+  // one source was unavailable, later callers retry ONLY that source; a transient official
+  // outage must not trigger another private-workspace merge over in-memory authoring changes.
+  if (officialAvailable && userReady) return Promise.resolve({ officialAvailable, userWorkspace });
   inFlight = (async () => {
     try {
-      // 1. Officials — always, for everyone. loadOfficialCampaigns never throws (it
-      //    falls back to the committed static file on any backend failure).
-      useCampaigns.getState().mergeOfficial(await loadOfficialCampaigns());
-      // 2. The signed-in user's own campaigns, merged on top. 401 / unreachable ⇒ skip,
-      //    leaving officials in place.
-      try {
-        useCampaigns.getState().mergeUser(await loadWorkspace());
-      } catch {
-        /* not signed in, or no /api proxy (dev) ⇒ officials only */
+      if (!officialAvailable) {
+        // Officials are public. Merge only a successful response; on a transient failure retain
+        // any in-memory official edits and let the next caller retry this slice alone.
+        const official = await loadOfficialCampaignsResult();
+        if (official.available) useCampaigns.getState().mergeOfficial(official.workspace);
+        officialAvailable = official.available;
       }
-      hydrated = true;
+      if (!userReady) {
+        // A 401 is a complete, safe anonymous result. Network/5xx failures are different: the
+        // private workspace is unknown, so callers must keep Save locked and retry later rather
+        // than PUT a partial store over it.
+        try {
+          useCampaigns.getState().mergeUser(await loadWorkspace());
+          userWorkspace = 'loaded';
+        } catch (error) {
+          userWorkspace = isUnauthorized(error) ? 'signed-out' : 'unavailable';
+        }
+      }
+      return { officialAvailable, userWorkspace };
     } finally {
       // Never cache a rejected promise: if a merge ever throws, the next visit must
       // retry instead of every future caller inheriting the poisoned inFlight.

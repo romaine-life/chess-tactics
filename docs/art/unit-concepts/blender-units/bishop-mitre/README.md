@@ -1,6 +1,7 @@
 # Mitred Bishop (source)
 
-Source for the active bishop unit (`frontend/public/assets/units/bishop/blender-render-mitre/`).
+Source for the active bishop design. Renders go to `.unit-art-output/bishop/navy-blue/`
+before upload through Unit Art.
 
 - `bishop_mitre.blend` — the **hand-assembled** source of truth: a navy Staunton bishop
   (chess bishop FBX, axis-baked + normalized + navy-styled) wearing a **mitre**

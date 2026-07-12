@@ -28,6 +28,9 @@ function childEnv() {
     FRONTEND_DIR: bakedFrontendDir,
     STATIC_FRONTEND_DIR: staticFrontendDir,
     NODE_PATH: nodePath,
+    // server.js runs from hotBackendDir after being copied there. Keep sibling
+    // backend assets resolving from the baked backend tree.
+    BAKED_BACKEND_DIR: __dirname,
   };
 }
 

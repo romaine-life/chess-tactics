@@ -5,7 +5,6 @@ import { isPassableTerrain } from '../core/terrain';
 import { createBlankLevel, type Level } from '../core/level';
 import { levelToEditorBoard, editorBoardToLevel } from '../core/levelBoard';
 import { encodeBoard, decodeBoard, type EditorBoard } from '../ui/boardCode';
-import { unitAssets } from '../ui/unitCatalog';
 import { applyMove, sideInCheck } from '../core/rules';
 import { tileAssets, tileFamilies } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
@@ -316,14 +315,25 @@ describe('createFromLevel — random placement', () => {
     expect(hasMove(legalMoves(pawn, game.pieces, game.size), 4, 4)).toBe(true);
     expect(hasMove(legalMoves(pawn, game.pieces, game.size), 2, 3)).toBe(false);
   });
+
+  it('fixed placement copies authored palettes onto live pieces', () => {
+    const level = createBlankLevel('fx-palettes', 'Fixed Palettes', 8, 8);
+    level.layers.units = [
+      { x: 2, y: 6, type: 'king', side: 'player', palette: 'white' },
+      { x: 5, y: 1, type: 'king', side: 'enemy', palette: 'black' },
+    ];
+
+    const game = createSkirmish({ seed: 9, level });
+    expect(game.pieces.find((p) => p.side === 'player')?.palette).toBe('white');
+    expect(game.pieces.find((p) => p.side === 'enemy')?.palette).toBe('black');
+  });
 });
 
 // The `/play?board=<code>` play-test path: a shared board-code link decodes into a
 // fixed-placement level that createSkirmish plays. This guards that whole data path
 // (encode → decode → editorBoardToLevel → createSkirmish) with a concrete mate position.
 describe('play a board-code link', () => {
-  const unitIdFor = (family: string): string =>
-    (unitAssets.find((u) => u.family === family && !u.speculative) ?? unitAssets.find((u) => u.family === family))!.id;
+  const unitIdFor = (family: string): string => family;
 
   it('decodes an authored mate-in-1 board into a playable, correctly-sided level', () => {
     const king = unitIdFor('king');
@@ -355,5 +365,42 @@ describe('play a board-code link', () => {
     expect(sideInCheck(after, 'enemy', env)).toBe(true);
     const enemyReplies = livingPieces(after.pieces, 'enemy').flatMap((p) => legalMoves(p, after.pieces, after.size, env));
     expect(enemyReplies).toHaveLength(0);
+  });
+});
+
+describe('createFromLevel castling + chess draw rules (ADR-0072)', () => {
+  it('resolves castle and chess-draws events into GameState, counting the start position', () => {
+    const level = createBlankLevel('lab-castle', 'Castle', 8, 8);
+    level.objective = 'capture-king';
+    level.layers.units = [
+      { x: 4, y: 7, type: 'king', side: 'player' },
+      { x: 7, y: 7, type: 'rook', side: 'player' },
+      { x: 4, y: 0, type: 'king', side: 'enemy' },
+    ];
+    level.events = [
+      { trigger: { kind: 'setup' }, do: [{ kind: 'castle', side: 'player', king: { x: 4, y: 7 }, rook: { x: 7, y: 7 }, kingTo: { x: 6, y: 7 }, rookTo: { x: 5, y: 7 } }] },
+      { trigger: { kind: 'setup' }, do: [{ kind: 'chess-draws', fiftyMove: true, threefold: true }] },
+    ];
+    const game = createSkirmish({ seed: 1, level });
+    expect(game.castleRules).toEqual([{ side: 'player', king: { x: 4, y: 7 }, rook: { x: 7, y: 7 }, kingTo: { x: 6, y: 7 }, rookTo: { x: 5, y: 7 } }]);
+    expect(game.drawRules).toEqual({ fiftyMove: true, threefold: true });
+    // The starting position is threefold occurrence #1.
+    expect(Object.values(game.positionCounts ?? {})).toEqual([1]);
+    // And the authored castle is actually offered from the start.
+    const king = game.pieces.find((p) => p.type === 'king' && p.side === 'player')!;
+    const moves = legalMoves(king, game.pieces, game.size, { castleRules: game.castleRules });
+    expect(moves.some((m) => m.x === 6 && m.y === 7 && m.castle)).toBe(true);
+  });
+
+  it('leaves an event-free level exactly as before (no castle rules, no draw rules, no table)', () => {
+    const level = createBlankLevel('lab-plain', 'Plain', 8, 8);
+    level.layers.units = [
+      { x: 4, y: 7, type: 'king', side: 'player' },
+      { x: 4, y: 0, type: 'king', side: 'enemy' },
+    ];
+    const game = createSkirmish({ seed: 1, level });
+    expect(game.castleRules).toBeUndefined();
+    expect(game.drawRules).toBeUndefined();
+    expect(game.positionCounts).toBeUndefined();
   });
 });

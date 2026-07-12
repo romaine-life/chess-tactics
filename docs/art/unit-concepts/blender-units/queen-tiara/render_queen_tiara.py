@@ -6,7 +6,9 @@ The tiara was hand-fitted onto the queen's crown collar in Blender, so the sourc
 is the assembled `queen_tiara.blend` (navy Staunton queen + jeweled gold tiara FBX,
 positioned, rigged to an empty, true-isometric contract camera baked in). This opens it,
 renders the 8 directions, and prints the seating anchor.
-Output -> frontend/public/assets/units/queen/blender-render-tiara/<direction>.png
+Output defaults to .unit-art-output/queen/navy-blue/<direction>.png. The canonical
+pipeline supplies UNIT_ART_OUTPUT_DIR plus UNIT_ART_FRAME_WIDTH/HEIGHT and Blender
+writes that exact delivery raster without a resize stage.
 
 The tiara's front gives the queen a per-direction facing (front -> game-south at yaw 0).
 """
@@ -18,7 +20,11 @@ ROOT = Path(__file__).resolve().parent
 while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 BLEND = str(ROOT / "docs/art/unit-concepts/blender-units/queen-tiara/queen_tiara.blend")
-OUT = str(ROOT / "frontend/public/assets/units/queen/blender-render-tiara")
+OUT = os.environ.get("UNIT_ART_OUTPUT_DIR", str(ROOT / ".unit-art-output/queen/navy-blue"))
+FRAME_WIDTH = int(os.environ.get("UNIT_ART_FRAME_WIDTH", "512"))
+FRAME_HEIGHT = int(os.environ.get("UNIT_ART_FRAME_HEIGHT", "512"))
+if not (1 <= FRAME_WIDTH <= 4096 and 1 <= FRAME_HEIGHT <= 4096):
+    raise RuntimeError("UNIT_ART_FRAME_WIDTH/HEIGHT must be between 1 and 4096")
 os.makedirs(OUT, exist_ok=True)
 
 bpy.ops.wm.open_mainfile(filepath=BLEND)
@@ -30,10 +36,26 @@ if rig is None:
         if o.type == "MESH":
             o.parent = rig; o.matrix_parent_inverse = rig.matrix_world.inverted()
 
+# The assembled blend originally referenced an unpacked temporary texture folder.
+# Geometry is the authored source; use one deterministic gold material so a fresh
+# checkout never renders Blender's magenta missing-texture error color.
+tiara = bpy.data.materials.get("tiara gold")
+if tiara is None:
+    raise RuntimeError("assembled queen source is missing the 'tiara gold' material")
+tiara.use_nodes = True
+nodes = tiara.node_tree.nodes; nodes.clear()
+out = nodes.new("ShaderNodeOutputMaterial")
+gold = nodes.new("ShaderNodeBsdfPrincipled")
+gold.inputs["Base Color"].default_value = (0.42, 0.20, 0.035, 1)
+gold.inputs["Metallic"].default_value = 0.78
+gold.inputs["Roughness"].default_value = 0.34
+tiara.node_tree.links.new(gold.outputs["BSDF"], out.inputs["Surface"])
+
 scene.render.engine = "CYCLES"; scene.cycles.samples = 48; scene.cycles.use_denoising = True
 scene.view_settings.view_transform = "Standard"
-scene.render.resolution_x = scene.render.resolution_y = 512; scene.render.film_transparent = True
-scene.render.image_settings.file_format = "PNG"
+scene.render.resolution_x = FRAME_WIDTH; scene.render.resolution_y = FRAME_HEIGHT; scene.render.resolution_percentage = 100
+scene.render.film_transparent = True
+scene.render.image_settings.file_format = "PNG"; scene.render.image_settings.color_mode = "RGBA"
 DIRECTIONS = {"south":0,"south-west":-45,"west":-90,"north-west":-135,"north":180,"north-east":135,"east":90,"south-east":45}
 for name, angle in DIRECTIONS.items():
     rig.rotation_euler = (0, 0, math.radians(angle))

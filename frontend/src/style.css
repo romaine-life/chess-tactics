@@ -202,16 +202,16 @@
   --panel-inset: #0a131b;
   --focus-ring: var(--cobalt-bright);
   --iso-tile-width: 96px;
-  --iso-tile-height: 55.426px;
+  --iso-tile-height: 54px;
   --iso-tile-step-x: 48px;
-  --iso-tile-step-y: 27.713px;
+  --iso-tile-step-y: 27px;
   --iso-tile-canvas-height: 140px;
   /* div-local Y of the tile's top-face centre (equator) inside the 180px frame.
      This is the widest row of the sprite PNG; the frame's translate anchors it to
      the cell. Every overlay diamond (grid, hit, footprint, selection ring) seats on
      this same plane, so they line up with placed tiles' top faces. Change in ONE
      place if the sprite's equator row ever moves. */
-  --iso-tile-equator: 69px;
+  --iso-tile-equator: 68px;
   /* Top edge of a top-face diamond: the equator minus half the diamond's height. */
   --iso-tile-surface-top: calc(var(--iso-tile-equator) - var(--iso-tile-height) / 2);
 
@@ -317,6 +317,25 @@ button:disabled {
   min-height: 0;
   overflow: hidden;
   padding: 14px;
+}
+
+.app-startup-status {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.app-startup-status.is-error h1 {
+  color: var(--danger);
+}
+
+.app-startup-status button {
+  min-width: 112px;
 }
 
 /* #root host. Fills the shell's content row; tall pages scroll here while the
@@ -434,9 +453,8 @@ h1 {
     linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46));
 }
 
-/* An animated scene region (menu twin of the board's .tile-layer-top-anim): a
-   BAKED horizontal frame sheet (scripts/build-scene-anim.py), only water pixels
-   opaque, frame 0 = the shipped scene; steps() just advances the frame index.
+/* An animated scene region: a BAKED horizontal frame sheet (scripts/build-scene-anim.py),
+   only water pixels opaque, frame 0 = the shipped scene; steps() just advances the frame index.
    !important clears the global `* { animation: none }` OS-reduce reset (~6477):
    Windows "animations off" reports prefers-reduced-motion falsely, and ambient
    scenery must not freeze for those players (deploy-drop/ADR-0048 precedent).
@@ -581,7 +599,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   z-index: 1;
-  /* .menu-layer (menu/campaign) is pointer-events:none so the rain stays
+  /* .menu-layer (menu/Play) is pointer-events:none so the rain stays
      click-through, and the credit would inherit that inertness. Opt back in,
      but at this backdrop z-index it only wins over exposed scene art. */
   pointer-events: auto;
@@ -643,6 +661,7 @@ h1 {
   gap: 7px;
 }
 .pages-ctl-row > input[type="range"],
+.pages-ctl-row > input[type="number"],
 .pages-ctl-row > select,
 .pages-ctl-row > .tileset-tier-seg {
   flex: 1 1 auto;
@@ -4048,9 +4067,9 @@ h1 {
   background: transparent;
 }
 
-/* Coordinated board reveal (render/boardArtReady). The board's dozens of tile <img>s each
-   load independently; without this they'd pop in one at a time ("popcorn"). The board is
-   held hidden until its whole art set has DECODED, then fades in as one unit on the same
+/* Coordinated board reveal (render/boardArtReady). The board's terrain canvas and sprite
+   images load independently. The board is held hidden until its whole art set has DECODED,
+   then fades in as one unit on the same
    320ms opacity fade the cold-load menu uses (ui/shell/coldReveal). A failsafe in the hook
    reveals anyway if an asset stalls, so the board can never hang invisible. */
 .skirmish-board-lab {
@@ -4231,6 +4250,23 @@ h1 {
   box-shadow: inset 0 0 0 2px rgba(245, 252, 255, .82);
 }
 
+/* Drag-to-move diagnostic: the square hit-testing thinks the cursor is over, even when
+   that square is not a legal destination. The green valid-drop style below overrides it. */
+.skirmish-board-cell-hit.is-drop-aim::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 223, 128, .32), transparent 62%),
+    rgba(255, 173, 64, .22);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-drop-aim::after {
+  opacity: 1;
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 232, 166, .92),
+    inset 0 0 0 4px rgba(144, 78, 20, .36),
+    0 0 12px rgba(255, 176, 66, .46);
+}
+
 /* Drag-to-move: the legal square the held piece is hovering over. Declared last so it wins
    over .is-move / :hover on the same cell — a bright green "drop here" fill + ring. */
 .skirmish-board-cell-hit.is-drop-hover::before {
@@ -4254,18 +4290,26 @@ h1 {
    the seat geometry lives nowhere else. Do not re-derive it per board. */
 .board-unit-seat {
   position: absolute;
-  width: 72px;
-  height: 86px;
+  width: calc(72px * var(--unit-scale));
+  height: calc(86px * var(--unit-scale));
   display: grid;
   align-items: center;
   justify-items: center;
-  transform: translate(-50%, -78%);
+  transform: translate(var(--unit-anchor-x), var(--unit-anchor-y));
   pointer-events: none;
 }
+
+.board-unit-seat.is-pawn { --unit-scale: var(--unit-scale-pawn); --unit-anchor-x: var(--unit-anchor-x-pawn); --unit-anchor-y: var(--unit-anchor-y-pawn); }
+.board-unit-seat.is-knight { --unit-scale: var(--unit-scale-knight); --unit-anchor-x: var(--unit-anchor-x-knight); --unit-anchor-y: var(--unit-anchor-y-knight); }
+.board-unit-seat.is-bishop { --unit-scale: var(--unit-scale-bishop); --unit-anchor-x: var(--unit-anchor-x-bishop); --unit-anchor-y: var(--unit-anchor-y-bishop); }
+.board-unit-seat.is-rook { --unit-scale: var(--unit-scale-rook); --unit-anchor-x: var(--unit-anchor-x-rook); --unit-anchor-y: var(--unit-anchor-y-rook); }
+.board-unit-seat.is-queen { --unit-scale: var(--unit-scale-queen); --unit-anchor-x: var(--unit-anchor-x-queen); --unit-anchor-y: var(--unit-anchor-y-queen); }
+.board-unit-seat.is-king { --unit-scale: var(--unit-scale-king); --unit-anchor-x: var(--unit-anchor-x-king); --unit-anchor-y: var(--unit-anchor-y-king); }
+
 .board-unit-seat img {
   display: block;
-  max-height: 92px;
-  max-width: 78px;
+  height: calc(92px * var(--unit-scale));
+  width: calc(78px * var(--unit-scale));
   object-fit: contain;
   image-rendering: auto;
 }
@@ -4758,7 +4802,7 @@ h1 {
   text-transform: uppercase;
 }
 
-/* Skirmish setup/profile rows in the /skirmish hub. */
+/* Skirmish setup/profile rows in the shared Play hub. */
 .skirmish-setup-section {
   display: grid;
   gap: var(--ds-stack);
@@ -5220,7 +5264,7 @@ h1 {
    disabled control, matching the retired title-bar Save's is-disabled look. */
 .le-seg-btn.is-blocked { opacity: .45; }
 
-/* Live-test Play in the always-visible Actions dock: a full-width primary button so it reads as
+/* Test in the always-visible Actions dock: a full-width primary button so it reads as
    the editor's "test this board now" verb, distinct from the Undo/Redo icons above it. */
 .le-actions-dock .le-play-board {
   border-image-source: var(--skirmish-chrome-inner-control-active-image, url("/assets/ui/kit/mode-button-active.png"));
@@ -5240,8 +5284,8 @@ h1 {
 }
 /* Pinned Actions dock in the rail: universal tools + Undo/Redo as compact icon-only
    squares. Labels ride aria-label + title; the button chrome comes from the inner
-   role, while the icons are glyph-only. Test + Save/Publish stay with the Status
-   layer's save workflow. */
+   role, while the icons are glyph-only. Current-board Test lives below; Save/Publish
+   stays in the Status layer. */
 .le-board-actions {
   box-sizing: border-box;
   display: grid;
@@ -5271,7 +5315,20 @@ h1 {
 .le-board-actions.le-status-actions { margin-top: 0; }
 .le-board-actions .le-seg-btn { min-width: 0; }
 
+.le-card-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+.le-card-row h2 { margin: 0; }
+.le-mini-btn {
+  min-height: 32px;
+  min-width: 72px;
+  padding-inline: 4px;
+}
 /* Level settings live under the Board layer: rule readout + faction-control assignment. */
+.le-level-name-input { box-sizing: border-box; width: 100%; }
 .le-settings-list { display: grid; gap: var(--ds-inline-tight); margin: 0 0 var(--ds-gutter); }
 .le-settings-list div { align-items: start; display: grid; gap: 8px; grid-template-columns: 74px minmax(0, 1fr); }
 .le-settings-list dt,
@@ -5292,6 +5349,120 @@ h1 {
 .le-faction-dot.is-crimson { background: #bf3e4a; }
 .le-faction-dot.is-golden { background: #d9a73f; }
 .le-faction-dot.is-emerald { background: #3ca66b; }
+.le-faction-dot.is-black { background: #2d3338; }
+.le-faction-dot.is-white { background: #e7dfc8; }
+.palette-select {
+  min-width: 0;
+  position: relative;
+  width: 100%;
+}
+.palette-select-trigger {
+  align-items: center;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  color: #eff9ff;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 40px;
+  outline: none;
+  padding: 0 28px 0 10px;
+  text-align: left;
+  text-shadow: 0 2px 0 #010407;
+  text-transform: uppercase;
+  width: 100%;
+}
+.palette-select-trigger::after {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23cfe6f1' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain;
+  content: "";
+  height: 8px;
+  width: 12px;
+}
+.palette-select-trigger:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+.palette-select-trigger:disabled {
+  cursor: default;
+  filter: saturate(.55);
+  opacity: .64;
+}
+.palette-select-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-select-swatch {
+  border: 1px solid rgba(240, 231, 211, .42);
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18);
+  display: inline-block;
+  height: 13px;
+  width: 13px;
+}
+.palette-select-swatch.is-navy-blue { background: #2f7fd4; }
+.palette-select-swatch.is-crimson { background: #bf3e4a; }
+.palette-select-swatch.is-golden { background: #d9a73f; }
+.palette-select-swatch.is-emerald { background: #3ca66b; }
+.palette-select-swatch.is-black { background: #2d3338; }
+.palette-select-swatch.is-white {
+  background: #e7dfc8;
+  border-color: rgba(255, 255, 255, .8);
+}
+.palette-select-menu {
+  background: rgba(3, 10, 17, .98);
+  border: 1px solid rgba(93, 160, 211, .42);
+  border-radius: 6px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, .52), inset 0 0 0 1px rgba(221, 237, 255, .05);
+  display: grid;
+  gap: 2px;
+  left: 0;
+  max-height: 238px;
+  overflow: auto;
+  padding: 4px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 150;
+}
+.palette-select-option {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #dceef7;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 32px;
+  padding: 0 8px;
+  text-align: left;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 #010407;
+}
+.palette-select-option:hover,
+.palette-select-option:focus-visible {
+  background: rgba(101, 184, 255, .16);
+  outline: none;
+}
+.palette-select-option.is-active {
+  background: rgba(143, 189, 235, .26);
+  color: #ffffff;
+}
+.le-faction-palette-select {
+  flex: 0 1 170px;
+  min-width: 140px;
+}
 .le-faction-select {
   appearance: none;
   -webkit-appearance: none;
@@ -5676,6 +5847,56 @@ h1 {
   z-index: 2;
 }
 
+.le-tactical-cell {
+  position: absolute;
+  left: 0;
+  top: var(--iso-tile-surface-top);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.le-tactical-cell::before,
+.le-tactical-cell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+.le-tactical-cell.is-promotion-zone::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 236, 150, .40), transparent 62%),
+    rgba(246, 198, 80, .26);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-threat::before {
+  background: rgba(255, 105, 64, .38);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-move::before {
+  background: rgba(61, 210, 255, .42);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-blocked-candidate::before {
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 214, 97, .42) 0 7px, rgba(81, 43, 14, .38) 7px 14px);
+  opacity: 1;
+}
+
+.le-tactical-cell.is-focused-piece::after {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 221, 112, .96),
+    inset 0 0 0 4px rgba(128, 55, 25, .42),
+    0 0 12px rgba(255, 151, 68, .54);
+  opacity: 1;
+}
+
 /* Marquee selection highlight for the Generate scope — same diamond seating as the zone tint, in
    a distinct cyan so it reads as "these cells will be generated", not a gameplay zone. Painted
    before the selection ring in the DOM so a single-cell ring still shows on top at equal z. */
@@ -5788,6 +6009,14 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.le-generate .le-gen-macro {
+  margin: 0 0 4px 12px;
+  padding: 2px 0 3px 8px;
+  border-left: 2px solid rgba(245, 196, 92, .34);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 /* Ground cover for a region: a compact list of collapsible cover rows, indented under the region. */
 .le-generate .le-gen-cover {
@@ -5978,6 +6207,8 @@ h1 {
   padding: 5px 2px;
 }
 .le-swatch img { height: 46px; image-rendering: pixelated; object-fit: contain; width: 46px; }
+.le-macro-swatch img { width: 100%; max-width: 58px; }
+.le-brush-thumb .le-thumb-macro { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
 .le-swatch small { font-size: var(--ds-text-2xs); line-height: 1; text-align: center; }
 .le-cover-swatches {
   grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
@@ -6168,11 +6399,11 @@ h1 {
 .le-status-card { display: flex; flex-direction: column; gap: var(--ds-stack); }
 .le-status-card > h2 { margin: 0; }
 .le-status-log .le-board-note { margin: 0; }
-/* The level's identity (name + OFFICIAL tag) — moved here from the title bar; global
-   chrome carries no editor status. */
-.le-status-level { align-items: baseline; display: flex; gap: var(--ds-inline-tight); min-width: 0; }
-.le-status-level .le-level-name { color: #f0e7d3; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.le-official-tag { color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; }
+/* The level's identity (name + OFFICIAL tag) lives with the save workflow. */
+.le-status-level { align-items: end; display: grid; gap: var(--ds-inline-tight); grid-template-columns: minmax(0, 1fr) auto; min-width: 0; }
+.le-status-name-field { display: grid; gap: 6px; min-width: 0; }
+.le-status-campaign-field .le-board-note { margin: 0; }
+.le-official-tag { align-self: end; color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; padding-bottom: 8px; }
 /* Drawn text boxes wear a kit line frame (ADR-0032/0034): the transparent-interior panel-line
    9-slice over the box's own navy surface (a border-box background layer, reaching the frame
    edge). Ready/blocked swap the SOURCE to the success/warning tone twin — one frame, tone at the
@@ -6261,6 +6492,29 @@ h1 {
 .le-roadconn-edge.is-none:hover line:last-child { stroke: #67d98a; }
 .le-roadconn-edge:focus-visible { outline: none; }
 .le-roadconn-edge:focus-visible line:last-child { stroke-width: 9; }
+.le-fenceconn-post { cursor: pointer; }
+.le-fenceconn-post-mark {
+  fill: rgba(8, 20, 28, .92);
+  stroke: rgba(120, 150, 165, .55);
+  stroke-width: 2;
+}
+.le-fenceconn-post.is-wood { --le-fence-post-color: #d6b169; }
+.le-fenceconn-post.is-stone { --le-fence-post-color: #c7d3d8; }
+.le-fenceconn-post.is-explicit .le-fenceconn-post-mark {
+  fill: var(--le-fence-post-color);
+  stroke: #fff4d2;
+}
+.le-fenceconn-post.is-automatic .le-fenceconn-post-mark {
+  stroke: var(--le-fence-post-color);
+  stroke-dasharray: 3 2;
+}
+.le-fenceconn-post.is-none .le-fenceconn-post-mark {
+  fill: rgba(103, 217, 138, .12);
+  stroke: rgba(103, 217, 138, .6);
+}
+.le-fenceconn-post:hover .le-fenceconn-post-mark { stroke: #fff4d2; stroke-width: 3; }
+.le-fenceconn-post:focus-visible { outline: none; }
+.le-fenceconn-post:focus-visible .le-fenceconn-post-mark { stroke: #fff; stroke-width: 4; }
 
 /* status line */
 .le-statusline { align-items: center; color: var(--skirmish-muted); display: flex; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 2px 6px; }
@@ -9553,6 +9807,26 @@ body { font-size: 17px; }
   box-shadow: 0 0 0 2px rgba(42, 166, 255, 0.18);
 }
 
+.unit-art-select-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+.unit-art-select-row select {
+  min-width: 0;
+}
+
+.tileset-control-stack .unit-art-select-row button {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  font: 900 16px/1 ui-monospace, Cascadia Mono, monospace;
+}
+
 /* Surface catalog swatch — the texture tiled, the way it fills a panel behind chrome. */
 .surface-swatch {
   display: block;
@@ -10649,6 +10923,393 @@ body { font-size: 17px; }
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.unit-size-controls {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(67, 127, 179, 0.28);
+}
+
+.unit-size-controls-head,
+.unit-size-spec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.unit-size-controls-actions,
+.unit-asset-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.unit-size-controls button:disabled,
+.unit-asset-manager button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.unit-size-controls-head strong,
+.unit-size-spec-head strong {
+  color: #9eb1c5;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.unit-size-list {
+  display: grid;
+  gap: 9px;
+}
+
+.unit-size-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px 28px;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.unit-size-row > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.unit-size-row strong {
+  color: #dcecff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.unit-size-row em {
+  color: #79d3ff;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.unit-size-row input[type='number'] {
+  box-sizing: border-box;
+  width: 58px;
+  height: 28px;
+  min-width: 0;
+  padding: 0 5px;
+  color: #f3fbff;
+  text-align: center;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-size-row input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  accent-color: #5bc8ff;
+}
+
+.unit-size-reset {
+  width: 28px;
+  min-width: 28px;
+}
+
+.unit-art-lab-main {
+  padding: 0;
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+  overflow: hidden;
+}
+
+.unit-size-spec {
+  display: grid;
+  gap: 6px;
+}
+
+.unit-size-spec textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  max-height: 120px;
+  resize: vertical;
+  padding: 8px;
+  color: #cfe3ef;
+  background: rgba(2, 8, 13, 0.62);
+  border: 1px solid rgba(67, 127, 179, 0.28);
+  border-radius: 4px;
+  font: 600 10px/1.35 ui-monospace, Cascadia Mono, monospace;
+}
+
+.unit-asset-manager {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(67, 127, 179, 0.28);
+}
+
+.unit-asset-editor {
+  display: grid;
+  gap: 9px;
+}
+
+.unit-asset-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.unit-asset-fields label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.unit-asset-fields label.is-wide {
+  grid-column: 1 / -1;
+}
+
+.unit-asset-fields label > span {
+  color: #91a9bf;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.unit-asset-fields input,
+.unit-asset-fields select,
+.unit-asset-actions select,
+.unit-asset-archive-row select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 29px;
+  padding: 0 6px;
+  color: #eef8ff;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-asset-actions select {
+  flex: 1 1 88px;
+}
+
+.unit-asset-upload {
+  position: relative;
+  flex: 1 1 104px;
+  min-height: 29px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #dcecff;
+  background: rgba(17, 49, 72, 0.88);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.unit-asset-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.unit-asset-completeness {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+
+.unit-asset-completeness span {
+  color: #8fa5b8;
+  font: 700 10px/1.25 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-asset-completeness span.is-complete {
+  color: #76d9a5;
+}
+
+.unit-asset-production-gate {
+  margin: 0;
+  color: #f0be72;
+  font: 800 10px/1.35 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-asset-current {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: #91a9bf;
+  font-size: 11px;
+}
+
+.unit-asset-current strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #dcecff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unit-asset-archive-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.unit-asset-status {
+  min-height: 14px;
+  color: #79d3ff;
+  font: 800 10px/1.3 var(--ds-font-sans, system-ui, sans-serif);
+  text-align: right;
+}
+
+.unit-size-row.is-single {
+  grid-template-columns: minmax(0, 1fr) 58px;
+}
+
+.unit-asset-modes {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(4, 15, 24, 0.72);
+  border: 1px solid rgba(67, 127, 179, 0.3);
+  border-radius: 4px;
+}
+
+.tileset-control-stack .unit-asset-modes button {
+  min-height: 24px;
+  padding: 4px 7px;
+  color: #8fa8bd;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  font-size: 10px;
+}
+
+.tileset-control-stack .unit-asset-modes button.is-active {
+  color: #edf8ff;
+  background: #183e58;
+  box-shadow: inset 0 0 0 1px rgba(91, 200, 255, 0.35);
+}
+
+.unit-recapture-editor {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.unit-recapture-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.unit-recapture-toolbar > strong {
+  color: #75d5ff;
+  font: 800 10px/1 ui-monospace, Cascadia Mono, monospace;
+  white-space: nowrap;
+}
+
+.unit-recapture-toolbar select {
+  box-sizing: border-box;
+  width: 100%;
+  height: 28px;
+  min-width: 0;
+  padding: 0 6px;
+  color: #eef8ff;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-recapture-rotation {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.unit-recapture-rotation figure {
+  display: grid;
+  grid-template-rows: minmax(58px, auto) 15px;
+  align-items: end;
+  justify-items: center;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  background: #101b23;
+  border: 1px solid rgba(91, 157, 216, 0.28);
+  border-radius: 4px;
+}
+
+.unit-recapture-rotation canvas {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 72px;
+  image-rendering: pixelated;
+}
+
+.unit-recapture-rotation figcaption {
+  align-self: stretch;
+  width: 100%;
+  padding-top: 3px;
+  color: #8fa8bd;
+  text-align: center;
+  background: #0a141c;
+  font: 800 9px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-recapture-summary {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.unit-recapture-summary > div {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(91, 157, 216, 0.15);
+}
+
+.unit-recapture-summary dt,
+.unit-recapture-summary dd {
+  margin: 0;
+  font: 800 10px/1.3 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.unit-recapture-summary dt {
+  color: #7f9aad;
+}
+
+.unit-recapture-summary dd {
+  min-width: 0;
+  color: #dcecff;
+  overflow-wrap: anywhere;
+}
+
+.unit-recapture-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .tileset-collection-select {
@@ -11929,6 +12590,54 @@ button.tileset-relationship-cell {
   --board-origin-top: 0px;
 }
 
+.tileset-terrain-layer,
+.tileset-scene-layer {
+  display: block;
+  image-rendering: pixelated;
+  pointer-events: none;
+  position: absolute;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tileset-terrain-layer {
+  z-index: 0;
+}
+
+.tileset-scene-layer {
+  /* Must match OBJECT_DEPTH_OFFSET in render/sceneDepth.ts. The canvas is one
+     atomic layer, so its CSS stack belongs above the per-tile ground overlays. */
+  z-index: 20000;
+}
+
+.tileset-board-grid-layer {
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 8500;
+}
+
+.tileset-placement-board .tileset-board-grid-layer {
+  z-index: 1;
+}
+
+.tileset-board-grid-layer path {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.36);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.15;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
+}
+
+.tileset-placement-board .tileset-board-grid-layer path {
+  stroke: rgba(0, 0, 0, 0.42);
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.16));
+}
+
 .tileset-generated-board-tile {
   position: absolute;
   width: 96px;
@@ -11961,16 +12670,6 @@ button.tileset-relationship-cell {
   -webkit-user-select: none;
 }
 
-/* Linear-feature overlay (road; rivers later): a transparent ribbon sprite stacked
-   directly over the base tile in the same 96x180 frame, so it aligns pixel-for-pixel.
-   The base <img> sits at top:0 of the tile box; this overrides its block flow to
-   occupy the identical box rather than stacking below it. */
-.tileset-generated-board-tile img.tileset-feature-overlay {
-  position: absolute;
-  left: 0;
-  top: 0;
-}
-
 .tileset-board-fence-overlay,
 .tileset-board-wall-overlay,
 .tileset-board-wall-decor {
@@ -11999,42 +12698,6 @@ button.tileset-relationship-cell {
   max-height: none;
 }
 
-/* Animated tile TOP (water ripple). The motion is BAKED frames in a horizontal sheet
-   (<tile>-top-anim.png, each frame the full 96x180 tile frame); this rule only advances
-   the frame index via steps() — the same model as .gc-tuft below. Per-cell phase is a
-   negative delay set from --tile-anim-phase (a whole-frame fraction) so open water
-   shimmers loosely instead of pulsing in unison. The animation is !important to clear
-   the global `* { animation: none }` OS-reduce reset (~6055): OS "animations off"
-   (Windows) reports prefers-reduced-motion falsely, and ambient board art is scenery,
-   not a UI transition — the deploy drop (~3842) sets the same precedent. The EXPLICIT
-   in-game reduce-motion choice (:root.reduce-motion) does freeze it, to frame 0 = the
-   exact static art. */
-.tileset-generated-board-tile .tile-layer-top-anim {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: block;
-  width: 96px;
-  height: 180px;
-  image-rendering: pixelated;
-  background-repeat: no-repeat;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
-  animation: tile-top-anim var(--tile-anim-dur, 1.6s) steps(var(--tile-anim-frames, 1)) infinite !important;
-  animation-delay: calc(-1 * var(--tile-anim-phase, 0) * var(--tile-anim-dur, 1.6s)) !important;
-  will-change: background-position;
-}
-
-:root.reduce-motion .tileset-generated-board-tile .tile-layer-top-anim {
-  animation: none !important;
-}
-
-@keyframes tile-top-anim {
-  from { background-position-x: 0; }
-  to { background-position-x: var(--tile-anim-travel, 0); }
-}
-
 /* Units and doodads no longer render inside cells here — both boards seat them at grid
    level via the shared .board-unit-seat and <DoodadSprite> (see render/BoardDoodad.tsx).
    The old per-cell .tileset-board-unit / .tileset-board-doodad rules were removed with them. */
@@ -12060,9 +12723,9 @@ button.tileset-relationship-cell {
 
 .tileset-generated-board-overlay-cell {
   position: absolute;
-  width: 96px;
-  height: 140px;
-  transform: translate(-48px, -27px);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-canvas-height);
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y)));
   pointer-events: none;
 }
 
@@ -12166,6 +12829,18 @@ button.tileset-relationship-cell {
   stroke: rgba(126, 236, 174, 0.95);
   stroke-width: 9;
   stroke-linecap: round;
+}
+.le-fence-post-hint {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 3px solid rgba(220, 255, 232, .98);
+  border-radius: 50%;
+  background: rgba(103, 217, 138, .75);
+  box-shadow: 0 0 0 3px rgba(21, 72, 48, .7), 0 0 12px rgba(103, 217, 138, .85);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 7;
 }
 
 .tileset-brush-display {
@@ -13883,8 +14558,14 @@ button.tileset-relationship-cell {
 .account-menu-root {
   align-items: center;
   display: flex;
+  flex: 0 0 var(--titlebar-control-size, 52px);
   gap: 10px;
+  inline-size: var(--titlebar-control-size, 52px);
   position: relative;
+}
+
+.account-sign-in-button {
+  flex: 0 0 var(--titlebar-control-size, 52px);
 }
 
 /* Account menu — small kit panel-framed popover anchored under the avatar. A
@@ -14233,6 +14914,63 @@ button.tileset-relationship-cell {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Unified Play selector (ADR-0074). Column 2 is one owner: Skirmish and Levels stay
+   pinned at the top while the unbounded Campaign collection scrolls below through the
+   canonical drawn-scroll primitive (ADR-0030). This only defines flow inside the shared
+   tab column; placement still comes exclusively from .settings-shell/.menu-dest-cols
+   (ADR-0062), with no Play-specific offset. */
+.play-source-rail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.play-source-fixed {
+  display: grid;
+  gap: var(--ds-stack);
+}
+
+.play-campaign-region {
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+.play-campaign-heading {
+  margin: var(--ds-gutter) var(--ds-stack) 0;
+}
+
+.play-campaign-scroll,
+.play-action-scroll {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.play-campaign-list {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-stack);
+  padding-inline-end: var(--ds-inline-tight);
+}
+
+.play-empty,
+.play-content-warning {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-xs);
+  margin: 0 var(--ds-stack);
+}
+
+.play-content-warning {
+  color: var(--ds-color-warning, #e0aa5a);
+}
+
+.play-action-col .settings-panel-content {
+  align-content: start;
+  padding-block-end: var(--ds-gutter);
 }
 
 /* (The home-menu-only margin fork that used to live here — `.main-menu-home .settings-shell`,
@@ -14809,7 +15547,7 @@ button.tileset-relationship-cell {
   justify-content: center;
 }
 
-/* Pinned rail footer — the whole-workspace verbs (New / Import / Save / Publish / Sign-in). */
+/* Pinned rail footer — creation (New Level / New Campaign), then workspace verbs. */
 .ce-rail-actions {
   display: grid;
   gap: 8px;
@@ -14970,6 +15708,18 @@ button.tileset-relationship-cell {
 
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
+
+/* A never-saved editor document has no canonical position from which a truthful thumbnail can
+   be baked. Keep the real LevelRow thumbnail footprint and label that state explicitly. */
+.settings-row-thumb .ce-draft-thumb-empty {
+  align-items: center;
+  color: rgba(201, 168, 119, .84);
+  display: grid;
+  font-size: var(--ds-text-3xs);
+  justify-items: center;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
 /* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */
 .campaign-level-row {
   align-items: center;
@@ -15077,6 +15827,9 @@ button.tileset-relationship-cell {
 /* The level list wraps its rows only to carry a data-testid — it must not disturb the
    section-rows grid, so it disappears and its rows become the grid's direct items. */
 .ce-level-list { display: contents; }
+/* Private recent-document discovery is only a test/semantic wrapper; keep the shared
+   SettingsRow elements as direct participants in the section's row grid. */
+.ce-recent-drafts { display: contents; }
 /* Section-trailing action (+ Add Level / + New Board). */
 .ce-section-action { padding: 4px 2px 0; }
 
@@ -15708,7 +16461,7 @@ button.tileset-relationship-cell {
    A true OS orientation lock is impossible in a mobile browser (screen.orientation
    .lock is unsupported on iOS Safari), so portrait shows a prompt instead of forcing
    rotation. The layout rules NEUTRALISE the desktop dressing-room offsets baked into
-   the shared menu/settings/campaign chrome — a rail `translate(-230px)` and a 931px
+   the shared menu/settings/Play chrome — a rail `translate(-230px)` and a 931px
    content panel `translate(-270px)` that are never otherwise reset (they push both
    mostly off a narrow screen). Layout only; no chrome art is hand-rolled (ADR-0032).
    Placed last so these overrides win the cascade; the two-class panel reset below is
@@ -15776,7 +16529,7 @@ button.tileset-relationship-cell {
     padding: 6px;
     overflow: visible;
   }
-  /* In the two-column (settings/campaign) case the rail column is narrow — stack 1-up. */
+  /* In the two-column (settings/Play) case the rail column is narrow — stack 1-up. */
   .settings-shell:has(.settings-main-frame) .settings-rail-frame {
     grid-template-columns: 1fr;
   }
@@ -15846,7 +16599,9 @@ button.tileset-relationship-cell {
    scrolling Studio rails. */
 .infotip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
 .infotip-dot {
-  appearance: none; cursor: help; inline-size: 14px; block-size: 14px; padding: 0;
+  /* min-block-size beats the global button { min-height:44px } touch-target rule,
+     which otherwise stretches this 14px circle into a tall oval. */
+  appearance: none; cursor: help; inline-size: 14px; block-size: 14px; min-block-size: 0; padding: 0;
   border-radius: 50%; border: 1px solid #3a4657; background: #0c1116; color: #93a0b0;
   font: 700 9px/1 system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center;
 }
@@ -15858,4 +16613,148 @@ button.tileset-relationship-cell {
   border-radius: 6px; font: 400 12px/1.45 system-ui, sans-serif; text-align: left;
   text-transform: none; letter-spacing: normal;
   box-shadow: 0 8px 24px rgba(0, 0, 0, .45); pointer-events: none;
+}
+.le-fence-review-banner {
+  align-items: center;
+  background: rgba(8, 16, 27, 0.92);
+  border: 1px solid rgba(117, 186, 255, 0.48);
+  border-radius: 7px;
+  color: #dcecff;
+  display: flex;
+  gap: 12px;
+  left: 50%;
+  max-width: calc(100% - 32px);
+  padding: 7px 11px;
+  pointer-events: none;
+  position: absolute;
+  top: 12px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 80;
+}
+
+.le-fence-review-banner strong {
+  color: #f3f8ff;
+  font-size: 11px;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.le-fence-review-banner span {
+  color: #8faac7;
+  font-size: 10px;
+}
+
+.le-fence-artwork-cycle {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+}
+
+.le-fence-artwork-cycle .settings-select-frame,
+.le-fence-artwork-cycle .le-layer-select {
+  min-width: 0;
+  width: 100%;
+}
+
+.le-fence-artwork-preview {
+  align-items: start;
+  background: rgba(5, 12, 20, 0.58);
+  border: 1px solid rgba(90, 121, 151, 0.35);
+  border-radius: 5px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  height: 66px;
+  justify-items: center;
+  margin-top: 7px;
+  overflow: hidden;
+}
+
+.le-fence-artwork-preview.is-rail-only {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.le-fence-artwork-preview img {
+  height: 135px;
+  image-rendering: pixelated;
+  margin-top: -31px;
+  object-fit: fill;
+  width: 72px;
+}
+
+.le-fence-artwork-status {
+  border-left: 2px solid #f0b35b;
+  display: grid;
+  gap: 3px;
+  margin-top: 7px;
+  padding: 3px 0 3px 8px;
+}
+
+.le-fence-artwork-status strong {
+  color: #f0b35b;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.le-fence-artwork-status span {
+  color: #90a5bb;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.le-fence-artwork-status.is-native-pass {
+  border-left-color: #58d68d;
+}
+
+.le-fence-artwork-status.is-native-pass strong {
+  color: #58d68d;
+}
+
+.le-fence-artwork-status.is-calibration {
+  border-left-color: #72b7ff;
+}
+
+.le-fence-artwork-status.is-calibration strong {
+  color: #72b7ff;
+}
+
+.le-fence-material-readout {
+  align-items: center;
+  background: rgba(8, 16, 27, 0.52);
+  border: 1px solid rgba(90, 121, 151, 0.28);
+  border-radius: 5px;
+  color: #8fa6bc;
+  display: flex;
+  font-size: 10px;
+  justify-content: space-between;
+  margin-top: 7px;
+  padding: 6px 8px;
+}
+
+.le-fence-material-readout strong {
+  color: #dcecff;
+}
+
+.tileset-studio-card-image .fence-art-card-media {
+  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  height: 150px;
+  justify-items: center;
+  overflow: hidden;
+  width: 100%;
+}
+
+.tileset-studio-card-image .fence-art-card-media.is-rail-only {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tileset-studio-card-image .fence-art-card-media img {
+  height: calc(135px * var(--tile-zoom, 1));
+  max-height: none;
+  max-width: none;
+  object-fit: fill;
+  width: calc(72px * var(--tile-zoom, 1));
 }

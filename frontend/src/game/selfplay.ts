@@ -10,11 +10,12 @@
 
 import { createFromLevel } from './setup';
 import { searchBestAction, type SearchOptions } from '../core/ai';
-import { evaluateObjective, kingSideOf, objectiveContextForLevel, type ObjectiveContext } from '../core/objectives';
+import { kingSideOf, objectiveContextForLevel, victoryRulesForLevel, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType } from '../core/level';
-import { applyMove, gameEnv, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
+import { applyMove, gameEnv, recordPosition, type MoveEnv } from '../core/rules';
 import { createRng } from '../core/rng';
 import type { GameState, Move, PieceType, Side, Vec, Winner } from '../core/types';
+import { settleCommittedPosition, type Adjudication } from '../core/adjudication';
 
 /** One committed action: enough to replay through applyMove and to compute
  * activity flags without re-simulating. */
@@ -40,6 +41,8 @@ export interface PieceActivity {
 export interface GameRecord {
   seed: number;
   winner: Winner;
+  /** Canonical reason for a rules-ended game. Null only for the training ply cap. */
+  adjudication: Adjudication | null;
   plies: number;
   turnsElapsed: number;
   moves: RecordedMove[];
@@ -78,56 +81,69 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
 
   let game: GameState = createFromLevel(level, seed);
   const ctx: ObjectiveContext = { ...objectiveContextForLevel(level), kingSide: kingSideOf(game.pieces) };
+  const victoryRules = victoryRulesForLevel(level, ctx);
+  const baseEnv = gameEnv(game);
+
+  let turnsElapsed = 0;
+  let adjudication: Adjudication | null = null;
+
+  const settle = (candidate: GameState): GameState => {
+    const result = settleCommittedPosition(candidate, {
+      victoryRules,
+      ctx,
+      turnsElapsed,
+      env: { ...baseEnv, lastMove: candidate.lastMove },
+    });
+    if (result.adjudication) adjudication = result.adjudication;
+    return result.state;
+  };
 
   // Opening book: fast-forward through the fixed opening plies (if any) BEFORE the
   // search loop. applyMove advances turn parity, so self-play resumes from the book
   // position with the correct side to move. Stop early if an opening move already
   // decides the game (degenerate books) so we never search a finished board.
   for (const om of opts.openingMoves ?? []) {
-    if (game.turn !== 'player' && game.turn !== 'enemy') break;
-    game = applyMove(game, om.pieceId, om.move).state;
+    if (game.winner || (game.turn !== 'player' && game.turn !== 'enemy')) break;
+    const prevTurn = game.turn;
+    // Book plies feed the threefold table too (recordPosition no-ops without the rule),
+    // so a repetition across the book/search seam is still counted.
+    const moved = applyMove(game, om.pieceId, om.move).state;
+    game = recordPosition(moved, { ...baseEnv, lastMove: moved.lastMove });
+    if (prevTurn === 'enemy' && game.turn !== 'enemy') turnsElapsed += 1;
+    game = settle(game);
   }
   // Static terrain + fence env, built once and reused per ply (only lastMove changes). Threading
   // fences here is what keeps self-play/tuning honest on FENCED levels — see rules.gameEnv.
-  const baseEnv = gameEnv(game);
   const startPieces = game.pieces.map((p) => ({ id: p.id, side: p.side, type: p.type }));
 
   const moves: RecordedMove[] = [];
-  let turnsElapsed = 0;
   let plies = 0;
   let tick = 0;
   let depthSum = 0;
   let nodes = 0;
 
-  // Start-of-game resolution, mirroring the store's newSkirmish order: first a
-  // stuck check (a player with no legal move at the start is a stalemate/checkmate,
-  // exactly as resolveIfPlayerStuck decides it), then the objective, so a degenerate
-  // level (e.g. a runner authored on a reach cell) is recorded as a zero-move game.
-  const startEnv: MoveEnv = { ...baseEnv, lastMove: game.lastMove };
-  const playerHasMove = livingPieces(game.pieces, 'player').some(
-    (p) => legalMoves(p, game.pieces, game.size, startEnv).length > 0,
-  );
-  if (game.turn === 'player' && !playerHasMove) {
-    const winner: Winner = sideInCheck(game, 'player', startEnv) ? 'enemy' : 'draw';
-    game = { ...game, winner, turn: 'done' };
-  }
-  if (!game.winner) {
-    const preWinner = evaluateObjective(game, objective, { ...ctx, turnsElapsed });
-    if (preWinner) game = { ...game, winner: preWinner, turn: 'done' };
-  }
+  // The same canonical oracle handles initial positions and post-move positions;
+  // there is no special root ordering that can diverge from live/netplay/search.
+  if (!game.winner) game = settle(game);
 
   while (!game.winner && plies < maxPlies && (game.turn === 'player' || game.turn === 'enemy')) {
     const side: Side = game.turn;
     const env: MoveEnv = { ...baseEnv, lastMove: game.lastMove };
     // Champion-vs-challenger: each side may search with its own eval weights.
     const sideSearch = opts.searchForSide?.[side] ?? opts.search;
-    const chosen = searchBestAction(game, env, { objective, ctx, turnsElapsed }, createRng(seed + tick), sideSearch);
+    const chosen = searchBestAction(
+      game,
+      env,
+      { objective, victoryRules, ctx, turnsElapsed },
+      createRng(seed + tick),
+      sideSearch,
+    );
     tick += 1;
     if (!chosen) {
-      // No legal action: checkmate if the stuck side's King is attacked (a loss
-      // for that side), else stalemate — the store's terminalIfStuck semantics.
-      const winner: Winner = sideInCheck(game, side, env) ? (side === 'player' ? 'enemy' : 'player') : 'draw';
-      game = { ...game, winner, turn: 'done' };
+      // Defensive only: the canonical settle at the previous boundary should have
+      // resolved every no-action state before search was asked to choose.
+      game = settle(game);
+      if (!game.winner) game = { ...game, winner: 'draw', turn: 'done' };
       break;
     }
 
@@ -135,7 +151,7 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
     const from: Vec = mover ? { x: mover.x, y: mover.y } : { x: chosen.move.x, y: chosen.move.y };
     const prevTurn = game.turn;
     const res = applyMove(game, chosen.pieceId, chosen.move);
-    game = res.state;
+    game = recordPosition(res.state, { ...baseEnv, lastMove: res.state.lastMove });
     plies += 1;
     depthSum += chosen.depth;
     nodes += chosen.nodes;
@@ -147,10 +163,7 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
     // count matches what the live store reports for an enemy-decided game.
     if (prevTurn === 'enemy' && game.turn !== 'enemy') turnsElapsed += 1;
 
-    if (!game.winner) {
-      const winner = evaluateObjective(game, objective, { ...ctx, turnsElapsed });
-      if (winner) game = { ...game, winner, turn: 'done' };
-    }
+    game = settle(game);
   }
 
   // Ply cap reached with no decision: call it a draw rather than lie with null.
@@ -177,6 +190,7 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
   return {
     seed,
     winner: game.winner,
+    adjudication,
     plies,
     turnsElapsed,
     moves,
@@ -192,14 +206,40 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
  * first, so index 0 is the game position where recorded decisions began; index i
  * is the board after record.moves[i-1].
  */
-export function replayStates(level: Level, record: GameRecord, openingMoves: readonly RecordedMove[] = []): GameState[] {
+export function replayStates(level: Level, record: Pick<GameRecord, 'seed' | 'moves'>, openingMoves: readonly RecordedMove[] = []): GameState[] {
   let game = createFromLevel(level, record.seed);
+  const baseEnv = gameEnv(game);
+  const ctx: ObjectiveContext = { ...objectiveContextForLevel(level), kingSide: kingSideOf(game.pieces) };
+  const victoryRules = victoryRulesForLevel(level, ctx);
+  let turnsElapsed = 0;
+  const applyCommitted = (m: RecordedMove): void => {
+    if (game.winner || (game.turn !== 'player' && game.turn !== 'enemy')) return;
+    const prevTurn = game.turn;
+    const moved = applyMove(game, m.pieceId, m.move).state;
+    game = recordPosition(moved, { ...baseEnv, lastMove: moved.lastMove });
+    if (prevTurn === 'enemy' && game.turn !== 'enemy') turnsElapsed += 1;
+    game = settleCommittedPosition(game, {
+      victoryRules,
+      ctx,
+      turnsElapsed,
+      env: { ...baseEnv, lastMove: game.lastMove },
+    }).state;
+  };
   for (const m of openingMoves) {
-    game = applyMove(game, m.pieceId, m.move).state;
+    applyCommitted(m);
+  }
+  if (!game.winner) {
+    game = settleCommittedPosition(game, {
+      victoryRules,
+      ctx,
+      turnsElapsed,
+      env: { ...baseEnv, lastMove: game.lastMove },
+    }).state;
   }
   const states: GameState[] = [game];
   for (const m of record.moves) {
-    game = applyMove(game, m.pieceId, m.move).state;
+    // Committed recording + canonical settlement keep replay byte-identical to play.
+    applyCommitted(m);
     states.push(game);
   }
   return states;

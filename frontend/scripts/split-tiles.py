@@ -42,9 +42,14 @@ def split(path):
     return int(np.abs(np.array(recomb).astype(int) - a.astype(int)).sum())
 
 
+def is_canonical_frame(path):
+    with Image.open(path) as img:
+        return img.size == (W, H)
+
+
 def main():
     files = sorted(p for p in glob.glob(os.path.join(SURF, '*.png'))
-                   if not p.endswith(('-top.png', '-side.png')))
+                   if not p.endswith(('-top.png', '-side.png')) and is_canonical_frame(p))
     bad = 0
     for p in files:
         diff = split(p)

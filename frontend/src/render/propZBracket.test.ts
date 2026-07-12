@@ -6,6 +6,7 @@ import {
   seatTransformPercent,
   structureSourceSplitMode,
 } from './BoardStructure';
+import { objectBaseZIndex, structureBackZIndex, structureFrontZIndex } from './sceneDepth';
 
 describe('seatTransformPercent — contact pixel onto the ground point', () => {
   it('the 1×1 doodad (96×180 @ 48,69) reproduces the shipped translate(-50%, -38.333%)', () => {
@@ -24,21 +25,21 @@ describe('seatTransformPercent — contact pixel onto the ground point', () => {
 describe('propZBracket — depth spans the full multi-cell footprint', () => {
   it('a 2×2 at (3,3) spans from back cell (3,3) to front cell (4,4)', () => {
     const z = propZBracket(3, 3, 2, 2);
-    expect(z.base).toBe((4 + 4) + 20000); // 20008
-    expect(z.back).toBe(20005);
-    expect(z.front).toBe(20009);
+    expect(z.base).toBe(objectBaseZIndex({ x: 4, y: 4 }));
+    expect(z.back).toBe(structureBackZIndex({ x: 3, y: 3 }));
+    expect(z.front).toBe(structureFrontZIndex({ x: 4, y: 4 }));
   });
 
   it('a 1×1 at (3,3) matches the legacy doodad bracket (front cell == anchor)', () => {
     const z = propZBracket(3, 3, 1, 1);
-    expect(z.base).toBe((3 + 3) + 20000); // 20006
-    expect(z.back).toBe(20005);
-    expect(z.front).toBe(20007);
+    expect(z.base).toBe(objectBaseZIndex({ x: 3, y: 3 }));
+    expect(z.back).toBe(structureBackZIndex({ x: 3, y: 3 }));
+    expect(z.front).toBe(structureFrontZIndex({ x: 3, y: 3 }));
   });
 
   it('side/intermediate cells can sort between a multi-cell prop back and front', () => {
     const z = propZBracket(4, 2, 2, 2);
-    const sideRook = 3 + 3 + 20000;
+    const sideRook = objectBaseZIndex({ x: 3, y: 3 });
     expect(z.back).toBeLessThan(sideRook);
     expect(z.front).toBeGreaterThan(sideRook);
   });

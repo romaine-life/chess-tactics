@@ -7,27 +7,15 @@ hybrid chess units defend anchors against enemy telegraphs across six breaches.
 
 ## Local Dev
 
-Use two fixed local ports with fixed meanings:
-
-- `http://localhost:3000` is the backend/Express preview. It serves the baked
-  Vite build from `frontend/dist` and requires `npm run build` to reflect
-  frontend source changes.
-- `http://localhost:5173` is the Vite frontend dev server. Use it for UI,
-  Tileset Studio, and art-workbench iteration that needs hot reload.
-
-Do not try to make `3000` do both jobs during an agent session. If the page HTML
-contains `/assets/index-*.js`, it is the baked preview. If it contains
-`/@vite/client` and `/src/main.tsx`, it is the hot Vite dev server.
-
-For fast frontend iteration:
+Use Vite for local development. It dynamically acquires a frontend port and
+spawns the backend on its own free port, then proxies `/api` through Vite.
+Open the local URL printed by Vite.
 
 ```sh
 cd frontend
 npm install
-npm run dev -- --host localhost --port 5173 --strictPort
+npm run dev
 ```
-
-Open `http://localhost:5173`.
 
 For baked preview:
 
@@ -51,38 +39,19 @@ under `frontend/public`.
 
 - Main menu design portfolio: <https://chess.romaine.life/design/main-menu>
 
-## Agent Preview Contract
+## Local Backend
 
-Agents and session tooling should start preview through the repo-owned launcher:
-
-```sh
-bin/agent-preview
-```
-
-The launcher uses `$PORT` when it is set by the session, otherwise `3000`.
-It always starts `backend/supervisor.js`; do not run `backend/server.js`
-directly for preview work. The supervisor is the supported entrypoint because
-it owns the hot backend and static override paths used during session edits.
-When the session does not provide explicit override directories, the launcher
-uses writable paths under `${XDG_RUNTIME_DIR:-/tmp}`.
-
-Agent sessions must not bypass backend startup with `DEV_NO_BACKEND=1` or
-`DEV_OFFLINE=1`. Those flags are owner-only escape hatches for deliberate
-manual frontend-only work. If the backend fails to start, agents should fix the
-backend startup problem or report it as a blocker.
+Level Editor documents use a stable `/editor/level?document=<opaque-id>&levelId=<id>` URL. The opaque document id is global; the level id remains account-local.
+For authenticated editors, changes autosave to a durable server-side working copy;
+**Save** promotes that working copy to the canonical level, while **Discard changes**
+replaces it with the canonical saved level. Copying the browser URL is side-effect
+free: it does not save, publish, grant access, or create another document. Gameplay
+and thumbnails read only canonical saved levels. Browser storage is a crash/offline
+fallback, not the cloud persistence model.
 
 Fresh worktrees do not have `backend/node_modules`; that is expected every time.
-Install backend dependencies once per worktree (`cd backend && npm install`)
-before starting a preview that needs the backend.
-
-To check whether the expected preview is running:
-
-```sh
-bin/agent-preview-status
-```
-
-A direct `node backend/server.js` process, even on the right port, is not the
-agent preview contract.
+`npm run dev` installs/refreshes backend dependencies before Vite starts the
+backend child process.
 
 The server uses `auth.romaine.life` for Microsoft sign-in. Optional env:
 
@@ -106,14 +75,23 @@ runtime wiring are exercised from the same image that PR CI proved.
 ## Persistence
 
 Durable game/design data (levels, campaigns, campaign workspaces, design
-portfolios) lives in **Azure Database for PostgreSQL**, reached passwordless via
-Entra workload identity. Art assets remain committed files under
-`frontend/public/assets`; they are not database records. The database is
-self-provisioned by this repo's `tofu/`. Local backend startup defaults to
-read-only schema checks; set `SCHEMA_MIGRATIONS=auto` when you intentionally want
-to apply missing migrations to a local database. See
+portfolios, and live Unit Art metadata) lives in **Azure Database for
+PostgreSQL**, reached passwordless via Entra workload identity. Unit Art PNGs are
+content-addressed in the private `unit-assets` Blob container; other code-owned
+assets remain under `frontend/public/assets`. The database is self-provisioned by
+this repo's `tofu/`. Local backend startup defaults to read-only schema checks;
+set `SCHEMA_MIGRATIONS=auto` when you intentionally want to apply missing
+migrations to a local database. See
 [docs/persistence.md](docs/persistence.md) for the schema, auth model, backups,
 failure behavior, and the one post-`tofu apply` value to pin.
+
+New board-unit geometry has one supported entry point: `python
+scripts/generate-unit-art.py`, which renders the calibrated Blender turntable at
+eight exact facings. Resizing already accepted art uses Unit Art's **Recapture**
+editor instead: it deterministically reduces the approved 6-palette x 8-direction
+set to the chosen delivery raster and creates a review-only storage-backed
+candidate with explicit source and resampling provenance.
+See [docs/art/unit-concepts/README.md](docs/art/unit-concepts/README.md).
 
 ## Checks
 

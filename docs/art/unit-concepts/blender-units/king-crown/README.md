@@ -1,6 +1,7 @@
 # Crowned King (source)
 
-Source for the active king unit (`frontend/public/assets/units/king/blender-render-crown/`).
+Source for the active king design. Renders go to `.unit-art-output/king/navy-blue/`
+before upload through Unit Art.
 
 - `king_crown.blend` — the **hand-assembled** source of truth: a navy Staunton king
   (wooden chess king OBJ, axis-baked + normalized + navy-styled) with a gold/jewel

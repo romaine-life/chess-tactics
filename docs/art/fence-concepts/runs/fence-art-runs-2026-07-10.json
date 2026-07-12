@@ -1,0 +1,77 @@
+{
+  "date": "2026-07-10",
+  "decision": "ADR-0040 compliant replacement: deterministic rail/vertex geometry plus generated/source visible pixels",
+  "production_status": "calibration_bridge_non_production_under_ADR_0076",
+  "native_scale_audit": {
+    "adr": "docs/adr/0076-scaling-is-calibration-production-art-is-native-1x.md",
+    "result": "fail",
+    "reason": "visible generated/source pixels are spatially downscaled before the final 1x runtime frames are written",
+    "wood_material": "64x64 source resized to 48x48",
+    "stone_material": "1024x1024 source resized to 48x48",
+    "wood_post": "418x1173 opaque source subject resized to 10x28",
+    "stone_post": "590x808 opaque source subject resized to 18x24",
+    "next_acceptance_step": "regenerate the approved material texel density and post subjects at their required native footprints, remove spatial resizing from the accepted bake, and add a native-size family gate"
+  },
+  "outputs": {
+    "contact_sheet": "docs/art/fence-concepts/fence-bake-contact-sheet.png",
+    "proofs": "docs/art/fence-concepts/proofs/fence-<material>-runtime-proof.png",
+    "live_editor_proof": "docs/art/fence-concepts/proofs/fence-editor-runtime-proof.png",
+    "rail_assets": "frontend/public/assets/tiles/feature/fence-<material>-{2,4,6}.png",
+    "post_assets": "frontend/public/assets/tiles/feature/fence-<material>-post.png",
+    "thumbnails": "frontend/public/assets/tiles/feature/fence-<material>-{post-,}thumb.png",
+    "frame": {
+      "width": 96,
+      "height": 180,
+      "anchor_x": 48,
+      "anchor_y": 68
+    }
+  },
+  "topology": {
+    "resolver": "packages/board-render/src/core/featureAutotile.ts#resolveFencePosts",
+    "automatic_post_rule": "draw at a geometric fence vertex iff unique incident segment degree is exactly 1",
+    "authored_post_rule": "draw at any explicitly stored in-bounds logical vertex; explicit material overrides an automatic post at the same vertex",
+    "authored_post_wire": "EditorBoard.fencePosts / board-code fp, keyed by canonical vx,vy with inclusive bounds 0..cols and 0..rows",
+    "boundary_behavior": "north/west edges resolve through off-board phantom owners and share the same vertex-degree graph"
+  },
+  "materials": [
+    {
+      "material": "wood",
+      "lane": "pixellab_generated_material",
+      "source": "docs/art/wall-concepts/materials/pixellab/wood-palisade.png",
+      "normalization": "64x64 source is spatially resized to 48x48, then colors are reduced and projected through alpha-only wood rail geometry; calibration bridge only under ADR-0076"
+    },
+    {
+      "material": "stone",
+      "lane": "photoscan_source_material",
+      "source": "docs/art/wall-concepts/materials/source/stone-photoscan.png",
+      "normalization": "1024x1024 source is spatially resized to 48x48, then colors are reduced and projected through alpha-only low-wall geometry; calibration bridge only under ADR-0076"
+    }
+  ],
+  "posts": [
+    {
+      "material": "wood",
+      "lane": "codex_builtin_imagegen_chroma_cutout",
+      "gate": "image_generation_call in the current Codex task rollout",
+      "input_reference": "docs/art/wall-concepts/materials/pixellab/wood-palisade.png",
+      "input_role": "style and material reference only",
+      "raw": "docs/art/fence-concepts/endings/codex/wood-terminal-raw.png",
+      "alpha": "docs/art/fence-concepts/endings/codex/wood-terminal-alpha.png",
+      "prompt": "Create exactly one stout oak fence terminal post for an isometric pixel-art chess tactics game: more substantial than an ordinary picket, with a small dark forged-iron band and restrained pyramidal wooden cap. One isolated vertical square timber post only, no rails or scenery. Crisp low-resolution pixel art, orthographic isometric three-quarter view matching a 2:1 board diamond, readable at about 24 pixels tall after downscaling. Soft top-left board lighting, warm muted oak, flat solid #00ff00 chroma background, no shadow, text, or watermark."
+    },
+    {
+      "material": "stone",
+      "lane": "codex_builtin_imagegen_chroma_cutout",
+      "gate": "image_generation_call in the current Codex task rollout",
+      "input_reference": "docs/art/wall-concepts/materials/source/stone-photoscan.png",
+      "input_role": "material reference only",
+      "raw": "docs/art/fence-concepts/endings/codex/stone-terminal-raw.png",
+      "alpha": "docs/art/fence-concepts/endings/codex/stone-terminal-alpha.png",
+      "prompt": "Create exactly one squat masonry terminal pier for the open end of a low stone fence in an isometric pixel-art chess tactics game, visibly more substantial than the adjoining low wall and topped by a clean beveled capstone. One isolated square stone pier only, no attached wall, rubble, or scenery. Crisp low-resolution pixel art, orthographic isometric three-quarter view matching a 2:1 board diamond, readable at about 22 pixels tall after downscaling. Soft top-left board lighting, cool weathered gray stone, flat solid #00ff00 chroma background, no shadow, text, or watermark."
+    }
+  ],
+  "chroma_removal": {
+    "tool": "$CODEX_HOME/skills/.system/imagegen/scripts/remove_chroma_key.py",
+    "options": "--auto-key border --soft-matte --transparent-threshold 12 --opaque-threshold 220 --despill",
+    "runtime_alpha": "bake thresholds final 96x180 calibration-bridge frames to hard 0/255 alpha; this is not native-scale acceptance"
+  }
+}

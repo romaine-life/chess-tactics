@@ -28,6 +28,11 @@ describe('level schema', () => {
     lvl.layers.units.push({ x: 99, y: 0, type: 'knight', side: 'player' });
     expect(validateLevel(lvl).ok).toBe(false);
   });
+  it('rejects an unknown unit palette', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.layers.units.push({ x: 1, y: 1, type: 'knight', side: 'player', palette: 'ultraviolet' as never });
+    expect(validateLevel(lvl).ok).toBe(false);
+  });
   it('rejects non-objects', () => {
     expect(validateLevel(null).ok).toBe(false);
     expect(validateLevel('nope').ok).toBe(false);
@@ -231,5 +236,48 @@ describe('level schema', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
     lvl.layers.zones = [{ id: 'z1', type: 'enemy-spawn', tiles: [[0, 0], [8, 0]] }]; // x=8 is off an 8-wide board
     expect(validateLevel(lvl).ok).toBe(false);
+  });
+
+  // ---- Castling + chess-draws events (ADR-0072) -----------------------------
+
+  it('castle events: a well-formed king-rook pair on a setup trigger passes', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.events = [{
+      id: 'player-castles-kingside',
+      name: 'Player castles kingside',
+      trigger: { kind: 'setup' },
+      do: [{ kind: 'castle', side: 'player', king: { x: 4, y: 7 }, rook: { x: 7, y: 7 }, kingTo: { x: 6, y: 7 }, rookTo: { x: 5, y: 7 } }],
+    }];
+    expect(validateLevel(lvl).ok).toBe(true);
+  });
+
+  it('castle events: rejects out-of-bounds, misaligned, king-on-rook, no-op, and mis-triggered shapes', () => {
+    const withCastle = (action: Record<string, unknown>, trigger: unknown = { kind: 'setup' }) => {
+      const l = createBlankLevel('l1', 'T', 8, 8);
+      (l as { events?: unknown }).events = [{ trigger, do: [{ kind: 'castle', side: 'player', king: { x: 4, y: 7 }, rook: { x: 7, y: 7 }, kingTo: { x: 6, y: 7 }, rookTo: { x: 5, y: 7 }, ...action }] }];
+      return validateLevel(l).ok;
+    };
+    expect(withCastle({})).toBe(true);
+    expect(withCastle({ rook: { x: 8, y: 7 } })).toBe(false); // off an 8-wide board
+    expect(withCastle({ rook: { x: 7, y: 6 } })).toBe(false); // no shared rank/file
+    expect(withCastle({ kingTo: { x: 6, y: 6 } })).toBe(false); // destination leaves the line
+    expect(withCastle({ rook: { x: 4, y: 7 } })).toBe(false); // king and rook share a square
+    expect(withCastle({ kingTo: { x: 4, y: 7 } })).toBe(false); // king "moves" to its own square
+    expect(withCastle({ rookTo: { x: 6, y: 7 } })).toBe(false); // kingTo === rookTo would stack two pieces
+    expect(withCastle({ king: { x: 4.5, y: 7 } })).toBe(false); // non-integer square
+    expect(withCastle({}, { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: 'z1' })).toBe(false); // wrong trigger
+  });
+
+  it('chess-draws events: boolean flags on a setup trigger pass; anything else fails', () => {
+    const withDraws = (action: Record<string, unknown>, trigger: unknown = { kind: 'setup' }) => {
+      const l = createBlankLevel('l1', 'T', 8, 8);
+      (l as { events?: unknown }).events = [{ trigger, do: [{ kind: 'chess-draws', ...action }] }];
+      return validateLevel(l).ok;
+    };
+    expect(withDraws({ fiftyMove: true, threefold: true })).toBe(true);
+    expect(withDraws({ fiftyMove: true })).toBe(true); // flags are independently optional
+    expect(withDraws({ fiftyMove: 'yes' })).toBe(false);
+    expect(withDraws({ threefold: 1 })).toBe(false);
+    expect(withDraws({}, { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: 'z1' })).toBe(false);
   });
 });

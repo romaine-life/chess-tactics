@@ -1,19 +1,23 @@
 FROM node:20-alpine AS frontend-build
 
-WORKDIR /app/frontend
+WORKDIR /app
 
-COPY frontend/package*.json ./
-RUN npm ci
+COPY packages/board-render/ packages/board-render/
+COPY frontend/package*.json frontend/
+RUN cd frontend && npm ci
 
-COPY frontend/ ./
-RUN npm run build
+COPY frontend/ frontend/
+RUN npm --prefix packages/board-render run build
+RUN npm --prefix frontend run build
 # DOM-free engine bundle for the headless training Job (backend/train-worker.mjs).
-RUN npm run build:trainer
+RUN npm --prefix frontend run build:trainer
 
 FROM node:20-alpine
 
 WORKDIR /app
 
+COPY packages/board-render/package*.json packages/board-render/
+COPY --from=frontend-build /app/packages/board-render/dist packages/board-render/dist
 COPY backend/package*.json backend/
 RUN cd backend && npm install --omit=dev
 

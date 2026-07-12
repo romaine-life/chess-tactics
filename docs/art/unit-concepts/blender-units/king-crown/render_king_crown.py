@@ -6,7 +6,9 @@ Unlike the procedural pieces, the crown was hand-fitted onto the king's head in
 Blender, so the source of truth is the assembled `king_crown.blend` (navy Staunton
 king OBJ + gold/jewel crown FBX, positioned). This script opens it, renders the 8
 true-isometric directions, and prints the seating anchor.
-Output -> frontend/public/assets/units/king/blender-render-crown/<direction>.png
+Output defaults to .unit-art-output/king/navy-blue/<direction>.png. The canonical
+pipeline supplies UNIT_ART_OUTPUT_DIR plus UNIT_ART_FRAME_WIDTH/HEIGHT and Blender
+writes that exact delivery raster without a resize stage.
 
 The king + crown are rotationally symmetric, so the 8 directions are near-identical
 (a king has no facing); they're rendered for pipeline consistency.
@@ -19,7 +21,11 @@ ROOT = Path(__file__).resolve().parent
 while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 BLEND = str(ROOT / "docs/art/unit-concepts/blender-units/king-crown/king_crown.blend")
-OUT = str(ROOT / "frontend/public/assets/units/king/blender-render-crown")
+OUT = os.environ.get("UNIT_ART_OUTPUT_DIR", str(ROOT / ".unit-art-output/king/navy-blue"))
+FRAME_WIDTH = int(os.environ.get("UNIT_ART_FRAME_WIDTH", "512"))
+FRAME_HEIGHT = int(os.environ.get("UNIT_ART_FRAME_HEIGHT", "512"))
+if not (1 <= FRAME_WIDTH <= 4096 and 1 <= FRAME_HEIGHT <= 4096):
+    raise RuntimeError("UNIT_ART_FRAME_WIDTH/HEIGHT must be between 1 and 4096")
 os.makedirs(OUT, exist_ok=True)
 
 bpy.ops.wm.open_mainfile(filepath=BLEND)
@@ -31,10 +37,26 @@ if rig is None:
         if o.type == "MESH":
             o.parent = rig; o.matrix_parent_inverse = rig.matrix_world.inverted()
 
+# The assembled blend originally referenced an unpacked temporary texture folder.
+# Geometry is the authored source; use one deterministic gold material so a fresh
+# checkout never renders Blender's magenta missing-texture error color.
+crown = bpy.data.materials.get("crown_pbr")
+if crown is None:
+    raise RuntimeError("assembled king source is missing the 'crown_pbr' material")
+crown.use_nodes = True
+nodes = crown.node_tree.nodes; nodes.clear()
+out = nodes.new("ShaderNodeOutputMaterial")
+gold = nodes.new("ShaderNodeBsdfPrincipled")
+gold.inputs["Base Color"].default_value = (0.42, 0.20, 0.035, 1)
+gold.inputs["Metallic"].default_value = 0.78
+gold.inputs["Roughness"].default_value = 0.34
+crown.node_tree.links.new(gold.outputs["BSDF"], out.inputs["Surface"])
+
 scene.render.engine = "CYCLES"; scene.cycles.samples = 48; scene.cycles.use_denoising = True
 scene.view_settings.view_transform = "Standard"
-scene.render.resolution_x = scene.render.resolution_y = 512; scene.render.film_transparent = True
-scene.render.image_settings.file_format = "PNG"
+scene.render.resolution_x = FRAME_WIDTH; scene.render.resolution_y = FRAME_HEIGHT; scene.render.resolution_percentage = 100
+scene.render.film_transparent = True
+scene.render.image_settings.file_format = "PNG"; scene.render.image_settings.color_mode = "RGBA"
 DIRECTIONS = {"south":0,"south-west":-45,"west":-90,"north-west":-135,"north":180,"north-east":135,"east":90,"south-east":45}
 for name, angle in DIRECTIONS.items():
     rig.rotation_euler = (0, 0, math.radians(angle))

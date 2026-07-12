@@ -1,29 +1,44 @@
 import { describe, expect, it } from 'vitest';
 
-import { FENCE_OVERLAY_DEPTH_OFFSET, WALL_OVERLAY_DEPTH_OFFSET, fenceOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
+import { FENCE_OVERLAY_DEPTH_OFFSET, WALL_OVERLAY_DEPTH_OFFSET, fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
+import { GROUND_COVER_FRONT_DEPTH_OFFSET, OBJECT_DEPTH_OFFSET, STRUCTURE_BACK_DEPTH_DELTA, objectBaseZIndex } from './sceneDepth';
 
 describe('fenceOverlayZIndex', () => {
-  it('places an edge fence above its owner cell and under the near cell unit band', () => {
+  it('places an edge fence above ground cover and below same-cell object art', () => {
     const ownerCell = { x: 2, y: 3 };
-    const ownerUnitZIndex = ownerCell.x + ownerCell.y + 20_000;
-    const nearUnitZIndex = ownerCell.x + 1 + ownerCell.y + 20_000;
+    const ownerCoverFrontZIndex = ownerCell.x + ownerCell.y + GROUND_COVER_FRONT_DEPTH_OFFSET;
+    const neighborCoverFrontZIndex = ownerCell.x + 1 + ownerCell.y + GROUND_COVER_FRONT_DEPTH_OFFSET;
+    const nearbyForegroundCoverFrontZIndex = ownerCell.x + 2 + ownerCell.y + GROUND_COVER_FRONT_DEPTH_OFFSET;
+    const ownerObjectBackZIndex = ownerCell.x + ownerCell.y + OBJECT_DEPTH_OFFSET + STRUCTURE_BACK_DEPTH_DELTA;
     const fenceZIndex = fenceOverlayZIndex(ownerCell);
 
-    expect(FENCE_OVERLAY_DEPTH_OFFSET).toBe(20_001);
-    expect(fenceZIndex).toBe(ownerUnitZIndex + 1);
-    expect(fenceZIndex).toBe(nearUnitZIndex);
+    expect(GROUND_COVER_FRONT_DEPTH_OFFSET).toBe(OBJECT_DEPTH_OFFSET - 11);
+    expect(FENCE_OVERLAY_DEPTH_OFFSET).toBe(OBJECT_DEPTH_OFFSET - 2);
+    expect(fenceZIndex).toBeGreaterThan(ownerCoverFrontZIndex);
+    expect(fenceZIndex).toBeGreaterThan(neighborCoverFrontZIndex);
+    expect(fenceZIndex).toBeGreaterThan(nearbyForegroundCoverFrontZIndex);
+    expect(fenceZIndex).toBeLessThan(ownerObjectBackZIndex);
   });
 });
 
 describe('wallOverlayZIndex', () => {
-  it('places a perimeter wall in the owner unit band', () => {
+  it('places a perimeter wall above ground cover and below same-cell structure art', () => {
     const ownerCell = { x: 2, y: 3 };
-    const farUnitZIndex = ownerCell.x - 1 + ownerCell.y + 20_000;
-    const nearUnitZIndex = ownerCell.x + ownerCell.y + 20_000;
+    const ownerCoverFrontZIndex = ownerCell.x + ownerCell.y + GROUND_COVER_FRONT_DEPTH_OFFSET;
+    const ownerStructureBackZIndex = ownerCell.x + ownerCell.y + OBJECT_DEPTH_OFFSET + STRUCTURE_BACK_DEPTH_DELTA;
     const wallZIndex = wallOverlayZIndex(ownerCell);
 
-    expect(WALL_OVERLAY_DEPTH_OFFSET).toBe(20_000);
-    expect(wallZIndex).toBeGreaterThan(farUnitZIndex);
-    expect(wallZIndex).toBe(nearUnitZIndex);
+    expect(WALL_OVERLAY_DEPTH_OFFSET).toBe(OBJECT_DEPTH_OFFSET - 2);
+    expect(wallZIndex).toBeGreaterThan(ownerCoverFrontZIndex);
+    expect(wallZIndex).toBeLessThan(ownerStructureBackZIndex);
+    expect(wallZIndex).toBeLessThan(objectBaseZIndex(ownerCell));
+  });
+});
+
+describe('wallArtOverlayZIndex', () => {
+  it('keeps mounted art in the wall display layer', () => {
+    const ownerCell = { x: 2, y: 3 };
+
+    expect(wallArtOverlayZIndex(ownerCell)).toBe(wallOverlayZIndex(ownerCell));
   });
 });

@@ -8,25 +8,128 @@ wiped on every restart/rollout — a latent data-loss bug, now fixed).
 
 ## What is stored
 
-Four document stores, each a Postgres table with relational metadata columns
-plus a `jsonb` `body`/`data` column (the migration lives inline in
-`backend/server.js`, `MIGRATIONS`):
+Durable document and live-content tables are created by the inline migrations in
+`backend/server.js`:
 
 | Table | Scope | Endpoint | Auth |
 | --- | --- | --- | --- |
 | `levels` | per signed-in owner (`PK (owner_email, id)`) | `/api/levels`, `/api/levels/:id` | sign-in required |
 | `campaign_workspaces` | one row per signed-in owner | `/api/campaign-workspace` | sign-in required |
+| `level_working_copies` | one durable working copy per signed-in owner + workspace + level | `/api/editor-documents` | sign-in required; official workspaces also require admin |
 | `campaigns` | per signed-in owner (`PK (owner_email, id)`) | `/api/campaigns`, `/api/campaigns/:id`, `/api/campaigns/:id/levels` | sign-in required |
 | `design_portfolios` | global, by id | `/api/design-portfolios/:id` | GET public, PUT requires sign-in (designer) |
+| `unit_families` / `unit_assets` / `unit_sprites` | global live Unit Art catalog | `/api/unit-catalog`, `/api/admin/unit-assets` | GET public, mutations require admin |
+| `unit_catalog_state` / `unit_asset_events` | Unit Art revision and audit history | internal | admin mutations write them |
 
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or
 overwrite the other's. Writes upsert and bump a `revision`.
 
-Art assets are **not** database records. PNG/WebP/AVIF/font files belong in the
-repo under `frontend/public/assets`, with catalog metadata in the committed
-`frontend/src/asset-catalog.json`. Postgres stores game/design data documents,
-not image bytes.
+## Level editor working copies
+
+The Level Editor uses a normal private document model, not a public-link map
+store. `level_working_copies` holds the user's latest acknowledged editing
+state indefinitely. Each row has an opaque, globally unique `document_id`,
+which is the stable editor address. Level ids such as `l1` are only unique
+inside one account and are never used as an editor URL authority. Loading or
+copying a document address does not create a public record, grant access,
+publish, save, or rewrite the URL (see ADR-0068). Opening a campaign's account-local
+`levelId` route may resolve its document once and replace the address with that stable opaque id;
+this is editor initialization, never an effect of copying. A request still filters by
+both the signed-in owner and `document_id`, so pasting another account's URL
+returns not found instead of accidentally resolving the viewer's unrelated
+level with the same per-owner id.
+
+`GET /api/editor-documents` is the private, authenticated recent-document
+index. Dirty work is ordered before clean documents, and `status=dirty` or
+`status=never-saved` can filter it directly. Pages contain at most 200 summaries
+and return `next_offset` until all owner-scoped documents have been traversed,
+including never-saved and migrated `legacy-*` documents, so an old draft cannot
+be hidden behind newer clean rows. It does not grant access, publish, mutate a
+document, or restore any public-by-link behavior. Full documents and summaries
+expose `has_saved_baseline`; unlike `saved_revision`, it remains true for a
+recovered dirty draft based on an existing canonical Level, so Discard remains
+available.
+
+Each autosave is a compare-and-swap write. The client sends the last server
+`revision` it observed; a stale tab receives `409
+editor_document_revision_conflict` plus the current server document instead of
+silently overwriting newer work. `saved_revision` records the working-copy
+revision known to match the canonical workspace Level. `baseline_hash` records
+the deterministic PostgreSQL `md5(level_jsonb::text)` identity of the canonical
+Level that working copy was based on. On load/resolve, a clean working copy
+automatically follows a newer canonical Level. A dirty working copy is preserved
+and returns `baseline_conflict: true`; Save then returns `409
+editor_document_baseline_conflict` with that intact document instead of blindly
+overwriting the external canonical change. Discard deliberately adopts the
+current canonical Level and resets the baseline. Autosave changes only the
+working body and revision, never its canonical baseline (and keeps the document
+clean when the submitted body exactly matches that baseline).
+
+Browser storage is only a crash/offline fallback. Signed-in entries are keyed and
+payload-validated by account plus opaque document id and remember the cloud revision
+they observed, so switching accounts or replaying an old Test-return URL cannot upload
+one document's recovery into another. Test-return board parameters are removed from the
+address after that exact snapshot is acknowledged; they are not a second document store.
+
+- `PUT /api/editor-documents/:documentId` updates only the working copy.
+- `POST /api/editor-documents/:documentId/save` transactionally promotes the
+  working copy (or the exact Level supplied with the Save click) into the
+  account campaign workspace; admins may explicitly target an official
+  workspace. It then advances both revision values together and returns the
+  canonical `workspace_revision` from that same transaction, so the caller's
+  next whole-workspace CAS does not conflict with its own Level Editor Save.
+- `POST /api/editor-documents/:documentId/discard` transactionally replaces the
+  working copy with the current canonical saved Level and advances both
+  revision values together.
+
+Whole-workspace writers use their own compare-and-swap token as well. `GET
+/api/campaign-workspace` returns `revision`; its PUT must send that revision
+beside `campaigns` and `levels`. A stale writer receives `409
+workspace_revision_conflict` plus the current workspace. Official workspace
+PUTs likewise send the `portfolio.revision` returned by GET and receive `409
+official_campaign_revision_conflict` plus the current portfolio when stale.
+An explicit Level Editor Save advances this workspace revision in the same
+transaction as canonical promotion. Thus a Campaign Editor tab opened before
+that Save cannot later revert it with a whole-document last-write-wins PUT.
+The account workspace PUT also refuses to introduce a level id reserved by a
+never-saved working document (`workspace_level_reserved`); only that document's
+Save may cross the canonical boundary for its server-allocated id.
+
+New user documents are allocated both an account-local `l<n>` level id and an
+opaque global document id by the server. They begin as a durable but
+never-saved working copy (`saved_revision = 0`). Their first Save creates the
+canonical unassigned Level. Canonical workspaces remain the source for campaign
+thumbnails and gameplay; autosaved working-copy content is never used for
+either.
+
+Migration 16 retires and drops the v13 `editor_maps` and
+`editor_map_audit_events` tables after carrying forward signed-in working
+copies. Repeated standalone rows whose old body used the shared placeholder id
+`draft` each receive a distinct `legacy-<public_id>` level id, so they cannot
+collapse under the one-working-copy-per-level constraint. Ordinary repeated
+level ids retain the newest row; `off-*` rows map to the official `default`
+workspace instead of being dropped. A migrated draft over an existing canonical
+Level receives a synthetic saved revision 1 and a working revision of at least
+2, preserving both its Discard target and its dirty state; only rows with no
+canonical Level remain genuinely never-saved. Anonymous handoff,
+misc-pool, edit-key, expiry, and public-by-link editor-document behavior no
+longer exists. Migrated signed-in rows retain their former globally unique map
+identity under a `legacy-` document-id prefix, but reads are now account-owned
+and never public. During compatibility recovery, an old editor URL
+`?map=<public_id>` is interpreted only as the private document id
+`legacy-<public_id>` through the normal authenticated GET, then canonicalized to
+the durable document URL; no old public/edit-key endpoint remains. This is
+separate from `public_maps`, the explicit published
+snapshot store used by the existing public `/play?map=...` subsystem; migration
+16 deliberately leaves that store intact.
+
+Most code-owned PNG/WebP/AVIF/font files remain in the repo under
+`frontend/public/assets`. Board-unit art is the deliberate live-content exception:
+Postgres stores its accepted pointers, candidate metadata, geometry, revisions,
+and sprite hashes; the private `unit-assets` Blob container stores the immutable
+PNG bytes. The backend serves those bytes through same-origin content-addressed
+routes. Postgres does not store image bytes.
 
 What is **not** in Postgres (deliberate, see "Boundaries"): the `lobbies`
 matchmaking map.

@@ -240,25 +240,20 @@ should drive the first concrete UI sweep because they define the practical tool
 layout, HUD structure, tile palette, brush controls, roster, selected-unit
 panel, threat language, and low-glare chrome.
 
-The current implementation uses an [art-backed UI bridge](art-backed-ui-bridge.md).
-The app routes render the approved concept art with live DOM controls/hotspots
-overlaid — the main menu as decomposed elements (art crops, a hybrid profile, DOM
-panels), and the campaign editor, level editor, and skirmish as their full concept
-renders with live hotspots — instead of the old utility UI, which was below the
-intended quality bar. The earlier placeholder skeletons were removed end to end.
+The production implementation has moved beyond the earlier
+[art-backed UI bridge](art-backed-ui-bridge.md) into the shared live-DOM kit. The
+homepage family uses one continuous generated scenic backdrop, one invariant title
+bar, shared settings-twin rails, live rows, and data-backed board previews. The saved
+concept renders remain direction and comparison references rather than runtime screens.
 
-The default work surfaces are `/`, `/main-menu`, `/campaigns`,
-`/level-editor`, and `/skirmish`. They show live DOM bridge
-surfaces with unfinished asset slots labeled in place. The main menu uses a
-generated no-board scenic background image, the accepted generated five-button
-row asset family with live labels, and the accepted title/brand artwork. The
-background image is accepted as the live background-only scene.
-Profile/account is a real shell backed by the narrowed generated secondary
-chrome. Daily/news is removed from the current main-menu design. The bottom
-dock is also removed for now because it duplicated the primary mode buttons
-without a distinct product purpose. The production route should not bake a board
-into the background or grow a separate battlefield preview panel; the real
-board/battlefield layer is out of scope for this pass. `/design/*/render` routes preserve the approved renders for comparison:
+The default work surfaces are `/`, `/play/select/skirmish`,
+`/play/select/levels`, `/play/select/campaign/<id>`, `/editor`,
+`/editor/level`, and exact `/play?...` for a selected live board. The main menu has
+four top-level controls — Play, Editor, Lobbies, Settings — and Play owns the shared
+Skirmish/Levels/Campaign selector described by ADR-0074. The generated no-board scenic
+background remains the accepted background-only scene. Daily/news and the duplicate
+bottom dock remain absent. The production route must not bake a board into the
+background or grow a separate battlefield preview panel. `/design/*/render` routes preserve the approved renders for comparison:
 `/design/main-menu/render`, `/design/campaigns/render`,
 `/design/level-editor/render`, and `/design/skirmish/render`.
 `/design/main-menu` remains the asset review board for comparing candidate
@@ -266,8 +261,8 @@ asset families before wiring them into a bridge.
 
 The main menu acceptance state lives in
 [main-menu-acceptance.md](main-menu-acceptance.md). As of the current pass, the
-mode button stack, upper-left brand/title banner, and art-backed live bridge
-approach are settled. The scenic background is accepted. Daily/news is removed.
+four-entry mode rail, invariant title bar, shared live-DOM kit, and scenic background
+are settled. Daily/news is removed.
 The real board/battlefield layer is out of scope for this pass, and desktop is
 the validation target. Profile/account and the overall desktop composition still
 need review.
@@ -335,6 +330,12 @@ artist. Generated art should still be processed into usable game assets:
 - controlled palettes and outlines
 - predictable file names and metadata
 - no dependency on one-off full-screen mockup renders for gameplay
+
+Per [ADR-0076](adr/0076-scaling-is-calibration-production-art-is-native-1x.md),
+scaling is allowed to calibrate an asset's required footprint, but the scaled
+candidate is not production art. Once its 1× frame, visible subject bounds, and
+anchor are approved, regenerate/re-render it at those pixels and serve it 1:1;
+offline downscaling and asset-local live scale are not acceptance paths.
 
 The goal is to use generated art as the source for production sprites and tiles,
 not merely as inspiration. The implementation should still treat those outputs

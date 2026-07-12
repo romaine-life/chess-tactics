@@ -18,12 +18,17 @@ export interface CampaignState {
   selectedCampaignId: string | null;
   selectedLevelId: string | null;
   counter: number;
+  /** Last server revisions observed for whole-workspace compare-and-swap writes. */
+  userWorkspaceRevision: number;
+  officialWorkspaceRevision: number;
   hydrate: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
   // Tier-scoped replace: swap just the official slice (id-preserving, tagged
   // readOnly), keeping the user slice — and vice versa. Used by the always-load-then-
   // merge hydration so officials show for everyone and the user's own merge on top.
-  mergeOfficial: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
-  mergeUser: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
+  mergeOfficial: (ws: { campaigns: Campaign[]; levels: Record<string, Level>; revision?: number }) => void;
+  mergeUser: (ws: { campaigns: Campaign[]; levels: Record<string, Level>; revision?: number }) => void;
+  setUserWorkspaceRevision: (revision: number) => void;
+  setOfficialWorkspaceRevision: (revision: number) => void;
   importWorkspace: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
   newCampaign: () => void;
   // Admin-gated: mint a new OFFICIAL campaign (`off-c-…`, origin:'official') and select
@@ -32,6 +37,10 @@ export interface CampaignState {
   // Mint a fresh per-user level id (`l<n>`) for a level authored outside a campaign,
   // store it, and return the id. Used by the Level Editor's cold-save path (Phase 3).
   createUnassignedLevel: (level: Level) => string;
+  // Mint a level in the target campaign's tier and attach it in one operation. A private
+  // campaign produces `l<n>`; an official campaign produces a digit-free `off-l-*` id.
+  // Used when an admin files a standalone board from inside the Level Editor.
+  createLevelInCampaign: (campaignId: string, level: Level) => string | null;
   duplicateCampaign: (id: string) => void;
   deleteCampaign: (id: string) => void;
   renameCampaign: (id: string, name: string) => void;
@@ -45,6 +54,9 @@ export interface CampaignState {
   // Same adoption flow, but with an explicit target campaign. Used when the unassigned
   // collection is selected as its own meta-campaign in the editor rail.
   attachLevelToCampaign: (campaignId: string, levelId: string) => void;
+  // Make a campaign the level's sole association, or pass null to leave it unassigned.
+  // Unlike attachLevelToCampaign this is a move, and it refuses cross-tier references.
+  assignLevelToCampaign: (levelId: string, campaignId: string | null) => void;
   deleteLevel: (levelId: string) => void;
   moveLevel: (levelId: string, dir: -1 | 1) => void;
   selectLevel: (levelId: string) => void;
@@ -136,6 +148,9 @@ const nextCounterFrom = (campaigns: Campaign[], levels: Record<string, Level>): 
   return max + 1;
 };
 
+const observedRevision = (value: unknown, fallback: number): number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : fallback;
+
 const importableWorkspace = (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => {
   const levels = Object.fromEntries(Object.entries(ws.levels ?? {}).map(([id, level]) => [id, withLevelDefaults(level)]));
   const campaigns = (ws.campaigns ?? []).map(withCampaignDefaults);
@@ -145,9 +160,10 @@ const importableWorkspace = (ws: { campaigns: Campaign[]; levels: Record<string,
 const attachLevelToCampaignState = (s: CampaignState, campaignId: string, levelId: string): Partial<CampaignState> => {
   const camp = s.campaigns.find((c) => c.id === campaignId);
   // Adopt an existing level into the target campaign: a missing campaign, a missing level, or
-  // an already-referenced one is a no-op. The new ref appends at the end (next ordinal) and
-  // seeds its objective from the level's own so the row reads correctly straight away.
-  if (!camp || !s.levels[levelId] || camp.levels.some((r) => r.levelId === levelId)) return {};
+  // an already-referenced one is a no-op. Cross-tier refs are also rejected: official saves
+  // serialize only `off-` levels, so attaching an `l<n>` there would create a dangling ref.
+  // The new ref appends at the end and seeds its objective from the level's own.
+  if (!camp || !s.levels[levelId] || isOfficialId(camp.id) !== isOfficialId(levelId) || camp.levels.some((r) => r.levelId === levelId)) return {};
   const ref: CampaignLevelRef = { levelId, ordinal: camp.levels.length, objective: s.levels[levelId].objective };
   return {
     campaigns: s.campaigns.map((c) => (c.id === camp.id ? { ...c, levels: [...c.levels, ref] } : c)),
@@ -162,6 +178,8 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
   selectedCampaignId: null,
   selectedLevelId: null,
   counter: 1,
+  userWorkspaceRevision: 0,
+  officialWorkspaceRevision: 0,
 
   hydrate: (ws) => set(() => {
     const imported = importableWorkspace(ws);
@@ -181,7 +199,13 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
     const userLevels = Object.fromEntries(Object.entries(s.levels).filter(([id]) => !isOfficialId(id)));
     const campaigns = [...officialCampaigns, ...userCampaigns];
     const levels = { ...officialLevels, ...userLevels };
-    return { campaigns, levels, counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)), ...reconcileSelection(s, campaigns, levels) };
+    return {
+      campaigns,
+      levels,
+      counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)),
+      officialWorkspaceRevision: observedRevision(ws.revision, s.officialWorkspaceRevision),
+      ...reconcileSelection(s, campaigns, levels),
+    };
   }),
 
   mergeUser: (ws) => set((s) => {
@@ -191,8 +215,22 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
     const officialLevels = Object.fromEntries(Object.entries(s.levels).filter(([id]) => isOfficialId(id)));
     const campaigns = [...officialCampaigns, ...userCampaigns];
     const levels = { ...officialLevels, ...userLevels };
-    return { campaigns, levels, counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)), ...reconcileSelection(s, campaigns, levels) };
+    return {
+      campaigns,
+      levels,
+      counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)),
+      userWorkspaceRevision: observedRevision(ws.revision, s.userWorkspaceRevision),
+      ...reconcileSelection(s, campaigns, levels),
+    };
   }),
+
+  setUserWorkspaceRevision: (revision) => set((s) => ({
+    userWorkspaceRevision: observedRevision(revision, s.userWorkspaceRevision),
+  })),
+
+  setOfficialWorkspaceRevision: (revision) => set((s) => ({
+    officialWorkspaceRevision: observedRevision(revision, s.officialWorkspaceRevision),
+  })),
 
   importWorkspace: (ws) => set((s) => {
     const imported = importableWorkspace(ws);
@@ -245,6 +283,34 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
     const id = `l${n}`;
     get().replaceLevel({ ...level, id });
     set({ counter: n + 1 });
+    return id;
+  },
+
+  createLevelInCampaign: (campaignId, level) => {
+    const state = get();
+    const campaign = state.campaigns.find((candidate) => candidate.id === campaignId);
+    if (!campaign) return null;
+    const official = campaign.origin === 'official' || isOfficialId(campaign.id);
+    const id = official
+      ? uniqueOfficialId('l', level.name, new Set(Object.keys(state.levels)))
+      : `l${state.counter}`;
+    const storedLevel = { ...withLevelDefaults(level), id };
+    const ref: CampaignLevelRef = {
+      levelId: id,
+      ordinal: campaign.levels.length,
+      objective: storedLevel.objective,
+    };
+    set({
+      campaigns: state.campaigns.map((candidate) => (
+        candidate.id === campaign.id
+          ? { ...candidate, levels: [...candidate.levels, ref] }
+          : candidate
+      )),
+      levels: { ...state.levels, [id]: storedLevel },
+      selectedCampaignId: campaign.id,
+      selectedLevelId: id,
+      counter: official ? state.counter : state.counter + 1,
+    });
     return id;
   },
 
@@ -330,6 +396,37 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
   }),
 
   attachLevelToCampaign: (campaignId, levelId) => set((s) => attachLevelToCampaignState(s, campaignId, levelId)),
+
+  assignLevelToCampaign: (levelId, campaignId) => set((s) => {
+    const level = s.levels[levelId];
+    if (!level) return {};
+    const target = campaignId ? s.campaigns.find((campaign) => campaign.id === campaignId) : null;
+    if (campaignId && !target) return {};
+    if (target && isOfficialId(target.id) !== isOfficialId(levelId)) return {};
+
+    const currentAssociations = s.campaigns.filter((campaign) => campaign.levels.some((ref) => ref.levelId === levelId));
+    if (currentAssociations.length === (target ? 1 : 0) && currentAssociations[0]?.id === target?.id) return {};
+
+    const campaigns = s.campaigns.map((campaign) => {
+      const withoutLevel = campaign.levels.filter((ref) => ref.levelId !== levelId);
+      if (campaign.id !== target?.id) {
+        return withoutLevel.length === campaign.levels.length
+          ? campaign
+          : { ...campaign, levels: reindexed(withoutLevel) };
+      }
+      const ref: CampaignLevelRef = {
+        levelId,
+        ordinal: withoutLevel.length,
+        objective: level.objective,
+      };
+      return { ...campaign, levels: reindexed([...withoutLevel, ref]) };
+    });
+    return {
+      campaigns,
+      selectedCampaignId: target?.id ?? s.selectedCampaignId,
+      selectedLevelId: levelId,
+    };
+  }),
 
   deleteLevel: (levelId) => set((s) => {
     const camp = selected(s);

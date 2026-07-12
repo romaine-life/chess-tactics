@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+printf 'chess-tactics Codex worktree setup: %s\n' "$repo_dir"
+printf 'installing frontend dependencies\n'
+npm --prefix "$repo_dir/frontend" ci
+
+printf 'installing backend dependencies\n'
+npm --prefix "$repo_dir/backend" ci
+
+printf 'building frontend for backend preview\n'
+npm --prefix "$repo_dir/frontend" run build
+
+printf 'chess-tactics Codex worktree setup complete\n'

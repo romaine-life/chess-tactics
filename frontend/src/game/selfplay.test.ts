@@ -49,6 +49,32 @@ describe('playLevelGame', () => {
     expect(record.plies).toBe(0);
   });
 
+  it('uses an authored victory override at the initial position and preserves its rule', () => {
+    const level = createBlankLevel('sp-authored', 'Authored', 4, 4);
+    level.objective = 'capture-all';
+    level.layers.units = [
+      { x: 0, y: 3, type: 'king', side: 'player' },
+      { x: 3, y: 0, type: 'king', side: 'enemy' },
+      { x: 2, y: 0, type: 'pawn', side: 'enemy' },
+    ];
+    // Capture-all would continue (two enemies live). This exact override is
+    // already true because the enemy has no bishop.
+    level.victory = [{
+      name: 'No enemy bishop remains',
+      if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'bishop' } }],
+      do: [{ kind: 'win', side: 'player' }],
+    }];
+
+    const record = playLevelGame(level, { seed: 1, ...SHORT });
+    expect(record.winner).toBe('player');
+    expect(record.plies).toBe(0);
+    expect(record.adjudication).toMatchObject({
+      kind: 'victory-rule',
+      winner: 'player',
+      rule: { name: 'No enemy bishop remains' },
+    });
+  });
+
   it('obeys fences: a lone fully fenced-in player piece is stuck at the start (draw, 0 plies)', () => {
     // A single player rook walled on all four edges has zero legal moves — every orthogonal
     // crossing is fenced. Self-play must see the fence (its env now goes through rules.gameEnv,
@@ -74,6 +100,22 @@ describe('playLevelGame', () => {
     expect(totalMoves).toBe(record.plies);
     const captures = record.moves.filter((m) => m.move.capture).length;
     expect(record.pieces.reduce((s, p) => s + p.captures, 0)).toBe(captures);
+  });
+
+  it('ends a game by the 50-move rule exactly at 100 quiet halfmoves (ADR-0072)', { timeout: 60_000 }, () => {
+    // Two lone kings can never capture or push a pawn, so the halfmove clock runs
+    // 1..100 and the authored 50-move rule must end the game as a draw at ply 100 —
+    // well before the 300-ply cap that used to be the only way out.
+    const level = createBlankLevel('sp-fifty', 'Fifty', 8, 8);
+    level.objective = 'capture-king';
+    level.layers.units = [
+      { x: 4, y: 7, type: 'king', side: 'player' },
+      { x: 4, y: 0, type: 'king', side: 'enemy' },
+    ];
+    level.events = [{ trigger: { kind: 'setup' }, do: [{ kind: 'chess-draws', fiftyMove: true }] }];
+    const record = playLevelGame(level, { seed: 2, search: FAST });
+    expect(record.winner).toBe('draw');
+    expect(record.plies).toBe(100);
   });
 });
 

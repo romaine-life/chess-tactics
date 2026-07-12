@@ -1,5 +1,7 @@
 node_modules/
 frontend/dist/
+packages/board-render/dist/
+backend/generated/
 npm-debug.log
 .DS_Store
 
@@ -22,6 +24,7 @@ npm-debug.log
 frontend/.codex-vite-*.log
 frontend/.chrome-campaign-proof/
 tmp-shots/
+.unit-art-output/
 
 # Advance Wars ROMs — copyrighted, never commit (see tools/aw-import)
 roms/

@@ -200,6 +200,15 @@
       "method": "image-generator (verified)",
       "gate": "pass"
     },
+    "sign-in": {
+      "group": "settings",
+      "forged": "2026-07-09",
+      "tries": 1,
+      "method": "image-generator (verified) + chroma-key cleanup",
+      "canvas": "64x64",
+      "gate": "pass",
+      "note": "Entry-door counterpart to sign-out, scaled to the same 50x59-ish painted footprint so the title-bar account button stays locked at the avatar size."
+    },
     "studio-catalog": {
       "group": "settings",
       "forged": "2026-07-03",

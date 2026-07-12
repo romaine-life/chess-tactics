@@ -14,10 +14,12 @@ draft endpoint contract.
 
 ## Settled / Locked
 
-- Main menu mode button stack.
-  The generated five-button row asset family is accepted. Keep labels as live
-  DOM text using the approved vendored pixel font, with transparent live click
-  targets over the button art.
+- Main menu mode rail.
+  The production rail has four live DOM controls: **Play**, **Editor**, **Lobbies**,
+  and **Settings**. Play is the single player-facing entry for Skirmish, standalone
+  Levels, and Campaigns; those choices live in its shared second column rather than
+  consuming separate top-level buttons. The historical five-mode row art remains a
+  design reference, not the production navigation topology (ADR-0074).
 - Upper-left brand/title banner.
   The crest plus `Chess Tactics` title crop is accepted. Treat it as locked
   unless a later layout change exposes a fit issue.
@@ -46,16 +48,14 @@ draft endpoint contract.
   refinement is intentionally deferred unless a desktop change breaks basic
   rendering.
 - Optimized runtime delivery of the accepted art (no visual change).
-  The accepted background, five button-row sheets, and title are delivered as
-  AVIF/WebP derivatives with the original PNG kept as the universal fallback.
+  The accepted background, shared rail surfaces/icons, and title are delivered with
+  optimized derivatives where registered, with the original PNG kept as the universal fallback.
   The PNG sources stay checked in and authoritative; derivatives are
   regenerated deterministically with `npm --prefix frontend run optimize:assets`
   (sharp, dev-only `--no-save`), driven by
   `frontend/src/ui/design/optimized-images.json`. The runtime prefers AVIF →
-  WebP → PNG via CSS `image-set()` (background + button sheets) and a
-  `<picture>` element (title). This is a delivery-format change only — the
-  pixels, crops, and layout are unchanged. First-visit payload over those seven
-  assets drops ~4386 KiB PNG → ~175 KiB AVIF / ~267 KiB WebP (~96% / ~94%).
+  WebP → PNG via CSS `image-set()` and a `<picture>` element where applicable.
+  This is a delivery-format change only; the source pixels remain authoritative.
 
 ## Needs Review
 
