@@ -25,15 +25,14 @@ import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { BoardGridLayer } from '../render/BoardGridLayer';
 import { BoardTerrainLayer, terrainCanvasMacroTiles, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
 import { studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
-import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
-import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { PaletteSelect } from './shared/PaletteSelect';
+import { HouseSelect } from './shared/HouseSelect';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import {
   levelEditorHrefWithRouteState,
@@ -66,6 +65,8 @@ import {
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
+import { LevelEditorControlsPanel, LevelEditorEventsOverlay } from './LevelEditorChromeConsumers';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
 import {
   directionCompassCells,
   hasDirectionSprite,
@@ -1244,7 +1245,7 @@ function uniqueEventName(base: string, events: readonly LevelEvent[]): string {
 }
 
 function SelectFrame({ children, className = '' }: { children: ReactNode; className?: string }): ReactElement {
-  return <div className={`le-select-wrap ${className}`.trim()}>{children}</div>;
+  return <div data-chrome-unit="inner-dropdown" className={chromeUnitClassNames('inner-dropdown', 'le-select-wrap', className)}>{children}</div>;
 }
 
 function LevelEventsEditor({ value, zones, onChange, templates }: {
@@ -1305,15 +1306,15 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
         {value.length === 0 ? <p className="le-board-warning">No events yet.</p> : null}
         <div className="le-md-rules">
           {value.map((item, index) => (
-            <button type="button" key={index} className={`le-md-item ${index === selected ? 'active' : ''}`.trim()} onClick={() => setSel(index)}>
+            <button type="button" key={index} data-chrome-unit="inner-list-row" className={chromeUnitClassNames('inner-list-row', 'le-md-item', index === selected && 'active')} onClick={() => setSel(index)}>
               <span className="le-md-item-name">{eventName(item, index)}</span>
               <span className="le-md-item-out">{primaryEventAction(item)?.kind ?? 'event'}</span>
             </button>
           ))}
         </div>
         <div className="le-cond-add le-rule-add">
-          <button type="button" className="le-seg-btn le-add-event" onClick={addSpawn}>+ Spawn</button>
-          <button type="button" className="le-seg-btn le-add-event" onClick={addPromotion}>+ Promotion</button>
+          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-add-event')} onClick={addSpawn}>+ Spawn</button>
+          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-add-event')} onClick={addPromotion}>+ Promotion</button>
         </div>
       </div>
       <div className="le-md-detail">
@@ -1364,7 +1365,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               </div>
             ))}
             <div className="le-rule-then">
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger', 'le-rule-remove')} onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : event && promotionTrigger && promotesTriggeringUnit ? (
@@ -1411,7 +1412,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               <output className="le-event-readout" aria-label="Event action">Promote</output>
             </div>
             <div className="le-rule-then">
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger', 'le-rule-remove')} onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : event && castleAction ? (
@@ -1439,7 +1440,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               this event and re-add the Castling template.
             </p>
             <div className="le-rule-then">
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger', 'le-rule-remove')} onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : event && chessDrawsAction ? (
@@ -1465,7 +1466,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               for the training AI.
             </p>
             <div className="le-rule-then">
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger', 'le-rule-remove')} onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : <p className="le-board-note">Select an event or add one on the left.</p>}
@@ -1499,7 +1500,8 @@ function DirectionPopover({ value, label, onChange }: {
     >
       <button
         type="button"
-        className="le-faction-select le-direction-trigger"
+        data-chrome-unit="inner-tool-square"
+        className={chromeUnitClassNames('inner-tool-square', 'le-faction-select', 'le-direction-trigger')}
         aria-label={label}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -1516,7 +1518,8 @@ function DirectionPopover({ value, label, onChange }: {
               <button
                 key={cell}
                 type="button"
-                className={`unit-facing-cell le-direction-cell${value === cell ? ' is-active' : ''}`}
+                data-chrome-unit="inner-tool-square"
+                className={chromeUnitClassNames('inner-tool-square', 'unit-facing-cell', 'le-direction-cell', value === cell && 'is-active')}
                 role="radio"
                 aria-checked={value === cell}
                 title={`Face ${cell}`}
@@ -1868,6 +1871,10 @@ const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }>
   { id: 'status', label: 'Status' },
 ];
 const isLayerOptionDisabled = (_layer: LayerKey): boolean => false;
+const LEVEL_EDITOR_LAYER_SELECT_OPTIONS = LEVEL_EDITOR_LAYER_OPTIONS.map((option) => ({
+  ...option,
+  disabled: isLayerOptionDisabled(option.id),
+}));
 const defaultLevelEditorLayer = (): LayerKey => LEVEL_EDITOR_LAYER_OPTIONS.find((option) => !isLayerOptionDisabled(option.id))?.id ?? LEVEL_EDITOR_LAYER_OPTIONS[0].id;
 function isWallMaterialId(value: string | undefined): value is WallMaterial {
   return !!value && (WALL_MATERIALS as readonly string[]).includes(value);
@@ -2215,6 +2222,7 @@ export function LevelEditor(): ReactElement {
   const activeZoneName = activeZone ? zoneDisplayName(activeZone, selectedZoneIndex) : '';
   const activeZoneNameValue = activeZone ? activeZone.name ?? activeZoneName : '';
   const activeZoneColor = activeZone ? zoneDisplayColor(activeZone) : DEFAULT_ZONE_COLOR;
+  const activeZoneColorLabel = LE_ZONE_COLOR_OPTIONS.find((option) => option.color === activeZoneColor)?.label ?? activeZoneColor;
   const activeZoneOverlay = useMemo(() => activeZone ? zoneCellColorMapFromEntries([activeZone]) : {}, [activeZone]);
   const visibleZones = brushKind === 'zone' ? activeZoneOverlay : {};
   useEffect(() => {
@@ -4816,10 +4824,10 @@ export function LevelEditor(): ReactElement {
                     <h2>{editorLoadError.title}</h2>
                     <p>{editorLoadError.detail}</p>
                     {editorLoadError.signIn ? (
-                      <button type="button" className="le-seg-btn" onClick={signInForEditor}>Sign in</button>
+                      <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={signInForEditor}>Sign in</button>
                     ) : null}
                     {editorLoadError.retry ? (
-                      <button type="button" className="le-seg-btn" onClick={retryCloudDocument}>Retry</button>
+                      <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={retryCloudDocument}>Retry</button>
                     ) : null}
                   </div>
                 ) : fenceArtReviewEnabled && !activeFenceArtwork ? (
@@ -4884,18 +4892,11 @@ export function LevelEditor(): ReactElement {
             </ViewPane>
           </div>
           {eventsOpen ? (
-            <div className="le-events-overlay" role="dialog" aria-label="Level events editor">
-              <div className="le-events-head">
-                <h2>Events</h2>
-                <div className="le-events-head-actions">
-                  <div className="le-seg le-events-tabs" role="tablist" aria-label="Event editor sections">
-                    <button type="button" role="tab" aria-selected={eventsTab === 'victory'} className={`le-seg-btn ${eventsTab === 'victory' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('victory')}>Victory rules</button>
-                    <button type="button" role="tab" aria-selected={eventsTab === 'other'} className={`le-seg-btn ${eventsTab === 'other' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('other')}>Other events</button>
-                  </div>
-                  <button type="button" className="le-seg-btn le-events-done" onClick={closeEventsEditor}>Done</button>
-                </div>
-              </div>
-              {eventsTab === 'victory' ? (
+            <LevelEditorEventsOverlay
+              tab={eventsTab}
+              onTabChange={setEventsTab}
+              onDone={closeEventsEditor}
+              victoryContent={(
                 <VictoryConditionsEditor
                   value={victory}
                   factions={victoryFactions}
@@ -4911,18 +4912,19 @@ export function LevelEditor(): ReactElement {
                             {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
                           </select>
                         </SelectFrame>
-                        <button type="button" className="le-seg-btn" onClick={() => {
+                        <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => {
                           const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
                           const templateRules = victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) });
                           setVictory((prev) => appendRules(prev, templateRules));
                         }}>Add template</button>
-                        <button type="button" className="le-seg-btn danger" disabled={victory.length === 0} onClick={() => setVictory([])}>Clear rules</button>
+                        <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} disabled={victory.length === 0} onClick={() => setVictory([])}>Clear rules</button>
                       </div>
                       <p className="le-board-note">Events run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
                     </div>
                   )}
                 />
-              ) : (
+              )}
+              otherContent={(
                 <LevelEventsEditor
                   value={events}
                   zones={eventZoneOptions}
@@ -4938,18 +4940,21 @@ export function LevelEditor(): ReactElement {
                             {OTHER_EVENT_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}
                           </select>
                         </SelectFrame>
-                        <button type="button" className="le-seg-btn" onClick={addOtherEventTemplate}>Add template</button>
-                        <button type="button" className="le-seg-btn danger" disabled={events.length === 0} onClick={clearOtherEvents}>Clear events</button>
+                        <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={addOtherEventTemplate}>Add template</button>
+                        <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} disabled={events.length === 0} onClick={clearOtherEvents}>Clear events</button>
                       </div>
                       <p className="le-board-note">Clear affects only this events list and any zones used only by those events.</p>
                     </div>
                   )}
                 />
               )}
-            </div>
+            />
           ) : null}
         </div>
 
+      {/* The real editor and Chrome Audit consume this one canonical outer-panel hierarchy.
+          The editor supplies live state and content; the shared component owns chrome,
+          title/actions structure, divider, and the sole scroll boundary. */}
       {editorLoadError ? (
       <aside className="skirmish-hud" aria-label="Editor document access" inert={!editorReady || saving ? true : undefined}>
         <section className="skirmish-card le-status-card">
@@ -4959,70 +4964,28 @@ export function LevelEditor(): ReactElement {
             <span>{editorLoadError.detail}</span>
           </div>
           {editorLoadError.signIn ? (
-            <button type="button" className="le-seg-btn" style={{ width: '100%' }} onClick={signInForEditor}>Sign in</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} style={{ width: '100%' }} onClick={signInForEditor}>Sign in</button>
           ) : null}
           {editorLoadError.retry ? (
-            <button type="button" className="le-seg-btn" style={{ width: '100%' }} onClick={retryCloudDocument}>Retry</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} style={{ width: '100%' }} onClick={retryCloudDocument}>Retry</button>
           ) : null}
         </section>
       </aside>
       ) : (
-      <aside className="skirmish-hud" aria-label="Editor controls" inert={!editorReady || saving ? true : undefined} aria-busy={!editorReady || saving || undefined}>
-        <section className="skirmish-card">
-          <h2>Layer</h2>
-          <SelectFrame>
-            <select
-              className="le-layer-select"
-              aria-label="Editor layer"
-              value={layer}
-              onChange={(e) => selectLayer(e.target.value as LayerKey)}
-            >
-              {LEVEL_EDITOR_LAYER_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id} disabled={isLayerOptionDisabled(option.id)}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </SelectFrame>
-        </section>
-
-        {/* Pinned editor ACTIONS dock: tools, Undo/Redo, and current-board Test stay above the sole
-            scroll region, visible on every layer without overlaying the board. */}
-        <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
-          <h2>Actions</h2>
-          <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
-            <button type="button" className={`le-seg-btn ${tool === 'select' ? 'active' : ''}`.trim()} onClick={() => setTool('select')} title="Select" aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'brush' ? 'active' : ''}`.trim()} onClick={() => setTool('brush')} title="Brush" aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')} title="Erase" aria-label="Erase"><span className="le-ico ic-eraser" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'move' ? 'active' : ''}`.trim()} onClick={() => setTool('move')} title="Move — drag a placed unit or prop to a new cell." aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
-            <span className="le-action-toolbar-divider" aria-hidden="true" />
-            <button
-              type="button"
-              className="le-seg-btn le-icon-btn"
-              onClick={undoBoard}
-              disabled={!undoStack.length}
-              aria-label="Undo"
-              title={undoStack.length ? 'Undo the last board edit.' : 'Nothing to undo.'}
-            ><span className="le-ico ic-undo" aria-hidden="true" /></button>
-            <button
-              type="button"
-              className="le-seg-btn le-icon-btn"
-              onClick={redoBoard}
-              disabled={!redoStack.length}
-              aria-label="Redo"
-              title={redoStack.length ? 'Redo the last undone edit.' : 'Nothing to redo.'}
-            ><span className="le-ico ic-redo" aria-hidden="true" /></button>
-          </div>
-          {/* Test the exact board on screen, saved or not. It lives in the always-visible Actions
-              dock and returns to the same editor target, making edit → test → back one loop. */}
-          {testHref ? (
-            <NavButton className="le-seg-btn le-play-board" data-testid="le-test" to={testHref} title="Test this exact board against the AI now. No save is required; ‹ Back returns you here.">Test</NavButton>
-          ) : (
-            <button type="button" className="le-seg-btn le-play-board" data-testid="le-test" disabled title="Add a player and an enemy piece (clear the playability issues in the Status layer) to test this board.">Test</button>
-          )}
-        </section>
-
-        <KitScroll className="le-hud-scroll">
+      <LevelEditorControlsPanel
+        layer={layer}
+        layerOptions={LEVEL_EDITOR_LAYER_SELECT_OPTIONS}
+        onLayerChange={selectLayer}
+        tool={tool === 'region' ? null : tool}
+        onToolChange={setTool}
+        canUndo={undoStack.length > 0}
+        canRedo={redoStack.length > 0}
+        onUndo={undoBoard}
+        onRedo={redoBoard}
+        playBoardHref={testHref}
+        inert={!editorReady || saving}
+        ariaBusy={!editorReady || saving}
+      >
         {layer === 'status' ? (
           <>
           {/* Playability list (ADR-0050): while any violation exists Save is disabled and the
@@ -5042,7 +5005,7 @@ export function LevelEditor(): ReactElement {
                   <li key={`${v.code}-${index}`} className="le-violation">
                     <span className="le-violation-msg">{v.message}</span>
                     {v.code === 'P3_UNITS_NOT_EMPTY' ? (
-                      <button type="button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
+                      <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-violation-action')} onClick={clearUnits}>Clear pieces</button>
                     ) : null}
                   </li>
                 ))}
@@ -5115,7 +5078,8 @@ export function LevelEditor(): ReactElement {
               {cloudSaveState === 'error' ? (
                 <button
                   type="button"
-                  className="le-seg-btn"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   data-testid="le-retry-cloud-sync"
                   disabled={saving}
                   onClick={retryCloudDocument}
@@ -5124,7 +5088,8 @@ export function LevelEditor(): ReactElement {
               {editorDocument?.has_saved_baseline ? (
                 <button
                   type="button"
-                  className="le-seg-btn"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   data-testid="le-discard-changes"
                   disabled={!hasDiscardableChanges || saving}
                   title={hasDiscardableChanges ? 'Revert the working copy to the last saved position.' : 'The working copy already matches the saved position.'}
@@ -5133,7 +5098,8 @@ export function LevelEditor(): ReactElement {
               ) : null}
               <button
                 type="button"
-                className={`le-seg-btn ${canSave ? 'active' : 'is-blocked'}`.trim()}
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', canSave ? 'active' : 'is-blocked')}
                 data-testid="le-save"
                 aria-label={canSave ? saveLabel : `${saveButtonLabel}: ${saveBlockedMessage}`}
                 title={canSave ? (isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.') : `${saveBlockedMessage} ${saveBlockedDetail}`.trim()}
@@ -5179,8 +5145,8 @@ export function LevelEditor(): ReactElement {
             <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
             <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
             <div className="le-board-actions">
-              <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
-              <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, path, fence rail, post, wall, and wall artwork from the board.">Clear</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, path, fence rail, post, wall, and wall artwork from the board.">Clear</button>
             </div>
           </section>
           <section className="skirmish-card le-level-settings">
@@ -5202,7 +5168,8 @@ export function LevelEditor(): ReactElement {
                       </span>
                       <span className="le-faction-fields">
                         <select
-                          className="le-faction-select"
+                          data-chrome-unit="inner-dropdown"
+                          className={chromeUnitClassNames('inner-dropdown', 'le-faction-select')}
                           value={playerFaction === faction ? 'player' : 'cpu'}
                           aria-label={`${LE_FACTION_LABELS[faction]} control`}
                           onChange={onFactionControlChange(faction)}
@@ -5233,7 +5200,8 @@ export function LevelEditor(): ReactElement {
               <label className="le-gen-unit-select">
                 <span>Region</span>
                 <select
-                  className="le-gen-region-terrain"
+                  data-chrome-unit="inner-dropdown"
+                  className={chromeUnitClassNames('inner-dropdown', 'le-gen-region-terrain')}
                   value={activeGeneratedRegionId ?? ''}
                   onChange={(event) => selectGeneratedRegionUnit(event.target.value)}
                   aria-label="Saved generated region"
@@ -5247,7 +5215,8 @@ export function LevelEditor(): ReactElement {
               {activeGeneratedRegion ? (
                 <button
                   type="button"
-                  className="le-gen-icon"
+                  data-chrome-unit="inner-tool-square"
+                  className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
                   onClick={() => removeGeneratedRegionUnit(activeGeneratedRegion.id)}
                   title={`Remove ${activeGeneratedRegion.name}`}
                   aria-label={`Remove ${activeGeneratedRegion.name}`}
@@ -5257,12 +5226,13 @@ export function LevelEditor(): ReactElement {
             <div className="le-gen-scope">
               <button
                 type="button"
-                className={`le-seg-btn ${tool === 'region' ? 'active' : ''}`.trim()}
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tool === 'region' && 'active')}
                 onClick={() => setTool(tool === 'region' ? 'select' : 'region')}
                 title="Click an already-drawn clump to select its whole same-terrain patch. Click this button again to stop."
               >{tool === 'region' ? 'Selecting…' : 'Select region'}</button>
               <span className="le-gen-scope-label">{regionSelection.size > 0 ? `${activeGeneratedRegion?.name ?? 'Selection'} · ${regionSelection.size} cells` : 'Whole board'}</span>
-              {regionSelection.size > 0 ? <button type="button" className="le-seg-btn" onClick={clearRegion} title="Clear the selection — Generate will cover the whole board.">Clear</button> : null}
+              {regionSelection.size > 0 ? <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={clearRegion} title="Clear the selection — Generate will cover the whole board.">Clear</button> : null}
             </div>
             {tool === 'region' ? <p className="le-board-note">Click a drawn clump to select its whole same-terrain patch. Generate fills the selection; everything outside it stays put.</p> : null}
             <div className="le-gen-regions" role="group" aria-label="Terrain regions">
@@ -5270,7 +5240,8 @@ export function LevelEditor(): ReactElement {
                 <div className="le-gen-region-group" key={sec.id}>
                   <div className="le-gen-region">
                     <select
-                      className="le-gen-region-terrain"
+                      data-chrome-unit="inner-dropdown"
+                      className={chromeUnitClassNames('inner-dropdown', 'le-gen-region-terrain')}
                       value={sec.terrain}
                       onChange={(event) => setSectionTerrain(sec.id, event.target.value as TileFamilyId)}
                       aria-label="Region terrain"
@@ -5289,8 +5260,8 @@ export function LevelEditor(): ReactElement {
                       aria-label={`${sec.terrain} share`}
                     />
                     <span className="le-gen-region-val">{sec.share}% · {Math.round((sec.share / 100) * scopeCells)}</span>
-                    <button type="button" className={`le-gen-icon ${sec.locked ? 'active' : ''}`.trim()} onClick={() => toggleSectionLock(sec.id)} aria-pressed={sec.locked} title={sec.locked ? 'Unlock — let this region rebalance' : 'Lock — keep this region fixed while others move'}>{sec.locked ? '🔒' : '🔓'}</button>
-                    <button type="button" className="le-gen-icon" onClick={() => removeSection(sec.id)} disabled={scatterSections.length <= 1} title="Remove this region">×</button>
+                    <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', sec.locked && 'active')} onClick={() => toggleSectionLock(sec.id)} aria-pressed={sec.locked} title={sec.locked ? 'Unlock — let this region rebalance' : 'Lock — keep this region fixed while others move'}>{sec.locked ? '🔒' : '🔓'}</button>
+                    <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')} onClick={() => removeSection(sec.id)} disabled={scatterSections.length <= 1} title="Remove this region">×</button>
                   </div>
                   {macroTileAssets.some((asset) => asset.family === sec.terrain) ? (
                     <div className="le-gen-macro">
@@ -5302,13 +5273,13 @@ export function LevelEditor(): ReactElement {
                     {sec.covers.map((c) => (
                       <div className="le-gen-cover-entry" key={c.id}>
                         <div className="le-gen-cover-head">
-                          <button type="button" className="le-gen-cover-caret-btn" onClick={() => toggleCoverEntryExpand(sec.id, c.id)} aria-expanded={c.expanded} aria-label={c.expanded ? 'Collapse cover settings' : 'Expand cover settings'}>
+                          <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-gen-cover-caret-btn', c.expanded && 'active')} onClick={() => toggleCoverEntryExpand(sec.id, c.id)} aria-expanded={c.expanded} aria-label={c.expanded ? 'Collapse cover settings' : 'Expand cover settings'}>
                             <span className="le-gen-cover-caret" aria-hidden="true">{c.expanded ? '▾' : '▸'}</span>
                           </button>
-                          <select className="le-gen-region-terrain" value={c.type} onChange={(event) => setCoverType(sec.id, c.id, event.target.value as GroundCoverId)} aria-label="Cover set">
+                          <select data-chrome-unit="inner-dropdown" className={chromeUnitClassNames('inner-dropdown', 'le-gen-region-terrain')} value={c.type} onChange={(event) => setCoverType(sec.id, c.id, event.target.value as GroundCoverId)} aria-label="Cover set">
                             {LE_COVER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                           </select>
-                          <button type="button" className="le-gen-icon" onClick={() => removeCover(sec.id, c.id)} title="Remove this cover">×</button>
+                          <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')} onClick={() => removeCover(sec.id, c.id)} title="Remove this cover">×</button>
                         </div>
                         {c.expanded ? (
                           <div className="le-gen-cover-knobs">
@@ -5320,15 +5291,15 @@ export function LevelEditor(): ReactElement {
                         ) : null}
                       </div>
                     ))}
-                    <button type="button" className="le-gen-cover-add" onClick={() => addCover(sec.id)} title="Add a cover set to this region.">+ Add cover</button>
+                    <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-gen-cover-add')} onClick={() => addCover(sec.id)} title="Add a cover set to this region.">+ Add cover</button>
                   </div>
                 </div>
               ))}
             </div>
-            <button type="button" className="le-seg-btn le-gen-add" onClick={addSection} title="Add another terrain region and rebalance the shares.">+ Add terrain region</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-gen-add')} onClick={addSection} title="Add another terrain region and rebalance the shares.">+ Add terrain region</button>
             <SliderRow label={`Randomness buffer · ${scatterBuffer}%`} value={scatterBuffer} set={setScatterBufferBalanced} min={0} max={60} step={1} nudge={1} dflt={0} />
             <SliderRow label="Edge roughness" value={scatterWiggle} set={setScatterWiggle} min={0} max={1} step={0.05} nudge={0.05} dflt={0.5} />
-            <button type="button" className="le-seg-btn le-gen-run" style={{ width: '100%', marginTop: 8 }} onClick={generateScatter} title="Roll a fresh layout into the selection (or the whole board) and autotile it.">Generate</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-gen-run')} style={{ width: '100%', marginTop: 8 }} onClick={generateScatter} title="Roll a fresh layout into the selection (or the whole board) and autotile it.">Generate</button>
           </section>
         </>) : layer === 'rules' ? (<>
           <section className="skirmish-card">
@@ -5336,7 +5307,7 @@ export function LevelEditor(): ReactElement {
             {/* ADR-0064: the rule authoring lives in a full-size overlay over the board (this panel is
                 too narrow) — see the .le-events-overlay below. This card is just the entry point. */}
             <p className="le-board-note">How this level is won, lost, deployed, and promoted. {victory.length} victory event{victory.length === 1 ? '' : 's'} and {events.length} other event{events.length === 1 ? '' : 's'} set.</p>
-            <button type="button" className="le-seg-btn le-events-open" onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-open')} onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
           </section>
 
           <section className="skirmish-card">
@@ -5439,7 +5410,8 @@ export function LevelEditor(): ReactElement {
                 <button
                   type="button"
                   key={cover.id}
-                  className={`le-swatch le-cover-swatch ${coverBrushType === cover.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                  data-chrome-unit="inner-asset-swatch"
+                  className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', 'le-cover-swatch', coverBrushType === cover.id && tool !== 'erase' && 'active')}
                   title={`${cover.label} · ${cover.terrainLabel}`}
                   onClick={() => { setCoverBrushType(cover.id); setBrushKind('cover'); setTool('brush'); }}
                 >
@@ -5449,11 +5421,11 @@ export function LevelEditor(): ReactElement {
               ))}
             </div>
             <div className="le-seg">
-              <button type="button" className={`le-seg-btn ${coverBrushDensity === 'sparse' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('sparse')}>Sparse</button>
-              <button type="button" className={`le-seg-btn ${coverBrushDensity === 'filled' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('filled')}>Filled</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', coverBrushDensity === 'sparse' && 'active')} onClick={() => setCoverBrushDensity('sparse')}>Sparse</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', coverBrushDensity === 'filled' && 'active')} onClick={() => setCoverBrushDensity('filled')}>Filled</button>
             </div>
             <p className="le-board-note">Brush paints {coverBrushDensity} {coverBrushAsset.label} on any tile; Erase clears a tile. The cover scatters from the density.</p>
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
             <p className="le-board-note">{coverCount} tile{coverCount === 1 ? '' : 's'} with cover.</p>
           </section>
         ) : null}
@@ -5464,7 +5436,7 @@ export function LevelEditor(): ReactElement {
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
               <div className="le-zone-select-controls">
-                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Previous zone" title="Previous zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(-1)}>
+                <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Previous zone" title="Previous zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(-1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
                 </button>
                 <SelectFrame>
@@ -5481,13 +5453,13 @@ export function LevelEditor(): ReactElement {
                     ))}
                   </select>
                 </SelectFrame>
-                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Next zone" title="Next zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(1)}>
+                <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Next zone" title="Next zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
                 </button>
-                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Remove selected zone" title="Remove selected zone" disabled={!activeZone} onClick={removeActiveZoneEntry}>
+                <button type="button" data-chrome-unit="inner-minus-key" className={chromeUnitClassNames('inner-minus-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Remove selected zone" title="Remove selected zone" disabled={!activeZone} onClick={removeActiveZoneEntry}>
                   <span><span className="stepper-glyph stepper-minus" aria-hidden="true" /></span>
                 </button>
-                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Add zone" title="Add zone" onClick={addZoneEntry}>
+                <button type="button" data-chrome-unit="inner-plus-key" className={chromeUnitClassNames('inner-plus-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Add zone" title="Add zone" onClick={addZoneEntry}>
                   <span><span className="stepper-glyph stepper-plus" aria-hidden="true" /></span>
                 </button>
               </div>
@@ -5505,21 +5477,22 @@ export function LevelEditor(): ReactElement {
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Color</span>
-              <div className="le-zone-color-swatches" role="group" aria-label="Zone color">
-                {LE_ZONE_COLOR_OPTIONS.map((option) => (
-                  <button
-                    type="button"
-                    key={option.color}
-                    className={`le-zone-color-button ${activeZoneColor === option.color ? 'active' : ''}`.trim()}
-                    disabled={!activeZone}
-                    title={option.label}
-                    aria-label={`Zone color ${option.label}`}
-                    onClick={() => setActiveZoneColor(option.color)}
-                  >
-                    <span className={`le-zone-dot le-zone-${option.color}`} aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
+              <HouseSelect<ZoneColor>
+                className="le-zone-color-select"
+                value={activeZoneColor}
+                options={LE_ZONE_COLOR_OPTIONS.map((option) => ({
+                  value: option.color,
+                  label: (
+                    <span className="le-zone-color-choice">
+                      <span className={`le-zone-dot le-zone-${option.color}`} aria-hidden="true" />
+                      <span className="le-zone-color-choice-label">{option.label}</span>
+                    </span>
+                  ),
+                }))}
+                disabled={!activeZone}
+                ariaLabel={`Zone color, selected ${activeZoneColorLabel}`}
+                onChange={setActiveZoneColor}
+              />
             </div>
             <p className="le-board-note">
               Brush paints cells into the selected zone. Events decide what that zone does.
@@ -5560,7 +5533,8 @@ export function LevelEditor(): ReactElement {
                 <button
                   type="button"
                   key={unit.id}
-                  className={`le-swatch ${unitBrushId === unit.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                  data-chrome-unit="inner-asset-swatch"
+                  className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', unitBrushId === unit.id && tool !== 'erase' && 'active')}
                   title={unit.label}
                   onClick={() => { setUnitBrushId(unit.id); setBrushKind('unit'); setTool('brush'); }}
                 >
@@ -5582,7 +5556,8 @@ export function LevelEditor(): ReactElement {
                   <button
                     type="button"
                     key={doodad.id}
-                    className={`le-swatch ${doodadBrushId === doodad.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    data-chrome-unit="inner-asset-swatch"
+                    className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', doodadBrushId === doodad.id && tool !== 'erase' && 'active')}
                     title={`${doodad.label} · ${doodad.terrains.join(', ')}`}
                     onClick={() => { setDoodadBrushId(doodad.id); setBrushKind('doodad'); setTool('brush'); }}
                   >
@@ -5606,7 +5581,8 @@ export function LevelEditor(): ReactElement {
                       <button
                         type="button"
                         key={def.id}
-                        className={`le-swatch ${propBrushId === def.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        data-chrome-unit="inner-asset-swatch"
+                        className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', propBrushId === def.id && tool !== 'erase' && 'active')}
                         title={`${def.label} · ${def.w}×${def.h} · ${def.terrains.join(', ')}${def.blocking ? ' · blocks' : ''}`}
                         onClick={() => { setPropBrushId(def.id); setBrushKind('prop'); setLayer('prop'); setTool('brush'); }}
                       >
@@ -5630,7 +5606,8 @@ export function LevelEditor(): ReactElement {
                   <button
                     type="button"
                     key={`wall-${mat}`}
-                    className={`le-swatch ${wallBrushMaterial === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    data-chrome-unit="inner-asset-swatch"
+                    className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', wallBrushMaterial === mat && tool !== 'erase' && 'active')}
                     title={WALL_MATERIAL_LABELS[mat]}
                     onClick={() => { setWallBrushMaterial(mat); setBrushKind('wall'); setLayer('wall'); setTool('brush'); }}
                   >
@@ -5654,7 +5631,8 @@ export function LevelEditor(): ReactElement {
                   <button
                     type="button"
                     key={art.id}
-                    className={`le-swatch le-wall-asset-swatch ${wallArtBrushId === art.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    data-chrome-unit="inner-asset-swatch"
+                    className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', 'le-wall-asset-swatch', wallArtBrushId === art.id && tool !== 'erase' && 'active')}
                     title={`${art.label} - spans ${art.span} wall${art.span === 1 ? '' : 's'}`}
                     onClick={() => { setWallArtBrushId(art.id); setBrushKind('wallart'); setLayer('wallart'); setTool('brush'); }}
                   >
@@ -5675,7 +5653,7 @@ export function LevelEditor(): ReactElement {
               <div className="le-pal-group le-fence-artwork-picker">
                 <span className="le-pal-grouplabel">Artwork</span>
                 <div className="le-fence-artwork-cycle">
-                  <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Previous fence artwork" title="Previous fence artwork" onClick={() => stepFenceArtwork(-1)}>
+                  <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Previous fence artwork" title="Previous fence artwork" onClick={() => stepFenceArtwork(-1)}>
                     <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
                   </button>
                   <SelectFrame>
@@ -5683,7 +5661,7 @@ export function LevelEditor(): ReactElement {
                       {fenceArtCatalog.map((artwork) => <option key={artwork.id} value={artwork.id}>{artwork.label}</option>)}
                     </select>
                   </SelectFrame>
-                  <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Next fence artwork" title="Next fence artwork" onClick={() => stepFenceArtwork(1)}>
+                  <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Next fence artwork" title="Next fence artwork" onClick={() => stepFenceArtwork(1)}>
                     <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
                   </button>
                 </div>
@@ -5701,10 +5679,11 @@ export function LevelEditor(): ReactElement {
             <div className="le-pal-group">
               <span className="le-pal-grouplabel">Place</span>
               <div className="le-seg" role="group" aria-label="Fence paint target">
-                <button type="button" className={`le-seg-btn ${fencePaintTarget === 'rail' ? 'active' : ''}`.trim()} aria-pressed={fencePaintTarget === 'rail'} onClick={() => { setFencePaintTarget('rail'); setTool('brush'); }}>Rails</button>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', fencePaintTarget === 'rail' && 'active')} aria-pressed={fencePaintTarget === 'rail'} onClick={() => { setFencePaintTarget('rail'); setTool('brush'); }}>Rails</button>
                 <button
                   type="button"
-                  className={`le-seg-btn ${fencePaintTarget === 'post' ? 'active' : ''}`.trim()}
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', fencePaintTarget === 'post' && 'active')}
                   aria-pressed={fencePaintTarget === 'post'}
                   disabled={Boolean(activeFenceArtwork && !activeFenceArtwork.post)}
                   title={activeFenceArtwork && !activeFenceArtwork.post ? 'This artwork is intentionally rail-only.' : undefined}
@@ -5725,7 +5704,8 @@ export function LevelEditor(): ReactElement {
                     <button
                       type="button"
                       key={`fence-${mat}`}
-                      className={`le-swatch ${fenceBrushMaterial === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                      data-chrome-unit="inner-asset-swatch"
+                      className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', fenceBrushMaterial === mat && tool !== 'erase' && 'active')}
                       title={FENCE_MATERIAL_LABELS[mat]}
                       onClick={() => { setFenceBrushMaterial(mat); setBrushKind('fence'); setLayer('fence'); setTool('brush'); }}
                     >
@@ -5765,7 +5745,8 @@ export function LevelEditor(): ReactElement {
                   <button
                     type="button"
                     key={`road-${mat}`}
-                    className={`le-swatch ${brushKind === 'road' && featureBrushMaterial.road === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    data-chrome-unit="inner-asset-swatch"
+                    className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', brushKind === 'road' && featureBrushMaterial.road === mat && tool !== 'erase' && 'active')}
                     title={FEATURE_MATERIAL_LABELS[mat]}
                     onClick={() => { setFeatureBrushMaterial((prev) => ({ ...prev, road: mat })); setBrushKind('road'); setLayer('paths'); setTool('brush'); }}
                   >
@@ -5782,7 +5763,8 @@ export function LevelEditor(): ReactElement {
                   <button
                     type="button"
                     key={`river-${mat}`}
-                    className={`le-swatch ${brushKind === 'river' && featureBrushMaterial.river === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    data-chrome-unit="inner-asset-swatch"
+                    className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', brushKind === 'river' && featureBrushMaterial.river === mat && tool !== 'erase' && 'active')}
                     title={FEATURE_MATERIAL_LABELS[mat]}
                     onClick={() => { setFeatureBrushMaterial((prev) => ({ ...prev, river: mat })); setBrushKind('river'); setLayer('paths'); setTool('brush'); }}
                   >
@@ -5823,7 +5805,8 @@ export function LevelEditor(): ReactElement {
                       <button
                         type="button"
                         key={asset.id}
-                        className={`le-swatch le-macro-swatch ${macroTileBrushId === asset.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        data-chrome-unit="inner-asset-swatch"
+                        className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', 'le-macro-swatch', macroTileBrushId === asset.id && tool !== 'erase' && 'active')}
                         title={`${asset.label} · ${asset.columns}×${asset.rows}`}
                         onClick={() => { setMacroTileBrushId(asset.id); setTool('brush'); }}
                       >
@@ -5844,7 +5827,8 @@ export function LevelEditor(): ReactElement {
                       <button
                         type="button"
                         key={tile.id}
-                        className={`le-swatch ${macroTileBrushId === null && brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        data-chrome-unit="inner-asset-swatch"
+                        className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', macroTileBrushId === null && brushId === tile.id && tool !== 'erase' && 'active')}
                         title={tile.label}
                         onClick={() => { setMacroTileBrushId(null); setBrushId(tile.id); setTool('brush'); }}
                       >
@@ -5894,8 +5878,8 @@ export function LevelEditor(): ReactElement {
           <section className="skirmish-card">
             <h2>Tile Fill</h2>
             <div className="le-seg">
-              <button type="button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank terrain cells with the current tile brush.">Empty</button>
-              <button type="button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole terrain layer with the current tile brush.">Whole</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => fillBoard('empty')} title="Fill blank terrain cells with the current tile brush.">Empty</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => fillBoard('all')} title="Fill the whole terrain layer with the current tile brush.">Whole</button>
             </div>
           </section>
         ) : null}
@@ -5903,7 +5887,7 @@ export function LevelEditor(): ReactElement {
         {brushKind !== 'tile' ? (
           <section className="skirmish-card">
             <h2>Layer Actions</h2>
-            <button type="button" className="le-seg-btn danger" style={{ width: '100%' }} onClick={clearActiveLayer} title={brushKind === 'zone' ? 'Clear the selected zone entry.' : brushKind === 'fence' ? 'Clear every fence rail and authored post from this board.' : `Clear every ${brushKind === 'wallart' ? 'wall art' : brushKind} placement from this board.`}>Clear {brushKind === 'zone' ? 'active zone' : brushKind === 'wallart' ? 'wall art' : brushKind === 'fence' ? 'fences & posts' : brushKind}</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} style={{ width: '100%' }} onClick={clearActiveLayer} title={brushKind === 'zone' ? 'Clear the selected zone entry.' : brushKind === 'fence' ? 'Clear every fence rail and authored post from this board.' : `Clear every ${brushKind === 'wallart' ? 'wall art' : brushKind} placement from this board.`}>Clear {brushKind === 'zone' ? 'active zone' : brushKind === 'wallart' ? 'wall art' : brushKind === 'fence' ? 'fences & posts' : brushKind}</button>
           </section>
         ) : null}
 
@@ -5917,20 +5901,20 @@ export function LevelEditor(): ReactElement {
           <div className="skirmish-view-group">
             <span className="skirmish-eyebrow">Zoom</span>
             <div className="skirmish-view-row">
-              <button type="button" className="app-header-button" onClick={() => adjustZoom(-0.1)} aria-label="Zoom out">−</button>
+              <button type="button" data-chrome-unit="inner-minus-key" className={chromeUnitClassNames('inner-minus-key', 'le-seg-btn', 'le-icon-btn')} onClick={() => adjustZoom(-0.1)} aria-label="Zoom out">−</button>
               <span className="skirmish-zoom-readout">{Math.round(viewZoom * 100)}%</span>
-              <button type="button" className="app-header-button" onClick={() => adjustZoom(0.1)} aria-label="Zoom in">+</button>
-              <button type="button" className="app-header-button" onClick={resetBoardView}>Reset</button>
+              <button type="button" data-chrome-unit="inner-plus-key" className={chromeUnitClassNames('inner-plus-key', 'le-seg-btn', 'le-icon-btn')} onClick={() => adjustZoom(0.1)} aria-label="Zoom in">+</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={resetBoardView}>Reset</button>
             </div>
           </div>
           <div className="skirmish-view-group">
             <span className="skirmish-eyebrow">Overlays</span>
             <div className="skirmish-view-row">
-              <button type="button" className={`app-header-button ${showMoves ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowMoves((value) => !value)} aria-pressed={showMoves}>Moves</button>
-              <button type="button" className={`app-header-button ${showEnemyAttacks ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowEnemyAttacks((value) => !value)} aria-pressed={showEnemyAttacks}>Attacks</button>
-              <button type="button" className={`app-header-button ${showBlocked ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowBlocked((value) => !value)} aria-pressed={showBlocked}>Blocks</button>
-              <button type="button" className={`app-header-button ${showPromotionZones ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowPromotionZones((value) => !value)} aria-pressed={showPromotionZones}>Promotion</button>
-              <button type="button" className={`app-header-button ${showGrid ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowGrid((value) => !value)} aria-pressed={showGrid}>Grid</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showMoves && 'active')} onClick={() => setShowMoves((value) => !value)} aria-pressed={showMoves}>Moves</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showEnemyAttacks && 'active')} onClick={() => setShowEnemyAttacks((value) => !value)} aria-pressed={showEnemyAttacks}>Attacks</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showBlocked && 'active')} onClick={() => setShowBlocked((value) => !value)} aria-pressed={showBlocked}>Blocks</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showPromotionZones && 'active')} onClick={() => setShowPromotionZones((value) => !value)} aria-pressed={showPromotionZones}>Promotion</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showGrid && 'active')} onClick={() => setShowGrid((value) => !value)} aria-pressed={showGrid}>Grid</button>
             </div>
           </div>
         </section>
@@ -5984,8 +5968,7 @@ export function LevelEditor(): ReactElement {
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{zoneCount}</b> zones · <b>{zonedTileCount}</b> zoned tiles · {boardCols}×{boardRows}
         </div>
         ) : null}
-        </KitScroll>
-      </aside>
+      </LevelEditorControlsPanel>
       )}
       </ArtRouteChrome>
     </div>

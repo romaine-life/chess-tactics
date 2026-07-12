@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CHROME_FAMILY_SURFACE_SELECTOR,
+  chromeFamilyRoleSelectors,
   dividerDefault,
   frameCss,
   installedChromeTuningPayload,
@@ -11,6 +13,7 @@ import {
   type FrameRender,
 } from './chromeFamilyRuntime';
 import { CHROME_LIVE_SLOTS } from './chromeCandidateSources';
+import { chromeUnitRoleSelectors, chromeUnitScopedSelectors } from './chromeUnitRegistry';
 
 const frame = (url: string, slice: number): FrameRender => ({
   url,
@@ -92,5 +95,26 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
     expect(css).toContain('border-image-width: 12px !important;');
     expect(css).not.toContain('--le-chrome-outer-frame-w');
     expect(css).not.toContain('--le-control-fill-inset');
+  });
+
+  it('targets real hierarchy classes and registry legacy selectors on every family surface', () => {
+    const outer = roleDefault('outer');
+    const inner = roleDefault('inner');
+    const selectors = chromeFamilyRoleSelectors('inner');
+    const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), divider);
+
+    expect(selectors).toBe(chromeUnitScopedSelectors(
+      CHROME_FAMILY_SURFACE_SELECTOR,
+      chromeUnitRoleSelectors('inner'),
+    ));
+    expect(selectors.split(',\n')[0]).toBe(`${CHROME_FAMILY_SURFACE_SELECTOR} .inner-box`);
+    expect(selectors).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} .settings-toggle`);
+    expect(selectors).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} .le-md-item`);
+    expect(css).toContain(`${selectors} {`);
+    expect(CHROME_FAMILY_SURFACE_SELECTOR).toContain('.chrome-family-surface');
+    expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} .inner-box:is(.active, .is-active, [aria-pressed="true"])`);
+    expect(css).toContain('border-image-source: var(--skirmish-chrome-inner-control-active-image) !important;');
+    expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} .inner-box.danger`);
+    expect(css).toContain('border-image-source: var(--skirmish-chrome-inner-control-danger-image) !important;');
   });
 });

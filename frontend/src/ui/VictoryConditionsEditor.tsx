@@ -4,6 +4,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { HouseSelect } from './shared/HouseSelect';
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
 
 // The Level Editor's "Victory events" editor (ADR-0064) — a MASTER-DETAIL surface inside the
 // events overlay: a scrollable list of NAMED rules on the left, the selected rule's `IF <conditions>
@@ -138,14 +139,20 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
         {value.length === 0 ? <p className="le-board-warning">No events yet — add a template above, or add one below.</p> : null}
         <div className="le-md-rules">
           {value.map((r, i) => (
-            <button type="button" key={i} className={`le-md-item ${i === selected ? 'active' : ''}`.trim()} onClick={() => setSel(i)}>
+            <button
+              type="button"
+              key={i}
+              data-chrome-unit="inner-list-row"
+              className={chromeUnitClassNames('inner-list-row', 'le-md-item', i === selected ? 'active' : '')}
+              onClick={() => setSel(i)}
+            >
               <span className="le-md-item-name">{displayName(r, i)}</span>
               <span className={`le-md-item-out ${r.do[0]?.kind ?? 'win'}`}>{outcomeLabel(r, factionLabel)}</span>
             </button>
           ))}
         </div>
         <div className="le-cond-add le-rule-add">
-          <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn le-add-event" onClick={addEvent}>+ Add event</button>
+          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-add-event')} onClick={addEvent}>+ Add event</button>
         </div>
       </div>
 
@@ -163,7 +170,7 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
               <div className="le-rule-cond" key={j}>
                 <div className="le-cond-top">
                   <span className="le-cond-summary"><b>{j === 0 ? 'IF' : 'and'}</b> {conditionSummary(c, factionLabel)}</span>
-                  <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger le-cond-remove" aria-label="Remove this condition" title="Remove condition" onClick={() => removeCond(j)}>–</button>
+                  <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger', 'le-cond-remove')} aria-label="Remove this condition" title="Remove condition" onClick={() => removeCond(j)}>–</button>
                 </div>
                 {c.kind === 'eliminate' ? (
                   <div className="le-cond-params">
@@ -196,9 +203,9 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
 
             <div className="le-cond-add">
               <span className="le-ctrllabel le-rule-and">and…</span>
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => addCond({ kind: 'eliminate', side: 'enemy' })}>+ Eliminate</button>
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => addCond({ kind: 'reach', side: 'player' })}>+ Reach goal</button>
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn" onClick={() => addCond({ kind: 'turnLimit', turns: DEFAULT_SURVIVE_TURNS })}>+ Turn N</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => addCond({ kind: 'eliminate', side: 'enemy' })}>+ Eliminate</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => addCond({ kind: 'reach', side: 'player' })}>+ Reach goal</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => addCond({ kind: 'turnLimit', turns: DEFAULT_SURVIVE_TURNS })}>+ Turn N</button>
             </div>
 
             <div className="le-rule-then">
@@ -211,11 +218,11 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
               />
               <div className="le-seg le-seg-wrap le-seg-compact">
                 {(['win', 'lose'] as const).map((kind) => (
-                  <button type="button" key={kind} data-chrome-unit="inner-text-button" className={`le-seg-btn ${action.kind === kind ? 'active' : ''}`.trim()}
+                  <button type="button" key={kind} data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', action.kind === kind ? 'active' : '')}
                     onClick={() => patchAction({ kind })}>{kind === 'win' ? 'wins' : 'loses'}</button>
                 ))}
               </div>
-              <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger le-rule-remove" onClick={() => removeRule(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger', 'le-rule-remove')} onClick={() => removeRule(selected)}>Remove event</button>
             </div>
           </div>
         ) : <p className="le-board-note">No event selected — add a template or add an event on the left.</p>}

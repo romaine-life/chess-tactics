@@ -5740,7 +5740,7 @@ h1 {
 .le-zone-panel .le-zone-select-controls,
 .le-zone-panel .le-select-wrap,
 .le-zone-panel .le-zone-name-input,
-.le-zone-panel .le-zone-color-swatches {
+.le-zone-panel .le-zone-color-select {
   box-sizing: border-box;
   justify-self: stretch;
   min-width: 0;
@@ -5755,8 +5755,7 @@ h1 {
 .le-zone-panel .le-layer-select-wrap,
 .le-zone-panel .le-layer-select,
 .le-zone-panel .le-zone-name-input,
-.le-zone-panel .le-zone-stepper-button.settings-chrome-button,
-.le-zone-panel .le-zone-color-button {
+.le-zone-panel .le-zone-stepper-button.settings-chrome-button {
   height: var(--le-zone-row-h);
   min-height: var(--le-zone-row-h);
 }
@@ -5766,20 +5765,6 @@ h1 {
 }
 .le-zone-panel .le-zone-name-input {
   max-width: none;
-}
-.le-zone-panel .le-zone-color-swatches {
-  align-items: stretch;
-  gap: 8px;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  height: var(--le-zone-row-h);
-  justify-content: stretch;
-}
-.le-zone-panel .le-zone-color-button {
-  width: 100%;
-}
-.le-zone-panel .le-zone-color-button .le-zone-dot {
-  height: 14px;
-  width: 14px;
 }
 /* The board-link field wears the kit `field-input` 9-slice (its own navy well is the frame's
    fill slice), never a hand-rolled border (ADR-0032/0034) — the same input chrome the Codex
@@ -6007,9 +5992,6 @@ h1 {
 }
 .le-generate .le-gen-icon {
   flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  min-height: 0; /* override the global button min-height:44px so the icon stays square */
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -6017,13 +5999,9 @@ h1 {
   font-size: 12px;
   line-height: 1;
   color: inherit;
-  background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(255, 255, 255, .18);
-  border-radius: 4px;
   cursor: pointer;
 }
 .le-generate .le-gen-icon:disabled { opacity: .35; cursor: default; }
-.le-generate .le-gen-icon.active { background: rgba(110, 238, 246, .22); border-color: rgba(110, 238, 246, .6); }
 .le-generate .le-gen-add { width: 100%; margin: 2px 0 8px; }
 .le-generate .le-gen-region-group {
   display: flex;
@@ -6055,23 +6033,12 @@ h1 {
   gap: 6px;
 }
 .le-generate .le-gen-cover-head .house-select { flex: 1 1 auto; min-width: 0; }
-/* Compact caret button that toggles this cover's knobs (no min-height:44 touch target). */
+/* The disclosure is a registered tool square; this rule only seats it in the cover row. */
 .le-generate .le-gen-cover-caret-btn {
   flex: 0 0 auto;
-  width: 18px;
-  height: 26px;
-  min-height: 0;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   color: inherit;
-  opacity: .65;
-  background: none;
-  border: none;
   cursor: pointer;
 }
-.le-generate .le-gen-cover-caret-btn:hover { opacity: 1; }
 .le-generate .le-gen-cover-caret { flex: 0 0 auto; width: 10px; font-size: 10px; }
 .le-generate .le-gen-cover-knobs {
   display: flex;
@@ -6079,24 +6046,17 @@ h1 {
   gap: 2px;
   margin: 2px 0 4px 16px;
 }
-/* The global button style forces min-height:44px + 9px padding (a full touch target) — override it
-   so the cover row's × stays compact. */
-.le-generate .le-gen-cover-entry .le-gen-icon { min-height: 0; width: 22px; height: 22px; padding: 0; }
 .le-generate .le-gen-cover-add {
   width: 100%;
-  min-height: 0;
   margin-top: 2px;
   padding: 4px 8px;
   font: inherit;
   font-size: 11px;
   color: inherit;
   opacity: .8;
-  background: rgba(255, 255, 255, .04);
-  border: 1px dashed rgba(255, 255, 255, .22);
-  border-radius: 4px;
   cursor: pointer;
 }
-.le-generate .le-gen-cover-add:hover { opacity: 1; background: rgba(255, 255, 255, .08); }
+.le-generate .le-gen-cover-add:hover { opacity: 1; }
 .le-generate .le-gen-run {
   font-weight: 600;
 }
@@ -6120,32 +6080,23 @@ h1 {
   background: rgba(var(--le-zone-accent), .95);
   box-shadow: 0 0 0 1px rgba(var(--le-zone-accent), .5);
 }
-.le-zone-color-swatches {
-  display: grid;
-  gap: 5px;
-  grid-template-columns: repeat(7, 24px);
-  justify-content: end;
+.le-zone-color-choice {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
 }
-.le-zone-color-button {
-  appearance: none;
-  background: rgba(7, 18, 27, .72);
-  border: 1px solid rgba(120, 160, 180, .28);
-  border-radius: 4px;
-  box-sizing: border-box;
-  cursor: pointer;
-  display: grid;
-  height: 24px;
-  padding: 0;
-  place-items: center;
-  width: 24px;
+.le-zone-color-choice .le-zone-dot {
+  flex: 0 0 auto;
+  height: 12px;
+  width: 12px;
 }
-.le-zone-color-button.active {
-  border-color: rgba(var(--le-zone-accent), .95);
-  box-shadow: 0 0 0 1px rgba(var(--le-zone-accent), .65), 0 0 10px rgba(var(--le-zone-accent), .2);
+.le-zone-color-choice-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.le-zone-color-button:disabled { cursor: default; opacity: .45; }
-.le-zone-color-button:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
-.le-zone-color-button .le-zone-dot { height: 12px; width: 12px; }
+.house-select-option .le-zone-color-choice { width: 100%; }
 
 /* A wrapping segmented row for controls with more items than fit one line (the 5-mode picker). */
 .le-seg-wrap { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: 1fr 1fr; }
@@ -6346,9 +6297,8 @@ h1 {
 .le-md { display: grid; flex: 1; gap: 20px; grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); min-height: 0; padding: 12px 2px 4px; }
 .le-md-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .le-md-rules { display: flex; flex: 1; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; padding-right: 4px; }
-.le-md-item { align-items: center; background: rgba(20, 34, 44, .5); border: 1px solid rgba(120, 160, 180, .18); border-radius: 5px; color: #cfe6f2; cursor: pointer; display: flex; gap: 8px; justify-content: space-between; padding: 7px 10px; text-align: left; }
-.le-md-item:hover { border-color: rgba(120, 160, 180, .4); }
-.le-md-item.active { background: rgba(30, 60, 82, .7); border-color: var(--skirmish-cyan, #7fd7ff); color: #eafaff; }
+.le-md-item { align-items: center; color: #cfe6f2; cursor: pointer; display: flex; gap: 8px; justify-content: space-between; padding: 7px 10px; text-align: left; }
+.le-md-item.active { color: #eafaff; }
 .le-md-item-name { font-size: var(--ds-text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .le-md-item-out { flex: none; font-size: var(--ds-text-2xs); opacity: .85; text-transform: uppercase; }
 .le-md-item-out.lose { color: #ff9a9a; }
@@ -16779,4 +16729,67 @@ button.tileset-relationship-cell {
   max-width: none;
   object-fit: fill;
   width: calc(72px * var(--tile-zoom, 1));
+}
+
+/* ADR-0082: these are the real DOM ancestors shown by Chrome Audit.  Legacy
+   feature classes may still own layout, spacing, and copy treatment, but every
+   house-chrome frame is painted by the registered inner role.  Keeping this
+   contract after the feature rules also prevents a local raw-CSS background or
+   one-pixel border from silently winning over the installed Chrome family. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box {
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  border-radius: 0;
+  border-style: solid;
+  border-width: var(--le-chrome-inner-rail-w, 7px);
+  border-image-source: var(--skirmish-chrome-inner-control-image);
+  border-image-slice: 24 fill;
+  border-image-width: var(--le-chrome-inner-rail-w, 7px);
+  border-image-repeat: round;
+  box-shadow: none;
+  box-sizing: border-box;
+  image-rendering: pixelated;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box:is(.active, .is-active, [aria-pressed="true"]) {
+  border-image-source: var(--skirmish-chrome-inner-control-active-image);
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box.danger {
+  border-image-source: var(--skirmish-chrome-inner-control-danger-image);
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .locked-height-rectangle {
+  min-block-size: var(--le-inner-control-h, 38px);
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .tool-square {
+  block-size: var(--le-inner-square, var(--le-inner-control-h, 38px));
+  inline-size: var(--le-inner-square, var(--le-inner-control-h, 38px));
+  min-block-size: var(--le-inner-square, var(--le-inner-control-h, 38px));
+  min-inline-size: var(--le-inner-square, var(--le-inner-control-h, 38px));
+  padding: 0;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .dropdown {
+  min-block-size: var(--le-inner-field-h, var(--le-inner-control-h, 38px));
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .toggle {
+  block-size: var(--le-inner-control-h, 38px);
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .list-row {
+  min-block-size: var(--le-inner-row-h, var(--le-inner-control-h, 38px));
+}
+
+/* The compass is a grid of canonical tool squares; its container follows the
+   inherited square token instead of squeezing those controls into a local 138px
+   diagram. */
+.level-editor-screen .unit-facing-compass {
+  aspect-ratio: auto;
+  grid-template-columns: repeat(3, var(--le-inner-square, 38px));
+  grid-template-rows: repeat(3, var(--le-inner-square, 38px));
+  width: calc(var(--le-inner-square, 38px) * 3 + 8px);
 }

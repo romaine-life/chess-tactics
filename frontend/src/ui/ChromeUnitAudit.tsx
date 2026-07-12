@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactElement, ty
 import { SliderRow } from './dressing/SliderRow';
 import {
   chromeUnitById,
+  chromeUnitClassNames,
   chromeUnitClassPath,
   chromeUnitsInHierarchyOrder,
+  type ChromeUnitId,
   type ChromeUnitSpec,
 } from './chromeUnitRegistry';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { HouseSelect } from './shared/HouseSelect';
+import { Toggle } from './shared/Toggle';
 import { LevelEditorControlsPanel, LevelEditorEventsOverlay, type LevelEditorLayerOption } from './LevelEditorChromeConsumers';
 import { SkirmishHud } from './SkirmishHud';
 import { VictoryConditionsEditor, type FactionOption } from './VictoryConditionsEditor';
@@ -33,6 +36,9 @@ export function chromeUnitThumbnailDims(unit: ChromeUnitSpec): ChromeUnitAuditDi
   if (unit.id === 'outer-panel') return { width: 188, height: 114, dividers: 1 };
   if (unit.id === 'inner-dropdown') return { width: 150, height: 64, dividers: 0 };
   if (unit.id === 'inner-text-button') return { width: 138, height: 0, dividers: 0 };
+  if (unit.id === 'inner-toggle') return { width: 138, height: 0, dividers: 0 };
+  if (unit.id === 'inner-list-row') return { width: 180, height: 0, dividers: 0 };
+  if (unit.id === 'inner-asset-swatch') return { width: 84, height: 78, dividers: 0 };
   if (unit.id === 'inner-box') return { width: 132, height: 86, dividers: 0 };
   if (unit.id === 'inner-locked-rectangle') return { width: 132, height: 58, dividers: 0 };
   return chromeUnitBaselineDims(unit);
@@ -130,11 +136,12 @@ function chromeUnitPreviewBaselineDims(unit: ChromeUnitSpec, preview: OuterPanel
 }
 
 function SelectVisual({ interactive, label, ariaLabel, className = '' }: { interactive: boolean; label: string; ariaLabel: string; className?: string }): ReactElement {
+  const rootClassName = chromeUnitClassNames('inner-dropdown', className);
   if (interactive) {
     return (
       <HouseSelect
         ariaLabel={ariaLabel}
-        className={className}
+        className={rootClassName}
         value="board"
         options={[
           { value: 'board', label },
@@ -146,7 +153,7 @@ function SelectVisual({ interactive, label, ariaLabel, className = '' }: { inter
     );
   }
   return (
-    <div data-chrome-unit="inner-dropdown" className={`house-select le-select-wrap ${className}`.trim()}>
+    <div data-chrome-unit="inner-dropdown" className={chromeUnitClassNames('inner-dropdown', 'house-select', 'le-select-wrap', className)}>
       <span className="house-select-trigger chrome-unit-inert-select">{label}</span>
     </div>
   );
@@ -154,23 +161,25 @@ function SelectVisual({ interactive, label, ariaLabel, className = '' }: { inter
 
 function SegButtonVisual({
   interactive,
+  unitId,
   className,
   label,
   children,
 }: {
   interactive: boolean;
+  unitId: ChromeUnitId;
   className: string;
   label: string;
   children: ReactNode;
 }): ReactElement {
   if (interactive) {
     return (
-      <button type="button" className={className} aria-label={label}>
+      <button type="button" data-chrome-unit={unitId} className={className} aria-label={label}>
         {children}
       </button>
     );
   }
-  return <span className={className} aria-hidden="true">{children}</span>;
+  return <span data-chrome-unit={unitId} className={className} aria-hidden="true">{children}</span>;
 }
 
 function toneClass(unit: ChromeUnitSpec): string {
@@ -199,9 +208,9 @@ function LevelEditorControlsConsumer({ dims }: { dims: ChromeUnitAuditDims }): R
       <section className="skirmish-card chrome-unit-panel-section">
         <h2>Board</h2>
         <div className="le-board-actions">
-          <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn">Randomize</button>
-          <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger">Clear</button>
-          <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn">Copy Link</button>
+          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}>Randomize</button>
+          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}>Clear</button>
+          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}>Copy Link</button>
         </div>
       </section>
       <section className="skirmish-card le-level-settings chrome-unit-panel-section">
@@ -225,7 +234,7 @@ function LevelEditorControlsConsumer({ dims }: { dims: ChromeUnitAuditDims }): R
                   ]}
                   onChange={chromeAuditNoop}
                 />
-                <button type="button" className="le-faction-select le-direction-trigger" aria-label="Specimen direction">N</button>
+                <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-faction-select', 'le-direction-trigger')} aria-label="Specimen direction">N</button>
               </span>
             </div>
           </div>
@@ -265,8 +274,8 @@ function EventsOverlayConsumer({ dims }: { dims: ChromeUnitAuditDims }): ReactEl
                   ]}
                   onChange={chromeAuditNoop}
                 />
-                <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn">Add template</button>
-                <button type="button" data-chrome-unit="inner-text-button" className="le-seg-btn danger">Clear rules</button>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}>Add template</button>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}>Clear rules</button>
               </div>
             </div>
           )}
@@ -281,7 +290,7 @@ function EventsOverlayConsumer({ dims }: { dims: ChromeUnitAuditDims }): ReactEl
             </div>
             <h3 className="le-victory-head">Events</h3>
             <div className="le-md-rules">
-              <button type="button" className="le-md-item active">
+              <button type="button" data-chrome-unit="inner-list-row" className={chromeUnitClassNames('inner-list-row', 'le-md-item', 'active')}>
                 <span className="le-md-item-name">Setup spawn</span>
                 <span className="le-md-item-out">spawn</span>
               </button>
@@ -329,7 +338,7 @@ function OuterPanelSpecimen({ dims, preview }: { dims: ChromeUnitAuditDims; prev
   return (
     <div
       data-chrome-unit="outer-panel"
-      className="skirmish-hud le-outer-panel chrome-unit-outer-panel"
+      className={chromeUnitClassNames('outer-panel', 'skirmish-hud', 'le-outer-panel', 'chrome-unit-outer-panel')}
       style={{ width: `${dims.width}px`, minHeight: `${dims.height}px` }}
     >
       <span className="le-outer-panel-fill" aria-hidden="true" />
@@ -351,7 +360,7 @@ function SquareSpecimen({ unit, interactive }: { unit: ChromeUnitSpec; interacti
   if (unit.id === 'inner-tool-square') {
     return (
       <div className="le-seg le-seg-icons chrome-unit-inline-seat">
-        <SegButtonVisual interactive={false} className="le-seg-btn" label="Tool square slot">
+        <SegButtonVisual interactive={false} unitId="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-seg-btn')} label="Tool square slot">
           <span className="chrome-unit-slot-marker" aria-hidden="true" />
         </SegButtonVisual>
       </div>
@@ -363,19 +372,19 @@ function SquareSpecimen({ unit, interactive }: { unit: ChromeUnitSpec; interacti
     return (
       <div className="settings-stepper chrome-unit-key-only">
         {interactive ? (
-          <button type="button" className="settings-chrome-button settings-chrome-button-neutral" aria-label={keyLabel}>{keyContents}</button>
+          <button type="button" data-chrome-unit={unit.id} className={chromeUnitClassNames(unit.id, 'settings-chrome-button', 'settings-chrome-button-neutral')} aria-label={keyLabel}>{keyContents}</button>
         ) : (
-          <span className="settings-chrome-button settings-chrome-button-neutral" aria-hidden="true">{keyContents}</span>
+          <span data-chrome-unit={unit.id} className={chromeUnitClassNames(unit.id, 'settings-chrome-button', 'settings-chrome-button-neutral')} aria-hidden="true">{keyContents}</span>
         )}
       </div>
     );
   }
   if (unit.iconClass) {
     const isHistoryKey = unit.id === 'inner-undo-key' || unit.id === 'inner-redo-key';
-    const className = `le-seg-btn${isHistoryKey ? ' le-icon-btn' : ''}${toneClass(unit)}`;
+    const className = chromeUnitClassNames(unit.id, 'le-seg-btn', isHistoryKey && 'le-icon-btn', toneClass(unit).trim());
     return (
       <div className="le-seg le-seg-icons chrome-unit-inline-seat">
-        <SegButtonVisual interactive={interactive && unit.catalogKind === 'implementation'} className={className} label={unit.label}>
+        <SegButtonVisual interactive={interactive && unit.catalogKind === 'implementation'} unitId={unit.id} className={className} label={unit.label}>
           <span className={`le-ico ${unit.iconClass}`} aria-hidden="true" />
         </SegButtonVisual>
       </div>
@@ -383,7 +392,7 @@ function SquareSpecimen({ unit, interactive }: { unit: ChromeUnitSpec; interacti
   }
   return (
     <div className="le-seg chrome-unit-inline-seat">
-      <SegButtonVisual interactive={interactive} className="le-seg-btn le-icon-btn" label="Undo">
+      <SegButtonVisual interactive={interactive} unitId="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-seg-btn', 'le-icon-btn')} label="Undo">
         <span className="le-ico ic-undo" aria-hidden="true" />
       </SegButtonVisual>
     </div>
@@ -393,7 +402,8 @@ function SquareSpecimen({ unit, interactive }: { unit: ChromeUnitSpec; interacti
 function FreeBoxSpecimen({ dims }: { dims: ChromeUnitAuditDims }): ReactElement {
   return (
     <div
-      className="le-seg-btn chrome-unit-rect chrome-unit-empty-template"
+      data-chrome-unit="inner-box"
+      className={chromeUnitClassNames('inner-box', 'chrome-unit-rect', 'chrome-unit-empty-template')}
       style={{ width: `${dims.width}px`, minHeight: `${dims.height}px` }}
       aria-hidden="true"
     />
@@ -405,14 +415,14 @@ function RectangleSpecimen({ unit, dims, interactive }: { unit: ChromeUnitSpec; 
     return (
       <div className="chrome-unit-variant-stack" style={{ width: `${dims.width}px` }}>
         {unit.variants.map((variant) => {
-          const className = `le-seg-btn chrome-unit-rect ${variant.className ?? ''}`.trim();
+          const className = chromeUnitClassNames(unit.id, 'le-seg-btn', 'chrome-unit-rect', variant.className);
           const contents = <span>{variant.specimenText}</span>;
           return interactive ? (
-            <button type="button" className={className} key={variant.name}>
+            <button type="button" data-chrome-unit={unit.id} className={className} key={variant.name}>
               {contents}
             </button>
           ) : (
-            <span className={className} aria-hidden="true" key={variant.name}>{contents}</span>
+            <span data-chrome-unit={unit.id} className={className} aria-hidden="true" key={variant.name}>{contents}</span>
           );
         })}
       </div>
@@ -420,17 +430,65 @@ function RectangleSpecimen({ unit, dims, interactive }: { unit: ChromeUnitSpec; 
   }
   const contents = <span>{unit.contentPolicy === 'slot' ? PLACEHOLDER_TEXT : unit.specimenText ?? 'Play Test'}</span>;
   const isInteractive = interactive && unit.catalogKind === 'implementation';
-  const className = `le-seg-btn chrome-unit-rect${toneClass(unit)}`;
+  const className = chromeUnitClassNames(unit.id, 'le-seg-btn', 'chrome-unit-rect', toneClass(unit).trim());
   return isInteractive ? (
     <button
       type="button"
+      data-chrome-unit={unit.id}
       className={className}
       style={{ width: `${dims.width}px` }}
     >
       {contents}
     </button>
   ) : (
-    <span className={className} style={{ width: `${dims.width}px` }} aria-hidden="true">{contents}</span>
+    <span data-chrome-unit={unit.id} className={className} style={{ width: `${dims.width}px` }} aria-hidden="true">{contents}</span>
+  );
+}
+
+function ToggleSpecimen({ interactive }: { interactive: boolean }): ReactElement {
+  const [checked, setChecked] = useState(false);
+  if (interactive) {
+    return <Toggle checked={checked} label="Toggle specimen" onChange={setChecked} />;
+  }
+  return (
+    <span
+      data-chrome-unit="inner-toggle"
+      className={chromeUnitClassNames('inner-toggle', 'settings-toggle', 'is-off')}
+      aria-hidden="true"
+    >
+      <span className="settings-toggle-opt" data-state="off">Off</span>
+      <span className="settings-toggle-opt" data-state="on">On</span>
+    </span>
+  );
+}
+
+function ListRowSpecimen({ interactive }: { interactive: boolean }): ReactElement {
+  const contents = (
+    <>
+      <span className="le-md-item-name">Setup spawn</span>
+      <span className="le-md-item-out">spawn</span>
+    </>
+  );
+  const className = chromeUnitClassNames('inner-list-row', 'le-md-item', 'active');
+  return interactive ? (
+    <button type="button" data-chrome-unit="inner-list-row" className={className}>{contents}</button>
+  ) : (
+    <span data-chrome-unit="inner-list-row" className={className} aria-hidden="true">{contents}</span>
+  );
+}
+
+function AssetSwatchSpecimen({ interactive }: { interactive: boolean }): ReactElement {
+  const contents = (
+    <>
+      <span className="chrome-unit-slot-marker" aria-hidden="true" />
+      <small>Asset</small>
+    </>
+  );
+  const className = chromeUnitClassNames('inner-asset-swatch', 'le-swatch', 'active');
+  return interactive ? (
+    <button type="button" data-chrome-unit="inner-asset-swatch" className={className}>{contents}</button>
+  ) : (
+    <span data-chrome-unit="inner-asset-swatch" className={className} aria-hidden="true">{contents}</span>
   );
 }
 
@@ -516,6 +574,9 @@ export function ChromeUnitSpecimen({
   if (unit.id === 'inner-box' && outerPreview?.kind === 'events-overlay') return <EventsOverlayConsumer dims={dims} />;
   if (unit.id === 'inner-box' && outerPreview?.kind === 'skirmish-hud') return <SkirmishHudConsumer dims={dims} />;
   if (unit.id === 'inner-box') return <FreeBoxSpecimen dims={dims} />;
+  if (unit.id === 'inner-asset-swatch') return <AssetSwatchSpecimen interactive={interactive} />;
+  if (unit.id === 'inner-toggle') return <ToggleSpecimen interactive={interactive} />;
+  if (unit.id === 'inner-list-row') return <ListRowSpecimen interactive={interactive} />;
   if (unit.dimensionPolicy === 'locked-square') return <SquareSpecimen unit={unit} interactive={interactive} />;
   if (unit.id === 'inner-dropdown') return <DropdownSpecimen unit={unit} dims={dims} interactive={interactive} />;
   return <RectangleSpecimen unit={unit} dims={dims} interactive={interactive} />;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { chromeUnitClassNames } from '../chromeUnitRegistry';
 
 export type HouseSelectOption<TValue extends string = string> = {
   value: TValue;
@@ -162,17 +163,21 @@ export function HouseSelect<TValue extends string>({
     updateMenuBox();
   }, [activeIndex, open, updateMenuBox]);
 
+  useEffect(() => {
+    if (disabled && open) closeMenu();
+  }, [closeMenu, disabled, open]);
+
   const menuStyle: CSSProperties | undefined = menuBox
     ? { left: menuBox.left, top: menuBox.top, width: menuBox.width, maxHeight: menuBox.maxHeight }
     : undefined;
-  const rootClass = `house-select le-select-wrap ${className}`.trim();
+  const rootClass = chromeUnitClassNames('inner-dropdown', 'house-select', 'le-select-wrap', className);
 
   const menu = open && typeof document !== 'undefined'
     ? createPortal(
       <div
         ref={menuRef}
         id={`${id}-menu`}
-        className="house-select-menu"
+        className="house-select-menu chrome-family-surface"
         role="listbox"
         aria-label={ariaLabel}
         style={menuStyle}
@@ -182,7 +187,8 @@ export function HouseSelect<TValue extends string>({
             key={option.value}
             type="button"
             id={`${id}-option-${option.value}`}
-            className={`house-select-option ${index === activeIndex ? 'is-active' : ''}`.trim()}
+            data-chrome-unit="inner-list-row"
+            className={chromeUnitClassNames('inner-list-row', 'house-select-option', index === activeIndex && 'is-active')}
             role="option"
             aria-selected={option.value === value}
             disabled={option.disabled}
