@@ -13,7 +13,7 @@
 
 import { encodeWeights } from '../game/tuning';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
-import { MATERIAL_SEARCH, type AiApproachId } from '../game/aiApproach';
+import { AI_APPROACHES, MATERIAL_SEARCH, type AiApproachId } from '../game/aiApproach';
 import type { BookPosition, OpeningBookSettings } from '../game/openingBook';
 import type { SpsaStepGameRecord } from '../game/tuning';
 import type { TdAdoptionRecord, TdRunsDoc, TdSessionDoc } from './tdSession';
@@ -140,6 +140,7 @@ export function migrateTdRuns(blob: BooksBlob): BooksBlob {
 }
 
 const sameVec = (a: number[], b: number[]): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
+const numericVec = (v: unknown): v is number[] => Array.isArray(v) && v.every((n) => typeof n === 'number');
 
 /** Point the level's AI at `id`, replacing THAT approach's config. Other
  * approaches' configs are untouched — setting an AI is repointing, never
@@ -160,16 +161,30 @@ export function clearLevelAiApproach(blob: BooksBlob, id: AiApproachId): BooksBl
 }
 
 /** Load-boundary defense for the level-AI document (the resolver mirror and audit
- * box trust it): drop configs without an all-numeric vector, unset `live` when it
- * points at a missing approach, drop an emptied document. Same object when clean. */
+ * box trust it): drop configs without an all-numeric vector, strip a malformed
+ * adoption record (the audit read compares its vector), unset `live` when it
+ * points at a missing approach OR an id this build's registry does not know (the
+ * audit box dereferences AI_APPROACHES[live] — a foreign id, e.g. written by a
+ * newer client, must degrade the level to stock, not crash the pane; the foreign
+ * CONFIG is preserved for the client that wrote it), and drop an emptied
+ * document. Same object when clean. */
 export function sanitizeLevelAi(doc: LevelAiDoc): LevelAiDoc | undefined {
   const src = doc.approaches && typeof doc.approaches === 'object' ? doc.approaches : {};
-  const entries = (Object.entries(src) as Array<[AiApproachId, AiApproachConfig | undefined]>)
-    .filter((e): e is [AiApproachId, AiApproachConfig] =>
-      !!e[1] && Array.isArray(e[1].vector) && e[1].vector.every((v) => typeof v === 'number'));
+  let dirty = false;
+  const entries: Array<[AiApproachId, AiApproachConfig]> = [];
+  for (const [id, cfg] of Object.entries(src) as Array<[AiApproachId, AiApproachConfig | undefined]>) {
+    if (!cfg || !numericVec(cfg.vector)) { dirty = true; continue; }
+    if (cfg.adoption && !numericVec(cfg.adoption.vector)) {
+      const { adoption: _malformed, ...kept } = cfg;
+      entries.push([id, kept]);
+      dirty = true;
+      continue;
+    }
+    entries.push([id, cfg]);
+  }
   if (!entries.length) return undefined;
-  const liveOk = doc.live !== undefined && entries.some(([id]) => id === doc.live);
-  if (doc.approaches === src && entries.length === Object.keys(src).length && (doc.live === undefined || liveOk)) return doc;
+  const liveOk = doc.live !== undefined && doc.live in AI_APPROACHES && entries.some(([id]) => id === doc.live);
+  if (!dirty && doc.approaches === src && (doc.live === undefined || liveOk)) return doc;
   return { ...(liveOk ? { live: doc.live } : {}), approaches: Object.fromEntries(entries) as LevelAiDoc['approaches'] };
 }
 
@@ -178,14 +193,15 @@ export function sanitizeLevelAi(doc: LevelAiDoc): LevelAiDoc | undefined {
  * the material-search approach's config — live, since the old format only stored a
  * vector while it was in force — carrying the adoption record when its vector
  * matches (the old read path applied the same guard: a stale record beside a
- * Training-tab vector was ignored). Orphaned fields (a record without a vector, or
- * either beside an existing `levelAi`) just drop. Pure — the net client applies it
+ * Training-tab vector was ignored). Orphaned or corrupt fields (a record without a
+ * vector, a non-all-numeric vector — the shape sanitizeLevelAi would reject — or
+ * either field beside an existing `levelAi`) just drop. Pure — the net client applies it
  * on load AFTER migrateTdRuns (which hoists a pre-library document's record up to
  * `tdAdoption` first), and the next save persists the migrated shape. */
 export function migrateLevelAi(blob: BooksBlob): BooksBlob {
   if (blob.adoptedWeights === undefined && blob.tdAdoption === undefined) return blob;
   const { adoptedWeights, tdAdoption, ...rest } = blob;
-  if (rest.levelAi || !Array.isArray(adoptedWeights)) return rest;
+  if (rest.levelAi || !numericVec(adoptedWeights)) return rest;
   const adoption = tdAdoption && Array.isArray(tdAdoption.vector) && sameVec(tdAdoption.vector, adoptedWeights)
     ? tdAdoption : undefined;
   return {

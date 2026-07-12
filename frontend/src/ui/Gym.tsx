@@ -375,6 +375,12 @@ export function GymCatalog({ search, selected, onSelect }: { search: string; sel
 
 const REF_VEC = encodeWeights(DEFAULT_EVAL_WEIGHTS);
 
+/** Exact vector equality for the adoption reads (JSON round-trips preserve the
+ * doubles). Defensive on `a`: persisted adoption records are compared here, and a
+ * malformed one must read as "different", never throw in render. */
+const sameVec = (a: unknown, b: readonly number[]): boolean =>
+  Array.isArray(a) && a.length === b.length && a.every((v, i) => v === b[i]);
+
 // --- TD piece-value learner (the `values` mode) ------------------------------------
 /** Every knob the learner exposes — complete vs TrainOptions (games, seed, λ, ε/α
  * schedules, ply cap, initial weight, update rule, probe cadence) plus the seed fold.
@@ -587,14 +593,22 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
         blobRef.current = loaded;
         setBlob(loaded);
         setActiveId(loaded.books[0]?.id);
-        // The account blob is the durable adopt truth: mirror the LIVE approach's
-        // vector into the local cache the live AI reads, so a fresh device picks up
-        // an AI set elsewhere. (loadOpeningBooks already migrated any bare-vector
-        // adoption into the `levelAi` approach document.)
+        // The account blob is the durable adopt truth — in BOTH directions: mirror
+        // the LIVE approach's vector into the local cache the live AI reads (a
+        // fresh device picks up an AI set elsewhere), and when the loaded blob has
+        // NO live approach, drop the cache — an adoption made on this device was
+        // cleared elsewhere, and keeping the stale vector would leave the enemy
+        // playing values the account no longer holds while the audit box
+        // resurrects a run's history record as "in force". (loadOpeningBooks
+        // already migrated any bare-vector adoption into `levelAi` and unset a
+        // foreign live id, so `live` here is registry-known.)
         const liveApproach = loaded.levelAi?.live ? loaded.levelAi.approaches[loaded.levelAi.live] : undefined;
         if (liveApproach) {
           setAdoptedWeights(levelId, liveApproach.vector);
           setAdoptedVec(liveApproach.vector);
+        } else {
+          setAdoptedWeights(levelId, null);
+          setAdoptedVec(null);
         }
         // Restore the run library's OPEN run — it continues exactly where it stood
         // (its OPTS restore with it: a session is a position inside a fixed schedule,
@@ -1168,12 +1182,15 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   // Adopt any weight vector (a local champion OR a cluster champion) for this level.
   // No run record travels here — the SPRT champion is the Training tab's provenance
   // — so a values-pane adoption record on the config is correctly replaced.
+  // Gated on the books load settling (like the TD autosave): before it resolves,
+  // blobRef holds the EMPTY blob, and committing that would wipe the account's
+  // books + run library for this level.
   const adoptVector = useCallback((vec: number[]) => {
-    if (!levelId) return;
+    if (!levelId || loadingBooks) return;
     setAdoptedWeights(levelId, vec);
     setAdoptedVec(vec);
     commit(setLevelAiApproach(blobRef.current, MATERIAL_SEARCH, { vector: vec }));
-  }, [levelId, commit]);
+  }, [levelId, loadingBooks, commit]);
   const adoptChampion = useCallback(() => {
     const cur = blobRef.current.books.find((b) => b.id === activeIdRef.current);
     if (!cur || cur.session.champion.step < 0) return;
@@ -1181,13 +1198,13 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   }, [adoptVector]);
 
   // Revert to the stock AI for this level (clears the approach config in both the
-  // cache and the account blob).
+  // cache and the account blob). Same load-settled gate as adoptVector.
   const unadopt = useCallback(() => {
-    if (!levelId) return;
+    if (!levelId || loadingBooks) return;
     setAdoptedWeights(levelId, null);
     setAdoptedVec(null);
     commit(clearLevelAiApproach(blobRef.current, MATERIAL_SEARCH));
-  }, [levelId, commit]);
+  }, [levelId, loadingBooks, commit]);
 
   // --- Derived training view (from the active book's retained session) -------
   const session: GymSession | undefined = activeBook?.session;
@@ -1421,7 +1438,9 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     });
   }, [tdAdoptRel, tdStarted, tdSummary, tdSess, tdUntouched]);
   const tdAdopt = useCallback(() => {
-    if (!levelId || !tdAdoptPreview) return;
+    // Gated on the books load settling: committing the pre-load EMPTY blob would
+    // wipe the account's books + run library for this level.
+    if (!levelId || !tdAdoptPreview || loadingBooks) return;
     const pieceValues = { ...DEFAULT_EVAL_WEIGHTS.pieceValues };
     for (const row of tdAdoptPreview) pieceValues[row.type] = row.adopted;
     const vec = encodeWeights({ ...DEFAULT_EVAL_WEIGHTS, pieceValues });
@@ -1455,16 +1474,17 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
       MATERIAL_SEARCH,
       { vector: vec, adoption },
     ));
-  }, [levelId, tdAdoptPreview, tdGamesDone, tdSummary, tdSess, tdProbeLog, tdKept, commit]);
+  }, [levelId, tdAdoptPreview, loadingBooks, tdGamesDone, tdSummary, tdSess, tdProbeLog, tdKept, commit]);
   // Clearing takes the approach OUT OF FORCE (its config: vector + live record) but
   // keeps every run's own adoption record — that is history ("this run went live on
-  // the 14th"). The level falls back to the stock AI.
+  // the 14th"). The level falls back to the stock AI. Same load-settled gate as the
+  // other adopt/clear verbs.
   const tdClearAdoption = useCallback(() => {
-    if (!levelId) return;
+    if (!levelId || loadingBooks) return;
     setAdoptedWeights(levelId, null);
     setAdoptedVec(null);
     commit(clearLevelAiApproach(blobRef.current, MATERIAL_SEARCH));
-  }, [levelId, commit]);
+  }, [levelId, loadingBooks, commit]);
   // What the live opponent will actually use on this level, resolved tier by tier —
   // the audit read. `adoptedVec` mirrors localStorage + the account blob; the live
   // record comes from the live APPROACH's config (falling back to a vector-match
@@ -1477,14 +1497,16 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const tdLiveAi = useMemo(() => {
     const shipped = levelId ? readShippedVector(levelId) : null;
     const vec = adoptedVec ?? shipped;
-    const sameVec = (a: number[], b: number[]): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
     const liveCfg = blob.levelAi?.live ? blob.levelAi.approaches[blob.levelAi.live] : undefined;
     const record = adoptedVec
       ? (liveCfg?.adoption && sameVec(liveCfg.adoption.vector, adoptedVec)
         ? liveCfg.adoption
         : (blob.tdRuns?.runs ?? []).find((r) => r.adoption && sameVec(r.adoption.vector, adoptedVec))?.adoption ?? null)
       : null;
-    const approach = AI_APPROACHES[blob.levelAi?.live ?? MATERIAL_SEARCH];
+    // Registry-guarded: sanitizeLevelAi unsets a foreign `live` at the load
+    // boundary, but a render must survive one regardless (no ErrorBoundary above).
+    const liveId = blob.levelAi?.live && blob.levelAi.live in AI_APPROACHES ? blob.levelAi.live : MATERIAL_SEARCH;
+    const approach = AI_APPROACHES[liveId];
     const approachName = adoptedVec ? approach.name : 'material search (stock)';
     const tier = adoptedVec
       ? (record ? 'your values — set from this pane' : 'your values — set from the Training tab')
@@ -1933,9 +1955,9 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                     </div>
                     {verdict === 'accept' && val?.done ? (
                       <div className="gym-val-adopt">
-                        {adoptedActive
+                        {adoptedVec !== null && sameVec(champion.theta, adoptedVec)
                           ? <span className="adopted">✓ adopted for this level — the live enemy plays {AI_APPROACHES[MATERIAL_SEARCH].name} with these weights</span>
-                          : <button type="button" className="adopt" onClick={adoptChampion} disabled={!levelId}>Adopt for this level</button>}
+                          : <button type="button" className="adopt" onClick={adoptChampion} disabled={!levelId || loadingBooks}>Adopt for this level</button>}
                       </div>
                     ) : null}
                   </div>
@@ -2232,7 +2254,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                       ? <>mean of {tdSummary.perSeed.length} seeds at {tdGamesDone} games</>
                       : <>live weights at game {tdGamesDone} (the seed fold at budget completion is the steadier read)</>}. Adopting sets a whole approach, not a bare number set: the level&apos;s AI becomes <b>{AI_APPROACHES[MATERIAL_SEARCH].name}</b> carrying these values. It replaces the approach&apos;s previous values on this level, including ones set from the Training tab (both surfaces tune the same approach).</p>
                     <div className="gym-td-keep">
-                      <button type="button" className="keep" onClick={tdAdopt}>Adopt as this level&apos;s AI</button>
+                      <button type="button" className="keep" onClick={tdAdopt} disabled={loadingBooks}>Adopt as this level&apos;s AI</button>
                     </div>
                   </div>
                 ) : null}
@@ -2254,7 +2276,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                     <p className="gym-hint">resolved before every enemy reply: your set approach → globally shipped values → built-in defaults</p>
                     {tdLiveAi.hasAdoption ? (
                       <div className="gym-adopt-row">
-                        <button type="button" onClick={tdClearAdoption}>clear adoption</button>
+                        <button type="button" onClick={tdClearAdoption} disabled={loadingBooks}>clear adoption</button>
                         <span className="gym-hint">the approach keeps nothing in force — the level falls back to stock values</span>
                       </div>
                     ) : null}
@@ -2432,8 +2454,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                 <h3>Live enemy AI <span className="gym-hint">(this level)</span></h3>
                 <div className="gym-adopt-row">
                   <span className={`badge ${adoptedActive ? 'on' : 'off'}`}>{adoptedActive ? 'ADOPTED' : 'stock'}</span>
-                  <span className="gym-hint">{adoptedActive ? `plays ${AI_APPROACHES[MATERIAL_SEARCH].name} with the adopted champion values` : 'plays material search with the stock values'}</span>
-                  {adoptedActive ? <button type="button" onClick={unadopt}>Revert</button> : null}
+                  <span className="gym-hint">{adoptedActive ? `plays ${AI_APPROACHES[MATERIAL_SEARCH].name} with your adopted values (this tab's champion or the Piece-values pane — the values pane's audit box names the source)` : 'plays material search with the stock values'}</span>
+                  {adoptedActive ? <button type="button" onClick={unadopt} disabled={loadingBooks}>Revert</button> : null}
                 </div>
 
                 <h3>Eval weights <span className="gym-hint">(champion vs shipped)</span></h3>

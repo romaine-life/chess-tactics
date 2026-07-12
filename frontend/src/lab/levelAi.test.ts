@@ -39,9 +39,16 @@ describe('setLevelAiApproach / clearLevelAiApproach', () => {
     const repointed = setLevelAiApproach(withFuture, MATERIAL_SEARCH, { vector: [1] });
     expect(repointed.levelAi?.live).toBe('material-search');
     expect(repointed.levelAi?.approaches[future]).toEqual({ vector: [9, 9] });
-    // And clearing the live one falls back without touching the sibling.
+    // Clearing the live one falls back without touching the sibling…
     const cleared = clearLevelAiApproach(repointed, MATERIAL_SEARCH);
     expect(cleared.levelAi).toEqual({ approaches: { [future]: { vector: [9, 9] } } });
+    // …and clearing a NON-live sibling must preserve `live` and its config — a
+    // clear-anything-unsets-live regression would knock the level back to stock.
+    const siblingCleared = clearLevelAiApproach(repointed, future);
+    expect(siblingCleared.levelAi).toEqual({
+      live: 'material-search',
+      approaches: { 'material-search': { vector: [1] } },
+    });
   });
 
   it('clearing the only approach removes the document; clearing with none set is a no-op', () => {
@@ -84,6 +91,12 @@ describe('migrateLevelAi', () => {
   it('is a no-op (same object) without the retired fields', () => {
     expect(migrateLevelAi(bare)).toBe(bare);
   });
+
+  it('drops a corrupted non-all-numeric vector instead of migrating junk the sanitizer would reject', () => {
+    const out = migrateLevelAi({ ...bare, adoptedWeights: [1, null, 3] as unknown as number[] });
+    expect(out.adoptedWeights).toBeUndefined();
+    expect(out.levelAi).toBeUndefined();
+  });
 });
 
 describe('sanitizeLevelAi', () => {
@@ -99,5 +112,24 @@ describe('sanitizeLevelAi', () => {
 
     const empty = { approaches: { 'material-search': {} } } as unknown as LevelAiDoc;
     expect(sanitizeLevelAi(empty)).toBeUndefined();
+  });
+
+  it("unsets a live id this build's registry does not know (a newer client's approach) but preserves its config — the level degrades to stock, never crashes the audit box", () => {
+    const foreign = { live: 'psqt', approaches: { psqt: { vector: [2, 3] } } } as unknown as LevelAiDoc;
+    expect(sanitizeLevelAi(foreign)).toEqual({ approaches: { psqt: { vector: [2, 3] } } });
+    // The empty-string variant slips past truthiness checks — same rule applies.
+    const emptyId = { live: '', approaches: { '': { vector: [2] } } } as unknown as LevelAiDoc;
+    expect(sanitizeLevelAi(emptyId)).toEqual({ approaches: { '': { vector: [2] } } });
+  });
+
+  it('strips a malformed adoption record (no numeric vector) but keeps the config — the audit read compares record vectors in render', () => {
+    const doc = {
+      live: 'material-search',
+      approaches: { 'material-search': { vector: [1, 2], adoption: { at: 't' } } },
+    } as unknown as LevelAiDoc;
+    expect(sanitizeLevelAi(doc)).toEqual({
+      live: 'material-search',
+      approaches: { 'material-search': { vector: [1, 2] } },
+    });
   });
 });

@@ -48,6 +48,28 @@ fight over one anonymous slot that tramples whatever tuning came before.
   (the old read path ignored those too). `adoptedWeights`/`tdAdoption` are
   retired: read for migration only, never written.
 
+## Review-pass hardening (adversarial review of the first commit)
+
+- **A foreign `live` id must degrade, never crash.** `sanitizeLevelAi` unsets a
+  `live` this build's registry doesn't know (a newer client's approach id — the
+  forward-compat case the schema exists for) while PRESERVING the foreign config;
+  the audit memo's registry lookup is additionally guarded. Verified live: a
+  planted `live:'psqt'` blob renders the pane as stock, and the next save keeps
+  the psqt config with `live` unset.
+- **Adopt/clear verbs are gated on the books load settling** (the same gate
+  d24275c4 gave the TD autosave): before the GET resolves, `blobRef` holds the
+  EMPTY blob, and committing it would wipe the level's books + run library.
+- **The mirror is blob-authoritative in both directions**: a load with no live
+  approach clears the localStorage cache, so an adoption cleared on another
+  device stops playing (and the audit box stops resurrecting a run's history
+  record as "in force").
+- **Provenance-honest Training-tab copy**: the SPRT-accept "✓ adopted" line only
+  claims THIS champion's weights are live when the adopted vector matches; the
+  badge hint no longer calls any adoption "the champion".
+- `sanitizeLevelAi` also strips a malformed adoption record; `migrateLevelAi`
+  rejects a non-all-numeric legacy vector; the render-side `sameVec` tolerates a
+  malformed record vector.
+
 ## Consequences
 
 - "I'm tuning THE approach" is now literal: runs, compare, SPRT champions all
