@@ -343,28 +343,48 @@ async function seedSyntheticReadinessMedia({ slot, domain, role, width, height }
   fs.mkdirSync(path.dirname(target), { recursive: true });
   if (!fs.existsSync(target)) fs.writeFileSync(target, bytes);
   const versionId = crypto.randomUUID();
-  await queryDb(
-    `BEGIN;
-     INSERT INTO media_slots (slot, domain, role, availability_policy, metadata, updated_by)
-     VALUES ($1, $2, $3, 'critical', '{}'::jsonb, 'smoke-importer');
-     INSERT INTO media_blobs (sha256, blob_key, media_type, byte_length, width, height, published_at)
-     VALUES ($4, $5, 'image/png', $6, $7, $8, now())
-     ON CONFLICT (sha256) DO NOTHING;
-     INSERT INTO media_versions (
-       id, slot, domain, role, label, status, blob_sha256, metadata,
-       provenance, native_evidence, row_revision, updated_by
-     ) VALUES (
-       $9, $1, $2, $3, $1, 'legacy-bridge', $4, '{}'::jsonb,
-       '{"fixture":"readiness-smoke"}'::jsonb, '{}'::jsonb, 1, 'smoke-importer'
-     );
-     UPDATE media_slots SET active_version_id = $9, lifecycle_state = 'active',
-       activated_at = now(), row_revision = 1, updated_at = now()
-      WHERE slot = $1;
-     UPDATE media_catalog_state SET revision = revision + 1, updated_at = now()
-      WHERE singleton = true;
-     COMMIT;`,
-    [slot, domain, role, sha256, blobKey, bytes.length, width, height, versionId],
-  );
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO media_slots (slot, domain, role, availability_policy, metadata, updated_by)
+       VALUES ($1, $2, $3, 'critical', '{}'::jsonb, 'smoke-importer')`,
+      [slot, domain, role],
+    );
+    await client.query(
+      `INSERT INTO media_blobs (sha256, blob_key, media_type, byte_length, width, height, published_at)
+       VALUES ($1, $2, 'image/png', $3, $4, $5, now())
+       ON CONFLICT (sha256) DO NOTHING`,
+      [sha256, blobKey, bytes.length, width, height],
+    );
+    await client.query(
+      `INSERT INTO media_versions (
+         id, slot, domain, role, label, status, blob_sha256, metadata,
+         provenance, native_evidence, row_revision, updated_by
+       ) VALUES (
+         $1, $2, $3, $4, $2, 'legacy-bridge', $5, '{}'::jsonb,
+         '{"fixture":"readiness-smoke"}'::jsonb, '{}'::jsonb, 1, 'smoke-importer'
+       )`,
+      [versionId, slot, domain, role, sha256],
+    );
+    await client.query(
+      `UPDATE media_slots SET active_version_id = $2, lifecycle_state = 'active',
+         activated_at = now(), row_revision = 1, updated_at = now()
+        WHERE slot = $1`,
+      [slot, versionId],
+    );
+    await client.query(
+      'UPDATE media_catalog_state SET revision = revision + 1, updated_at = now() WHERE singleton = true',
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    await client.end();
+  }
 }
 
 async function queryDb(sql, params = []) {
