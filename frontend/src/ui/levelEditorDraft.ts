@@ -34,6 +34,19 @@ export interface LevelEditorDraft {
   events?: LevelEvents;
 }
 
+export interface ScopedLevelEditorDraftIdentity {
+  documentId?: string | null;
+  ownerEmail?: string | null;
+}
+
+export interface ScopedLevelEditorDraftRebase {
+  expectedDocumentRevision: number;
+  expectedCloudSignature: string;
+  nextDocumentRevision: number;
+  nextCloudSignature: string;
+  levelName: string;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -193,4 +206,74 @@ export function clearLevelEditorDraft(key: string): void {
   } catch {
     /* Storage can be blocked; nothing to clear. */
   }
+}
+
+function normalizeScopedLevelEditorDraftIdentity(
+  identity: ScopedLevelEditorDraftIdentity,
+): { documentId: string; ownerEmail: string } | null {
+  const documentId = identity.documentId?.trim() ?? '';
+  const ownerEmail = identity.ownerEmail?.trim().toLowerCase() ?? '';
+  return documentId && ownerEmail ? { documentId, ownerEmail } : null;
+}
+
+/** The one account + opaque-document browser-recovery address used by the Level Editor. */
+export function scopedLevelEditorDraftKey(identity: ScopedLevelEditorDraftIdentity): string | null {
+  const normalized = normalizeScopedLevelEditorDraftIdentity(identity);
+  return normalized ? levelEditorDraftKey(normalized) : null;
+}
+
+/** Read a scoped recovery only when its stored identities still match its storage address. */
+export function readScopedLevelEditorDraft(identity: ScopedLevelEditorDraftIdentity): LevelEditorDraft | null {
+  const normalized = normalizeScopedLevelEditorDraftIdentity(identity);
+  if (!normalized) return null;
+  const draft = readLevelEditorDraft(levelEditorDraftKey(normalized));
+  return draft?.documentId === normalized.documentId && draft.ownerEmail === normalized.ownerEmail
+    ? draft
+    : null;
+}
+
+/** Write a recovery through the canonical scoped address and bind its payload to that identity. */
+export function writeScopedLevelEditorDraft(
+  identity: ScopedLevelEditorDraftIdentity,
+  draft: LevelEditorDraft,
+): boolean {
+  const normalized = normalizeScopedLevelEditorDraftIdentity(identity);
+  if (!normalized) return false;
+  return writeLevelEditorDraft(levelEditorDraftKey(normalized), {
+    ...draft,
+    documentId: normalized.documentId,
+    ownerEmail: normalized.ownerEmail,
+  });
+}
+
+/** Explicit Discard/Delete owns both the cloud working copy and this browser fallback. */
+export function clearScopedLevelEditorDraft(identity: ScopedLevelEditorDraftIdentity): void {
+  const key = scopedLevelEditorDraftKey(identity);
+  if (key) clearLevelEditorDraft(key);
+}
+
+/**
+ * Rebase a browser fallback after a name-only cloud CAS. Local board/rule edits are preserved,
+ * but only when the recovery proves it observed the exact cloud revision being renamed. A stale
+ * or already-conflicted recovery remains untouched for the Level Editor's normal conflict flow.
+ */
+export function rebaseScopedLevelEditorDraft(
+  identity: ScopedLevelEditorDraftIdentity,
+  rebase: ScopedLevelEditorDraftRebase,
+): boolean {
+  const draft = readScopedLevelEditorDraft(identity);
+  if (
+    !draft
+    || draft.recoveryConflict === true
+    || draft.documentRevision !== rebase.expectedDocumentRevision
+    || (draft.cloudSignature !== undefined && draft.cloudSignature !== rebase.expectedCloudSignature)
+  ) return false;
+
+  return writeScopedLevelEditorDraft(identity, {
+    ...draft,
+    savedAt: Date.now(),
+    documentRevision: rebase.nextDocumentRevision,
+    cloudSignature: rebase.nextCloudSignature,
+    levelName: rebase.levelName,
+  });
 }

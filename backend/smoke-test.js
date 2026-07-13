@@ -2701,6 +2701,86 @@ async function main() {
   ) {
     throw new Error(`Never-saved cloud document was not discoverable without its URL: ${recentAfterNewDocument.statusCode} ${recentAfterNewDocument.body}`);
   }
+
+  // Deletion is a CAS-protected cleanup operation for never-saved private work
+  // only. It stays owner-scoped, never grants public access, and never reaches a
+  // canonical workspace Level.
+  const deleteCandidate = await request(
+    'POST', '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level: { ...workspaceLevel, id: 'delete-placeholder', name: 'Delete Candidate' } }),
+  );
+  const deleteCandidateBody = JSON.parse(deleteCandidate.body);
+  const deleteCandidateId = deleteCandidateBody.document && deleteCandidateBody.document.document_id;
+  if (
+    deleteCandidate.statusCode !== 201 ||
+    typeof deleteCandidateId !== 'string' || !deleteCandidateId ||
+    deleteCandidateBody.document.saved_revision !== 0 ||
+    deleteCandidateBody.document.never_saved !== true
+  ) {
+    throw new Error(`Could not create never-saved delete candidate: ${deleteCandidate.statusCode} ${deleteCandidate.body}`);
+  }
+  const advancedDeleteCandidate = await request(
+    'PUT', `/api/editor-documents/${deleteCandidateId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      revision: 1,
+      level: { ...deleteCandidateBody.document.level, name: 'Delete Candidate Autosaved' },
+    }),
+  );
+  if (advancedDeleteCandidate.statusCode !== 200 || JSON.parse(advancedDeleteCandidate.body).document.revision !== 2) {
+    throw new Error(`Could not advance never-saved delete candidate: ${advancedDeleteCandidate.statusCode} ${advancedDeleteCandidate.body}`);
+  }
+  const anonymousDeleteCandidate = await request(
+    'DELETE', `/api/editor-documents/${deleteCandidateId}`,
+    { 'content-type': 'application/json' },
+    JSON.stringify({ revision: 2 }),
+  );
+  if (anonymousDeleteCandidate.statusCode !== 401) {
+    throw new Error(`Never-saved document deletion must require sign-in: ${anonymousDeleteCandidate.statusCode} ${anonymousDeleteCandidate.body}`);
+  }
+  const rivalDeleteCandidate = await request(
+    'DELETE', `/api/editor-documents/${deleteCandidateId}`,
+    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 2 }),
+  );
+  if (rivalDeleteCandidate.statusCode !== 404 || JSON.parse(rivalDeleteCandidate.body).error !== 'editor_document_not_found') {
+    throw new Error(`Never-saved document deletion leaked another owner's work: ${rivalDeleteCandidate.statusCode} ${rivalDeleteCandidate.body}`);
+  }
+  const staleDeleteCandidate = await request(
+    'DELETE', `/api/editor-documents/${deleteCandidateId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 1 }),
+  );
+  const staleDeleteCandidateBody = JSON.parse(staleDeleteCandidate.body);
+  if (
+    staleDeleteCandidate.statusCode !== 409 ||
+    staleDeleteCandidateBody.error !== 'editor_document_revision_conflict' ||
+    staleDeleteCandidateBody.document.revision !== 2 ||
+    staleDeleteCandidateBody.document.level.name !== 'Delete Candidate Autosaved'
+  ) {
+    throw new Error(`Stale never-saved document deletion lost CAS protection: ${staleDeleteCandidate.statusCode} ${staleDeleteCandidate.body}`);
+  }
+  const deletedCandidate = await request(
+    'DELETE', `/api/editor-documents/${deleteCandidateId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 2 }),
+  );
+  const deletedCandidateBody = JSON.parse(deletedCandidate.body);
+  if (
+    deletedCandidate.statusCode !== 200 ||
+    deletedCandidateBody.document.document_id !== deleteCandidateId ||
+    deletedCandidateBody.document.revision !== 2 ||
+    deletedCandidateBody.document.never_saved !== true ||
+    deletedCandidateBody.document.level.name !== 'Delete Candidate Autosaved'
+  ) {
+    throw new Error(`Never-saved document deletion returned the wrong document: ${deletedCandidate.statusCode} ${deletedCandidate.body}`);
+  }
+  const deletedCandidateRead = await get(`/api/editor-documents/${deleteCandidateId}`, { cookie: 'better-auth.session=abc' });
+  if (deletedCandidateRead.statusCode !== 404 || JSON.parse(deletedCandidateRead.body).error !== 'editor_document_not_found') {
+    throw new Error(`Deleted never-saved document remained readable: ${deletedCandidateRead.statusCode} ${deletedCandidateRead.body}`);
+  }
+
   const workspaceBeforeReservedCollision = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
   const workspaceBeforeReservedCollisionBody = JSON.parse(workspaceBeforeReservedCollision.body);
   const reservedCollisionAttempt = await request(
@@ -2759,6 +2839,24 @@ async function main() {
   const workspaceWithNewLevel = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
   if (JSON.parse(workspaceWithNewLevel.body).levels.l2.name !== 'New Working Level Autosaved') {
     throw new Error(`First Save did not create the canonical Level: ${workspaceWithNewLevel.body}`);
+  }
+  const deleteSavedBaseline = await request(
+    'DELETE', `/api/editor-documents/${newDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 3 }),
+  );
+  const deleteSavedBaselineBody = JSON.parse(deleteSavedBaseline.body);
+  if (
+    deleteSavedBaseline.statusCode !== 409 ||
+    deleteSavedBaselineBody.error !== 'editor_document_delete_requires_never_saved' ||
+    deleteSavedBaselineBody.document.document_id !== newDocumentId ||
+    deleteSavedBaselineBody.document.has_saved_baseline !== true
+  ) {
+    throw new Error(`Saved-baseline editor document was deletable: ${deleteSavedBaseline.statusCode} ${deleteSavedBaseline.body}`);
+  }
+  const workspaceAfterRejectedDocumentDelete = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  if (JSON.parse(workspaceAfterRejectedDocumentDelete.body).levels.l2.name !== 'New Working Level Autosaved') {
+    throw new Error(`Rejected editor-document deletion changed canonical content: ${workspaceAfterRejectedDocumentDelete.body}`);
   }
   const postSaveDraft = await request(
     'PUT', `/api/editor-documents/${newDocumentId}`,

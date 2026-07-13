@@ -15,9 +15,12 @@ Authenticated edits autosave to a durable server-side working copy. **Save** pro
 that copy to the canonical level, and **Discard changes** restores the working copy
 from canonical. Copying the browser URL must remain side-effect free: it does not
 save, publish, create another document, change permissions, rewrite the URL, or
-navigate. Gameplay and thumbnails read canonical levels only; browser storage is a
-crash/offline fallback. Do not introduce another editor identity or a link-triggered
-persistence path.
+navigate. Gameplay and campaign/share/server thumbnails read canonical levels only.
+The sole working-copy preview exception is the signed-in owner's bounded **Continue
+editing** card list at `/editor`: it may read an existing private document to identify
+the work being resumed, without saving or publishing it (ADR-0090). Browser storage
+is a crash/offline fallback. Do not introduce another editor identity or a
+link-triggered persistence path.
 
 ## Generated-art handoff rule
 

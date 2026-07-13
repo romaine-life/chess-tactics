@@ -5,6 +5,7 @@ import {
   autosaveEditorDocument,
   autosaveEditorDocumentOnPageHide,
   createEditorDocument,
+  deleteNeverSavedEditorDocument,
   discardEditorDocumentChanges,
   isEditorDocumentConflict,
   listEditorDocuments,
@@ -172,6 +173,27 @@ describe('editor document persistence', () => {
     expect(JSON.parse(init.body)).toEqual({ revision: 4 });
   });
 
+  it('CAS-deletes a never-saved working copy and returns the deleted document', async () => {
+    const deleted = {
+      ...document,
+      saved_revision: 0,
+      has_saved_baseline: false,
+      never_saved: true,
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { document: deleted }));
+
+    await expect(deleteNeverSavedEditorDocument('doc/a b', 4)).resolves.toEqual(deleted);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc%2Fa%20b');
+    expect(init).toMatchObject({
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(JSON.parse(init.body)).toEqual({ revision: 4 });
+  });
+
   it('atomically saves the latest level even if autosave is still debounced', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, {
       document: { ...document, dirty: false },
@@ -227,6 +249,46 @@ describe('editor document conflicts', () => {
       status: 409,
       conflict: 'baseline',
       document: current,
+    });
+  });
+
+  it('carries the current server document when a delete loses its revision race', async () => {
+    const current = {
+      ...document,
+      revision: 9,
+      saved_revision: 0,
+      has_saved_baseline: false,
+      never_saved: true,
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(409, {
+      error: 'editor_document_revision_conflict',
+      document: current,
+    }));
+
+    const error = await deleteNeverSavedEditorDocument('doc-7f3c', 4)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(EditorDocumentConflictError);
+    expect(isEditorDocumentConflict(error)).toBe(true);
+    expect(error).toMatchObject({ status: 409, conflict: 'revision', document: current });
+  });
+
+  it('does not mislabel a saved-baseline delete rejection as a revision conflict', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(409, {
+      error: 'editor_document_delete_requires_never_saved',
+      details: 'only a never-saved working copy can be deleted',
+      document,
+    }));
+
+    const error = await deleteNeverSavedEditorDocument('doc-7f3c', 4)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error).not.toBeInstanceOf(EditorDocumentConflictError);
+    expect(isEditorDocumentConflict(error)).toBe(false);
+    expect(error).toMatchObject({
+      status: 409,
+      details: 'editor_document_delete_requires_never_saved: only a never-saved working copy can be deleted',
     });
   });
 
