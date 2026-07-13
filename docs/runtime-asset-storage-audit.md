@@ -80,6 +80,11 @@ post-build `check:media-final` combines both views. A fresh production build
 reports zero tracked, embedded, packaged, static-authority, writer,
 filesystem-assumption, or cutover-scaffold violations.
 
+The unserved-pod verifier, manual exact-image approval token, and operational
+runbook were cutover scaffold rather than steady-state release machinery. They
+were retired after this audit completed; ADR-0094 restores ordinary merged-main
+build and digest-pinned deployment.
+
 This completes the storage/runtime cutover, not every domain's owner-operated
 acceptance instrument. Unit Art and the atomic Water side projection are
 contract-complete for promotion. Other migrated domains are live-backed and can
@@ -135,7 +140,8 @@ catalogs:
 - Critical catalogs are required at startup and in server rendering. There is no
   committed fallback, cached prior-art fallback, or generic substitute.
 - The existing app Postgres/Blob pair is the one authoritative content data
-  plane. Cutover and owner verification use unserved candidate pods against it;
+  plane. The completed cutover and owner verification used unserved candidate
+  pods against it;
   transient CI databases contain synthetic fixtures and are not promotion or
   release authorities ([ADR-0086](adr/0086-runtime-asset-cutover-uses-one-live-data-plane.md)).
 - Generation and editing tools upload candidates. They do not write production

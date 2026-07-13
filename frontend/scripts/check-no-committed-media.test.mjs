@@ -412,6 +412,39 @@ describe('no-committed-media guard', () => {
     }
   });
 
+  it('rejects the retired cutover release ceremony under renamed live paths', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-cutover-release-test-'));
+    const write = (relativePath, value) => {
+      const target = path.join(repoRoot, relativePath);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, value, 'utf8');
+    };
+    try {
+      write('.github/workflows/release.yml', 'run: gh pr comment 42 --body exact-image-approval');
+      write('backend/package.json', '{"scripts":{"release":"node scripts/verify-live-media-cutover.mjs"}}');
+      const trackedFiles = ['.github/workflows/release.yml', 'backend/package.json'];
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles })).toEqual([
+        expect.objectContaining({ kind: 'temporary-cutover-scaffold', path: '.github/workflows/release.yml' }),
+        expect.objectContaining({ kind: 'temporary-cutover-scaffold', path: 'backend/package.json' }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('does not ban unrelated pull-request comments', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ordinary-pr-comment-test-'));
+    const relativePath = '.github/workflows/notify.yml';
+    const target = path.join(repoRoot, relativePath);
+    try {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, 'run: gh pr comment 42 --body "preview is ready"', 'utf8');
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it('rejects cutover switches and packaged readers moved out of server.js', () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'moved-cutover-scaffold-test-'));
     const write = (relativePath, value) => {
