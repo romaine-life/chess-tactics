@@ -6,8 +6,8 @@ Unlike the procedural pieces, the crown was hand-fitted onto the king's head in
 Blender, so the source of truth is the assembled `king_crown.blend` (navy Staunton
 king OBJ + gold/jewel crown FBX, positioned). This script opens it, renders the 8
 true-isometric directions, and prints the seating anchor.
-Output defaults to .unit-art-output/king/navy-blue/<direction>.png. The canonical
-pipeline supplies UNIT_ART_OUTPUT_DIR plus UNIT_ART_FRAME_WIDTH/HEIGHT and Blender
+The canonical pipeline fetches the private blend into a temporary directory and
+supplies UNIT_ART_BLEND, UNIT_ART_OUTPUT_DIR, and frame dimensions. Blender
 writes that exact delivery raster without a resize stage.
 
 The king + crown are rotationally symmetric, so the 8 directions are near-identical
@@ -15,15 +15,13 @@ The king + crown are rotationally symmetric, so the 8 directions are near-identi
 """
 import bpy, os, math, mathutils, numpy as np
 from bpy_extras.object_utils import world_to_camera_view
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
-    ROOT = ROOT.parent
-BLEND = str(ROOT / "docs/art/unit-concepts/blender-units/king-crown/king_crown.blend")
-OUT = os.environ.get("UNIT_ART_OUTPUT_DIR", str(ROOT / ".unit-art-output/king/navy-blue"))
-FRAME_WIDTH = int(os.environ.get("UNIT_ART_FRAME_WIDTH", "512"))
-FRAME_HEIGHT = int(os.environ.get("UNIT_ART_FRAME_HEIGHT", "512"))
+BLEND = os.environ.get("UNIT_ART_BLEND")
+OUT = os.environ.get("UNIT_ART_OUTPUT_DIR")
+if not BLEND or not OUT:
+    raise RuntimeError("run through generate-unit-art.py; private king source and output are required")
+FRAME_WIDTH = int(os.environ["UNIT_ART_FRAME_WIDTH"])
+FRAME_HEIGHT = int(os.environ["UNIT_ART_FRAME_HEIGHT"])
 if not (1 <= FRAME_WIDTH <= 4096 and 1 <= FRAME_HEIGHT <= 4096):
     raise RuntimeError("UNIT_ART_FRAME_WIDTH/HEIGHT must be between 1 and 4096")
 os.makedirs(OUT, exist_ok=True)

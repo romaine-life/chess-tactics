@@ -18,9 +18,9 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / 'packages' / 'board-render' / 'src' / 'art' / 'macroTiles.json'
-SOURCE_DIR = ROOT / 'docs' / 'art' / 'pixellab-runs' / 'macro-tiles'
-OUTPUT_DIR = ROOT / 'frontend' / 'public' / 'assets' / 'tiles' / 'macro-tiles'
-SURFACE_DIR = ROOT / 'frontend' / 'public' / 'assets' / 'tiles' / 'surface'
+SOURCE_DIR: Path
+OUTPUT_DIR: Path
+SURFACE_DIR: Path
 
 STEP_X = 48
 STEP_Y = 27
@@ -35,7 +35,11 @@ REFERENCE_LEFT = (0, 68)
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('ids', nargs='*', help='Optional macrotile ids; defaults to every manifest asset.')
-    parser.add_argument('--check', action='store_true', help='Validate inputs and geometry without writing outputs.')
+    parser.add_argument('--manifest', type=Path, default=MANIFEST, help='Code-owned macrotile geometry manifest.')
+    parser.add_argument('--source-dir', type=Path, required=True, help='Fetched source candidates in a temporary workspace.')
+    parser.add_argument('--surface-dir', type=Path, required=True, help='Fetched terrain-top reference candidates.')
+    parser.add_argument('--out-dir', type=Path, required=True, help='Temporary output directory; upload results through the live-media client.')
+    parser.add_argument('--check', action='store_true', help='Compare regenerated candidates with an explicit output directory without writing.')
     return parser.parse_args()
 
 
@@ -105,7 +109,7 @@ def production_palette(family: str) -> np.ndarray:
         with Image.open(path) as reference_image:
             reference = np.array(reference_image.convert('RGBA'))
         if reference.shape[:2] != inside.shape:
-            raise SystemExit(f'{path.relative_to(ROOT)}: unexpected production tile dimensions.')
+            raise SystemExit(f'{path}: unexpected terrain reference dimensions.')
         samples.append(reference[:, :, :3][inside & (reference[:, :, 3] > 0)])
     return np.concatenate(samples, axis=0)
 
@@ -208,7 +212,12 @@ def validate_owned_top(image: Image.Image, columns: int, rows: int, tile_id: str
 
 
 def main() -> None:
+    global MANIFEST, SOURCE_DIR, SURFACE_DIR, OUTPUT_DIR
     args = parse_args()
+    MANIFEST = args.manifest.resolve()
+    SOURCE_DIR = args.source_dir.resolve()
+    SURFACE_DIR = args.surface_dir.resolve()
+    OUTPUT_DIR = args.out_dir.resolve()
     assets = load_assets(args.ids)
     if not assets:
         raise SystemExit('No macrotile assets selected.')
@@ -222,7 +231,7 @@ def main() -> None:
             raise SystemExit(f'{tile_id}: macrotiles must span at least 2x2 cells.')
         source_path = SOURCE_DIR / f"{asset.get('source', tile_id)}.png"
         if not source_path.exists():
-            raise SystemExit(f'{tile_id}: missing source {source_path.relative_to(ROOT)}')
+            raise SystemExit(f'{tile_id}: missing source {source_path}')
         with Image.open(source_path) as source_image:
             cropped = crop_to_footprint(source_image, columns, rows)
             palette_tied = tie_to_production_palette(cropped, asset['family'], palette_match)
@@ -233,15 +242,15 @@ def main() -> None:
         output_path = OUTPUT_DIR / f'{tile_id}.png'
         if args.check:
             if not output_path.exists():
-                raise SystemExit(f'{tile_id}: missing committed output {output_path.relative_to(ROOT)}')
+                raise SystemExit(f'{tile_id}: missing comparison output {output_path}')
             with Image.open(output_path) as committed_image:
                 committed = committed_image.convert('RGBA')
             if committed.size != baked.size or not np.array_equal(np.array(committed), np.array(baked)):
-                raise SystemExit(f'{tile_id}: committed output is stale; run npm run assets:build:macro-tiles')
+                raise SystemExit(f'{tile_id}: comparison output differs from the regenerated candidate')
         else:
             baked.save(output_path, optimize=True)
         mode = 'checked' if args.check else 'wrote'
-        print(f'{mode} {output_path.relative_to(ROOT)} ({baked.width}x{baked.height})')
+        print(f'{mode} {output_path} ({baked.width}x{baked.height})')
 
 
 if __name__ == '__main__':

@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
+import { applyLiveMediaCatalog, resetLiveMediaCatalog } from '@chess-tactics/board-render';
 import {
   flatContactClipRects,
   flatContactSplitPercent,
@@ -7,6 +8,10 @@ import {
   structureSourceSplitMode,
 } from './BoardStructure';
 import { objectBaseZIndex, structureBackZIndex, structureFrontZIndex } from './sceneDepth';
+import { testGroundCoverCatalog, testStructureMediaSlots } from '../test/liveMediaCatalog';
+
+beforeAll(() => applyLiveMediaCatalog(testGroundCoverCatalog(testStructureMediaSlots())));
+afterAll(() => resetLiveMediaCatalog());
 
 describe('seatTransformPercent — contact pixel onto the ground point', () => {
   it('the 1×1 doodad (96×180 @ 48,69) reproduces the shipped translate(-50%, -38.333%)', () => {

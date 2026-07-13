@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { applyLiveMediaCatalog, resetLiveMediaCatalog } from '@chess-tactics/board-render';
 import { roadEdgeKey } from '../core/featureAutotile';
+import { testGroundCoverCatalog } from '../test/liveMediaCatalog';
 import { deriveFeatureOverlays, studioCoverCells } from './StudioReadOnlyBoard';
+
+beforeAll(() => applyLiveMediaCatalog(testGroundCoverCatalog()));
+afterAll(() => resetLiveMediaCatalog());
 
 describe('deriveFeatureOverlays', () => {
   it('honors forced feature exits like the editor and thumbnail bake', () => {

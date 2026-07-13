@@ -59,6 +59,25 @@ describe('advanceTd — the owner grammar over the engine', () => {
     expect(JSON.parse(JSON.stringify(session))).toEqual(session);
   });
 
+  it('keeps a per-game ledger whose deltas telescope to the learned weights', { timeout: 120_000 }, async () => {
+    const lvl = kqk3();
+    const fresh = freshTdSession(OPTS);
+    expect(fresh.ledger).toEqual([]);
+    const { session } = await advanceTd(lvl, CFG, fresh, 5);
+    const ledger = session.ledger ?? [];
+    expect(ledger.map((r) => r.game)).toEqual([1, 2, 3, 4, 5]);
+    for (const row of ledger) {
+      expect(['player', 'draw', 'enemy']).toContain(row.winner);
+      expect(row.plies).toBeGreaterThan(0);
+      expect(row.epsilon).toBeGreaterThan(0);
+    }
+    // Σ per-game deltas = final weights − the equal start (the ledger IS the change).
+    for (const type of Object.keys(fresh.train.weights) as Array<keyof typeof fresh.train.weights>) {
+      const summed = ledger.reduce((s, r) => s + r.delta[type], 0);
+      expect(fresh.train.weights[type] + summed).toBeCloseTo(session.train.weights[type], 10);
+    }
+  });
+
   it('progress is per game and monotonic, and the probe lands on its cadence', { timeout: 120_000 }, async () => {
     const lvl = kqk3();
     const seen: number[] = [];

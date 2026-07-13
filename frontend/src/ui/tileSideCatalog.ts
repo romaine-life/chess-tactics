@@ -2,7 +2,8 @@
 // are easy to overlook in the placement catalog (which routes to the Level Editor). This
 // read-only catalog category exists to inspect those faces — every production tile plus the
 // frayed perimeter EDGE tiles — one item per tile. Mirrors surfaceCatalog.ts: adding nothing
-// here is needed when a family/variant is added; the list derives from the shipped tileset.
+// here is needed when a family/variant is added; the list derives from the shared semantic
+// tile registry, while the live backend catalog resolves each slot's bytes.
 
 import { tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import type { TileFamilyId } from '../core/tileSockets';
@@ -10,7 +11,7 @@ import type { TileFamilyId } from '../core/tileSockets';
 export interface TileSideItem {
   id: string;
   label: string;
-  src: string; // served path under public/
+  src: string; // stable backend semantic-slot route; never a public-folder file
   family: TileFamilyId;
   /** 'base' | 'variant' for surface tiles, 'edge' for the frayed perimeter tiles. */
   role: string;

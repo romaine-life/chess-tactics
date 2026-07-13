@@ -5,7 +5,7 @@ import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { PropSprite } from '../render/BoardStructure';
 import { objectBaseZIndex } from '../render/sceneDepth';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
-import { PROP_DEFS, propCells, currentSeats, applyLiveSeats, type PropDef, type PropKind, type PropSeatEntry, type PropSeatMap, type StructurePart, type StructurePlacement, type StructureSourceRef } from '../core/props';
+import { PROP_DEFS, propCells, currentSeats, applyPropSeats, type PropDef, type PropKind, type PropSeatEntry, type PropSeatMap, type StructurePart, type StructurePlacement, type StructureSourceRef } from '../core/props';
 import { pieceSpritePath } from '../core/pieces';
 import { ViewPane } from './shared/ViewPane';
 import { SliderRow } from './dressing/SliderRow';
@@ -20,8 +20,8 @@ import { STRUCTURE_ART_ASSETS, structureArtAsset, type StructureArtAsset } from 
 // `header` slot — exactly like NineSliceLab / PortraitLab. It is reached from the Props catalog
 // category's Inspect affordance, never a standalone route. It tunes how a multi-cell prop
 // (tree/house) SITS on its tiles through the real PropSprite path, then Saves the seat map LIVE to
-// the DB (PUT /api/prop-seats/default, admin-gated, instant-live per ADR-0061) — the overlay
-// PROP_DEFS composes on top of the committed baseline.
+// the DB (PUT /api/prop-seats/default, admin-gated, instant-live per ADR-0061). ADR-0085 makes
+// that complete document the only PROP_DEFS authority.
 
 type Seat = { anchorX: number; anchorY: number; scale: number; w?: number; h?: number; base?: string; label?: string };
 type Seats = Record<string, Seat>;
@@ -87,7 +87,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
     doodad?: DoodadAsset;
   } => {
     if (source.kind === 'asset') {
-      const art = structureArtAsset(source.id) ?? STRUCTURE_ART_ASSETS[0];
+      const art = structureArtAsset(source.id) ?? structureArtAsset(STRUCTURE_ART_ASSETS[0].id)!;
       const kind: PropKind = art.propKind ?? (art.kind === 'tree' || art.kind === 'rock' ? art.kind : 'house');
       return { label: art.label, terrains: art.terrains, kind, sprite: art.sprite, art };
     }
@@ -184,9 +184,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
   const [draftTerrains, setDraftTerrains] = useState(initialDraft.terrains);
   const drag = useRef<{ px: number; py: number; anchorX: number; anchorY: number } | null>(null);
 
-  // The currently-SAVED live map (committed baseline ∪ live DB overrides) that PROP_DEFS is derived
-  // from — NOT the static propSeats.json import, which would show a DB-overridden prop's stale
-  // committed value and lack any DB-only variant entirely (indexing it would then throw). This is
+  // The currently-saved complete DB map that PROP_DEFS is derived from. This is
   // the "saved" state to diff against and to re-publish untouched.
   const committedSeats = currentSeats() as Seats;
   const seats: Seats = { ...committedSeats, ...overrides };
@@ -341,14 +339,14 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
   const onDragEnd = () => { drag.current = null; };
 
   const save = async () => {
-    // Instant-live publish (ADR-0061): PUT the WHOLE live map (baseline ∪ overrides) to the DB — the
+    // Instant-live publish (ADR-0061): PUT the WHOLE live map to the DB — the
     // endpoint REPLACES the document, so we always send the full map (never just the edited entries)
     // or an omitted prop would vanish. Admin-gated; mapSaveError turns 401/403/503 into a message.
     if (draftMode || !dirty) return;
     setStatus('saving…');
     try {
       await saveLiveSeats(seats);
-      applyLiveSeats(seats as PropSeatMap);
+      applyPropSeats(seats as PropSeatMap);
       setOverrides({});
       setStatus('saved — live now');
     } catch (err) {
@@ -376,7 +374,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
     setStatus(`saving ${draftTarget}...`);
     try {
       await saveLiveSeats(next);
-      applyLiveSeats(next as PropSeatMap);
+      applyPropSeats(next as PropSeatMap);
       setStatus(`${editMode ? 'saved' : 'created'} ${draftTarget} "${id}"`);
       if (draftTarget === 'prop') onPropId(id);
     } catch (err) {
@@ -386,7 +384,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
   };
   const copy = async () => {
     await navigator.clipboard.writeText(`${JSON.stringify(seats, null, 2)}\n`);
-    setStatus('copied propSeats.json to clipboard');
+    setStatus('copied live prop-seat document to clipboard');
   };
 
   // Build the sprite seat explicitly (NOT ...liveSeat — that also carries w/h/base/label, which
@@ -403,7 +401,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
   const unitPos = boardLabCellPosition(unitCell);
 
   // "Share base" size variants (ADR-0059): duplicate the CURRENT prop at its current seat as a new
-  // pickable prop that reuses the base sprite. Writes a propSeats.json entry with a `base`; props.ts
+  // pickable prop that reuses the base sprite. Writes a live seat entry with a `base`; props.ts
   // synthesizes the PROP_DEF. Base = def.spriteId, so this works even when a variant is selected.
   const saveVariant = async () => {
     const suffix = variantName.trim();
@@ -421,7 +419,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
     const next: Seats = { ...seats, [variantId]: { base: baseId, label: `${baseDef.label} — ${suffix}`, anchorX: liveSeat.anchorX, anchorY: liveSeat.anchorY, scale: liveSeat.scale, ...footprint } };
     try {
       await saveLiveSeats(next);
-      applyLiveSeats(next as PropSeatMap);
+      applyPropSeats(next as PropSeatMap);
       setStatus(`saved variant "${variantId}" — pick it from Prop after reload`); setVariantName('');
     } catch (err) {
       const r = mapSaveError(err);
@@ -441,7 +439,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
     const next: Seats = { ...seats, [activeId]: { ...cur, base: def.spriteId, label } };
     try {
       await saveLiveSeats(next);
-      applyLiveSeats(next as PropSeatMap);
+      applyPropSeats(next as PropSeatMap);
       setStatus(`renamed to "${label}"`);
     } catch (err) {
       const r = mapSaveError(err);
@@ -456,14 +454,14 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
     if (!isCopy) return;
     setStatus('deleting…');
     // Delete = PUT the whole live map MINUS this copy (the endpoint replaces the document). Server-side
-    // base-integrity refuses to leave an orphan variant; a base has no delete button (and the baseline
-    // overlay keeps base seats present regardless), so only copies reach here.
+    // base-integrity refuses to leave an orphan variant; required base seats have no delete button,
+    // so only copies reach here.
     const removed = activeId;
     const next: Seats = { ...seats };
     delete next[removed];
     try {
       await saveLiveSeats(next);
-      applyLiveSeats(next as PropSeatMap);
+      applyPropSeats(next as PropSeatMap);
       onPropId(def.spriteId); // fall back to the base prop
       setOverrides((o) => { const n = { ...o }; delete n[removed]; return n; });
       setStatus(`deleted "${removed}"`);

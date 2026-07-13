@@ -51,7 +51,7 @@ export function PagesLibraryStudio({
 }
 
 
-// The stone surfaces the menu slab can wear (files under public/assets/ui/surfaces/).
+// The live-media surface slots the menu slab can wear.
 const STONE_SURFACES = [
   { name: 'stone-slate-blue', label: 'Slate blue' },
   { name: 'stone-cobble-blue', label: 'Cobble blue' },
@@ -345,7 +345,7 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
 // The editor's chrome is built from kit 9-slice frames (border-image). This viewer auditions each
 // element group's size / frame / fill live on the real /editor page, one element at a time.
 
-// Kit frames an element can be forced to wear (public/assets/ui/kit/). 'shipped' leaves the element's
+// Kit frames an element can be forced to wear (backend `ui/kit/*` slots). 'shipped' leaves the element's
 // own frame — and its hover/selected/danger variants — untouched.
 const CE_KIT_FRAMES = [
   { id: 'primary', label: 'Button · primary', file: '/assets/ui/kit/button-primary.png' },

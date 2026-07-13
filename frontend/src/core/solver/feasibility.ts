@@ -10,12 +10,12 @@
 // `hard`, `enPassantUnsound` is set, and a refusal note is added.
 
 import type { Level } from '../level';
-import type { GameState, Piece, Side, Vec } from '../types';
+import type { Piece, Side, Vec } from '../types';
 import type { MoveEnv } from '../rules';
 import type { FeasibilityReport, SolveMode, SolveVerdict } from './types';
 import { legalMoves, livingPieces } from '../rules';
 import { createRng } from '../rng';
-import { toSolverInput } from './input';
+import { terminalOutcome, toSolverInput, type SolverInput } from './input';
 import { applyMove } from '../rules';
 
 /** Default memory cap for a Phase-1 feasibility read (~3 GiB). Phase 3 wires the Job limit. */
@@ -70,13 +70,16 @@ function stateSpaceEstimate(cellCount: number, slots: ReadonlyArray<{ canPromote
 }
 
 /** Mean legal-move count over a seeded random walk from the start (deterministic). */
-function sampledBranching(start: GameState, env: MoveEnv, walks: number, seed = 12345): number {
+function sampledBranching(input: SolverInput, walks: number, seed = 12345): number {
   const rng = createRng(seed);
+  const env = input.env;
   let total = 0;
   let samples = 0;
   for (let w = 0; w < walks; w += 1) {
-    let state = start;
+    let state = input.start;
+    let turnsElapsed = 0;
     for (let d = 0; d < SAMPLE_WALK_DEPTH; d += 1) {
+      if (terminalOutcome(state, input, turnsElapsed)) break;
       const side: Side = state.turn === 'enemy' ? 'enemy' : 'player';
       const movers = livingPieces(state.pieces, side);
       const all: Array<{ id: string; move: import('../types').Move }> = [];
@@ -87,7 +90,7 @@ function sampledBranching(start: GameState, env: MoveEnv, walks: number, seed = 
       const pick = all[rng.int(all.length)];
       const { state: next } = applyMove(state, pick.id, pick.move);
       state = next;
-      if (next.winner) break;
+      if (side === 'enemy') turnsElapsed += 1;
     }
   }
   return samples > 0 ? total / samples : 0;
@@ -128,7 +131,7 @@ export function estimateFeasibility(level: Level, opts: FeasibilityOptions = {})
   for (const p of livingPieces(input.start.pieces, rootSide)) {
     branchingRoot += legalMoves(p, input.start.pieces, input.start.size, env).length;
   }
-  const branchingSampled = sampledBranching(input.start, env, walks);
+  const branchingSampled = sampledBranching(input, walks);
 
   // Memory.
   const tablebaseBytesEstimate = Number.isFinite(corrected) ? corrected * BYTES_PER_ENTRY : Infinity;

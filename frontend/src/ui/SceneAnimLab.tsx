@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { SCENE_ANIMS, SceneBackdrop } from './SceneBackdrop';
+import {
+  fetchAdminLiveMediaCatalog,
+  type AdminLiveMediaCatalog,
+  type AdminLiveMediaVersion,
+} from '../net/liveMediaAdmin';
 
 // Scene-animation inspector as an embedded Studio Viewer kind (ADR-0058) — the shared eyes for
 // the menu waterfall work. The menu plays the loop as an uncontrollable CSS steps() animation;
@@ -8,7 +14,7 @@ import { SCENE_ANIMS, SceneBackdrop } from './SceneBackdrop';
 // `.al-lab-main`, every control in the one `.tileset-view-controls` panel, reached from the Scene
 // Animations catalog. Pure inspector — nothing committed is edited (ADR-0057 N/A).
 
-const SCENE_URL = '/assets/ui/main-menu/background-scene-v1.png';
+const SCENE_SLOT = 'ui/main-menu/background-scene-v1.png';
 const SCENE_W = 1586;
 const SCENE_H = 991;
 
@@ -18,65 +24,42 @@ export const SCENE_ANIM_REGIONS = SCENE_ANIMS;
 // The Animated Scenes catalog: whole backdrops, each owning a set of animated regions. Today
 // only the main-menu backdrop, but modelled as a list so a second scene is one more entry
 // (ADR-0059) rather than a fork. regionIds index into SCENE_ANIMS.
-export interface SceneAnimScene { id: string; label: string; url: string; w: number; h: number; regionIds: string[] }
+export interface SceneAnimScene { id: string; label: string; slot: string; w: number; h: number; regionIds: string[] }
 export const SCENE_ANIM_SCENES: SceneAnimScene[] = [
-  { id: 'main-menu', label: 'Main Menu', url: SCENE_URL, w: SCENE_W, h: SCENE_H, regionIds: SCENE_ANIMS.map((r) => r.id) },
+  { id: 'main-menu', label: 'Main Menu', slot: SCENE_SLOT, w: SCENE_W, h: SCENE_H, regionIds: SCENE_ANIMS.map((r) => r.id) },
 ];
 
 const shortRegionName = (id: string): string => id.replace(/^waterfall-/, '');
 
 interface Variant { id: string; label: string; sheet: string; frames: number }
 
-const SCENE_ANIM_DIR = '/assets/ui/main-menu/scene-anim/';
-function cand(name: string, hint: string): Variant {
-  return { id: name, label: `Candidate — ${hint}`, sheet: `${SCENE_ANIM_DIR}${name}.png`, frames: 12 };
+function versionFrameCount(version: AdminLiveMediaVersion, fallback: number): number {
+  const runtime = version.metadata.runtime;
+  if (!runtime || typeof runtime !== 'object' || Array.isArray(runtime)) return fallback;
+  const count = Number((runtime as Record<string, unknown>).frameCount);
+  return Number.isSafeInteger(count) && count > 0 ? count : fallback;
 }
 
-// Liveliness candidates for the right-side falls, baked for A/B in this inspector
-// (build-scene-anim.py --scroll from the static art; all 12-frame, loop-clean by construction).
-// The shipped bakes gate water at brightness 64 and animate only ~4-13% of each box, reading as
-// too static; these lower the gate so more of the fall moves. Coverage is the key lever: past
-// ~35-46% the scroll starts animating non-water (wet rock / mist / the flat lake), which reads as
-// unnatural shimmer. Ordered here CALMEST -> FULLEST. Verdict tags come from an adversarial judge
-// panel (liveliness / naturalism / motion). Pick the winner in the inspector, then promote it to
-// the live sheet + SCENE_ANIMS and delete the rest. Deliberately not committed long-term.
-const RIGHT_CANDIDATES: Record<string, Variant[]> = {
-  'waterfall-right': [
-    cand('cand-right-b62-s3', '21% · calmest, closest to waterfall-left feel'),
-    cand('cand-right-b58-s3', '25% · calm'),
-    cand('cand-right-b52-s3', '34% · panel pick ★ — lively + clean'),
-    cand('cand-right-b46-s3', '46% · livelier (mild rock bleed)'),
-    cand('cand-right-b46-s4', '46% · livelier, faster (mild rock bleed)'),
-    cand('cand-right-b42-s3', '56% · full — over-shimmer: rock/mist/pool'),
-    cand('cand-right-b42-s5', '56% · fullest — over-shimmer: whole-cliff pulse'),
-  ],
-  'waterfall-right-lower': [
-    cand('cand-rlow-b64-s3', '19% · calmest, lake stays still (~reference)'),
-    cand('cand-rlow-b60-s3', '26% · calm'),
-    cand('cand-rlow-b56-s3', '34% · panel pick ★'),
-    cand('cand-rlow-b48-s3', '54% · over-shimmer: lake speckle + boiling'),
-    cand('cand-rlow-b48-s4', '54% · over-shimmer: lake drift + wrap jolt'),
-    cand('cand-rlow-b44-s5', '63% · liveliest (lake + rock sparkle)'),
-  ],
-  'waterfall-right-mid': [
-    cand('cand-rmid-b58-s3', '24% · calmest (~reference)'),
-    cand('cand-rmid-b54-s3', '33% · calm'),
-    cand('cand-rmid-b48-s3', '46% · panel pick ★'),
-    cand('cand-rmid-b42-s3', '58% · busy (rock bleed)'),
-    cand('cand-rmid-b42-s4', '58% · over-shimmer: strobing + wrap jolt'),
-    cand('cand-rmid-b38-s5', '65% · full, clean motion but wide smear'),
-  ],
-};
-
-// Bake variants per region: every region offers its live sheet, then any liveliness candidates,
-// then (for the big right fall) the retired AI-frames sheet for comparison.
-function variantsFor(region: SceneRegion): Variant[] {
-  const live = { id: 'live', label: `Live sheet — ${region.frames} frames`, sheet: region.sheet, frames: region.frames };
-  const candidates = RIGHT_CANDIDATES[region.id] ?? [];
-  const retired: Variant[] = region.id === 'waterfall-right'
-    ? [{ id: 'ai', label: 'AI frames, color-locked (retired) — 11 frames', sheet: `${SCENE_ANIM_DIR}waterfall-right-ai.png`, frames: 11 }]
-    : [];
-  return [live, ...candidates, ...retired];
+/** Candidate/archive lifecycle belongs to the admin catalog, never this source file. */
+export function sceneAnimationVariants(region: SceneRegion, adminCatalog: AdminLiveMediaCatalog | null): Variant[] {
+  const active = liveMediaForSlot(region.slot);
+  const live: Variant = {
+    id: 'active',
+    label: `Active ${active.versionStatus} — ${region.frames} frames`,
+    sheet: active.media.immutableUrl,
+    frames: region.frames,
+  };
+  if (!adminCatalog) return [live];
+  const versions = adminCatalog.versions
+    .filter((version) => version.slot === region.slot && version.id !== active.activeVersionId && version.media)
+    .filter((version) => version.status === 'candidate' || version.status === 'archived')
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return [live, ...versions.map((version) => ({
+    id: version.id,
+    label: `${version.status === 'candidate' ? 'Candidate' : 'Archived'} — ${version.label}`,
+    sheet: version.media!.url,
+    frames: versionFrameCount(version, region.frames),
+  }))];
 }
 
 // A static (frame-0) crop of a region, for the catalog card.
@@ -86,7 +69,7 @@ export function SceneRegionThumb({ region }: { region: SceneRegion }): ReactElem
   return (
     <span style={{
       display: 'block', width: region.w * scale, height: region.h * scale,
-      backgroundImage: `url("${SCENE_URL}")`, backgroundSize: `${SCENE_W * scale}px auto`,
+      backgroundImage: `url("${resolvedLiveMediaUrl(SCENE_SLOT)}")`, backgroundSize: `${SCENE_W * scale}px auto`,
       backgroundPosition: `${-region.x * scale}px ${-region.y * scale}px`, imageRendering: 'pixelated', borderRadius: 4,
     }} />
   );
@@ -172,7 +155,17 @@ export function SceneAnimLab({ regionId, onRegionId, header }: {
   regionId: string; onRegionId: (id: string) => void; header?: ReactNode;
 }): ReactElement {
   const region = SCENE_ANIMS.find((r) => r.id === regionId) ?? SCENE_ANIMS[0];
-  const variants = variantsFor(region);
+  const [adminCatalog, setAdminCatalog] = useState<AdminLiveMediaCatalog | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetchAdminLiveMediaCatalog().then((catalog) => {
+      if (active) setAdminCatalog(catalog);
+    }).catch(() => {
+      if (active) setAdminCatalog(null);
+    });
+    return () => { active = false; };
+  }, []);
+  const variants = useMemo(() => sceneAnimationVariants(region, adminCatalog), [adminCatalog, region]);
   const [variantId, setVariantId] = useState(variants[0].id);
   const variant = variants.find((v) => v.id === variantId) ?? variants[0];
   const [frame, setFrame] = useState(0);
@@ -188,7 +181,7 @@ export function SceneAnimLab({ regionId, onRegionId, header }: {
   // Region (the selection axis) is owned by the studio; on a change reset the per-region
   // view state — variant to live, tempo to the region's shipped ms, frame to 0.
   useEffect(() => {
-    setVariantId('live');
+    setVariantId('active');
     setFrameMs(region.frameMs);
     frameRef.current = 0;
     setFrame(0);
@@ -223,7 +216,7 @@ export function SceneAnimLab({ regionId, onRegionId, header }: {
     const px = (v: number): string => `${v * zoom}px`;
     const scene: CSSProperties = {
       width: px(w), height: px(h),
-      backgroundImage: `url("${SCENE_URL}")`,
+      backgroundImage: `url("${resolvedLiveMediaUrl(SCENE_SLOT)}")`,
       backgroundSize: `${SCENE_W * zoom}px auto`,
       backgroundPosition: `${-x * zoom}px ${-y * zoom}px`,
       imageRendering: 'pixelated', position: 'relative',
@@ -264,7 +257,7 @@ export function SceneAnimLab({ regionId, onRegionId, header }: {
                 {SCENE_ANIMS.map((r) => <option key={r.id} value={r.id}>{r.id} — {r.frameMs}ms</option>)}
               </select>
             </label>
-            <label className="tileset-category-select" title="Live sheet, or a retired bake for A/B.">
+            <label className="tileset-category-select" title="Active, candidate, and archived versions from the backend catalog.">
               <span>Variant</span>
               <select value={variantId} onChange={(e) => { setVariantId(e.target.value); frameRef.current = 0; setFrame(0); }} aria-label="Variant">
                 {variants.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}

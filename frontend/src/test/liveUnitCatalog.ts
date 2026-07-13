@@ -63,6 +63,7 @@ export function testLiveUnitCatalog({
       sprites,
       spriteCount: UNIT_PALETTES.length * rookDirections.length,
       complete: true,
+      acceptanceBlockReason: null,
     })),
   };
 }

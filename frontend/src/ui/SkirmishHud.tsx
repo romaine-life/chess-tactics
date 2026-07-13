@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
@@ -10,13 +10,14 @@ import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 // portrait AND the roster slots both render through it, so framing/fill/crop are defined once and
 // never re-derived per surface. See docs/portrait-contract.md.
 import { UnitPortrait, loadCrops, STORAGE_KEY, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
-import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
+import { runtimePortraitMasterSrc } from './portraitCandidates';
 import { useConfirm } from './shared/ConfirmDialog';
 import { BackGlyph, RestartGlyph, NewGlyph } from './shared/actionGlyphs';
 import { NavButton } from './shared/NavButton';
 import { SkirmishClockControl } from './SkirmishClockControl';
 import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 import { Stepper } from './shared/Stepper';
+import { clientSide, clientSideLabel, clientSideOrder, clientSideRelation, clientTurnLabel, type PlayingSide } from '../game/clientPerspective';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -69,8 +70,8 @@ const SHORTCUT_KEY_ROWS: string[][] = [
 ];
 
 export const SHORTCUT_BINDINGS: Record<string, GridAction> = {
-  q: { kind: 'toggle', flag: 'showEnemyAttacks', label: 'Opp. attacks', hint: 'Show all enemy attack squares (danger zone)' },
-  w: { kind: 'toggle', flag: 'showEnemyMoves', label: 'Opp. moves', hint: 'Show all enemy legal-move squares' },
+  q: { kind: 'toggle', flag: 'showEnemyAttacks', label: 'Opp. attacks', hint: 'Show all opponent attack squares (danger zone)' },
+  w: { kind: 'toggle', flag: 'showEnemyMoves', label: 'Opp. moves', hint: 'Show all opponent legal-move squares' },
   e: { kind: 'toggle', flag: 'showGrid', label: 'Grid', hint: 'Show the board grid overlay' },
   r: { kind: 'deselect', label: 'Deselect all', hint: 'Clear the selected and focused units' },
   a: { kind: 'toggle', flag: 'showPlayerAttacks', label: 'Your attacks', hint: 'Show all friendly attack squares' },
@@ -134,16 +135,28 @@ function UnitBadge({ piece, large = false }: { piece: Piece | null; large?: bool
   );
 }
 
-function CountPip({ side, count }: { side: Side; count: number }) {
+function CountPip({ side, count, owner }: { side: Side; count: number; owner: 'Your' | 'Opponent' }) {
   return (
-    <span className={`skirmish-count-pip ${side}`}>
+    <span className={`skirmish-count-pip ${side}`} aria-label={`${owner} remaining forces: ${count}`}>
       <span className={`skirmish-icon skirmish-icon-rook-${side === 'enemy' ? 'red' : 'blue'}`} aria-hidden="true" />
-      <strong>{count}</strong>
+      <strong aria-hidden="true">{count}</strong>
     </span>
   );
 }
 
+export function skirmishUnitOwnerLabel(side: Side, localSide: PlayingSide): string {
+  return `${clientSideLabel(side, localSide)} unit`;
+}
+
+export function skirmishRosterAction(side: Side, localSide: PlayingSide): 'select' | 'focus' {
+  return clientSideRelation(side, localSide) === 'self' ? 'select' : 'focus';
+}
+
 type SkirmishHudProps = {
+  className?: string;
+  style?: CSSProperties;
+  /** Audit/embedded surfaces can retain tab interaction without installing match-wide shortcuts. */
+  enableGlobalShortcuts?: boolean;
   /** Show the (+) button for authored non-campaign or single-player test/attempt loops. */
   canStartNewSkirmish?: boolean;
   /** In-place restart of the CURRENT authored battle. Non-null only
@@ -162,9 +175,14 @@ type SkirmishHudProps = {
   /** Optional return target for editor/launched playtests. */
   returnHref?: string | null;
   returnLabel?: string;
+  /** False in a secondary same-seat tab: keep inspection/view controls, hide lifecycle writes. */
+  netInteractive?: boolean;
 };
 
 export function SkirmishHud({
+  className = '',
+  style,
+  enableGlobalShortcuts = true,
   canStartNewSkirmish = true,
   onRestart = null,
   restartLabel = 'Restart',
@@ -175,6 +193,7 @@ export function SkirmishHud({
   onClockControlChange,
   returnHref = null,
   returnLabel = 'Back',
+  netInteractive = true,
 }: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
@@ -231,6 +250,7 @@ export function SkirmishHud({
   // goes stale (no re-binding per zoom change). Ignores typing fields and modifier
   // combos so it never steals browser/OS shortcuts.
   useEffect(() => {
+    if (!enableGlobalShortcuts) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
@@ -240,36 +260,42 @@ export function SkirmishHud({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [enableGlobalShortcuts]);
 
-  const selected = game.pieces.find((p) => p.id === selectedId && p.alive) ?? null;
-  const focused = game.pieces.find((p) => p.id === focusedId && p.alive) ?? selected;
-  const playerPieces = livingPieces(game.pieces, 'player');
-  const enemyPieces = livingPieces(game.pieces, 'enemy');
-  const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins — capture the enemy King.'];
-  const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? DEFAULT_BACKGROUND_SET.portraits[focused.type] : null;
-  const promotingPiece = pendingPromotion ? game.pieces.find((p) => p.id === pendingPromotion.pieceId) ?? null : null;
   // Status reads from THIS client's seat. Single-player: 'you' = 'player'. Netplay:
   // 'you' = the lobby seat this client controls (host='player', guest='enemy'), so the
   // guest sees "Victory" when the 'enemy' side wins and "Your turn" on the enemy turn.
-  const localSide: Side = net ? net.localSide : 'player';
-  const opponentTurnLabel = net ? 'Opponent turn' : 'Enemy turn';
-  const turnLabel = game.winner
-    ? game.winner === 'draw' ? 'Draw' : game.winner === localSide ? 'Victory' : 'Defeat'
-    : game.turn === localSide ? 'Your turn' : opponentTurnLabel;
+  const localSide = clientSide(net);
+  const rosterRows = clientSideOrder(localSide).map((side) => ({ side, pieces: livingPieces(game.pieces, side) }));
+  const selected = game.pieces.find((piece) => piece.id === selectedId && piece.alive) ?? null;
+  const focused = game.pieces.find((piece) => piece.id === focusedId && piece.alive) ?? selected;
+  const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins.'];
+  const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? DEFAULT_BACKGROUND_SET.portraits[focused.type] : null;
+  const promotingPiece = pendingPromotion ? game.pieces.find((piece) => piece.id === pendingPromotion.pieceId) ?? null : null;
+  const turnLabel = clientTurnLabel(game, localSide, !!net?.pendingMove);
 
   return (
-    <aside data-testid="skirmish-hud" className="skirmish-hud" aria-label="Skirmish command HUD">
+    <aside
+      data-testid="skirmish-hud"
+      data-chrome-unit="outer-panel"
+      data-chrome-consumer="skirmish-hud"
+      className={`skirmish-hud le-outer-panel ${className}`.trim()}
+      style={style}
+      aria-label="Skirmish command HUD"
+    >
       {/* Portals to <body>; render anywhere. Only visible while a resign confirm is open. */}
       {dialog}
+      <span className="le-outer-panel-fill" aria-hidden="true" />
+      <div className="le-outer-panel-content">
       <section className="skirmish-score-panel" aria-label="Turn summary">
         <div>
           <span className="skirmish-eyebrow">Status</span>
           <strong data-testid="turn-label">{turnLabel}</strong>
         </div>
         <div className="skirmish-counts" aria-label="Remaining forces">
-          <CountPip side="player" count={playerPieces.length} />
-          <CountPip side="enemy" count={enemyPieces.length} />
+          {rosterRows.map(({ side, pieces }, index) => (
+            <CountPip key={side} side={side} count={pieces.length} owner={index === 0 ? 'Your' : 'Opponent'} />
+          ))}
         </div>
       </section>
 
@@ -334,7 +360,10 @@ export function SkirmishHud({
                   crop={portraitCrops[focused.type as PortraitPiece]}
                   backdrop={focusedPortraitBackdrop}
                   className="unit-portrait--hud"
-                  method={PRODUCTION_PORTRAIT_METHOD}
+                  masterUrl={runtimePortraitMasterSrc(
+                    focused.type as PortraitPiece,
+                    paletteForSide(focused.side, focused.palette) as PortraitPalette,
+                  )}
                 />
               ) : (
                 <div className="unit-portrait unit-portrait--hud" style={{ display: 'grid', placeItems: 'center' }}>
@@ -343,7 +372,7 @@ export function SkirmishHud({
               )}
               <div className="skirmish-selected-copy">
                 <strong data-testid="selected-name">{focused ? TYPE_LABEL[focused.type] : 'None'}</strong>
-                <span>{focused ? `${focused.side === 'enemy' ? 'Enemy' : focused.side === 'player' ? 'Player' : 'Neutral'} - ${ROLE[focused.type]}` : 'Choose a unit on the board.'}</span>
+                <span>{focused ? `${skirmishUnitOwnerLabel(focused.side, localSide)} - ${ROLE[focused.type]}` : 'Choose a unit on the board.'}</span>
               </div>
             </div>
             {focused && (focused.side === 'player' || focused.side === 'enemy') && (
@@ -365,15 +394,15 @@ export function SkirmishHud({
           <section className="skirmish-card skirmish-roster-card" aria-label="Roster">
             <h2>Roster</h2>
             <div className="skirmish-roster-rows">
-              {[playerPieces, enemyPieces].map((pieces, row) => (
-                <div className="skirmish-roster-strip" key={row === 0 ? 'player' : 'enemy'}>
+              {rosterRows.map(({ side, pieces }) => (
+                <div className="skirmish-roster-strip" key={side} aria-label={`${clientSideLabel(side, localSide)} roster`}>
                   {pieces.map((piece) => (
                     <button
                       key={piece.id}
                       type="button"
                       className={`skirmish-roster-slot ${piece.id === focused?.id ? 'active' : ''}`.trim()}
-                      onClick={() => piece.side === 'player' ? select(piece.id) : focus(piece.id)}
-                      aria-label={`${piece.side} ${TYPE_LABEL[piece.type]}`}
+                      onClick={() => skirmishRosterAction(piece.side, localSide) === 'select' ? select(piece.id) : focus(piece.id)}
+                      aria-label={`${clientSideLabel(piece.side, localSide)} ${TYPE_LABEL[piece.type]}`}
                     >
                       {isPlayablePieceType(piece.type) ? (
                         <UnitPortrait
@@ -381,7 +410,10 @@ export function SkirmishHud({
                           palette={paletteForSide(piece.side, piece.palette) as PortraitPalette}
                           crop={portraitCrops[piece.type as PortraitPiece]}
                           className="unit-portrait--roster"
-                          method={PRODUCTION_PORTRAIT_METHOD}
+                          masterUrl={runtimePortraitMasterSrc(
+                            piece.type as PortraitPiece,
+                            paletteForSide(piece.side, piece.palette) as PortraitPalette,
+                          )}
                         />
                       ) : (
                         <UnitBadge piece={piece} />
@@ -425,7 +457,7 @@ export function SkirmishHud({
               <span className="skirmish-eyebrow">Overlays</span>
               <div className="skirmish-view-row">
                 <button type="button" className={`app-header-button ${showMoves ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showMoves')} aria-pressed={showMoves}>Moves</button>
-                <button type="button" className={`app-header-button ${showEnemyAttacks ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showEnemyAttacks')} aria-pressed={showEnemyAttacks}>Attacks</button>
+                <button type="button" className={`app-header-button ${showEnemyAttacks ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showEnemyAttacks')} aria-pressed={showEnemyAttacks}>Opp. attacks</button>
                 <button type="button" className={`app-header-button ${showBlocked ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showBlocked')} aria-pressed={showBlocked}>Blocks</button>
                 <button type="button" className={`app-header-button ${showPromotionZones ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showPromotionZones')} aria-pressed={showPromotionZones}>Promotion</button>
                 <button type="button" className={`app-header-button ${showGrid ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showGrid')} aria-pressed={showGrid}>Grid</button>
@@ -552,7 +584,7 @@ export function SkirmishHud({
                 ) : null}
                 {/* Concede the current battle. In netplay this relays through the lobby; in
                     solo/test play it immediately ends the board as a defeat. */}
-                {!game.winner ? (
+                {!game.winner && (!net || netInteractive) ? (
                   <button
                     type="button"
                     className="app-header-button skirmish-resign-button"
@@ -582,6 +614,7 @@ export function SkirmishHud({
             </div>
           </section>
         )}
+      </div>
       </div>
     </aside>
   );

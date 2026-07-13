@@ -1,8 +1,15 @@
 ---
-status: "accepted"
+status: "accepted; downscale-without-reforge clauses superseded by ADR-0076; asset-storage clauses superseded by ADR-0085"
 date: 2026-06-27
 deciders: Nelson, Claude
 ---
+
+> **Downscale-without-reforge clauses superseded by
+> [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md) (2026-07-10).**
+> The canvas, optical keylines, shape classes, and optical centering stand.
+> Section C.1's "clean downscale with no reforge" and the LANCZOS "re-pack, not
+> re-forge" production method do not: scaled results are calibration briefs for
+> native regeneration.
 
 # ADR-0027: Shape-varied icon sets are placed by per-shape optical keyline within the canonical canvas
 

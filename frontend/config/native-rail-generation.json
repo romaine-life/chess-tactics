@@ -1,0 +1,165 @@
+{
+  "version": 1,
+  "roles": {
+    "outer": {
+      "thickness": 12,
+      "templates": {
+        "codex": {
+          "revision": 2,
+          "guideInset": 4,
+          "width": 1536,
+          "height": 1024,
+          "cells": [
+            { "id": "long-top", "fit": "long", "edge": "top", "x": 48, "y": 32, "w": 1440, "h": 12 },
+            { "id": "long-bottom", "fit": "long", "edge": "bottom", "x": 48, "y": 80, "w": 1440, "h": 12 },
+            { "id": "long-left", "fit": "long", "edge": "left", "x": 48, "y": 160, "w": 12, "h": 832 },
+            { "id": "long-right", "fit": "long", "edge": "right", "x": 96, "y": 160, "w": 12, "h": 832 },
+            { "id": "repeat-top", "fit": "repeat", "edge": "top", "x": 192, "y": 192, "w": 96, "h": 12 },
+            { "id": "repeat-bottom", "fit": "repeat", "edge": "bottom", "x": 192, "y": 240, "w": 96, "h": 12 },
+            { "id": "repeat-left", "fit": "repeat", "edge": "left", "x": 336, "y": 192, "w": 12, "h": 96 },
+            { "id": "repeat-right", "fit": "repeat", "edge": "right", "x": 384, "y": 192, "w": 12, "h": 96 }
+          ]
+        },
+        "codexDenseHorizontal": {
+          "revision": 1,
+          "guideInset": 4,
+          "width": 1536,
+          "height": 1024,
+          "pattern": { "orientation": "horizontal", "fit": "long", "start": 8, "pitch": 16, "count": 63, "crossStart": 48, "length": 1440 }
+        },
+        "codexDenseVertical": {
+          "revision": 1,
+          "guideInset": 4,
+          "width": 1536,
+          "height": 1024,
+          "pattern": { "orientation": "vertical", "fit": "long", "start": 8, "pitch": 16, "count": 95, "crossStart": 48, "length": 928 }
+        },
+        "codexDenseFamily": {
+          "revision": 1,
+          "guideInset": 0,
+          "width": 1536,
+          "height": 1024,
+          "styleReference": "/assets/ui/chrome/outer/rail.png",
+          "patterns": [
+            {
+              "idPrefix": "horizontal",
+              "orientation": "horizontal",
+              "fit": "repeat",
+              "start": 8,
+              "pitch": 16,
+              "count": 63,
+              "crossStart": 0,
+              "length": 960,
+              "candidateIndices": [15, 31, 47]
+            },
+            {
+              "idPrefix": "vertical",
+              "orientation": "vertical",
+              "fit": "repeat",
+              "start": 984,
+              "pitch": 16,
+              "count": 34,
+              "crossStart": 0,
+              "length": 1024,
+              "candidateIndices": [8, 17, 25]
+            }
+          ]
+        },
+        "pixellab": {
+          "width": 512,
+          "height": 512,
+          "cells": [
+            { "id": "long-top", "fit": "long", "edge": "top", "x": 32, "y": 32, "w": 448, "h": 12 },
+            { "id": "long-bottom", "fit": "long", "edge": "bottom", "x": 32, "y": 76, "w": 448, "h": 12 },
+            { "id": "long-left", "fit": "long", "edge": "left", "x": 32, "y": 120, "w": 12, "h": 360 },
+            { "id": "long-right", "fit": "long", "edge": "right", "x": 76, "y": 120, "w": 12, "h": 360 },
+            { "id": "repeat-top", "fit": "repeat", "edge": "top", "x": 128, "y": 128, "w": 96, "h": 12 },
+            { "id": "repeat-bottom", "fit": "repeat", "edge": "bottom", "x": 128, "y": 172, "w": 96, "h": 12 },
+            { "id": "repeat-left", "fit": "repeat", "edge": "left", "x": 272, "y": 128, "w": 12, "h": 96 },
+            { "id": "repeat-right", "fit": "repeat", "edge": "right", "x": 316, "y": 128, "w": 12, "h": 96 }
+          ]
+        }
+      }
+    },
+    "inner": {
+      "thickness": 7,
+      "templates": {
+        "codex": {
+          "revision": 2,
+          "guideInset": 1,
+          "width": 1536,
+          "height": 1024,
+          "cells": [
+            { "id": "long-top", "fit": "long", "edge": "top", "x": 48, "y": 32, "w": 1440, "h": 7 },
+            { "id": "long-bottom", "fit": "long", "edge": "bottom", "x": 48, "y": 64, "w": 1440, "h": 7 },
+            { "id": "long-left", "fit": "long", "edge": "left", "x": 48, "y": 112, "w": 7, "h": 880 },
+            { "id": "long-right", "fit": "long", "edge": "right", "x": 80, "y": 112, "w": 7, "h": 880 },
+            { "id": "repeat-top", "fit": "repeat", "edge": "top", "x": 160, "y": 160, "w": 64, "h": 7 },
+            { "id": "repeat-bottom", "fit": "repeat", "edge": "bottom", "x": 160, "y": 192, "w": 64, "h": 7 },
+            { "id": "repeat-left", "fit": "repeat", "edge": "left", "x": 256, "y": 160, "w": 7, "h": 64 },
+            { "id": "repeat-right", "fit": "repeat", "edge": "right", "x": 288, "y": 160, "w": 7, "h": 64 }
+          ]
+        },
+        "codexDenseHorizontal": {
+          "revision": 1,
+          "guideInset": 1,
+          "width": 1536,
+          "height": 1024,
+          "pattern": { "orientation": "horizontal", "fit": "long", "start": 7, "pitch": 10, "count": 101, "crossStart": 48, "length": 1440 }
+        },
+        "codexDenseVertical": {
+          "revision": 1,
+          "guideInset": 1,
+          "width": 1536,
+          "height": 1024,
+          "pattern": { "orientation": "vertical", "fit": "long", "start": 7, "pitch": 10, "count": 152, "crossStart": 48, "length": 928 }
+        },
+        "codexDenseFamily": {
+          "revision": 1,
+          "guideInset": 0,
+          "width": 1536,
+          "height": 1024,
+          "styleReference": "/assets/ui/chrome/inner/rail.png",
+          "patterns": [
+            {
+              "idPrefix": "horizontal",
+              "orientation": "horizontal",
+              "fit": "repeat",
+              "start": 7,
+              "pitch": 10,
+              "count": 101,
+              "crossStart": 0,
+              "length": 960,
+              "candidateIndices": [25, 50, 75]
+            },
+            {
+              "idPrefix": "vertical",
+              "orientation": "vertical",
+              "fit": "repeat",
+              "start": 980,
+              "pitch": 10,
+              "count": 55,
+              "crossStart": 0,
+              "length": 1024,
+              "candidateIndices": [14, 27, 41]
+            }
+          ]
+        },
+        "pixellab": {
+          "width": 512,
+          "height": 512,
+          "cells": [
+            { "id": "long-top", "fit": "long", "edge": "top", "x": 32, "y": 32, "w": 448, "h": 7 },
+            { "id": "long-bottom", "fit": "long", "edge": "bottom", "x": 32, "y": 64, "w": 448, "h": 7 },
+            { "id": "long-left", "fit": "long", "edge": "left", "x": 32, "y": 96, "w": 7, "h": 384 },
+            { "id": "long-right", "fit": "long", "edge": "right", "x": 64, "y": 96, "w": 7, "h": 384 },
+            { "id": "repeat-top", "fit": "repeat", "edge": "top", "x": 128, "y": 128, "w": 64, "h": 7 },
+            { "id": "repeat-bottom", "fit": "repeat", "edge": "bottom", "x": 128, "y": 160, "w": 64, "h": 7 },
+            { "id": "repeat-left", "fit": "repeat", "edge": "left", "x": 232, "y": 128, "w": 7, "h": 64 },
+            { "id": "repeat-right", "fit": "repeat", "edge": "right", "x": 264, "y": 128, "w": 7, "h": 64 }
+          ]
+        }
+      }
+    }
+  }
+}

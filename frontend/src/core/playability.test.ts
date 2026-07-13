@@ -1,5 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
+import { applyLiveMediaCatalog, resetLiveMediaCatalog, resetPropSeats } from '@chess-tactics/board-render';
 import { validatePlayability } from './playability';
+import { applyTestPropSeats } from '../test/livePropSeats';
+import { testGroundCoverCatalog, testStructureMediaSlots } from '../test/liveMediaCatalog';
+
+beforeAll(() => {
+  applyLiveMediaCatalog(testGroundCoverCatalog(testStructureMediaSlots()));
+  applyTestPropSeats();
+});
+afterAll(() => {
+  resetPropSeats();
+  resetLiveMediaCatalog();
+});
 import { createBlankLevel, type Level, type Zone } from './level';
 import type { PieceType, Side } from './types';
 

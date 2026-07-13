@@ -49,14 +49,17 @@ describe('runTexel on the Break the Line board', () => {
   });
 
   it('leaves inert weights (absent pieces / off-objective terms) untouched', () => {
-    // rival-kings uses piece values + hangingUndefended + advance; knight/rook/queen are
-    // not on the board and guard/reach*/survive* are off-objective, so their eval
-    // contribution — and thus their gradient — is exactly zero. They must not move.
+    // Rival Kings uses piece values + hangingUndefended + advance + guard. The exact
+    // victory rules describe both royal targets, so guard is intentionally active even
+    // though the legacy headline objective is no longer consulted by evaluation.
+    // Knight/rook/queen are absent and reach*/survive* are off-rule, so those gradients
+    // remain exactly zero and their weights must not move.
     const corpus = smallCorpus();
     const ref = encodeWeights(DEFAULT_EVAL_WEIGHTS);
     const result = runTexel(corpus.positions, { iterations: 60 });
-    const inert = [1 /*knight*/, 3 /*rook*/, 4 /*queen*/, 9 /*guard*/, 10 /*reachProgress*/, 11 /*reachGarrison*/, 12 /*surviveUrgency*/, 13 /*surviveClock*/];
+    const inert = [1 /*knight*/, 3 /*rook*/, 4 /*queen*/, 10 /*reachProgress*/, 11 /*reachGarrison*/, 12 /*surviveUrgency*/, 13 /*surviveClock*/];
     for (const i of inert) expect(result.theta[i]).toBeCloseTo(ref[i], 9);
+    expect(result.theta[9] /*guard*/).not.toBeCloseTo(ref[9], 9);
     expect(Number.isFinite(result.initialError)).toBe(true);
     expect(Number.isFinite(result.finalError)).toBe(true);
     // Decoded weights round-trip through the vector.

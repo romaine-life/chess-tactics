@@ -1,14 +1,6 @@
-// Deterministic profile/status asset normalizer for the main menu.
-//
-// Source: frontend/public/assets/ui/main-menu-aspirational.png
-// Outputs:
-//   public/assets/ui/main-menu/panel-9slice.png
-//   public/assets/ui/main-menu/panel-9slice.json
-//   public/assets/ui/main-menu/profile-crest.png (+ @2x)
-//   public/assets/ui/main-menu/profile-rook-blue.png (+ @2x)
-//   public/assets/ui/main-menu/profile-rook-red.png (+ @2x)
-//   public/assets/ui/main-menu/profile-cog.png (+ @2x)
-//   public/assets/ui/main-menu/profile-contact-sheet.png
+// Deterministic profile/status asset normalizer for the main menu. The source
+// must be fetched from live media; outputs go to a temporary directory and are
+// uploaded as candidates through scripts/live-media-admin-client.mjs.
 //
 // The panel frame is cropped from the approved render and cleaned by removing
 // baked live text/icons from the content area. Runtime copy and counts remain
@@ -17,12 +9,18 @@
 import { PNG } from 'pngjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const UI_DIR = path.resolve(__dirname, '../public/assets/ui');
-const OUT_DIR = path.join(UI_DIR, 'main-menu');
-const SOURCE = path.join(UI_DIR, 'main-menu-aspirational.png');
+const argv = process.argv.slice(2);
+const option = (name) => {
+  const index = argv.indexOf(`--${name}`);
+  return index >= 0 ? argv[index + 1] : undefined;
+};
+const SOURCE = option('source');
+const outputOption = option('out-dir');
+if (!SOURCE || !outputOption) {
+  console.error('Usage: node scripts/normalize-main-menu-profile.mjs --source <fetched.png> --out-dir <temp-output>');
+  process.exit(2);
+}
+const OUT_DIR = path.resolve(outputOption);
 
 const PANEL = {
   x: 1176,
@@ -267,3 +265,4 @@ writePNG(contact, path.join(OUT_DIR, 'profile-contact-sheet.png'));
 console.log('Wrote main-menu profile assets:');
 console.log(`  panel-9slice.png ${panel.w}x${panel.h}`);
 for (const { icon, img } of iconImgs) console.log(`  ${icon.out} ${img.w}x${img.h}`);
+console.log('Upload the output files as live-media candidates; this script does not publish repository media.');

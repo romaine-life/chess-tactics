@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { chromeUnitClassNames } from '../chromeUnitRegistry';
 
 // The accepted on/off control: a forged kit-frame button (button-neutral 9-slice) holding two
 // words — the active state lights up (warm = on, cool = off), the other dims. Shared chrome —
@@ -16,7 +17,8 @@ export function Toggle({
   return (
     <button
       type="button"
-      className={`settings-toggle ${checked ? 'is-on' : 'is-off'}`}
+      data-chrome-unit="inner-toggle"
+      className={chromeUnitClassNames('inner-toggle', 'settings-toggle', checked ? 'is-on' : 'is-off')}
       role="switch"
       aria-checked={checked}
       aria-label={label}

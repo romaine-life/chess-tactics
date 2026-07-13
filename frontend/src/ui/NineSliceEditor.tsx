@@ -17,8 +17,10 @@
 // Edge handedness: right = rot90(scaled edge), left = flipH(right), bottom =
 // flipV(top) — every mirror/rotation AFTER scaling, identical to the Node bake.
 //
-// In dev, Save writes config/nine-slice/<asset>.json and regenerates the asset
-// (via the Vite dev endpoint). Routing follows repo convention (lazy in App.tsx).
+// The editor reads code-owned geometry from config/nine-slice and previews it
+// against live media slots. In dev, Save geometry updates only those JSON shape
+// files; it never writes media or promotion state to Git.
+// Routing follows repo convention (lazy in App.tsx).
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import nineSliceRegistry from '../../config/nine-slice-registry.json';
 import { SURFACE_ASSETS } from './surfaceCatalog';
@@ -50,6 +52,16 @@ type Asset = { id: string; label: string; corner: string; edge: string; fill: st
 // corner/fill, so the frame path only ever sees the full atom set.
 type RegAsset = { label: string; theme?: string; kind?: string; sides?: string; atoms: { corner?: string; edge?: string; fill?: string }; frame: Frame; carve?: boolean; flipSides?: boolean; variants: { out: string }[] };
 const REGISTRY = (nineSliceRegistry as { assets: Record<string, RegAsset> }).assets;
+const CONFIG_MODULES = import.meta.glob('../../config/nine-slice/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, unknown>;
+const CONFIG_BY_ASSET = Object.values(CONFIG_MODULES).reduce<Record<string, object>>((result, raw) => {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && typeof (raw as { asset?: unknown }).asset === 'string') {
+    result[(raw as { asset: string }).asset] = raw;
+  }
+  return result;
+}, {});
 // `bar` (divider) and `junction` (tee/cross) assets are composed straight from atoms with no
 // per-corner geometry, so this 3×3 corner editor can't calibrate them — their pixels are fully
 // determined by construction. Excluded here (a frame needs the full corner/edge/fill triple).
@@ -93,7 +105,13 @@ const SIDE_SIGN: Record<Side, 1 | -1> = { top: 1, bottom: -1, left: 1, right: -1
 const SIDE_CORNERS: Record<Side, [Corner, Corner]> = { top: ['tl', 'tr'], bottom: ['bl', 'br'], left: ['tl', 'bl'], right: ['tr', 'br'] };
 // v5: per-element absolutes (older entries hold the retired global+residual shape).
 const STORAGE_KEY = 'nine-slice-editor-v5';
-const Z = 6;
+const MIN_SCALE = 0.25;
+const MAX_INSPECT_Z = 6;
+const MAX_INSPECT_DIM = 1024;
+function inspectZoomForFrame(width: number, height: number): number {
+  const maxDim = Math.max(width, height, 1);
+  return Math.max(1, Math.min(MAX_INSPECT_Z, Math.floor(MAX_INSPECT_DIM / maxDim)));
+}
 // The 3×3 spatial selector — you click the part of the frame you mean.
 const SEL_CELLS: { key: Sel; glyph: string; title: string }[] = [
   { key: 'tl', glyph: '◤', title: 'top-left corner' },
@@ -171,7 +189,7 @@ function foldedCorners(global: unknown, per: unknown): Corners {
 }
 
 function roundedScale(value: unknown, fallback: number): number {
-  return Math.max(1, Math.min(4, Math.round(finiteNumber(value, fallback) * 100) / 100));
+  return Math.max(MIN_SCALE, Math.min(4, Math.round(finiteNumber(value, fallback) * 100) / 100));
 }
 
 // Accepts the canonical per-element shape AND the retired global+residual shape
@@ -433,7 +451,7 @@ export const DEFAULT_NINE_SLICE_ASSET = ASSETS[0].id;
 // editing controls are the Controls panel. Asset selection is owned by the studio
 // (assetId/onAssetId ride its URL), so there is NO own route, NO page chrome, and
 // NO "Back" link — the Catalog tab is back (docs/studio-control-architecture.md).
-export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; onAssetId: (id: string) => void; header?: ReactNode }): ReactElement {
+export function NineSliceLab({ assetId, onAssetId, header, zoom = 1 }: { assetId: string; onAssetId: (id: string) => void; header?: ReactNode; zoom?: number }): ReactElement {
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId) ?? ASSETS[0], [assetId]);
   const aid = asset.id;
   // The frames that share this asset's shape (same theme). Editing Shape edits the
@@ -548,28 +566,21 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     return () => { live = false; };
   }, [previewSurfaceName]);
 
-  // Hydrate from the on-disk config (dev) the first time each asset is opened, so the
-  // editor reflects what's actually baked — not stale localStorage or defaults. This
-  // is what stops a fresh editor from saving default values over your real config.
+  // Hydrate from the bundled code-owned geometry the first time each asset is opened,
+  // so the editor reflects its authoritative shape rather than stale localStorage.
   const hydrated = useRef<Set<string>>(new Set());
   // The saved/baked config each asset was hydrated from — a per-control "Reset" reverts to THIS
   // (its shipped value), mirroring the dressing rooms, rather than to a bare zero. Falls back to
   // DEFAULT_EDIT when no config has loaded (fresh asset / production, where there's no hydrate).
   const baselineRef = useRef<Record<string, EditState>>({});
   useEffect(() => {
-    if (!((import.meta as { env?: { DEV?: boolean } }).env?.DEV) || hydrated.current.has(aid)) return;
-    let live = true;
-    fetch(`/__nine-slice/config?asset=${aid}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (!live || !j.ok || !j.config) return;
-        hydrated.current.add(aid);
-        const hydratedEdit = normalizedEdit(j.config);
-        baselineRef.current[aid] = hydratedEdit;
-        setEdits((prev) => ({ ...prev, [aid]: hydratedEdit }));
-      })
-      .catch(() => {});
-    return () => { live = false; };
+    if (hydrated.current.has(aid)) return;
+    const config = CONFIG_BY_ASSET[aid];
+    if (!config) return;
+    hydrated.current.add(aid);
+    const hydratedEdit = normalizedEdit(config);
+    baselineRef.current[aid] = hydratedEdit;
+    setEdits((prev) => ({ ...prev, [aid]: hydratedEdit }));
   }, [aid]);
 
   const update = (mut: (cur: EditState) => EditState) => setEdits((prev) => {
@@ -580,7 +591,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   // A corner may grow until it fills its whole side (frame / corner) — quadrant
   // clipping lets it meet the opposite corner at the midline instead of overlapping.
   // Mirrors maxFrameScaleForAsset in the Node bake.
-  const maxFrameScale = loaded ? Math.max(1, Math.min(4, asset.frame.w / loaded.cw, asset.frame.h / loaded.ch)) : 4;
+  const maxFrameScale = loaded ? Math.max(MIN_SCALE, Math.min(4, asset.frame.w / loaded.cw, asset.frame.h / loaded.ch)) : 4;
   const boxRange = (box: { minX: number; minY: number; maxX: number; maxY: number }, scale: number) => {
     const scaled = scaleBox(box, scale);
     const W = asset.frame.w, H = asset.frame.h;
@@ -725,13 +736,13 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   });
   const setBracketScale = (next: number | ((cur: number) => number)) => update((cur) => {
     const raw = typeof next === 'function' ? next(cur.bracketScale ?? DEFAULT_BRACKET_SCALE) : next;
-    const bracketScale = Math.max(1, Math.min(4, Math.round(raw * 100) / 100));
+    const bracketScale = Math.max(MIN_SCALE, Math.min(4, Math.round(raw * 100) / 100));
     const r = cornerRangeAt('gold', bracketScale);
     return { ...cur, bracketScale, brackets: r ? clampCornersTo(cur.brackets, r) : cur.brackets };
   });
   const setFrameScale = (next: number | ((cur: number) => number)) => update((cur) => {
     const raw = typeof next === 'function' ? next(cur.frameScale ?? DEFAULT_FRAME_SCALE) : next;
-    const frameScale = clamp(Math.round(raw * 100) / 100, 1, maxFrameScale);
+    const frameScale = clamp(Math.round(raw * 100) / 100, MIN_SCALE, maxFrameScale);
     const r = cornerRangeAt('cool', frameScale);
     const pipes = clonePipes(cur.pipes);
     for (const s of SIDES) { const pr = pipeSideRange(s, frameScale); if (pr) pipes[s] = clamp(pipes[s], pr.min, pr.max); }
@@ -803,12 +814,13 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   useEffect(() => {
     if (!loaded) return;
     const W = asset.frame.w, H = asset.frame.h;        // canvas = the asset footprint
+    const Z = inspectZoomForFrame(W, H) * (Number.isFinite(zoom) ? Math.max(0.25, Math.min(4, zoom)) : 1);
     const off = buildFrameCanvas(loaded, edit, W, H, asset.carve, asset.flipSides);        // full frame (baked body)
     const orn = buildFrameCanvas(loaded, edit, W, H, asset.carve, asset.flipSides, true);  // ornament only (no fill)
     const g = off.getContext('2d')!; // status reads the full frame's opaque box
 
     const view = canvasRef.current; if (!view) return;
-    view.width = W * Z; view.height = H * Z;
+    view.width = Math.max(1, Math.round(W * Z)); view.height = Math.max(1, Math.round(H * Z));
     const vg = view.getContext('2d')!; vg.imageSmoothingEnabled = false;
     for (let y = 0; y < view.height; y += 8) for (let x = 0; x < view.width; x += 8) { vg.fillStyle = ((x / 8 + y / 8) & 1) ? '#3a3f48' : '#2b2f37'; vg.fillRect(x, y, 8, 8); }
     if (backing === 'surface' && surfaceImg) {
@@ -822,11 +834,11 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       const tile = 16 * Z; // 16 footprint px per tile — enough texture to read
       for (let y = 0; y < view.height; y += tile) for (let x = 0; x < view.width; x += tile) vg.drawImage(surfaceImg, x, y, tile, tile);
       vg.restore();
-      vg.drawImage(orn, 0, 0, W, H, 0, 0, W * Z, H * Z);
+      vg.drawImage(orn, 0, 0, W, H, 0, 0, view.width, view.height);
     } else if (backing === 'fill') {
-      vg.drawImage(off, 0, 0, W, H, 0, 0, W * Z, H * Z);   // the asset's baked body
+      vg.drawImage(off, 0, 0, W, H, 0, 0, view.width, view.height);   // the asset's baked body
     } else {
-      vg.drawImage(orn, 0, 0, W, H, 0, 0, W * Z, H * Z);   // 'none' — ornament on the checkerboard
+      vg.drawImage(orn, 0, 0, W, H, 0, 0, view.width, view.height);   // 'none' — ornament on the checkerboard
     }
 
     // Guides are FIXED references at the asset footprint — you position the
@@ -857,7 +869,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     }
     setStatus(maxX < 0 ? null : { top: minY, left: minX, right: (W - 1) - maxX, bottom: (H - 1) - maxY });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, editKey, showOuter, showContent, showFill, backing, surfaceImg, asset]);
+  }, [loaded, editKey, showOuter, showContent, showFill, backing, surfaceImg, asset, zoom]);
 
   // LIVE preview — the exact assembled asset footprint. Consumer previews below use
   // real app DOM/CSS with this live frame source instead of a hand-drawn imitation.
@@ -907,24 +919,29 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   const selIsCorner = (CORNERS as string[]).includes(sel);
   const membersOff = layer === 'cool' && !memberCorners && !memberPipe && !selIsCorner;
 
-  // Save straight to the on-disk config + regenerate the asset, via the dev-only
-  // Vite endpoint. import.meta.env.DEV gates the button; the endpoint only exists
-  // while `vite` is serving — so this whole path is dev-only by construction.
   const isDev = Boolean((import.meta as { env?: { DEV?: boolean } }).env?.DEV);
   const [saveMsg, setSaveMsg] = useState('');
   const [importJson, setImportJson] = useState('');
   const [importMsg, setImportMsg] = useState('');
-  const saveToDisk = async () => {
-    setSaveMsg('saving…');
+  const saveGeometry = async () => {
+    setSaveMsg('saving geometry…');
     try {
-      const r = await fetch('/__nine-slice/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: exportJson });
-      const j = await r.json();
-      if (j.ok) baselineRef.current[aid] = edit; // the just-saved config is the new reset baseline
-      const scope = j.theme ? `${j.theme} family (${j.family?.members?.length ?? family.length} frames)` : j.asset;
-      // The endpoint pushes a live page reload after a save, so the app shows it
-      // everywhere on navigation — this message is a brief confirmation before that.
-      setSaveMsg(j.ok ? `saved ${scope} · applying live across the app…` : `error: ${j.error}`);
-    } catch (e) { setSaveMsg(`error: ${String(e)}`); }
+      const response = await fetch('/__nine-slice/geometry', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: exportJson,
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      if (result.mediaWritten !== false || result.promotionChanged !== false) {
+        throw new Error('geometry endpoint crossed the live-media ownership boundary');
+      }
+      baselineRef.current[aid] = edit;
+      const scope = result.theme ? `${result.theme} geometry + ${result.asset} boxes` : `${result.asset} geometry`;
+      setSaveMsg(`saved ${scope} · no media or promotion changed`);
+    } catch (error) {
+      setSaveMsg(`error: ${String(error)}`);
+    }
   };
   const applyImportJson = (mode: 'current' | 'named') => {
     const text = importJson.trim();
@@ -963,7 +980,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     <>
       <section className="al-lab-main" aria-label="9-slice frame editor">
         <div style={ST.stage}>
-          <canvas ref={canvasRef} style={{ imageRendering: 'pixelated', maxWidth: '100%' }} />
+          <canvas ref={canvasRef} style={{ imageRendering: 'pixelated', height: 'auto' }} />
           <div style={ST.previewStrip}>
             <div style={ST.previewItem}><span style={ST.previewLabel}>actual size · 1×</span><canvas ref={pvActualRef} style={{ imageRendering: 'pixelated' }} /></div>
             <div style={ST.previewItem}>
@@ -1031,7 +1048,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
                 <button type="button" style={ST.sb} onClick={() => setBracketScale((s) => s + 0.25)}>+</button>
                 <button type="button" style={ST.sb} title="Reset bracket size to saved" aria-label="Reset bracket size" onClick={resetBracketScale}>↺</button>
               </div>
-              <input type="range" min={1} max={4} step={0.05} value={edit.bracketScale} onChange={(e) => setBracketScale(Number(e.target.value))} style={{ display: 'block', width: '100%', minWidth: 0, boxSizing: 'border-box' }} aria-label="Bracket size" />
+              <input type="range" min={MIN_SCALE} max={4} step={0.05} value={edit.bracketScale} onChange={(e) => setBracketScale(Number(e.target.value))} style={{ display: 'block', width: '100%', minWidth: 0, boxSizing: 'border-box' }} aria-label="Bracket size" />
             </>
           ) : (
             <>
@@ -1042,7 +1059,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
                 <button type="button" style={ST.sb} onClick={() => setFrameScale((s) => s + 0.25)}>+</button>
                 <button type="button" style={ST.sb} title="Reset frame size to saved" aria-label="Reset frame size" onClick={resetFrameScale}>↺</button>
               </div>
-              <input type="range" min={1} max={maxFrameScale} step={0.05} value={edit.frameScale} onChange={(e) => setFrameScale(Number(e.target.value))} style={{ display: 'block', width: '100%', minWidth: 0, boxSizing: 'border-box' }} aria-label="Frame size" />
+              <input type="range" min={MIN_SCALE} max={maxFrameScale} step={0.05} value={edit.frameScale} onChange={(e) => setFrameScale(Number(e.target.value))} style={{ display: 'block', width: '100%', minWidth: 0, boxSizing: 'border-box' }} aria-label="Frame size" />
               <p style={ST.hint}>One line weight: frame size scales the cool corners and the pipes' thickness together.</p>
             </>
           )}
@@ -1123,7 +1140,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
                   these boxes up against real pixels; consumers pad/clip by the result.
                   They bake into NO pixels — they ride in the config + generated CSS. */}
               <span style={ST.sectionHead}>Hand-off boxes{asset.theme ? ` · ${asset.label} only` : ''} — you calibrate, code consumes</span>
-              <p style={ST.hint}>These are <b>per-frame</b>{asset.theme ? ' (unlike the shared Shape)' : ''} — they don't touch the frame art, just mark where consumers start their content and stop their backing. Save writes them to the config + generated CSS.</p>
+              <p style={ST.hint}>These are <b>per-frame</b>{asset.theme ? ' (unlike the shared Shape)' : ''} — they don't touch the frame art, just mark where consumers start their content and stop their backing. Export keeps this code-owned geometry separate from live media.</p>
               <label style={ST.toggle}>
                 <input type="checkbox" checked={showContent} onChange={(e) => setShowContent(e.target.checked)} />
                 <span style={{ color: '#5cff9e' }}>■</span> <b>Content box</b>&nbsp;— where text / icons start
@@ -1193,10 +1210,11 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
           <button type="button" style={ST.resetAll} onClick={resetAll}>↺ Reset all adjustments</button>
           {isDev && (
             <>
-              <button type="button" style={ST.save} onClick={saveToDisk}>{asset.theme ? `💾 Save ${asset.theme} family (${family.length}) + apply live` : '💾 Save to disk + regenerate (dev)'}</button>
+              <button type="button" style={ST.save} onClick={saveGeometry}>{asset.theme ? `💾 Save ${asset.theme} geometry + ${aid} boxes` : '💾 Save geometry (dev)'}</button>
               {saveMsg && <div style={{ ...ST.hint, color: saveMsg.startsWith('error') ? '#ff9aa8' : '#9affc4' }}>{saveMsg}</div>}
             </>
           )}
+          <p style={ST.hint}>Save writes deterministic geometry only. Publishing frame pixels requires a reviewed live-media candidate and backend acceptance.</p>
           <details style={ST.details}>
             <summary style={ST.summary}>Import JSON</summary>
             <div style={ST.detailsBody}>
@@ -1234,7 +1252,7 @@ const ST: Record<string, CSSProperties> = {
   fpRow: { display: 'flex', flexWrap: 'wrap', gap: '0 10px', alignItems: 'baseline', justifyContent: 'space-between' },
   fpPath: { fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#9fc4d5', wordBreak: 'break-all' },
   fp: { fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#bfe3ff', fontWeight: 600, flex: 'none' },
-  stage: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 26, overflow: 'auto', padding: 20 },
+  stage: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 26, overflow: 'auto', padding: 20, boxSizing: 'border-box' },
   previewStrip: { display: 'flex', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap', justifyContent: 'center' },
   previewItem: { display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', padding: 16, background: '#0e1626', border: '1px solid #1b2740', borderRadius: 8 },
   previewLabel: { fontSize: 11, color: '#9fc4d5', letterSpacing: 0.3 },

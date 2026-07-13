@@ -1,105 +1,58 @@
 # Piece portrait contract
 
-The **portrait** is the framed bust shown in the Skirmish HUD's "Selected Unit" card. It
-is a **separate render contract from the true-isometric board sprite** — the board needs a
-top-down gameplay projection; a portrait needs an eye-level, dimensional "hero" shot.
+The portrait is the framed bust shown in the Skirmish HUD's Selected Unit card.
+It is a separate visual role from the fixed-isometric board sprite and a separate
+live-media semantic slot.
 
-## Camera
-- **Perspective** lens, 55mm on a 36mm sensor (mild, flattering portrait depth) — *not*
-  orthographic.
-- **Eye-level**: elevation **+10°** above the look-at point.
-- **Frontal-¾**: azimuth **30°** off dead-front for **every** piece. The unit keeps its
-  standard orientation (front → local −Y = in-game south, per the unit-facing
-  convention); only the *camera* orbits, so every portrait faces south like the board
-  sprite. No per-unit aesthetic facing offset — the knight is viewed frontal-¾ like the
-  rest (its horse head reads fine at 30°), not turned to profile.
-- **Adaptive bust framing**: from each unit's actual top (`topZ`), the camera looks at
-  `Tz = 0.62·topZ` and frames a vertical span of `0.96·topZ`, so the distinctive top
-  (crown / mitre / tiara / helmet / horse head / battlements) and the upper body fill the
-  frame and the body **bleeds off the bottom edge** — a portrait, not a full figurine. Two
-  failure modes to avoid, both anchored by the HUD's `object-position:center bottom`: a base
-  sliced flat reads as "cut off", and showing the whole piece down to its base reads as a
-  figurine standing on its feet. Cropping through the (roughly vertical) column, flush to
-  the bottom edge, avoids both. Override per piece via the `PORTRAIT_TZ` / `PORTRAIT_SPAN`
-  env vars if a piece needs it. Adapts to each piece's height automatically.
-- 512×512, transparent background (`film_transparent`), Cycles, Standard view transform.
-  Lighting + materials come from the unit's source `.blend` (same look as the board).
+## Camera and composition
 
-## Hero yaw
-All pieces (pawn, knight, bishop, rook, queen, king): `30°` (frontal-¾). The unit faces
-in-game south; the camera orbits 30° off the front.
+- Perspective lens, 55 mm on a 36 mm sensor.
+- Eye-level presentation, 10° above the look-at point.
+- Frontal three-quarter view: 30° camera azimuth for every piece while the unit
+  itself keeps its canonical south-facing orientation.
+- Adaptive bust framing: look at `0.62 × topZ` and frame a vertical span of
+  `0.96 × topZ`. The distinctive top remains visible and the body bleeds through
+  the bottom edge; it must not read as a full figurine or a base sliced flat.
+- 512×512 transparent source render, Cycles, Standard view transform.
+
+Per-piece framing overrides and crop rectangles are deterministic geometry and
+may remain in Git. They must refer to stable portrait slots, never repository
+paths, candidate ids, or blob hashes.
 
 ## Palettes
-One portrait **per team palette** (`navy-blue`, `crimson`, `golden`, `emerald`, `black`,
-`white`) — same material-swap recipe as the board sprites: the body "navy stone" material
-is recolored, gold accents are kept except for `golden`'s iron-accent treatment, and
-black/white are generated as curated value ramps from the navy master so highlights and
-shadows survive. Body base colours (linear RGB) for the Blender-authored palettes in
-`portrait_render.py`:
 
-| palette   | body RGB (linear)       | accent | body metal |
-|-----------|-------------------------|--------|------------|
-| navy-blue | `0.045  0.10   0.16`    | keep   | –          |
-| crimson   | `0.2925 0.0483 0.0509`  | keep   | –          |
-| golden    | `0.566  0.392  0.088`   | iron   | `0.6`      |
-| emerald   | `0.0332 0.1570 0.0808`  | keep   | –          |
-| black     | generated ramp           | keep   | –          |
-| white     | generated ramp           | keep   | –          |
+Each portrait family provides `navy-blue`, `crimson`, `golden`, `emerald`,
+`black`, and `white`. The body material follows the board-unit palette recipe;
+golden uses the iron-accent treatment. Black and white use curated value ramps
+that preserve highlights and shadows.
 
-(`navy-blue` is the canonical `navy stone` base; crimson/golden/emerald were
-recovered by calibrating against the navy renders, since the original ad-hoc
-commands were never committed.) The knight is procedural and carries its own
-per-palette fur tones in `knight_portrait.py`.
+## Live-media ownership
 
-The piece blends are the **ornamented production set**, not the plainer historical
-candidate set retained only in private archive storage: helmeted pawn
-(`pawn-helmet/pawn_helmet.blend`), ornate mitre (`bishop-mitre`), accepted ruinwall
-rook (`rook-claude/units/rook-ruinwall/model.blend`), beaded tiara (`queen-tiara`),
-and gold crown (`king-crown`). See `render_all.sh` for the exact map.
+Portrait masters, candidates, review images, and accepted delivery rasters are
+stored in private object storage. Postgres owns their typed portrait metadata,
+review evidence, active/accepted pointers, and revisions. Runtime portrait
+components resolve stable backend routes such as the semantic role for a piece
+and palette; `/assets/...` is a backend semantic-slot address, never a
+filesystem or `frontend/public` path.
 
-## Asset path & wiring (live render — PR #189)
-The HUD does **not** load a pre-baked PNG. The Selected-Unit portrait, the roster slots, and the
-Portrait editor previews all render **live in the browser** through one shared `<UnitPortrait>`
-component (`frontend/src/ui/PortraitEditor.tsx`) and the `.unit-portrait` CSS box
-(`frontend/src/style.css`):
-- **Master render:** `/assets/portrait-editor/<piece>/<palette>.png` (full-body, transparent).
-- **Crop:** per-piece `cx, cy, s` from `frontend/src/art/portraitCrops.json` (the committed
-  source of truth the HUD reads), applied via `CroppedView` so the bust fills the box at the
-  dialled framing — including the intentional off-center "lead room" placement.
-- **Frame:** the transparent `panel-line` 9-slice, filling to the panel Fill-box boundary
-  (`config/nine-slice/panel.json` `fill`) with the bracket ornament bleeding over. The
-  Selected-Unit portrait composites a backdrop scene behind the bust; the roster shows a cyan ring
-  when selected. Non-roster pieces fall back to the badge glyph.
+The Selected Unit card, roster, Portrait editor, Studio, and server rendering
+must all resolve the same catalog revision. A missing critical portrait slot is
+an explicit availability failure. There is no badge, baked portrait, or generic
+committed-art fallback for a required portrait role.
 
-Because all three surfaces read the same master + crop, framing / fill / placement are defined once
-and can't diverge — change the crop in the editor, commit it to `portraitCrops.json`, and every
-surface updates. No re-bake.
+## Authoring and review
 
-## The baked PNGs are superseded (decision, PR #189 follow-up)
-`/assets/units/<piece>/portrait/<palette>.png` (via `portraitPath()` in `frontend/src/core/pieces.ts`)
-and the bake that produces them (`bake_finals.sh` below) are **no longer consumed by the game** —
-the HUD renders live from the masters above. They are **retained only as studio catalog artwork**
-(`frontend/src/ui/design/artworkManifest.json` lists them as a rendered reference gallery).
-**Decision:** keep the baked PNGs as catalog artwork; treat the live master+crop render as the
-source of truth; run the bake only to refresh that catalog reference — it is not required for the
-HUD, and re-baking does not affect what the HUD shows.
+1. Fetch any required private source model through an authenticated authoring
+   workflow into a temporary workspace.
+2. Render the declared camera directly at the native target size. Do not crop,
+   resize, or spatially resample the subject to manufacture native evidence.
+3. Upload the exact output as a candidate with its camera, palette, source,
+   dimensions, and no-resampling provenance.
+4. Mount that candidate in the real HUD/roster/editor surfaces at canonical 1×.
+5. Record owner review and accept the complete typed portrait family through the
+   backend transaction.
+6. Delete the temporary source and render workspace.
 
-## Framing workflow (current)
-1. Open the **Portrait Editor** (`/portrait-editor`, `frontend/src/ui/PortraitEditor.tsx`) — the
-   full-body master with a draggable/zoomable square crop and a live `<UnitPortrait>` preview at
-   HUD size.
-2. Dial the crop, **Copy JSON**, and commit the per-piece `cx, cy, s` to
-   `frontend/src/art/portraitCrops.json`. The HUD reads it directly — done, no bake.
-
-Editor masters live at `/assets/portrait-editor/<piece>/<palette>.png`. The master *render* framing
-(`Tz`/`span` per piece — `pawn/knight/bishop/queen/king` Tz 0.50 span 1.45; `rook` Tz 0.45 span
-1.75), used only to regenerate the masters/baked catalog, is recorded in
-`docs/art/unit-concepts/portraits/crops.json` (distinct from the HUD's `portraitCrops.json`).
-
-## Reproduce (low-level)
-- Single blend piece: `blender -b --python docs/art/unit-concepts/portraits/portrait_render.py -- <blend> <outfile> <palette> <r> <g> <b> <keep|iron> <yaw> [metal] [rough]` (`PORTRAIT_TZ`/`PORTRAIT_SPAN`/`PORTRAIT_RES` env override framing/resolution)
-- Knight (procedural): `blender -b --python docs/art/unit-concepts/portraits/knight_portrait.py -- <palette> <outfile> <yaw>`
-- `render_all.sh` renders the older full-bust framing directly to the final paths — superseded by the editor+bake workflow above (running it overwrites the baked crops).
-
-Background art is intentionally **not** baked in — portraits ship transparent so a backdrop
-can be composited behind them later.
+The retired portrait scripts that wrote masters, palette variants, or catalog
+references under `frontend/public` and `docs/art` were deleted at the ADR-0085
+cutover. They are not a regeneration or fallback path.

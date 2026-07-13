@@ -1,8 +1,14 @@
 ---
-status: "accepted"
+status: "accepted; display-scaling clause superseded by ADR-0076; asset-storage clauses superseded by ADR-0085"
 date: 2026-06-27
 deciders: Nelson, Claude
 ---
+
+> **Display-scaling clause superseded by
+> [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md) (2026-07-10).**
+> The canonical `64×64` canvas, safe area, padding, and dimension guard stand.
+> Section D no longer authorizes serving that one source downscaled in smaller
+> production roles; scaling may calibrate those roles, which then need native pixels.
 
 # ADR-0026: UI-kit icons live on one canonical 64×64 centered canvas, with a normalized safe area the forge enforces
 

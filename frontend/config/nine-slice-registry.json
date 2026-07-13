@@ -1,5 +1,5 @@
 {
-  "_doc": "Single source of truth for atom-built 9-slice frames. Read by the Node bake (scripts/nine-slice-kit.mjs), the in-app editor (NineSliceEditor), and the catalog edit-link (AssetLibraryStudio). Add a frame here and it becomes bakeable, editable, and catalog-linked with no other code change. atoms = names in public/assets/ui/kit/atoms; variants[].out = composed PNG in public/assets/ui/kit; swap = palette name; consume = the CSS var its content drives; carve = flood navy bleed outside the rail; line = filename of the transparent-interior 'line' twin baked into public/assets/ui/explore/frames (full ornament over a see-through center — assembled from the corner+edge atoms with a transparent fill; no masking, no carve — the fix for the 9-slice fill problem so a surface shows behind the chrome while the frame stays; the ornament must reach the element edge, so only bracket frames qualify, NOT the inset steel row rail; see ADR-0034). lineTones = semantic-accent twins of `line`: each { out, swap } re-bakes the line frame with a palette swap applied to the corner/edge atoms, so the warm gold bracket ramp becomes a success/warning/error/warm accent while the cool steel rail is untouched — one frame character, corner accent per tone (baked beside panel-line.png, parity-tested like every other output). kind = 'junction' marks a rail junction DERIVED from the corner atom by mirroring it into each concave angle (composeTee/composeCross): tee = 3-way (sides NSE = corner + flipV(corner)), cross = 4-way (sides NSEW = corner in all four quadrants). kind = 'bar' marks a 1-D horizontal separator (panel-divider): buildBar runs the edge atom horizontally as a branch rail and seats a full 3-way tee (composeTee) at each end, so it tees into a frame's side rail as the frame's OWN corner, just branched — pixel-consistent by construction, no forged junction atom (ADR-0012's mirror-a-corner generalized from a box to interior junctions). Both are composed straight from atoms (no per-corner config); full-corner size makes the divider ~45px tall. Consumed via a horizontal 1-D border-image (`0 capW 0 capW fill`, the 90°-rotate of the scrollbar slice), NOT a 4-corner border-image; capW = barCapWidth(id). A bar carries only an integer barScale (rail weight; 1 = the frame's native rail), so it is excluded from the 4-corner 9-slice editor and calibrated as a live divider-in-panel preview instead.",
+  "_doc": "Single source of truth for code-owned geometry of atom-built 9-slice frames. Read by the candidate generator (scripts/nine-slice-kit.mjs), the in-app editor (NineSliceEditor), and the catalog edit-link (AssetLibraryStudio). Media inputs are fetched from backend-owned live slots into a temporary workspace; composed pixels are uploaded as private candidates and are never read from or written to Git. atoms names semantic source slots; variants[].out and line/lineTones[].out name semantic output slots; swap selects a palette; consume names the CSS variable driven by an accepted output; carve floods navy bleed outside the rail. A line is the transparent-interior twin assembled from corner and edge atoms so a surface remains visible behind its ornament; only edge-reaching bracket frames qualify (ADR-0034). lineTones apply semantic palette swaps while preserving the cool steel rail. kind='junction' derives tee/cross geometry by mirroring the corner into concave angles. kind='bar' builds a one-dimensional horizontal separator from edge and tee/corner geometry and is consumed with a horizontal border-image; barScale controls rail weight. Geometry and registry text live in Git; source and output pixels live only in backend storage.",
   "palettes": {
     "active": {
       "101921": "183452",
@@ -223,6 +223,199 @@
       "variants": [
         {
           "out": "panel-divider.png"
+        }
+      ]
+    },
+    "codex-outer-panel": {
+      "label": "Codex outer chrome panel (gold corners / transparent fill)",
+      "atoms": {
+        "corner": "codex-outer-corner",
+        "edge": "codex-outer-edge",
+        "fill": "codex-outer-fill"
+      },
+      "frame": {
+        "w": 512,
+        "h": 384
+      },
+      "variants": [
+        {
+          "out": "codex-outer-panel.png"
+        }
+      ]
+    },
+    "codex-outer-divider": {
+      "label": "Codex outer divider (atomless natural T caps)",
+      "kind": "bar",
+      "railSource": "edge",
+      "railFit": "stretch",
+      "junctionStyle": "natural",
+      "host": {
+        "frame": "codex-outer-panel.png",
+        "slice": 180,
+        "previewWidth": 560
+      },
+      "atoms": {
+        "edge": "codex-outer-edge",
+        "corner": "codex-outer-corner",
+        "tee": "codex-outer-tee-natural"
+      },
+      "frame": {
+        "w": 512,
+        "h": 112
+      },
+      "variants": [
+        {
+          "out": "codex-outer-divider.png"
+        }
+      ]
+    },
+    "codex-outer-tee": {
+      "label": "Codex outer rail junction — atomless 3-way tee",
+      "kind": "junction",
+      "sides": "NSE",
+      "atoms": {
+        "corner": "codex-outer-corner",
+        "tee": "codex-outer-tee-natural"
+      },
+      "frame": {
+        "w": 218,
+        "h": 195
+      },
+      "variants": [
+        {
+          "out": "codex-outer-tee.png"
+        }
+      ]
+    },
+    "codex-outer-cross": {
+      "label": "Codex outer rail junction — atomless 4-way cross",
+      "kind": "junction",
+      "sides": "NSEW",
+      "atoms": {
+        "corner": "codex-outer-corner",
+        "cross": "codex-outer-cross-natural"
+      },
+      "frame": {
+        "w": 236,
+        "h": 325
+      },
+      "variants": [
+        {
+          "out": "codex-outer-cross.png"
+        }
+      ]
+    },
+    "codex-parts-outer-panel": {
+      "label": "Codex independent outer panel (gold atom corners / rail source)",
+      "atoms": {
+        "corner": "codex-parts-outer-corner",
+        "edge": "codex-parts-outer-edge",
+        "fill": "codex-parts-outer-fill"
+      },
+      "frame": {
+        "w": 512,
+        "h": 384
+      },
+      "variants": [
+        {
+          "out": "codex-parts-outer-panel.png"
+        }
+      ]
+    },
+    "codex-parts-outer-cross": {
+      "label": "Codex independent outer rail junction — atomless 4-way cross",
+      "kind": "junction",
+      "sides": "NSEW",
+      "atoms": {
+        "corner": "codex-parts-outer-corner",
+        "cross": "codex-parts-outer-cross-natural"
+      },
+      "frame": {
+        "w": 245,
+        "h": 245
+      },
+      "variants": [
+        {
+          "out": "codex-parts-outer-cross.png"
+        }
+      ]
+    },
+    "codex-parts-inner-panel": {
+      "label": "Codex independent inner panel (gold atom corners / rail source)",
+      "atoms": {
+        "corner": "codex-parts-inner-corner",
+        "edge": "codex-parts-inner-edge",
+        "fill": "codex-parts-inner-fill"
+      },
+      "frame": {
+        "w": 256,
+        "h": 192
+      },
+      "variants": [
+        {
+          "out": "codex-parts-inner-panel.png"
+        }
+      ]
+    },
+    "codex-parts-inner-divider": {
+      "label": "Codex independent inner divider (atomless natural T caps)",
+      "kind": "bar",
+      "railSource": "edge",
+      "railFit": "stretch",
+      "junctionStyle": "natural",
+      "host": {
+        "frame": "codex-parts-inner-panel.png",
+        "slice": 92,
+        "previewWidth": 360
+      },
+      "atoms": {
+        "edge": "codex-parts-inner-edge",
+        "corner": "codex-parts-inner-corner",
+        "tee": "codex-parts-inner-tee-natural"
+      },
+      "frame": {
+        "w": 320,
+        "h": 160
+      },
+      "variants": [
+        {
+          "out": "codex-parts-inner-divider.png"
+        }
+      ]
+    },
+    "codex-parts-inner-tee": {
+      "label": "Codex independent inner rail junction — atomless 3-way tee",
+      "kind": "junction",
+      "sides": "NSE",
+      "atoms": {
+        "corner": "codex-parts-inner-corner",
+        "tee": "codex-parts-inner-tee-natural"
+      },
+      "frame": {
+        "w": 87,
+        "h": 148
+      },
+      "variants": [
+        {
+          "out": "codex-parts-inner-tee.png"
+        }
+      ]
+    },
+    "codex-parts-inner-cross": {
+      "label": "Codex independent inner rail junction — atomless 4-way cross",
+      "kind": "junction",
+      "sides": "NSEW",
+      "atoms": {
+        "corner": "codex-parts-inner-corner",
+        "cross": "codex-parts-inner-cross-natural"
+      },
+      "frame": {
+        "w": 148,
+        "h": 148
+      },
+      "variants": [
+        {
+          "out": "codex-parts-inner-cross.png"
         }
       ]
     },

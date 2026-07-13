@@ -1,0 +1,99 @@
+{
+  "authority": "historical-provenance-only",
+  "runtime_authority": "backend-live-media-catalog",
+  "schema_version": 1,
+  "run_date": "2026-07-10",
+  "provider": "OpenAI Codex built-in image generation",
+  "use_case": "stylized-concept",
+  "production_status": "calibration_candidates_non_production_under_ADR_0076",
+  "exact_prompts": "docs/art/fence-concepts/candidates/2026-07-10/codex/PROMPTS.md",
+  "adrs": [
+    "docs/adr/0040-feature-tiles-own-geometry-generate-material.md",
+    "docs/adr/0076-scaling-is-calibration-production-art-is-native-1x.md"
+  ],
+  "pixel_contract": {
+    "runtime_frame": [96, 180],
+    "anchor": [48, 68],
+    "wood_rail_vertical_feature_height": 16,
+    "stone_rail_vertical_feature_height": 14,
+    "wood_post_opaque_footprint": [10, 28],
+    "stone_post_opaque_footprint": [18, 24]
+  },
+  "transform_chain": [
+    "built-in image generation on a flat chroma plate",
+    "local chroma-key removal with no spatial transform"
+  ],
+  "transform_chain_scope": "high_resolution_source_sheets_only",
+  "shown_game_surface_preview": {
+    "builder": "docs/art/fence-concepts/candidates/2026-07-10/build_game_surface_previews.py",
+    "spatial_resampling": true,
+    "method": "alpha crop followed by Pillow LANCZOS fit into the review-only native-frame footprint",
+    "production_eligibility": false
+  },
+  "chroma_removal": {
+    "tool": "$CODEX_HOME/skills/.system/imagegen/scripts/remove_chroma_key.py",
+    "options": "--auto-key border --soft-matte --transparent-threshold 12 --opaque-threshold 220 --despill"
+  },
+  "native_scale_audit": {
+    "result": "fail",
+    "reason": "The generated sheets are high-resolution design references, not artwork authored at the gameplay subjects' native pixel footprints. They may be scaled for calibration but cannot be promoted."
+  },
+  "production_eligibility": false,
+  "next_acceptance_step": "Regenerate a selected Codex design through PixelLab at the exact native canvas and opaque footprint, or rebuild it as Blender source and render directly to 96x180. Do not resize these sheets into production.",
+  "candidates": [
+    {
+      "key": "wood_kit",
+      "generation_id": "exec-4259e49d-ea2e-42ce-9051-565af842c18f",
+      "input_references": [
+        {
+          "path": "docs/art/wall-concepts/materials/pixellab/wood-palisade.png",
+          "role": "material and palette reference"
+        },
+        {
+          "path": "docs/art/fence-concepts/endings/codex/wood-terminal-alpha.png",
+          "role": "terminal-post design reference"
+        }
+      ],
+      "prompt_summary": "One isolated low oak picket-and-rail segment without heavy endpoint posts plus one matching stout terminal post, orthographic isometric pixel-art treatment on a uniform green chroma plate.",
+      "raw": {
+        "path": "docs/art/fence-concepts/candidates/2026-07-10/codex/wood-kit-raw.png",
+        "dimensions": [1536, 1024],
+        "sha256": "dba67ca0e61ee12e4e32989fdbb4b0becb0a9799e7121ac96007f3a975d49bb0"
+      },
+      "alpha": {
+        "path": "docs/art/fence-concepts/candidates/2026-07-10/codex/wood-kit-alpha.png",
+        "dimensions": [1536, 1024],
+        "alpha_bbox": [102, 163, 1421, 870],
+        "transparent_corners": true,
+        "sha256": "c85b0502c48d95f853787ecbbea26280b29e1c84ff5f868647e6e42de03ad685"
+      }
+    },
+    {
+      "key": "stone_kit",
+      "generation_id": "exec-b379e71a-bfd1-46fe-adf5-072ec1c56b91",
+      "input_references": [
+        {
+          "path": "docs/art/wall-concepts/materials/source/stone-photoscan.png",
+          "role": "material reference"
+        },
+        {
+          "path": "docs/art/fence-concepts/endings/codex/stone-terminal-alpha.png",
+          "role": "terminal-pier design reference"
+        }
+      ],
+      "prompt_summary": "One isolated low capped fieldstone wall segment without a terminal pier plus one matching capped terminal pier, orthographic isometric pixel-art treatment on a uniform green chroma plate.",
+      "raw": {
+        "path": "docs/art/fence-concepts/candidates/2026-07-10/codex/stone-kit-raw.png",
+        "dimensions": [1774, 887],
+        "sha256": "73d139ea75f23808992f08fee479200bdc8e5a954af7445939045697e38cff97"
+      },
+      "alpha": {
+        "path": "docs/art/fence-concepts/candidates/2026-07-10/codex/stone-kit-alpha.png",
+        "dimensions": [1774, 887],
+        "alpha_bbox": [145, 51, 1623, 845],
+        "transparent_corners": true,
+        "sha256": "40e84493bff0a09b6ad0091b8ccfa94e890cb788380843938bcee0da208ae0e4"
+      }
+    }
+  ]
+}

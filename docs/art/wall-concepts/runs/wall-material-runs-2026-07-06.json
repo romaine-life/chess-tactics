@@ -1,4 +1,6 @@
 {
+  "authority": "historical-provenance-only",
+  "runtime_authority": "backend-live-media-catalog",
   "date": "2026-07-06",
   "outputs": {
     "contact_sheet": "docs/art/wall-concepts/wall-bake-contact-sheet.png",

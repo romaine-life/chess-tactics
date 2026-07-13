@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { macroTileOwnedCellKeys, type TerrainCanvasMacroTile } from './BoardTerrainLayer';
+import { macroTileOwnedCellKeys, terrainTopFootprintDiamonds, type TerrainCanvasMacroTile } from './BoardTerrainLayer';
 
 describe('macroTileOwnedCellKeys', () => {
   it('marks every logical cell whose 1x1 top must be suppressed', () => {
@@ -27,5 +27,29 @@ describe('macroTileOwnedCellKeys', () => {
     ];
 
     expect([...macroTileOwnedCellKeys(macroTiles)].sort()).toEqual(['2,3', '2,4', '3,4', '4,3']);
+  });
+});
+
+describe('terrainTopFootprintDiamonds', () => {
+  it('clips seam padding to occupied tops and leaves void holes outside the footprint', () => {
+    const diamonds = terrainTopFootprintDiamonds([
+      { key: '0,0', x: 0, y: 0, topSrc: '/top.png' },
+      { key: '2,0', x: 2, y: 0, topSrc: '/top.png' },
+      { key: 'ignored', x: 1, y: 0 },
+    ]);
+
+    expect(diamonds).toHaveLength(2);
+    expect(diamonds[0]).toEqual([
+      { x: 0, y: -27 },
+      { x: 48, y: 0 },
+      { x: 0, y: 27 },
+      { x: -48, y: 0 },
+    ]);
+    expect(diamonds[1]).toEqual([
+      { x: 96, y: 27 },
+      { x: 144, y: 54 },
+      { x: 96, y: 81 },
+      { x: 48, y: 54 },
+    ]);
   });
 });

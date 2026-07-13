@@ -1,5 +1,5 @@
 ---
-status: "accepted"
+status: "accepted; asset-storage clauses superseded by ADR-0085"
 date: 2026-06-25
 deciders: Nelson, Claude
 ---

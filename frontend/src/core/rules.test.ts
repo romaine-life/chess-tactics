@@ -385,14 +385,14 @@ describe('applyMove', () => {
     expect(res.state.pieces.find((p) => p.id === pawn.id)).toMatchObject({ x: 3, y: 2 });
     expect(res.state.pieces.find((p) => p.id === target.id)?.alive).toBe(false);
   });
-  it('declares victory when one side is wiped out', () => {
+  it('leaves outcome adjudication to the level rules when one side is wiped out', () => {
     const queen = P('player', 'queen', 4, 6);
     const lastFoe = P('enemy', 'pawn', 4, 5);
     const state = { size: SIZE, pieces: [queen, lastFoe], turn: 'player' as const, winner: null };
     const res = applyMove(state, queen.id, { x: 4, y: 5, capture: lastFoe.id });
-    expect(res.state.winner).toBe('player');
-    expect(res.state.turn).toBe('done');
-    expect(res.events.some((e) => e.kind === 'victory')).toBe(true);
+    expect(res.state.winner).toBeNull();
+    expect(res.state.turn).toBe('enemy');
+    expect(res.events.map((event) => event.kind)).toEqual(['captured', 'moved']);
   });
 });
 

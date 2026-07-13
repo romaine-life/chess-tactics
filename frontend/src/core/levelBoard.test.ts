@@ -69,6 +69,15 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
     expect(levelToEditorBoard(level).fences).toEqual(board.fences);
   });
 
+  it('round-trips standalone authored fence posts only through boardCode', () => {
+    const board = filledBoard(4, 4);
+    board.fencePosts = { '0,0': 'wood', '2,2': 'stone', '4,4': 'wood' };
+
+    const level = editorBoardToLevel(board, { id: 'l15', name: 'Fence posts' });
+    expect(level.layers.fences).toEqual([]);
+    expect(levelToEditorBoard(level).fencePosts).toEqual(board.fencePosts);
+  });
+
   it('projects and saves only north/west perimeter walls', () => {
     const board = filledBoard(4, 4);
     const north = roadEdgeKey(0, 0, 0, -1);
@@ -163,7 +172,9 @@ describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
       boardCode: undefined,
       layers: { ...saved.layers, fences: [edge] },
     };
-    expect(levelToEditorBoard(legacy).fences).toEqual({ [edge]: 'wood' });
+    const reopened = levelToEditorBoard(legacy);
+    expect(reopened.fences).toEqual({ [edge]: 'wood' });
+    expect(reopened.fencePosts).toEqual({});
   });
 });
 

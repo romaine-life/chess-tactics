@@ -5,19 +5,12 @@
 // along a straight board edge — swapping in a TERMINATOR cap when it would clip at the
 // corner / board end (so we never show a sliced-through neck, only a clean broken end).
 //
-//   node frontend/scripts/forge-feature.mjs [fossil ruins] | --all
-//
-// Output: <fam-agnostic> explore/<feature>-body.png (wide, sliced into pieces) and
-//         explore/<feature>-cap.png (square, the clean terminator).
-import { mkdtempSync, rmSync, copyFileSync, writeFileSync, mkdirSync } from 'node:fs';
+//   node frontend/scripts/forge-feature.mjs [fossil ruins] --slot-prefix <slot> -- <upload options>
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { CODEX, runCodex, imageGenVerdict, sessionImage } from './codex-imagegen.mjs';
-
-const FRONTEND = fileURLToPath(new URL('..', import.meta.url));
-const OUT = join(FRONTEND, 'public/assets/tiles/explore');
-const EVID = join(FRONTEND, 'tmp-forge-evidence');
+import { optionValue, splitGeneratorArgs, uploadGeneratedCandidate } from './upload-generated-candidate.mjs';
 
 // Each feature: a WIDE body (the whole set-piece left→right) + a CAP (clean terminator).
 const SPECS = {
@@ -70,8 +63,6 @@ async function forgePart(feature, partName, part, maxTries) {
     const work = mkdtempSync(join(tmpdir(), `feat-${feature}-${partName}-`));
     try {
       const { out: jsonl } = await runCodex(work, prompt(part, prior));
-      mkdirSync(EVID, { recursive: true });
-      writeFileSync(join(EVID, `feat-${feature}-${partName}-try${attempt}.jsonl`), jsonl);
       const verdict = imageGenVerdict(jsonl);
       if (!verdict.ok) {
         console.log(`  ${feature}/${partName} try ${attempt}: METHOD ✗ — ${verdict.reason}`);
@@ -80,10 +71,11 @@ async function forgePart(feature, partName, part, maxTries) {
       }
       const shipped = sessionImage(verdict.tid);
       if (!shipped) { prior = 'image not found; generate again into the default folder.'; continue; }
-      mkdirSync(OUT, { recursive: true });
       const file = `${feature}-${partName}.png`;
-      copyFileSync(shipped, join(OUT, file));
-      console.log(`  ${feature}/${partName} try ${attempt}: ✓ -> explore/${file}`);
+      const provenance = join(work, 'provenance.json');
+      writeFileSync(provenance, `${JSON.stringify({ generator: 'forge-feature', threadId: verdict.tid, feature, part: partName }, null, 2)}\n`);
+      uploadGeneratedCandidate(shipped, [...uploadArgs, '--provenance-json', provenance], `${slotPrefix}/${file}`);
+      console.log(`  ${feature}/${partName} try ${attempt}: ✓ uploaded ${slotPrefix}/${file}`);
       return true;
     } finally {
       rmSync(work, { recursive: true, force: true });
@@ -92,7 +84,11 @@ async function forgePart(feature, partName, part, maxTries) {
   return false;
 }
 
-const argv = process.argv.slice(2);
+const { toolArgs, uploadArgs } = splitGeneratorArgs(process.argv.slice(2));
+const slotPrefix = optionValue(toolArgs, '--slot-prefix').replace(/\/+$/, '');
+if (!slotPrefix || !uploadArgs.length) throw new Error('forge-feature requires --slot-prefix and live-media options after --');
+const prefixIndex = toolArgs.indexOf('--slot-prefix');
+const argv = toolArgs.filter((_, index) => index !== prefixIndex && index !== prefixIndex + 1);
 const names = argv.includes('--all') || argv.filter((a) => !a.startsWith('--')).length === 0
   ? Object.keys(SPECS)
   : argv.filter((a) => SPECS[a]);

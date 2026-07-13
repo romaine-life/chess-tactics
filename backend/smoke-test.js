@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { createCanvas } = require('@napi-rs/canvas');
 
 const port = 31337;
 const authPort = 31338;
@@ -11,6 +12,7 @@ const bgmPort = 31339;
 const hotRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'chess-tactics-hot-'));
 const hotBackendDir = path.join(hotRoot, 'backend');
 const hotStaticDir = path.join(hotRoot, 'static');
+const liveMediaStorageDir = path.join(hotRoot, 'live-media');
 const mockAuth = http.createServer((req, res) => {
   if (req.url === '/api/auth/get-session') {
     if (!req.headers.cookie || !req.headers.cookie.includes('better-auth.session')) {
@@ -152,6 +154,7 @@ const child = spawn(process.execPath, ['supervisor.js'], {
   cwd: __dirname,
   env: {
     ...process.env,
+    NODE_ENV: 'test',
     AUTH_BASE_URL: `http://127.0.0.1:${authPort}`,
     PORT: String(port),
     PUBLIC_ORIGIN: 'https://chess.romaine.life',
@@ -161,10 +164,14 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     BGM_READ_URL: `http://127.0.0.1:${bgmPort}`,
     HOT_BACKEND_DIR: hotBackendDir,
     STATIC_FRONTEND_DIR: hotStaticDir,
+    LOBBY_TEST_LEVEL_METADATA: JSON.stringify({
+      'off-l-smoke-timed': { level: { id: 'off-l-smoke-timed', name: 'Smoke Timed Level', objective: 'survive', timeControl: { initialSeconds: 60, incrementSeconds: 0 } } },
+    }),
     // The mock auth returns player@example.com for any non-rival session; make that
     // the official-campaigns admin so the requireAdmin path is exercised (ADR-0038).
     ADMIN_EMAILS: 'player@example.com',
     UNIT_ASSET_STORAGE_DIR: path.join(hotRoot, 'unit-assets'),
+    LIVE_MEDIA_STORAGE_DIR: liveMediaStorageDir,
     // Smoke-test databases are throwaway/reset by this file, so schema mutation is
     // intentional here even though local backend startup defaults to read-only check.
     SCHEMA_MIGRATIONS: 'auto',
@@ -287,11 +294,97 @@ function openSse(path, headers = {}) {
 
 // Reset the Postgres-backed document tables so re-runs (and a freshly migrated
 // CI database) start from a known-empty state. Tables exist by now because the
-// server applies migrations before it begins listening (and /health gates on
-// that), so waitForServer() has already returned by the time this runs.
+// server attempts migrations before it begins listening. `/health` proves only
+// process liveness; `/ready` is asserted after this reset establishes a known
+// complete catalog state.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, level_working_copies, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
-  await queryDb("INSERT INTO unit_catalog_state (singleton) VALUES (true); INSERT INTO unit_families (family) VALUES ('pawn'), ('rook'), ('knight'), ('bishop'), ('queen'), ('king');");
+  await queryDb('TRUNCATE levels, campaign_workspaces, level_working_copies, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats, sfx_profiles, media_asset_events, media_versions, media_blobs, media_slots, media_catalog_state, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
+  await queryDb("INSERT INTO media_catalog_state (singleton) VALUES (true); INSERT INTO unit_catalog_state (singleton) VALUES (true); INSERT INTO unit_families (family) VALUES ('pawn'), ('rook'), ('knight'), ('bishop'), ('queen'), ('king');");
+}
+
+// Explicit synthetic live content for this transient smoke database. Production
+// seat data is never imported from a repository fixture.
+const SYNTHETIC_PROP_SEATS = Object.freeze({
+  oak: { anchorX: 96, anchorY: 255, scale: 1, w: 2, h: 2 },
+  cottage: { anchorX: 91, anchorY: 110, scale: 0.62, w: 2, h: 2 },
+  cabin: { anchorX: 118, anchorY: 107, scale: 0.35, w: 1, h: 1 },
+  lodge: { anchorX: 103, anchorY: 126, scale: 1, w: 2, h: 2 },
+  rock: { anchorX: 20, anchorY: 44, scale: 1, w: 1, h: 1 },
+  fieldstone: { anchorX: 25, anchorY: 46, scale: 1, w: 1, h: 1 },
+  'oak-test-small': { base: 'oak', label: 'Synthetic small oak', anchorX: 96, anchorY: 238, scale: 0.25, w: 1, h: 1 },
+});
+
+async function seedSyntheticPropSeats() {
+  await queryDb(
+    `INSERT INTO prop_seats (id, data, client_schema_version, revision, updated_by)
+     VALUES ('default', $1::jsonb, 1, 1, 'smoke-fixture')`,
+    [JSON.stringify(SYNTHETIC_PROP_SEATS)],
+  );
+}
+
+function syntheticPng(width = 512, height = 512, background = '#16324a', foreground = '#7dd7ff') {
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = foreground;
+  ctx.fillRect(Math.floor(width / 4), Math.floor(height / 4), Math.ceil(width / 2), Math.ceil(height / 2));
+  return canvas.toBuffer('image/png');
+}
+
+// Direct importer-shaped bridge fixture for readiness-only semantic slots.
+// The production bridge mutation route is deliberately absent; this disposable
+// database and local object store model already-imported live content.
+async function seedSyntheticReadinessMedia({ slot, domain, role, width, height }) {
+  const bytes = syntheticPng(width, height);
+  const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+  const blobKey = `objects/${sha256.slice(0, 2)}/${sha256}`;
+  const target = path.join(liveMediaStorageDir, ...blobKey.split('/'));
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  if (!fs.existsSync(target)) fs.writeFileSync(target, bytes);
+  const versionId = crypto.randomUUID();
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO media_slots (slot, domain, role, availability_policy, metadata, updated_by)
+       VALUES ($1, $2, $3, 'critical', '{}'::jsonb, 'smoke-importer')`,
+      [slot, domain, role],
+    );
+    await client.query(
+      `INSERT INTO media_blobs (sha256, blob_key, media_type, byte_length, width, height, published_at)
+       VALUES ($1, $2, 'image/png', $3, $4, $5, now())
+       ON CONFLICT (sha256) DO NOTHING`,
+      [sha256, blobKey, bytes.length, width, height],
+    );
+    await client.query(
+      `INSERT INTO media_versions (
+         id, slot, domain, role, label, status, blob_sha256, metadata,
+         provenance, native_evidence, row_revision, updated_by
+       ) VALUES (
+         $1, $2, $3, $4, $2, 'legacy-bridge', $5, '{}'::jsonb,
+         '{"fixture":"readiness-smoke"}'::jsonb, '{}'::jsonb, 1, 'smoke-importer'
+       )`,
+      [versionId, slot, domain, role, sha256],
+    );
+    await client.query(
+      `UPDATE media_slots SET active_version_id = $2, lifecycle_state = 'active',
+         activated_at = now(), row_revision = 1, updated_at = now()
+        WHERE slot = $1`,
+      [slot, versionId],
+    );
+    await client.query(
+      'UPDATE media_catalog_state SET revision = revision + 1, updated_at = now() WHERE singleton = true',
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    await client.end();
+  }
 }
 
 async function queryDb(sql, params = []) {
@@ -464,6 +557,19 @@ async function main() {
   }
   await validateEditorMigration16Preservation();
   await resetDb();
+
+  const missingPropSeats = await get('/api/prop-seats/default');
+  if (missingPropSeats.statusCode !== 503 || JSON.parse(missingPropSeats.body).error !== 'prop_seats_store_unavailable') {
+    throw new Error(`Missing authoritative prop seats did not fail closed: ${missingPropSeats.statusCode} ${missingPropSeats.body}`);
+  }
+  await seedSyntheticPropSeats();
+
+  const initialReadiness = await get('/ready', {}, 5000);
+  if (
+    initialReadiness.statusCode !== 503
+    || JSON.parse(initialReadiness.body).error !== 'application_not_ready'
+    || !String(initialReadiness.headers['cache-control'] || '').includes('no-store')
+  ) throw new Error(`Empty catalogs falsely reported ready: ${initialReadiness.statusCode} ${initialReadiness.body}`);
   const editorSchema = await queryDb(
      `SELECT
        to_regclass('public.level_working_copies') AS working_copies,
@@ -567,8 +673,8 @@ async function main() {
   ];
   for (const assetPath of artAssets) {
     const response = await get(assetPath);
-    if (response.statusCode !== 200 || !String(response.headers['content-type'] || '').includes('image/png')) {
-      throw new Error(`Unexpected art asset response for ${assetPath}: ${response.statusCode} ${response.headers['content-type'] || ''}`);
+    if (response.statusCode !== 404) {
+      throw new Error(`Unregistered asset must not fall through to packaged media for ${assetPath}: ${response.statusCode}`);
     }
   }
 
@@ -626,10 +732,695 @@ async function main() {
   );
   if (anonymousUnitCreate.statusCode !== 401) throw new Error(`Anonymous unit create should be 401: ${anonymousUnitCreate.statusCode}`);
   const adminJson = { 'content-type': 'application/json', cookie: 'better-auth.session=abc' };
+
+  // Shared live media: no packaged-file fallback, private candidates,
+  // native/review-gated acceptance, immutable public bytes, stable slot
+  // redirects, revisions, audit, and private archives. Imported legacy-bridge
+  // rows remain readable, but no API can create another one after cutover.
+  const emptyMediaCatalog = await get('/api/asset-catalog');
+  const emptyMediaBody = JSON.parse(emptyMediaCatalog.body);
+  if (emptyMediaCatalog.statusCode !== 200 || emptyMediaBody.schemaVersion !== 1 || emptyMediaBody.slots.length !== 0) {
+    throw new Error(`Unexpected empty media catalog: ${emptyMediaCatalog.statusCode} ${emptyMediaCatalog.body}`);
+  }
+  const waterSideSlots = Array.from({ length: 8 }, (_, index) => `tiles/surface/water-${index}-side.png`);
+  const candidateBytes = syntheticPng(96, 180, '#16324a', '#4f8fb2');
+  const candidateSha = crypto.createHash('sha256').update(candidateBytes).digest('hex');
+  const candidateCreateBody = {
+    slot: waterSideSlots[0],
+    sourcePath: 'smoke/private-water-0-side.png',
+    domain: 'terrain',
+    role: 'side',
+    label: 'Private smoke candidate',
+    availabilityPolicy: 'critical',
+    slotMetadata: {
+      fixture: true,
+      privatePrompt: 'must never leak publicly',
+      acceptance: { mode: 'group', groupId: 'terrain/water/side-v1', requiredSlots: waterSideSlots },
+    },
+    metadata: { generation: 0 },
+    provenance: { generator: 'synthetic-private-smoke' },
+  };
+  const anonymousMediaCreate = await request(
+    'POST', '/api/admin/media-versions', { 'content-type': 'application/json' }, JSON.stringify(candidateCreateBody), 5000,
+  );
+  if (anonymousMediaCreate.statusCode !== 401) throw new Error(`Anonymous media create should be 401: ${anonymousMediaCreate.statusCode}`);
+  const candidateCreate = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify(candidateCreateBody), 5000);
+  if (candidateCreate.statusCode !== 201) throw new Error(`Media candidate create failed: ${candidateCreate.statusCode} ${candidateCreate.body}`);
+  const candidateVersion = JSON.parse(candidateCreate.body).version;
+  const stagedMediaCatalog = await get('/api/asset-catalog');
+  if (
+    stagedMediaCatalog.statusCode !== 200
+    || JSON.parse(stagedMediaCatalog.body).slots.some((slot) => slot.slot === waterSideSlots[0])
+  ) throw new Error(`Unactivated critical staging slot leaked publicly: ${stagedMediaCatalog.statusCode} ${stagedMediaCatalog.body}`);
+  const missingMediaRevision = await request(
+    'PUT', `/api/admin/media-versions/${candidateVersion.id}/content`,
+    { 'content-type': 'image/png', cookie: 'better-auth.session=abc' }, candidateBytes, 5000,
+  );
+  if (missingMediaRevision.statusCode !== 428) throw new Error(`Media upload without revision should be 428: ${missingMediaRevision.statusCode} ${missingMediaRevision.body}`);
+  const candidateUpload = await request(
+    'PUT', `/api/admin/media-versions/${candidateVersion.id}/content`,
+    { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, candidateBytes, 5000,
+  );
+  const candidateUploadBody = JSON.parse(candidateUpload.body);
+  if (
+    candidateUpload.statusCode !== 200 || candidateUploadBody.version.rowRevision !== 1
+    || candidateUploadBody.catalogRevision !== 0
+    || candidateUploadBody.version.media.sha256 !== candidateSha
+    || candidateUploadBody.version.media.mediaType !== 'image/png'
+  ) throw new Error(`Media candidate content upload failed: ${candidateUpload.statusCode} ${candidateUpload.body}`);
+  const privateCandidateRead = await get(candidateUploadBody.version.media.url, { cookie: 'better-auth.session=abc' }, 5000);
+  if (privateCandidateRead.statusCode !== 200 || privateCandidateRead.headers['cache-control'] !== 'private, no-store') {
+    throw new Error(`Admin candidate immutable read failed: ${privateCandidateRead.statusCode} ${privateCandidateRead.body}`);
+  }
+  const publicCandidateRead = await get(`/api/media/${candidateSha}`, {}, 5000);
+  if (publicCandidateRead.statusCode !== 404 || publicCandidateRead.headers['cache-control'] !== 'no-store') {
+    throw new Error(`Unaccepted media blob leaked or was negatively cacheable: ${publicCandidateRead.statusCode}`);
+  }
+  const removedBridgeRoute = await request(
+    'POST', `/api/admin/media-versions/${candidateVersion.id}/bridge`, adminJson,
+    JSON.stringify({ expectedRevision: 1 }), 5000,
+  );
+  if (removedBridgeRoute.statusCode !== 404) {
+    throw new Error(`Retired bridge creation route must remain absent: ${removedBridgeRoute.statusCode} ${removedBridgeRoute.body}`);
+  }
+  const stagedAdminCatalog = JSON.parse((await get(
+    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+  )).body);
+  const stagedSlot = stagedAdminCatalog.slots.find((slot) => slot.slot === waterSideSlots[0]);
+  if (
+    stagedSlot.activeVersionId !== null || stagedSlot.versionStatus !== null
+    || stagedSlot.lifecycleState !== 'staging' || stagedSlot.metadata.privatePrompt !== 'must never leak publicly'
+  ) throw new Error(`Admin staging projection is wrong: ${JSON.stringify(stagedSlot)}`);
+  const stagedStableRoute = await get(`/assets/${waterSideSlots[0]}`);
+  if (stagedStableRoute.statusCode !== 404) {
+    throw new Error(`Staging stable route should fail closed, not fall back: ${stagedStableRoute.statusCode}`);
+  }
+
+  // Migration history legitimately contains legacy-bridge rows even though the
+  // application no longer exposes an API that can create one. Seed one directly
+  // in this throwaway database so future CI keeps read/availability/replacement
+  // compatibility without reopening the retired mutation route. First patch the
+  // staging contract through the API to invalidate the earlier empty-catalog cache.
+  const stagingPatch = await request(
+    'PATCH', `/api/admin/media-slots/${waterSideSlots[0]}`, adminJson,
+    JSON.stringify({ expectedRevision: stagedSlot.rowRevision, metadata: stagedSlot.metadata }), 5000,
+  );
+  const stagingPatchBody = JSON.parse(stagingPatch.body);
+  if (stagingPatch.statusCode !== 200 || stagingPatchBody.slot.rowRevision !== stagedSlot.rowRevision + 1) {
+    throw new Error(`Staging media contract patch failed: ${stagingPatch.statusCode} ${stagingPatch.body}`);
+  }
+  const importedBridge = await queryDb(
+    `WITH version_update AS (
+       UPDATE media_versions
+          SET status = 'legacy-bridge', row_revision = row_revision + 1,
+              updated_at = now(), updated_by = 'smoke-importer'
+        WHERE id = $1 AND slot = $3 AND status = 'candidate' AND blob_sha256 = $2
+        RETURNING id, slot, source_path
+     ), blob_update AS (
+       UPDATE media_blobs SET published_at = COALESCE(published_at, now())
+        WHERE sha256 = $2 AND EXISTS (SELECT 1 FROM version_update)
+     ), slot_update AS (
+       UPDATE media_slots
+          SET active_version_id = $1, lifecycle_state = 'active', activated_at = now(),
+              row_revision = row_revision + 1, updated_at = now(), updated_by = 'smoke-importer'
+        WHERE slot = $3 AND lifecycle_state = 'staging' AND active_version_id IS NULL
+          AND EXISTS (SELECT 1 FROM version_update)
+        RETURNING slot
+     ), event_insert AS (
+       INSERT INTO media_asset_events (slot, source_path, version_id, action, actor_email, details)
+       SELECT slot, source_path, id, 'legacy-bridge-activated', 'smoke-importer',
+              '{"fixture":"direct-imported-legacy-bridge"}'::jsonb
+         FROM version_update WHERE EXISTS (SELECT 1 FROM slot_update)
+     )
+     UPDATE media_catalog_state SET revision = revision + 1, updated_at = now()
+      WHERE singleton = true AND EXISTS (SELECT 1 FROM slot_update)
+      RETURNING revision`,
+    [candidateVersion.id, candidateSha, waterSideSlots[0]],
+  );
+  if (Number(importedBridge.rows[0]?.revision) !== 1) {
+    throw new Error(`Direct imported-bridge fixture failed: ${JSON.stringify(importedBridge.rows)}`);
+  }
+  const bridgedCatalogResponse = await get('/api/asset-catalog');
+  if (
+    bridgedCatalogResponse.statusCode !== 503
+    || JSON.parse(bridgedCatalogResponse.body).error !== 'media_catalog_incomplete'
+  ) throw new Error(`Partial critical Water group should fail closed: ${bridgedCatalogResponse.statusCode} ${bridgedCatalogResponse.body}`);
+  const bridgedAdminCatalog = JSON.parse((await get(
+    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+  )).body);
+  const bridgedSlot = bridgedAdminCatalog.slots.find((slot) => slot.slot === waterSideSlots[0]);
+  if (
+    bridgedSlot.activeVersionId !== candidateVersion.id || bridgedSlot.versionStatus !== 'legacy-bridge'
+    || bridgedSlot.productionEligible !== false || bridgedSlot.metadata.privatePrompt !== 'must never leak publicly'
+  ) throw new Error(`Admin imported-bridge projection is wrong: ${JSON.stringify(bridgedSlot)}`);
+  const partialStableBridge = await get(`/assets/${waterSideSlots[0]}`);
+  if (partialStableBridge.statusCode !== 503) {
+    throw new Error(`Incomplete group stable route should fail, not fall back: ${partialStableBridge.statusCode}`);
+  }
+  const publicBridge = await get(`/api/media/${candidateSha}`, {}, 5000);
+  if (
+    publicBridge.statusCode !== 200 || publicBridge.headers.etag !== `"${candidateSha}"`
+    || !String(publicBridge.headers['cache-control']).includes('immutable')
+  ) throw new Error(`Public imported-bridge read failed: ${publicBridge.statusCode} ${publicBridge.body}`);
+  const rangedBridge = await get(`/api/media/${candidateSha}`, { range: 'bytes=0-3' }, 5000);
+  if (rangedBridge.statusCode !== 206 || rangedBridge.headers['content-length'] !== '4') {
+    throw new Error(`Imported bridge range read failed: ${rangedBridge.statusCode} ${rangedBridge.body}`);
+  }
+
+  const acceptedBytes = syntheticPng(96, 180, '#102838', '#7bdcf4');
+  const acceptedSha = crypto.createHash('sha256').update(acceptedBytes).digest('hex');
+  const nativeCreate = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
+    slot: waterSideSlots[0],
+    domain: 'terrain',
+    role: 'side',
+    label: 'Native reviewed smoke asset',
+    availabilityPolicy: 'critical',
+    nativeEvidence: {
+      native1x: true,
+      spatialResampling: false,
+      sourceWidth: 96,
+      sourceHeight: 180,
+      sourceSha256: acceptedSha,
+    },
+    provenance: { generator: 'synthetic-smoke' },
+  }), 5000);
+  if (nativeCreate.statusCode !== 201) throw new Error(`Native media candidate create failed: ${nativeCreate.statusCode} ${nativeCreate.body}`);
+  const nativeVersion = JSON.parse(nativeCreate.body).version;
+  const nativeUpload = await request(
+    'PUT', `/api/admin/media-versions/${nativeVersion.id}/content`,
+    { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, acceptedBytes, 5000,
+  );
+  const nativeUploadBody = JSON.parse(nativeUpload.body);
+  if (nativeUpload.statusCode !== 200 || nativeUploadBody.version.rowRevision !== 1) {
+    throw new Error(`Native media upload failed: ${nativeUpload.statusCode} ${nativeUpload.body}`);
+  }
+  const unreviewedAccept = await request(
+    'POST', `/api/admin/media-versions/${nativeVersion.id}/accept`, adminJson,
+    JSON.stringify({
+      expectedRevision: 1,
+      expectedSlotRevision: bridgedSlot.rowRevision,
+      expectedActiveVersionId: candidateVersion.id,
+    }), 5000,
+  );
+  if (unreviewedAccept.statusCode !== 409 || JSON.parse(unreviewedAccept.body).error !== 'media_owner_review_required') {
+    throw new Error(`Unreviewed media acceptance should fail: ${unreviewedAccept.statusCode} ${unreviewedAccept.body}`);
+  }
+  const invalidReviewSurface = await request(
+    'POST', `/api/admin/media-versions/${nativeVersion.id}/review`, adminJson,
+    JSON.stringify({
+      expectedRevision: 1,
+      approved: true,
+      notes: 'Owner-approved smoke proof',
+      surfaceUrl: 'https://example.invalid/studio?smoke=1',
+      evidence: { schema: 'terrain-surface-canonical-board-proof-v1' },
+    }), 5000,
+  );
+  if (invalidReviewSurface.statusCode !== 400 || JSON.parse(invalidReviewSurface.body).error !== 'invalid_media_review') {
+    throw new Error(`External review surface should fail closed: ${invalidReviewSurface.statusCode} ${invalidReviewSurface.body}`);
+  }
+
+  const privateBytes = Buffer.from('private source proof\n', 'utf8');
+  const privateSha = crypto.createHash('sha256').update(privateBytes).digest('hex');
+  const privateCreate = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
+    slot: null,
+    sourcePath: 'docs/art/smoke/private-source.txt',
+    domain: 'source',
+    role: 'source',
+    label: 'Private source archive',
+    provenance: { migration: { kind: 'git-media-cutover', byteExact: true, repositoryCommit: 'smoke-commit', originalRepositoryPath: 'docs/art/smoke/private-source.txt', sha256: privateSha } },
+  }), 5000);
+  if (privateCreate.statusCode !== 201) throw new Error(`Private media create failed: ${privateCreate.statusCode} ${privateCreate.body}`);
+  const privateVersion = JSON.parse(privateCreate.body).version;
+  const privateUpload = await request(
+    'PUT', `/api/admin/media-versions/${privateVersion.id}/content`,
+    { 'content-type': 'text/plain', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, privateBytes, 5000,
+  );
+  if (privateUpload.statusCode !== 200) throw new Error(`Private media upload failed: ${privateUpload.statusCode} ${privateUpload.body}`);
+  const privateArchive = await request(
+    'POST', `/api/admin/media-versions/${privateVersion.id}/archive`, adminJson,
+    JSON.stringify({
+      expectedRevision: 1,
+      reason: 'Smoke-test private source archive',
+      evidence: { schema: 'smoke-private-archive-v1', sha256: privateSha },
+    }), 5000,
+  );
+  const privateArchiveBody = JSON.parse(privateArchive.body);
+  if (
+    privateArchive.statusCode !== 200 || privateArchiveBody.version.status !== 'archived'
+    || privateArchiveBody.version.sourcePath !== 'docs/art/smoke/private-source.txt'
+  ) throw new Error(`Private media archive failed: ${privateArchive.statusCode} ${privateArchive.body}`);
+  if ((await get(`/api/media/${privateSha}`)).statusCode !== 404) throw new Error('Private archived blob leaked through public immutable route');
+  const privateAdminRead = await get(`/api/admin/media/${privateSha}`, { cookie: 'better-auth.session=abc' }, 5000);
+  if (
+    privateAdminRead.statusCode !== 200 || privateAdminRead.body !== privateBytes.toString('utf8')
+    || privateAdminRead.headers['cache-control'] !== 'private, no-store'
+  ) {
+    throw new Error(`Private archived media verification failed: ${privateAdminRead.statusCode} ${privateAdminRead.body}`);
+  }
+
+  const groupSlots = waterSideSlots;
+  const groupBytes = waterSideSlots.map((_, index) => syntheticPng(
+    96, 180, `#${(0x102030 + index * 0x010305).toString(16).padStart(6, '0')}`, '#7bdcf4',
+  ));
+  groupBytes[0] = acceptedBytes;
+  const preparedGroupVersions = [{ id: nativeVersion.id, slot: groupSlots[0], sha256: acceptedSha, rowRevision: 1 }];
+  for (let index = 1; index < groupSlots.length; index += 1) {
+    const sha = crypto.createHash('sha256').update(groupBytes[index]).digest('hex');
+    const create = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
+      slot: groupSlots[index],
+      sourcePath: `smoke/generated-water-${index}-side.png`,
+      domain: 'terrain',
+      role: 'side',
+      label: `Grouped smoke ${index + 1}`,
+      availabilityPolicy: 'critical',
+      slotMetadata: {
+        acceptance: {
+          mode: 'group',
+          groupId: 'terrain/water/side-v1',
+          requiredSlots: index === 1 ? [...groupSlots].reverse() : groupSlots,
+        },
+      },
+      nativeEvidence: {
+        native1x: true,
+        spatialResampling: false,
+        sourceWidth: 96,
+        sourceHeight: 180,
+        sourceSha256: sha,
+      },
+      provenance: { generator: 'synthetic-group-smoke' },
+    }), 5000);
+    if (create.statusCode !== 201) throw new Error(`Grouped media create failed: ${create.statusCode} ${create.body}`);
+    const version = JSON.parse(create.body).version;
+    const upload = await request(
+      'PUT', `/api/admin/media-versions/${version.id}/content`,
+      { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, groupBytes[index], 5000,
+    );
+    if (upload.statusCode !== 200 || JSON.parse(upload.body).version.media.sha256 !== sha) {
+      throw new Error(`Grouped media upload failed: ${upload.statusCode} ${upload.body}`);
+    }
+    preparedGroupVersions.push({ id: version.id, slot: groupSlots[index], sha256: sha, rowRevision: 1 });
+  }
+  const beforeGroupReviewCatalog = JSON.parse((await get(
+    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+  )).body);
+  const groupSlotSnapshotsBeforeReview = groupSlots.map((slot) => {
+    const row = beforeGroupReviewCatalog.slots.find((item) => item.slot === slot);
+    if (!row) throw new Error(`Grouped slot missing before review: ${slot}`);
+    return row;
+  });
+  const groupSurfaceUrl = `http://127.0.0.1:${port}/studio?smoke-group=1`;
+  const groupProof = {
+    schema: 'terrain-surface-canonical-board-proof-v1',
+    family: 'water',
+    surfaceUrl: groupSurfaceUrl,
+    renderer: 'BoardLabBoard/BoardTerrainLayer',
+    canonicalScale: 1,
+    assetLocalScale: 1,
+    spatialResampling: false,
+    deterministicProof: true,
+    abruptExposedEdge: true,
+    exposedFaces: ['south', 'east'],
+    selectedCandidates: preparedGroupVersions.map((version) => ({
+      slot: version.slot,
+      versionId: version.id,
+      sha256: version.sha256,
+      rowRevision: version.rowRevision,
+      faces: ['south', 'east'],
+    })),
+    slotSnapshots: groupSlotSnapshotsBeforeReview.map((slot) => ({
+      slot: slot.slot,
+      rowRevision: slot.rowRevision,
+      activeVersionId: slot.activeVersionId,
+      lifecycleState: slot.lifecycleState,
+    })),
+    acceptanceGroups: [{ groupId: 'terrain/water/side-v1', requiredSlots: groupSlots }],
+  };
+  const groupReview = await request(
+    'POST', '/api/admin/media-versions/review-batch', adminJson,
+    JSON.stringify({
+      items: preparedGroupVersions.map((version) => ({ id: version.id, expectedRevision: version.rowRevision })),
+      approved: true,
+      notes: 'All eight Water side faces reviewed together at canonical 1x',
+      surfaceUrl: groupSurfaceUrl,
+      evidence: groupProof,
+    }), 5000,
+  );
+  const groupReviewBody = JSON.parse(groupReview.body);
+  if (
+    groupReview.statusCode !== 200 || groupReviewBody.versions.length !== 8
+    || groupReviewBody.versions.some((version) => version.rowRevision !== 2)
+  ) throw new Error(`Grouped media review failed atomically: ${groupReview.statusCode} ${groupReview.body}`);
+  const partialGroupAccept = await request(
+    'POST', `/api/admin/media-versions/${preparedGroupVersions[0].id}/accept`, adminJson,
+    JSON.stringify({
+      expectedRevision: 2,
+      expectedSlotRevision: groupSlotSnapshotsBeforeReview[0].rowRevision,
+      expectedActiveVersionId: groupSlotSnapshotsBeforeReview[0].activeVersionId,
+    }), 5000,
+  );
+  if (
+    partialGroupAccept.statusCode !== 409
+    || !['media_group_incomplete', 'media_group_accept_required'].includes(JSON.parse(partialGroupAccept.body).error)
+  ) throw new Error(`Partial grouped acceptance should fail atomically: ${partialGroupAccept.statusCode} ${partialGroupAccept.body}`);
+  const groupAccept = await request(
+    'POST', '/api/admin/media-versions/accept-batch', adminJson,
+    JSON.stringify({
+      items: preparedGroupVersions.map((version) => {
+        const slot = groupSlotSnapshotsBeforeReview.find((item) => item.slot === version.slot);
+        return {
+          id: version.id,
+          expectedRevision: 2,
+          expectedSlotRevision: slot.rowRevision,
+          expectedActiveVersionId: slot.activeVersionId,
+        };
+      }),
+    }), 5000,
+  );
+  const groupAcceptBody = JSON.parse(groupAccept.body);
+  if (
+    groupAccept.statusCode !== 200 || groupAcceptBody.versions.length !== 8
+    || groupAcceptBody.versions.some((version) => version.status !== 'accepted') || !groupAcceptBody.batchId
+  ) throw new Error(`Grouped media batch acceptance failed: ${groupAccept.statusCode} ${groupAccept.body}`);
+  const groupedCatalog = JSON.parse((await get('/api/asset-catalog')).body);
+  if (groupSlots.some((slot) => groupedCatalog.slots.find((item) => item.slot === slot)?.versionStatus !== 'accepted')) {
+    throw new Error(`Grouped slots did not publish atomically: ${JSON.stringify(groupedCatalog.slots)}`);
+  }
+  const acceptedFirstSlot = groupedCatalog.slots.find((item) => item.slot === groupSlots[0]);
+  if (
+    acceptedFirstSlot.activeVersionId !== nativeVersion.id || acceptedFirstSlot.media.sha256 !== acceptedSha
+    || acceptedFirstSlot.productionEligible !== true || acceptedFirstSlot.metadata.privatePrompt !== undefined
+    || acceptedFirstSlot.metadata.acceptance.groupId !== 'terrain/water/side-v1'
+  ) throw new Error(`Accepted Water pointer mismatch: ${JSON.stringify(acceptedFirstSlot)}`);
+  const stableAccepted = await get(`/assets/${waterSideSlots[0]}`);
+  if (stableAccepted.statusCode !== 302 || stableAccepted.headers.location !== `/api/media/${acceptedSha}`) {
+    throw new Error(`Stable accepted Water slot did not resolve through backend: ${stableAccepted.statusCode}`);
+  }
+  const rangedAccepted = await get(`/api/media/${acceptedSha}`, { range: 'bytes=0-3' }, 5000);
+  if (rangedAccepted.statusCode !== 206 || rangedAccepted.headers['content-length'] !== '4') {
+    throw new Error(`Immutable media range read failed: ${rangedAccepted.statusCode} ${rangedAccepted.body}`);
+  }
+  const historicalBridgeRead = await get(`/api/media/${candidateSha}`, {}, 5000);
+  if (historicalBridgeRead.statusCode !== 200) {
+    throw new Error(`Previously published immutable bridge hash disappeared after replacement: ${historicalBridgeRead.statusCode}`);
+  }
+  const groupedAdminCatalog = JSON.parse((await get('/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000)).body);
+  const archivedBridge = groupedAdminCatalog.versions.find((version) => version.id === candidateVersion.id);
+  if (
+    archivedBridge.status !== 'archived'
+    || !groupedAdminCatalog.events.some((event) => event.action === 'accepted-batch' && event.versionId === nativeVersion.id)
+  ) throw new Error(`Media replacement/audit is incomplete: ${JSON.stringify(groupedAdminCatalog)}`);
+  const groupedSlotRows = groupSlots.map((slot) => groupedAdminCatalog.slots.find((item) => item.slot === slot));
+  const slotContractUpdate = await request(
+    'PATCH', `/api/admin/media-slots/${waterSideSlots[0]}`, adminJson,
+    JSON.stringify({
+      expectedRevision: groupedSlotRows[0].rowRevision,
+      metadata: { fixture: true, acceptance: { mode: 'standalone' } },
+      availabilityPolicy: 'decorative',
+    }), 5000,
+  );
+  if (
+    slotContractUpdate.statusCode !== 409
+    || JSON.parse(slotContractUpdate.body).error !== 'active_media_slot_contract_immutable'
+  ) throw new Error(`Active media slot contract/policy should be immutable: ${slotContractUpdate.statusCode} ${slotContractUpdate.body}`);
+  const partialGroupRetirement = await request(
+    'POST', `/api/admin/media-slots/${groupSlots[0]}/retire`, adminJson,
+    JSON.stringify({
+      expectedRevision: groupedSlotRows[0].rowRevision,
+      reason: 'Exercise grouped retirement guard',
+      evidence: { ownerConfirmed: true, fixture: 'live-media-smoke' },
+      confirmCriticalRetirement: true,
+    }), 5000,
+  );
+  if (
+    partialGroupRetirement.statusCode !== 409
+    || JSON.parse(partialGroupRetirement.body).error !== 'media_group_retirement_incomplete'
+  ) throw new Error(`Partial grouped retirement should fail: ${partialGroupRetirement.statusCode} ${partialGroupRetirement.body}`);
+  const groupRetirement = await request(
+    'POST', '/api/admin/media-slots/retire-batch', adminJson,
+    JSON.stringify({
+      items: groupedSlotRows.map((slot) => ({ slot: slot.slot, expectedRevision: slot.rowRevision })),
+      reason: 'Retire the complete disposable smoke group',
+      evidence: { ownerConfirmed: true, fixture: 'live-media-smoke', groupId: 'terrain/water/side-v1' },
+      confirmCriticalRetirement: true,
+    }), 5000,
+  );
+  const groupRetirementBody = JSON.parse(groupRetirement.body);
+  if (
+    groupRetirement.statusCode !== 200 || groupRetirementBody.slots.length !== 8
+    || groupRetirementBody.slots.some((slot) => slot.lifecycleState !== 'retired' || slot.activeVersionId !== null)
+  ) throw new Error(`Grouped media retirement failed: ${groupRetirement.statusCode} ${groupRetirement.body}`);
+  const catalogAfterRetirement = JSON.parse((await get('/api/asset-catalog')).body);
+  if (groupSlots.some((slot) => catalogAfterRetirement.slots.some((item) => item.slot === slot))) {
+    throw new Error(`Retired media slot leaked into public catalog: ${JSON.stringify(catalogAfterRetirement.slots)}`);
+  }
+  const retiredGroupSha = crypto.createHash('sha256').update(groupBytes[0]).digest('hex');
+  if ((await get(`/api/media/${retiredGroupSha}`)).statusCode !== 200) {
+    throw new Error('Historically published immutable media disappeared after retirement');
+  }
+  if ((await get(`/api/admin/media/${retiredGroupSha}`, { cookie: 'better-auth.session=abc' }, 5000)).statusCode !== 200) {
+    throw new Error('Retired grouped media bytes were not retained for admin audit');
+  }
+
+  // Ground-cover sprite geometry is version metadata in the same public live
+  // catalog consumed by both the browser and server thumbnail renderer. Import
+  // three tiny synthetic bridges directly (the bridge API is intentionally
+  // retired) so the critical renderer projection stays fully exercised without
+  // committing production sheets or a generated TypeScript catalog.
+  const groundCoverTerrains = ['grass', 'water', 'sand'];
+  const groundCoverFixtures = [];
+  for (let index = 0; index < groundCoverTerrains.length; index += 1) {
+    const terrain = groundCoverTerrains[index];
+    const slot = `groundcover/${terrain}/v0.png`;
+    const bytes = syntheticPng(240, 37, `#${(0x31512f + index * 0x191109).toString(16).padStart(6, '0')}`, '#b9d982');
+    const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+    const metadata = {
+      runtime: {
+        groundCover: {
+          terrain, id: 0, frameWidth: 40, frameHeight: 37,
+          frameCount: 6, baseX: 20, baseY: 28, contentWidth: 18,
+        },
+      },
+    };
+    const created = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
+      slot,
+      sourcePath: `smoke/generated-${terrain}-cover-v0.png`,
+      domain: 'terrain',
+      role: 'media',
+      label: `Synthetic ${terrain} ground cover`,
+      availabilityPolicy: 'critical',
+      metadata,
+      provenance: { generator: 'synthetic-ground-cover-smoke' },
+      nativeEvidence: {
+        native1x: true,
+        spatialResampling: false,
+        sourceWidth: 240,
+        sourceHeight: 37,
+        sourceSha256: sha256,
+      },
+    }), 5000);
+    if (created.statusCode !== 201) {
+      throw new Error(`Ground-cover media create failed: ${created.statusCode} ${created.body}`);
+    }
+    const version = JSON.parse(created.body).version;
+    const uploaded = await request(
+      'PUT', `/api/admin/media-versions/${version.id}/content`,
+      { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, bytes, 5000,
+    );
+    if (uploaded.statusCode !== 200 || JSON.parse(uploaded.body).version.media.sha256 !== sha256) {
+      throw new Error(`Ground-cover media upload failed: ${uploaded.statusCode} ${uploaded.body}`);
+    }
+    const stagingGroundCoverPatch = await request(
+      'PATCH', `/api/admin/media-slots/${slot}`, adminJson,
+      JSON.stringify({ expectedRevision: 0, metadata: {} }), 5000,
+    );
+    if (stagingGroundCoverPatch.statusCode !== 200) {
+      throw new Error(`Ground-cover staging slot patch failed: ${stagingGroundCoverPatch.statusCode} ${stagingGroundCoverPatch.body}`);
+    }
+    const imported = await queryDb(
+      `WITH version_update AS (
+         UPDATE media_versions
+            SET status = 'legacy-bridge', row_revision = row_revision + 1,
+                updated_at = now(), updated_by = 'smoke-importer'
+          WHERE id = $1 AND slot = $3 AND status = 'candidate' AND blob_sha256 = $2
+          RETURNING id, slot, source_path
+       ), blob_update AS (
+         UPDATE media_blobs SET published_at = COALESCE(published_at, now())
+          WHERE sha256 = $2 AND EXISTS (SELECT 1 FROM version_update)
+       ), slot_update AS (
+         UPDATE media_slots
+            SET active_version_id = $1, lifecycle_state = 'active', activated_at = now(),
+                row_revision = row_revision + 1, updated_at = now(), updated_by = 'smoke-importer'
+          WHERE slot = $3 AND lifecycle_state = 'staging' AND active_version_id IS NULL
+            AND EXISTS (SELECT 1 FROM version_update)
+          RETURNING slot
+       ), event_insert AS (
+         INSERT INTO media_asset_events (slot, source_path, version_id, action, actor_email, details)
+         SELECT slot, source_path, id, 'legacy-bridge-activated', 'smoke-importer',
+                '{"fixture":"synthetic-ground-cover-bridge"}'::jsonb
+           FROM version_update WHERE EXISTS (SELECT 1 FROM slot_update)
+       )
+       UPDATE media_catalog_state SET revision = revision + 1, updated_at = now()
+        WHERE singleton = true AND EXISTS (SELECT 1 FROM slot_update)
+        RETURNING revision`,
+      [version.id, sha256, slot],
+    );
+    if (!imported.rows[0]) throw new Error(`Ground-cover bridge activation failed for ${slot}`);
+    groundCoverFixtures.push({ slot, sha256, metadata });
+  }
+  const groundCoverCatalog = JSON.parse((await get('/api/asset-catalog')).body);
+  for (const fixture of groundCoverFixtures) {
+    const projected = groundCoverCatalog.slots.find((slot) => slot.slot === fixture.slot);
+    if (
+      !projected || projected.versionStatus !== 'legacy-bridge' || projected.productionEligible !== false
+      || projected.media.immutableUrl !== `/api/media/${fixture.sha256}`
+      || JSON.stringify(projected.versionMetadata) !== JSON.stringify(fixture.metadata)
+    ) throw new Error(`Ground-cover public metadata projection mismatch: ${JSON.stringify(projected)}`);
+  }
+
+  // Global SFX metadata/assignment authority. The migration does not seed a
+  // profile: missing means honest decorative silence. Admin writes must carry a
+  // complete typed document and compare-and-swap the current revision.
+  const missingSfxProfile = await get('/api/sfx-profiles/default');
+  if (missingSfxProfile.statusCode !== 404 || JSON.parse(missingSfxProfile.body).error !== 'sfx_profile_not_found') {
+    throw new Error(`Missing SFX profile should be explicit: ${missingSfxProfile.statusCode} ${missingSfxProfile.body}`);
+  }
+  const syntheticSfxProfile = {
+    schemaVersion: 1,
+    soundSets: {
+      grass: { label: 'Grass', character: 'Synthetic dry step', build: 'Synthetic smoke recording', gain: 0.5 },
+      arrival: { label: 'Arrival', character: 'Synthetic deploy thump', build: 'Synthetic smoke recording', gain: 0.6 },
+      click: { label: 'Click', character: 'Synthetic interface tap', build: 'Synthetic smoke recording', gain: 0.5 },
+    },
+    terrainAssignments: {
+      grass: 'grass', water: null, sand: null, stone: null,
+      road: null, bridge: null, dirt: null, pebble: null,
+    },
+    arrival: { sample: 'arrival', gain: 0.55, firing: 'per-unit' },
+  };
+  const anonymousSfxWrite = await request(
+    'PUT', '/api/sfx-profiles/default', { 'content-type': 'application/json' },
+    JSON.stringify({ data: syntheticSfxProfile, expectedRevision: null, clientSchemaVersion: 1 }), 5000,
+  );
+  if (anonymousSfxWrite.statusCode !== 401) throw new Error(`Anonymous SFX profile write should be 401: ${anonymousSfxWrite.statusCode}`);
+  const invalidSfxWrite = await request(
+    'PUT', '/api/sfx-profiles/default', adminJson,
+    JSON.stringify({
+      data: { ...syntheticSfxProfile, terrainAssignments: { grass: 'missing' } },
+      expectedRevision: null,
+      clientSchemaVersion: 1,
+    }), 5000,
+  );
+  if (invalidSfxWrite.statusCode !== 400 || JSON.parse(invalidSfxWrite.body).error !== 'invalid_sfx_profile') {
+    throw new Error(`Incomplete SFX profile should be rejected: ${invalidSfxWrite.statusCode} ${invalidSfxWrite.body}`);
+  }
+  const createdSfxProfile = await request(
+    'PUT', '/api/sfx-profiles/default', adminJson,
+    JSON.stringify({ data: syntheticSfxProfile, expectedRevision: null, clientSchemaVersion: 1 }), 5000,
+  );
+  const createdSfxBody = JSON.parse(createdSfxProfile.body);
+  if (
+    createdSfxProfile.statusCode !== 201 || createdSfxBody.profile.revision !== 0
+    || createdSfxBody.profile.data.arrival.firing !== 'per-unit'
+  ) throw new Error(`SFX profile create failed: ${createdSfxProfile.statusCode} ${createdSfxProfile.body}`);
+  const publicSfxProfile = await get('/api/sfx-profiles/default');
+  if (
+    publicSfxProfile.statusCode !== 200 || publicSfxProfile.headers.etag !== '"sfx-profile-0"'
+    || JSON.parse(publicSfxProfile.body).profile.data.terrainAssignments.grass !== 'grass'
+  ) throw new Error(`Public SFX profile read failed: ${publicSfxProfile.statusCode} ${publicSfxProfile.body}`);
+  const staleSfxWrite = await request(
+    'PUT', '/api/sfx-profiles/default', adminJson,
+    JSON.stringify({ data: syntheticSfxProfile, expectedRevision: 9, clientSchemaVersion: 1 }), 5000,
+  );
+  if (
+    staleSfxWrite.statusCode !== 409 || JSON.parse(staleSfxWrite.body).error !== 'sfx_profile_conflict'
+    || JSON.parse(staleSfxWrite.body).currentRevision !== 0
+  ) throw new Error(`Stale SFX profile write should conflict: ${staleSfxWrite.statusCode} ${staleSfxWrite.body}`);
+  const updatedSfxProfile = await request(
+    'PUT', '/api/sfx-profiles/default', adminJson,
+    JSON.stringify({
+      data: {
+        ...syntheticSfxProfile,
+        soundSets: {
+          ...syntheticSfxProfile.soundSets,
+          grass: { ...syntheticSfxProfile.soundSets.grass, gain: 0.45 },
+        },
+        arrival: { ...syntheticSfxProfile.arrival, firing: 'once' },
+      },
+      expectedRevision: 0,
+      clientSchemaVersion: 1,
+    }), 5000,
+  );
+  const updatedSfxBody = JSON.parse(updatedSfxProfile.body);
+  if (
+    updatedSfxProfile.statusCode !== 200 || updatedSfxBody.profile.revision !== 1
+    || updatedSfxBody.profile.data.soundSets.grass.gain !== 0.45
+    || updatedSfxBody.profile.data.arrival.firing !== 'once'
+  ) throw new Error(`Optimistic SFX profile update failed: ${updatedSfxProfile.statusCode} ${updatedSfxProfile.body}`);
+
+  const idempotentPayload = {
+    slot: 'backgrounds/smoke-idempotent.png',
+    domain: 'background',
+    role: 'media',
+    label: 'Idempotent create smoke',
+    availabilityPolicy: 'decorative',
+    provenance: { fixture: 'idempotent-create' },
+  };
+  const idempotentHeaders = {
+    ...adminJson,
+    'idempotency-key': 'smoke-same-key-new-slot',
+  };
+  const idempotentCreates = await Promise.all([
+    request('POST', '/api/admin/media-versions', idempotentHeaders, JSON.stringify(idempotentPayload), 5000),
+    request('POST', '/api/admin/media-versions', idempotentHeaders, JSON.stringify(idempotentPayload), 5000),
+  ]);
+  const idempotentBodies = idempotentCreates.map((response) => JSON.parse(response.body));
+  if (
+    idempotentCreates.map((response) => response.statusCode).sort().join(',') !== '200,201'
+    || idempotentBodies[0].version.id !== idempotentBodies[1].version.id
+    || idempotentBodies.filter((body) => body.idempotentReplay === true).length !== 1
+  ) throw new Error(`Parallel idempotent create did not replay exactly: ${JSON.stringify(idempotentCreates)}`);
+  const conflictingReplay = await request(
+    'POST', '/api/admin/media-versions', idempotentHeaders,
+    JSON.stringify({ ...idempotentPayload, label: 'Conflicting reuse' }), 5000,
+  );
+  if (conflictingReplay.statusCode !== 409 || JSON.parse(conflictingReplay.body).error !== 'media_idempotency_conflict') {
+    throw new Error(`Conflicting idempotency key reuse should be 409: ${conflictingReplay.statusCode} ${conflictingReplay.body}`);
+  }
+  const sharedSlotPayload = {
+    ...idempotentPayload,
+    slot: 'backgrounds/smoke-shared-slot.png',
+    label: 'Shared slot candidate smoke',
+  };
+  const sharedSlotCreates = await Promise.all(['a', 'b'].map((suffix) => request(
+    'POST', '/api/admin/media-versions',
+    { ...adminJson, 'idempotency-key': `smoke-shared-slot-${suffix}` },
+    JSON.stringify(sharedSlotPayload), 5000,
+  )));
+  const sharedSlotBodies = sharedSlotCreates.map((response) => JSON.parse(response.body));
+  if (
+    sharedSlotCreates.some((response) => response.statusCode !== 201)
+    || new Set(sharedSlotBodies.map((body) => body.version.id)).size !== 2
+  ) throw new Error(`Concurrent distinct candidates could not share a new slot: ${JSON.stringify(sharedSlotCreates)}`);
+  const abandoned = await request(
+    'POST', `/api/admin/media-versions/${sharedSlotBodies[0].version.id}/archive`, adminJson,
+    JSON.stringify({
+      expectedRevision: 0,
+      reason: 'Abandon empty smoke candidate',
+      evidence: { schema: 'smoke-abandon-v1', canceled: true },
+    }), 5000,
+  );
+  if (abandoned.statusCode !== 200 || JSON.parse(abandoned.body).version.status !== 'archived') {
+    throw new Error(`Empty candidate abandonment failed: ${abandoned.statusCode} ${abandoned.body}`);
+  }
+  const missingSharedSlot = await get('/assets/backgrounds/smoke-shared-slot.png', {}, 5000);
+  if (missingSharedSlot.statusCode !== 404 || missingSharedSlot.headers['cache-control'] !== 'no-store') {
+    throw new Error(`Staging slot 404 should be no-store: ${missingSharedSlot.statusCode} ${missingSharedSlot.body}`);
+  }
+
   const createdUnit = await request('POST', '/api/admin/unit-assets', adminJson, JSON.stringify(unitMetadata), 5000);
   if (createdUnit.statusCode !== 201) throw new Error(`Unit candidate create failed: ${createdUnit.statusCode} ${createdUnit.body}`);
   const firstUnitId = JSON.parse(createdUnit.body).assetId;
-  const pawnPng = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'public', 'assets', 'units', 'pawn', 'portrait', 'navy-blue.png'));
+  const pawnPng = syntheticPng();
   const uploadedUnit = await request(
     'PUT',
     `/api/admin/unit-assets/${firstUnitId}/sprites/navy-blue/south`,
@@ -679,17 +1470,59 @@ async function main() {
   )).rows[0];
   const palettes = ['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white'];
   const directions = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
-  const spriteParams = [];
-  const spriteValues = [];
-  for (const palette of palettes) for (const direction of directions) {
-    const base = spriteParams.length;
-    spriteParams.push(secondUnitId, palette, direction, storedSprite.sha256, storedSprite.blob_key, storedSprite.width, storedSprite.height, storedSprite.byte_length);
-    spriteValues.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`);
-  }
-  await queryDb(
-    `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length) VALUES ${spriteValues.join(',')}`,
-    spriteParams,
+  const seedCompleteUnitSprites = async (assetId) => {
+    const spriteParams = [];
+    const spriteValues = [];
+    for (const palette of palettes) for (const direction of directions) {
+      const base = spriteParams.length;
+      spriteParams.push(assetId, palette, direction, storedSprite.sha256, storedSprite.blob_key, storedSprite.width, storedSprite.height, storedSprite.byte_length);
+      spriteValues.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`);
+    }
+    await queryDb(
+      `INSERT INTO unit_sprites (asset_id, palette, direction, sha256, blob_key, width, height, byte_length) VALUES ${spriteValues.join(',')}`,
+      spriteParams,
+    );
+  };
+
+  const resampledUnit = await request('POST', '/api/admin/unit-assets', adminJson, JSON.stringify({
+    ...unitMetadata,
+    label: 'Calibration-only recapture',
+    method: 'Accepted sprite smooth recapture',
+    notes: JSON.stringify({ pipeline: 'accepted-sprite-recapture', spatialResampling: true }),
+  }), 5000);
+  if (resampledUnit.statusCode !== 201) throw new Error(`Resampled unit candidate create failed: ${resampledUnit.statusCode} ${resampledUnit.body}`);
+  const resampledUnitId = JSON.parse(resampledUnit.body).assetId;
+  await seedCompleteUnitSprites(resampledUnitId);
+  const blockedResampledAccept = await request(
+    'POST', `/api/admin/unit-assets/${resampledUnitId}/accept`, { ...adminJson, 'if-match': '"0"' }, '{}', 5000,
   );
+  const blockedResampledBody = JSON.parse(blockedResampledAccept.body);
+  if (
+    blockedResampledAccept.statusCode !== 409
+    || blockedResampledBody.error !== 'unit_asset_calibration_only'
+    || blockedResampledBody.details?.reason !== 'spatial-resampling'
+  ) {
+    throw new Error(`Resampled unit acceptance should be blocked by ADR-0076: ${blockedResampledAccept.statusCode} ${blockedResampledAccept.body}`);
+  }
+  const scrubbedResampled = await request(
+    'PATCH', `/api/admin/unit-assets/${resampledUnitId}`, { ...adminJson, 'if-match': '"0"' },
+    JSON.stringify({ method: 'Blender', notes: 'metadata markers removed after recapture' }), 5000,
+  );
+  if (scrubbedResampled.statusCode !== 200) throw new Error(`Resampled metadata update failed: ${scrubbedResampled.statusCode} ${scrubbedResampled.body}`);
+  const scrubbedAsset = JSON.parse(scrubbedResampled.body).catalog.assets.find((asset) => asset.id === resampledUnitId);
+  if (scrubbedAsset?.acceptanceBlockReason !== 'spatial-resampling') {
+    throw new Error(`Resampled acceptance block was not monotonic: ${scrubbedResampled.body}`);
+  }
+  const stillBlockedResampledAccept = await request(
+    'POST', `/api/admin/unit-assets/${resampledUnitId}/accept`, { ...adminJson, 'if-match': '"1"' }, '{}', 5000,
+  );
+  if (stillBlockedResampledAccept.statusCode !== 409 || JSON.parse(stillBlockedResampledAccept.body).error !== 'unit_asset_calibration_only') {
+    throw new Error(`Edited resampled unit should remain blocked: ${stillBlockedResampledAccept.statusCode} ${stillBlockedResampledAccept.body}`);
+  }
+  const pawnBeforeNativeAccept = (await queryDb('SELECT accepted_asset_id FROM unit_families WHERE family = $1', ['pawn'])).rows[0];
+  if (pawnBeforeNativeAccept?.accepted_asset_id) throw new Error('Blocked recapture changed the accepted pawn pointer');
+
+  await seedCompleteUnitSprites(secondUnitId);
   const acceptedUnit = await request(
     'POST', `/api/admin/unit-assets/${secondUnitId}/accept`, { ...adminJson, 'if-match': '"0"' }, '{}', 5000,
   );
@@ -732,6 +1565,100 @@ async function main() {
   ) {
     throw new Error(`Accepted pawn pointer/native-scale mismatch: ${JSON.stringify(acceptedPawn)}`);
   }
+
+  // Complete the remaining browser-startup projection with synthetic live
+  // structure halves and the five canonical installed Chrome roles. Readiness
+  // must now run the same board-render snapshot validators as browser boot and
+  // expose all three fresh DB revisions.
+  const readinessStructureRasters = {
+    'props/oak': [192, 300],
+    'props/cottage': [177, 184],
+    'props/cabin': [220, 176],
+    'props/lodge': [210, 177],
+    'props/rock': [40, 45],
+    'props/fieldstone': [51, 47],
+  };
+  for (const [prefix, [width, height]] of Object.entries(readinessStructureRasters)) {
+    for (const half of ['back', 'front']) {
+      await seedSyntheticReadinessMedia({
+        slot: `${prefix}/${half}.png`, domain: 'prop', role: half, width, height,
+      });
+    }
+  }
+  for (const [index, slot] of [
+    'ui/chrome/outer/atom.png',
+    'ui/chrome/outer/rail.png',
+    'ui/chrome/inner/atom.png',
+    'ui/chrome/inner/rail.png',
+    'ui/chrome/divider/joint.png',
+  ].entries()) {
+    await seedSyntheticReadinessMedia({
+      slot, domain: 'ui-kit', role: 'media', width: 32 + index, height: 32 + index,
+    });
+  }
+
+  const completeReadiness = await get('/ready', {}, 5000);
+  const completeReadinessBody = JSON.parse(completeReadiness.body);
+  if (
+    completeReadiness.statusCode !== 200 || completeReadinessBody.status !== 'ready'
+    || !Number.isInteger(completeReadinessBody.catalogRevision)
+    || completeReadinessBody.propSeatsRevision !== 1
+    || !Number.isInteger(completeReadinessBody.unitCatalogRevision)
+  ) throw new Error(
+    `Complete renderer snapshot was not ready: ${completeReadiness.statusCode} ${completeReadiness.body}\n`
+    + `Recent backend output:\n${output.slice(-4000)}`,
+  );
+
+  // The live prop document remains independently availability-critical. Its
+  // restoration uses the same explicit synthetic DB fixture, never a Git seed.
+  await queryDb("DELETE FROM prop_seats WHERE id = 'default'");
+  const missingSeatsReadiness = await get('/ready', {}, 5000);
+  if (missingSeatsReadiness.statusCode !== 503 || JSON.parse(missingSeatsReadiness.body).error !== 'application_not_ready') {
+    throw new Error(`Missing prop seats did not fail readiness: ${missingSeatsReadiness.statusCode} ${missingSeatsReadiness.body}`);
+  }
+  await seedSyntheticPropSeats();
+
+  // A configured path string is not storage readiness. Break the local object
+  // root while preserving process liveness, then prove fresh probes recover.
+  const displacedLiveMediaStorage = `${liveMediaStorageDir}-readiness-test`;
+  fs.renameSync(liveMediaStorageDir, displacedLiveMediaStorage);
+  fs.writeFileSync(liveMediaStorageDir, 'not-a-directory');
+  try {
+    const unavailableStore = await get('/ready', {}, 5000);
+    const stillLive = await get('/health');
+    if (unavailableStore.statusCode !== 503 || JSON.parse(unavailableStore.body).error !== 'application_not_ready') {
+      throw new Error(`Unavailable live media store did not fail readiness: ${unavailableStore.statusCode} ${unavailableStore.body}`);
+    }
+    if (stillLive.statusCode !== 200 || stillLive.body !== 'ok') {
+      throw new Error(`Storage readiness failure took down liveness: ${stillLive.statusCode} ${stillLive.body}`);
+    }
+  } finally {
+    fs.rmSync(liveMediaStorageDir, { force: true });
+    fs.renameSync(displacedLiveMediaStorage, liveMediaStorageDir);
+  }
+  const storeRecovered = await get('/ready', {}, 5000);
+  if (storeRecovered.statusCode !== 200) {
+    throw new Error(`Live media store readiness did not recover: ${storeRecovered.statusCode} ${storeRecovered.body}`);
+  }
+
+  await queryDb('ALTER TABLE media_catalog_state RENAME TO media_catalog_state_readiness_test');
+  try {
+    const unavailableCatalog = await get('/ready', {}, 5000);
+    const stillLive = await get('/health');
+    if (unavailableCatalog.statusCode !== 503 || JSON.parse(unavailableCatalog.body).error !== 'application_not_ready') {
+      throw new Error(`Unavailable live media catalog did not fail readiness: ${unavailableCatalog.statusCode} ${unavailableCatalog.body}`);
+    }
+    if (stillLive.statusCode !== 200 || stillLive.body !== 'ok') {
+      throw new Error(`Catalog readiness failure took down liveness: ${stillLive.statusCode} ${stillLive.body}`);
+    }
+  } finally {
+    await queryDb('ALTER TABLE media_catalog_state_readiness_test RENAME TO media_catalog_state');
+  }
+  const catalogRecovered = await get('/ready', {}, 5000);
+  if (catalogRecovered.statusCode !== 200) {
+    throw new Error(`Live media catalog readiness did not recover: ${catalogRecovered.statusCode} ${catalogRecovered.body}`);
+  }
+
   const rejectAcceptedArchive = await request(
     'POST', `/api/admin/unit-assets/${secondUnitId}/archive`, { ...adminJson, 'if-match': '"1"' }, '{}', 5000,
   );
@@ -951,11 +1878,10 @@ async function main() {
   }
   const officialThumb = await get('/assets/level-thumb/off-l-test.png', undefined, 5000);
   if (
-    officialThumb.statusCode !== 200 ||
-    !String(officialThumb.headers['content-type'] || '').includes('image/png') ||
-    officialThumb.body.length < 1000
+    officialThumb.statusCode !== 503
+    || JSON.parse(officialThumb.body).error !== 'thumbnail_render_unavailable'
   ) {
-    throw new Error(`Official level thumbnail should render PNG: ${officialThumb.statusCode} ${officialThumb.headers['content-type'] || ''}`);
+    throw new Error(`Missing live thumbnail media should fail explicitly without fallback: ${officialThumb.statusCode} ${officialThumb.body}`);
   }
 
   // Non-off-prefixed ids are rejected (would collide the per-user id counter).
@@ -978,16 +1904,13 @@ async function main() {
     throw new Error(`Official ids with digits should be rejected: ${digitOffIdWrite.statusCode} ${digitOffIdWrite.body}`);
   }
 
-  // --- Prop-seat tuning (/api/prop-seats): global, public GET / admin PUT (ADR-0061) ---
-  const propSeatsDoc = {
-    oak: { anchorX: 96, anchorY: 255, scale: 1, w: 2, h: 2 },
-    'oak-1x1-tree': { base: 'oak', anchorX: 96, anchorY: 238, scale: 0.25, w: 1, h: 1 },
-  };
+  // --- Prop-seat tuning: complete DB authority, public GET / admin PUT ----------
+  const propSeatsDoc = structuredClone(SYNTHETIC_PROP_SEATS);
 
-  const emptyPropSeats = await get('/api/prop-seats/default');
-  const emptyPropSeatsBody = JSON.parse(emptyPropSeats.body);
-  if (emptyPropSeats.statusCode !== 200 || emptyPropSeatsBody.portfolio.revision !== 0 || Object.keys(emptyPropSeatsBody.portfolio.data).length !== 0) {
-    throw new Error(`Unexpected empty prop seats response: ${emptyPropSeats.statusCode} ${emptyPropSeats.body}`);
+  const initialPropSeats = await get('/api/prop-seats/default');
+  const initialPropSeatsBody = JSON.parse(initialPropSeats.body);
+  if (initialPropSeats.statusCode !== 200 || initialPropSeatsBody.portfolio.revision !== 1 || initialPropSeatsBody.portfolio.data.cottage.scale !== 0.62) {
+    throw new Error(`Unexpected synthetic prop seats response: ${initialPropSeats.statusCode} ${initialPropSeats.body}`);
   }
 
   const anonymousPropSeatsWrite = await request(
@@ -1016,12 +1939,12 @@ async function main() {
   const adminPropSeatsWrite = await request(
     'PUT', '/api/prop-seats/default',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ data: propSeatsDoc }),
+    JSON.stringify({ data: propSeatsDoc, expectedRevision: 1 }),
   );
   const adminPropSeatsWriteBody = JSON.parse(adminPropSeatsWrite.body);
   if (
     adminPropSeatsWrite.statusCode !== 200 ||
-    adminPropSeatsWriteBody.portfolio.revision !== 1 ||
+    adminPropSeatsWriteBody.portfolio.revision !== 2 ||
     adminPropSeatsWriteBody.portfolio.updated_by !== 'player@example.com' ||
     adminPropSeatsWriteBody.portfolio.data.oak.scale !== 1
   ) {
@@ -1033,20 +1956,84 @@ async function main() {
   const publishedPropSeatsBody = JSON.parse(publishedPropSeats.body);
   if (
     publishedPropSeats.statusCode !== 200 ||
-    publishedPropSeatsBody.portfolio.revision !== 1 ||
-    publishedPropSeatsBody.portfolio.data['oak-1x1-tree'].base !== 'oak'
+    publishedPropSeatsBody.portfolio.revision !== 2 ||
+    publishedPropSeatsBody.portfolio.data['oak-test-small'].base !== 'oak'
   ) {
     throw new Error(`Prop seats did not persist for public read: ${publishedPropSeats.statusCode} ${publishedPropSeats.body}`);
+  }
+
+  const blindPropSeatsWrite = await request(
+    'PUT', '/api/prop-seats/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: propSeatsDoc }),
+  );
+  if (blindPropSeatsWrite.statusCode !== 400 || JSON.parse(blindPropSeatsWrite.body).error !== 'invalid_prop_seats_write') {
+    throw new Error(`Blind prop-seat write should be rejected: ${blindPropSeatsWrite.statusCode} ${blindPropSeatsWrite.body}`);
+  }
+
+  const stalePropSeatsWrite = await request(
+    'PUT', '/api/prop-seats/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: propSeatsDoc, expectedRevision: 1 }),
+  );
+  const stalePropSeatsWriteBody = JSON.parse(stalePropSeatsWrite.body);
+  if (
+    stalePropSeatsWrite.statusCode !== 409
+    || stalePropSeatsWriteBody.error !== 'prop_seats_revision_conflict'
+    || stalePropSeatsWriteBody.currentRevision !== 2
+  ) {
+    throw new Error(`Stale prop-seat write should conflict: ${stalePropSeatsWrite.statusCode} ${stalePropSeatsWrite.body}`);
+  }
+
+  const sequentialPropSeatsWrite = await request(
+    'PUT', '/api/prop-seats/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: propSeatsDoc, expectedRevision: 2 }),
+  );
+  if (sequentialPropSeatsWrite.statusCode !== 200 || JSON.parse(sequentialPropSeatsWrite.body).portfolio.revision !== 3) {
+    throw new Error(`Sequential prop-seat write did not advance its revision: ${sequentialPropSeatsWrite.statusCode} ${sequentialPropSeatsWrite.body}`);
+  }
+
+  const createdPropSeats = await request(
+    'PUT', '/api/prop-seats/cas-create',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: propSeatsDoc, expectedRevision: null }),
+  );
+  if (createdPropSeats.statusCode !== 201 || JSON.parse(createdPropSeats.body).portfolio.revision !== 1) {
+    throw new Error(`Null-token prop-seat create failed: ${createdPropSeats.statusCode} ${createdPropSeats.body}`);
+  }
+  const duplicatePropSeatsCreate = await request(
+    'PUT', '/api/prop-seats/cas-create',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: propSeatsDoc, expectedRevision: null }),
+  );
+  if (
+    duplicatePropSeatsCreate.statusCode !== 409
+    || JSON.parse(duplicatePropSeatsCreate.body).currentRevision !== 1
+  ) {
+    throw new Error(`Null token should not overwrite an existing prop-seat row: ${duplicatePropSeatsCreate.statusCode} ${duplicatePropSeatsCreate.body}`);
   }
 
   // A size-variant whose `base` doesn't resolve in-document is rejected (no orphan variant).
   const orphanVariantWrite = await request(
     'PUT', '/api/prop-seats/default',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ data: { 'ghost-house': { base: 'missing', anchorX: 1, anchorY: 1, scale: 1 } } }),
+    JSON.stringify({
+      data: { ...propSeatsDoc, 'ghost-house': { base: 'missing', anchorX: 1, anchorY: 1, scale: 1 } },
+      expectedRevision: 3,
+    }),
   );
   if (orphanVariantWrite.statusCode !== 400 || JSON.parse(orphanVariantWrite.body).error !== 'invalid_prop_seats') {
     throw new Error(`Orphan prop-seat variant should be rejected: ${orphanVariantWrite.statusCode} ${orphanVariantWrite.body}`);
+  }
+
+  const incompletePropSeatsWrite = await request(
+    'PUT', '/api/prop-seats/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: { oak: propSeatsDoc.oak }, expectedRevision: 3 }),
+  );
+  if (incompletePropSeatsWrite.statusCode !== 400 || JSON.parse(incompletePropSeatsWrite.body).error !== 'invalid_prop_seats') {
+    throw new Error(`Incomplete prop-seat document should be rejected: ${incompletePropSeatsWrite.statusCode} ${incompletePropSeatsWrite.body}`);
   }
 
   // --- New-format level persistence (/api/levels): per-user, DB-backed -------
@@ -2235,8 +3222,8 @@ async function main() {
     throw new Error(`Start without a level should 409 no_level: ${startNoLevel.statusCode} ${startNoLevel.body}`);
   }
 
-  // Only the host may pick the level; a missing levelId is a 400.
-  const rivalSetLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-crown-valoria-01' }));
+  // Only the host may pick a canonical official level; timing comes from its content.
+  const rivalSetLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-test' }));
   if (rivalSetLevel.statusCode !== 403) {
     throw new Error(`Guest should not be able to set the lobby level: ${rivalSetLevel.statusCode} ${rivalSetLevel.body}`);
   }
@@ -2244,9 +3231,25 @@ async function main() {
   if (missingLevelId.statusCode !== 400 || JSON.parse(missingLevelId.body).error !== 'missing_level_id') {
     throw new Error(`Setting a level without an id should 400 missing_level_id: ${missingLevelId.statusCode} ${missingLevelId.body}`);
   }
-  const setLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-crown-valoria-01' }));
+  const unknownCanonicalLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-missing-smoke' }));
+  if (unknownCanonicalLevel.statusCode !== 404 || JSON.parse(unknownCanonicalLevel.body).error !== 'level_not_found') {
+    throw new Error(`Unknown canonical level should 404 level_not_found: ${unknownCanonicalLevel.statusCode} ${unknownCanonicalLevel.body}`);
+  }
+  const setTimedLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-smoke-timed', timed: false }));
+  if (setTimedLevel.statusCode !== 200 || JSON.parse(setTimedLevel.body).lobby.level_timed !== true) {
+    throw new Error(`Unexpected timed-level response: ${setTimedLevel.statusCode} ${setTimedLevel.body}`);
+  }
+  const startTimedLevel = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  if (startTimedLevel.statusCode !== 409 || JSON.parse(startTimedLevel.body).error !== 'timed_level_unsupported') {
+    throw new Error(`Timed level should 409 timed_level_unsupported: ${startTimedLevel.statusCode} ${startTimedLevel.body}`);
+  }
+  // This id is intentionally absent from LOBBY_TEST_LEVEL_METADATA: Level and Start
+  // must resolve the exact DB-backed official document written earlier in this smoke.
+  const setLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-test', timed: true }));
   const setLevelBody = JSON.parse(setLevel.body);
-  if (setLevel.statusCode !== 200 || setLevelBody.lobby.level_id !== 'off-l-crown-valoria-01' || setLevelBody.lobby.your_side !== 'player') {
+  if (setLevel.statusCode !== 200 || setLevelBody.lobby.level_id !== 'off-l-test' || setLevelBody.lobby.level_timed !== false
+    || setLevelBody.lobby.level_name !== 'Official Exact Save' || setLevelBody.lobby.level_objective !== 'capture-all'
+    || setLevelBody.lobby.your_side !== 'player') {
     throw new Error(`Unexpected set-level response: ${setLevel.statusCode} ${setLevel.body}`);
   }
 
@@ -2258,27 +3261,27 @@ async function main() {
 
   // Relay moves. Host ('player') moves first (index 0), then guest ('enemy') at index 1 —
   // strict one-move-per-turn alternation is enforced server-side (host=even, guest=odd).
-  const hostMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-1', move: { x: 3, y: 4 } }));
+  const hostMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-host-0', expectedMoveCount: 0, pieceId: 'p-1', move: { x: 3, y: 4 } }));
   const hostMoveBody = JSON.parse(hostMove.body);
   if (hostMove.statusCode !== 200 || hostMoveBody.move.i !== 0 || hostMoveBody.move.side !== 'player' || hostMoveBody.move.pieceId !== 'p-1') {
     throw new Error(`Unexpected host move response: ${hostMove.statusCode} ${hostMove.body}`);
   }
   // Turn integrity: the host cannot move again out of turn (index 1 belongs to the guest).
-  const outOfTurn = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-2', move: { x: 1, y: 1 } }));
+  const outOfTurn = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-host-out-of-turn', expectedMoveCount: 1, pieceId: 'p-2', move: { x: 1, y: 1 } }));
   if (outOfTurn.statusCode !== 409 || JSON.parse(outOfTurn.body).error !== 'not_your_turn') {
     throw new Error(`Out-of-turn move should 409 not_your_turn: ${outOfTurn.statusCode} ${outOfTurn.body}`);
   }
-  const guestMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'e-1', move: { x: 3, y: 4 } }));
+  const guestMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-guest-1', expectedMoveCount: 1, pieceId: 'e-1', move: { x: 3, y: 4 } }));
   const guestMoveBody = JSON.parse(guestMove.body);
   if (guestMove.statusCode !== 200 || guestMoveBody.move.i !== 1 || guestMoveBody.move.side !== 'enemy' || guestMoveBody.move.pieceId !== 'e-1') {
     throw new Error(`Unexpected guest move response: ${guestMove.statusCode} ${guestMove.body}`);
   }
   // Payload validation runs before the turn check, so a malformed move is 400 bad_move.
-  const badMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-1', move: { x: 'nope' } }));
+  const badMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-bad-move', expectedMoveCount: 2, pieceId: 'p-1', move: { x: 'nope' } }));
   if (badMove.statusCode !== 400 || JSON.parse(badMove.body).error !== 'bad_move') {
     throw new Error(`Malformed move should 400 bad_move: ${badMove.statusCode} ${badMove.body}`);
   }
-  const outsiderMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'x-1', move: { x: 1, y: 1 } }));
+  const outsiderMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-outsider', expectedMoveCount: 2, pieceId: 'x-1', move: { x: 1, y: 1 } }));
   if (outsiderMove.statusCode !== 401) {
     throw new Error(`Anonymous move should require sign-in: ${outsiderMove.statusCode} ${outsiderMove.body}`);
   }
@@ -2289,7 +3292,7 @@ async function main() {
   }
   const startedList = await get('/api/lobbies', { cookie: 'better-auth.session=abc' });
   const startedListBody = JSON.parse(startedList.body);
-  if (startedList.statusCode !== 200 || startedListBody.current.move_count !== 2 || startedListBody.current.level_id !== 'off-l-crown-valoria-01') {
+  if (startedList.statusCode !== 200 || startedListBody.current.move_count !== 2 || startedListBody.current.level_id !== 'off-l-test') {
     throw new Error(`Started lobby should expose move_count/level_id: ${startedList.statusCode} ${startedList.body}`);
   }
 
@@ -2313,7 +3316,7 @@ async function main() {
     throw new Error(`Resigned lobby should expose the result to the host: ${resignedView.statusCode} ${resignedView.body}`);
   }
   // The match is over — further moves are rejected rather than re-opening a decided game.
-  const moveAfterResign = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-2', move: { x: 5, y: 5 } }));
+  const moveAfterResign = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-after-resign', expectedMoveCount: 2, pieceId: 'p-2', move: { x: 5, y: 5 } }));
   if (moveAfterResign.statusCode !== 409 || JSON.parse(moveAfterResign.body).error !== 'match_over') {
     throw new Error(`Move after resign should 409 match_over: ${moveAfterResign.statusCode} ${moveAfterResign.body}`);
   }
@@ -2323,16 +3326,15 @@ async function main() {
   if (hostResign.statusCode !== 200 || hostResignBody.lobby.result.winner !== 'player') {
     throw new Error(`Resign should be idempotent (first result kept): ${hostResign.statusCode} ${hostResign.body}`);
   }
-  // Re-starting the lobby begins a fresh match: the prior game's move log AND result are
-  // cleared, so a reused lobby never replays the old game or carries a stale outcome.
+  // Start is a one-shot ready→started transition; it cannot reset a live/finished match.
   const restart = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
   const restartBody = JSON.parse(restart.body);
-  if (restart.statusCode !== 200 || restartBody.lobby.phase !== 'started' || restartBody.lobby.move_count !== 0 || restartBody.lobby.result !== null) {
-    throw new Error(`Re-start should clear moves + result: ${restart.statusCode} ${restart.body}`);
+  if (restart.statusCode !== 409 || restartBody.error !== 'lobby_already_started') {
+    throw new Error(`Re-start should 409 lobby_already_started: ${restart.statusCode} ${restart.body}`);
   }
   const restartBackfill = await get(`/api/lobbies/${lobbyId}/moves?since=0`, { cookie: 'better-auth.session=abc' });
-  if (restartBackfill.statusCode !== 200 || JSON.parse(restartBackfill.body).moves.length !== 0) {
-    throw new Error(`Re-started lobby should have an empty move log: ${restartBackfill.statusCode} ${restartBackfill.body}`);
+  if (restartBackfill.statusCode !== 200 || JSON.parse(restartBackfill.body).moves.length !== 2) {
+    throw new Error(`Rejected Re-start must preserve move log: ${restartBackfill.statusCode} ${restartBackfill.body}`);
   }
 
   const redirect = await get('/api/auth/sign-in?returnTo=%2Fplay');

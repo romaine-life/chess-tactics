@@ -27,10 +27,10 @@ The current canonical circular footprint target is `96px`, so the equal-area squ
 
 Asset:
 
-- Accepted frames live in Unit Art storage. The authored Blender source is
-  `docs/art/unit-concepts/blender-units/rook-claude/units/rook-ruinwall/model.blend`;
-  `python scripts/generate-unit-art.py render rook ...` renders its exact
-  eight-direction turntable through the accepted-only Ruinwall renderer.
+- Accepted frames and the authored Blender source live in Unit Art storage.
+  `python scripts/generate-unit-art.py render rook ...` fetches that private
+  source through its explicit temporary source manifest and renders the exact
+  eight-direction turntable through the Git-owned Ruinwall algorithm.
 
 Measured south-render source:
 
@@ -55,9 +55,16 @@ v2-v4 rook experiments are historical candidates, not the accepted rook source.
 
 Asset:
 
-- `.unit-art-output/knight/navy-blue/*.png` (procedural navy fur coat; render recipe: `docs/art/unit-concepts/blender-units/knight-fur/render_knight_fur.py`)
-- Supersedes the earlier `candidate-wooden` render (same OBJ, raw wood-grain diffuse,
-  now retained only in the private historical archive).
+- Accepted frames are Unit Art versions in Postgres/private Blob Storage. The
+  ignored `.unit-art-output` tree is only a temporary render workspace.
+- `python scripts/generate-unit-art.py render knight ... --source-manifest
+  <outside-repo.json> --api-base <backend>` fetches the private OBJ/MTL/texture
+  bundle by backend `sourcePath` and runs the Git-owned
+  `knight-fur/render_knight_fur.py` algorithm. The archived bundle identities are
+  `docs/art/unit-concepts/source-assets/knight/wooden-chess-knight-side-b/{12936_Wooden_Chess_Knight_Side_B_V2_l3.obj,12936_Wooden_Chess_Knight_Side_B_V2_l3.mtl,12936_WoodenChessNightSideB_diffuse.jpg}`;
+  those strings identify private versions, not repository files.
+- Supersedes the earlier `candidate-wooden` render, now retained only in the
+  private historical archive.
 
 - Source canvas: `512x512px`
 - Contact footprint (max projected base width): `178px`
@@ -79,7 +86,13 @@ At `100%` unit scale, the game renders the source image so the measured `178px` 
 
 Asset:
 
-- `.unit-art-output/pawn/navy-blue/*.png` (classic Staunton pawn + medieval archer's helmet, navy). Recipe: `docs/art/unit-concepts/blender-units/pawn-helmet/render_pawn_helmet.py`. Source models: `docs/art/unit-concepts/source-assets/pawn-helmet/`.
+- Accepted frames are live Unit Art versions. The ignored local output directory
+  is transient. The canonical generator fetches private source versions with
+  backend identities `docs/art/unit-concepts/source-assets/pawn-helmet/Pawn.stl`
+  and `docs/art/unit-concepts/source-assets/pawn-helmet/helmet.dae` into a
+  temporary directory, then runs the Git-owned
+  `pawn-helmet/render_pawn_helmet.py` algorithm. The identities are deliberately
+  historical-looking `sourcePath` values; the binaries do not live in Git.
 
 Calibration (same camera + base-at-origin normalization as the knight):
 
@@ -99,7 +112,12 @@ The pawn body is rotationally symmetric; the helmet's visor provides the per-dir
 
 Asset:
 
-- `.unit-art-output/king/navy-blue/*.png` (navy Staunton king + gold/jewel crown, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/king-crown/` (`king_crown.blend` is the hand-assembled source of truth; `render_king_crown.py` re-renders it).
+- Accepted frames are live Unit Art versions. The hand-assembled source is the
+  private version whose backend identity is
+  `docs/art/unit-concepts/blender-units/king-crown/king_crown.blend`; the canonical
+  generator fetches it into a temporary directory and runs the Git-owned
+  `king-crown/render_king_crown.py` algorithm. No `.blend` or active frame lives
+  at that path in Git.
 
 Calibration (same camera + base-at-origin normalization as the rest of the roster):
 
@@ -113,13 +131,21 @@ unitAnchorX: '50%'
 unitAnchorY: '80.241%'
 ```
 
-The crown was hand-fitted in Blender (not scripted), so unlike the pawn/knight there's no procedural recipe — the assembled `.blend` is the source. King + crown are rotationally symmetric (no per-direction facing).
+The crown was hand-fitted in Blender (not scripted), so unlike the pawn/knight
+there is no procedural assembly recipe: the content-addressed private `.blend`
+version is the material source. King + crown are rotationally symmetric (no
+per-direction facing).
 
 ## Active Blender Bishop
 
 Asset:
 
-- `.unit-art-output/bishop/navy-blue/*.png` (navy Staunton bishop + navy mitre, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/bishop-mitre/` (`bishop_mitre.blend` is the hand-assembled source of truth; `render_bishop_mitre.py` re-renders it).
+- Accepted frames are live Unit Art versions. The hand-assembled source is the
+  private version whose backend identity is
+  `docs/art/unit-concepts/blender-units/bishop-mitre/bishop_mitre.blend`; the
+  canonical generator fetches it into a temporary directory and runs the
+  Git-owned `bishop-mitre/render_bishop_mitre.py` algorithm. The identity is not
+  a repository file.
 
 Calibration (same camera + base-at-origin normalization as the rest of the roster):
 
@@ -133,13 +159,20 @@ unitAnchorX: '50%'
 unitAnchorY: '80.241%'
 ```
 
-The mitre was hand-fitted in Blender (not scripted) — the assembled `.blend` is the source. Unlike the king, the mitre's front peak gives a genuine per-direction facing across the 8 sprites.
+The mitre was hand-fitted in Blender (not scripted); the content-addressed
+private `.blend` version is the material source. Unlike the king, the mitre's
+front peak gives a genuine per-direction facing across the 8 sprites.
 
 ## Active Blender Queen
 
 Asset:
 
-- `.unit-art-output/queen/navy-blue/*.png` (navy Staunton queen + jeweled gold tiara, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/queen-tiara/` (`queen_tiara.blend` is the hand-assembled source of truth; `render_queen_tiara.py` re-renders it).
+- Accepted frames are live Unit Art versions. The hand-assembled source is the
+  private version whose backend identity is
+  `docs/art/unit-concepts/blender-units/queen-tiara/queen_tiara.blend`; the
+  canonical generator fetches it into a temporary directory and runs the
+  Git-owned `queen-tiara/render_queen_tiara.py` algorithm. The identity is not a
+  repository file.
 
 Calibration (same camera + base-at-origin normalization as the rest of the roster):
 
@@ -153,7 +186,9 @@ unitAnchorX: '50%'
 unitAnchorY: '80.241%'
 ```
 
-The tiara was hand-fitted in Blender (not scripted) — the assembled `.blend` is the source. Like the bishop, the tiara's front gives a genuine per-direction facing across the 8 sprites.
+The tiara was hand-fitted in Blender (not scripted); the content-addressed
+private `.blend` version is the material source. Like the bishop, the tiara's
+front gives a genuine per-direction facing across the 8 sprites.
 
 ## Delivery Raster Rule
 
@@ -166,10 +201,12 @@ For genuinely new Blender-authored unit art:
 5. Store `sourceCanvasPx`, `sourceCanvasHeightPx`, `sourceFootprintPx`, `unitAnchorX`, and `unitAnchorY`.
 6. Keep old AI/generated art as historical reference, not active app catalog entries.
 
-For a size-only revision of accepted art:
+For a size-only calibration of accepted art:
 
 1. Treat the complete accepted 6-palette x 8-direction asset as the immutable visual source.
 2. Preserve source aspect ratio inside the Unit Studio delivery raster and reduce with deterministic premultiplied-alpha area sampling.
 3. Scale `sourceFootprintPx` by the same horizontal canvas ratio and preserve the accepted anchor.
 4. Record source asset id, source dimensions, contained dimensions, delivery dimensions, and `spatialResampling: true` in candidate provenance.
-5. Review the delivery pixels on the board before accepting. At logical `100%`, the accepted result is drawn 1:1.
+5. Review those calibration pixels on the board to settle the target delivery dimensions; do not accept the resampled candidate.
+6. Re-render the complete family from its Blender source directly at the calibrated target dimensions and verify that no spatial resampling occurred.
+7. Review and accept only that native render. At logical `100%`, the accepted result is drawn 1:1.

@@ -1,9 +1,23 @@
-import { describe, it, expect } from 'vitest';
-import { propCells, propDef, PROP_DEFS, type PropDef } from './props';
-import propSeats from './propSeats.json';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
+import {
+  applyLiveMediaCatalog,
+  resetLiveMediaCatalog,
+} from '@chess-tactics/board-render';
+import { currentSeats, propCells, propDef, PROP_DEFS, resetPropSeats, type PropDef } from './props';
+import { TEST_PROP_SEATS, applyTestPropSeats } from '../test/livePropSeats';
+import { testGroundCoverCatalog, testStructureMediaSlots } from '../test/liveMediaCatalog';
 
 const sortCells = (cells: Array<{ x: number; y: number }>) =>
   [...cells].sort((a, b) => a.y - b.y || a.x - b.x);
+
+beforeAll(() => {
+  applyLiveMediaCatalog(testGroundCoverCatalog(testStructureMediaSlots()));
+  applyTestPropSeats();
+});
+afterAll(() => {
+  resetPropSeats();
+  resetLiveMediaCatalog();
+});
 
 describe('props core', () => {
   it('propCells(0,0,oak) is exactly the 2×2 block (order-insensitive)', () => {
@@ -32,15 +46,15 @@ describe('props core', () => {
     expect(propDef('not-a-real-prop')).toBeUndefined();
   });
 
-  it('every def composes a full seat from propSeats.json, and the file has no orphans', () => {
+  it('every def composes from the explicit complete test document, with no orphans', () => {
     for (const d of PROP_DEFS) {
       expect(Number.isFinite(d.sprite.anchorX), `${d.id} anchorX`).toBe(true);
       expect(Number.isFinite(d.sprite.anchorY), `${d.id} anchorY`).toBe(true);
       expect(d.sprite.scale, `${d.id} scale`).toBeGreaterThan(0);
     }
     const defIds = new Set(PROP_DEFS.map((d) => d.id));
-    for (const seatId of Object.keys(propSeats)) {
-      expect(defIds.has(seatId), `propSeats.json entry "${seatId}" has no PROP_DEFS def`).toBe(true);
+    for (const seatId of Object.keys(TEST_PROP_SEATS)) {
+      expect(defIds.has(seatId), `test seat entry "${seatId}" has no PROP_DEFS def`).toBe(true);
     }
   });
 
@@ -61,9 +75,8 @@ describe('props core', () => {
   });
 
   it('footprint is data-driven: a base defaults to 2×2 absent a w/h; a copy follows its own w/h or inherits the base', () => {
-    // Assert the RULE for every def (robust to whatever copies are authored in propSeats.json —
-    // they can now be created/renamed/deleted and given their own footprint in /prop-lab).
-    const seats = propSeats as Record<string, { w?: number; h?: number; base?: string }>;
+    // Assert the rule against explicit synthetic live content.
+    const seats = TEST_PROP_SEATS as Record<string, { w?: number; h?: number; base?: string }>;
     for (const d of PROP_DEFS) {
       const s = seats[d.id] ?? {};
       if (s.base) {
@@ -79,7 +92,7 @@ describe('props core', () => {
 
   it('a copy shares its base sprite (asset + frame + family + kind + terrains), with its own seat', () => {
     // Pick any authored copy — don't hard-code an id, since copies come and go via the editor.
-    const seats = propSeats as Record<string, { base?: string }>;
+    const seats = TEST_PROP_SEATS as Record<string, { base?: string }>;
     const copyId = Object.keys(seats).find((id) => seats[id].base);
     if (!copyId) return; // no copies authored — nothing to assert
     const copy = propDef(copyId)!;
@@ -102,6 +115,33 @@ describe('props core', () => {
       expect(typeof d.family, `${d.id} family`).toBe('string');
       // a variant's spriteId is another (base) prop that exists; a base points at itself.
       expect(ids.has(d.spriteId), `${d.id} spriteId "${d.spriteId}" resolves`).toBe(true);
+    }
+  });
+
+  it('fails closed when no complete seat document has been hydrated', () => {
+    resetPropSeats();
+    try {
+      expect(() => currentSeats()).toThrow(/not hydrated/);
+      expect(() => propDef('oak')).toThrow(/not hydrated/);
+      expect(PROP_DEFS).toEqual([]);
+    } finally {
+      applyTestPropSeats();
+    }
+  });
+
+  it('derives prop frame dimensions from the hydrated live-media snapshot', () => {
+    const catalog = testGroundCoverCatalog(testStructureMediaSlots());
+    for (const slot of catalog.slots.filter((entry) => entry.slot.startsWith('props/cabin/'))) {
+      slot.media.width = 333;
+      slot.media.height = 222;
+    }
+    applyLiveMediaCatalog(catalog);
+    applyTestPropSeats();
+    try {
+      expect(propDef('cabin')?.sprite).toMatchObject({ w: 333, h: 222 });
+    } finally {
+      applyLiveMediaCatalog(testGroundCoverCatalog(testStructureMediaSlots()));
+      applyTestPropSeats();
     }
   });
 });

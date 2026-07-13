@@ -9,14 +9,14 @@ Use the right server for the job:
 - `http://localhost:5173/studio` is the Vite hot-reload workbench for tile UI, art review, and rapid iteration.
 - `http://localhost:3000/studio` is the backend/Express baked preview. It serves `frontend/dist`, so source edits only appear there after `npm run build` and a browser refresh.
 
-Do not debug live UI iteration on `3000` unless the goal is specifically to verify the baked build. A correct dev page contains `@vite/client` and `/src/main.tsx`; a baked preview contains `/assets/index-*.js`.
+Do not debug live UI iteration on `3000` unless the goal is specifically to verify the baked build. A correct dev page contains `@vite/client` and `/src/main.tsx`; a baked preview contains `/app-code/index-*.js`.
 
 ## Style Target
 
 Primary visual target:
 
-- `docs/art/ui-screen-concepts/04-skirmish.png`
-- Runtime copy: `frontend/public/assets/art/skirmish-style-target.png`
+- private source version formerly named `docs/art/ui-screen-concepts/04-skirmish.png`
+- Live style slot: `/assets/art/skirmish-style-target.png`
 
 The goal is not generic pixel-art terrain. The goal is to capture the board feel, camera angle, material language, and readable tactics-game presentation from the generated skirmish concept.
 
@@ -53,9 +53,10 @@ The canonical board tile geometry is locked unless a deliberate art-direction de
 
 Source of truth:
 
-- `frontend/src/art/tileTemplate.ts`
-- `frontend/scripts/generate-tile-template.mjs`
-- `frontend/public/assets/tiles/canonical-template/`
+- Deterministic geometry: `frontend/src/art/tileTemplate.ts`.
+- Template media: stable backend semantic slots under
+  `/assets/tiles/canonical-template/`; these are catalog routes, not public
+  files or repository output directories.
 - Socket contract: `frontend/src/core/tileSockets.ts`
 - Board generation: `frontend/src/core/tileBoardGenerator.ts`
 - Coverage diagnostics: `frontend/src/core/tileCoverage.ts`
@@ -173,7 +174,8 @@ Timing: start animation prototypes after the static tile rules, transition cover
 
 Likely animation targets:
 
-- Water shimmer or running water. First prototype: `water-clean-a` uses local 8-frame shimmer frames from `frontend/public/assets/tiles/canonical-animated/water-shimmer-a/`.
+- Water shimmer or running water. The `water-clean-a` prototype uses the
+  frame-set slots under `/assets/tiles/canonical-animated/water-shimmer-a/`.
 - Subtle grass movement if it does not distract from tactics readability.
 - Trees, shrubs, and props as separate animated objects or overlays.
 - Magical or tactical highlight tiles.
@@ -187,30 +189,39 @@ Pass criteria:
 
 Implementation notes:
 
-- Prototype generator: `frontend/scripts/generate-animated-tile-prototypes.mjs`
-- NPM command: `npm run tiles:animated`
+- Candidate transform: `frontend/scripts/build-water-anim.py`. It reads fetched
+  source pixels and writes candidate sheets only in an explicit
+  outside-repository temporary workspace; the exact sheets are then uploaded to
+  their live semantic slots.
 - Studio assets can declare optional animation metadata; renderers resolve the current frame without changing socket rules or geometry.
 - Tileset Studio view mode includes frame-by-frame controls for animated assets: play or pause, previous or next frame, and a scrubber.
 - Current prototype is deliberately subtle and should be judged in board context before expanding to more families.
 
 ## Tooling Notes
 
-Current deterministic asset scripts:
+The Git-input/Git-output publisher modes and their production-folder targets are
+retired. Reusable deterministic transforms take explicit outside-repository
+input and output paths, then the live-media client uploads the exact candidate
+bytes. Representative entry points are:
 
-- `frontend/scripts/generate-clean-canonical-tiles.mjs`
-- `frontend/scripts/extract-concept-materials.mjs`
-- `frontend/scripts/generate-tile-template.mjs`
+- `frontend/scripts/project-tile-surface.py`
+- `frontend/scripts/split-tiles.py`
+- `frontend/scripts/build-water-anim.py`
+- `frontend/scripts/live-media-admin-client.mjs`
 
-Current generated folders:
+Current live semantic namespaces (backend slots, not folders):
 
-- `frontend/public/assets/tiles/canonical-true-iso/` - active production catalog tiles, normalized to the true-isometric footprint.
-- `frontend/public/assets/tiles/canonical-clean/`
-- `frontend/public/assets/tiles/canonical-accepted/`
-- `frontend/public/assets/tiles/canonical-template/`
-- `frontend/public/assets/tiles/canonical-transition-fill/`
-- `frontend/public/assets/tiles/concept-materials/`
+- `tiles/canonical-true-iso/*` — normalized production-role slots.
+- `tiles/canonical-clean/*`
+- `tiles/canonical-template/*`
+- `tiles/canonical-transition-fill/*`
+- private source versions for canonical-accepted history and concept materials.
 
-`canonical-clean` and `canonical-accepted` are retained as legacy/source and before/after comparison folders; they should not be wired as active production tile catalog assets. PixelLab can be useful for inspiration, raw candidates, and object/animation experiments. It should not be treated as the geometry authority. Generated assets must be normalized to the canonical board angle before being accepted.
+Legacy clean/accepted comparisons are retained as private source versions, not
+repository folders or active pointers. PixelLab can be useful for inspiration,
+raw candidates, and object/animation experiments. It should not be treated as
+the geometry authority. Generated assets must be normalized to the canonical
+board angle before backend acceptance.
 
 ## Collaboration Rules
 

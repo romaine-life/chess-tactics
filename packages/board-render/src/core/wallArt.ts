@@ -88,7 +88,7 @@ function normalizeWallArt(id: string, entry: WallArtEntry): WallArt | null {
   if (!entry || !Array.isArray(entry.slots)) return null;
   const slots = entry.slots.map((slot) => coerceSlot(slot as WallArtSlot)).filter((slot): slot is WallArtSlot => !!slot);
   const span = Number.isFinite(entry.span) ? Math.max(1, Math.min(16, Math.round(Number(entry.span)))) : 1;
-  const hasMirrorSlot = slots.some((slot) => wallDecorAsset(slot.sourceId).kind === 'mirror');
+  const hasMirrorSlot = slots.some((slot) => wallDecorAsset(slot.sourceId)?.kind === 'mirror');
   const reflection = hasMirrorSlot || entry.reflection ? normalizeWallArtReflection(entry.reflection) : undefined;
   return {
     id,
@@ -248,7 +248,7 @@ export function wallArtSlotsForFace(artId: string | undefined, face: WallDecorFa
   return wallArt(artId)?.slots.filter((slot) => slot.face === face) ?? [];
 }
 
-export function slotSource(slot: WallArtSlot): WallDecorAsset {
+export function slotSource(slot: WallArtSlot): WallDecorAsset | undefined {
   return wallDecorAsset(slot.sourceId);
 }
 
@@ -271,6 +271,7 @@ export function wallArtSrcs(
     for (const face of ['west', 'north'] as const) {
       for (const slot of wallArtSlotsForFace(faceMap[face], face)) {
         const source = slotSource(slot);
+        if (!source) continue;
         urls.add(source.faces[face].src);
         if (source.kind === 'mirror') urls.add(source.faces[face].glassSrc);
       }

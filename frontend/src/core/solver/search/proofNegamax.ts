@@ -88,7 +88,12 @@ export function makeProofSearchState(
   input: SolverInput,
   opts: { maxNodes?: number; ttEntryLimit?: number; tt?: TranspositionTable; emit?: PhaseEmit } = {},
 ): ProofSearchState {
-  const sctx = { objective: input.level.objective, ctx: input.ctx, turnsElapsed: 0 };
+  const sctx = {
+    objective: input.level.objective,
+    victoryRules: input.victoryRules,
+    ctx: input.ctx,
+    turnsElapsed: 0,
+  };
   // No time budget (a solve is deterministic; budgets are node-count only — §Determinism).
   const s = makeSearchState(input.env, sctx, { maxNodes: opts.maxNodes });
   return {

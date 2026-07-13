@@ -1,20 +1,20 @@
-# The content fingerprint image tag is bumped by
-# .github/workflows/build-and-deploy.yaml on every push to main (via sed on
-# this file).
+# Build and Deploy replaces this value with the full, digest-pinned image ref
+# already built and verified on the merged PR. Non-production lanes may still
+# supply an ordinary content-fingerprint tag.
 image:
   repository: romainecr.azurecr.io/chess-tactics
-  # Quoted so YAML never reinterprets image tag characters.
+  # Quoted so YAML never reinterprets tag or digest-reference characters.
   tag: "app-d8b760f7bd2277a16d792ec4c39d158d2482445670540d88a3ac2626789318aa"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
 # (backend/server.js reads these as env; deployment.yaml wires them onto the
 # container). Written by .github/workflows/build-and-deploy.yaml on every push to
-# main — the SAME commit that bumps the image tag above — via
+# main — the SAME commit that pins the image reference above — via
 # scripts/write-build-info.mjs (a targeted per-line replace, so these are the only
 # lines it touches). Deliberately carried in the manifest, NOT baked into the
-# image: the tag is a pure content fingerprint and a content-identical rebuild is
-# skipped, so baking these in would let a reused image show a stale PR. Empty by
+# image: the deployed ref is content-addressed and can be reused, so baking these
+# in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
   prTitle: "Persistent menu shell: button column stays; Settings / Campaign / Editor drill in"
@@ -75,11 +75,15 @@ livePreview:
     url: "http://127.0.0.1:3000"
   # Request path prefixes always reverse-proxied to the backend (the stable API
   # + health stay reachable through the edge regardless of override state).
-  # chess-tactics' backend serves /api/* and /health; everything else is
+  # chess-tactics' backend serves /api/* plus liveness/readiness; everything else is
   # frontend served override-first / fresh-passthrough.
   backendPrefixes:
     - /api
+    # Stable semantic media slots are backend routes, never frontend override
+    # files. Keep them on the same backend lane in live-preview sessions too.
+    - /assets
     - /health
+    - /ready
   authorizedSubject: ""
   override:
     volumeName: live-preview-override
@@ -137,6 +141,22 @@ unitAssets:
   # Test slots copy the live catalog into their isolated Postgres + local blob
   # directory at startup because slot service accounts never receive prod identity.
   seedCatalogUrl: "https://chess.romaine.life/api/unit-catalog"
+
+# Private content-addressed storage for the generic live-media catalog. Stable
+# browser URLs stay same-origin; only the backend talks to Blob Storage.
+liveMedia:
+  containerUrl: "https://chesstacticsmedia.blob.core.windows.net/live-media"
+  # Test slots seed metadata into their isolated Postgres, then fetch immutable
+  # bytes by hash only when requested. Neither source grants the slot Azure
+  # credentials or makes production writable.
+  seedCatalogUrl: "https://chess.romaine.life/api/asset-catalog"
+  seedMediaBaseUrl: "https://chess.romaine.life/api/media"
+
+# Test-slot-only source for the required complete live placement document. The
+# backend copies it into isolated ephemeral Postgres at startup; production
+# never sets this variable and has no runtime seed path.
+propSeats:
+  seedUrl: "https://chess.romaine.life/api/prop-seats/default"
 
 ingress:
   gatewayName: main

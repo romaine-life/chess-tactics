@@ -6,7 +6,8 @@ invent; precise, consistent terms make it reproduce. Two axes: **fidelity** (the
 look) and **anatomy** (the parts). Grounded in the accepted concept's measured
 numbers so the target is concrete, not a feeling.
 
-Decision that requires this: [ADR-0014](adr/0014-ui-chrome-low-fidelity-aesthetic.md).
+Decisions that require this: [ADR-0014](adr/0014-ui-chrome-low-fidelity-aesthetic.md)
+and [ADR-0076](adr/0076-scaling-is-calibration-production-art-is-native-1x.md).
 
 ## Fidelity / aesthetic axis (the look)
 
@@ -28,9 +29,11 @@ Terms to use:
   minimal. **Do NOT request "soft anti-aliased" or "do not binarize"** — that is
   the exact instruction that produced the smooth 8,167-color reject. This line is
   the main reason this doc exists.
-- **native footprint** — author / size the element at roughly its real on-screen
-  pixel size, not 10–20× larger. High native density reads as over-smooth. (Repo
-  rule, from the tile pipeline: native footprint, no fractional downscale of pixel art.)
+- **native footprint** — use scaling to calibrate the exact real on-screen 1×
+  footprint, then regenerate/re-render the accepted element at those pixels. A
+  10–20× candidate that is downscaled offline or live remains calibration work,
+  not production. High source density reads as over-smooth because a resampler,
+  rather than the artist/generator, chooses the final pixels.
 
 ## Anatomy axis (the parts — frames / rows)
 

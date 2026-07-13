@@ -16,12 +16,11 @@ on a front screen edge (x==cols-1 or y==rows-1). One "both faces frayed" tile co
 straight edges AND the front corner, because the non-void face is occluded by the tile in
 front of it.
 """
-import os
+import argparse
+from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SURF = os.path.normpath(os.path.join(HERE, '..', 'public', 'assets', 'tiles', 'surface'))
 W, H = 96, 180
 APEX, RIGHT, FRONT, LEFT = (48, 41), (96, 68), (48, 95), (0, 68)
 
@@ -52,9 +51,9 @@ def smooth(x, k=6):
     return np.convolve(np.pad(x, k, mode='edge'), ker, mode='same')[k:-k]
 
 
-def build_edge(fam):
-    src = f'{SURF}/{fam}-0.png'
-    out = f'{SURF}/{fam}-edge.png'
+def build_edge(fam, source_dir, output_dir):
+    src = source_dir / f'{fam}-0.png'
+    out = output_dir / f'{fam}-edge.png'
     rng = np.random.default_rng(SEED.get(fam, 1))
     a = np.array(Image.open(src).convert('RGBA')).astype(float)
     alpha = a[:, :, 3]
@@ -104,7 +103,11 @@ def build_edge(fam):
 
 
 if __name__ == '__main__':
-    import sys
-    fams = sys.argv[1:] or ['grass']
-    for fam in fams:
-        build_edge(fam)
+    parser = argparse.ArgumentParser(description='Build abrupt-edge candidates in a temporary workspace.')
+    parser.add_argument('--source-dir', required=True, type=Path, help='Directory containing <family>-0.png inputs fetched from live storage')
+    parser.add_argument('--out-dir', required=True, type=Path, help='Temporary output directory; upload results with live-media-admin-client.mjs')
+    parser.add_argument('families', nargs='*', default=['grass'])
+    args = parser.parse_args()
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    for family in args.families:
+        build_edge(family, args.source_dir, args.out_dir)

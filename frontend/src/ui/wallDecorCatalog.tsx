@@ -44,6 +44,18 @@ export function WallDecorPreview({ asset, zoom = 1 }: { asset: WallDecorAsset; z
 
 export function WallDecorLab({ assetId, header }: { assetId: string | undefined; header?: ReactNode }): ReactElement {
   const asset = wallDecorAsset(assetId);
+  if (!asset) {
+    return (
+      <>
+        <section className="al-lab-main" aria-label="Wall art source preview">
+          <p className="tileset-catalog-note">The selected wall-decoration source is unavailable as a complete live catalog triplet.</p>
+        </section>
+        <aside className="tileset-view-controls" aria-label="Wall art source controls">
+          <section className="tileset-inspector-section"><h2>Controls</h2>{header}</section>
+        </aside>
+      </>
+    );
+  }
   return (
     <>
       <section className="al-lab-main" aria-label="Wall art source preview">
@@ -85,10 +97,8 @@ export function WallDecorLab({ assetId, header }: { assetId: string | undefined;
               <div><dt>Kind</dt><dd>{WALL_DECOR_KIND_LABELS[asset.kind]}</dd></div>
               <div><dt>Frame</dt><dd>{asset.width}x{asset.height}</dd></div>
               <div><dt>Faces</dt><dd>west {asset.faces.west.width}x{asset.faces.west.height} / north {asset.faces.north.width}x{asset.faces.north.height}</dd></div>
-              <div><dt>Method</dt><dd>{asset.method}</dd></div>
-              <div><dt>Path</dt><dd>{asset.src}</dd></div>
+              <div><dt>Media</dt><dd>live catalog · immutable snapshot</dd></div>
             </dl>
-            <p className="tileset-catalog-note">{asset.notes}</p>
           </div>
         </section>
       </aside>

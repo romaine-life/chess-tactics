@@ -1,47 +1,41 @@
-// The landing sound effects, as catalog items. Read-only: you audition them (the
-// Viewer plays them live), you don't edit them.
-//
-// Every effect here is AUTHORED recorded foley, sliced into one-shot take variants
-// under public/assets/sfx/<key>/ and random-picked per landing (so repeats never
-// fatigue). The card waveform is the real decoded take. A card is one SOUND set; the
-// terrain→sound MAP (which terrains use it) lives in TERRAIN_SAMPLE + the assignment
-// panel — e.g. road/bridge/dirt/pebble all reuse the stone footsteps. An earlier
-// procedurally-synthesised set was removed (we play recordings, not synth).
-//
-// Adding an effect = drop sliced takes under public/assets/sfx/<key>/ + a manifest,
-// then an entry here. cliff/rock are impassable (pieces never land), so no sound.
+// Read-only projection of the DB-owned SFX profile for Studio catalog cards.
+// Recorded bytes come from live semantic media slots; labels, descriptions,
+// per-set gains, terrain assignments, and arrival behavior come from the live
+// profile. This module owns no production defaults.
 
-import type { TerrainType } from '../core/types';
+import {
+  ASSIGNABLE_SFX_TERRAINS,
+  currentLiveSfxProfile,
+  type AssignableSfxTerrain,
+  type SfxProfile,
+} from '../core/sfxProfile';
 import type { SampleKey } from '../sfx';
 
 export interface SfxAsset {
-  /** Stable id (== the terrain it sounds for, or 'arrival'); backs catalog selection. */
   name: string;
-  /** The terrain this sounds for; omitted for the non-terrain arrival thump. */
-  terrain?: TerrainType;
-  /** The authored sample key under /assets/sfx/<key>/. */
   sampleKey: SampleKey;
   label: string;
-  /** One-line description of what the sound evokes (the Details "Character"). */
   character: string;
-  /** How it's made — the Details "Build" line. */
   build: string;
-  /** How many take variants are random-picked per landing. */
-  variantCount: number;
+  gain: number;
+  terrains: AssignableSfxTerrain[];
+  arrival: boolean;
 }
 
-// Terrains a piece can land on (cliff/rock are impassable → never a landing, so not
-// assignable). Drives the Studio terrain→sound assignment panel.
-export const ASSIGNABLE_TERRAINS: TerrainType[] = ['grass', 'water', 'sand', 'stone', 'road', 'bridge', 'dirt', 'pebble'];
+export const ASSIGNABLE_TERRAINS = [...ASSIGNABLE_SFX_TERRAINS];
 
-export const SFX_ASSETS: SfxAsset[] = [
-  { name: 'grass', terrain: 'grass', sampleKey: 'grass', label: 'Grass', character: 'Recorded dry hay/grass rustle.', build: 'Authored recording · sliced one-shot takes', variantCount: 4 },
-  { name: 'water', terrain: 'water', sampleKey: 'water', label: 'Water', character: 'Recorded splash / wet step.', build: 'Authored recording · sliced one-shot takes', variantCount: 10 },
-  { name: 'sand', terrain: 'sand', sampleKey: 'sand', label: 'Sand', character: 'Recorded soft sandy shuffle.', build: 'Authored recording · sliced one-shot takes', variantCount: 11 },
-  { name: 'stone', terrain: 'stone', sampleKey: 'stone', label: 'Stone', character: 'Recorded footsteps on stone.', build: 'Authored recording · sliced one-shot takes', variantCount: 12 },
-  // The "unit lands on the board" thump, layered over the terrain at the deploy roll-call.
-  { name: 'arrival', sampleKey: 'arrival', label: 'Arrival', character: 'Unit lands on the board — layered over terrain on deploy.', build: 'Authored recording (landing.mp3)', variantCount: 1 },
-  // Interface feedback — the tap on any button/link/switch (playInterface), gated on the
-  // Interface Sounds toggle. Not a landing, so no terrain. Silent until ui-click.mp3 is added.
-  { name: 'click', sampleKey: 'click', label: 'Interface Click', character: 'UI feedback tap on menu / button / control activation.', build: 'Authored recording (tracked WAV take)', variantCount: 1 },
-];
+export function sfxAssets(profile: SfxProfile | null = currentLiveSfxProfile()): SfxAsset[] {
+  if (!profile) return [];
+  return Object.entries(profile.soundSets)
+    .map(([key, sound]) => ({
+      name: key,
+      sampleKey: key,
+      label: sound.label,
+      character: sound.character,
+      build: sound.build,
+      gain: sound.gain,
+      terrains: ASSIGNABLE_SFX_TERRAINS.filter((terrain) => profile.terrainAssignments[terrain] === key),
+      arrival: profile.arrival.sample === key,
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label) || left.name.localeCompare(right.name));
+}

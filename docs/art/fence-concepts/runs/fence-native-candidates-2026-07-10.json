@@ -1,0 +1,92 @@
+{
+  "authority": "historical-provenance-only",
+  "runtime_authority": "backend-live-media-catalog",
+  "schema_version": 1,
+  "date": "2026-07-10",
+  "production_status": "candidate_bakeoff_review_ready_not_live",
+  "adrs": ["ADR-0040", "ADR-0076"],
+  "projection_acceptance_manifest": "docs/art/fence-concepts/candidates/2026-07-10/projection-acceptance.json",
+  "pixel_contract": {
+    "gameplay_frame": [96, 180],
+    "draw_rect": [96, 180],
+    "anchor": [48, 68],
+    "baseline_scale": 1,
+    "alpha": "binary",
+    "rail_span": 48,
+    "wood_vertical_feature_height": 16,
+    "stone_vertical_feature_height": 14,
+    "wood_post_opaque_footprint": [10, 28],
+    "stone_post_opaque_footprint": [18, 24]
+  },
+  "supplementary_proof": "docs/art/fence-concepts/candidates/2026-07-10/fence-native-candidate-contact-sheet.png",
+  "supplementary_surfaces": [
+    {
+      "kind": "studio_game_map",
+      "route": "/studio?mode=catalog&cat=fences",
+      "screenshot": "docs/art/fence-concepts/proofs/fence-native-candidate-map-proof.png"
+    },
+    {
+      "kind": "superseded_combined_board_capture",
+      "screenshot": "docs/art/fence-concepts/proofs/fence-native-candidate-editor-map-proof.png",
+      "note": "Historical five-lane board capture retained as review evidence; superseded by the durable drawable Level Editor document below."
+    }
+  ],
+  "game_surface_proof": {
+    "status": "ready",
+    "kind": "level_editor_document",
+    "route": "/editor/level?document=5d04d83f-474e-4d76-a49e-094bbe26ec0d&levelId=l6&from=studio&layer=fence&kind=fence&artReview=fence-native-candidates-2026-07-10&fenceArt=blender-stone",
+    "selector": "[data-testid=level-editor]",
+    "screenshot": "docs/art/fence-concepts/proofs/fence-art-drawing-editor-proof.png",
+    "document_id": "5d04d83f-474e-4d76-a49e-094bbe26ec0d",
+    "level_id": "l6",
+    "private_account_document": true,
+    "editable_in_handoff_browser": true,
+    "verified_cloud_revision": 3,
+    "verified_geometry": { "rails": 12, "authored_posts": 7 },
+    "canonical_scale": 1,
+    "mounting": "isolated_review_assets_not_runtime_promotion",
+    "artwork_brush": {
+      "selectable_kit_ids": ["live-wood", "live-stone", "blender-stone", "pixellab-wood", "pixellab-stone", "codex-wood", "codex-stone"],
+      "live_kit_ids": ["live-wood", "live-stone"],
+      "candidate_ids": ["blender-stone", "pixellab-wood", "pixellab-stone", "codex-wood", "codex-stone"],
+      "draw_targets": ["rails_on_any_board_edge", "posts_on_any_board_vertex"],
+      "cycling_behavior": "restyles the same authored geometry without moving or replacing it",
+      "saved_geometry": "ordinary editable wood/stone rails and authored posts; artwork-kit ids remain review-route state",
+      "initial_board": "pre-drawn durable private working copy served from the editor-document database"
+    }
+  },
+  "runtime_assets_changed": false,
+  "lanes": [
+    {
+      "id": "blender_stone",
+      "material": "stone",
+      "source": "docs/art/fence-concepts/candidates/2026-07-10/blender-stone/stone-fence-native-source.blend",
+      "render_script": "docs/art/fence-concepts/candidates/2026-07-10/blender-stone/render_blender_stone.py",
+      "outputs": [
+        {"path": "docs/art/fence-concepts/candidates/2026-07-10/blender-stone/stone-rail-e-native-96x180.png", "alpha_bbox": [48, 55, 96, 94], "sha256": "d6ac1da652c0979485d9bc8a45fd32a908a36c2517d3cd7b21877d898f160ba9"},
+        {"path": "docs/art/fence-concepts/candidates/2026-07-10/blender-stone/stone-rail-s-native-96x180.png", "alpha_bbox": [0, 55, 48, 94], "sha256": "0ae6b0276bbc892933847ac2228ba47400541e3ee8c0837716facd52060689aa"},
+        {"path": "docs/art/fence-concepts/candidates/2026-07-10/blender-stone/stone-terminal-post-native-96x180.png", "alpha_bbox": [39, 45, 57, 69], "sha256": "99929b041879308956d10e7f571624b3e17c48156d7af71a5e2187c460c00cd5"}
+      ],
+      "transform_chain": ["native Blender render at 96x180 and 100 percent", "binary alpha hardening in the Blender compositor"],
+      "spatial_resampling": false,
+      "native_scale_audit": "pass",
+      "production_eligibility": "mechanically_eligible_pending_in_app_human_review"
+    },
+    {
+      "id": "pixellab_wood_and_stone",
+      "manifest": "docs/art/fence-concepts/candidates/2026-07-10/pixellab/manifest.json",
+      "spatial_resampling": false,
+      "result": "stone post exact; PixelLab stone rail pixels accepted and frozen only for future bishop-passable art; all rails remain standard board-edge projection misses",
+      "production_eligibility": "stone_post_mechanically_eligible; stone_rail_future_bishop_passable_scope_only"
+    },
+    {
+      "id": "codex_wood_and_stone",
+      "manifest": "docs/art/fence-concepts/candidates/2026-07-10/codex/manifest.json",
+      "spatial_resampling": true,
+      "spatial_resampling_scope": "shown_game_surface_previews_only",
+      "native_scale_audit": "fail_high_resolution_design_references",
+      "production_eligibility": false
+    }
+  ],
+  "acceptance_scope_note": "This run covers gameplay sprites only. The durable Level Editor document is the primary live-board judgment and drawing surface: it offers two current-live kits plus five generated candidates, and lets a reviewer draw rails or posts anywhere before cycling the same geometry among kits. The Studio gallery and contact sheet are supplementary. PixelLab stone-rail pixels are accepted and hash-frozen only for future bishop-passable art; they do not claim the standard board-edge projection. Review mounting does not promote any candidate into the live fence family or change the current calibration-bridge production status. Preview roles still require their own native-size contract before the whole fence family can be called production-accepted."
+}

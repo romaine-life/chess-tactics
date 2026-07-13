@@ -6,21 +6,26 @@ on:
     paths:
       - backend/**
       - frontend/**
+      - packages/board-render/**
       - Dockerfile
       - .dockerignore
       - scripts/image-fingerprint.sh
+      - scripts/exact-image-approval.mjs
       - k8s/**
       - .github/workflows/build-and-deploy.yaml
   workflow_dispatch:
     inputs:
       git_ref:
-        description: "Git ref or commit SHA to build. Leave blank to build the dispatch revision."
+        description: "Git ref or commit SHA whose previously built candidate should be verified."
         required: false
         type: string
 
 permissions:
   id-token: write
   contents: write
+  # Pull-request comments use GitHub's shared issue-comment connection, even
+  # when queried through `gh pr view --json comments`.
+  issues: read
   # Resolve the merged PR (title/number/url) for the built commit — surfaced in
   # Settings → About. See the "Resolve build metadata" step.
   pull-requests: read
@@ -31,10 +36,10 @@ concurrency:
 
 jobs:
   build-and-deploy:
-    name: Build image, push, bump Helm values tag
+    name: Verify image and pin Helm digest
     if: github.event_name == 'workflow_dispatch' || vars.ARM_CLIENT_ID != ''
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+    environment: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
     env:
       REGISTRY: romainecr.azurecr.io
       IMAGE: chess-tactics
@@ -59,6 +64,10 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # Dispatch may inspect arbitrary same-repo revisions. Do not leave a
+          # write-capable token in their Git config; the gated publish step
+          # authenticates only after all target-controlled code has finished.
+          persist-credentials: false
 
       - name: Resolve requested ref
         env:
@@ -88,14 +97,19 @@ jobs:
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
           short="$(git rev-parse --short HEAD)"
-          # The PR whose squash-merge produced this commit on main. The GitHub API
-          # is the source of truth (handles merge-commit and rebase strategies);
-          # `|| echo '{}'` keeps a missing association non-fatal.
-          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/pulls" \
-            -H "Accept: application/vnd.github+json" --jq '.[0] // {}' 2>/dev/null || echo '{}')"
+          # Select exactly the merged-to-main PR whose merge commit is this
+          # revision. An API failure or ambiguous association stays empty and
+          # the production gate below fails closed.
+          prs_json="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/pulls" \
+            -H "Accept: application/vnd.github+json" 2>/dev/null || echo '[]')"
+          pr_match_count="$(printf '%s' "$prs_json" | jq --arg sha "$sha" \
+            '[.[] | select(.merged_at != null and .base.ref == "main" and .merge_commit_sha == $sha)] | length')"
+          pr_json="$(printf '%s' "$prs_json" | jq -c --arg sha "$sha" \
+            '[.[] | select(.merged_at != null and .base.ref == "main" and .merge_commit_sha == $sha)] | if length == 1 then .[0] else {} end')"
           pr_number="$(printf '%s' "$pr_json" | jq -r '.number // empty')"
           pr_title="$(printf '%s' "$pr_json" | jq -r '.title // empty')"
           pr_url="$(printf '%s' "$pr_json" | jq -r '.html_url // empty')"
+          pr_head_sha="$(printf '%s' "$pr_json" | jq -r '.head.sha // empty')"
           # Fallback for direct pushes / dispatch with no API association: parse a
           # trailing "(#NNN)" from the commit subject (our squash-merge convention).
           if [ -z "$pr_number" ]; then
@@ -110,6 +124,8 @@ jobs:
             echo "commit=${short}"
             echo "pr_number=${pr_number}"
             echo "pr_url=${pr_url}"
+            echo "pr_head_sha=${pr_head_sha}"
+            echo "pr_match_count=${pr_match_count}"
           } >> "$GITHUB_OUTPUT"
           # Title is free text — write it with a heredoc so quotes/newlines survive.
           {
@@ -119,6 +135,19 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Build metadata: ${short} — ${pr_title:-(no title)} (#${pr_number:-?})" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Require a unique merged PR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          PR_HEAD_SHA: ${{ steps.meta.outputs.pr_head_sha }}
+          PR_MATCH_COUNT: ${{ steps.meta.outputs.pr_match_count }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${PR_MATCH_COUNT}" != "1" || ! "${PR_HEAD_SHA}" =~ ^[0-9a-f]{40,64}$ ]]; then
+            echo "::error::Production deployment requires exactly one merged-to-main PR. Direct pushes, ambiguous associations, and GitHub API failures do not deploy."
+            exit 1
+          fi
+
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
@@ -127,6 +156,7 @@ jobs:
           cache-dependency-path: |
             backend/package-lock.json
             frontend/package-lock.json
+            packages/board-render/package-lock.json
 
       - name: Test app
         working-directory: backend
@@ -135,6 +165,9 @@ jobs:
         run: |
           npm ci
           npm test
+
+      - name: Test exact-image release gate
+        run: node --test scripts/exact-image-approval.test.mjs
 
       - name: Azure Login
         uses: azure/login@v3
@@ -147,7 +180,6 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Compute release version (patch) — sourced from the prod deploy branch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
@@ -166,14 +198,17 @@ jobs:
           prod_ver="$(git show origin/prod:k8s/Chart.yaml 2>/dev/null \
             | sed -n 's/^appVersion:[[:space:]]*"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' | head -1)"
           base_ver="$(node -p "require('./frontend/package.json').version")"
-          floor="$(printf '%s\n%s\n' "${prod_ver:-0.0.0}" "${base_ver}" | sort -V | tail -1)"
+          backend_ver="$(node -p "require('./backend/package.json').version")"
+          board_render_ver="$(node -p "require('./packages/board-render/package.json').version")"
+          floor="$(printf '%s\n%s\n%s\n%s\n' "${prod_ver:-0.0.0}" "${base_ver}" "${backend_ver}" "${board_render_ver}" | sort -V | tail -1)"
           IFS=. read -r MA MI PA <<<"${floor}"
           new_version="${MA}.${MI}.$((PA + 1))"
-          # Bake into THIS checkout only (frontend + backend), for the build; not committed to main.
+          # Bake into THIS checkout only, for the build; not committed to main.
           (cd frontend && npm version "${new_version}" --no-git-tag-version --allow-same-version >/dev/null)
           (cd backend  && npm version "${new_version}" --no-git-tag-version --allow-same-version >/dev/null)
+          (cd packages/board-render && npm version "${new_version}" --no-git-tag-version --allow-same-version >/dev/null)
           echo "APP_VERSION=${new_version}" >> "$GITHUB_ENV"
-          echo "Release v${new_version} (prod ${prod_ver:-none} / main floor ${base_ver})" >> "$GITHUB_STEP_SUMMARY"
+          echo "Release v${new_version} (prod ${prod_ver:-none} / package floors ${base_ver}, ${backend_ver}, ${board_render_ver})" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compute image fingerprint
         id: fingerprint
@@ -185,7 +220,9 @@ jobs:
             --image app \
             --dockerfile Dockerfile \
             --context . \
-            --paths 'Dockerfile .dockerignore backend frontend' \
+            --paths 'Dockerfile .dockerignore backend frontend packages/board-render' \
+            --platform linux/amd64 \
+            --base-images 'node:20-alpine' \
             | tee "${output}"
           tag="$(awk -F= '$1 == "proof_tag" { print $2 }' "${output}")"
           test -n "${tag}" || { echo "::error::image fingerprint did not emit proof_tag"; exit 1; }
@@ -195,35 +232,60 @@ jobs:
       - name: Login to ACR
         run: az acr login --name romainecr
 
-      - name: Check existing image tag
-        id: image
+      - name: Resolve immutable deployment image
+        id: deployment-image
         shell: bash
         run: |
           set -euo pipefail
-          if az acr repository show-tags \
-              --name romainecr \
-              --repository "${IMAGE}" \
-              --query "[?@=='${TAG}'] | [0]" \
-              --output tsv | grep -qx "${TAG}"; then
-            echo "target_exists=true" >>"${GITHUB_OUTPUT}"
-          else
-            echo "target_exists=false" >>"${GITHUB_OUTPUT}"
+          candidate="$(az acr repository show \
+            --name romainecr \
+            --image "${IMAGE}:${TAG}" \
+            --output json 2>/dev/null || true)"
+          candidate_json="${candidate:-null}"
+          canonical_digest="$(printf '%s' "${candidate_json}" | jq -r '.digest // empty')"
+          write_enabled="$(printf '%s' "${candidate_json}" | jq -r '.changeableAttributes.writeEnabled')"
+          delete_enabled="$(printf '%s' "${candidate_json}" | jq -r '.changeableAttributes.deleteEnabled')"
+          if [[ ! "${canonical_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::The exact fingerprint image ${REGISTRY}/${IMAGE}:${TAG} does not exist. Build and verify the candidate image before deployment."
+            exit 1
+          fi
+          if [[ "${write_enabled}" != "false" || "${delete_enabled}" != "false" ]]; then
+            echo "::error::Candidate identity ${REGISTRY}/${IMAGE}:${TAG} is not registry-locked against overwrite and deletion. Re-run Docker Build Check and verify the locked candidate."
+            exit 1
           fi
 
-      - name: Build and push image
-        if: steps.image.outputs.target_exists != 'true'
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ env.TAG }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=max
+          image_ref="${REGISTRY}/${IMAGE}@${canonical_digest}"
+          echo "digest=${canonical_digest}" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_DIGEST=${canonical_digest}" >> "$GITHUB_ENV"
+          echo "DEPLOY_IMAGE_REF=${image_ref}" >> "$GITHUB_ENV"
+          echo "Resolved immutable candidate ${image_ref}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require explicit approval of the exact image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          PR_HEAD_SHA: ${{ steps.meta.outputs.pr_head_sha }}
+          FINGERPRINT: ${{ steps.fingerprint.outputs.fingerprint }}
+          IMAGE_DIGEST: ${{ steps.deployment-image.outputs.digest }}
+          TRUSTED_APPROVER_IDS: ${{ vars.EXACT_IMAGE_APPROVER_IDS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            | node scripts/exact-image-approval.mjs verify \
+                --comments - \
+                --head "${PR_HEAD_SHA}" \
+                --fingerprint "${FINGERPRINT}" \
+                --digest "${IMAGE_DIGEST}" \
+                --trusted-user-ids "${TRUSTED_APPROVER_IDS}"
+          echo "The exact owner-approved digest is ${IMAGE_DIGEST}." >>"${GITHUB_STEP_SUMMARY}"
 
       - name: Publish tag + version to the prod deploy branch
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
+          GH_TOKEN: ${{ github.token }}
           PR_TITLE: ${{ steps.meta.outputs.pr_title }}
           PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
           PR_URL: ${{ steps.meta.outputs.pr_url }}
@@ -232,19 +294,21 @@ jobs:
           set -euo pipefail
           # DEPLOY STATE goes to the long-lived orphan `prod` branch, never main. prod carries
           # ONLY k8s/, so we sync main's chart onto it (template/values edits from PRs flow
-          # through), then pin the freshly-built image tag + appVersion + build provenance, and
+          # through), then pin the already-verified image digest + appVersion + build provenance, and
           # commit there. ArgoCD tracks `prod`. main takes zero bot commits → it stays protected.
           # No [skip ci] needed: this workflow triggers on main, so a prod push starts nothing.
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          gh auth setup-git
           git fetch --force origin '+refs/heads/prod:refs/remotes/origin/prod'
           git worktree add --detach prod-deploy origin/prod
           rm -rf prod-deploy/k8s
           cp -r k8s prod-deploy/k8s
-          # Quote so YAML never reinterprets tag characters.
-          sed -i "s|^  tag: .*|  tag: \"${TAG}\"|" prod-deploy/k8s/values.yaml
-          grep -qx "  tag: \"${TAG}\"" prod-deploy/k8s/values.yaml \
-            || { echo "::error::prod values.yaml image tag was not set"; exit 1; }
+          # `tag` accepts a complete image ref when it contains `/`; pinning the
+          # digest keeps Argo and the trainer on the exact owner-verified manifest.
+          sed -i "s|^  tag: .*|  tag: \"${DEPLOY_IMAGE_REF}\"|" prod-deploy/k8s/values.yaml
+          grep -qx "  tag: \"${DEPLOY_IMAGE_REF}\"" prod-deploy/k8s/values.yaml \
+            || { echo "::error::prod values.yaml image digest was not set"; exit 1; }
           sed -i "s|^appVersion: .*|appVersion: \"${APP_VERSION}\"|" prod-deploy/k8s/Chart.yaml
           grep -qx "appVersion: \"${APP_VERSION}\"" prod-deploy/k8s/Chart.yaml \
             || { echo "::error::prod Chart.yaml appVersion was not set"; exit 1; }
@@ -253,7 +317,7 @@ jobs:
           if git -C prod-deploy diff --cached --quiet; then
             echo "No deploy change to publish to prod"
           else
-            git -C prod-deploy commit -m "deploy: v${APP_VERSION} — image ${TAG}"
+            git -C prod-deploy commit -m "deploy: v${APP_VERSION} — image ${IMAGE_DIGEST}"
             git -C prod-deploy push origin HEAD:prod
           fi
           git worktree remove --force prod-deploy

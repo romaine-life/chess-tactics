@@ -1,7 +1,7 @@
 import { type ReactElement, type ReactNode, type CSSProperties } from 'react';
-import { SCROLLBAR_ASSETS } from './scrollbarCatalog';
+import { liveScrollbarAssets } from './scrollbarCatalog';
 
-// Read-only catalog grid for scrollbar-grip candidates. Each card shows the sprite centered
+// Read-only live catalog grid for scrollbar grips. Each card shows the sprite centered
 // (a scrollbar grip is a single element, not a tiled surface). Reuses the shared studio card +
 // surface-swatch classes so it matches the Tiles / Units / Surfaces grids.
 export function ScrollbarLibraryStudio({
@@ -16,7 +16,7 @@ export function ScrollbarLibraryStudio({
   onSelect: (name: string) => void;
 }): ReactElement {
   const q = search.trim().toLowerCase();
-  const visible = SCROLLBAR_ASSETS.filter((s) => !q || [s.label, s.approach, s.material].join(' ').toLowerCase().includes(q));
+  const visible = liveScrollbarAssets().filter((s) => !q || [s.label, s.name, s.kind].join(' ').toLowerCase().includes(q));
   return (
     <div className="tileset-studio-grid surface-grid" aria-label="Scrollbars">
       {visible.map((s) => (
@@ -44,12 +44,12 @@ export function ScrollbarLibraryStudio({
           <span className="tileset-studio-card-meta">
             <span className="tileset-studio-card-text">
               <strong>{s.label}</strong>
-              <em>{s.preferred ? `${s.material} · preferred` : s.material}</em>
+              <em>{s.kind} · {s.width} × {s.height}</em>
             </span>
           </span>
         </button>
       ))}
-      {visible.length === 0 ? <p className="tileset-studio-empty">No scrollbars match.</p> : null}
+      {visible.length === 0 ? <p className="tileset-studio-empty">No live scrollbars match.</p> : null}
     </div>
   );
 }
@@ -59,7 +59,23 @@ export function ScrollbarLibraryStudio({
 // (ADR-0029: viewing surfaces present the asset at optimal interactivity; read-only = not
 // editable, not lifeless). Custom ::-webkit-scrollbar skins render in Chrome (the app's target).
 export function ScrollbarViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
-  const s = SCROLLBAR_ASSETS.find((x) => x.name === name) ?? SCROLLBAR_ASSETS[0];
+  const assets = liveScrollbarAssets();
+  const s = assets.find((x) => x.name === name) ?? assets[0];
+  if (!s) {
+    return (
+      <>
+        <section className="al-lab-main surface-view-main" aria-label="Scrollbar test">
+          <p className="al-lab-empty">No dimensioned scrollbar grip is available in the live media catalog.</p>
+        </section>
+        <aside className="tileset-view-controls" aria-label="Scrollbar details">
+          <section className="tileset-inspector-section">
+            <h2>Controls</h2>
+            <div className="tileset-control-stack">{header}</div>
+          </section>
+        </aside>
+      </>
+    );
+  }
   const skin =
     `.scrollbar-demo::-webkit-scrollbar { width: 18px; }\n` +
     `.scrollbar-demo::-webkit-scrollbar-track { background: #06121f; border-radius: 2px; margin: 3px; }\n` +
@@ -90,9 +106,9 @@ export function ScrollbarViewer({ name, header }: { name?: string; header?: Reac
             <p className="tileset-catalog-note">Scroll the panel — drag the grip or wheel over it — to test how it behaves.</p>
             <dl className="al-meta">
               <div><dt>Scrollbar</dt><dd>{s.label}</dd></div>
-              <div><dt>Approach</dt><dd>{s.approach}</dd></div>
-              <div><dt>Material</dt><dd>{s.material}</dd></div>
-              <div><dt>Default</dt><dd>{s.preferred ? 'preferred' : '—'}</dd></div>
+              <div><dt>Preview</dt><dd>{s.kind}</dd></div>
+              <div><dt>Native size</dt><dd>{s.width} × {s.height}</dd></div>
+              <div><dt>Semantic slot</dt><dd>{s.slot}</dd></div>
             </dl>
           </div>
         </section>

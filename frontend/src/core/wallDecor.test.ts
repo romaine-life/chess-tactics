@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  applyLiveMediaCatalog,
+  resetLiveMediaCatalog,
   WALL_DECOR_ASSETS,
   WALL_DECOR_KIND_LABELS,
   WALL_DECOR_KINDS,
-} from './wallDecor';
+} from '@chess-tactics/board-render';
+import { testGroundCoverCatalog, testWallDecorMediaSlots } from '../test/liveMediaCatalog';
 
 const MIRROR_IDS = [
   'mirror-keep',
@@ -12,6 +15,9 @@ const MIRROR_IDS = [
   'mirror-witch-eye',
   'mirror-grand-gallery',
 ] as const;
+
+beforeAll(() => applyLiveMediaCatalog(testGroundCoverCatalog(testWallDecorMediaSlots())));
+afterAll(() => resetLiveMediaCatalog());
 
 describe('wall decor catalog', () => {
   it('exposes mirrors as a labeled catalog kind', () => {
@@ -27,7 +33,7 @@ describe('wall decor catalog', () => {
       expect(asset?.kind, id).toBe('mirror');
       if (asset?.kind !== 'mirror') continue;
       for (const face of ['west', 'north'] as const) {
-        expect(asset.faces[face].glassSrc, `${id}/${face}`).toMatch(/-glass\.png$/);
+        expect(asset.faces[face].glassSrc, `${id}/${face}`).toMatch(/^\/api\/media\/[0-9a-f]{64}$/);
         expect(asset.faces[face].aperture.length, `${id}/${face}`).toBeGreaterThanOrEqual(6);
       }
     }

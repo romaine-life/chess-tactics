@@ -4,24 +4,35 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
+import { resolveTerrainSideExposure } from '@chess-tactics/board-render';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
+import {
+  FENCE_ART_REVIEW_ID,
+  transformFenceArtReviewOps,
+} from './fenceArtReview';
+import {
+  cycleFenceArtKit,
+  fenceArtKit,
+  fenceArtKits as projectFenceArtKits,
+  fenceArtworkBackendReview,
+  type FenceArtKit,
+} from './fenceCandidateProfiles';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { BoardGridLayer } from '../render/BoardGridLayer';
 import { BoardTerrainLayer, terrainCanvasMacroTiles, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
 import { studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
-import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
-import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { PaletteSelect } from './shared/PaletteSelect';
+import { HouseSelect } from './shared/HouseSelect';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import {
   levelEditorHrefWithRouteState,
@@ -54,6 +65,9 @@ import {
 } from './levelEditorPersistence';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { HomepageBackdrop } from './HomepageBackdrop';
+import { useInstalledChromeCss } from './useInstalledChromeCss';
+import { LevelEditorControlsPanel, LevelEditorEventsOverlay } from './LevelEditorChromeConsumers';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
 import {
   directionCompassCells,
   hasDirectionSprite,
@@ -62,6 +76,8 @@ import {
   rookDirections,
   unitAssets,
   unitAssetById,
+  unitArtForId,
+  unitFamilyForId,
   type Direction,
   type Faction,
   type UnitAsset,
@@ -73,8 +89,8 @@ import {
   type StudioAsset,
   type StudioFamily,
 } from './studioBoard';
-import { featureThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
-import { resolveFeatureOverlays, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
+import { featureThumbSrc, fencePostThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
+import { resolveFeatureOverlays, resolveFencePosts, fenceVertexKey as canonicalFenceVertexKey, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, wallArtBadge, wallArtIdOrDefault, wallArtItems, wallArtLabel, wallArtPlacementSpanAtEdge, wallArtSpanEdges, wallArtSpanForId, type WallArtId } from '../core/wallArt';
 import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
@@ -107,6 +123,7 @@ import { OBJECTIVE_LABEL } from '../core/objectives';
 import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, mapSaveError } from '../campaign/save';
 import { fetchMeStatus, goSignIn, signInHref, type AuthUser } from '../net/auth';
+import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
   autosaveEditorDocument,
   autosaveEditorDocumentOnPageHide,
@@ -138,6 +155,29 @@ type BoardUnitPlacement = {
 type MoveSubject =
   | { kind: 'unit'; x: number; y: number }
   | { kind: 'prop'; x: number; y: number; propId: string };
+
+type FencePaintTarget = 'rail' | 'post';
+type FenceVertexCorner = 'back' | 'right' | 'front' | 'left';
+
+const FENCE_VERTEX_CORNERS: ReadonlyArray<{
+  id: FenceVertexCorner;
+  label: string;
+  dx: 0 | 1;
+  dy: 0 | 1;
+  unitX: 0 | 0.5 | 1;
+  unitY: 0 | 0.5 | 1;
+  hintTop: string;
+}> = [
+  { id: 'back', label: 'Back', dx: 0, dy: 0, unitX: 0.5, unitY: 0, hintTop: 'var(--iso-tile-surface-top)' },
+  { id: 'right', label: 'Right', dx: 1, dy: 0, unitX: 1, unitY: 0.5, hintTop: 'calc(var(--iso-tile-surface-top) + var(--iso-tile-height) / 2)' },
+  { id: 'front', label: 'Front', dx: 1, dy: 1, unitX: 0.5, unitY: 1, hintTop: 'calc(var(--iso-tile-surface-top) + var(--iso-tile-height))' },
+  { id: 'left', label: 'Left', dx: 0, dy: 1, unitX: 0, unitY: 0.5, hintTop: 'calc(var(--iso-tile-surface-top) + var(--iso-tile-height) / 2)' },
+];
+
+const fenceVertexKey = (x: number, y: number, corner: FenceVertexCorner): string => {
+  const target = FENCE_VERTEX_CORNERS.find((candidate) => candidate.id === corner)!;
+  return canonicalFenceVertexKey(x + target.dx, y + target.dy);
+};
 
 type BoardViewOverlayFlags = {
   showMoves: boolean;
@@ -204,6 +244,8 @@ function StudioEditableBoard({
   macroTiles: placedMacroTiles = [],
   features: placedFeatures = {},
   fences: placedFences = {},
+  fencePosts: placedFencePosts = {},
+  fenceArtwork,
   walls: placedWalls = {},
   wallArt: placedWallArt = {},
   wallArtBrushId,
@@ -211,10 +253,13 @@ function StudioEditableBoard({
   coverTypes: placedCoverTypes = {},
   coverSeed = 1234,
   fenceTool = false,
+  fencePaintTarget = 'rail',
   wallTool = false,
   wallArtTool = false,
   onPaintEdge,
   onEraseEdge,
+  onPaintPost,
+  onErasePost,
   onPaintWallEdge,
   onEraseWallEdge,
   onPaintWallArtEdge,
@@ -255,6 +300,10 @@ function StudioEditableBoard({
   features?: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
   /** Edge fences keyed by shared-edge key (roadEdgeKey) -> fence material — drawn as edge rails. */
   fences?: Record<string, FenceMaterial>;
+  /** Positive authored fence posts keyed by logical grid vertex "x,y" -> material. */
+  fencePosts?: Record<string, FenceMaterial>;
+  /** Exact route-gated artwork kit; geometry remains ordinary wood/stone board data. */
+  fenceArtwork?: FenceArtKit;
   /** Edge walls keyed by shared-edge key (roadEdgeKey) -> material; valid only on the north/west map perimeter. */
   walls?: Record<string, WallMaterial>;
   /** Wall art keyed by anchor edge; spans across N north/west perimeter wall edges. */
@@ -269,6 +318,8 @@ function StudioEditableBoard({
   coverSeed?: number;
   /** When true, the brush paints EDGES (fences) not cells: hover picks the nearest diamond edge. */
   fenceTool?: boolean;
+  /** Which fence primitive the fence brush targets: a diamond edge rail or a logical grid vertex post. */
+  fencePaintTarget?: FencePaintTarget;
   /** When true, the brush paints EDGES (walls) not cells: hover picks the nearest diamond edge. */
   wallTool?: boolean;
   /** When true, the brush paints EDGES (wall art) not cells: hover picks the nearest diamond edge. */
@@ -277,6 +328,10 @@ function StudioEditableBoard({
   onPaintEdge?: (edgeKey: string) => void;
   /** Remove a fence from an edge. */
   onEraseEdge?: (edgeKey: string) => void;
+  /** Add an authored post at a logical grid vertex. */
+  onPaintPost?: (vertexKey: string) => void;
+  /** Remove only the authored post at a vertex; an automatic open-end post may remain. */
+  onErasePost?: (vertexKey: string) => void;
   /** Add a wall on an edge; only the northmost and westmost map edges render. */
   onPaintWallEdge?: (edgeKey: string) => void;
   /** Remove a wall from an edge. */
@@ -321,9 +376,16 @@ function StudioEditableBoard({
   // The unit/prop picked up under the Move tool, held while the pointer drags to a destination.
   // It's state (not a ref) so source/target highlights re-render as you drag.
   const [movingFrom, setMovingFrom] = useState<MoveSubject | null>(null);
-  // Edge-fence painting: which diamond side is under the cursor (the rail will drop there).
+  // Fence painting previews either the nearest diamond side (rail) or nearest logical corner
+  // (post). A shared corner canonicalizes to one vertex key from every adjoining tile.
   const [hoverEdge, setHoverEdge] = useState<{ x: number; y: number; edge: FeatureEdge } | null>(null);
-  const edgeTool = fenceTool || wallTool || wallArtTool;
+  const [hoverPost, setHoverPost] = useState<{ x: number; y: number; corner: FenceVertexCorner } | null>(null);
+  const fencePostTool = fenceTool && fencePaintTarget === 'post';
+  const placementTargetTool = fenceTool || wallTool || wallArtTool;
+  useEffect(() => {
+    setHoverEdge(null);
+    setHoverPost(null);
+  }, [fencePaintTarget]);
   const wallBounds = { cols, rows };
   const applyTool = (x: number, y: number) => {
     if (tool === 'brush') onPaint(x, y);
@@ -348,6 +410,25 @@ function StudioEditableBoard({
     const dy = e.clientY - (rect.top + rect.height / 2);
     return dy < 0 ? (dx >= 0 ? 'N' : 'W') : (dx >= 0 ? 'E' : 'S');
   };
+  // Normalize against the hit diamond before comparing distances. Its rendered frame is wider
+  // than it is tall, so raw screen-pixel distance would make Back/Front swallow the side corners.
+  const vertexAtPointer = (e: { currentTarget: Element; clientX: number; clientY: number }): FenceVertexCorner => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / (rect.width || 1);
+    const py = (e.clientY - rect.top) / (rect.height || 1);
+    let nearest = FENCE_VERTEX_CORNERS[0];
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const candidate of FENCE_VERTEX_CORNERS) {
+      const dx = px - candidate.unitX;
+      const dy = py - candidate.unitY;
+      const distance = dx * dx + dy * dy;
+      if (distance < nearestDistance) {
+        nearest = candidate;
+        nearestDistance = distance;
+      }
+    }
+    return nearest.id;
+  };
   // Toggle an edge barrier on the diamond edge under the cursor (brush adds, erase/right-click removes).
   const applyBarrierAt = (x: number, y: number, edge: FeatureEdge, erasing: boolean): void => {
     const { key } = edgeTarget(x, y, edge);
@@ -363,6 +444,11 @@ function StudioEditableBoard({
     }
     if (erasing) onEraseEdge?.(key);
     else onPaintEdge?.(key);
+  };
+  const applyFencePostAt = (x: number, y: number, corner: FenceVertexCorner, erasing: boolean): void => {
+    const key = fenceVertexKey(x, y, corner);
+    if (erasing) onErasePost?.(key);
+    else onPaintPost?.(key);
   };
   // The two diamond-side endpoints (in a 0..100 viewBox over the hit diamond) for the edge hint.
   const EDGE_LINE: Record<FeatureEdge, [number, number, number, number]> = {
@@ -393,12 +479,17 @@ function StudioEditableBoard({
   };
 
   const hoverBarrierEdge = (x: number, y: number, edge: FeatureEdge): void => {
+    setHoverPost(null);
     const { key } = edgeTarget(x, y, edge);
     if ((wallTool || wallArtTool) && !isNorthWestBoundaryWallEdge(key, { cols, rows })) {
       setHoverEdge(null);
       return;
     }
     setHoverEdge({ x, y, edge });
+  };
+  const hoverFencePost = (x: number, y: number, corner: FenceVertexCorner): void => {
+    setHoverEdge(null);
+    setHoverPost({ x, y, corner });
   };
 
   const finishMoveAt = (to: { x: number; y: number } | null): void => {
@@ -427,7 +518,10 @@ function StudioEditableBoard({
       const key = `${x},${y}`;
       const assetId = placed[key];
       const asset = assetId ? resolveAsset(assetId) : undefined;
-      const drawSide = !!asset && (!occupiedTiles.has(`${x + 1},${y}`) || !occupiedTiles.has(`${x},${y + 1}`));
+      const sideExposure = resolveTerrainSideExposure(
+        { x, y },
+        (nextX, nextY) => occupiedTiles.has(`${nextX},${nextY}`),
+      );
       terrainCells.push(studioTerrainCanvasCell({
         key,
         x,
@@ -436,7 +530,7 @@ function StudioEditableBoard({
         feature: placedFeatures[key],
         animationFrame,
         hidden,
-        drawSide,
+        sideExposure,
       }));
       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
       // Move-tool feedback reuses the built-in diamond tile-ring (not an axis-aligned box): the
@@ -445,7 +539,10 @@ function StudioEditableBoard({
       const isMoveFrom = tool === 'move' && movingCells.has(key);
       const isMoveTo = tool === 'move' && !!movingFrom && !isMoveFrom && hoverCell?.x === x && hoverCell?.y === y;
       const moveDroppable = isMoveTo && movingFrom ? (canMoveTo ? canMoveTo(movingFrom, { x, y }) : true) : false;
-      const fenceHere = edgeTool && hoverEdge?.x === x && hoverEdge?.y === y ? hoverEdge.edge : null;
+      const fenceHere = placementTargetTool && !fencePostTool && hoverEdge?.x === x && hoverEdge?.y === y ? hoverEdge.edge : null;
+      const postHere = fencePostTool && hoverPost?.x === x && hoverPost?.y === y
+        ? FENCE_VERTEX_CORNERS.find((corner) => corner.id === hoverPost.corner) ?? null
+        : null;
       const tacticalState = tacticalPreview ? [
         tacticalPreview.promotionZoneSet.has(key) ? 'is-promotion-zone' : '',
         tacticalPreview.moveSet.has(key) ? 'is-move' : '',
@@ -474,6 +571,13 @@ function StudioEditableBoard({
                 <line x1={EDGE_LINE[fenceHere][0]} y1={EDGE_LINE[fenceHere][1]} x2={EDGE_LINE[fenceHere][2]} y2={EDGE_LINE[fenceHere][3]} />
               </svg>
             ) : null}
+            {postHere ? (
+              <span
+                className="le-fence-post-hint"
+                style={{ left: `${postHere.unitX * 100}%`, top: postHere.hintTop }}
+                aria-hidden="true"
+              />
+            ) : null}
             {tacticalState ? <span className={`le-tactical-cell ${tacticalState}`} aria-hidden="true" /> : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             {isMoveFrom ? <span className="tileset-cell-ring is-move-from" aria-hidden="true" /> : null}
@@ -483,9 +587,9 @@ function StudioEditableBoard({
               onPointerDown={(event) => {
                 if (event.button === 2) return; // right-click erases via onContextMenu
                 event.stopPropagation(); // don't let the ViewPane start a pan while editing
-                if (edgeTool && (tool === 'brush' || tool === 'erase')) {
-                  // Barrier tools paint EDGES: toggle the diamond side under the cursor.
-                  applyBarrierAt(x, y, edgeAtPointer(event), tool === 'erase');
+                if (placementTargetTool && (tool === 'brush' || tool === 'erase')) {
+                  if (fencePostTool) applyFencePostAt(x, y, vertexAtPointer(event), tool === 'erase');
+                  else applyBarrierAt(x, y, edgeAtPointer(event), tool === 'erase');
                   return;
                 }
                 if (tool === 'move') {
@@ -506,15 +610,23 @@ function StudioEditableBoard({
                 if (tool !== 'select') paintingRef.current = true;
                 applyTool(x, y);
               }}
-              onPointerEnter={() => { setHoverCell({ x, y }); if (!edgeTool && paintingRef.current) applyTool(x, y); }}
-              onPointerMove={edgeTool ? (event) => hoverBarrierEdge(x, y, edgeAtPointer(event)) : undefined}
+              onPointerEnter={() => { setHoverCell({ x, y }); if (!placementTargetTool && paintingRef.current) applyTool(x, y); }}
+              onPointerMove={placementTargetTool ? (event) => {
+                if (fencePostTool) hoverFencePost(x, y, vertexAtPointer(event));
+                else hoverBarrierEdge(x, y, edgeAtPointer(event));
+              } : undefined}
               onPointerUp={(event) => {
                 if (tool === 'move' && movingFrom) {
                   event.stopPropagation();
                   finishMoveAt({ x, y });
                 }
               }}
-              onContextMenu={(event) => { event.preventDefault(); if (edgeTool) applyBarrierAt(x, y, edgeAtPointer(event), true); else onErase(x, y); }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                if (fencePostTool) applyFencePostAt(x, y, vertexAtPointer(event), true);
+                else if (placementTargetTool) applyBarrierAt(x, y, edgeAtPointer(event), true);
+                else onErase(x, y);
+              }}
             />
           </>
         ),
@@ -776,6 +888,7 @@ function StudioEditableBoard({
     coverTypes: placedCoverTypes,
     features: placedFeatures as EditorBoard['features'],
     fences: placedFences,
+    fencePosts: placedFencePosts,
     walls: placedWalls,
     wallArt: placedWallArt,
     featureCuts: {},
@@ -796,11 +909,18 @@ function StudioEditableBoard({
             cells={terrainCells}
             macroTiles={hidden?.tile ? [] : terrainCanvasMacroTiles(placedMacroTiles)}
           />
-          <BoardSceneLayer board={sceneBoard} hidden={hidden} coverSeed={coverSeed} ambientCover={false} omitTerrain />
+          <BoardSceneLayer
+            board={sceneBoard}
+            hidden={hidden}
+            coverSeed={coverSeed}
+            ambientCover={false}
+            omitTerrain
+            transformOps={fenceArtwork ? ((ops, board) => transformFenceArtReviewOps(ops, board, fenceArtwork)) : undefined}
+          />
         </>
       )}
       onPointerUp={endInteraction}
-      onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
+      onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); setHoverPost(null); }}
     >
       {showGrid ? <BoardGridLayer cells={cells} /> : null}
       {overlaySprites}
@@ -1037,7 +1157,7 @@ const CHESS_MATERIAL_POINT_VALUE: Record<PlayablePieceType, number> = {
 };
 const MATERIAL_VALUE_NOTE = 'P=1 / N,B=3 / R=5 / Q=9';
 const materialPointsForUnitId = (unitId: string): number => {
-  const type = unitAssetById(unitId)?.family;
+  const type = unitFamilyForId(unitId);
   return type ? CHESS_MATERIAL_POINT_VALUE[type] : 0;
 };
 
@@ -1205,7 +1325,7 @@ function uniqueEventName(base: string, events: readonly LevelEvent[]): string {
 }
 
 function SelectFrame({ children, className = '' }: { children: ReactNode; className?: string }): ReactElement {
-  return <div className={`le-select-wrap ${className}`.trim()}>{children}</div>;
+  return <div data-chrome-unit="inner-dropdown" className={chromeUnitClassNames('inner-dropdown', 'le-select-wrap', className)}>{children}</div>;
 }
 
 function LevelEventsEditor({ value, zones, onChange, templates }: {
@@ -1266,15 +1386,15 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
         {value.length === 0 ? <p className="le-board-warning">No events yet.</p> : null}
         <div className="le-md-rules">
           {value.map((item, index) => (
-            <button type="button" key={index} className={`le-md-item ${index === selected ? 'active' : ''}`.trim()} onClick={() => setSel(index)}>
+            <button type="button" key={index} data-chrome-unit="inner-list-row" className={chromeUnitClassNames('inner-list-row', 'le-md-item', index === selected && 'active')} onClick={() => setSel(index)}>
               <span className="le-md-item-name">{eventName(item, index)}</span>
               <span className="le-md-item-out">{primaryEventAction(item)?.kind ?? 'event'}</span>
             </button>
           ))}
         </div>
         <div className="le-cond-add le-rule-add">
-          <button type="button" className="le-seg-btn le-add-event" onClick={addSpawn}>+ Spawn</button>
-          <button type="button" className="le-seg-btn le-add-event" onClick={addPromotion}>+ Promotion</button>
+          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-add-event')} onClick={addSpawn}>+ Spawn</button>
+          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-add-event')} onClick={addPromotion}>+ Promotion</button>
         </div>
       </div>
       <div className="le-md-detail">
@@ -1325,7 +1445,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               </div>
             ))}
             <div className="le-rule-then">
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger', 'le-rule-remove')} onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : event && promotionTrigger && promotesTriggeringUnit ? (
@@ -1372,7 +1492,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               <output className="le-event-readout" aria-label="Event action">Promote</output>
             </div>
             <div className="le-rule-then">
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger', 'le-rule-remove')} onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : event && castleAction ? (
@@ -1400,7 +1520,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               this event and re-add the Castling template.
             </p>
             <div className="le-rule-then">
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger', 'le-rule-remove')} onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : event && chessDrawsAction ? (
@@ -1426,7 +1546,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
               for the training AI.
             </p>
             <div className="le-rule-then">
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeEvent(selected)}>Remove event</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger', 'le-rule-remove')} onClick={() => removeEvent(selected)}>Remove event</button>
             </div>
           </div>
         ) : <p className="le-board-note">Select an event or add one on the left.</p>}
@@ -1460,7 +1580,8 @@ function DirectionPopover({ value, label, onChange }: {
     >
       <button
         type="button"
-        className="le-faction-select le-direction-trigger"
+        data-chrome-unit="inner-tool-square"
+        className={chromeUnitClassNames('inner-tool-square', 'le-faction-select', 'le-direction-trigger')}
         aria-label={label}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -1477,7 +1598,8 @@ function DirectionPopover({ value, label, onChange }: {
               <button
                 key={cell}
                 type="button"
-                className={`unit-facing-cell le-direction-cell${value === cell ? ' is-active' : ''}`}
+                data-chrome-unit="inner-tool-square"
+                className={chromeUnitClassNames('inner-tool-square', 'unit-facing-cell', 'le-direction-cell', value === cell && 'is-active')}
                 role="radio"
                 aria-checked={value === cell}
                 title={`Face ${cell}`}
@@ -1575,15 +1697,21 @@ function FenceConnections({
   cols,
   rows,
   fences,
+  posts,
   onPaint,
   onErase,
+  onPaintPost,
+  onErasePost,
 }: {
   cell: { x: number; y: number };
   cols: number;
   rows: number;
   fences: Record<string, FenceMaterial>;
+  posts: Record<string, FenceMaterial>;
   onPaint: (edge: string) => void;
   onErase: (edge: string) => void;
+  onPaintPost: (vertex: string) => void;
+  onErasePost: (vertex: string) => void;
 }): ReactElement {
   const V = { apex: [64, 14], right: [114, 48], bottom: [64, 82], left: [14, 48] } as const;
   const EDGE_GEO: Record<string, readonly [readonly [number, number], readonly [number, number]]> = {
@@ -1592,8 +1720,15 @@ function FenceConnections({
     S: [V.bottom, V.left],
     W: [V.left, V.apex],
   };
+  const VERTEX_GEO: Record<FenceVertexCorner, readonly [number, number]> = {
+    back: V.apex,
+    right: V.right,
+    front: V.bottom,
+    left: V.left,
+  };
+  const resolvedPosts = resolveFencePosts(fences, posts);
   return (
-    <svg className="le-roadconn" viewBox="0 0 128 96" role="group" aria-label="Fence edges for the selected tile">
+    <svg className="le-roadconn" viewBox="0 0 128 96" role="group" aria-label="Fence rails and posts for the selected tile">
       <polygon points={`${V.apex} ${V.right} ${V.bottom} ${V.left}`} fill="rgba(8,20,28,.55)" stroke="rgba(82,142,170,.35)" strokeWidth="1" />
       {FEATURE_DIRS.map((dir) => {
         const nx = cell.x + dir.dx;
@@ -1625,6 +1760,35 @@ function FenceConnections({
           >
             <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="20" strokeLinecap="round" />
             <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={material ? '7' : '5'} strokeLinecap="round" strokeDasharray={material ? undefined : neighborOnBoard ? '4 7' : '2 6'} />
+          </g>
+        );
+      })}
+      {FENCE_VERTEX_CORNERS.map((corner) => {
+        const vertex = fenceVertexKey(cell.x, cell.y, corner.id);
+        const explicitMaterial = posts[vertex];
+        const resolved = resolvedPosts.get(vertex);
+        const state = explicitMaterial ? 'explicit' : resolved?.source === 'automatic' ? 'automatic' : 'none';
+        const material = explicitMaterial ?? resolved?.material;
+        const [cx, cy] = VERTEX_GEO[corner.id];
+        const toggle = (): void => (explicitMaterial ? onErasePost(vertex) : onPaintPost(vertex));
+        const label = explicitMaterial
+          ? `Remove authored ${FENCE_MATERIAL_LABELS[explicitMaterial]} post from ${corner.label} vertex`
+          : resolved?.source === 'automatic'
+          ? `Author a post at ${corner.label} vertex; an automatic ${FENCE_MATERIAL_LABELS[resolved.material]} open-end post is already present`
+          : `Add post to ${corner.label} vertex`;
+        return (
+          <g
+            key={`post-${corner.id}`}
+            className={`le-fenceconn-post is-${state}${material ? ` is-${material}` : ''}`}
+            role="button"
+            aria-label={label}
+            aria-pressed={Boolean(explicitMaterial)}
+            tabIndex={0}
+            onClick={toggle}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+          >
+            <circle cx={cx} cy={cy} r="13" fill="transparent" />
+            <circle className="le-fenceconn-post-mark" cx={cx} cy={cy} r={state === 'explicit' ? 6 : 5} />
           </g>
         );
       })}
@@ -1787,6 +1951,10 @@ const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }>
   { id: 'status', label: 'Status' },
 ];
 const isLayerOptionDisabled = (_layer: LayerKey): boolean => false;
+const LEVEL_EDITOR_LAYER_SELECT_OPTIONS = LEVEL_EDITOR_LAYER_OPTIONS.map((option) => ({
+  ...option,
+  disabled: isLayerOptionDisabled(option.id),
+}));
 const defaultLevelEditorLayer = (): LayerKey => LEVEL_EDITOR_LAYER_OPTIONS.find((option) => !isLayerOptionDisabled(option.id))?.id ?? LEVEL_EDITOR_LAYER_OPTIONS[0].id;
 function isWallMaterialId(value: string | undefined): value is WallMaterial {
   return !!value && (WALL_MATERIALS as readonly string[]).includes(value);
@@ -1899,6 +2067,10 @@ export function LevelEditor(): ReactElement {
   // It takes precedence over a campaign level (it's the explicit "inspect this exact board").
   const loadedBoard = useMemo(() => readBoardParam(), []);
   const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const isChromeLabPreview = useMemo(() => urlParams.get('chromeLab') === '1', [urlParams]);
+  const installedChromeCss = useInstalledChromeCss(!isChromeLabPreview);
+  const fenceArtReviewEnabled = urlParams.get('artReview') === FENCE_ART_REVIEW_ID;
+  const initialFenceArtworkId = urlParams.get('fenceArt') ?? '';
   const urlTimeControl = useMemo(() => readTimeControlParams(urlParams), [urlParams]);
   const urlEvents = useMemo(() => readLevelEventsParam(urlParams), [urlParams]);
   const urlVictory = useMemo(() => readVictoryRulesParam(urlParams), [urlParams]);
@@ -2047,7 +2219,41 @@ export function LevelEditor(): ReactElement {
   // Edge fences (ADR): a wall on the boundary between two tiles, keyed by the shared-edge key
   // (roadEdgeKey) -> material. Painted per-edge, not per-cell; blocks crossing that edge in play.
   const [boardFences, setBoardFences] = useState<Record<string, FenceMaterial>>(initialBoard?.fences ?? {});
+  // Positive authored posts live at logical grid vertices. Automatic degree-one open-end posts are
+  // still derived from the rails; these entries only add/override posts and may stand alone.
+  const [boardFencePosts, setBoardFencePosts] = useState<Record<string, FenceMaterial>>(initialBoard?.fencePosts ?? {});
+  const [fenceAdminCatalog, setFenceAdminCatalog] = useState<AdminLiveMediaCatalog | null>(null);
+  const [fenceCatalogError, setFenceCatalogError] = useState<string | null>(null);
+  const fenceArtCatalog = useMemo(() => projectFenceArtKits(fenceAdminCatalog), [fenceAdminCatalog]);
+  const [selectedFenceArtworkId, setSelectedFenceArtworkId] = useState(initialFenceArtworkId);
+  const activeFenceArtwork = fenceArtReviewEnabled
+    ? (fenceArtKit(fenceArtCatalog, selectedFenceArtworkId) ?? fenceArtCatalog[0])
+    : undefined;
+  const activeFenceArtworkReview = activeFenceArtwork ? fenceArtworkBackendReview(activeFenceArtwork) : undefined;
+  const fenceReviewCatalogMessage = fenceCatalogError
+    ?? (fenceAdminCatalog ? 'No complete E/S fence review kit exists in the backend catalog.' : 'Loading backend fence review media…');
   const [fenceBrushMaterial, setFenceBrushMaterial] = useState<FenceMaterial>(DEFAULT_FENCE_MATERIAL);
+  const [fencePaintTarget, setFencePaintTarget] = useState<FencePaintTarget>('rail');
+  useEffect(() => {
+    if (!fenceArtReviewEnabled) return undefined;
+    let cancelled = false;
+    void fetchAdminLiveMediaCatalog().then((catalog) => {
+      if (cancelled) return;
+      setFenceAdminCatalog(catalog);
+      setFenceCatalogError(null);
+    }).catch((error: unknown) => {
+      if (cancelled) return;
+      setFenceAdminCatalog(null);
+      setFenceCatalogError(error instanceof Error ? error.message : String(error));
+    });
+    return () => { cancelled = true; };
+  }, [fenceArtReviewEnabled]);
+  useEffect(() => {
+    if (!activeFenceArtwork) return;
+    setSelectedFenceArtworkId(activeFenceArtwork.id);
+    setFenceBrushMaterial(activeFenceArtwork.material);
+    if (!activeFenceArtwork.post) setFencePaintTarget('rail');
+  }, [activeFenceArtwork]);
   // Edge walls use fence-style edge keys, but the editor accepts only the map's northmost
   // and westmost perimeter edges.
   const [boardWalls, setBoardWalls] = useState<Record<string, WallMaterial>>(() =>
@@ -2095,6 +2301,7 @@ export function LevelEditor(): ReactElement {
   const activeZoneName = activeZone ? zoneDisplayName(activeZone, selectedZoneIndex) : '';
   const activeZoneNameValue = activeZone ? activeZone.name ?? activeZoneName : '';
   const activeZoneColor = activeZone ? zoneDisplayColor(activeZone) : DEFAULT_ZONE_COLOR;
+  const activeZoneColorLabel = LE_ZONE_COLOR_OPTIONS.find((option) => option.color === activeZoneColor)?.label ?? activeZoneColor;
   const activeZoneOverlay = useMemo(() => activeZone ? zoneCellColorMapFromEntries([activeZone]) : {}, [activeZone]);
   const visibleZones = brushKind === 'zone' ? activeZoneOverlay : {};
   useEffect(() => {
@@ -2221,6 +2428,15 @@ export function LevelEditor(): ReactElement {
       if (routeState.brushKind === 'wallart') {
         setWallArtBrushId(wallArtIdOrDefault(routeState.brush));
       }
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('artReview') === FENCE_ART_REVIEW_ID) {
+        const nextArtwork = fenceArtKit(fenceArtCatalog, params.get('fenceArt'));
+        if (nextArtwork) {
+          setSelectedFenceArtworkId(nextArtwork.id);
+          setFenceBrushMaterial(nextArtwork.material);
+          if (!nextArtwork.post) setFencePaintTarget('rail');
+        }
+      }
     };
     window.addEventListener('popstate', syncFromRoute);
     window.addEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
@@ -2228,7 +2444,7 @@ export function LevelEditor(): ReactElement {
       window.removeEventListener('popstate', syncFromRoute);
       window.removeEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
     };
-  }, []);
+  }, [fenceArtCatalog]);
 
   // DEV-only preview of the in-game confirm dialog, so its look can be judged live without the
   // admin + official-target gating that guards the real Publish flow. Stripped from prod builds
@@ -2286,6 +2502,7 @@ export function LevelEditor(): ReactElement {
     setBoardCoverTypes(board.coverTypes ?? {});
     setBoardFeatures(board.features);
     setBoardFences(board.fences ?? {});
+    setBoardFencePosts(board.fencePosts ?? {});
     setBoardWalls(perimeterWalls(board.walls, board.cols, board.rows));
     setBoardWallArt(perimeterWallArt(board.wallArt, board.cols, board.rows));
     setFeatureCuts(board.featureCuts);
@@ -2325,8 +2542,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -2342,6 +2559,7 @@ export function LevelEditor(): ReactElement {
     setBoardCoverTypes(board.coverTypes ?? {});
     setBoardFeatures(board.features);
     setBoardFences(board.fences ?? {});
+    setBoardFencePosts(board.fencePosts ?? {});
     setBoardWalls(perimeterWalls(board.walls, board.cols, board.rows));
     setBoardWallArt(perimeterWallArt(board.wallArt, board.cols, board.rows));
     setFeatureCuts(board.featureCuts);
@@ -2401,7 +2619,7 @@ export function LevelEditor(): ReactElement {
   };
   const brushAsset = resolveAsset(brushId) ?? leDefaultTile;
   const macroTileBrushAsset = macroTileBrushId ? macroTileAsset(macroTileBrushId) : undefined;
-  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssetById(id);
+  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitArtForId(id);
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? leUnitAssets[0];
   const directionForFaction = (faction: UnitPalette): Direction => factionDefaultDirection(faction, boardFactionDirections);
   const setUnitFaction = (faction: UnitPalette): void => {
@@ -2613,6 +2831,25 @@ export function LevelEditor(): ReactElement {
     delete next.cells[key];
     commitEditorBoard(next);
   };
+  const selectFenceArtwork = (id: string): void => {
+    const artwork = fenceArtKit(fenceArtCatalog, id);
+    if (!artwork) return;
+    setSelectedFenceArtworkId(artwork.id);
+    setFenceBrushMaterial(artwork.material);
+    if (!artwork.post) setFencePaintTarget('rail');
+    setBrushKind('fence');
+    setLayer('fence');
+    setTool('brush');
+    const url = new URL(window.location.href);
+    url.searchParams.set('artReview', FENCE_ART_REVIEW_ID);
+    url.searchParams.set('fenceArt', artwork.id);
+    navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
+  };
+  const stepFenceArtwork = (delta: -1 | 1): void => {
+    const artwork = cycleFenceArtKit(fenceArtCatalog, selectedFenceArtworkId, delta);
+    if (artwork) selectFenceArtwork(artwork.id);
+  };
+
   // Edge-fence paint/erase — the fence tool targets the shared edge under the cursor (roadEdgeKey),
   // not a cell. Add stamps the current brush material; erase drops the edge. Both ride undo/redo.
   const paintFenceEdge = (edgeKey: string): void => {
@@ -2627,6 +2864,22 @@ export function LevelEditor(): ReactElement {
     const fences = { ...(next.fences ?? {}) };
     delete fences[edgeKey];
     next.fences = fences;
+    commitEditorBoard(next);
+  };
+  const paintFencePost = (vertexKey: string): void => {
+    const [vx, vy] = vertexKey.split(',').map(Number);
+    if (!Number.isInteger(vx) || !Number.isInteger(vy) || vx < 0 || vy < 0 || vx > boardCols || vy > boardRows) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    next.fencePosts = { ...(next.fencePosts ?? {}), [vertexKey]: fenceBrushMaterial };
+    commitEditorBoard(next);
+  };
+  const eraseFencePost = (vertexKey: string): void => {
+    const current = currentEditorBoardRef.current.fencePosts ?? {};
+    if (!(vertexKey in current)) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const posts = { ...(next.fencePosts ?? {}) };
+    delete posts[vertexKey];
+    next.fencePosts = posts;
     commitEditorBoard(next);
   };
   const wallEdgeCanRender = (edgeKey: string): boolean =>
@@ -2706,7 +2959,7 @@ export function LevelEditor(): ReactElement {
     setWallArtPlacementFeedback({ tone: 'ready', message: `Removed ${wallArtLabel(hit.artId)}.` });
   };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, macroTiles: [], units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, macroTiles: [], units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, fencePosts: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
     setActiveGeneratedRegionId(null);
     setRegionSelection(new Set());
   };
@@ -2724,7 +2977,7 @@ export function LevelEditor(): ReactElement {
         Object.assign(next, withZoneEntries(next, updated));
       }
     }
-    else if (brushKind === 'fence') next.fences = {};
+    else if (brushKind === 'fence') { next.fences = {}; next.fencePosts = {}; }
     else if (brushKind === 'wall') { next.walls = {}; next.wallArt = {}; }
     else if (brushKind === 'wallart') next.wallArt = {};
     else if (featureKind) {
@@ -4195,7 +4448,7 @@ export function LevelEditor(): ReactElement {
     const units: CastleTemplateUnit[] = [];
     for (const [key, placement] of Object.entries(board.units as Record<string, BoardUnitPlacement>)) {
       const [x, y] = key.split(',').map(Number);
-      const type = unitAssetById(placement.unitId)?.family;
+      const type = unitFamilyForId(placement.unitId);
       if (type !== 'king' && type !== 'rook') continue;
       units.push({ x, y, type, side: placement.faction === player ? 'player' : 'enemy' });
     }
@@ -4349,6 +4602,18 @@ export function LevelEditor(): ReactElement {
         else dropped = true;
       }
       if (dropped) nextBoard.fences = next;
+    }
+    // Posts live on grid VERTICES, whose valid domain includes the far outer boundary
+    // (0..cols, 0..rows). This deliberately differs from the half-open cell bounds above.
+    {
+      const next: Record<string, FenceMaterial> = {};
+      let dropped = false;
+      for (const [vertex, material] of Object.entries(nextBoard.fencePosts ?? {})) {
+        const [vx, vy] = vertex.split(',').map(Number);
+        if (Number.isInteger(vx) && Number.isInteger(vy) && vx >= 0 && vy >= 0 && vx <= nextCols && vy <= nextRows) next[vertex] = material;
+        else dropped = true;
+      }
+      if (dropped) nextBoard.fencePosts = next;
     }
     // Walls are perimeter-only; after a resize, keep just the northmost/westmost edges
     // that are still valid on the new board bounds.
@@ -4624,6 +4889,7 @@ export function LevelEditor(): ReactElement {
     <div className="level-editor-root">
       <HomepageBackdrop />
       <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" ready={editorReady}>
+        {installedChromeCss ? <style data-level-editor-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
         {confirmDialog}
         {/* The title bar carries NO editor status (no level name, no save-state chip) — the
             owner removed the center cluster: that's ambient chrome noise while editing, and
@@ -4645,18 +4911,34 @@ export function LevelEditor(): ReactElement {
 
         <div className="skirmish-field" inert={!editorReady || saving ? true : undefined} aria-busy={!editorReady || saving || undefined}>
           <div className="skirmish-board-frame">
+            {activeFenceArtwork ? (
+              <div className="le-fence-review-banner" data-testid="fence-candidate-editor-review">
+                <strong>Fence artwork drawing · {activeFenceArtwork.label}</strong>
+                <span>{activeFenceArtworkReview?.statusLabel} · {activeFenceArtwork.post ? 'draw rails/posts anywhere' : 'rail-only artwork'} · cycle artwork in Fence controls</span>
+              </div>
+            ) : fenceArtReviewEnabled ? (
+              <div className="le-fence-review-banner" data-testid="fence-candidate-editor-review" role="status">
+                <strong>Fence review media unavailable</strong>
+                <span>{fenceReviewCatalogMessage}</span>
+              </div>
+            ) : null}
             <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
-              <div className="tileset-view-board-content is-board">
+              <div className="tileset-view-board-content is-board" data-art-review={activeFenceArtwork ? FENCE_ART_REVIEW_ID : undefined} data-fence-art={activeFenceArtwork?.id}>
                 {editorLoadError ? (
                   <div className="tileset-view-empty" role="status" aria-live="polite">
                     <h2>{editorLoadError.title}</h2>
                     <p>{editorLoadError.detail}</p>
                     {editorLoadError.signIn ? (
-                      <button type="button" className="le-seg-btn" onClick={signInForEditor}>Sign in</button>
+                      <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={signInForEditor}>Sign in</button>
                     ) : null}
                     {editorLoadError.retry ? (
-                      <button type="button" className="le-seg-btn" onClick={retryCloudDocument}>Retry</button>
+                      <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={retryCloudDocument}>Retry</button>
                     ) : null}
+                  </div>
+                ) : fenceArtReviewEnabled && !activeFenceArtwork ? (
+                  <div className="tileset-view-empty" role="status" aria-live="polite">
+                    <h2>Fence review media unavailable</h2>
+                    <p>{fenceReviewCatalogMessage}</p>
                   </div>
                 ) : (
                   <StudioEditableBoard
@@ -4686,12 +4968,17 @@ export function LevelEditor(): ReactElement {
                     onMove={moveObject}
                     canMoveTo={canMoveObjectTo}
                     fences={boardFences}
+                    fencePosts={boardFencePosts}
+                    fenceArtwork={activeFenceArtwork}
                     cover={boardCover}
                     coverTypes={boardCoverTypes}
                     coverSeed={coverSeed}
                     fenceTool={fenceTool}
+                    fencePaintTarget={fencePaintTarget}
                     onPaintEdge={paintFenceEdge}
                     onEraseEdge={eraseFenceEdge}
+                    onPaintPost={paintFencePost}
+                    onErasePost={eraseFencePost}
                     walls={boardWalls}
                     wallTool={wallTool}
                     onPaintWallEdge={paintWallEdge}
@@ -4711,18 +4998,11 @@ export function LevelEditor(): ReactElement {
             </ViewPane>
           </div>
           {eventsOpen ? (
-            <div className="le-events-overlay" role="dialog" aria-label="Level events editor">
-              <div className="le-events-head">
-                <h2>Events</h2>
-                <div className="le-events-head-actions">
-                  <div className="le-seg le-events-tabs" role="tablist" aria-label="Event editor sections">
-                    <button type="button" role="tab" aria-selected={eventsTab === 'victory'} className={`le-seg-btn ${eventsTab === 'victory' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('victory')}>Victory rules</button>
-                    <button type="button" role="tab" aria-selected={eventsTab === 'other'} className={`le-seg-btn ${eventsTab === 'other' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('other')}>Other events</button>
-                  </div>
-                  <button type="button" className="le-seg-btn le-events-done" onClick={closeEventsEditor}>Done</button>
-                </div>
-              </div>
-              {eventsTab === 'victory' ? (
+            <LevelEditorEventsOverlay
+              tab={eventsTab}
+              onTabChange={setEventsTab}
+              onDone={closeEventsEditor}
+              victoryContent={(
                 <VictoryConditionsEditor
                   value={victory}
                   factions={victoryFactions}
@@ -4738,18 +5018,19 @@ export function LevelEditor(): ReactElement {
                             {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
                           </select>
                         </SelectFrame>
-                        <button type="button" className="le-seg-btn" onClick={() => {
+                        <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => {
                           const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
                           const templateRules = victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) });
                           setVictory((prev) => appendRules(prev, templateRules));
                         }}>Add template</button>
-                        <button type="button" className="le-seg-btn danger" disabled={victory.length === 0} onClick={() => setVictory([])}>Clear rules</button>
+                        <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} disabled={victory.length === 0} onClick={() => setVictory([])}>Clear rules</button>
                       </div>
                       <p className="le-board-note">Events run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
                     </div>
                   )}
                 />
-              ) : (
+              )}
+              otherContent={(
                 <LevelEventsEditor
                   value={events}
                   zones={eventZoneOptions}
@@ -4765,18 +5046,21 @@ export function LevelEditor(): ReactElement {
                             {OTHER_EVENT_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}
                           </select>
                         </SelectFrame>
-                        <button type="button" className="le-seg-btn" onClick={addOtherEventTemplate}>Add template</button>
-                        <button type="button" className="le-seg-btn danger" disabled={events.length === 0} onClick={clearOtherEvents}>Clear events</button>
+                        <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={addOtherEventTemplate}>Add template</button>
+                        <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} disabled={events.length === 0} onClick={clearOtherEvents}>Clear events</button>
                       </div>
                       <p className="le-board-note">Clear affects only this events list and any zones used only by those events.</p>
                     </div>
                   )}
                 />
               )}
-            </div>
+            />
           ) : null}
         </div>
 
+      {/* The real editor and Chrome Audit consume this one canonical outer-panel hierarchy.
+          The editor supplies live state and content; the shared component owns chrome,
+          title/actions structure, divider, and the sole scroll boundary. */}
       {editorLoadError ? (
       <aside className="skirmish-hud" aria-label="Editor document access" inert={!editorReady || saving ? true : undefined}>
         <section className="skirmish-card le-status-card">
@@ -4786,70 +5070,28 @@ export function LevelEditor(): ReactElement {
             <span>{editorLoadError.detail}</span>
           </div>
           {editorLoadError.signIn ? (
-            <button type="button" className="le-seg-btn" style={{ width: '100%' }} onClick={signInForEditor}>Sign in</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} style={{ width: '100%' }} onClick={signInForEditor}>Sign in</button>
           ) : null}
           {editorLoadError.retry ? (
-            <button type="button" className="le-seg-btn" style={{ width: '100%' }} onClick={retryCloudDocument}>Retry</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} style={{ width: '100%' }} onClick={retryCloudDocument}>Retry</button>
           ) : null}
         </section>
       </aside>
       ) : (
-      <aside className="skirmish-hud" aria-label="Editor controls" inert={!editorReady || saving ? true : undefined} aria-busy={!editorReady || saving || undefined}>
-        <section className="skirmish-card">
-          <h2>Layer</h2>
-          <SelectFrame>
-            <select
-              className="le-layer-select"
-              aria-label="Editor layer"
-              value={layer}
-              onChange={(e) => selectLayer(e.target.value as LayerKey)}
-            >
-              {LEVEL_EDITOR_LAYER_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id} disabled={isLayerOptionDisabled(option.id)}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </SelectFrame>
-        </section>
-
-        {/* Pinned editor ACTIONS dock: tools, Undo/Redo, and current-board Test stay above the sole
-            scroll region, visible on every layer without overlaying the board. */}
-        <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
-          <h2>Actions</h2>
-          <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
-            <button type="button" className={`le-seg-btn ${tool === 'select' ? 'active' : ''}`.trim()} onClick={() => setTool('select')} title="Select" aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'brush' ? 'active' : ''}`.trim()} onClick={() => setTool('brush')} title="Brush" aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')} title="Erase" aria-label="Erase"><span className="le-ico ic-eraser" aria-hidden="true" /></button>
-            <button type="button" className={`le-seg-btn ${tool === 'move' ? 'active' : ''}`.trim()} onClick={() => setTool('move')} title="Move — drag a placed unit or prop to a new cell." aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
-            <span className="le-action-toolbar-divider" aria-hidden="true" />
-            <button
-              type="button"
-              className="le-seg-btn le-icon-btn"
-              onClick={undoBoard}
-              disabled={!undoStack.length}
-              aria-label="Undo"
-              title={undoStack.length ? 'Undo the last board edit.' : 'Nothing to undo.'}
-            ><span className="le-ico ic-undo" aria-hidden="true" /></button>
-            <button
-              type="button"
-              className="le-seg-btn le-icon-btn"
-              onClick={redoBoard}
-              disabled={!redoStack.length}
-              aria-label="Redo"
-              title={redoStack.length ? 'Redo the last undone edit.' : 'Nothing to redo.'}
-            ><span className="le-ico ic-redo" aria-hidden="true" /></button>
-          </div>
-          {/* Test the exact board on screen, saved or not. It lives in the always-visible Actions
-              dock and returns to the same editor target, making edit → test → back one loop. */}
-          {testHref ? (
-            <NavButton className="le-seg-btn le-play-board" data-testid="le-test" to={testHref} title="Test this exact board against the AI now. No save is required; ‹ Back returns you here.">Test</NavButton>
-          ) : (
-            <button type="button" className="le-seg-btn le-play-board" data-testid="le-test" disabled title="Add a player and an enemy piece (clear the playability issues in the Status layer) to test this board.">Test</button>
-          )}
-        </section>
-
-        <KitScroll className="le-hud-scroll">
+      <LevelEditorControlsPanel
+        layer={layer}
+        layerOptions={LEVEL_EDITOR_LAYER_SELECT_OPTIONS}
+        onLayerChange={selectLayer}
+        tool={tool === 'region' ? null : tool}
+        onToolChange={setTool}
+        canUndo={undoStack.length > 0}
+        canRedo={redoStack.length > 0}
+        onUndo={undoBoard}
+        onRedo={redoBoard}
+        playBoardHref={testHref}
+        inert={!editorReady || saving}
+        ariaBusy={!editorReady || saving}
+      >
         {layer === 'status' ? (
           <>
           {/* Playability list (ADR-0050): while any violation exists Save is disabled and the
@@ -4869,7 +5111,7 @@ export function LevelEditor(): ReactElement {
                   <li key={`${v.code}-${index}`} className="le-violation">
                     <span className="le-violation-msg">{v.message}</span>
                     {v.code === 'P3_UNITS_NOT_EMPTY' ? (
-                      <button type="button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
+                      <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-violation-action')} onClick={clearUnits}>Clear pieces</button>
                     ) : null}
                   </li>
                 ))}
@@ -4942,7 +5184,8 @@ export function LevelEditor(): ReactElement {
               {cloudSaveState === 'error' ? (
                 <button
                   type="button"
-                  className="le-seg-btn"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   data-testid="le-retry-cloud-sync"
                   disabled={saving}
                   onClick={retryCloudDocument}
@@ -4951,7 +5194,8 @@ export function LevelEditor(): ReactElement {
               {editorDocument?.has_saved_baseline ? (
                 <button
                   type="button"
-                  className="le-seg-btn"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   data-testid="le-discard-changes"
                   disabled={!hasDiscardableChanges || saving}
                   title={hasDiscardableChanges ? 'Revert the working copy to the last saved position.' : 'The working copy already matches the saved position.'}
@@ -4960,7 +5204,8 @@ export function LevelEditor(): ReactElement {
               ) : null}
               <button
                 type="button"
-                className={`le-seg-btn ${canSave ? 'active' : 'is-blocked'}`.trim()}
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', canSave ? 'active' : 'is-blocked')}
                 data-testid="le-save"
                 aria-label={canSave ? saveLabel : `${saveButtonLabel}: ${saveBlockedMessage}`}
                 title={canSave ? (isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.') : `${saveBlockedMessage} ${saveBlockedDetail}`.trim()}
@@ -5006,8 +5251,8 @@ export function LevelEditor(): ReactElement {
             <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
             <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
             <div className="le-board-actions">
-              <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
-              <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, path, fence rail, post, wall, and wall artwork from the board.">Clear</button>
             </div>
           </section>
           <section className="skirmish-card le-level-settings">
@@ -5029,7 +5274,8 @@ export function LevelEditor(): ReactElement {
                       </span>
                       <span className="le-faction-fields">
                         <select
-                          className="le-faction-select"
+                          data-chrome-unit="inner-dropdown"
+                          className={chromeUnitClassNames('inner-dropdown', 'le-faction-select')}
                           value={playerFaction === faction ? 'player' : 'cpu'}
                           aria-label={`${LE_FACTION_LABELS[faction]} control`}
                           onChange={onFactionControlChange(faction)}
@@ -5060,7 +5306,8 @@ export function LevelEditor(): ReactElement {
               <label className="le-gen-unit-select">
                 <span>Region</span>
                 <select
-                  className="le-gen-region-terrain"
+                  data-chrome-unit="inner-dropdown"
+                  className={chromeUnitClassNames('inner-dropdown', 'le-gen-region-terrain')}
                   value={activeGeneratedRegionId ?? ''}
                   onChange={(event) => selectGeneratedRegionUnit(event.target.value)}
                   aria-label="Saved generated region"
@@ -5074,7 +5321,8 @@ export function LevelEditor(): ReactElement {
               {activeGeneratedRegion ? (
                 <button
                   type="button"
-                  className="le-gen-icon"
+                  data-chrome-unit="inner-tool-square"
+                  className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
                   onClick={() => removeGeneratedRegionUnit(activeGeneratedRegion.id)}
                   title={`Remove ${activeGeneratedRegion.name}`}
                   aria-label={`Remove ${activeGeneratedRegion.name}`}
@@ -5084,12 +5332,13 @@ export function LevelEditor(): ReactElement {
             <div className="le-gen-scope">
               <button
                 type="button"
-                className={`le-seg-btn ${tool === 'region' ? 'active' : ''}`.trim()}
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tool === 'region' && 'active')}
                 onClick={() => setTool(tool === 'region' ? 'select' : 'region')}
                 title="Click an already-drawn clump to select its whole same-terrain patch. Click this button again to stop."
               >{tool === 'region' ? 'Selecting…' : 'Select region'}</button>
               <span className="le-gen-scope-label">{regionSelection.size > 0 ? `${activeGeneratedRegion?.name ?? 'Selection'} · ${regionSelection.size} cells` : 'Whole board'}</span>
-              {regionSelection.size > 0 ? <button type="button" className="le-seg-btn" onClick={clearRegion} title="Clear the selection — Generate will cover the whole board.">Clear</button> : null}
+              {regionSelection.size > 0 ? <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={clearRegion} title="Clear the selection — Generate will cover the whole board.">Clear</button> : null}
             </div>
             {tool === 'region' ? <p className="le-board-note">Click a drawn clump to select its whole same-terrain patch. Generate fills the selection; everything outside it stays put.</p> : null}
             <div className="le-gen-regions" role="group" aria-label="Terrain regions">
@@ -5097,7 +5346,8 @@ export function LevelEditor(): ReactElement {
                 <div className="le-gen-region-group" key={sec.id}>
                   <div className="le-gen-region">
                     <select
-                      className="le-gen-region-terrain"
+                      data-chrome-unit="inner-dropdown"
+                      className={chromeUnitClassNames('inner-dropdown', 'le-gen-region-terrain')}
                       value={sec.terrain}
                       onChange={(event) => setSectionTerrain(sec.id, event.target.value as TileFamilyId)}
                       aria-label="Region terrain"
@@ -5116,8 +5366,8 @@ export function LevelEditor(): ReactElement {
                       aria-label={`${sec.terrain} share`}
                     />
                     <span className="le-gen-region-val">{sec.share}% · {Math.round((sec.share / 100) * scopeCells)}</span>
-                    <button type="button" className={`le-gen-icon ${sec.locked ? 'active' : ''}`.trim()} onClick={() => toggleSectionLock(sec.id)} aria-pressed={sec.locked} title={sec.locked ? 'Unlock — let this region rebalance' : 'Lock — keep this region fixed while others move'}>{sec.locked ? '🔒' : '🔓'}</button>
-                    <button type="button" className="le-gen-icon" onClick={() => removeSection(sec.id)} disabled={scatterSections.length <= 1} title="Remove this region">×</button>
+                    <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', sec.locked && 'active')} onClick={() => toggleSectionLock(sec.id)} aria-pressed={sec.locked} title={sec.locked ? 'Unlock — let this region rebalance' : 'Lock — keep this region fixed while others move'}>{sec.locked ? '🔒' : '🔓'}</button>
+                    <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')} onClick={() => removeSection(sec.id)} disabled={scatterSections.length <= 1} title="Remove this region">×</button>
                   </div>
                   {macroTileAssets.some((asset) => asset.family === sec.terrain) ? (
                     <div className="le-gen-macro">
@@ -5129,13 +5379,13 @@ export function LevelEditor(): ReactElement {
                     {sec.covers.map((c) => (
                       <div className="le-gen-cover-entry" key={c.id}>
                         <div className="le-gen-cover-head">
-                          <button type="button" className="le-gen-cover-caret-btn" onClick={() => toggleCoverEntryExpand(sec.id, c.id)} aria-expanded={c.expanded} aria-label={c.expanded ? 'Collapse cover settings' : 'Expand cover settings'}>
+                          <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-gen-cover-caret-btn', c.expanded && 'active')} onClick={() => toggleCoverEntryExpand(sec.id, c.id)} aria-expanded={c.expanded} aria-label={c.expanded ? 'Collapse cover settings' : 'Expand cover settings'}>
                             <span className="le-gen-cover-caret" aria-hidden="true">{c.expanded ? '▾' : '▸'}</span>
                           </button>
-                          <select className="le-gen-region-terrain" value={c.type} onChange={(event) => setCoverType(sec.id, c.id, event.target.value as GroundCoverId)} aria-label="Cover set">
+                          <select data-chrome-unit="inner-dropdown" className={chromeUnitClassNames('inner-dropdown', 'le-gen-region-terrain')} value={c.type} onChange={(event) => setCoverType(sec.id, c.id, event.target.value as GroundCoverId)} aria-label="Cover set">
                             {LE_COVER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                           </select>
-                          <button type="button" className="le-gen-icon" onClick={() => removeCover(sec.id, c.id)} title="Remove this cover">×</button>
+                          <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')} onClick={() => removeCover(sec.id, c.id)} title="Remove this cover">×</button>
                         </div>
                         {c.expanded ? (
                           <div className="le-gen-cover-knobs">
@@ -5147,15 +5397,15 @@ export function LevelEditor(): ReactElement {
                         ) : null}
                       </div>
                     ))}
-                    <button type="button" className="le-gen-cover-add" onClick={() => addCover(sec.id)} title="Add a cover set to this region.">+ Add cover</button>
+                    <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-gen-cover-add')} onClick={() => addCover(sec.id)} title="Add a cover set to this region.">+ Add cover</button>
                   </div>
                 </div>
               ))}
             </div>
-            <button type="button" className="le-seg-btn le-gen-add" onClick={addSection} title="Add another terrain region and rebalance the shares.">+ Add terrain region</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-gen-add')} onClick={addSection} title="Add another terrain region and rebalance the shares.">+ Add terrain region</button>
             <SliderRow label={`Randomness buffer · ${scatterBuffer}%`} value={scatterBuffer} set={setScatterBufferBalanced} min={0} max={60} step={1} nudge={1} dflt={0} />
             <SliderRow label="Edge roughness" value={scatterWiggle} set={setScatterWiggle} min={0} max={1} step={0.05} nudge={0.05} dflt={0.5} />
-            <button type="button" className="le-seg-btn le-gen-run" style={{ width: '100%', marginTop: 8 }} onClick={generateScatter} title="Roll a fresh layout into the selection (or the whole board) and autotile it.">Generate</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-gen-run')} style={{ width: '100%', marginTop: 8 }} onClick={generateScatter} title="Roll a fresh layout into the selection (or the whole board) and autotile it.">Generate</button>
           </section>
         </>) : layer === 'rules' ? (<>
           <section className="skirmish-card">
@@ -5163,7 +5413,7 @@ export function LevelEditor(): ReactElement {
             {/* ADR-0064: the rule authoring lives in a full-size overlay over the board (this panel is
                 too narrow) — see the .le-events-overlay below. This card is just the entry point. */}
             <p className="le-board-note">How this level is won, lost, deployed, and promoted. {victory.length} victory event{victory.length === 1 ? '' : 's'} and {events.length} other event{events.length === 1 ? '' : 's'} set.</p>
-            <button type="button" className="le-seg-btn le-events-open" onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-open')} onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
           </section>
 
           <section className="skirmish-card">
@@ -5228,7 +5478,7 @@ export function LevelEditor(): ReactElement {
           <div className="le-brush-pick">
             <span className="le-brush-thumb">
               {brushKind === 'unit'
-                ? <img src={unitBrushAsset.sprite(unitFaction, unitBrushDirection)} alt="" draggable={false} />
+                ? <img src={unitBrushAsset.sprite(unitFaction, unitBrushDirection) ?? undefined} alt="" draggable={false} />
                 : brushKind === 'doodad'
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : brushKind === 'prop'
@@ -5242,7 +5492,9 @@ export function LevelEditor(): ReactElement {
                 : wallArtTool
                 ? wallArtBrush ? <WallArtPreview art={wallArtBrush} zoom={0.46} /> : null
                 : fenceTool
-                ? <img src={fenceThumbSrc(fenceBrushMaterial)} alt="" draggable={false} />
+                ? <img src={activeFenceArtwork
+                  ? (fencePaintTarget === 'post' ? (activeFenceArtwork.post ?? activeFenceArtwork.railE) : activeFenceArtwork.railE)
+                  : (fencePaintTarget === 'post' ? fencePostThumbSrc(fenceBrushMaterial) : fenceThumbSrc(fenceBrushMaterial))} alt="" draggable={false} />
                 : featureKind
                 ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
                 : macroTileBrushAsset
@@ -5250,8 +5502,8 @@ export function LevelEditor(): ReactElement {
                 : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : wallTool ? `${WALL_MATERIAL_LABELS[wallBrushMaterial]} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : macroTileBrushAsset?.label ?? brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : macroTileBrushAsset ? `composite tile · ${macroTileBrushAsset.columns}×${macroTileBrushAsset.rows}` : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : wallTool ? `${WALL_MATERIAL_LABELS[wallBrushMaterial]} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${activeFenceArtwork?.label ?? FENCE_MATERIAL_LABELS[fenceBrushMaterial]} · ${fencePaintTarget}` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : macroTileBrushAsset?.label ?? brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? `fence · ${fencePaintTarget === 'post' ? 'vertex' : 'edge'}` : featureKind ? `feature · ${featureKind}` : macroTileBrushAsset ? `composite tile · ${macroTileBrushAsset.columns}×${macroTileBrushAsset.rows}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -5264,7 +5516,8 @@ export function LevelEditor(): ReactElement {
                 <button
                   type="button"
                   key={cover.id}
-                  className={`le-swatch le-cover-swatch ${coverBrushType === cover.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                  data-chrome-unit="inner-asset-swatch"
+                  className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', 'le-cover-swatch', coverBrushType === cover.id && tool !== 'erase' && 'active')}
                   title={`${cover.label} · ${cover.terrainLabel}`}
                   onClick={() => { setCoverBrushType(cover.id); setBrushKind('cover'); setTool('brush'); }}
                 >
@@ -5274,11 +5527,11 @@ export function LevelEditor(): ReactElement {
               ))}
             </div>
             <div className="le-seg">
-              <button type="button" className={`le-seg-btn ${coverBrushDensity === 'sparse' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('sparse')}>Sparse</button>
-              <button type="button" className={`le-seg-btn ${coverBrushDensity === 'filled' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('filled')}>Filled</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', coverBrushDensity === 'sparse' && 'active')} onClick={() => setCoverBrushDensity('sparse')}>Sparse</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', coverBrushDensity === 'filled' && 'active')} onClick={() => setCoverBrushDensity('filled')}>Filled</button>
             </div>
             <p className="le-board-note">Brush paints {coverBrushDensity} {coverBrushAsset.label} on any tile; Erase clears a tile. The cover scatters from the density.</p>
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
             <p className="le-board-note">{coverCount} tile{coverCount === 1 ? '' : 's'} with cover.</p>
           </section>
         ) : null}
@@ -5289,7 +5542,7 @@ export function LevelEditor(): ReactElement {
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
               <div className="le-zone-select-controls">
-                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Previous zone" title="Previous zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(-1)}>
+                <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Previous zone" title="Previous zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(-1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
                 </button>
                 <SelectFrame>
@@ -5306,13 +5559,13 @@ export function LevelEditor(): ReactElement {
                     ))}
                   </select>
                 </SelectFrame>
-                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Next zone" title="Next zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(1)}>
+                <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Next zone" title="Next zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
                 </button>
-                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Remove selected zone" title="Remove selected zone" disabled={!activeZone} onClick={removeActiveZoneEntry}>
+                <button type="button" data-chrome-unit="inner-minus-key" className={chromeUnitClassNames('inner-minus-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Remove selected zone" title="Remove selected zone" disabled={!activeZone} onClick={removeActiveZoneEntry}>
                   <span><span className="stepper-glyph stepper-minus" aria-hidden="true" /></span>
                 </button>
-                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Add zone" title="Add zone" onClick={addZoneEntry}>
+                <button type="button" data-chrome-unit="inner-plus-key" className={chromeUnitClassNames('inner-plus-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Add zone" title="Add zone" onClick={addZoneEntry}>
                   <span><span className="stepper-glyph stepper-plus" aria-hidden="true" /></span>
                 </button>
               </div>
@@ -5330,21 +5583,22 @@ export function LevelEditor(): ReactElement {
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Color</span>
-              <div className="le-zone-color-swatches" role="group" aria-label="Zone color">
-                {LE_ZONE_COLOR_OPTIONS.map((option) => (
-                  <button
-                    type="button"
-                    key={option.color}
-                    className={`le-zone-color-button ${activeZoneColor === option.color ? 'active' : ''}`.trim()}
-                    disabled={!activeZone}
-                    title={option.label}
-                    aria-label={`Zone color ${option.label}`}
-                    onClick={() => setActiveZoneColor(option.color)}
-                  >
-                    <span className={`le-zone-dot le-zone-${option.color}`} aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
+              <HouseSelect<ZoneColor>
+                className="le-zone-color-select"
+                value={activeZoneColor}
+                options={LE_ZONE_COLOR_OPTIONS.map((option) => ({
+                  value: option.color,
+                  label: (
+                    <span className="le-zone-color-choice">
+                      <span className={`le-zone-dot le-zone-${option.color}`} aria-hidden="true" />
+                      <span className="le-zone-color-choice-label">{option.label}</span>
+                    </span>
+                  ),
+                }))}
+                disabled={!activeZone}
+                ariaLabel={`Zone color, selected ${activeZoneColorLabel}`}
+                onChange={setActiveZoneColor}
+              />
             </div>
             <p className="le-board-note">
               Brush paints cells into the selected zone. Events decide what that zone does.
@@ -5385,12 +5639,13 @@ export function LevelEditor(): ReactElement {
                 <button
                   type="button"
                   key={unit.id}
-                  className={`le-swatch ${unitBrushId === unit.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                  data-chrome-unit="inner-asset-swatch"
+                  className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', unitBrushId === unit.id && tool !== 'erase' && 'active')}
                   title={unit.label}
                   onClick={() => { setUnitBrushId(unit.id); setBrushKind('unit'); setTool('brush'); }}
                 >
                   <img
-                    src={unit.sprite(unitFaction, hasDirectionSprite(unit, unitBrushDirection) ? unitBrushDirection : 'south')}
+                    src={unit.sprite(unitFaction, hasDirectionSprite(unit, unitBrushDirection) ? unitBrushDirection : 'south') ?? undefined}
                     alt=""
                     draggable={false}
                   />
@@ -5407,7 +5662,8 @@ export function LevelEditor(): ReactElement {
                   <button
                     type="button"
                     key={doodad.id}
-                    className={`le-swatch ${doodadBrushId === doodad.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    data-chrome-unit="inner-asset-swatch"
+                    className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', doodadBrushId === doodad.id && tool !== 'erase' && 'active')}
                     title={`${doodad.label} · ${doodad.terrains.join(', ')}`}
                     onClick={() => { setDoodadBrushId(doodad.id); setBrushKind('doodad'); setTool('brush'); }}
                   >
@@ -5431,7 +5687,8 @@ export function LevelEditor(): ReactElement {
                       <button
                         type="button"
                         key={def.id}
-                        className={`le-swatch ${propBrushId === def.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        data-chrome-unit="inner-asset-swatch"
+                        className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', propBrushId === def.id && tool !== 'erase' && 'active')}
                         title={`${def.label} · ${def.w}×${def.h} · ${def.terrains.join(', ')}${def.blocking ? ' · blocks' : ''}`}
                         onClick={() => { setPropBrushId(def.id); setBrushKind('prop'); setLayer('prop'); setTool('brush'); }}
                       >
@@ -5455,7 +5712,8 @@ export function LevelEditor(): ReactElement {
                   <button
                     type="button"
                     key={`wall-${mat}`}
-                    className={`le-swatch ${wallBrushMaterial === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    data-chrome-unit="inner-asset-swatch"
+                    className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', wallBrushMaterial === mat && tool !== 'erase' && 'active')}
                     title={WALL_MATERIAL_LABELS[mat]}
                     onClick={() => { setWallBrushMaterial(mat); setBrushKind('wall'); setLayer('wall'); setTool('brush'); }}
                   >
@@ -5479,7 +5737,8 @@ export function LevelEditor(): ReactElement {
                   <button
                     type="button"
                     key={art.id}
-                    className={`le-swatch le-wall-asset-swatch ${wallArtBrushId === art.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    data-chrome-unit="inner-asset-swatch"
+                    className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', 'le-wall-asset-swatch', wallArtBrushId === art.id && tool !== 'erase' && 'active')}
                     title={`${art.label} - spans ${art.span} wall${art.span === 1 ? '' : 's'}`}
                     onClick={() => { setWallArtBrushId(art.id); setWallArtPlacementFeedback(null); setBrushKind('wallart'); setLayer('wallart'); setTool('brush'); }}
                   >
@@ -5503,28 +5762,91 @@ export function LevelEditor(): ReactElement {
         ) : fenceTool ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Fence</h2>
-            <div className="le-pal-group">
-              <span className="le-pal-grouplabel">Rail</span>
-              <div className="le-swatches">
-                {FENCE_MATERIALS.map((mat) => (
-                  <button
-                    type="button"
-                    key={`fence-${mat}`}
-                    className={`le-swatch ${fenceBrushMaterial === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
-                    title={FENCE_MATERIAL_LABELS[mat]}
-                    onClick={() => { setFenceBrushMaterial(mat); setBrushKind('fence'); setLayer('fence'); setTool('brush'); }}
-                  >
-                    <img src={fenceThumbSrc(mat)} alt="" draggable={false} />
-                    <small>{FENCE_MATERIAL_LABELS[mat]}</small>
+            {activeFenceArtwork ? (
+              <div className="le-pal-group le-fence-artwork-picker">
+                <span className="le-pal-grouplabel">Artwork</span>
+                <div className="le-fence-artwork-cycle">
+                  <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Previous fence artwork" title="Previous fence artwork" onClick={() => stepFenceArtwork(-1)}>
+                    <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
                   </button>
-                ))}
+                  <SelectFrame>
+                    <select className="le-layer-select" value={activeFenceArtwork.id} onChange={(event) => selectFenceArtwork(event.target.value)} aria-label="Fence artwork">
+                      {fenceArtCatalog.map((artwork) => <option key={artwork.id} value={artwork.id}>{artwork.label}</option>)}
+                    </select>
+                  </SelectFrame>
+                  <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Next fence artwork" title="Next fence artwork" onClick={() => stepFenceArtwork(1)}>
+                    <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
+                  </button>
+                </div>
+                <div className={`le-fence-artwork-preview ${activeFenceArtwork.post ? '' : 'is-rail-only'}`.trim()} data-fence-artwork={activeFenceArtwork.id}>
+                  <img src={activeFenceArtwork.railE} alt="East rail" draggable={false} />
+                  <img src={activeFenceArtwork.railS} alt="South rail" draggable={false} />
+                  {activeFenceArtwork.post ? <img src={activeFenceArtwork.post} alt="Post" draggable={false} /> : null}
+                </div>
+                <div className={`le-fence-artwork-status is-${activeFenceArtworkReview?.status ?? 'unavailable'}`}>
+                  <strong>{activeFenceArtworkReview?.statusLabel}</strong>
+                  <span>{activeFenceArtworkReview?.note}</span>
+                </div>
+              </div>
+            ) : null}
+            <div className="le-pal-group">
+              <span className="le-pal-grouplabel">Place</span>
+              <div className="le-seg" role="group" aria-label="Fence paint target">
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', fencePaintTarget === 'rail' && 'active')} aria-pressed={fencePaintTarget === 'rail'} onClick={() => { setFencePaintTarget('rail'); setTool('brush'); }}>Rails</button>
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', fencePaintTarget === 'post' && 'active')}
+                  aria-pressed={fencePaintTarget === 'post'}
+                  disabled={Boolean(activeFenceArtwork && !activeFenceArtwork.post)}
+                  title={activeFenceArtwork && !activeFenceArtwork.post ? 'This artwork is intentionally rail-only.' : undefined}
+                  onClick={() => { setFencePaintTarget('post'); setTool('brush'); }}
+                >Posts</button>
               </div>
             </div>
+            {activeFenceArtwork ? (
+              <div className="le-fence-material-readout">
+                <span>New-stroke geometry</span>
+                <strong>{FENCE_MATERIAL_LABELS[activeFenceArtwork.material]}</strong>
+              </div>
+            ) : (
+              <div className="le-pal-group">
+                <span className="le-pal-grouplabel">Material</span>
+                <div className="le-swatches">
+                  {FENCE_MATERIALS.map((mat) => (
+                    <button
+                      type="button"
+                      key={`fence-${mat}`}
+                      data-chrome-unit="inner-asset-swatch"
+                      className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', fenceBrushMaterial === mat && tool !== 'erase' && 'active')}
+                      title={FENCE_MATERIAL_LABELS[mat]}
+                      onClick={() => { setFenceBrushMaterial(mat); setBrushKind('fence'); setLayer('fence'); setTool('brush'); }}
+                    >
+                      <img src={fencePaintTarget === 'post' ? fencePostThumbSrc(mat) : fenceThumbSrc(mat)} alt="" draggable={false} />
+                      <small>{FENCE_MATERIAL_LABELS[mat]}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <p className="le-board-note">
-              Hover a tile and the nearest <strong>edge</strong> highlights; click to drop a rail on that edge
-              (right-click or the Erase tool removes it). Boundary rails are visual; a fenced edge between
-              two board tiles can&rsquo;t be crossed — both tiles stay walkable, and knights hop it (like water).
+              {fencePaintTarget === 'rail' ? <>
+                Hover a tile and the nearest <strong>edge</strong> highlights; click to drop a rail on that edge
+                (right-click or the Erase tool removes it). Boundary rails are visual; a fenced edge between
+                two board tiles can&rsquo;t be crossed — both tiles stay walkable, and knights hop it (like water).
+              </> : <>
+                Hover a tile and the nearest <strong>corner</strong> highlights; click to author a post at that shared
+                grid vertex. Posts may stand alone. Right-click or Erase removes only the authored post; an automatic
+                post still appears wherever exactly one rail ends.
+              </>}
             </p>
+            {activeFenceArtwork ? (
+              <p className="le-board-note">
+                {activeFenceArtwork.post
+                  ? 'Artwork cycling restyles the same authored rails and posts without changing their saved collision geometry or production status.'
+                  : 'This backend review kit is rail-only. Saved post geometry is left unchanged but intentionally hidden, and post authoring is unavailable while this kit is selected.'}
+              </p>
+            ) : null}
           </section>
         ) : featureKind ? (
           <section className="skirmish-card le-brush-panel">
@@ -5536,7 +5858,8 @@ export function LevelEditor(): ReactElement {
                   <button
                     type="button"
                     key={`road-${mat}`}
-                    className={`le-swatch ${brushKind === 'road' && featureBrushMaterial.road === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    data-chrome-unit="inner-asset-swatch"
+                    className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', brushKind === 'road' && featureBrushMaterial.road === mat && tool !== 'erase' && 'active')}
                     title={FEATURE_MATERIAL_LABELS[mat]}
                     onClick={() => { setFeatureBrushMaterial((prev) => ({ ...prev, road: mat })); setBrushKind('road'); setLayer('paths'); setTool('brush'); }}
                   >
@@ -5553,7 +5876,8 @@ export function LevelEditor(): ReactElement {
                   <button
                     type="button"
                     key={`river-${mat}`}
-                    className={`le-swatch ${brushKind === 'river' && featureBrushMaterial.river === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    data-chrome-unit="inner-asset-swatch"
+                    className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', brushKind === 'river' && featureBrushMaterial.river === mat && tool !== 'erase' && 'active')}
                     title={FEATURE_MATERIAL_LABELS[mat]}
                     onClick={() => { setFeatureBrushMaterial((prev) => ({ ...prev, river: mat })); setBrushKind('river'); setLayer('paths'); setTool('brush'); }}
                   >
@@ -5594,7 +5918,8 @@ export function LevelEditor(): ReactElement {
                       <button
                         type="button"
                         key={asset.id}
-                        className={`le-swatch le-macro-swatch ${macroTileBrushId === asset.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        data-chrome-unit="inner-asset-swatch"
+                        className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', 'le-macro-swatch', macroTileBrushId === asset.id && tool !== 'erase' && 'active')}
                         title={`${asset.label} · ${asset.columns}×${asset.rows}`}
                         onClick={() => { setMacroTileBrushId(asset.id); setTool('brush'); }}
                       >
@@ -5615,7 +5940,8 @@ export function LevelEditor(): ReactElement {
                       <button
                         type="button"
                         key={tile.id}
-                        className={`le-swatch ${macroTileBrushId === null && brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        data-chrome-unit="inner-asset-swatch"
+                        className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', macroTileBrushId === null && brushId === tile.id && tool !== 'erase' && 'active')}
                         title={tile.label}
                         onClick={() => { setMacroTileBrushId(null); setBrushId(tile.id); setTool('brush'); }}
                       >
@@ -5647,9 +5973,9 @@ export function LevelEditor(): ReactElement {
 
         {fenceTool && selectedCell ? (
           <section className="skirmish-card">
-            <h2>Fence edges</h2>
-            <FenceConnections cell={selectedCell} cols={boardCols} rows={boardRows} fences={boardFences} onPaint={paintFenceEdge} onErase={eraseFenceEdge} />
-            <p className="le-board-note">Click an edge to select or clear the fence on that side of the selected tile. Outer board edges place boundary rails.</p>
+            <h2>Fence layout</h2>
+            <FenceConnections cell={selectedCell} cols={boardCols} rows={boardRows} fences={boardFences} posts={boardFencePosts} onPaint={paintFenceEdge} onErase={eraseFenceEdge} onPaintPost={paintFencePost} onErasePost={eraseFencePost} />
+            <p className="le-board-note">Click an edge to toggle its rail or a corner dot to toggle an authored post. Dashed corner dots are automatic open ends; removing an authored post falls back to automatic behavior.</p>
           </section>
         ) : null}
 
@@ -5665,8 +5991,8 @@ export function LevelEditor(): ReactElement {
           <section className="skirmish-card">
             <h2>Tile Fill</h2>
             <div className="le-seg">
-              <button type="button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank terrain cells with the current tile brush.">Empty</button>
-              <button type="button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole terrain layer with the current tile brush.">Whole</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => fillBoard('empty')} title="Fill blank terrain cells with the current tile brush.">Empty</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => fillBoard('all')} title="Fill the whole terrain layer with the current tile brush.">Whole</button>
             </div>
           </section>
         ) : null}
@@ -5674,7 +6000,7 @@ export function LevelEditor(): ReactElement {
         {brushKind !== 'tile' ? (
           <section className="skirmish-card">
             <h2>Layer Actions</h2>
-            <button type="button" className="le-seg-btn danger" style={{ width: '100%' }} onClick={clearActiveLayer} title={brushKind === 'zone' ? 'Clear the selected zone entry.' : `Clear every ${brushKind === 'wallart' ? 'wall art' : brushKind} placement from this board.`}>Clear {brushKind === 'zone' ? 'active zone' : brushKind === 'wallart' ? 'wall art' : brushKind}</button>
+            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} style={{ width: '100%' }} onClick={clearActiveLayer} title={brushKind === 'zone' ? 'Clear the selected zone entry.' : brushKind === 'fence' ? 'Clear every fence rail and authored post from this board.' : `Clear every ${brushKind === 'wallart' ? 'wall art' : brushKind} placement from this board.`}>Clear {brushKind === 'zone' ? 'active zone' : brushKind === 'wallart' ? 'wall art' : brushKind === 'fence' ? 'fences & posts' : brushKind}</button>
           </section>
         ) : null}
 
@@ -5688,20 +6014,20 @@ export function LevelEditor(): ReactElement {
           <div className="skirmish-view-group">
             <span className="skirmish-eyebrow">Zoom</span>
             <div className="skirmish-view-row">
-              <button type="button" className="app-header-button" onClick={() => adjustZoom(-0.1)} aria-label="Zoom out">−</button>
+              <button type="button" data-chrome-unit="inner-minus-key" className={chromeUnitClassNames('inner-minus-key', 'le-seg-btn', 'le-icon-btn')} onClick={() => adjustZoom(-0.1)} aria-label="Zoom out">−</button>
               <span className="skirmish-zoom-readout">{Math.round(viewZoom * 100)}%</span>
-              <button type="button" className="app-header-button" onClick={() => adjustZoom(0.1)} aria-label="Zoom in">+</button>
-              <button type="button" className="app-header-button" onClick={resetBoardView}>Reset</button>
+              <button type="button" data-chrome-unit="inner-plus-key" className={chromeUnitClassNames('inner-plus-key', 'le-seg-btn', 'le-icon-btn')} onClick={() => adjustZoom(0.1)} aria-label="Zoom in">+</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={resetBoardView}>Reset</button>
             </div>
           </div>
           <div className="skirmish-view-group">
             <span className="skirmish-eyebrow">Overlays</span>
             <div className="skirmish-view-row">
-              <button type="button" className={`app-header-button ${showMoves ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowMoves((value) => !value)} aria-pressed={showMoves}>Moves</button>
-              <button type="button" className={`app-header-button ${showEnemyAttacks ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowEnemyAttacks((value) => !value)} aria-pressed={showEnemyAttacks}>Attacks</button>
-              <button type="button" className={`app-header-button ${showBlocked ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowBlocked((value) => !value)} aria-pressed={showBlocked}>Blocks</button>
-              <button type="button" className={`app-header-button ${showPromotionZones ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowPromotionZones((value) => !value)} aria-pressed={showPromotionZones}>Promotion</button>
-              <button type="button" className={`app-header-button ${showGrid ? 'app-header-button-active' : ''}`.trim()} onClick={() => setShowGrid((value) => !value)} aria-pressed={showGrid}>Grid</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showMoves && 'active')} onClick={() => setShowMoves((value) => !value)} aria-pressed={showMoves}>Moves</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showEnemyAttacks && 'active')} onClick={() => setShowEnemyAttacks((value) => !value)} aria-pressed={showEnemyAttacks}>Attacks</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showBlocked && 'active')} onClick={() => setShowBlocked((value) => !value)} aria-pressed={showBlocked}>Blocks</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showPromotionZones && 'active')} onClick={() => setShowPromotionZones((value) => !value)} aria-pressed={showPromotionZones}>Promotion</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showGrid && 'active')} onClick={() => setShowGrid((value) => !value)} aria-pressed={showGrid}>Grid</button>
             </div>
           </div>
         </section>
@@ -5755,8 +6081,7 @@ export function LevelEditor(): ReactElement {
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{zoneCount}</b> zones · <b>{zonedTileCount}</b> zoned tiles · {boardCols}×{boardRows}
         </div>
         ) : null}
-        </KitScroll>
-      </aside>
+      </LevelEditorControlsPanel>
       )}
       </ArtRouteChrome>
     </div>

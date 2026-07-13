@@ -10,8 +10,11 @@ import {
   featureMaterials,
   defaultFeatureMaterial,
   resolveFenceOverlays,
+  resolveFencePosts,
   resolveWallOverlays,
   fenceBlocksCrossing,
+  fenceVertexKey,
+  parseFenceVertexKey,
   parseEdgeKey,
   FENCE_MATERIALS,
   DEFAULT_FENCE_MATERIAL,
@@ -192,26 +195,88 @@ describe('edge fences', () => {
     expect(fenceBlocksCrossing(undefined, 1, 1, 2, 1)).toBe(false);
   });
 
-  it('assigns each shared edge to its upper-left cell (E=2 / S=4), drawn once', () => {
+  it('assigns isolated E/S rails once and resolves their endpoints as canonical posts', () => {
     // vertical-screen pair (N/S neighbours) → smaller-y cell's S(4) edge
-    const vertical = resolveFenceOverlays({ [roadEdgeKey(1, 1, 1, 2)]: 'wood' });
+    const verticalFences = { [roadEdgeKey(1, 1, 1, 2)]: 'wood' } as const;
+    const vertical = resolveFenceOverlays(verticalFences);
     expect(vertical.get('1,1')).toEqual({ mask: 4, material: 'wood' });
     expect(vertical.has('1,2')).toBe(false);
+    expect(resolveFencePosts(verticalFences)).toEqual(new Map([
+      ['2,2', { x: 2, y: 2, material: 'wood', source: 'automatic' }],
+      ['1,2', { x: 1, y: 2, material: 'wood', source: 'automatic' }],
+    ]));
+
     // horizontal-screen pair (E/W neighbours) → smaller-x cell's E(2) edge
-    const horizontal = resolveFenceOverlays({ [roadEdgeKey(1, 1, 2, 1)]: 'stone' });
+    const horizontalFences = { [roadEdgeKey(1, 1, 2, 1)]: 'stone' } as const;
+    const horizontal = resolveFenceOverlays(horizontalFences);
     expect(horizontal.get('1,1')).toEqual({ mask: 2, material: 'stone' });
-    // a cell owning both its E and S edges combines to mask 6
-    const both = resolveFenceOverlays({ [roadEdgeKey(0, 0, 1, 0)]: 'wood', [roadEdgeKey(0, 0, 0, 1)]: 'wood' });
-    expect(both.get('0,0')).toEqual({ mask: 6, material: 'wood' });
+    expect([...resolveFencePosts(horizontalFences).keys()]).toEqual(['2,1', '2,2']);
   });
 
-  it('resolves north/west boundary fences through off-board phantom owners', () => {
-    const boundary = resolveFenceOverlays({
+  it('combines a same-owner E+S corner and omits the automatic post at its shared vertex', () => {
+    const fences = { [roadEdgeKey(0, 0, 1, 0)]: 'wood', [roadEdgeKey(0, 0, 0, 1)]: 'wood' } as const;
+    expect(resolveFenceOverlays(fences).get('0,0')).toEqual({ mask: 6, material: 'wood' });
+    expect([...resolveFencePosts(fences).keys()]).toEqual(['1,0', '0,1']);
+  });
+
+  it('keeps only the outer automatic posts across a collinear continuation', () => {
+    const fences = {
+      [roadEdgeKey(0, 0, 1, 0)]: 'wood',
+      [roadEdgeKey(0, 1, 1, 1)]: 'wood',
+    } as const;
+    expect(resolveFenceOverlays(fences)).toEqual(new Map([
+      ['0,0', { mask: 2, material: 'wood' }],
+      ['0,1', { mask: 2, material: 'wood' }],
+    ]));
+    expect([...resolveFencePosts(fences).keys()]).toEqual(['1,0', '1,2']);
+  });
+
+  it('resolves isolated north/west boundary fences through off-board phantom owners', () => {
+    const fences = {
+      [roadEdgeKey(1, 0, 1, -1)]: 'wood',
+      [roadEdgeKey(0, 2, -1, 2)]: 'stone',
+    } as const;
+    const boundary = resolveFenceOverlays(fences);
+    expect(boundary.get('1,-1')).toEqual({ mask: 4, material: 'wood' });
+    expect(boundary.get('-1,2')).toEqual({ mask: 2, material: 'stone' });
+    expect([...resolveFencePosts(fences).keys()]).toEqual(['2,0', '1,0', '0,2', '0,3']);
+  });
+
+  it('deduplicates a post shared by phantom-owner rails and permits an explicit corner post', () => {
+    const fences = {
       [roadEdgeKey(0, 0, 0, -1)]: 'wood',
-      [roadEdgeKey(0, 0, -1, 0)]: 'stone',
+      [roadEdgeKey(0, 0, -1, 0)]: 'wood',
+    } as const;
+    expect([...resolveFencePosts(fences).keys()]).toEqual(['1,0', '0,1']);
+    expect(resolveFencePosts(fences, { '0,0': 'stone' }).get('0,0')).toEqual({
+      x: 0, y: 0, material: 'stone', source: 'explicit',
     });
-    expect(boundary.get('0,-1')).toEqual({ mask: 4, material: 'wood' });
-    expect(boundary.get('-1,0')).toEqual({ mask: 2, material: 'stone' });
+  });
+
+  it('deduplicates reversed aliases before computing endpoint degree', () => {
+    const fences = {
+      '1,1|2,1': 'wood',
+      '2,1|1,1': 'stone',
+    } as const;
+    expect(resolveFenceOverlays(fences)).toEqual(new Map([['1,1', { mask: 2, material: 'wood' }]]));
+    expect([...resolveFencePosts(fences).values()]).toEqual([
+      { x: 2, y: 1, material: 'wood', source: 'automatic' },
+      { x: 2, y: 2, material: 'wood', source: 'automatic' },
+    ]);
+  });
+
+  it('lets explicit material override an automatic endpoint and keeps standalone posts', () => {
+    const fences = { [roadEdgeKey(1, 1, 2, 1)]: 'wood' } as const;
+    const posts = resolveFencePosts(fences, { '2,1': 'stone', '4,4': 'wood' });
+    expect(posts.size).toBe(3);
+    expect(posts.get('2,1')).toEqual({ x: 2, y: 1, material: 'stone', source: 'explicit' });
+    expect(posts.get('2,2')).toEqual({ x: 2, y: 2, material: 'wood', source: 'automatic' });
+    expect(posts.get('4,4')).toEqual({ x: 4, y: 4, material: 'wood', source: 'explicit' });
+    expect(fenceVertexKey(4, 4)).toBe('4,4');
+    expect(parseFenceVertexKey('4,4')).toEqual({ x: 4, y: 4 });
+    expect(parseFenceVertexKey('4.5,4')).toBeNull();
+    expect(parseFenceVertexKey('04,4')).toBeNull();
+    expect(parseFenceVertexKey('4,4,5')).toBeNull();
   });
 
   it('exposes wood + stone fence materials with wood as the default', () => {

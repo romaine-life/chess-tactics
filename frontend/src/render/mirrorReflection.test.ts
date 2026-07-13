@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   WALL_DECOR_ASSETS,
+  applyLiveMediaCatalog,
   applyLiveUnitCatalog,
   boardDrawOps,
   clipPolygonToConvex,
@@ -21,6 +22,7 @@ import {
   reflectedOpsForSubjects,
   reflectedSeatForSurface,
   resetLiveUnitCatalog,
+  resetLiveMediaCatalog,
   roadEdgeKey,
   unitArtForId,
   wallArt,
@@ -35,10 +37,17 @@ import {
   type EditorBoard,
   type MirrorReflectionSubject,
 } from '@chess-tactics/board-render';
+import { testGroundCoverCatalog, testWallDecorMediaSlots } from '../test/liveMediaCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 
-beforeAll(() => applyLiveUnitCatalog(testLiveUnitCatalog()));
-afterAll(() => resetLiveUnitCatalog());
+beforeAll(() => {
+  applyLiveMediaCatalog(testGroundCoverCatalog(testWallDecorMediaSlots()));
+  applyLiveUnitCatalog(testLiveUnitCatalog());
+});
+afterAll(() => {
+  resetLiveMediaCatalog();
+  resetLiveUnitCatalog();
+});
 
 const blank = (cols = 6, rows = 6): EditorBoard => ({
   cols,
@@ -76,7 +85,7 @@ describe('mirror metadata and normalized optics', () => {
     for (const mirror of mirrors) {
       for (const face of ['west', 'north'] as const) {
         expect(isNormalizedAperture(mirror.faces[face].aperture), `${mirror.id}/${face}`).toBe(true);
-        expect(mirror.faces[face].glassSrc, `${mirror.id}/${face}`).toMatch(/\.png$/);
+        expect(mirror.faces[face].glassSrc, `${mirror.id}/${face}`).toMatch(/^\/api\/media\/[0-9a-f]{64}$/);
       }
     }
     expect(mirrors.every((mirror) => ['authored-crop', 'full-body'].includes(mirror.mirrorCoverage))).toBe(true);
@@ -87,7 +96,7 @@ describe('mirror metadata and normalized optics', () => {
 
   it('gives every placeable mirror live optics with no off/none mode', () => {
     const mirrors = wallArtItems().filter((art) =>
-      art.slots.some((slot) => wallDecorAsset(slot.sourceId).kind === 'mirror'));
+      art.slots.some((slot) => wallDecorAsset(slot.sourceId)?.kind === 'mirror'));
     expect(mirrors.length).toBeGreaterThanOrEqual(5);
     for (const art of mirrors) {
       expect(art.reflection?.opacity).toBeGreaterThan(0);
@@ -98,9 +107,12 @@ describe('mirror metadata and normalized optics', () => {
 
   it('preloads both the foreground frame and generated glass backing', () => {
     const edge = roadEdgeKey(0, 0, -1, 0);
+    const keep = wallDecorAsset('mirror-keep');
+    expect(keep?.kind).toBe('mirror');
+    if (!keep || keep.kind !== 'mirror') return;
     expect(wallArtSrcs({ [edge]: 'mirror-keep-wall' }, { cols: 4, rows: 4 })).toEqual([
-      '/assets/wall-decor/mirror-keep-west.png',
-      '/assets/wall-decor/mirror-keep-west-glass.png',
+      keep.faces.west.src,
+      keep.faces.west.glassSrc,
     ]);
   });
 });
@@ -356,12 +368,18 @@ describe('static EditorBoard reflection parity', () => {
     const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-8.png')!;
     const glass = ops.find((op) => op.z === mirrorGlassOverlayZIndex({ x: 0, y: 0 }))!;
     const reflection = ops.find((op) => op.contain && op.clipPolygons?.length)!;
-    const frameSrc = wallDecorAsset('mirror-keep').faces.west.src;
+    const keepFrameSource = wallDecorAsset('mirror-keep');
+    expect(keepFrameSource?.kind).toBe('mirror');
+    if (!keepFrameSource || keepFrameSource.kind !== 'mirror') return;
+    const frameSrc = keepFrameSource.faces.west.src;
     const frame = ops.find((op) => op.src === frameSrc)!;
     const physical = ops.find((op) => op.contain && !op.clipPolygons)!;
     const unit = unitArtForId('pawn')!;
 
-    expect(glass.src).toMatch(/mirror-keep-west-glass\.png$/);
+    const keep = wallDecorAsset('mirror-keep');
+    expect(keep?.kind).toBe('mirror');
+    if (!keep || keep.kind !== 'mirror') return;
+    expect(glass.src).toBe(keep.faces.west.glassSrc);
     expect(reflection.src).toBe(unit.sprite('navy-blue', 'north'));
     expect(reflection.flipX).toBe(true);
     expect(reflection.clipPolygons?.[0].length).toBeGreaterThanOrEqual(6);

@@ -12,12 +12,15 @@ import { UNIT_PALETTE_LABELS, UNIT_PALETTES, type UnitPalette } from '../core/pi
 import {
   familyLabels,
   rookDirections,
+  unitAssetProductionEligibility,
   type Direction,
   type LiveUnitCatalog,
   type LiveUnitCatalogAsset,
   type UnitAsset,
 } from './unitCatalog';
 import { UnitRecaptureEditor, type UnitArtPreview } from './UnitRecaptureEditor';
+
+const CALIBRATION_ONLY_MESSAGE = 'Calibration only · regenerate at native pixels before acceptance (ADR-0076)';
 
 type MetadataDraft = {
   label: string;
@@ -70,6 +73,7 @@ export function UnitAssetManager({
     ? catalog.assets.find((asset) => asset.id === selectedUnit.catalogAssetId)
     : undefined;
   const candidate = selectedAsset && !selectedAsset.accepted && selectedAsset.status !== 'archived' ? selectedAsset : null;
+  const candidateEligibility = candidate ? unitAssetProductionEligibility(candidate) : { eligible: true as const };
   const accepted = catalog.assets.find((asset) => asset.family === selectedUnit.family && asset.accepted);
   const source = selectedAsset ?? accepted;
   const [draft, setDraft] = useState<MetadataDraft | null>(() => candidate ? draftFromAsset(candidate) : null);
@@ -186,6 +190,10 @@ export function UnitAssetManager({
 
   const acceptCandidate = async (asset: LiveUnitCatalogAsset): Promise<void> => {
     if (busy || !asset.complete) return;
+    if (!unitAssetProductionEligibility(asset).eligible) {
+      setStatus(CALIBRATION_ONLY_MESSAGE);
+      return;
+    }
     setBusy(true);
     setStatus('Accepting');
     try {
@@ -217,6 +225,9 @@ export function UnitAssetManager({
   };
 
   const archivedSelection = archived.find((asset) => asset.id === archivedId);
+  const archivedEligibility = archivedSelection
+    ? unitAssetProductionEligibility(archivedSelection)
+    : { eligible: true as const };
 
   return (
     <section className="unit-asset-manager" aria-label="Unit asset manager">
@@ -259,9 +270,15 @@ export function UnitAssetManager({
               <span>Upload PNGs</span>
               <input ref={fileInputRef} type="file" accept="image/png,.png" multiple onChange={(event) => void uploadFiles(event)} disabled={busy} />
             </label>
-            <button type="button" onClick={() => void acceptCandidate(candidate)} disabled={busy || !candidate.complete}>Accept</button>
+            <button
+              type="button"
+              onClick={() => void acceptCandidate(candidate)}
+              disabled={busy || !candidate.complete || !candidateEligibility.eligible}
+              title={!candidateEligibility.eligible ? CALIBRATION_ONLY_MESSAGE : undefined}
+            >Accept</button>
             <button type="button" onClick={() => void archiveCandidate()} disabled={busy}>Archive</button>
           </div>
+          {!candidateEligibility.eligible ? <p className="unit-asset-production-gate">{CALIBRATION_ONLY_MESSAGE}</p> : null}
           <div className="unit-asset-completeness">
             {UNIT_PALETTES.map((id) => {
               const count = rookDirections.filter((direction) => candidate.sprites[id]?.[direction]).length;
@@ -272,7 +289,7 @@ export function UnitAssetManager({
       ) : (
         <div className="unit-asset-current">
           <span>{familyLabels[selectedUnit.family]}</span>
-          <strong>{accepted?.label ?? 'Committed fallback'}</strong>
+          <strong>{accepted?.label ?? 'No accepted backend version'}</strong>
           <button type="button" onClick={() => void createCandidate()} disabled={busy}>New candidate</button>
         </div>
       )}
@@ -282,9 +299,17 @@ export function UnitAssetManager({
           <select value={archivedId} onChange={(event) => setArchivedId(event.target.value)} aria-label="Archived unit art">
             {archived.map((asset) => <option key={asset.id} value={asset.id}>{familyLabels[asset.family]} · {asset.label}</option>)}
           </select>
-          <button type="button" disabled={busy || !archivedSelection?.complete} onClick={() => archivedSelection && void acceptCandidate(archivedSelection)}>Restore accepted</button>
+          <button
+            type="button"
+            disabled={busy || !archivedSelection?.complete || !archivedEligibility.eligible}
+            title={!archivedEligibility.eligible ? CALIBRATION_ONLY_MESSAGE : undefined}
+            onClick={() => archivedSelection && void acceptCandidate(archivedSelection)}
+          >Restore accepted</button>
         </div>
       ) : null}
+      {editorMode === 'asset' && archivedSelection && !archivedEligibility.eligible
+        ? <p className="unit-asset-production-gate">{CALIBRATION_ONLY_MESSAGE}</p>
+        : null}
       {editorMode === 'asset' && status ? <output className="unit-asset-status">{status}</output> : null}
     </section>
   );

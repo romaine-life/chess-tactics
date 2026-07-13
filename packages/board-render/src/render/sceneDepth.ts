@@ -12,6 +12,9 @@ export const GROUND_COVER_FRONT_DEPTH_OFFSET = OBJECT_DEPTH_OFFSET - 11;
 // seated in the cell. Ground cover leaves a wider gutter below fences because
 // tufts from the nearby foreground rows can still visually overlap the rail.
 export const FENCE_OVERLAY_DEPTH_OFFSET = OBJECT_DEPTH_OFFSET - 2;
+// A post caps every rail that terminates at its vertex. Keep it half a band in front of the
+// nearest incident rail so the rail sprite's own terminal upright cannot paint through the post.
+export const FENCE_POST_DEPTH_BIAS = 0.5;
 
 // Perimeter walls sit on the back edges of their owner cells. Keep the entire wall below
 // same-cell structure art; otherwise a split prop/doodad is painted back-half, wall, front-half
@@ -43,6 +46,15 @@ export function groundCoverZIndex(cell: { x: number; y: number }, tuftDy: number
 
 export function fenceOverlayZIndex(cell: { x: number; y: number }): number {
   return cellDepth(cell) + FENCE_OVERLAY_DEPTH_OFFSET;
+}
+
+/**
+ * A fence vertex's projected base is one depth step above `cellDepth(vertex)`. The positive
+ * half-band bias puts the post in front of both possible incident rail-owner bands, so a post
+ * consistently caps its rail endpoints without entering the object band.
+ */
+export function fencePostZIndex(vertex: { x: number; y: number }): number {
+  return cellDepth(vertex) - 1 + FENCE_OVERLAY_DEPTH_OFFSET + FENCE_POST_DEPTH_BIAS;
 }
 
 export function wallOverlayZIndex(cell: { x: number; y: number }): number {

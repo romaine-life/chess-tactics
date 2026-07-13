@@ -1,15 +1,15 @@
 # Asset Terminology
 
-Canonical vocabulary for the asset catalog (`frontend/src/asset-catalog.json`,
-explored at `/design/catalog`). **Every term here is attested by an engine
+Canonical vocabulary for the backend live-media catalog (explored through
+Studio). **Every term here is attested by an engine
 authority** (Unity, Unreal, or Godot documentation) — no informal terms. Pairs
 with `docs/asset-generation-contract.md` (what *becomes* an asset) and
 `docs/asset-pipeline-proposal.md` (how art is normalized).
 
 ## Core split: asset vs. widget
 
-- **Asset** — a reusable piece the game operates on, stored as data (an image +
-  a contract). 9-slices and icons are assets. Test: the *Convert To Assets* rule
+- **Asset** — a reusable piece the game operates on, stored as live data (media
+  bytes plus a contract). 9-slices and icons are assets. Test: the *Convert To Assets* rule
   in `asset-generation-contract.md`. *(Unity / Unreal: "asset".)*
 - **Widget** — an interactive element the player manipulates (a button),
   **assembled at runtime** from assets + live data; not stored as one image.

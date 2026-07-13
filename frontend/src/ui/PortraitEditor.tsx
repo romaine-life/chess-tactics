@@ -73,16 +73,17 @@ export function CroppedView({ src, crop }: { src: string; crop: Crop }): ReactEl
 // transparent line-frame with the fill boundary. Every surface — the Selected-Unit HUD, the
 // roster slots, and these editor previews — renders through THIS, so the framing/fill/crop are
 // defined once (here + the `.unit-portrait` CSS) and never re-derived per surface. Size, backdrop,
-// and the selected highlight vary via `size`/`backdrop`/a `className` modifier; nothing else.
-export function UnitPortrait({ piece, palette, crop, backdrop, size, className, method }: {
-  piece: Piece; palette: Palette; crop: Crop; backdrop?: string | null; size?: number; className?: string; method?: PortraitMethod;
+// and the selected highlight vary via `size`/`backdrop`/a `className` modifier. `masterUrl`
+// is an explicit semantic-slot override for runtime callers; `method` remains review-only.
+export function UnitPortrait({ piece, palette, crop, backdrop, size, className, method, masterUrl }: {
+  piece: Piece; palette: Palette; crop: Crop; backdrop?: string | null; size?: number; className?: string; method?: PortraitMethod; masterUrl?: string;
 }): ReactElement {
   const style: CSSProperties = {};
   if (size != null) { style.width = size; style.height = size; }
   if (backdrop) (style as Record<string, string>)['--up-backdrop'] = `url("${backdrop}")`;
   return (
     <div className={`unit-portrait ${backdrop ? 'has-backdrop' : ''} ${className ?? ''}`.trim()} style={style}>
-      <div className="unit-portrait__bust"><CroppedView src={masterSrc(piece, palette, method)} crop={crop} /></div>
+      <div className="unit-portrait__bust"><CroppedView src={masterUrl ?? masterSrc(piece, palette, method)} crop={crop} /></div>
     </div>
   );
 }

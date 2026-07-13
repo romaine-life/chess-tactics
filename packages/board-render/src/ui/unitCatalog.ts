@@ -24,7 +24,7 @@ export type UnitAsset = {
   family: PieceId;
   label: string;
   badge: string;
-  preview: string;
+  preview: string | null;
   read: string;
   status: string;
   directions?: Direction[];
@@ -44,7 +44,7 @@ export type UnitAsset = {
   complete?: boolean;
   spriteCount?: number;
   rowRevision?: number;
-  sprite: (faction: Faction, direction: Direction) => string;
+  sprite: (faction: Faction, direction: Direction) => string | null;
 };
 
 export type LiveUnitSprite = {
@@ -75,7 +75,43 @@ export type LiveUnitCatalogAsset = {
   sprites: Partial<Record<Faction, Partial<Record<Direction, LiveUnitSprite>>>>;
   spriteCount: number;
   complete: boolean;
+  /** Server-owned monotonic acceptance gate. Resampled calibration candidates cannot clear it. */
+  acceptanceBlockReason?: 'spatial-resampling' | null;
 };
+
+export type UnitAssetProductionEligibility =
+  | { eligible: true }
+  | { eligible: false; reason: 'spatial-resampling'; adr: 'ADR-0076' };
+
+/**
+ * Shared UI/server interpretation of the durable production gate. The catalog field is
+ * authoritative; parsing provenance keeps older snapshots and freshly-authored metadata honest
+ * until the backend has persisted its monotonic block.
+ */
+export function unitAssetProductionEligibility(
+  asset: Pick<LiveUnitCatalogAsset, 'method' | 'notes' | 'acceptanceBlockReason'>,
+): UnitAssetProductionEligibility {
+  if (asset.acceptanceBlockReason === 'spatial-resampling') {
+    return { eligible: false, reason: 'spatial-resampling', adr: 'ADR-0076' };
+  }
+  let provenance: { pipeline?: unknown; spatialResampling?: unknown } | null = null;
+  try {
+    const parsed = JSON.parse(asset.notes || 'null') as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      provenance = parsed as { pipeline?: unknown; spatialResampling?: unknown };
+    }
+  } catch {
+    // Human notes are valid for native candidates; only structured resampling evidence blocks.
+  }
+  if (
+    asset.method === 'Accepted sprite smooth recapture'
+    || provenance?.pipeline === 'accepted-sprite-recapture'
+    || provenance?.spatialResampling === true
+  ) {
+    return { eligible: false, reason: 'spatial-resampling', adr: 'ADR-0076' };
+  }
+  return { eligible: true };
+}
 
 export type LiveUnitCatalogFamily = {
   family: PieceId;
@@ -161,15 +197,6 @@ export const directionCompassCells: Array<Direction | 'center'> = [
 
 const paletteSprite = (piece: PieceId) => (faction: Faction, direction: Direction) => pieceSpritePath(piece, faction, direction);
 
-export const MISSING_DIRECTION_SPRITE =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'>" +
-      "<path d='M80 26 L144 80 L80 134 L16 80 Z' fill='none' stroke='#8fb8ff' stroke-width='3' stroke-dasharray='6 6' opacity='0.4'/>" +
-      "<text x='80' y='96' font-size='42' text-anchor='middle' fill='#8fb8ff' opacity='0.5' font-family='sans-serif'>?</text>" +
-      '</svg>',
-  );
-
 export const hasDirectionSprite = (unit: UnitAsset, dir: Direction) => (unit.directions ? unit.directions.includes(dir) : dir === 'south');
 
 const productionUnits: UnitAsset[] = [];
@@ -185,17 +212,17 @@ export const activeUnitFamilies: PieceId[] = ['pawn', 'rook', 'knight', 'bishop'
 
 let liveUnitCatalog: LiveUnitCatalog | null = null;
 
-const candidateSprite = (asset: LiveUnitCatalogAsset) => (faction: Faction, direction: Direction): string =>
-  asset.sprites[faction]?.[direction]?.url ?? MISSING_DIRECTION_SPRITE;
+const candidateSprite = (asset: LiveUnitCatalogAsset) => (faction: Faction, direction: Direction): string | null =>
+  asset.sprites[faction]?.[direction]?.url ?? null;
 
-const candidatePreview = (asset: LiveUnitCatalogAsset): string => {
+const candidatePreview = (asset: LiveUnitCatalogAsset): string | null => {
   const preferred = asset.sprites['navy-blue']?.south?.url;
   if (preferred) return preferred;
   for (const palette of Object.values(asset.sprites)) {
     if (!palette) continue;
     for (const sprite of Object.values(palette)) if (sprite?.url) return sprite.url;
   }
-  return MISSING_DIRECTION_SPRITE;
+  return null;
 };
 
 const effectiveScalePercent = (familyScalePercent: number, nativeScalePercent: number): number =>

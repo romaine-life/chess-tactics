@@ -1,29 +1,83 @@
 {
-  "generatedAt": "2026-07-12T18:18:59.2765761Z",
-  "results": [
+  "authority": "historical-provenance-only",
+  "runtime_authority": "backend-live-media-catalog",
+  "date": "2026-07-06",
+  "outputs": {
+    "contact_sheet": "docs/art/wall-art-concepts/wall-decor-contact-sheet.png",
+    "runtime_proof": "docs/art/wall-art-concepts/proofs/wall-decor-runtime-proof.png",
+    "runtime_manifest": "frontend/public/assets/wall-decor/manifest.json",
+    "ui_manifest": "frontend/src/ui/design/wallDecorManifest.json",
+    "final_assets": "frontend/public/assets/wall-decor/<id>.png",
+    "projected_face_assets": "frontend/public/assets/wall-decor/<id>-<west|north>.png",
+    "placement": "Choose one projected face asset per wall segment; the proof sheet shows both faces together only for review."
+  },
+  "reference_lanes": [
     {
-      "id": "mirror-grand-gallery-grounded",
-      "ok": true,
-      "reference": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-tall-raw.png",
-      "referenceRole": "precise-object edit target",
-      "prompt": "Keep the complete bottom rail, bottom corner bosses, and lower mounting baseline fixed; extend the same uninterrupted Grand Gallery glass and side rails substantially upward, preserving its generated pixel-art material and one continuous opening on flat #00ff00 chroma.",
-      "sizeHint": "floor-to-near-ceiling continuous mirror, lower baseline fixed",
-      "raw": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-grounded-raw.png",
-      "alpha": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-grounded-alpha.png",
-      "methodEvidence": "built-in image_gen call returned image in rollout",
-      "attempts": 1
+      "lane": "pixellab_reference",
+      "tool": "create_tiles_pro",
+      "tile_id": "1b8380fc-2c6c-43f2-9bc4-3fa9cde3427c",
+      "seed": 70620,
+      "archive": "docs/art/wall-art-concepts/pixellab/run-1b8380fc-2c6c-43f2-9bc4-3fa9cde3427c",
+      "selected_refs": [
+        "docs/art/wall-art-concepts/refs/banner-stone.png",
+        "docs/art/wall-art-concepts/refs/relief-stone.png"
+      ]
     },
     {
-      "id": "mirror-grand-gallery-grounded-wide",
-      "ok": true,
-      "reference": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-grounded-raw.png",
-      "referenceRole": "precise-object edit target",
-      "prompt": "Preserve the grounded mirror's exact height and bottom baseline; widen only the uninterrupted rails, glass, and highlights between unchanged side assemblies until the outer bbox is approximately 0.90:1 width-to-height; flat #00ff00 chroma, no seams or mullions.",
-      "sizeHint": "very tall three-wall mirror with fixed lower baseline",
-      "raw": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-grounded-wide-raw.png",
-      "alpha": "docs/art/wall-art-concepts/codex/mirror-grand-gallery-grounded-wide-alpha.png",
-      "methodEvidence": "built-in image_gen call returned image in rollout",
-      "attempts": 1
+      "lane": "codex_img2img_reference",
+      "tool": "frontend/scripts/forge-wall-material.mjs",
+      "selected_ref": "docs/art/wall-art-concepts/refs/lantern-wall-reference.png",
+      "normalization": "Used only as an img2img reference for standalone lantern decor."
+    }
+  ],
+  "assets": [
+    {
+      "id": "banner-tattered",
+      "source_ref": "docs/art/wall-art-concepts/refs/banner-stone.png",
+      "codex_thread_id": "019f35b1-fef8-7b22-96f7-b9662b6f0edf",
+      "raw": "docs/art/wall-art-concepts/codex/banner-tattered-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/banner-tattered-alpha.png",
+      "final": "frontend/public/assets/wall-decor/banner-tattered.png",
+      "faces": {
+        "west": "frontend/public/assets/wall-decor/banner-tattered-west.png",
+        "north": "frontend/public/assets/wall-decor/banner-tattered-north.png"
+      }
+    },
+    {
+      "id": "relief-pawn",
+      "source_ref": "docs/art/wall-art-concepts/refs/relief-stone.png",
+      "codex_thread_id": "019f35b3-e038-7091-a630-88677460ff80",
+      "raw": "docs/art/wall-art-concepts/codex/relief-pawn-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/relief-pawn-alpha.png",
+      "final": "frontend/public/assets/wall-decor/relief-pawn.png",
+      "faces": {
+        "west": "frontend/public/assets/wall-decor/relief-pawn-west.png",
+        "north": "frontend/public/assets/wall-decor/relief-pawn-north.png"
+      }
+    },
+    {
+      "id": "relief-rook",
+      "source_ref": "docs/art/wall-art-concepts/refs/relief-stone.png",
+      "codex_thread_id": "019f35b6-2ec1-7e33-b95c-c1777c0b4ddf",
+      "raw": "docs/art/wall-art-concepts/codex/relief-rook-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/relief-rook-alpha.png",
+      "final": "frontend/public/assets/wall-decor/relief-rook.png",
+      "faces": {
+        "west": "frontend/public/assets/wall-decor/relief-rook-west.png",
+        "north": "frontend/public/assets/wall-decor/relief-rook-north.png"
+      }
+    },
+    {
+      "id": "lantern-brass",
+      "source_ref": "docs/art/wall-art-concepts/refs/lantern-wall-reference.png",
+      "codex_thread_id": "019f35b7-c3b7-7102-96e3-e1f63f9ccfa3",
+      "raw": "docs/art/wall-art-concepts/codex/lantern-brass-raw.png",
+      "alpha": "docs/art/wall-art-concepts/codex/lantern-brass-alpha.png",
+      "final": "frontend/public/assets/wall-decor/lantern-brass.png",
+      "faces": {
+        "west": "frontend/public/assets/wall-decor/lantern-brass-west.png",
+        "north": "frontend/public/assets/wall-decor/lantern-brass-north.png"
+      }
     }
   ]
 }

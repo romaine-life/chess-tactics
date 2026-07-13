@@ -1,5 +1,5 @@
 ---
-status: "accepted"
+status: "accepted; repo-write and asset-storage clauses superseded by ADR-0085"
 date: 2026-07-02
 deciders: Nelson, Claude
 ---

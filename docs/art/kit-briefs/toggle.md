@@ -1,5 +1,11 @@
 # Kit Art Brief — Toggle (on / off)
 
+> **Live-storage workflow (ADR-0085).** Paths below identify archived source
+> records and semantic slots; they are not repository files. Fetch references by
+> original `sourcePath` with the live-media admin client, generate only in an
+> OS-temporary directory, and upload the results as candidates. Never overwrite
+> or create repository media.
+
 Self-contained brief for the art generator. Needs no context beyond this file
 and the referenced images. Goal: produce two clean, **transparent, crisp**
 toggle pills in the accepted Settings art style — NOT a soft crop of the
@@ -74,6 +80,7 @@ it precisely:
 
 ## Deliverables
 
-Overwrite `frontend/public/assets/ui/kit/toggle-on.png` and `toggle-off.png`
-(plus `@2x`). I will run the gate, wire them in at native size, and screenshot
-for sign-off.
+Upload `toggle-on`, `toggle-off`, and their `@2x` versions as candidates for
+the corresponding `ui/kit/` semantic slots. I will run the gate against those
+exact backend versions, mount them at native size, and review them in the live
+screen. Acceptance is a backend transaction after sign-off.

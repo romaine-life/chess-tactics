@@ -294,10 +294,23 @@ export function fenceBlocksCrossing(
   return fences.has(roadEdgeKey(ax, ay, bx, by));
 }
 
-/** A fenced cell resolved to its render selector: an E(2)/S(4) mask + which rail material. */
+/** A fenced cell resolved to its rail selector. */
 export interface ResolvedFenceOverlay {
   mask: number;
   material: FenceMaterial;
+}
+
+/** One canonical fence-graph vertex, in the square-grid lattice around the tile diamonds. */
+export interface FenceVertex {
+  x: number;
+  y: number;
+}
+
+/** A post resolved exactly once at a canonical fence vertex. */
+export interface ResolvedFencePost extends FenceVertex {
+  material: FenceMaterial;
+  /** Automatic posts cap degree-one endpoints; explicit posts are authored by the editor. */
+  source: 'automatic' | 'explicit';
 }
 
 /** A walled cell resolved to its render selector: an N(1)/W(8) mask + which wall material. */
@@ -306,40 +319,141 @@ export interface ResolvedWallOverlay {
   material: WallMaterial;
 }
 
-/**
- * Resolve an edge-keyed fence map to the per-cell render overlay (E=2 / S=4 mask + material) —
- * each edge is assigned to its UPPER-LEFT cell (smaller x for a horizontal-screen pair, smaller
- * y for a vertical-screen pair) so every rail is drawn exactly once. Boundary N/W rails resolve
- * to an off-board phantom owner's E/S frame, using the same baked art. Returns a
- * `cellKey → { mask, material }` map; cells with no owned fenced edge are absent. If one cell
- * owns two edges of different materials, the first-seen material wins (a cosmetic v1 limit —
- * the collision path reads the raw edge set, unaffected).
- */
-export function resolveFenceOverlays(fences: Record<string, FenceMaterial>): Map<string, ResolvedFenceOverlay> {
-  const out = new Map<string, ResolvedFenceOverlay>();
+interface FenceSegment {
+  ownerX: number;
+  ownerY: number;
+  maskBit: number;
+  material: FenceMaterial;
+  endpoints: readonly [FenceVertex, FenceVertex];
+}
+
+/** Canonical key for a fence vertex. Shared tile corners always produce the same key. */
+export function fenceVertexKey(x: number, y: number): string {
+  return featureKey(x, y);
+}
+
+/** Parse a canonical/authored fence-vertex key, rejecting fractional or malformed coordinates. */
+export function parseFenceVertexKey(key: string): FenceVertex | null {
+  const parts = key.split(',');
+  if (parts.length !== 2) return null;
+  const x = Number(parts[0]);
+  const y = Number(parts[1]);
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return null;
+  return fenceVertexKey(x, y) === key ? { x, y } : null;
+}
+
+function resolveFenceSegments(fences: Readonly<Record<string, FenceMaterial>>): FenceSegment[] {
+  const segments: FenceSegment[] = [];
+  const seenEdges = new Set<string>();
+
   for (const [edge, material] of Object.entries(fences)) {
     const cells = parseEdgeKey(edge);
     if (!cells) continue;
     const { ax, ay, bx, by } = cells;
     if (!isOrthogonalPair(ax, ay, bx, by)) continue;
-    let ownerX: number;
-    let ownerY: number;
-    let bit: number;
+
+    // Authored maps normally use roadEdgeKey already, but treating reversed/non-canonical aliases
+    // as one physical segment keeps vertex degree honest on imported or hand-edited board codes.
+    const canonicalEdge = roadEdgeKey(ax, ay, bx, by);
+    if (seenEdges.has(canonicalEdge)) continue;
+    seenEdges.add(canonicalEdge);
+
+    let segment: FenceSegment;
     if (ay === by) {
-      // horizontal-screen pair (E/W neighbours): owner is the smaller-x cell, its E edge.
-      ownerX = Math.min(ax, bx);
-      ownerY = ay;
-      bit = 2;
+      // Horizontal-screen pair (E/W neighbours): owner is smaller-x, and its E rail runs RIGHT→FRONT.
+      const ownerX = Math.min(ax, bx);
+      const ownerY = ay;
+      segment = {
+        ownerX,
+        ownerY,
+        maskBit: 2,
+        material,
+        endpoints: [
+          { x: ownerX + 1, y: ownerY },
+          { x: ownerX + 1, y: ownerY + 1 },
+        ],
+      };
     } else {
-      // vertical-screen pair (N/S neighbours): owner is the smaller-y cell, its S edge.
-      ownerX = ax;
-      ownerY = Math.min(ay, by);
-      bit = 4;
+      // Vertical-screen pair (N/S neighbours): owner is smaller-y, and its S rail runs FRONT→LEFT.
+      const ownerX = ax;
+      const ownerY = Math.min(ay, by);
+      segment = {
+        ownerX,
+        ownerY,
+        maskBit: 4,
+        material,
+        endpoints: [
+          { x: ownerX + 1, y: ownerY + 1 },
+          { x: ownerX, y: ownerY + 1 },
+        ],
+      };
     }
+
+    segments.push(segment);
+  }
+
+  return segments;
+}
+
+/**
+ * Resolve an edge-keyed fence map to the per-cell render overlay (E=2 / S=4 mask + material) —
+ * each edge is assigned to its UPPER-LEFT cell (smaller x for a horizontal-screen pair, smaller
+ * y for a vertical-screen pair) so every rail is drawn exactly once. Boundary N/W rails resolve
+ * to an off-board phantom owner's E/S frame, using the same baked art. Returns a
+ * `cellKey → { mask, material }` map; cells with no owned fenced edge are absent. If one cell owns
+ * two edges of different materials, the first-seen material wins (a cosmetic v1 limit — the
+ * collision path reads the raw edge set, unaffected).
+ */
+export function resolveFenceOverlays(fences: Readonly<Record<string, FenceMaterial>>): Map<string, ResolvedFenceOverlay> {
+  const out = new Map<string, ResolvedFenceOverlay>();
+  for (const segment of resolveFenceSegments(fences)) {
+    const { ownerX, ownerY, maskBit, material } = segment;
     const key = featureKey(ownerX, ownerY);
     const prev = out.get(key);
-    out.set(key, { mask: (prev?.mask ?? 0) | bit, material: prev?.material ?? material });
+    out.set(key, {
+      mask: (prev?.mask ?? 0) | maskBit,
+      material: prev?.material ?? material,
+    });
   }
+  return out;
+}
+
+/**
+ * Resolve automatic degree-one endings plus positive explicit authoring into one post per
+ * geometric vertex. Explicit posts win at an automatic endpoint (including their material), and
+ * may also stand alone or appear at corners/joins. Reversed aliases of one fence edge are counted
+ * once before degree is computed, so imported board codes cannot manufacture false junctions.
+ */
+export function resolveFencePosts(
+  fences: Readonly<Record<string, FenceMaterial>>,
+  explicitPosts: Readonly<Record<string, FenceMaterial>> = {},
+): Map<string, ResolvedFencePost> {
+  const incidents = new Map<string, { vertex: FenceVertex; degree: number; material: FenceMaterial }>();
+  for (const segment of resolveFenceSegments(fences)) {
+    for (const vertex of segment.endpoints) {
+      const key = fenceVertexKey(vertex.x, vertex.y);
+      const previous = incidents.get(key);
+      incidents.set(key, {
+        vertex,
+        degree: (previous?.degree ?? 0) + 1,
+        material: previous?.material ?? segment.material,
+      });
+    }
+  }
+
+  const out = new Map<string, ResolvedFencePost>();
+  for (const [key, incident] of incidents) {
+    if (incident.degree !== 1) continue;
+    out.set(key, { ...incident.vertex, material: incident.material, source: 'automatic' });
+  }
+
+  for (const [rawKey, material] of Object.entries(explicitPosts)) {
+    const vertex = parseFenceVertexKey(rawKey);
+    if (!vertex) continue;
+    const key = fenceVertexKey(vertex.x, vertex.y);
+    out.set(key, { ...vertex, material, source: 'explicit' });
+  }
+
   return out;
 }
 

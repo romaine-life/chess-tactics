@@ -7,6 +7,7 @@
 //   f?:fillTileId, t?:{cell:tileId}, h?:[cell], u?:{cell:[unitId,dir,faction]},
 //   d?:{cell:doodadId}, p?:{anchorCell:propId}, mt?:[[macroTileId,x,y,breakMask?]], v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fe?:{edgeKey:fenceMaterial},
+//   fp?:{vertexKey:fenceMaterial},
 //   wl?:{edgeKey:wallMaterial}, wa?:{anchorEdgeKey:wallArtId},
 //   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
 //   gr?:generatedRegionUnits }. `f` fills every cell, then `t` overrides — so a "mostly one tile"
@@ -14,17 +15,19 @@
 // features split per kind on the wire (rd=roads, rv=rivers) and merge into one `features` map on
 // decode. FENCES are edge-based, not per-cell: `fe` maps a shared-edge key (roadEdgeKey "x,y|x,y")
 // to a fence material — same edge keying as `rc` (severed edges) and `rx` (forced outward exits).
-// `wl` is a plain wall material map; `wa` is the independent wall-art layer mounted on walls.
+// `fp` stores author-added fence posts at logical grid vertices ("x,y"); automatic degree-one
+// fence endings remain derived from `fe`. `wl` is a plain wall material map; `wa` is the
+// independent wall-art layer mounted on walls.
 // `zn` is the authored gameplay-zone list; `z` is the legacy collapsed view (cell -> type) kept
 // for old links/clients. `gr` stores editor-only generated-region units: saved cell selections
 // plus the Generate panel settings needed to rerun them. base64url of the JSON (no padding, +/ -> -_).
 //
-// FORWARD/BACK-COMPAT: `z`/`p`/`fe`/`wl`/`wa` are emitted only when non-empty, so a board without them
+// FORWARD/BACK-COMPAT: `z`/`p`/`fe`/`fp`/`wl`/`wa` are emitted only when non-empty, so a board without them
 // encodes byte-identically to a code that predates them, and an OLD code decodes them to empty.
 
 import type { GroundCoverDensity } from '../core/groundCover';
 import { macroTileAsset, macroTileBreakIndices, type MacroTilePlacement } from '../core/macroTiles';
-import { DEFAULT_WALL_MATERIAL, WALL_MATERIALS, type FeatureKind, type FeatureMaterial, type RoadMaterial, type RiverMaterial, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
+import { DEFAULT_WALL_MATERIAL, FENCE_MATERIALS, WALL_MATERIALS, type FeatureKind, type FeatureMaterial, type RoadMaterial, type RiverMaterial, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, type WallArtId } from '../core/wallArt';
 import { ZONE_COLORS, ZONE_TYPES, type ZoneColor, type ZoneType } from '../core/level';
 import type { TileFamilyId } from '../core/tileSockets';
@@ -106,6 +109,10 @@ export interface EditorBoard {
    * Optional + back-compat (like `zones`): a bare board literal omits it; `decodeBoard` always
    * returns it populated (empty for an old code). */
   fences?: Record<string, FenceMaterial>;
+  /** Author-added fence posts, keyed by logical grid vertex "x,y" -> material. Vertex bounds are
+   * inclusive (0..cols, 0..rows), unlike cell keys. These supplement the automatic degree-one
+   * fence endings and may stand alone without an incident fence. */
+  fencePosts?: Record<string, FenceMaterial>;
   /** Edge walls, keyed like fences, but valid only on the northmost/westmost map perimeter.
    * Saves as its own visual channel while `editorBoardToLevel` projects it into the same
    * durable blocked-edge list as fences. Values are plain wall material ids. */
@@ -135,6 +142,7 @@ const clampNumber = (value: unknown, fallback: number, min: number, max: number)
   typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
 const validZoneTypes = new Set<string>(ZONE_TYPES);
 const validZoneColors = new Set<string>(ZONE_COLORS);
+const validFenceMaterials = new Set<string>(FENCE_MATERIALS);
 const validWallMaterials = new Set<string>(WALL_MATERIALS);
 
 function cellParts(key: string): [number, number] | null {
@@ -146,6 +154,25 @@ function cellParts(key: string): [number, number] | null {
 function inBoardKey(key: string, cols: number, rows: number): boolean {
   const p = cellParts(key);
   return !!p && p[0] >= 0 && p[0] < cols && p[1] >= 0 && p[1] < rows;
+}
+
+/** Keep only canonical integer grid vertices inside the board's inclusive vertex bounds. */
+function cleanFencePosts(value: unknown, cols: number, rows: number): Record<string, FenceMaterial> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, FenceMaterial> = {};
+  for (const [key, material] of Object.entries(value as Record<string, unknown>)) {
+    const parts = key.split(',');
+    if (parts.length !== 2) continue;
+    const x = Number(parts[0]);
+    const y = Number(parts[1]);
+    // Requiring the re-serialized key to match rejects fractions, whitespace, leading zeroes,
+    // extra components, and other aliases that could otherwise name the same geometric vertex.
+    if (!Number.isInteger(x) || !Number.isInteger(y) || `${x},${y}` !== key) continue;
+    if (x < 0 || x > cols || y < 0 || y > rows) continue;
+    if (typeof material !== 'string' || !validFenceMaterials.has(material)) continue;
+    out[key] = material as FenceMaterial;
+  }
+  return out;
 }
 
 function sortCellKeys(keys: string[]): string[] {
@@ -405,6 +432,10 @@ export function encodeBoard(b: EditorBoard): string {
   if (nonEmpty(rv)) wire.rv = rv;
   // Fences: an edge-key -> material map (emitted only when non-empty, back-compat like `z`/`p`).
   if (b.fences && nonEmpty(b.fences)) wire.fe = b.fences;
+  // Author-added posts are vertex-keyed and visual-only. Empty maps stay absent so post-free boards
+  // retain byte-identical codes; automatic degree-one endings continue to derive from `fe`.
+  const fencePosts = cleanFencePosts(b.fencePosts, b.cols, b.rows);
+  if (nonEmpty(fencePosts)) wire.fp = fencePosts;
   // Walls: edge-key -> material map. Separate from fences visually, but gameplay blocks the
   // same edge when the board is projected to a Level.
   if (b.walls && nonEmpty(b.walls)) wire.wl = b.walls;
@@ -456,6 +487,8 @@ export function decodeBoard(code: string): EditorBoard | null {
     // Fences: edge-key -> material (an OLD code without `fe` yields an empty map — back-compat).
     const fences: Record<string, FenceMaterial> = {};
     if (w.fe) for (const [k, m] of Object.entries(w.fe as Record<string, FenceMaterial>)) fences[k] = m;
+    // Authored posts supplement derived fence endings. Old codes have no `fp` and decode empty.
+    const fencePosts = cleanFencePosts(w.fp, cols, rows);
     // Walls: edge-key -> material (an OLD code without `wl` yields an empty map — back-compat).
     // Legacy draft links briefly stored wall-art ids in `wl`; migrate those to `wa` while
     // leaving a default wall under them so they still render as mounted art.
@@ -506,6 +539,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
       features,
       fences,
+      fencePosts,
       walls,
       wallArt: wallArtPlacements,
       featureCuts,

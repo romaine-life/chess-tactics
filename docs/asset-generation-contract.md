@@ -7,9 +7,21 @@ roughly gestures at it.
 
 Use this contract together with `docs/asset-terminology.md` (the vocabulary:
 asset, frame, part, slot, state, assembly), `docs/ui-art-direction.md`, and
-`docs/asset-pipeline-proposal.md`. For scenic backgrounds and unit portrait
+`docs/asset-pipeline-proposal.md`, plus the live-storage rules in
+[`runtime-asset-contract.md`](runtime-asset-contract.md). For scenic backgrounds and unit portrait
 backdrops, also use `docs/lore-anti-story.md` and
 `docs/background-art-contract.md`.
+
+Production raster sizing is governed by
+[ADR-0076](adr/0076-scaling-is-calibration-production-art-is-native-1x.md):
+scaling may calibrate a candidate, but acceptance requires regenerated native
+pixels and a 1:1 canonical runtime path.
+
+Storage and promotion are governed by
+[ADR-0085](adr/0085-runtime-assets-are-live-storage-backed.md): generated media
+is uploaded as a live candidate, accepted pointers live in Postgres, immutable
+bytes live in private Blob Storage, and no production/review/source media is
+published into Git.
 
 ## Core Decision
 
@@ -18,15 +30,18 @@ state. Generated concept renders are the style source and review reference;
 they are not the final renderer for interactive systems.
 
 Do not ask an agent to "make the UI look like the art" by inventing CSS. Ask it
-to produce named bitmap assets, manifests, contact sheets, and in-game previews
-that can be reviewed against the approved art.
+to produce named live-storage candidates, provenance, contact sheets, and
+in-game previews that can be reviewed against the approved art. A filesystem
+export is temporary handoff material, never promotion.
 
 ## Hard Rule
 
 Do not approximate the approved pixel-art style with CSS gradients, generic
 borders, box shadows, rounded panels, DOM-drawn ornaments, or ad hoc SVG
-redraws. CSS is layout glue. It may position, scale, hide, show, and load
-assets; it should not be the medium that recreates rich pixel art.
+redraws. CSS is layout glue. It may position, hide, show, and load assets; it may
+scale candidates during review or transform a whole scene for user zoom. It must
+not downscale an accepted asset locally to manufacture its canonical production
+size, and it should not be the medium that recreates rich pixel art.
 
 When the target visual detail is pixel-authored, produce transparent PNG assets
 or sprite sheets and render them through canvas or DOM image layers.
@@ -219,8 +234,11 @@ Constraints:
 - visible refined pixels
 - transparent PNG exports
 - fixed frame sizes
+- fixed native 1× subject footprint and anchor
 - 2px transparent gutter
 - live text only
+- no spatial resampling between the accepted generation and runtime PNG
+- source frame/atlas rect equals the canonical 1× draw rect
 - no CSS gradients, CSS ornaments, or DOM-drawn pixel-art substitutes
 - contact sheet required at 1x and 2x
 - in-app preview required beside the original crop
@@ -233,6 +251,37 @@ Make the profile panel look like the art.
 ```
 
 That leaves too much room for generic CSS approximation.
+
+## Game-Owned Review Handoff
+
+An art-generation task is not complete when it has merely exported assets,
+written manifests, or built contact sheets. Before an agent reports completion,
+it must mount every candidate the owner is being asked to judge in a game-owned
+viewing surface, open the exact deep link, and provide a focused capture from that
+live route.
+
+For board-visible art, the required default is a canonical-1× map proof over
+representative terrain and neighboring game objects. Prefer an editable Level
+Editor misc-map handoff. A dedicated Studio map may be used for a multi-candidate
+bake-off only when it renders through the real game board stack, shows every
+candidate in the batch, and keeps review assets isolated from accepted runtime
+art. A catalog card, standalone image, or contact sheet does not replace the map.
+
+This rule applies to calibration candidates and rejected or footprint-miss
+candidates too. **Production status and presentation status are separate.** A
+review-only mount does not promote the artwork, and the surface must preserve and
+display its honest status. If a game-surface proof cannot be produced, record the
+task as unfinished and identify the blocker rather than saying it is done.
+
+A run that claims `review_ready` or `complete` must record:
+
+- the game-surface kind and exact route;
+- canonical display scale;
+- a focused live-route capture;
+- every candidate id presented on the surface;
+- whether mounting is isolated review art or accepted runtime art.
+
+Contact sheets remain useful supplementary proofs for pixel inspection.
 
 ## Design Portfolio And Touchpoints
 
@@ -289,10 +338,41 @@ family with state frames and slots. The icons that fit those slots are sibling
 `button-icon.main-menu` assets. A rendered row is an assembly of frame state,
 icon asset, live label, and action.
 
+## Native-Pixel Production Gate
+
+Scaling is encouraged while deciding how large an asset should read. A tuning
+surface may shrink or grow a candidate, and the chosen frame, opaque subject
+footprint, anchor, and role become the next generation brief. That scaled output
+remains a **calibration candidate**; Save/Accept must not merely publish its scale.
+
+Before production acceptance:
+
+1. Freeze the canonical 1× frame, visible subject footprint, anchor/gutters, and
+   DOM/canvas draw rect.
+2. Regenerate, re-render, re-forge, or natively export the artwork at that pixel
+   contract.
+3. Preserve those authored pixels 1:1 through crop, translation, transparent
+   padding, chroma cleanup, masks, composition, or atlas packing. Do not spatially
+   resize them into the target, offline or live.
+4. Record generation/export dimensions and prove intrinsic frame/atlas dimensions
+   equal the canonical draw dimensions with asset-local baseline scale `1`.
+5. Review an in-app proof at canonical 1×.
+
+The transparent frame is not enough: the opaque subject must also be generated at
+its final visible footprint. Nearest-neighbor scaling and
+`image-rendering: pixelated` are still scaling, not acceptance. Whole-scene/user
+zoom, DPR-specific exports, and declared 9-slice/tiled regions are the narrow
+compositor exceptions defined by ADR-0076.
+
 ## Acceptance Checks
 
 Before an asset family is wired into production routes, require:
 
+- a declared canonical 1× frame, opaque subject footprint, anchor, and draw rect
+- native generation/render/export dimensions matching that contract
+- no spatial resampling in the accepted path and asset-local baseline scale `1`
+- a family-specific machine gate for dimensions, provenance, and any permitted
+  crop/pad-only pixel identity
 - transparent runtime PNGs with no keyed background color remaining
 - stable semantic frame names and manifest entries
 - integer frame rectangles, anchors, and gutters
@@ -304,12 +384,20 @@ Before an asset family is wired into production routes, require:
 
 Mechanical checks can reject broken assets. Human review accepts the style.
 
+The live unit catalog already persists a monotonic `spatial-resampling` block and
+refuses acceptance/restoration for recapture candidates. Its positive native-render
+evidence is still named ADR-0076 debt: a missing block is not proof that an arbitrary
+manual upload is native, so the external render manifest and 1× proof remain required
+until that evidence becomes first-class catalog schema.
+
 ## Migration Posture
 
 Art-backed screens and crops are allowed as bridges when they preserve approved
 visual accuracy faster than a production asset kit can. They should remain explicit
 references or temporary composition layers, not a reason to avoid building real
-assets for reusable game systems.
+assets for reusable game systems. Likewise, a scaled candidate may remain live only
+as an explicitly labeled calibration/legacy bridge; it is not accepted production
+work until it is regenerated and passes the native-pixel gate.
 
 The desired end state is a game made of disciplined pixel assets that matches
 the generated art's mood, palette, silhouette language, and tactical clarity.

@@ -25,7 +25,6 @@ import {
 import {
   activeUnitFamilies,
   hasDirectionSprite,
-  MISSING_DIRECTION_SPRITE,
   unitArtForId,
   type Direction,
   type Faction,
@@ -100,7 +99,7 @@ const slugify = (value: string): string =>
 function entryAsWallArt(id: string, entry: WallArtMap[string]): WallArt {
   const span = Number.isFinite(entry?.span) ? Math.max(1, Math.min(16, Math.round(Number(entry.span)))) : 1;
   const slots = Array.isArray(entry?.slots) ? entry.slots : [];
-  const hasMirror = slots.some((slot) => wallDecorAsset(slot.sourceId).kind === 'mirror');
+  const hasMirror = slots.some((slot) => wallDecorAsset(slot.sourceId)?.kind === 'mirror');
   return {
     id,
     label: typeof entry?.label === 'string' && entry.label.trim() ? entry.label.trim() : id,
@@ -130,8 +129,9 @@ function uniqueSlotId(slots: readonly WallArtSlot[], base: string): string {
   return `${base}-${Date.now().toString(36)}`;
 }
 
-function defaultSlot(sourceId: string, face: WallDecorFaceId, slots: readonly WallArtSlot[]): WallArtSlot {
+function defaultSlot(sourceId: string, face: WallDecorFaceId, slots: readonly WallArtSlot[]): WallArtSlot | undefined {
   const source = wallDecorAsset(sourceId);
+  if (!source) return undefined;
   const faceAsset = source.faces[face];
   return {
     id: uniqueSlotId(slots, `${source.id}-${face}`),
@@ -144,11 +144,12 @@ function defaultSlot(sourceId: string, face: WallDecorFaceId, slots: readonly Wa
 }
 
 function slotLabel(slot: WallArtSlot, index: number): string {
-  return `Slot ${index + 1} - ${wallDecorAsset(slot.sourceId).label} (${slot.face})`;
+  return `Slot ${index + 1} - ${wallDecorAsset(slot.sourceId)?.label ?? 'Unavailable source'} (${slot.face})`;
 }
 
 function slotLayerSrcs(slot: WallArtSlot): string[] {
   const source = slotSource(slot);
+  if (!source) return [];
   if (source.kind === 'mirror') {
     const face = source.faces[slot.face];
     return [face.glassSrc, face.src];
@@ -156,8 +157,9 @@ function slotLayerSrcs(slot: WallArtSlot): string[] {
   return [source.faces[slot.face].src];
 }
 
-function slotPreviewStyle(slot: WallArtSlot, wallLeft: number, wallTop: number, scale: number, offsetX = 0, offsetY = 0): CSSProperties {
+function slotPreviewStyle(slot: WallArtSlot, wallLeft: number, wallTop: number, scale: number, offsetX = 0, offsetY = 0): CSSProperties | undefined {
   const source = slotSource(slot);
+  if (!source) return undefined;
   const face = source.faces[slot.face];
   const slotScale = slot.scale * scale;
   return {
@@ -180,8 +182,9 @@ function labAnchorCell(face: WallDecorFaceId): { x: number; y: number } {
   return face === 'west' ? { x: 0, y: LAB_WEST_Y } : { x: LAB_NORTH_X, y: 0 };
 }
 
-function wallArtBoardSlotRect(slot: WallArtSlot): CSSProperties & { src: string } {
+function wallArtBoardSlotRect(slot: WallArtSlot): (CSSProperties & { src: string }) | undefined {
   const op = wallArtBoardSlotOp(slot);
+  if (!op) return undefined;
   return {
     src: op.src,
     left: op.dx,
@@ -192,8 +195,9 @@ function wallArtBoardSlotRect(slot: WallArtSlot): CSSProperties & { src: string 
   };
 }
 
-function wallArtBoardSlotOp(slot: WallArtSlot): BoardDrawOp {
+function wallArtBoardSlotOp(slot: WallArtSlot): BoardDrawOp | undefined {
   const source = slotSource(slot);
+  if (!source) return undefined;
   const face = source.faces[slot.face];
   const anchor = labAnchorCell(slot.face);
   const { left, top } = boardLabCellPosition(anchor);
@@ -254,8 +258,8 @@ function testPieceSubjects(pieces: readonly TestPiece[], bounds: { cols: number;
       seat,
       facing: piece.direction,
       spriteForFacing: (facing) => hasDirectionSprite(unit, facing)
-        ? unit.sprite(piece.faction, facing)
-        : MISSING_DIRECTION_SPRITE,
+        ? unit.sprite(piece.faction, facing) ?? op.src
+        : op.src,
     } satisfies MirrorReflectionSubject];
   });
 }
@@ -341,7 +345,9 @@ function WallArtBoardSlots({
   return (
     <>
       {art.slots.map((slot, index) => {
-        const { src, ...style } = wallArtBoardSlotRect(slot);
+        const rect = wallArtBoardSlotRect(slot);
+        if (!rect) return null;
+        const { src, ...style } = rect;
         const className = `wall-art-board-slot${index === activeSlotIndex ? ' is-active' : ''}${ghost ? ' is-ghost' : ''}`;
         if (ghost) {
           return (
@@ -498,6 +504,7 @@ export function WallArtPreview({ art, zoom = 1 }: { art: WallArt; zoom?: number 
     ...nativeFrames.map((frame) => ({ left: frame.left, top: frame.top, right: frame.left + supportingWall.width, bottom: frame.top + supportingWall.height })),
     ...art.slots.map((slot) => {
       const source = slotSource(slot);
+      if (!source) return { left: 0, top: 0, right: 0, bottom: 0 };
       const face = source.faces[slot.face];
       const left = WALL_ART_DATUM_LEFT + slot.x - face.mountX * slot.scale;
       const top = WALL_ART_DATUM_TOP + slot.y - face.mountY * slot.scale;
@@ -634,7 +641,7 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
   const fullBodyMirrorSurfaces = useMemo(
     () => mirrorSurfaces.filter((surface) => {
       const source = wallDecorAsset(surface.sourceId);
-      return source.kind === 'mirror' && source.mirrorCoverage === 'full-body';
+      return source?.kind === 'mirror' && source.mirrorCoverage === 'full-body';
     }),
     [mirrorSurfaces],
   );
@@ -694,22 +701,32 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
 
   const addSlot = (): void => {
     const face = activeSlot?.face ?? 'west';
-    const sourceId = activeSlot?.sourceId ?? WALL_DECOR_ASSETS[0].id;
+    const sourceId = wallDecorAsset(activeSlot?.sourceId)?.id ?? WALL_DECOR_ASSETS[0]?.id;
+    if (!sourceId) {
+      setStatus('no complete live wall-decoration source is available');
+      return;
+    }
     setStatus('');
     setDraftMap((cur) => {
       const entry = cur[activeId] ?? activeEntry;
       const slots = [...(entry.slots ?? [])];
-      slots.push(defaultSlot(sourceId, face, slots));
+      const slot = defaultSlot(sourceId, face, slots);
+      if (slot) slots.push(slot);
       return { ...cur, [activeId]: { ...entry, slots } };
     });
     setSelectedSlotIndex(art.slots.length);
   };
 
-  const createArt = (sourceId = activeSlot?.sourceId ?? WALL_DECOR_ASSETS[0].id): void => {
-    const source = wallDecorAsset(sourceId);
+  const createArt = (sourceId?: string): void => {
+    const source = wallDecorAsset(sourceId ?? activeSlot?.sourceId);
+    if (!source) {
+      setStatus('no complete live wall-decoration source is available');
+      return;
+    }
     const id = uniqueWallArtId(draftMap, newArtId || newArtName);
     const label = newArtName.trim() || id;
     const slot = defaultSlot(source.id, 'west', []);
+    if (!slot) return;
     setDraftMap((cur) => ({
       ...cur,
       [id]: {
@@ -729,9 +746,15 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
   useEffect(() => {
     if (!draftSourceId) return;
     const source = wallDecorAsset(draftSourceId);
+    if (!source) {
+      setStatus('the requested wall-decoration source is unavailable');
+      onDraftSourceConsumed?.();
+      return;
+    }
     const label = `${source.label} wall art`;
     const id = uniqueWallArtId(draftMap, label);
     const slot = defaultSlot(source.id, 'west', []);
+    if (!slot) return;
     setDraftMap((cur) => ({
       ...cur,
       [id]: {
@@ -904,14 +927,18 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
                     ))}
                   </select>
                 </label>
-                <button type="button" className="ps-slot-button" onClick={addSlot} title="Add source artwork slot" aria-label="Add source artwork slot">+</button>
+                <button type="button" className="ps-slot-button" onClick={addSlot} disabled={!WALL_DECOR_ASSETS.length} title="Add source artwork slot" aria-label="Add source artwork slot">+</button>
                 <button type="button" className="ps-slot-button ps-slot-remove" onClick={removeSlot} disabled={!activeSlot} title="Remove source artwork slot" aria-label="Remove source artwork slot">-</button>
               </span>
               {activeSlot ? (
                 <>
                   <label className="tileset-category-select">
                     <span>Source artwork</span>
-                    <select value={activeSlot.sourceId} onChange={(event) => setSlot({ sourceId: wallDecorAsset(event.target.value).id })} aria-label="Source artwork">
+                    <select value={wallDecorAsset(activeSlot.sourceId)?.id ?? ''} onChange={(event) => {
+                      const source = wallDecorAsset(event.target.value);
+                      if (source) setSlot({ sourceId: source.id });
+                    }} aria-label="Source artwork" disabled={!WALL_DECOR_ASSETS.length}>
+                      {wallDecorAsset(activeSlot.sourceId) ? null : <option value="">Unavailable source</option>}
                       {WALL_DECOR_ASSETS.map((decor) => <option key={decor.id} value={decor.id}>Wall art source: {decor.label}</option>)}
                     </select>
                   </label>
@@ -922,8 +949,8 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
                       <option value="north">North</option>
                     </select>
                   </label>
-                  <SliderRow label={`X - ${Math.round(activeSlot.x)}`} value={activeSlot.x} set={(value) => setSlot({ x: Math.round(value) })} min={slotBounds.minX} max={slotBounds.maxX} step={1} nudge={1} dflt={defaultSlot(activeSlot.sourceId, activeSlot.face, []).x} />
-                  <SliderRow label={`Y - ${Math.round(activeSlot.y)}`} value={activeSlot.y} set={(value) => setSlot({ y: Math.round(value) })} min={slotBounds.minY} max={slotBounds.maxY} step={1} nudge={1} dflt={defaultSlot(activeSlot.sourceId, activeSlot.face, []).y} />
+                  <SliderRow label={`X - ${Math.round(activeSlot.x)}`} value={activeSlot.x} set={(value) => setSlot({ x: Math.round(value) })} min={slotBounds.minX} max={slotBounds.maxX} step={1} nudge={1} dflt={defaultSlot(activeSlot.sourceId, activeSlot.face, [])?.x ?? activeSlot.x} />
+                  <SliderRow label={`Y - ${Math.round(activeSlot.y)}`} value={activeSlot.y} set={(value) => setSlot({ y: Math.round(value) })} min={slotBounds.minY} max={slotBounds.maxY} step={1} nudge={1} dflt={defaultSlot(activeSlot.sourceId, activeSlot.face, [])?.y ?? activeSlot.y} />
                   <SliderRow label={`Scale - ${activeSlot.scale.toFixed(2)}x`} value={activeSlot.scale} set={(value) => setSlot({ scale: round2(value) })} min={0.25} max={1.8} step={0.01} nudge={0.05} dflt={1} />
                   <div className="ps-block">
                     <span className="ps-ctl-label">Nudge <em>Shift = x10</em></span>
@@ -1027,9 +1054,9 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
                 <span>ID</span>
                 <input value={newArtId} onChange={(event) => setNewArtId(slugify(event.target.value))} />
               </label>
-              <button type="button" className="tileset-view-action" onClick={() => createArt()} title="Create a new wall art definition from the current source artwork slot">Create new from slot</button>
+              <button type="button" className="tileset-view-action" onClick={() => createArt()} disabled={!WALL_DECOR_ASSETS.length} title="Create a new wall art definition from the current source artwork slot">Create new from slot</button>
             </div>
-            {activeSlot ? <p className="ps-saved">draft: wall art · source slot {activeSlotIndex + 1}/{art.slots.length} from {wallDecorAsset(activeSlot.sourceId).label}</p> : null}
+            {activeSlot ? <p className="ps-saved">draft: wall art · source slot {activeSlotIndex + 1}/{art.slots.length} from {wallDecorAsset(activeSlot.sourceId)?.label ?? 'unavailable live source'}</p> : null}
             <label className="tileset-category-select" title="The ground family under the preview board.">
               <span>Ground</span>
               <select value={family} onChange={(event) => setFamily(event.target.value as Family)} aria-label="Ground family">

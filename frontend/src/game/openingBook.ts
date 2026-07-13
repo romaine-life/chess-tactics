@@ -16,15 +16,17 @@ import type { Level } from '../core/level';
 import type { GameState, Move, Piece, Side, Vec } from '../core/types';
 import { createFromLevel } from './setup';
 import { createRng } from '../core/rng';
-import { applyMove, gameEnv, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
+import { applyMove, gameEnv, legalMoves, livingPieces, recordPosition, type MoveEnv } from '../core/rules';
 import {
   DEFAULT_EVAL_WEIGHTS,
   evaluateGameState,
+  terminalScore,
   type SearchContext,
   type SearchOptions,
 } from '../core/ai';
-import { evaluateObjective, kingSideOf, objectiveContextForLevel } from '../core/objectives';
-import type { RecordedMove } from './selfplay';
+import { kingSideOf, objectiveContextForLevel, victoryRulesForLevel } from '../core/objectives';
+import { adjudicateCommittedPosition } from '../core/adjudication';
+import { replayStates, type RecordedMove } from './selfplay';
 
 /** Knobs for one book (persisted per-book alongside its positions + session). */
 export interface OpeningBookSettings {
@@ -65,9 +67,10 @@ function bookEnv(game: GameState): MoveEnv {
   return { ...gameEnv(game), lastMove: game.lastMove };
 }
 
-/** All legal (piece, move) pairs for the living pieces of `side`, ranked by the
- * shallow shipped eval of the RESULTING state, oriented so higher = better for
- * `side`. evaluateGameState is player-positive, so enemy candidates are negated. */
+/** All legal (piece, move) pairs for the living pieces of `side`. A resulting
+ * authored-rule/checkmate/draw terminal gets its exact canonical score; live
+ * successors use the shallow shipped eval. Scores are player-positive, so enemy
+ * candidates are negated for ordering. */
 function rankedCandidates(
   game: GameState,
   side: Side,
@@ -78,8 +81,18 @@ function rankedCandidates(
   for (const piece of livingPieces(game.pieces, side)) {
     const from: Vec = { x: piece.x, y: piece.y };
     for (const move of legalMoves(piece, game.pieces, game.size, env)) {
-      const next = applyMove(game, piece.id, move).state;
-      const playerScore = evaluateGameState(next, sctx, DEFAULT_EVAL_WEIGHTS, env);
+      const moved = applyMove(game, piece.id, move).state;
+      const next = recordPosition(moved, { ...env, lastMove: moved.lastMove });
+      const turnsElapsed = sctx.turnsElapsed + (side === 'enemy' ? 1 : 0);
+      const winner = adjudicateCommittedPosition(next, {
+        victoryRules: sctx.victoryRules,
+        ctx: sctx.ctx,
+        turnsElapsed,
+        env: { ...env, lastMove: next.lastMove },
+      })?.winner ?? null;
+      const playerScore = winner
+        ? terminalScore(winner, 0)
+        : evaluateGameState(next, { ...sctx, turnsElapsed }, DEFAULT_EVAL_WEIGHTS, env);
       out.push({
         pieceId: piece.id,
         from,
@@ -130,18 +143,25 @@ export function generateOpeningBook(
     // Objective context is static for the level; kingSide is read from the start
     // position (it doesn't change over an opening walk that never captures a king,
     // and if it did the eval simply reflects the new board — this only ranks plies).
+    const ctx = { ...objectiveContextForLevel(level), kingSide: kingSideOf(game.pieces) };
     const sctx: SearchContext = {
       objective: level.objective,
-      ctx: { ...objectiveContextForLevel(level), kingSide: kingSideOf(game.pieces) },
+      ctx,
+      victoryRules: victoryRulesForLevel(level, ctx),
       turnsElapsed: 0,
     };
 
     const moves: RecordedMove[] = [];
     for (let ply = 0; ply < plies; ply += 1) {
       if (game.turn !== 'player' && game.turn !== 'enemy') break; // terminal
-      if (evaluateObjective(game, level.objective, { ...sctx.ctx, turnsElapsed: 0 })) break;
-      const side: Side = game.turn;
       const env = bookEnv(game);
+      if (adjudicateCommittedPosition(game, {
+        victoryRules: sctx.victoryRules,
+        ctx: sctx.ctx,
+        turnsElapsed: sctx.turnsElapsed,
+        env,
+      })) break;
+      const side: Side = game.turn;
       const ranked = rankedCandidates(game, side, env, sctx);
       if (ranked.length === 0) break; // stuck: stop the walk early
 
@@ -149,7 +169,9 @@ export function generateOpeningBook(
       const rng = createRng(seed * 1000 + ply);
       const chosen = ranked[rng.int(pool)];
 
-      game = applyMove(game, chosen.pieceId, chosen.move).state;
+      const moved = applyMove(game, chosen.pieceId, chosen.move).state;
+      if (side === 'enemy' && moved.turn !== 'enemy') sctx.turnsElapsed += 1;
+      game = recordPosition(moved, { ...env, lastMove: moved.lastMove });
       moves.push({ pieceId: chosen.pieceId, side, from: chosen.from, move: chosen.move });
     }
 
@@ -199,11 +221,8 @@ export function generateCuratedBook(
 /** Replay a book position onto a live GameState — for the UI board and balance.
  * createFromLevel(level, pos.seed) then applyMove each recorded move in order. */
 export function stateAtPosition(level: Level, pos: BookPosition): GameState {
-  let game = createFromLevel(level, pos.seed);
-  for (const m of pos.moves) {
-    game = applyMove(game, m.pieceId, m.move).state;
-  }
-  return game;
+  const states = replayStates(level, { seed: pos.seed, moves: pos.moves });
+  return states[states.length - 1];
 }
 
 const isCombatant = (p: Piece): boolean => p.alive && (p.side === 'player' || p.side === 'enemy');

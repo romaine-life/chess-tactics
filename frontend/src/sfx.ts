@@ -23,7 +23,9 @@
 //   - Bounded: a polyphony cap drops (or steals) voices so a flurry of rapid moves
 //     can never pile up an unbounded graph of nodes.
 
+import { liveMediaSlotsWithPrefix } from '@chess-tactics/board-render';
 import type { TerrainType } from './core/types';
+import { currentLiveSfxProfile, type AssignableSfxTerrain } from './core/sfxProfile';
 
 // ---- settings contract (shared with Settings.tsx) --------------------------
 // The Settings screen persists a JSON blob under this key; we read the fields that gate
@@ -303,8 +305,9 @@ function registerVoice(node: GainNode, duration: number): void {
 }
 
 // ---- authored sample sets --------------------------------------------------
-// Terrains are voiced by recorded foley: a set of one-shot take variants under
-// /assets/sfx/<key>/ (sliced from the raw recordings; see tools/sfx/slice-sfx.sh).
+// Terrains are voiced by recorded foley: a set of one-shot take variants whose
+// live semantic slots share the `sfx/<key>/` prefix. The backend catalog, not a
+// packaged manifest or directory listing, owns which takes currently exist.
 // When a set is decoded we play a RANDOM take per landing so repeated moves never
 // fatigue. Until a set is decoded (or if it fails to load) that terrain is briefly
 // silent; a terrain with no entry at all (only the impassable cliff/rock) is always
@@ -313,36 +316,13 @@ function registerVoice(node: GainNode, duration: number): void {
 // 'arrival' is not a terrain — it's the "unit lands on the board" thump, layered on
 // top of the per-terrain spawn sound (see store.ts deploy roll-call) via playArrival.
 
-const SAMPLE_BASE = '/assets/sfx';
-
-// Per-set level trim. The recordings are peak-normalised (hot, ~-1.5 dBFS), so they
-// play attenuated; tune per set to balance the terrains against each other by ear.
-// 'click' is the UI feedback set (played by playInterface, not a landing).
-const SAMPLE_GAINS: Record<string, number> = { grass: 0.5, water: 0.5, sand: 0.6, stone: 0.5, arrival: 0.6, click: 0.5 };
-
-// Every decodable authored set. The terrain/landing sets PLUS the interface 'click' (UI
-// feedback). AUTHORED_SAMPLE_KEYS (exported below) is the terrain-facing subset the Studio
-// catalog + assignment panel use — 'click' is excluded there because it's not a landing sound.
-const SAMPLE_KEYS = ['grass', 'water', 'sand', 'stone', 'arrival', 'click'] as const;
-type SampleKey = (typeof SAMPLE_KEYS)[number];
-
-// Which terrains are voiced by an authored set. Every landable terrain is mapped; the
-// bare hard-ground terrains (road/bridge/dirt/pebble) reuse the stone footsteps. Only
-// the impassable cliff/rock have no entry (pieces never land on them).
-const TERRAIN_SAMPLE: Partial<Record<TerrainType, SampleKey>> = {
-  grass: 'grass',
-  water: 'water',
-  sand: 'sand',
-  stone: 'stone',
-  road: 'stone',
-  bridge: 'stone',
-  dirt: 'stone',
-  pebble: 'stone',
-};
+// Sound-set identity, level trims, terrain assignments, and arrival behavior all
+// come from the live SFX profile. A missing profile means decorative silence; it
+// never selects a committed default.
+type SampleKey = string;
 
 interface SampleSet {
   key: SampleKey;
-  gain: number;
   variants: string[];
   buffers: (AudioBuffer | null)[];
   state: 'idle' | 'loading' | 'loaded' | 'error';
@@ -351,32 +331,47 @@ interface SampleSet {
 
 const sampleSets: Partial<Record<SampleKey, SampleSet>> = {};
 
-// Fetch a set's manifest + decode every take into an AudioBuffer. Idempotent: a set
+const sampleVariantPattern = /^v(\d+)\.(?:aac|flac|m4a|mp3|oga|ogg|wav|webm)$/i;
+
+/** Resolve one authored set from the required live catalog, never a packaged manifest. */
+export function authoredSampleUrls(key: SampleKey): string[] {
+  const prefix = `sfx/${key}/`;
+  return liveMediaSlotsWithPrefix(prefix)
+    .flatMap((entry) => {
+      const filename = entry.slot.slice(prefix.length);
+      const match = sampleVariantPattern.exec(filename);
+      return match && entry.media.mediaType.startsWith('audio/')
+        ? [{ url: entry.media.immutableUrl, index: Number(match[1]), filename }]
+        : [];
+    })
+    .sort((left, right) => left.index - right.index || left.filename.localeCompare(right.filename))
+    .map((entry) => entry.url);
+}
+
+// Resolve a set from the hydrated backend catalog + decode every take into an
+// AudioBuffer. Idempotent: a set
 // already loading/loaded is left alone. Safe to call before any gesture — decoding
 // works on a suspended context; only *playback* needs the resume.
 async function loadSampleSet(key: SampleKey): Promise<void> {
+  if (!currentLiveSfxProfile()?.soundSets[key]) return;
   const w = win();
   const context = ensureContext();
   if (!w || !context || typeof w.fetch !== 'function') return;
   let set = sampleSets[key];
   if (set?.state === 'loaded') return;
   if (set?.state === 'loading') return set.promise;
-  set = sampleSets[key] = set ?? { key, gain: SAMPLE_GAINS[key] ?? 1, variants: [], buffers: [], state: 'idle' };
+  set = sampleSets[key] = set ?? { key, variants: [], buffers: [], state: 'idle' };
   set.state = 'loading';
   set.promise = (async () => {
     try {
-      const res = await w.fetch(`${SAMPLE_BASE}/${key}/manifest.json`);
-      if (!res.ok) throw new Error(`manifest ${res.status}`);
-      const man = (await res.json()) as { variants?: unknown };
-      const variants = Array.isArray(man.variants)
-        ? man.variants.filter((v): v is string => typeof v === 'string')
-        : [];
+      const variants = authoredSampleUrls(key);
+      if (!variants.length) throw new Error(`live media catalog has no authored ${key} samples`);
       set.variants = variants;
       set.buffers = new Array(variants.length).fill(null);
       await Promise.all(
-        variants.map(async (name, i) => {
+        variants.map(async (url, i) => {
           try {
-            const r = await w.fetch(`${SAMPLE_BASE}/${key}/${name}`);
+            const r = await w.fetch(url);
             if (!r.ok) return;
             const ab = await r.arrayBuffer();
             set.buffers[i] = await context.decodeAudioData(ab);
@@ -398,19 +393,23 @@ async function loadSampleSet(key: SampleKey): Promise<void> {
 // Kick off decoding for every authored set. Called on the first gesture (when a
 // context first exists) so sets are ready before the first landing.
 function preloadSamples(): void {
-  for (const k of SAMPLE_KEYS) void loadSampleSet(k);
+  for (const key of Object.keys(currentLiveSfxProfile()?.soundSets ?? {})) void loadSampleSet(key);
 }
 
 // Play a random decoded take from a set through the shared voice/master path.
 // Returns false (so the caller knows nothing played) when the set isn't decoded yet
 // or has no usable takes.
-function playSampleSet(key: SampleKey, callGain: number): boolean {
+function playSampleSet(key: SampleKey, callGain: number, soundSetGain?: number): boolean {
+  const profile = currentLiveSfxProfile();
+  const configured = profile?.soundSets[key];
+  if (!configured) return false;
   const set = sampleSets[key];
   if (!set || set.state !== 'loaded' || !ctx || !master) return false;
   const ready = set.buffers.filter((b): b is AudioBuffer => b !== null);
   if (!ready.length) return false;
   const buf = ready[Math.floor(Math.random() * ready.length)];
-  const voiceGain = acquireVoice(callGain * set.gain);
+  const configuredGain = soundSetGain === undefined ? configured.gain : Math.min(2, normGain(soundSetGain));
+  const voiceGain = acquireVoice(callGain * configuredGain);
   if (!voiceGain) return false;
   const src = ctx.createBufferSource();
   src.buffer = buf;
@@ -447,38 +446,29 @@ export function playTerrain(terrain: TerrainType, opts?: { gain?: number }): voi
   // set plays a random take; one with no mapping (only the impassable cliff/rock) is
   // silent. If the set isn't decoded yet, kick off its load — the first landing may be
   // silent, then later ones play.
-  const sampleKey = TERRAIN_SAMPLE[terrain];
+  const profile = currentLiveSfxProfile();
+  const sampleKey = profile && Object.hasOwn(profile.terrainAssignments, terrain)
+    ? profile.terrainAssignments[terrain as AssignableSfxTerrain]
+    : null;
   if (!sampleKey) return;
   if (!playSampleSet(sampleKey, callGain)) void loadSampleSet(sampleKey);
 }
 
 /**
- * The shipped arrival-thump recipe in ONE place: the sample set playArrival voices, the
- * per-call gain the deploy roll-call (game/store.ts) fires it at, and the firing shape
- * (the roll-call fires one thump per deploying unit = 'per-unit'). The Studio SFX
- * panel's "Reset to current" derives its baseline from THIS constant (ADR-0057:
- * derived, never transcribed) — when the shipped thump changes, change it here and the
- * game and the panel both follow.
- */
-export const ARRIVAL_BAKED: { sample: SampleKey; gain: number; firing: 'per-unit' | 'once' } = {
-  sample: 'arrival',
-  gain: 0.55,
-  firing: 'per-unit',
-};
-
-/**
  * Play the "unit lands on the board" arrival thump (authored landing.mp3), layered
- * on top of the per-terrain spawn sound at the deploy roll-call. No-op (silently
- * kicking off a load) until the sample is decoded. @param opts.gain per-call trim.
+ * on top of the per-terrain spawn sound at the deploy roll-call. The live profile
+ * owns the sample, gain, and whether the cue fires per unit or once for the squad.
  */
-export function playArrival(opts?: { gain?: number }): void {
+export function playArrival(opts?: { unitIndex?: number }): void {
+  const arrival = currentLiveSfxProfile()?.arrival;
+  if (!arrival?.sample || (arrival.firing === 'once' && (opts?.unitIndex ?? 0) > 0)) return;
   const context = ensureContext();
   if (!context || !master) return;
   if (context.state === 'suspended') {
     void context.resume().catch(() => { /* may need a real gesture first */ });
   }
   if (masterGainFor(effectsSettings()) <= 0) return;
-  if (!playSampleSet(ARRIVAL_BAKED.sample, normGain(opts?.gain))) void loadSampleSet(ARRIVAL_BAKED.sample);
+  if (!playSampleSet(arrival.sample, arrival.gain)) void loadSampleSet(arrival.sample);
 }
 
 /**
@@ -500,11 +490,13 @@ export function playInterface(opts?: { gain?: number }): void {
     void context.resume().catch(() => { /* may need a real gesture first */ });
   }
   if (masterGainFor(settings) <= 0) return;
+  const interfaceSample = Object.hasOwn(currentLiveSfxProfile()?.soundSets ?? {}, 'click') ? 'click' : null;
+  if (!interfaceSample) return;
   const gain = normGain(opts?.gain);
-  if (!playSampleSet('click', gain)) {
-    void loadSampleSet('click').then(() => {
+  if (!playSampleSet(interfaceSample, gain)) {
+    void loadSampleSet(interfaceSample).then(() => {
       const latest = effectsSettings();
-      if (latest.interfaceSounds && masterGainFor(latest) > 0) playSampleSet('click', gain);
+      if (latest.interfaceSounds && masterGainFor(latest) > 0) playSampleSet(interfaceSample, gain);
     });
   }
 }
@@ -524,14 +516,14 @@ export function previewArrival(): void {
  * full). Used by the Studio's assignment panel so you can hear what a sound would be like
  * (and at what level) before assigning it. No-op (kicking off a load) until decoded.
  */
-export function previewSample(key: SampleKey, gain = 1): void {
+export function previewSample(key: SampleKey, gain = 1, soundSetGain?: number): void {
   const context = ensureContext();
   if (!context || !master) return;
   if (context.state === 'suspended') {
     void context.resume().catch(() => { /* may need a real gesture first */ });
   }
   if (masterGainFor(effectsSettings()) <= 0) return;
-  if (!playSampleSet(key, normGain(gain))) void loadSampleSet(key);
+  if (!playSampleSet(key, normGain(gain), soundSetGain)) void loadSampleSet(key);
 }
 
 /**
@@ -542,6 +534,8 @@ export function previewSample(key: SampleKey, gain = 1): void {
  * player-facing mix. Not for gameplay. No-op (kicking a load) until the set is decoded.
  */
 export function auditionSampleRaw(key: SampleKey, gain = 0.9): void {
+  const configured = currentLiveSfxProfile()?.soundSets[key];
+  if (!configured) return;
   const context = ensureContext();
   if (!context) return;
   if (context.state === 'suspended') {
@@ -552,7 +546,7 @@ export function auditionSampleRaw(key: SampleKey, gain = 0.9): void {
   const ready = set.buffers.filter((b): b is AudioBuffer => b !== null);
   if (!ready.length) return;
   const g = context.createGain();
-  g.gain.value = normGain(gain) * set.gain;
+  g.gain.value = normGain(gain) * configured.gain;
   g.connect(context.destination); // bypass the master (effects-volume) bus
   const src = context.createBufferSource();
   src.buffer = ready[Math.floor(Math.random() * ready.length)];
@@ -570,15 +564,19 @@ export function isSampleReady(key: SampleKey): boolean {
 // Surface the authored-sample wiring to the Studio so it can tell which terrains are
 // voiced by recordings and render the real take waveforms.
 
-// The terrain/landing foley sets surfaced to the Studio audition catalog + assignment panel.
-// Excludes the interface 'click' set — that's UI feedback (played by playInterface), not a
-// landing sound assignable to a terrain.
-export const AUTHORED_SAMPLE_KEYS: readonly SampleKey[] = SAMPLE_KEYS.filter((k) => k !== 'click');
 export type { SampleKey };
+
+/** Every sound set declared by the hydrated backend profile. */
+export function authoredSampleKeys(): SampleKey[] {
+  return Object.keys(currentLiveSfxProfile()?.soundSets ?? {}).sort();
+}
 
 /** The authored sample key voicing a terrain, or null when it has no recorded set. */
 export function authoredSampleKeyFor(terrain: TerrainType): SampleKey | null {
-  return TERRAIN_SAMPLE[terrain] ?? null;
+  const profile = currentLiveSfxProfile();
+  return profile && Object.hasOwn(profile.terrainAssignments, terrain)
+    ? profile.terrainAssignments[terrain as AssignableSfxTerrain]
+    : null;
 }
 
 /** Ensure a set is decoded and return its usable take buffers (for waveform render). */

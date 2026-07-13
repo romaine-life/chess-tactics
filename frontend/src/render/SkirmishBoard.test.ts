@@ -5,20 +5,8 @@ import type { EditorBoard } from '../ui/boardCode';
 import { tileFamilies } from '../art/tileset';
 import { createSkirmish } from '../game/setup';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
-import { applyLiveUnitCatalog, resetLiveUnitCatalog, unitArtForId } from '../ui/unitCatalog';
-import {
-  mirrorSurfacesForArt,
-  projectBoardPoint,
-  reflectedOpsForSubjects,
-  wallArt,
-} from '@chess-tactics/board-render';
-import {
-  buildSkirmishBoard,
-  mirrorSpriteSourcesForPiece,
-  mirrorSubjectForSeat,
-  pieceOp,
-  skirmishTileClickIntent,
-} from './SkirmishBoard';
+import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
+import { buildSkirmishBoard, pieceOp, skirmishArmyOverlaySet, skirmishTileClickIntent } from './SkirmishBoard';
 
 afterEach(() => resetLiveUnitCatalog());
 
@@ -54,6 +42,23 @@ const exactBoard = (): EditorBoard => {
 };
 
 describe('buildSkirmishBoard', () => {
+  it('uses the continuity mural for generated gameplay perimeter faces', () => {
+    const generated = createSkirmish({ seed: 1, size: { cols: 3, rows: 4 } });
+    const game = {
+      ...generated,
+      terrain: Array.from({ length: 12 }, (_, index) => ({
+        x: index % 3,
+        y: Math.floor(index / 3),
+        terrain: 'grass' as const,
+        elevation: 0,
+      })),
+    };
+    const corner = buildSkirmishBoard(game, 1).cells.find((cell) => cell.x === 2 && cell.y === 3)!;
+
+    expect(corner.sideAssets?.east?.id).toBe('grass-mural-3');
+    expect(corner.sideAssets?.south?.id).toBe('grass-mural-0');
+  });
+
   it('uses exact tile ids from saved boardCode instead of seed-picked variants', () => {
     const painted = exactBoard();
     const level = editorBoardToLevel(painted, { id: 'saved-map', name: 'Saved Map' });
@@ -81,6 +86,7 @@ describe('pieceOp', () => {
     const op = pieceOp(rock, { left: 36, top: 86 * 0.78 });
 
     expect(op?.src).toContain('/assets/units/rock/');
+    expect(op?.layer).toBe('scene');
     expect(op?.dx).toBe(0);
     expect(op?.dy).toBe(0);
   });
@@ -101,55 +107,6 @@ describe('pieceOp', () => {
   });
 });
 
-describe('live mirror subjects', () => {
-  it('derives continuous grid coordinates from an animated projected seat', () => {
-    const start = projectBoardPoint({ x: 0, y: 2 });
-    const end = projectBoardPoint({ x: 1, y: 1 });
-    const seat = {
-      left: start.left + (end.left - start.left) * 0.25,
-      top: start.top + (end.top - start.top) * 0.25,
-    };
-    const op = { src: 'knight.png', dx: seat.left - 12, dy: seat.top - 24, dw: 24, dh: 24, z: 1 };
-    const knight: Piece = {
-      id: 'knight-1', side: 'player', type: 'knight', x: 1, y: 1, startY: 1, alive: true, facing: 'west',
-    };
-
-    const subject = mirrorSubjectForSeat(op, seat, knight)!;
-
-    expect(subject.grid.x).toBeCloseTo(0.25, 12);
-    expect(subject.grid.y).toBeCloseTo(1.75, 12);
-    expect(subject.seat).toBe(seat);
-    expect(subject.op).toBe(op);
-    expect(subject.facing).toBe('west');
-  });
-
-  it('supplies face-specific directional sprites for an animated west-facing knight', () => {
-    applyLiveUnitCatalog(testLiveUnitCatalog({ directionalUrls: true }));
-    const knight: Piece = {
-      id: 'knight-1', side: 'player', type: 'knight', x: 1, y: 1, startY: 1, alive: true, facing: 'west',
-    };
-    const seat = projectBoardPoint(knight);
-    const op = pieceOp(knight, seat)!;
-    const subject = mirrorSubjectForSeat(op, seat, knight)!;
-    const art = wallArt('mirror-keep-wall')!;
-    const west = mirrorSurfacesForArt(art, { x: 0, y: 1, face: 'west' })[0];
-    const north = mirrorSurfacesForArt(art, { x: 1, y: 0, face: 'north' })[0];
-    const westReflection = reflectedOpsForSubjects([west], [subject])[0];
-    const northReflection = reflectedOpsForSubjects([north], [subject])[0];
-    const unit = unitArtForId('knight')!;
-
-    expect(op.src).toBe(unit.sprite('navy-blue', 'west'));
-    expect(westReflection.src).toBe(unit.sprite('navy-blue', 'south'));
-    expect(westReflection.flipX).toBe(true);
-    expect(northReflection.src).toBe(unit.sprite('navy-blue', 'north'));
-    expect(northReflection.flipX).toBe(true);
-    expect(mirrorSpriteSourcesForPiece(knight, ['west', 'north'])).toEqual([
-      westReflection.src,
-      northReflection.src,
-    ]);
-  });
-});
-
 describe('skirmishTileClickIntent', () => {
   it('clears the current selection when the player clicks an unrelated board tile', () => {
     expect(skirmishTileClickIntent(4, 3, [{ x: 2, y: 2 }], undefined, 'player')).toEqual({
@@ -161,15 +118,36 @@ describe('skirmishTileClickIntent', () => {
     });
   });
 
-  it('keeps moves, friendly selection, and opponent focus ahead of cancellation', () => {
-    expect(skirmishTileClickIntent(2, 2, [{ x: 2, y: 2 }], { id: 'enemy-1', side: 'enemy' }, 'player')).toEqual({ kind: 'move' });
-    expect(skirmishTileClickIntent(1, 1, [], { id: 'player-2', side: 'player' }, 'player')).toEqual({
+  it.each([
+    ['player', 'enemy'],
+    ['enemy', 'player'],
+  ] as const)('keeps moves, own-side selection, and opponent focus ahead of cancellation for the %s seat', (localSide, opponent) => {
+    expect(skirmishTileClickIntent(2, 2, [{ x: 2, y: 2 }], { id: 'opponent-1', side: opponent }, localSide)).toEqual({ kind: 'move' });
+    expect(skirmishTileClickIntent(1, 1, [], { id: 'own-2', side: localSide }, localSide)).toEqual({
       kind: 'select',
-      pieceId: 'player-2',
+      pieceId: 'own-2',
     });
-    expect(skirmishTileClickIntent(6, 6, [], { id: 'enemy-1', side: 'enemy' }, 'player')).toEqual({
+    expect(skirmishTileClickIntent(6, 6, [], { id: 'opponent-1', side: opponent }, localSide)).toEqual({
       kind: 'focus',
-      pieceId: 'enemy-1',
+      pieceId: 'opponent-1',
     });
+  });
+});
+
+describe('skirmishArmyOverlaySet', () => {
+  const pieces: Piece[] = [
+    { id: 'player-rook', side: 'player', type: 'rook', x: 1, y: 2, startY: 2, alive: true },
+    { id: 'enemy-rook', side: 'enemy', type: 'rook', x: 6, y: 5, startY: 5, alive: true },
+  ];
+
+  it.each([
+    ['player', 'enemy', '1,2', '6,5'],
+    ['enemy', 'player', '6,5', '1,2'],
+  ] as const)('keeps Your/Opponent overlay ownership correct for the %s seat', (localSide, opponent, ownCell, opponentCell) => {
+    const own = skirmishArmyOverlaySet(pieces, localSide, (piece) => [{ x: piece.x, y: piece.y }]);
+    const remote = skirmishArmyOverlaySet(pieces, opponent, (piece) => [{ x: piece.x, y: piece.y }]);
+
+    expect([...own]).toEqual([ownCell]);
+    expect([...remote]).toEqual([opponentCell]);
   });
 });

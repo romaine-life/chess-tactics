@@ -10,9 +10,7 @@
 // The event lives in the full session ROLLOUT log:
 //   $CODEX_HOME/sessions/<Y>/<M>/<D>/rollout-<ts>-<thread_id>.jsonl
 // Correlate via the `thread_id` that `thread.started` prints to stdout, then read that
-// rollout. Older Codex builds recorded `image_generation_call` directly. Current builds
-// record the built-in tool inside a completed `functions.exec` custom call and return the
-// generated bitmap as an `input_image` block. Both are method-verifiable ROLLOUT shapes.
+// rollout. `image_generation_call` (+ `image_generation_end`) live there.
 //
 // SHIP from the session's own dir, never from codex's "copy latest image to workspace"
 // step: the model output lands in $CODEX_HOME/generated_images/<thread_id>/ig_*.png, and
@@ -53,7 +51,8 @@ export const CODEX = resolveCodex();
 export function runCodex(cwd, text, ref) {
   return new Promise((res) => {
     const args = ['exec', '--json', '--sandbox', 'workspace-write', '--skip-git-repo-check', '-C', cwd];
-    if (ref) args.push('-i', ref);
+    const refs = Array.isArray(ref) ? ref : (ref ? [ref] : []);
+    if (refs.length) args.push('-i', ...refs);
     const p = spawn(CODEX, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     p.stdout.on('data', (d) => { out += d; });
@@ -89,53 +88,20 @@ export function findRollout(threadId) {
   return null;
 }
 
-function imageBlock(value) {
-  if (!value || typeof value !== 'object') return false;
-  if (Array.isArray(value)) return value.some(imageBlock);
-  if ((value.type === 'input_image' || value.type === 'generated_image' || value.type === 'image')
-      && typeof value.image_url === 'string'
-      && value.image_url.startsWith('data:image/')) return true;
-  return Object.values(value).some(imageBlock);
-}
-
-export function rolloutImageGenEvidence(text) {
-  let builtInCall = false;
-  for (const line of text.split('\n')) {
-    let event; try { event = JSON.parse(line); } catch { continue; }
-    const candidates = [event.type, event.payload?.type, event.item?.type, event.response?.type];
-    if (candidates.includes('image_generation_call')) {
-      return { ok: true, reason: 'image_generation_call in rollout' };
-    }
-    const payload = event.payload;
-    if (payload?.type === 'custom_tool_call'
-        && payload.name === 'exec'
-        && typeof payload.input === 'string'
-        && /\btools\.image_gen__imagegen\s*\(/.test(payload.input)) {
-      builtInCall = true;
-      continue;
-    }
-    if (builtInCall && imageBlock(payload?.output)) {
-      return { ok: true, reason: 'built-in image_gen call returned image in rollout' };
-    }
-  }
-  return {
-    ok: false,
-    reason: builtInCall
-      ? 'built-in image_gen call present but no generated image output in rollout'
-      : 'rollout present but no verified image generation call',
-  };
-}
-
 // METHOD GATE. Returns { ok, reason, roll, tid }. ok=true iff the run's ROLLOUT contains an
-// old direct image_generation_call event OR the current built-in image_gen custom call plus
-// returned bitmap — proof codex used the real image model, not a code-drawer.
+// image_generation_call event — proof codex used the real image model, not a code-drawer.
 export function imageGenVerdict(stdout) {
   const tid = threadIdOf(stdout);
   if (!tid) return { ok: false, reason: 'no thread_id on stdout (cannot locate rollout)' };
   const roll = findRollout(tid);
   if (!roll) return { ok: false, reason: `no rollout file for thread ${tid}`, tid };
-  const evidence = rolloutImageGenEvidence(readFileSync(roll, 'utf8'));
-  return { ...evidence, roll, tid };
+  const text = readFileSync(roll, 'utf8');
+  for (const l of text.split('\n')) {
+    let j; try { j = JSON.parse(l); } catch { continue; }
+    const cands = [j.type, j.payload && j.payload.type, j.item && j.item.type, j.response && j.response.type];
+    if (cands.includes('image_generation_call')) return { ok: true, reason: 'image_generation_call in rollout', roll, tid };
+  }
+  return { ok: false, reason: 'rollout present but no image_generation_call (code-drawn)', roll, tid };
 }
 
 // RACE-FREE shipping source: the newest ig_*.png in the session's OWN output dir. Returns
@@ -143,7 +109,7 @@ export function imageGenVerdict(stdout) {
 export function sessionImage(threadId) {
   const dir = join(GEN_IMAGES, threadId);
   let entries; try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return null; }
-  const igs = entries.filter((e) => e.isFile() && /^(?:ig_|exec-).*\.png$/i.test(e.name))
+  const igs = entries.filter((e) => e.isFile() && /^ig_.*\.png$/i.test(e.name))
     .map((e) => ({ p: join(dir, e.name), m: statSync(join(dir, e.name)).mtimeMs }))
     .sort((a, b) => b.m - a.m);
   return igs.length ? igs[0].p : null;

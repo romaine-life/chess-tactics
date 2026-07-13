@@ -27,9 +27,28 @@ All terrain tiles must use the canonical board footprint:
 
 Source of truth:
 
-- `frontend/src/art/tileTemplate.ts`
-- `frontend/scripts/generate-tile-template.mjs`
-- `frontend/public/assets/tiles/canonical-template/`
+- Deterministic geometry: `frontend/src/art/tileTemplate.ts`.
+- Template media: stable backend semantic slots under
+  `/assets/tiles/canonical-template/`. These addresses are live catalog routes,
+  never files under `frontend/public` or another repository directory.
+
+## Exposed Face Contract
+
+Per [ADR-0087](adr/0087-exposed-terrain-faces-own-independent-edge-treatments.md),
+an abrupt edge is an occupancy boundary, not a special terrain family.
+
+- Only the camera-facing south and east vertical faces are drawn.
+- South borders `(x, y + 1)` and owns source columns `0..47`.
+- East borders `(x + 1, y)` and owns source columns `48..95`.
+- Exposure and material selection are independent. A face override cannot force
+  an occupied/internal face to render.
+- South and east may select different side materials at the same corner.
+- A base side is the fallback. Murals, story features, transitions, and
+  waterfalls are explicit per-face overrides.
+- Water's ordinary abrupt treatment is a thin generated cap over dark substrate.
+  Waterfall art requires an explicit connected feature.
+- The top seam-repair pass stays inside the occupied diamond union and cannot
+  extend the logical map.
 
 ## Base Tiles
 

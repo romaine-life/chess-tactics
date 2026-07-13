@@ -6,26 +6,40 @@ import {
   TILE_STEP_Y,
 } from '../art/projectionContract';
 import { studioFamilies, assetFrameSrc, type StudioAsset } from '../ui/studioBoard';
-import { featureFrameSrc, fenceFrameSrc, wallFrameSrc, WALL_FRAME_GEOMETRY } from '../art/tileset';
+import { featureFrameSrc, fenceFrameSrc, fencePostSrc, wallFrameSrc, WALL_FRAME_GEOMETRY } from '../art/tileset';
 import {
   unitArtForId,
   unitAnchorFraction,
   hasDirectionSprite,
-  MISSING_DIRECTION_SPRITE,
   type UnitAsset,
   type Direction,
   type Faction,
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { resolveFeatureOverlays, resolveFenceOverlays, resolveWallOverlays } from '../core/featureAutotile';
+import {
+  resolveFeatureOverlays,
+  resolveFenceOverlays,
+  resolveFencePosts,
+  resolveWallOverlays,
+  type ResolvedFenceOverlay,
+  type ResolvedFencePost,
+} from '../core/featureAutotile';
+import { resolveWallArtFaces, slotSource, wallArtSlotsForFace } from '../core/wallArt';
 import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './structureGeometry';
-import { fenceOverlayZIndex, groundCoverZIndex, objectBaseZIndex, wallOverlayZIndex } from './sceneDepth';
+import { fenceOverlayZIndex, fencePostZIndex, groundCoverZIndex, objectBaseZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
 import { propDef, type StructureSourceRef } from '../core/props';
 import { densityFieldAt, groundCoverSet, resolveGroundCover, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 import { macroTileAsset, macroTileBreakIndices, macroTileFrame, macroTileOwnedCellIndices, resolveMacroTilePlacements } from '../core/macroTiles';
+import {
+  TERRAIN_SIDE_FACE_COLUMN,
+  TERRAIN_SIDE_FACES,
+  resolveTerrainSideExposure,
+  resolveTerrainSideFaces,
+  resolveTerrainSideMaterials,
+} from './terrainSides';
 import {
   mirrorGlassOpsForSurfaces,
   mirrorSurfacesForPlacements,
@@ -52,7 +66,18 @@ const TERRAIN_FEATURE_DEPTH_OFFSET = 3000;
 export const UNIT_IMG_MAX_W = 78;
 export const UNIT_IMG_MAX_H = 92;
 
+export type BoardDrawLayer = 'terrain' | 'linear-feature' | 'scene';
+
+export interface BoardSpriteAnimation {
+  kind: 'ground-cover-sway';
+  frameCount: number;
+  durationMs: number;
+  phase: number;
+}
+
 export interface BoardDrawOp {
+  /** Semantic ownership used by composed renderers; never infer this from `src`. */
+  layer?: BoardDrawLayer;
   src: string;
   dx: number;
   dy: number;
@@ -66,8 +91,24 @@ export interface BoardDrawOp {
   sy?: number;
   sw?: number;
   sh?: number;
+  /** Code-owned playback policy over catalog-declared sprite-sheet geometry. */
+  animation?: BoardSpriteAnimation;
   /** Board-space polygon paths used to expose broken cells inside a composite terrain image. */
   clipPolygons?: number[][];
+}
+
+export function isBoardDrawOpInLayer(
+  op: BoardDrawOp,
+  ...layers: readonly BoardDrawLayer[]
+): boolean {
+  return !!op.layer && layers.includes(op.layer);
+}
+
+export function withoutBoardDrawLayers<TOp extends BoardDrawOp>(
+  ops: readonly TOp[],
+  ...layers: readonly BoardDrawLayer[]
+): TOp[] {
+  return ops.filter((op) => !isBoardDrawOpInLayer(op, ...layers));
 }
 
 export interface BakeBounds {
@@ -99,9 +140,9 @@ function staticUnitSubject(
   if (!unit) return null;
   const direction = placement.direction as Direction;
   const faction = placement.faction as Faction;
-  const src = hasDirectionSprite(unit, direction)
-    ? unit.sprite(faction, direction)
-    : MISSING_DIRECTION_SPRITE;
+  if (!hasDirectionSprite(unit, direction)) return null;
+  const src = unit.sprite(faction, direction);
+  if (!src) return null;
   const scale = unit.defaultScale / 100;
   const nativeScale = unit.nativeScalePercent / 100;
   const seatW = UNIT_SEAT_W * nativeScale * scale;
@@ -116,9 +157,10 @@ function staticUnitSubject(
     seat,
     facing: direction,
     spriteForFacing: (facing) => hasDirectionSprite(unit, facing)
-      ? unit.sprite(faction, facing)
-      : MISSING_DIRECTION_SPRITE,
+      ? unit.sprite(faction, facing) ?? src
+      : src,
     op: {
+      layer: 'scene',
       src,
       dx: seatX + (seatW - imageW) / 2,
       dy: seatY + (seatH - imageH) / 2,
@@ -156,14 +198,15 @@ function pushStructureDrawOps(
   const fullW = sourceSprite.w * scale;
   const fullH = sourceSprite.h * scale;
   if (structureSourceSplitMode(source) !== 'flat-contact') {
-    ops.push({ src: structureSourceHalfSrc(source, 'back'), dx, dy, dw: fullW, dh: fullH, z: backZ });
-    ops.push({ src: structureSourceHalfSrc(source, 'front'), dx, dy, dw: fullW, dh: fullH, z: frontZ });
+    ops.push({ layer: 'scene', src: structureSourceHalfSrc(source, 'back'), dx, dy, dw: fullW, dh: fullH, z: backZ });
+    ops.push({ layer: 'scene', src: structureSourceHalfSrc(source, 'front'), dx, dy, dw: fullW, dh: fullH, z: frontZ });
     return;
   }
 
   const clips = flatContactClipRects({ w: sourceSprite.w, h: sourceSprite.h, anchorY });
   if (clips.back.sh > 0) {
     ops.push({
+      layer: 'scene',
       src: structureSourceHalfSrc(source, 'back'),
       sx: clips.back.sx,
       sy: clips.back.sy,
@@ -178,6 +221,7 @@ function pushStructureDrawOps(
   }
   if (clips.front.sh > 0) {
     ops.push({
+      layer: 'scene',
       src: structureSourceHalfSrc(source, 'front'),
       sx: clips.front.sx,
       sy: clips.front.sy,
@@ -192,6 +236,38 @@ function pushStructureDrawOps(
   }
 }
 
+function pushFenceDrawOps(
+  ops: BoardDrawOp[],
+  cell: { x: number; y: number },
+  fence: ResolvedFenceOverlay,
+): void {
+  const { left, top } = boardLabCellPosition(cell);
+  const z = fenceOverlayZIndex(cell);
+  ops.push({
+    layer: 'scene',
+    src: fenceFrameSrc(fence.material, fence.mask),
+    dx: left - TILE_STEP_X,
+    dy: top - TILE_EQUATOR,
+    dw: TILE_FRAME_W,
+    dh: TILE_FRAME_H,
+    z,
+  });
+}
+
+function pushFencePostDrawOp(ops: BoardDrawOp[], post: ResolvedFencePost): void {
+  const { left, top: vertexCellTop } = boardLabCellPosition(post);
+  const top = vertexCellTop - TILE_STEP_Y;
+  ops.push({
+    layer: 'scene',
+    src: fencePostSrc(post.material),
+    dx: left - TILE_STEP_X,
+    dy: top - TILE_EQUATOR,
+    dw: TILE_FRAME_W,
+    dh: TILE_FRAME_H,
+    z: fencePostZIndex(post),
+  });
+}
+
 export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {}): BoardDrawOp[] {
   const ops: BoardDrawOp[] = [];
 
@@ -199,8 +275,10 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   const isExit = (edge: string): boolean => board.featureExits[edge] === true;
   const overlays = resolveFeatureOverlays(board.features, isSevered, isExit);
   const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
+  const fencePosts = resolveFencePosts(board.fences ?? {}, board.fencePosts ?? {});
   const wallBounds = { cols: board.cols, rows: board.rows };
   const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
+  const wallFaceStyles = resolveWallArtFaces(board.wallArt, wallBounds);
   const hasWall = (edge: string): boolean => Boolean(board.walls?.[edge]);
   const mirrorSurfaces = mirrorSurfacesForPlacements(board.wallArt, wallBounds)
     .filter((surface) => surface.segments.every((segment) => !segment.edge || hasWall(segment.edge)));
@@ -240,18 +318,39 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       const tile = board.cells[key] ? resolveTile(board.cells[key]) : undefined;
       if (tile) {
         const frameSrc = assetFrameSrc(tile, 0);
-        const drawSide = !occupiedTerrain.has(`${x + 1},${y}`) || !occupiedTerrain.has(`${x},${y + 1}`);
-        if (drawSide) {
-          ops.push({ src: frameSrc.replace(/\.png$/, '-side.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
+        const sideFaces = resolveTerrainSideFaces(
+          resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupiedTerrain.has(`${nextX},${nextY}`)),
+          resolveTerrainSideMaterials(tile, undefined, (source) => (
+            assetFrameSrc(source, 0).replace(/\.png$/, '-side.png')
+          )),
+        );
+        for (const face of TERRAIN_SIDE_FACES) {
+          const { exposed, material } = sideFaces[face];
+          if (!exposed || !material) continue;
+          const faceX = TERRAIN_SIDE_FACE_COLUMN[face] * TILE_STEP_X;
+          ops.push({
+            layer: 'terrain',
+            src: material,
+            sx: faceX,
+            sy: 0,
+            sw: TILE_STEP_X,
+            sh: TILE_FRAME_H,
+            dx: frameX + faceX,
+            dy: frameY,
+            dw: TILE_STEP_X,
+            dh: TILE_FRAME_H,
+            z: zIndex,
+          });
         }
         if (!macroOwnedTerrain.has(key)) {
-          ops.push({ src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
+          ops.push({ layer: 'terrain', src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
         }
       }
 
       const feature = overlays[key];
       if (feature) {
         ops.push({
+          layer: 'linear-feature',
           src: featureFrameSrc(feature.kind, feature.material, feature.mask),
           dx: frameX,
           dy: frameY,
@@ -261,11 +360,11 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
         });
       }
 
-      const fence = fenceOverlays.get(key);
       const wall = wallOverlays.get(key);
       if (wall) {
         const wallZ = wallOverlayZIndex({ x, y });
         ops.push({
+          layer: 'scene',
           src: wallFrameSrc(wall.material, wall.mask),
           dx: left - WALL_ANCHOR_X,
           dy: top - WALL_ANCHOR_Y,
@@ -273,19 +372,40 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
           dh: WALL_FRAME_H,
           z: wallZ,
         });
-      }
-
-      if (fence) {
-        ops.push({
-          src: fenceFrameSrc(fence.material, fence.mask),
-          dx: frameX,
-          dy: frameY,
-          dw: TILE_FRAME_W,
-          dh: TILE_FRAME_H,
-          z: fenceOverlayZIndex({ x, y }),
-        });
+        const faceStyles = wallFaceStyles.get(key);
+        for (const face of ['west', 'north'] as const) {
+          const maskBit = face === 'west' ? 8 : 1;
+          if (!(wall.mask & maskBit)) continue;
+          for (const slot of wallArtSlotsForFace(faceStyles?.[face], face)) {
+            const source = slotSource(slot);
+            if (!source) continue;
+            if (source.kind === 'mirror') continue;
+            const faceAsset = source.faces[face];
+            ops.push({
+              layer: 'scene',
+              src: faceAsset.src,
+              dx: left - WALL_ANCHOR_X + slot.x - faceAsset.mountX * slot.scale,
+              dy: top - WALL_ANCHOR_Y + slot.y - faceAsset.mountY * slot.scale,
+              dw: faceAsset.width * slot.scale,
+              dh: faceAsset.height * slot.scale,
+              z: wallArtOverlayZIndex({ x, y }),
+            });
+          }
+        }
       }
     }
+  }
+
+  // Posts cap their incident rails at a positive half-depth bias. Keep insertion order only as a
+  // secondary deterministic tie breaker; numeric z owns the visible ordering.
+  for (const post of fencePosts.values()) pushFencePostDrawOp(ops, post);
+  // Fence owners can be off-board phantom cells for north/west boundary rails. Iterating the
+  // resolved map (instead of looking fences up only while walking in-bounds tiles) paints those
+  // rails. Posts resolve separately by canonical vertex, so a shared corner/join is drawn once.
+  for (const [key, fence] of fenceOverlays) {
+    const [x, y] = key.split(',').map(Number);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    pushFenceDrawOps(ops, { x, y }, fence);
   }
 
   for (const placement of acceptedMacroTiles) {
@@ -298,6 +418,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       ? macroTileOwnedCellIndices(placement, board.cols, board.rows).map((index) => terrainCellClipPolygon(index, board.cols))
       : undefined;
     ops.push({
+      layer: 'terrain',
       src: asset.src,
       dx: left + frame.left,
       dy: top + frame.top,
@@ -386,17 +507,24 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       const meta = set.variants.find((v) => v.id === tuft.variant);
       if (!meta) continue;
       ops.push({
-        src: `${set.basePath}/v${tuft.variant}.png`,
+        layer: 'scene',
+        src: meta.src,
         sx: 0,
         sy: 0,
-        sw: meta.frameW,
-        sh: meta.frameH,
+        sw: meta.frameWidth,
+        sh: meta.frameHeight,
         dx: left + tuft.dx - meta.baseX,
         dy: top + tuft.dy - meta.baseY,
-        dw: meta.frameW,
-        dh: meta.frameH,
+        dw: meta.frameWidth,
+        dh: meta.frameHeight,
         z: groundCoverZIndex(cell, tuft.dy),
         flipX: tuft.flip,
+        animation: {
+          kind: 'ground-cover-sway',
+          frameCount: set.frameCount,
+          durationMs: 1140,
+          phase: tuft.phase,
+        },
       });
     }
   }
@@ -429,6 +557,7 @@ export function boardContentHash(board: RenderBoard): string {
     `ct:${sortedEntries(board.coverTypes ?? {})}`,
     `f:${sortedEntries(board.features)}`,
     `fe:${sortedEntries(board.fences ?? {})}`,
+    `fp:${sortedEntries(board.fencePosts ?? {})}`,
     `wl:${sortedEntries(board.walls ?? {})}`,
     `wa:${sortedEntries(board.wallArt ?? {})}`,
     `x:${sortedEntries(board.featureCuts)}`,

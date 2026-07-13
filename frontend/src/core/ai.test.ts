@@ -5,6 +5,7 @@ import {
 } from './ai';
 import { createRng } from './rng';
 import type { GameState, Piece, PieceType, Side } from './types';
+import { victoryRulesForObjective } from './objectives';
 
 function piece(id: string, side: Side, type: PieceType, x: number, y: number, extra: Partial<Piece> = {}): Piece {
   return { id, side, type, x, y, alive: true, startY: y, ...extra };
@@ -15,7 +16,11 @@ function state(pieces: Piece[], over: Partial<GameState> = {}): GameState {
 }
 
 function sctx(over: Partial<SearchContext> = {}): SearchContext {
-  return { objective: 'capture-all', ctx: {}, turnsElapsed: 0, ...over };
+  const merged = { objective: 'capture-all' as const, ctx: {}, turnsElapsed: 0, ...over };
+  return {
+    ...merged,
+    victoryRules: over.victoryRules ?? victoryRulesForObjective(merged.objective, merged.ctx),
+  };
 }
 
 // Node-bounded (no wall clock) so the search is deterministic under any timer setup.
@@ -37,6 +42,55 @@ describe('searchBestAction', () => {
     const chosen = searchBestAction(s, {}, sctx({ objective: 'rival-kings' }), null, FAST);
     expect(chosen).not.toBeNull();
     expect(chosen!.move).toMatchObject({ x: 7, y: 4, capture: 'p-king' });
+  });
+
+  it('searches the exact authored victory rules instead of the objective preset', () => {
+    // Same fork as above: the objective label/heuristic remains Rival Kings, but
+    // this authored level says eliminating the player's QUEEN wins. Search must
+    // therefore take the queen instead of silently solving the rival-kings preset.
+    const s = state([
+      piece('e-rook', 'enemy', 'rook', 0, 4),
+      piece('p-king', 'player', 'king', 7, 4),
+      piece('p-queen', 'player', 'queen', 0, 0),
+      piece('e-king', 'enemy', 'king', 7, 1),
+    ]);
+    const authored = [{
+      name: 'Take the Queen',
+      if: [{ kind: 'eliminate' as const, side: 'player' as const, filter: { type: 'queen' as const } }],
+      do: [{ kind: 'win' as const, side: 'enemy' as const }],
+    }];
+    const chosen = searchBestAction(
+      s,
+      {},
+      sctx({ objective: 'rival-kings', victoryRules: authored }),
+      null,
+      FAST,
+    );
+    expect(chosen).not.toBeNull();
+    expect(chosen!.move).toMatchObject({ x: 0, y: 0, capture: 'p-queen' });
+  });
+
+  it('derives horizon guidance from authored rules rather than the headline preset', () => {
+    const rules = [{
+      name: 'Enemy breakthrough',
+      if: [{ kind: 'reach' as const, side: 'enemy' as const }],
+      do: [{ kind: 'win' as const, side: 'enemy' as const }],
+    }];
+    const far = state([
+      piece('p-king', 'player', 'king', 7, 7),
+      piece('e-pawn', 'enemy', 'pawn', 3, 5),
+      piece('e-king', 'enemy', 'king', 0, 0),
+    ]);
+    const near = state(far.pieces.map((candidate) => candidate.id === 'e-pawn' ? { ...candidate, y: 1 } : candidate));
+    const context = sctx({
+      objective: 'capture-all',
+      victoryRules: rules,
+      ctx: { reachCells: [{ x: 3, y: 0 }] },
+    });
+
+    // Enemy progress toward its authored goal is bad for the player even though the
+    // stale headline objective says capture-all.
+    expect(evaluateGameState(near, context)).toBeLessThan(evaluateGameState(far, context));
   });
 
   it('declines a defended pawn when a free pawn is on offer', () => {

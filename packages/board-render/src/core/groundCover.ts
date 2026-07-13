@@ -4,13 +4,12 @@
 // resolved to concrete tufts ONCE when the tile is placed/built — never per render.
 //
 // Authored art (the baked tuft sheets) + procedural PLACEMENT (this file): every
-// game separates the two. Sheets + the typed manifest are produced by
-// scripts/build-groundcover.mjs.
+// game separates the two. Sheet bytes and their per-version geometry come from
+// the applied backend live-media catalog; only deterministic placement policy is
+// code-owned here.
 
+import type { LiveMediaCatalog, LiveMediaSlot } from '../art/liveMediaCatalog';
 import type { TileFamilyId } from './tileSockets';
-import grassManifest from '../art/groundcover/grass.generated';
-import waterManifest from '../art/groundcover/water.generated';
-import sandManifest from '../art/groundcover/sand.generated';
 
 export type GroundCoverDensity = 'sparse' | 'filled';
 
@@ -31,16 +30,17 @@ export interface GroundCover {
 
 export interface CoverVariantMeta {
   id: number;
-  frameW: number;
-  frameH: number;
+  frameWidth: number;
+  frameHeight: number;
   baseX: number;
   baseY: number;
-  w: number;
+  contentWidth: number;
+  /** Immutable content-addressed URL from the applied catalog snapshot. */
+  src: string;
 }
 export interface CoverSet {
   terrain: string;
   frameCount: number;
-  basePath: string;
   variants: CoverVariantMeta[];
   /** Only place on a tile that borders a DIFFERENT terrain (e.g. reeds at the water's edge). */
   edgeOnly?: boolean;
@@ -49,13 +49,141 @@ export interface CoverSet {
   count?: Record<GroundCoverDensity, number>;
 }
 
-// Registry keyed by terrain family. Grass is the first set; add stone/water/etc.
-// by committing sources + re-running the bake and registering the manifest here.
-const SETS: Partial<Record<TileFamilyId, CoverSet>> = {
-  grass: { ...grassManifest, basePath: '/assets/groundcover/grass' } as unknown as CoverSet,
-  water: { ...waterManifest, basePath: '/assets/groundcover/water', edgeOnly: true, count: { sparse: 2, filled: 3 } } as unknown as CoverSet,
-  sand: { ...sandManifest, basePath: '/assets/groundcover/sand', count: { sparse: 2, filled: 4 } } as unknown as CoverSet,
+export type GroundCoverTerrain = Extract<TileFamilyId, 'grass' | 'water' | 'sand'>;
+
+export interface GroundCoverRuntimeMetadata {
+  terrain: GroundCoverTerrain;
+  id: number;
+  frameWidth: number;
+  frameHeight: number;
+  frameCount: number;
+  baseX: number;
+  baseY: number;
+  contentWidth: number;
+}
+
+const GROUND_COVER_TERRAINS = ['grass', 'water', 'sand'] as const satisfies readonly GroundCoverTerrain[];
+const GROUND_COVER_SLOT = /^groundcover\/(grass|water|sand)\/v(0|[1-9][0-9]*)\.png$/;
+
+// Scatter/count/edge-only behavior is deterministic game logic. Pixel geometry
+// is deliberately absent: every frame and anchor is hydrated from live metadata.
+const PLACEMENT_POLICY: Record<GroundCoverTerrain, Pick<CoverSet, 'edgeOnly' | 'count'>> = {
+  grass: {},
+  water: { edgeOnly: true, count: { sparse: 2, filled: 3 } },
+  sand: { count: { sparse: 2, filled: 4 } },
 };
+
+let SETS: Partial<Record<TileFamilyId, CoverSet>> = {};
+
+function groundCoverCatalogFailure(message: string): Error {
+  return new Error(`invalid ground-cover live catalog: ${message}`);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function boundedInteger(value: unknown, min: number, max: number): number | null {
+  return Number.isInteger(value) && Number(value) >= min && Number(value) <= max ? Number(value) : null;
+}
+
+function runtimeGroundCover(slot: LiveMediaSlot, terrain: GroundCoverTerrain, slotId: number): GroundCoverRuntimeMetadata {
+  const runtime = isRecord(slot.versionMetadata.runtime) ? slot.versionMetadata.runtime : null;
+  const raw = runtime && isRecord(runtime.groundCover) ? runtime.groundCover : null;
+  if (!raw) throw groundCoverCatalogFailure(`${slot.slot} is missing versionMetadata.runtime.groundCover`);
+  const allowed = new Set([
+    'terrain', 'id', 'frameWidth', 'frameHeight', 'frameCount', 'baseX', 'baseY', 'contentWidth',
+  ]);
+  const unknown = Object.keys(raw).filter((key) => !allowed.has(key));
+  if (unknown.length) {
+    throw groundCoverCatalogFailure(`${slot.slot} groundCover metadata contains unsupported keys: ${unknown.sort().join(', ')}`);
+  }
+  if (raw.terrain !== terrain) throw groundCoverCatalogFailure(`${slot.slot} metadata terrain must match its slot`);
+  const id = boundedInteger(raw.id, 0, 32768);
+  const frameWidth = boundedInteger(raw.frameWidth, 1, 32768);
+  const frameHeight = boundedInteger(raw.frameHeight, 1, 32768);
+  const frameCount = boundedInteger(raw.frameCount, 1, 32768);
+  const baseX = boundedInteger(raw.baseX, 0, 32767);
+  const baseY = boundedInteger(raw.baseY, 0, 32767);
+  const contentWidth = boundedInteger(raw.contentWidth, 1, 32768);
+  if (id === null || id !== slotId) throw groundCoverCatalogFailure(`${slot.slot} metadata id must match its slot`);
+  if (frameWidth === null || frameHeight === null || frameCount === null) {
+    throw groundCoverCatalogFailure(`${slot.slot} frame geometry must use positive bounded integers`);
+  }
+  if (baseX === null || baseX >= frameWidth || baseY === null || baseY >= frameHeight) {
+    throw groundCoverCatalogFailure(`${slot.slot} base anchor must lie inside one frame`);
+  }
+  if (contentWidth === null || contentWidth > frameWidth) {
+    throw groundCoverCatalogFailure(`${slot.slot} contentWidth must fit inside one frame`);
+  }
+  if (slot.domain !== 'terrain' || slot.role !== 'media' || slot.media.mediaType !== 'image/png') {
+    throw groundCoverCatalogFailure(`${slot.slot} must be a terrain/media image/png slot`);
+  }
+  if (slot.media.width !== frameWidth * frameCount || slot.media.height !== frameHeight) {
+    throw groundCoverCatalogFailure(`${slot.slot} metadata does not match uploaded sheet dimensions`);
+  }
+  return { terrain, id, frameWidth, frameHeight, frameCount, baseX, baseY, contentWidth };
+}
+
+/** Hydrate all ground-cover sets atomically from one validated backend snapshot. */
+export function applyGroundCoverCatalog(catalog: LiveMediaCatalog): void {
+  const variants = new Map<GroundCoverTerrain, CoverVariantMeta[]>();
+  const frameCounts = new Map<GroundCoverTerrain, number>();
+  for (const slot of catalog.slots) {
+    const match = GROUND_COVER_SLOT.exec(slot.slot);
+    if (!match) continue;
+    const terrain = match[1] as GroundCoverTerrain;
+    const id = Number(match[2]);
+    const metadata = runtimeGroundCover(slot, terrain, id);
+    const priorFrameCount = frameCounts.get(terrain);
+    if (priorFrameCount !== undefined && priorFrameCount !== metadata.frameCount) {
+      throw groundCoverCatalogFailure(`${terrain} variants disagree on frameCount`);
+    }
+    frameCounts.set(terrain, metadata.frameCount);
+    const entries = variants.get(terrain) ?? [];
+    if (entries.some((entry) => entry.id === metadata.id)) {
+      throw groundCoverCatalogFailure(`${terrain} repeats variant id ${metadata.id}`);
+    }
+    entries.push({
+      id: metadata.id,
+      frameWidth: metadata.frameWidth,
+      frameHeight: metadata.frameHeight,
+      baseX: metadata.baseX,
+      baseY: metadata.baseY,
+      contentWidth: metadata.contentWidth,
+      src: slot.media.immutableUrl,
+    });
+    variants.set(terrain, entries);
+  }
+
+  const next: Partial<Record<TileFamilyId, CoverSet>> = {};
+  for (const terrain of GROUND_COVER_TERRAINS) {
+    const terrainVariants = variants.get(terrain);
+    const frameCount = frameCounts.get(terrain);
+    if (!terrainVariants?.length || frameCount === undefined) continue;
+    terrainVariants.sort((left, right) => left.id - right.id);
+    next[terrain] = {
+      terrain,
+      frameCount,
+      variants: terrainVariants,
+      ...PLACEMENT_POLICY[terrain],
+    };
+  }
+  const missing = GROUND_COVER_TERRAINS.filter((terrain) => !next[terrain]?.variants.length);
+  if (missing.length) {
+    throw groundCoverCatalogFailure(`required terrain sets are absent: ${missing.join(', ')}`);
+  }
+  SETS = next;
+}
+
+export function resetGroundCoverCatalog(): void {
+  SETS = {};
+}
+
+export function assertGroundCoverCatalogAvailable(): void {
+  const missing = GROUND_COVER_TERRAINS.filter((terrain) => !SETS[terrain]?.variants.length);
+  if (missing.length) throw groundCoverCatalogFailure(`required terrain sets are absent: ${missing.join(', ')}`);
+}
 
 export function groundCoverSet(terrain: TileFamilyId): CoverSet | undefined {
   return SETS[terrain];

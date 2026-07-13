@@ -4,23 +4,16 @@
 // `exec --json` stdout — see codex-imagegen.mjs). Each texture ships from the session's own
 // generated_images/<thread_id>/ dir (race-free). See docs/kit-forge.md, ADR-0011/0014.
 //
-//   node frontend/scripts/forge-surface-texture.mjs [name...] | --all  [--n 4] [--tries 2]
-//
-// Output (exploration, NOT production yet): frontend/public/assets/ui/explore/<name>.png
-// Evidence (codex event stream): frontend/tmp-forge-evidence/<name>-tryN.jsonl
+//   node frontend/scripts/forge-surface-texture.mjs [name...] --slot-prefix <slot> -- <upload options>
 //
 // These are TILES, so the mechanical check is wrap-seam error (right↔left, bottom↔top),
 // not transparency. It's a WARN, not a hard gate — codex seamlessness is imperfect and
 // we want to eyeball the look first; healing is a later pass once a material is chosen.
-import { mkdtempSync, rmSync, copyFileSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { CODEX, runCodex, imageGenVerdict, sessionImage } from './codex-imagegen.mjs';
-
-const FRONTEND = fileURLToPath(new URL('..', import.meta.url));
-const OUT = join(FRONTEND, 'public/assets/ui/explore');
-const EVID = join(FRONTEND, 'tmp-forge-evidence');
+import { optionValue, splitGeneratorArgs, uploadGeneratedCandidate } from './upload-generated-candidate.mjs';
 
 // The shared shell palette (frontend/src/style.css tokens) so the materials harmonize
 // with the dark low-glare app shell instead of fighting it.
@@ -90,8 +83,6 @@ async function forgeOne(spec, maxTries) {
     const work = mkdtempSync(join(tmpdir(), `surf-${spec.name}-`));
     try {
       const { out: jsonl } = await runCodex(work, prompt(spec, prior));
-      mkdirSync(EVID, { recursive: true });
-      writeFileSync(join(EVID, `${spec.name}-try${attempt}.jsonl`), jsonl);
       // PRIMARY gate: the canonical image_generation_call event in the session rollout.
       const verdict = imageGenVerdict(jsonl);
       if (!verdict.ok) {
@@ -106,11 +97,12 @@ async function forgeOne(spec, maxTries) {
         prior = 'you generated an image but it could not be located in the default image output folder; generate again and leave the output there.';
         continue;
       }
-      mkdirSync(OUT, { recursive: true });
-      copyFileSync(shipped, join(OUT, `${spec.name}.png`));
-      const seam = await seamError(join(OUT, `${spec.name}.png`));
+      const seam = await seamError(shipped);
       const seamStr = seam ? `(${seam.size}) seam L↔R=${seam.lr} T↔B=${seam.tb}` : '(seam skipped — no pngjs)';
-      console.log(`  ${spec.name} try ${attempt}: image_generation_call ✓ · ship ${shipped.split(/[\\/]/).pop()} ${seamStr} -> explore/${spec.name}.png`);
+      const provenance = join(work, 'provenance.json');
+      writeFileSync(provenance, `${JSON.stringify({ generator: 'forge-surface-texture', threadId: verdict.tid, seam }, null, 2)}\n`);
+      uploadGeneratedCandidate(shipped, [...uploadArgs, '--provenance-json', provenance], `${slotPrefix}/${spec.name}.png`);
+      console.log(`  ${spec.name} try ${attempt}: image_generation_call ✓ · ${seamStr} -> ${slotPrefix}/${spec.name}.png`);
       return { name: spec.name, pass: true, tries: attempt, seam, tid: verdict.tid };
     } finally {
       rmSync(work, { recursive: true, force: true });
@@ -119,7 +111,11 @@ async function forgeOne(spec, maxTries) {
   return { name: spec.name, pass: false, tries: maxTries };
 }
 
-const argv = process.argv.slice(2);
+const { toolArgs, uploadArgs } = splitGeneratorArgs(process.argv.slice(2));
+const slotPrefix = optionValue(toolArgs, '--slot-prefix').replace(/\/+$/, '');
+if (!slotPrefix || !uploadArgs.length) throw new Error('forge-surface-texture requires --slot-prefix and live-media options after --');
+const prefixIndex = toolArgs.indexOf('--slot-prefix');
+const argv = toolArgs.filter((_, index) => index !== prefixIndex && index !== prefixIndex + 1);
 const flag = (n, def) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : def; };
 const n = Math.max(1, parseInt(flag('--n', '4'), 10));
 const maxTries = Math.max(1, parseInt(flag('--tries', '2'), 10));

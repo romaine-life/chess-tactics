@@ -341,7 +341,7 @@ export function mirrorSurfacesForArt(art: WallArt, target: MirrorSurfaceTarget):
   for (const slot of art.slots) {
     if (slot.face !== target.face) continue;
     const source = slotSource(slot);
-    if (source.kind !== 'mirror') continue;
+    if (!source || source.kind !== 'mirror') continue;
     const normalized = wallDecorMirrorAperture(source, target.face);
     if (!normalized) continue;
     const face = source.faces[target.face];
@@ -429,6 +429,7 @@ export function wallArtFrameOpsForArt(
   for (const slot of definition.slots) {
     if (slot.face !== target.face) continue;
     const source = slotSource(slot);
+    if (!source) continue;
     const face = source.faces[target.face];
     const base: Omit<BoardDrawOp, 'z'> = {
       src: face.src,

@@ -1,14 +1,13 @@
-// Accepted background-surface textures — seamless, tileable pixel-art tiles used to fill
-// panel/frame interiors. Read-only catalog items: you view them tiled as a surface, you
-// don't edit them. Mirrors public/assets/ui/surfaces/accepted-surfaces.json (tile-px 1024,
-// repeat). Adding a surface = one entry here, like the other *Catalog data modules.
+// Stable background-surface slots — seamless, tileable pixel-art tiles used to
+// fill panel/frame interiors. The backend catalog owns their active versions;
+// this module owns only UI labels and repeat geometry.
 
 export interface SurfaceAsset {
   name: string;
   label: string;
   approach: 'hybrid' | 'pixel-model' | 'baseline' | 'pixellab';
   material: string;
-  file: string; // served path under public/
+  file: string; // backend-resolved stable semantic slot
   tilePx: number; // intended on-screen tile size for repeat-tiling
 }
 

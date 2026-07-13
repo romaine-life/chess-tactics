@@ -2,28 +2,25 @@
 
 Run with:  blender --background --python render_pawn_helmet.py
 
-A classic Staunton pawn (source-assets/pawn-helmet/Pawn.stl) wearing a medieval
-archer's helmet (helmet.dae, COLLADA parsed by hand since Blender 5.x has no
+A classic Staunton pawn wearing a medieval archer's helmet (COLLADA parsed by
+hand since Blender 5.x has no
 COLLADA importer). Both navy-styled, rendered at the true-isometric contract
 angle (45 yaw / 35.264 elevation / ortho). The pawn body is symmetric; the helmet
 visor gives each direction a real facing (visor -> game-south at yaw 0).
-Output defaults to .unit-art-output/pawn/navy-blue/<direction>.png. The canonical
-pipeline supplies UNIT_ART_OUTPUT_DIR plus UNIT_ART_FRAME_WIDTH/HEIGHT so Blender's
+The canonical pipeline fetches both private source records into a temporary
+directory and supplies their paths, UNIT_ART_OUTPUT_DIR, and frame dimensions so Blender's
 first raster is already the delivery frame. This renderer never resizes a frame.
 """
 import bpy, os, math, mathutils, numpy as np
 import xml.etree.ElementTree as ET
 from bpy_extras.object_utils import world_to_camera_view
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
-    ROOT = ROOT.parent
-SRC = ROOT / "docs/art/unit-concepts/source-assets/pawn-helmet"
-STL = str(SRC / "Pawn.stl"); DAE = str(SRC / "helmet.dae")
-OUT = os.environ.get("UNIT_ART_OUTPUT_DIR", str(ROOT / ".unit-art-output/pawn/navy-blue"))
-FRAME_WIDTH = int(os.environ.get("UNIT_ART_FRAME_WIDTH", "512"))
-FRAME_HEIGHT = int(os.environ.get("UNIT_ART_FRAME_HEIGHT", "512"))
+STL = os.environ.get("UNIT_ART_PAWN_STL"); DAE = os.environ.get("UNIT_ART_PAWN_DAE")
+OUT = os.environ.get("UNIT_ART_OUTPUT_DIR")
+if not STL or not DAE or not OUT:
+    raise RuntimeError("run through generate-unit-art.py; private pawn sources and output are required")
+FRAME_WIDTH = int(os.environ["UNIT_ART_FRAME_WIDTH"])
+FRAME_HEIGHT = int(os.environ["UNIT_ART_FRAME_HEIGHT"])
 if not (1 <= FRAME_WIDTH <= 4096 and 1 <= FRAME_HEIGHT <= 4096):
     raise RuntimeError("UNIT_ART_FRAME_WIDTH/HEIGHT must be between 1 and 4096")
 os.makedirs(OUT, exist_ok=True)

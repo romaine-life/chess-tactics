@@ -7,9 +7,12 @@
 //
 // Two homes, one truth (mirrors campaign progress: backend account row + a local
 // cache): the account-scoped opening-books blob keeps the durable, cross-device
-// copy (BooksBlob.adoptedWeights, persisted through net/openingBooks), and THIS
-// localStorage map is the synchronous cache the live AI can read without awaiting a
-// backend round-trip. The Gym writes both on adopt; the store reads only this one.
+// copy — the level-AI document (BooksBlob.levelAi: the named APPROACH in force plus
+// each approach's own tuned vector, persisted through net/openingBooks) — and THIS
+// localStorage map caches the LIVE approach's vector so the live AI can read it
+// without awaiting a backend round-trip. The Gym writes both on adopt; the store
+// reads only this one. (One approach exists today — material search — so the cache
+// is a bare vector; a second approach adds a resolver branch here.)
 //
 // Best-effort like every other localStorage store in the app: absent/blocked
 // storage (SSR, tests, privacy modes) degrades to "no adoption" and the live AI

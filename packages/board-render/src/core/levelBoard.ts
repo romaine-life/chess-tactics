@@ -274,6 +274,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     cover,
     features,
     fences,
+    fencePosts: {},
     walls: {},
     wallArt: {},
     featureCuts: {},

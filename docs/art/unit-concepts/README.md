@@ -39,15 +39,27 @@ same.
 
 ADR-0075 separates new geometry from resizing accepted art. A new unit starts
 from one calibrated Blender model under a fixed camera at eight exact 45-degree
-facings. A scale-only revision starts from the accepted 6-palette x 8-direction
-sprite set so its approved styling and orientation cannot drift.
+facings. A scale-only calibration starts from the accepted 6-palette x 8-direction
+sprite set so its approved styling and orientation cannot drift. ADR-0076
+supersedes ADR-0075 only where it allowed that spatially resampled calibration to
+be accepted as production art.
 
 The canonical entry point is below.
 
 ```powershell
-python scripts/generate-unit-art.py render pawn --target 51x61
+python scripts/generate-unit-art.py render pawn --target 51x61 `
+  --renderer-root <Git-renderer-code-directory> `
+  --source-manifest <temporary-backend-source-manifest.json> `
+  --api-base http://127.0.0.1:3000
 python scripts/generate-unit-art.py verify pawn --target 51x61
 ```
+
+The render command has no repository media fallback. `--source-manifest` is a
+temporary schema-version-1 export of backend archival identities, grouped as
+`pieces.<piece>.sources[]` with `sourcePath`, a local `name`, and the optional
+renderer `env` binding. `--renderer-root` names Git-owned Blender algorithm code;
+the client fetches every model/texture into OS temp storage and records the
+verified source hashes in `render.json`.
 
 For several genuinely new pieces, pass the Unit Studio handoff JSON to `render
 all --handoff <file>`. The command writes eight exact Blender frames and
@@ -56,18 +68,21 @@ all --handoff <file>`. The command writes eight exact Blender frames and
 For an accepted-art size revision, set the size in Unit Studio and open Unit Art's
 **Recapture** tab. **Recapture accepted** samples every approved palette and
 direction with an aspect-preserving, premultiplied-alpha area reduction, previews
-the exact delivery PNGs live, and **Create candidate** uploads them without
-accepting them. A square accepted source is contained within the delivery canvas;
+the calibration PNGs live, and **Create candidate** uploads them as explicitly
+non-production evidence. A square accepted source is contained within the delivery canvas;
 for example, `512x512 -> 51x61` means a smooth `51x51` image centered in a
 transparent `51x61` frame, not a nonuniform stretch. Provenance records the
 accepted source asset, source, contained, and delivery dimensions, and the fact
 that spatial resampling occurred. The result is deliberately called downscaled,
-never pixel-authored or native-generated.
+never pixel-authored or native-generated, and it cannot be accepted. The reviewed
+dimensions become the target for a fresh Blender render; only that native output,
+with no spatial resampling and a passing live-board review, is acceptance-eligible.
 
 Direct image generation, whole-sheet restyling/slicing, and the old south-concept
 fan-out are retired for board units. Downscaling is allowed only as this explicit,
-deterministic recapture of an accepted complete asset. Local authoring output must
-not be written under `frontend/public`.
+deterministic calibration recapture of an accepted complete asset, never as the
+final production raster. Local authoring output stays in the ignored
+`.unit-art-output` handoff and must then be uploaded as a live-media candidate.
 
 ## Historical Archive
 

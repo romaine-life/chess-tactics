@@ -1,4 +1,5 @@
 import { type ReactElement, type ReactNode } from 'react';
+import { chromeUnitClassNames } from '../chromeUnitRegistry';
 
 // Shared dressing-room control primitives. Every Studio tuner (Main Menu, Settings, Campaign)
 // reuses these so the panels look and behave identically.
@@ -20,10 +21,10 @@ export function SliderRow({ label, value, set, min, max, step = 1, nudge = 1, df
     <label className="tileset-catalog-zoom">
       <span>{label}</span>
       <div className="pages-ctl-row">
-        <button type="button" className="pages-step" aria-label="Decrease" onClick={(e) => { e.preventDefault(); set(clamp(value - nudge)); }}>−</button>
+        <button type="button" data-chrome-unit="inner-minus-key" className={chromeUnitClassNames('inner-minus-key', 'pages-step')} aria-label="Decrease" onClick={(e) => { e.preventDefault(); set(clamp(value - nudge)); }}>−</button>
         <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => set(Number(e.target.value))} />
-        <button type="button" className="pages-step" aria-label="Increase" onClick={(e) => { e.preventDefault(); set(clamp(value + nudge)); }}>+</button>
-        <button type="button" className="pages-mini-reset" title="Reset to default" aria-label="Reset to default" onClick={(e) => { e.preventDefault(); set(dflt); }}>↺</button>
+        <button type="button" data-chrome-unit="inner-plus-key" className={chromeUnitClassNames('inner-plus-key', 'pages-step')} aria-label="Increase" onClick={(e) => { e.preventDefault(); set(clamp(value + nudge)); }}>+</button>
+        <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'pages-mini-reset')} title="Reset to default" aria-label="Reset to default" onClick={(e) => { e.preventDefault(); set(dflt); }}>↺</button>
       </div>
     </label>
   );
@@ -33,6 +34,6 @@ export function SliderRow({ label, value, set, min, max, step = 1, nudge = 1, df
 // just that one to its default. (Sliders carry their own ↺ via SliderRow.)
 export function ctlReset(onReset: () => void): ReactElement {
   return (
-    <button type="button" className="pages-mini-reset" title="Reset to default" aria-label="Reset to default" onClick={(e) => { e.preventDefault(); onReset(); }}>↺</button>
+    <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'pages-mini-reset')} title="Reset to default" aria-label="Reset to default" onClick={(e) => { e.preventDefault(); onReset(); }}>↺</button>
   );
 }
