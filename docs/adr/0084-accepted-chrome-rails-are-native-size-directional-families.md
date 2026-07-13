@@ -1,8 +1,10 @@
 ---
-status: "accepted; Git-backed candidate storage and generator enforcement superseded by ADR-0088"
+status: "accepted; Git-backed candidate storage superseded by ADR-0088 and outer-only divider inheritance superseded by ADR-0092"
 date: 2026-07-10
 deciders: Nelson, Codex
-partially_superseded_by: "[ADR-0088](0088-chrome-candidates-and-installed-roles-are-live-catalog-owned.md)"
+partially_superseded_by:
+  - "[ADR-0088](0088-chrome-candidates-and-installed-roles-are-live-catalog-owned.md)"
+  - "[ADR-0092](0092-dividers-inherit-their-host-chrome-role.md)"
 ---
 
 # ADR-0084: Accepted chrome rails are native-size directional families
@@ -125,3 +127,6 @@ approved outer horizontal rail; divider atoms remain independent.
 - Enforced by `frontend/scripts/import-native-rail-attempt.mjs`,
   `frontend/scripts/screen-native-rail-directory.mjs`, and the checked family
   composition in `frontend/config/native-rail-families.json`.
+- Divider rail ownership is superseded by
+  [ADR-0092](0092-dividers-inherit-their-host-chrome-role.md): a divider inherits
+  the native directional rail family of its outer or inner host.

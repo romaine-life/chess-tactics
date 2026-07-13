@@ -109,6 +109,7 @@ const GENERATED_CANDIDATE_CATALOG_POINTER = /\/assets\/[^"'`\s]*candidate|["']?(
 const CHROME_INSTALLED_SELECTOR_PATH = /(?:^|\/)(?=[^/]*chrome)(?=[^/]*(?:accepted|default|family|installed|production|runtime))[^/]*\.(?:c?js|json|mjs|mts|ts|tsx)$/i;
 const CHROME_INSTALLED_CONTEXT = /\b(?:acceptedChrome|committedChrome|installedChrome|productionChrome|useInstalledChromeCss)\w*/i;
 const CHROME_SOURCE_SELECTOR_LITERAL = /["']?((?:atom|rail)SourceId|(?:outer|inner|divider)(?:Atom|Rail)Source(?:Id|Path|Slot|Url)?)["']?\s*[:=]\s*["'`]([^"'`]+)["'`]/gi;
+const CHROME_SOURCE_SELECTOR_KEY = /^(?:(?:atom|rail)SourceId|(?:outer|inner|divider)(?:Atom|Rail)Source(?:Id|Path|Slot|Url)?)$/i;
 const GENERATED_CHROME_SOURCE_PATH = /(?:^|\/)assets\/ui\/chrome-candidates(?:\/|$)|(?:^|\/)ui\/chrome-candidates(?:\/|$)/i;
 const SCROLLBAR_AUTHORITY_PATH = /(?:^|\/)[^/]*scrollbar[^/]*\.(?:c?js|mjs|mts|ts|tsx)$/i;
 const STATIC_SCROLLBAR_ROSTER = /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::[^=\n]+)?=\s*\[[\s\S]{0,12000}\b(?:name|label|approach|material|file|src|url)\s*:/i;
@@ -471,6 +472,27 @@ function normalizedChromeSemanticSlot(value) {
   return withoutQuery.startsWith('assets/') ? withoutQuery.slice('assets/'.length) : withoutQuery;
 }
 
+function chromeJsonSelectorReason(value, pathParts = []) {
+  if (!value || typeof value !== 'object') return null;
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = [...pathParts, key];
+    if (typeof child === 'string' && CHROME_SOURCE_SELECTOR_KEY.test(key)) {
+      const slot = normalizedChromeSemanticSlot(child);
+      const isRoleDividerSentinel = child === 'none'
+        && key === 'atomSourceId'
+        && pathParts.length === 2
+        && pathParts[0] === 'dividers'
+        && ['outer', 'inner'].includes(pathParts[1]);
+      if (!isRoleDividerSentinel && !CANONICAL_CHROME_SOURCE_SLOTS.has(slot)) {
+        return `${childPath.join('.')} points at a generated candidate id/path instead of a canonical backend slot`;
+      }
+    }
+    const nestedReason = chromeJsonSelectorReason(child, childPath);
+    if (nestedReason) return nestedReason;
+  }
+  return null;
+}
+
 function chromeConfigSelectorReason(source) {
   try {
     const parsed = JSON.parse(source);
@@ -500,6 +522,23 @@ function chromeConfigSelectorReason(source) {
         }
       }
     }
+    const roleDividers = parsed?.dividers;
+    if (roleDividers && typeof roleDividers === 'object' && !Array.isArray(roleDividers)) {
+      for (const role of ['outer', 'inner']) {
+        const divider = roleDividers[role];
+        if (!divider || typeof divider !== 'object' || Array.isArray(divider) || !('atomSourceId' in divider)) continue;
+        const actual = typeof divider.atomSourceId === 'string'
+          ? normalizedChromeSemanticSlot(divider.atomSourceId)
+          : '';
+        if (actual !== 'none' && actual !== 'ui/chrome/divider/joint.png') {
+          return `dividers.${role}.atomSourceId must be none or resolve through the canonical ui/chrome/divider/joint.png backend slot`;
+        }
+      }
+    }
+    // Parsed JSON gets a structural walk so a valid installed-role section
+    // cannot hide a candidate pointer elsewhere in the same document. Only the
+    // exact dividers.<role>.atomSourceId `none` sentinel is exempt.
+    return chromeJsonSelectorReason(parsed);
   } catch {
     // JavaScript/TypeScript installation declarations are handled by the
     // literal scan below. Malformed JSON will fail its own parser in CI.

@@ -6,8 +6,9 @@ invent; precise, consistent terms make it reproduce. Two axes: **fidelity** (the
 look) and **anatomy** (the parts). Grounded in the accepted concept's measured
 numbers so the target is concrete, not a feeling.
 
-Decisions that require this: [ADR-0014](adr/0014-ui-chrome-low-fidelity-aesthetic.md)
-and [ADR-0076](adr/0076-scaling-is-calibration-production-art-is-native-1x.md).
+Decisions that require this: [ADR-0014](adr/0014-ui-chrome-low-fidelity-aesthetic.md),
+[ADR-0076](adr/0076-scaling-is-calibration-production-art-is-native-1x.md), and
+[ADR-0093](adr/0093-chrome-rails-own-alignment-atoms-use-clip-aprons.md).
 
 ## Fidelity / aesthetic axis (the look)
 
@@ -38,6 +39,15 @@ Terms to use:
 ## Anatomy axis (the parts — frames / rows)
 
 - **rail** — the thin border line of a frame.
+- **rail alignment edge** — the rail's border-box edge used by layout grids,
+  Contents Boxes, titles, and sibling alignment. Ornament does not move it.
+- **atom** — a corner or junction ornament painted independently over a rail.
+  It is an absolute overlay, not another box or padding source.
+- **atom overhang** — the measured paint extending beyond the rail alignment
+  edge on one side.
+- **clip apron** — transparent extra room at a clipping boundary, paired with
+  equal compensating content padding so atom overhang stays visible without
+  moving the rail or enabling horizontal scrolling.
 - **fill** — the interior area (e.g. navy for a settings row).
 - **corner** — where two rails meet.
 - **notch** — the small stepped, inward accent in the rail at a corner (a short

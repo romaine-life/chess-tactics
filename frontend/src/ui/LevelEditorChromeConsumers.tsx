@@ -2,6 +2,7 @@ import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { KitScroll } from './KitScroll';
 import { NavButton } from './shared/NavButton';
 import { HouseSelect } from './shared/HouseSelect';
+import { ChromeDivider } from './shared/ChromeBox';
 import type { LevelEditorLayerKey } from './levelEditorRoute';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 
@@ -12,6 +13,18 @@ export type LevelEditorLayerOption = {
   label: string;
   disabled?: boolean;
 };
+
+export function adjacentLevelEditorLayer(
+  layer: LevelEditorLayerKey,
+  layerOptions: readonly LevelEditorLayerOption[],
+  direction: -1 | 1,
+): LevelEditorLayerKey | null {
+  const enabled = layerOptions.filter((option) => !option.disabled);
+  if (enabled.length === 0) return null;
+  const currentIndex = enabled.findIndex((option) => option.id === layer);
+  const anchor = currentIndex >= 0 ? currentIndex : direction > 0 ? -1 : 0;
+  return enabled[(anchor + direction + enabled.length) % enabled.length]?.id ?? null;
+}
 
 export function LevelEditorControlsPanel({
   layer,
@@ -55,6 +68,11 @@ export function LevelEditorControlsPanel({
   const playTitle = playBoardEnabled
     ? "Play this exact board against the AI now - no save (a Test Board; set a CPU-delay floor in the game's Controls tab). Back returns you here."
     : 'Add a player and an enemy piece (clear the playability issues in the Status layer) to live-test this board.';
+  const layerStepDisabled = inert || ariaBusy || layerOptions.filter((option) => !option.disabled).length <= 1;
+  const stepLayer = (direction: -1 | 1): void => {
+    const nextLayer = adjacentLevelEditorLayer(layer, layerOptions, direction);
+    if (nextLayer && nextLayer !== layer) onLayerChange(nextLayer);
+  };
 
   return (
     <aside
@@ -69,18 +87,42 @@ export function LevelEditorControlsPanel({
       <span className="le-outer-panel-fill" aria-hidden="true" />
       <div className="le-outer-panel-content le-outer-panel-content--titled">
         <section className="skirmish-card le-layer-card">
-          <h2 className="kit-panel-title"><span className="kit-panel-title-text">Layer</span></h2>
-          <HouseSelect
-            ariaLabel="Editor layer"
-            value={layer}
-            disabled={inert || ariaBusy}
-            options={layerOptions.map((option) => ({
-              value: option.id,
-              label: option.label,
-              disabled: option.disabled,
-            }))}
-            onChange={onLayerChange}
-          />
+          <h2 className="kit-panel-title"><span className="kit-panel-title-text">Controls</span></h2>
+          <div className="le-layer-picker-row">
+            <button
+              type="button"
+              data-chrome-unit="inner-chevron-key"
+              className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-layer-stepper-button')}
+              disabled={layerStepDisabled}
+              aria-label="Previous editor layer"
+              title="Previous editor layer"
+              onClick={() => stepLayer(-1)}
+            >
+              <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
+            </button>
+            <HouseSelect
+              ariaLabel="Editor layer"
+              value={layer}
+              disabled={inert || ariaBusy}
+              options={layerOptions.map((option) => ({
+                value: option.id,
+                label: option.label,
+                disabled: option.disabled,
+              }))}
+              onChange={onLayerChange}
+            />
+            <button
+              type="button"
+              data-chrome-unit="inner-chevron-key"
+              className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-layer-stepper-button')}
+              disabled={layerStepDisabled}
+              aria-label="Next editor layer"
+              title="Next editor layer"
+              onClick={() => stepLayer(1)}
+            >
+              <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
+            </button>
+          </div>
         </section>
 
         <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
@@ -118,7 +160,7 @@ export function LevelEditorControlsPanel({
         </section>
 
         <div className="le-control-divider-host" aria-hidden="true">
-          <div className="kit-divider" />
+          <ChromeDivider role="outer" />
         </div>
 
         <KitScroll className={scrollClass}>

@@ -89,6 +89,24 @@ the existing asset that becomes the basis for the canonical art (re-cut to true
 | 10 | **Section divider** | label rule | settings `section-divider-frame` |
 | 11 | **Icon glyph** | one shared set | unify `main-menu` + `skirmish` + `utility` + `settings` icon-* |
 
+The catalog's type 10 is a decorative labelled rule. A **structural box
+divider** is a different shared primitive: a one-dimensional child bar inserted
+between sections of an existing box. It does not create another frame type or
+chrome role. Under [ADR-0092](adr/0092-dividers-inherit-their-host-chrome-role.md),
+each structural divider inherits the rail, thickness, fit, and reach of its
+`outer` or `inner` host; Chrome Lab owns independent visible band and joint
+geometry for those two roles. Consumers compose the shared `ChromeDivider`
+component as many times as needed and never paint local separator borders.
+
+Under [ADR-0093](adr/0093-chrome-rails-own-alignment-atoms-use-clip-aprons.md),
+the **rail edge** is every box's layout and alignment edge. Corner atoms and
+divider joints are absolute ornament: their overhang does not alter box width,
+Contents Box placement, sibling margins, or title alignment. A scrollport or
+viewport boundary that would clip that ornament must provide a transparent
+measured **clip apron** and compensating padding, preserving the rail coordinate
+and vertical-only scrolling. Local collision clearance may keep ornament off a
+composite control's own text, but it never moves the host rail.
+
 Feature-unique art that is **not** a chrome type and stays per-feature: faction
 **shields** (`ce shield-*`), the **board / preview frame** (`ce preview-frame`,
 `skirmish portrait-frame`), and the **board renderers** themselves.

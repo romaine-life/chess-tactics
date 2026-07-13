@@ -1,5 +1,5 @@
 {
-  "_doc": "Committed deterministic Chrome geometry. Chrome Lab's Save defaults button writes numeric tuning here in dev; all five source selectors remain canonical backend slots, while private candidate versions are auditioned without becoming installed authority.",
+  "_doc": "Committed deterministic Chrome geometry. Chrome Lab's Save defaults button writes numeric tuning here in dev; outer and inner divider geometry is independent while their installed joint material shares the canonical backend slot.",
   "target": "level-editor",
   "outer": {
     "atomSourceId": "ui/chrome/outer/atom.png",
@@ -68,21 +68,42 @@
     "atomCoverY": 6,
     "atomPreviewMode": "live"
   },
-  "divider": {
-    "atomSourceId": "ui/chrome/divider/joint.png",
-    "atomTurns": 0,
-    "atomSize": 32,
-    "atomX": 11,
-    "atomY": 0,
-    "atomLeftX": 0,
-    "atomRightX": 1,
-    "atomLeftY": 0,
-    "atomRightY": 0,
-    "atomAlignMode": "rail-center",
-    "atomAnchorX": 9,
-    "atomAnchorY": 9,
-    "atomCoverX": 9,
-    "atomCoverY": 9,
-    "atomPreviewMode": "live"
+  "dividers": {
+    "outer": {
+      "atomSourceId": "ui/chrome/divider/joint.png",
+      "atomTurns": 0,
+      "atomSize": 32,
+      "bandHeight": 34,
+      "atomX": 11,
+      "atomY": 0,
+      "atomLeftX": 0,
+      "atomRightX": 1,
+      "atomLeftY": 0,
+      "atomRightY": 0,
+      "atomAlignMode": "rail-center",
+      "atomAnchorX": 9,
+      "atomAnchorY": 9,
+      "atomCoverX": 9,
+      "atomCoverY": 9,
+      "atomPreviewMode": "live"
+    },
+    "inner": {
+      "atomSourceId": "ui/chrome/divider/joint.png",
+      "atomTurns": 0,
+      "atomSize": 11,
+      "bandHeight": 7,
+      "atomX": 3.5,
+      "atomY": 0,
+      "atomLeftX": -0.5,
+      "atomRightX": 0,
+      "atomLeftY": 0,
+      "atomRightY": 0,
+      "atomAlignMode": "rail-center",
+      "atomAnchorX": 6,
+      "atomAnchorY": 6,
+      "atomCoverX": 6,
+      "atomCoverY": 6,
+      "atomPreviewMode": "live"
+    }
   }
 }

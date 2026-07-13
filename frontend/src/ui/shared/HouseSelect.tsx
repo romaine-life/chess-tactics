@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
+import { KitScroll } from '../KitScroll';
+import { ChromeDivider, InnerChromeBox } from './ChromeBox';
 
 export type HouseSelectOption<TValue extends string = string> = {
   value: TValue;
@@ -11,9 +13,10 @@ export type HouseSelectOption<TValue extends string = string> = {
 
 type MenuBox = {
   left: number;
-  top: number;
   width: number;
   maxHeight: number;
+  top?: number;
+  bottom?: number;
 };
 
 const MENU_GAP = 4;
@@ -60,18 +63,29 @@ export function HouseSelect<TValue extends string>({
     const root = rootRef.current;
     if (!root || typeof window === 'undefined') return;
     const rect = root.getBoundingClientRect();
+    const rootStyle = window.getComputedStyle(root);
+    const paintOverhang = (property: string): number => {
+      const value = Number.parseFloat(rootStyle.getPropertyValue(property));
+      return Number.isFinite(value) ? Math.max(0, value) : 0;
+    };
+    const leftMargin = Math.max(MENU_MARGIN, paintOverhang('--le-inner-atom-left-overhang'));
+    const rightMargin = Math.max(MENU_MARGIN, paintOverhang('--le-inner-atom-right-overhang'));
+    const topMargin = Math.max(MENU_MARGIN, paintOverhang('--le-inner-atom-top-overhang'));
+    const bottomMargin = Math.max(MENU_MARGIN, paintOverhang('--le-inner-atom-bottom-overhang'));
     const viewportW = window.innerWidth;
     const viewportH = window.innerHeight;
     const width = Math.max(rect.width, 120);
-    const below = viewportH - rect.bottom - MENU_MARGIN;
-    const above = rect.top - MENU_MARGIN;
+    const below = viewportH - rect.bottom - bottomMargin;
+    const above = rect.top - topMargin;
     const openUp = below < MENU_MIN_HEIGHT && above > below;
-    const room = Math.max(MENU_MIN_HEIGHT, (openUp ? above : below) - MENU_GAP);
+    const room = Math.max(1, (openUp ? above : below) - MENU_GAP);
     const maxHeight = Math.min(MENU_MAX_HEIGHT, room);
-    const rawTop = openUp ? rect.top - MENU_GAP - maxHeight : rect.bottom + MENU_GAP;
-    const top = Math.max(MENU_MARGIN, Math.min(rawTop, viewportH - MENU_MARGIN - maxHeight));
-    const left = Math.max(MENU_MARGIN, Math.min(rect.left, viewportW - MENU_MARGIN - width));
-    setMenuBox({ left, top, width, maxHeight });
+    const left = Math.max(leftMargin, Math.min(rect.left, viewportW - rightMargin - width));
+    if (openUp) {
+      setMenuBox({ left, bottom: Math.max(bottomMargin, viewportH - rect.top + MENU_GAP), width, maxHeight });
+    } else {
+      setMenuBox({ left, top: Math.max(topMargin, rect.bottom + MENU_GAP), width, maxHeight });
+    }
   }, []);
 
   const openMenu = useCallback((): void => {
@@ -87,10 +101,10 @@ export function HouseSelect<TValue extends string>({
   const chooseIndex = useCallback((index: number): void => {
     const option = options[index];
     if (!option || option.disabled) return;
-    onChange(option.value);
+    if (option.value !== value) onChange(option.value);
     setOpen(false);
     buttonRef.current?.focus();
-  }, [onChange, options]);
+  }, [onChange, options, value]);
 
   const moveActive = useCallback((delta: number): void => {
     if (enabledIndexes.length === 0) return;
@@ -141,7 +155,6 @@ export function HouseSelect<TValue extends string>({
 
   useEffect(() => {
     if (!open) return;
-    updateMenuBox();
     const onPointerDown = (event: PointerEvent): void => {
       const target = event.target;
       if (!(target instanceof Node)) return;
@@ -158,17 +171,24 @@ export function HouseSelect<TValue extends string>({
     };
   }, [closeMenu, open, updateMenuBox]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     updateMenuBox();
-  }, [activeIndex, open, updateMenuBox]);
+  }, [open, options.length, updateMenuBox]);
 
   useEffect(() => {
     if (disabled && open) closeMenu();
   }, [closeMenu, disabled, open]);
 
-  const menuStyle: CSSProperties | undefined = menuBox
-    ? { left: menuBox.left, top: menuBox.top, width: menuBox.width, maxHeight: menuBox.maxHeight }
+  const menuStyle: (CSSProperties & { '--house-select-menu-max-height'?: string }) | undefined = menuBox
+    ? {
+        left: menuBox.left,
+        top: menuBox.top,
+        bottom: menuBox.bottom,
+        width: menuBox.width,
+        maxHeight: menuBox.maxHeight,
+        '--house-select-menu-max-height': `${menuBox.maxHeight}px`,
+      }
     : undefined;
   const rootClass = chromeUnitClassNames('inner-dropdown', 'house-select', 'le-select-wrap', className);
 
@@ -176,29 +196,38 @@ export function HouseSelect<TValue extends string>({
     ? createPortal(
       <div
         ref={menuRef}
-        id={`${id}-menu`}
         className="house-select-menu chrome-family-surface"
-        role="listbox"
-        aria-label={ariaLabel}
         style={menuStyle}
       >
-        {options.map((option, index) => (
-          <button
-            key={option.value}
-            type="button"
-            id={`${id}-option-${option.value}`}
-            data-chrome-unit="inner-list-row"
-            className={chromeUnitClassNames('inner-list-row', 'house-select-option', index === activeIndex && 'is-active')}
-            role="option"
-            aria-selected={option.value === value}
-            disabled={option.disabled}
-            title={option.title}
-            onMouseEnter={() => { if (!option.disabled) setActiveIndex(index); }}
-            onClick={() => chooseIndex(index)}
-          >
-            {option.label}
-          </button>
-        ))}
+        <InnerChromeBox
+          id={`${id}-menu`}
+          className="house-select-menu-box"
+          role="listbox"
+          aria-label={ariaLabel}
+        >
+          <KitScroll className="house-select-menu-scroll">
+            <div className="house-select-menu-options">
+              {options.map((option, index) => (
+                <Fragment key={option.value}>
+                  {index > 0 ? <ChromeDivider role="inner" /> : null}
+                  <button
+                    type="button"
+                    id={`${id}-option-${option.value}`}
+                    className={`house-select-option ${index === activeIndex ? 'is-active' : ''}`.trim()}
+                    role="option"
+                    aria-selected={option.value === value}
+                    disabled={option.disabled}
+                    title={option.title}
+                    onMouseEnter={() => { if (!option.disabled) setActiveIndex(index); }}
+                    onClick={() => chooseIndex(index)}
+                  >
+                    {option.label}
+                  </button>
+                </Fragment>
+              ))}
+            </div>
+          </KitScroll>
+        </InnerChromeBox>
       </div>,
       document.body,
     )

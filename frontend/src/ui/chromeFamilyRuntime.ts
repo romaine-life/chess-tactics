@@ -29,6 +29,7 @@ export type ChromeFillSurfaceId =
 
 export const NO_ATOM_SOURCE_ID = 'none';
 export const DIVIDER_H = 34;
+export const INNER_DIVIDER_H = 7;
 export const DEFAULT_DIVIDER_ATOM_SIZE = 17;
 export const EMPTY_FRAME: FrameRender = { url: '', slice: 1, size: 3, atomOverlay: null };
 export const EMPTY_DIVIDER: DividerRender = { railUrl: '', railHeight: 1, railTileWidth: 1, height: DIVIDER_H, atomOverlay: null };
@@ -129,6 +130,7 @@ export type DividerTune = {
   atomSourceId: string;
   atomTurns: 0 | 1 | 2 | 3;
   atomSize: number;
+  bandHeight: number;
   atomX: number;
   atomY: number;
   atomLeftX: number;
@@ -143,11 +145,13 @@ export type DividerTune = {
   atomPreviewMode?: AtomPreviewMode;
 };
 
+export type DividerTunes = Record<ChromeRole, DividerTune>;
+
 export type ChromeTuningPayload = {
   target: string;
   outer: RoleTune;
   inner: RoleTune;
-  divider: DividerTune;
+  dividers: DividerTunes;
 };
 
 /**
@@ -158,8 +162,14 @@ export function installedChromeTuningPayload(
   target: string,
   outer: RoleTune,
   inner: RoleTune,
-  divider: DividerTune,
+  dividers: DividerTunes,
 ): ChromeTuningPayload {
+  const installedDividerTune = (divider: DividerTune): DividerTune => ({
+    ...divider,
+    atomSourceId: divider.atomSourceId === NO_ATOM_SOURCE_ID
+      ? NO_ATOM_SOURCE_ID
+      : CHROME_LIVE_SLOTS.dividerJoint,
+  });
   return {
     target,
     outer: {
@@ -172,9 +182,9 @@ export function installedChromeTuningPayload(
       atomSourceId: CHROME_LIVE_SLOTS.innerAtom,
       railSourceId: CHROME_LIVE_SLOTS.innerRail,
     },
-    divider: {
-      ...divider,
-      atomSourceId: CHROME_LIVE_SLOTS.dividerJoint,
+    dividers: {
+      outer: installedDividerTune(dividers.outer),
+      inner: installedDividerTune(dividers.inner),
     },
   };
 }
@@ -194,8 +204,6 @@ export type AtomOverlayRender = {
   br: string;
   size: number;
   outset: number;
-  leftFootprint: number;
-  rightFootprint: number;
   leftX: number;
   rightX: number;
   topY: number;
@@ -210,10 +218,12 @@ export type DividerRender = {
   atomOverlay: DividerAtomOverlay | null;
 };
 
+export type DividerRenders = Record<ChromeRole, DividerRender>;
+
 type CommittedChromeLabDefaults = {
   outer: RoleTune;
   inner: RoleTune;
-  divider: DividerTune;
+  dividers: DividerTunes;
 };
 
 const COMMITTED_CHROME_LAB_DEFAULTS = committedChromeLabDefaults as unknown as CommittedChromeLabDefaults;
@@ -246,8 +256,8 @@ export function roleDefault(role: ChromeRole): RoleTune {
   return { ...(role === 'outer' ? COMMITTED_CHROME_LAB_DEFAULTS.outer : COMMITTED_CHROME_LAB_DEFAULTS.inner) };
 }
 
-export function dividerDefault(): DividerTune {
-  return { ...COMMITTED_CHROME_LAB_DEFAULTS.divider };
+export function dividerDefault(role: ChromeRole = 'outer'): DividerTune {
+  return { ...COMMITTED_CHROME_LAB_DEFAULTS.dividers[role] };
 }
 export function defaultRailFitForSource(sourceId: string, fallback: RailFit = 'stretch'): RailFit {
   const source = chromeSourceById(sourceId);
@@ -533,7 +543,8 @@ function renderDividerJointDataUrl(atom: HTMLCanvasElement, width: number, heigh
 function dividerAtomBaseOffset(divider: DividerTune, atomW: number, atomH: number): { x: number; y: number; anchorX: number; anchorY: number; targetX: number; targetY: number } {
   const mode = divider.atomAlignMode ?? 'manual';
   const targetX = 0;
-  const targetY = DIVIDER_H / 2;
+  const bandHeight = clamp(Math.round(divider.bandHeight), 1, 96);
+  const targetY = bandHeight / 2;
   const anchorX = mode === 'rail-center'
     ? atomW / 2
     : mode === 'edge-cover'
@@ -547,7 +558,7 @@ function dividerAtomBaseOffset(divider: DividerTune, atomW: number, atomH: numbe
   if (mode === 'manual') {
     return {
       x: divider.atomX,
-      y: (DIVIDER_H - atomH) / 2 + divider.atomY,
+      y: (bandHeight - atomH) / 2 + divider.atomY,
       anchorX,
       anchorY,
       targetX,
@@ -597,8 +608,6 @@ function atomOverlayForTune(tune: RoleTune, atom: HTMLCanvasElement, slice: numb
   const rightX = seat.rightX;
   const topY = seat.topY;
   const bottomY = seat.bottomY;
-  const leftFootprint = Math.max(0, -leftX, size + leftX);
-  const rightFootprint = Math.max(0, -rightX, size + rightX);
   const maxOffset = Math.max(Math.abs(leftX), Math.abs(rightX), Math.abs(topY), Math.abs(bottomY));
   return {
     tl: renderCornerAtomDataUrl(atom, atomSize, false, false),
@@ -607,8 +616,6 @@ function atomOverlayForTune(tune: RoleTune, atom: HTMLCanvasElement, slice: numb
     br: renderCornerAtomDataUrl(atom, atomSize, true, true),
     size,
     outset: Math.ceil(size + maxOffset + 4),
-    leftFootprint,
-    rightFootprint,
     leftX,
     rightX,
     topY,
@@ -616,16 +623,16 @@ function atomOverlayForTune(tune: RoleTune, atom: HTMLCanvasElement, slice: numb
   };
 }
 
-export async function composeDividerRender(outer: RoleTune, divider: DividerTune): Promise<DividerRender> {
+export async function composeDividerRender(host: RoleTune, divider: DividerTune): Promise<DividerRender> {
   const hasAtom = divider.atomSourceId !== NO_ATOM_SOURCE_ID;
   const atomSource = dividerJointSourceById(divider.atomSourceId);
   const [railImage, atomImage] = await Promise.all([
-    loadImage(chromeSourceById(outer.railSourceId).src),
+    loadImage(chromeSourceById(host.railSourceId).src),
     hasAtom && atomSource.src ? loadImage(atomSource.src) : Promise.resolve(null),
   ]);
   const rail = horizontalRailCanvas(railImage);
-  const outerBase = renderFrameBaseCanvas(outer, rail);
-  const railTile = renderFrameEdgeTileDataUrl(outerBase.canvas, outerBase.slice);
+  const hostBase = renderFrameBaseCanvas(host, rail);
+  const railTile = renderFrameEdgeTileDataUrl(hostBase.canvas, hostBase.slice);
   let atomOverlay: DividerAtomOverlay | null = null;
   if (atomImage) {
     const atomH = clamp(Math.round(divider.atomSize), 1, 128);
@@ -650,7 +657,13 @@ export async function composeDividerRender(outer: RoleTune, divider: DividerTune
       rightY,
     };
   }
-  return { railUrl: railTile.url, railHeight: railTile.height, railTileWidth: railTile.width, height: DIVIDER_H, atomOverlay };
+  return {
+    railUrl: railTile.url,
+    railHeight: railTile.height,
+    railTileWidth: railTile.width,
+    height: clamp(Math.round(divider.bandHeight), 1, 96),
+    atomOverlay,
+  };
 }
 
 export async function composeFrameDataUrl(tune: RoleTune): Promise<FrameRender> {
@@ -813,12 +826,14 @@ ${overlaySelector} {
 `;
 }
 
-function dividerCss(outer: RoleTune, outerFrame: FrameRender, divider: DividerRender): string {
-  if (!outerFrame.url) return '';
+function dividerCss(role: ChromeRole, host: RoleTune, hostFrame: FrameRender, divider: DividerRender): string {
+  if (!hostFrame.url) return '';
+  const selector = `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="${role}"]`;
   const railWidth = divider.railHeight;
   const railTop = Math.round((divider.height - railWidth) / 2);
+  const reach = role === 'outer' ? roleContentInset(host) : renderedRailThickness(host);
   let atomCss = `
-.level-editor-screen .le-control-divider-host .kit-divider::after {
+${selector}::after {
   content: none !important;
 }
 `;
@@ -830,7 +845,7 @@ function dividerCss(outer: RoleTune, outerFrame: FrameRender, divider: DividerRe
     const leftY = cssPx(overlay.outset + overlay.leftY);
     const rightY = cssPx(overlay.outset + overlay.rightY);
     atomCss = `
-.level-editor-screen .le-control-divider-host .kit-divider::after {
+${selector}::after {
   background-image: url("${overlay.left}"), url("${overlay.right}");
   background-position: left ${leftX} top ${leftY}, right ${rightX} top ${rightY};
   background-repeat: no-repeat;
@@ -845,7 +860,8 @@ function dividerCss(outer: RoleTune, outerFrame: FrameRender, divider: DividerRe
 `;
   }
   return `
-.level-editor-screen .le-control-divider-host .kit-divider {
+${selector} {
+  --kit-divider-reach: ${cssPx(reach)};
   background: none !important;
   border: 0 !important;
   border-image: none !important;
@@ -854,14 +870,14 @@ function dividerCss(outer: RoleTune, outerFrame: FrameRender, divider: DividerRe
   overflow: visible !important;
   position: relative;
 }
-.level-editor-screen .le-control-divider-host .kit-divider::before {
+${selector}::before {
   border-color: transparent !important;
   border-style: solid !important;
   border-width: ${cssPx(railWidth)} 0 0 0 !important;
-  border-image-source: url("${outerFrame.url}") !important;
-  border-image-slice: ${outerFrame.slice} !important;
+  border-image-source: url("${hostFrame.url}") !important;
+  border-image-slice: ${hostFrame.slice} !important;
   border-image-width: ${cssPx(railWidth)} 0 0 0 !important;
-  border-image-repeat: ${borderImageRepeatForTune(outer)} !important;
+  border-image-repeat: ${borderImageRepeatForTune(host)} !important;
   box-sizing: border-box;
   content: "";
   image-rendering: pixelated;
@@ -877,7 +893,13 @@ ${atomCss}
 `;
 }
 
-export function frameCss(outer: RoleTune, inner: RoleTune, outerFrame: FrameRender, innerFrame: FrameRender, divider: DividerRender): string {
+export function frameCss(
+  outer: RoleTune,
+  inner: RoleTune,
+  outerFrame: FrameRender,
+  innerFrame: FrameRender,
+  dividers: DividerRenders,
+): string {
   if (!outerFrame.url || !innerFrame.url) return '';
   const familySurface = CHROME_FAMILY_SURFACE_SELECTOR;
   const outerRailWidth = renderedRailThickness(outer);
@@ -887,8 +909,10 @@ export function frameCss(outer: RoleTune, inner: RoleTune, outerFrame: FrameRend
   const innerAtomOutset = cssPx(innerFrame.atomOverlay?.outset ?? 0);
   const innerAtomLeftOverhang = cssPx(Math.max(0, -(innerFrame.atomOverlay?.leftX ?? 0)));
   const innerAtomRightOverhang = cssPx(Math.max(0, -(innerFrame.atomOverlay?.rightX ?? 0)));
-  const innerAtomLeftFootprint = cssPx(innerFrame.atomOverlay?.leftFootprint ?? 0);
-  const innerAtomRightFootprint = cssPx(innerFrame.atomOverlay?.rightFootprint ?? 0);
+  const innerAtomTopOverhang = cssPx(Math.max(0, -(innerFrame.atomOverlay?.topY ?? 0)));
+  const innerAtomBottomOverhang = cssPx(Math.max(0, -(innerFrame.atomOverlay?.bottomY ?? 0)));
+  const innerDividerAtomLeftOverhang = cssPx(Math.max(0, -(dividers.inner.atomOverlay?.leftX ?? 0)));
+  const innerDividerAtomRightOverhang = cssPx(Math.max(0, -(dividers.inner.atomOverlay?.rightX ?? 0)));
   const innerRoleSelectors = chromeUnitRoleSelectors('inner');
   const innerDropdownSelectors = new Set(chromeUnitSelectors('inner-dropdown'));
   const innerSelectFrameSelectors = chromeUnitScopedSelectors(
@@ -910,8 +934,10 @@ ${familySurface} {
   --le-inner-atom-outset: ${innerAtomOutset} !important;
   --le-inner-atom-left-overhang: ${innerAtomLeftOverhang} !important;
   --le-inner-atom-right-overhang: ${innerAtomRightOverhang} !important;
-  --le-inner-atom-left-footprint: ${innerAtomLeftFootprint} !important;
-  --le-inner-atom-right-footprint: ${innerAtomRightFootprint} !important;
+  --le-inner-atom-top-overhang: ${innerAtomTopOverhang} !important;
+  --le-inner-atom-bottom-overhang: ${innerAtomBottomOverhang} !important;
+  --le-inner-divider-atom-left-overhang: ${innerDividerAtomLeftOverhang} !important;
+  --le-inner-divider-atom-right-overhang: ${innerDividerAtomRightOverhang} !important;
   --le-outer-fill-box-left: ${cssPx(outer.fillBoxLeft)} !important;
   --le-outer-fill-box-right: ${cssPx(outer.fillBoxRight)} !important;
   --le-outer-fill-box-top: ${cssPx(outer.fillBoxTop)} !important;
@@ -920,7 +946,7 @@ ${familySurface} {
   --le-panel-title-text-x: ${cssPx(outer.titleTextX ?? 0)} !important;
   --le-panel-title-text-y: ${cssPx(outer.titleTextY ?? 0)} !important;
   --le-panel-title-font-size: ${cssPx(outer.titleFontSize ?? 16)} !important;
-  --le-panel-title-align-extra-x: ${outer.titleHorizontalAlign === 'content-inset' ? 'calc(var(--le-outer-fill-box-left, 0px) - var(--ds-space-3))' : '0px'} !important;
+  --le-panel-title-align-extra-x: ${outer.titleHorizontalAlign === 'content-inset' ? 'calc(-1 * var(--ds-space-3))' : '0px'} !important;
   --le-panel-title-effective-text-x: ${outer.titleHorizontalAlign === 'content-inset' ? '0px' : cssPx(outer.titleTextX ?? 0)} !important;
   --le-panel-title-effective-text-y: ${outer.titleVerticalAlign === 'center' ? '0px' : cssPx(outer.titleTextY ?? 0)} !important;
   --skirmish-chrome-outer-rail-w: ${outerRailWidth}px !important;
@@ -965,6 +991,7 @@ ${familySurface} .inner-box.danger {
 }
 ${cornerAtomOverlayCss(innerControlSelectors, innerFrame.atomOverlay, { forcePosition: true })}
 ${cornerAtomOverlayCss(innerSelectFrameSelectors, innerFrame.atomOverlay, { forcePosition: true, pseudo: '::before' })}
-${dividerCss(outer, outerFrame, divider)}
+${dividerCss('outer', outer, outerFrame, dividers.outer)}
+${dividerCss('inner', inner, innerFrame, dividers.inner)}
 `;
 }

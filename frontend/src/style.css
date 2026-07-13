@@ -5023,8 +5023,10 @@ h1 {
   --le-inner-atom-outset: 0px;
   --le-inner-atom-left-overhang: 0px;
   --le-inner-atom-right-overhang: 0px;
-  --le-inner-atom-left-footprint: 0px;
-  --le-inner-atom-right-footprint: 0px;
+  --le-inner-atom-top-overhang: 0px;
+  --le-inner-atom-bottom-overhang: 0px;
+  --le-inner-divider-atom-left-overhang: 0px;
+  --le-inner-divider-atom-right-overhang: 0px;
   --le-inner-control-h: 38px;
   --le-inner-field-h: var(--le-inner-control-h);
   --le-inner-square: var(--le-inner-control-h);
@@ -5048,8 +5050,7 @@ h1 {
   --rail-w: var(--le-control-rail-w);
   --kit-divider-reach: var(--le-outer-content-padding, 0px);
   --le-control-content-inset: var(--le-outer-content-padding, 0px);
-  --le-visible-content-left-inset: var(--le-inner-atom-left-footprint, var(--le-inner-atom-left-overhang, 0px));
-  --le-visible-content-right-inset: var(--le-inner-atom-right-footprint, var(--le-inner-atom-right-overhang, 0px));
+  --le-panel-title-align-extra-x: calc(-1 * var(--ds-space-3));
   border: 0;
   border-image: none;
   box-sizing: border-box;
@@ -5124,22 +5125,32 @@ h1 {
    to the fill box, while every real control beneath it returns to the shared
    contents boundary. */
 .level-editor-screen .le-layer-card > :not(.kit-panel-title) {
-  margin-inline:
-    calc(var(--le-control-content-inset) + var(--le-visible-content-left-inset))
-    calc(var(--le-control-content-inset) + var(--le-visible-content-right-inset));
+  margin-inline: var(--le-control-content-inset);
 }
 
-.level-editor-screen .le-layer-card > .house-select.le-select-wrap {
+.level-editor-screen .le-layer-card > .le-layer-picker-row {
   width: auto;
 }
 
-/* Inner controls can visually overhang their CSS box because the atom is part of
-   the rendered control, not layout. Promote that footprint to the section edge so
-   headings, labels, and controls all share the same visible left/right boundary. */
-:is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-content > .skirmish-card:not(.le-layer-card),
-:is(.level-editor-screen, .skirmish-screen) .le-hud-scroll > .kit-scroll-content > .skirmish-card {
-  box-sizing: border-box;
-  padding-inline: var(--le-visible-content-left-inset) var(--le-visible-content-right-inset);
+.le-layer-picker-row {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: var(--le-inner-square) minmax(0, 1fr) var(--le-inner-square);
+  min-width: 0;
+}
+
+.le-layer-picker-row .house-select {
+  min-width: 0;
+  width: 100%;
+}
+
+.le-layer-stepper-button.settings-chrome-button {
+  height: var(--le-inner-square);
+  min-height: var(--le-inner-square);
+  min-width: var(--le-inner-square);
+  padding: 0;
+  width: var(--le-inner-square);
 }
 
 /* Repeatable divider host: each instance represents one section break in the
@@ -5592,28 +5603,67 @@ h1 {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: calc(var(--le-chrome-inner-rail-w, 10px) + 2px);
 }
+/* The fixed portal is only a positioning surface. One inner-box child owns the
+   popup chrome; contained options are regions split by structural dividers. */
 .house-select-menu {
-  background: rgba(3, 10, 17, .98);
-  border: 1px solid rgba(93, 160, 211, .46);
-  border-radius: 4px;
-  box-shadow: 0 14px 38px rgba(0, 0, 0, .56), inset 0 0 0 1px rgba(221, 237, 255, .05);
+  background: transparent;
+  border: 0;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .56);
   box-sizing: border-box;
   color: #eff9ff;
-  display: grid;
-  gap: 3px;
+  display: block;
   image-rendering: pixelated;
-  overflow: auto;
+  overflow: visible;
   overscroll-behavior: contain;
-  padding: 5px;
+  padding: 0;
   position: fixed;
   z-index: 2200;
+}
+.house-select-menu-box {
+  display: block;
+  max-height: var(--house-select-menu-max-height, 260px);
+  min-height: 0;
+  min-width: 0;
+  overflow: visible;
+  width: 100%;
+}
+.house-select-menu-scroll {
+  --house-select-clip-apron-left: calc(var(--le-chrome-inner-rail-w, 7px) + max(var(--le-inner-atom-left-overhang, 0px), var(--le-inner-divider-atom-left-overhang, 0px)));
+  --house-select-clip-apron-right: calc(var(--le-chrome-inner-rail-w, 7px) + max(var(--le-inner-atom-right-overhang, 0px), var(--le-inner-divider-atom-right-overhang, 0px)));
+  margin-inline:
+    calc(-1 * var(--house-select-clip-apron-left))
+    calc(-1 * var(--house-select-clip-apron-right));
+  max-height: calc(var(--house-select-menu-max-height, 260px) - (var(--le-chrome-inner-rail-w, 7px) * 2));
+  min-height: 0;
+}
+.house-select-menu-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+  height: auto;
+  max-height: inherit;
+  overflow-x: hidden;
+  padding-inline: var(--house-select-clip-apron-left) var(--house-select-clip-apron-right);
+}
+.house-select-menu-scroll > .kit-scroll-rail {
+  bottom: 2px;
+  right: calc(3px + var(--house-select-clip-apron-right));
+  top: 2px;
+}
+.house-select-menu-options {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+}
+.house-select-menu-options > .chrome-divider[data-chrome-divider-role="inner"] {
+  --kit-divider-gap: 0px;
+  --kit-divider-reach: var(--le-chrome-inner-rail-w, 7px);
 }
 .house-select-option {
   appearance: none;
   -webkit-appearance: none;
-  background: rgba(10, 28, 43, .82);
-  border: 1px solid transparent;
-  border-radius: 3px;
+  background: rgba(10, 28, 43, .42);
+  border: 0;
+  border-radius: 0;
   box-sizing: border-box;
   color: #d8eaff;
   cursor: pointer;
@@ -5621,7 +5671,7 @@ h1 {
   min-height: 30px;
   min-width: 0;
   overflow: hidden;
-  padding: 7px 9px;
+  padding: 7px 26px 7px 9px;
   text-align: left;
   text-overflow: ellipsis;
   text-shadow: 0 2px 0 #010407;
@@ -5632,12 +5682,10 @@ h1 {
 .house-select-option.is-active,
 .house-select-option:hover:not(:disabled) {
   background: rgba(25, 94, 132, .95);
-  border-color: rgba(111, 210, 255, .64);
   color: #f3fbff;
 }
 .house-select-option[aria-selected="true"] {
   background: rgba(88, 151, 198, .42);
-  border-color: rgba(159, 224, 255, .58);
   color: #ffffff;
 }
 .house-select-option:disabled {
@@ -5794,18 +5842,29 @@ h1 {
   outline-offset: 2px;
 }
 
-/* active brush picker */
-.le-brush-pick { align-items: center; display: grid; gap: 8px; grid-template-columns: 48px minmax(0, 1fr); margin-top: 6px; }
-.le-brush-thumb {
-  background: radial-gradient(circle at 50% 40%, rgba(63, 148, 190, .18), transparent 64%), rgba(3, 12, 19, .74);
-  border: 1px solid rgba(87, 153, 184, .4);
-  border-radius: 5px;
+/* Active brush summary: every brush kind shares one registered thumbnail frame. */
+.le-brush-pick {
+  align-items: center;
   display: grid;
-  height: 44px;
+  /* Local collision clearance keeps the thumbnail atom off its adjacent label;
+     it does not move the thumbnail rail or the shared section alignment edge. */
+  gap: calc(8px + var(--le-inner-atom-right-overhang, 0px));
+  grid-template-columns: calc(48px + 2 * var(--le-chrome-inner-rail-w, 7px)) minmax(0, 1fr);
+  margin-top: 6px;
+  min-width: 0;
+}
+.le-brush-thumb {
+  box-sizing: border-box;
+  height: calc(44px + 2 * var(--le-chrome-inner-rail-w, 7px));
+  position: relative;
+  width: calc(48px + 2 * var(--le-chrome-inner-rail-w, 7px));
+}
+.le-brush-thumb-viewport {
+  display: grid;
+  inset: 0;
   overflow: hidden;
   place-items: center;
-  position: relative;
-  width: 48px;
+  position: absolute;
 }
 /* Fit the brush preview INSIDE the thumb. The old height:90% mis-resolved against the
    auto grid row, so portrait sprites (roads) overflowed to ~88px and clipped. */
@@ -6136,13 +6195,20 @@ h1 {
 /* The editor's control column scrolls as one (ADR-0030 KitScroll) so tall layers — e.g.
    Cover — never clip their bottom controls. Layer tabs stay fixed above it; this fills the
    remaining panel height and carries the same stack gap the sections had as aside children. */
-.le-hud-scroll { flex: 1 1 auto; min-height: 0; }
+.le-hud-scroll {
+  flex: 1 1 auto;
+  margin-inline:
+    calc(-1 * var(--le-inner-atom-left-overhang, 0px))
+    calc(-1 * var(--le-inner-atom-right-overhang, 0px));
+  min-height: 0;
+}
 .le-hud-scroll > .kit-scroll-content {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: var(--ds-gutter);
-  padding-right: 18px;
+  padding-left: var(--le-inner-atom-left-overhang, 0px);
+  padding-right: calc(18px + var(--le-inner-atom-right-overhang, 0px));
 }
 
 /* kit-scroll — the DRAWN scroll primitive (ADR-0030), rendered by <KitScroll>. The native bar is
@@ -6296,14 +6362,38 @@ h1 {
 /* Master-detail: a scrollable NAMED rule list (left) + the selected rule's editor (right). */
 .le-md { display: grid; flex: 1; gap: 20px; grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); min-height: 0; padding: 12px 2px 4px; }
 .le-md-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-.le-md-rules { display: flex; flex: 1; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; padding-right: 4px; }
+.le-md-rules {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  margin-inline:
+    calc(-1 * var(--le-inner-atom-left-overhang, 0px))
+    calc(-1 * var(--le-inner-atom-right-overhang, 0px));
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-left: var(--le-inner-atom-left-overhang, 0px);
+  padding-right: calc(4px + var(--le-inner-atom-right-overhang, 0px));
+}
 .le-md-item { align-items: center; color: #cfe6f2; cursor: pointer; display: flex; gap: 8px; justify-content: space-between; padding: 7px 10px; text-align: left; }
 .le-md-item.active { color: #eafaff; }
 .le-md-item-name { font-size: var(--ds-text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .le-md-item-out { flex: none; font-size: var(--ds-text-2xs); opacity: .85; text-transform: uppercase; }
 .le-md-item-out.lose { color: #ff9a9a; }
 .le-md-item-out.win { color: #9ff0b0; }
-.le-md-detail { min-height: 0; overflow-y: auto; padding-right: 6px; }
+.le-md-detail {
+  box-sizing: border-box;
+  margin-inline:
+    calc(-1 * var(--le-inner-atom-left-overhang, 0px))
+    calc(-1 * var(--le-inner-atom-right-overhang, 0px));
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-left: var(--le-inner-atom-left-overhang, 0px);
+  padding-right: calc(6px + var(--le-inner-atom-right-overhang, 0px));
+}
 .le-md-detail .le-rule { border: 0; margin-top: 0; padding: 0; }
 .le-events-other .le-rule > .le-ctrlrow {
   display: grid;
@@ -10584,11 +10674,6 @@ body { font-size: 17px; }
   margin: 0;
   min-width: 0;
   padding: 0;
-}
-
-.chrome-unit-audit-stage .le-outer-panel > .le-outer-panel-content > .skirmish-card:not(.le-layer-card),
-.chrome-unit-audit-stage .le-hud-scroll > .kit-scroll-content > .skirmish-card {
-  padding-inline: var(--le-visible-content-left-inset) var(--le-visible-content-right-inset);
 }
 
 .chrome-unit-panel-card,
@@ -15908,15 +15993,14 @@ button.tileset-relationship-cell {
   block-size: 9px;
   inline-size: 9px;
   inset-block-start: 1px;
-  inset-inline-start: 3px;
+  inset-inline-start: 4px;
   transform: rotate(45deg);
 }
 .stepper-chevron::after {
   content: none;
 }
-.stepper-chevron-right::before {
-  inset-inline-start: 1px;
-  transform: rotate(225deg);
+.stepper-chevron-right {
+  transform: scaleX(-1);
 }
 
 .settings-stepper output {
