@@ -10,6 +10,7 @@ import COMMITTED_CROPS from '../art/portraitCrops.json';
 import { UNIT_PALETTE_LABELS, type UnitPalette } from '../core/pieces';
 import { PORTRAIT_METHODS, portraitMasterSrc, type PortraitMethod } from './portraitCandidates';
 import { PaletteSelect } from './shared/PaletteSelect';
+import { InnerChromeBox } from './shared/ChromeBox';
 
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const;
 const paletteEnabledForMethod = (method: PortraitMethod): boolean => method === 'smooth' || method === 'codex-stone';
@@ -82,9 +83,9 @@ export function UnitPortrait({ piece, palette, crop, backdrop, size, className, 
   if (size != null) { style.width = size; style.height = size; }
   if (backdrop) (style as Record<string, string>)['--up-backdrop'] = `url("${backdrop}")`;
   return (
-    <div className={`unit-portrait ${backdrop ? 'has-backdrop' : ''} ${className ?? ''}`.trim()} style={style}>
+    <InnerChromeBox className={`unit-portrait ${backdrop ? 'has-backdrop' : ''} ${className ?? ''}`.trim()} style={style}>
       <div className="unit-portrait__bust"><CroppedView src={masterUrl ?? masterSrc(piece, palette, method)} crop={crop} /></div>
-    </div>
+    </InnerChromeBox>
   );
 }
 

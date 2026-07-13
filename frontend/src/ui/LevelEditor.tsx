@@ -77,6 +77,7 @@ import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { LevelEditorControlsPanel, LevelEditorEventsOverlay } from './LevelEditorChromeConsumers';
+import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import {
   directionCompassCells,
@@ -5062,8 +5063,8 @@ export function LevelEditor(): ReactElement {
           The editor supplies live state and content; the shared component owns chrome,
           title/actions structure, divider, and the sole scroll boundary. */}
       {editorLoadError ? (
-      <aside className="skirmish-hud" aria-label="Editor document access" inert={!editorReady || saving ? true : undefined}>
-        <section className="skirmish-card le-status-card">
+      <OuterChromeBox chromeConsumer="level-editor-controls" titled className="skirmish-hud" aria-label="Editor document access" inert={!editorReady || saving ? true : undefined}>
+        <OuterChromeHeader title="Controls" className="le-status-card">
           <h2>Document</h2>
           <div className="le-status-current is-blocked">
             <strong>{editorLoadError.title}</strong>
@@ -5075,8 +5076,8 @@ export function LevelEditor(): ReactElement {
           {editorLoadError.retry ? (
             <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} style={{ width: '100%' }} onClick={retryCloudDocument}>Retry</button>
           ) : null}
-        </section>
-      </aside>
+        </OuterChromeHeader>
+      </OuterChromeBox>
       ) : (
       <LevelEditorControlsPanel
         layer={layer}
