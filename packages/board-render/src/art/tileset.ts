@@ -193,6 +193,18 @@ export const featureFrameSrc = (kind: FeatureKind, material: FeatureMaterial, ma
 export const fenceFrameSrc = (material: FenceMaterial, mask: number): string =>
   `/assets/tiles/feature/fence-${material}-${mask}.png`;
 
+/** Sole native frame geometry for generated perimeter walls. The base remains seated at the
+ * board boundary while the full 160px face provides headroom for exact-size unit reflections. */
+export const WALL_FRAME_GEOMETRY = {
+  width: 128,
+  height: 336,
+  anchorX: 64,
+  anchorY: 192,
+  wallHeight: 160,
+  /** Wall-bake back-edge apex is local y=164, 28px above the owning cell seat. */
+  backEdgeApexOffsetY: -28,
+} as const;
+
 /** Direction-neutral post artwork, seated once at a canonical fence vertex. */
 export const fencePostSrc = (material: FenceMaterial): string =>
   `/assets/tiles/feature/fence-${material}-post.png`;
@@ -200,7 +212,7 @@ export const fencePostSrc = (material: FenceMaterial): string =>
 // A per-cell WALL frame: walls on a board-perimeter cell's OWN N(1)/W(8) diamond
 // sides (mask ∈ {1,8,9}). Only northmost/westmost map edges use these frames.
 // Baked by scripts/build-wall-tiles.py from generated material. These are tall
-// 128x240 frames seated at a wall-specific anchor; they intentionally do not
+// 128x336 frames seated at a wall-specific anchor; they intentionally do not
 // reuse the tile/fence frame contract.
 export const wallFrameSrc = (material: WallMaterial, mask: number): string =>
   `/assets/tiles/feature/wall-${material}-${mask}.png`;

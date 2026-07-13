@@ -22,5 +22,50 @@
       { "id": "lantern-west", "sourceId": "lantern-brass", "face": "west", "x": 42, "y": 28, "scale": 1 },
       { "id": "lantern-north", "sourceId": "lantern-brass", "face": "north", "x": 84, "y": 28, "scale": 1 }
     ]
+  },
+  "mirror-keep-wall": {
+    "label": "Keep Mirror",
+    "span": 1,
+    "reflection": { "opacity": 0.82 },
+    "slots": [
+      { "id": "mirror-keep-west", "sourceId": "mirror-keep", "face": "west", "x": 42, "y": 44, "scale": 1 },
+      { "id": "mirror-keep-north", "sourceId": "mirror-keep", "face": "north", "x": 84, "y": 44, "scale": 1 }
+    ]
+  },
+  "mirror-court-oval-wall": {
+    "label": "Court Oval",
+    "span": 1,
+    "reflection": { "opacity": 0.76 },
+    "slots": [
+      { "id": "mirror-court-oval-west", "sourceId": "mirror-court-oval", "face": "west", "x": 42, "y": 44, "scale": 1 },
+      { "id": "mirror-court-oval-north", "sourceId": "mirror-court-oval", "face": "north", "x": 84, "y": 44, "scale": 1 }
+    ]
+  },
+  "mirror-chapel-glass-wall": {
+    "label": "Chapel Glass",
+    "span": 1,
+    "reflection": { "opacity": 0.78 },
+    "slots": [
+      { "id": "mirror-chapel-glass-west", "sourceId": "mirror-chapel-glass", "face": "west", "x": 42, "y": 46, "scale": 1 },
+      { "id": "mirror-chapel-glass-north", "sourceId": "mirror-chapel-glass", "face": "north", "x": 84, "y": 46, "scale": 1 }
+    ]
+  },
+  "mirror-witch-eye-wall": {
+    "label": "Witch's Eye",
+    "span": 1,
+    "reflection": { "opacity": 0.72 },
+    "slots": [
+      { "id": "mirror-witch-eye-west", "sourceId": "mirror-witch-eye", "face": "west", "x": 42, "y": 42, "scale": 1 },
+      { "id": "mirror-witch-eye-north", "sourceId": "mirror-witch-eye", "face": "north", "x": 84, "y": 42, "scale": 1 }
+    ]
+  },
+  "mirror-grand-gallery-wall": {
+    "label": "Grand Gallery Mirror",
+    "span": 3,
+    "reflection": { "opacity": 0.84 },
+    "slots": [
+        { "id": "mirror-grand-gallery-west", "sourceId": "mirror-grand-gallery", "face": "west", "x": 42, "y": 72, "scale": 1 },
+        { "id": "mirror-grand-gallery-north", "sourceId": "mirror-grand-gallery", "face": "north", "x": 86, "y": 72, "scale": 1 }
+    ]
   }
 }

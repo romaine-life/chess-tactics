@@ -7,6 +7,7 @@ import {
   boardBounds,
   boardSocialFramingBounds,
   largestSolidRect,
+  paintBoardThumbnailOp,
 } from './bakeBoardThumbnail';
 import { roadEdgeKey } from '../core/featureAutotile';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -44,9 +45,9 @@ function coverage(isOpaque: (x: number, y: number) => boolean, r: { x: number; y
   return opaque / (r.w * r.h);
 }
 
-// PURE logic only — no <canvas> (jsdom has none): content-hash stability, image-src dedup, and
-// the bounds/scale math. The actual rasterisation (drawImage/toBlob) is browser-only and not
-// asserted here.
+// No real <canvas> (jsdom has none): draw-op composition uses a recording context, while the
+// remaining coverage exercises content hashes, image-src dedup, and bounds/scale math. Actual
+// browser rasterisation (drawImage/toBlob) remains browser-only.
 
 const blank = (cols = 4, rows = 4): EditorBoard => ({
   cols, rows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {},
@@ -57,6 +58,108 @@ const blank = (cols = 4, rows = 4): EditorBoard => ({
 const TILE = 'grass-surf-0';
 const UNIT = { unitId: 'rook', direction: 'south', faction: 'navy-blue' };
 const GRASS_COVER_SRC = `/api/media/${'a'.repeat(64)}`;
+
+type CanvasCall = { name: string; args: unknown[]; alpha: number };
+
+function recordingContext(initialAlpha = 1): { ctx: CanvasRenderingContext2D; calls: CanvasCall[] } {
+  const calls: CanvasCall[] = [];
+  let alpha = initialAlpha;
+  const record = (name: string, ...args: unknown[]): void => { calls.push({ name, args, alpha }); };
+  const ctx = {
+    get globalAlpha() { return alpha; },
+    set globalAlpha(value: number) { alpha = value; record('globalAlpha', value); },
+    save: () => record('save'),
+    restore: () => record('restore'),
+    beginPath: () => record('beginPath'),
+    moveTo: (...args: unknown[]) => record('moveTo', ...args),
+    lineTo: (...args: unknown[]) => record('lineTo', ...args),
+    closePath: () => record('closePath'),
+    clip: () => record('clip'),
+    translate: (...args: unknown[]) => record('translate', ...args),
+    scale: (...args: unknown[]) => record('scale', ...args),
+    drawImage: (...args: unknown[]) => record('drawImage', ...args),
+  } as unknown as CanvasRenderingContext2D;
+  return { ctx, calls };
+}
+
+describe('paintBoardThumbnailOp — draw-op composition parity', () => {
+  it('clips in fixed board coordinates, flips inside the op box, and multiplies then restores alpha', () => {
+    const { ctx, calls } = recordingContext(0.5);
+    const image = { naturalWidth: 8, naturalHeight: 8 } as HTMLImageElement;
+    const op: BoardDrawOp = {
+      src: '/reflection.png',
+      dx: 30,
+      dy: 40,
+      dw: 10,
+      dh: 12,
+      z: 1,
+      flipX: true,
+      opacity: 0.4,
+      clipPolygons: [[31, 41, 39, 41, 39, 51, 31, 51]],
+    };
+
+    paintBoardThumbnailOp(ctx, image, op, { minX: 10, minY: 20, width: 60, height: 60 }, 2);
+
+    const move = calls.find((call) => call.name === 'moveTo')!;
+    const translate = calls.find((call) => call.name === 'translate')!;
+    const draw = calls.find((call) => call.name === 'drawImage')!;
+    expect(move.args).toEqual([42, 42]);
+    expect(calls.indexOf(move)).toBeLessThan(calls.indexOf(translate));
+    expect(translate.args).toEqual([60, 40]);
+    expect(calls.find((call) => call.name === 'scale')?.args).toEqual([-1, 1]);
+    expect(draw.args).toEqual([image, 0, 0, 20, 24]);
+    expect(draw.alpha).toBeCloseTo(0.2);
+    expect(calls.filter((call) => call.name === 'restore')).toHaveLength(2);
+    expect(ctx.globalAlpha).toBe(0.5);
+  });
+
+  it('preserves source-rectangle drawing inside a flipped op box', () => {
+    const { ctx, calls } = recordingContext();
+    const image = { naturalWidth: 64, naturalHeight: 64 } as HTMLImageElement;
+    const op: BoardDrawOp = {
+      src: '/sheet.png',
+      dx: 12,
+      dy: 18,
+      dw: 32,
+      dh: 40,
+      z: 1,
+      sx: 4,
+      sy: 5,
+      sw: 16,
+      sh: 20,
+      flipX: true,
+    };
+
+    paintBoardThumbnailOp(ctx, image, op, { minX: 2, minY: 8, width: 80, height: 80 }, 2);
+
+    expect(calls.find((call) => call.name === 'translate')?.args).toEqual([84, 20]);
+    expect(calls.find((call) => call.name === 'drawImage')?.args).toEqual([
+      image, 4, 5, 16, 20, 0, 0, 64, 80,
+    ]);
+  });
+
+  it('preserves contain sizing and centering inside a flipped op box', () => {
+    const { ctx, calls } = recordingContext();
+    const image = { naturalWidth: 156, naturalHeight: 46 } as HTMLImageElement;
+    const op: BoardDrawOp = {
+      src: '/piece.png',
+      dx: 0,
+      dy: 0,
+      dw: 100,
+      dh: 120,
+      z: 1,
+      contain: true,
+      flipX: true,
+    };
+
+    paintBoardThumbnailOp(ctx, image, op, { minX: 0, minY: 0, width: 100, height: 120 }, 2);
+
+    expect(calls.find((call) => call.name === 'translate')?.args).toEqual([200, 0]);
+    expect(calls.find((call) => call.name === 'drawImage')?.args).toEqual([
+      image, 22, 97, 156, 46,
+    ]);
+  });
+});
 
 describe('boardContentHash — stability + sensitivity', () => {
   it('is stable across object-key insertion order (canonicalised)', () => {
@@ -532,9 +635,9 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 1, y: 0 }));
     expect(wall).toBeDefined();
     expect(ownerUnit).toBeDefined();
-    expect(wall).toMatchObject({ dw: 128, dh: 240 });
+    expect(wall).toMatchObject({ dw: 128, dh: 336 });
     expect(wall!.dx).toBeCloseTo((1 - 0) * TILE_TEMPLATE.stepX - 64);
-    expect(wall!.dy).toBeCloseTo((1 + 0) * TILE_TEMPLATE.stepY - 96);
+    expect(wall!.dy).toBeCloseTo((1 + 0) * TILE_TEMPLATE.stepY - 192);
     expect(wall!.z).toBe(wallOverlayZIndex({ x: 1, y: 0 }));
     expect(wall!.z).toBeLessThan(ownerUnit!.z);
   });
@@ -561,9 +664,10 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
 
   it('keeps wall art in the wall display layer while drawing it after the wall frame', () => {
     const edge = roadEdgeKey(0, 0, -1, 0);
+    const secondEdge = roadEdgeKey(0, 1, -1, 1);
     const board: EditorBoard = {
       ...blank(3, 3),
-      walls: { [edge]: 'stone' },
+      walls: { [edge]: 'stone', [secondEdge]: 'stone' },
       wallArt: { [edge]: 'banner-stone-wall' },
       props: { '0,0': { propId: 'fieldstone' } },
     };
@@ -576,7 +680,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(art).toBeDefined();
     expect(structureBack).toBeDefined();
     expect(art!.z).toBe(wallArtOverlayZIndex({ x: 0, y: 0 }));
-    expect(art!.z).toBe(wall!.z);
+    expect(art!.z).toBeGreaterThan(wall!.z);
     expect(art!.z).toBeLessThan(structureBack!.z);
     expect(ops.indexOf(wall!)).toBeLessThan(ops.indexOf(art!));
   });

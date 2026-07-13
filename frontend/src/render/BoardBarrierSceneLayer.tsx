@@ -1,5 +1,5 @@
 import { useMemo, type ReactElement } from 'react';
-import { type BakeBounds, type BoardDrawOp } from '@chess-tactics/board-render';
+import { WALL_FRAME_GEOMETRY, type BakeBounds, type BoardDrawOp } from '@chess-tactics/board-render';
 import { fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
 import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
 import type { ResolvedFenceOverlay, ResolvedFencePost, ResolvedWallOverlay } from '../core/featureAutotile';
@@ -11,10 +11,10 @@ import { BoardCanvasLayer, boundsForOps } from './BoardCanvasLayer';
 const TILE_FRAME_W = TILE_STEP_X * 2;
 const TILE_FRAME_H = TILE_FRAME_HEIGHT;
 const TILE_EQUATOR = TILE_FRAME_EQUATOR_Y;
-const WALL_FRAME_W = 128;
-const WALL_FRAME_H = 240;
-const WALL_ANCHOR_X = 64;
-const WALL_ANCHOR_Y = 96;
+const WALL_FRAME_W = WALL_FRAME_GEOMETRY.width;
+const WALL_FRAME_H = WALL_FRAME_GEOMETRY.height;
+const WALL_ANCHOR_X = WALL_FRAME_GEOMETRY.anchorX;
+const WALL_ANCHOR_Y = WALL_FRAME_GEOMETRY.anchorY;
 
 function parseCellKey(key: string): { x: number; y: number } | null {
   const [x, y] = key.split(',').map(Number);
@@ -34,6 +34,7 @@ function wallArtOps(
     for (const slot of wallArtSlotsForFace(faceStyles?.[face], face)) {
       const source = slotSource(slot);
       if (!source) continue;
+      if (source.kind === 'mirror') continue;
       const faceAsset = source.faces[face];
       ops.push({
         layer: 'scene',

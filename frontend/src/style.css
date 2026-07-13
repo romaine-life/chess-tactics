@@ -6851,6 +6851,17 @@ h1 {
     overflow: auto;
   }
 
+  /* The editor assigns named board/rail areas on desktop. When the shared Skirmish shell drops
+     to one column those names must stack too; otherwise CSS creates an implicit second column for
+     `rail`, letting the HUD cover nearly the entire board at tablet/in-app-browser widths. */
+  .level-editor-screen {
+    grid-template-areas:
+      "titlebar"
+      "board"
+      "rail";
+    grid-template-rows: var(--app-header-h) minmax(520px, 62vh) auto;
+  }
+
   /* Single column: title bar stays full-bleed on top, board then HUD stacked under it. */
   .skirmish-topbar {
     grid-column: 1;
@@ -12125,6 +12136,157 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
+.mirror-aperture-inspector {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 39990;
+}
+
+.mirror-aperture-inspector polygon {
+  fill: rgba(78, 218, 255, .09);
+  stroke: rgba(126, 238, 255, .96);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.mirror-los-proof {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 39995;
+}
+
+.mirror-los-aperture,
+.mirror-los-supported-aperture,
+.mirror-los-ray,
+.mirror-los-hit,
+.mirror-los-mask {
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 1px 0 rgba(2, 6, 10, .96)) drop-shadow(0 0 2px rgba(2, 6, 10, .92));
+}
+
+.mirror-los-aperture {
+  fill: none;
+  stroke: rgba(117, 236, 255, .94);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+}
+
+.mirror-los-supported-aperture {
+  fill: rgba(72, 222, 255, .07);
+  stroke: rgba(86, 191, 214, .72);
+  stroke-width: .75;
+}
+
+.mirror-los-ray {
+  fill: none;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  opacity: .92;
+}
+
+.mirror-los-ray.is-virtual {
+  stroke-dasharray: 3 2;
+  opacity: .48;
+}
+
+.mirror-los-proof .is-pass .mirror-los-ray,
+.mirror-los-proof .mirror-los-mask.is-pass {
+  stroke: #50f0b4;
+  fill: #50f0b4;
+}
+
+.mirror-los-proof .is-floor-occluded .mirror-los-ray,
+.mirror-los-proof .mirror-los-mask.is-floor-occluded {
+  stroke: #6f8eaa;
+  fill: #6f8eaa;
+}
+
+.mirror-los-proof .is-outside-glass .mirror-los-ray,
+.mirror-los-proof .mirror-los-mask.is-outside-glass {
+  stroke: #ff527d;
+  fill: #ff527d;
+}
+
+.mirror-los-proof .is-unsupported .mirror-los-ray,
+.mirror-los-proof .mirror-los-mask.is-unsupported {
+  stroke: #ffb553;
+  fill: #ffb553;
+}
+
+.mirror-los-proof .is-invalid .mirror-los-ray,
+.mirror-los-proof .mirror-los-mask.is-invalid {
+  stroke: #c5c9d1;
+  fill: #c5c9d1;
+}
+
+.mirror-los-hit {
+  fill: rgba(3, 9, 15, .9);
+  stroke: currentColor;
+  stroke-width: 1.1;
+}
+
+.mirror-los-proof .is-pass .mirror-los-hit { color: #50f0b4; }
+.mirror-los-proof .is-floor-occluded .mirror-los-hit { color: #6f8eaa; }
+.mirror-los-proof .is-outside-glass .mirror-los-hit { color: #ff527d; }
+.mirror-los-proof .is-unsupported .mirror-los-hit { color: #ffb553; }
+.mirror-los-proof .is-invalid .mirror-los-hit { color: #c5c9d1; }
+
+.mirror-los-mask {
+  stroke: none;
+  opacity: .5;
+}
+
+.mirror-los-label {
+  font-family: inherit;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  paint-order: stroke fill;
+  stroke: rgba(2, 6, 10, .96);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+}
+
+.mirror-los-label.is-pass { fill: #baffdf; }
+.mirror-los-label.is-fail { fill: #ffc1d1; }
+
+.mirror-los-proof-readout {
+  color: #c9e8f4;
+}
+
+.mirror-test-cell-hit {
+  position: relative;
+  display: block;
+  width: 104px;
+  height: 62px;
+  transform: translateX(-4px);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  cursor: crosshair;
+  pointer-events: auto;
+}
+
+.mirror-test-cell-hit:hover,
+.mirror-test-cell-hit:focus-visible,
+.mirror-test-cell-hit.is-selected {
+  background: rgba(77, 220, 255, .17);
+  box-shadow: inset 0 0 0 2px rgba(177, 245, 255, .86);
+  outline: 0;
+}
+
+.mirror-optics-controls .ps-saved {
+  margin: 0;
+}
+
 .wall-asset-lab-stage {
   display: flex;
   flex-wrap: wrap;
@@ -12605,6 +12767,14 @@ button.tileset-relationship-cell {
   filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
 }
 
+/* Wall-art placement is a geometry-verification surface. Keep its canonical cell grid visually
+   decisive over detailed terrain without making gameplay/editor grids globally heavier. */
+.wall-art-board-surface .tileset-board-grid-layer path {
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.32));
+}
+
 .tileset-placement-board .tileset-board-grid-layer path {
   stroke: rgba(0, 0, 0, 0.42);
   filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.16));
@@ -12813,6 +12983,68 @@ button.tileset-relationship-cell {
   pointer-events: none;
   transform: translate(-50%, -50%);
   z-index: 7;
+}
+
+/* Perimeter walls protrude above the tile diamonds that normally receive editor input. These
+   face-shaped SVG targets sit on the generated wall pixels, so wall and wall-art tools operate on
+   the visible object. They stay transparent until hover/focus, then prove ready vs blocked state. */
+.le-wall-face-hit {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+  outline: none;
+}
+
+.le-wall-face-hit polygon {
+  fill: transparent;
+  pointer-events: auto;
+  stroke: transparent;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.le-wall-face-hit.is-ready polygon {
+  cursor: crosshair;
+  stroke-dasharray: none;
+}
+
+.le-wall-face-hit.is-blocked polygon {
+  cursor: help;
+  stroke-dasharray: 5 3;
+}
+
+.le-wall-face-hit.is-ready:hover polygon,
+.le-wall-face-hit.is-ready:focus-visible polygon {
+  fill: rgba(74, 220, 143, 0.2);
+  stroke: rgba(113, 255, 184, 0.98);
+}
+
+.le-wall-face-hit.is-blocked:hover polygon,
+.le-wall-face-hit.is-blocked:focus-visible polygon {
+  fill: rgba(239, 84, 84, 0.2);
+  stroke: rgba(255, 126, 126, 0.98);
+}
+
+.le-wall-placement-feedback {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(91, 132, 160, 0.32);
+  border-radius: 4px;
+  color: #cbd9e5;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.le-wall-placement-feedback.is-ready {
+  border-color: rgba(90, 222, 151, 0.55);
+  color: #aef0ca;
+  background: rgba(34, 118, 76, 0.16);
+}
+
+.le-wall-placement-feedback.is-blocked {
+  border-color: rgba(244, 101, 101, 0.58);
+  color: #ffc1b8;
+  background: rgba(130, 45, 45, 0.17);
 }
 
 .tileset-brush-display {
@@ -16563,6 +16795,29 @@ button.tileset-relationship-cell {
     grid-column: 2; grid-row: 2;
     height: 100%; max-height: none;
     overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+
+  /* Level authoring needs a usable board plus full-width controls, not the battle HUD's compact
+     landscape split. Keep the editor's named areas stacked even though this later rule restores
+     two columns for gameplay. Specificity and placement intentionally win the shared overrides. */
+  .skirmish-screen.level-editor-screen {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "titlebar"
+      "board"
+      "rail";
+    grid-template-rows: var(--app-header-h) minmax(520px, 62vh) auto;
+    overflow: auto;
+  }
+  .level-editor-screen .skirmish-war-room {
+    grid-column: 1; grid-row: 2;
+    min-height: 520px;
+  }
+  .level-editor-screen .skirmish-hud {
+    grid-column: 1; grid-row: 3;
+    height: auto;
+    overflow: visible;
+    padding: 0 8px 12px;
   }
 }
 
