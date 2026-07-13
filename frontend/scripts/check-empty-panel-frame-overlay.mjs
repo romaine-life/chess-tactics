@@ -22,6 +22,7 @@ const houseSelect = readFileSync(join(frontend, 'src/ui/shared/HouseSelect.tsx')
 const chromeBox = readFileSync(join(frontend, 'src/ui/shared/ChromeBox.tsx'), 'utf8');
 const skirmish = readFileSync(join(frontend, 'src/ui/Skirmish.tsx'), 'utf8');
 const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8');
+const portraitEditor = readFileSync(join(frontend, 'src/ui/PortraitEditor.tsx'), 'utf8');
 const installedChromeCss = readFileSync(join(frontend, 'src/ui/useInstalledChromeCss.ts'), 'utf8');
 const victoryConditionsEditor = readFileSync(join(frontend, 'src/ui/VictoryConditionsEditor.tsx'), 'utf8');
 const confirmDialog = readFileSync(join(frontend, 'src/ui/shared/ConfirmDialog.tsx'), 'utf8');
@@ -167,12 +168,12 @@ if (/\.level-editor-screen \.skirmish-hud > \.le-outer-panel-content[^\{]*\{[\s\
   failures.push('outer-panel ordinary content must inherit wrapper padding instead of selector-specific inset margins');
 }
 if (!/:is\(\.level-editor-screen, \.skirmish-screen\) \.le-outer-panel > \.le-outer-panel-content--titled\s*\{[\s\S]*?padding-block-start\s*:\s*0\s*;/.test(css)
-  || !/:is\(\.level-editor-screen, \.skirmish-screen\) \.le-outer-panel > \.le-outer-panel-content--titled > \.le-layer-card\s*\{[\s\S]*?margin-inline\s*:\s*calc\(-1 \* var\(--le-control-content-inset\)\)\s*;/.test(css)) {
+  || !/:is\(\.level-editor-screen, \.skirmish-screen, \.chrome-family-surface\) \.le-outer-panel > \.le-outer-panel-content--titled > \.outer-chrome-header\s*\{[\s\S]*?margin-inline\s*:\s*calc\(-1 \* var\(--le-control-content-inset\)\)\s*;/.test(css)) {
   failures.push('the titled panel shell must be an explicit full-bleed exception to the inherited contents box');
 }
 
-if (!/\.level-editor-screen \.le-layer-card > :not\(\.kit-panel-title\)\s*\{[\s\S]*?margin-inline\s*:\s*var\(--le-control-content-inset\)\s*;/.test(css)) {
-  failures.push('layer card control rails must align to the contents box while the title fill remains full-width');
+if (!/:is\(\.level-editor-screen, \.skirmish-screen, \.chrome-family-surface\) \.outer-chrome-header > :not\(\.kit-panel-title\)\s*\{[\s\S]*?margin-inline\s*:\s*var\(--le-control-content-inset\)\s*;/.test(css)) {
+  failures.push('outer-panel header controls must align to the contents box while the title fill remains full-width');
 }
 
 const hudScrollBlock = blockFor('.le-hud-scroll');
@@ -217,7 +218,7 @@ if (!/gap\s*:\s*calc\(8px \+ var\(--le-inner-atom-right-overhang, 0px\)\)/.test(
   failures.push('active-brush thumbnail must keep local atom collision clearance and clip previews inside a nested viewport');
 }
 if (!/className="le-layer-picker-row"[\s\S]*?aria-label="Previous editor layer"[\s\S]*?<HouseSelect[\s\S]*?aria-label="Next editor layer"/.test(levelEditorChromeConsumers)
-  || !/<span className="kit-panel-title-text">Controls<\/span>/.test(levelEditorChromeConsumers)) {
+  || !/<OuterChromeHeader title="Controls">/.test(levelEditorChromeConsumers)) {
   failures.push('level editor Controls header must expose registered previous/dropdown/next layer navigation');
 }
 
@@ -536,7 +537,10 @@ for (const id of [
   if (!chromeUnitRegistry.includes(selector)) {
     failures.push(`chrome unit registry must point ${id} at its data-chrome-unit selector`);
   }
-  if (!(levelEditor + levelEditorChromeConsumers).includes(`data-chrome-unit="${id}"`)) {
+  const implementationSources = id === 'outer-panel'
+    ? levelEditor + levelEditorChromeConsumers + chromeBox
+    : levelEditor + levelEditorChromeConsumers;
+  if (!implementationSources.includes(`data-chrome-unit="${id}"`)) {
     failures.push(`level editor must tag the concrete ${id} implementation with data-chrome-unit`);
   }
 }
@@ -545,6 +549,7 @@ for (const [label, text] of [
   ['Level Editor', levelEditor],
   ['Level Editor Chrome Consumers', levelEditorChromeConsumers],
   ['Skirmish HUD', skirmishHud],
+  ['Portrait Editor', portraitEditor],
   ['Victory Conditions Editor', victoryConditionsEditor],
   ['Confirm Dialog', confirmDialog],
   ['Chrome Box primitives', chromeBox],
@@ -620,6 +625,15 @@ if (!/data-chrome-unit="inner-box"/.test(chromeBox)
   || !/data-chrome-divider-role=\{role\}/.test(chromeBox)
   || !/className=\{`kit-divider chrome-divider/.test(chromeBox)) {
   failures.push('shared ChromeBox primitives must own the registered inner frame and role-keyed structural divider DOM');
+}
+if (!/data-chrome-unit="outer-panel"/.test(chromeBox)
+  || !/data-chrome-consumer=\{chromeConsumer\}/.test(chromeBox)
+  || !/chromeUnitClassNames\('outer-panel',\s*'le-outer-panel',\s*className\)/.test(chromeBox)
+  || !/className="le-outer-panel-fill"/.test(chromeBox)
+  || !/titled \? 'le-outer-panel-content--titled' : ''/.test(chromeBox)
+  || !/className=\{`skirmish-card outer-chrome-header/.test(chromeBox)
+  || !/<OuterChromeTitle>\{title\}<\/OuterChromeTitle>/.test(chromeBox)) {
+  failures.push('shared ChromeBox primitives must own the complete outer-panel fill/content/header composition');
 }
 if ((levelEditor.match(/<select\b[^>]*>/g) ?? []).some((opening) => /data-chrome-unit="inner-dropdown"|chromeUnitClassNames\('inner-dropdown'/.test(opening))) {
   failures.push('Level Editor native selects must sit inside shared dropdown wrappers instead of wearing inner-dropdown chrome directly');
@@ -711,7 +725,7 @@ if (!/contentPadding:\s*numberFrom\(value\.contentPadding,\s*defaults\.contentPa
   failures.push('Chrome Lab must persist, export, and apply the outer role Contents Box breathing-room control');
 }
 
-const title = blockFor('.level-editor-screen .skirmish-card h2.kit-panel-title');
+const title = blockFor(':is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .skirmish-card h2.kit-panel-title');
 if (!/margin\s*:[\s\S]*?var\(--le-outer-fill-box-top,[^)]+\)[\s\S]*?var\(--le-outer-fill-box-right,[^)]+\)[\s\S]*?var\(--ds-stack\)[\s\S]*?var\(--le-outer-fill-box-left,[^)]+\)\s*;/.test(title)) {
   failures.push('panel title fill must fit the frame fill box, not the outer footprint');
 }
@@ -852,59 +866,58 @@ const levelEditorControlsPanelEnd = levelEditorChromeConsumers.indexOf('export f
 const levelEditorControlsPanel = levelEditorControlsPanelStart >= 0 && levelEditorControlsPanelEnd > levelEditorControlsPanelStart
   ? levelEditorChromeConsumers.slice(levelEditorControlsPanelStart, levelEditorControlsPanelEnd)
   : '';
-const levelEditorControlsPanelAside = levelEditorControlsPanel.match(/<aside\b[^>]*>/)?.[0] ?? '';
 if (!levelEditorControlsPanel) {
   failures.push('missing shared LevelEditorControlsPanel implementation');
-} else if (!/chromeUnitClassNames\('outer-panel',\s*'skirmish-hud',\s*'le-outer-panel',\s*className\)/.test(levelEditorControlsPanel)
-  || !/data-chrome-unit="outer-panel"/.test(levelEditorControlsPanelAside)
-  || !/data-chrome-consumer="level-editor-controls"/.test(levelEditorControlsPanelAside)
-  || !/className=\{rootClassName\}/.test(levelEditorControlsPanelAside)
-  || !/<span className="le-outer-panel-fill"/.test(levelEditorControlsPanel)
-  || !/<div className="le-outer-panel-content le-outer-panel-content--titled"/.test(levelEditorControlsPanel)) {
-  failures.push('shared LevelEditorControlsPanel must own the canonical skirmish-hud le-outer-panel fill/content structure');
+} else if (!/<OuterChromeBox[\s\S]*?chromeConsumer="level-editor-controls"[\s\S]*?titled[\s\S]*?className=\{`skirmish-hud \$\{className\}`\.trim\(\)\}/.test(levelEditorControlsPanel)
+  || !/<OuterChromeHeader title="Controls">/.test(levelEditorControlsPanel)) {
+  failures.push('LevelEditorControlsPanel must compose the shared titled OuterChromeBox and Controls header');
 }
 
-if (!/chromeUnitClassNames\('outer-panel',\s*'skirmish-hud',\s*'le-outer-panel',\s*className\)/.test(levelEditorChromeConsumers)
-  || !/chromeUnitClassNames\('outer-panel',\s*'le-events-overlay',\s*'le-outer-panel',\s*className\)/.test(levelEditorChromeConsumers)) {
-  failures.push('level editor outer chrome consumers must instantiate the shared le-outer-panel class');
+if (!/<OuterChromeBox as="div" chromeConsumer="events-overlay"/.test(levelEditorChromeConsumers)) {
+  failures.push('events overlay must reuse OuterChromeBox while preserving its dialog div semantics');
 }
-if (!/data-chrome-unit="outer-panel"/.test(skirmishHud)
-  || !/data-chrome-consumer="skirmish-hud"/.test(skirmishHud)
-  || !/skirmish-hud le-outer-panel/.test(skirmishHud)
-  || !/className="le-outer-panel-fill"/.test(skirmishHud)
-  || !/className="le-outer-panel-content"/.test(skirmishHud)) {
-  failures.push('live Skirmish HUD must instantiate the complete shared outer-panel fill/content contract');
+if (!/<OuterChromeBox[\s\S]*?chromeConsumer="skirmish-hud"[\s\S]*?titled[\s\S]*?className=\{`skirmish-hud \$\{className\}`\.trim\(\)\}/.test(skirmishHud)
+  || !/<OuterChromeHeader title="Controls">/.test(skirmishHud)
+  || /<h2>Controls<\/h2>/.test(skirmishHud)) {
+  failures.push('live Skirmish HUD must use the same titled OuterChromeBox and Controls header as the editor');
 }
 if (!/import\s+\{\s*SkirmishHud\s*\}/.test(chromeUnitAudit)
   || !/preview\.kind === 'skirmish-hud'/.test(chromeUnitAudit)
   || !/<SkirmishHud[\s\S]*?enableGlobalShortcuts=\{false\}/.test(chromeUnitAudit)) {
   failures.push('Chrome Audit must expose the real Skirmish HUD consumer without installing match-wide shortcuts');
 }
-if (!/data-chrome-unit="outer-panel"/.test(levelEditorChromeConsumers)) {
-  failures.push('level editor outer chrome consumers must tag the concrete outer-panel implementation');
-}
-if ((levelEditorChromeConsumers.match(/className="le-outer-panel-fill"/g) ?? []).length < 2 || !/className="le-outer-panel-fill"/.test(chromeUnitAudit)) {
-  failures.push('level editor outer-panel consumers and audit specimen must include the shared fill layer');
-}
-if (!/className="le-outer-panel-content le-outer-panel-content--titled"/.test(levelEditorChromeConsumers)
-  || !/className="le-outer-panel-content le-outer-panel-content--titled"/.test(chromeUnitAudit)) {
-  failures.push('titled outer-panel consumers and their audit specimen must declare the shared full-bleed title exception');
+if (!/<OuterChromeBox[\s\S]*?chromeConsumer="outer-panel-specimen"[\s\S]*?titled/.test(chromeUnitAudit)
+  || !/<OuterChromeHeader title=\{PLACEHOLDER_TEXT\}/.test(chromeUnitAudit)) {
+  failures.push('Chrome Audit outer-panel specimen must consume the shared titled outer-panel primitives');
 }
 
-for (const [selector, tokens] of [
-  ['.skirmish-hud', ['--skirmish-chrome-outer-rail-w', '--skirmish-chrome-outer-panel-image']],
-  ['.skirmish-hud-tab', ['--skirmish-chrome-inner-rail-w', '--skirmish-chrome-inner-control-image']],
-  ['.skirmish-hud .app-header-button', ['--skirmish-chrome-inner-rail-w', '--skirmish-chrome-inner-control-image']],
-  ['.skirmish-service-record', ['--skirmish-chrome-inner-rail-w', '--skirmish-chrome-inner-control-image']],
-  ['.unit-portrait', ['--skirmish-chrome-inner-rail-w', '--skirmish-chrome-inner-line-image']],
-  ['.unit-portrait--roster', ['--skirmish-chrome-inner-rail-w']],
-]) {
+const skirmishHudBlock = blockFor('.skirmish-hud');
+if (!skirmishHudBlock) {
+  failures.push('missing .skirmish-hud layout block');
+} else if (/border-image(?:-source|-width|-slice|-repeat)?\s*:|--skirmish-chrome-outer-(?:rail-w|panel-image)\s*:/.test(skirmishHudBlock)) {
+  failures.push('.skirmish-hud must own layout only; shared OuterChromeBox owns outer frame geometry');
+}
+
+if (!/<InnerChromeBox className="skirmish-service-record">/.test(skirmishHud)
+  || !/<InnerChromeBox className="unit-portrait unit-portrait--hud"/.test(skirmishHud)
+  || !/<InnerChromeBox className=\{`unit-portrait/.test(portraitEditor)) {
+  failures.push('Skirmish portrait and service-record boxes must instantiate the registered InnerChromeBox primitive');
+}
+for (const selector of ['.skirmish-service-record', '.unit-portrait', '.unit-portrait--roster']) {
   const block = blockFor(selector);
-  if (!block) failures.push(`missing ${selector} shared control-panel chrome block`);
-  for (const token of tokens) {
-    if (block && !block.includes(token)) {
-      failures.push(`${selector} must consume ${token}`);
-    }
+  if (block && /border-image(?:-source|-width|-slice|-repeat)?\s*:/.test(block)) {
+    failures.push(`${selector} must not own frame geometry after migrating to InnerChromeBox`);
+  }
+}
+if (!/data-chrome-unit="inner-asset-swatch"[\s\S]*?chromeUnitClassNames\('inner-asset-swatch',\s*'app-header-button',\s*'skirmish-promotion-option'\)/.test(skirmishHud)
+  || !/data-chrome-unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'skirmish-hud-tab'/.test(skirmishHud)
+  || !/data-chrome-unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'app-header-button',\s*'skirmish-grid-key'/.test(skirmishHud)) {
+  failures.push('Skirmish promotion, tab, and command-grid controls must inherit existing registered inner units');
+}
+for (const selector of ['.skirmish-hud-tab', '.skirmish-hud .app-header-button']) {
+  const block = blockFor(selector);
+  if (block && /border(?:-image(?:-source|-width|-slice|-repeat)?)?\s*:/.test(block)) {
+    failures.push(`${selector} must not own frame geometry after migrating to the registered inner hierarchy`);
   }
 }
 

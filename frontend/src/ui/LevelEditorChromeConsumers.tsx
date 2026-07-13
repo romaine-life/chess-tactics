@@ -2,7 +2,7 @@ import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { KitScroll } from './KitScroll';
 import { NavButton } from './shared/NavButton';
 import { HouseSelect } from './shared/HouseSelect';
-import { ChromeDivider } from './shared/ChromeBox';
+import { ChromeDivider, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import type { LevelEditorLayerKey } from './levelEditorRoute';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 
@@ -63,7 +63,6 @@ export function LevelEditorControlsPanel({
   ariaBusy?: boolean;
   children: ReactNode;
 }): ReactElement {
-  const rootClassName = chromeUnitClassNames('outer-panel', 'skirmish-hud', 'le-outer-panel', className);
   const scrollClass = `le-hud-scroll ${scrollClassName}`.trim();
   const playTitle = playBoardEnabled
     ? "Play this exact board against the AI now - no save (a Test Board; set a CPU-delay floor in the game's Controls tab). Back returns you here."
@@ -75,19 +74,16 @@ export function LevelEditorControlsPanel({
   };
 
   return (
-    <aside
-      data-chrome-unit="outer-panel"
-      data-chrome-consumer="level-editor-controls"
-      className={rootClassName}
+    <OuterChromeBox
+      chromeConsumer="level-editor-controls"
+      titled
+      className={`skirmish-hud ${className}`.trim()}
       style={style}
       aria-label="Editor controls"
       inert={inert || undefined}
       aria-busy={ariaBusy || undefined}
     >
-      <span className="le-outer-panel-fill" aria-hidden="true" />
-      <div className="le-outer-panel-content le-outer-panel-content--titled">
-        <section className="skirmish-card le-layer-card">
-          <h2 className="kit-panel-title"><span className="kit-panel-title-text">Controls</span></h2>
+      <OuterChromeHeader title="Controls">
           <div className="le-layer-picker-row">
             <button
               type="button"
@@ -123,7 +119,7 @@ export function LevelEditorControlsPanel({
               <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
             </button>
           </div>
-        </section>
+      </OuterChromeHeader>
 
         <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
           <h2>Actions</h2>
@@ -166,8 +162,7 @@ export function LevelEditorControlsPanel({
         <KitScroll className={scrollClass}>
           {children}
         </KitScroll>
-      </div>
-    </aside>
+    </OuterChromeBox>
   );
 }
 
@@ -188,11 +183,8 @@ export function LevelEditorEventsOverlay({
   className?: string;
   style?: CSSProperties;
 }): ReactElement {
-  const rootClassName = chromeUnitClassNames('outer-panel', 'le-events-overlay', 'le-outer-panel', className);
   return (
-    <div data-chrome-unit="outer-panel" data-chrome-consumer="events-overlay" className={rootClassName} style={style} role="dialog" aria-label="Level events editor">
-      <span className="le-outer-panel-fill" aria-hidden="true" />
-      <div className="le-outer-panel-content">
+    <OuterChromeBox as="div" chromeConsumer="events-overlay" className={`le-events-overlay ${className}`.trim()} style={style} role="dialog" aria-label="Level events editor">
         <div className="le-events-head">
           <h2>Events</h2>
           <div className="le-events-head-actions">
@@ -204,7 +196,6 @@ export function LevelEditorEventsOverlay({
           </div>
         </div>
         {tab === 'victory' ? victoryContent : otherContent}
-      </div>
-    </div>
+    </OuterChromeBox>
   );
 }

@@ -4612,12 +4612,8 @@ h1 {
   flex-direction: column;
   grid-column: 2;
   grid-row: 2;
-  /* The right side is ONE control panel: a single kit panel frame (same panel.png +
-     14px corner as the title bar, so they read consistently) holding the tabs, the
-     active content, and the actions. Inner sections are frameless content, not nested
-     boxes. This is the precedent for the level editor's right side too (ADR-0033). */
-  border: var(--skirmish-chrome-outer-rail-w) solid transparent;
-  border-image: var(--skirmish-chrome-outer-panel-image) 24 fill / var(--skirmish-chrome-outer-rail-w) round;
+  /* The right side is the shared OuterChromeBox. This class owns placement and
+     flex behavior only; the outer-panel role owns frame, fill, and contents. */
   box-sizing: border-box;
   /* Sections are separated by the GUTTER, not the within-section stack (ADR-0056). */
   gap: var(--ds-gutter);
@@ -4648,20 +4644,11 @@ h1 {
 .skirmish-hud-tab {
   appearance: none;
   align-items: center;
-  background: transparent;
   display: flex;
   justify-content: center;
   /* Icon-only: equal-share basis (0) keeps all five on ONE compact row instead of
      stretching to a text width and wrapping to a second row. */
   flex: 1 1 0;
-  /* Kit mode-button frame — atom-assembled (ADR-0012/0016), the SAME tab/header
-     frame the settings nav uses; gold brackets, cyan when active. Chrome must be
-     the kit 9-slice, never hand-rolled CSS borders/gradients (ADR-0002/0011/0014).
-     Slimmed to 7px now the cell only carries a glyph, not a word; stretch (not round)
-     so the scaled frame's uniform pipes render continuous instead of re-tiling. */
-  border: var(--skirmish-chrome-inner-rail-w) solid transparent;
-  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--skirmish-chrome-inner-rail-w) stretch;
-  border-radius: 0;
   color: var(--skirmish-muted);
   cursor: pointer;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
@@ -4685,7 +4672,6 @@ h1 {
 }
 
 .skirmish-hud-tab.active {
-  border-image-source: var(--skirmish-chrome-inner-control-active-image);
   color: #f3fbff;
 }
 
@@ -4726,15 +4712,6 @@ h1 {
   border-image-width: var(--skirmish-chrome-inner-rail-w);
 }
 
-.skirmish-hud .app-header-button {
-  border-width: var(--skirmish-chrome-inner-rail-w);
-  border-image-source: var(--skirmish-chrome-inner-control-image);
-  border-image-width: var(--skirmish-chrome-inner-rail-w);
-  border-image-slice: 24 fill;
-  border-image-repeat: stretch;
-}
-
-.skirmish-hud .app-header-button-active,
 .skirmish-hud .settings-chrome-button-primary {
   border-image-source: var(--skirmish-chrome-inner-control-active-image);
 }
@@ -4779,13 +4756,6 @@ h1 {
   block-size: 20px;
   display: block;
   inline-size: 20px;
-}
-
-/* Resign is a concede/caution action — swap the neutral kit frame for the danger (red)
-   one so it reads as distinct from the other match controls (same treatment as the
-   editor's Delete/Clear buttons). */
-.skirmish-view-row .app-header-button.skirmish-resign-button {
-  border-image-source: var(--skirmish-chrome-inner-control-danger-image);
 }
 
 /* Test Board CPU-delay floor (HUD Controls tab, test only): the shared editable Stepper,
@@ -5110,7 +5080,7 @@ h1 {
   padding-block-start: 0;
 }
 
-:is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-content--titled > .le-layer-card {
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-outer-panel > .le-outer-panel-content--titled > .outer-chrome-header {
   margin-inline: calc(-1 * var(--le-control-content-inset));
 }
 
@@ -5124,11 +5094,11 @@ h1 {
 /* The titled shell is the one full-bleed contents exception: its title belongs
    to the fill box, while every real control beneath it returns to the shared
    contents boundary. */
-.level-editor-screen .le-layer-card > :not(.kit-panel-title) {
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .outer-chrome-header > :not(.kit-panel-title) {
   margin-inline: var(--le-control-content-inset);
 }
 
-.level-editor-screen .le-layer-card > .le-layer-picker-row {
+.level-editor-screen .outer-chrome-header > .le-layer-picker-row {
   width: auto;
 }
 
@@ -5200,7 +5170,7 @@ h1 {
    strip. It borrows the title font + forged nailhead rule, but its height is a
    SUB-header proportion of the app bar (not a second full title bar). The text
    keeps normal tracking; the chrome carries the connection to the global bar. */
-.level-editor-screen .skirmish-card h2.kit-panel-title {
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .skirmish-card h2.kit-panel-title {
   --kit-panel-title-rule-h: 10px;
   --kit-panel-title-base-frame-w: 12px;
   --kit-panel-title-base-h: clamp(44px, calc(var(--app-header-h) * .58), 50px);
@@ -5236,7 +5206,7 @@ h1 {
   text-transform: uppercase;
 }
 
-.level-editor-screen .skirmish-card h2.kit-panel-title .kit-panel-title-text {
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .skirmish-card h2.kit-panel-title .kit-panel-title-text {
   display: inline-block;
   margin-block-start: calc(var(--le-control-rail-w, var(--kit-panel-title-base-frame-w)) + (var(--kit-panel-title-visible-h) - var(--kit-panel-title-rule-h) - 1em) / 2);
   transform: translate(
@@ -6605,12 +6575,9 @@ h1 {
   grid-template-columns: 86px minmax(0, 1fr);
 }
 
-/* The ONE unit-portrait box (see UnitPortrait in PortraitEditor.tsx). A transparent panel-line
-   frame whose bracket ornament bleeds over a bust/backdrop that fills to the `--up-fill` boundary
-   (the editor's Fill box, config/nine-slice/panel.json `fill` = 2). The Selected-Unit HUD, the
-   roster slots, and the editor previews ALL render through this — the framing/fill is defined here
-   ONCE, never re-derived per surface. The rendered rail thickness comes from the inner chrome role; `--up-backdrop` =
-   the scene art (when a surface composites one behind the bust). Not a raw-CSS box. */
+/* The ONE unit-portrait box (see UnitPortrait in PortraitEditor.tsx). InnerChromeBox owns
+   its frame/fill; this feature class owns only portrait composition and sizing. The
+   Selected-Unit HUD, roster slots, and editor previews all render through it. */
 .unit-portrait {
   --up-fill: 2px;
   position: relative;
@@ -6619,8 +6586,6 @@ h1 {
   background-color: rgba(3, 12, 19, .74);
   background-clip: padding-box;
   background-origin: padding-box;
-  border: var(--up-fill) solid transparent;
-  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--skirmish-chrome-inner-rail-w, 12px) round;
   padding: calc(var(--skirmish-chrome-inner-rail-w, 12px) - var(--up-fill));
   image-rendering: pixelated;
 }
@@ -6651,7 +6616,6 @@ h1 {
 
 /* Roster thumbnail: fills its button; frame thickness still comes from the inner chrome role. */
 .unit-portrait--roster {
-  border-image-width: var(--skirmish-chrome-inner-rail-w);
   width: 100%;
   height: 100%;
 }
@@ -6709,10 +6673,8 @@ h1 {
 }
 
 .skirmish-service-record {
-  /* In-theme kit sub-panel so the stats aren't bare/"headless" on the control panel
-     (ADR-0032). One frame for the whole block — not five sets of brackets. */
-  border: var(--skirmish-chrome-inner-rail-w, 12px) solid transparent;
-  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--skirmish-chrome-inner-rail-w, 12px) round;
+  /* InnerChromeBox owns the one frame for the whole record; the five stat columns
+     remain deliberately frameless content. */
   box-sizing: border-box;
   margin-top: var(--ds-stack);
 }

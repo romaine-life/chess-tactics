@@ -18,6 +18,8 @@ import { SkirmishClockControl } from './SkirmishClockControl';
 import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 import { Stepper } from './shared/Stepper';
 import { clientSide, clientSideLabel, clientSideOrder, clientSideRelation, clientTurnLabel, type PlayingSide } from '../game/clientPerspective';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -275,18 +277,39 @@ export function SkirmishHud({
   const turnLabel = clientTurnLabel(game, localSide, !!net?.pendingMove);
 
   return (
-    <aside
-      data-testid="skirmish-hud"
-      data-chrome-unit="outer-panel"
-      data-chrome-consumer="skirmish-hud"
-      className={`skirmish-hud le-outer-panel ${className}`.trim()}
-      style={style}
-      aria-label="Skirmish command HUD"
-    >
+    <>
       {/* Portals to <body>; render anywhere. Only visible while a resign confirm is open. */}
       {dialog}
-      <span className="le-outer-panel-fill" aria-hidden="true" />
-      <div className="le-outer-panel-content">
+      <OuterChromeBox
+        chromeConsumer="skirmish-hud"
+        titled
+        data-testid="skirmish-hud"
+        className={`skirmish-hud ${className}`.trim()}
+        style={style}
+        aria-label="Skirmish command HUD"
+      >
+        <OuterChromeHeader title="Controls">
+          <div className="skirmish-hud-tabs" role="tablist" aria-label="HUD sections">
+            {HUD_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                data-chrome-unit="inner-text-button"
+                id={`skirmish-tab-${t.id}`}
+                aria-selected={tab === t.id}
+                aria-controls={`skirmish-panel-${t.id}`}
+                className={chromeUnitClassNames('inner-text-button', 'skirmish-hud-tab', tab === t.id && 'active')}
+                aria-label={t.label}
+                title={t.label}
+                onClick={() => setTab(t.id)}
+              >
+                <span className={`skirmish-tab-icon skirmish-tab-icon-${t.id}`} aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        </OuterChromeHeader>
+
       <section className="skirmish-score-panel" aria-label="Turn summary">
         <div>
           <span className="skirmish-eyebrow">Status</span>
@@ -310,7 +333,8 @@ export function SkirmishHud({
                 <button
                   key={type}
                   type="button"
-                  className="app-header-button skirmish-promotion-option"
+                  data-chrome-unit="inner-asset-swatch"
+                  className={chromeUnitClassNames('inner-asset-swatch', 'app-header-button', 'skirmish-promotion-option')}
                   onClick={() => choosePromotion(type)}
                   aria-label={`Promote to ${PROMOTION_LABEL[type]}`}
                   title={`Promote to ${PROMOTION_LABEL[type]}`}
@@ -323,25 +347,6 @@ export function SkirmishHud({
           </div>
         </section>
       ) : null}
-
-      <div className="skirmish-hud-tabs" role="tablist" aria-label="HUD sections">
-        {HUD_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            id={`skirmish-tab-${t.id}`}
-            aria-selected={tab === t.id}
-            aria-controls={`skirmish-panel-${t.id}`}
-            className={`skirmish-hud-tab ${tab === t.id ? 'active' : ''}`.trim()}
-            aria-label={t.label}
-            title={t.label}
-            onClick={() => setTab(t.id)}
-          >
-            <span className={`skirmish-tab-icon skirmish-tab-icon-${t.id}`} aria-hidden="true" />
-          </button>
-        ))}
-      </div>
 
       <div
         className="skirmish-hud-panel"
@@ -366,9 +371,9 @@ export function SkirmishHud({
                   )}
                 />
               ) : (
-                <div className="unit-portrait unit-portrait--hud" style={{ display: 'grid', placeItems: 'center' }}>
+                <InnerChromeBox className="unit-portrait unit-portrait--hud" style={{ display: 'grid', placeItems: 'center' }}>
                   <UnitBadge piece={focused} large />
-                </div>
+                </InnerChromeBox>
               )}
               <div className="skirmish-selected-copy">
                 <strong data-testid="selected-name">{focused ? TYPE_LABEL[focused.type] : 'None'}</strong>
@@ -376,7 +381,7 @@ export function SkirmishHud({
               </div>
             </div>
             {focused && (focused.side === 'player' || focused.side === 'enemy') && (
-              <div className="skirmish-service-record">
+              <InnerChromeBox className="skirmish-service-record">
                 <h3>Service Record</h3>
                 <dl>
                   <div><dt>Used</dt><dd>{focused.timesUsed ?? 0}</dd></div>
@@ -385,7 +390,7 @@ export function SkirmishHud({
                   <div><dt>Escapes</dt><dd>{focused.escapes ?? 0}</dd></div>
                   <div><dt>Threats</dt><dd>{focused.threatsMade ?? 0}</dd></div>
                 </dl>
-              </div>
+              </InnerChromeBox>
             )}
           </section>
         )}
@@ -447,20 +452,25 @@ export function SkirmishHud({
             <div className="skirmish-view-group">
               <span className="skirmish-eyebrow">Zoom</span>
               <div className="skirmish-view-row">
-                <button type="button" className="app-header-button" onClick={() => setZoom(zoom - 0.1)} aria-label="Zoom out">−</button>
-                <span className="skirmish-zoom-readout">{Math.round(zoom * 100)}%</span>
-                <button type="button" className="app-header-button" onClick={() => setZoom(zoom + 0.1)} aria-label="Zoom in">+</button>
-                <button type="button" className="app-header-button" onClick={resetView}>Reset</button>
+                <Stepper
+                  value={Math.round(zoom * 100)}
+                  suffix="%"
+                  decreaseLabel="Zoom out"
+                  increaseLabel="Zoom in"
+                  onDecrease={() => setZoom(zoom - 0.1)}
+                  onIncrease={() => setZoom(zoom + 0.1)}
+                />
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={resetView}>Reset</button>
               </div>
             </div>
             <div className="skirmish-view-group">
               <span className="skirmish-eyebrow">Overlays</span>
               <div className="skirmish-view-row">
-                <button type="button" className={`app-header-button ${showMoves ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showMoves')} aria-pressed={showMoves}>Moves</button>
-                <button type="button" className={`app-header-button ${showEnemyAttacks ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showEnemyAttacks')} aria-pressed={showEnemyAttacks}>Opp. attacks</button>
-                <button type="button" className={`app-header-button ${showBlocked ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showBlocked')} aria-pressed={showBlocked}>Blocks</button>
-                <button type="button" className={`app-header-button ${showPromotionZones ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showPromotionZones')} aria-pressed={showPromotionZones}>Promotion</button>
-                <button type="button" className={`app-header-button ${showGrid ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showGrid')} aria-pressed={showGrid}>Grid</button>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showMoves && 'active')} onClick={() => toggleOverlay('showMoves')} aria-pressed={showMoves}>Moves</button>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showEnemyAttacks && 'active')} onClick={() => toggleOverlay('showEnemyAttacks')} aria-pressed={showEnemyAttacks}>Opp. attacks</button>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showBlocked && 'active')} onClick={() => toggleOverlay('showBlocked')} aria-pressed={showBlocked}>Blocks</button>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showPromotionZones && 'active')} onClick={() => toggleOverlay('showPromotionZones')} aria-pressed={showPromotionZones}>Promotion</button>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showGrid && 'active')} onClick={() => toggleOverlay('showGrid')} aria-pressed={showGrid}>Grid</button>
               </div>
             </div>
           </section>
@@ -468,7 +478,6 @@ export function SkirmishHud({
 
         {tab === 'controls' && (
           <section className="skirmish-card skirmish-controls-card" aria-label="Page controls">
-            <h2>Controls</h2>
             <div className="skirmish-view-group">
               <span className="skirmish-eyebrow">Shortcuts</span>
               <div className="skirmish-grid" role="group" aria-label="Match shortcut grid">
@@ -476,7 +485,7 @@ export function SkirmishHud({
                   const action = SHORTCUT_BINDINGS[key];
                   if (!action) {
                     return (
-                      <span key={key} className="app-header-button skirmish-grid-key is-empty" aria-hidden="true">
+                      <span key={key} data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', 'is-empty')} aria-hidden="true">
                         <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
                       </span>
                     );
@@ -487,8 +496,9 @@ export function SkirmishHud({
                     <button
                       key={key}
                       type="button"
+                      data-chrome-unit="inner-text-button"
                       data-testid={`shortcut-${key}`}
-                      className={`app-header-button skirmish-grid-key ${active ? 'app-header-button-active is-active' : ''}`.trim()}
+                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', active && 'active is-active')}
                       aria-pressed={isToggle ? active : undefined}
                       title={action.hint}
                       onClick={() => { runSkirmishShortcut(key); }}
@@ -546,7 +556,8 @@ export function SkirmishHud({
               <div className="skirmish-view-row">
                 {returnHref && !net ? (
                   <NavButton
-                    className="app-header-button skirmish-return-button"
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-return-button')}
+                    data-chrome-unit="inner-text-button"
                     data-testid="skirmish-return-scenario"
                     aria-label={returnLabel}
                     title={returnLabel}
@@ -559,7 +570,8 @@ export function SkirmishHud({
                 {onRestart && !net ? (
                   <button
                     type="button"
-                    className="app-header-button skirmish-lifecycle-button"
+                    data-chrome-unit="inner-tool-square"
+                    className={chromeUnitClassNames('inner-tool-square', 'app-header-button', 'skirmish-lifecycle-button')}
                     data-testid="restart-level"
                     aria-label={restartLabel}
                     title={restartLabel}
@@ -573,7 +585,8 @@ export function SkirmishHud({
                 {canStartNewSkirmish && !net ? (
                   <button
                     type="button"
-                    className="app-header-button skirmish-lifecycle-button"
+                    data-chrome-unit="inner-tool-square"
+                    className={chromeUnitClassNames('inner-tool-square', 'app-header-button', 'skirmish-lifecycle-button')}
                     data-testid="new-skirmish"
                     aria-label={newSkirmishLabel}
                     title={newSkirmishLabel}
@@ -587,7 +600,8 @@ export function SkirmishHud({
                 {!game.winner && (!net || netInteractive) ? (
                   <button
                     type="button"
-                    className="app-header-button skirmish-resign-button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-resign-button', 'danger')}
                     data-testid="resign"
                     onClick={async () => {
                       const ok = await ask(net ? {
@@ -615,7 +629,7 @@ export function SkirmishHud({
           </section>
         )}
       </div>
-      </div>
-    </aside>
+      </OuterChromeBox>
+    </>
   );
 }

@@ -10,7 +10,7 @@ import {
 } from './chromeUnitRegistry';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { HouseSelect } from './shared/HouseSelect';
-import { ChromeDivider, InnerChromeBox } from './shared/ChromeBox';
+import { ChromeDivider, InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { Toggle } from './shared/Toggle';
 import { LevelEditorControlsPanel, LevelEditorEventsOverlay, type LevelEditorLayerOption } from './LevelEditorChromeConsumers';
 import { SkirmishHud } from './SkirmishHud';
@@ -337,23 +337,19 @@ function OuterPanelSpecimen({ dims, preview }: { dims: ChromeUnitAuditDims; prev
   if (preview.kind === 'skirmish-hud') return <SkirmishHudConsumer dims={dims} />;
   const dividerCount = Math.max(0, Math.round(dims.dividers));
   return (
-    <div
-      data-chrome-unit="outer-panel"
-      className={chromeUnitClassNames('outer-panel', 'skirmish-hud', 'le-outer-panel', 'chrome-unit-outer-panel')}
+    <OuterChromeBox
+      chromeConsumer="outer-panel-specimen"
+      titled
+      className="skirmish-hud chrome-unit-outer-panel"
       style={{ width: `${dims.width}px`, minHeight: `${dims.height}px` }}
     >
-      <span className="le-outer-panel-fill" aria-hidden="true" />
-      <div className="le-outer-panel-content le-outer-panel-content--titled">
-        <section className="skirmish-card le-layer-card chrome-unit-panel-card">
-          <h2 className="kit-panel-title"><span className="kit-panel-title-text">{PLACEHOLDER_TEXT}</span></h2>
-        </section>
-        {Array.from({ length: dividerCount }, (_, index) => (
-          <div className="le-control-divider-host chrome-unit-divider-host" key={`divider-${index}`}>
-            <ChromeDivider role="outer" />
-          </div>
-        ))}
-      </div>
-    </div>
+      <OuterChromeHeader title={PLACEHOLDER_TEXT} className="chrome-unit-panel-card" />
+      {Array.from({ length: dividerCount }, (_, index) => (
+        <div className="le-control-divider-host chrome-unit-divider-host" key={`divider-${index}`}>
+          <ChromeDivider role="outer" />
+        </div>
+      ))}
+    </OuterChromeBox>
   );
 }
 
