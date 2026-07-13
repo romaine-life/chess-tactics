@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { SliderRow } from './dressing/SliderRow';
 import {
   chromeUnitById,
@@ -10,6 +10,7 @@ import {
 } from './chromeUnitRegistry';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { HouseSelect } from './shared/HouseSelect';
+import { ChromeDivider, InnerChromeBox } from './shared/ChromeBox';
 import { Toggle } from './shared/Toggle';
 import { LevelEditorControlsPanel, LevelEditorEventsOverlay, type LevelEditorLayerOption } from './LevelEditorChromeConsumers';
 import { SkirmishHud } from './SkirmishHud';
@@ -39,7 +40,7 @@ export function chromeUnitThumbnailDims(unit: ChromeUnitSpec): ChromeUnitAuditDi
   if (unit.id === 'inner-toggle') return { width: 138, height: 0, dividers: 0 };
   if (unit.id === 'inner-list-row') return { width: 180, height: 0, dividers: 0 };
   if (unit.id === 'inner-asset-swatch') return { width: 84, height: 78, dividers: 0 };
-  if (unit.id === 'inner-box') return { width: 132, height: 86, dividers: 0 };
+  if (unit.id === 'inner-box') return { width: 132, height: 86, dividers: 2 };
   if (unit.id === 'inner-locked-rectangle') return { width: 132, height: 58, dividers: 0 };
   return chromeUnitBaselineDims(unit);
 }
@@ -348,7 +349,7 @@ function OuterPanelSpecimen({ dims, preview }: { dims: ChromeUnitAuditDims; prev
         </section>
         {Array.from({ length: dividerCount }, (_, index) => (
           <div className="le-control-divider-host chrome-unit-divider-host" key={`divider-${index}`}>
-            <div className="kit-divider" />
+            <ChromeDivider role="outer" />
           </div>
         ))}
       </div>
@@ -363,6 +364,23 @@ function SquareSpecimen({ unit, interactive }: { unit: ChromeUnitSpec; interacti
         <SegButtonVisual interactive={false} unitId="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-seg-btn')} label="Tool square slot">
           <span className="chrome-unit-slot-marker" aria-hidden="true" />
         </SegButtonVisual>
+      </div>
+    );
+  }
+  if (unit.id === 'inner-chevron-key') {
+    return (
+      <div className="le-seg le-seg-icons chrome-unit-inline-seat">
+        {unit.variants?.map((variant) => (
+          <SegButtonVisual
+            key={variant.name}
+            interactive={interactive}
+            unitId="inner-chevron-key"
+            className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-layer-stepper-button')}
+            label={variant.label}
+          >
+            <span><span className={`stepper-glyph stepper-chevron ${variant.className ?? ''}`.trim()} aria-hidden="true" /></span>
+          </SegButtonVisual>
+        ))}
       </div>
     );
   }
@@ -400,13 +418,25 @@ function SquareSpecimen({ unit, interactive }: { unit: ChromeUnitSpec; interacti
 }
 
 function FreeBoxSpecimen({ dims }: { dims: ChromeUnitAuditDims }): ReactElement {
+  const dividerCount = Math.max(0, Math.round(dims.dividers));
   return (
-    <div
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'chrome-unit-rect', 'chrome-unit-empty-template')}
-      style={{ width: `${dims.width}px`, minHeight: `${dims.height}px` }}
+    <InnerChromeBox
+      className="chrome-unit-rect chrome-unit-empty-template"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: `${dims.width}px`,
+        minHeight: `${dims.height}px`,
+      }}
       aria-hidden="true"
-    />
+    >
+      {Array.from({ length: dividerCount + 1 }, (_, index) => (
+        <Fragment key={`inner-section-${index}`}>
+          <span className="chrome-unit-inner-box-slot" style={{ flex: '1 1 0', minHeight: 0 }} />
+          {index < dividerCount ? <ChromeDivider role="inner" /> : null}
+        </Fragment>
+      ))}
+    </InnerChromeBox>
   );
 }
 

@@ -20,13 +20,17 @@ export function useInstalledChromeCss(enabled = true): string {
     let live = true;
     const outer = roleDefault('outer');
     const inner = roleDefault('inner');
-    const divider = dividerDefault();
+    const dividers = {
+      outer: dividerDefault('outer'),
+      inner: dividerDefault('inner'),
+    };
     Promise.all([
       composeFrameDataUrl(outer),
       composeFrameDataUrl(inner),
-      composeDividerRender(outer, divider),
-    ]).then(([outerFrame, innerFrame, dividerRender]) => {
-      if (live) setCss(frameCss(outer, inner, outerFrame, innerFrame, dividerRender));
+      composeDividerRender(outer, dividers.outer),
+      composeDividerRender(inner, dividers.inner),
+    ]).then(([outerFrame, innerFrame, outerDivider, innerDivider]) => {
+      if (live) setCss(frameCss(outer, inner, outerFrame, innerFrame, { outer: outerDivider, inner: innerDivider }));
     }).catch(() => {
       if (live) setCss('');
     });

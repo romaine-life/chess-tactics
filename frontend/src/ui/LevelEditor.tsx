@@ -3,7 +3,7 @@
 // the heavy library studios + manifests live in TilePreview.tsx and are never
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
 import { resolveTerrainSideExposure } from '@chess-tactics/board-render';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -4139,8 +4139,8 @@ export function LevelEditor(): ReactElement {
     }
     if (playerFaction === faction) setPlayerFactionWithHistory(null);
   };
-  const onFactionControlChange = (faction: UnitPalette) => (event: ChangeEvent<HTMLSelectElement>): void => {
-    setFactionControl(faction, event.currentTarget.value as FactionControl);
+  const onFactionControlChange = (faction: UnitPalette) => (control: FactionControl): void => {
+    setFactionControl(faction, control);
   };
   const browserRecoverySafetyDetail = localBackupAvailable === true
     ? 'A browser recovery copy is available.'
@@ -5272,22 +5272,19 @@ export function LevelEditor(): ReactElement {
                         <span>{LE_FACTION_LABELS[faction]}</span>
                         <b>{boardFactionCounts[faction]}</b>
                       </span>
-                      <span className="le-faction-fields">
-                        <select
-                          data-chrome-unit="inner-dropdown"
-                          className={chromeUnitClassNames('inner-dropdown', 'le-faction-select')}
+                      <div className="le-faction-fields">
+                        <HouseSelect<FactionControl>
                           value={playerFaction === faction ? 'player' : 'cpu'}
-                          aria-label={`${LE_FACTION_LABELS[faction]} control`}
+                          ariaLabel={`${LE_FACTION_LABELS[faction]} control`}
                           onChange={onFactionControlChange(faction)}
-                        >
-                          {controlOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                        </select>
+                          options={controlOptions}
+                        />
                         <DirectionPopover
                           value={directionForFaction(faction)}
                           label={`${LE_FACTION_LABELS[faction]} default facing`}
                           onChange={(direction) => setFactionDefaultDirection(faction, direction)}
                         />
-                      </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -5303,21 +5300,18 @@ export function LevelEditor(): ReactElement {
             <h2>Generate terrain</h2>
             <p className="le-board-note">Carve a saved region — or the whole board — into terrain regions. Add regions and dial each one's share (they rebalance to 100 − buffer); each becomes one contiguous area. Then Generate.</p>
             <div className="le-gen-unit-row">
-              <label className="le-gen-unit-select">
+              <div className="le-gen-unit-select">
                 <span>Region</span>
-                <select
-                  data-chrome-unit="inner-dropdown"
-                  className={chromeUnitClassNames('inner-dropdown', 'le-gen-region-terrain')}
+                <HouseSelect<string>
                   value={activeGeneratedRegionId ?? ''}
-                  onChange={(event) => selectGeneratedRegionUnit(event.target.value)}
-                  aria-label="Saved generated region"
-                >
-                  <option value="">New selection</option>
-                  {generatedRegions.map((region) => (
-                    <option key={region.id} value={region.id}>{region.name} · {region.cells.length}</option>
-                  ))}
-                </select>
-              </label>
+                  onChange={selectGeneratedRegionUnit}
+                  ariaLabel="Saved generated region"
+                  options={[
+                    { value: '', label: 'New selection' },
+                    ...generatedRegions.map((region) => ({ value: region.id, label: `${region.name} · ${region.cells.length}` })),
+                  ]}
+                />
+              </div>
               {activeGeneratedRegion ? (
                 <button
                   type="button"
@@ -5342,18 +5336,16 @@ export function LevelEditor(): ReactElement {
             </div>
             {tool === 'region' ? <p className="le-board-note">Click a drawn clump to select its whole same-terrain patch. Generate fills the selection; everything outside it stays put.</p> : null}
             <div className="le-gen-regions" role="group" aria-label="Terrain regions">
-              {scatterSections.map((sec) => (
+              {scatterSections.map((sec, sectionIndex) => (
                 <div className="le-gen-region-group" key={sec.id}>
                   <div className="le-gen-region">
-                    <select
-                      data-chrome-unit="inner-dropdown"
-                      className={chromeUnitClassNames('inner-dropdown', 'le-gen-region-terrain')}
+                    <HouseSelect<TileFamilyId>
+                      className="le-gen-region-select"
                       value={sec.terrain}
-                      onChange={(event) => setSectionTerrain(sec.id, event.target.value as TileFamilyId)}
-                      aria-label="Region terrain"
-                    >
-                      {LE_SCATTER_FAMILIES.map((family) => <option key={family.id} value={family.id}>{family.label}</option>)}
-                    </select>
+                      onChange={(terrain) => setSectionTerrain(sec.id, terrain)}
+                      ariaLabel={`Region ${sectionIndex + 1} terrain`}
+                      options={LE_SCATTER_FAMILIES.map((family) => ({ value: family.id, label: family.label }))}
+                    />
                     <input
                       type="range"
                       className="le-gen-region-slider"
@@ -5376,15 +5368,19 @@ export function LevelEditor(): ReactElement {
                     </div>
                   ) : null}
                   <div className="le-gen-cover">
-                    {sec.covers.map((c) => (
+                    {sec.covers.map((c, coverIndex) => (
                       <div className="le-gen-cover-entry" key={c.id}>
                         <div className="le-gen-cover-head">
                           <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-gen-cover-caret-btn', c.expanded && 'active')} onClick={() => toggleCoverEntryExpand(sec.id, c.id)} aria-expanded={c.expanded} aria-label={c.expanded ? 'Collapse cover settings' : 'Expand cover settings'}>
                             <span className="le-gen-cover-caret" aria-hidden="true">{c.expanded ? '▾' : '▸'}</span>
                           </button>
-                          <select data-chrome-unit="inner-dropdown" className={chromeUnitClassNames('inner-dropdown', 'le-gen-region-terrain')} value={c.type} onChange={(event) => setCoverType(sec.id, c.id, event.target.value as GroundCoverId)} aria-label="Cover set">
-                            {LE_COVER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                          </select>
+                          <HouseSelect<GroundCoverId>
+                            className="le-gen-cover-select"
+                            value={c.type}
+                            onChange={(type) => setCoverType(sec.id, c.id, type)}
+                            ariaLabel={`Region ${sectionIndex + 1} cover ${coverIndex + 1} set`}
+                            options={LE_COVER_TYPES.map((type) => ({ value: type.id, label: type.label }))}
+                          />
                           <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')} onClick={() => removeCover(sec.id, c.id)} title="Remove this cover">×</button>
                         </div>
                         {c.expanded ? (
@@ -5476,30 +5472,35 @@ export function LevelEditor(): ReactElement {
           <h2>Brush</h2>
           {tool === 'move' ? <p className="le-board-note">Drag a placed unit or prop to a new cell. Units keep their piece, side and facing; props keep their footprint and terrain rules.</p> : null}
           <div className="le-brush-pick">
-            <span className="le-brush-thumb">
-              {brushKind === 'unit'
-                ? <img src={unitBrushAsset.sprite(unitFaction, unitBrushDirection) ?? undefined} alt="" draggable={false} />
-                : brushKind === 'doodad'
-                ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
-                : brushKind === 'prop'
-                ? <img src={propHalfSrc(propBrushDef.spriteId, 'front')} alt="" draggable={false} />
-                : brushKind === 'cover'
-                ? <GroundCoverPreview asset={coverBrushAsset} />
-                : brushKind === 'zone'
-                ? <span className={`le-brush-thumb-zone le-zone-${activeZoneColor}`} aria-hidden="true" />
-                : wallTool
-                ? <img src={wallThumbSrc(wallBrushMaterial)} alt="" draggable={false} />
-                : wallArtTool
-                ? wallArtBrush ? <WallArtPreview art={wallArtBrush} zoom={0.46} /> : null
-                : fenceTool
-                ? <img src={activeFenceArtwork
-                  ? (fencePaintTarget === 'post' ? (activeFenceArtwork.post ?? activeFenceArtwork.railE) : activeFenceArtwork.railE)
-                  : (fencePaintTarget === 'post' ? fencePostThumbSrc(fenceBrushMaterial) : fenceThumbSrc(fenceBrushMaterial))} alt="" draggable={false} />
-                : featureKind
-                ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
-                : macroTileBrushAsset
-                ? <img className="le-thumb-macro" src={macroTileBrushAsset.src} alt="" draggable={false} />
-                : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
+            <span
+              data-chrome-unit="inner-box"
+              className={chromeUnitClassNames('inner-box', 'le-brush-thumb')}
+            >
+              <span className="le-brush-thumb-viewport">
+                {brushKind === 'unit'
+                  ? <img src={unitBrushAsset.sprite(unitFaction, unitBrushDirection) ?? undefined} alt="" draggable={false} />
+                  : brushKind === 'doodad'
+                  ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
+                  : brushKind === 'prop'
+                  ? <img src={propHalfSrc(propBrushDef.spriteId, 'front')} alt="" draggable={false} />
+                  : brushKind === 'cover'
+                  ? <GroundCoverPreview asset={coverBrushAsset} />
+                  : brushKind === 'zone'
+                  ? <span className={`le-brush-thumb-zone le-zone-${activeZoneColor}`} aria-hidden="true" />
+                  : wallTool
+                  ? <img src={wallThumbSrc(wallBrushMaterial)} alt="" draggable={false} />
+                  : wallArtTool
+                  ? wallArtBrush ? <WallArtPreview art={wallArtBrush} zoom={0.46} /> : null
+                  : fenceTool
+                  ? <img src={activeFenceArtwork
+                    ? (fencePaintTarget === 'post' ? (activeFenceArtwork.post ?? activeFenceArtwork.railE) : activeFenceArtwork.railE)
+                    : (fencePaintTarget === 'post' ? fencePostThumbSrc(fenceBrushMaterial) : fenceThumbSrc(fenceBrushMaterial))} alt="" draggable={false} />
+                  : featureKind
+                  ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
+                  : macroTileBrushAsset
+                  ? <img className="le-thumb-macro" src={macroTileBrushAsset.src} alt="" draggable={false} />
+                  : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
+              </span>
             </span>
             <span className="le-brush-meta">
               <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : wallTool ? `${WALL_MATERIAL_LABELS[wallBrushMaterial]} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${activeFenceArtwork?.label ?? FENCE_MATERIAL_LABELS[fenceBrushMaterial]} · ${fencePaintTarget}` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : macroTileBrushAsset?.label ?? brushAsset.label}</strong>
@@ -5542,7 +5543,7 @@ export function LevelEditor(): ReactElement {
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
               <div className="le-zone-select-controls">
-                <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Previous zone" title="Previous zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(-1)}>
+                <button type="button" data-chrome-unit="inner-chevron-key" className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Previous zone" title="Previous zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(-1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
                 </button>
                 <SelectFrame>
@@ -5559,7 +5560,7 @@ export function LevelEditor(): ReactElement {
                     ))}
                   </select>
                 </SelectFrame>
-                <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Next zone" title="Next zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(1)}>
+                <button type="button" data-chrome-unit="inner-chevron-key" className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Next zone" title="Next zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
                 </button>
                 <button type="button" data-chrome-unit="inner-minus-key" className={chromeUnitClassNames('inner-minus-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Remove selected zone" title="Remove selected zone" disabled={!activeZone} onClick={removeActiveZoneEntry}>
@@ -5766,7 +5767,7 @@ export function LevelEditor(): ReactElement {
               <div className="le-pal-group le-fence-artwork-picker">
                 <span className="le-pal-grouplabel">Artwork</span>
                 <div className="le-fence-artwork-cycle">
-                  <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Previous fence artwork" title="Previous fence artwork" onClick={() => stepFenceArtwork(-1)}>
+                  <button type="button" data-chrome-unit="inner-chevron-key" className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Previous fence artwork" title="Previous fence artwork" onClick={() => stepFenceArtwork(-1)}>
                     <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
                   </button>
                   <SelectFrame>
@@ -5774,7 +5775,7 @@ export function LevelEditor(): ReactElement {
                       {fenceArtCatalog.map((artwork) => <option key={artwork.id} value={artwork.id}>{artwork.label}</option>)}
                     </select>
                   </SelectFrame>
-                  <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Next fence artwork" title="Next fence artwork" onClick={() => stepFenceArtwork(1)}>
+                  <button type="button" data-chrome-unit="inner-chevron-key" className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Next fence artwork" title="Next fence artwork" onClick={() => stepFenceArtwork(1)}>
                     <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
                   </button>
                 </div>

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Guard for ADR-0081/0069/0070: empty outer control-panel frames must be overlays, not
+// Guard for ADR-0081/0069/0070/0093: empty outer control-panel frames must be overlays, not
 // layout borders that reserve a fake colored moat; house chrome in the focused
 // skirmish/editor control panels must consume outer/inner role variables instead
 // of local frame paths and widths. Media bytes and candidate-source validation
@@ -18,6 +18,8 @@ const chromeLabDefaults = JSON.parse(readFileSync(join(frontend, 'config/chrome-
 const chromeUnitRegistry = readFileSync(join(frontend, 'src/ui/chromeUnitRegistry.ts'), 'utf8');
 const levelEditor = readFileSync(join(frontend, 'src/ui/LevelEditor.tsx'), 'utf8');
 const levelEditorChromeConsumers = readFileSync(join(frontend, 'src/ui/LevelEditorChromeConsumers.tsx'), 'utf8');
+const houseSelect = readFileSync(join(frontend, 'src/ui/shared/HouseSelect.tsx'), 'utf8');
+const chromeBox = readFileSync(join(frontend, 'src/ui/shared/ChromeBox.tsx'), 'utf8');
 const skirmish = readFileSync(join(frontend, 'src/ui/Skirmish.tsx'), 'utf8');
 const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8');
 const installedChromeCss = readFileSync(join(frontend, 'src/ui/useInstalledChromeCss.ts'), 'utf8');
@@ -169,12 +171,54 @@ if (!/:is\(\.level-editor-screen, \.skirmish-screen\) \.le-outer-panel > \.le-ou
   failures.push('the titled panel shell must be an explicit full-bleed exception to the inherited contents box');
 }
 
-if (!/\.level-editor-screen \.le-layer-card > :not\(\.kit-panel-title\)\s*\{[\s\S]*?margin-inline\s*:\s*\n\s*calc\(var\(--le-control-content-inset\) \+ var\(--le-visible-content-left-inset\)\)\s*\n\s*calc\(var\(--le-control-content-inset\) \+ var\(--le-visible-content-right-inset\)\)\s*;/.test(css)) {
-  failures.push('layer card controls must use the contents box plus visible atom overhang while the title fill remains full-width');
+if (!/\.level-editor-screen \.le-layer-card > :not\(\.kit-panel-title\)\s*\{[\s\S]*?margin-inline\s*:\s*var\(--le-control-content-inset\)\s*;/.test(css)) {
+  failures.push('layer card control rails must align to the contents box while the title fill remains full-width');
 }
 
-if (!/className="le-control-divider-host"[\s\S]*?className="kit-divider"/.test(levelEditorChromeConsumers)) {
-  failures.push('level editor rail must place reusable kit-divider between fixed controls and dynamic content');
+const hudScrollBlock = blockFor('.le-hud-scroll');
+const hudScrollContentBlock = blockFor('.le-hud-scroll > .kit-scroll-content');
+if (!/margin-inline\s*:/.test(hudScrollBlock)
+  || !hudScrollBlock.includes('--le-inner-atom-left-overhang')
+  || !hudScrollBlock.includes('--le-inner-atom-right-overhang')
+  || !/padding-left\s*:\s*var\(--le-inner-atom-left-overhang/.test(hudScrollContentBlock)
+  || !/padding-right\s*:\s*calc\(18px \+ var\(--le-inner-atom-right-overhang/.test(hudScrollContentBlock)) {
+  failures.push('the Level Editor scrollport must expand a two-sided atom clip apron without moving its rail-aligned content');
+}
+for (const [selector, rightReserve] of [['.le-md-rules', '4px'], ['.le-md-detail', '6px']]) {
+  const block = blockFor(selector);
+  if (!/margin-inline\s*:/.test(block)
+    || !block.includes('--le-inner-atom-left-overhang')
+    || !block.includes('--le-inner-atom-right-overhang')
+    || !/overflow-x\s*:\s*hidden/.test(block)
+    || !/padding-left\s*:\s*var\(--le-inner-atom-left-overhang/.test(block)
+    || !block.includes(`padding-right: calc(${rightReserve} + var(--le-inner-atom-right-overhang, 0px))`)) {
+    failures.push(`${selector} must expose a two-sided atom clip apron while preserving its ${rightReserve} right reserve`);
+  }
+}
+if (/--le-inner-atom-(?:left|right)-footprint|--le-visible-content-(?:left|right)-inset/.test(`${css}\n${chromeRuntime}`)) {
+  failures.push('atom footprint must not become control, title, or section alignment state');
+}
+
+if (!/className="le-control-divider-host"[\s\S]*?<ChromeDivider role="outer"\s*\/>/.test(levelEditorChromeConsumers)) {
+  failures.push('level editor rail must place the shared outer-role ChromeDivider between fixed controls and dynamic content');
+}
+if (!/data-chrome-unit="inner-box"\s+className=\{chromeUnitClassNames\('inner-box', 'le-brush-thumb'\)\}/.test(levelEditor)) {
+  failures.push('shared Level Editor active-brush thumbnail must inherit the registered inner-box frame');
+}
+const activeBrushThumbBlock = blockFor('.le-brush-thumb');
+if (/\bbackground(?:-[\w-]+)?\s*:|\bborder(?:-[\w-]+)?\s*:/.test(activeBrushThumbBlock)) {
+  failures.push('active-brush thumbnail must not replace its registered inner-box frame with local CSS borders or backgrounds');
+}
+const activeBrushPickBlock = blockFor('.le-brush-pick');
+const activeBrushViewportBlock = blockFor('.le-brush-thumb-viewport');
+if (!/gap\s*:\s*calc\(8px \+ var\(--le-inner-atom-right-overhang, 0px\)\)/.test(activeBrushPickBlock)
+  || !/inset\s*:\s*0/.test(activeBrushViewportBlock)
+  || !/overflow\s*:\s*hidden/.test(activeBrushViewportBlock)) {
+  failures.push('active-brush thumbnail must keep local atom collision clearance and clip previews inside a nested viewport');
+}
+if (!/className="le-layer-picker-row"[\s\S]*?aria-label="Previous editor layer"[\s\S]*?<HouseSelect[\s\S]*?aria-label="Next editor layer"/.test(levelEditorChromeConsumers)
+  || !/<span className="kit-panel-title-text">Controls<\/span>/.test(levelEditorChromeConsumers)) {
+  failures.push('level editor Controls header must expose registered previous/dropdown/next layer navigation');
 }
 
 const dividerHost = blockFor('.level-editor-screen .le-control-divider-host');
@@ -182,7 +226,7 @@ if (!/position\s*:\s*relative\s*;/.test(dividerHost) || !/z-index\s*:\s*4\s*;/.t
   failures.push('level editor divider host must render above the frame overlay without catching interactions');
 }
 if (!/function\s+renderFrameEdgeTileDataUrl/.test(chromeRuntime)) {
-  failures.push('Chrome Lab divider must derive its rail from the normalized outer frame edge');
+  failures.push('Chrome Lab dividers must derive their rails from the normalized host frame edge');
 }
 if (/function\s+renderRailTileDataUrl/.test(chromeRuntime)) {
   failures.push('Chrome Lab divider must not flatten raw rail sources into its own tile path');
@@ -202,9 +246,10 @@ if (!/function\s+renderedRailThickness[\s\S]*?tune\.railThickness/.test(chromeRu
 if (!/function\s+roleContentInset[\s\S]*?tune\.contentPadding/.test(chromeRuntime)) {
   failures.push('Chrome Contents Box must have a pure content-owned inset derivation');
 }
-if (!/CHROME_LAB_STORAGE_VERSION\s*=\s*3/.test(chromeLab)
+if (!/CHROME_LAB_STORAGE_VERSION\s*=\s*4/.test(chromeLab)
+  || !/CHROME_LAB_PREVIOUS_STORAGE_VERSION\s*=\s*3/.test(chromeLab)
   || !/CHROME_LAB_LEGACY_STORAGE_VERSION\s*=\s*2/.test(chromeLab)) {
-  failures.push('Chrome Lab must migrate v2 tuning while dropping obsolete geometry fields');
+  failures.push('Chrome Lab must migrate v2/v3 tuning into role-owned divider geometry while dropping obsolete fields');
 }
 if (!/function\s+defaultRailFitForSource[\s\S]*?source\.kind === 'rail-repeat'\)\s*return 'tile';/.test(chromeRuntime)
   || chromeLabDefaults.inner?.railSourceId !== 'ui/chrome/inner/rail.png'
@@ -219,15 +264,18 @@ if (chromeLabDefaults.outer?.railSourceId !== 'ui/chrome/outer/rail.png'
 }
 const dividerTuneType = chromeRuntime.match(/type\s+DividerTune\s*=\s*\{[\s\S]*?\n\};/)?.[0] ?? '';
 if (/\b(?:railSourceId|railFit|railThickness|railX|railY|railUnderlap)\b/.test(dividerTuneType)) {
-  failures.push('Chrome Lab divider tuning must not own rail settings; divider rail always follows outer chrome');
+  failures.push('Chrome Lab divider tuning must not own rail settings; each divider rail follows its host chrome role');
 }
-if (!/railFit:\s*RailFit/.test(chromeRuntime) || !/<DividerControls[\s\S]*railFit=\{outer\.railFit\}/.test(chromeLab)) {
-  failures.push('Chrome Lab divider controls must preview the divider rail using the outer chrome fit');
+if (!/railFit:\s*RailFit/.test(chromeRuntime)
+  || !/<DividerControls role="outer"[^>]*railFit=\{outer\.railFit\}/.test(chromeLab)
+  || !/<DividerControls role="inner"[^>]*railFit=\{inner\.railFit\}/.test(chromeLab)) {
+  failures.push('Chrome Lab divider controls must preview each divider rail using its host chrome fit');
 }
-if (!/function\s+dividerCss\(outer:\s*RoleTune,\s*outerFrame:\s*FrameRender,\s*divider:\s*DividerRender\)/.test(chromeRuntime)
-  || !/\.level-editor-screen \.le-control-divider-host \.kit-divider::before\s*\{[\s\S]*?border-image-source:\s*url\("\$\{outerFrame\.url\}"\)/.test(chromeRuntime)
-  || !/\.level-editor-screen \.le-control-divider-host \.kit-divider\s*\{[\s\S]*?background:\s*none !important;/.test(chromeRuntime)) {
-  failures.push('Chrome Lab divider rail must render through the same outer frame border-image path, not a cropped background approximation');
+if (!/function\s+dividerCss\(role:\s*ChromeRole,\s*host:\s*RoleTune,\s*hostFrame:\s*FrameRender,\s*divider:\s*DividerRender\)/.test(chromeRuntime)
+  || !/data-chrome-divider-role/.test(chromeRuntime)
+  || !/border-image-source:\s*url\("\$\{hostFrame\.url\}"\)/.test(chromeRuntime)
+  || !/border-image-repeat:\s*\$\{borderImageRepeatForTune\(host\)\}/.test(chromeRuntime)) {
+  failures.push('Chrome Lab dividers must render through their host role frame border-image path, not a cropped background approximation');
 }
 if (!/(?:export\s+)?const\s+DEFAULT_DIVIDER_ATOM_SIZE\s*=\s*17\s*;/.test(chromeRuntime)) {
   failures.push('Chrome Lab divider atom default size must match the right-sized 17px divider cover atom family');
@@ -237,8 +285,9 @@ if (/DIVIDER_TEE_SOURCES/.test(chromeRuntime + chromeLab) || /divider-atoms-img2
 }
 if (!/dividerJointSources\s+as\s+liveDividerJointSources/.test(chromeRuntime)
   || !/export\s+function\s+dividerJointSources/.test(chromeRuntime)
-  || chromeLabDefaults.divider?.atomSourceId !== 'ui/chrome/divider/joint.png') {
-  failures.push('Chrome Lab divider picker must use backend candidates and the canonical installed divider slot');
+  || chromeLabDefaults.dividers?.outer?.atomSourceId !== 'ui/chrome/divider/joint.png'
+  || !['ui/chrome/divider/joint.png', 'none'].includes(chromeLabDefaults.dividers?.inner?.atomSourceId)) {
+  failures.push('Chrome Lab divider pickers must share the canonical installed divider slot while permitting a role to hide the joint');
 }
 if (chromeLabDefaults.outer?.atomSourceId !== 'ui/chrome/outer/atom.png'
   || chromeLabDefaults.inner?.atomSourceId !== 'ui/chrome/inner/atom.png'
@@ -257,9 +306,12 @@ for (const [key, value] of Object.entries({
   fillBoxTop: chromeLabDefaults.outer?.fillBoxTop,
   fillBoxBottom: chromeLabDefaults.outer?.fillBoxBottom,
   contentPadding: chromeLabDefaults.outer?.contentPadding,
-  dividerAtomSize: chromeLabDefaults.divider?.atomSize,
-  dividerAtomX: chromeLabDefaults.divider?.atomX,
-  dividerAtomY: chromeLabDefaults.divider?.atomY,
+  outerDividerBandHeight: chromeLabDefaults.dividers?.outer?.bandHeight,
+  outerDividerAtomSize: chromeLabDefaults.dividers?.outer?.atomSize,
+  outerDividerAtomX: chromeLabDefaults.dividers?.outer?.atomX,
+  outerDividerAtomY: chromeLabDefaults.dividers?.outer?.atomY,
+  innerDividerBandHeight: chromeLabDefaults.dividers?.inner?.bandHeight,
+  innerDividerAtomSize: chromeLabDefaults.dividers?.inner?.atomSize,
 })) {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     failures.push(`Chrome Lab committed defaults must include numeric ${key} tuning`);
@@ -314,6 +366,7 @@ for (const id of [
   'inner-toggle',
   'inner-list-row',
   'inner-tool-square',
+  'inner-chevron-key',
   'inner-select-tool',
   'inner-brush-tool',
   'inner-erase-tool',
@@ -362,6 +415,7 @@ for (const [parent, child] of [
   ['inner-locked-rectangle', 'inner-toggle'],
   ['inner-locked-rectangle', 'inner-list-row'],
   ['inner-locked-rectangle', 'inner-tool-square'],
+  ['inner-tool-square', 'inner-chevron-key'],
   ['inner-tool-square', 'inner-select-tool'],
   ['inner-tool-square', 'inner-brush-tool'],
   ['inner-tool-square', 'inner-erase-tool'],
@@ -378,8 +432,8 @@ for (const [parent, child] of [
     failures.push(`chrome unit registry order must list parent ${parent} before child ${child}`);
   }
 }
-if (!/id:\s*'inner-box'[\s\S]*?dimensionPolicy:\s*'free-form'[\s\S]*?controlPolicy:\s*'width-height'/.test(chromeUnitRegistry)) {
-  failures.push('inner-box must be the free-form inner chrome parent, not a square-specific class');
+if (!/id:\s*'inner-box'[\s\S]*?dimensionPolicy:\s*'free-form'[\s\S]*?controlPolicy:\s*'width-height-dividers'[\s\S]*?contentPolicy:\s*'slot'/.test(chromeUnitRegistry)) {
+  failures.push('inner-box must be the owner-operable free-form divided inner chrome parent');
 }
 if (/id:\s*'inner-rectangle'/.test(chromeUnitRegistry)) {
   failures.push('inner rectangle must not exist as a separate class layer; locked-height-rectangle is the rectangle contract');
@@ -390,6 +444,9 @@ if (!/id:\s*'inner-locked-rectangle'[\s\S]*?name:\s*'locked-height-rectangle'[\s
 if (!/id:\s*'inner-tool-square'[\s\S]*?name:\s*'tool-square'[\s\S]*?parentId:\s*'inner-locked-rectangle'/.test(chromeUnitRegistry)) {
   failures.push('inner tool square must inherit from locked-height-rectangle so it shares the height contract');
 }
+if (!/id:\s*'inner-chevron-key'[\s\S]*?name:\s*'chevron-key'[\s\S]*?parentId:\s*'inner-tool-square'[\s\S]*?variants:\s*\[[\s\S]*?name:\s*'previous'[\s\S]*?name:\s*'next'/.test(chromeUnitRegistry)) {
+  failures.push('inner chevron key must be a previous/next implementation beneath the shared tool-square contract');
+}
 if (!/id:\s*'inner-text-button'[\s\S]*?name:\s*'text-button'[\s\S]*?parentId:\s*'inner-locked-rectangle'/.test(chromeUnitRegistry)) {
   failures.push('inner text button must inherit from locked-height-rectangle and be the sole wide text command unit');
 }
@@ -397,10 +454,11 @@ if (!/id:\s*'inner-dropdown'[\s\S]*?name:\s*'dropdown'[\s\S]*?parentId:\s*'inner
   failures.push('inner dropdown must inherit from locked-height-rectangle and expose only its child class name');
 }
 for (const [id, kind, content] of [
-  ['inner-box', 'template', 'none'],
+  ['inner-box', 'template', 'slot'],
   ['inner-asset-swatch', 'template', 'slot'],
   ['inner-locked-rectangle', 'template', 'slot'],
   ['inner-tool-square', 'template', 'slot'],
+  ['inner-chevron-key', 'implementation', 'fixed'],
   ['inner-text-button', 'template', 'slot'],
   ['inner-toggle', 'template', 'slot'],
   ['inner-list-row', 'template', 'slot'],
@@ -439,6 +497,21 @@ if (!/chrome-unit-slot-marker/.test(chromeUnitAudit + css) || !/PLACEHOLDER_TEXT
 if (!/--le-inner-square\s*:\s*var\(--le-inner-control-h\)\s*;/.test(css)) {
   failures.push('inner square size must derive from the locked-height rectangle height token');
 }
+const chevronButtons = [
+  ...[...levelEditor.matchAll(/<button\b[\s\S]*?<\/button>/g)].map((match) => match[0]),
+  ...[...levelEditorChromeConsumers.matchAll(/<button\b[\s\S]*?<\/button>/g)].map((match) => match[0]),
+].filter((block) => block.includes('stepper-chevron'));
+if (chevronButtons.length !== 6 || chevronButtons.some((block) => !block.includes('data-chrome-unit="inner-chevron-key"') || !/chromeUnitClassNames\(\s*'inner-chevron-key'/.test(block))) {
+  failures.push('all six previous/next Level Editor controls must use the concrete inner-chevron-key hierarchy leaf');
+}
+if (!/unit\.id === 'inner-chevron-key'[\s\S]*?stepper-glyph stepper-chevron/.test(chromeUnitAudit)) {
+  failures.push('Chrome Lab must render the real previous/next chevron-key specimen instead of a generic tool-square fallback');
+}
+if (!/inset-inline-start:\s*4px\s*;/.test(blockFor('.stepper-chevron::before'))
+  || !/transform:\s*scaleX\(-1\)\s*;/.test(blockFor('.stepper-chevron-right'))
+  || blockFor('.stepper-chevron-right::before')) {
+  failures.push('previous/next chevrons must share one centered drawing and mirror the complete right glyph seat');
+}
 if (!/\.level-editor-screen \.settings-stepper \.settings-chrome-button\s*\{[\s\S]*?block-size:\s*var\(--le-inner-square\)\s*;[\s\S]*?inline-size:\s*var\(--le-inner-square\)\s*;[\s\S]*?min-block-size:\s*var\(--le-inner-square\)\s*;[\s\S]*?min-inline-size:\s*var\(--le-inner-square\)\s*;/.test(css)) {
   failures.push('level editor stepper plus/minus keys must share the inner tool-square dimensions');
 }
@@ -456,6 +529,7 @@ for (const id of [
   'inner-move-tool',
   'inner-undo-key',
   'inner-redo-key',
+  'inner-chevron-key',
   'inner-text-button',
 ]) {
   const selector = `[data-chrome-unit="${id}"]`;
@@ -473,6 +547,7 @@ for (const [label, text] of [
   ['Skirmish HUD', skirmishHud],
   ['Victory Conditions Editor', victoryConditionsEditor],
   ['Confirm Dialog', confirmDialog],
+  ['Chrome Box primitives', chromeBox],
 ]) {
   const ids = [
     ...[...text.matchAll(/data-chrome-unit="([^"]+)"/g)].map((match) => match[1]),
@@ -494,7 +569,6 @@ for (const selector of [
   '[data-chrome-consumer="level-editor-controls"]',
   '[data-chrome-consumer="events-overlay"]',
   '[data-chrome-consumer="skirmish-hud"]',
-  '.level-editor-screen .le-control-divider-host .kit-divider',
   '.le-icon-btn',
   '.le-action-toolbar .le-seg-btn',
   '.le-seg-icons .le-seg-btn',
@@ -505,11 +579,55 @@ for (const selector of [
   '.le-select-wrap',
   '.le-layer-select-wrap',
   '.le-event-select-wrap',
-  '.le-layer-select',
 ]) {
   if (!chromeUnitRegistry.includes(selector)) {
     failures.push(`house chrome selector must be represented in the chrome unit registry: ${selector}`);
   }
+}
+if (!chromeRuntime.includes("calc(-1 * var(--ds-space-3))")) {
+  failures.push('content-aligned panel titles must align to the rail-owned contents boundary without atom compensation');
+}
+if (/id:\s*'inner-dropdown'[\s\S]*?selectors:\s*\[[\s\S]*?'\.le-layer-select'/.test(chromeUnitRegistry)) {
+  failures.push('inner dropdown registry must frame the wrapper, not its native .le-layer-select child');
+}
+const houseSelectMenuBlock = blockFor('.house-select-menu');
+const houseSelectScrollBlock = blockFor('.house-select-menu-scroll');
+const houseSelectScrollContentBlock = blockFor('.house-select-menu-scroll > .kit-scroll-content');
+const houseSelectScrollRailBlock = blockFor('.house-select-menu-scroll > .kit-scroll-rail');
+const houseSelectOptionBlock = blockFor('.house-select-option');
+if (!/<KitScroll\s+className="house-select-menu-scroll"/.test(houseSelect)
+  || !/<InnerChromeBox[\s\S]*?className="house-select-menu-box"[\s\S]*?<ChromeDivider role="inner"/.test(houseSelect)
+  || /chromeUnitClassNames\('inner-list-row',\s*'house-select-option'/.test(houseSelect)
+  || /\.house-select-option'/.test(chromeUnitRegistry)
+  || !/overflow\s*:\s*visible/.test(houseSelectMenuBlock)
+  || !houseSelectScrollBlock.includes('--house-select-clip-apron-left')
+  || !houseSelectScrollBlock.includes('--house-select-clip-apron-right')
+  || !houseSelectScrollBlock.includes('--le-inner-divider-atom-left-overhang')
+  || !houseSelectScrollBlock.includes('--le-inner-divider-atom-right-overhang')
+  || !/padding-inline\s*:\s*var\(--house-select-clip-apron-left\) var\(--house-select-clip-apron-right\)/.test(houseSelectScrollContentBlock)
+  || !/right\s*:\s*calc\(3px \+ var\(--house-select-clip-apron-right\)\)/.test(houseSelectScrollRailBlock)
+  || !/overflow-x\s*:\s*hidden/.test(houseSelectScrollContentBlock)
+  || /overflow-x\s*:\s*(?:auto|scroll)/.test(houseSelectScrollContentBlock)
+  || /--le-inner-atom-(?:left|right)-(?:overhang|footprint)/.test(houseSelectOptionBlock)) {
+  failures.push('HouseSelect menus must be one divided inner box with a joint-safe clip apron, unframed rows, and vertical-only scrolling');
+}
+for (const side of ['left', 'right', 'top', 'bottom']) {
+  if (!houseSelect.includes(`paintOverhang('--le-inner-atom-${side}-overhang')`)) {
+    failures.push(`HouseSelect viewport placement must reserve live ${side} atom paint overhang`);
+  }
+}
+if (!/data-chrome-unit="inner-box"/.test(chromeBox)
+  || !/data-chrome-divider-role=\{role\}/.test(chromeBox)
+  || !/className=\{`kit-divider chrome-divider/.test(chromeBox)) {
+  failures.push('shared ChromeBox primitives must own the registered inner frame and role-keyed structural divider DOM');
+}
+if ((levelEditor.match(/<select\b[^>]*>/g) ?? []).some((opening) => /data-chrome-unit="inner-dropdown"|chromeUnitClassNames\('inner-dropdown'/.test(opening))) {
+  failures.push('Level Editor native selects must sit inside shared dropdown wrappers instead of wearing inner-dropdown chrome directly');
+}
+if (!/<HouseSelect<string>[\s\S]*?ariaLabel="Saved generated region"/.test(levelEditor)
+  || !/<HouseSelect<TileFamilyId>[\s\S]*?className="le-gen-region-select"[\s\S]*?ariaLabel=\{`Region \$\{sectionIndex \+ 1\} terrain`\}/.test(levelEditor)
+  || !/<HouseSelect<GroundCoverId>[\s\S]*?className="le-gen-cover-select"[\s\S]*?ariaLabel=\{`Region \$\{sectionIndex \+ 1\} cover \$\{coverIndex \+ 1\} set`\}/.test(levelEditor)) {
+  failures.push('Generate region, terrain, and cover selectors must use the shared HouseSelect component');
 }
 if (/generate-divider-atom-candidates/.test(readFileSync(join(frontend, 'package.json'), 'utf8'))) {
   failures.push('Chrome Lab divider atoms must not be regenerated from code-drawn placeholder geometry');
@@ -811,7 +929,7 @@ if (!focused) {
 }
 
 if (failures.length) {
-  console.error('\n✗ empty panel frame/chrome guard FAILED (ADR-0081/0069/0070):');
+  console.error('\n✗ empty panel frame/chrome guard FAILED (ADR-0081/0069/0070/0093):');
   for (const failure of failures) console.error('  - ' + failure);
   process.exit(1);
 }

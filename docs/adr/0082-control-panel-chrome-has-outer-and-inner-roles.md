@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: "accepted; divider ownership clause superseded by ADR-0092"
 date: 2026-07-06
 deciders: Nelson, Codex
+partially_superseded_by: "[ADR-0092](0092-dividers-inherit-their-host-chrome-role.md)"
 ---
 
 # ADR-0082: Control-panel chrome has outer and inner roles
@@ -157,3 +158,6 @@ square and tool square sizes cannot drift back in through local CSS.
 - Amended by [ADR-0083](0083-chrome-frame-geometry-is-derived-not-authored-state.md):
   rendered rail thickness is authored, generated frame geometry is derived, and
   Fill Box and Contents Box remain independent.
+- Divider ownership is superseded by
+  [ADR-0092](0092-dividers-inherit-their-host-chrome-role.md): structural
+  dividers now inherit either their outer or inner host role.

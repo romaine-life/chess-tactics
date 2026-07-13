@@ -41,6 +41,7 @@ export type ChromeUnitId =
   | 'inner-toggle'
   | 'inner-list-row'
   | 'inner-tool-square'
+  | 'inner-chevron-key'
   | 'inner-select-tool'
   | 'inner-brush-tool'
   | 'inner-erase-tool'
@@ -118,8 +119,6 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
       '[data-chrome-consumer="level-editor-controls"]',
       '[data-chrome-consumer="events-overlay"]',
       '[data-chrome-consumer="skirmish-hud"]',
-      '.level-editor-screen .le-control-divider-host',
-      '.level-editor-screen .le-control-divider-host .kit-divider',
     ],
     usage: [
       'Level Editor control rail',
@@ -134,12 +133,12 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     label: 'Inner box',
     role: 'inner',
     dimensionPolicy: 'free-form',
-    controlPolicy: 'width-height',
+    controlPolicy: 'width-height-dividers',
     catalogKind: 'template',
-    contentPolicy: 'none',
+    contentPolicy: 'slot',
     tone: 'structural',
     stateModel: 'static',
-    badge: 'free form',
+    badge: 'free box + dividers',
     token: '--le-chrome-inner-rail-w',
     defaultWidth: 180,
     minWidth: 64,
@@ -147,8 +146,11 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     defaultHeight: 112,
     minHeight: 44,
     maxHeight: 320,
+    defaultDividers: 2,
+    maxDividers: 12,
     selectors: [
       '[data-chrome-unit="inner-box"]',
+      '.le-brush-thumb',
       '.le-violations',
       '.le-status-current',
       '.le-material-values',
@@ -158,6 +160,8 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     ],
     usage: [
       'Base free-form primitive for inner-role controls',
+      'Containing box with repeatable structural dividers inherited from the inner rail',
+      'Level Editor active brush thumbnail shared by every brush kind',
       'Concrete inner controls inherit their geometry contract from child classes',
     ],
   },
@@ -335,13 +339,12 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     maxWidth: 620,
     selectors: [
       '.le-md-item',
-      '.house-select-option',
       '.palette-select-option',
       '[data-chrome-unit="inner-list-row"]',
     ],
     usage: [
       'Rules and event master-detail list rows',
-      'House and palette dropdown option rows',
+      'Palette dropdown option rows',
       'Selectable named rows with trailing status text',
     ],
   },
@@ -372,6 +375,50 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
       'Undo/redo history controls',
       'Small icon-only action controls',
       'Generator cover disclosure control',
+    ],
+  },
+  {
+    id: 'inner-chevron-key',
+    name: 'chevron-key',
+    label: 'Inner chevron key',
+    role: 'inner',
+    dimensionPolicy: 'locked-square',
+    controlPolicy: 'none',
+    catalogKind: 'implementation',
+    contentPolicy: 'fixed',
+    tone: 'neutral',
+    stateModel: 'disabled-capable',
+    badge: 'previous / next',
+    token: '--le-inner-square',
+    parentId: 'inner-tool-square',
+    selectors: [
+      '.le-layer-stepper-button.settings-chrome-button',
+      '[data-chrome-unit="inner-chevron-key"]',
+    ],
+    variants: [
+      {
+        name: 'previous',
+        label: 'Previous',
+        tone: 'neutral',
+        stateModel: 'disabled-capable',
+        specimenText: 'Previous',
+        className: 'stepper-chevron-left',
+        usage: 'Cycle backward through an ordered editor choice',
+      },
+      {
+        name: 'next',
+        label: 'Next',
+        tone: 'neutral',
+        stateModel: 'disabled-capable',
+        specimenText: 'Next',
+        className: 'stepper-chevron-right',
+        usage: 'Cycle forward through an ordered editor choice',
+      },
+    ],
+    usage: [
+      'Previous and next keys for the Level Editor layer picker',
+      'Previous and next keys for zone and fence artwork pickers',
+      'One centered chevron glyph mirrored between direction variants',
     ],
   },
   {
@@ -581,13 +628,14 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
       '.le-select-wrap',
       '.le-layer-select-wrap',
       '.le-event-select-wrap',
-      '.le-layer-select',
       '[data-chrome-unit="inner-dropdown"]',
     ],
     usage: [
       'Layer picker',
       'Zone picker',
       'Event template picker',
+      'Board faction control picker',
+      'Generate region, terrain, and cover pickers',
     ],
   },
 ];

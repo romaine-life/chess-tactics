@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: "accepted; outer-only divider clauses superseded by ADR-0092"
 date: 2026-07-10
 deciders: Nelson, Codex
+partially_superseded_by: "[ADR-0092](0092-dividers-inherit-their-host-chrome-role.md)"
 ---
 
 # ADR-0083: Chrome frame geometry is derived, not authored state
@@ -98,3 +99,6 @@ and `railY` values are dropped. New exports contain only the version 3 model.
 - Amended by [ADR-0084](0084-accepted-chrome-rails-are-native-size-directional-families.md):
   accepted installed rail art must match the authored thickness at 100% and
   provide native directional sources.
+- Outer-only divider derivation is superseded by
+  [ADR-0092](0092-dividers-inherit-their-host-chrome-role.md): each divider now
+  derives its rail and reach from its own host role.

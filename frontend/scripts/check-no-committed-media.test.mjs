@@ -290,7 +290,10 @@ describe('no-committed-media guard', () => {
         railSourceId: 'inner-rails-repeat-v4-02',
         railThickness: 7,
       },
-      divider: { atomSourceId: 'divider-atoms-pixellab-cover-v1-21', atomSize: 32 },
+      dividers: {
+        outer: { atomSourceId: 'divider-atoms-pixellab-cover-v1-21', atomSize: 32 },
+        inner: { atomSourceId: 'none', atomSize: 11 },
+      },
     });
     expect(chromeInstalledSourceAuthorityReason(
       'frontend/config/chrome-lab-defaults.json',
@@ -317,7 +320,10 @@ describe('no-committed-media guard', () => {
         railSourceId: '/assets/ui/chrome/inner/rail.png',
         railThickness: 7,
       },
-      divider: { atomSourceId: 'ui/chrome/divider/joint.png', atomSize: 32 },
+      dividers: {
+        outer: { atomSourceId: 'ui/chrome/divider/joint.png', atomSize: 32 },
+        inner: { atomSourceId: 'none', atomSize: 11 },
+      },
     });
     expect(chromeInstalledSourceAuthorityReason(
       'frontend/config/chrome-lab-defaults.json',
@@ -327,6 +333,22 @@ describe('no-committed-media guard', () => {
       'frontend/config/chrome-lab-defaults.json',
       canonicalBackendDefaults,
     )).toBe(false);
+    const hiddenCandidateDefaults = JSON.stringify({
+      ...JSON.parse(canonicalBackendDefaults),
+      candidate: { atomSourceId: 'private-candidate-version' },
+    });
+    expect(chromeInstalledSourceAuthorityReason(
+      'frontend/config/chrome-lab-defaults.json',
+      hiddenCandidateDefaults,
+    )).toMatch(/candidate\.atomSourceId.*generated candidate/i);
+    expect(isStaticPromotionAuthority(
+      'frontend/config/chrome-lab-defaults.json',
+      hiddenCandidateDefaults,
+    )).toBe(true);
+    expect(isStaticPromotionAuthority(
+      'frontend/config/chrome-lab-defaults.json',
+      canonicalBackendDefaults.replace('"none"', '"none?candidate-version"'),
+    )).toBe(true);
     expect(isStaticPromotionAuthority(
       'frontend/config/chrome-lab-defaults.json',
       canonicalBackendDefaults.replace('ui/chrome/divider/joint.png', 'ui/chrome/divider/atom.png'),

@@ -58,6 +58,8 @@ import {
   type DividerRender,
   type DividerJointSource,
   type DividerTune,
+  type DividerRenders,
+  type DividerTunes,
   type FrameRender,
   type RailFit,
   type RoleTune,
@@ -69,14 +71,15 @@ import {
 
 type PreviewMode = 'interact' | 'pan';
 type PreviewFocus = 'controls' | 'board' | 'current';
-type ChromeLabControlTab = 'preview' | 'outer' | 'inner' | 'divider';
+type ChromeLabControlTab = 'preview' | 'outer' | 'inner';
 type RoleControlTab = 'chrome' | 'rail' | 'atom' | 'divider' | 'title' | 'info';
 
-const CHROME_LAB_STORAGE_VERSION = 3;
+const CHROME_LAB_STORAGE_VERSION = 4;
+const CHROME_LAB_PREVIOUS_STORAGE_VERSION = 3;
 const CHROME_LAB_LEGACY_STORAGE_VERSION = 2;
 const CHROME_LAB_STORAGE_PREFIX = 'chess-tactics.chrome-lab';
 const SOURCE_PREVIEW_STAGE_LIMIT: SourcePreviewBox = { width: 264, height: 180 };
-const CHROME_LAB_CONTROL_TAB_IDS: readonly ChromeLabControlTab[] = ['preview', 'outer', 'inner', 'divider'];
+const CHROME_LAB_CONTROL_TAB_IDS: readonly ChromeLabControlTab[] = ['preview', 'outer', 'inner'];
 const ROLE_CONTROL_TAB_IDS: readonly RoleControlTab[] = ['chrome', 'rail', 'atom', 'divider', 'title', 'info'];
 const PREVIEW_FOCUS_IDS: readonly PreviewFocus[] = ['controls', 'board', 'current'];
 const PREVIEW_MODE_IDS: readonly PreviewMode[] = ['interact', 'pan'];
@@ -117,7 +120,7 @@ type ChromeLabTuneState = {
   innerRoleTab: RoleControlTab;
   outer: RoleTune;
   inner: RoleTune;
-  divider: DividerTune;
+  dividers: DividerTunes;
 };
 
 type StoredChromeLabTuneState = ChromeLabTuneState & {
@@ -155,7 +158,10 @@ function chromeLabDefaultState(): ChromeLabTuneState {
     innerRoleTab: 'atom',
     outer: roleDefault('outer'),
     inner: roleDefault('inner'),
-    divider: dividerDefault(),
+    dividers: {
+      outer: dividerDefault('outer'),
+      inner: dividerDefault('inner'),
+    },
   };
 }
 
@@ -296,13 +302,14 @@ function roleTuneFromStorage(role: ChromeRole, value: unknown): RoleTune {
   return tune;
 }
 
-function dividerTuneFromStorage(value: unknown): DividerTune {
-  const defaults = dividerDefault();
+function dividerTuneFromStorage(role: ChromeRole, value: unknown): DividerTune {
+  const defaults = dividerDefault(role);
   if (!isRecord(value)) return defaults;
   return {
     atomSourceId: dividerAtomSourceId(value.atomSourceId, defaults.atomSourceId),
     atomTurns: turnFrom(value.atomTurns, defaults.atomTurns),
     atomSize: numberFrom(value.atomSize, defaults.atomSize),
+    bandHeight: numberFrom(value.bandHeight, defaults.bandHeight),
     atomX: numberFrom(value.atomX, defaults.atomX),
     atomY: numberFrom(value.atomY, defaults.atomY),
     atomLeftX: numberFrom(value.atomLeftX, defaults.atomLeftX),
@@ -323,21 +330,35 @@ function chromeLabStateFromStorage(targetId: string): ChromeLabTuneState {
   if (typeof window === 'undefined') return defaults;
   try {
     const raw = window.localStorage.getItem(chromeLabStorageKey(targetId))
+      ?? window.localStorage.getItem(chromeLabStorageKey(targetId, CHROME_LAB_PREVIOUS_STORAGE_VERSION))
       ?? window.localStorage.getItem(chromeLabStorageKey(targetId, CHROME_LAB_LEGACY_STORAGE_VERSION));
     if (!raw) return defaults;
     const parsed: unknown = JSON.parse(raw);
-    if (!isRecord(parsed) || (parsed.version !== CHROME_LAB_STORAGE_VERSION && parsed.version !== CHROME_LAB_LEGACY_STORAGE_VERSION)) return defaults;
+    if (!isRecord(parsed) || ![
+      CHROME_LAB_STORAGE_VERSION,
+      CHROME_LAB_PREVIOUS_STORAGE_VERSION,
+      CHROME_LAB_LEGACY_STORAGE_VERSION,
+    ].includes(parsed.version as number)) return defaults;
+    const previousStandaloneDivider = parsed.controlTab === 'divider';
+    const storedDividers = isRecord(parsed.dividers) ? parsed.dividers : null;
     const state: ChromeLabTuneState = {
       previewMode: tabFrom(parsed.previewMode, ['interact', 'pan'] as const, defaults.previewMode),
       previewFocus: tabFrom(parsed.previewFocus, ['controls', 'board', 'current'] as const, defaults.previewFocus),
-      controlTab: tabFrom(parsed.controlTab, ['preview', 'outer', 'inner', 'divider'] as const, defaults.controlTab),
-      outerRoleTab: tabFrom(parsed.outerRoleTab, ['chrome', 'rail', 'atom', 'divider', 'title', 'info'] as const, defaults.outerRoleTab),
-      innerRoleTab: tabFrom(parsed.innerRoleTab, ['chrome', 'rail', 'atom', 'info'] as const, defaults.innerRoleTab),
+      controlTab: previousStandaloneDivider
+        ? 'outer'
+        : tabFrom(parsed.controlTab, CHROME_LAB_CONTROL_TAB_IDS, defaults.controlTab),
+      outerRoleTab: previousStandaloneDivider
+        ? 'divider'
+        : tabFrom(parsed.outerRoleTab, ROLE_CONTROL_TAB_IDS, defaults.outerRoleTab),
+      innerRoleTab: tabFrom(parsed.innerRoleTab, ROLE_CONTROL_TAB_IDS, defaults.innerRoleTab),
       outer: roleTuneFromStorage('outer', parsed.outer),
       inner: roleTuneFromStorage('inner', parsed.inner),
-      divider: dividerTuneFromStorage(parsed.divider),
+      dividers: {
+        outer: dividerTuneFromStorage('outer', storedDividers?.outer ?? parsed.divider),
+        inner: dividerTuneFromStorage('inner', storedDividers?.inner),
+      },
     };
-    if (parsed.version === CHROME_LAB_LEGACY_STORAGE_VERSION) saveChromeLabState(targetId, state);
+    if (parsed.version !== CHROME_LAB_STORAGE_VERSION) saveChromeLabState(targetId, state);
     return state;
   } catch {
     return defaults;
@@ -358,7 +379,7 @@ function saveChromeLabState(targetId: string, state: ChromeLabTuneState): void {
   }
 }
 
-async function saveChromeLabDefaultsToDisk(payload: { target: string; outer: RoleTune; inner: RoleTune; divider: DividerTune }): Promise<string> {
+async function saveChromeLabDefaultsToDisk(payload: { target: string; outer: RoleTune; inner: RoleTune; dividers: DividerTunes }): Promise<string> {
   const response = await fetch('/__chrome-lab/defaults', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -986,17 +1007,17 @@ function DividerJointPreview({ source }: { source: DividerJointSource }): ReactE
 }
 
 function DividerControls({
+  role,
   tune,
   onTune,
   render,
   railFit,
-  embedded = false,
 }: {
+  role: ChromeRole;
   tune: DividerTune;
   onTune: (patch: Partial<DividerTune>) => void;
   render: DividerRender;
   railFit: RailFit;
-  embedded?: boolean;
 }): ReactElement {
   const sources = dividerJointSources();
   const source = dividerJointSourceById(tune.atomSourceId);
@@ -1006,15 +1027,17 @@ function DividerControls({
     const next = sources[(base + delta + sources.length) % sources.length];
     onTune({ atomSourceId: next.id });
   };
-  const defaults = dividerDefault();
+  const defaults = dividerDefault(role);
   const hasAtom = tune.atomSourceId !== NO_ATOM_SOURCE_ID;
   const jointScalePercent = sourceScalePercent(tune.atomSize, source);
   const railRepeat = railFit === 'tile' ? 'repeat-x' : 'no-repeat';
   const railSize = railFit === 'tile'
     ? `${render.railTileWidth}px ${render.railHeight}px`
     : `100% ${render.railHeight}px`;
-  const controls = (
+  const roleLabel = role === 'outer' ? 'Outer' : 'Inner';
+  return (
     <section className="chrome-lab-subsection chrome-lab-subpane">
+          <p className="chrome-lab-note">Installed joint material is shared by both roles; {roleLabel.toLowerCase()} divider geometry is independent.</p>
           <div className="chrome-lab-frame-preview">
             <div
               className="chrome-lab-divider-mini"
@@ -1026,6 +1049,14 @@ function DividerControls({
             />
             <span>Divider row - height {render.height}px</span>
           </div>
+          <SliderRow
+            label={<>Divider band height - {tune.bandHeight}px</>}
+            value={tune.bandHeight}
+            set={(value) => onTune({ bandHeight: value })}
+            min={1}
+            max={96}
+            dflt={defaults.bandHeight}
+          />
           <label className="tileset-category-select">
             <span>Joint atom</span>
             <select value={tune.atomSourceId} onChange={(event) => onTune({ atomSourceId: event.target.value })}>
@@ -1077,15 +1108,6 @@ function DividerControls({
           )}
     </section>
   );
-  if (embedded) return controls;
-  return (
-    <section className="chrome-lab-section chrome-lab-pane" aria-label="Panel Divider">
-      <h3 className="chrome-lab-pane-title">Divider Atom</h3>
-      <div className="chrome-lab-section-body">
-        {controls}
-      </div>
-    </section>
-  );
 }
 
 function InheritedChromeControls({
@@ -1130,10 +1152,10 @@ function ChromeLabUnitChromeControls({
   unitId,
   outer,
   inner,
-  divider,
+  dividers,
   outerFrame,
   innerFrame,
-  dividerRender,
+  dividerRenders,
   outerRoleTab,
   innerRoleTab,
   onOuterRoleTab,
@@ -1147,17 +1169,17 @@ function ChromeLabUnitChromeControls({
   unitId: ChromeUnitId;
   outer: RoleTune;
   inner: RoleTune;
-  divider: DividerTune;
+  dividers: DividerTunes;
   outerFrame: FrameRender;
   innerFrame: FrameRender;
-  dividerRender: DividerRender;
+  dividerRenders: DividerRenders;
   outerRoleTab: RoleControlTab;
   innerRoleTab: RoleControlTab;
   onOuterRoleTab: (tab: RoleControlTab) => void;
   onInnerRoleTab: (tab: RoleControlTab) => void;
   onOuter: (patch: Partial<RoleTune>) => void;
   onInner: (patch: Partial<RoleTune>) => void;
-  onDivider: (patch: Partial<DividerTune>) => void;
+  onDivider: (role: ChromeRole, patch: Partial<DividerTune>) => void;
   onJumpUnit: (id: ChromeUnitId) => void;
   infoControls: ReactNode;
 }): ReactElement {
@@ -1172,7 +1194,7 @@ function ChromeLabUnitChromeControls({
           activeTab={outerRoleTab}
           onActiveTab={onOuterRoleTab}
           onTune={onOuter}
-          dividerControls={<DividerControls tune={divider} render={dividerRender} railFit={outer.railFit} onTune={onDivider} embedded />}
+          dividerControls={<DividerControls role="outer" tune={dividers.outer} render={dividerRenders.outer} railFit={outer.railFit} onTune={(patch) => onDivider('outer', patch)} />}
           titleControls={<TitleTextControls tune={outer} onTune={onOuter} />}
           infoControls={infoControls}
         />
@@ -1182,7 +1204,7 @@ function ChromeLabUnitChromeControls({
   if (unitId === 'inner-box') {
     return (
       <>
-        <p className="chrome-lab-note">This class owns the inner chrome family. Child controls inherit this chrome and only expose their own dimensions/content.</p>
+        <p className="chrome-lab-note">This class owns the inner chrome family. Child controls inherit its box and divider geometry.</p>
         <RoleChromeControls
           role="inner"
           tune={inner}
@@ -1190,6 +1212,7 @@ function ChromeLabUnitChromeControls({
           activeTab={innerRoleTab}
           onActiveTab={onInnerRoleTab}
           onTune={onInner}
+          dividerControls={<DividerControls role="inner" tune={dividers.inner} render={dividerRenders.inner} railFit={inner.railFit} onTune={(patch) => onDivider('inner', patch)} />}
           infoControls={infoControls}
         />
       </>
@@ -1426,10 +1449,13 @@ function ChromeLabUnitViewer({
   const [outerPreviewId, setOuterPreviewIdState] = useState(() => chromeLabRouteParam('chromePreview') ?? 'template');
   const [outer, setOuter] = useState<RoleTune>(initialLabState.outer);
   const [inner, setInner] = useState<RoleTune>(initialLabState.inner);
-  const [divider, setDivider] = useState<DividerTune>(initialLabState.divider);
+  const [dividers, setDividers] = useState<DividerTunes>(initialLabState.dividers);
   const [outerFrame, setOuterFrame] = useState<FrameRender>(EMPTY_FRAME);
   const [innerFrame, setInnerFrame] = useState<FrameRender>(EMPTY_FRAME);
-  const [dividerRender, setDividerRender] = useState<DividerRender>(EMPTY_DIVIDER);
+  const [dividerRenders, setDividerRenders] = useState<DividerRenders>({
+    outer: EMPTY_DIVIDER,
+    inner: EMPTY_DIVIDER,
+  });
   const [copied, setCopied] = useState(false);
   const [exportText, setExportText] = useState('');
   const [saveMsg, setSaveMsg] = useState('');
@@ -1455,9 +1481,9 @@ function ChromeLabUnitViewer({
       innerRoleTab,
       outer,
       inner,
-      divider,
+      dividers,
     });
-  }, [divider, initialLabState.controlTab, initialLabState.previewFocus, initialLabState.previewMode, inner, innerRoleTab, outer, outerRoleTab]);
+  }, [dividers, initialLabState.controlTab, initialLabState.previewFocus, initialLabState.previewMode, inner, innerRoleTab, outer, outerRoleTab]);
 
   useEffect(() => {
     let live = true;
@@ -1473,13 +1499,23 @@ function ChromeLabUnitViewer({
 
   useEffect(() => {
     let live = true;
-    composeDividerRender(outer, divider).then((frame) => { if (live) setDividerRender(frame); }).catch(() => { if (live) setDividerRender(EMPTY_DIVIDER); });
+    composeDividerRender(outer, dividers.outer)
+      .then((frame) => { if (live) setDividerRenders((current) => ({ ...current, outer: frame })); })
+      .catch(() => { if (live) setDividerRenders((current) => ({ ...current, outer: EMPTY_DIVIDER })); });
     return () => { live = false; };
-  }, [divider, outer]);
+  }, [dividers.outer, outer]);
 
-  const css = frameCss(outer, inner, outerFrame, innerFrame, dividerRender);
+  useEffect(() => {
+    let live = true;
+    composeDividerRender(inner, dividers.inner)
+      .then((frame) => { if (live) setDividerRenders((current) => ({ ...current, inner: frame })); })
+      .catch(() => { if (live) setDividerRenders((current) => ({ ...current, inner: EMPTY_DIVIDER })); });
+    return () => { live = false; };
+  }, [dividers.inner, inner]);
+
+  const css = frameCss(outer, inner, outerFrame, innerFrame, dividerRenders);
   const copyJson = async (): Promise<void> => {
-    const payload = JSON.stringify(installedChromeTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, divider), null, 2);
+    const payload = JSON.stringify(installedChromeTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, dividers), null, 2);
     setExportText(payload);
     try {
       await navigator.clipboard.writeText(payload);
@@ -1492,7 +1528,7 @@ function ChromeLabUnitViewer({
   const saveDefaults = async (): Promise<void> => {
     setSaveMsg('saving...');
     try {
-      const path = await saveChromeLabDefaultsToDisk(installedChromeTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, divider));
+      const path = await saveChromeLabDefaultsToDisk(installedChromeTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, dividers));
       setSaveMsg(`saved ${path}`);
     } catch (error) {
       setSaveMsg(`error: ${error instanceof Error ? error.message : String(error)}`);
@@ -1523,17 +1559,20 @@ function ChromeLabUnitViewer({
         unitId={target.unitId}
         outer={outer}
         inner={inner}
-        divider={divider}
+        dividers={dividers}
         outerFrame={outerFrame}
         innerFrame={innerFrame}
-        dividerRender={dividerRender}
+        dividerRenders={dividerRenders}
         outerRoleTab={outerRoleTab}
         innerRoleTab={innerRoleTab}
         onOuterRoleTab={setOuterRoleTab}
         onInnerRoleTab={setInnerRoleTab}
         onOuter={(patch) => setOuter((current) => ({ ...current, ...patch }))}
         onInner={(patch) => setInner((current) => ({ ...current, ...patch }))}
-        onDivider={(patch) => setDivider((current) => ({ ...current, ...patch }))}
+        onDivider={(role, patch) => setDividers((current) => ({
+          ...current,
+          [role]: { ...current[role], ...patch },
+        }))}
         onJumpUnit={(id) => onTargetId(`unit-${id}`)}
         infoControls={infoWithExport}
       />
@@ -1574,18 +1613,22 @@ function ChromeLabPageViewer({
   const previewMetricsRef = useRef<PreviewScrollMetrics | null>(null);
   const { canvasStyle, frameStyle } = useWindowScaledPreview(zoom);
   const [initialLabState] = useState<ChromeLabTuneState>(() => chromeLabStateFromStorage(target.id));
+  const legacyStandaloneDividerRoute = chromeLabRouteParam('chromeTab') === 'divider';
   const [loadedTargetId, setLoadedTargetId] = useState(target.id);
   const [previewMode, setPreviewModeState] = useState<PreviewMode>(() => chromeLabRouteTab('chromePointer', PREVIEW_MODE_IDS, initialLabState.previewMode));
   const [previewFocus, setPreviewFocusState] = useState<PreviewFocus>(() => chromeLabRouteTab('chromeFocus', PREVIEW_FOCUS_IDS, initialLabState.previewFocus));
-  const [controlTab, setControlTabState] = useState<ChromeLabControlTab>(() => chromeLabRouteTab('chromeTab', CHROME_LAB_CONTROL_TAB_IDS, initialLabState.controlTab));
-  const [outerRoleTab, setOuterRoleTabState] = useState<RoleControlTab>(() => chromeLabRouteTab('chromeOuterTab', ROLE_CONTROL_TAB_IDS, initialLabState.outerRoleTab));
+  const [controlTab, setControlTabState] = useState<ChromeLabControlTab>(() => legacyStandaloneDividerRoute ? 'outer' : chromeLabRouteTab('chromeTab', CHROME_LAB_CONTROL_TAB_IDS, initialLabState.controlTab));
+  const [outerRoleTab, setOuterRoleTabState] = useState<RoleControlTab>(() => legacyStandaloneDividerRoute ? 'divider' : chromeLabRouteTab('chromeOuterTab', ROLE_CONTROL_TAB_IDS, initialLabState.outerRoleTab));
   const [innerRoleTab, setInnerRoleTabState] = useState<RoleControlTab>(() => chromeLabRouteTab('chromeInnerTab', ROLE_CONTROL_TAB_IDS, initialLabState.innerRoleTab));
   const [outer, setOuter] = useState<RoleTune>(initialLabState.outer);
   const [inner, setInner] = useState<RoleTune>(initialLabState.inner);
-  const [divider, setDivider] = useState<DividerTune>(initialLabState.divider);
+  const [dividers, setDividers] = useState<DividerTunes>(initialLabState.dividers);
   const [outerFrame, setOuterFrame] = useState<FrameRender>(EMPTY_FRAME);
   const [innerFrame, setInnerFrame] = useState<FrameRender>(EMPTY_FRAME);
-  const [dividerRender, setDividerRender] = useState<DividerRender>(EMPTY_DIVIDER);
+  const [dividerRenders, setDividerRenders] = useState<DividerRenders>({
+    outer: EMPTY_DIVIDER,
+    inner: EMPTY_DIVIDER,
+  });
   const [copied, setCopied] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const setPreviewMode = (mode: PreviewMode): void => {
@@ -1614,12 +1657,13 @@ function ChromeLabPageViewer({
     const next = chromeLabStateFromStorage(target.id);
     setPreviewModeState(chromeLabRouteTab('chromePointer', PREVIEW_MODE_IDS, next.previewMode));
     setPreviewFocusState(chromeLabRouteTab('chromeFocus', PREVIEW_FOCUS_IDS, next.previewFocus));
-    setControlTabState(chromeLabRouteTab('chromeTab', CHROME_LAB_CONTROL_TAB_IDS, next.controlTab));
-    setOuterRoleTabState(chromeLabRouteTab('chromeOuterTab', ROLE_CONTROL_TAB_IDS, next.outerRoleTab));
+    const legacyDividerRoute = chromeLabRouteParam('chromeTab') === 'divider';
+    setControlTabState(legacyDividerRoute ? 'outer' : chromeLabRouteTab('chromeTab', CHROME_LAB_CONTROL_TAB_IDS, next.controlTab));
+    setOuterRoleTabState(legacyDividerRoute ? 'divider' : chromeLabRouteTab('chromeOuterTab', ROLE_CONTROL_TAB_IDS, next.outerRoleTab));
     setInnerRoleTabState(chromeLabRouteTab('chromeInnerTab', ROLE_CONTROL_TAB_IDS, next.innerRoleTab));
     setOuter(next.outer);
     setInner(next.inner);
-    setDivider(next.divider);
+    setDividers(next.dividers);
     setLoadedTargetId(target.id);
   }, [loadedTargetId, target.id]);
 
@@ -1633,9 +1677,9 @@ function ChromeLabPageViewer({
       innerRoleTab,
       outer,
       inner,
-      divider,
+      dividers,
     });
-  }, [controlTab, divider, inner, innerRoleTab, loadedTargetId, outer, outerRoleTab, previewFocus, previewMode, target.id]);
+  }, [controlTab, dividers, inner, innerRoleTab, loadedTargetId, outer, outerRoleTab, previewFocus, previewMode, target.id]);
 
   useEffect(() => {
     let live = true;
@@ -1651,11 +1695,21 @@ function ChromeLabPageViewer({
 
   useEffect(() => {
     let live = true;
-    composeDividerRender(outer, divider).then((frame) => { if (live) setDividerRender(frame); }).catch(() => { if (live) setDividerRender(EMPTY_DIVIDER); });
+    composeDividerRender(outer, dividers.outer)
+      .then((frame) => { if (live) setDividerRenders((current) => ({ ...current, outer: frame })); })
+      .catch(() => { if (live) setDividerRenders((current) => ({ ...current, outer: EMPTY_DIVIDER })); });
     return () => { live = false; };
-  }, [divider, outer]);
+  }, [dividers.outer, outer]);
 
-  const css = frameCss(outer, inner, outerFrame, innerFrame, dividerRender);
+  useEffect(() => {
+    let live = true;
+    composeDividerRender(inner, dividers.inner)
+      .then((frame) => { if (live) setDividerRenders((current) => ({ ...current, inner: frame })); })
+      .catch(() => { if (live) setDividerRenders((current) => ({ ...current, inner: EMPTY_DIVIDER })); });
+    return () => { live = false; };
+  }, [dividers.inner, inner]);
+
+  const css = frameCss(outer, inner, outerFrame, innerFrame, dividerRenders);
   useInjectedStyle(iframeRef, 'chrome-lab-runtime', css);
 
   const readPreviewMetrics = (): PreviewScrollMetrics | null => {
@@ -1729,10 +1783,10 @@ function ChromeLabPageViewer({
     setInnerRoleTab(defaults.innerRoleTab);
     setOuter(defaults.outer);
     setInner(defaults.inner);
-    setDivider(defaults.divider);
+    setDividers(defaults.dividers);
   };
   const copyJson = async (): Promise<void> => {
-    const payload = JSON.stringify(installedChromeTuningPayload(target.id, outer, inner, divider), null, 2);
+    const payload = JSON.stringify(installedChromeTuningPayload(target.id, outer, inner, dividers), null, 2);
     try {
       await navigator.clipboard.writeText(payload);
       setCopied(true);
@@ -1744,7 +1798,7 @@ function ChromeLabPageViewer({
   const saveDefaults = async (): Promise<void> => {
     setSaveMsg('saving...');
     try {
-      const path = await saveChromeLabDefaultsToDisk(installedChromeTuningPayload(target.id, outer, inner, divider));
+      const path = await saveChromeLabDefaultsToDisk(installedChromeTuningPayload(target.id, outer, inner, dividers));
       setSaveMsg(`saved ${path}`);
     } catch (error) {
       setSaveMsg(`error: ${error instanceof Error ? error.message : String(error)}`);
@@ -1829,7 +1883,6 @@ function ChromeLabPageViewer({
               {tabButton('preview', 'Preview')}
               {tabButton('outer', 'Outer')}
               {tabButton('inner', 'Inner')}
-              {tabButton('divider', 'Divider')}
             </div>
 
             <div className="chrome-lab-tabpanels">
@@ -1870,6 +1923,7 @@ function ChromeLabPageViewer({
                     activeTab={outerRoleTab}
                     onActiveTab={setOuterRoleTab}
                     onTune={(patch) => setOuter((current) => ({ ...current, ...patch }))}
+                    dividerControls={<DividerControls role="outer" tune={dividers.outer} render={dividerRenders.outer} railFit={outer.railFit} onTune={(patch) => setDividers((current) => ({ ...current, outer: { ...current.outer, ...patch } }))} />}
                     titleControls={<TitleTextControls tune={outer} onTune={(patch) => setOuter((current) => ({ ...current, ...patch }))} />}
                   />
                 </div>
@@ -1883,12 +1937,8 @@ function ChromeLabPageViewer({
                     activeTab={innerRoleTab}
                     onActiveTab={setInnerRoleTab}
                     onTune={(patch) => setInner((current) => ({ ...current, ...patch }))}
+                    dividerControls={<DividerControls role="inner" tune={dividers.inner} render={dividerRenders.inner} railFit={inner.railFit} onTune={(patch) => setDividers((current) => ({ ...current, inner: { ...current.inner, ...patch } }))} />}
                   />
-                </div>
-              ) : null}
-              {controlTab === 'divider' ? (
-                <div id="chrome-lab-panel-divider" role="tabpanel" aria-labelledby="chrome-lab-tab-divider">
-                  <DividerControls tune={divider} render={dividerRender} railFit={outer.railFit} onTune={(patch) => setDivider((current) => ({ ...current, ...patch }))} />
                 </div>
               ) : null}
             </div>

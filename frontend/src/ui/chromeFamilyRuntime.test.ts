@@ -22,13 +22,21 @@ const frame = (url: string, slice: number): FrameRender => ({
   atomOverlay: null,
 });
 
-const divider: DividerRender = {
+const outerDivider: DividerRender = {
   railUrl: 'divider.png',
   railHeight: 12,
   railTileWidth: 24,
-  height: 17,
+  height: 34,
   atomOverlay: null,
 };
+const innerDivider: DividerRender = {
+  railUrl: 'inner-divider.png',
+  railHeight: 5,
+  railTileWidth: 10,
+  height: 7,
+  atomOverlay: null,
+};
+const dividers = { outer: outerDivider, inner: innerDivider };
 
 describe('chrome family geometry ownership (ADR-0083)', () => {
   it('keeps installed media selectors on canonical backend slots', () => {
@@ -40,7 +48,16 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
       atomSourceId: CHROME_LIVE_SLOTS.innerAtom,
       railSourceId: CHROME_LIVE_SLOTS.innerRail,
     });
-    expect(dividerDefault().atomSourceId).toBe(CHROME_LIVE_SLOTS.dividerJoint);
+    expect(dividerDefault('outer')).toMatchObject({
+      atomSourceId: CHROME_LIVE_SLOTS.dividerJoint,
+      bandHeight: 34,
+    });
+    expect(dividerDefault('inner')).toMatchObject({
+      atomSourceId: CHROME_LIVE_SLOTS.dividerJoint,
+      bandHeight: 7,
+      atomX: 3.5,
+      atomLeftX: -0.5,
+    });
   });
 
   it('exports geometry without promoting auditioned version ids into defaults', () => {
@@ -48,7 +65,10 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
       'level-editor',
       { ...roleDefault('outer'), atomSourceId: 'private-atom-version', railSourceId: 'private-rail-version' },
       { ...roleDefault('inner'), atomSourceId: 'private-inner-atom', railSourceId: 'private-inner-rail' },
-      { ...dividerDefault(), atomSourceId: 'none' },
+      {
+        outer: { ...dividerDefault('outer'), atomSourceId: 'private-divider-version' },
+        inner: { ...dividerDefault('inner'), atomSourceId: 'none' },
+      },
     );
     expect(payload.outer).toMatchObject({
       atomSourceId: CHROME_LIVE_SLOTS.outerAtom,
@@ -58,7 +78,8 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
       atomSourceId: CHROME_LIVE_SLOTS.innerAtom,
       railSourceId: CHROME_LIVE_SLOTS.innerRail,
     });
-    expect(payload.divider.atomSourceId).toBe(CHROME_LIVE_SLOTS.dividerJoint);
+    expect(payload.dividers.outer.atomSourceId).toBe(CHROME_LIVE_SLOTS.dividerJoint);
+    expect(payload.dividers.inner.atomSourceId).toBe('none');
   });
 
   it('keeps derived frame geometry and invisible rail seats out of authored state', () => {
@@ -86,22 +107,74 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
       contentPadding: 25,
     };
     const inner = roleDefault('inner');
-    const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), divider);
+    const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), dividers);
 
     expect(css).toContain('--le-chrome-outer-rail-w: 12px !important;');
     expect(css).toContain('--le-outer-fill-box-left: 3px !important;');
     expect(css).toContain('--le-outer-content-padding: 25px !important;');
+    expect(css).toContain('--le-panel-title-align-extra-x: calc(-1 * var(--ds-space-3)) !important;');
     expect(css).toContain('border-image-slice: 19 !important;');
     expect(css).toContain('border-image-width: 12px !important;');
     expect(css).not.toContain('--le-chrome-outer-frame-w');
     expect(css).not.toContain('--le-control-fill-inset');
   });
 
+  it('exports atom overhang only as paint-safe clip geometry', () => {
+    const outer = roleDefault('outer');
+    const inner = roleDefault('inner');
+    const innerFrame: FrameRender = {
+      ...frame('inner.png', 5),
+      atomOverlay: {
+        tl: 'tl.png',
+        tr: 'tr.png',
+        bl: 'bl.png',
+        br: 'br.png',
+        size: 11,
+        outset: 23,
+        leftX: -8,
+        rightX: -7,
+        topY: -8,
+        bottomY: -8,
+      },
+    };
+    const dividerRenders = {
+      ...dividers,
+      inner: {
+        ...innerDivider,
+        atomOverlay: {
+          left: 'left-joint.png',
+          right: 'right-joint.png',
+          width: 11,
+          height: 11,
+          outset: 18,
+          leftX: -2.5,
+          rightX: -2,
+          leftY: -2,
+          rightY: -2,
+        },
+      },
+    };
+    const css = frameCss(outer, inner, frame('outer.png', 19), innerFrame, dividerRenders);
+
+    expect(css).toContain('--le-inner-atom-left-overhang: 8px !important;');
+    expect(css).toContain('--le-inner-atom-right-overhang: 7px !important;');
+    expect(css).toContain('--le-inner-atom-top-overhang: 8px !important;');
+    expect(css).toContain('--le-inner-atom-bottom-overhang: 8px !important;');
+    expect(css).toContain('--le-inner-divider-atom-left-overhang: 2.5px !important;');
+    expect(css).toContain('--le-inner-divider-atom-right-overhang: 2px !important;');
+    expect(css).not.toContain('atom-left-footprint');
+    expect(css).not.toContain('atom-right-footprint');
+    expect(css).not.toContain('visible-content');
+    expect(css).toContain('overflow: visible !important;');
+    expect(css).toContain('position: absolute;');
+    expect(css).toContain('inset: -23px;');
+  });
+
   it('targets real hierarchy classes and registry legacy selectors on every family surface', () => {
     const outer = roleDefault('outer');
     const inner = roleDefault('inner');
     const selectors = chromeFamilyRoleSelectors('inner');
-    const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), divider);
+    const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), dividers);
 
     expect(selectors).toBe(chromeUnitScopedSelectors(
       CHROME_FAMILY_SURFACE_SELECTOR,
@@ -110,11 +183,18 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
     expect(selectors.split(',\n')[0]).toBe(`${CHROME_FAMILY_SURFACE_SELECTOR} .inner-box`);
     expect(selectors).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} .settings-toggle`);
     expect(selectors).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} .le-md-item`);
+    expect(selectors.split(',\n')).not.toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} .le-layer-select`);
     expect(css).toContain(`${selectors} {`);
     expect(CHROME_FAMILY_SURFACE_SELECTOR).toContain('.chrome-family-surface');
     expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} .inner-box:is(.active, .is-active, [aria-pressed="true"])`);
     expect(css).toContain('border-image-source: var(--skirmish-chrome-inner-control-active-image) !important;');
     expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} .inner-box.danger`);
     expect(css).toContain('border-image-source: var(--skirmish-chrome-inner-control-danger-image) !important;');
+    expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="outer"]`);
+    expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="inner"]`);
+    expect(css).toContain('--kit-divider-reach: 31px;');
+    expect(css).toContain('--kit-divider-reach: 7px;');
+    expect(css).toContain('height: 34px !important;');
+    expect(css).toContain('height: 7px !important;');
   });
 });
