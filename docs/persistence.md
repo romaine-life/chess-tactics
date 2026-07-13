@@ -40,7 +40,8 @@ so sequential edits cannot silently overwrite a newer document.
 
 The Level Editor uses a normal private document model, not a public-link map
 store. `level_working_copies` holds the user's latest acknowledged editing
-state indefinitely. Each row has an opaque, globally unique `document_id`,
+state indefinitely unless the owner explicitly deletes a never-saved document.
+Each row has an opaque, globally unique `document_id`,
 which is the stable editor address. Level ids such as `l1` are only unique
 inside one account and are never used as an editor URL authority. Loading or
 copying a document address does not create a public record, grant access,
@@ -61,6 +62,12 @@ document, or restore any public-by-link behavior. Full documents and summaries
 expose `has_saved_baseline`; unlike `saved_revision`, it remains true for a
 recovered dirty draft based on an existing canonical Level, so Discard remains
 available.
+
+Per [ADR-0090](adr/0090-private-draft-cards-preview-and-manage-working-copies.md),
+the signed-in owner's bounded `/editor` Continue-editing list may hydrate its
+displayed summaries through the existing owner-scoped full-document GET and render
+the working Level as a private resume preview. The summary index remains body-free.
+This preview does not make autosaved work canonical, playable, shared, or public.
 
 Each autosave is a compare-and-swap write. The client sends the last server
 `revision` it observed; a stale tab receives `409
@@ -93,6 +100,9 @@ address after that exact snapshot is acknowledged; they are not a second documen
 - `POST /api/editor-documents/:documentId/discard` transactionally replaces the
   working copy with the current canonical saved Level and advances both
   revision values together.
+- `DELETE /api/editor-documents/:documentId` compare-and-swap deletes only a
+  never-saved working copy. It rejects saved-baseline documents and never deletes
+  a canonical Level; saved-backed cleanup uses Discard instead.
 
 Whole-workspace writers use their own compare-and-swap token as well. `GET
 /api/campaign-workspace` returns `revision`; its PUT must send that revision
@@ -110,9 +120,10 @@ Save may cross the canonical boundary for its server-allocated id.
 New user documents are allocated both an account-local `l<n>` level id and an
 opaque global document id by the server. They begin as a durable but
 never-saved working copy (`saved_revision = 0`). Their first Save creates the
-canonical unassigned Level. Canonical workspaces remain the source for campaign
-thumbnails and gameplay; autosaved working-copy content is never used for
-either.
+canonical unassigned Level. Canonical workspaces remain the source for campaign,
+gameplay, share, and server thumbnails. Autosaved content is not used by those
+surfaces; only the private owner-scoped resume preview defined by ADR-0090 may
+render the working copy itself.
 
 Migration 16 retires and drops the v13 `editor_maps` and
 `editor_map_audit_events` tables after carrying forward signed-in working

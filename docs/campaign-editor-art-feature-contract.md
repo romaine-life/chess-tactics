@@ -72,6 +72,15 @@ controls are backed by real behavior and real data.
 - Edit notes, persisted in the level or campaign-level metadata.
 - Show stars from real saved progress data, not selected-row decoration.
 - Show row thumbnail rendered from the level data.
+- Saved levels in **Unassigned levels** expose tier-gated Edit Board and confirmed
+  Delete controls on each row. They do not expose campaign-order controls because
+  the collection is name-sorted rather than authored in an ordinal sequence.
+- In the private Continue-editing section, preview the exact owner-scoped working
+  Level and expose revision-safe Rename plus confirmed Discard/Delete controls;
+  this narrow resume-card exception is governed by [ADR-0090](adr/0090-private-draft-cards-preview-and-manage-working-copies.md).
+- Per [ADR-0091](adr/0091-unsaved-drafts-belong-to-the-unassigned-editor-collection.md),
+  mount Continue editing only inside **Unassigned levels** and show its unsaved-work
+  attention state in that rail tab without changing the canonical Level count.
 
 ### Board Editing And Playtest
 

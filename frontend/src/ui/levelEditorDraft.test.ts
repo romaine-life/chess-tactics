@@ -2,10 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeBoard, encodeBoard, type EditorBoard } from './boardCode';
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 import {
+  clearScopedLevelEditorDraft,
   hashDraftSeed,
   levelEditorDraftKey,
   parseLevelEditorDraft,
+  readScopedLevelEditorDraft,
+  rebaseScopedLevelEditorDraft,
+  scopedLevelEditorDraftKey,
   serializeLevelEditorDraft,
+  writeScopedLevelEditorDraft,
   writeLevelEditorDraft,
   type LevelEditorDraft,
 } from './levelEditorDraft';
@@ -37,6 +42,17 @@ const baseDraft = (over: Partial<LevelEditorDraft> = {}): LevelEditorDraft => ({
   surviveTurns: 7,
   ...over,
 });
+
+const stubLocalStorage = () => {
+  const values = new Map<string, string>();
+  const localStorage = {
+    getItem: vi.fn((key: string) => values.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => { values.set(key, value); }),
+    removeItem: vi.fn((key: string) => { values.delete(key); }),
+  };
+  vi.stubGlobal('window', { localStorage });
+  return { localStorage, values };
+};
 
 describe('levelEditorDraftKey', () => {
   it('scopes drafts by campaign level, standalone editor, or board-link seed', () => {
@@ -195,5 +211,84 @@ describe('level editor draft codec', () => {
     expect('placement' in parsed).toBe(false);
     expect('roster' in parsed).toBe(false);
     expect(decodeBoard(encodeBoard(parsed.board))?.units['2,2']).toEqual({ unitId: 'rook', direction: 'south', faction: 'navy-blue' });
+  });
+});
+
+describe('scoped level editor recovery', () => {
+  const identity = { documentId: 'doc-7f3c', ownerEmail: 'Nelson@Example.com ' };
+
+  it('binds scoped reads and writes to the normalized account and document identity', () => {
+    stubLocalStorage();
+
+    expect(writeScopedLevelEditorDraft(identity, baseDraft({
+      documentId: 'wrong-document',
+      ownerEmail: 'wrong@example.com',
+      documentRevision: 3,
+    }))).toBe(true);
+
+    expect(readScopedLevelEditorDraft(identity)).toMatchObject({
+      documentId: 'doc-7f3c',
+      ownerEmail: 'nelson@example.com',
+      documentRevision: 3,
+    });
+    expect(readScopedLevelEditorDraft({ ...identity, documentId: 'doc-other' })).toBeNull();
+  });
+
+  it('rebases a matching recovery after a name-only cloud CAS without losing local board edits', () => {
+    stubLocalStorage();
+    const localBoard = baseBoard({ cells: { '2,2': 'lava-surf-0' } });
+    writeScopedLevelEditorDraft(identity, baseDraft({
+      board: localBoard,
+      documentRevision: 3,
+      cloudSignature: 'cloud-revision-3',
+    }));
+
+    expect(rebaseScopedLevelEditorDraft(identity, {
+      expectedDocumentRevision: 3,
+      expectedCloudSignature: 'cloud-revision-3',
+      nextDocumentRevision: 4,
+      nextCloudSignature: 'cloud-revision-4',
+      levelName: 'Renamed bridge',
+    })).toBe(true);
+
+    const rebased = readScopedLevelEditorDraft(identity)!;
+    expect(rebased.levelName).toBe('Renamed bridge');
+    expect(rebased.documentRevision).toBe(4);
+    expect(rebased.cloudSignature).toBe('cloud-revision-4');
+    expect(rebased.savedSig).toBe('clean-baseline');
+    expect(encodeBoard(rebased.board)).toBe(encodeBoard(localBoard));
+  });
+
+  it('preserves stale or conflicted recovery and clears only on an explicit cleanup acknowledgement', () => {
+    const { values } = stubLocalStorage();
+    writeScopedLevelEditorDraft(identity, baseDraft({
+      documentRevision: 7,
+      cloudSignature: 'cloud-revision-7',
+    }));
+    const key = scopedLevelEditorDraftKey(identity)!;
+    const before = values.get(key);
+
+    expect(rebaseScopedLevelEditorDraft(identity, {
+      expectedDocumentRevision: 6,
+      expectedCloudSignature: 'cloud-revision-6',
+      nextDocumentRevision: 7,
+      nextCloudSignature: 'cloud-revision-7',
+      levelName: 'Must not replace recovery',
+    })).toBe(false);
+    expect(values.get(key)).toBe(before);
+
+    writeScopedLevelEditorDraft(identity, { ...readScopedLevelEditorDraft(identity)!, recoveryConflict: true });
+    const conflicted = values.get(key);
+    expect(rebaseScopedLevelEditorDraft(identity, {
+      expectedDocumentRevision: 7,
+      expectedCloudSignature: 'cloud-revision-7',
+      nextDocumentRevision: 8,
+      nextCloudSignature: 'cloud-revision-8',
+      levelName: 'Must not replace conflict',
+    })).toBe(false);
+    expect(values.get(key)).toBe(conflicted);
+
+    clearScopedLevelEditorDraft(identity);
+    expect(values.has(key)).toBe(false);
   });
 });

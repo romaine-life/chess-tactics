@@ -4037,6 +4037,47 @@ async function dbDiscardEditorDocument(ownerEmail, documentId, expectedRevision)
   });
 }
 
+async function dbDeleteNeverSavedEditorDocument(ownerEmail, documentId, expectedRevision, { allowOfficial = false } = {}) {
+  return withEditorDocumentTransaction(async (client) => {
+    const current = await dbLockEditorDocument(client, ownerEmail, documentId);
+    if (!current) throw editorDocumentError(404, 'editor_document_not_found');
+    if (current.workspace_kind === 'official' && !allowOfficial) {
+      throw editorDocumentError(403, 'admin_required');
+    }
+    assertEditorDocumentRevision(current, expectedRevision);
+    // Deleting a saved-baseline document would discard its stable editor address and
+    // blur the boundary between private working-copy cleanup and canonical Level deletion.
+    // This operation is intentionally limited to documents that have never crossed Save.
+    if (current.baseline_hash !== null || Number(current.saved_revision) !== 0) {
+      throw editorDocumentError(
+        409,
+        'editor_document_delete_requires_never_saved',
+        current,
+        'only a never-saved working copy can be deleted',
+      );
+    }
+    const { rows } = await client.query(
+      `DELETE FROM level_working_copies
+        WHERE owner_email = $1
+          AND document_id = $2
+          AND revision = $3
+          AND baseline_hash IS NULL
+          AND saved_revision = 0
+      RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [ownerEmail, documentId, expectedRevision],
+    );
+    if (!rows[0]) {
+      throw editorDocumentError(
+        409,
+        'editor_document_delete_requires_never_saved',
+        current,
+        'only a never-saved working copy can be deleted',
+      );
+    }
+    return rows[0];
+  });
+}
+
 function editorDocumentResolveRequest(req, res) {
   const raw = isObjectRecord(req.body) ? req.body : {};
   const workspace = editorDocumentWorkspace(raw);
@@ -4168,6 +4209,26 @@ app.put('/api/editor-documents/:documentId', async (req, res) => {
     res.status(200).json({ document: publicEditorDocument(row) });
   } catch (error) {
     respondEditorDocumentError(res, error, 'autosave');
+  }
+});
+
+app.delete('/api/editor-documents/:documentId', async (req, res) => {
+  const input = editorDocumentOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const revision = editorDocumentRevision(input.raw.revision);
+  if (revision === null) { res.status(400).json({ error: 'revision_required' }); return; }
+  try {
+    const row = await dbDeleteNeverSavedEditorDocument(
+      user.email,
+      input.documentId,
+      revision,
+      { allowOfficial: isAdminEmail(user.email) },
+    );
+    res.status(200).json({ document: publicEditorDocument(row) });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'delete');
   }
 });
 

@@ -15750,6 +15750,14 @@ button.tileset-relationship-cell {
   display: inline-flex;
   justify-content: center;
 }
+.ce-tab-draft-status {
+  color: var(--ce-gold-bright);
+  font-size: var(--ds-text-xl);
+  font-weight: 900;
+  line-height: 1;
+  min-inline-size: 20px;
+  text-shadow: 0 0 8px rgba(240, 189, 85, .28);
+}
 
 /* Pinned rail footer — creation (New Level / New Campaign), then workspace verbs. */
 .ce-rail-actions {
@@ -15841,6 +15849,29 @@ button.tileset-relationship-cell {
   padding: 12px 18px;
 }
 
+/* Draft cards keep navigation and management controls as sibling buttons. This transparent
+   grid item owns the thumbnail/copy hit area without wrapping their block markup or the action
+   buttons, so the whole visible card still feels clickable without nested interactions. */
+.ce-editor-level-row.is-neutral { cursor: default; }
+.ce-editor-level-primary {
+  align-self: stretch;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  grid-column: 1 / 3;
+  grid-row: 1;
+  inline-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
+  padding: 0;
+  z-index: 1;
+}
+.ce-editor-level-primary:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -2px;
+}
+
 .ce-editor-level-row + .ce-editor-level-row {
   margin-top: 8px;
   min-block-size: 86px;
@@ -15896,6 +15927,7 @@ button.tileset-relationship-cell {
   gap: 4px;
   grid-area: actions;
   justify-content: end;
+  z-index: 2;
 }
 
 .ce-editor-level-row .ce-icon-button {
@@ -15913,16 +15945,34 @@ button.tileset-relationship-cell {
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
 
-/* A never-saved editor document has no canonical position from which a truthful thumbnail can
-   be baked. Keep the real LevelRow thumbnail footprint and label that state explicitly. */
-.settings-row-thumb .ce-draft-thumb-empty {
+/* Inline draft rename stays inside the shared row and reuses the canonical kit field + icon
+   buttons. The form itself is invisible layout; every perceived surface remains kit-backed. */
+.ce-draft-rename {
   align-items: center;
-  color: rgba(201, 168, 119, .84);
   display: grid;
-  font-size: var(--ds-text-3xs);
-  justify-items: center;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+  flex: 1 1 auto;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) 32px 32px;
+  max-inline-size: 420px;
+  min-inline-size: 0;
+}
+
+.ce-name-input.ce-draft-name-input {
+  block-size: 32px;
+  border-image-width: 6px;
+  border-width: 6px;
+  font-size: var(--ds-text-sm);
+  min-block-size: 32px;
+  min-inline-size: 0;
+  min-height: 32px;
+  min-width: 0;
+  padding: 3px 8px;
+}
+
+.ce-draft-cancel-button > span {
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-md);
+  line-height: 1;
 }
 /* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */
 .campaign-level-row {

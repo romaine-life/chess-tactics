@@ -34,6 +34,7 @@ import { Toggle } from './shared/Toggle';
 import { PaletteSelect } from './shared/PaletteSelect';
 import { HouseSelect } from './shared/HouseSelect';
 import { BoardSizePanel } from './shared/BoardSizePanel';
+import { DEFAULT_LEVEL_NAME, LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 import {
   levelEditorHrefWithRouteState,
   isLevelEditorRoutePath,
@@ -56,7 +57,16 @@ import {
   readTimeControlParams,
   readVictoryRulesParam,
 } from './playtestRoute';
-import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft, type LevelEditorDraft } from './levelEditorDraft';
+import {
+  clearLevelEditorDraft,
+  levelEditorDraftKey,
+  readLevelEditorDraft,
+  readScopedLevelEditorDraft,
+  scopedLevelEditorDraftKey,
+  writeLevelEditorDraft,
+  writeScopedLevelEditorDraft,
+  type LevelEditorDraft,
+} from './levelEditorDraft';
 import { levelEditorLevelSignature, normalizedLevelEditorSignature } from './levelEditorSignature';
 import {
   editorDocumentWorkspaceForLevelId,
@@ -2346,8 +2356,8 @@ export function LevelEditor(): ReactElement {
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name is edited in
   // Status, beside the save workflow; `savedSig` is the level signature at last save, the dirty basis.
   const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId ?? localDraft?.editingId);
-  const [levelName, setLevelNameState] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? urlLevelName ?? 'Untitled level');
-  const levelNameForSave = useMemo(() => levelName.trim() || 'Untitled level', [levelName]);
+  const [levelName, setLevelNameState] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? urlLevelName ?? DEFAULT_LEVEL_NAME);
+  const levelNameForSave = useMemo(() => normalizeLevelName(levelName), [levelName]);
   const [savedSig, setSavedSig] = useState<string | null>(initialTargetSig ?? localDraft?.savedSig ?? null);
   // Set true once a campaign level has been hydrated into the board state; the baseline effect
   // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
@@ -3446,7 +3456,7 @@ export function LevelEditor(): ReactElement {
       : existingRecovery?.ownerEmail;
     if (editorDocument) {
       if (!ownerEmail) return;
-      const expectedKey = levelEditorDraftKey({ documentId: editorDocument.document_id, ownerEmail });
+      const expectedKey = scopedLevelEditorDraftKey({ documentId: editorDocument.document_id, ownerEmail });
       if (draftKey !== expectedKey) return;
     }
     const savedAt = Date.now();
@@ -3472,7 +3482,9 @@ export function LevelEditor(): ReactElement {
       victory: victoryForSave,
       events: eventsForSave,
     };
-    const wrote = writeLevelEditorDraft(draftKey, draft);
+    const wrote = editorDocument && ownerEmail
+      ? writeScopedLevelEditorDraft({ documentId: editorDocument.document_id, ownerEmail }, draft)
+      : writeLevelEditorDraft(draftKey, draft);
     setLocalBackupAvailable(wrote);
     // A recovery being claimed after sign-in stays protected until it has a scoped browser copy
     // and a durable cloud document. If the cloud call is temporarily down, keep the intent's
@@ -3678,14 +3690,10 @@ export function LevelEditor(): ReactElement {
         if (!active) return;
 
         const ownerEmail = user.email?.trim().toLowerCase() ?? '';
-        const scopedDraftKey = ownerEmail
-          ? levelEditorDraftKey({ documentId: doc.document_id, ownerEmail })
-          : null;
-        const rawScopedDraft = scopedDraftKey ? readLevelEditorDraft(scopedDraftKey) : null;
-        const scopedDraft = rawScopedDraft
-          && rawScopedDraft.documentId === doc.document_id
-          && rawScopedDraft.ownerEmail === ownerEmail
-          && rawScopedDraft.editingId === doc.level_id
+        const scopedDraftIdentity = { documentId: doc.document_id, ownerEmail };
+        const scopedDraftKey = scopedLevelEditorDraftKey(scopedDraftIdentity);
+        const rawScopedDraft = readScopedLevelEditorDraft(scopedDraftIdentity);
+        const scopedDraft = rawScopedDraft?.editingId === doc.level_id
           ? rawScopedDraft
           : null;
         const recoveryDraft = scopedDraft ?? claimedUnscopedDraft;
@@ -3772,7 +3780,7 @@ export function LevelEditor(): ReactElement {
 
         if (scopedDraftKey && scopedDraftKey !== draftKey) setDraftKey(scopedDraftKey);
         if (claimedUnscopedDraft && scopedDraftKey && ownerEmail) {
-          const migrated = writeLevelEditorDraft(scopedDraftKey, {
+          const migrated = writeScopedLevelEditorDraft(scopedDraftIdentity, {
             ...claimedUnscopedDraft,
             documentId: doc.document_id,
             ownerEmail,
@@ -3817,17 +3825,9 @@ export function LevelEditor(): ReactElement {
         if (routeParams.documentId) {
           const status = (error as { status?: number }).status;
           const ownerEmail = user.email?.trim().toLowerCase() ?? '';
-          const failedDocumentDraftKey = ownerEmail
-            ? levelEditorDraftKey({ documentId: routeParams.documentId, ownerEmail })
-            : null;
-          const failedDocumentDraft = failedDocumentDraftKey
-            ? readLevelEditorDraft(failedDocumentDraftKey)
-            : null;
-          const scopedRecovery = failedDocumentDraft
-            && failedDocumentDraft.documentId === routeParams.documentId
-            && failedDocumentDraft.ownerEmail === ownerEmail
-            ? failedDocumentDraft
-            : null;
+          const failedDocumentDraftIdentity = { documentId: routeParams.documentId, ownerEmail };
+          const failedDocumentDraftKey = scopedLevelEditorDraftKey(failedDocumentDraftIdentity);
+          const scopedRecovery = readScopedLevelEditorDraft(failedDocumentDraftIdentity);
           if (scopedRecovery && status !== 403 && status !== 404) {
             const recovered = levelFromDraft(scopedRecovery, canonical ?? initialCandidateRef.current);
             applyLevelDocument(recovered, {
@@ -5128,8 +5128,8 @@ export function LevelEditor(): ReactElement {
                   className="le-text-input le-level-name-input"
                   value={levelName}
                   aria-label="Level name"
-                  placeholder="Untitled level"
-                  maxLength={80}
+                  placeholder={DEFAULT_LEVEL_NAME}
+                  maxLength={LEVEL_NAME_MAX}
                   onChange={(event) => setLevelName(event.target.value)}
                   onBlur={() => setLevelNameState(levelNameForSave)}
                 />
