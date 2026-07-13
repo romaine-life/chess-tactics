@@ -2705,6 +2705,18 @@ async function main() {
   // Deletion is a CAS-protected cleanup operation for never-saved private work
   // only. It stays owner-scoped, never grants public access, and never reaches a
   // canonical workspace Level.
+  const deleteEditorDocumentRequest = (documentId, revision, cookie = null) => {
+    const body = JSON.stringify({ revision });
+    return request(
+      'DELETE', `/api/editor-documents/${documentId}`,
+      {
+        ...(cookie ? { cookie } : {}),
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(body),
+      },
+      body,
+    );
+  };
   const deleteCandidate = await request(
     'POST', '/api/editor-documents/resolve',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
@@ -2731,27 +2743,15 @@ async function main() {
   if (advancedDeleteCandidate.statusCode !== 200 || JSON.parse(advancedDeleteCandidate.body).document.revision !== 2) {
     throw new Error(`Could not advance never-saved delete candidate: ${advancedDeleteCandidate.statusCode} ${advancedDeleteCandidate.body}`);
   }
-  const anonymousDeleteCandidate = await request(
-    'DELETE', `/api/editor-documents/${deleteCandidateId}`,
-    { 'content-type': 'application/json' },
-    JSON.stringify({ revision: 2 }),
-  );
+  const anonymousDeleteCandidate = await deleteEditorDocumentRequest(deleteCandidateId, 2);
   if (anonymousDeleteCandidate.statusCode !== 401) {
     throw new Error(`Never-saved document deletion must require sign-in: ${anonymousDeleteCandidate.statusCode} ${anonymousDeleteCandidate.body}`);
   }
-  const rivalDeleteCandidate = await request(
-    'DELETE', `/api/editor-documents/${deleteCandidateId}`,
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 2 }),
-  );
+  const rivalDeleteCandidate = await deleteEditorDocumentRequest(deleteCandidateId, 2, 'better-auth.session=rival');
   if (rivalDeleteCandidate.statusCode !== 404 || JSON.parse(rivalDeleteCandidate.body).error !== 'editor_document_not_found') {
     throw new Error(`Never-saved document deletion leaked another owner's work: ${rivalDeleteCandidate.statusCode} ${rivalDeleteCandidate.body}`);
   }
-  const staleDeleteCandidate = await request(
-    'DELETE', `/api/editor-documents/${deleteCandidateId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 1 }),
-  );
+  const staleDeleteCandidate = await deleteEditorDocumentRequest(deleteCandidateId, 1, 'better-auth.session=abc');
   const staleDeleteCandidateBody = JSON.parse(staleDeleteCandidate.body);
   if (
     staleDeleteCandidate.statusCode !== 409 ||
@@ -2761,11 +2761,7 @@ async function main() {
   ) {
     throw new Error(`Stale never-saved document deletion lost CAS protection: ${staleDeleteCandidate.statusCode} ${staleDeleteCandidate.body}`);
   }
-  const deletedCandidate = await request(
-    'DELETE', `/api/editor-documents/${deleteCandidateId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 2 }),
-  );
+  const deletedCandidate = await deleteEditorDocumentRequest(deleteCandidateId, 2, 'better-auth.session=abc');
   const deletedCandidateBody = JSON.parse(deletedCandidate.body);
   if (
     deletedCandidate.statusCode !== 200 ||
@@ -2840,11 +2836,7 @@ async function main() {
   if (JSON.parse(workspaceWithNewLevel.body).levels.l2.name !== 'New Working Level Autosaved') {
     throw new Error(`First Save did not create the canonical Level: ${workspaceWithNewLevel.body}`);
   }
-  const deleteSavedBaseline = await request(
-    'DELETE', `/api/editor-documents/${newDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 3 }),
-  );
+  const deleteSavedBaseline = await deleteEditorDocumentRequest(newDocumentId, 3, 'better-auth.session=abc');
   const deleteSavedBaselineBody = JSON.parse(deleteSavedBaseline.body);
   if (
     deleteSavedBaseline.statusCode !== 409 ||
