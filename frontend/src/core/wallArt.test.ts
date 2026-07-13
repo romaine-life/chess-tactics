@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { roadEdgeKey } from './featureAutotile';
-import { resolveWallArtFaces, wallArt, wallArtAtEdge, wallArtSpanEdges } from './wallArt';
+import { applyLiveWallArt, currentWallArt, resolveWallArtFaces, wallArt, wallArtAtEdge, wallArtSpanEdges } from './wallArt';
 
 describe('wall art', () => {
   it('expands placeable wall art across its configured span', () => {
@@ -37,5 +37,43 @@ describe('wall art', () => {
       artId: 'banner-stone-wall',
       edges: [anchor, second],
     });
+  });
+
+  it('registers every mirror treatment with both faces and mandatory live optics', () => {
+    for (const [id, span] of [
+      ['mirror-keep-wall', 1],
+      ['mirror-court-oval-wall', 1],
+      ['mirror-chapel-glass-wall', 1],
+      ['mirror-witch-eye-wall', 1],
+      ['mirror-grand-gallery-wall', 3],
+    ] as const) {
+      const art = wallArt(id);
+      expect(art?.span).toBe(span);
+      expect(art?.slots.map((slot) => slot.face)).toEqual(['west', 'north']);
+      expect(art?.slots.every((slot) => slot.sourceId.startsWith(id.replace(/-wall$/, '')))).toBe(true);
+      expect(art?.reflection?.opacity).toBeGreaterThan(0);
+      expect(Object.keys(art?.reflection ?? {})).toEqual(['opacity']);
+    }
+  });
+
+  it('retires persisted lens, FOV, and reflected-scale keys when live wall art is normalized', () => {
+    const before = structuredClone(currentWallArt());
+    const keep = before['mirror-keep-wall'];
+    try {
+      expect(applyLiveWallArt({
+        'mirror-keep-wall': {
+          ...keep,
+          reflection: {
+            opacity: 0.61,
+            mode: 'convex',
+            fieldOfView: 9,
+            subjectScale: 0.2,
+          },
+        } as unknown as typeof keep,
+      })).toBe(true);
+      expect(currentWallArt()['mirror-keep-wall'].reflection).toEqual({ opacity: 0.61 });
+    } finally {
+      applyLiveWallArt(before);
+    }
   });
 });

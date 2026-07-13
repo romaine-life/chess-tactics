@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactElement } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react';
 import { useCampaigns } from '../campaign/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -11,7 +11,6 @@ import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { injectStressLevels } from '../campaign/stressFixture';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { NavButton } from './shared/NavButton';
-import { navigateApp } from './navigation';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
@@ -19,14 +18,26 @@ import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { KitScroll } from './KitScroll';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
+import { LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 import { editSkirmishProfileHref, isSkirmishProfileLevel, skirmishProfileLevels } from './skirmishProfiles';
-import { listEditorDocuments, type EditorDocumentSummary } from '../net/editorDocuments';
 import {
+  autosaveEditorDocument,
+  deleteNeverSavedEditorDocument,
+  discardEditorDocumentChanges,
+  isEditorDocumentConflict,
+  listEditorDocuments,
+  loadEditorDocument,
+  type EditorDocument,
+  type EditorDocumentSummary,
+} from '../net/editorDocuments';
+import {
+  CAMPAIGN_EDITOR_UNASSIGNED_RETURN_TO,
   editorDocumentContinueHref,
   editorDocumentDisplayName,
   resumableUserEditorDocuments,
-  savedLevelForEditorDocument,
 } from './campaignEditorRecentDrafts';
+import { clearScopedLevelEditorDraft, rebaseScopedLevelEditorDraft } from './levelEditorDraft';
+import { levelEditorLevelSignature } from './levelEditorSignature';
 
 const CE_ICONS = {
   favorite: '/assets/ui/kit/icons/brand-shield.png',
@@ -35,17 +46,29 @@ const CE_ICONS = {
   delete: '/assets/ui/kit/icons/delete.png',
   lock: '/assets/ui/kit/icons/lock.png',
   pencil: '/assets/ui/kit/icons/pencil.png',
+  save: '/assets/ui/kit/icons/save.png',
 } as const;
 
 // The carved rail-tab icon, shared with the play-side Campaign section (PlayMenu.tsx) so a
 // campaign looks identical whether you're picking one to play or one to edit.
 const CAMPAIGN_TAB_ICON = '/assets/ui/main-menu/icons-carved/campaign-editor.png';
 
-type CampaignCollection = 'campaign' | 'unassigned' | 'skirmish-profiles';
+export type CampaignCollection = 'campaign' | 'unassigned' | 'skirmish-profiles';
 
-// The Editor is now a settings-twin at /editor (the nested board editor is /editor/level);
-// returns thread back here so Back/Save round-trips land on the Editor, not the old route.
-const CAMPAIGN_EDITOR_RETURN_TO = '/editor';
+export function campaignCollectionFromSearch(search: string): CampaignCollection {
+  const collection = new URLSearchParams(search).get('collection');
+  return collection === 'unassigned' || collection === 'skirmish-profiles'
+    ? collection
+    : 'campaign';
+}
+
+export function campaignCollectionHref(href: string, collection: CampaignCollection): string {
+  const url = new URL(href, 'http://localhost');
+  if (collection === 'campaign') url.searchParams.delete('collection');
+  else url.searchParams.set('collection', collection);
+  const query = url.searchParams.toString();
+  return `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
+}
 
 function workspaceSignature(ws: { campaigns: Campaign[]; levels: Record<string, Level> }): string {
   return JSON.stringify(ws);
@@ -62,12 +85,22 @@ function officialSliceSignature(): string {
   return workspaceSignature(officialWorkspaceForSave());
 }
 
-function recentDraftDescription(document: EditorDocumentSummary): string {
+function recentDraftDescription(document: Pick<EditorDocumentSummary, 'never_saved' | 'updated_at'>): string {
   const state = document.never_saved ? 'Not saved yet' : 'Unsaved changes';
   if (!document.updated_at) return state;
   const updatedAt = new Date(document.updated_at);
   if (Number.isNaN(updatedAt.getTime())) return state;
   return `${state} · Edited ${updatedAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
+}
+
+function recentDraftAccessibleDescription(document: EditorDocument): string {
+  const state = document.never_saved ? 'Not saved yet' : 'Unsaved changes';
+  const updatedAt = document.updated_at ? new Date(document.updated_at) : null;
+  const edited = updatedAt && !Number.isNaN(updatedAt.getTime())
+    ? `${state}. Edited ${updatedAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'medium' })}.`
+    : `${state}.`;
+  const units = document.level.layers.units.length;
+  return `${edited} ${document.level.board.cols} by ${document.level.board.rows} board with ${units} ${units === 1 ? 'unit' : 'units'}.`;
 }
 
 function validateWorkspaceImport(ws: Partial<{ campaigns: Campaign[]; levels: Record<string, Level> }>): string | null {
@@ -95,11 +128,17 @@ function IconButton({
   danger = false,
   selected = false,
   className = '',
+  buttonRef,
   onKeyDown,
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { danger?: boolean; selected?: boolean }): ReactElement {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  danger?: boolean;
+  selected?: boolean;
+  buttonRef?: React.Ref<HTMLButtonElement>;
+}): ReactElement {
   return (
     <button
+      ref={buttonRef}
       type="button"
       className={`ce-icon-button ${danger ? 'is-danger' : ''} ${selected ? 'is-selected' : ''} ${className}`.trim()}
       {...props}
@@ -211,13 +250,14 @@ function CampaignRailTab({
 }
 
 // The workspace's unassigned levels, presented as one more rail tab at the end of the list.
-function UnassignedRailTab({
+export function UnassignedRailTab({
   count,
   active,
   index,
   onSelect,
   title = 'Unassigned levels',
   itemName = 'level',
+  hasUnsavedDrafts = false,
 }: {
   count: number;
   active: boolean;
@@ -225,12 +265,15 @@ function UnassignedRailTab({
   onSelect: () => void;
   title?: string;
   itemName?: string;
+  hasUnsavedDrafts?: boolean;
 }): ReactElement {
   const levelCount = `${count} ${itemName}${count === 1 ? '' : 's'}`;
+  const draftLabel = 'Unsaved drafts available';
   return (
     <div
       role="button"
       tabIndex={0}
+      aria-label={`${title}, ${levelCount}${hasUnsavedDrafts ? `, ${draftLabel.toLowerCase()}` : ''}`}
       aria-current={active ? 'page' : undefined}
       style={{ ['--tab-index' as string]: index }}
       className={`settings-tab main-menu-mode-tab ce-campaign-tab ce-campaign-tab-meta ${active ? 'is-active' : ''}`.trim()}
@@ -249,6 +292,14 @@ function UnassignedRailTab({
         <strong>{title}</strong>
         <small>{levelCount}</small>
       </span>
+      {hasUnsavedDrafts ? (
+        <span
+          className="ce-tab-trail ce-tab-draft-status"
+          data-testid="unassigned-draft-attention"
+          title={draftLabel}
+          aria-hidden="true"
+        >!</span>
+      ) : null}
     </div>
   );
 }
@@ -265,9 +316,17 @@ function LevelRow({
   readOnly = false,
   displayName,
   description,
+  heading,
+  actions,
   showOrdinal = true,
   ariaLabel,
-  emptyThumbnailLabel,
+  headingId,
+  descriptionId,
+  primaryHref,
+  onPrimarySelect,
+  primaryAriaLabel,
+  primaryTitle,
+  actionsLabel,
   onSelect,
   editHref,
   onMoveUp,
@@ -280,11 +339,19 @@ function LevelRow({
   active: boolean;
   readOnly?: boolean;
   displayName?: string;
-  description?: string;
+  description?: ReactNode;
+  heading?: ReactNode;
+  actions?: ReactNode;
   showOrdinal?: boolean;
   ariaLabel?: string;
-  emptyThumbnailLabel?: string;
-  onSelect: () => void;
+  headingId?: string;
+  descriptionId?: string;
+  primaryHref?: string;
+  onPrimarySelect?: () => void;
+  primaryAriaLabel?: string;
+  primaryTitle?: string;
+  actionsLabel?: string;
+  onSelect?: () => void;
   editHref?: string;
   onMoveUp?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onMoveDown?: (event: React.MouseEvent<HTMLButtonElement>) => void;
@@ -295,73 +362,349 @@ function LevelRow({
   // ref's objective as a mode name only.
   const rowName = displayName ?? level?.name ?? levelRef.levelId;
   const goalLine = description ?? (level ? levelObjectiveLine(level) : MODE_NAME[levelRef.objective ?? 'capture-all']);
+  const hasDefaultActions = !readOnly && Boolean(editHref || onMoveUp || onMoveDown || onDelete);
+  const defaultActions = hasDefaultActions ? (
+    <>
+      {editHref ? (
+        <IconNavButton to={editHref} aria-label={`Edit board for ${rowName}`} title="Edit board">
+          <CeIcon icon="pencil" />
+        </IconNavButton>
+      ) : null}
+      {onMoveUp ? <IconButton onClick={onMoveUp} aria-label={`Move ${rowName} up`}><CeIcon icon="chevron-up" /></IconButton> : null}
+      {onMoveDown ? <IconButton onClick={onMoveDown} aria-label={`Move ${rowName} down`}><CeIcon icon="chevron-down" /></IconButton> : null}
+      {onDelete ? (
+        <IconButton
+          danger
+          title="Delete saved level"
+          onClick={onDelete}
+          aria-label={`Delete saved level ${rowName}`}
+        ><CeIcon icon="delete" /></IconButton>
+      ) : null}
+    </>
+  ) : null;
+  const rowActions = actions === undefined ? defaultActions : actions;
+  const hasActions = rowActions !== null && rowActions !== false;
+  const containerIsButton = Boolean(onSelect);
   return (
     <div
-      role="button"
-      tabIndex={0}
-      aria-label={ariaLabel}
-      aria-current={active ? 'true' : undefined}
-      className={['settings-row', 'ce-editor-level-row', active ? 'is-selected' : '', readOnly ? 'is-read-only' : ''].filter(Boolean).join(' ')}
+      role={containerIsButton ? 'button' : undefined}
+      tabIndex={containerIsButton ? 0 : undefined}
+      aria-label={containerIsButton ? ariaLabel : undefined}
+      aria-current={containerIsButton && active ? 'true' : undefined}
+      className={['settings-row', 'ce-editor-level-row', active ? 'is-selected' : '', hasActions ? '' : 'is-read-only', containerIsButton ? '' : 'is-neutral'].filter(Boolean).join(' ')}
       onClick={onSelect}
-      onKeyDown={(event) => {
+      onKeyDown={onSelect ? (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onSelect();
         }
-      }}
+      } : undefined}
     >
-      <span className="settings-row-thumb" aria-hidden="true">
+      <div className="settings-row-thumb" aria-hidden="true">
         {level ? (
           <LevelThumbnail level={level} width={68} height={44} />
         ) : (
-          <span className={`settings-row-thumb-empty ${emptyThumbnailLabel ? 'ce-draft-thumb-empty' : ''}`.trim()}>
-            {emptyThumbnailLabel ? <small>{emptyThumbnailLabel}</small> : null}
-          </span>
+          <span className="settings-row-thumb-empty" />
         )}
-      </span>
+      </div>
       <div className="settings-row-copy ce-editor-level-copy">
         <div className="ce-editor-level-heading">
-          <h4>{showOrdinal ? `${index + 1}. ` : ''}{rowName}</h4>
+          {heading ?? <h4 id={headingId}>{showOrdinal ? `${index + 1}. ` : ''}{rowName}</h4>}
         </div>
-        <p>{goalLine}</p>
+        <p id={descriptionId}>{goalLine}</p>
       </div>
-      {readOnly ? null : (
-        <div className="settings-row-control ce-row-actions" aria-label="Level actions">
-          {editHref ? (
-            <IconNavButton to={editHref} aria-label={`Edit ${rowName}`}>
-              <CeIcon icon="pencil" />
-            </IconNavButton>
-          ) : null}
-          <IconButton onClick={onMoveUp} aria-label="Move level up"><CeIcon icon="chevron-up" /></IconButton>
-          <IconButton onClick={onMoveDown} aria-label="Move level down"><CeIcon icon="chevron-down" /></IconButton>
-          <IconButton danger onClick={onDelete} aria-label="Delete level"><CeIcon icon="delete" /></IconButton>
+      {primaryHref ? (
+        <NavButton
+          className="ce-editor-level-primary"
+          to={primaryHref}
+          aria-label={primaryAriaLabel}
+          aria-describedby={descriptionId}
+          aria-current={active ? 'true' : undefined}
+          title={primaryTitle}
+        />
+      ) : onPrimarySelect ? (
+        <button
+          type="button"
+          className="ce-editor-level-primary"
+          aria-label={primaryAriaLabel}
+          aria-describedby={descriptionId}
+          aria-current={active ? 'true' : undefined}
+          title={primaryTitle}
+          onClick={onPrimarySelect}
+        />
+      ) : null}
+      {hasActions ? (
+        <div className="settings-row-control ce-row-actions" role="group" aria-label={actionsLabel ?? `Actions for ${rowName}`}>
+          {rowActions}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
-export function RecentDraftLevelRow({
-  document,
-  savedLevel,
+/**
+ * A saved level that is not filed into a campaign. Its controls are deliberately
+ * capability-based: Edit and Delete apply, while campaign-order controls do not.
+ */
+export function UnassignedLevelRow({
+  level,
+  index,
+  active,
+  canManage,
+  editHref,
+  onSelect,
+  onDelete,
 }: {
-  document: EditorDocumentSummary;
-  savedLevel: Level | undefined;
+  level: Level;
+  index: number;
+  active: boolean;
+  canManage: boolean;
+  editHref: string;
+  onSelect: () => void;
+  onDelete: () => void;
 }): ReactElement {
-  const name = editorDocumentDisplayName(document);
+  const rowId = useId();
+  const titleId = `${rowId}-title`;
+  const descriptionId = `${rowId}-description`;
   return (
     <LevelRow
-      levelRef={{ levelId: document.level_id, ordinal: 0, objective: savedLevel?.objective }}
-      level={savedLevel}
+      levelRef={{ levelId: level.id, ordinal: index, objective: level.objective }}
+      level={level}
+      index={index}
+      active={active}
+      readOnly={!canManage}
+      headingId={titleId}
+      descriptionId={descriptionId}
+      onPrimarySelect={onSelect}
+      primaryAriaLabel={`Preview ${level.name}`}
+      primaryTitle="Preview level"
+      editHref={canManage ? editHref : undefined}
+      onDelete={canManage ? (event) => {
+        event.stopPropagation();
+        onDelete();
+      } : undefined}
+    />
+  );
+}
+
+function recentDraftActionError(error: unknown, action: 'rename' | 'remove'): string {
+  if (isEditorDocumentConflict(error)) {
+    return 'Changed in another tab. The newer draft is shown; review it and try again.';
+  }
+  return action === 'rename'
+    ? 'Rename failed. Your typed name is still here — try again.'
+    : 'Could not remove this draft. Try again in a moment.';
+}
+
+export function RecentDraftLevelRow({
+  document,
+  ownerEmail,
+  onDocumentChange,
+  onRemove,
+}: {
+  document: EditorDocument;
+  ownerEmail?: string | null;
+  onDocumentChange: (document: EditorDocument) => void;
+  onRemove: (document: EditorDocument) => Promise<void>;
+}): ReactElement {
+  const name = editorDocumentDisplayName(document);
+  const continueHref = editorDocumentContinueHref(document);
+  const rowId = useId();
+  const titleId = `${rowId}-title`;
+  const statusId = `${rowId}-status`;
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(name);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const renameButtonRef = useRef<HTMLButtonElement | null>(null);
+  const selectRenameInputRef = useRef(false);
+  const refocusRenameInputRef = useRef(false);
+  const restoreRenameButtonRef = useRef(false);
+
+  useEffect(() => {
+    if (!renaming) setRenameDraft(name);
+  }, [name, renaming]);
+
+  useEffect(() => {
+    if (renaming && !busy) {
+      if (selectRenameInputRef.current) {
+        selectRenameInputRef.current = false;
+        renameInputRef.current?.select();
+      } else if (refocusRenameInputRef.current) {
+        refocusRenameInputRef.current = false;
+        renameInputRef.current?.focus();
+      }
+      return;
+    }
+    if (!renaming && !busy && restoreRenameButtonRef.current) {
+      restoreRenameButtonRef.current = false;
+      renameButtonRef.current?.focus();
+    }
+  }, [busy, renaming]);
+
+  const finishRename = () => {
+    selectRenameInputRef.current = false;
+    refocusRenameInputRef.current = false;
+    restoreRenameButtonRef.current = true;
+    setRenaming(false);
+  };
+
+  const cancelRename = () => {
+    setRenameDraft(name);
+    setActionError('');
+    finishRename();
+  };
+
+  const commitRename = async () => {
+    if (busy) return;
+    const nextName = normalizeLevelName(renameDraft);
+    if (nextName === name) {
+      setActionError('');
+      finishRename();
+      return;
+    }
+    setBusy(true);
+    setActionError('');
+    try {
+      const updated = await autosaveEditorDocument(
+        document.document_id,
+        { ...document.level, name: nextName },
+        document.revision,
+      );
+      rebaseScopedLevelEditorDraft(
+        { documentId: document.document_id, ownerEmail },
+        {
+          expectedDocumentRevision: document.revision,
+          expectedCloudSignature: levelEditorLevelSignature(document.level),
+          nextDocumentRevision: updated.revision,
+          nextCloudSignature: levelEditorLevelSignature(updated.level),
+          levelName: updated.level.name,
+        },
+      );
+      onDocumentChange(updated);
+      finishRename();
+    } catch (error) {
+      if (isEditorDocumentConflict(error)) onDocumentChange(error.document);
+      refocusRenameInputRef.current = true;
+      setActionError(recentDraftActionError(error, 'rename'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (busy) return;
+    setBusy(true);
+    setActionError('');
+    try {
+      await onRemove(document);
+    } catch (error) {
+      if (isEditorDocumentConflict(error)) onDocumentChange(error.document);
+      setActionError(recentDraftActionError(error, 'remove'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const renameHeading = renaming ? (
+    <>
+      <h4 id={titleId} className="sr-only">{name}</h4>
+      <form
+        className="ce-draft-rename"
+        aria-label={`Rename ${name}`}
+        aria-busy={busy}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void commitRename();
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === 'Escape' && !busy) {
+            event.preventDefault();
+            cancelRename();
+          }
+        }}
+      >
+        <input
+          ref={renameInputRef}
+          className="ce-name-input ce-draft-name-input"
+          value={renameDraft}
+          maxLength={LEVEL_NAME_MAX}
+          aria-label="Level name"
+          readOnly={busy}
+          onChange={(event) => setRenameDraft(event.target.value)}
+        />
+        <IconButton
+          className="ce-draft-rename-button"
+          aria-label={`Save name for ${name}`}
+          title="Save name"
+          disabled={busy}
+          onClick={() => {
+            void commitRename();
+          }}
+        ><CeIcon icon="save" /></IconButton>
+        <IconButton
+          className="ce-draft-rename-button ce-draft-cancel-button"
+          aria-label={`Cancel renaming ${name}`}
+          title="Cancel"
+          disabled={busy}
+          onClick={cancelRename}
+        >×</IconButton>
+      </form>
+    </>
+  ) : undefined;
+
+  return (
+    <LevelRow
+      levelRef={{ levelId: document.level_id, ordinal: 0, objective: document.level.objective }}
+      level={document.level}
       index={0}
       active={false}
-      readOnly
       displayName={name}
-      description={recentDraftDescription(document)}
+      description={(
+        <>
+          <span aria-hidden="true">{actionError || recentDraftDescription(document)}</span>
+          <span className="sr-only" aria-live="polite">
+            {actionError || recentDraftAccessibleDescription(document)}
+          </span>
+        </>
+      )}
+      heading={renameHeading}
+      actions={(
+        <>
+          <IconButton
+            buttonRef={renameButtonRef}
+            aria-label={`Rename ${name}`}
+            title="Rename"
+            disabled={busy || renaming}
+            onClick={() => {
+              selectRenameInputRef.current = true;
+              refocusRenameInputRef.current = false;
+              restoreRenameButtonRef.current = false;
+              setRenameDraft(name);
+              setRenaming(true);
+              setActionError('');
+            }}
+          ><CeIcon icon="pencil" /></IconButton>
+          <IconButton
+            danger
+            aria-label={document.never_saved ? `Delete unsaved ${name}` : `Discard changes to ${name}`}
+            title={document.never_saved ? 'Delete unsaved level' : 'Discard changes'}
+            disabled={busy}
+            onClick={() => {
+              void remove();
+            }}
+          ><CeIcon icon="delete" /></IconButton>
+        </>
+      )}
       showOrdinal={false}
-      ariaLabel={`Continue editing ${name}`}
-      emptyThumbnailLabel="Not saved"
-      onSelect={() => navigateApp(editorDocumentContinueHref(document))}
+      headingId={titleId}
+      descriptionId={statusId}
+      primaryHref={!renaming && !busy ? continueHref : undefined}
+      primaryAriaLabel={`Continue editing ${name}`}
+      primaryTitle="Continue editing"
+      actionsLabel={`Actions for ${name}`}
     />
   );
 }
@@ -373,12 +716,14 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
-  const [recentDrafts, setRecentDrafts] = useState<EditorDocumentSummary[]>([]);
+  const [recentDrafts, setRecentDrafts] = useState<EditorDocument[]>([]);
   // A stale whole-workspace body must never be paired with the newer revision from a 409 and
   // retried. Keep the local work visible, stop that tier's writes, and require a deliberate reload.
   const [userSaveConflict, setUserSaveConflict] = useState(false);
   const [officialSaveConflict, setOfficialSaveConflict] = useState(false);
-  const [selectedCollection, setSelectedCollection] = useState<CampaignCollection>('campaign');
+  const [selectedCollection, setSelectedCollection] = useState<CampaignCollection>(() => (
+    campaignCollectionFromSearch(typeof window === 'undefined' ? '' : window.location.search)
+  ));
   const { ask, dialog: confirmDialog } = useConfirm();
   // Entrance readiness (ADR-0051): the shared store may already hold campaigns from a
   // /play/select visit this session — then there's real content at mount and
@@ -424,6 +769,13 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   }, [embedded]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const nextHref = campaignCollectionHref(window.location.href, selectedCollection);
+    const currentHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextHref !== currentHref) window.history.replaceState(window.history.state, '', nextHref);
+  }, [selectedCollection]);
+
+  useEffect(() => {
     let active = true;
     void fetchMe().then(async (user) => {
       if (!active) return;
@@ -435,7 +787,21 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       }
       try {
         const result = await listEditorDocuments({ status: 'all', limit: 100 });
-        if (active) setRecentDrafts(resumableUserEditorDocuments(result.documents));
+        const summaries = resumableUserEditorDocuments(result.documents);
+        const loaded = await Promise.all(summaries.map(async (summary) => {
+          try {
+            return await loadEditorDocument(summary.document_id);
+          } catch {
+            return null;
+          }
+        }));
+        if (active) {
+          setRecentDrafts(loaded.filter((document): document is EditorDocument => Boolean(
+            document
+            && document.workspace_kind === 'user'
+            && (document.dirty || document.never_saved),
+          )));
+        }
       } catch {
         // Discovery is optional UI. Workspace authoring remains available when the private list
         // endpoint is temporarily unavailable, and no fallback may invent or expose documents.
@@ -604,15 +970,57 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   };
 
   const confirmDeleteLevel = async (level: Level) => {
+    const persistenceVerb = tierOf(level.id) === 'official' ? 'Publish' : 'Save';
     if (await ask({
-      title: `Delete level?`,
-      message: <>Delete <b>{level.name}</b>? This removes it from the workspace when you save.</>,
+      title: 'Delete saved level?',
+      message: <>Delete <b>{level.name}</b> from the workspace? This removes it when you {persistenceVerb}.</>,
       confirmLabel: 'Delete',
       cancelLabel: 'Keep',
       tone: 'danger',
     })) {
       useCampaigns.getState().deleteLevel(level.id);
-      setStatus('Level deleted. Save to keep this change.');
+      setStatus(`Level deleted. ${persistenceVerb} to keep this change.`);
+    }
+  };
+
+  const updateRecentDraft = (updated: EditorDocument) => {
+    setRecentDrafts((documents) => (
+      updated.dirty || updated.never_saved
+        ? documents.map((document) => (document.document_id === updated.document_id ? updated : document))
+        : documents.filter((document) => document.document_id !== updated.document_id)
+    ));
+  };
+
+  const removeRecentDraft = async (document: EditorDocument) => {
+    const name = editorDocumentDisplayName(document);
+    const deleteForever = document.never_saved;
+    const confirmed = await ask(deleteForever ? {
+      title: 'Delete unsaved level?',
+      message: <><b>{name}</b> has never been saved. This permanently deletes its working copy.</>,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      tone: 'danger',
+    } : {
+      title: 'Discard unsaved changes?',
+      message: <>Restore <b>{name}</b> to its last saved position? The saved level remains available.</>,
+      confirmLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      if (deleteForever) {
+        await deleteNeverSavedEditorDocument(document.document_id, document.revision);
+      } else {
+        await discardEditorDocumentChanges(document.document_id, document.revision);
+      }
+      clearScopedLevelEditorDraft({ documentId: document.document_id, ownerEmail: me?.email });
+      setRecentDrafts((documents) => documents.filter((candidate) => candidate.document_id !== document.document_id));
+      setStatus(deleteForever ? `Deleted unsaved level “${name}”.` : `Discarded unsaved changes to “${name}”.`);
+    } catch (error) {
+      if (isEditorDocumentConflict(error)) updateRecentDraft(error.document);
+      throw error;
     }
   };
 
@@ -634,10 +1042,6 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
     [levels, referencedLevelIds],
   );
   const profileLevels = useMemo(() => skirmishProfileLevels(levels), [levels]);
-  const unassignedLevelRefs = useMemo<CampaignLevelRef[]>(
-    () => unassignedLevels.map((level, index) => ({ levelId: level.id, ordinal: index, objective: level.objective })),
-    [unassignedLevels],
-  );
   const profileLevelRefs = useMemo<CampaignLevelRef[]>(
     () => profileLevels.map((level, index) => ({ levelId: level.id, ordinal: index, objective: level.objective })),
     [profileLevels],
@@ -670,13 +1074,14 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       ? `${isSkirmishProfilesSelected ? 'Profile' : 'Level'} ${selectedVisibleLevelIndex + 1}: ${levelDoc.name}`
       : levelDoc.name
     : 'Selected Level';
+  const collectionReturnTo = campaignCollectionHref('/editor', selectedCollection);
   const editHrefForCampaignLevel = (campaignId: string, levelId: string): string =>
-    `/editor/level?campaignId=${encodeURIComponent(campaignId)}&levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`;
+    `/editor/level?campaignId=${encodeURIComponent(campaignId)}&levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(collectionReturnTo)}`;
   const editHrefForUnassigned = (levelId: string): string =>
-    `/editor/level?levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`;
+    `/editor/level?levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(collectionReturnTo)}`;
   const editHref = levelDoc
     ? isSkirmishProfilesSelected
-      ? editSkirmishProfileHref(levelDoc.id, CAMPAIGN_EDITOR_RETURN_TO)
+      ? editSkirmishProfileHref(levelDoc.id, collectionReturnTo)
       : isUnassignedSelected
       ? editHrefForUnassigned(levelDoc.id)
       : camp
@@ -685,9 +1090,9 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
     : '/editor/level';
   const playHref = levelDoc
     ? isMetaCollectionSelected
-      ? `/play?levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
+      ? `/play?levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent(collectionReturnTo)}`
       : camp
-        ? `/play?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
+        ? `/play?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent(collectionReturnTo)}`
         : '/play'
     : '/play';
   const editableCampaignsForLevel = useMemo(
@@ -825,6 +1230,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                   count={unassignedLevels.length}
                   index={campaigns.length + 1}
                   active={isUnassignedSelected}
+                  hasUnsavedDrafts={recentDrafts.length > 0}
                   onSelect={selectUnassignedCollection}
                 />
               </div>
@@ -835,7 +1241,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
             <div className="ce-rail-actions">
               <SettingsButton
                 data-testid="new-level-shortcut"
-                href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`}
+                href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_UNASSIGNED_RETURN_TO)}`}
               >+ New Level</SettingsButton>
               <SettingsButton
                 data-testid="new-campaign"
@@ -896,19 +1302,6 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
             <div className="ce-editor-body">
               <KitScroll className="settings-scroll ce-editor-scroll">
                 <div className="settings-panel-content">
-                  {recentDrafts.length > 0 ? (
-                    <SettingsSection title="Continue editing">
-                      <div className="ce-recent-drafts" data-testid="recent-editor-documents">
-                        {recentDrafts.map((document) => (
-                          <RecentDraftLevelRow
-                            key={document.document_id}
-                            document={document}
-                            savedLevel={savedLevelForEditorDocument(document, levels)}
-                          />
-                        ))}
-                      </div>
-                    </SettingsSection>
-                  ) : null}
                   {isSkirmishProfilesSelected ? (
                     <SettingsSection title="Skirmish Profiles">
                       <div className="ce-level-list" data-testid="skirmish-profiles">
@@ -930,25 +1323,42 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                       </div>
                     </SettingsSection>
                   ) : isUnassignedSelected ? (
-                    <SettingsSection title="Unassigned Levels">
-                      <div className="ce-level-list" data-testid="unassigned-levels">
-                        {unassignedLevelRefs.length === 0 ? <p className="ce-empty">No unassigned levels.</p> : null}
-                        {unassignedLevelRefs.map((ref, index) => (
-                          <LevelRow
-                            key={ref.levelId}
-                            levelRef={ref}
-                            level={levels[ref.levelId]}
-                            index={index}
-                            active={ref.levelId === selectedLevelId}
-                            readOnly
-                            onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
-                            onMoveUp={(event) => { event.stopPropagation(); }}
-                            onMoveDown={(event) => { event.stopPropagation(); }}
-                            onDelete={(event) => { event.stopPropagation(); }}
-                          />
-                        ))}
-                      </div>
-                    </SettingsSection>
+                    <>
+                      {recentDrafts.length > 0 ? (
+                        <SettingsSection title="Continue editing">
+                          <div className="ce-recent-drafts" data-testid="recent-editor-documents">
+                            {recentDrafts.map((document) => (
+                              <RecentDraftLevelRow
+                                key={document.document_id}
+                                document={document}
+                                ownerEmail={me?.email}
+                                onDocumentChange={updateRecentDraft}
+                                onRemove={removeRecentDraft}
+                              />
+                            ))}
+                          </div>
+                        </SettingsSection>
+                      ) : null}
+                      <SettingsSection title="Unassigned Levels">
+                        <div className="ce-level-list" data-testid="unassigned-levels">
+                          {unassignedLevels.length === 0 ? <p className="ce-empty">No unassigned levels.</p> : null}
+                          {unassignedLevels.map((level, index) => (
+                            <UnassignedLevelRow
+                              key={level.id}
+                              level={level}
+                              index={index}
+                              active={level.id === selectedLevelId}
+                              canManage={tierOf(level.id) === 'official'
+                                ? officialWorkspaceReady && isAdmin
+                                : userWorkspaceReady}
+                              editHref={editHrefForUnassigned(level.id)}
+                              onSelect={() => useCampaigns.getState().selectLevel(level.id)}
+                              onDelete={() => { void confirmDeleteLevel(level); }}
+                            />
+                          ))}
+                        </div>
+                      </SettingsSection>
+                    </>
                   ) : camp ? (
                     <>
                       <SettingsSection title="Campaign">

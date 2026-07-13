@@ -19,7 +19,7 @@ describe('new-level shortcut and campaign assignment controls', () => {
     expect(newCampaignIndex).toBeGreaterThan(newLevelIndex);
     expect(campaignEditorSource.match(/>\+ New Level<\/SettingsButton>/g)).toHaveLength(1);
     expect(campaignEditorSource).toContain(
-      'href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`}',
+      'href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_UNASSIGNED_RETURN_TO)}`}',
     );
   });
 
@@ -33,7 +33,8 @@ describe('new-level shortcut and campaign assignment controls', () => {
     expect(editorSource).toContain('const saved = await saveEditorDocument(');
     expect(editorSource).toContain('campaignAssignmentId || null,');
     expect(editorSource).toContain('useCampaigns.getState().assignLevelToCampaign(doc.level_id, campaignAssignmentId || null);');
-    expect(editorSource).toContain('levelEditorDraftKey({ documentId: doc.document_id, ownerEmail })');
+    expect(editorSource).toContain('const scopedDraftKey = scopedLevelEditorDraftKey(scopedDraftIdentity);');
+    expect(editorSource).toContain('writeScopedLevelEditorDraft(scopedDraftIdentity, {');
   });
 
   it('keeps destructive workspace controls locked when private hydration is unavailable', () => {

@@ -73,6 +73,52 @@ describe('campaign store', () => {
     expect(useCampaigns.getState().levels[id]).toBeUndefined();
   });
 
+  it('deletes a selected unassigned level without a selected campaign', () => {
+    const id = useCampaigns.getState().createUnassignedLevel(makeLevel('draft', 'Loose Board'));
+    useCampaigns.getState().selectLevel(id);
+
+    useCampaigns.getState().deleteLevel(id);
+
+    const state = useCampaigns.getState();
+    expect(state.selectedCampaignId).toBeNull();
+    expect(state.selectedLevelId).toBeNull();
+    expect(state.levels[id]).toBeUndefined();
+  });
+
+  it('removes and reindexes a deleted level in every campaign that references it', () => {
+    useCampaigns.getState().newCampaign();
+    const firstCampaignId = useCampaigns.getState().selectedCampaignId!;
+    useCampaigns.getState().addLevel();
+    const sharedLevelId = useCampaigns.getState().selectedLevelId!;
+    useCampaigns.getState().addLevel();
+    const firstTrailingId = useCampaigns.getState().selectedLevelId!;
+
+    useCampaigns.getState().newCampaign();
+    const secondCampaignId = useCampaigns.getState().selectedCampaignId!;
+    useCampaigns.getState().addLevel();
+    const secondLeadingId = useCampaigns.getState().selectedLevelId!;
+    useCampaigns.getState().attachLevelToCampaign(secondCampaignId, sharedLevelId);
+    useCampaigns.getState().addLevel();
+    const secondTrailingId = useCampaigns.getState().selectedLevelId!;
+    useCampaigns.getState().selectLevel(sharedLevelId);
+
+    useCampaigns.getState().deleteLevel(sharedLevelId);
+
+    const state = useCampaigns.getState();
+    expect(state.campaigns.find((campaign) => campaign.id === firstCampaignId)!.levels)
+      .toMatchObject([{ levelId: firstTrailingId, ordinal: 0 }]);
+    expect(state.campaigns.find((campaign) => campaign.id === secondCampaignId)!.levels)
+      .toMatchObject([
+        { levelId: secondLeadingId, ordinal: 0 },
+        { levelId: secondTrailingId, ordinal: 1 },
+      ]);
+    expect(state.campaigns.every((campaign) => (
+      campaign.levels.every((ref) => ref.levelId !== sharedLevelId)
+    ))).toBe(true);
+    expect(state.levels[sharedLevelId]).toBeUndefined();
+    expect(state.selectedLevelId).toBeNull();
+  });
+
   it('edits level objective + economy', () => {
     useCampaigns.getState().newCampaign();
     useCampaigns.getState().addLevel();

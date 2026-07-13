@@ -130,7 +130,10 @@ async function documentFromResponse(action: string, response: Response): Promise
           error?: unknown;
           details?: unknown;
         };
-        if (body.document) {
+        if (
+          body.document
+          && (body.error === 'editor_document_revision_conflict' || body.error === 'editor_document_baseline_conflict')
+        ) {
           const conflict = body.error === 'editor_document_baseline_conflict' ? 'baseline' : 'revision';
           throw new EditorDocumentConflictError(action, body.document, conflict, errorDetails(body));
         }
@@ -277,6 +280,20 @@ export function discardEditorDocumentChanges(
   return postDocument('discard-editor-document', `${documentUrl(documentId)}/discard`, {
     revision: expectedRevision,
   });
+}
+
+/** Permanently remove a never-saved working copy using its observed revision. */
+export async function deleteNeverSavedEditorDocument(
+  documentId: string,
+  expectedRevision: number,
+): Promise<EditorDocument> {
+  const response = await editorDocumentFetch(documentUrl(documentId), {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ revision: expectedRevision }),
+  });
+  return documentFromResponse('delete-never-saved-editor-document', response);
 }
 
 /**

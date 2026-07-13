@@ -429,12 +429,15 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
   }),
 
   deleteLevel: (levelId) => set((s) => {
-    const camp = selected(s);
-    if (!camp) return {};
     const levels = { ...s.levels };
     delete levels[levelId];
     return {
-      campaigns: s.campaigns.map((c) => (c.id === camp.id ? { ...c, levels: reindexed(c.levels.filter((r) => r.levelId !== levelId)) } : c)),
+      campaigns: s.campaigns.map((campaign) => {
+        const remaining = campaign.levels.filter((ref) => ref.levelId !== levelId);
+        return remaining.length === campaign.levels.length
+          ? campaign
+          : { ...campaign, levels: reindexed(remaining) };
+      }),
       levels,
       selectedLevelId: s.selectedLevelId === levelId ? null : s.selectedLevelId,
     };

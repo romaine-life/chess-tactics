@@ -9,9 +9,17 @@
     "final_assets": "frontend/public/assets/tiles/feature/wall-<material>-{1,8,9,thumb}.png",
     "wall_frame": {
       "width": 128,
-      "height": 240,
+      "height": 336,
       "anchor_x": 64,
-      "anchor_y": 96
+      "anchor_y": 192,
+      "wall_height": 160,
+      "base_apex": [64, 164],
+      "base_left": [16, 191],
+      "base_right": [112, 191],
+      "below_anchor_tail": 144,
+      "upward_headroom_over_retired_short_frame": 96,
+      "derivation": "Canonical full-height wall geometry for every bare, decorated, and mirror-bearing perimeter wall. It uses the same prepared material pixels, sampling, shading, and board-space base as the retired 128x240 frame. The grounded Grand Gallery uses slot y=72; its 142x240 face canvas begins 16px below this wall canvas top and its lower rail meets the wall/floor datum.",
+      "decision": "ADR-0086 retires the short wall pixels and all parallel wall-tall outputs; the full-height bake occupies the canonical wall-* filenames."
     }
   },
   "lanes": [

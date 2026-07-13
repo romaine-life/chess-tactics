@@ -7,11 +7,40 @@ import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X } from '../art/pro
 // renderer re-implements the math and drifts (the old StudioEditableBoard had
 // the headroom wrong at -27 instead of -69, which sank tiles relative to the grid).
 
-/** Grid cell -> board-space pixel (the cell's contact-diamond centre) + paint order. */
-export function boardLabCellPosition(cell: { x: number; y: number }): { left: number; top: number; zIndex: number } {
+export interface BoardGridPoint {
+  x: number;
+  y: number;
+}
+
+export interface BoardSeatPoint {
+  left: number;
+  top: number;
+}
+
+/** Continuous grid point -> board-space pixel. This is the canonical forward projection for
+ * both whole-cell seats and in-flight piece seats. */
+export function projectBoardPoint(point: BoardGridPoint): BoardSeatPoint {
   return {
-    left: (cell.x - cell.y) * TILE_TEMPLATE.stepX,
-    top: (cell.x + cell.y) * TILE_TEMPLATE.stepY,
+    left: (point.x - point.y) * TILE_TEMPLATE.stepX,
+    top: (point.x + point.y) * TILE_TEMPLATE.stepY,
+  };
+}
+
+/** Board-space pixel -> exact continuous grid point. This is the canonical inverse of
+ * projectBoardPoint, including for an in-flight seat between whole cells. */
+export function unprojectBoardPoint(seat: BoardSeatPoint): BoardGridPoint {
+  const difference = seat.left / TILE_TEMPLATE.stepX;
+  const sum = seat.top / TILE_TEMPLATE.stepY;
+  return {
+    x: (sum + difference) / 2,
+    y: (sum - difference) / 2,
+  };
+}
+
+/** Grid cell -> board-space pixel (the cell's contact-diamond centre) + paint order. */
+export function boardLabCellPosition(cell: BoardGridPoint): BoardSeatPoint & { zIndex: number } {
+  return {
+    ...projectBoardPoint(cell),
     zIndex: cell.x + cell.y,
   };
 }

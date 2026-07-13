@@ -4,9 +4,8 @@ import {
   editorDocumentContinueHref,
   editorDocumentDisplayName,
   resumableUserEditorDocuments,
-  savedLevelForEditorDocument,
 } from './campaignEditorRecentDrafts';
-import { createBlankLevel } from '../core/level';
+import { DEFAULT_LEVEL_NAME, LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 
 const summary = (over: Partial<EditorDocumentSummary> = {}): EditorDocumentSummary => ({
   document_id: 'doc-a',
@@ -45,21 +44,18 @@ describe('Campaign Editor recent drafts', () => {
 
   it('links directly to the existing private document without a create/share action', () => {
     expect(editorDocumentContinueHref(summary({ document_id: 'doc/a b', level_id: 'l 2' })))
-      .toBe('/editor/level?levelId=l+2&document=doc%2Fa+b&returnTo=%2Feditor');
+      .toBe('/editor/level?levelId=l+2&document=doc%2Fa+b&returnTo=%2Feditor%3Fcollection%3Dunassigned');
   });
 
   it('gives an unnamed draft a stable human label', () => {
-    expect(editorDocumentDisplayName(summary({ name: '  ' }))).toBe('Untitled level');
+    expect(editorDocumentDisplayName(summary({ name: '  ' }))).toBe(DEFAULT_LEVEL_NAME);
   });
 
-  it('uses only the canonical saved position for a draft thumbnail', () => {
-    const savedLevel = createBlankLevel('l1', 'Saved position');
-    const levels = { l1: savedLevel };
-
-    expect(savedLevelForEditorDocument(summary(), levels)).toBe(savedLevel);
-    expect(savedLevelForEditorDocument(summary({
-      has_saved_baseline: false,
-      never_saved: true,
-    }), levels)).toBeUndefined();
+  it('uses the shared Level Editor name policy for inline rename and display', () => {
+    expect(normalizeLevelName('  New bridge  ')).toBe('New bridge');
+    expect(normalizeLevelName('   ')).toBe(DEFAULT_LEVEL_NAME);
+    expect(normalizeLevelName('x'.repeat(LEVEL_NAME_MAX + 20))).toHaveLength(LEVEL_NAME_MAX);
+    expect(editorDocumentDisplayName(summary({ name: 'x'.repeat(LEVEL_NAME_MAX + 20) })))
+      .toBe('x'.repeat(LEVEL_NAME_MAX));
   });
 });

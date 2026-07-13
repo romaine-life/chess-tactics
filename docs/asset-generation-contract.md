@@ -135,6 +135,79 @@ Rendered board concepts are still valuable, but they should become references,
 crop sources, or temporary bridge images while the real tile and piece kits are
 being produced.
 
+### Full-Height Wall Assets
+
+All perimeter wall materials use one canonical full-height generated geometry. The
+generated wall face, anchor, back-edge/floor seam, footprint, material projection, and
+below-anchor tail are identical whether the wall is bare or carries wall art. Runtime and
+preview consumers must not select geometry by mirror presence.
+
+The former ordinary short wall pixels and mirror-only `wall-tall-*` outputs are retired.
+The full-height bake overwrites the canonical `wall-<material>-*` filenames/catalog
+entries; parallel short/tall runtime lanes, `wallVariant` selectors, fallback defaults,
+and short-wall proof expectations must be deleted end to end. Source history may retain
+old renders only as clearly labeled retired evidence outside runtime asset paths. New
+material bakes, thumbnails, contact sheets, and runtime seat proofs all target the
+canonical full-height frame. See
+[ADR-0086](adr/0086-all-perimeter-walls-use-full-height-geometry.md).
+
+### Live Mirror Assets
+
+A wall mirror is an assembly of generated material pixels and live game state. Its
+frame, bevel, glass tint, foxing, scratches, and highlights are generated transparent
+bitmap assets. Its reflected chess piece is never baked into those pixels; the shared
+board renderer supplies the current physical unit through the frame-owned aperture.
+
+Mirror fit follows the exact one-to-one game-world and wall-height rules in
+[ADR-0086](adr/0086-all-perimeter-walls-use-full-height-geometry.md):
+
+- the reflected draw keeps the physical board draw's resolved width and height, with no
+  mirror-only scale or depth-compression treatment
+- its feet remain on the exact reflected floor-contact anchor, with no vertical fitting
+  offset
+- Grand Gallery and any future full-body mirror mount on the same canonical full-height
+  wall used everywhere else; their generated lower rails stay grounded while frame and
+  glass use the available upward relief, and moving the whole assembly upward to catch
+  the virtual raster is prohibited
+- every mirror's generated frame and glass, plus its live reflection, are clipped to the
+  same actual supporting-wall-face union, capped at the generated wall's projected
+  back-edge/floor seam so the boundary tile occludes below-seam pixels
+- a full-body assembly must contain the tallest resolved exact virtual raster before
+  support occlusion and classify every opaque physical-draw pixel's board-axis wall
+  crossing as either supported glass or floor-occluded at normal board scale on both wall
+  faces, with the two counts reported separately and no outside-glass, unsupported, or
+  invalid pixels
+- intentionally small Keep, Court, Chapel, and Witch's Eye apertures may crop that same
+  exact-size raster; cropping at the authored glass polygon is not a fit transform
+- wall height never varies by mirror kind or presence; every assembly leaves the logical
+  wall plane, contact footprint, anchor, span, back-edge/floor seam, and corridor
+  unchanged
+- mirror manifests use semantic `mirrorCoverage: "full-body" | "authored-crop"`
+  metadata to drive aperture acceptance, never wall-height selection
+- insufficient headroom in a full-body mirror requires a source and bake revision; do
+  not stretch an existing frame, shrink or shift the live piece, float it above its seat,
+  or append CSS, SVG, gradient, or code-painted wall pixels
+
+Grand Gallery additionally uses exact face parity: the emitted north frame and glass are
+horizontal pixel mirrors of the west frame and glass. Its north mount and normalized aperture
+mirror the west geometry with polygon winding restored. Independently shearing directional
+source highlights for the two faces is not an eligible bake because it changes the material's
+visual identity by wall orientation. The image-generation gate compares every emitted RGBA
+sample. See [ADR-0087](adr/0087-grand-gallery-wall-faces-are-exact-visual-counterparts.md).
+
+Grand Gallery acceptance evidence must show the full tallest-unit reflection at 1:1
+beside its physical board draw on both wall faces, with aperture bounds visible. It must
+also show or report the exhaustive wall-hit silhouette from the physical alpha mask:
+every west grid-X or north grid-Y crossing on the wall side lies inside both the authored
+aperture and an actual supporting-wall segment, while every crossing below the projected
+wall/floor seam is reported separately as floor-occluded. Supported-glass plus
+floor-occluded must equal the visible-alpha total, with no failure class. Representative
+rays may explain the construction, but cannot replace the per-pixel pass/fail gate. See
+[ADR-0085](adr/0085-mirror-surfaces-end-at-the-wall-floor-boundary.md). Small
+mirror evidence may show a partial silhouette, but must prove that it is an aperture clip
+of the unchanged exact-size, exact-anchor draw. Contact sheets alone are insufficient:
+include actual board-scale proofs without resampling or fitting displacement.
+
 ## Agent Task Shape
 
 Asset-generation tasks should be narrow and concrete. A good task names the

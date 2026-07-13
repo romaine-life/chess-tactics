@@ -6,7 +6,7 @@ import {
   TILE_STEP_Y,
 } from '../art/projectionContract';
 import { studioFamilies, assetFrameSrc, type StudioAsset } from '../ui/studioBoard';
-import { featureFrameSrc, fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
+import { featureFrameSrc, fenceFrameSrc, fencePostSrc, wallFrameSrc, WALL_FRAME_GEOMETRY } from '../art/tileset';
 import {
   unitArtForId,
   unitAnchorFraction,
@@ -40,14 +40,21 @@ import {
   resolveTerrainSideFaces,
   resolveTerrainSideMaterials,
 } from './terrainSides';
+import {
+  mirrorGlassOpsForSurfaces,
+  mirrorSurfacesForPlacements,
+  reflectedOpsForSubjects,
+  wallArtFrameOpsForPlacements,
+  type MirrorReflectionSubject,
+} from './mirrorReflection';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
 const TILE_FRAME_H = TILE_FRAME_HEIGHT;
 const TILE_EQUATOR = TILE_FRAME_EQUATOR_Y;
-const WALL_FRAME_W = 128;
-const WALL_FRAME_H = 240;
-const WALL_ANCHOR_X = 64;
-const WALL_ANCHOR_Y = 96;
+const WALL_FRAME_W = WALL_FRAME_GEOMETRY.width;
+const WALL_FRAME_H = WALL_FRAME_GEOMETRY.height;
+const WALL_ANCHOR_X = WALL_FRAME_GEOMETRY.anchorX;
+const WALL_ANCHOR_Y = WALL_FRAME_GEOMETRY.anchorY;
 const DOODAD_FRAME_W = TILE_FRAME_W;
 const DOODAD_FRAME_H = TILE_FRAME_H;
 const DOODAD_ANCHOR_Y = 69;
@@ -70,7 +77,7 @@ export interface BoardSpriteAnimation {
 
 export interface BoardDrawOp {
   /** Semantic ownership used by composed renderers; never infer this from `src`. */
-  layer: BoardDrawLayer;
+  layer?: BoardDrawLayer;
   src: string;
   dx: number;
   dy: number;
@@ -94,7 +101,7 @@ export function isBoardDrawOpInLayer(
   op: BoardDrawOp,
   ...layers: readonly BoardDrawLayer[]
 ): boolean {
-  return layers.includes(op.layer);
+  return !!op.layer && layers.includes(op.layer);
 }
 
 export function withoutBoardDrawLayers<TOp extends BoardDrawOp>(
@@ -122,6 +129,48 @@ const studioTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.ass
 const resolveTile = (id: string): StudioAsset | undefined => studioTiles.find((asset) => asset.id === id);
 const resolveUnit = (id: string): UnitAsset | undefined => unitArtForId(id);
 const resolveDoodad = (id: string): DoodadAsset | undefined => doodadAsset(id);
+
+function staticUnitSubject(
+  key: string,
+  placement: RenderBoard['units'][string],
+): MirrorReflectionSubject | null {
+  const [x, y] = key.split(',').map(Number);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const unit = resolveUnit(placement.unitId);
+  if (!unit) return null;
+  const direction = placement.direction as Direction;
+  const faction = placement.faction as Faction;
+  if (!hasDirectionSprite(unit, direction)) return null;
+  const src = unit.sprite(faction, direction);
+  if (!src) return null;
+  const scale = unit.defaultScale / 100;
+  const nativeScale = unit.nativeScalePercent / 100;
+  const seatW = UNIT_SEAT_W * nativeScale * scale;
+  const seatH = UNIT_SEAT_H * nativeScale * scale;
+  const imageW = Math.min(UNIT_IMG_MAX_W, unit.footprint.sourceCanvasPx) * scale;
+  const imageH = Math.min(UNIT_IMG_MAX_H, unit.footprint.sourceCanvasHeightPx) * scale;
+  const seat = boardLabCellPosition({ x, y });
+  const seatX = seat.left - unitAnchorFraction(unit.unitAnchorX) * seatW;
+  const seatY = seat.top - unitAnchorFraction(unit.unitAnchorY) * seatH;
+  return {
+    grid: { x, y },
+    seat,
+    facing: direction,
+    spriteForFacing: (facing) => hasDirectionSprite(unit, facing)
+      ? unit.sprite(faction, facing) ?? src
+      : src,
+    op: {
+      layer: 'scene',
+      src,
+      dx: seatX + (seatW - imageW) / 2,
+      dy: seatY + (seatH - imageH) / 2,
+      dw: imageW,
+      dh: imageH,
+      z: objectBaseZIndex({ x, y }),
+      contain: true,
+    },
+  };
+}
 
 function terrainCellClipPolygon(index: number, columns: number): number[] {
   const x = index % columns;
@@ -230,6 +279,17 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   const wallBounds = { cols: board.cols, rows: board.rows };
   const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
   const wallFaceStyles = resolveWallArtFaces(board.wallArt, wallBounds);
+  const hasWall = (edge: string): boolean => Boolean(board.walls?.[edge]);
+  const mirrorSurfaces = mirrorSurfacesForPlacements(board.wallArt, wallBounds)
+    .filter((surface) => surface.segments.every((segment) => !segment.edge || hasWall(segment.edge)));
+  const staticUnitSubjects = new Map<string, MirrorReflectionSubject>();
+  for (const [key, placement] of Object.entries(board.units)) {
+    const subject = staticUnitSubject(key, placement);
+    if (subject) staticUnitSubjects.set(key, subject);
+  }
+  ops.push(...mirrorGlassOpsForSurfaces(mirrorSurfaces));
+  ops.push(...reflectedOpsForSubjects(mirrorSurfaces, [...staticUnitSubjects.values()]));
+  ops.push(...wallArtFrameOpsForPlacements(board.wallArt, wallBounds, { hasWall }));
   const occupiedTerrain = new Set(
     Object.entries(board.cells)
       .filter(([, id]) => !!resolveTile(id))
@@ -319,6 +379,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
           for (const slot of wallArtSlotsForFace(faceStyles?.[face], face)) {
             const source = slotSource(slot);
             if (!source) continue;
+            if (source.kind === 'mirror') continue;
             const faceAsset = source.faces[face];
             ops.push({
               layer: 'scene',
@@ -397,34 +458,8 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       }
     }
 
-    const placement = board.units[key];
-    const unit = placement ? resolveUnit(placement.unitId) : undefined;
-    if (unit && placement) {
-      const direction = placement.direction as Direction;
-      const src = hasDirectionSprite(unit, direction)
-        ? unit.sprite(placement.faction as Faction, direction)
-        : null;
-      if (src) {
-        const scale = unit.defaultScale / 100;
-        const nativeScale = unit.nativeScalePercent / 100;
-        const seatW = UNIT_SEAT_W * nativeScale * scale;
-        const seatH = UNIT_SEAT_H * nativeScale * scale;
-        const imageW = Math.min(UNIT_IMG_MAX_W, unit.footprint.sourceCanvasPx) * scale;
-        const imageH = Math.min(UNIT_IMG_MAX_H, unit.footprint.sourceCanvasHeightPx) * scale;
-        const seatX = left - unitAnchorFraction(unit.unitAnchorX) * seatW;
-        const seatY = top - unitAnchorFraction(unit.unitAnchorY) * seatH;
-        ops.push({
-          layer: 'scene',
-          src,
-          dx: seatX + (seatW - imageW) / 2,
-          dy: seatY + (seatH - imageH) / 2,
-          dw: imageW,
-          dh: imageH,
-          z: base,
-          contain: true,
-        });
-      }
-    }
+    const unitSubject = staticUnitSubjects.get(key);
+    if (unitSubject) ops.push(unitSubject.op);
   }
 
   for (const [key, placement] of Object.entries(board.props ?? {})) {
