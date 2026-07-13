@@ -129,7 +129,7 @@ const FINAL_CUTOVER_MARKER_EXEMPTIONS = new Set([
   'frontend/scripts/check-no-committed-media.test.mjs',
 ]);
 const TEST_SOURCE_PATH = /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)|\.test\.[^.\/]+$|(?:^|\/)[^\/]*smoke-test\.js$/;
-const CUTOVER_SCAFFOLD_SOURCE_PATH = /^(?:backend\/|frontend\/(?:config|scripts|src)\/|k8s\/|\.github\/workflows\/)|^(?:Dockerfile|backend\/package\.json|frontend\/package\.json)$/;
+const CUTOVER_SCAFFOLD_SOURCE_PATH = /^(?:backend\/|frontend\/(?:config|scripts|src)\/|scripts\/|k8s\/|\.github\/workflows\/)|^(?:Dockerfile|backend\/package\.json|frontend\/package\.json)$/;
 const STATIC_AUTHORITY_SOURCE_PATH = /^(?:backend\/|frontend\/(?:config|scripts|src)\/|packages\/|k8s\/|\.github\/|scripts\/|tools\/)/;
 const STATIC_AUTHORITY_CODE_EXTENSION = /\.(?:c?js|json|mjs|mts|ts|tsx)$/;
 const STATIC_AUTHORITY_CONFIG_EXTENSION = /\.(?:jsonl|toml|ya?ml)$/;
@@ -158,6 +158,10 @@ const RETIRED_CUTOVER_SOURCE_MARKERS = [
   {
     pattern: /--allow-frozen-cutover|--allow-cutover-importer/,
     detail: 'CI still permits the retired Git-media cutover snapshot',
+  },
+  {
+    pattern: /exact-image-approval|EXACT_IMAGE_APPROVER_IDS|verify-live-media-cutover|media:verify-cutover|candidate-\$\{GITHUB_RUN_ID\}/,
+    detail: 'retired one-time cutover release ceremony remains after final cutover',
   },
   {
     pattern: /propSeats\.json|applyPropSeatOverrides|THUMBNAIL_PROP_SEATS_TTL_MS|_thumbnailPropSeatsCache/,

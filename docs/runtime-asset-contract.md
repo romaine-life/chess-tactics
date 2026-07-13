@@ -133,10 +133,10 @@ catalog.
 - Local development resolves the one live catalog through the Vite-spawned
   backend by default. The app database and private media container remain the
   authoritative content data plane.
-- The cutover and owner verification use unserved candidate pods against that
-  same data plane, as decided by
+- The completed cutover and owner verification used unserved candidate pods
+  against that same data plane, as decided by
   [ADR-0086](adr/0086-runtime-asset-cutover-uses-one-live-data-plane.md). A
-  production-seeded test database is not a release gate.
+  production-seeded test database is not a steady-state release gate.
 - Automated tests may use transient databases and local object storage for
   generated fixtures. Optional preview tooling may project immutable public
   reads, but it cannot write, promote, or supply cutover evidence.
@@ -172,6 +172,7 @@ version accepted and had no review or acceptance input. A bridge pointer is
 named `active`, never `accepted`, and its catalog entry is explicitly
 non-production-eligible; storage cutover cannot legitimize its pixels.
 
-The one-time infrastructure ordering, one-data-plane bootstrap, immutable proof,
-and owner-verification gates are documented in the
-[runtime asset cutover runbook](runtime-asset-cutover-runbook.md).
+The one-time infrastructure ordering, bootstrap verifier, and manual image
+approval gate were deleted after the cutover completed. Normal releases build
+the merged `main` revision and deploy its digest as defined by
+[ADR-0094](adr/0094-merge-builds-and-deploys-the-merged-image.md).

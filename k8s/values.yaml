@@ -1,6 +1,6 @@
 # Build and Deploy replaces this value with the full, digest-pinned image ref
-# already built and verified on the merged PR. Non-production lanes may still
-# supply an ordinary content-fingerprint tag.
+# built from the exact merged main revision. Non-production lanes may still
+# supply an ordinary content-fingerprint or commit tag.
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
