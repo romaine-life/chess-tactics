@@ -1,10 +1,10 @@
 # Build and Deploy replaces this value with the full, digest-pinned image ref
-# already built and verified on the merged PR. Non-production lanes may still
-# supply an ordinary content-fingerprint tag.
+# built from the exact merged main revision. Non-production lanes may still
+# supply an ordinary content-fingerprint or commit tag.
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:36b6d9b3746b0f7de97b67172480835d5526bc2ad3d60414ef596d66c23483b5"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:fd6367ecbd3aae0bd2fd4249678bedc6d439cf21308f81cbd4d78b64fc41d4a0"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Restore exact-image approval visibility"
-  prNumber: "484"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/484"
-  commit: "1792341"
+  prTitle: "Restore normal merge-to-deploy releases"
+  prNumber: "489"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/489"
+  commit: "619589a"
 
 name: chess-tactics
 namespace: chess-tactics
