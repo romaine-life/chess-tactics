@@ -179,6 +179,8 @@ type SkirmishHudProps = {
   returnLabel?: string;
   /** False in a secondary same-seat tab: keep inspection/view controls, hide lifecycle writes. */
   netInteractive?: boolean;
+  /** Development-only owner calibration for a temporary pre-drawn plate candidate. */
+  onOpenPredrawnRegistration?: (() => void) | null;
 };
 
 export function SkirmishHud({
@@ -196,6 +198,7 @@ export function SkirmishHud({
   returnHref = null,
   returnLabel = 'Back',
   netInteractive = true,
+  onOpenPredrawnRegistration = null,
 }: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
@@ -473,6 +476,19 @@ export function SkirmishHud({
                 <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showGrid && 'active')} onClick={() => toggleOverlay('showGrid')} aria-pressed={showGrid}>Grid</button>
               </div>
             </div>
+            {onOpenPredrawnRegistration ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Pre-drawn plate</span>
+                <div className="skirmish-view-row">
+                  <button
+                    type="button"
+                    className="app-header-button app-header-button-active"
+                    data-testid="open-predrawn-registration"
+                    onClick={onOpenPredrawnRegistration}
+                  >Pick corners</button>
+                </div>
+              </div>
+            ) : null}
           </section>
         )}
 

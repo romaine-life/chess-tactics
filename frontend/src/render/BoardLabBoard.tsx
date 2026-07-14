@@ -16,6 +16,7 @@ import { featureFrameSrc } from '../art/tileset';
 import type { ResolvedFenceOverlay, ResolvedFencePost, ResolvedWallOverlay } from '../core/featureAutotile';
 import type { WallArtPlacementMap } from '../core/wallArt';
 import { resolveMacroTilePlacements, type MacroTilePlacement } from '../core/macroTiles';
+import { PredrawnBoardLayer, predrawnReviewGridCells, type PredrawnBoardPlate } from './PredrawnBoardLayer';
 
 // Re-export the projection so existing importers (SkirmishBoard, TilePreview, the
 // thumbnail bake) keep working; the math itself now lives in one place: boardProjection.
@@ -86,6 +87,8 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   className?: string;
   ariaLabel?: string;
   showGrid?: boolean;
+  /** One continuous board plate replacing composed terrain, props, and barrier pixels. */
+  predrawnPlate?: PredrawnBoardPlate;
   macroTiles?: readonly MacroTilePlacement[];
   renderCellOverlay?: (context: BoardLabBoardOverlayContext<TAsset>) => ReactNode;
   /**
@@ -154,6 +157,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   className = '',
   ariaLabel = 'Generated board',
   showGrid = false,
+  predrawnPlate,
   macroTiles,
   renderCellOverlay,
   fenceOverlays,
@@ -165,6 +169,9 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   children,
 }: BoardLabBoardProps<TAsset>) {
   const sourceCells = board.cells;
+  const reviewGridCells = predrawnPlate
+    ? predrawnReviewGridCells(sourceCells, predrawnPlate.registration)
+    : sourceCells;
   const byKey = new Map<string, SocketBoardCell<TAsset>>(
     sourceCells.map((cell): [string, SocketBoardCell<TAsset>] => [`${cell.x}-${cell.y}`, cell]),
   );
@@ -212,8 +219,10 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       boardPan={boardPan}
       backgroundLayer={(
         <>
-          <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(resolvedMacroTiles)} />
-          <BoardBarrierSceneLayer fenceOverlays={fenceOverlays} fencePosts={fencePosts} wallOverlays={wallOverlays} wallArt={wallArt} wallBounds={wallBounds} />
+          {predrawnPlate
+            ? <PredrawnBoardLayer plate={predrawnPlate} cells={sourceCells} />
+            : <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(resolvedMacroTiles)} />}
+          {!predrawnPlate ? <BoardBarrierSceneLayer fenceOverlays={fenceOverlays} fencePosts={fencePosts} wallOverlays={wallOverlays} wallArt={wallArt} wallBounds={wallBounds} /> : null}
           {sceneLayer}
         </>
       )}
@@ -226,7 +235,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
           : undefined
       }
     >
-      {showGrid ? <BoardGridLayer cells={sourceCells} /> : null}
+      {showGrid ? <BoardGridLayer cells={reviewGridCells} /> : null}
       {children}
     </TileGrid>
   );

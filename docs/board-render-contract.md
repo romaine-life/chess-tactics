@@ -219,6 +219,103 @@ The runtime board is one composed terrain canvas, but its source data remains la
 3. Road and river feature overlays.
 4. Optional grid, cover, doodads, props, units, and tactical overlays.
 
+### Pre-drawn board surfaces
+
+Per [ADR-0096](adr/0096-predrawn-candidate-review-uses-exact-board-plane-registration.md),
+a board may replace the composed terrain, feature, prop, fence, wall, and wall-art
+pixels with one complete pre-drawn live-media plate. Its ordinary cell and object
+data remain present and gameplay-authoritative; this is a render mode, not a
+different coordinate system or a flattened rules document.
+
+The plate is registered once to the canonical centered board reference frame.
+Development review uses four source corners for the board plane and, per
+[ADR-0101](adr/0101-owner-fitted-grid-defines-predrawn-review-rectification.md),
+may record one strictly monotonic guide for each internal row and column. The
+complete owner-fitted grid is visible over the untouched source together with an
+equal-spacing reference and a numeric correction range. Saving applies the
+inverse row/column map to the one continuous painting before its exact
+four-corner homography. It never crops, masks, splits, or independently aligns
+landmarks. Per
+[ADR-0102](adr/0102-predrawn-refit-target-dimensions-are-owner-configurable.md),
+the owner sets the row and column count of that refit target itself. The authored
+level dimensions are only its initial default. The saved count controls the
+guide topology and homography. Per
+[ADR-0103](adr/0103-predrawn-review-overlay-uses-the-saved-refit-grid.md), it also
+controls the visible temporary review grid after the picker closes, so the
+chosen count does not appear to revert. Playable cells, hit targets, movement,
+and level dimensions remain authored-level data; the review grid is visual
+calibration evidence only. A generated extra row or column therefore remains
+visible instead of being compressed or hidden. These calibration
+coordinates are not persisted in the level, and
+production acceptance still requires a native-frame plate under ADR-0076. Units,
+selection and tactical state, doodads, and animated ground cover remain ordinary
+board-space overlays.
+
+Per [ADR-0097](adr/0097-predrawn-registration-is-owner-picked-source-geometry.md)
+and [ADR-0099](adr/0099-predrawn-registration-is-local-first-and-explicitly-saved.md),
+the four source corners and the full internal row/column fit are owner-authorable
+in the running app against the untouched candidate image. Automatic geometry may
+seed that instrument, but it does not outrank an owner-picked control. Guide
+movement is clamped between neighboring guides so the board cannot fold or
+reorder cells. Refit row/column count changes rebuild only the changed axis with
+equal spacing and never resize the level or select a playable subset. Clicks,
+drags, nudges, target-count changes, spacing reset, and restore change pending
+picker state. `SAVE REGISTRATION` synchronously writes a candidate-source-scoped
+browser-local record and must read back the exact serialized value before the UI
+reports success. Only then does it mirror the development review URL and enable
+grid-on comparison. The same browser's verified local record outranks that URL;
+different browser profiles do not share it.
+
+After `DONE`, a registered candidate's visible grid continues to use the saved
+refit row/column count. The ordinary authored-cell grid returns when no temporary
+candidate registration is active. Review-grid cells must never become editor hit
+targets or gameplay cells.
+
+Per [ADR-0104](adr/0104-predrawn-calibration-can-snap-to-the-canonical-grid-shape.md),
+`SNAP IDEAL GRID` converts the current refit count to the exact runtime projection
+shape using the canonical `TILE_STEP_X`/`TILE_STEP_Y` axis vectors and one uniform
+scale. It preserves the current center and closest scale when possible, keeps the
+result inside the source frame, and resets internal guides to equal spacing. It
+does not change the selected counts or authored level geometry.
+
+Per [ADR-0105](adr/0105-predrawn-calibration-keeps-an-independent-pinned-boundary.md),
+the owner may pin the current four outer corners as a separate painted-boundary
+reference. Its contrasting four-line outline and independently draggable handles
+remain visible while the working grid is snapped or edited. Version-4
+registration preserves that reference across save and reopen, but the reference
+is display-only and never participates in the homography, rectification, review
+grid, hit targets, or gameplay.
+
+Per [ADR-0106](adr/0106-predrawn-registration-handoff-is-a-compact-copy-packet.md),
+`COPY CODEX HANDOFF` is enabled only after `SAVE REGISTRATION` has read back and
+verified the exact source-scoped local record. It copies a compact JSON packet
+containing only the candidate source and serialized registration. The mirrored
+development URL remains useful for reopen and debugging, but copying an address
+bar is not the owner-to-agent handoff workflow.
+
+Per [ADR-0107](adr/0107-registered-predrawn-candidates-activate-the-locked-editor.md),
+that verified registration plus an allowed same-origin development candidate is
+also sufficient to activate pre-drawn mode in the real Level Editor before live
+media acceptance. Closing calibration keeps the complete candidate plate under
+the live grid and applies the same locked-layer and baked-signature guards as a
+persisted pre-drawn surface. Its temporary source and synthetic review surface
+exist only in memory and are never serialized into the working copy or level.
+`DONE` removes the picker-open route flag so a refresh stays in the editor.
+
+Per [ADR-0108](adr/0108-predrawn-scenes-own-a-viewport-cover-zoom-floor.md),
+the transformed convex boundary of the complete source frame—not the playable
+grid diamond—defines a viewport-cover zoom floor while any pre-drawn plate is
+active. The shared `ViewPane` recomputes that floor from its live dimensions and
+current pan, rounds upward to the control precision, and reports it to editor and
+gameplay zoom controls. Wheel, stepper, shortcut, and reset paths must not cross
+it. If the floor exceeds the ordinary gameplay cap, the cap rises to the floor;
+ordinary tiled boards retain their existing zoom range.
+
+While this surface is active, the editor must reject changes to dimensions,
+cells, macrotiles, roads, props, fences, walls, wall art, generated regions, cuts,
+and exits. Units, rules, zones, doodads, and animated cover remain editable.
+Changing baked geometry requires a new plate.
+
 A macrotile never changes movement, collision, terrain family, or cell addressing. Its catalog
 entry declares a rectangular footprint and one board-space PNG. A placement may also declare
 row-major `breaks`: footprint cells where the ordinary 1x1 top is exposed and the macrotile image

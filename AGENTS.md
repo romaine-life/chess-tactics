@@ -47,7 +47,7 @@ contracts whenever the task vocabulary suggests one.
 | --- | --- |
 | Product and gameplay intent | [`docs/game-concept.md`](docs/game-concept.md) and relevant entries in the ADR decision log |
 | Board, terrain, tiles, and projection | [`docs/board-render-contract.md`](docs/board-render-contract.md), [`docs/tile-ruleset.md`](docs/tile-ruleset.md), [`docs/blender-projection-contract.md`](docs/blender-projection-contract.md), and [`frontend/scripts/TILE_PIPELINE.md`](frontend/scripts/TILE_PIPELINE.md) |
-| Generated visual art and runtime visual assets | [`docs/runtime-asset-contract.md`](docs/runtime-asset-contract.md), [`docs/asset-generation-contract.md`](docs/asset-generation-contract.md), [`docs/asset-terminology.md`](docs/asset-terminology.md), and the relevant portrait, background, UI, or tile contract |
+| Generated visual art and runtime visual assets | [`docs/runtime-asset-contract.md`](docs/runtime-asset-contract.md), [`docs/asset-generation-contract.md`](docs/asset-generation-contract.md), [`docs/asset-terminology.md`](docs/asset-terminology.md), and the relevant portrait, background, UI, or tile contract. For complete pre-drawn level scenes, also read [`docs/art/predrawn-board-generation.md`](docs/art/predrawn-board-generation.md). |
 | UI, chrome, Studio, and editors | [`docs/ui-art-direction.md`](docs/ui-art-direction.md), [`docs/ui-kit-standard.md`](docs/ui-kit-standard.md), and [`docs/studio-control-architecture.md`](docs/studio-control-architecture.md) |
 | Content, persistence, and authentication | [`docs/persistence.md`](docs/persistence.md) and the ADRs governing the affected content system |
 | Backend, multiplayer, and local server work | `CLAUDE.md` and the relevant backend smoke tests |
@@ -116,6 +116,13 @@ contracts whenever the task vocabulary suggests one.
   running application, verify the real full app on the exact route and state
   affected. Use the dynamically printed Vite URL, not an assumed port, and use
   the supported screenshot path documented in `CLAUDE.md`.
+- Nelson uses external Chrome for application review and handoff. Ambient
+  in-app-browser state is informational only: never infer that he is using that
+  browser, never navigate or claim its tabs as a substitute, and never ask him
+  to repeat work there. Unless he explicitly requests browser automation in
+  another surface, provide the exact direct development URL for him to open in
+  Chrome. A Chrome-control connection failure must be diagnosed and repaired;
+  falling back to the in-app browser is not an acceptable workaround.
 - For visual UI work, especially Chrome Lab, level editor chrome, rail/atom
   alignment, clipping, overflow, title text placement, preview surfaces, and
   dark-theme controls, static inspection and typecheck are never sufficient.

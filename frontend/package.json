@@ -10,6 +10,7 @@
     "build:board-render": "npm --prefix ../packages/board-render run build",
     "preview": "vite preview --host 0.0.0.0",
     "shot": "node scripts/shot.mjs",
+    "predrawn:detect": "node scripts/detect-predrawn-board.mjs",
     "e2e:lobby": "node scripts/lobby-e2e.mjs",
     "vendor:ambience": "node scripts/vendor-ambience.mjs",
     "assets:build:macro-tiles": "python scripts/build-macro-tiles.py",

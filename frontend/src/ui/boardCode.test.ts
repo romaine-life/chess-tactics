@@ -181,4 +181,23 @@ describe('boardCode round-trip', () => {
     expect(encodeBoard(emptyBoard({ generatedRegions: [] }))).toBe(encodeBoard(emptyBoard()));
     expect(decodeBoard(encodeBoard(emptyBoard()))!.generatedRegions).toEqual([]);
   });
+
+  it('round-trips a pre-drawn board as a semantic media slot plus canonical review frame', () => {
+    const surface: NonNullable<EditorBoard['surface']> = {
+      kind: 'predrawn',
+      slot: 'boards/fortress-gate/plate.png',
+      frameWidth: 950,
+      frameHeight: 565,
+    };
+    expect(decodeBoard(encodeBoard(emptyBoard({ surface })))?.surface).toEqual(surface);
+  });
+
+  it('drops malformed pre-drawn surface records instead of persisting arbitrary URLs', () => {
+    const decoded = decodeBoard(encodeWire({
+      c: 6,
+      r: 5,
+      pd: ['https://example.com/board.png', 950, 565],
+    }));
+    expect(decoded?.surface).toBeUndefined();
+  });
 });

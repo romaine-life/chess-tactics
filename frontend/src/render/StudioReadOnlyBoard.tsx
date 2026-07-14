@@ -16,6 +16,7 @@ import {
   resolveTerrainSideMaterials,
   type TerrainSideExposure,
 } from '@chess-tactics/board-render';
+import { PredrawnBoardLayer, runtimePredrawnBoardPlate } from './PredrawnBoardLayer';
 
 // THE shared, non-interactive board renderer — one source of truth for how an EditorBoard
 // draws (terrain through one composed canvas layer; units, doodads, props, fences, walls, wall art,
@@ -165,6 +166,7 @@ export function StudioReadOnlyBoard({
     rows: board.rows,
     familyAt: (x, y) => familyOfTile(board.cells[`${x},${y}`] ?? ''),
   });
+  const predrawnPlate = board.surface ? runtimePredrawnBoardPlate(board.surface) : undefined;
 
   return (
     <TileGrid
@@ -175,7 +177,9 @@ export function StudioReadOnlyBoard({
       boardPan={boardPan}
       backgroundLayer={(
         <>
-          <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(macroTiles)} />
+          {predrawnPlate
+            ? <PredrawnBoardLayer plate={predrawnPlate} cells={gridCells} />
+            : <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(macroTiles)} />}
           <BoardSceneLayer board={board} coverSeed={coverSeed} ambientCover={false} omitTerrain />
         </>
       )}

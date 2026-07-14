@@ -33,6 +33,8 @@ import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 import { macroTileAsset, macroTileBreakIndices, macroTileFrame, macroTileOwnedCellIndices, resolveMacroTilePlacements } from '../core/macroTiles';
+import { liveMediaSlotUrl } from '../art/liveMediaCatalog';
+import { predrawnBoardPlacement } from './predrawnBoard';
 import {
   TERRAIN_SIDE_FACE_COLUMN,
   TERRAIN_SIDE_FACES,
@@ -270,17 +272,32 @@ function pushFencePostDrawOp(ops: BoardDrawOp[], post: ResolvedFencePost): void 
 
 export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {}): BoardDrawOp[] {
   const ops: BoardDrawOp[] = [];
+  const predrawn = board.surface?.kind === 'predrawn' ? board.surface : undefined;
+  if (predrawn) {
+    const gridCells = Array.from({ length: board.rows }, (_, y) =>
+      Array.from({ length: board.cols }, (__, x) => ({ x, y }))).flat();
+    const placement = predrawnBoardPlacement(predrawn, gridCells);
+    ops.push({
+      layer: 'terrain',
+      src: liveMediaSlotUrl(predrawn.slot),
+      dx: placement.left,
+      dy: placement.top,
+      dw: placement.width,
+      dh: placement.height,
+      z: -100000,
+    });
+  }
 
   const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
   const isExit = (edge: string): boolean => board.featureExits[edge] === true;
   const overlays = resolveFeatureOverlays(board.features, isSevered, isExit);
-  const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
-  const fencePosts = resolveFencePosts(board.fences ?? {}, board.fencePosts ?? {});
+  const fenceOverlays = predrawn ? new Map() : resolveFenceOverlays(board.fences ?? {});
+  const fencePosts = predrawn ? new Map() : resolveFencePosts(board.fences ?? {}, board.fencePosts ?? {});
   const wallBounds = { cols: board.cols, rows: board.rows };
-  const wallOverlays = resolveWallOverlays(board.walls ?? {}, wallBounds);
-  const wallFaceStyles = resolveWallArtFaces(board.wallArt, wallBounds);
+  const wallOverlays = predrawn ? new Map() : resolveWallOverlays(board.walls ?? {}, wallBounds);
+  const wallFaceStyles = predrawn ? new Map() : resolveWallArtFaces(board.wallArt, wallBounds);
   const hasWall = (edge: string): boolean => Boolean(board.walls?.[edge]);
-  const mirrorSurfaces = mirrorSurfacesForPlacements(board.wallArt, wallBounds)
+  const mirrorSurfaces = (predrawn ? [] : mirrorSurfacesForPlacements(board.wallArt, wallBounds))
     .filter((surface) => surface.segments.every((segment) => !segment.edge || hasWall(segment.edge)));
   const staticUnitSubjects = new Map<string, MirrorReflectionSubject>();
   for (const [key, placement] of Object.entries(board.units)) {
@@ -316,7 +333,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       const frameY = top - TILE_EQUATOR;
 
       const tile = board.cells[key] ? resolveTile(board.cells[key]) : undefined;
-      if (tile) {
+      if (tile && !predrawn) {
         const frameSrc = assetFrameSrc(tile, 0);
         const sideFaces = resolveTerrainSideFaces(
           resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupiedTerrain.has(`${nextX},${nextY}`)),
@@ -348,7 +365,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       }
 
       const feature = overlays[key];
-      if (feature) {
+      if (feature && !predrawn) {
         ops.push({
           layer: 'linear-feature',
           src: featureFrameSrc(feature.kind, feature.material, feature.mask),
@@ -408,7 +425,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     pushFenceDrawOps(ops, { x, y }, fence);
   }
 
-  for (const placement of acceptedMacroTiles) {
+  for (const placement of predrawn ? [] : acceptedMacroTiles) {
     const asset = macroTileAsset(placement.assetId);
     if (!asset) continue;
     const { left, top } = boardLabCellPosition(placement);
@@ -462,7 +479,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     if (unitSubject) ops.push(unitSubject.op);
   }
 
-  for (const [key, placement] of Object.entries(board.props ?? {})) {
+  for (const [key, placement] of Object.entries(predrawn ? {} : (board.props ?? {}))) {
     const def = propDef(placement.propId);
     if (!def) continue;
     const [ax, ay] = key.split(',').map(Number);
@@ -548,6 +565,7 @@ export function boardContentHash(board: RenderBoard): string {
   const parts = [
     `c${board.cols}`,
     `r${board.rows}`,
+    `pd:${JSON.stringify(board.surface ?? null)}`,
     `t:${sortedEntries(board.cells)}`,
     `mt:${JSON.stringify(macroTiles)}`,
     `u:${sortedEntries(board.units)}`,

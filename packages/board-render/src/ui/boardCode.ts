@@ -10,7 +10,8 @@
 //   fp?:{vertexKey:fenceMaterial},
 //   wl?:{edgeKey:wallMaterial}, wa?:{anchorEdgeKey:wallArtId},
 //   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
-//   gr?:generatedRegionUnits }. `f` fills every cell, then `t` overrides — so a "mostly one tile"
+//   gr?:generatedRegionUnits, pd?:[semanticMediaSlot,referenceFrameWidth,referenceFrameHeight] }.
+// `f` fills every cell, then `t` overrides — so a "mostly one tile"
 // board stays tiny; `h` punches intentional holes back out of that fill. The autotiling ribbon
 // features split per kind on the wire (rd=roads, rv=rivers) and merge into one `features` map on
 // decode. FENCES are edge-based, not per-cell: `fe` maps a shared-edge key (roadEdgeKey "x,y|x,y")
@@ -53,6 +54,19 @@ export interface EditorZoneEntry {
 
 export type BoardFactionDirections = Partial<Record<UnitPalette, UnitFacing>>;
 
+/**
+ * One continuous board illustration registered against the canonical centred board viewport.
+ * The media id is a stable live-media slot, never a candidate URL or repository filename.
+ * `frameWidth`/`frameHeight` are the canonical 1x review-frame dimensions the generated image
+ * is scaled into; they do not claim that imagegen preserved the grid proportions internally.
+ */
+export interface PredrawnBoardSurface {
+  kind: 'predrawn';
+  slot: string;
+  frameWidth: number;
+  frameHeight: number;
+}
+
 export type BoardGeneratedRegionCover = {
   type: TileFamilyId;
   knobs: { amount: number; amountRandom: number; density: number; densityRandom: number };
@@ -92,6 +106,8 @@ export interface EditorBoard {
   /** Per-faction default facing used when the level editor places new units. */
   factionDirections?: BoardFactionDirections;
   cells: Record<string, string>;
+  /** Absent means ordinary composed terrain tiles; present replaces baked board art with one plate. */
+  surface?: PredrawnBoardSurface;
   /** Opaque multi-cell terrain tops that replace the covered 1x1 top sprites. */
   macroTiles?: MacroTilePlacement[];
   units: Record<string, { unitId: string; direction: string; faction: string }>;
@@ -144,6 +160,35 @@ const validZoneTypes = new Set<string>(ZONE_TYPES);
 const validZoneColors = new Set<string>(ZONE_COLORS);
 const validFenceMaterials = new Set<string>(FENCE_MATERIALS);
 const validWallMaterials = new Set<string>(WALL_MATERIALS);
+const mediaSlotSegmentPattern = /^[A-Za-z0-9_][A-Za-z0-9._@+-]*$/;
+const MAX_PREDRAWN_FRAME_DIMENSION = 8192;
+
+/** Validate the persisted half of a pre-drawn surface without resolving its live media. */
+export function normalizePredrawnBoardSurface(value: unknown): PredrawnBoardSurface | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if (record.kind !== 'predrawn' || typeof record.slot !== 'string') return undefined;
+  const slot = record.slot.trim();
+  const segments = slot.split('/');
+  if (
+    !slot
+    || slot.length > 512
+    || slot.includes('//')
+    || slot.endsWith('/')
+    || segments.some((segment) => segment === '.' || segment === '..' || !mediaSlotSegmentPattern.test(segment))
+  ) return undefined;
+  const frameWidth = Number(record.frameWidth);
+  const frameHeight = Number(record.frameHeight);
+  if (
+    !Number.isSafeInteger(frameWidth)
+    || !Number.isSafeInteger(frameHeight)
+    || frameWidth < 1
+    || frameHeight < 1
+    || frameWidth > MAX_PREDRAWN_FRAME_DIMENSION
+    || frameHeight > MAX_PREDRAWN_FRAME_DIMENSION
+  ) return undefined;
+  return { kind: 'predrawn', slot, frameWidth, frameHeight };
+}
 
 function cellParts(key: string): [number, number] | null {
   const [xs, ys] = key.split(',');
@@ -403,6 +448,8 @@ export function encodeBoard(b: EditorBoard): string {
     if (!(key in b.cells)) h.push(key);
   }
   const wire: Record<string, unknown> = { c: b.cols, r: b.rows };
+  const surface = normalizePredrawnBoardSurface(b.surface);
+  if (surface) wire.pd = [surface.slot, surface.frameWidth, surface.frameHeight];
   if (b.playerFaction) wire.pf = b.playerFaction;
   const fd = cleanFactionDirections(b.factionDirections);
   if (nonEmpty(fd)) wire.fd = fd;
@@ -533,8 +580,11 @@ export function decodeBoard(code: string): EditorBoard | null {
     if (!zoneEntries.length && nonEmpty(legacyZones)) zoneEntries = zoneEntriesFromCellMap(legacyZones, cols, rows);
     const zones = zoneCellMapFromEntries(zoneEntries);
     const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows);
+    const surface = Array.isArray(w.pd)
+      ? normalizePredrawnBoardSurface({ kind: 'predrawn', slot: w.pd[0], frameWidth: w.pd[1], frameHeight: w.pd[2] })
+      : undefined;
     return {
-      cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, macroTiles, units, doodads, props,
+      cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, surface, macroTiles, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
       features,

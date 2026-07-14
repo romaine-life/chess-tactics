@@ -50,11 +50,34 @@ import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progres
 import { navigateApp, readValidatedReturnTo } from './navigation';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { PLAY_SKIRMISH_SELECTOR_HREF, playCampaignSelectorHref } from './playHubRoute';
+import { PredrawnCornerPicker } from './PredrawnCornerPicker';
+import {
+  predrawnBoardPreviewRegistration,
+  predrawnBoardPreviewSrc,
+  serializePredrawnBoardPreviewRegistration,
+  storedPredrawnBoardRegistration,
+  type PredrawnBoardCornerRegistration,
+} from '../render/PredrawnBoardLayer';
+import { useSkirmishView } from '../game/skirmishView';
 
 export function Skirmish() {
   const installedChromeCss = useInstalledChromeCss();
   const routeSearch = window.location.search;
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
+  const predrawnPreview = useMemo(
+    () => predrawnBoardPreviewSrc(routeSearch, window.location.origin),
+    [routeSearch],
+  );
+  const predrawnRegistration = useMemo(
+    () => predrawnPreview
+      ? storedPredrawnBoardRegistration(predrawnPreview)
+        ?? predrawnBoardPreviewRegistration(routeSearch)
+      : predrawnBoardPreviewRegistration(routeSearch),
+    [predrawnPreview, routeSearch],
+  );
+  const [predrawnPickerOpen, setPredrawnPickerOpen] = useState(
+    () => routeParams.get('predrawnPicker') === '1',
+  );
   const routeCampaignId = routeParams.get('campaignId');
   const routeLevelId = routeParams.get('levelId');
   const routeMode = routeParams.get('mode');
@@ -108,8 +131,12 @@ export function Skirmish() {
     appendTimeControlParams(params, scenarioTimeControl ?? undefined);
     appendLevelEventsParam(params, routeEvents);
     appendVictoryRulesParam(params, routeVictory);
+    const predrawnPreview = routeParams.get('predrawnPreview');
+    if (predrawnPreview) params.set('predrawnPreview', predrawnPreview);
+    const predrawnCorners = routeParams.get('predrawnCorners');
+    if (predrawnCorners) params.set('predrawnCorners', predrawnCorners);
     return `/editor/level?${params.toString()}`;
-  }, [routeBoard, routeLevelName, routeObjective, routeSurviveTurns, scenarioTimeControl, routeEvents, routeVictory]);
+  }, [routeBoard, routeLevelName, routeObjective, routeSurviveTurns, scenarioTimeControl, routeEvents, routeVictory, routeParams]);
   const levelReturnHref = useMemo(() => {
     if (routeMode !== 'test' || !routeLevelId) return null;
     const params = new URLSearchParams({ levelId: routeLevelId });
@@ -223,6 +250,13 @@ export function Skirmish() {
       useSkirmish.getState().leaveNetSession(net.lobbyId);
     }
     navigateApp('/lobbies', { replace: true });
+  };
+
+  const savePredrawnRegistration = (registration: PredrawnBoardCornerRegistration): void => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('predrawnCorners', serializePredrawnBoardPreviewRegistration(registration));
+    if (!useSkirmishView.getState().showGrid) useSkirmishView.getState().toggle('showGrid');
+    navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
   };
 
   // A move-derived result is just as durable as resignation: each seat independently
@@ -980,7 +1014,15 @@ export function Skirmish() {
                   {returnIsEditor ? 'Back to editor' : 'Back to Play'}
                 </NavButton>
               </div>
-            ) : boardSettled ? <SkirmishBoard interactive={!net || (netSeatInteractive && !netRelayFrozen)} /> : routeLobby ? (
+            ) : boardSettled ? (
+              <SkirmishBoard
+                interactive={!net || (netSeatInteractive && !netRelayFrozen)}
+                predrawnReview={predrawnPreview ? {
+                  src: predrawnPreview,
+                  registration: predrawnRegistration,
+                } : undefined}
+              />
+            ) : routeLobby ? (
               <div className="skirmish-status-chip skirmish-turn-plate" role="status">
                 <strong>{netError ?? 'Connecting…'}</strong>
                 <small>Multiplayer</small>
@@ -1015,7 +1057,19 @@ export function Skirmish() {
         returnHref={returnHref}
         returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
         netInteractive={netSeatInteractive}
+        onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
       />
+
+      {predrawnPickerOpen && predrawnPreview ? (
+        <PredrawnCornerPicker
+          src={predrawnPreview}
+          initialRegistration={predrawnRegistration}
+          columns={activeLevel?.board.cols ?? 1}
+          rows={activeLevel?.board.rows ?? 1}
+          onChange={savePredrawnRegistration}
+          onClose={() => setPredrawnPickerOpen(false)}
+        />
+      ) : null}
 
       {isCampaignPlay && routeCampaignId && routeLevel && game.winner && (
         <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result">

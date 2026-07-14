@@ -49,7 +49,21 @@ import { levelEditorExitAction } from './levelEditorExit';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { WallArtPreview } from './WallArtLab';
-import { readBoardParam, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell } from './boardCode';
+import { readBoardParam, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell, type PredrawnBoardSurface } from './boardCode';
+import {
+  PredrawnBoardLayer,
+  predrawnBoardCoverPolygon,
+  predrawnBoardPlateForEditorReview,
+  predrawnReviewGridCells,
+  predrawnBoardPreviewRegistration,
+  predrawnBoardPreviewSrc,
+  serializePredrawnBoardPreviewRegistration,
+  storedPredrawnBoardRegistration,
+  type PredrawnBoardCornerRegistration,
+  type PredrawnBoardPlate,
+} from '../render/PredrawnBoardLayer';
+import { PredrawnCornerPicker } from './PredrawnCornerPicker';
+import { isPredrawnLockedLayer, predrawnEditorHrefAfterPicker, preservesPredrawnBakedArt } from './predrawnEditorPolicy';
 import { removeZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
 import {
   currentBoardTestHref,
@@ -285,6 +299,7 @@ function StudioEditableBoard({
   boardZoom,
   boardPan,
   showGrid = false,
+  predrawnPlate,
   tacticalPreview,
   animationFrame,
   onPaint,
@@ -362,6 +377,8 @@ function StudioEditableBoard({
   boardZoom: number;
   boardPan: { x: number; y: number };
   showGrid?: boolean;
+  /** Complete board illustration; when present the baked terrain/prop/barrier pixels are not drawn. */
+  predrawnPlate?: PredrawnBoardPlate;
   tacticalPreview?: BoardTacticalPreview;
   animationFrame: number;
   onPaint: (x: number, y: number) => void;
@@ -891,6 +908,7 @@ function StudioEditableBoard({
     cols,
     rows,
     cells: placed,
+    surface: predrawnPlate?.surface,
     macroTiles: [...placedMacroTiles],
     units: placedUnits,
     doodads: placedDoodads,
@@ -916,10 +934,14 @@ function StudioEditableBoard({
       boardPan={boardPan}
       backgroundLayer={(
         <>
-          <BoardTerrainLayer
-            cells={terrainCells}
-            macroTiles={hidden?.tile ? [] : terrainCanvasMacroTiles(placedMacroTiles)}
-          />
+          {predrawnPlate && !hidden?.tile
+            ? <PredrawnBoardLayer plate={predrawnPlate} cells={cells} />
+            : !predrawnPlate
+              ? <BoardTerrainLayer
+                  cells={terrainCells}
+                  macroTiles={hidden?.tile ? [] : terrainCanvasMacroTiles(placedMacroTiles)}
+                />
+              : null}
           <BoardSceneLayer
             board={sceneBoard}
             hidden={hidden}
@@ -933,7 +955,9 @@ function StudioEditableBoard({
       onPointerUp={endInteraction}
       onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); setHoverPost(null); }}
     >
-      {showGrid ? <BoardGridLayer cells={cells} /> : null}
+      {showGrid ? (
+        <BoardGridLayer cells={predrawnReviewGridCells(cells, predrawnPlate?.registration)} />
+      ) : null}
       {overlaySprites}
     </TileGrid>
   );
@@ -2174,6 +2198,33 @@ export function LevelEditor(): ReactElement {
     reportStatus('Sign-in opened in another tab.', 'info', 'Keep this editor open. Return here after signing in; cloud sync will retry without discarding this work.');
   };
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
+  const [boardSurface, setBoardSurface] = useState<PredrawnBoardSurface | undefined>(() => initialBoard?.surface);
+  const [predrawnReviewSearch, setPredrawnReviewSearch] = useState(() => window.location.search);
+  useEffect(() => {
+    const sync = (): void => setPredrawnReviewSearch(window.location.search);
+    window.addEventListener('popstate', sync);
+    window.addEventListener(APP_NAVIGATION_EVENT, sync);
+    return () => {
+      window.removeEventListener('popstate', sync);
+      window.removeEventListener(APP_NAVIGATION_EVENT, sync);
+    };
+  }, []);
+  const predrawnPreview = useMemo(
+    () => predrawnBoardPreviewSrc(predrawnReviewSearch, window.location.origin),
+    [predrawnReviewSearch],
+  );
+  const predrawnRegistration = useMemo(
+    () => predrawnPreview
+      ? storedPredrawnBoardRegistration(predrawnPreview)
+        ?? predrawnBoardPreviewRegistration(predrawnReviewSearch)
+      : predrawnBoardPreviewRegistration(predrawnReviewSearch),
+    [predrawnPreview, predrawnReviewSearch],
+  );
+  const editorPredrawnPlate = useMemo<PredrawnBoardPlate | undefined>(() => {
+    return predrawnBoardPlateForEditorReview(boardSurface, predrawnPreview, predrawnRegistration);
+  }, [boardSurface, predrawnPreview, predrawnRegistration]);
+  const isPredrawnBoard = editorPredrawnPlate !== undefined;
+  const isPredrawnReviewOnly = isPredrawnBoard && boardSurface?.kind !== 'predrawn';
   const [boardMacroTiles, setBoardMacroTiles] = useState<MacroTilePlacement[]>(() => initialBoard ? validMacroTilesForBoard(initialBoard) : []);
   const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
   const [boardRows, setBoardRows] = useState(initialBoard?.rows ?? LE_ROWS);
@@ -2199,14 +2250,52 @@ export function LevelEditor(): ReactElement {
   const [scatterBuffer, setScatterBuffer] = useState(0);
   const [scatterWiggle, setScatterWiggle] = useState(0.5);
   const [viewZoom, setViewZoom] = useState(1);
+  const [viewMinZoom, setViewMinZoom] = useState(0.4);
+  const viewMaxZoom = Math.max(4, viewMinZoom);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const predrawnCoverCells = useMemo(
+    () => Array.from({ length: boardRows }, (_, y) =>
+      Array.from({ length: boardCols }, (__, x) => ({ x, y }))).flat(),
+    [boardCols, boardRows],
+  );
+  const predrawnCoverPolygon = useMemo(
+    () => editorPredrawnPlate
+      ? predrawnBoardCoverPolygon(editorPredrawnPlate, predrawnCoverCells)
+      : undefined,
+    [editorPredrawnPlate, predrawnCoverCells],
+  );
   const [showGrid, setShowGrid] = useState(false);
+  const [predrawnPickerOpen, setPredrawnPickerOpen] = useState(
+    () => new URL(window.location.href).searchParams.get('predrawnPicker') === '1',
+  );
+  const savePredrawnRegistration = (registration: PredrawnBoardCornerRegistration): void => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('predrawnCorners', serializePredrawnBoardPreviewRegistration(registration));
+    setShowGrid(true);
+    setPredrawnReviewSearch(url.search);
+    navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
+  };
+  const closePredrawnPicker = (): void => {
+    const href = predrawnEditorHrefAfterPicker(window.location.href);
+    setPredrawnPickerOpen(false);
+    setPredrawnReviewSearch(new URL(href, window.location.origin).search);
+    navigateApp(href, { replace: true, scroll: false });
+  };
   const [showMoves, setShowMoves] = useState(true);
   const [showEnemyAttacks, setShowEnemyAttacks] = useState(true);
   const [showBlocked, setShowBlocked] = useState(false);
   const [showPromotionZones, setShowPromotionZones] = useState(false);
   const [brushKind, setBrushKind] = useState<BrushKind>(initialBrushKind);
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
+  const layerSelectOptions = useMemo(() => LEVEL_EDITOR_LAYER_SELECT_OPTIONS.map((option) => ({
+    ...option,
+    disabled: option.disabled || (isPredrawnBoard && isPredrawnLockedLayer(option.id)),
+  })), [isPredrawnBoard]);
+  useEffect(() => {
+    if (!isPredrawnBoard || !isPredrawnLockedLayer(layer)) return;
+    setLayer('board');
+    setTool('select');
+  }, [isPredrawnBoard, layer]);
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((initialBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(initialBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
@@ -2432,7 +2521,7 @@ export function LevelEditor(): ReactElement {
         ? { ...rawRouteState, layer: 'wallart' as const, brushKind: 'wallart' as const }
         : rawRouteState;
       const nextLayer = routeState.layer ?? defaultLevelEditorLayer();
-      if (isLayerOptionDisabled(nextLayer)) return;
+      if (isLayerOptionDisabled(nextLayer) || (isPredrawnBoard && isPredrawnLockedLayer(nextLayer))) return;
       setLayer(nextLayer);
       setTool(toolForLayer(nextLayer));
       setBrushKind(brushKindForRouteState(nextLayer, routeState.brushKind));
@@ -2455,7 +2544,7 @@ export function LevelEditor(): ReactElement {
       window.removeEventListener('popstate', syncFromRoute);
       window.removeEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
     };
-  }, [fenceArtCatalog]);
+  }, [fenceArtCatalog, isPredrawnBoard]);
 
   // DEV-only preview of the in-game confirm dialog, so its look can be judged live without the
   // admin + official-target gating that guards the real Publish flow. Stripped from prod builds
@@ -2505,6 +2594,7 @@ export function LevelEditor(): ReactElement {
     setBoardCols(board.cols);
     setBoardRows(board.rows);
     setBoardCells(board.cells);
+    setBoardSurface(board.surface);
     setBoardMacroTiles(validMacroTilesForBoard(board));
     setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
     setBoardDoodads(board.doodads);
@@ -2553,8 +2643,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, surface: boardSurface, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardSurface, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -2562,6 +2652,7 @@ export function LevelEditor(): ReactElement {
     setBoardCols(board.cols);
     setBoardRows(board.rows);
     setBoardCells(board.cells);
+    setBoardSurface(board.surface);
     setBoardMacroTiles(validMacroTilesForBoard(board));
     setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
     setBoardDoodads(board.doodads);
@@ -2588,6 +2679,9 @@ export function LevelEditor(): ReactElement {
   const commitEditorBoard = (next: EditorBoard, selection?: { x: number; y: number } | null): boolean => {
     const current = currentEditorBoardRef.current;
     const normalized = { ...next, macroTiles: validMacroTilesForBoard(next) };
+    if (isPredrawnBoard && !preservesPredrawnBakedArt(current, normalized)) {
+      return false;
+    }
     if (boardSignature(normalized) === boardSignature(current)) return false;
     setUndoStack((prev) => [...prev, cloneEditorBoard(current)].slice(-HISTORY_LIMIT));
     setRedoStack([]);
@@ -2603,6 +2697,7 @@ export function LevelEditor(): ReactElement {
   const undoBoard = (): void => {
     const prev = undoStack[undoStack.length - 1];
     if (!prev) return;
+    if (isPredrawnBoard && !preservesPredrawnBakedArt(currentEditorBoardRef.current, prev)) return;
     const departing = cloneEditorBoard(currentEditorBoardRef.current);
     setRedoStack((next) => [departing, ...next].slice(0, HISTORY_LIMIT));
     setUndoStack((next) => next.slice(0, -1));
@@ -2614,6 +2709,7 @@ export function LevelEditor(): ReactElement {
   const redoBoard = (): void => {
     const next = redoStack[0];
     if (!next) return;
+    if (isPredrawnBoard && !preservesPredrawnBakedArt(currentEditorBoardRef.current, next)) return;
     const departing = cloneEditorBoard(currentEditorBoardRef.current);
     setUndoStack((prev) => [...prev, departing].slice(-HISTORY_LIMIT));
     setRedoStack((prev) => prev.slice(1));
@@ -4366,7 +4462,7 @@ export function LevelEditor(): ReactElement {
   };
 
   const selectLayer = (nextLayer: LayerKey): void => {
-    if (isLayerOptionDisabled(nextLayer)) return;
+    if (isLayerOptionDisabled(nextLayer) || (isPredrawnBoard && isPredrawnLockedLayer(nextLayer))) return;
     setLayer(nextLayer);
     setTool(toolForLayer(nextLayer));
     if (nextLayer === 'paths') {
@@ -4520,9 +4616,9 @@ export function LevelEditor(): ReactElement {
     }
     commitEditorBoard(next, to);
   };
-  const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
+  const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(viewMaxZoom, Math.max(viewMinZoom, Number((z + delta).toFixed(2)))));
   const resetBoardView = (): void => {
-    setViewZoom(1);
+    setViewZoom(Math.max(1, viewMinZoom));
     setViewPan({ x: 0, y: 0 });
   };
   // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
@@ -4879,6 +4975,12 @@ export function LevelEditor(): ReactElement {
       layer,
     });
   }, [clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, editorDocument?.revision, eventsForSave, layer, levelNameForSave, objective, playability.ok, routeParams.campaignId, routeParams.returnTo, surviveTurns, targetLevelId, victoryForSave]);
+  const canUndoBoard = undoStack.length > 0 && (
+    !isPredrawnBoard || preservesPredrawnBakedArt(currentEditorBoard, undoStack[undoStack.length - 1])
+  );
+  const canRedoBoard = redoStack.length > 0 && (
+    !isPredrawnBoard || preservesPredrawnBakedArt(currentEditorBoard, redoStack[0])
+  );
 
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
@@ -4892,6 +4994,16 @@ export function LevelEditor(): ReactElement {
       <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" ready={editorReady}>
         {installedChromeCss ? <style data-level-editor-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
         {confirmDialog}
+        {predrawnPickerOpen && predrawnPreview ? (
+          <PredrawnCornerPicker
+            src={predrawnPreview}
+            initialRegistration={predrawnRegistration}
+            columns={boardCols}
+            rows={boardRows}
+            onChange={savePredrawnRegistration}
+            onClose={closePredrawnPicker}
+          />
+        ) : null}
         {/* The title bar carries NO editor status (no level name, no save-state chip) — the
             owner removed the center cluster: that's ambient chrome noise while editing, and
             everything it said lives in the Status layer for whoever goes looking. Only the
@@ -4923,7 +5035,18 @@ export function LevelEditor(): ReactElement {
                 <span>{fenceReviewCatalogMessage}</span>
               </div>
             ) : null}
-            <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
+            <ViewPane
+              kind="board"
+              ariaLabel="Level editor board"
+              zoom={viewZoom}
+              pan={viewPan}
+              minZoom={0.4}
+              maxZoom={viewMaxZoom}
+              onZoomChange={setViewZoom}
+              onPanChange={setViewPan}
+              coverPolygon={predrawnCoverPolygon}
+              onMinimumZoomChange={setViewMinZoom}
+            >
               <div className="tileset-view-board-content is-board" data-art-review={activeFenceArtwork ? FENCE_ART_REVIEW_ID : undefined} data-fence-art={activeFenceArtwork?.id}>
                 {editorLoadError ? (
                   <div className="tileset-view-empty" role="status" aria-live="polite">
@@ -4961,6 +5084,7 @@ export function LevelEditor(): ReactElement {
                     boardZoom={viewZoom}
                     boardPan={viewPan}
                     showGrid={showGrid}
+                    predrawnPlate={editorPredrawnPlate}
                     tacticalPreview={tacticalPreview}
                     animationFrame={animationFrame}
                     onPaint={paintCell}
@@ -5081,12 +5205,12 @@ export function LevelEditor(): ReactElement {
       ) : (
       <LevelEditorControlsPanel
         layer={layer}
-        layerOptions={LEVEL_EDITOR_LAYER_SELECT_OPTIONS}
+        layerOptions={layerSelectOptions}
         onLayerChange={selectLayer}
         tool={tool === 'region' ? null : tool}
         onToolChange={setTool}
-        canUndo={undoStack.length > 0}
-        canRedo={redoStack.length > 0}
+        canUndo={canUndoBoard}
+        canRedo={canRedoBoard}
         onUndo={undoBoard}
         onRedo={redoBoard}
         playBoardHref={testHref}
@@ -5249,12 +5373,22 @@ export function LevelEditor(): ReactElement {
           <>
           <section className="skirmish-card">
             <h2>Board</h2>
-            <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
-            <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
-            <div className="le-board-actions">
-              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
-              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, path, fence rail, post, wall, and wall artwork from the board.">Clear</button>
-            </div>
+            {isPredrawnBoard ? (
+              <div className="le-predrawn-lock" role="status" data-testid="predrawn-board-lock">
+                <strong>{isPredrawnReviewOnly ? 'Registered pre-drawn review' : 'Pre-drawn board'} · {boardCols}×{boardRows}</strong>
+                <span>The continuous plate owns terrain, paths, props, fences, and walls. Those layers and the board dimensions are locked; units, zones, doodads, and animated cover remain editable.</span>
+                {isPredrawnReviewOnly ? <span>The candidate is mounted for this development review only; it is not an accepted runtime media pointer.</span> : null}
+              </div>
+            ) : (
+              <>
+                <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
+                <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
+                <div className="le-board-actions">
+                  <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
+                  <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, path, fence rail, post, wall, and wall artwork from the board.">Clear</button>
+                </div>
+              </>
+            )}
           </section>
           <section className="skirmish-card le-level-settings">
             <h2>Level Settings</h2>
@@ -6016,7 +6150,7 @@ export function LevelEditor(): ReactElement {
           <div className="skirmish-view-group">
             <span className="skirmish-eyebrow">Zoom</span>
             <div className="skirmish-view-row">
-              <button type="button" data-chrome-unit="inner-minus-key" className={chromeUnitClassNames('inner-minus-key', 'le-seg-btn', 'le-icon-btn')} onClick={() => adjustZoom(-0.1)} aria-label="Zoom out">−</button>
+              <button type="button" data-chrome-unit="inner-minus-key" className={chromeUnitClassNames('inner-minus-key', 'le-seg-btn', 'le-icon-btn')} disabled={viewZoom <= viewMinZoom} onClick={() => adjustZoom(-0.1)} aria-label="Zoom out">−</button>
               <span className="skirmish-zoom-readout">{Math.round(viewZoom * 100)}%</span>
               <button type="button" data-chrome-unit="inner-plus-key" className={chromeUnitClassNames('inner-plus-key', 'le-seg-btn', 'le-icon-btn')} onClick={() => adjustZoom(0.1)} aria-label="Zoom in">+</button>
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={resetBoardView}>Reset</button>
@@ -6032,6 +6166,20 @@ export function LevelEditor(): ReactElement {
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showGrid && 'active')} onClick={() => setShowGrid((value) => !value)} aria-pressed={showGrid}>Grid</button>
             </div>
           </div>
+          {isPredrawnBoard && predrawnPreview ? (
+            <div className="skirmish-view-group">
+              <span className="skirmish-eyebrow">Pre-drawn plate</span>
+              <div className="skirmish-view-row">
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
+                  data-testid="open-predrawn-registration"
+                  onClick={() => setPredrawnPickerOpen(true)}
+                >Pick corners</button>
+              </div>
+            </div>
+          ) : null}
         </section>
         ) : null}
 

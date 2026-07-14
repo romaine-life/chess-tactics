@@ -135,6 +135,54 @@ Rendered board concepts are still valuable, but they should become references,
 crop sources, or temporary bridge images while the real tile and piece kits are
 being produced.
 
+### Pre-drawn Whole-Level Plates
+
+The pre-drawn board path is the deliberate complete-plate exception to the
+ordinary composited-tile direction above. Under ADR-0095 through ADR-0101, one
+continuous generated painting may replace the ordinary terrain, road, prop, and
+barrier pixels for a specific authored level while the canonical level remains
+the sole authority for gameplay geometry and live units, grid, selection, and
+tactical overlays.
+
+Per [ADR-0100](adr/0100-predrawn-generation-packets-preserve-authored-level-semantics.md),
+whole-level generation must not ask a model to infer the playable board from a
+beauty render alone. Every request uses an authored-level packet containing:
+
+- a unit-free exact projected grid and perimeter guide;
+- board dimensions and projected axis directions;
+- a canonical coordinate-by-coordinate terrain and footprint dump;
+- exact road connectivity, blocking shared edges, exits, and outer boundary
+  edges;
+- separately labeled material/layout and style references; and
+- explicit prohibitions against baked units, invented gameplay height, expanded
+  footprints, extra roads, and a model-invented perimeter.
+
+The guide owns spatial geometry, the semantic dump owns gameplay meaning, and
+style references own only appearance. Boundary appearance may be generated
+creatively, but its location is the canonical outer edge of the board. The
+mutable process and prompt wording live in
+[`art/predrawn-board-generation.md`](art/predrawn-board-generation.md); exact run
+prompts remain text provenance while candidate media follows the live-storage
+contract.
+
+Per [ADR-0101](adr/0101-owner-fitted-grid-defines-predrawn-review-rectification.md),
+candidate review exposes the complete authored grid over the untouched source.
+The owner may fit monotonic row and column guides and inspect their correction
+range. Development may inverse-warp the complete painting from that fit, but the
+measurement is regeneration feedback rather than production acceptance: large,
+non-separable, or semantic drift still rejects the generation, and accepted art
+must return at the canonical native frame without spatial resampling.
+
+Per [ADR-0102](adr/0102-predrawn-refit-target-dimensions-are-owner-configurable.md),
+the review instrument's target row and column counts are owner-configurable. If
+the candidate visibly contains an extra row or column, the owner sets the target
+to the painted count before fitting guides. That target controls the refit
+topology and the temporary post-picker review overlay. Per
+[ADR-0103](adr/0103-predrawn-review-overlay-uses-the-saved-refit-grid.md), this
+overlay retains the chosen count after `DONE`; canonical level dimensions,
+interactive cells, and gameplay remain unchanged, leaving the generated excess
+visible as evidence for the next generation pass.
+
 ### Full-Height Wall Assets
 
 All perimeter wall materials use one canonical full-height generated geometry. The

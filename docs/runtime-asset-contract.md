@@ -25,6 +25,14 @@ Game data and code refer to stable semantic slots such as a terrain layer role o
 UI-kit part. They never persist a candidate UUID, blob hash, generated filename,
 repository path, or currently accepted URL.
 
+A pre-drawn board persists its plate's semantic slot and declared native
+reference-frame dimensions. A same-origin temporary preview URL may substitute
+candidate bytes during development review, and a source-scoped browser-local
+record may hold the owner-fitted corner/row/column calibration from ADR-0101.
+Neither the candidate URL nor that review rectification is serialized into the
+level; accepted plate bytes still resolve through the live-media catalog at the
+declared native frame.
+
 The stable route `/assets/<slot>` is a backend route, not a filesystem path. The
 backend resolves it through the current active pointer and redirects or serves
 the immutable content-addressed object. A literal `/assets/...` string is valid

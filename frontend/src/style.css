@@ -1248,6 +1248,383 @@ h1 {
 @keyframes confirm-scrim-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes confirm-panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
+/* Development-only pre-drawn plate registration. The dialog reuses the shared confirm-panel
+   chrome, but gives the untouched source image most of the viewport so the owner can place
+   source-pixel corner handles instead of asking an agent to infer them. */
+.predrawn-corner-picker-scrim {
+  padding: 18px;
+  z-index: 10001;
+}
+.predrawn-corner-picker-panel {
+  display: grid;
+  gap: 10px;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  height: min(94dvh, 1080px);
+  max-width: none;
+  overflow: hidden;
+  padding: 8px 12px 12px;
+  width: min(96vw, 1600px);
+}
+.predrawn-corner-picker-header,
+.predrawn-corner-picker-footer,
+.predrawn-corner-picker-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.predrawn-corner-picker-header > div {
+  display: grid;
+  gap: 4px;
+}
+.predrawn-corner-picker-header h2 {
+  margin: 0;
+}
+.predrawn-corner-picker-header p,
+.predrawn-corner-picker-footer p {
+  color: var(--ds-ink-3, #9eb1c5);
+  font-size: var(--ds-text-xs);
+  line-height: 1.35;
+  margin: 0;
+}
+.predrawn-corner-picker-footer p strong {
+  color: var(--ds-ink-1, #eff9ff);
+}
+.predrawn-corner-picker-save-status[data-state="saved"] {
+  color: #83e6b0;
+}
+.predrawn-corner-picker-save-status[data-state="error"] {
+  color: #ffad9d;
+}
+.predrawn-corner-picker-corners {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 6px;
+  grid-template-columns: repeat(4, minmax(112px, 1fr));
+}
+.predrawn-corner-picker-corners .le-seg-btn {
+  gap: 2px;
+  grid-auto-flow: row;
+  min-width: 0;
+  padding-inline: 8px;
+}
+.predrawn-corner-picker-corners .le-seg-btn strong {
+  font-weight: 400;
+}
+.predrawn-corner-picker-corners .le-seg-btn span {
+  color: var(--ds-ink-3, #9eb1c5);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .68em;
+  text-transform: none;
+}
+.predrawn-corner-picker-zoom {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 5px;
+}
+.predrawn-corner-picker-zoom .le-seg-btn {
+  min-width: 58px;
+  padding-inline: 8px;
+}
+.predrawn-grid-calibration-bar {
+  align-items: center;
+  background: rgba(3, 12, 19, .74);
+  border: 1px solid rgba(91, 157, 216, .26);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  min-height: 34px;
+  padding: 4px 6px 4px 10px;
+}
+.predrawn-grid-size-controls {
+  align-items: end;
+  border-left: 1px solid rgba(91, 157, 216, .22);
+  display: flex;
+  gap: 6px;
+  padding-left: 10px;
+}
+.predrawn-grid-size-controls label {
+  display: grid;
+  gap: 2px;
+}
+.predrawn-grid-size-controls label > span,
+.predrawn-grid-size-controls small {
+  color: var(--ds-ink-3, #9eb1c5);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.predrawn-grid-size-controls > span {
+  color: var(--ds-ink-3, #9eb1c5);
+  line-height: 28px;
+}
+.predrawn-grid-size-controls input {
+  background: rgba(2, 10, 16, .92);
+  border: 1px solid rgba(91, 157, 216, .42);
+  border-radius: 4px;
+  color: var(--ds-ink-1, #eff9ff);
+  font: 600 12px/1 ui-monospace, "Cascadia Mono", monospace;
+  height: 28px;
+  padding: 0 5px;
+  width: 58px;
+}
+.predrawn-grid-size-controls input:focus-visible {
+  border-color: #42dcff;
+  outline: 1px solid #42dcff;
+  outline-offset: 1px;
+}
+.predrawn-grid-size-controls small {
+  align-self: center;
+  margin-left: 2px;
+}
+.predrawn-grid-calibration-bar output {
+  color: var(--ds-ink-2, #c7d9e8);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 11px;
+  text-align: center;
+}
+.predrawn-grid-calibration-bar .le-seg-btn {
+  min-width: 112px;
+  padding-inline: 8px;
+}
+.predrawn-grid-calibration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: end;
+}
+.predrawn-grid-legend {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+.predrawn-grid-legend span {
+  align-items: center;
+  color: var(--ds-ink-3, #9eb1c5);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 6px;
+  white-space: nowrap;
+}
+.predrawn-grid-legend span::before {
+  background: #42dcff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .8);
+  content: "";
+  height: 7px;
+  width: 7px;
+}
+.predrawn-grid-legend span[data-kind="canonical"]::before {
+  background: #ffd46b;
+}
+.predrawn-grid-legend span[data-kind="boundary"]::before {
+  background: #ff78d5;
+}
+.predrawn-corner-picker-viewport {
+  background: #010203;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  position: relative;
+}
+.predrawn-corner-picker-stage {
+  max-width: none;
+  min-width: 1px;
+  position: relative;
+}
+.predrawn-corner-picker-stage > img {
+  display: block;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+  width: 100%;
+}
+.predrawn-corner-picker-overlay {
+  cursor: crosshair;
+  inset: 0;
+  position: absolute;
+  touch-action: none;
+}
+.predrawn-corner-picker-overlay:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .88);
+  outline-offset: -2px;
+}
+.predrawn-corner-picker-overlay > svg {
+  height: 100%;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+}
+.predrawn-grid-reference-lines line {
+  fill: none;
+  stroke: rgba(255, 212, 107, .72);
+  stroke-dasharray: 7 6;
+  stroke-linecap: round;
+  stroke-width: 1.35;
+}
+.predrawn-grid-fitted-lines line {
+  fill: none;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .88));
+  stroke: rgba(66, 220, 255, .96);
+  stroke-linecap: round;
+  stroke-width: 1.7;
+}
+.predrawn-grid-guide-handles > * {
+  cursor: ew-resize;
+  fill: rgba(2, 14, 22, .86);
+  pointer-events: all;
+  stroke: #42dcff;
+  stroke-width: 2;
+}
+.predrawn-grid-row-handles > * {
+  cursor: ns-resize;
+  fill: rgba(41, 28, 5, .9);
+  stroke: #ffd46b;
+}
+.predrawn-grid-move-handle {
+  cursor: move;
+  pointer-events: all;
+}
+.predrawn-grid-move-handle circle {
+  fill: rgba(2, 14, 22, .88);
+  stroke: #effcff;
+  stroke-width: 2;
+}
+.predrawn-grid-move-handle path {
+  fill: none;
+  pointer-events: none;
+  stroke: #effcff;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+.predrawn-corner-picker-overlay polygon {
+  fill: rgba(61, 210, 255, .06);
+  stroke: rgba(61, 210, 255, .92);
+  stroke-dasharray: 9 6;
+  stroke-width: 2;
+}
+.predrawn-corner-picker-overlay .predrawn-boundary-reference polygon {
+  fill: rgba(255, 120, 213, .025);
+  stroke: #ff78d5;
+  stroke-dasharray: 4 4;
+  stroke-width: 2.4;
+}
+.predrawn-boundary-reference circle {
+  cursor: move;
+  fill: rgba(28, 4, 24, .9);
+  pointer-events: all;
+  stroke: #ff78d5;
+  stroke-width: 2;
+}
+.predrawn-boundary-reference circle.active {
+  fill: #ff78d5;
+  stroke: #fff1fb;
+}
+.predrawn-corner-picker-marker {
+  color: rgba(255, 215, 105, 1);
+  cursor: move;
+  height: 0;
+  pointer-events: auto;
+  position: absolute;
+  width: 0;
+  z-index: 2;
+}
+.predrawn-corner-picker-marker::before,
+.predrawn-corner-picker-marker::after {
+  content: "";
+  left: 0;
+  pointer-events: auto;
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+.predrawn-corner-picker-marker::before {
+  background: rgba(5, 18, 28, .18);
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .72);
+  height: 14px;
+  width: 14px;
+}
+.predrawn-corner-picker-marker::after {
+  background:
+    linear-gradient(currentColor, currentColor) 50% 0 / 1px 100% no-repeat,
+    linear-gradient(90deg, currentColor, currentColor) 0 50% / 100% 1px no-repeat;
+  height: 22px;
+  width: 22px;
+}
+.predrawn-corner-picker-marker-label {
+  background: rgba(5, 18, 28, .92);
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .92);
+  color: inherit;
+  font-family: "Advance Wars 2 GBA", "VT323", monospace;
+  font-size: 12px;
+  left: 11px;
+  line-height: 16px;
+  min-width: 18px;
+  padding: 1px 3px;
+  position: absolute;
+  text-align: center;
+  text-shadow: 0 2px 0 #010407;
+  top: -25px;
+}
+.predrawn-corner-picker-marker[data-corner="east"] .predrawn-corner-picker-marker-label {
+  left: -31px;
+}
+.predrawn-corner-picker-marker[data-corner="north"] .predrawn-corner-picker-marker-label {
+  top: 9px;
+}
+.predrawn-corner-picker-marker.active {
+  color: #effcff;
+}
+.predrawn-corner-picker-marker.active::before {
+  background: rgba(21, 86, 119, .18);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .72), 0 0 0 5px rgba(61, 210, 255, .28);
+}
+.predrawn-corner-picker-error {
+  color: #ffad9d;
+  inset: 50% auto auto 50%;
+  margin: 0;
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+.predrawn-corner-picker-footer .confirm-actions {
+  flex: 0 0 auto;
+}
+@media (max-width: 800px) {
+  .predrawn-corner-picker-toolbar,
+  .predrawn-corner-picker-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .predrawn-corner-picker-corners {
+    grid-template-columns: repeat(2, minmax(112px, 1fr));
+    width: 100%;
+  }
+  .predrawn-corner-picker-zoom,
+  .predrawn-corner-picker-footer .confirm-actions {
+    justify-content: end;
+    width: 100%;
+  }
+  .predrawn-grid-calibration-bar {
+    grid-template-columns: 1fr auto;
+  }
+  .predrawn-grid-size-controls {
+    border-left: 0;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-left: 0;
+  }
+  .predrawn-grid-calibration-bar output {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    text-align: left;
+  }
+}
+
 /* "New version available" prompt — quiet, fixed, non-blocking. Shown only after
    a newer build is detected (src/net/appUpdate.ts). */
 .app-update-banner {
@@ -6262,6 +6639,8 @@ h1 {
 .le-ctrlrow { align-items: center; display: flex; gap: var(--ds-inline-tight); justify-content: space-between; margin-top: var(--ds-stack); }
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: var(--ds-stack) 2px 0; }
+.le-predrawn-lock { display: grid; gap: 6px; color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; }
+.le-predrawn-lock strong { color: var(--skirmish-ink); }
 
 /* Victory-conditions editor (ADR-0064) — layout only; every control is a kit atom (le-seg-btn /
    Toggle / Stepper / the styled le-layer-select). Each RULE is a faint grouping block; its
@@ -12772,13 +13151,21 @@ button.tileset-relationship-cell {
 }
 
 .tileset-terrain-layer,
-.tileset-scene-layer {
+.tileset-scene-layer,
+.predrawn-board-layer {
   display: block;
   image-rendering: pixelated;
   pointer-events: none;
   position: absolute;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.predrawn-board-layer {
+  image-rendering: auto;
+  max-width: none;
+  object-fit: fill;
+  z-index: 0;
 }
 
 .tileset-terrain-layer {
