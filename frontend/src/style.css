@@ -4483,17 +4483,16 @@ h1 {
   border: 0;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   cursor: pointer;
-  height: 62px;
+  height: var(--iso-tile-height);
   left: 0;
   min-height: 0;
   padding: 0;
   pointer-events: auto;
   position: absolute;
-  top: -4px;
+  top: 0;
   /* Don't let a touch-drag on a piece scroll the page — the board owns the gesture. */
   touch-action: none;
-  width: 104px;
-  transform: translateX(-4px);
+  width: var(--iso-tile-width);
   z-index: 5;
 }
 
