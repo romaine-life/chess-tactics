@@ -145,6 +145,12 @@ jobs:
           npm ci
           npm test
 
+      - name: Check frontend contracts
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run check
+
       - name: Test immutable-image release contract
         run: node --test scripts/immutable-image-release.test.mjs
 

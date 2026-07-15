@@ -1,5 +1,6 @@
 import { useState, type ReactElement } from 'react';
 import { Stepper } from './Stepper';
+import { HouseSelect } from './HouseSelect';
 import { BOARD_COLS, BOARD_ROWS } from '../../core/level';
 
 // Shared board-size control: two kit Steppers (Width × Height) clamped to the engine's
@@ -32,14 +33,26 @@ export function BoardSizePanel({
       <div className="le-ctrlrow">
         <span className="le-ctrllabel">Width</span>
         <div className="board-size-control">
-          <label className="board-size-side"><span className="sr-only">Width side</span><select aria-label="Width resize side" value={widthSide} onChange={(event) => setWidthSide(event.target.value as typeof widthSide)}><option value="left">Left</option><option value="right">Right</option></select></label>
+          <HouseSelect
+            className="board-size-side"
+            value={widthSide}
+            options={[{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }]}
+            ariaLabel="Width resize side"
+            onChange={setWidthSide}
+          />
           <Stepper value={cols} suffix="" decreaseLabel={`Remove a column from the ${widthSide}`} increaseLabel={`Add a column to the ${widthSide}`} onDecrease={() => setCols(cols - 1)} onIncrease={() => setCols(cols + 1)} />
         </div>
       </div>
       <div className="le-ctrlrow">
         <span className="le-ctrllabel">Height</span>
         <div className="board-size-control">
-          <label className="board-size-side"><span className="sr-only">Height side</span><select aria-label="Height resize side" value={heightSide} onChange={(event) => setHeightSide(event.target.value as typeof heightSide)}><option value="top">Top</option><option value="bottom">Bottom</option></select></label>
+          <HouseSelect
+            className="board-size-side"
+            value={heightSide}
+            options={[{ value: 'top', label: 'Top' }, { value: 'bottom', label: 'Bottom' }]}
+            ariaLabel="Height resize side"
+            onChange={setHeightSide}
+          />
           <Stepper value={rows} suffix="" decreaseLabel={`Remove a row from the ${heightSide}`} increaseLabel={`Add a row to the ${heightSide}`} onDecrease={() => setRows(rows - 1)} onIncrease={() => setRows(rows + 1)} />
         </div>
       </div>
