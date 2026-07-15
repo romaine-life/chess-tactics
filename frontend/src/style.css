@@ -6262,8 +6262,7 @@ h1 {
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .board-size-panel .le-ctrlrow { align-items: stretch; flex-direction: column; }
 .board-size-control { align-items: center; display: flex; gap: var(--ds-inline-tight); justify-content: space-between; }
-.board-size-side { display: flex; }
-.board-size-side select { width: 82px; min-height: 40px; padding: 0 var(--ds-inset); color: #d6ecf5; background: #101c25; border: 1px solid rgba(127, 215, 255, .35); }
+.board-size-side { width: 82px; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: var(--ds-stack) 2px 0; }
 
 /* Victory-conditions editor (ADR-0064) — layout only; every control is a kit atom (le-seg-btn /
