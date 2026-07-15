@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Stepper } from './Stepper';
 import { BOARD_COLS, BOARD_ROWS } from '../../core/level';
 
@@ -18,37 +18,33 @@ export function BoardSizePanel({
 }: {
   cols: number;
   rows: number;
-  onResize: (cols: number, rows: number) => void;
+  onResize: (cols: number, rows: number, side: BoardResizeSide) => void;
   colLimits?: { min: number; max: number };
   rowLimits?: { min: number; max: number };
 }): ReactElement {
+  const [widthSide, setWidthSide] = useState<Extract<BoardResizeSide, 'left' | 'right'>>('right');
+  const [heightSide, setHeightSide] = useState<Extract<BoardResizeSide, 'top' | 'bottom'>>('bottom');
   const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
-  const setCols = (next: number): void => onResize(clamp(next, colLimits.min, colLimits.max), rows);
-  const setRows = (next: number): void => onResize(cols, clamp(next, rowLimits.min, rowLimits.max));
+  const setCols = (next: number): void => onResize(clamp(next, colLimits.min, colLimits.max), rows, widthSide);
+  const setRows = (next: number): void => onResize(cols, clamp(next, rowLimits.min, rowLimits.max), heightSide);
   return (
     <div className="board-size-panel">
       <div className="le-ctrlrow">
         <span className="le-ctrllabel">Width</span>
-        <Stepper
-          value={cols}
-          suffix=""
-          decreaseLabel="Narrower board"
-          increaseLabel="Wider board"
-          onDecrease={() => setCols(cols - 1)}
-          onIncrease={() => setCols(cols + 1)}
-        />
+        <div className="board-size-control">
+          <label className="board-size-side"><span className="sr-only">Width side</span><select aria-label="Width resize side" value={widthSide} onChange={(event) => setWidthSide(event.target.value as typeof widthSide)}><option value="left">Left</option><option value="right">Right</option></select></label>
+          <Stepper value={cols} suffix="" decreaseLabel={`Remove a column from the ${widthSide}`} increaseLabel={`Add a column to the ${widthSide}`} onDecrease={() => setCols(cols - 1)} onIncrease={() => setCols(cols + 1)} />
+        </div>
       </div>
       <div className="le-ctrlrow">
         <span className="le-ctrllabel">Height</span>
-        <Stepper
-          value={rows}
-          suffix=""
-          decreaseLabel="Shorter board"
-          increaseLabel="Taller board"
-          onDecrease={() => setRows(rows - 1)}
-          onIncrease={() => setRows(rows + 1)}
-        />
+        <div className="board-size-control">
+          <label className="board-size-side"><span className="sr-only">Height side</span><select aria-label="Height resize side" value={heightSide} onChange={(event) => setHeightSide(event.target.value as typeof heightSide)}><option value="top">Top</option><option value="bottom">Bottom</option></select></label>
+          <Stepper value={rows} suffix="" decreaseLabel={`Remove a row from the ${heightSide}`} increaseLabel={`Add a row to the ${heightSide}`} onDecrease={() => setRows(rows - 1)} onIncrease={() => setRows(rows + 1)} />
+        </div>
       </div>
     </div>
   );
 }
+
+export type BoardResizeSide = 'left' | 'right' | 'top' | 'bottom';

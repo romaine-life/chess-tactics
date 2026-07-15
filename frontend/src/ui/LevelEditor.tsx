@@ -33,7 +33,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { PaletteSelect } from './shared/PaletteSelect';
 import { HouseSelect } from './shared/HouseSelect';
-import { BoardSizePanel } from './shared/BoardSizePanel';
+import { BoardSizePanel, type BoardResizeSide } from './shared/BoardSizePanel';
 import { DEFAULT_LEVEL_NAME, LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 import {
   levelEditorHrefWithRouteState,
@@ -4528,7 +4528,17 @@ export function LevelEditor(): ReactElement {
   // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
   // tiles/units — and a now-offboard selection — whose coordinates fall outside the new
   // bounds, so nothing keeps rendering or counting off the edge of the board.
-  const resizeBoard = (nextCols: number, nextRows: number): void => {
+  const resizeBoard = (nextCols: number, nextRows: number, side: BoardResizeSide): void => {
+    const dx = side === 'left' ? nextCols - boardCols : 0;
+    const dy = side === 'top' ? nextRows - boardRows : 0;
+    const shiftKey = (key: string): string => {
+      const [x, y] = key.split(',').map(Number);
+      return `${x + dx},${y + dy}`;
+    };
+    const shiftMap = <T,>(map: Record<string, T> | undefined): Record<string, T> =>
+      Object.fromEntries(Object.entries(map ?? {}).map(([key, value]) => [shiftKey(key), value]));
+    const shiftEdges = <T,>(map: Record<string, T> | undefined): Record<string, T> =>
+      Object.fromEntries(Object.entries(map ?? {}).map(([edge, value]) => [edge.split('|').map(shiftKey).join('|'), value]));
     const within = (key: string): boolean => {
       const [cx, cy] = key.split(',').map(Number);
       return cx >= 0 && cy >= 0 && cx < nextCols && cy < nextRows;
@@ -4540,6 +4550,25 @@ export function LevelEditor(): ReactElement {
       return dropped ? next : map;
     };
     const nextBoard = cloneEditorBoard(currentEditorBoardRef.current);
+    if (dx || dy) {
+      nextBoard.cells = shiftMap(nextBoard.cells);
+      nextBoard.units = shiftMap(nextBoard.units);
+      nextBoard.doodads = shiftMap(nextBoard.doodads);
+      nextBoard.props = shiftMap(nextBoard.props);
+      nextBoard.cover = shiftMap(nextBoard.cover);
+      nextBoard.coverTypes = shiftMap(nextBoard.coverTypes);
+      nextBoard.features = shiftMap(nextBoard.features);
+      nextBoard.zones = shiftMap(nextBoard.zones);
+      nextBoard.fencePosts = shiftMap(nextBoard.fencePosts);
+      nextBoard.fences = shiftEdges(nextBoard.fences);
+      nextBoard.walls = shiftEdges(nextBoard.walls);
+      nextBoard.wallArt = shiftEdges(nextBoard.wallArt);
+      nextBoard.featureCuts = shiftEdges(nextBoard.featureCuts);
+      nextBoard.featureExits = shiftEdges(nextBoard.featureExits);
+      nextBoard.macroTiles = (nextBoard.macroTiles ?? []).map((placement) => ({ ...placement, x: placement.x + dx, y: placement.y + dy }));
+      nextBoard.zoneEntries = zoneEntriesForBoard(nextBoard).map((entry) => ({ ...entry, tiles: entry.tiles.map(shiftKey) }));
+      nextBoard.generatedRegions = (nextBoard.generatedRegions ?? []).map((region) => ({ ...region, cells: region.cells.map(shiftKey) }));
+    }
     nextBoard.cells = prune(nextBoard.cells);
     nextBoard.units = prune(nextBoard.units);
     nextBoard.doodads = prune(nextBoard.doodads);
@@ -4560,6 +4589,7 @@ export function LevelEditor(): ReactElement {
       if (dropped) nextBoard.props = next;
     }
     nextBoard.cover = prune(nextBoard.cover);
+    nextBoard.coverTypes = prune(nextBoard.coverTypes ?? {});
     nextBoard.features = prune(nextBoard.features);
     // Zone entries keep their identity on resize; only their off-board tiles are pruned.
     {
@@ -4646,7 +4676,8 @@ export function LevelEditor(): ReactElement {
     }
     nextBoard.cols = nextCols;
     nextBoard.rows = nextRows;
-    commitEditorBoard(nextBoard, selectedCell && (selectedCell.x >= nextCols || selectedCell.y >= nextRows) ? null : selectedCell);
+    const shiftedSelection = selectedCell ? { x: selectedCell.x + dx, y: selectedCell.y + dy } : null;
+    commitEditorBoard(nextBoard, shiftedSelection && (shiftedSelection.x < 0 || shiftedSelection.y < 0 || shiftedSelection.x >= nextCols || shiftedSelection.y >= nextRows) ? null : shiftedSelection);
     if (activeGeneratedRegionId) {
       const activeAfterResize = prunedGeneratedRegions.find((region) => region.id === activeGeneratedRegionId);
       if (activeAfterResize) setRegionSelection(new Set(activeAfterResize.cells));
@@ -5250,7 +5281,7 @@ export function LevelEditor(): ReactElement {
           <section className="skirmish-card">
             <h2>Board</h2>
             <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
-            <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
+            <p className="le-board-note">Choose the side, then add or remove columns and rows there. Shrinking drops content outside the new bounds.</p>
             <div className="le-board-actions">
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, path, fence rail, post, wall, and wall artwork from the board.">Clear</button>
