@@ -51,7 +51,7 @@ describe('Level Editor chrome hierarchy', () => {
       ['setShowEnemyAttacks', 'inner-text-button'],
       ['setShowBlocked', 'inner-text-button'],
       ['setShowPromotionZones', 'inner-text-button'],
-      ['setShowGrid', 'inner-text-button'],
+      ['setGridScope', 'inner-text-button'],
     ] as const;
     const blocks = buttonBlocks(levelEditor);
     for (const [handler, unit] of controls) {
@@ -59,6 +59,7 @@ describe('Level Editor chrome hierarchy', () => {
       expect(block, `expected Board view control using ${handler}`).toBeDefined();
       expectChromeUnit(block!, unit);
     }
+    expect(blocks.filter((block) => block.includes('setGridScope'))).toHaveLength(2);
     expect(levelEditor).not.toContain('app-header-button');
   });
 

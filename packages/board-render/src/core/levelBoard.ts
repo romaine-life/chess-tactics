@@ -388,7 +388,10 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     difficulty: meta.difficulty ?? 'normal',
     economy: meta.economy ?? { startingFunds: 1200, incomePerTurn: 150 },
     theme: meta.theme ?? 'grassland',
-    boardCode: encodeBoard({ ...board, cols, rows, walls: validWalls }),
+    // The board code is the complete authored visual scene. Gameplay layers above are the
+    // playable-rectangle projection; never strip scenic walls or other outer-board artwork from
+    // the editor's lossless source merely because they do not participate in collision.
+    boardCode: encodeBoard({ ...board, cols, rows }),
     layers: { terrain, decals: [], zones, units, props, fences },
   };
   // ADR-0050 mode fields ride as OPTIONAL keys: written only when meta supplies a non-default

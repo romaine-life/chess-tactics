@@ -4,12 +4,13 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { resolveTerrainSideExposure } from '@chess-tactics/board-render';
+import { resolveDecorativeWallOverlays, resolveTerrainSideExposure } from '@chess-tactics/board-render';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
+import { BoardBarrierSceneLayer } from '../render/BoardBarrierSceneLayer';
 import {
   FENCE_ART_REVIEW_ID,
   transformFenceArtReviewOps,
@@ -24,6 +25,7 @@ import {
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { BoardGridLayer } from '../render/BoardGridLayer';
 import { BoardTerrainLayer, terrainCanvasMacroTiles, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
+import { decorativeTerrainApronCells, withDecorativeTerrainFeatures, type DecorativeTerrainExtents } from '../render/decorativeTerrainApron';
 import { studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
 import { ViewPane } from './shared/ViewPane';
 import { useConfirm } from './shared/ConfirmDialog';
@@ -100,11 +102,12 @@ import {
   type StudioAsset,
   type StudioFamily,
 } from './studioBoard';
-import { featureThumbSrc, fencePostThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
+import { featureFrameSrc, featureThumbSrc, fencePostThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
 import { resolveFeatureOverlays, resolveFencePosts, fenceVertexKey as canonicalFenceVertexKey, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, wallArtBadge, wallArtIdOrDefault, wallArtItems, wallArtLabel, wallArtPlacementSpanAtEdge, wallArtSpanEdges, wallArtSpanForId, type WallArtId } from '../core/wallArt';
 import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
+import { playableBorderFenceEdges, playableBorderRoadKeys } from '../core/playableBorder';
 import { scatterTerrainDetailed } from '../core/terrainScatter';
 import { createRng } from '../core/rng';
 import {
@@ -284,7 +287,7 @@ function StudioEditableBoard({
   selectedCell,
   boardZoom,
   boardPan,
-  showGrid = false,
+  gridScope = 'off',
   tacticalPreview,
   animationFrame,
   onPaint,
@@ -297,6 +300,10 @@ function StudioEditableBoard({
   hidden,
   regionCells,
   onRegionStart,
+  decorativeApron,
+  decorativeCells = {},
+  decorativeFences = {}, decorativeFencePosts = {}, decorativeWalls = {},
+  allowDecorativeEditing = false,
 }: {
   cols: number;
   rows: number;
@@ -361,7 +368,7 @@ function StudioEditableBoard({
   selectedCell: { x: number; y: number } | null;
   boardZoom: number;
   boardPan: { x: number; y: number };
-  showGrid?: boolean;
+  gridScope?: 'off' | 'playable' | 'whole';
   tacticalPreview?: BoardTacticalPreview;
   animationFrame: number;
   onPaint: (x: number, y: number) => void;
@@ -381,6 +388,13 @@ function StudioEditableBoard({
   regionCells?: Set<string>;
   /** Region tool: click a tile to select its whole connected same-terrain patch. */
   onRegionStart?: (x: number, y: number) => void;
+  /** Draw visual-only terrain beyond the tactical grid for art handoff. */
+  decorativeApron: DecorativeTerrainExtents;
+  decorativeCells?: Record<string, string>;
+  decorativeFences?: Record<string, FenceMaterial>;
+  decorativeFencePosts?: Record<string, FenceMaterial>;
+  decorativeWalls?: Record<string, WallMaterial>;
+  allowDecorativeEditing?: boolean;
 }): ReactElement {
   const paintingRef = useRef(false);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
@@ -524,6 +538,9 @@ function StudioEditableBoard({
       .filter(([, id]) => !!resolveAsset(id))
       .map(([key]) => key),
   );
+  const apronContains = (x: number, y: number): boolean =>
+    x >= -decorativeApron.left && x < cols + decorativeApron.right
+    && y >= -decorativeApron.top && y < rows + decorativeApron.bottom;
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < cols; x += 1) {
       const key = `${x},${y}`;
@@ -531,7 +548,9 @@ function StudioEditableBoard({
       const asset = assetId ? resolveAsset(assetId) : undefined;
       const sideExposure = resolveTerrainSideExposure(
         { x, y },
-        (nextX, nextY) => occupiedTiles.has(`${nextX},${nextY}`),
+        (nextX, nextY) => apronContains(nextX, nextY) && (nextX < 0 || nextX >= cols || nextY < 0 || nextY >= rows)
+          ? true
+          : occupiedTiles.has(`${nextX},${nextY}`),
       );
       terrainCells.push(studioTerrainCanvasCell({
         key,
@@ -643,6 +662,96 @@ function StudioEditableBoard({
         ),
       });
     }
+  }
+
+  // Keep the large static apron off the playable terrain canvas. Animated playable tiles may
+  // repaint every frame; sharing that canvas would redraw the whole decorative rectangle too.
+  const authoredApron = new Map<string, TerrainCanvasCell>();
+  for (const [key, assetId] of Object.entries(decorativeCells)) {
+    const [x, y] = key.split(',').map(Number);
+    const asset = resolveAsset(assetId);
+    if (!asset || !apronContains(x, y) || (x >= 0 && x < cols && y >= 0 && y < rows)) continue;
+    authoredApron.set(key, {
+      ...studioTerrainCanvasCell({ key: `decorative:${key}`, x, y, tileAsset: asset, feature: placedFeatures[key], animationFrame: 0, hidden, sideExposure: resolveTerrainSideExposure({ x, y }, () => true) }),
+      animate: false,
+    });
+  }
+  const apronTerrainCells = withDecorativeTerrainFeatures(
+    decorativeTerrainApronCells(terrainCells, cols, rows, decorativeApron, authoredApron),
+    placedFeatures,
+    (feature) => featureFrameSrc(feature.kind, feature.material, feature.mask),
+  );
+  const apronBaseCells = apronTerrainCells.map(({ featureSrc: _featureSrc, ...cell }) => cell);
+  const apronFeatureCells = apronTerrainCells.flatMap((cell) => cell.featureSrc ? [{
+    key: `decorative-feature:${cell.x},${cell.y}`,
+    x: cell.x,
+    y: cell.y,
+    featureSrc: cell.featureSrc,
+  }] : []);
+  for (const cell of apronTerrainCells) {
+    const key = `${cell.x},${cell.y}`;
+    const fenceHere = placementTargetTool && !fencePostTool && hoverEdge?.x === cell.x && hoverEdge?.y === cell.y ? hoverEdge.edge : null;
+    const postHere = fencePostTool && hoverPost?.x === cell.x && hoverPost?.y === cell.y
+      ? FENCE_VERTEX_CORNERS.find((corner) => corner.id === hoverPost.corner) ?? null
+      : null;
+    cells.push({
+      key: `decorative-hit:${key}`,
+      x: cell.x,
+      y: cell.y,
+      className: 'tileset-placement-cell is-decorative',
+      data: { 'data-board-x': cell.x, 'data-board-y': cell.y, 'data-decorative-cell': 'true' },
+      children: (
+        <>
+          {regionCells?.has(key) ? <span className="le-region-cell" aria-hidden="true" /> : null}
+          {fenceHere ? (
+            <svg className="le-fence-edge-hint" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <line x1={EDGE_LINE[fenceHere][0]} y1={EDGE_LINE[fenceHere][1]} x2={EDGE_LINE[fenceHere][2]} y2={EDGE_LINE[fenceHere][3]} />
+            </svg>
+          ) : null}
+          {postHere ? (
+            <span
+              className="le-fence-post-hint"
+              style={{ left: `${postHere.unitX * 100}%`, top: postHere.hintTop }}
+              aria-hidden="true"
+            />
+          ) : null}
+          {tool === 'region' || allowDecorativeEditing ? (
+            <span
+              className="tileset-cell-hit"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                if (tool === 'region') onRegionStart?.(cell.x, cell.y);
+                else if (placementTargetTool && (tool === 'brush' || tool === 'erase')) {
+                  if (fencePostTool) { applyFencePostAt(cell.x, cell.y, vertexAtPointer(event), tool === 'erase'); return; }
+                  const edge = edgeAtPointer(event);
+                  if (wallTool && edge !== 'N' && edge !== 'W') return;
+                  applyBarrierAt(cell.x, cell.y, edge, tool === 'erase');
+                } else if (tool === 'brush') { paintingRef.current = true; onPaint(cell.x, cell.y); }
+                else if (tool === 'erase') { paintingRef.current = true; onErase(cell.x, cell.y); }
+              }}
+              onPointerEnter={() => {
+                if (placementTargetTool || !paintingRef.current) return;
+                if (tool === 'brush') onPaint(cell.x, cell.y);
+                else if (tool === 'erase') onErase(cell.x, cell.y);
+              }}
+              onPointerMove={placementTargetTool ? (event) => {
+                if (fencePostTool) hoverFencePost(cell.x, cell.y, vertexAtPointer(event));
+                else hoverBarrierEdge(cell.x, cell.y, edgeAtPointer(event));
+              } : undefined}
+              onPointerUp={() => { paintingRef.current = false; }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                if (!placementTargetTool) { onErase(cell.x, cell.y); return; }
+                if (fencePostTool) { applyFencePostAt(cell.x, cell.y, vertexAtPointer(event), true); return; }
+                const edge = edgeAtPointer(event);
+                if (wallTool && edge !== 'N' && edge !== 'W') return;
+                applyBarrierAt(cell.x, cell.y, edge, true);
+              }}
+            />
+          ) : null}
+        </>
+      ),
+    });
   }
 
   // Board art now renders through BoardSceneLayer. These remaining DOM nodes are editor-only
@@ -890,7 +999,7 @@ function StudioEditableBoard({
   const sceneBoard: EditorBoard = {
     cols,
     rows,
-    cells: placed,
+    cells: { ...placed, ...decorativeCells },
     macroTiles: [...placedMacroTiles],
     units: placedUnits,
     doodads: placedDoodads,
@@ -898,14 +1007,20 @@ function StudioEditableBoard({
     cover: placedCover,
     coverTypes: placedCoverTypes,
     features: placedFeatures as EditorBoard['features'],
-    fences: placedFences,
-    fencePosts: placedFencePosts,
-    walls: placedWalls,
+    fences: { ...decorativeFences, ...placedFences },
+    fencePosts: { ...decorativeFencePosts, ...placedFencePosts },
+    walls: { ...decorativeWalls, ...placedWalls },
     wallArt: placedWallArt,
     featureCuts: {},
     featureExits: {},
     zones: {},
   };
+  const outerWalls = Object.fromEntries(Object.entries(sceneBoard.walls ?? {}).filter(([edge]) =>
+    edge.split('|').some((key) => {
+      const [x, y] = key.split(',').map(Number);
+      return x < 0 || y < 0 || x >= cols || y >= rows;
+    }),
+  ));
 
   return (
     <TileGrid
@@ -916,10 +1031,12 @@ function StudioEditableBoard({
       boardPan={boardPan}
       backgroundLayer={(
         <>
+          {apronBaseCells.length ? <BoardTerrainLayer cells={apronBaseCells} /> : null}
           <BoardTerrainLayer
             cells={terrainCells}
             macroTiles={hidden?.tile ? [] : terrainCanvasMacroTiles(placedMacroTiles)}
           />
+          {apronFeatureCells.length ? <BoardTerrainLayer cells={apronFeatureCells} /> : null}
           <BoardSceneLayer
             board={sceneBoard}
             hidden={hidden}
@@ -928,12 +1045,14 @@ function StudioEditableBoard({
             omitTerrain
             transformOps={fenceArtwork ? ((ops, board) => transformFenceArtReviewOps(ops, board, fenceArtwork)) : undefined}
           />
+          <BoardBarrierSceneLayer wallOverlays={resolveDecorativeWallOverlays(outerWalls)} />
         </>
       )}
       onPointerUp={endInteraction}
       onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); setHoverPost(null); }}
     >
-      {showGrid ? <BoardGridLayer cells={cells} /> : null}
+      {gridScope === 'playable' ? <BoardGridLayer cells={terrainCells} /> : null}
+      {gridScope === 'whole' ? <BoardGridLayer cells={cells} /> : null}
       {overlaySprites}
     </TileGrid>
   );
@@ -2177,6 +2296,13 @@ export function LevelEditor(): ReactElement {
   const [boardMacroTiles, setBoardMacroTiles] = useState<MacroTilePlacement[]>(() => initialBoard ? validMacroTilesForBoard(initialBoard) : []);
   const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
   const [boardRows, setBoardRows] = useState(initialBoard?.rows ?? LE_ROWS);
+  const [decorativeApron, setDecorativeApron] = useState<DecorativeTerrainExtents>(() =>
+    initialBoard?.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 });
+  const [decorativeCells, setDecorativeCells] = useState<Record<string, string>>(() => initialBoard?.decorativeCells ?? {});
+  const [decorativeFeatures, setDecorativeFeatures] = useState<Record<string, FeatureCell>>(() => initialBoard?.decorativeFeatures ?? {});
+  const [decorativeFences, setDecorativeFences] = useState<Record<string, FenceMaterial>>(() => initialBoard?.decorativeFences ?? {});
+  const [decorativeFencePosts, setDecorativeFencePosts] = useState<Record<string, FenceMaterial>>(() => initialBoard?.decorativeFencePosts ?? {});
+  const [decorativeWalls, setDecorativeWalls] = useState<Record<string, WallMaterial>>(() => initialBoard?.decorativeWalls ?? {});
   const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() =>
     (initialBoard?.playerFaction && (UNIT_PALETTES as readonly string[]).includes(initialBoard.playerFaction)) ? initialBoard.playerFaction as UnitPalette : null,
   );
@@ -2200,7 +2326,7 @@ export function LevelEditor(): ReactElement {
   const [scatterWiggle, setScatterWiggle] = useState(0.5);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const [showGrid, setShowGrid] = useState(false);
+  const [gridScope, setGridScope] = useState<'off' | 'playable' | 'whole'>('off');
   const [showMoves, setShowMoves] = useState(true);
   const [showEnemyAttacks, setShowEnemyAttacks] = useState(true);
   const [showBlocked, setShowBlocked] = useState(false);
@@ -2504,6 +2630,12 @@ export function LevelEditor(): ReactElement {
     const board = levelToEditorBoard(level);
     setBoardCols(board.cols);
     setBoardRows(board.rows);
+    setDecorativeApron(board.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 });
+    setDecorativeCells(board.decorativeCells ?? {});
+    setDecorativeFeatures(board.decorativeFeatures ?? {});
+    setDecorativeFences(board.decorativeFences ?? {});
+    setDecorativeFencePosts(board.decorativeFencePosts ?? {});
+    setDecorativeWalls(board.decorativeWalls ?? {});
     setBoardCells(board.cells);
     setBoardMacroTiles(validMacroTilesForBoard(board));
     setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
@@ -2553,14 +2685,20 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, decorativeApron, decorativeCells, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, decorativeApron, decorativeCells, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
   const applyEditorBoard = (board: EditorBoard): void => {
     setBoardCols(board.cols);
     setBoardRows(board.rows);
+    setDecorativeApron(board.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 });
+    setDecorativeCells(board.decorativeCells ?? {});
+    setDecorativeFeatures(board.decorativeFeatures ?? {});
+    setDecorativeFences(board.decorativeFences ?? {});
+    setDecorativeFencePosts(board.decorativeFencePosts ?? {});
+    setDecorativeWalls(board.decorativeWalls ?? {});
     setBoardCells(board.cells);
     setBoardMacroTiles(validMacroTilesForBoard(board));
     setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
@@ -2676,13 +2814,24 @@ export function LevelEditor(): ReactElement {
   };
   const resolvePropDef = (id: string): PropDef | undefined => propDef(id);
   const propBrushDef = resolvePropDef(propBrushId) ?? PROP_DEFS[0];
-  // Generalised doodadFitsTile for a W×H footprint: EVERY footprint cell must be in-bounds AND
+  const authoredCellTileId = (x: number, y: number): string | undefined => {
+    const key = `${x},${y}`;
+    if (cellWithinBoard(key)) return boardCells[key];
+    if (!cellWithinScenicRectangle(key)) return undefined;
+    if (decorativeCells[key]) return decorativeCells[key];
+    const sourceX = Math.max(0, Math.min(boardCols - 1, x));
+    const sourceY = Math.max(0, Math.min(boardRows - 1, y));
+    return boardCells[`${sourceX},${sourceY}`];
+  };
+  // Generalised doodadFitsTile for a W×H footprint: EVERY footprint cell must be in the authored
+  // rectangle AND its visible terrain must accept the prop. Gameplay projection later ignores
+  // scenic placements, but visual composition uses the same prop rules everywhere.
   // its tile's family must be a terrain the prop allows. (Overlap with units/other props is a
   // separate check at paint time — fit is purely about the terrain bed.)
   const propFitsBoard = (def: PropDef, ax: number, ay: number): boolean => {
-    if (ax < 0 || ay < 0 || ax + def.w > boardCols || ay + def.h > boardRows) return false;
     return propCells(ax, ay, def).every((c) => {
-      const fam = boardCells[`${c.x},${c.y}`] ? leFamilyOfTile(boardCells[`${c.x},${c.y}`])?.id : undefined;
+      const tileId = authoredCellTileId(c.x, c.y);
+      const fam = tileId ? leFamilyOfTile(tileId)?.id : undefined;
       return fam !== undefined && def.terrains.includes(fam);
     });
   };
@@ -2717,8 +2866,51 @@ export function LevelEditor(): ReactElement {
   const featureOverlays = useMemo(() => {
     const isSevered = (edge: string): boolean => featureCuts[edge] === true;
     const isExit = (edge: string): boolean => featureExits[edge] === true;
-    return resolveFeatureOverlays(boardFeatures, isSevered, isExit);
-  }, [boardFeatures, featureCuts, featureExits]);
+    return resolveFeatureOverlays({ ...boardFeatures, ...decorativeFeatures }, isSevered, isExit);
+  }, [boardFeatures, decorativeFeatures, featureCuts, featureExits]);
+  const borderRoadKeys = useMemo(() => playableBorderRoadKeys(boardCols, boardRows), [boardCols, boardRows]);
+  const borderFenceEdges = useMemo(() => playableBorderFenceEdges(boardCols, boardRows), [boardCols, boardRows]);
+  const hasPlayablePathBorder = Boolean(featureKind) && borderRoadKeys.every((key) =>
+    (boardFeatures[key] ?? decorativeFeatures[key])?.kind === featureKind,
+  );
+  const hasPlayableFenceBorder = borderFenceEdges.every((edge) =>
+    edge in boardFences || edge in decorativeFences,
+  );
+
+  const ensureBorderApron = (board: EditorBoard): void => {
+    const apron = board.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 };
+    board.decorativeApron = {
+      top: Math.max(1, apron.top),
+      right: Math.max(1, apron.right),
+      bottom: Math.max(1, apron.bottom),
+      left: Math.max(1, apron.left),
+    };
+  };
+  const setPlayablePathBorder = (enabled: boolean): void => {
+    if (!featureKind) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const features = { ...(next.decorativeFeatures ?? {}), ...(next.features ?? {}) };
+    for (const key of borderRoadKeys) {
+      if (enabled) features[key] = { kind: featureKind, material: featureBrushMaterial[featureKind] };
+      else if (features[key]?.kind === featureKind) delete features[key];
+    }
+    next.features = features;
+    next.decorativeFeatures = {};
+    if (enabled) ensureBorderApron(next);
+    commitEditorBoard(next);
+  };
+  const setPlayableFenceBorder = (enabled: boolean): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const fences = { ...(next.decorativeFences ?? {}), ...(next.fences ?? {}) };
+    for (const edge of borderFenceEdges) {
+      if (enabled) fences[edge] = fenceBrushMaterial;
+      else delete fences[edge];
+    }
+    next.fences = fences;
+    next.decorativeFences = {};
+    if (enabled) ensureBorderApron(next);
+    commitEditorBoard(next);
+  };
 
   const paintCell = (x: number, y: number): void => {
     const key = `${x},${y}`;
@@ -2741,7 +2933,7 @@ export function LevelEditor(): ReactElement {
     }
     if (brushKind === 'doodad') {
       // A doodad only lands on a tile of its home terrain; painting elsewhere is a no-op.
-      if (!doodadFitsTile(doodadBrushAsset, boardCells[key])) return;
+      if (!doodadFitsTile(doodadBrushAsset, authoredCellTileId(x, y))) return;
       next.doodads[key] = { doodadId: doodadBrushAsset.id };
       commitEditorBoard(next);
       return;
@@ -2757,7 +2949,7 @@ export function LevelEditor(): ReactElement {
     if (brushKind === 'cover') {
       // Ground cover paints the selected cover set onto any existing tile. If it differs from
       // the tile terrain, store the decoupled override in the existing coverTypes channel.
-      const tileId = boardCells[key];
+      const tileId = authoredCellTileId(x, y);
       if (!tileId || !groundCoverSet(coverBrushType)) return;
       const terrain = leFamilyOfTile(tileId)?.id;
       next.cover[key] = coverBrushDensity;
@@ -2795,8 +2987,12 @@ export function LevelEditor(): ReactElement {
       commitEditorBoard(next, { x, y });
       return;
     }
-    next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
-    next.cells[key] = brushAsset.id;
+    if (cellWithinBoard(key)) {
+      next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
+      next.cells[key] = brushAsset.id;
+    } else {
+      next.decorativeCells = { ...(next.decorativeCells ?? {}), [key]: brushAsset.id };
+    }
     commitEditorBoard(next);
   };
   const eraseCell = (x: number, y: number): void => {
@@ -2804,6 +3000,7 @@ export function LevelEditor(): ReactElement {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     if (featureKind) {
       delete next.features[key];
+      delete next.decorativeFeatures?.[key];
       for (const edge of Object.keys(next.featureCuts)) if (edge.split('|').includes(key)) delete next.featureCuts[edge];
       for (const edge of Object.keys(next.featureExits)) if (edge.split('|').includes(key)) delete next.featureExits[edge];
       commitEditorBoard(next);
@@ -2838,8 +3035,10 @@ export function LevelEditor(): ReactElement {
       commitEditorBoard(withZoneEntries(next, updated));
       return;
     }
-    next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
-    delete next.cells[key];
+    if (cellWithinBoard(key)) {
+      next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
+      delete next.cells[key];
+    } else delete next.decorativeCells?.[key];
     commitEditorBoard(next);
   };
   const selectFenceArtwork = (id: string): void => {
@@ -2865,51 +3064,59 @@ export function LevelEditor(): ReactElement {
   // not a cell. Add stamps the current brush material; erase drops the edge. Both ride undo/redo.
   const paintFenceEdge = (edgeKey: string): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    next.fences = { ...(next.fences ?? {}), [edgeKey]: fenceBrushMaterial };
+    next.fences = { ...(next.decorativeFences ?? {}), ...(next.fences ?? {}), [edgeKey]: fenceBrushMaterial };
+    next.decorativeFences = {};
     commitEditorBoard(next);
   };
   const eraseFenceEdge = (edgeKey: string): void => {
-    const current = currentEditorBoardRef.current.fences ?? {};
+    const current = { ...(currentEditorBoardRef.current.decorativeFences ?? {}), ...(currentEditorBoardRef.current.fences ?? {}) };
     if (!(edgeKey in current)) return;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    const fences = { ...(next.fences ?? {}) };
+    const fences = { ...(next.decorativeFences ?? {}), ...(next.fences ?? {}) };
     delete fences[edgeKey];
     next.fences = fences;
+    next.decorativeFences = {};
     commitEditorBoard(next);
   };
   const paintFencePost = (vertexKey: string): void => {
     const [vx, vy] = vertexKey.split(',').map(Number);
-    if (!Number.isInteger(vx) || !Number.isInteger(vy) || vx < 0 || vy < 0 || vx > boardCols || vy > boardRows) return;
+    if (!Number.isInteger(vx) || !Number.isInteger(vy)) return;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    next.fencePosts = { ...(next.fencePosts ?? {}), [vertexKey]: fenceBrushMaterial };
+    next.fencePosts = { ...(next.decorativeFencePosts ?? {}), ...(next.fencePosts ?? {}), [vertexKey]: fenceBrushMaterial };
+    next.decorativeFencePosts = {};
     commitEditorBoard(next);
   };
   const eraseFencePost = (vertexKey: string): void => {
-    const current = currentEditorBoardRef.current.fencePosts ?? {};
+    const [vx, vy] = vertexKey.split(',').map(Number);
+    const current = { ...(currentEditorBoardRef.current.decorativeFencePosts ?? {}), ...(currentEditorBoardRef.current.fencePosts ?? {}) };
     if (!(vertexKey in current)) return;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    const posts = { ...(next.fencePosts ?? {}) };
+    const posts = { ...(next.decorativeFencePosts ?? {}), ...(next.fencePosts ?? {}) };
     delete posts[vertexKey];
     next.fencePosts = posts;
+    next.decorativeFencePosts = {};
     commitEditorBoard(next);
   };
   const wallEdgeCanRender = (edgeKey: string): boolean =>
-    isNorthWestBoundaryWallEdge(edgeKey, { cols: boardCols, rows: boardRows });
+    isNorthWestBoundaryWallEdge(edgeKey, { cols: boardCols, rows: boardRows })
+    || edgeKey.split('|').some((key) => !cellWithinBoard(key));
   const paintWallEdge = (edgeKey: string): void => {
     if (!wallEdgeCanRender(edgeKey)) return;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    const walls = { ...(next.walls ?? {}) };
+    const walls = { ...(next.decorativeWalls ?? {}), ...(next.walls ?? {}) };
     walls[edgeKey] = wallBrushMaterial;
     next.walls = walls;
+    next.decorativeWalls = {};
     commitEditorBoard(next);
   };
   const eraseWallEdge = (edgeKey: string): void => {
-    const current = currentEditorBoardRef.current.walls ?? {};
+    const current = { ...(currentEditorBoardRef.current.decorativeWalls ?? {}), ...(currentEditorBoardRef.current.walls ?? {}) };
     if (!(edgeKey in current)) return;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    const walls = { ...(next.walls ?? {}) };
+    const walls = { ...(next.decorativeWalls ?? {}), ...(next.walls ?? {}) };
     delete walls[edgeKey];
     next.walls = walls;
+    next.decorativeWalls = {};
     const currentArt = next.wallArt ?? {};
     const hit = wallArtAtEdge(edgeKey, currentArt, { cols: boardCols, rows: boardRows });
     if (hit) {
@@ -2970,7 +3177,7 @@ export function LevelEditor(): ReactElement {
     setWallArtPlacementFeedback({ tone: 'ready', message: `Removed ${wallArtLabel(hit.artId)}.` });
   };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, macroTiles: [], units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, fencePosts: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, decorativeCells: {}, decorativeFeatures: {}, decorativeFences: {}, decorativeFencePosts: {}, decorativeWalls: {}, macroTiles: [], units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, fencePosts: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
     setActiveGeneratedRegionId(null);
     setRegionSelection(new Set());
   };
@@ -3037,6 +3244,12 @@ export function LevelEditor(): ReactElement {
     const [x, y] = key.split(',').map(Number);
     return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < cols && y < rows;
   };
+  const cellWithinScenicRectangle = (key: string): boolean => {
+    const [x, y] = key.split(',').map(Number);
+    return Number.isInteger(x) && Number.isInteger(y)
+      && x >= -decorativeApron.left && x < boardCols + decorativeApron.right
+      && y >= -decorativeApron.top && y < boardRows + decorativeApron.bottom;
+  };
   const hydrateGeneratedRegionSections = (sections: BoardGeneratedRegionSection[], legacyDensity?: number): ScatterRow[] => {
     const existingSections = sections.length > 0;
     const source = sections.length ? sections : scatterRowsToGeneratedSections(defaultScatterRows());
@@ -3074,7 +3287,7 @@ export function LevelEditor(): ReactElement {
     }
     const region = generatedRegions.find((r) => r.id === id);
     if (!region) return;
-    const cells = sortRegionCells(region.cells.filter((key) => cellWithinBoard(key)));
+    const cells = sortRegionCells(region.cells.filter((key) => cellWithinScenicRectangle(key)));
     setActiveGeneratedRegionId(region.id);
     setRegionSelection(new Set(cells));
     setScatterBuffer(region.buffer);
@@ -3099,7 +3312,8 @@ export function LevelEditor(): ReactElement {
   // hand-authored board.
   const regionSelectPatch = (x: number, y: number): void => {
     const familyAt = (cx: number, cy: number): string => {
-      const id = boardCells[`${cx},${cy}`];
+      const key = `${cx},${cy}`;
+      const id = cx >= 0 && cx < boardCols && cy >= 0 && cy < boardRows ? boardCells[key] : decorativeCells[key];
       return id ? (leFamilyOfTile(id)?.id ?? '?') : '';
     };
     const target = familyAt(x, y);
@@ -3107,7 +3321,8 @@ export function LevelEditor(): ReactElement {
     const stack: Array<[number, number]> = [[x, y]];
     while (stack.length > 0) {
       const [cx, cy] = stack.pop()!;
-      if (cx < 0 || cy < 0 || cx >= boardCols || cy >= boardRows) continue;
+      if (cx < -decorativeApron.left || cy < -decorativeApron.top
+        || cx >= boardCols + decorativeApron.right || cy >= boardRows + decorativeApron.bottom) continue;
       const key = `${cx},${cy}`;
       if (found.has(key) || familyAt(cx, cy) !== target) continue;
       found.add(key);
@@ -3134,7 +3349,9 @@ export function LevelEditor(): ReactElement {
     setRegionSelection(new Set());
   };
   // How many cells a share applies to right now: the marquee selection if any, else the whole board.
-  const scopeCells = regionSelection.size > 0 ? regionSelection.size : boardCols * boardRows;
+  const scopeCells = regionSelection.size > 0
+    ? regionSelection.size
+    : (boardCols + decorativeApron.left + decorativeApron.right) * (boardRows + decorativeApron.top + decorativeApron.bottom);
   const setSectionShare = (id: number, value: number): void => setScatterSections((prev) => rebalanceShares(prev, id, value, scatterBuffer));
   const setSectionTerrain = (id: number, terrain: TileFamilyId): void => setScatterSections((prev) => prev.map((s) => (s.id === id ? { ...s, terrain } : s)));
   const toggleSectionLock = (id: number): void => setScatterSections((prev) => prev.map((s) => (s.id === id ? { ...s, locked: !s.locked } : s)));
@@ -3192,24 +3409,34 @@ export function LevelEditor(): ReactElement {
   const generateScatter = (): void => {
     const sections = scatterSections.map((s) => ({ terrain: s.terrain, share: s.share }));
     if (sections.length === 0) return;
-    const selectedRegionCells = sortRegionCells([...regionSelection].filter((key) => cellWithinBoard(key)));
+    const selectedRegionCells = sortRegionCells([...regionSelection].filter((key) => cellWithinScenicRectangle(key)));
     const seed = Date.now() >>> 0; // a fresh layout each press; the committed board is the artifact
     const cols = boardCols;
     const rows = boardRows;
-    const baseMap: (TileFamilyId | undefined)[] = Array.from({ length: cols * rows }, (_, i) => {
-      const id = boardCells[`${i % cols},${(i / cols) | 0}`];
+    const generateApron = Object.values(decorativeApron).some((value) => value > 0);
+    const offsetX = generateApron ? decorativeApron.left : 0;
+    const offsetY = generateApron ? decorativeApron.top : 0;
+    const generationCols = generateApron ? cols + decorativeApron.left + decorativeApron.right : cols;
+    const generationRows = generateApron ? rows + decorativeApron.top + decorativeApron.bottom : rows;
+    const baseMap: (TileFamilyId | undefined)[] = Array.from({ length: generationCols * generationRows }, (_, i) => {
+      const x = (i % generationCols) - offsetX;
+      const y = ((i / generationCols) | 0) - offsetY;
+      const id = x >= 0 && x < cols && y >= 0 && y < rows
+        ? boardCells[`${x},${y}`]
+        : decorativeCells[`${x},${y}`];
       return id ? (leFamilyOfTile(id)?.id as TileFamilyId | undefined) : undefined;
     });
     const region = selectedRegionCells.length > 0
       ? new Set(
-          selectedRegionCells
-            .map((key) => { const [x, y] = key.split(',').map(Number); return y * cols + x; })
-            .filter((i) => i >= 0 && i < cols * rows),
+          selectedRegionCells.map((key) => {
+            const [x, y] = key.split(',').map(Number);
+            return (y + offsetY) * generationCols + x + offsetX;
+          }),
         )
       : undefined;
-    const { terrain: terrainMap, sectionOf } = scatterTerrainDetailed({
-      columns: cols,
-      rows,
+    const generatedScatter = scatterTerrainDetailed({
+      columns: generationCols,
+      rows: generationRows,
       sections,
       randomnessBuffer: scatterBuffer,
       wiggle: scatterWiggle,
@@ -3217,8 +3444,37 @@ export function LevelEditor(): ReactElement {
       region,
       baseMap,
     });
-    const solved = solveSocketBoard({ assets: leTileAssets, terrainMap, seed, columns: cols, rows, familyAssets: leFamilyAssets });
+    const fullSolved = solveSocketBoard({ assets: leTileAssets, terrainMap: generatedScatter.terrain, seed, columns: generationCols, rows: generationRows, familyAssets: leFamilyAssets });
+    const terrainMap: TileFamilyId[] = [];
+    const sectionOf = new Int32Array(cols * rows);
+    const solvedCells = [] as typeof fullSolved.cells;
+    for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) {
+      const fullIndex = (y + offsetY) * generationCols + x + offsetX;
+      terrainMap.push(generatedScatter.terrain[fullIndex]);
+      sectionOf[y * cols + x] = generatedScatter.sectionOf[fullIndex];
+      const cell = fullSolved.cells[fullIndex];
+      solvedCells.push({ ...cell, x, y });
+    }
+    const solved = { ...fullSolved, cells: solvedCells };
     const next = cloneEditorBoard(currentEditorBoardRef.current);
+    if (generateApron) {
+      if (!region) next.decorativeCells = {};
+      else if (!next.decorativeCells) next.decorativeCells = {};
+      for (const cell of fullSolved.cells) {
+        const x = cell.x - offsetX;
+        const y = cell.y - offsetY;
+        if (x >= 0 && x < cols && y >= 0 && y < rows) continue;
+        const fullIndex = cell.y * generationCols + cell.x;
+        if (region && !region.has(fullIndex)) continue;
+        next.decorativeCells[`${x},${y}`] = cell.asset?.id ?? leDefaultTile.id;
+      }
+    }
+    const playableRegion = selectedRegionCells.length > 0
+      ? new Set(selectedRegionCells.flatMap((key) => {
+          const [x, y] = key.split(',').map(Number);
+          return x >= 0 && x < cols && y >= 0 && y < rows ? [y * cols + x] : [];
+        }))
+      : undefined;
     const generatedMacroTiles = generateMacroTiles({
       terrainMap,
       columns: cols,
@@ -3227,9 +3483,9 @@ export function LevelEditor(): ReactElement {
       sectionOf,
       densityBySection: scatterSections.map((section) => section.macroTileDensity),
       breakupBySection: scatterSections.map((section) => section.macroTileBreakup),
-      region,
+      region: playableRegion,
     });
-    const rewrittenCells = region ?? new Set(Array.from({ length: cols * rows }, (_, index) => index));
+    const rewrittenCells = playableRegion ?? new Set(Array.from({ length: cols * rows }, (_, index) => index));
     const preservedMacroTiles = (next.macroTiles ?? []).filter((placement) => {
       const cells = macroTileCellIndices(placement, cols, rows);
       if (cells.length > 0) return !cells.some((index) => rewrittenCells.has(index));
@@ -3257,7 +3513,7 @@ export function LevelEditor(): ReactElement {
     const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
     for (const cell of solved.cells) {
       const idx = cell.y * cols + cell.x;
-      if (region && !region.has(idx)) continue; // scoped: only rewrite region cells
+      if (playableRegion && !playableRegion.has(idx)) continue; // scoped: only rewrite selected playable cells
       const key = `${cell.x},${cell.y}`;
       next.cells[key] = cell.asset?.id ?? leDefaultTile.id;
       const s = sectionOf[idx];
@@ -4991,7 +5247,7 @@ export function LevelEditor(): ReactElement {
                     selectedCell={selectedCell}
                     boardZoom={viewZoom}
                     boardPan={viewPan}
-                    showGrid={showGrid}
+                    gridScope={gridScope}
                     tacticalPreview={tacticalPreview}
                     animationFrame={animationFrame}
                     onPaint={paintCell}
@@ -5024,6 +5280,12 @@ export function LevelEditor(): ReactElement {
                     macroTileBrush={brushKind === 'tile' ? macroTileBrushAsset : null}
                     regionCells={regionSelection}
                     onRegionStart={regionSelectPatch}
+                    decorativeApron={decorativeApron}
+                    decorativeCells={decorativeCells}
+                    decorativeFences={decorativeFences}
+                    decorativeFencePosts={decorativeFencePosts}
+                    decorativeWalls={decorativeWalls}
+                    allowDecorativeEditing={['tile', 'doodad', 'prop', 'cover', 'road', 'river', 'fence', 'wall'].includes(brushKind)}
                   />
                 )}
               </div>
@@ -5282,6 +5544,21 @@ export function LevelEditor(): ReactElement {
             <h2>Board</h2>
             <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
             <p className="le-board-note">Choose the side, then add or remove columns and rows there. Shrinking drops content outside the new bounds.</p>
+            <h3>Scenic terrain rectangle</h3>
+            {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
+              <div className="le-ctrlrow" key={side}>
+                <span className="le-ctrllabel">{side[0].toUpperCase() + side.slice(1)}</span>
+                <Stepper
+                  value={decorativeApron[side]}
+                  suffix=" tiles"
+                  decreaseLabel={`Reduce scenic terrain on the ${side}`}
+                  increaseLabel={`Extend scenic terrain on the ${side}`}
+                  onDecrease={() => setDecorativeApron((current) => ({ ...current, [side]: Math.max(0, current[side] - 1) }))}
+                  onIncrease={() => setDecorativeApron((current) => ({ ...current, [side]: Math.min(16, current[side] + 1) }))}
+                />
+              </div>
+            ))}
+            <p className="le-board-note">Extend only the sides needed for the art-handoff rectangle. These tiles are decorative only and cannot hold units, zones, features, or moves.</p>
             <div className="le-board-actions">
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, path, fence rail, post, wall, and wall artwork from the board.">Clear</button>
@@ -5738,6 +6015,7 @@ export function LevelEditor(): ReactElement {
         ) : wallTool ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Wall</h2>
+            <p className="le-board-note">When on, decorative tiles accept north and west wall faces only. These walls never block play.</p>
             <div className="le-pal-group">
               <span className="le-pal-grouplabel">Back edge</span>
               <div className="le-swatches">
@@ -5795,6 +6073,10 @@ export function LevelEditor(): ReactElement {
         ) : fenceTool ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Fence</h2>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Playable border</span>
+              <Toggle checked={hasPlayableFenceBorder} label="Surround the playable grid with a fence" onChange={setPlayableFenceBorder} />
+            </div>
             {activeFenceArtwork ? (
               <div className="le-pal-group le-fence-artwork-picker">
                 <span className="le-pal-grouplabel">Artwork</span>
@@ -5884,6 +6166,10 @@ export function LevelEditor(): ReactElement {
         ) : featureKind ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Path surface</h2>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Playable border</span>
+              <Toggle checked={hasPlayablePathBorder} label={`Surround the playable grid with ${featureKind === 'river' ? 'water' : 'a road'}`} onChange={setPlayablePathBorder} />
+            </div>
             <div className="le-pal-group">
               <span className="le-pal-grouplabel">Roads</span>
               <div className="le-swatches">
@@ -6060,7 +6346,8 @@ export function LevelEditor(): ReactElement {
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showEnemyAttacks && 'active')} onClick={() => setShowEnemyAttacks((value) => !value)} aria-pressed={showEnemyAttacks}>Attacks</button>
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showBlocked && 'active')} onClick={() => setShowBlocked((value) => !value)} aria-pressed={showBlocked}>Blocks</button>
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showPromotionZones && 'active')} onClick={() => setShowPromotionZones((value) => !value)} aria-pressed={showPromotionZones}>Promotion</button>
-              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showGrid && 'active')} onClick={() => setShowGrid((value) => !value)} aria-pressed={showGrid}>Grid</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', gridScope === 'playable' && 'active')} onClick={() => setGridScope((value) => value === 'playable' ? 'off' : 'playable')} aria-pressed={gridScope === 'playable'}>Playable grid</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', gridScope === 'whole' && 'active')} onClick={() => setGridScope((value) => value === 'whole' ? 'off' : 'whole')} aria-pressed={gridScope === 'whole'}>Whole grid</button>
             </div>
           </div>
         </section>

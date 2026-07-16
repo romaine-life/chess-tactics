@@ -209,6 +209,27 @@ the union of occupied logical diamonds, including holes, and must never paint a
 top-color apron outside the map. A visible lip or cap is authored side media,
 not generic renderer padding.
 
+### Level Editor scenic terrain apron
+
+Per [ADR-0096](adr/0096-level-editor-scenic-terrain-apron-is-decoration-only.md), the Level
+Editor's persisted Scenic terrain rectangle may extend nearest-edge terrain tops independently by
+zero to sixteen cells beyond its top, right, bottom, and left sides for an art-generation handoff
+view. Decorative apron animation stays on frame zero. Those apron coordinates exist only in the terrain compositor.
+Scenic cells use the ordinary editor region-selection and scoped Generate path. Generate rewrites
+exactly the selected area across either side of the playable boundary and persists outside terrain
+in the separate decorative-cell channel. The apron uses a separate static canvas.
+The editor exposes separate Playable grid and Whole grid overlays; the former is always bounded to
+the tactical board, and the latter includes scenic cells.
+
+Per [ADR-0098](adr/0098-authored-board-extends-beyond-playable-grid.md), the full scenic rectangle is
+the authored visual board. Ordinary terrain, road, river, fence, north/west wall-face, prop, doodad,
+and cover tools use their canonical placement and renderer paths on either side of the playable
+boundary, without per-tool Scenic toggles. Units and gameplay zones remain playable-only. Board
+code preserves the complete visual scene; Level terrain, barriers, collision, movement, objectives,
+promotion, and solver state project only the playable rectangle. The apron suppresses perimeter
+side exposure where visual terrain continues; interior authored holes retain ordinary exposure. A
+board without an authored terrain top does not synthesize an apron.
+
 ## Composed terrain and macrotiles
 
 The runtime board is one composed terrain canvas, but its source data remains layered:

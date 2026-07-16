@@ -23,6 +23,8 @@ export interface TerrainCanvasCell {
   sideFaces?: TerrainSideFaces<string>;
   featureSrc?: string;
   topAnimFrames?: number;
+  /** Keep a multi-frame source on frame zero without scheduling continuous canvas repaints. */
+  animate?: boolean;
 }
 
 export interface TerrainCanvasMacroTile {
@@ -128,6 +130,7 @@ function terrainSignature(cells: readonly TerrainCanvasCell[], macroTiles: reado
       cell.topSrc ?? '',
       cell.featureSrc ?? '',
       cell.topAnimFrames ?? 0,
+      cell.animate === false ? 0 : 1,
       ...TERRAIN_SIDE_FACES.flatMap((face) => [
         cell.sideFaces?.[face].exposed ? 1 : 0,
         cell.sideFaces?.[face].material ?? '',
@@ -284,7 +287,7 @@ function imageReady(image: HTMLImageElement | undefined): image is HTMLImageElem
 
 function topAnimationFrame(cell: TerrainCanvasCell, timeMs: number): number {
   const frames = cell.topAnimFrames ?? 0;
-  if (frames <= 1) return 0;
+  if (frames <= 1 || cell.animate === false) return 0;
   const phase = ((cell.x * 7 + cell.y * 13) % frames) / frames;
   return Math.floor((((timeMs / TILE_TOP_ANIM_MS) + phase) % 1) * frames);
 }
@@ -490,7 +493,7 @@ export function BoardTerrainLayer({
     let raf = 0;
     const sources = uniqueSources(cells, macroTiles);
     const macroOwned = macroTileOwnedCellKeys(macroTiles);
-    const animated = cells.some((cell) => !macroOwned.has(`${cell.x},${cell.y}`) && (cell.topAnimFrames ?? 0) > 1);
+    const animated = cells.some((cell) => !macroOwned.has(`${cell.x},${cell.y}`) && cell.animate !== false && (cell.topAnimFrames ?? 0) > 1);
 
     const paint = (images: ReadonlyMap<string, HTMLImageElement>, timeMs = performance.now()): void => {
       if (cancelled) return;
@@ -512,7 +515,11 @@ export function BoardTerrainLayer({
       cancelled = true;
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [bounds, cells, macroTiles, signature]);
+  // `cells` and `macroTiles` are commonly rebuilt as equivalent arrays during editor renders.
+  // Depending on their identities cancels an in-flight image load and can starve a static feature
+  // pass until several unrelated renders have occurred. `signature` is the complete deterministic
+  // content dependency, and `bounds` is memoized from that signature.
+  }, [bounds, signature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const style = {
     left: `${bounds.left}px`,
