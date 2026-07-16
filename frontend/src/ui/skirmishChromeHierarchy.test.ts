@@ -6,7 +6,10 @@ const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 
 const portraitEditor = readFileSync(new URL('./PortraitEditor.tsx', import.meta.url), 'utf8');
 const stepper = readFileSync(new URL('./shared/Stepper.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
+const appTitleBar = readFileSync(new URL('./shell/AppTitleBar.tsx', import.meta.url), 'utf8');
+const chromeRuntime = readFileSync(new URL('./chromeFamilyRuntime.ts', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 
 const buttonBlocks = (source: string): string[] => source.match(/<button\b[\s\S]*?<\/button>/g) ?? [];
 
@@ -22,6 +25,48 @@ function expectChromeUnit(block: string, unit: string): void {
 }
 
 describe('Skirmish chrome hierarchy', () => {
+  it('keeps the HUD content scroller vertical-only despite inner-atom overhang', () => {
+    expect(styleCss).toMatch(/\.skirmish-hud-panel\s*\{[\s\S]*?overflow-x:\s*hidden;[\s\S]*?overflow-y:\s*auto;/);
+  });
+
+  it('does not expose board overdraw as empty horizontal page scroll', () => {
+    expect(styleCss).toMatch(/@media \(max-width: 860px\)[\s\S]*?\.skirmish-screen\s*\{[\s\S]*?overflow-x:\s*hidden;[\s\S]*?overflow-y:\s*auto;/);
+  });
+
+  it('uses one branched shell divider instead of two complete outer boxes (ADR-0096)', () => {
+    expect(appTitleBar).toContain('chrome-family-surface chrome-rails-offscreen');
+    expect(appTitleBar).not.toContain('chromeCorners');
+    expect(appTitleBar).not.toContain('cornerPreviewClass');
+    expect(appTitleBar).toContain('<span className="app-shell-outer-divider" aria-hidden="true" />');
+    expect(appTitleBar).toContain('app-shell-rail-junction--persistent-controls');
+    expect(appTitleBar).toMatch(/app-shell-rail-junction--persistent-controls[^]*?<div className="app-titlebar-trailing-menu">/);
+    expect(appTitleBar).not.toMatch(/<div className="app-titlebar-trailing-menu">\s*<span className="app-shell-rail-junction/);
+    expect(appTitleBar).toContain('app-shell-rail-junction--control-branch');
+    expect(appTitleBar).toContain('app-shell-rail-junction--right-continuation');
+    expect(styleCss).toMatch(/\.settings-header-frame\.app-titlebar\s*\{[\s\S]*?align-content:\s*stretch;/);
+    expect(styleCss).toMatch(/\.app-titlebar-trailing-menu\s*\{[\s\S]*?align-self:\s*start;[\s\S]*?block-size:\s*calc\(var\(--app-header-h\) - var\(--titlebar-rule-h\)\);[\s\S]*?margin-block:\s*calc\(-1 \* var\(--ds-titlebar-inset\)\) 0;/);
+    expect(styleCss).toMatch(/:root\s*\{\s*--skirmish-rail-w:\s*clamp\(176px, 30vw, 300px\);/);
+    expect(styleCss).toMatch(/\.app-shell-titlebar\.settings-header-frame\s*\{[\s\S]*?--ds-titlebar-inset:\s*6px;[\s\S]*?padding-block:\s*var\(--ds-titlebar-inset\);/);
+    expect(chromeRuntime).toContain('.app-shell-outer-divider::before');
+    expect(chromeRuntime).toContain('.app-shell-rail-junction--persistent-controls');
+    expect(chromeRuntime).toContain('anchor(--app-titlebar-persistent-controls left)');
+    expect(chromeRuntime).toContain('right: calc(var(--skirmish-rail-w) - var(--le-chrome-outer-rail-w) / 2');
+    expect(styleCss).toMatch(/\.app-titlebar-trailing-menu\s*\{[\s\S]*?anchor-name:\s*--app-titlebar-persistent-controls;/);
+    expect(chromeRuntime).toContain('.app-shell-rail-junction--control-branch');
+    expect(chromeRuntime).toContain('border-width: ${outerRailWidth}px ${outerRailWidth}px 0;');
+    expect(chromeRuntime).toContain('border-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;');
+    expect(chromeRuntime).toContain('url("${outerFrame.atomOverlay.tl}"), url("${outerFrame.atomOverlay.tr}"), url("${outerFrame.atomOverlay.bl}")');
+    expect(chromeRuntime).toContain('url("${outerFrame.atomOverlay.bl}"), url("${outerFrame.atomOverlay.br}")');
+    expect(styleCss).toMatch(/\.app-titlebar-trailing-menu\s*\{[\s\S]*?--titlebar-persistent-gap:\s*max\(0px, calc\(\(var\(--app-header-h\) - var\(--titlebar-rule-h\) - var\(--titlebar-control-size\)\) \/ 2\)\);[\s\S]*?--titlebar-control-gap:\s*var\(--titlebar-persistent-gap\);[\s\S]*?justify-self:\s*end;[\s\S]*?padding-inline-start:\s*calc\(var\(--le-chrome-outer-rail-w, 12px\) \+ var\(--titlebar-persistent-gap\)\)/);
+  });
+
+  it('registers every level-specific title-bar status box as inner chrome', () => {
+    const centerSlot = skirmish.match(/<TitleBarSlot region="center">([\s\S]*?)<\/TitleBarSlot>/)?.[1] ?? '';
+    expect(centerSlot.match(/<TitleBarStatus\b/g)).toHaveLength(3);
+    expect(centerSlot).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
+    expect(skirmish).toContain("import { TitleBarStatus } from './shell/TitleBarControls';");
+  });
+
   it('uses the registered outer panel and explicit inner boxes', () => {
     expect(skirmishHud).toContain('<OuterChromeBox');
     expect(skirmishHud).toContain('chromeConsumer="skirmish-hud"');

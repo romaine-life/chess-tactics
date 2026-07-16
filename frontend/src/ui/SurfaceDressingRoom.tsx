@@ -47,7 +47,6 @@ interface RegionDef {
 // Selectors verified against the live Settings DOM. `[data-testid="settings"]` is on the
 // .settings-art-route wrapper, so these scope every override to the real Settings screen.
 const REGIONS: RegionDef[] = [
-  { id: 'title', label: 'Title bar', selector: '[data-testid="settings"] .app-titlebar.settings-header-frame', hint: 'The top header strip.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: false, geom: ['padX', 'padY', 'moveX', 'moveY'] },
   { id: 'tabsBox', label: 'Rail box', selector: '[data-testid="settings"] .settings-rail-frame', hint: 'The left rail container holding the tab buttons.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true, geom: ['padX', 'padY', 'gap'], inherited: 'Rail width & offset (X / Y) are shared with the Main Menu buttons — tune them in the Main Menu dressing room.' },
   { id: 'buttons', label: 'Rail tabs', selector: '[data-testid="settings"] .settings-tab', hint: 'The individual tab buttons inside the rail.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round', frameWidth: 12, configId: 'mode-button', isBox: false, geom: ['minH', 'padX', 'padY', 'gap', 'iconSize', 'iconX'], inherited: 'Width, offset (X / Y) & label position are shared with the Main Menu buttons — tune them in the Main Menu dressing room.' },
   { id: 'rowsBox', label: 'Rows box', selector: '[data-testid="settings"] .settings-main-frame', hint: 'The main panel container holding the rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true, geom: ['width', 'padX', 'padY', 'moveX', 'moveY'] },
@@ -148,16 +147,7 @@ function buildCss(config: DressingConfig, base: Record<RegionId, GeomBase>): str
     const decls: string[] = [];
     let paddingHandled = false; // true once the fill-clip owns padding
 
-    if (region.id === 'title') {
-      // Title bar (ADR-0037): a full-bleed surface under a forged stud strip — not a frame+fill.
-      const studded = 'url("/assets/ui/titlebar/joint-diamond-forged.png") center bottom / auto 26px no-repeat, url("/assets/ui/titlebar/band-forged.png") left bottom / auto var(--titlebar-rule-h, 14px) repeat-x';
-      if (name === CLEAR) {
-        decls.push('border: 0', 'border-image: none', `background: ${studded}`, 'image-rendering: pixelated');
-      } else if (isSurface(name)) {
-        const asset = SURFACE_ASSETS.find((s) => s.name === name);
-        if (asset) decls.push('border: 0', 'border-image: none', `background: ${studded}, url("${asset.file}") ${offsetX}px ${offsetY}px / ${tilePx}px repeat fixed`, 'image-rendering: pixelated');
-      }
-    } else if (name === CLEAR) {
+    if (name === CLEAR) {
       decls.push(`border-image: ${region.frame}`, 'background: transparent', 'image-rendering: pixelated');
     } else if (isSurface(name)) {
       const asset = SURFACE_ASSETS.find((s) => s.name === name);

@@ -32,7 +32,7 @@ describe('Campaign Editor recent draft row', () => {
     );
 
     expect(markup).not.toContain('<div role="button"');
-    expect(markup).toContain('class="settings-row ce-editor-level-row is-neutral"');
+    expect(markup).toContain('data-chrome-unit="inner-box" class="inner-box settings-row ce-editor-level-row is-neutral"');
     expect(markup).not.toContain('ce-editor-draft-row');
     expect(markup).toContain('class="level-thumbnail');
     expect(markup.match(/<button/g)).toHaveLength(3);

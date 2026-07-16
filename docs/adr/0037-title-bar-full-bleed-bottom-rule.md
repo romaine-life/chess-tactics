@@ -1,10 +1,12 @@
 ---
-status: "accepted; asset-storage clauses superseded by ADR-0085"
+status: "superseded by ADR-0099; asset-storage clauses superseded by ADR-0085"
 date: 2026-06-28
 deciders: Nelson, Claude
 ---
 
 # ADR-0037: The app title bar is full-bleed with a bottom RULE, not a 4-sided frame
+
+Superseded by [ADR-0099](0099-title-bar-and-control-panels-form-one-outer-rail.md).
 
 Refines [ADR-0004](0004-standard-app-title-bar.md) (one shared full-bleed title bar) and
 scopes an exception to [ADR-0034](0034-nine-slice-line-frames-for-surface-fill.md) (line
