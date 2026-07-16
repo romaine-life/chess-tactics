@@ -1,16 +1,16 @@
 ---
-status: "accepted; automatic corner-authority clause superseded by ADR-0097; four-corner-only correction superseded by ADR-0101"
+status: "accepted; automatic corner-authority clause superseded by ADR-0101; four-corner-only correction superseded by ADR-0105"
 date: 2026-07-13
 deciders: Nelson, Codex
-supersedes: "[ADR-0095](0095-pre-drawn-boards-use-one-registered-live-media-plate.md)"
-partially_superseded_by: "[ADR-0097](0097-predrawn-registration-is-owner-picked-source-geometry.md) and [ADR-0101](0101-owner-fitted-grid-defines-predrawn-review-rectification.md)"
+supersedes: "[ADR-0099](0099-pre-drawn-boards-use-one-registered-live-media-plate.md)"
+partially_superseded_by: "[ADR-0101](0101-predrawn-registration-is-owner-picked-source-geometry.md) and [ADR-0105](0105-owner-fitted-grid-defines-predrawn-review-rectification.md)"
 ---
 
-# ADR-0096: Pre-drawn candidate review uses exact board-plane registration
+# ADR-0100: Pre-drawn candidate review uses exact board-plane registration
 
 ## Context
 
-ADR-0095 established the pre-drawn board as one continuous plate over unchanged,
+ADR-0099 established the pre-drawn board as one continuous plate over unchanged,
 gameplay-authoritative level geometry. It limited review calibration to scale and
 translation. In practice, a generated candidate can preserve the intended board
 and still return with slightly different isometric framing. A scale/translation

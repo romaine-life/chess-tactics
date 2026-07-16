@@ -28,7 +28,7 @@ repository path, or currently accepted URL.
 A pre-drawn board persists its plate's semantic slot and declared native
 reference-frame dimensions. A same-origin temporary preview URL may substitute
 candidate bytes during development review, and a source-scoped browser-local
-record may hold the owner-fitted corner/row/column calibration from ADR-0101.
+record may hold the owner-fitted corner/row/column calibration from ADR-0105.
 Neither the candidate URL nor that review rectification is serialized into the
 level; accepted plate bytes still resolve through the live-media catalog at the
 declared native frame.

@@ -3,7 +3,7 @@
 This is the mutable recipe for turning an authored level into one continuous
 full-scene painting without giving the image generator permission to redesign
 the level. It implements
-[ADR-0100](../adr/0100-predrawn-generation-packets-preserve-authored-level-semantics.md).
+[ADR-0104](../adr/0104-predrawn-generation-packets-preserve-authored-level-semantics.md).
 
 Amend this file whenever a reviewed pass teaches us a better instruction. Keep
 the authority order intact unless a later ADR changes it. Preserve exact prompts

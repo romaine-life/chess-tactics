@@ -1,12 +1,12 @@
 ---
-status: "accepted; fixed authored-dimension target superseded by ADR-0102"
+status: "accepted; fixed authored-dimension target superseded by ADR-0106"
 date: 2026-07-13
 deciders: Nelson, Codex
-partially_supersedes: "[ADR-0096](0096-predrawn-candidate-review-uses-exact-board-plane-registration.md) and [ADR-0097](0097-predrawn-registration-is-owner-picked-source-geometry.md)"
-partially_superseded_by: "[ADR-0102](0102-predrawn-refit-target-dimensions-are-owner-configurable.md)"
+partially_supersedes: "[ADR-0100](0100-predrawn-candidate-review-uses-exact-board-plane-registration.md) and [ADR-0101](0101-predrawn-registration-is-owner-picked-source-geometry.md)"
+partially_superseded_by: "[ADR-0106](0106-predrawn-refit-target-dimensions-are-owner-configurable.md)"
 ---
 
-# ADR-0101: Owner-fitted grid defines pre-drawn review rectification
+# ADR-0105: Owner-fitted grid defines pre-drawn review rectification
 
 ## Context
 

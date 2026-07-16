@@ -12,6 +12,7 @@ import {
   resolveFenceOverlays,
   resolveFencePosts,
   resolveWallOverlays,
+  resolveDecorativeWallOverlays,
   fenceBlocksCrossing,
   fenceVertexKey,
   parseFenceVertexKey,
@@ -36,6 +37,17 @@ describe('feature autotile bit convention', () => {
     expect(FEATURE_DIRS.find((d) => d.edge === 'E')).toMatchObject({ dx: 1, dy: 0, bit: 2 });
     expect(FEATURE_DIRS.find((d) => d.edge === 'S')).toMatchObject({ dx: 0, dy: 1, bit: 4 });
     expect(FEATURE_DIRS.find((d) => d.edge === 'W')).toMatchObject({ dx: -1, dy: 0, bit: 8 });
+  });
+});
+
+describe('decorative wall faces', () => {
+  it('maps arbitrary north and west edges onto their visible owning cell', () => {
+    const overlays = resolveDecorativeWallOverlays({
+      '-2,-1|-1,-1': 'brick',
+      '3,-2|3,-1': 'stone',
+    });
+    expect(overlays.get('-1,-1')).toEqual({ mask: 8, material: 'brick' });
+    expect(overlays.get('3,-1')).toEqual({ mask: 1, material: 'stone' });
   });
 });
 

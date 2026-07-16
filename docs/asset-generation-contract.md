@@ -138,13 +138,13 @@ being produced.
 ### Pre-drawn Whole-Level Plates
 
 The pre-drawn board path is the deliberate complete-plate exception to the
-ordinary composited-tile direction above. Under ADR-0095 through ADR-0101, one
+ordinary composited-tile direction above. Under ADR-0099 through ADR-0105, one
 continuous generated painting may replace the ordinary terrain, road, prop, and
 barrier pixels for a specific authored level while the canonical level remains
 the sole authority for gameplay geometry and live units, grid, selection, and
 tactical overlays.
 
-Per [ADR-0100](adr/0100-predrawn-generation-packets-preserve-authored-level-semantics.md),
+Per [ADR-0104](adr/0104-predrawn-generation-packets-preserve-authored-level-semantics.md),
 whole-level generation must not ask a model to infer the playable board from a
 beauty render alone. Every request uses an authored-level packet containing:
 
@@ -165,7 +165,7 @@ mutable process and prompt wording live in
 prompts remain text provenance while candidate media follows the live-storage
 contract.
 
-Per [ADR-0101](adr/0101-owner-fitted-grid-defines-predrawn-review-rectification.md),
+Per [ADR-0105](adr/0105-owner-fitted-grid-defines-predrawn-review-rectification.md),
 candidate review exposes the complete authored grid over the untouched source.
 The owner may fit monotonic row and column guides and inspect their correction
 range. Development may inverse-warp the complete painting from that fit, but the
@@ -173,12 +173,12 @@ measurement is regeneration feedback rather than production acceptance: large,
 non-separable, or semantic drift still rejects the generation, and accepted art
 must return at the canonical native frame without spatial resampling.
 
-Per [ADR-0102](adr/0102-predrawn-refit-target-dimensions-are-owner-configurable.md),
+Per [ADR-0106](adr/0106-predrawn-refit-target-dimensions-are-owner-configurable.md),
 the review instrument's target row and column counts are owner-configurable. If
 the candidate visibly contains an extra row or column, the owner sets the target
 to the painted count before fitting guides. That target controls the refit
 topology and the temporary post-picker review overlay. Per
-[ADR-0103](adr/0103-predrawn-review-overlay-uses-the-saved-refit-grid.md), this
+[ADR-0107](adr/0107-predrawn-review-overlay-uses-the-saved-refit-grid.md), this
 overlay retains the chosen count after `DONE`; canonical level dimensions,
 interactive cells, and gameplay remain unchanged, leaving the generated excess
 visible as evidence for the next generation pass.

@@ -10,7 +10,9 @@
 //   fp?:{vertexKey:fenceMaterial},
 //   wl?:{edgeKey:wallMaterial}, wa?:{anchorEdgeKey:wallArtId},
 //   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
-//   gr?:generatedRegionUnits, pd?:[semanticMediaSlot,referenceFrameWidth,referenceFrameHeight] }.
+//   gr?:generatedRegionUnits, pd?:[semanticMediaSlot,referenceFrameWidth,referenceFrameHeight],
+//   da?:[top,right,bottom,left], dt?:{cell:tileId}, dr?:{cell:feature},
+//   dfe?:{edgeKey:fenceMaterial}, dfp?:{vertexKey:fenceMaterial}, dwl?:{edgeKey:wallMaterial} }.
 // `f` fills every cell, then `t` overrides — so a "mostly one tile"
 // board stays tiny; `h` punches intentional holes back out of that fill. The autotiling ribbon
 // features split per kind on the wire (rd=roads, rv=rivers) and merge into one `features` map on
@@ -101,6 +103,15 @@ export interface BoardGeneratedRegion {
 export interface EditorBoard {
   cols: number;
   rows: number;
+  /** Level-editor/art-handoff presentation only. Extends terrain beyond the tactical bounds;
+   * apron cells are never gameplay addresses and never project into Level layers. */
+  decorativeApron?: { top: number; right: number; bottom: number; left: number };
+  /** Render-only generated terrain keyed by coordinates outside the playable board. */
+  decorativeCells?: Record<string, string>;
+  decorativeFeatures?: Record<string, FeatureCell>;
+  decorativeFences?: Record<string, FenceMaterial>;
+  decorativeFencePosts?: Record<string, FenceMaterial>;
+  decorativeWalls?: Record<string, WallMaterial>;
   /** Palette faction the human player controls. Undefined/null means choose at play-load time. */
   playerFaction?: string | null;
   /** Per-faction default facing used when the level editor places new units. */
@@ -300,6 +311,16 @@ function isInBoundsCellKey(key: string, cols: number, rows: number): boolean {
   return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < cols && y < rows;
 }
 
+function isInScenicBoundsCellKey(key: string, cols: number, rows: number, apron: EditorBoard['decorativeApron']): boolean {
+  const [xRaw, yRaw] = key.split(',');
+  const x = Number(xRaw);
+  const y = Number(yRaw);
+  const extents = apron ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  return Number.isInteger(x) && Number.isInteger(y)
+    && x >= -extents.left && x < cols + extents.right
+    && y >= -extents.top && y < rows + extents.bottom;
+}
+
 function cleanMacroTiles(value: unknown, cols: number, rows: number): MacroTilePlacement[] {
   if (!Array.isArray(value)) return [];
   const out: MacroTilePlacement[] = [];
@@ -346,11 +367,11 @@ function encodeMacroTiles(value: MacroTilePlacement[] | undefined, cols: number,
   });
 }
 
-function encodeGeneratedRegions(regions: BoardGeneratedRegion[] | undefined, cols: number, rows: number): unknown[] {
+function encodeGeneratedRegions(regions: BoardGeneratedRegion[] | undefined, cols: number, rows: number, apron?: EditorBoard['decorativeApron']): unknown[] {
   if (!regions?.length) return [];
   return regions
     .map((region) => {
-      const cells = [...new Set(region.cells.filter((key) => isInBoundsCellKey(key, cols, rows)))];
+      const cells = [...new Set(region.cells.filter((key) => isInScenicBoundsCellKey(key, cols, rows, apron)))];
       if (!cells.length) return null;
       return {
         i: region.id,
@@ -378,7 +399,7 @@ function encodeGeneratedRegions(regions: BoardGeneratedRegion[] | undefined, col
     .filter(Boolean) as unknown[];
 }
 
-function decodeGeneratedRegions(value: unknown, cols: number, rows: number): BoardGeneratedRegion[] {
+function decodeGeneratedRegions(value: unknown, cols: number, rows: number, apron?: EditorBoard['decorativeApron']): BoardGeneratedRegion[] {
   if (!Array.isArray(value)) return [];
   const out: BoardGeneratedRegion[] = [];
   for (const raw of value) {
@@ -387,7 +408,7 @@ function decodeGeneratedRegions(value: unknown, cols: number, rows: number): Boa
     const id = typeof rec.i === 'string' && rec.i.trim() ? rec.i : `region-${out.length + 1}`;
     const name = typeof rec.n === 'string' && rec.n.trim() ? rec.n : `Region ${out.length + 1}`;
     const cells = Array.isArray(rec.c)
-      ? [...new Set(rec.c.map(String).filter((key) => isInBoundsCellKey(key, cols, rows)))]
+      ? [...new Set(rec.c.map(String).filter((key) => isInScenicBoundsCellKey(key, cols, rows, apron)))]
       : [];
     if (!cells.length) continue;
     const sections: BoardGeneratedRegionSection[] = [];
@@ -450,6 +471,14 @@ export function encodeBoard(b: EditorBoard): string {
   const wire: Record<string, unknown> = { c: b.cols, r: b.rows };
   const surface = normalizePredrawnBoardSurface(b.surface);
   if (surface) wire.pd = [surface.slot, surface.frameWidth, surface.frameHeight];
+  if (b.decorativeApron && Object.values(b.decorativeApron).some((value) => value > 0)) {
+    wire.da = [b.decorativeApron.top, b.decorativeApron.right, b.decorativeApron.bottom, b.decorativeApron.left];
+  }
+  if (b.decorativeCells && nonEmpty(b.decorativeCells)) wire.dt = b.decorativeCells;
+  if (b.decorativeFeatures && nonEmpty(b.decorativeFeatures)) wire.dr = b.decorativeFeatures;
+  if (b.decorativeFences && nonEmpty(b.decorativeFences)) wire.dfe = b.decorativeFences;
+  if (b.decorativeFencePosts && nonEmpty(b.decorativeFencePosts)) wire.dfp = b.decorativeFencePosts;
+  if (b.decorativeWalls && nonEmpty(b.decorativeWalls)) wire.dwl = b.decorativeWalls;
   if (b.playerFaction) wire.pf = b.playerFaction;
   const fd = cleanFactionDirections(b.factionDirections);
   if (nonEmpty(fd)) wire.fd = fd;
@@ -500,7 +529,7 @@ export function encodeBoard(b: EditorBoard): string {
     return name || color ? [z.id, z.type, z.tiles, name ?? '', color ?? ''] : [z.id, z.type, z.tiles];
   });
   if (nonEmpty(zones)) wire.z = zones;
-  const gr = encodeGeneratedRegions(b.generatedRegions, b.cols, b.rows);
+  const gr = encodeGeneratedRegions(b.generatedRegions, b.cols, b.rows, b.decorativeApron);
   if (gr.length) wire.gr = gr;
   return enc(JSON.stringify(wire));
 }
@@ -579,12 +608,25 @@ export function decodeBoard(code: string): EditorBoard | null {
     }
     if (!zoneEntries.length && nonEmpty(legacyZones)) zoneEntries = zoneEntriesFromCellMap(legacyZones, cols, rows);
     const zones = zoneCellMapFromEntries(zoneEntries);
-    const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows);
+    const apronValues = Array.isArray(w.da) ? w.da : (w.da === 1 || w.da === true ? [4, 4, 4, 4] : [0, 0, 0, 0]);
+    const decorativeApron = {
+      top: Math.max(0, Math.min(16, Math.round(Number(apronValues[0]) || 0))),
+      right: Math.max(0, Math.min(16, Math.round(Number(apronValues[1]) || 0))),
+      bottom: Math.max(0, Math.min(16, Math.round(Number(apronValues[2]) || 0))),
+      left: Math.max(0, Math.min(16, Math.round(Number(apronValues[3]) || 0))),
+    };
+    const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows, decorativeApron);
     const surface = Array.isArray(w.pd)
       ? normalizePredrawnBoardSurface({ kind: 'predrawn', slot: w.pd[0], frameWidth: w.pd[1], frameHeight: w.pd[2] })
       : undefined;
     return {
-      cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, surface, macroTiles, units, doodads, props,
+      cols, rows, decorativeApron, surface,
+      decorativeCells: (w.dt && typeof w.dt === 'object' && !Array.isArray(w.dt) ? w.dt : {}) as Record<string, string>,
+      decorativeFeatures: (w.dr && typeof w.dr === 'object' && !Array.isArray(w.dr) ? w.dr : {}) as Record<string, FeatureCell>,
+      decorativeFences: (w.dfe && typeof w.dfe === 'object' && !Array.isArray(w.dfe) ? w.dfe : {}) as Record<string, FenceMaterial>,
+      decorativeFencePosts: (w.dfp && typeof w.dfp === 'object' && !Array.isArray(w.dfp) ? w.dfp : {}) as Record<string, FenceMaterial>,
+      decorativeWalls: (w.dwl && typeof w.dwl === 'object' && !Array.isArray(w.dwl) ? w.dwl : {}) as Record<string, WallMaterial>,
+      playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, macroTiles, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
       features,

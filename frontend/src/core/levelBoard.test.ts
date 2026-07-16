@@ -78,7 +78,7 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
     expect(levelToEditorBoard(level).fencePosts).toEqual(board.fencePosts);
   });
 
-  it('projects and saves only north/west perimeter walls', () => {
+  it('projects only playable north/west walls while preserving all authored wall art', () => {
     const board = filledBoard(4, 4);
     const north = roadEdgeKey(0, 0, 0, -1);
     const west = roadEdgeKey(0, 2, -1, 2);
@@ -88,8 +88,33 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
     const level = editorBoardToLevel(board, { id: 'l14', name: 'Walls' });
     expect(level.layers.fences).toEqual([north, west]);
     const reopened = levelToEditorBoard(level);
-    expect(reopened.walls).toEqual({ [north]: 'stone', [west]: 'brick' });
+    expect(reopened.walls).toEqual(board.walls);
     expect(reopened.fences).toEqual({});
+  });
+
+  it('preserves outer-board artwork but excludes it from every gameplay layer', () => {
+    const board = filledBoard(4, 4);
+    const outerFence = roadEdgeKey(-2, 1, -1, 1);
+    const outerWall = roadEdgeKey(-2, 2, -1, 2);
+    board.features['-1,0'] = { kind: 'road', material: 'cobble' };
+    board.fences = { [outerFence]: 'wood' };
+    board.walls = { [outerWall]: 'brick' };
+    board.props = { '-1,1': { propId: 'oak' } };
+    board.units = { '-1,2': { unitId: 'rook', direction: 'south', faction: 'white' } };
+    board.zones = { '-1,3': 'player-spawn' };
+
+    const level = editorBoardToLevel(board, { id: 'outer-art', name: 'Outer art' });
+    expect(level.layers.terrain.some((cell) => cell.terrain === 'road')).toBe(false);
+    expect(level.layers.fences).toEqual([]);
+    expect(level.layers.props).toEqual([]);
+    expect(level.layers.units).toEqual([]);
+    expect(level.layers.zones).toEqual([]);
+
+    const reopened = levelToEditorBoard(level);
+    expect(reopened.features['-1,0']).toEqual(board.features['-1,0']);
+    expect(reopened.fences?.[outerFence]).toBe('wood');
+    expect(reopened.walls?.[outerWall]).toBe('brick');
+    expect(reopened.props['-1,1']).toEqual({ propId: 'oak' });
   });
 
   it('maps only the assigned player faction to player and leaves unassigned maps CPU-only', () => {

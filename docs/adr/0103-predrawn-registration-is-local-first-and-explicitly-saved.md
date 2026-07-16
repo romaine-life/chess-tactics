@@ -2,14 +2,14 @@
 status: "accepted"
 date: 2026-07-13
 deciders: Nelson, Codex
-partially_supersedes: "[ADR-0098](0098-predrawn-registration-has-no-unsaved-dialog-state.md)"
+partially_supersedes: "[ADR-0102](0102-predrawn-registration-has-no-unsaved-dialog-state.md)"
 ---
 
-# ADR-0099: Pre-drawn registration is local-first and explicitly saved
+# ADR-0103: Pre-drawn registration is local-first and explicitly saved
 
 ## Context
 
-ADR-0098 made each point edit write immediately to the review URL. That blurred
+ADR-0102 made each point edit write immediately to the review URL. That blurred
 the difference between placing a point and proving that the authored registration
 had become durable. It also led browser inspection in a different browser profile
 to be mistaken for inspection of the owner's Chrome session. Browser profiles do

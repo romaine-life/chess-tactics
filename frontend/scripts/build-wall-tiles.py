@@ -21,17 +21,17 @@ from PIL import Image, ImageDraw, ImageEnhance
 
 RUNTIME_TILE_REFERENCE: Path
 WALL_FRAME_W = 128
-WALL_FRAME_H = 240
+WALL_FRAME_H = 336
 WALL_ANCHOR_X = 64
-WALL_ANCHOR_Y = 96
+WALL_ANCHOR_Y = 192
 TILE_ANCHOR_X = 48
 TILE_ANCHOR_Y = 69
 TILE_STEP_X = 48
 TILE_STEP_Y = 28
-WALL_HEIGHT = 64
-WALL_BASE_APEX = (64, 68)
-WALL_BASE_LEFT = (16, 95)
-WALL_BASE_RIGHT = (112, 95)
+WALL_HEIGHT = 160
+WALL_BASE_APEX = (64, 164)
+WALL_BASE_LEFT = (16, 191)
+WALL_BASE_RIGHT = (112, 191)
 
 MATERIAL_INPUTS: dict[str, Path]
 
@@ -151,8 +151,8 @@ def bake_wall_sprites(out_dir: Path, material: str, material_path: Path) -> None
 def compose_runtime_seat_proof(out_dir: Path, material: str, draw_guides: bool) -> Image.Image:
     tile = Image.open(RUNTIME_TILE_REFERENCE).convert("RGBA")
     wall = Image.open(out_dir / f"wall-{material}-9.png").convert("RGBA")
-    origin = (130, 160)
-    canvas = Image.new("RGBA", (260, 300), (12, 18, 24, 255))
+    origin = (130, 220)
+    canvas = Image.new("RGBA", (260, 400), (12, 18, 24, 255))
     canvas.alpha_composite(tile, (origin[0] - TILE_ANCHOR_X, origin[1] - TILE_ANCHOR_Y))
     canvas.alpha_composite(wall, (origin[0] - WALL_ANCHOR_X, origin[1] - WALL_ANCHOR_Y))
     if draw_guides:
@@ -174,7 +174,7 @@ def write_runtime_seat_proof(out_dir: Path, proof_dir: Path, material: str) -> N
 
 
 def write_contact_sheet(out_dir: Path, proof_dir: Path, materials: list[str]) -> None:
-    cell_w, cell_h = 220, 360
+    cell_w, cell_h = 220, 500
     sheet = Image.new("RGBA", (cell_w * len(materials), cell_h), (10, 16, 22, 255))
     draw = ImageDraw.Draw(sheet)
     for idx, material in enumerate(materials):
@@ -182,8 +182,8 @@ def write_contact_sheet(out_dir: Path, proof_dir: Path, materials: list[str]) ->
         wall = Image.open(out_dir / f"wall-{material}-9.png").convert("RGBA")
         proof = Image.open(proof_dir / f"wall-{material}-runtime-seat-proof.png").convert("RGBA")
         sheet.alpha_composite(wall, (x0 + (cell_w - wall.width) // 2, 28))
-        proof_small = proof.resize((156, 180), Image.Resampling.NEAREST)
-        sheet.alpha_composite(proof_small, (x0 + (cell_w - proof_small.width) // 2, 170))
+        proof_small = proof.resize((156, 240), Image.Resampling.NEAREST)
+        sheet.alpha_composite(proof_small, (x0 + (cell_w - proof_small.width) // 2, 250))
         draw.text((x0 + 12, 8), material, fill=(230, 242, 255, 255))
     sheet.save(proof_dir / "wall-bake-contact-sheet.png")
 
