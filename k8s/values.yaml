@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:ddd12c9b593d2181e431cec8b3b32c9ccde6a014afc9aaa128a1665512126445"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:fda9af8224bec603b935a0a5e3d5b63384831e5fcfb28f79d79e21f927682868"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add authored scenic board borders"
-  prNumber: "494"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/494"
-  commit: "ce0d290"
+  prTitle: "Unify title bar and control chrome"
+  prNumber: "495"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/495"
+  commit: "134633f"
 
 name: chess-tactics
 namespace: chess-tactics
