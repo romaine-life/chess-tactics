@@ -503,3 +503,20 @@ export function resolveWallOverlays(
   }
   return out;
 }
+
+/** Resolve explicitly decorative north/west wall faces at arbitrary board coordinates. */
+export function resolveDecorativeWallOverlays(walls: Record<string, WallMaterial>): Map<string, ResolvedWallOverlay> {
+  const out = new Map<string, ResolvedWallOverlay>();
+  for (const [edge, material] of Object.entries(walls)) {
+    const cells = parseEdgeKey(edge);
+    if (!cells || !isOrthogonalPair(cells.ax, cells.ay, cells.bx, cells.by)) continue;
+    const horizontal = cells.ay === cells.by;
+    const target = horizontal
+      ? { x: Math.max(cells.ax, cells.bx), y: cells.ay, bit: 8 as const }
+      : { x: cells.ax, y: Math.max(cells.ay, cells.by), bit: 1 as const };
+    const key = featureKey(target.x, target.y);
+    const prev = out.get(key);
+    out.set(key, { mask: (prev?.mask ?? 0) | target.bit, material: prev?.material ?? material });
+  }
+  return out;
+}

@@ -36,6 +36,44 @@ describe('boardCode round-trip', () => {
     expect(decoded!.fences).toEqual(board.fences);
   });
 
+  it('round-trips the decoration-only terrain apron without changing legacy boards', () => {
+    const decorativeApron = { top: 2, right: 5, bottom: 1, left: 3 };
+    const decorativeCells = { '-1,0': 'grass-surf-0', '6,2': 'stone-surf-0' };
+    const decoded = decodeBoard(encodeBoard(emptyBoard({ decorativeApron, decorativeCells })));
+    expect(decoded?.decorativeApron).toEqual(decorativeApron);
+    expect(decoded?.decorativeCells).toEqual(decorativeCells);
+    expect(decodeBoard(encodeBoard(emptyBoard()))?.decorativeApron).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  });
+
+  it('round-trips decorative roads, fences, posts, and walls separately from gameplay channels', () => {
+    const board = emptyBoard({
+      decorativeFeatures: { '-1,0': { kind: 'road', material: 'cobble' } },
+      decorativeFences: { '-1,0|-1,1': 'wood' },
+      decorativeFencePosts: { '-1,0': 'stone' },
+      decorativeWalls: { '-1,0|-2,0': 'brick' },
+    });
+    const decoded = decodeBoard(encodeBoard(board));
+    expect(decoded?.decorativeFeatures).toEqual(board.decorativeFeatures);
+    expect(decoded?.decorativeFences).toEqual(board.decorativeFences);
+    expect(decoded?.decorativeFencePosts).toEqual(board.decorativeFencePosts);
+    expect(decoded?.decorativeWalls).toEqual(board.decorativeWalls);
+    expect(decoded?.features).toEqual({});
+    expect(decoded?.fences).toEqual({});
+    expect(decoded?.walls).toEqual({});
+  });
+
+  it('round-trips saved generated-region selections across the scenic boundary', () => {
+    const generatedRegions: EditorBoard['generatedRegions'] = [{
+      id: 'scenic-region', name: 'North scenery', cells: ['0,-1', '1,-1'],
+      sections: [{ terrain: 'grass', share: 100 }], buffer: 0, wiggle: 0.5,
+    }];
+    const decoded = decodeBoard(encodeBoard(emptyBoard({
+      decorativeApron: { top: 2, right: 0, bottom: 0, left: 0 },
+      generatedRegions,
+    })));
+    expect(decoded?.generatedRegions?.[0].cells).toEqual(['0,-1', '1,-1']);
+  });
+
   it('preserves perimeter walls independently from fences', () => {
     const board = emptyBoard({
       fences: { '1,1|2,1': 'wood' },
