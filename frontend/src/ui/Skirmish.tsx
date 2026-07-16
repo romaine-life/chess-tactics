@@ -4,6 +4,7 @@ import { SkirmishHud } from './SkirmishHud';
 import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
+import { TitleBarStatus } from './shell/TitleBarControls';
 import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
 import {
@@ -50,6 +51,8 @@ import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progres
 import { navigateApp, readValidatedReturnTo } from './navigation';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { PLAY_SKIRMISH_SELECTOR_HREF, playCampaignSelectorHref } from './playHubRoute';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { InnerChromeBox } from './shared/ChromeBox';
 
 export function Skirmish() {
   const installedChromeCss = useInstalledChromeCss();
@@ -910,11 +913,11 @@ export function Skirmish() {
             the turn plate and objective always flank a real element, so the clock stays
             page-centred over the title bar's diamond (equal-width flanks, see style.css). */}
         <div className="skirmish-topbar-status">
-          <div className="skirmish-status-chip skirmish-turn-plate">
+          <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate">
             <strong>{turnLabel}</strong>
             <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
-          </div>
-          <div className={`skirmish-status-chip skirmish-clock${clock && clock.remainingMs <= 20_000 ? ' is-low' : ''}`}>
+          </TitleBarStatus>
+          <TitleBarStatus className={`skirmish-status-chip skirmish-clock${clock && clock.remainingMs <= 20_000 ? ' danger is-low' : ''}`}>
             {clock ? (
               <>
                 <strong>{formatClockMs(clock.remainingMs)}</strong>
@@ -926,14 +929,14 @@ export function Skirmish() {
                 <small>No limit</small>
               </>
             )}
-          </div>
-          <div className="skirmish-status-chip skirmish-objective">
+          </TitleBarStatus>
+          <TitleBarStatus className="skirmish-status-chip skirmish-objective">
             <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
             <span>
               <strong>Objective</strong>
               <small>{objectiveGoal}</small>
             </span>
-          </div>
+          </TitleBarStatus>
         </div>
       </TitleBarSlot>
 
@@ -961,7 +964,8 @@ export function Skirmish() {
           so — like the netplay return — this rides a fixed corner chip rather than the bar. */}
       {returnHref ? (
         <NavButton
-          className="app-header-button app-header-button-active skirmish-return-editor"
+          data-chrome-unit="inner-text-button"
+          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active', 'skirmish-return-editor')}
           data-testid="skirmish-return"
           to={returnHref}
           title="Return to the board editor with this position."
@@ -974,33 +978,33 @@ export function Skirmish() {
         <div className="skirmish-field">
           <div className="skirmish-board-frame">
             {mapError ? (
-              <div className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
+              <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
                 <strong>{mapError}</strong>
-                <NavButton className="app-header-button app-header-button-active" to={returnHref ?? PLAY_SKIRMISH_SELECTOR_HREF}>
+                <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={returnHref ?? PLAY_SKIRMISH_SELECTOR_HREF}>
                   {returnIsEditor ? 'Back to editor' : 'Back to Play'}
                 </NavButton>
-              </div>
+              </InnerChromeBox>
             ) : boardSettled ? <SkirmishBoard interactive={!net || (netSeatInteractive && !netRelayFrozen)} /> : routeLobby ? (
-              <div className="skirmish-status-chip skirmish-turn-plate" role="status">
+              <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="status">
                 <strong>{netError ?? 'Connecting…'}</strong>
                 <small>Multiplayer</small>
-              </div>
+              </InnerChromeBox>
             ) : routeMap ? (
               // A cold shared-map link fetches its snapshot before the board can mount.
-              <div className="skirmish-status-chip skirmish-turn-plate" role="status">
+              <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="status">
                 <strong>Loading map…</strong>
                 <small>Shared map</small>
-              </div>
+              </InnerChromeBox>
             ) : null}
           </div>
         </div>
         {/* Connection/authority errors stay visible even after a local verdict: result
             consensus and acknowledged Leave are still live protocol work at that point. */}
         {boardSettled && netError ? (
-          <div className="skirmish-status-chip skirmish-turn-plate" role="status" style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40 }}>
+          <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="status" style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40 }}>
             <strong>{netError}</strong>
             <small>Multiplayer</small>
-          </div>
+          </InnerChromeBox>
         ) : null}
       </section>
       <SkirmishHud
@@ -1023,15 +1027,15 @@ export function Skirmish() {
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
             <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
             <div className="campaign-result-actions">
-              <button type="button" className="app-header-button" onClick={replayLevel}>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={replayLevel}>
                 {game.winner === 'player' ? 'Replay' : 'Retry'}
               </button>
               {game.winner === 'player' && nextLevel ? (
-                <button type="button" className="app-header-button app-header-button-active" onClick={advanceToNextLevel}>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} onClick={advanceToNextLevel}>
                   Continue
                 </button>
               ) : (
-                <NavButton className="app-header-button app-header-button-active" to={playCampaignSelectorHref(routeCampaignId)}>
+                <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={playCampaignSelectorHref(routeCampaignId)}>
                   Back to Campaign
                 </NavButton>
               )}
@@ -1051,10 +1055,10 @@ export function Skirmish() {
               ? 'The clients disagree about this terminal position. Leaving concedes the match and closes recovery.'
               : `Multiplayer skirmish — ${resultDetail ?? objectiveGoal}`}</p>
             <div className="campaign-result-actions">
-              <button type="button" className="app-header-button" data-testid="netplay-view-board" onClick={() => setNetResultDismissed(true)}>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} data-testid="netplay-view-board" onClick={() => setNetResultDismissed(true)}>
                 View board
               </button>
-              <button type="button" className="app-header-button app-header-button-active" data-testid="netplay-return" onClick={returnToLobbies}>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} data-testid="netplay-return" onClick={returnToLobbies}>
                 {netResultDisputed ? 'Concede and leave' : 'Return to lobbies'}
               </button>
             </div>
@@ -1069,11 +1073,11 @@ export function Skirmish() {
           role="status"
           style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40, display: 'flex', alignItems: 'center', gap: 12 }}
         >
-          <div className="skirmish-status-chip skirmish-turn-plate">
+          <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate">
             <strong>{turnLabel}</strong>
             <small>{netResultDisputed ? 'Result disputed' : 'Match complete'}</small>
-          </div>
-          <button type="button" className="app-header-button app-header-button-active" data-testid="netplay-return-persistent" onClick={returnToLobbies}>
+          </InnerChromeBox>
+          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} data-testid="netplay-return-persistent" onClick={returnToLobbies}>
             {netResultDisputed ? 'Concede and leave' : 'Return to lobbies'}
           </button>
         </div>

@@ -107,6 +107,29 @@ measured **clip apron** and compensating padding, preserving the rail coordinate
 and vertical-only scrolling. Local collision clearance may keep ornament off a
 composite control's own text, but it never moves the host rail.
 
+Under [ADR-0100](adr/0100-title-and-controls-are-one-branched-rail-topology.md),
+the persistent title and right-side Play/Level Editor controls are one branched
+`outer`-rail shell. The title omits its bottom exterior rail, the controls omit
+their top exterior rail, and one structural divider serves both boundaries.
+Divider joints cover internal branches; outer corner atoms appear only at true
+exterior corners. ADR-0103 supersedes that final exterior-corner clause for the
+viewport shell: title/control rails flow beyond the screen edge without visible
+corner atoms, while internal divider joints remain.
+
+Under [ADR-0101](adr/0101-title-bar-buttons-use-the-inner-box-role.md), every
+button inside that persistent title bar consumes the registered `inner-box`
+role. The inner role owns its frame and state art; the title-control primitive
+owns only title-bar dimensions, padding, typography, and glyph layout. Raw
+buttons in title action slots are forbidden so a title control cannot silently
+form another chrome family.
+
+Under [ADR-0102](adr/0102-runtime-buttons-use-registered-inner-chrome.md), that
+ownership rule applies to runtime controls throughout the application. The old
+`mode-button` images have no runtime consumers; `.app-header-button` is
+layout-only during its remaining name migration, and every use must carry a
+registered inner unit path. The repository guard rejects both unowned uses and
+direct runtime references to the retired frame sources.
+
 Feature-unique art that is **not** a chrome type and stays per-feature: faction
 **shields** (`ce shield-*`), the **board / preview frame** (`ce preview-frame`,
 `skirmish portrait-frame`), and the **board renderers** themselves.

@@ -889,16 +889,6 @@ export function NineSliceLab({ assetId, onAssetId, header, zoom = 1 }: { assetId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, editKey, asset, backing]);
 
-  const liveConsumerFrameUrl = useMemo(() => {
-    if (!loaded) return null;
-    const frame = buildFrameCanvas(loaded, edit, asset.frame.w, asset.frame.h, asset.carve, asset.flipSides);
-    return frame.toDataURL('image/png');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, editKey, asset]);
-  const liveConsumerFrameStyle: CSSProperties | undefined = liveConsumerFrameUrl
-    ? { borderImageSource: `url("${liveConsumerFrameUrl}")` }
-    : undefined;
-
   // Canonical shape, same key order the kit writes — a saved config and an export
   // diff cleanly against each other.
   const exportJson = JSON.stringify({
@@ -986,13 +976,7 @@ export function NineSliceLab({ assetId, onAssetId, header, zoom = 1 }: { assetId
             <div style={ST.previewItem}>
               <span style={ST.previewLabel}>real button · 2× view</span>
               <div style={ST.consumerPreview}>
-                {aid === 'mode-button' ? (
-                  <button type="button" className="app-header-button" style={{ ...liveConsumerFrameStyle, transform: 'scale(2)', transformOrigin: 'center' }}>
-                    Settings
-                  </button>
-                ) : (
-                  <span style={ST.previewNote}>No placed app button consumes this frame yet.</span>
-                )}
+                <span style={ST.previewNote}>No application control consumes this retired frame.</span>
               </div>
             </div>
           </div>

@@ -23,7 +23,7 @@ describe('Campaign Editor unassigned level row', () => {
     );
 
     expect(markup).not.toContain('<div role="button"');
-    expect(markup).toContain('class="settings-row ce-editor-level-row is-selected is-neutral"');
+    expect(markup).toContain('data-chrome-unit="inner-box" class="inner-box settings-row ce-editor-level-row active is-selected is-neutral"');
     expect(markup).toContain('aria-label="Preview Standalone map"');
     expect(markup).toContain('aria-current="true"');
     expect(markup).toContain('role="group" aria-label="Actions for Standalone map"');
@@ -45,7 +45,7 @@ describe('Campaign Editor unassigned level row', () => {
       />,
     );
 
-    expect(markup).toContain('class="settings-row ce-editor-level-row is-read-only is-neutral"');
+    expect(markup).toContain('data-chrome-unit="inner-box" class="inner-box settings-row ce-editor-level-row is-read-only is-neutral"');
     expect(markup).toContain('aria-label="Preview Standalone map"');
     expect(markup).not.toContain('role="group"');
     expect(markup).not.toContain('Edit board for Standalone map');

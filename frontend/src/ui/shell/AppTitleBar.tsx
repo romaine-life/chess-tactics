@@ -40,7 +40,15 @@ export function AppTitleBar({ path, search, onCenterNode, onActionsNode, onStudN
   // (revealTitle undefined/true) is fully visible.
   const pendingClass = revealTitle === false ? ' reveal-pending' : '';
   return (
-    <header className={`app-titlebar settings-header-frame app-shell-titlebar${barClass}${pendingClass}`}>
+    <header
+      data-chrome-unit="outer-panel"
+      data-chrome-consumer="app-titlebar"
+      className={`app-titlebar settings-header-frame app-shell-titlebar chrome-family-surface chrome-rails-offscreen${barClass}${pendingClass}`}
+    >
+      <span className="app-titlebar-fill" aria-hidden="true" />
+      <span className="app-shell-outer-divider" aria-hidden="true" />
+      <span className="app-shell-rail-junction app-shell-rail-junction--control-branch" aria-hidden="true" />
+      <span className="app-shell-rail-junction app-shell-rail-junction--right-continuation" aria-hidden="true" />
       <BrandLockup screenName={config.screenName} />
       {config.centerSlot ? <div className="app-shell-titlebar-center" ref={onCenterNode} /> : null}
       {config.actionsSlot ? <div className="app-shell-titlebar-actions" ref={onActionsNode} /> : null}
@@ -48,7 +56,10 @@ export function AppTitleBar({ path, search, onCenterNode, onActionsNode, onStudN
           the grid), so it never shifts the brand/center/cluster tracks. Empty unless a
           single-player Skirmish portals its Retry control in. */}
       {config.studSlot ? <div className="app-shell-titlebar-stud" ref={onStudNode} /> : null}
-      <HeaderAccountCluster signInReturnTo={config.signInReturnTo} showSettingsGear={config.showSettingsGear} />
+      <span className="app-shell-rail-junction app-shell-rail-junction--persistent-controls" aria-hidden="true" />
+      <div className="app-titlebar-trailing-menu">
+        <HeaderAccountCluster signInReturnTo={config.signInReturnTo} showSettingsGear={config.showSettingsGear} />
+      </div>
     </header>
   );
 }

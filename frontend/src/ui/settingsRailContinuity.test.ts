@@ -20,9 +20,9 @@ const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
  *  inside CSS template strings (PagesLibraryStudio) or selector props (SurfaceDressingRoom),
  *  which aren't render sites, and the `settings-tab-icon` child span (negative lookahead). */
 function rendersSettingsTab(src: string): boolean {
-  for (const m of src.matchAll(/className=([\s\S]{0,60})/g)) {
+  for (const m of src.matchAll(/className=([\s\S]{0,160})/g)) {
     const head = m[1].replace(/^[\s{("'`]+/, '');
-    if (/^settings-tab(?![-\w])/.test(head)) return true;
+    if (/^settings-tab(?![-\w])/.test(head) || /chromeUnitClassNames\([\s\S]*?['"]settings-tab(?:\s|['"])/.test(head)) return true;
   }
   return false;
 }

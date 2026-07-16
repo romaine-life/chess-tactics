@@ -86,13 +86,6 @@ export function HeaderAccountCluster({
 
   return (
     <div className="header-account-cluster" aria-label="Settings and account">
-      {/* The wall: a vertical forged-iron rule that locks this invariant cluster off from
-          the contextual actionsSlot to its left (the ADR-0037 bottom rule stood on end,
-          same nailhead art). It lands on the bottom rule at a diamond stud (the rule's own
-          cap ornament) so wall and floor meet AT a shared rivet, not a seam. Decorative
-          only — aria-hidden. Lives INSIDE the cluster, so per ADR-0042 it renders wherever
-          the invariant cluster does (every screen) and claims no grid column of its own. */}
-      <span className="cluster-wall" aria-hidden="true" />
       {/* Persistent mute control — the vanilla BGM player (bgm.js) re-homes its own
           kit-framed button into THIS boxless slot, so the one mute toggle rides the
           always-on trailing cluster on every route instead of floating bottom-right

@@ -7,6 +7,7 @@ import { Lobbies } from './Lobbies';
 import { NavButton } from './shared/NavButton';
 import { FittedTabLabel } from './shared/FittedTabLabel';
 import { isPlaySelectorPath, PLAY_SKIRMISH_SELECTOR_HREF } from './playHubRoute';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
 
 // The Editor is heavier / code-split out of the menu bundle — lazy-loaded only when its
 // destination opens, inside a LOCAL Suspense so the fallback shows in the destination column
@@ -77,7 +78,8 @@ const SETTINGS_ICON = `${ICONS}/settings.png`;
 function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?: boolean }): ReactElement {
   return (
     <NavButton
-      className={`settings-tab main-menu-mode-tab ${active ? 'is-active' : ''}`.trim()}
+      data-chrome-unit="inner-box"
+      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', active && 'is-active')}
       // Toggle: clicking a tab whose destination is already open closes it (back to the bare
       // menu at '/'); otherwise it opens that destination. Home is a menu path, so React keeps
       // this MainMenu instance mounted either way — the button column never blinks.

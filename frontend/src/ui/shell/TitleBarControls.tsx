@@ -1,4 +1,5 @@
 import { type ButtonHTMLAttributes, type HTMLAttributes, type ReactElement, type ReactNode } from 'react';
+import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { NavButton } from '../shared/NavButton';
 
 type TitleBarControlVariant = 'label' | 'return' | 'icon';
@@ -14,6 +15,22 @@ export function TitleBarActions({
 }: HTMLAttributes<HTMLDivElement> & { children: ReactNode }): ReactElement {
   return (
     <div className={cx('titlebar-actions', className)} {...props}>
+      {children}
+    </div>
+  );
+}
+
+export function TitleBarStatus({
+  children,
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & { children: ReactNode }): ReactElement {
+  return (
+    <div
+      data-chrome-unit="inner-box"
+      className={chromeUnitClassNames('inner-box', 'titlebar-status', className)}
+      {...props}
+    >
       {children}
     </div>
   );
@@ -37,23 +54,24 @@ export function TitleBarButton({
   variant = 'label',
   ...props
 }: TitleBarButtonProps): ReactElement {
-  const controlClassName = cx(
+  const controlClassName = chromeUnitClassNames(
+    'inner-box',
     'titlebar-control',
     `titlebar-control--${variant}`,
-    active && 'titlebar-control--active',
+    active && 'active titlebar-control--active',
     className,
   );
 
   if (to) {
     return (
-      <NavButton className={controlClassName} to={to} replace={replace} scroll={scroll} {...props}>
+      <NavButton data-chrome-unit="inner-box" className={controlClassName} to={to} replace={replace} scroll={scroll} {...props}>
         {children}
       </NavButton>
     );
   }
 
   return (
-    <button type="button" className={controlClassName} {...props}>
+    <button type="button" data-chrome-unit="inner-box" className={controlClassName} {...props}>
       {children}
     </button>
   );

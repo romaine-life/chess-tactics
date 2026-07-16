@@ -180,9 +180,9 @@ describe('Level Editor chrome hierarchy', () => {
     expectRegisteredFamily(confirmDialog, 'le-seg-btn', 'inner-text-button');
   });
 
-  it('keeps the approved title-bar controls on their separate family contract', () => {
-    expect(titleBarControls).toContain("'titlebar-control'");
-    expect(titleBarControls).not.toContain('data-chrome-unit=');
-    expect(titleBarControls).not.toContain('chromeUnitClassNames(');
+  it('registers the canonical title-bar control as an inner box', () => {
+    expect(titleBarControls).toMatch(/chromeUnitClassNames\(\s*'inner-box'/);
+    expect(titleBarControls).toContain('data-chrome-unit="inner-box"');
+    expect(titleBarControls).not.toContain('mode-button.png');
   });
 });

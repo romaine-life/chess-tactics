@@ -1,5 +1,5 @@
 ---
-status: "accepted"
+status: "accepted; mode-button implementation detail superseded by ADR-0101"
 date: 2026-06-28
 deciders: Nelson, Claude
 ---
