@@ -4,7 +4,7 @@ date: 2026-07-14
 deciders: Nelson, Codex
 ---
 
-# ADR-0111: Registered pre-drawn candidates activate the locked editor
+# ADR-0116: Registered pre-drawn candidates activate the locked editor
 
 ## Context
 

@@ -4,7 +4,7 @@ date: 2026-07-14
 deciders: Nelson, Codex
 ---
 
-# ADR-0112: Pre-drawn scenes own a viewport-cover zoom floor
+# ADR-0117: Pre-drawn scenes own a viewport-cover zoom floor
 
 ## Context
 

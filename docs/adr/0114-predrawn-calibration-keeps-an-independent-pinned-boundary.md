@@ -4,7 +4,7 @@ date: 2026-07-13
 deciders: Nelson, Codex
 ---
 
-# ADR-0109: Pre-drawn calibration keeps an independent pinned boundary
+# ADR-0114: Pre-drawn calibration keeps an independent pinned boundary
 
 ## Context
 

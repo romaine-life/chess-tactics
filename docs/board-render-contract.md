@@ -242,7 +242,7 @@ The runtime board is one composed terrain canvas, but its source data remains la
 
 ### Pre-drawn board surfaces
 
-Per [ADR-0100](adr/0100-predrawn-candidate-review-uses-exact-board-plane-registration.md),
+Per [ADR-0105](adr/0105-predrawn-candidate-review-uses-exact-board-plane-registration.md),
 a board may replace the composed terrain, feature, prop, fence, wall, and wall-art
 pixels with one complete pre-drawn live-media plate. Its ordinary cell and object
 data remain present and gameplay-authoritative; this is a render mode, not a
@@ -250,18 +250,18 @@ different coordinate system or a flattened rules document.
 
 The plate is registered once to the canonical centered board reference frame.
 Development review uses four source corners for the board plane and, per
-[ADR-0105](adr/0105-owner-fitted-grid-defines-predrawn-review-rectification.md),
+[ADR-0110](adr/0110-owner-fitted-grid-defines-predrawn-review-rectification.md),
 may record one strictly monotonic guide for each internal row and column. The
 complete owner-fitted grid is visible over the untouched source together with an
 equal-spacing reference and a numeric correction range. Saving applies the
 inverse row/column map to the one continuous painting before its exact
 four-corner homography. It never crops, masks, splits, or independently aligns
 landmarks. Per
-[ADR-0106](adr/0106-predrawn-refit-target-dimensions-are-owner-configurable.md),
+[ADR-0111](adr/0111-predrawn-refit-target-dimensions-are-owner-configurable.md),
 the owner sets the row and column count of that refit target itself. The authored
 level dimensions are only its initial default. The saved count controls the
 guide topology and homography. Per
-[ADR-0107](adr/0107-predrawn-review-overlay-uses-the-saved-refit-grid.md), it also
+[ADR-0112](adr/0112-predrawn-review-overlay-uses-the-saved-refit-grid.md), it also
 controls the visible temporary review grid after the picker closes, so the
 chosen count does not appear to revert. Playable cells, hit targets, movement,
 and level dimensions remain authored-level data; the review grid is visual
@@ -272,8 +272,8 @@ production acceptance still requires a native-frame plate under ADR-0076. Units,
 selection and tactical state, doodads, and animated ground cover remain ordinary
 board-space overlays.
 
-Per [ADR-0101](adr/0101-predrawn-registration-is-owner-picked-source-geometry.md)
-and [ADR-0103](adr/0103-predrawn-registration-is-local-first-and-explicitly-saved.md),
+Per [ADR-0106](adr/0106-predrawn-registration-is-owner-picked-source-geometry.md)
+and [ADR-0108](adr/0108-predrawn-registration-is-local-first-and-explicitly-saved.md),
 the four source corners and the full internal row/column fit are owner-authorable
 in the running app against the untouched candidate image. Automatic geometry may
 seed that instrument, but it does not outrank an owner-picked control. Guide
@@ -292,14 +292,14 @@ refit row/column count. The ordinary authored-cell grid returns when no temporar
 candidate registration is active. Review-grid cells must never become editor hit
 targets or gameplay cells.
 
-Per [ADR-0108](adr/0108-predrawn-calibration-can-snap-to-the-canonical-grid-shape.md),
+Per [ADR-0113](adr/0113-predrawn-calibration-can-snap-to-the-canonical-grid-shape.md),
 `SNAP IDEAL GRID` converts the current refit count to the exact runtime projection
 shape using the canonical `TILE_STEP_X`/`TILE_STEP_Y` axis vectors and one uniform
 scale. It preserves the current center and closest scale when possible, keeps the
 result inside the source frame, and resets internal guides to equal spacing. It
 does not change the selected counts or authored level geometry.
 
-Per [ADR-0109](adr/0109-predrawn-calibration-keeps-an-independent-pinned-boundary.md),
+Per [ADR-0114](adr/0114-predrawn-calibration-keeps-an-independent-pinned-boundary.md),
 the owner may pin the current four outer corners as a separate painted-boundary
 reference. Its contrasting four-line outline and independently draggable handles
 remain visible while the working grid is snapped or edited. Version-4
@@ -307,14 +307,14 @@ registration preserves that reference across save and reopen, but the reference
 is display-only and never participates in the homography, rectification, review
 grid, hit targets, or gameplay.
 
-Per [ADR-0110](adr/0110-predrawn-registration-handoff-is-a-compact-copy-packet.md),
+Per [ADR-0115](adr/0115-predrawn-registration-handoff-is-a-compact-copy-packet.md),
 `COPY CODEX HANDOFF` is enabled only after `SAVE REGISTRATION` has read back and
 verified the exact source-scoped local record. It copies a compact JSON packet
 containing only the candidate source and serialized registration. The mirrored
 development URL remains useful for reopen and debugging, but copying an address
 bar is not the owner-to-agent handoff workflow.
 
-Per [ADR-0111](adr/0111-registered-predrawn-candidates-activate-the-locked-editor.md),
+Per [ADR-0116](adr/0116-registered-predrawn-candidates-activate-the-locked-editor.md),
 that verified registration plus an allowed same-origin development candidate is
 also sufficient to activate pre-drawn mode in the real Level Editor before live
 media acceptance. Closing calibration keeps the complete candidate plate under
@@ -323,7 +323,7 @@ persisted pre-drawn surface. Its temporary source and synthetic review surface
 exist only in memory and are never serialized into the working copy or level.
 `DONE` removes the picker-open route flag so a refresh stays in the editor.
 
-Per [ADR-0112](adr/0112-predrawn-scenes-own-a-viewport-cover-zoom-floor.md),
+Per [ADR-0117](adr/0117-predrawn-scenes-own-a-viewport-cover-zoom-floor.md),
 the transformed convex boundary of the complete source frame—not the playable
 grid diamond—defines a viewport-cover zoom floor while any pre-drawn plate is
 active. The shared `ViewPane` recomputes that floor from its live dimensions and

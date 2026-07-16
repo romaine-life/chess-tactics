@@ -1759,8 +1759,8 @@ h1 {
   /* Shared top-bar height — the ONE standard header height across pages.
      Material's normal app bar is ~48-56dp; the tall 96-128dp "prominent" bar is
      only for hero moments. Sized to seat the ~54px content with an ADR-0031
-     --ds-space-2 (8px) inset above the forged bottom rule (ADR-0037): 54 + 14 rule
-     + 2×8 inset = 84. Grown from clamp(64,5vw,72) when the rule replaced the frame. */
+     --ds-space-2 (8px) inset above the accepted outer rail (ADR-0095): 54 + 14 rail
+     + 2×8 inset = 84. */
   /* vw-relative pieces of the chrome family use --layout-vw (zoom-corrected viewport
      width, ui/shell/layoutViewport.ts) so browser zoom magnifies them instead of
      re-flowing; identical to plain vw at 100% zoom. */
@@ -3054,8 +3054,6 @@ h1 {
 
 .utility-panel {
   background: transparent;
-  border: 16px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   min-width: 0;
   padding: 2px;
 }
@@ -3067,15 +3065,13 @@ h1 {
 
 .utility-lobby-card {
   background: transparent;
-  border: 16px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   display: grid;
   gap: 12px;
   padding: 2px;
 }
 
 .utility-lobby-card.is-current {
-  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+  color: var(--ink);
 }
 
 .utility-lobby-main,
@@ -3225,8 +3221,6 @@ h1 {
 
 .utility-level-card {
   background: transparent;
-  border: 14px solid transparent;
-  border-image: url("/assets/ui/kit/row.png") 18 fill / 14px stretch;
   color: inherit;
   cursor: pointer;
   display: grid;
@@ -3247,7 +3241,7 @@ h1 {
 }
 
 .utility-level-card.is-selected {
-  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+  color: var(--ink);
 }
 
 .utility-level-thumb {
@@ -3340,8 +3334,6 @@ h1 {
 .utility-squad-card {
   align-content: center;
   background: transparent;
-  border: 16px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   color: var(--ink);
   cursor: pointer;
   display: grid;
@@ -3354,7 +3346,7 @@ h1 {
 }
 
 .utility-squad-card.is-selected {
-  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+  color: var(--ink);
 }
 
 .utility-squad-card.is-locked {
@@ -4019,6 +4011,10 @@ h1 {
 
 /* ---------------- Asset-backed skirmish screen ---------------- */
 
+:root {
+  --skirmish-rail-w: clamp(300px, 24vw, 360px);
+}
+
 .skirmish-screen {
   --skirmish-blue: #1c7ff0;
   --skirmish-cyan: #38d7ff;
@@ -4033,8 +4029,8 @@ h1 {
   --skirmish-chrome-inner-rail-w: 7px;
   --skirmish-chrome-outer-panel-image: url("/assets/ui/kit/panel.png");
   --skirmish-chrome-outer-line-image: url("/assets/ui/explore/frames/panel-line.png");
-  --skirmish-chrome-inner-control-image: url("/assets/ui/kit/mode-button.png");
-  --skirmish-chrome-inner-control-active-image: url("/assets/ui/kit/mode-button-active.png");
+  --skirmish-chrome-inner-control-image: none;
+  --skirmish-chrome-inner-control-active-image: none;
   --skirmish-chrome-inner-control-danger-image: url("/assets/ui/kit/button-danger.png");
   --skirmish-chrome-inner-line-image: url("/assets/ui/explore/frames/panel-line.png");
   --skirmish-chrome-inner-line-warm-image: url("/assets/ui/explore/frames/panel-line-warm.png");
@@ -4057,12 +4053,12 @@ h1 {
   --ds-inline-tight: var(--ds-space-1);
   --ds-gutter: var(--ds-space-3);
   --skirmish-grid-gap: 12px;
-  --skirmish-rail-w: clamp(300px, 24vw, 360px);
   align-items: stretch;
   color: var(--skirmish-ink);
   display: grid;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  gap: var(--skirmish-grid-gap);
+  column-gap: var(--skirmish-grid-gap);
+  row-gap: 0;
   grid-template-columns: minmax(0, 1fr) var(--skirmish-rail-w);
   /* Row-first: a full-bleed title bar spanning both columns on top (ADR-0004),
      then the board + HUD below. Matches the settings screen's header pattern. */
@@ -4228,8 +4224,6 @@ h1 {
      Fixed 46px height = the header buttons, so the bar's elements line up. */
   align-items: center;
   block-size: 46px;
-  border: 8px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / 8px round;
   box-sizing: border-box;
   display: flex;
   gap: var(--ds-inline);
@@ -5075,6 +5069,9 @@ h1 {
   flex-direction: column;
   gap: var(--ds-stack);
   min-height: 0;
+  /* This is a vertical-only HUD scroller. Inner-box rail atoms deliberately
+     overhang their content boxes; they must not create a horizontal scroll lane. */
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
@@ -7266,6 +7263,7 @@ h1 {
 }
 
 @media (max-width: 1180px) {
+  :root { --skirmish-rail-w: 324px; }
   .skirmish-screen {
     grid-template-columns: minmax(0, 1fr) minmax(286px, 324px);
   }
@@ -7281,7 +7279,11 @@ h1 {
   .skirmish-screen {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(520px, 62vh) auto;
-    overflow: auto;
+    /* The board art layer intentionally overdraws its fitted viewport. Keep the
+       stacked page vertically scrollable, but never expose that paint-only width
+       as an empty horizontal scroll range. */
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   /* The editor assigns named board/rail areas on desktop. When the shared Skirmish shell drops
@@ -8630,7 +8632,7 @@ body { font-size: 17px; }
      a follower tab: same lit frame (music IS playing, elsewhere), but its icon stays
      dimmed via is-muted, so it reads as "on, not here" — distinct from the base-frame
      muted state it used to be pixel-identical to. */
-  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+  color: #f4fbff;
 }
 
 .bgm-control.is-muted .bgm-control-icon {
@@ -14692,10 +14694,66 @@ button.tileset-relationship-cell {
    page-specific class adds only content layout (grid columns), never the frame, so
    the bars match by construction. The in-game HUD is the compact variant of it. */
 .app-titlebar {
-  border: 14px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
+  border: 0;
+  border-image: none;
   box-sizing: border-box;
   min-block-size: var(--app-header-h);
+  overflow: visible;
+  position: relative;
+}
+
+/* ADR-0095: the persistent bar is an outer-role box. The generated Chrome-family
+   stylesheet owns ::before (rail), the fill span, and the trailing divider rail. */
+.app-titlebar > .app-titlebar-fill {
+  inset: var(--le-outer-fill-box-top, 0) var(--le-outer-fill-box-right, 0)
+    var(--le-outer-fill-box-bottom, 0) var(--le-outer-fill-box-left, 0);
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+.app-titlebar > :not(.app-titlebar-fill):not(.app-shell-titlebar-stud) {
+  position: relative;
+  z-index: 2;
+}
+
+.app-titlebar-trailing-menu {
+  anchor-name: --app-titlebar-persistent-controls;
+  /* One measured inset for the persistent-control lane. The available lane is
+     header height minus the shared divider rail; centring one control in that
+     lane leaves the exact clearance used between every adjacent control. */
+  --titlebar-persistent-gap: max(0px, calc((var(--app-header-h) - var(--titlebar-rule-h) - var(--titlebar-control-size)) / 2));
+  --titlebar-control-gap: var(--titlebar-persistent-gap);
+  align-items: center;
+  /* This lane's origin is the title bar's origin and its bottom is the divider's
+     top edge. That gives its nested junction the same global coordinate system as
+     header-owned junctions at every responsive height. */
+  align-self: start;
+  block-size: calc(var(--app-header-h) - var(--titlebar-rule-h));
+  display: flex;
+  justify-self: end;
+  z-index: 7 !important;
+  margin-block: calc(-1 * var(--ds-titlebar-inset)) 0;
+  /* The divider owns a real outer-rail-width lane. Keep the same deliberate gap
+     between that lane and the first persistent control that the retired bolted
+     wall reserved inside HeaderAccountCluster. */
+  padding-inline-start: calc(var(--le-chrome-outer-rail-w, 12px) + var(--titlebar-persistent-gap));
+}
+
+/* Viewport-edge rails terminate beyond the visible canvas without exterior corner
+   atoms. Internal divider joints remain installed at real rail intersections. */
+:root:has(.app-titlebar.chrome-rails-offscreen) .app-titlebar::after,
+:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"])::after {
+  content: none !important;
+}
+
+:root:has(.app-titlebar.chrome-rails-offscreen) .app-titlebar::before {
+  content: none !important;
+}
+
+:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"])::before {
+  border-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
+  border-image-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
 }
 
 /* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered ONCE in App,
@@ -14709,6 +14767,10 @@ button.tileset-relationship-cell {
   position: fixed;
   inset: 0 0 auto 0;
   z-index: 10000;
+}
+
+.app-chrome-family-root {
+  display: contents;
 }
 /* On Settings, scale the bar with the UI-Scale setting so it matches the (zoomed)
    Settings body. `zoom` (not transform) keeps the baked oak surface continuous, same
@@ -14738,8 +14800,6 @@ button.tileset-relationship-cell {
 .app-header-button {
   align-items: center;
   block-size: 46px;
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px stretch;
   box-sizing: border-box;
   color: #eef6ff;
   cursor: pointer;
@@ -14756,7 +14816,7 @@ button.tileset-relationship-cell {
 }
 
 .app-header-button-active {
-  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px stretch;
+  color: #f4fbff;
 }
 
 .app-header-button.is-disabled,
@@ -14793,15 +14853,13 @@ button.tileset-relationship-cell {
 }
 
 /* TitleBarControls.tsx is the only supported way for routed screens to add title-bar
-   buttons. It clears the global button base and consumes the title-bar geometry tokens
-   below, so no screen chooses its own padding, frame width, or fixed control size. */
+   buttons. The registered inner-box role owns their frame; this class owns only the
+   title-bar-specific content geometry and interaction layout. */
 .titlebar-control {
   align-items: center;
   appearance: none;
   background: transparent;
   block-size: var(--titlebar-control-size, 52px);
-  border: var(--titlebar-control-frame-w, 10px) solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / var(--titlebar-control-frame-w, 10px) stretch;
   border-radius: 0;
   box-shadow: none;
   box-sizing: border-box;
@@ -14824,12 +14882,6 @@ button.tileset-relationship-cell {
   text-shadow: none;
   text-transform: uppercase;
   white-space: nowrap;
-}
-
-.titlebar-control--active,
-.titlebar-control.is-playing,
-.titlebar-control.is-othertab {
-  border-image-source: url("/assets/ui/kit/mode-button-active.png");
 }
 
 .titlebar-control--return,
@@ -14888,18 +14940,9 @@ button.tileset-relationship-cell {
      gap-width left on every plain bar, so the cluster would jump when navigating to a
      bar that DOES override (e.g. menu -> skirmish). Keep it at exactly two. */
   grid-template-columns: minmax(0, 1fr) auto;
-  /* Fork A (ADR-0037): full-bleed oak whose bottom edge is a forged NAILHEAD iron rule
-     (a studded band) capped by a centred diamond stud, replacing the panel-LINE frame.
-     With no border the wood reaches the element edge — no side/top frame and no 1px keyline
-     gap (the original defect). The rule + stud are generated low-fi atoms in
-     /assets/ui/titlebar/ (ADR-0011/0014); the wood stays a fixed surface so it lines up
-     with the rest of the app's wood. */
-  /* The forged rule occupies the bottom band, so the content's bottom boundary is the
-     rule's TOP, not the bar edge. Content gets an ADR-0031 inset (--ds-space-2 = 8px)
-     off the top edge AND above the rule's top line; the bottom padding adds the rule
-     height (a chrome metric, exempt from the spacing scale) on top of that inset.
-     --app-header-h is sized so this inset fits (content + rule + 2×inset). */
-  --titlebar-rule-h: 14px;
+  /* ADR-0095: padding clears the accepted outer rail; the former bespoke forged
+     band/diamond background is retired. */
+  --titlebar-rule-h: var(--le-chrome-outer-rail-w, 12px);
   --ds-titlebar-inset: var(--ds-space-2);
   --titlebar-control-gap: var(--ds-space-2);
   --titlebar-control-size: 52px;
@@ -14917,11 +14960,15 @@ button.tileset-relationship-cell {
   --titlebar-pad-inline: var(--ds-space-6);
   border: 0;
   padding: var(--ds-titlebar-inset) var(--titlebar-pad-inline) calc(var(--ds-titlebar-inset) + var(--titlebar-rule-h));
-  background:
-    url("/assets/ui/titlebar/joint-diamond-forged.png") center bottom / auto 26px no-repeat,
-    url("/assets/ui/titlebar/band-forged.png") left bottom / auto var(--titlebar-rule-h) repeat-x,
-    url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
+  background: none;
   image-rendering: pixelated;
+}
+
+/* Consume the complete title-bar content row so nested rail junctions share the
+   header divider's coordinate origin. The general settings frame centers its grid,
+   but here that left a 4px remainder and shifted its nested junction down by 2px. */
+.settings-header-frame.app-titlebar {
+  align-content: stretch;
 }
 
 /* The bottom-centre ornament diamond (ADR-0037) as an interactive control. A single-player
@@ -14946,7 +14993,7 @@ button.tileset-relationship-cell {
   appearance: none;
   /* Overlays the decorative centre diamond pixel-for-pixel — so it uses the SAME forged diamond
      the band's background cap uses (joint-diamond-forged, ADR-0066). */
-  background: url("/assets/ui/titlebar/joint-diamond-forged.png") center bottom / auto 26px no-repeat;
+  background: none;
   border: 0;
   border-radius: 0;
   box-shadow: none;
@@ -15110,66 +15157,6 @@ button.tileset-relationship-cell {
      exact when the landscape-phone breakpoint tightens that padding. Applies on every bar (the
      cluster is invariant), so the trailing gap is a consistent --cluster-gap app-wide. */
   margin-inline-end: calc(var(--cluster-gap) - var(--titlebar-pad-inline, var(--ds-space-6)));
-}
-
-/* The wall (component: HeaderAccountCluster) — a vertical forged-iron rule that LOCKS the
-   invariant cluster off from the contextual controls to its left: the ADR-0037 bottom rule
-   stood on end. The whole title-bar rule is a forged TILESET (ADR-0066), assembled from
-   codex-GENERATED atoms (method-verified, chroma-keyed + low-fi — ADR-0011/0013/0014), never
-   code-drawn:
-     - one shared RIVET atom (atom-rivet.png), used UPRIGHT in every piece so rivets never drift;
-     - two orientation-lit STRAP atoms — horizontal ledge (atom-strap-h, bright top edge) and
-       vertical wall (atom-strap-v, symmetric left-right) — so lighting reads right per axis;
-     - composed by scripts/compose-titlebar-runs.py into the run tiles band-forged.png (E-W,
-       tiled x on .settings-header-frame) and rail-forged.png (N-S, tiled y here).
-   Two DISTINCT joints: joint-square-forged.png (the intersection cover, this wall's ::after) and
-   joint-diamond-forged.png (the band's centre cap, on .settings-header-frame).
-   The wall lives INSIDE the cluster, so per ADR-0042 it renders wherever the invariant cluster
-   does — every screen — and claims NO grid column of its own (no cluster nudge, the "don't pad
-   with an empty auto column" hazard on .settings-header-frame). A screen's actionsSlot sits in
-   the PRIOR grid track, so its controls land OUTSIDE (left of) the wall by construction.
-     ::before = the vertical run (rail-forged.png), full-bleed top edge down to the band.
-     ::after  = the square intersection joint (joint-square-forged.png), bottom-aligned to the
-                bar, covering where the run meets the band (no rivet collisions, holds across widths). */
-.cluster-wall {
-  position: relative;
-  flex: 0 0 auto;
-  align-self: stretch;
-  inline-size: var(--titlebar-rule-h, 14px);
-}
-
-/* The vertical run: an absolute layer running the full bar height — full-bleed to the TOP edge
-   (mirroring the band's full-bleed to the bottom edge) down to the floor band. inset-block-start
-   is pulled well above the cluster-wall box (symmetric with the bottom overrun) so the run always
-   reaches the top edge regardless of the header-h clamp's centering slack; the excess sits off the
-   top of the fixed bar / viewport. Drawn from the bottom so its base seats on the band and its top
-   ends flat (no cap — same as the band's ends). */
-.cluster-wall::before {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  inset-block-start: calc(-1 * (var(--ds-space-2) + var(--titlebar-rule-h, 14px)));
-  inset-block-end: calc(-1 * (var(--ds-space-2) + var(--titlebar-rule-h, 14px)));
-  overflow: hidden;
-  /* the N-S run tile — the SAME rivet as the band, on the symmetric vertical strap — tiled y */
-  background: url("/assets/ui/titlebar/rail-forged.png") bottom center / var(--titlebar-rule-h, 14px) auto repeat-y;
-  image-rendering: pixelated;
-}
-
-/* The intersection joint — a forged SQUARE that blocks the run↔run connection point. Centered
-   on the wall, its BOTTOM edge flush with the bar's bottom edge. The cluster-wall box (the
-   button band) sits its bottom-padding + the button-centering gap above the bar bottom; that
-   whole distance is the bottom padding (--ds-space-2 + rule) plus ~1px of centering slack. */
-.cluster-wall::after {
-  content: "";
-  position: absolute;
-  inset-inline-start: 50%;
-  inset-block-end: calc(-1 * (var(--ds-space-2) + var(--titlebar-rule-h, 14px)) - 1px);
-  block-size: 24px;
-  inline-size: 24px;
-  transform: translateX(-50%);
-  background: url("/assets/ui/titlebar/joint-square-forged.png") bottom center / contain no-repeat;
-  image-rendering: pixelated;
 }
 
 /* Title-bar icon-only controls get their geometry from .titlebar-control--icon. This
@@ -15765,6 +15752,25 @@ button.tileset-relationship-cell {
   transform: translate(-50%, -50%);
 }
 
+.settings-tab.main-menu-mode-tab {
+  --settings-tab-icon-size: 44px;
+  overflow: hidden;
+}
+
+.main-menu-mode-tab .settings-tab-icon {
+  overflow: visible;
+  position: relative;
+}
+
+.main-menu-mode-tab .settings-tab-icon img {
+  position: absolute;
+  left: 50%;
+  /* 61px tab - 44px icon = 17px: exact centring is 8.5px. Resolve the
+     half-pixel upward so the raster icon paints on whole logical pixels. */
+  top: calc(50% - .5px);
+  transform: translate(calc(-50% + 0px), -50%);
+}
+
 .settings-tab strong {
   /* Tab label sits at the content row-title tier and FOLLOWS it (ADR-0022, amended
      2026-06-27): both moved md -> lg when the row text was enlarged. lg now ties
@@ -15911,15 +15917,6 @@ button.tileset-relationship-cell {
 .settings-row {
   align-items: center;
   box-sizing: border-box;
-  /* Baked surface skin: panel-LINE frame over a fixed stone surface (was the filled
-     steel row.png frame). border-width = the fill inset; border-image-width renders
-     the frame full; padding compensates so content clears it (ADR-0034). */
-  border: 2px solid transparent;
-  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round;
-  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
-  background-origin: padding-box;
-  background-clip: padding-box;
-  image-rendering: pixelated;
   /* Flex, not grid: a row carries an OPTIONAL value and/or control, so a fixed
      column count strands an empty track + gap when one is absent — the lopsiding
      ADR-0028 fixes. copy fills; value/control hug the end. */
@@ -15944,9 +15941,6 @@ button.tileset-relationship-cell {
    a panel.png frame around one flat baked <img>, letterboxed to the board's native aspect. */
 .settings-row-thumb {
   flex: none;
-  background: transparent;
-  border: 6px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 18 fill / 6px stretch;
   box-sizing: border-box;
   display: block;
   width: 84px;
@@ -17265,7 +17259,12 @@ button.tileset-relationship-cell {
   /* Title bar: drop the desktop UI-Scale zoom and tighten padding so the brand + account
      cluster sit comfortably in the shorter bar. */
   .app-shell-titlebar.app-titlebar--ui-scaled { zoom: 1; }
-  .app-shell-titlebar.settings-header-frame { padding-block: 6px; --titlebar-pad-inline: 12px; padding-inline: var(--titlebar-pad-inline); }
+  .app-shell-titlebar.settings-header-frame {
+    --ds-titlebar-inset: 6px;
+    --titlebar-pad-inline: 12px;
+    padding-block: var(--ds-titlebar-inset);
+    padding-inline: var(--titlebar-pad-inline);
+  }
 
   /* Skirmish: keep the board + HUD side-by-side. The 860px block stacks them, which
      forces an awkward vertical page-scroll on a short landscape screen; the base 2-column
@@ -17274,6 +17273,9 @@ button.tileset-relationship-cell {
     grid-template-columns: minmax(0, 1fr) clamp(176px, 30vw, 300px);
     grid-template-rows: var(--app-header-h) minmax(0, 1fr);
     overflow: hidden;
+  }
+  :root {
+    --skirmish-rail-w: clamp(176px, 30vw, 300px);
   }
   .skirmish-war-room { grid-column: 1; grid-row: 2; min-height: 0; }
   .skirmish-hud {

@@ -489,7 +489,8 @@ export function initBgm() {
   function buildControl() {
     const el = document.createElement('button');
     el.type = 'button';
-    el.className = 'titlebar-control titlebar-control--icon bgm-control';
+    el.dataset.chromeUnit = 'inner-box';
+    el.className = 'inner-box titlebar-control titlebar-control--icon bgm-control';
     const icon = document.createElement('img');
     icon.className = 'titlebar-control-glyph bgm-control-icon';
     icon.src = '/assets/ui/kit/icons/music.png';
@@ -598,6 +599,7 @@ export function initBgm() {
     const playing = !audio.paused && state.started && !state.muted;
     el.classList.toggle('is-muted', state.muted);
     el.classList.toggle('is-playing', playing);
+    el.classList.toggle('active', playing);
     const now = state.currentTitle ? `♪ ${state.currentTitle}` : 'Background music';
     el.setAttribute('aria-label', state.muted ? 'Unmute background music' : `Mute background music (${now})`);
     el.title = state.muted

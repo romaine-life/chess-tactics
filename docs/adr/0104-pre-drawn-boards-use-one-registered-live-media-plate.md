@@ -1,11 +1,11 @@
 ---
-status: "superseded by ADR-0100"
+status: "superseded by ADR-0105"
 date: 2026-07-13
 deciders: Nelson, Codex
-superseded_by: "[ADR-0100](0100-predrawn-candidate-review-uses-exact-board-plane-registration.md)"
+superseded_by: "[ADR-0105](0105-predrawn-candidate-review-uses-exact-board-plane-registration.md)"
 ---
 
-# ADR-0099: Pre-drawn boards use one registered live-media plate
+# ADR-0104: Pre-drawn boards use one registered live-media plate
 
 ## Context
 

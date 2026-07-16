@@ -4,7 +4,7 @@ date: 2026-07-13
 deciders: Nelson, Codex
 ---
 
-# ADR-0108: Pre-drawn calibration can snap to the canonical grid shape
+# ADR-0113: Pre-drawn calibration can snap to the canonical grid shape
 
 ## Context
 

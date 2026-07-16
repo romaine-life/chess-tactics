@@ -28,6 +28,7 @@ import {
 import { NavButton } from './shared/NavButton';
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 import { skirmishProfileLevels } from './skirmishProfiles';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
 const CAMPAIGN_ICON = `${ICONS}/campaign-editor.png`;
@@ -47,7 +48,8 @@ function PlayRailTab({
 }): ReactElement {
   return (
     <NavButton
-      className={`settings-tab main-menu-mode-tab ${active ? 'is-active' : ''}`.trim()}
+      data-chrome-unit="inner-box"
+      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', active && 'is-active')}
       to={href}
       style={{ ['--tab-index' as string]: index }}
       aria-current={active ? 'page' : undefined}
@@ -63,7 +65,8 @@ function PlayRailTab({
 function CampaignTab({ campaign, active, index }: { campaign: CampaignDoc; active: boolean; index: number }): ReactElement {
   return (
     <NavButton
-      className={`settings-tab main-menu-mode-tab ${active ? 'is-active' : ''}`.trim()}
+      data-chrome-unit="inner-box"
+      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', active && 'is-active')}
       to={playCampaignSelectorHref(campaign.id)}
       style={{ ['--tab-index' as string]: index }}
       aria-current={active ? 'page' : undefined}
@@ -113,7 +116,7 @@ function SkirmishProfilesPanel({
           <h3 className="settings-section-title">Skirmish</h3>
           <div className="settings-section-rows">
             {!loading && !officialAvailable ? (
-              <section className="settings-row" role="status">
+              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
                 <div className="settings-row-copy">
                   <h4>Official content unavailable</h4>
                   <p>Skirmishes could not be loaded. Reopen Play to retry.</p>
@@ -121,7 +124,7 @@ function SkirmishProfilesPanel({
               </section>
             ) : null}
             {!loading && !userWorkspaceAvailable ? (
-              <section className="settings-row" role="status">
+              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
                 <div className="settings-row-copy">
                   <h4>Your workspace is unavailable</h4>
                   <p>Your skirmish profiles could not be loaded. Reopen Play to retry.</p>
@@ -129,12 +132,12 @@ function SkirmishProfilesPanel({
               </section>
             ) : null}
             {loading ? (
-              <section className="settings-row">
+              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')}>
                 <div className="settings-row-copy"><h4>Loading skirmishes…</h4></div>
               </section>
             ) : null}
             {!loading && officialAvailable && userWorkspaceAvailable && levels.length === 0 ? (
-              <section className="settings-row">
+              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')}>
                 <div className="settings-row-copy">
                   <h4>No skirmish profiles available</h4>
                   <p>Skirmishes appear here when they are authored in the shared content system.</p>
@@ -142,8 +145,8 @@ function SkirmishProfilesPanel({
               </section>
             ) : null}
             {levels.map((level) => (
-              <section className="settings-row" key={level.id}>
-                <span className="settings-row-thumb" aria-hidden="true">
+              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} key={level.id}>
+                <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
                   <LevelThumbnail level={level} width={72} height={48} alt="" />
                 </span>
                 <div className="settings-row-copy">
@@ -152,7 +155,8 @@ function SkirmishProfilesPanel({
                 </div>
                 <div className="settings-row-control">
                   <NavButton
-                    className="app-header-button app-header-button-active"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                     to={playSkirmishLevelHref(level.id)}
                     aria-label={`Play ${level.name}`}
                   >
@@ -186,7 +190,7 @@ function StandaloneLevelsPanel({
           <h3 className="settings-section-title">Levels</h3>
           <div className="settings-section-rows">
             {!loading && !officialAvailable ? (
-              <section className="settings-row" role="status">
+              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
                 <div className="settings-row-copy">
                   <h4>Official content unavailable</h4>
                   <p>Public levels could not be loaded. Reopen Play to retry.</p>
@@ -194,7 +198,7 @@ function StandaloneLevelsPanel({
               </section>
             ) : null}
             {!loading && !userWorkspaceAvailable ? (
-              <section className="settings-row" role="status">
+              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
                 <div className="settings-row-copy">
                   <h4>Your workspace is unavailable</h4>
                   <p>Your standalone levels could not be loaded. Reopen Play to retry.</p>
@@ -202,18 +206,18 @@ function StandaloneLevelsPanel({
               </section>
             ) : null}
             {loading ? (
-              <section className="settings-row">
+              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')}>
                 <div className="settings-row-copy"><h4>Loading levels…</h4></div>
               </section>
             ) : null}
             {!loading && officialAvailable && userWorkspaceAvailable && levels.length === 0 ? (
-              <section className="settings-row">
+              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')}>
                 <div className="settings-row-copy">
                   <h4>No standalone levels</h4>
                   <p>Save a board in the Level Editor and it appears here.</p>
                 </div>
                 <div className="settings-row-control">
-                  <NavButton className="app-header-button" to="/editor/level">Open Editor</NavButton>
+                  <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} to="/editor/level">Open Editor</NavButton>
                 </div>
               </section>
             ) : null}
@@ -221,8 +225,8 @@ function StandaloneLevelsPanel({
               const playerCount = level.layers.units.filter((unit) => unit.side === 'player').length;
               const enemyCount = level.layers.units.filter((unit) => unit.side === 'enemy').length;
               return (
-                <section className="settings-row" key={level.id}>
-                  <span className="settings-row-thumb" aria-hidden="true">
+                <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} key={level.id}>
+                  <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
                     <LevelThumbnail level={level} width={72} height={48} alt="" />
                   </span>
                   <div className="settings-row-copy">
@@ -231,7 +235,8 @@ function StandaloneLevelsPanel({
                   </div>
                   <div className="settings-row-control">
                     <NavButton
-                      className="app-header-button app-header-button-active"
+                      data-chrome-unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                       to={playSkirmishLevelHref(level.id, PLAY_LEVELS_SELECTOR_HREF)}
                       aria-label={`Play ${level.name}`}
                     >
@@ -269,7 +274,7 @@ function CampaignLevelsPanel({
           <h3 className="settings-section-title">{campaign.name} — Levels</h3>
           <div className="settings-section-rows">
             {refs.length === 0 ? (
-              <section className="settings-row">
+              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')}>
                 <div className="settings-row-copy">
                   <h4>No levels yet</h4>
                   <p>This campaign has no levels. Add some in the Editor.</p>
@@ -295,7 +300,8 @@ function CampaignLevelsPanel({
               const playHref = `/play?campaignId=${encodeURIComponent(campaign.id)}&levelId=${encodeURIComponent(ref.levelId)}`;
               return (
                 <section
-                  className={`settings-row campaign-level-row ${unlocked ? '' : 'is-disabled'} ${ref.levelId === selectedLevelId ? 'is-selected' : ''}`.trim()}
+                  data-chrome-unit="inner-box"
+                  className={chromeUnitClassNames('inner-box', 'settings-row campaign-level-row', !unlocked && 'is-disabled', ref.levelId === selectedLevelId && 'active is-selected')}
                   key={ref.levelId}
                   role="button"
                   tabIndex={0}
@@ -308,7 +314,7 @@ function CampaignLevelsPanel({
                     }
                   }}
                 >
-                  <span className="settings-row-thumb" aria-hidden="true">
+                  <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
                     {level
                       ? <LevelThumbnail level={level} width={68} height={44} alt="" />
                       : <span className="settings-row-thumb-empty" />}
@@ -323,11 +329,11 @@ function CampaignLevelsPanel({
                   <div className="settings-row-control" onClick={(event) => event.stopPropagation()}>
                     {unlocked
                       ? (
-                        <NavButton className="app-header-button app-header-button-active" to={playHref} aria-label={`Play ${level?.name ?? `level ${index + 1}`}`}>
+                        <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={playHref} aria-label={`Play ${level?.name ?? `level ${index + 1}`}`}>
                           Play
                         </NavButton>
                       )
-                      : <button type="button" className="app-header-button" disabled>Locked</button>}
+                      : <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} disabled>Locked</button>}
                   </div>
                 </section>
               );
@@ -535,8 +541,8 @@ export function PlayMenu(): ReactElement {
           actions={
             <div className="ce-preview-actions is-single">
               {selectedUnlocked
-                ? <NavButton className="ce-link-button" to={selectedPlayHref}><span>Play</span></NavButton>
-                : <button type="button" className="ce-link-button" disabled><span>Locked</span></button>}
+                ? <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selectedPlayHref}><span>Play</span></NavButton>
+                : <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} disabled><span>Locked</span></button>}
             </div>
           }
         />

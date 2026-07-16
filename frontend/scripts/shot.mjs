@@ -8,7 +8,7 @@
 // focused, repeatable PNG. Read it to view.
 //
 // Usage:
-//   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>] [--full]
+//   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>] [--full] [--show-scrollbars]
 //
 // Examples:
 //   node scripts/shot.mjs http://127.0.0.1:5199/play/select/skirmish --select '.menu-dest'
@@ -30,6 +30,7 @@ const [w, h] = String(flag('size', '1280x800')).split('x').map(Number);
 const scale = Math.max(1, Number(flag('scale', 1)) || 1); // deviceScaleFactor — bump for small elements
 const readyExpr = flag('ready');
 const fullPage = has('full');
+const showScrollbars = has('show-scrollbars');
 
 const CHROMES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -46,7 +47,7 @@ const browser = await puppeteer.launch({
   executablePath,
   headless: 'new',
   args: ['--no-sandbox', '--disable-gpu', '--disable-software-rasterizer', '--disable-background-networking',
-    '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--hide-scrollbars'],
+    '--no-first-run', '--no-default-browser-check', '--disable-extensions', ...(showScrollbars ? [] : ['--hide-scrollbars'])],
 });
 try {
   const page = await browser.newPage();

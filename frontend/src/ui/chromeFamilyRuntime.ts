@@ -926,6 +926,112 @@ export function frameCss(
       .map((selector) => selector === '.inner-box' ? '.inner-box:not(.dropdown)' : selector),
   );
   const innerChromeFrameSelectors = chromeFamilyRoleSelectors('inner');
+  const titlebarJoint = dividers.outer.atomOverlay;
+  const outerDividerRailTop = Math.round((dividers.outer.height - dividers.outer.railHeight) / 2);
+  const outerAtomOverlayOutset = outerFrame.atomOverlay?.outset ?? 0;
+  const dividerOverlayOutset = titlebarJoint?.outset ?? 0;
+  const controlSeamAtomCss = outerFrame.atomOverlay && titlebarJoint ? `
+${familySurface} .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"])::after {
+  background-image:
+    url("${outerFrame.atomOverlay.bl}"), url("${outerFrame.atomOverlay.br}");
+  background-position:
+    left ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.leftX)} bottom ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.bottomY)},
+    right ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.rightX)} bottom ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.bottomY)};
+  background-repeat: no-repeat;
+  background-size:
+    ${cssPx(outerFrame.atomOverlay.size)} ${cssPx(outerFrame.atomOverlay.size)},
+    ${cssPx(outerFrame.atomOverlay.size)} ${cssPx(outerFrame.atomOverlay.size)};
+}
+` : '';
+  const titlebarCornerCss = outerFrame.atomOverlay ? `
+.app-titlebar.chrome-family-surface::after {
+  background-image: url("${outerFrame.atomOverlay.tl}"), url("${outerFrame.atomOverlay.tr}"), url("${outerFrame.atomOverlay.bl}"), url("${outerFrame.atomOverlay.br}");
+  background-position:
+    left ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.leftX)} top ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.topY)},
+    right ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.rightX)} top ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.topY)},
+    left ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.leftX)} bottom ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.bottomY)},
+    right ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.rightX)} bottom ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.bottomY)};
+  background-repeat: no-repeat;
+  background-size: ${cssPx(outerFrame.atomOverlay.size)} ${cssPx(outerFrame.atomOverlay.size)};
+  content: "";
+  image-rendering: pixelated;
+  inset: -${cssPx(outerFrame.atomOverlay.outset)};
+  pointer-events: none;
+  position: absolute;
+  z-index: 6;
+}
+.app-shell-titlebar:is(.skirmish-topbar, .le-topbar)::after {
+  background-image: url("${outerFrame.atomOverlay.tl}"), url("${outerFrame.atomOverlay.tr}"), url("${outerFrame.atomOverlay.bl}");
+  background-position:
+    left ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.leftX)} top ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.topY)},
+    right ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.rightX)} top ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.topY)},
+    left ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.leftX)} bottom ${cssPx(outerAtomOverlayOutset + outerFrame.atomOverlay.bottomY)};
+}
+` : '';
+  const shellDividerCss = titlebarJoint ? `
+.app-shell-outer-divider {
+  bottom: ${cssPx(-outerDividerRailTop)};
+  height: ${cssPx(dividers.outer.height)};
+  left: 0;
+  pointer-events: none;
+  position: absolute !important;
+  right: 0;
+  z-index: 5 !important;
+}
+.app-shell-outer-divider::before {
+  border-color: transparent;
+  border-style: solid;
+  border-width: ${cssPx(dividers.outer.railHeight)} 0 0;
+  border-image-source: url("${outerFrame.url}");
+  border-image-slice: ${outerFrame.slice};
+  border-image-width: ${cssPx(dividers.outer.railHeight)} 0 0;
+  border-image-repeat: ${borderImageRepeatForTune(outer)};
+  box-sizing: border-box;
+  content: "";
+  height: ${cssPx(dividers.outer.railHeight)};
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: ${cssPx(outerDividerRailTop)};
+}
+.app-shell-outer-divider::after {
+  content: none;
+}
+.app-shell-rail-junction {
+  background-image: url("${titlebarJoint.left}");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: ${cssPx(titlebarJoint.width)} ${cssPx(titlebarJoint.height)};
+  height: ${cssPx(titlebarJoint.height)};
+  pointer-events: none;
+  position: absolute !important;
+  top: calc(var(--app-header-h) - ${cssPx((dividers.outer.railHeight + titlebarJoint.height) / 2)});
+  width: ${cssPx(titlebarJoint.width)};
+  z-index: 6 !important;
+}
+.app-shell-rail-junction--persistent-controls {
+  left: calc(anchor(--app-titlebar-persistent-controls left) + var(--le-chrome-outer-rail-w) / 2 - ${cssPx(titlebarJoint.width / 2)});
+}
+.app-shell-rail-junction--control-branch,
+.app-shell-rail-junction--right-continuation {
+  display: none;
+}
+.app-shell-titlebar:is(.skirmish-topbar, .le-topbar) > .app-shell-rail-junction--control-branch {
+  display: block;
+  right: calc(var(--skirmish-rail-w) - var(--le-chrome-outer-rail-w) / 2 - ${cssPx(titlebarJoint.width / 2)});
+}
+.app-shell-titlebar:is(.skirmish-topbar, .le-topbar) > .app-shell-rail-junction--right-continuation {
+  background-image: url("${titlebarJoint.right}");
+  display: block;
+  right: calc(var(--le-chrome-outer-rail-w) / 2 - ${cssPx(titlebarJoint.width / 2)});
+}
+.app-shell-titlebar.chrome-rails-offscreen > .app-shell-rail-junction--right-continuation {
+  display: none;
+}
+@media (max-width: 860px) {
+  .app-shell-titlebar:is(.skirmish-topbar, .le-topbar) > :is(.app-shell-rail-junction--control-branch, .app-shell-rail-junction--right-continuation) { display: none; }
+}
+` : '';
   return `
 ${familySurface} {
   --le-chrome-outer-rail-w: ${outerRailWidth}px !important;
@@ -975,7 +1081,49 @@ ${familySurface} .le-outer-panel {
 ${familySurface} .le-outer-panel > .le-outer-panel-fill {
 ${chromeFillCss(outer)}
 }
+${familySurface} .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"])::before {
+  border-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;
+  border-image-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;
+}
 ${cornerAtomOverlayCss(`${familySurface} .le-outer-panel`, outerFrame.atomOverlay)}
+${controlSeamAtomCss}
+.app-titlebar.chrome-family-surface::before {
+  border-color: transparent;
+  border-style: solid;
+  border-width: ${outerRailWidth}px ${outerRailWidth}px 0;
+  border-image-source: url("${outerFrame.url}") !important;
+  border-image-slice: ${outerFrame.slice} !important;
+  border-image-width: ${outerRailWidth}px ${outerRailWidth}px 0 ${outerRailWidth}px !important;
+  border-image-repeat: ${borderImageRepeatForTune(outer)} !important;
+  box-sizing: border-box;
+  content: "";
+  image-rendering: pixelated;
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 3;
+}
+${titlebarCornerCss}
+${shellDividerCss}
+.app-titlebar.chrome-family-surface > .app-titlebar-fill {
+${chromeFillCss(outer)}
+}
+.app-titlebar-trailing-menu::before {
+  border-left: ${outerRailWidth}px solid transparent;
+  border-image-source: url("${outerFrame.url}") !important;
+  border-image-slice: ${outerFrame.slice} !important;
+  border-image-width: 0 0 0 ${outerRailWidth}px !important;
+  border-image-repeat: ${borderImageRepeatForTune(outer)} !important;
+  bottom: 0;
+  box-sizing: border-box;
+  content: "";
+  image-rendering: pixelated;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  z-index: 3;
+}
 ${innerChromeFrameSelectors} {
   border-image-source: url("${innerFrame.url}") !important;
   border-image-slice: ${innerFrame.slice} !important;

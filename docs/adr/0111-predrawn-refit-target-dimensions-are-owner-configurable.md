@@ -1,16 +1,16 @@
 ---
-status: "accepted; post-picker review-grid clause superseded by ADR-0107"
+status: "accepted; post-picker review-grid clause superseded by ADR-0112"
 date: 2026-07-13
 deciders: Nelson, Codex
-partially_supersedes: "[ADR-0105](0105-owner-fitted-grid-defines-predrawn-review-rectification.md)"
-partially_superseded_by: "[ADR-0107](0107-predrawn-review-overlay-uses-the-saved-refit-grid.md)"
+partially_supersedes: "[ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md)"
+partially_superseded_by: "[ADR-0112](0112-predrawn-review-overlay-uses-the-saved-refit-grid.md)"
 ---
 
-# ADR-0106: Pre-drawn refit target dimensions are owner-configurable
+# ADR-0111: Pre-drawn refit target dimensions are owner-configurable
 
 ## Context
 
-ADR-0105 initialized the calibration grid from the authored level dimensions
+ADR-0110 initialized the calibration grid from the authored level dimensions
 and required fitted-guide counts to match those dimensions. That assumption
 breaks the review instrument when a generated candidate paints an extra row or
 column. Forcing a six-column painting into a five-column target distorts the

@@ -3,6 +3,7 @@ import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { NavButton } from './shared/NavButton';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
 
 const OPTIONS = PLAYABLE_PIECE_TYPES.filter((piece) => piece !== 'pawn');
 
@@ -29,16 +30,16 @@ export function Party() {
       <HomepageBackdrop />
       <div className="settings-screen utility-twin-screen app-shell-bar-pad">
         <ArtRouteChrome className="utility-screen utility-party">
-          <section className="utility-panel">
+          <section data-chrome-unit="outer-panel" className={chromeUnitClassNames('outer-panel', 'utility-panel')}>
             <p className="utility-lead">Pawn is locked in. Choose two more ({picks.length}/2).</p>
             <div className="utility-squad-grid">
-              <span className="utility-squad-card is-selected is-locked">
+              <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'utility-squad-card', 'active is-selected is-locked')}>
                 <PieceIcon type="pawn" />
                 <strong>Pawn</strong>
                 <small>Locked</small>
               </span>
               {OPTIONS.map((p) => (
-                <button key={p} type="button" data-testid={`party-${p}`} className={`utility-squad-card ${picks.includes(p) ? 'is-selected' : ''}`.trim()} onClick={() => toggle(p)}>
+                <button key={p} type="button" data-chrome-unit="inner-box" data-testid={`party-${p}`} className={chromeUnitClassNames('inner-box', 'utility-squad-card', picks.includes(p) && 'active is-selected')} onClick={() => toggle(p)}>
                   <PieceIcon type={p} />
                   <strong>{p}</strong>
                   <small>{picks.includes(p) ? 'Selected' : 'Available'}</small>

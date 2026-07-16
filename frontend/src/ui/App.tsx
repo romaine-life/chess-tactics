@@ -5,6 +5,7 @@ import { armBoardArtForNav, isBoardArtPending, subscribeBoardArt } from '../rend
 import { Party } from './Party';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
+import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { TitleBarPortalContext } from './shell/TitleBarPortalContext';
 import { markScreenNavigation } from './shell/useScreenEntrance';
 import {
@@ -58,6 +59,7 @@ const EXIT_HOLD_FAILSAFE_MS = 4000;
 // audio element alive. The selector lives at /play/select/* while exact /play stays
 // the live board; legacy editor/menu paths still resolve to their React surfaces.
 export function App(): ReactElement {
+  const installedChromeCss = useInstalledChromeCss();
   const [path, setPath] = useState<string>(() => normalizeRoutePath(window.location.pathname));
   const [search, setSearch] = useState<string>(() => window.location.search);
   // Cross-route veil: an atmospheric field that fades OVER the current screen, lets
@@ -334,6 +336,8 @@ export function App(): ReactElement {
 
   return (
     <>
+      {installedChromeCss ? <style data-app-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
+      <div className="app-chrome-family-root chrome-family-surface">
       <UpdateBanner />
       {/* The single persistent title bar, rendered OUTSIDE the routed screen so it
           survives navigation (only its contents change). It always draws the brand +
@@ -371,6 +375,7 @@ export function App(): ReactElement {
           <p className="rotate-gate-title">Rotate your device</p>
           <p className="rotate-gate-copy">Chess Tactics plays in landscape.</p>
         </div>
+      </div>
       </div>
     </>
   );

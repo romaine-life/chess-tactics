@@ -12,6 +12,7 @@ import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -667,9 +668,10 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
       >
         {tabs.map((tab, index) => (
           <NavButton
+            data-chrome-unit="inner-box"
             key={tab.id}
             to={withReturnTo(TAB_PATHS[tab.id])}
-            className={`settings-tab main-menu-mode-tab ${tab.id === activeTab ? 'is-active' : ''}`.trim()}
+            className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', tab.id === activeTab && 'is-active')}
             // Position down the rail — drives the shared stone-continuity slice
             // (--tab-index, see .settings-tab in style.css) so the tabs read as one sheet (ADR-0063).
             style={{ ['--tab-index' as string]: index }}

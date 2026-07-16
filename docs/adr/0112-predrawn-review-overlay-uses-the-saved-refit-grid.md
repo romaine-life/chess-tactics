@@ -2,14 +2,14 @@
 status: "accepted"
 date: 2026-07-13
 deciders: Nelson, Codex
-partially_supersedes: "[ADR-0106](0106-predrawn-refit-target-dimensions-are-owner-configurable.md)"
+partially_supersedes: "[ADR-0111](0111-predrawn-refit-target-dimensions-are-owner-configurable.md)"
 ---
 
-# ADR-0107: Pre-drawn review overlay uses the saved refit grid
+# ADR-0112: Pre-drawn review overlay uses the saved refit grid
 
 ## Context
 
-ADR-0106 made the artwork refit target dimensions owner-configurable while
+ADR-0111 made the artwork refit target dimensions owner-configurable while
 leaving the visible post-picker grid derived from the authored level. A saved
 six-column target therefore transformed the art as six columns but showed five
 grid columns after the picker closed. The control appeared to revert and the

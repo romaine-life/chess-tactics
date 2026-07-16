@@ -4,7 +4,7 @@ date: 2026-07-13
 deciders: Nelson, Codex
 ---
 
-# ADR-0104: Pre-drawn generation packets preserve authored level semantics
+# ADR-0109: Pre-drawn generation packets preserve authored level semantics
 
 ## Context
 
@@ -64,7 +64,7 @@ under ADR-0085 and are not committed to Git.
 
 Generation does not make a candidate production-ready. Candidate review still
 uses the real game surface, live grid, and owner-picked registration governed by
-ADR-0100 through ADR-0103. The canonical level remains gameplay-authoritative.
+ADR-0105 through ADR-0108. The canonical level remains gameplay-authoritative.
 
 ## Consequences
 

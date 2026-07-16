@@ -18,6 +18,7 @@ import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { KitScroll } from './KitScroll';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 import { editSkirmishProfileHref, isSkirmishProfileLevel, skirmishProfileLevels } from './skirmishProfiles';
 import {
@@ -140,7 +141,8 @@ function IconButton({
     <button
       ref={buttonRef}
       type="button"
-      className={`ce-icon-button ${danger ? 'is-danger' : ''} ${selected ? 'is-selected' : ''} ${className}`.trim()}
+      data-chrome-unit="inner-tool-square"
+      className={chromeUnitClassNames('inner-tool-square', 'ce-icon-button', danger && 'danger is-danger', selected && 'active is-selected', className)}
       {...props}
       onKeyDown={(event) => {
         onKeyDown?.(event);
@@ -163,7 +165,8 @@ function IconNavButton({
   return (
     <NavButton
       {...props}
-      className={`ce-icon-button ${selected ? 'is-selected' : ''} ${className}`.trim()}
+      data-chrome-unit="inner-tool-square"
+      className={chromeUnitClassNames('inner-tool-square', 'ce-icon-button', selected && 'active is-selected', className)}
       onClick={(event) => {
         onClick?.(event);
         event.stopPropagation();
@@ -215,7 +218,8 @@ function CampaignRailTab({
       // one sheet however many campaigns there are (counted continuously past the Unassigned
       // tab), matching the menu / Settings / Campaign rails.
       style={{ ['--tab-index' as string]: index }}
-      className={`settings-tab main-menu-mode-tab ce-campaign-tab ${active ? 'is-active' : ''} ${locked ? 'is-locked' : ''}`.trim()}
+      data-chrome-unit="inner-box"
+      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab ce-campaign-tab', active && 'is-active', locked && 'is-locked')}
       onClick={selectCampaign}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -238,7 +242,8 @@ function CampaignRailTab({
       ) : !isOfficial ? (
         <button
           type="button"
-          className={`ce-tab-trail ce-row-favorite ${campaign.favorite ? 'is-selected' : ''}`.trim()}
+          data-chrome-unit="inner-tool-square"
+          className={chromeUnitClassNames('inner-tool-square', 'ce-tab-trail ce-row-favorite', campaign.favorite && 'active is-selected')}
           aria-label={campaign.favorite ? `Unfavorite ${campaign.name}` : `Favorite ${campaign.name}`}
           onClick={onFavorite}
         >
@@ -276,7 +281,8 @@ export function UnassignedRailTab({
       aria-label={`${title}, ${levelCount}${hasUnsavedDrafts ? `, ${draftLabel.toLowerCase()}` : ''}`}
       aria-current={active ? 'page' : undefined}
       style={{ ['--tab-index' as string]: index }}
-      className={`settings-tab main-menu-mode-tab ce-campaign-tab ce-campaign-tab-meta ${active ? 'is-active' : ''}`.trim()}
+      data-chrome-unit="inner-box"
+      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab ce-campaign-tab ce-campaign-tab-meta', active && 'is-active')}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -387,11 +393,12 @@ function LevelRow({
   const containerIsButton = Boolean(onSelect);
   return (
     <div
+      data-chrome-unit="inner-box"
       role={containerIsButton ? 'button' : undefined}
       tabIndex={containerIsButton ? 0 : undefined}
       aria-label={containerIsButton ? ariaLabel : undefined}
       aria-current={containerIsButton && active ? 'true' : undefined}
-      className={['settings-row', 'ce-editor-level-row', active ? 'is-selected' : '', hasActions ? '' : 'is-read-only', containerIsButton ? '' : 'is-neutral'].filter(Boolean).join(' ')}
+      className={chromeUnitClassNames('inner-box', 'settings-row ce-editor-level-row', active && 'active is-selected', !hasActions && 'is-read-only', !containerIsButton && 'is-neutral')}
       onClick={onSelect}
       onKeyDown={onSelect ? (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -400,7 +407,7 @@ function LevelRow({
         }
       } : undefined}
     >
-      <div className="settings-row-thumb" aria-hidden="true">
+      <div data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
         {level ? (
           <LevelThumbnail level={level} width={68} height={44} />
         ) : (
@@ -1450,8 +1457,8 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
               embedded={embedded}
               actions={(levelRef || isMetaCollectionSelected) ? (
                 <div className={`ce-preview-actions ${isUnassignedSelected ? 'has-assign' : ''}`.trim()}>
-                  <NavButton className="ce-link-button" to={editHref}><span>Edit Board</span></NavButton>
-                  <NavButton className="ce-link-button ce-link-button-ghost" to={playHref}><span>Test Play</span></NavButton>
+                  <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={editHref}><span>Edit Board</span></NavButton>
+                  <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button ce-link-button-ghost')} to={playHref}><span>Test Play</span></NavButton>
                   {isUnassignedSelected ? (
                     <label className="ce-assign-field">
                       <span className="sr-only">Assign to campaign</span>

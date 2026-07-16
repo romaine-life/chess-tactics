@@ -1,5 +1,6 @@
 import { type ReactElement, type ReactNode } from 'react';
 import { NavButton } from './NavButton';
+import { chromeUnitClassNames } from '../chromeUnitRegistry';
 
 // The shared settings/menu "rail + content" control primitives (ADR-0059): a section
 // (uppercase eyebrow + grouped rows), a row (copy · value · control grid), and a chrome
@@ -33,12 +34,12 @@ export function SettingsButton({
   title?: string;
   'data-testid'?: string;
 }): ReactElement {
-  const classes = `settings-chrome-button settings-chrome-button-${tone} ${className}`.trim();
+  const classes = chromeUnitClassNames('inner-text-button', `settings-chrome-button settings-chrome-button-${tone}`, tone === 'danger' && 'danger', className);
   if (href && external) {
     // External destinations still open a new tab — via a button, not an anchor
     // (ADR-0052): no hover URL leaks into the game shell; noopener guards the opener.
     return (
-      <button type="button" className={classes} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
+      <button type="button" data-chrome-unit="inner-text-button" className={classes} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
         <span>{children}</span>
       </button>
     );
@@ -46,13 +47,13 @@ export function SettingsButton({
   if (href && !disabled) {
     // Internal routes are game controls — a NavButton, not a hyperlink (ADR-0052).
     return (
-      <NavButton className={classes} to={href} aria-label={ariaLabel} title={title} data-testid={dataTestid}>
+      <NavButton data-chrome-unit="inner-text-button" className={classes} to={href} aria-label={ariaLabel} title={title} data-testid={dataTestid}>
         <span>{children}</span>
       </NavButton>
     );
   }
   return (
-    <button type="button" className={classes} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} onClick={onClick}>
+    <button type="button" data-chrome-unit="inner-text-button" className={classes} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} onClick={onClick}>
       <span>{children}</span>
     </button>
   );
@@ -74,7 +75,10 @@ export function SettingsRow({
   children?: ReactNode;
 }): ReactElement {
   return (
-    <section className={`settings-row ${tall ? 'settings-row-tall' : ''}`}>
+    <section
+      data-chrome-unit="inner-box"
+      className={chromeUnitClassNames('inner-box', 'settings-row', tall && 'settings-row-tall')}
+    >
       <div className="settings-row-copy">
         {eyebrow ? <span className="settings-row-eyebrow">{eyebrow}</span> : null}
         <h4>{title}</h4>

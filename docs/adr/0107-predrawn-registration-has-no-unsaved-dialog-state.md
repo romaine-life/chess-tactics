@@ -1,16 +1,16 @@
 ---
-status: "accepted; immediate-write/no-save-action clause superseded by ADR-0103"
+status: "accepted; immediate-write/no-save-action clause superseded by ADR-0108"
 date: 2026-07-13
 deciders: Nelson, Codex
-partially_supersedes: "[ADR-0101](0101-predrawn-registration-is-owner-picked-source-geometry.md)"
-partially_superseded_by: "[ADR-0103](0103-predrawn-registration-is-local-first-and-explicitly-saved.md)"
+partially_supersedes: "[ADR-0106](0106-predrawn-registration-is-owner-picked-source-geometry.md)"
+partially_superseded_by: "[ADR-0108](0108-predrawn-registration-is-local-first-and-explicitly-saved.md)"
 ---
 
-# ADR-0102: Pre-drawn registration has no unsaved dialog state
+# ADR-0107: Pre-drawn registration has no unsaved dialog state
 
 ## Context
 
-ADR-0101 required an owner-operated source-corner picker but specified a separate
+ADR-0106 required an owner-operated source-corner picker but specified a separate
 Apply action. That left a newly picked point only in React dialog state until a
 second gesture committed it. A tab reconnect, refresh, or inspection could then
 reconstruct the picker from the unchanged URL and lose the owner's selection.

@@ -1,5 +1,5 @@
 ---
-status: "accepted"
+status: "accepted; mode-button frame clause superseded by ADR-0101"
 date: 2026-06-27
 deciders: Nelson, Claude
 ---

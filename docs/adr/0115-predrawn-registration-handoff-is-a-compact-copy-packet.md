@@ -4,7 +4,7 @@ date: 2026-07-14
 deciders: Nelson, Codex
 ---
 
-# ADR-0110: Pre-drawn registration handoff is a compact copy packet
+# ADR-0115: Pre-drawn registration handoff is a compact copy packet
 
 ## Context
 
