@@ -1009,8 +1009,8 @@ ${familySurface} .le-outer-panel:is([data-chrome-consumer="level-editor-controls
   width: ${cssPx(titlebarJoint.width)};
   z-index: 6 !important;
 }
-.app-shell-rail-junction--persistent-controls {
-  left: calc(anchor(--app-titlebar-persistent-controls left) + var(--le-chrome-outer-rail-w) / 2 - ${cssPx(titlebarJoint.width / 2)});
+.app-shell-rail-junction--persistent-divider {
+  left: calc(anchor(--app-titlebar-persistent-divider left) + var(--le-chrome-outer-rail-w) / 2 - ${cssPx(titlebarJoint.width / 2)});
 }
 .app-shell-rail-junction--control-branch,
 .app-shell-rail-junction--right-continuation {
@@ -1108,7 +1108,7 @@ ${shellDividerCss}
 .app-titlebar.chrome-family-surface > .app-titlebar-fill {
 ${chromeFillCss(outer)}
 }
-.app-titlebar-trailing-menu::before {
+.app-titlebar-persistent-divider::before {
   border-left: ${outerRailWidth}px solid transparent;
   border-image-source: url("${outerFrame.url}") !important;
   border-image-slice: ${outerFrame.slice} !important;

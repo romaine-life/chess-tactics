@@ -2,8 +2,9 @@
 // <AppTitleBar> rendered in App. The single bar renders from this table so it
 // survives navigation, and it ALWAYS draws the invariant chrome — BrandLockup
 // (leading) + HeaderAccountCluster (trailing) — on every route (ADR-0042). A config
-// can only ADD optional regions between brand and cluster; nothing here can suppress
-// the cluster. Every shipping surface (Studio + dev/inspector tools included) is on
+// can only ADD an optional center region; routed controls use the typed contribution
+// API and always land in the App-owned lane before the persistent divider. Every
+// shipping surface (Studio + dev/inspector tools included) is on
 // the shared bar; there is no opt-out set, and the function never returns null.
 import { playRouteScreenName } from '@chess-tactics/board-render';
 import { isPlaySelectorPath } from '../playHubRoute';
@@ -21,10 +22,6 @@ export interface TitleBarConfig {
   barClass?: string;
   /** Render a center portal slot the screen fills via <TitleBarSlot region="center">. */
   centerSlot?: boolean;
-  /** Render an actions portal slot (labeled controls) the screen fills via
-   *  <TitleBarSlot region="actions">. Laid out BEFORE the cluster — additive, never
-   *  a replacement for it (ADR-0042). */
-  actionsSlot?: boolean;
   /** Render the bottom-centre "stud" portal slot — the decorative nailhead diamond
    *  becomes an interactive control the screen fills via <TitleBarSlot region="stud">.
    *  Absolutely positioned over the ornament, out of the grid, so it never shifts the
@@ -34,11 +31,9 @@ export interface TitleBarConfig {
 
 export function titleBarConfig(path: string, search = ''): TitleBarConfig | null {
   // The design/asset Studio + its deep-link aliases: brand left, then the workspace
-  // switcher (Catalog/Lab/Viewer icons) in the actions slot, account cluster right. The
-  // Studio portals its icon nav there via <TitleBarSlot region="actions">; studio-topbar
-  // adds the 3rd grid column (brand · actions · cluster) that slot needs.
+  // switcher (Catalog/Lab/Viewer icons) contributed before the persistent divider.
   if (path === '/studio' || path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') {
-    return { screenName: 'Studio', barClass: 'studio-topbar', actionsSlot: true };
+    return { screenName: 'Studio', barClass: 'studio-topbar' };
   }
   // Dev / inspector tools — the shared bar with just brand + account cluster.
   if (path === '/portrait-editor') return { screenName: 'Portrait Editor' };
@@ -58,13 +53,12 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     return { screenName: 'Party', signInReturnTo: '/party' };
   }
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
-    return { screenName: 'Level Editor', barClass: 'le-topbar', actionsSlot: true };
+    return { screenName: 'Level Editor', barClass: 'le-topbar' };
   }
   if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') {
-    // The Editor is a settings-twin now: a ‹ Back control in the trailing actions slot
-    // (like Settings) plus the live save-state chip in the center slot. ce-topbar adds the
-    // trailing grid column the actions slot needs (mirrors settings-topbar).
-    return { screenName: 'Editor', barClass: 'ce-topbar', centerSlot: true, actionsSlot: true };
+    // The Editor is a settings-twin now: a typed ‹ Back contribution plus the live
+    // save-state chip in the center slot.
+    return { screenName: 'Editor', barClass: 'ce-topbar', centerSlot: true };
   }
   if (path === '/settings' || path.startsWith('/settings/')) {
     // screen, so only Settings scales.
@@ -72,11 +66,8 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     // (/settings/<tab>, /settings/audio/tracks), so the gear is a muscle-memory
     // "back to settings root" from any sub-page. href="/settings" normalizes to
     // the first tab. (Default showSettingsGear=true, so it's simply not hidden.)
-    // actionsSlot hosts the "‹ Back" return control (Settings portals it there when the URL
-    // carries a valid ?returnTo) — the same trailing slot the Level Editor's back uses, so
-    // every return control sits with the account/settings cluster. settings-topbar adds the
-    // 3rd grid column (brand · actions · cluster) that slot needs.
-    return { screenName: 'Settings', signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled settings-topbar', actionsSlot: true };
+    // A valid returnTo contributes a typed Back control before the persistent divider.
+    return { screenName: 'Settings', signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled settings-topbar' };
   }
   // Fallback: the Main Menu — renderRoute's default for any unmatched path.
   return { screenName: 'Main Menu', signInReturnTo: '/', barClass: 'main-menu-twin-header' };

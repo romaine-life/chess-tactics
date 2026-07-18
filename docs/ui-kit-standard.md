@@ -123,6 +123,16 @@ owns only title-bar dimensions, padding, typography, and glyph layout. Raw
 buttons in title action slots are forbidden so a title control cannot silently
 form another chrome family.
 
+Under [ADR-0104](adr/0104-title-bar-controls-are-typed-contributions-to-one-lane.md),
+routed screens contribute closed typed control descriptions rather than title-bar
+JSX. The persistent bar renders those controls, its structural divider, and the
+music/settings/account controls in one App-owned lane. That lane exclusively owns
+vertical alignment, button gaps, equal divider clearance, and trailing-edge
+clearance; callers cannot provide layout classes, styles, padding, or wrappers.
+Any title-bar control change must verify the rendered lane on a real route with
+`npm run verify:titlebar -- <live-url> --size <width>x<height>` in addition to the
+static contract checks.
+
 Under [ADR-0102](adr/0102-runtime-buttons-use-registered-inner-chrome.md), that
 ownership rule applies to runtime controls throughout the application. The old
 `mode-button` images have no runtime consumers; `.app-header-button` is

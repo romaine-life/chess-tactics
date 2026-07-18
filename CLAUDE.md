@@ -74,6 +74,16 @@ and don't tell the user screenshots are impossible. Use the helper below.
    Output defaults to `frontend/tmp-shots/shot.png` (gitignored). **Default to showing the
    small PNG inline — never substitute a link + description for the pixels.**
 
+   Persistent title-bar control changes additionally run the rendered geometry gate
+   on the exact live route and every affected responsive width:
+   ```
+   npm run verify:titlebar -- '<vite-url>/editor/level?returnTo=%2Feditor&...' --size 1280x800
+   npm run verify:titlebar -- '<same-url>' --size 740x430
+   ```
+   The gate measures the real DOM: contributed and persistent controls must share a
+   top/bottom coordinate, clear the horizontal divider, and use the same tokenized
+   gaps at both sides of the persistent divider and the viewport edge.
+
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 

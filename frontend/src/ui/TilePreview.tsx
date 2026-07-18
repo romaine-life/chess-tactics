@@ -72,8 +72,7 @@ import { navigateApp } from './navigation';
 import { STUDIO_VIEWER_KIND_OPTIONS, isViewerKind, type ViewerKind } from './studioViewerKinds';
 import { listEditorDocuments } from '../net/editorDocuments';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
-import { TitleBarSlot } from './shell/TitleBarSlot';
-import { TitleBarActions, TitleBarButton, TitleBarIconButton } from './shell/TitleBarControls';
+import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
 import {
   activeUnitFamilies,
   familyLabels,
@@ -1865,32 +1864,61 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     </label>
   );
 
-  // The studio workspace switcher (Catalog / Lab / Viewer) — three icon buttons that ride
-  // the persistent title bar's actions slot (just before the account cluster), portaled in
-  // via <TitleBarSlot> below. It moved OFF the control rail so switching workspaces no longer
+  // The studio workspace switcher (Catalog / Lab / Viewer) contributes typed controls
+  // before the persistent divider. It moved OFF the control rail so switching workspaces no longer
   // costs every Viewer's controls a row of word-tabs. The glyphs are forged kit icons —
   // indie pixel-art of period objects (~0–1750 AD): an open illuminated codex (Catalog), an
   // alchemist's flask (Lab), a hand lens (Viewer) — made by scripts/forge-studio-switcher-icons.mjs
   // (codex img-gen → 64×64 kit canvas). Catalog & Viewer toggle in place; Lab hops to the Level Editor.
-  const studioModeNav = (
-    <>
-      <TitleBarIconButton active={studioMode === 'catalog'} aria-pressed={studioMode === 'catalog'} onClick={openCatalogMode} label="Catalog" title="Catalog — browse the catalogs." iconSrc="/assets/ui/kit/icons/studio-catalog.png" />
-      <TitleBarIconButton to="/editor/level?from=studio" label="Lab" title="Lab — open the Level Editor to paint tiles and units and set the board size." iconSrc="/assets/ui/kit/icons/studio-lab.png" />
-      <TitleBarIconButton active={studioMode === 'viewer'} aria-pressed={studioMode === 'viewer'} onClick={() => setStudioMode('viewer')} label="Viewer" title="Viewer — view one finished asset or artwork." iconSrc="/assets/ui/kit/icons/studio-viewer.png" />
-    </>
-  );
   // "‹ Scene" back: from the per-waterfall inspector (the 'sceneanim' Viewer) return to the
-  // Animated Scenes picker for THAT region's scene. Lives in the title-bar actions slot beside the
-  // studio's own workspace nav. The title-bar control primitive owns its frame and spacing; this is
+  // Animated Scenes picker for THAT region's scene. It is a typed contribution beside the
+  // studio's own workspace nav. The App-owned lane owns its frame and spacing; this is
   // an in-app state flip (the studio owns its own URL), not a ?returnTo.
   const backToSceneMap = (): void => {
     const scene = SCENE_ANIM_SCENES.find((s) => s.regionIds.includes(selectedRegionId)) ?? SCENE_ANIM_SCENES[0];
     setSelectedSceneId(scene.id);
     openViewer('animscene');
   };
-  const sceneBackNav = studioMode === 'viewer' && viewerKind === 'sceneanim' ? (
-    <TitleBarButton onClick={backToSceneMap} aria-label="Back to the animated scene" title="Back to the animated scene map">‹ Scene</TitleBarButton>
-  ) : null;
+  const studioTitleBarControls: TitleBarControlSpec[] = [
+    ...(studioMode === 'viewer' && viewerKind === 'sceneanim' ? [{
+      id: 'studio-scene-back',
+      kind: 'action' as const,
+      label: '‹ Scene',
+      title: 'Back to the animated scene map',
+      onActivate: backToSceneMap,
+    }] : []),
+    {
+      id: 'studio-catalog',
+      kind: 'action',
+      presentation: 'icon',
+      label: 'Catalog',
+      title: 'Catalog — browse the catalogs.',
+      iconSrc: '/assets/ui/kit/icons/studio-catalog.png',
+      active: studioMode === 'catalog',
+      pressed: studioMode === 'catalog',
+      onActivate: openCatalogMode,
+    },
+    {
+      id: 'studio-lab',
+      kind: 'navigation',
+      presentation: 'icon',
+      label: 'Lab',
+      title: 'Lab — open the Level Editor to paint tiles and units and set the board size.',
+      iconSrc: '/assets/ui/kit/icons/studio-lab.png',
+      destination: '/editor/level?from=studio',
+    },
+    {
+      id: 'studio-viewer',
+      kind: 'action',
+      presentation: 'icon',
+      label: 'Viewer',
+      title: 'Viewer — view one finished asset or artwork.',
+      iconSrc: '/assets/ui/kit/icons/studio-viewer.png',
+      active: studioMode === 'viewer',
+      pressed: studioMode === 'viewer',
+      onActivate: () => setStudioMode('viewer'),
+    },
+  ];
   // Viewer labs render their controls through a `header` slot: the preview-kind select plus the
   // viewer-wide Zoom meta-control. Zoom scales the WHOLE preview (100% = full size; scroll the panel
   // to roam it) — it rides the header so it shows for every Viewer kind; individual viewers opt in
@@ -1916,7 +1944,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
 
   return (
     <main className="tileset-studio-page app-shell-bar-pad">
-      <TitleBarSlot region="actions"><TitleBarActions aria-label="Studio workspace">{sceneBackNav}{studioModeNav}</TitleBarActions></TitleBarSlot>
+      <TitleBarControlContribution ariaLabel="Studio workspace" controls={studioTitleBarControls} />
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''} ${category === 'artwork' ? 'is-artwork' : ''}`} aria-label="Tileset browser">
         {studioMode === 'catalog' ? (
         <>

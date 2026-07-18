@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: "accepted; actionsSlot mechanism superseded by ADR-0104"
 date: 2026-06-28
 deciders: Nelson, Claude
+partially_superseded_by: "[ADR-0104](0104-title-bar-controls-are-typed-contributions-to-one-lane.md)"
 ---
 
 # ADR-0042: The title bar is an invariant — screens ADD optional slots, never replace its chrome
