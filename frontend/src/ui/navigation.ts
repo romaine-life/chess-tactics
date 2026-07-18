@@ -52,7 +52,7 @@ export function getAppNavigationUrl(href: string, baseHref: string = window.loca
 
 // The "return to where you came from" target carried as ?returnTo on a pushed screen's
 // URL (written by the title-bar gear when opening Settings; read by Settings to draw the
-// "‹ Back" control in the title bar's trailing actions slot and to thread the param
+// "‹ Back" control in the title bar's typed before-divider lane and to thread the param
 // through its own links). It
 // becomes an anchor href, i.e. a navigation target, so it is strictly validated: it must
 // RESOLVE same-origin (getAppNavigationUrl — the exact gate the click interceptor applies,

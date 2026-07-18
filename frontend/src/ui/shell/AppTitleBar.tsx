@@ -10,22 +10,21 @@ import { titleBarConfig } from './titleBarConfig';
 //
 // The bar is an INVARIANT (ADR-0042): it ALWAYS renders the BrandLockup (leading) and
 // the HeaderAccountCluster (trailing). No config can suppress either — a screen may
-// only ADD optional regions BETWEEN them. Stateful screens (Skirmish status, the
-// editors' save-state + actions) keep their dynamic content in their OWN component and
-// portal it into the center/actions target nodes below — App holds those nodes in
-// state and feeds <TitleBarSlot> via context. The actions slot sits before the cluster,
-// so editor controls coexist with the gear+avatar rather than replacing them.
+// only ADD typed content. Stateful screens keep dynamic state in their OWN component;
+// center/stud content uses bounded portals, while ordinary controls contribute closed
+// descriptions. AppTitleBar alone renders those descriptions before the divider in the
+// same lane as the invariant cluster (ADR-0104).
 //
-// Return-to-origin ("‹ Back") is one of those additive actions-slot items — it lives in
-// the TRAILING control area with the account/settings cluster (the app's navigation home
+// Return-to-origin ("‹ Back") is a typed before-divider contribution in the trailing
+// control lane with the account/settings cluster (the app's navigation home
 // per ADR-0036), NOT before the brand. The brand lockup is a fixed leading anchor and
-// never moves. Both the Settings back and the Level Editor's ‹ Back/‹ Catalog portal into
-// the SAME actions slot, so every return control sits in one consistent place.
-export function AppTitleBar({ path, search, onCenterNode, onActionsNode, onStudNode, revealTitle }: {
+// never moves. Settings and the Level Editor declare intent; this component owns their
+// identical placement.
+export function AppTitleBar({ path, search, onCenterNode, onBeforeDividerNode, onStudNode, revealTitle }: {
   path: string;
   search?: string;
   onCenterNode: (el: HTMLElement | null) => void;
-  onActionsNode: (el: HTMLElement | null) => void;
+  onBeforeDividerNode: (el: HTMLElement | null) => void;
   onStudNode: (el: HTMLElement | null) => void;
   // Cold-load reveal only: false while the bar is waiting its turn on a fresh menu load
   // (see ui/shell/coldReveal). Undefined/true everywhere else — the bar renders opaque,
@@ -51,13 +50,14 @@ export function AppTitleBar({ path, search, onCenterNode, onActionsNode, onStudN
       <span className="app-shell-rail-junction app-shell-rail-junction--right-continuation" aria-hidden="true" />
       <BrandLockup screenName={config.screenName} />
       {config.centerSlot ? <div className="app-shell-titlebar-center" ref={onCenterNode} /> : null}
-      {config.actionsSlot ? <div className="app-shell-titlebar-actions" ref={onActionsNode} /> : null}
       {/* Bottom-centre stud target: absolutely positioned over the ornament diamond (out of
           the grid), so it never shifts the brand/center/cluster tracks. Empty unless a
           single-player Skirmish portals its Retry control in. */}
       {config.studSlot ? <div className="app-shell-titlebar-stud" ref={onStudNode} /> : null}
-      <span className="app-shell-rail-junction app-shell-rail-junction--persistent-controls" aria-hidden="true" />
-      <div className="app-titlebar-trailing-menu">
+      <span className="app-shell-rail-junction app-shell-rail-junction--persistent-divider" aria-hidden="true" />
+      <div className="app-titlebar-control-lane">
+        <span className="app-titlebar-contribution-target" ref={onBeforeDividerNode} />
+        <span className="app-titlebar-persistent-divider" aria-hidden="true" />
         <HeaderAccountCluster signInReturnTo={config.signInReturnTo} showSettingsGear={config.showSettingsGear} />
       </div>
     </header>

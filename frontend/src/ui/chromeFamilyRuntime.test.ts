@@ -193,7 +193,7 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
     expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="outer"]`);
     expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="inner"]`);
     expect(css).toContain('.app-titlebar.chrome-family-surface::before');
-    expect(css).toContain('.app-titlebar-trailing-menu::before');
+    expect(css).toContain('.app-titlebar-persistent-divider::before');
     expect(css).toContain('--kit-divider-reach: 31px;');
     expect(css).toContain('--kit-divider-reach: 7px;');
     expect(css).toContain('height: 34px !important;');

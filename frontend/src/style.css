@@ -3809,25 +3809,8 @@ h1 {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
-/* Level Editor bar: 3 columns — brand · return-nav (‹ Catalog / ‹ Back, actions slot) ·
-   account cluster. Undo/Test/Save moved into the editor's rail dock, and the owner removed
-   the center status cluster, so do not render a ghost center track/gap here. */
-.app-shell-titlebar.le-topbar {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-}
-/* Editor bar: 4 columns — brand · save-state (center) · ‹ Back (actions) · account cluster.
-   The Editor is a settings-twin, so like Settings it carries a Back control in the trailing
-   actions slot; the two `auto auto` tracks before the cluster hold center + actions (mirrors
-   .le-topbar, the other center+actions bar). Save/Publish are workspace verbs in the rail. */
+/* Editor bar: brand · save-state (center) · the one control lane. */
 .app-shell-titlebar.ce-topbar {
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-}
-
-/* Studio bar: 3 columns — brand · workspace switcher (Catalog/Lab/Viewer icons, actions
-   slot) · account cluster. The extra track lets the icon nav sit before the always-present
-   cluster (ADR-0042). */
-.app-shell-titlebar.studio-topbar {
-  column-gap: var(--titlebar-control-gap, var(--ds-space-2));
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
@@ -5267,7 +5250,7 @@ h1 {
 
 /* Test-play "‹ Back to editor": a persistent, non-blocking return to the editor board that
    launched the test (only present when the match carries a valid ?returnTo). Fixed corner chip
-   — the skirmish title bar has no actions slot — clear of the centered board and side HUD. */
+   — Skirmish contributes no before-divider controls — clear of the centered board and side HUD. */
 .skirmish-return-editor {
   bottom: 24px;
   left: 24px;
@@ -14330,27 +14313,44 @@ button.tileset-relationship-cell {
   z-index: 2;
 }
 
-.app-titlebar-trailing-menu {
-  anchor-name: --app-titlebar-persistent-controls;
-  /* One measured inset for the persistent-control lane. The available lane is
-     header height minus the shared divider rail; centring one control in that
-     lane leaves the exact clearance used between every adjacent control. */
-  --titlebar-persistent-gap: max(0px, calc((var(--app-header-h) - var(--titlebar-rule-h) - var(--titlebar-control-size)) / 2));
-  --titlebar-control-gap: var(--titlebar-persistent-gap);
+.app-titlebar-control-lane {
   align-items: center;
-  /* This lane's origin is the title bar's origin and its bottom is the divider's
-     top edge. That gives its nested junction the same global coordinate system as
-     header-owned junctions at every responsive height. */
+  /* One coordinate system for every ordinary title-bar control. Its origin is the
+     title bar's origin and its bottom is the structural divider's top edge. */
   align-self: start;
   block-size: calc(var(--app-header-h) - var(--titlebar-rule-h));
   display: flex;
+  gap: var(--titlebar-control-gap);
   justify-self: end;
   z-index: 7 !important;
   margin-block: calc(-1 * var(--ds-titlebar-inset)) 0;
-  /* The divider owns a real outer-rail-width lane. Keep the same deliberate gap
-     between that lane and the first persistent control that the retired bolted
-     wall reserved inside HeaderAccountCluster. */
-  padding-inline-start: calc(var(--le-chrome-outer-rail-w, 12px) + var(--titlebar-persistent-gap));
+  /* The header's general page inset is wider than its control rhythm. Pull the
+     lane to the one canonical gap so the final control-to-viewport clearance is
+     identical to every inter-control and control-to-divider clearance. */
+  margin-inline-end: calc(var(--titlebar-control-gap) - var(--titlebar-pad-inline));
+}
+
+/* The portal target contributes no box of its own. A routed contribution renders
+   one typed control group here; an empty route contributes nothing and therefore
+   cannot create a phantom flex gap. */
+.app-titlebar-contribution-target {
+  display: contents;
+}
+
+.app-titlebar-contributed-controls {
+  align-items: center;
+  display: flex;
+  gap: var(--titlebar-control-gap);
+}
+
+/* A real lane track, not a caller-owned offset. Generated chrome paints its rail
+   on this box and anchors the divider joint to the same rail coordinate. */
+.app-titlebar-persistent-divider {
+  align-self: stretch;
+  anchor-name: --app-titlebar-persistent-divider;
+  flex: 0 0 var(--le-chrome-outer-rail-w, 12px);
+  inline-size: var(--le-chrome-outer-rail-w, 12px);
+  position: relative;
 }
 
 /* Viewport-edge rails terminate beyond the visible canvas without exterior corner
@@ -14399,14 +14399,6 @@ button.tileset-relationship-cell {
   grid-row: 2;
 }
 
-/* Settings carries the return "‹ Back" in its actions slot (portaled by the Settings
-   screen when a valid ?returnTo is present), so its bar needs a 3rd, trailing column for
-   the account cluster: brand · actions · cluster. Two classes out-rank the base
-   .settings-header-frame 2-column grid (the same trick the skirmish/editor bars use). */
-.app-shell-titlebar.settings-topbar {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-}
-
 /* Shared kit-framed text button. Non-title-bar panels and HUDs still use this visual
    primitive directly; title-bar controls must go through TitleBarControls.tsx so the bar,
    not the caller, owns control geometry. */
@@ -14450,19 +14442,8 @@ button.tileset-relationship-cell {
   outline-offset: 2px;
 }
 
-.app-shell-titlebar-center,
-.app-shell-titlebar-actions {
+.app-shell-titlebar-center {
   min-width: 0;
-}
-
-.app-shell-titlebar-actions,
-.titlebar-actions {
-  align-items: center;
-  display: flex;
-}
-
-.titlebar-actions {
-  gap: var(--titlebar-control-gap, var(--ds-space-2));
 }
 
 /* TitleBarControls.tsx is the only supported way for routed screens to add title-bar
@@ -14543,33 +14524,25 @@ button.tileset-relationship-cell {
   align-items: center;
   block-size: var(--app-header-h);
   display: grid;
-  /* The DEFAULT bar is two sections: brand (1fr, leading) · account cluster (auto,
-     trailing) — the invariant chrome every screen carries (ADR-0042). The cluster is the
-     last DOM child, so it lands in this final column flush to the right padding edge.
-     A screen that ADDS optional center/actions slots ALSO sets a barClass that overrides
-     this with the extra columns (skirmish-topbar=3, le/ce-topbar=4); those overrides carry
-     two classes so they out-rank this base. Do NOT pad this with an extra empty `auto`
-     column "for the slots" — an unused trailing track + its gap would push the cluster a
-     gap-width left on every plain bar, so the cluster would jump when navigating to a
-     bar that DOES override (e.g. menu -> skirmish). Keep it at exactly two. */
+  /* Default topology: brand · one App-owned control lane. Routes may add a center
+     status track, but contributed buttons never add grid columns or wrappers. */
   grid-template-columns: minmax(0, 1fr) auto;
   /* ADR-0095: padding clears the accepted outer rail; the former bespoke forged
      band/diamond background is retired. */
   --titlebar-rule-h: var(--le-chrome-outer-rail-w, 12px);
   --ds-titlebar-inset: var(--ds-space-2);
-  --titlebar-control-gap: var(--ds-space-2);
   --titlebar-control-size: 52px;
+  /* Horizontal relationships use the design-system spacing scale. This one token
+     governs action-to-divider, divider-to-cluster, and control-to-control spacing. */
+  --titlebar-control-gap: var(--ds-space-2);
   --titlebar-control-frame-w: 10px;
   --titlebar-control-icon-size: 26px;
   --titlebar-label-gap: var(--ds-space-2);
   --titlebar-label-pad-inline: var(--ds-space-4);
-  /* The grid column gap is the space OUTSIDE the invariant wall; the cluster flex gap is
-     the space INSIDE it. Both must use the same token or controls frame the divider
-     asymmetrically. */
+  /* Grid relationships and every relationship inside the control lane use this token. */
   column-gap: var(--titlebar-control-gap);
-  /* Trailing/leading inline padding, published as a var so the account cluster can pull its
-     own trailing edge in to match (see .header-account-cluster). Tightened at the
-     landscape-phone breakpoint, where the cluster's pull-in follows automatically. */
+  /* Page inset is published so the control lane can resolve its final edge to the
+     canonical control gap. */
   --titlebar-pad-inline: var(--ds-space-6);
   border: 0;
   padding: var(--ds-titlebar-inset) var(--titlebar-pad-inline) calc(var(--ds-titlebar-inset) + var(--titlebar-rule-h));
@@ -14762,14 +14735,6 @@ button.tileset-relationship-cell {
   display: flex;
   gap: var(--cluster-gap);
   justify-content: flex-end;
-  /* The bar reserves --titlebar-pad-inline of trailing padding, but the cluster's LEADING gap
-     (the forged wall -> first button) is only --cluster-gap. That left-tight / right-loose
-     split reads as an off-centre cluster. Pull the trailing edge in by the difference so the
-     gap after the last button equals --cluster-gap too — the buttons sit symmetrically framed
-     between the wall and the bar edge. Reads the bar's OWN padding var (inherited), so it stays
-     exact when the landscape-phone breakpoint tightens that padding. Applies on every bar (the
-     cluster is invariant), so the trailing gap is a consistent --cluster-gap app-wide. */
-  margin-inline-end: calc(var(--cluster-gap) - var(--titlebar-pad-inline, var(--ds-space-6)));
 }
 
 /* Title-bar icon-only controls get their geometry from .titlebar-control--icon. This
@@ -16865,12 +16830,10 @@ button.tileset-relationship-cell {
 
 /* -- Landscape-phone tweaks (narrow AND short — i.e. a phone held sideways). ------- */
 @media (max-width: 960px) and (max-height: 540px) {
-  /* A shorter app bar reclaims scarce vertical space; every route reserves its header
-     row from this token, so the fixed bar and the reserved track shrink together. */
-  :root { --app-header-h: 60px; }
-
-  /* Title bar: drop the desktop UI-Scale zoom and tighten padding so the brand + account
-     cluster sit comfortably in the shorter bar. */
+  /* Keep the canonical 84px bar: the installed 24px outer divider plus 52px
+     registered controls require a 60px control lane (4px clearance per side).
+     The retired 60px bar made an 8px divider overlap mathematically unavoidable.
+     Drop only the Settings UI-scale zoom and tighten the page inset. */
   .app-shell-titlebar.app-titlebar--ui-scaled { zoom: 1; }
   .app-shell-titlebar.settings-header-frame {
     --ds-titlebar-inset: 6px;

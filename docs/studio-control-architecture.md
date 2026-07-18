@@ -52,8 +52,9 @@ modes, it is wrong**, no matter how correct the contents are.
 ## Layout — the same in every mode
 
 - **Topbar:** brand · **breadcrumb** (where you are) · the **mode** toggle. The mode
-  toggle rides the persistent app title bar's actions slot, just before the account
-  cluster — so it costs the Controls panel no vertical space in any mode.
+  toggle is a typed contribution to the persistent title bar's one control lane,
+  before its structural divider and invariant controls — so it costs the Controls
+  panel no vertical space and cannot choose its own placement.
 - The mode toggle is **three fixed icon tabs** — **open book** (Catalog) ·
   **beaker** (Lab) · **magnifier** (Viewer). They are **persistent destinations**,
   always present and always live — never disabled, never reordered. They are **decoupled from the category**: the

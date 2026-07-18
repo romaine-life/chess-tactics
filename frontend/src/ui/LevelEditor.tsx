@@ -29,8 +29,7 @@ import { decorativeTerrainApronCells, withDecorativeTerrainFeatures, type Decora
 import { studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
 import { ViewPane } from './shared/ViewPane';
 import { useConfirm } from './shared/ConfirmDialog';
-import { TitleBarSlot } from './shell/TitleBarSlot';
-import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
+import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { PaletteSelect } from './shared/PaletteSelect';
@@ -5183,19 +5182,26 @@ export function LevelEditor(): ReactElement {
             owner removed the center cluster: that's ambient chrome noise while editing, and
             everything it said lives in the Status layer for whoever goes looking. Only the
             return nav rides the bar (below). */}
-        {editorReady ? <TitleBarSlot region="actions">
-          {/* Only the RETURN nav rides the global title bar now (‹ Catalog / ‹ Back). The
-              workspace ACTIONS live in the editor's OWN chrome — tools + Undo/Redo in the pinned
-              dock (.le-actions-dock), Test in that always-visible dock, and Save/Publish in
-              the Status layer card — because
-              document verbs belong in the editor's toolbar, not global chrome (the
-              Unity/Unreal/Godot/Blender convention). The bar stays brand + return-nav +
-              account cluster, matching Settings. */}
-          <TitleBarActions aria-label="Editor navigation">
-            {cameFromStudio ? <TitleBarButton to="/studio" title="Return to the Studio catalog">‹ Catalog</TitleBarButton> : null}
-            {routeParams.returnTo ? <TitleBarButton variant="return" to={routeParams.returnTo} title="Return to the campaign editor">‹ Back</TitleBarButton> : null}
-          </TitleBarActions>
-        </TitleBarSlot> : null}
+        {editorReady ? <TitleBarControlContribution
+          ariaLabel="Editor navigation"
+          controls={[
+            ...(cameFromStudio ? [{
+              id: 'level-editor-catalog',
+              kind: 'navigation' as const,
+              label: '‹ Catalog',
+              destination: '/studio',
+              title: 'Return to the Studio catalog',
+            }] : []),
+            ...(routeParams.returnTo ? [{
+              id: 'level-editor-back',
+              kind: 'navigation' as const,
+              presentation: 'return' as const,
+              label: '‹ Back',
+              destination: routeParams.returnTo,
+              title: 'Return to the campaign editor',
+            }] : []),
+          ] satisfies TitleBarControlSpec[]}
+        /> : null}
 
         <div className="skirmish-field" inert={!editorReady || saving ? true : undefined} aria-busy={!editorReady || saving || undefined}>
           <div className="skirmish-board-frame">

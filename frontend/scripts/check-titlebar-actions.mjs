@@ -3,10 +3,6 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const root = join(process.cwd(), 'src', 'ui');
-const slotRe = /<TitleBarSlot\s+region=["']actions["'][^>]*>([\s\S]*?)<\/TitleBarSlot>/g;
-const centerSlotRe = /<TitleBarSlot\s+region=["']center["'][^>]*>([\s\S]*?)<\/TitleBarSlot>/g;
-const forbiddenClassRe = /app-header-button|studio-mode-icon|studio-mode-nav|studio-topbar-actions|le-topbar-actions|titlebar-return-button/;
-const directButtonRe = /<(?:button|NavButton)\b/;
 const files = [];
 
 function walk(dir) {
@@ -21,58 +17,79 @@ function walk(dir) {
 walk(root);
 
 const failures = [];
+const allowedPrimitiveConsumers = new Set([
+  'src/ui/shell/TitleBarControls.tsx',
+  'src/ui/shared/HeaderAccountCluster.tsx',
+  'src/ui/shared/AccountMenu.tsx',
+]);
+
 for (const file of files) {
   const source = readFileSync(file, 'utf8');
+  const rel = relative(process.cwd(), file).replaceAll('\\', '/');
+
+  if (/TitleBarSlot\s+region=["']actions["']/.test(source)) {
+    failures.push(`${rel}: arbitrary title-bar action slots are retired; contribute typed TitleBarControlSpec values.`);
+  }
+  if (/\bTitleBarActions\b/.test(source)) {
+    failures.push(`${rel}: TitleBarActions is retired; AppTitleBar owns the one control lane.`);
+  }
+  if (!allowedPrimitiveConsumers.has(rel)
+    && /\bTitleBar(?:Icon)?ButtonPrimitive\b/.test(source)) {
+    failures.push(`${rel}: routed code cannot import or render private title-bar button primitives.`);
+  }
+
+  const centerSlotBodies = [...source.matchAll(/<TitleBarSlot\s+region=["']center["'][^>]*>([\s\S]*?)<\/TitleBarSlot>/g)]
+    .map((match) => match[1]);
+  for (const body of centerSlotBodies) {
+    if (/<(?:button|NavButton|TitleBarButtonPrimitive)\b/.test(body)) {
+      failures.push(`${rel}: the center slot cannot host ordinary buttons; use a typed control contribution.`);
+    }
+  }
+
   const legacyButtonOpenings = source.match(/<(?:button|NavButton)\b[^>]*app-header-button[^>]*>/g) ?? [];
   for (const opening of legacyButtonOpenings) {
     if (!opening.includes('data-chrome-unit=') || !opening.includes('chromeUnitClassNames(')) {
-      failures.push(`${relative(process.cwd(), file)}: app-header-button may provide layout only; every consumer must declare registered chrome ownership.`);
-    }
-  }
-  for (const match of source.matchAll(slotRe)) {
-    const body = match[1];
-    if (!body.includes('<TitleBarActions')) {
-      failures.push(`${relative(process.cwd(), file)}: actions TitleBarSlot must wrap content in <TitleBarActions>.`);
-    }
-    if (forbiddenClassRe.test(body)) {
-      failures.push(`${relative(process.cwd(), file)}: actions TitleBarSlot contains legacy title-bar button/layout classes.`);
-    }
-    if (directButtonRe.test(body)) {
-      failures.push(`${relative(process.cwd(), file)}: actions TitleBarSlot buttons must use the class-owned <TitleBarButton> primitive.`);
-    }
-  }
-  for (const match of source.matchAll(centerSlotRe)) {
-    const body = match[1];
-    if (directButtonRe.test(body)) {
-      failures.push(`${relative(process.cwd(), file)}: center TitleBarSlot buttons must use the class-owned <TitleBarButton> primitive.`);
-    }
-    const rawStatusOpenings = body.match(/<div\b[^>]*skirmish-status-chip[^>]*>/g) ?? [];
-    if (rawStatusOpenings.length) {
-      failures.push(`${relative(process.cwd(), file)}: framed title-bar status objects must use the class-owned <TitleBarStatus> primitive.`);
+      failures.push(`${rel}: app-header-button may provide layout only; every consumer must declare registered chrome ownership.`);
     }
   }
 }
 
-const titleControlsPath = join(root, 'shell', 'TitleBarControls.tsx');
-const titleControls = readFileSync(titleControlsPath, 'utf8');
-if (!/chromeUnitClassNames\(\s*'inner-box'/.test(titleControls)
-  || !/data-chrome-unit="inner-box"/.test(titleControls)) {
-  failures.push('src/ui/shell/TitleBarControls.tsx: canonical title-bar buttons must be registered inner-box chrome units.');
+const controlsPath = join(root, 'shell', 'TitleBarControls.tsx');
+const controls = readFileSync(controlsPath, 'utf8');
+if (!/export type TitleBarControlSpec\b/.test(controls)
+  || !/function TitleBarControlContribution\b/.test(controls)
+  || !/beforeDividerNode/.test(controls)) {
+  failures.push('src/ui/shell/TitleBarControls.tsx: typed before-divider contribution API is missing.');
 }
-if (!/function\s+TitleBarStatus[\s\S]*?data-chrome-unit="inner-box"[\s\S]*?chromeUnitClassNames\('inner-box', 'titlebar-status'/.test(titleControls)) {
+if (/interface TitleBarControlBase[\s\S]*?\b(?:className|style|children)\??:/.test(controls)) {
+  failures.push('src/ui/shell/TitleBarControls.tsx: contributed control descriptions may not expose markup or layout escape hatches.');
+}
+if (!/chromeUnitClassNames\(\s*'inner-box'/.test(controls)
+  || !/data-chrome-unit="inner-box"/.test(controls)) {
+  failures.push('src/ui/shell/TitleBarControls.tsx: private title-bar buttons must be registered inner-box chrome units.');
+}
+if (!/function\s+TitleBarStatus[\s\S]*?data-chrome-unit="inner-box"[\s\S]*?chromeUnitClassNames\('inner-box', 'titlebar-status'/.test(controls)) {
   failures.push('src/ui/shell/TitleBarControls.tsx: canonical title-bar status objects must be registered inner-box chrome units.');
 }
 
+const appTitleBar = readFileSync(join(root, 'shell', 'AppTitleBar.tsx'), 'utf8');
+if (!/<div className="app-titlebar-control-lane">[\s\S]*?app-titlebar-contribution-target[\s\S]*?app-titlebar-persistent-divider[\s\S]*?<HeaderAccountCluster/.test(appTitleBar)) {
+  failures.push('src/ui/shell/AppTitleBar.tsx: contributed controls, persistent divider, and invariant controls must share one ordered lane.');
+}
+if (/app-shell-titlebar-actions|app-titlebar-trailing-menu/.test(appTitleBar)) {
+  failures.push('src/ui/shell/AppTitleBar.tsx: retired split action/trailing layout returned.');
+}
+
 const accountMenu = readFileSync(join(root, 'shared', 'AccountMenu.tsx'), 'utf8');
-if (!/<TitleBarButton[\s\S]*?account-avatar-button/.test(accountMenu)
+if (!/<TitleBarButtonPrimitive[\s\S]*?account-avatar-button/.test(accountMenu)
   || /<button[\s\S]{0,180}account-avatar-button/.test(accountMenu)) {
-  failures.push('src/ui/shared/AccountMenu.tsx: account trigger must use the class-owned <TitleBarButton> primitive.');
+  failures.push('src/ui/shared/AccountMenu.tsx: account trigger must use the private registered title-bar primitive.');
 }
 
 const bgm = readFileSync(join(process.cwd(), 'src', 'bgm.js'), 'utf8');
 if (!/dataset\.chromeUnit\s*=\s*'inner-box'/.test(bgm)
   || !/className\s*=\s*'inner-box titlebar-control titlebar-control--icon bgm-control'/.test(bgm)) {
-  failures.push('src/bgm.js: dynamic music title-bar button must declare the registered inner-box class and unit ownership.');
+  failures.push('src/bgm.js: dynamic music title-bar button must declare registered inner-box ownership.');
 }
 
 const styleCss = readFileSync(join(process.cwd(), 'src', 'style.css'), 'utf8');
@@ -84,9 +101,20 @@ const appHeaderButtonBlock = styleCss.match(/\.app-header-button\s*\{([\s\S]*?)\
 if (/border(?:-image)?\s*:|border-image-(?:source|slice|width|repeat)\s*:/.test(appHeaderButtonBlock)) {
   failures.push('.app-header-button is layout-only and must not own frame geometry.');
 }
+if (!/\.app-titlebar-control-lane\s*\{[\s\S]*?align-items:\s*center;[\s\S]*?gap:\s*var\(--titlebar-control-gap\)/.test(styleCss)
+  || !/\.app-titlebar-contributed-controls\s*\{[\s\S]*?gap:\s*var\(--titlebar-control-gap\)/.test(styleCss)
+  || !/\.app-titlebar-persistent-divider\s*\{[\s\S]*?anchor-name:\s*--app-titlebar-persistent-divider/.test(styleCss)) {
+  failures.push('src/style.css: the canonical control lane must own alignment, gaps, and the real divider track.');
+}
+if (/app-shell-titlebar-actions|app-titlebar-trailing-menu|\.titlebar-actions\b/.test(styleCss)) {
+  failures.push('src/style.css: retired split title-bar layout selectors returned.');
+}
+if (/(?:\.le-topbar|\.ce-topbar|\.studio-topbar|\.settings-topbar|\.level-editor-screen|\.tileset-studio|\.settings-screen)[^{}]*(?:\.titlebar-control|\.app-titlebar-control-lane|\.app-titlebar-contributed-controls)[^{]*\{/s.test(styleCss)) {
+  failures.push('src/style.css: routes may not position or resize title-bar controls locally.');
+}
 
 if (failures.length) {
-  console.error('Title-bar actions contract violations:');
+  console.error('Title-bar control contract violations:');
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }

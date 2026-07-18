@@ -9,8 +9,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
-import { TitleBarSlot } from './shell/TitleBarSlot';
-import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
+import { TitleBarControlContribution } from './shell/TitleBarControls';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 
@@ -226,7 +225,7 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
   const [previous, setPrevious] = useState<{ tab: SettingsTab; tracks: boolean } | null>(null);
   const [xfade, setXfade] = useState<'idle' | 'enter' | 'active'>('idle');
   // The origin the user opened Settings from (null on a direct URL open). Rendered as the
-  // "‹ Back" control portaled into the title bar's trailing actions slot (below), and
+  // "‹ Back" control contributed to the title bar's before-divider lane (below), and
   // THREADED through every in-Settings link (withReturnTo) so the ?returnTo param — and
   // thus that Back — survives each tab/tracks hop.
   const [returnTo, setReturnTo] = useState<string | null>(readValidatedReturnTo);
@@ -737,27 +736,34 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
   );
 
   // The Settings route now usually renders inside MainMenu's persistent shell, but the
-  // return affordance still belongs to Settings: it reads Settings' ?returnTo and portals
-  // into the app title bar's actions slot. Keep it mounted in embedded mode too, or the
+  // return affordance still belongs to Settings: it reads Settings' ?returnTo and contributes
+  // typed navigation intent before the app title bar's divider. Keep it mounted in embedded mode too, or the
   // title-bar gear becomes a one-way trip from full-screen routes like a campaign game.
-  const returnSlot = returnTo ? (
-    <TitleBarSlot region="actions">
-      <TitleBarActions aria-label="Settings navigation">
-        <TitleBarButton variant="return" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</TitleBarButton>
-      </TitleBarActions>
-    </TitleBarSlot>
+  const returnControl = returnTo ? (
+    <TitleBarControlContribution
+      ariaLabel="Settings navigation"
+      controls={[{
+        id: 'settings-back',
+        kind: 'navigation',
+        presentation: 'return',
+        label: '‹ Back',
+        destination: returnTo,
+        title: 'Back to the previous screen',
+        testId: 'settings-back',
+      }]}
+    />
   ) : null;
 
   // Embedded in the persistent menu shell (MainMenu's second column): render the two columns
   // plus any title-bar portal content. The shell owns the backdrop, screen wrapper, and
   // zoom-safe placement. A standalone open still renders the full art-route below.
-  if (embedded) return <>{returnSlot}{inner}</>;
+  if (embedded) return <>{returnControl}{inner}</>;
 
   return (
     <section className="settings-art-route" aria-label="Settings" data-testid="settings">
-      {/* Return control rides the title-bar actions slot (the app's nav home); shown only when the
+      {/* Return control rides the typed title-bar lane (the app's nav home); shown only when the
           URL carries a valid origin. On a direct open the brand lockup is the way home. */}
-      {returnSlot}
+      {returnControl}
       {/* One continuous homepage backdrop (scene + synced rain), shared across the menu family (ADR-0064). */}
       <HomepageBackdrop />
       <div className="settings-screen app-shell-bar-pad">
