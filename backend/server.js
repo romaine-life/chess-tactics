@@ -9837,12 +9837,12 @@ async function loadThumbnailRenderInputs() {
   };
 }
 async function withThumbnailRenderInputs(task) {
-  if (!serverRender || typeof serverRender.applyServerRenderSnapshot !== 'function') {
-    throw new Error('complete live renderer snapshot validator is unavailable');
+  if (!serverRender || typeof serverRender.applyServerThumbnailSnapshot !== 'function') {
+    throw new Error('bounded thumbnail renderer snapshot validator is unavailable');
   }
   const renderInputs = await loadThumbnailRenderInputs();
   return withServerRenderCriticalSection(async () => {
-    serverRender.applyServerRenderSnapshot(renderInputs);
+    serverRender.applyServerThumbnailSnapshot(renderInputs);
     return task(renderInputs);
   });
 }
