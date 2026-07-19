@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, type CSSProperties, type ReactElement } fro
 import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
 import { macroTileAsset, macroTileBreakIndices, macroTileFrame, type MacroTilePlacement } from '../core/macroTiles';
 import { boardLabCellPosition } from './boardProjection';
+import { loadingError, loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
 import {
   TERRAIN_SIDE_FACE_COLUMN,
   TERRAIN_SIDE_FACES,
   type TerrainSideFace,
   type TerrainSideFaces,
 } from '@chess-tactics/board-render';
+import { loadDecodedImageMap } from './imageResources';
 
 const TILE_FRAME_W = TILE_STEP_X * 2;
 const TILE_FRAME_H = TILE_FRAME_HEIGHT;
@@ -59,7 +61,6 @@ interface TerrainBounds {
   height: number;
 }
 
-const imageCache = new Map<string, Promise<HTMLImageElement>>();
 const expandedTopCache = new Map<string, HTMLCanvasElement | null>();
 
 function splitTopSrc(src: string): string {
@@ -72,21 +73,6 @@ export function terrainTopSrc(src: string, animFrames = 0): string {
   return animFrames > 1 ? src.replace(/\.png$/, '-top-anim.png') : splitTopSrc(src);
 }
 
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  const cached = imageCache.get(src);
-  if (cached) return cached;
-  const promise = new Promise<HTMLImageElement>((resolve) => {
-    const img = new Image();
-    img.decoding = 'async';
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(img);
-    img.src = src;
-    img.decode?.().catch(() => {});
-  });
-  imageCache.set(src, promise);
-  return promise;
-}
 
 function terrainBounds(cells: readonly TerrainCanvasCell[], macroTiles: readonly TerrainCanvasMacroTile[]): TerrainBounds {
   if (cells.length === 0 && macroTiles.length === 0) return { left: 0, top: 0, width: 1, height: 1 };
@@ -471,9 +457,13 @@ function drawFrame(
 export function BoardTerrainLayer({
   cells,
   macroTiles = [],
+  onFirstFrame,
+  onFrameError,
 }: {
   cells: readonly TerrainCanvasCell[];
   macroTiles?: readonly TerrainCanvasMacroTile[];
+  onFirstFrame?: () => void;
+  onFrameError?: (error: unknown) => void;
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const signature = useMemo(() => terrainSignature(cells, macroTiles), [cells, macroTiles]);
@@ -487,6 +477,8 @@ export function BoardTerrainLayer({
     let cancelled = false;
     let raf = 0;
     const sources = uniqueSources(cells, macroTiles);
+    const startedAt = performance.now();
+    loadingMark('terrain-canvas', 'renderer-load-start', { assetCount: sources.length, cellCount: cells.length });
     const macroOwned = macroTileOwnedCellKeys(macroTiles);
     const animated = cells.some((cell) => !macroOwned.has(`${cell.x},${cell.y}`) && cell.animate !== false && (cell.topAnimFrames ?? 0) > 1);
 
@@ -495,15 +487,21 @@ export function BoardTerrainLayer({
       drawFrame(ctx, cells, macroTiles, bounds, images, timeMs);
     };
 
-    void Promise.all(sources.map(async (src): Promise<[string, HTMLImageElement]> => [src, await loadImage(src)])).then((entries) => {
-      const images = new Map(entries);
+    void loadDecodedImageMap(sources).then((images) => {
       paint(images);
+      requestAnimationFrame(() => {
+        loadingMeasure('terrain-canvas', 'first-painted-frame', startedAt, { assetCount: sources.length, cellCount: cells.length });
+        onFirstFrame?.();
+      });
       if (!animated) return;
       const tick = (timeMs: number): void => {
         paint(images, timeMs);
         raf = window.requestAnimationFrame(tick);
       };
       raf = window.requestAnimationFrame(tick);
+    }).catch((error) => {
+      loadingError('terrain-canvas', 'renderer-load-failed', error);
+      onFrameError?.(error);
     });
 
     return () => {
@@ -514,7 +512,7 @@ export function BoardTerrainLayer({
   // Depending on their identities cancels an in-flight image load and can starve a static feature
   // pass until several unrelated renders have occurred. `signature` is the complete deterministic
   // content dependency, and `bounds` is memoized from that signature.
-  }, [bounds, signature]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bounds, signature, onFirstFrame, onFrameError]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const style = {
     left: `${bounds.left}px`,

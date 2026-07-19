@@ -107,6 +107,9 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   wallBounds?: { cols: number; rows: number };
   /** Additional board-art canvas for generated boards (ground cover, props, units, etc.). */
   sceneLayer?: ReactNode;
+  onTerrainFirstFrame?: () => void;
+  onBarrierFirstFrame?: () => void;
+  onFrameError?: (error: unknown) => void;
   children?: ReactNode;
 }
 
@@ -160,6 +163,9 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   wallArt,
   wallBounds,
   sceneLayer,
+  onTerrainFirstFrame,
+  onBarrierFirstFrame,
+  onFrameError,
   children,
 }: BoardLabBoardProps<TAsset>) {
   const sourceCells = board.cells;
@@ -208,8 +214,8 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       boardPan={boardPan}
       backgroundLayer={(
         <>
-          <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(resolvedMacroTiles)} />
-          <BoardBarrierSceneLayer fenceOverlays={fenceOverlays} fencePosts={fencePosts} wallOverlays={wallOverlays} wallArt={wallArt} wallBounds={wallBounds} />
+          <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(resolvedMacroTiles)} onFirstFrame={onTerrainFirstFrame} onFrameError={onFrameError} />
+          <BoardBarrierSceneLayer fenceOverlays={fenceOverlays} fencePosts={fencePosts} wallOverlays={wallOverlays} wallArt={wallArt} wallBounds={wallBounds} onFirstFrame={onBarrierFirstFrame} onFrameError={onFrameError} />
           {sceneLayer}
         </>
       )}

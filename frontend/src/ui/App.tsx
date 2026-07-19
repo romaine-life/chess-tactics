@@ -18,6 +18,7 @@ import {
 } from './navigation';
 import { isBoardArtRoute, isHeavyRoute, isLightArtRoute, routeScreenKey } from './routeSurfaces';
 import { SCREEN_EXIT_MS, setScreenExiting } from './shell/screenExit';
+import { RouteLoadBoundary } from './shell/RouteLoadBoundary';
 import {
   importCampaignEditor,
   importLevelEditor,
@@ -50,10 +51,6 @@ const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily
 // in style.css (JS drives the route swap; CSS drives the opacity fade).
 const VEIL_COVER_MS = 260;
 const VEIL_REVEAL_MS = 340;
-// Cap on the ADR-0051 post-swap exit hold (outgoing chrome invisible while a lazy
-// light destination's chunk downloads) — same never-strand posture as the entrance
-// hold's READY_FAILSAFE_MS.
-const EXIT_HOLD_FAILSAFE_MS = 4000;
 
 // React router replacing app.js's string-HTML router. Same-origin app links are
 // intercepted below so route changes keep the document, React tree, and BGM
@@ -94,13 +91,10 @@ export function App(): ReactElement {
   // Light-hop exit dissolve (ADR-0051): the timer holding the swap while the outgoing
   // chrome fades, and the post-swap flag that keeps the exit state up until the
   // incoming screen has committed (so a slow lazy chunk can't flash the faded-out
-  // screen back). Mirrors the veil's pendingTarget/coverCommitted shape. The failsafe
-  // caps that post-swap hold (a cold lazy chunk on a hover-less device could otherwise
-  // strand the player on a bare backdrop indefinitely — the entrance side has the same
-  // posture in READY_FAILSAFE_MS).
+  // screen back). Mirrors the veil's pendingTarget/coverCommitted shape. The incoming
+  // screen owns an explicit error state; elapsed time cannot reveal an incomplete route.
   const exitTimer = useRef(0);
   const exitSwapCommitted = useRef(false);
-  const exitHoldFailsafe = useRef(0);
   // The nav handler below is mounted once ([] deps) and must read the CURRENT veil
   // phase — the exit dissolve may only arm while the veil is idle, and a nav landing
   // mid-cover must retarget the veil's held swap instead of racing it for
@@ -196,10 +190,6 @@ export function App(): ReactElement {
           window.clearTimeout(exitTimer.current);
           exitTimer.current = 0;
         }
-        if (exitHoldFailsafe.current) {
-          window.clearTimeout(exitHoldFailsafe.current);
-          exitHoldFailsafe.current = 0;
-        }
         exitSwapCommitted.current = false;
         pendingTarget.current = next; // hold the swap until the field is fully opaque
         pendingSearch.current = nextSearch;
@@ -218,10 +208,6 @@ export function App(): ReactElement {
         // A fresh episode owns the bookkeeping: a still-pending previous swap must not
         // let the reset effect below clear the exit state mid-dissolve.
         exitSwapCommitted.current = false;
-        if (exitHoldFailsafe.current) {
-          window.clearTimeout(exitHoldFailsafe.current);
-          exitHoldFailsafe.current = 0;
-        }
         setScreenExiting(true);
         exitTimer.current = window.setTimeout(() => {
           exitTimer.current = 0;
@@ -232,14 +218,6 @@ export function App(): ReactElement {
           if (target != null) {
             exitSwapCommitted.current = true;
             commitRoute(target, targetSearch);
-            // Cap the invisible-and-inert post-swap hold: if the incoming chunk is
-            // still downloading after this, bring the old screen back rather than
-            // stranding the player on a bare backdrop (the swap still lands later).
-            exitHoldFailsafe.current = window.setTimeout(() => {
-              exitHoldFailsafe.current = 0;
-              exitSwapCommitted.current = false;
-              setScreenExiting(false);
-            }, EXIT_HOLD_FAILSAFE_MS);
           }
         }, SCREEN_EXIT_MS);
       } else {
@@ -328,10 +306,6 @@ export function App(): ReactElement {
   useEffect(() => {
     if (exitSwapCommitted.current && !isPending) {
       exitSwapCommitted.current = false;
-      if (exitHoldFailsafe.current) {
-        window.clearTimeout(exitHoldFailsafe.current);
-        exitHoldFailsafe.current = 0;
-      }
       setScreenExiting(false);
     }
   }, [path, isPending]);
@@ -354,7 +328,9 @@ export function App(): ReactElement {
           load straight onto a lazy route, when this boundary has revealed nothing
           yet. Heavy entrances additionally ride the veil below. */}
       <TitleBarPortalContext.Provider value={titleBarPortals}>
-        <Suspense fallback={fallback}>{renderRoute(path)}</Suspense>
+        <RouteLoadBoundary resetKey={`${path}${search}`}>
+          <Suspense fallback={fallback}>{renderRoute(path)}</Suspense>
+        </RouteLoadBoundary>
       </TitleBarPortalContext.Provider>
       <div
         className={`route-veil${veil === 'cover' ? ' is-cover' : ''}${veil === 'reveal' ? ' is-reveal' : ''}`}

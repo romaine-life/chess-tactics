@@ -3,6 +3,7 @@
 
 import type { Campaign, Level } from '../core/level';
 import { HttpError } from './http';
+import { installLevelThumbnailUrls } from './levelThumbnails';
 
 export interface Workspace {
   campaigns: Campaign[];
@@ -61,6 +62,7 @@ function safeUpdatedAt(value: unknown): string | null {
 
 function asRevisionedWorkspace(value: unknown): RevisionedWorkspace {
   const data = (value && typeof value === 'object' ? value : {}) as Partial<RevisionedWorkspace>;
+  installLevelThumbnailUrls((data as Partial<RevisionedWorkspace> & { thumbnail_urls?: unknown }).thumbnail_urls);
   return {
     campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
     levels: data.levels && typeof data.levels === 'object' ? data.levels : {},
@@ -133,7 +135,9 @@ export async function loadOfficialCampaignsResult(): Promise<OfficialCampaignLoa
     if (!res.ok) return { workspace: empty, available: false };
     const body = (await res.json()) as {
       portfolio?: { data?: unknown; revision?: unknown; updated_at?: unknown };
+      thumbnail_urls?: unknown;
     };
+    installLevelThumbnailUrls(body.thumbnail_urls);
     return {
       workspace: {
         ...asRevisionedWorkspace(body.portfolio?.data),

@@ -298,7 +298,7 @@ function openSse(path, headers = {}) {
 // process liveness; `/ready` is asserted after this reset establishes a known
 // complete catalog state.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, level_working_copies, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats, sfx_profiles, drawable_asset_events, drawable_asset_media, drawable_assets, drawable_catalog_state, media_asset_events, media_versions, media_blobs, media_slots, media_catalog_state, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
+  await queryDb('TRUNCATE levels, campaign_workspaces, level_working_copies, level_thumbnail_derivatives, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats, sfx_profiles, drawable_asset_events, drawable_asset_media, drawable_assets, drawable_catalog_state, media_asset_events, media_versions, media_blobs, media_slots, media_catalog_state, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
   await queryDb("INSERT INTO media_catalog_state (singleton) VALUES (true); INSERT INTO drawable_catalog_state (singleton) VALUES (true); INSERT INTO unit_catalog_state (singleton) VALUES (true); INSERT INTO unit_families (family) VALUES ('pawn'), ('rook'), ('knight'), ('bishop'), ('queen'), ('king');");
 }
 
@@ -2869,13 +2869,22 @@ async function main() {
     firstNewEditorSaveBody.document.revision !== 3 ||
     firstNewEditorSaveBody.document.saved_revision !== 3 ||
     firstNewEditorSaveBody.workspace_revision !== 6 ||
+    firstNewEditorSaveBody.thumbnail_ready !== true ||
     firstNewEditorSaveBody.document.dirty !== false
   ) {
     throw new Error(`First Save should promote a new document: ${firstNewEditorSave.statusCode} ${firstNewEditorSave.body}`);
   }
   const workspaceWithNewLevel = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
-  if (JSON.parse(workspaceWithNewLevel.body).levels.l2.name !== 'New Working Level Autosaved') {
+  const workspaceWithNewLevelBody = JSON.parse(workspaceWithNewLevel.body);
+  if (
+    workspaceWithNewLevelBody.levels.l2.name !== 'New Working Level Autosaved' ||
+    !/^\/api\/media\/[0-9a-f]{64}$/.test(workspaceWithNewLevelBody.thumbnail_urls.l2 || '')
+  ) {
     throw new Error(`First Save did not create the canonical Level: ${workspaceWithNewLevel.body}`);
+  }
+  const storedListThumbnail = await get(workspaceWithNewLevelBody.thumbnail_urls.l2);
+  if (storedListThumbnail.statusCode !== 200 || storedListThumbnail.headers['content-type'] !== 'image/png') {
+    throw new Error(`Canonical level summary did not project a readable immutable thumbnail: ${storedListThumbnail.statusCode}`);
   }
   const deleteSavedBaseline = await deleteEditorDocumentRequest(newDocumentId, 3, 'better-auth.session=abc');
   const deleteSavedBaselineBody = JSON.parse(deleteSavedBaseline.body);
@@ -2946,6 +2955,7 @@ async function main() {
   if (
     officialEditorSave.statusCode !== 200 ||
     officialEditorSaveBody.document.saved_revision !== 2 ||
+    officialEditorSaveBody.thumbnail_ready !== true ||
     officialEditorSaveBody.workspace_revision !== 2
   ) {
     throw new Error(`Official editor Save failed: ${officialEditorSave.statusCode} ${officialEditorSave.body}`);
@@ -2954,6 +2964,7 @@ async function main() {
   const officialAfterEditorSaveBody = JSON.parse(officialAfterEditorSave.body);
   if (
     officialAfterEditorSaveBody.portfolio.data.levels['off-l-test'].name !== 'Official Exact Save' ||
+    !/^\/api\/media\/[0-9a-f]{64}$/.test(officialAfterEditorSaveBody.thumbnail_urls['off-l-test'] || '') ||
     officialAfterEditorSaveBody.portfolio.revision !== 2
   ) {
     throw new Error(`Official editor Save did not promote globally: ${officialAfterEditorSave.body}`);

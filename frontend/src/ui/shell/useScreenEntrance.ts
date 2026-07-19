@@ -18,8 +18,8 @@ import { useEffect, useState } from 'react';
 // `ready:false` until it has something real to show; the chrome HOLDS invisible-and-inert, then
 // plays the one deterministic fade when readiness lands — never a fade over an empty frame with
 // content popping in after. Screens with synchronous content (or a designed in-chrome loading
-// state) simply omit the flag. A generous failsafe force-starts the fade so a dead fetch can
-// never strand a screen invisible. A hold applies on COLD loads too (a cold-loaded /play/select is
+// state) simply omit the flag. Failed loading must become an explicit screen error; a timer may
+// not rename an incomplete screen as ready. A hold applies on COLD loads too (a cold-loaded /play/select is
 // as empty as a navigated-to one); ready cold mounts still skip the fade — the main menu's
 // cold-load reveal owns that first appearance, and a second fade would double up. App flips the
 // nav flag on the first navigation.
@@ -34,11 +34,6 @@ export function markScreenNavigation(): void {
 // MUST match --ds-duration-fade in style.css: the inert-during-motion window == the fade length.
 const SCREEN_FADE_MS = 350;
 
-// Failsafe for a screen whose `ready` never lands (hung fetch): force the reveal rather than
-// strand an invisible screen. Generous on purpose — real readiness drives the reveal; this
-// only rescues a genuinely stuck load (same posture as shell/coldReveal's failsafe).
-const READY_FAILSAFE_MS = 4000;
-
 type EntrancePhase = 'hold' | 'fade' | 'settled';
 
 export function useScreenEntrance(ready: boolean = true): string {
@@ -49,15 +44,15 @@ export function useScreenEntrance(ready: boolean = true): string {
     return initial.navMount ? 'fade' : 'settled';
   });
 
-  // Held: start the fade when readiness lands (or the failsafe fires).
+  // Held: start the fade only when readiness lands. The owning screen must expose an
+  // explicit error/retry state when its load fails.
   useEffect(() => {
     if (phase !== 'hold') return undefined;
     if (ready) {
       setPhase('fade');
       return undefined;
     }
-    const failsafe = window.setTimeout(() => setPhase('fade'), READY_FAILSAFE_MS);
-    return () => window.clearTimeout(failsafe);
+    return undefined;
   }, [phase, ready]);
 
   // Fading: settle (and unlock) once the fade completes. The timer starts when the fade
