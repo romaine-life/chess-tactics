@@ -3,11 +3,13 @@ import {
   liveMediaForSlot,
   resolveTerrainSideExposure,
   resolveTerrainSideFaces,
-  resolveTerrainSideMaterials,
+  subterrainFaceKey,
+  subterrainMaterialSrc,
+  type SubterrainPlacementMap,
 } from '@chess-tactics/board-render';
 import { boardLabCellPosition } from './boardProjection';
 import { BoardGridLayer } from './BoardGridLayer';
-import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
+import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { TileGrid } from './TileGrid';
 import { BoardBarrierSceneLayer } from './BoardBarrierSceneLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
@@ -27,7 +29,7 @@ export interface BoardLabBoardOverlayContext<TAsset extends TileSocketAsset> {
   top: number;
 }
 
-export type BoardLabTerrainRole = 'top' | 'side';
+export type BoardLabTerrainRole = 'top';
 
 export interface BoardLabTerrainSourceContext<TAsset extends TileSocketAsset> {
   role: BoardLabTerrainRole;
@@ -42,6 +44,7 @@ export type BoardLabTerrainSourceOverride<TAsset extends TileSocketAsset> = (
 
 /** Pin one stable semantic face URL to the immutable object in one hydrated catalog snapshot. */
 export function immutableBoardLabTerrainSrc(stableSrc: string): string {
+  if (/^\/api\/media\/[0-9a-f]{64}$/.test(stableSrc)) return stableSrc;
   if (!stableSrc.startsWith('/assets/') || stableSrc.includes('?') || stableSrc.includes('#')) {
     throw new Error(`Board terrain source is not a stable semantic asset URL: ${stableSrc}`);
   }
@@ -65,9 +68,7 @@ export function resolveBoardLabTerrainSrc<TAsset extends TileSocketAsset>(
   context: Omit<BoardLabTerrainSourceContext<TAsset>, 'role'>,
   override?: BoardLabTerrainSourceOverride<TAsset>,
 ): string {
-  const stableSrc = role === 'top'
-    ? terrainTopSrc(stableFrameSrc, context.cell.asset?.topAnimFrames)
-    : terrainSideSrc(stableFrameSrc);
+  const stableSrc = terrainTopSrc(stableFrameSrc, context.cell.asset?.topAnimFrames);
   const candidateSrc = override?.(stableSrc, { ...context, role });
   return candidateSrc ?? immutableBoardLabTerrainSrc(stableSrc);
 }
@@ -77,8 +78,7 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   assetFrameSrc: (asset: TAsset) => string;
   /**
    * Review-only resolver for an exact transformed semantic slot. It receives
-   * `/assets/...-top[-anim].png` or `/assets/...-side.png`, never the combined
-   * source frame, so candidate bytes cannot accidentally replace a sibling role.
+   * the exact top slot, never a combined frame. Subterrain uses its own registry.
    */
   terrainSrcOverride?: BoardLabTerrainSourceOverride<TAsset>;
   boardZoom?: number;
@@ -87,6 +87,8 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   ariaLabel?: string;
   showGrid?: boolean;
   macroTiles?: readonly MacroTilePlacement[];
+  /** Explicit opt-in vertical surfaces; terrain assets never provide a fallback side. */
+  subterrain?: SubterrainPlacementMap;
   renderCellOverlay?: (context: BoardLabBoardOverlayContext<TAsset>) => ReactNode;
   /**
    * Edge fences resolved to a per-cell rail overlay (E/S mask + material), keyed by "x,y".
@@ -112,21 +114,16 @@ export function boardLabTerrainCanvasCells<TAsset extends TileSocketAsset>(
   sourceCells: readonly SocketBoardCell<TAsset>[],
   assetFrameSrc: (asset: TAsset) => string,
   terrainSrcOverride?: BoardLabTerrainSourceOverride<TAsset>,
+  subterrain?: SubterrainPlacementMap,
 ): TerrainCanvasCell[] {
   const occupied = new Set(sourceCells.filter((cell) => cell.asset).map((cell) => `${cell.x}-${cell.y}`));
   return sourceCells.map((cell) => {
     const topAsset = cell.asset;
     const topFrameSrc = topAsset ? assetFrameSrc(topAsset) : undefined;
-    const sideMaterials = resolveTerrainSideMaterials(
-      cell.asset,
-      cell.sideAssets,
-      (asset) => resolveBoardLabTerrainSrc(
-        assetFrameSrc(asset),
-        'side',
-        { cell, asset },
-        terrainSrcOverride,
-      ),
-    );
+    const sideMaterials = Object.fromEntries(['south', 'east'].flatMap((face) => {
+      const material = subterrain?.[subterrainFaceKey(cell.x, cell.y, face as 'south' | 'east')];
+      return material ? [[face, subterrainMaterialSrc(material)]] : [];
+    }));
     return {
       key: `${cell.x}-${cell.y}`,
       x: cell.x,
@@ -155,6 +152,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   ariaLabel = 'Generated board',
   showGrid = false,
   macroTiles,
+  subterrain,
   renderCellOverlay,
   fenceOverlays,
   fencePosts,
@@ -171,7 +169,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   const byCoordinate = new Map<string, SocketBoardCell<TAsset>>(
     sourceCells.map((cell): [string, SocketBoardCell<TAsset>] => [`${cell.x},${cell.y}`, cell]),
   );
-  const terrainCells = boardLabTerrainCanvasCells(sourceCells, assetFrameSrc, terrainSrcOverride);
+  const terrainCells = boardLabTerrainCanvasCells(sourceCells, assetFrameSrc, terrainSrcOverride, subterrain);
   const cells = sourceCells.map((cell) => {
     // Terrain art is composed once in BoardTerrainLayer; the per-cell DOM stays as semantic
     // editor/game chrome (data hooks, missing labels, selections, hit targets), not tile pixels.
@@ -182,8 +180,6 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       className: cell.missing ? 'is-missing' : !cell.asset ? 'is-empty' : '',
       data: {
         'data-asset-id': cell.asset?.id,
-        'data-east-side-id': cell.sideAssets?.east?.id,
-        'data-south-side-id': cell.sideAssets?.south?.id,
         'data-missing': cell.missing?.label,
         'data-board-x': cell.x,
         'data-board-y': cell.y,

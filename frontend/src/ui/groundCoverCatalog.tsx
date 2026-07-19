@@ -1,8 +1,9 @@
 import type { CSSProperties, ReactElement } from 'react';
 import { groundCoverSet, type CoverSet, type CoverVariantMeta } from '../core/groundCover';
 import { terrainLabels, type TileFamilyId } from '../core/tileSockets';
+import { drawableAssets } from '@chess-tactics/board-render';
 
-export type GroundCoverId = Extract<TileFamilyId, 'grass' | 'water' | 'sand'>;
+export type GroundCoverId = TileFamilyId;
 
 export interface GroundCoverCatalogAsset {
   id: GroundCoverId;
@@ -13,38 +14,22 @@ export interface GroundCoverCatalogAsset {
   set: CoverSet;
 }
 
-const GROUND_COVER_META: Record<GroundCoverId, { label: string; badge: string; notes: string }> = {
-  grass: {
-    label: 'Grass tufts',
-    badge: 'field cover',
-    notes: 'Ambient animated grass blades scattered across ground-cover cells.',
-  },
-  water: {
-    label: 'Reeds',
-    badge: 'shoreline cover',
-    notes: 'Animated reed clusters. The default water set only grows on shoreline water when generated.',
-  },
-  sand: {
-    label: 'Sand',
-    badge: 'dry cover',
-    notes: 'Animated dry dune-grass cover for sandy or hand-overridden cover cells.',
-  },
-};
+const currentGroundCoverAssets = (): GroundCoverCatalogAsset[] => drawableAssets('ground-cover').map((record) => {
+  const id = typeof record.behavior.terrain === 'string' ? record.behavior.terrain : record.id;
+  const set = groundCoverSet(id);
+  if (!set) throw new Error(`Missing live ground-cover set: ${id}`);
+  return { id, label: record.label, terrainLabel: terrainLabels[id],
+    badge: typeof record.metadata.badge === 'string' ? record.metadata.badge : '',
+    notes: typeof record.metadata.notes === 'string' ? record.metadata.notes : '', set };
+});
 
-export const GROUND_COVER_IDS: readonly GroundCoverId[] = ['grass', 'water', 'sand'];
-
-// Modules load before main.tsx applies the backend catalog. Keep only semantic
-// UI identity eager; resolve each live set through a getter after startup.
-export const GROUND_COVER_ASSETS: readonly GroundCoverCatalogAsset[] = GROUND_COVER_IDS.map((id) => ({
-  id,
-  terrainLabel: terrainLabels[id],
-  get set(): CoverSet {
-    const set = groundCoverSet(id);
-    if (!set) throw new Error(`Missing live ground-cover set: ${id}`);
-    return set;
+export const GROUND_COVER_ASSETS: readonly GroundCoverCatalogAsset[] = new Proxy([] as GroundCoverCatalogAsset[], {
+  get: (_target, property) => {
+    const current = currentGroundCoverAssets();
+    const value = Reflect.get(current, property);
+    return typeof value === 'function' ? value.bind(current) : value;
   },
-  ...GROUND_COVER_META[id],
-}));
+});
 
 export const groundCoverAsset = (id: string | undefined): GroundCoverCatalogAsset =>
   GROUND_COVER_ASSETS.find((asset) => asset.id === id) ?? GROUND_COVER_ASSETS[0];

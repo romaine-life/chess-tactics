@@ -8,7 +8,7 @@
 // Anchor convention: (x,y) is the min-(x,y) cell of the footprint (smallest x AND smallest y).
 // No rotation in v1, so a prop serialises as a single entry at its anchor.
 
-import { structureArtAsset, structureRasterDimensions } from './structureArt';
+import { STRUCTURE_ART_ASSETS, structureArtAsset, structureRasterDimensions } from './structureArt';
 
 export type PropKind = 'tree' | 'house' | 'rock';
 export type StructurePlacement = 'prop' | 'doodad';
@@ -65,10 +65,6 @@ export type PropSeatEntry = {
 };
 export type PropSeatMap = Record<string, PropSeatEntry>;
 
-// These six identities and their gameplay semantics remain code-owned. Their
-// anchors, scale, footprint tuning, variants, and authored structures come from
-// the one complete `prop_seats/default` live document.
-export const REQUIRED_PROP_SEAT_IDS = ['oak', 'cottage', 'cabin', 'lodge', 'rock', 'fieldstone'] as const;
 const DEFAULT_FOOTPRINT = 2;
 
 // There is intentionally no packaged seed or last-good fallback. Application
@@ -95,7 +91,8 @@ function isSource(value: unknown): value is StructureSourceRef {
 /** Reject a partial or malformed DB snapshot before it can replace renderer state. */
 export function assertPropSeatMap(value: unknown): asserts value is PropSeatMap {
   if (!isRecord(value)) throw new Error('invalid prop seats: document must be an object map');
-  for (const id of REQUIRED_PROP_SEAT_IDS) {
+  const baseIds = STRUCTURE_ART_ASSETS.filter((asset) => asset.kind !== 'doodad').map((asset) => asset.id);
+  for (const id of baseIds) {
     if (!Object.hasOwn(value, id)) throw new Error(`invalid prop seats: required prop "${id}" is missing`);
   }
   for (const [id, raw] of Object.entries(value)) {
@@ -116,10 +113,10 @@ export function assertPropSeatMap(value: unknown): asserts value is PropSeatMap 
       if (typeof raw.base !== 'string' || !Object.hasOwn(value, raw.base)) {
         throw new Error(`invalid prop seats: seat "${id}" base must reference this document`);
       }
-      if (!(REQUIRED_PROP_SEAT_IDS as readonly string[]).includes(raw.base)) {
-        throw new Error(`invalid prop seats: seat "${id}" base must reference a code-owned base prop`);
+      if (!baseIds.includes(raw.base)) {
+        throw new Error(`invalid prop seats: seat "${id}" base must reference an installed base prop`);
       }
-      if ((REQUIRED_PROP_SEAT_IDS as readonly string[]).includes(id)) {
+      if (baseIds.includes(id)) {
         throw new Error(`invalid prop seats: required prop "${id}" cannot be a variant`);
       }
     }
@@ -140,7 +137,7 @@ export function assertPropSeatMap(value: unknown): asserts value is PropSeatMap 
     if (raw.placement && !Object.hasOwn(raw, 'source') && !Object.hasOwn(raw, 'parts')) {
       throw new Error(`invalid prop seats: seat "${id}" authored placement needs source or parts`);
     }
-    if (!(REQUIRED_PROP_SEAT_IDS as readonly string[]).includes(id) && !raw.base && !raw.placement) {
+    if (!baseIds.includes(id) && !raw.base && !raw.placement) {
       throw new Error(`invalid prop seats: seat "${id}" must be a variant or authored placement`);
     }
     if (Object.hasOwn(raw, 'kind') && raw.kind !== 'tree' && raw.kind !== 'house' && raw.kind !== 'rock') {
@@ -198,57 +195,25 @@ export interface PlacedProp {
   propId: string;
 }
 
-// The BASE props. Semantic/gameplay definitions stay in code; raster dimensions
-// come from the hydrated active live-media slots and tuning comes from the DB map.
 function baseDefs(seats: PropSeatMap): PropDef[] {
   const sprite = (id: string) => {
     const art = structureArtAsset(id);
     if (!art) throw new Error(`required structure art definition "${id}" is missing`);
     return { w: art.sprite.w, h: art.sprite.h, ...seat(seats, id) };
   };
-  return [
-    {
-      id: 'oak',
-      label: 'Oak tree',
-      kind: 'tree',
-      w: footW(seats, 'oak'),
-      h: footH(seats, 'oak'),
-      blocking: true,
-      terrains: ['grass', 'dirt'],
-      spriteId: 'oak',
-      spriteSource: { kind: 'asset', id: 'oak' },
-      family: 'oak',
-      sprite: sprite('oak'),
-    },
-    {
-      id: 'cottage',
-      label: 'Cottage',
-      kind: 'house',
-      w: footW(seats, 'cottage'),
-      h: footH(seats, 'cottage'),
-      blocking: true,
-      terrains: ['grass', 'dirt', 'stone'],
-      spriteId: 'cottage',
-      spriteSource: { kind: 'asset', id: 'cottage' },
-      family: 'cottage',
-      sprite: sprite('cottage'),
-    },
-    // Houses — the stylized keeper set. `cottage` above is the low-poly mesh render; these two are
-    // gated Codex img2img RESTYLES of real Blender captures (photoreal meshes read "too realistic"
-    // raw, so the cabin/green-roof shapes are kept but re-skinned to pixel-art). Method-verified via
-    // imageGenVerdict (rollout image_generation_call), NOT code-drawn.
-    { id: 'cabin', label: 'Log cabin', kind: 'house', w: footW(seats, 'cabin'), h: footH(seats, 'cabin'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'cabin', spriteSource: { kind: 'asset', id: 'cabin' }, family: 'cabin', sprite: sprite('cabin') },
-    { id: 'lodge', label: 'Green-roof house', kind: 'house', w: footW(seats, 'lodge'), h: footH(seats, 'lodge'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'lodge', spriteSource: { kind: 'asset', id: 'lodge' }, family: 'lodge', sprite: sprite('lodge') },
-    // Rocks — 1×1 blocking boulders: the placeable impassable-cell obstacle (the old editor's rock
-    // terrain swatch, reborn as a prop so the rules engine stays untouched). Same gated Codex restyle
-    // pipeline as cabin/lodge, from the two staged /rocks meshes (see SOURCES.md). Native-res PNGs;
-    // tile-fit is the live seat `scale` (eye-tunable in /prop-lab), not a baked-small sprite.
-    { id: 'rock', label: 'Rock', kind: 'rock', w: footW(seats, 'rock'), h: footH(seats, 'rock'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'rock', spriteSource: { kind: 'asset', id: 'rock' }, family: 'rock', sprite: sprite('rock') },
-    // Named 'fieldstone' (not 'granite') to avoid colliding with the obstacle-piece sprite variant
-    // ROCK_VARIANTS=['boulder','granite'] under /assets/units/rock/ (render/SkirmishBoard.tsx) — a
-    // separate system from these placeable props. Both derive from the same round-boulder mesh.
-    { id: 'fieldstone', label: 'Fieldstone', kind: 'rock', w: footW(seats, 'fieldstone'), h: footH(seats, 'fieldstone'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'fieldstone', spriteSource: { kind: 'asset', id: 'fieldstone' }, family: 'fieldstone', sprite: sprite('fieldstone') },
-  ];
+  return STRUCTURE_ART_ASSETS.filter((asset) => asset.kind !== 'doodad').map((asset) => ({
+    id: asset.id,
+    label: asset.label,
+    kind: asset.propKind ?? (asset.kind === 'tree' || asset.kind === 'rock' ? asset.kind : 'house'),
+    w: seats[asset.id]?.w ?? asset.footprint?.w ?? DEFAULT_FOOTPRINT,
+    h: seats[asset.id]?.h ?? asset.footprint?.h ?? DEFAULT_FOOTPRINT,
+    blocking: asset.blocking,
+    terrains: asset.terrains,
+    spriteId: asset.id,
+    spriteSource: { kind: 'asset', id: asset.id },
+    family: asset.id,
+    sprite: sprite(asset.id),
+  }));
 }
 
 // Size variants: any seat entry with a `base` synthesizes a prop that SHARES the base's PNG +

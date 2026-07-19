@@ -1,9 +1,5 @@
-import {
-  applyGroundCoverCatalog,
-  assertGroundCoverCatalogAvailable,
-  resetGroundCoverCatalog,
-} from '../core/groundCover';
-import { applyWallDecorCatalog, resetWallDecorCatalog } from '../core/wallDecor';
+import { resetGroundCoverCatalog } from '../core/groundCover';
+import { resetWallDecorCatalog } from '../core/wallDecor';
 
 export type LiveMediaAvailabilityPolicy = 'critical' | 'decorative';
 export type LiveMediaVersionStatus = 'accepted' | 'legacy-bridge';
@@ -142,10 +138,6 @@ export const INSTALLED_CHROME_LIVE_SLOTS = {
 /** Apply one complete backend snapshot as the renderer's only media authority. */
 export function applyLiveMediaCatalog(value: unknown): boolean {
   assertLiveMediaCatalog(value);
-  // Build every typed projection before publishing the new snapshot so an
-  // invalid catalog cannot leave generic lookup and renderer metadata split.
-  applyGroundCoverCatalog(value);
-  applyWallDecorCatalog(value);
   const changed = liveMediaCatalog?.revision !== value.revision;
   liveMediaCatalog = value;
   liveMediaBySlot = new Map(value.slots.map((slot) => [slot.slot, slot]));
@@ -192,7 +184,6 @@ export function assertCriticalLiveMediaAvailable(): void {
   if (!liveMediaCatalog.slots.some((slot) => slot.availabilityPolicy === 'critical')) {
     throw catalogFailure('catalog contains no availability-critical slots');
   }
-  assertGroundCoverCatalogAvailable();
 }
 
 /** Fail startup/readiness unless every installed Chrome role is a real live raster. */

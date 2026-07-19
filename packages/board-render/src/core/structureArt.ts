@@ -1,4 +1,4 @@
-import { liveMediaForSlot } from '../art/liveMediaCatalog';
+import { drawableAssets } from '../art/drawableCatalog';
 
 export type StructureArtKind = 'tree' | 'house' | 'rock' | 'doodad';
 export type StructureSplitMode = 'authored' | 'flat-contact';
@@ -8,8 +8,8 @@ export interface StructureArtAsset {
   label: string;
   kind: StructureArtKind;
   propKind?: 'tree' | 'house' | 'rock';
-  path: string;
   terrains: string[];
+  blocking: boolean;
   sprite: { w: number; h: number; anchorX: number; anchorY: number; scale: number };
   footprint?: { w: number; h: number };
   /**
@@ -23,131 +23,56 @@ export type StructureArtDefinition = Omit<StructureArtAsset, 'sprite'> & {
   sprite: Omit<StructureArtAsset['sprite'], 'w' | 'h'>;
 };
 
-// Semantic identity, terrain affinity, anchors, and split behavior are code-owned.
-// Raster dimensions are deliberately absent: the hydrated live-media catalog owns
-// those facts for the exact active bytes.
-export const STRUCTURE_ART_ASSETS: StructureArtDefinition[] = [
-  {
-    id: 'oak',
-    label: 'Oak tree art',
-    kind: 'tree',
-    path: '/assets/props/oak',
-    terrains: ['grass', 'dirt'],
-    sprite: { anchorX: 96, anchorY: 255, scale: 1 },
-    footprint: { w: 2, h: 2 },
-  },
-  {
-    id: 'cottage',
-    label: 'Cottage art',
-    kind: 'house',
-    path: '/assets/props/cottage',
-    terrains: ['grass', 'dirt', 'stone'],
-    sprite: { anchorX: 91, anchorY: 110, scale: 0.62 },
-    footprint: { w: 2, h: 2 },
-    splitMode: 'flat-contact',
-  },
-  {
-    id: 'cabin',
-    label: 'Log cabin art',
-    kind: 'house',
-    path: '/assets/props/cabin',
-    terrains: ['grass', 'dirt', 'stone'],
-    sprite: { anchorX: 118, anchorY: 107, scale: 0.35 },
-    footprint: { w: 1, h: 1 },
-    splitMode: 'flat-contact',
-  },
-  {
-    id: 'lodge',
-    label: 'Green-roof house art',
-    kind: 'house',
-    path: '/assets/props/lodge',
-    terrains: ['grass', 'dirt', 'stone'],
-    sprite: { anchorX: 103, anchorY: 126, scale: 1 },
-    footprint: { w: 2, h: 2 },
-    splitMode: 'flat-contact',
-  },
-  {
-    id: 'rock',
-    label: 'Rock art',
-    kind: 'rock',
-    path: '/assets/props/rock',
-    terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'],
-    sprite: { anchorX: 20, anchorY: 44, scale: 1 },
-    footprint: { w: 1, h: 1 },
-    splitMode: 'flat-contact',
-  },
-  {
-    id: 'fieldstone',
-    label: 'Fieldstone art',
-    kind: 'rock',
-    path: '/assets/props/fieldstone',
-    terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'],
-    sprite: { anchorX: 25, anchorY: 46, scale: 1 },
-    footprint: { w: 1, h: 1 },
-    splitMode: 'flat-contact',
-  },
-  {
-    id: 'boulder',
-    label: 'Boulder art',
-    kind: 'doodad',
-    propKind: 'rock',
-    path: '/assets/doodads/boulder',
-    terrains: ['stone'],
-    sprite: { anchorX: 48, anchorY: 69, scale: 1 },
-  },
-  {
-    id: 'stump',
-    label: 'Tree stump art',
-    kind: 'doodad',
-    propKind: 'tree',
-    path: '/assets/doodads/stump',
-    terrains: ['dirt'],
-    sprite: { anchorX: 48, anchorY: 69, scale: 1 },
-  },
-  {
-    id: 'fern',
-    label: 'Fern art',
-    kind: 'doodad',
-    propKind: 'tree',
-    path: '/assets/doodads/fern',
-    terrains: ['water'],
-    sprite: { anchorX: 48, anchorY: 69, scale: 1 },
-  },
-  {
-    id: 'flower',
-    label: 'Flower art',
-    kind: 'doodad',
-    propKind: 'tree',
-    path: '/assets/doodads/flower',
-    terrains: ['grass'],
-    sprite: { anchorX: 48, anchorY: 69, scale: 1 },
-  },
-];
+const definitions = (): StructureArtDefinition[] => drawableAssets('structure').map((asset) => {
+  const { value, structureKind, propKind, terrains, blocking, anchorX, anchorY, scale, footprint, splitMode } = asset.behavior;
+  if (typeof structureKind !== 'string' || !Array.isArray(terrains) || typeof anchorX !== 'number' || typeof anchorY !== 'number') {
+    throw new Error(`structure ${asset.id} lacks placement behavior`);
+  }
+  return {
+    id: typeof value === 'string' ? value : asset.id, label: asset.label, kind: structureKind as StructureArtKind,
+    ...(typeof propKind === 'string' ? { propKind: propKind as StructureArtDefinition['propKind'] } : {}),
+    terrains: terrains.filter((value): value is string => typeof value === 'string'),
+    blocking: blocking !== false,
+    sprite: { anchorX, anchorY, scale: typeof scale === 'number' ? scale : 1 },
+    ...(footprint && typeof footprint === 'object' ? { footprint: footprint as { w: number; h: number } } : {}),
+    ...(splitMode === 'authored' || splitMode === 'flat-contact' ? { splitMode } : {}),
+  };
+});
 
-export function structureRasterDimensions(path: string): { w: number; h: number } {
-  const prefix = path.startsWith('/assets/') ? path.slice('/assets/'.length) : '';
-  if (!prefix) throw new Error(`structure art path is not a semantic asset path: ${path}`);
-  const back = liveMediaForSlot(`${prefix}/back.png`).media;
-  const front = liveMediaForSlot(`${prefix}/front.png`).media;
+export const STRUCTURE_ART_ASSETS: StructureArtDefinition[] = new Proxy([] as StructureArtDefinition[], {
+  get: (_target, property) => {
+    const current = definitions();
+    const value = Reflect.get(current, property);
+    return typeof value === 'function' ? value.bind(current) : value;
+  },
+});
+
+export function structureRasterDimensions(id: string): { w: number; h: number } {
+  const record = drawableAssets('structure').find((asset) => (asset.behavior.value ?? asset.id) === id);
+  const back = record?.media.back?.media;
+  const front = record?.media.front?.media;
+  if (!back || !front) throw new Error(`structure art media is missing for ${id}`);
   if (!back.width || !back.height || !front.width || !front.height) {
-    throw new Error(`structure art raster dimensions are missing for ${path}`);
+    throw new Error(`structure art raster dimensions are missing for ${id}`);
   }
   if (back.width !== front.width || back.height !== front.height) {
-    throw new Error(`structure art halves have different raster dimensions for ${path}`);
+    throw new Error(`structure art halves have different raster dimensions for ${id}`);
   }
   return { w: back.width, h: back.height };
 }
 
 export function structureArtAsset(id: string): StructureArtAsset | undefined {
-  const definition = STRUCTURE_ART_ASSETS.find((asset) => asset.id === id);
+  const definition = definitions().find((asset) => asset.id === id);
   if (!definition) return undefined;
   return {
     ...definition,
-    sprite: { ...structureRasterDimensions(definition.path), ...definition.sprite },
+    sprite: { ...structureRasterDimensions(id), ...definition.sprite },
   };
 }
 
 export function structureArtHalfSrc(id: string, half: 'back' | 'front'): string {
-  const definition = STRUCTURE_ART_ASSETS.find((asset) => asset.id === id);
-  return `${definition?.path ?? `/assets/props/${id}`}/${half}.png`;
+  const record = drawableAssets('structure').find((asset) => (asset.behavior.value ?? asset.id) === id);
+  const media = record?.media[half]?.media;
+  if (!media) throw new Error(`structure ${id} has no ${half} media`);
+  return media.immutableUrl;
 }

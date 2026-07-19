@@ -1,10 +1,11 @@
-import { applyLiveMediaCatalog, resetLiveMediaCatalog } from '@chess-tactics/board-render';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { applyLiveMediaCatalog, resetDrawableCatalog, resetLiveMediaCatalog, subterrainMaterialSrc } from '@chess-tactics/board-render';
+import { afterEach, describe, expect, it } from 'vitest';
 import { tileFamilies } from '../art/tileset';
 import { baseSocketsForFamily } from '../core/tileSockets';
 import type { SocketBoardCell } from '../core/tileBoardGenerator';
 import { boardLabTerrainCanvasCells, immutableBoardLabTerrainSrc, resolveBoardLabTerrainSrc } from './BoardLabBoard';
 import { testGroundCoverCatalog } from '../test/liveMediaCatalog';
+import { applyTestDrawableCatalog } from '../test/drawableCatalog';
 
 function hydrateSlot(slot: string, sha256 = 'a'.repeat(64)): void {
   const catalog = testGroundCoverCatalog([{
@@ -35,29 +36,9 @@ function hydrateSlot(slot: string, sha256 = 'a'.repeat(64)): void {
   applyLiveMediaCatalog(catalog);
 }
 
-afterEach(() => resetLiveMediaCatalog());
+afterEach(() => { resetLiveMediaCatalog(); resetDrawableCatalog(); });
 
 describe('BoardLabBoard terrain review source', () => {
-  it('offers the exact side slot to the override after top/side transformation', () => {
-    const asset = tileFamilies.water[3];
-    const cell: SocketBoardCell<typeof asset> = {
-      x: 0,
-      y: 0,
-      asset,
-      sideAssets: { south: asset },
-      terrain: 'water',
-      sockets: baseSocketsForFamily('water'),
-    };
-    const override = vi.fn((stableSrc: string) => stableSrc.endsWith('-side.png') ? '/api/admin/media/candidate' : undefined);
-
-    expect(resolveBoardLabTerrainSrc(asset.src, 'side', { cell, asset }, override))
-      .toBe('/api/admin/media/candidate');
-    expect(override).toHaveBeenCalledWith(
-      '/assets/tiles/surface/water-3-side.png',
-      expect.objectContaining({ role: 'side', cell, asset }),
-    );
-  });
-
   it('keeps animated Water tops isolated from a side candidate', () => {
     const asset = tileFamilies.water[0];
     const cell: SocketBoardCell<typeof asset> = {
@@ -71,7 +52,7 @@ describe('BoardLabBoard terrain review source', () => {
     hydrateSlot('tiles/surface/water-0-top-anim.png');
 
     expect(resolveBoardLabTerrainSrc(asset.src, 'top', { cell, asset }, sideOnly))
-      .toBe(`/api/media/${'a'.repeat(64)}`);
+      .toBe(asset.src);
   });
 
   it('pins production faces to the immutable URL from the hydrated catalog revision', () => {
@@ -81,16 +62,15 @@ describe('BoardLabBoard terrain review source', () => {
       .toBe(`/api/media/${'b'.repeat(64)}`);
   });
 
-  it('keeps hidden faces hidden while allowing different materials at a corner', () => {
+  it('keeps unpainted faces empty and explicit subterrain clipped by exposure', () => {
+    applyTestDrawableCatalog();
     const base = tileFamilies.water[0];
-    const south = tileFamilies.water[1];
-    const east = tileFamilies.water[2];
+    hydrateSlot('tiles/surface/dirt-0-side.png');
     const cells: SocketBoardCell<typeof base>[] = [
       {
         x: 0,
         y: 0,
         asset: base,
-        sideAssets: { south, east },
         terrain: 'water',
         sockets: baseSocketsForFamily('water'),
       },
@@ -103,10 +83,13 @@ describe('BoardLabBoard terrain review source', () => {
       },
     ];
 
-    const [first] = boardLabTerrainCanvasCells(cells, (asset) => asset.src, (stableSrc) => stableSrc);
+    const [first] = boardLabTerrainCanvasCells(cells, (asset) => asset.src, (stableSrc) => stableSrc, {
+      '0,0:south': 'earth',
+      '0,0:east': 'earth',
+    });
     expect(first.sideFaces).toEqual({
-      south: { exposed: true, material: '/assets/tiles/surface/water-1-side.png' },
-      east: { exposed: false, material: '/assets/tiles/surface/water-2-side.png' },
+      south: { exposed: true, material: subterrainMaterialSrc('earth') },
+      east: { exposed: false, material: subterrainMaterialSrc('earth') },
     });
   });
 });

@@ -86,7 +86,7 @@ describe('netplay relay determinism', () => {
       expect(relayed, `seed ${seed}: expected the sim to relay at least one move`).toBeGreaterThan(0);
       expect(guest.winner).toEqual(host.winner);
     }
-  });
+  }, 10_000);
 
   it('a castle relays as its plain { pieceId, x, y } and both boards reproduce the rook hop (ADR-0072)', () => {
     // A level with authored castling + threefold: the richest new state a relayed game

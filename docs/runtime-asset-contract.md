@@ -42,6 +42,11 @@ domain-native stores such as Unit Art and BGM remain conforming because their
 runtime bytes and pointers are already backend-resolved rather than Git-backed.
 Each projection validates its own completeness and geometry before acceptance:
 
+The logical drawable catalog above those media slots is the authority for installed
+content membership, labels, ordering, behavior configuration, and named media roles.
+Runtime and editor consumers query that projection; a stable semantic slot is no
+longer sufficient authority for code to declare that an installed asset exists.
+
 - Unit Art: family, palette, direction, anchor, and native footprint.
 - Terrain: top, side, animation, alpha ownership, projection, face semantics.
 - Ground cover: every `groundcover/<terrain>/v<id>.png` version declares its

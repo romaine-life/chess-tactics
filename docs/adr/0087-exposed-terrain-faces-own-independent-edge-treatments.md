@@ -1,5 +1,6 @@
 ---
-status: "accepted"
+status: "accepted; material fallback superseded by ADR-0105"
+partially_superseded_by: "[ADR-0105](0105-subterrain-is-an-opt-in-drawable-surface.md)"
 date: 2026-07-12
 deciders: Nelson, Codex
 partially_supersedes:

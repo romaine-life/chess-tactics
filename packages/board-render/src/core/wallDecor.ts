@@ -1,334 +1,65 @@
-import type { LiveMediaCatalog, LiveMediaSlot } from '../art/liveMediaCatalog';
+import { drawableAssets, type DrawableAsset, type DrawableMediaRole } from '../art/drawableCatalog';
 
 export type WallDecorKind = 'banner' | 'relief' | 'lantern' | 'mirror';
 export type WallDecorFaceId = 'west' | 'north';
 export type WallDecorMirrorCoverage = 'authored-crop' | 'full-body';
-
-/** Flat [u,v,...] polygon in face-sprite coordinates. */
 export type NormalizedAperturePolygon = number[];
 
 export interface WallDecorFace {
-  /** Immutable content-addressed URL from the applied catalog snapshot. */
-  src: string;
-  width: number;
-  height: number;
-  mountX: number;
-  mountY: number;
-  previewX: number;
-  previewY: number;
+  src: string; width: number; height: number; mountX: number; mountY: number; previewX: number; previewY: number;
 }
-
-export interface WallDecorMirrorFace extends WallDecorFace {
-  aperture: NormalizedAperturePolygon;
-  /** Immutable aperture-only backing/tint from the same live catalog snapshot. */
-  glassSrc: string;
-}
-
-interface WallDecorAssetBase {
-  id: string;
-  label: string;
-  kind: WallDecorKind;
-  /** Immutable content-addressed URL from the applied catalog snapshot. */
-  src: string;
-  width: number;
-  height: number;
-  mountX: number;
-  mountY: number;
-}
-
-export interface WallDecorStaticAsset extends WallDecorAssetBase {
-  kind: Exclude<WallDecorKind, 'mirror'>;
-  faces: Record<WallDecorFaceId, WallDecorFace>;
-}
-
-export interface WallDecorMirrorAsset extends WallDecorAssetBase {
-  kind: 'mirror';
-  mirrorCoverage: WallDecorMirrorCoverage;
-  faces: Record<WallDecorFaceId, WallDecorMirrorFace>;
-}
-
+export interface WallDecorMirrorFace extends WallDecorFace { aperture: NormalizedAperturePolygon; glassSrc: string }
+interface WallDecorAssetBase { id: string; label: string; kind: WallDecorKind; src: string; width: number; height: number; mountX: number; mountY: number }
+export interface WallDecorStaticAsset extends WallDecorAssetBase { kind: Exclude<WallDecorKind, 'mirror'>; faces: Record<WallDecorFaceId, WallDecorFace> }
+export interface WallDecorMirrorAsset extends WallDecorAssetBase { kind: 'mirror'; mirrorCoverage: WallDecorMirrorCoverage; faces: Record<WallDecorFaceId, WallDecorMirrorFace> }
 export type WallDecorAsset = WallDecorStaticAsset | WallDecorMirrorAsset;
-
-interface WallDecorFaceGeometry {
-  mountX: number;
-  mountY: number;
-  previewX: number;
-  previewY: number;
-}
-
-interface WallDecorStaticDefinition {
-  id: string;
-  label: string;
-  kind: Exclude<WallDecorKind, 'mirror'>;
-  mountX: number;
-  mountY: number;
-  faces: Record<WallDecorFaceId, WallDecorFaceGeometry>;
-}
-
-interface WallDecorMirrorFaceGeometry extends WallDecorFaceGeometry {
-  aperture: NormalizedAperturePolygon;
-}
-
-interface WallDecorMirrorDefinition {
-  id: string;
-  label: string;
-  kind: 'mirror';
-  mirrorCoverage: WallDecorMirrorCoverage;
-  mountX: number;
-  mountY: number;
-  faces: Record<WallDecorFaceId, WallDecorMirrorFaceGeometry>;
-}
-
-type WallDecorDefinition = WallDecorStaticDefinition | WallDecorMirrorDefinition;
-
-// Stable semantic identities and deterministic placement geometry remain code-
-// owned. Pixel URLs and intrinsic raster dimensions deliberately do not.
-const WALL_DECOR_DEFINITIONS: readonly WallDecorDefinition[] = [
-  {
-    id: 'banner-tattered',
-    label: 'Tattered Banner',
-    kind: 'banner',
-    mountX: 36,
-    mountY: 10,
-    faces: {
-      west: { mountX: 13, mountY: 10, previewX: 42, previewY: 24 },
-      north: { mountX: 13, mountY: 11, previewX: 84, previewY: 24 },
-    },
-  },
-  {
-    id: 'relief-pawn',
-    label: 'Pawn Relief',
-    kind: 'relief',
-    mountX: 36,
-    mountY: 36,
-    faces: {
-      west: { mountX: 13, mountY: 29, previewX: 42, previewY: 42 },
-      north: { mountX: 13, mountY: 25, previewX: 84, previewY: 42 },
-    },
-  },
-  {
-    id: 'relief-rook',
-    label: 'Rook Relief',
-    kind: 'relief',
-    mountX: 36,
-    mountY: 36,
-    faces: {
-      west: { mountX: 20, mountY: 29, previewX: 42, previewY: 42 },
-      north: { mountX: 20, mountY: 29, previewX: 84, previewY: 42 },
-    },
-  },
-  {
-    id: 'lantern-brass',
-    label: 'Brass Lantern',
-    kind: 'lantern',
-    mountX: 28,
-    mountY: 8,
-    faces: {
-      west: { mountX: 8, mountY: 4, previewX: 42, previewY: 28 },
-      north: { mountX: 8, mountY: 5, previewX: 84, previewY: 28 },
-    },
-  },
-  {
-    id: 'mirror-keep',
-    label: 'Keep Mirror',
-    kind: 'mirror',
-    mirrorCoverage: 'authored-crop',
-    mountX: 36,
-    mountY: 44,
-    faces: {
-      west: { mountX: 17, mountY: 35, previewX: 42, previewY: 44, aperture: [0.241176, 0.295423, 0.758824, 0.155986, 0.758824, 0.67993, 0.241176, 0.819366] },
-      north: { mountX: 17, mountY: 35, previewX: 84, previewY: 44, aperture: [0.241176, 0.166549, 0.758824, 0.305986, 0.758824, 0.82993, 0.241176, 0.690493] },
-    },
-  },
-  {
-    id: 'mirror-court-oval',
-    label: 'Court Oval',
-    kind: 'mirror',
-    mirrorCoverage: 'authored-crop',
-    mountX: 36,
-    mountY: 44,
-    faces: {
-      west: { mountX: 15, mountY: 27, previewX: 42, previewY: 44, aperture: [0.5, 0.263289, 0.766, 0.499978, 0.5, 0.812763, 0.234, 0.657478, 0.304, 0.402719] },
-      north: { mountX: 15, mountY: 28, previewX: 84, previewY: 44, aperture: [0.5, 0.274254, 0.766, 0.668443, 0.5, 0.823728, 0.234, 0.510943, 0.304, 0.297632] },
-    },
-  },
-  {
-    id: 'mirror-chapel-glass',
-    label: 'Chapel Glass',
-    kind: 'mirror',
-    mirrorCoverage: 'authored-crop',
-    mountX: 36,
-    mountY: 48,
-    faces: {
-      west: { mountX: 16, mountY: 32, previewX: 42, previewY: 46, aperture: [0.5, 0.146458, 0.6375, 0.187639, 0.72, 0.280347, 0.72, 0.667569, 0.28, 0.777569, 0.28, 0.390347, 0.3625, 0.256389] },
-      north: { mountX: 16, mountY: 32, previewX: 84, previewY: 46, aperture: [0.5, 0.156875, 0.6375, 0.266806, 0.72, 0.400764, 0.72, 0.787986, 0.28, 0.677986, 0.28, 0.290764, 0.3625, 0.198056] },
-    },
-  },
-  {
-    id: 'mirror-witch-eye',
-    label: "Witch's Eye",
-    kind: 'mirror',
-    mirrorCoverage: 'authored-crop',
-    mountX: 36,
-    mountY: 36,
-    faces: {
-      west: { mountX: 19, mountY: 19, previewX: 42, previewY: 42, aperture: [0.5, 0.193056, 0.787368, 0.308556, 0.698947, 0.527889, 0.5, 0.697056, 0.212632, 0.581556, 0.234737, 0.332556] },
-      north: { mountX: 19, mountY: 20, previewX: 84, previewY: 42, aperture: [0.5, 0.206944, 0.787368, 0.595444, 0.698947, 0.730778, 0.5, 0.710944, 0.212632, 0.322444, 0.234737, 0.426278] },
-    },
-  },
-  {
-    id: 'mirror-grand-gallery',
-    label: 'Grand Gallery Mirror',
-    kind: 'mirror',
-    mirrorCoverage: 'full-body',
-    mountX: 108,
-    mountY: 215,
-    faces: {
-      west: {
-        mountX: 119,
-        mountY: 152,
-        previewX: 42,
-        previewY: 72,
-        aperture: [0.043662, 0.327792, 0.956338, 0.024042, 0.956338, 0.668042, 0.043662, 0.971792],
-      },
-      north: {
-        mountX: 23,
-        mountY: 152,
-        previewX: 86,
-        previewY: 72,
-        aperture: [0.956338, 0.971792, 0.043662, 0.668042, 0.043662, 0.024042, 0.956338, 0.327792],
-      },
-    },
-  },
-];
-
-export const WALL_DECOR_KIND_LABELS: Record<WallDecorKind, string> = {
-  banner: 'Banners',
-  relief: 'Reliefs',
-  lantern: 'Lanterns',
-  mirror: 'Mirrors',
-};
-
-export const WALL_DECOR_KINDS: readonly WallDecorKind[] = ['banner', 'relief', 'lantern', 'mirror'];
 
 const wallDecorAssets: WallDecorAsset[] = [];
 export const WALL_DECOR_ASSETS: readonly WallDecorAsset[] = wallDecorAssets;
+export const WALL_DECOR_KINDS: readonly WallDecorKind[] = new Proxy([] as WallDecorKind[], {
+  get(_target, property) { const values = [...new Set(wallDecorAssets.map((asset) => asset.kind))]; const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; },
+});
+export const WALL_DECOR_KIND_LABELS: Record<string, string> = new Proxy({}, {
+  get(_target, property) { const asset = drawableAssets('wall-decor').find((entry) => entry.behavior.decorKind === property); return asset?.metadata.kindLabel ?? String(property); },
+}) as Record<string, string>;
 
-function usableWallDecorMedia(slot: LiveMediaSlot | undefined): slot is LiveMediaSlot & {
-  media: LiveMediaSlot['media'] & { width: number; height: number };
-} {
-  return !!slot
-    && slot.domain === 'wall-decor'
-    && slot.role === 'media'
-    && slot.availabilityPolicy === 'decorative'
-    && slot.media.mediaType === 'image/png'
-    && Number.isSafeInteger(slot.media.width)
-    && Number(slot.media.width) > 0
-    && Number.isSafeInteger(slot.media.height)
-    && Number(slot.media.height) > 0;
+const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+const positive = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) > 0;
+const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+export function isNormalizedAperture(value: unknown): value is NormalizedAperturePolygon {
+  return Array.isArray(value) && value.length >= 6 && value.length % 2 === 0 && value.every((item) => finite(item) && item >= 0 && item <= 1);
 }
+const media = (asset: DrawableAsset, role: string): DrawableMediaRole => {
+  const value = asset.media[role];
+  if (!value || value.media.mediaType !== 'image/png' || !positive(value.media.width) || !positive(value.media.height)) throw new Error(`invalid wall-decor catalog: ${asset.id} ${role} media is invalid`);
+  return value;
+};
+const geometry = (asset: DrawableAsset, face: WallDecorFaceId) => {
+  const faces = asset.behavior.faces;
+  const value = record(faces) ? faces[face] : null;
+  if (!record(value) || !finite(value.mountX) || !finite(value.mountY) || !finite(value.previewX) || !finite(value.previewY)) throw new Error(`invalid wall-decor catalog: ${asset.id} ${face} geometry is invalid`);
+  return value;
+};
 
-function usableMirrorGlassMedia(slot: LiveMediaSlot | undefined): slot is LiveMediaSlot & {
-  media: LiveMediaSlot['media'] & { width: number; height: number };
-} {
-  return usableWallDecorMedia(slot);
-}
-
-export function isNormalizedAperture(polygon: unknown): polygon is NormalizedAperturePolygon {
-  return Array.isArray(polygon)
-    && polygon.length >= 6
-    && polygon.length % 2 === 0
-    && polygon.every((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1);
-}
-
-/**
- * Project complete decorative triplets from one live catalog snapshot.
- *
- * Wall decor is optional. A missing or invalid main/west/north member omits the
- * whole semantic asset, so no renderer can assemble a partial set or request a
- * broken URL.
- */
-export function applyWallDecorCatalog(catalog: LiveMediaCatalog): void {
-  const bySlot = new Map(catalog.slots.map((slot) => [slot.slot, slot]));
-  const next: WallDecorAsset[] = [];
-  for (const definition of WALL_DECOR_DEFINITIONS) {
-    const base = bySlot.get(`wall-decor/${definition.id}.png`);
-    const west = bySlot.get(`wall-decor/${definition.id}-west.png`);
-    const north = bySlot.get(`wall-decor/${definition.id}-north.png`);
-    if (!usableWallDecorMedia(base) || !usableWallDecorMedia(west) || !usableWallDecorMedia(north)) continue;
-    if (definition.kind === 'mirror') {
-      const westGlass = bySlot.get(`wall-decor/${definition.id}-west-glass.png`);
-      const northGlass = bySlot.get(`wall-decor/${definition.id}-north-glass.png`);
-      if (!usableMirrorGlassMedia(westGlass) || !usableMirrorGlassMedia(northGlass)) continue;
-      if (!isNormalizedAperture(definition.faces.west.aperture) || !isNormalizedAperture(definition.faces.north.aperture)) continue;
-      next.push({
-        id: definition.id,
-        label: definition.label,
-        kind: definition.kind,
-        mirrorCoverage: definition.mirrorCoverage,
-        src: base.media.immutableUrl,
-        width: base.media.width,
-        height: base.media.height,
-        mountX: definition.mountX,
-        mountY: definition.mountY,
-        faces: {
-          west: {
-            src: west.media.immutableUrl,
-            glassSrc: westGlass.media.immutableUrl,
-            width: west.media.width,
-            height: west.media.height,
-            ...definition.faces.west,
-          },
-          north: {
-            src: north.media.immutableUrl,
-            glassSrc: northGlass.media.immutableUrl,
-            width: north.media.width,
-            height: north.media.height,
-            ...definition.faces.north,
-          },
-        },
-      });
-      continue;
-    }
-    next.push({
-      id: definition.id,
-      label: definition.label,
-      kind: definition.kind,
-      src: base.media.immutableUrl,
-      width: base.media.width,
-      height: base.media.height,
-      mountX: definition.mountX,
-      mountY: definition.mountY,
-      faces: {
-        west: {
-          src: west.media.immutableUrl,
-          width: west.media.width,
-          height: west.media.height,
-          ...definition.faces.west,
-        },
-        north: {
-          src: north.media.immutableUrl,
-          width: north.media.width,
-          height: north.media.height,
-          ...definition.faces.north,
-        },
-      },
-    });
-  }
+export function applyWallDecorCatalog(): void {
+  const next = drawableAssets('wall-decor').map((asset): WallDecorAsset => {
+    const rawKind = asset.behavior.decorKind;
+    if ((rawKind !== 'banner' && rawKind !== 'relief' && rawKind !== 'lantern' && rawKind !== 'mirror') || !finite(asset.behavior.mountX) || !finite(asset.behavior.mountY)) throw new Error(`invalid wall-decor catalog: ${asset.id} behavior is invalid`);
+    const kind: WallDecorKind = rawKind;
+    const base = media(asset, 'base'); const west = media(asset, 'west'); const north = media(asset, 'north');
+    const common = { id: asset.id, label: asset.label, kind, src: base.media.immutableUrl, width: base.media.width!, height: base.media.height!, mountX: asset.behavior.mountX, mountY: asset.behavior.mountY };
+    const face = (id: WallDecorFaceId): WallDecorFace => { const source = id === 'west' ? west : north; return { src: source.media.immutableUrl, width: source.media.width!, height: source.media.height!, ...geometry(asset, id) } as WallDecorFace; };
+    if (kind !== 'mirror') return { ...common, kind, faces: { west: face('west'), north: face('north') } };
+    const coverage = asset.behavior.mirrorCoverage;
+    if (coverage !== 'authored-crop' && coverage !== 'full-body') throw new Error(`invalid wall-decor catalog: ${asset.id} mirror coverage is invalid`);
+    const mirrorFace = (id: WallDecorFaceId): WallDecorMirrorFace => { const value = geometry(asset, id); if (!isNormalizedAperture(value.aperture)) throw new Error(`invalid wall-decor catalog: ${asset.id} ${id} aperture is invalid`); return { ...face(id), aperture: value.aperture, glassSrc: media(asset, `${id}-glass`).media.immutableUrl }; };
+    return { ...common, kind: 'mirror', mirrorCoverage: coverage, faces: { west: mirrorFace('west'), north: mirrorFace('north') } };
+  });
   wallDecorAssets.splice(0, wallDecorAssets.length, ...next);
 }
-
-export function resetWallDecorCatalog(): void {
-  wallDecorAssets.splice(0, wallDecorAssets.length);
-}
-
-export const wallDecorAsset = (id: string | undefined): WallDecorAsset | undefined =>
-  id ? WALL_DECOR_ASSETS.find((asset) => asset.id === id) : WALL_DECOR_ASSETS[0];
-
-export function wallDecorMirrorAperture(
-  asset: WallDecorAsset | undefined,
-  face: WallDecorFaceId,
-): NormalizedAperturePolygon | null {
+export function resetWallDecorCatalog(): void { wallDecorAssets.splice(0, wallDecorAssets.length); }
+export const wallDecorAsset = (id: string | undefined): WallDecorAsset | undefined => id ? wallDecorAssets.find((asset) => asset.id === id) : wallDecorAssets[0];
+export function wallDecorMirrorAperture(asset: WallDecorAsset | undefined, face: WallDecorFaceId): NormalizedAperturePolygon | null {
   if (!asset || asset.kind !== 'mirror') return null;
   const aperture = asset.faces[face].aperture;
   return isNormalizedAperture(aperture) ? [...aperture] : null;

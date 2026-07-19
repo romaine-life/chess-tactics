@@ -1,6 +1,6 @@
 import { tileFamilies } from '../art/tileset';
+import { drawableAssets } from '../art/drawableCatalog';
 import {
-  terrainLabels,
   type TileAssetKind,
   type TileFamilyId,
   type TileSocketAsset,
@@ -40,18 +40,24 @@ export interface StudioFamily {
 export const assetFrameSrc = (asset: StudioAsset, animationFrame: number): string =>
   asset.animation ? asset.animation.frames[animationFrame % asset.animation.frames.length] ?? asset.src : asset.src;
 
-const STUDIO_FAMILY_META: Record<TileFamilyId, { purpose: string; status: string; review: string }> = {
-  grass: { purpose: 'High-volume base terrain for most playable cells.', status: 'Production', review: 'Variation + same-footprint repetition.' },
-  dirt: { purpose: 'Bare-earth ground.', status: 'Production', review: 'Variation across the patch.' },
-  stone: { purpose: 'Stone / cobble footing.', status: 'Production', review: 'Variation + readability.' },
-  pebble: { purpose: 'Loose pebble ground.', status: 'Production', review: 'Variation.' },
-  sand: { purpose: 'Sandy ground.', status: 'Production', review: 'Variation.' },
-  water: { purpose: 'Open water (impassable to land units).', status: 'Production', review: 'Variation + surface read.' },
-};
+const currentStudioFamilies = (): StudioFamily[] => (Object.keys(tileFamilies) as TileFamilyId[]).map((id) => {
+  const record = drawableAssets('terrain-surface').find((asset) => asset.behavior.family === id);
+  return {
+    id,
+    label: typeof record?.metadata.familyLabel === 'string' ? record.metadata.familyLabel : id,
+    purpose: typeof record?.metadata.purpose === 'string' ? record.metadata.purpose : '',
+    status: typeof record?.metadata.status === 'string' ? record.metadata.status : '',
+    review: typeof record?.metadata.review === 'string' ? record.metadata.review : '',
+    assets: tileFamilies[id].map((asset): StudioAsset => ({ ...asset })),
+  };
+});
 
-export const studioFamilies: StudioFamily[] = (Object.keys(tileFamilies) as TileFamilyId[]).map((id) => ({
-  id,
-  label: terrainLabels[id],
-  ...STUDIO_FAMILY_META[id],
-  assets: tileFamilies[id].map((asset): StudioAsset => ({ ...asset })),
-}));
+export const studioFamilies: StudioFamily[] = new Proxy([] as StudioFamily[], {
+  get: (_target, property) => {
+    const current = currentStudioFamilies();
+    const value = Reflect.get(current, property);
+    return typeof value === 'function' ? value.bind(current) : value;
+  },
+  ownKeys: () => Reflect.ownKeys(currentStudioFamilies()),
+  getOwnPropertyDescriptor: (_target, property) => Object.getOwnPropertyDescriptor(currentStudioFamilies(), property),
+});

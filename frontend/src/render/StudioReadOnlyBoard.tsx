@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { BoardSceneLayer } from './BoardSceneLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
-import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainSideSrc, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
+import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { immutableBoardLabTerrainSrc } from './BoardLabBoard';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
 import { featureFrameSrc } from '../art/tileset';
@@ -13,7 +13,9 @@ import { resolveMacroTilePlacements } from '../core/macroTiles';
 import {
   resolveTerrainSideExposure,
   resolveTerrainSideFaces,
-  resolveTerrainSideMaterials,
+  subterrainFaceKey,
+  subterrainMaterialSrc,
+  type TerrainSideMaterials,
   type TerrainSideExposure,
 } from '@chess-tactics/board-render';
 
@@ -36,8 +38,8 @@ export interface BoardLayerVisibility {
 // Reuses the canonical ResolvedFeatureOverlay shape.
 export type FeatureOverlayMap = Record<string, ResolvedFeatureOverlay>;
 
-const allTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
-const resolveTileAsset = (id: string): StudioAsset | undefined => allTiles.find((asset) => asset.id === id);
+const resolveTileAsset = (id: string): StudioAsset | undefined =>
+  studioFamilies.flatMap((family) => family.assets).find((asset) => asset.id === id);
 const familyOfTile = (id: string): TileFamilyId | undefined =>
   studioFamilies.find((family) => family.assets.some((asset) => asset.id === id))?.id;
 
@@ -50,6 +52,7 @@ export function studioTerrainCanvasCell({
   animationFrame,
   hidden,
   sideExposure,
+  sideMaterials = {},
 }: {
   key: string;
   x: number;
@@ -59,6 +62,7 @@ export function studioTerrainCanvasCell({
   animationFrame: number;
   hidden?: BoardLayerVisibility;
   sideExposure: TerrainSideExposure;
+  sideMaterials?: TerrainSideMaterials<string>;
 }): TerrainCanvasCell {
   const frameSrc = tileAsset && !hidden?.tile ? assetFrameSrc(tileAsset, animationFrame) : undefined;
   return {
@@ -68,11 +72,7 @@ export function studioTerrainCanvasCell({
     topSrc: frameSrc ? immutableBoardLabTerrainSrc(terrainTopSrc(frameSrc, tileAsset?.topAnimFrames)) : undefined,
     sideFaces: resolveTerrainSideFaces(
       sideExposure,
-      resolveTerrainSideMaterials(
-        tileAsset && !hidden?.tile ? tileAsset : undefined,
-        undefined,
-        (asset) => immutableBoardLabTerrainSrc(terrainSideSrc(assetFrameSrc(asset, animationFrame))),
-      ),
+      sideMaterials,
     ),
     featureSrc: feature ? featureFrameSrc(feature.kind, feature.material, feature.mask) : undefined,
     topAnimFrames: tileAsset?.topAnimFrames,
@@ -150,7 +150,11 @@ export function StudioReadOnlyBoard({
       const key = `${x},${y}`;
       const tileAsset = board.cells[key] ? resolveTileAsset(board.cells[key]) : undefined;
       const sideExposure = resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupied.has(`${nextX},${nextY}`));
-      terrainCells.push(studioTerrainCanvasCell({ key, x, y, tileAsset, feature: featureOverlays[key], animationFrame, sideExposure }));
+      const sideMaterials = Object.fromEntries(['south', 'east'].flatMap((face) => {
+        const material = board.subterrain?.[subterrainFaceKey(x, y, face as 'south' | 'east')];
+        return material ? [[face, subterrainMaterialSrc(material)]] : [];
+      }));
+      terrainCells.push(studioTerrainCanvasCell({ key, x, y, tileAsset, feature: featureOverlays[key], animationFrame, sideExposure, sideMaterials }));
       gridCells.push({
         key,
         x,

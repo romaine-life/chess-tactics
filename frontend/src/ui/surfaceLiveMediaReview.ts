@@ -237,10 +237,6 @@ export function waterSideCanonicalProofBoard(variants: readonly TileAsset[]): So
       x,
       y,
       asset,
-      sideAssets: {
-        ...(y === rows - 1 ? { south: variants[x] } : {}),
-        ...(x === columns - 1 ? { east: variants[y] } : {}),
-      },
       sockets: baseSocketsForFamily('water'),
       terrain: 'water' as const,
     };

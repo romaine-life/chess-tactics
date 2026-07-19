@@ -157,6 +157,11 @@ Unit Art remains a typed catalog over the same ownership model. BGM retains its
 existing Blob-index/range-streaming projection. See
 [`runtime-asset-contract.md`](runtime-asset-contract.md).
 
+Per [ADR-0106](adr/0106-installed-content-is-database-owned.md), `drawable_assets`
+owns the installed logical inventory and `drawable_asset_media` assigns its named
+roles to live-media slots. Concrete editor/catalog entries are database records,
+not compiled TypeScript members.
+
 The SFX runtime profile is a separate typed document projection over live-media
 recording slots. It owns labels/descriptions, sound-set gains, terrain
 assignments, and arrival behavior, with a compare-and-swap revision on admin

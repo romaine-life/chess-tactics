@@ -50,6 +50,7 @@ const RETIRED_GIT_MEDIA_PATHS = [
   'packages/board-render/src/core/propSeats.json',
   'frontend/src/ui/design/wallDecorManifest.json',
   'packages/board-render/src/ui/design/wallDecorManifest.json',
+  'packages/board-render/src/art/macroTiles.json',
 ];
 const PUBLIC_ROOT_PREFIX = 'frontend/public/';
 const PUBLIC_ASSET_PREFIX = 'frontend/public/assets/';
@@ -170,6 +171,30 @@ const RETIRED_CUTOVER_SOURCE_MARKERS = [
   {
     pattern: /wallDecorManifest(?:\.json|_default)?/,
     detail: 'committed wall-decoration media manifest remains after live-catalog cutover',
+  },
+  {
+    pattern: /\bSUBTERRAIN_(?:MATERIALS|MATERIAL_LABELS|MATERIAL_SLOTS)\b/,
+    detail: 'compiled Subterrain inventory remains after drawable-catalog cutover',
+  },
+  {
+    pattern: /\b(?:ROAD_MATERIALS|RIVER_MATERIALS|FEATURE_MATERIAL_LABELS|FENCE_MATERIALS|FENCE_MATERIAL_LABELS|WALL_MATERIALS|WALL_MATERIAL_LABELS|DEFAULT_(?:ROAD|RIVER|FENCE|WALL)_MATERIAL)\b/,
+    detail: 'compiled feature/barrier material inventory remains after drawable-catalog cutover',
+  },
+  {
+    pattern: /\/assets\/tiles\/feature\/\$\{(?:kind|material)[^\n]{0,120}\.png/,
+    detail: 'compiled feature/barrier media-slot template remains after drawable-catalog cutover',
+  },
+  {
+    pattern: /\b(?:PRODUCTION_VARIANTS|EDGE_FAMILIES|MURAL_FAMILIES|FEATURE_PIECE_COUNT|STUDIO_FAMILY_META)\b/,
+    detail: 'compiled terrain-surface inventory remains after drawable-catalog cutover',
+  },
+  {
+    pattern: /\b(?:MacroTileManifest|STRUCTURE_ART_ASSETS\s*:\s*StructureArtDefinition\[\]\s*=\s*\[|DOODAD_ASSETS\s*=\s*\[)\b/,
+    detail: 'compiled composite/structure inventory remains after drawable-catalog cutover',
+  },
+  {
+    pattern: /\b(?:GROUND_COVER_TERRAINS|GROUND_COVER_IDS|GROUND_COVER_META|PLACEMENT_POLICY|WALL_DECOR_DEFINITIONS|REQUIRED_PROP_SEAT_IDS)\b/,
+    detail: 'compiled ground-cover/wall-decoration/prop inventory remains after drawable-catalog cutover',
   },
   {
     pattern: /\b(?:SAMPLE_GAINS|TERRAIN_SAMPLE|ARRIVAL_BAKED|SFX_ASSETS)\b|Copy for Claude|(?:bake[^\n]{0,80}(?:SFX|sound)|(?:SFX|sound)[^\n]{0,80}bake)/i,

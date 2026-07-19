@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   applyServerRenderSnapshot,
   resetLiveMediaCatalog,
+  resetDrawableCatalog,
   resetLiveUnitCatalog,
   resetPropSeats,
   type LiveMediaCatalog,
@@ -14,9 +15,11 @@ import {
 } from '../test/liveMediaCatalog';
 import { TEST_PROP_SEATS } from '../test/livePropSeats';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
+import { testDrawableCatalog } from '../test/drawableCatalog';
 
 function completeSnapshot() {
   return {
+    drawableCatalog: testDrawableCatalog(),
     mediaCatalog: testGroundCoverCatalog([
       ...testStructureMediaSlots(),
       ...testInstalledChromeMediaSlots(),
@@ -30,6 +33,7 @@ afterEach(() => {
   resetLiveUnitCatalog();
   resetPropSeats();
   resetLiveMediaCatalog();
+  resetDrawableCatalog();
 });
 
 describe('availability-critical server renderer snapshot', () => {
@@ -37,12 +41,10 @@ describe('availability-critical server renderer snapshot', () => {
     expect(() => applyServerRenderSnapshot(completeSnapshot())).not.toThrow();
   });
 
-  it('rejects incomplete ground cover', () => {
+  it('accepts a DB-defined ground-cover inventory without requiring a compiled member roster', () => {
     const snapshot = completeSnapshot();
-    snapshot.mediaCatalog.slots = snapshot.mediaCatalog.slots.filter((slot) => (
-      !slot.slot.startsWith('groundcover/water/')
-    ));
-    expect(() => applyServerRenderSnapshot(snapshot)).toThrow(/water/);
+    snapshot.drawableCatalog.assets = snapshot.drawableCatalog.assets.filter((asset) => asset.id !== 'ground-cover-water');
+    expect(() => applyServerRenderSnapshot(snapshot)).not.toThrow();
   });
 
   it('rejects a missing installed Chrome role', () => {

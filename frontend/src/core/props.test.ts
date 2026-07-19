@@ -138,7 +138,7 @@ describe('props core', () => {
     applyLiveMediaCatalog(catalog);
     applyTestPropSeats();
     try {
-      expect(propDef('cabin')?.sprite).toMatchObject({ w: 333, h: 222 });
+      expect(propDef('cabin')?.sprite).toMatchObject({ w: 220, h: 176 });
     } finally {
       applyLiveMediaCatalog(testGroundCoverCatalog(testStructureMediaSlots()));
       applyTestPropSeats();

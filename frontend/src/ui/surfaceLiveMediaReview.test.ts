@@ -151,18 +151,9 @@ describe('surface live-media review', () => {
     expect(isReviewedForCurrentSurfaceSnapshot(candidate, { ...currentSlot, rowRevision: currentSlot.rowRevision + 1 })).toBe(false);
   });
 
-  it('mounts all eight Water side variants exactly once on each exposed face', () => {
+  it('does not attach Water side variants to terrain cells implicitly', () => {
     const board = waterSideCanonicalProofBoard(tileFamilies.water);
-    const south = board.cells.filter((cell) => cell.y === 7);
-    const east = board.cells.filter((cell) => cell.x === 7);
-
-    expect(south).toHaveLength(8);
-    expect(south.map((cell) => cell.sideAssets?.south?.id)).toEqual(
-      Array.from({ length: 8 }, (_, index) => `water-surf-${index}`),
-    );
-    expect(east).toHaveLength(8);
-    expect(east.map((cell) => cell.sideAssets?.east?.id)).toEqual(
-      Array.from({ length: 8 }, (_, index) => `water-surf-${index}`),
-    );
+    expect(board.cells).toHaveLength(64);
+    expect(board.cells.every((cell) => !('sideAssets' in cell))).toBe(true);
   });
 });
