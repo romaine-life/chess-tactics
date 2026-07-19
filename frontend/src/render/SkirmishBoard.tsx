@@ -7,7 +7,7 @@ import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { GameState, Move, Piece, Side, TerrainType, UnitFacing, Vec } from '../core/types';
 import { attackedSquares, blockedCandidateSquares, enemyThreats, legalMoves, livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
-import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
+import { defaultTerrainFamily, familyForGameplayTerrain, familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
@@ -46,22 +46,9 @@ import {
   withoutBoardDrawLayers,
 } from '@chess-tactics/board-render';
 
-const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
-  grass: 'grass',
-  road: 'stone',
-  stone: 'stone',
-  bridge: 'stone',
-  cliff: 'stone',
-  rock: 'stone',
-  water: 'water',
-  dirt: 'dirt',
-  pebble: 'pebble',
-  sand: 'sand',
-};
-
 function terrainFamilyForGame(terrain: TerrainType | undefined): TileFamilyId | null {
   if (!terrain || terrain === 'void') return null;
-  return TERRAIN_TO_FAMILY[terrain];
+  return familyForGameplayTerrain(terrain) ?? null;
 }
 
 const tileAssetById = (): Map<string, TileAsset> => new Map(tileAssets.map((asset) => [asset.id, asset]));
@@ -176,9 +163,10 @@ export function skirmishArmyOverlaySet(
 function terrainMapForGame(game: GameState): TileFamilyId[] {
   const byKey = new Map((game.terrain ?? []).map((cell) => [`${cell.x},${cell.y}`, terrainFamilyForGame(cell.terrain)]));
   const map: TileFamilyId[] = [];
+  const defaultFamilyId = defaultTerrainFamily().id;
   for (let y = 0; y < game.size.rows; y += 1) {
     for (let x = 0; x < game.size.cols; x += 1) {
-      map.push(byKey.get(`${x},${y}`) ?? 'grass');
+      map.push(byKey.get(`${x},${y}`) ?? defaultFamilyId);
     }
   }
   return map;

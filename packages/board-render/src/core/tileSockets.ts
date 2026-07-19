@@ -1,4 +1,5 @@
 import { drawableAssets } from '../art/drawableCatalog';
+import type { TerrainType } from './types';
 
 export type TileFamilyId = string;
 export type TerrainPairId = string;
@@ -45,11 +46,22 @@ export interface TerrainFamilyRecord {
   roles: string[];
   defaultGroundCoverId?: string;
   scatterDefaultShare?: number;
+  gameplayTerrain: TerrainType;
+  rendersGameplayTerrains: TerrainType[];
 }
+
+const GAMEPLAY_TERRAINS = new Set<TerrainType>(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'dirt', 'pebble', 'sand', 'void']);
+const isGameplayTerrain = (value: unknown): value is TerrainType => typeof value === 'string' && GAMEPLAY_TERRAINS.has(value as TerrainType);
 
 export function terrainFamilyRecords(): TerrainFamilyRecord[] {
   return drawableAssets('terrain-family').map((asset) => {
     const id = typeof asset.behavior.value === 'string' ? asset.behavior.value : asset.id;
+    const gameplayTerrain = asset.behavior.gameplayTerrain;
+    const rendersGameplayTerrains = asset.behavior.rendersGameplayTerrains;
+    if (!isGameplayTerrain(gameplayTerrain) || gameplayTerrain === 'void'
+      || !Array.isArray(rendersGameplayTerrains) || !rendersGameplayTerrains.length || !rendersGameplayTerrains.every(isGameplayTerrain)) {
+      throw new Error(`terrain family ${asset.id} has invalid database-owned gameplay terrain behavior`);
+    }
     return {
       id,
       label: asset.label,
@@ -59,8 +71,23 @@ export function terrainFamilyRecords(): TerrainFamilyRecord[] {
       roles: Array.isArray(asset.behavior.roles) ? asset.behavior.roles.filter((role): role is string => typeof role === 'string') : [],
       defaultGroundCoverId: typeof asset.behavior.defaultGroundCoverId === 'string' ? asset.behavior.defaultGroundCoverId : undefined,
       scatterDefaultShare: typeof asset.behavior.scatterDefaultShare === 'number' ? asset.behavior.scatterDefaultShare : undefined,
+      gameplayTerrain,
+      rendersGameplayTerrains,
     };
   });
+}
+
+export function gameplayTerrainForFamily(familyId: TileFamilyId): TerrainType {
+  const family = terrainFamilyRecords().find((record) => record.id === familyId);
+  if (!family) throw new Error(`drawable catalog has no terrain family ${familyId}`);
+  return family.gameplayTerrain;
+}
+
+export function familyForGameplayTerrain(terrain: TerrainType): TileFamilyId | undefined {
+  if (terrain === 'void') return undefined;
+  const matches = terrainFamilyRecords().filter((family) => family.rendersGameplayTerrains.includes(terrain));
+  if (matches.length !== 1) throw new Error(`drawable catalog requires exactly one render family for gameplay terrain ${terrain}; found ${matches.length}`);
+  return matches[0].id;
 }
 
 export function terrainFamiliesForRole(role: string): TerrainFamilyRecord[] {

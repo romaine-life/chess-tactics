@@ -176,6 +176,17 @@ owns the installed logical inventory and `drawable_asset_media` assigns its name
 roles to live-media slots. Concrete editor/catalog entries are database records,
 not compiled TypeScript members.
 
+Terrain-family rows declare both their serialized gameplay terrain and the
+gameplay terrain values they render. Editor conversion, free-skirmish assembly,
+and gameplay rendering use that projection; they do not keep family maps or a
+compiled `grass` fallback.
+
+Installed unit-portrait rows also own their crop geometry in `behavior.crop`.
+The Portrait Editor keeps browser state only as an unsaved draft and persists
+accepted geometry through the admin drawable transaction; gameplay, roster,
+and catalog rendering read the database projection and fail closed when a crop
+is absent or invalid.
+
 The SFX runtime profile is a separate typed document projection over live-media
 recording slots. It owns labels/descriptions, sound-set gains, terrain
 assignments, and arrival behavior, with a compare-and-swap revision on admin

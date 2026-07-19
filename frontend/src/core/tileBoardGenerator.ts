@@ -1,7 +1,7 @@
 import { createRng } from './rng';
 import type { GroundCover } from './groundCover';
 import type { EdgeName, EdgeSockets, TerrainPairId, TileFamilyId, TileSocketAsset } from './tileSockets';
-import { baseSocketsForFamily, familyIdForAsset, tileSocketsForAsset, transitionPairs } from './tileSockets';
+import { baseSocketsForFamily, defaultTerrainFamily, familyIdForAsset, tileSocketsForAsset, transitionPairs } from './tileSockets';
 import type { FeatureKind, FeatureMaterial } from './featureAutotile';
 import { featureKey, featureMaskAt } from './featureAutotile';
 
@@ -105,7 +105,7 @@ function terrainFamiliesForAssets<TAsset extends TileSocketAsset>(assets: readon
 }
 
 function generateTerrainMap(families: readonly TileFamilyId[], seed: number, columns: number, rows: number): TileFamilyId[] {
-  if (families.length <= 1) return Array.from({ length: columns * rows }, () => families[0] ?? 'grass');
+  if (families.length <= 1) return Array.from({ length: columns * rows }, () => families[0] ?? defaultTerrainFamily().id);
   const rng = createRng(seed);
   const anchors = families.flatMap((family) =>
     Array.from({ length: 2 }, () => ({
@@ -174,7 +174,7 @@ function buildSocketGrid(map: readonly TileFamilyId[], columns: number, rows: nu
 
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < columns; x += 1) {
-      const center = terrainAt(map, x, y, columns, rows) ?? 'grass';
+      const center = terrainAt(map, x, y, columns, rows) ?? defaultTerrainFamily().id;
       if (y === 0) horizontalEdges[y][x] = center;
       if (x === 0) verticalEdges[y][x] = center;
 
@@ -326,7 +326,7 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
   for (let index = 0; index < columns * rows; index += 1) {
     const y = Math.floor(index / columns);
     const x = index % columns;
-    const terrain = terrainAt(terrainMap, x, y, columns, rows) ?? 'grass';
+    const terrain = terrainAt(terrainMap, x, y, columns, rows) ?? defaultTerrainFamily().id;
     const sockets = socketGrid[index];
     const feature = featureAt(x, y);
     const candidates = boardAssets.filter((asset) => assetMatchesSockets(asset, sockets, familyAssets));

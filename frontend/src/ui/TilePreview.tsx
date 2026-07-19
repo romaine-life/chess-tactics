@@ -26,7 +26,8 @@ import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } fr
 import { DividerLab, DEFAULT_DIVIDER_ASSET } from './DividerViewer';
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
 import { buildStudioArtworkLibrary, buildStudioAssetLibrary } from './design/studioLiveMediaLibrary';
-import { CroppedView, loadCrops, type Piece as PortraitPiece } from './PortraitEditor';
+import { CroppedView, type Piece as PortraitPiece } from './PortraitEditor';
+import { installedPortraitCrops } from './portraitCrops';
 import { PORTRAIT_METHODS, PORTRAIT_PIECES, portraitMasterSrc, type PortraitMethod } from './portraitCandidates';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
 import { SurfaceLibraryStudio, SurfaceViewer } from './SurfaceLibraryStudio';
@@ -1390,8 +1391,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
 
   // Portraits — the bake-off as its own catalog category, so portraits get their own
   // Unit (piece) and Treatment (method) filters. Cards render through the accepted
-  // per-piece crop (loadCrops + CroppedView via cardMedia), navy-only, held out of game.
-  const portraitCatalogCrops = loadCrops();
+  // database-owned per-piece crop (CroppedView via cardMedia), navy-only, held out of game.
+  const portraitCatalogCrops = installedPortraitCrops();
   const portraitsCatalogType: CatalogType<PortraitCandidateAsset> = {
     id: 'portraits',
     label: 'Portraits',

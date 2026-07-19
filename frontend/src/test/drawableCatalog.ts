@@ -39,6 +39,8 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     id: `terrain-family-${family}`, kind: 'terrain-family', label: family[0].toUpperCase() + family.slice(1), sortOrder,
     lifecycleState: 'active', behavior: {
       value: family,
+      gameplayTerrain: family,
+      rendersGameplayTerrains: family === 'stone' ? ['stone', 'road', 'bridge', 'cliff', 'rock'] : [family],
       roles: [
         'level-editor-scatter',
         ...(['grass', 'dirt', 'stone'].includes(family) ? ['prop-seat-preview', 'wall-art-preview'] : []),
@@ -159,7 +161,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     },
     ...['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'].map((piece, sortOrder) => ({
       id: `test-portrait-${piece}`, kind: 'unit-portrait', label: `Test ${piece} portraits`, sortOrder,
-      lifecycleState: 'active' as const, behavior: { piece }, metadata: {}, rowRevision: 1,
+      lifecycleState: 'active' as const, behavior: { piece, crop: { cx: 0.5, cy: 0.3, s: 0.5 } }, metadata: {}, rowRevision: 1,
       media: Object.fromEntries(['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white']
         .map((palette) => [palette, descriptor(`test/portrait/${piece}-${palette}.png`, 96, 96)])),
     })),

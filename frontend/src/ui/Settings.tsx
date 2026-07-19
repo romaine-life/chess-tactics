@@ -72,10 +72,10 @@ const DEFAULT_SETTINGS: LocalSettings = {
 };
 
 const tabs: TabDefinition[] = [
-  { id: 'general', label: 'General', icon: 'icon-gear-generated.png' },
-  { id: 'audio', label: 'Audio', icon: 'icon-speaker-generated.png' },
-  { id: 'gameplay', label: 'Gameplay', icon: 'icon-knight-generated.png' },
-  { id: 'creator-tools', label: 'Creator Tools', icon: 'icon-wrench-generated.png' },
+  { id: 'general', label: 'General', icon: 'ui-kit-icons-gear-png' },
+  { id: 'audio', label: 'Audio', icon: 'ui-kit-icons-speaker-png' },
+  { id: 'gameplay', label: 'Gameplay', icon: 'ui-kit-icons-knight-png' },
+  { id: 'creator-tools', label: 'Creator Tools', icon: 'ui-kit-icons-wrench-png' },
 ];
 
 // Each settings section is its own route (/settings/<tab>) so it can be linked,
@@ -114,8 +114,7 @@ const creatorTools: CreatorTool[] = [
 ];
 
 function asset(file: string): string {
-  // Use the shared UI kit's generated glyphs: icon-gear-generated.png -> kit/icons/gear.png
-  return installedUiMedia(`ui-kit-icons-${file.replace(/^icon-/, '').replace(/-generated/, '').replace(/\.png$/, '')}-png`);
+  return installedUiMedia(file);
 }
 
 // Build / server provenance, stamped by vite.config buildInfo, surfaced in About so

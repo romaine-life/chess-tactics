@@ -650,6 +650,40 @@ describe('no-committed-media guard', () => {
     }
   });
 
+  it('permanently rejects recreation or renamed imports of the retired portrait crop table', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-portrait-crops-test-'));
+    const tablePath = 'frontend/src/art/portraitCrops.json';
+    const importPath = 'frontend/src/ui/LegacyPortraits.ts';
+    for (const relativePath of [tablePath, importPath]) {
+      const target = path.join(repoRoot, relativePath);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, relativePath === tablePath ? '{}\n' : 'const COMMITTED_CROPS = {};\n', 'utf8');
+    }
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [tablePath, importPath] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'retired-git-media-path', path: tablePath }),
+        expect.objectContaining({ kind: 'retired-portrait-crop-authority', path: importPath }),
+      ]));
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects recreation of a compiled terrain-family gameplay map', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-terrain-map-test-'));
+    const relativePath = 'frontend/src/core/legacyTerrainMap.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "const FAMILY_TO_TERRAIN = { grass: 'grass' };\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ kind: 'retired-terrain-gameplay-map', path: relativePath }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it.each([
     'frontend/config/chrome-lab-defaults.json',
     'frontend/config/nine-slice-registry.json',

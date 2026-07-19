@@ -6,19 +6,20 @@
 // Export the JSON and hand it back — it maps to camera framing for crisp finals.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement, ReactNode, WheelEvent as ReactWheelEvent } from 'react';
-import COMMITTED_CROPS from '../art/portraitCrops.json';
 import { UNIT_PALETTES, UNIT_PALETTE_LABELS, type UnitPalette } from '../core/pieces';
+import { saveDrawableAssetBatch } from '../net/drawableCatalogAdmin';
+import { installedPortraitAssets, installedPortraitCrops, PORTRAIT_PIECES, type PortraitCrop, type PortraitPiece } from './portraitCrops';
 import { PORTRAIT_METHODS, defaultPortraitMethod, portraitMasterSrc, portraitMethodSupportsPalette, type PortraitMethod } from './portraitCandidates';
 import { PaletteSelect } from './shared/PaletteSelect';
 import { InnerChromeBox } from './shared/ChromeBox';
 
-const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const;
+const PIECES = PORTRAIT_PIECES;
 const paletteEnabledForMethod = (piece: Piece, method: PortraitMethod): boolean => (
   UNIT_PALETTES.some((palette) => palette !== 'navy-blue' && portraitMethodSupportsPalette(piece, method, palette))
 );
-export type Piece = (typeof PIECES)[number];
+export type Piece = PortraitPiece;
 export type Palette = UnitPalette;
-export type Crop = { cx: number; cy: number; s: number };
+export type Crop = PortraitCrop;
 
 // Master render framing (Tz·topZ, span·topZ) used per piece — emitted with the
 // JSON so the crop can be mapped back to camera framing exactly.
@@ -27,11 +28,6 @@ const MASTER_FRAMING: Record<Piece, { tz: number; span: number }> = {
   rook: { tz: 0.5, span: 1.15 }, queen: { tz: 0.5, span: 1.45 }, king: { tz: 0.5, span: 1.45 },
 };
 
-// Fallback headshot if a piece is somehow missing from the committed crops below.
-const DEFAULT_CROP: Crop = { cx: 0.5, cy: 0.30, s: 0.50 };
-// The committed, intentional per-piece framing (off-center lead room, zoom) — the single source
-// of truth the editor, the Skirmish HUD, and the roster all START from, so they never diverge.
-const COMMITTED = COMMITTED_CROPS as Record<Piece, Crop>;
 export const STORAGE_KEY = 'portrait-editor-crops-v4'; // v4: discard pre-padding drafts so the committed rook headroom (and any baked crop) shows
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -101,8 +97,8 @@ function HudFrame({ piece, palette, crop, size, label, method }: { piece: Piece;
   );
 }
 
-export function loadCrops(): Record<Piece, Crop> {
-  const base = Object.fromEntries(PIECES.map((p) => [p, { ...(COMMITTED[p] ?? DEFAULT_CROP) }])) as Record<Piece, Crop>;
+export function loadDraftCrops(): Record<Piece, Crop> {
+  const base = installedPortraitCrops();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -117,7 +113,7 @@ export function loadCrops(): Record<Piece, Crop> {
 // JSON export. Consumed both by the standalone PortraitEditor page and by the
 // in-studio PortraitLab Viewer surface, so the two never diverge.
 function usePortraitEditor() {
-  const [crops, setCrops] = useState<Record<Piece, Crop>>(loadCrops);
+  const [crops, setCrops] = useState<Record<Piece, Crop>>(loadDraftCrops);
   const [piece, setPiece] = useState<Piece>('pawn');
   const [palette, setPalette] = useState<Palette>('navy-blue');
   const [method, setMethod] = useState<PortraitMethod>(() => defaultPortraitMethod());
@@ -168,13 +164,28 @@ function usePortraitEditor() {
   }, null, 2), [crops]);
 
   const [copied, setCopied] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const copy = async () => {
     try { await navigator.clipboard.writeText(json); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
   };
-  const resetPiece = () => setCrop({ ...(COMMITTED[piece] ?? DEFAULT_CROP) });
-  const resetAll = () => setCrops(Object.fromEntries(PIECES.map((p) => [p, { ...(COMMITTED[p] ?? DEFAULT_CROP) }])) as Record<Piece, Crop>);
+  const resetPiece = () => setCrop({ ...installedPortraitCrops()[piece] });
+  const resetAll = () => setCrops(installedPortraitCrops());
+  const save = async () => {
+    setSaveState('saving');
+    try {
+      const assets = installedPortraitAssets();
+      await saveDrawableAssetBatch(PIECES.map((p) => ({
+        id: assets[p].id, kind: assets[p].kind, label: assets[p].label, sortOrder: assets[p].sortOrder,
+        lifecycleState: 'active' as const, behavior: { ...assets[p].behavior, crop: crops[p] }, metadata: assets[p].metadata,
+        media: Object.fromEntries(Object.entries(assets[p].media).map(([role, value]) => [role, value.slot])),
+        expectedRevision: assets[p].rowRevision,
+      })));
+      localStorage.removeItem(STORAGE_KEY);
+      setSaveState('saved');
+    } catch { setSaveState('error'); }
+  };
 
-  return { crops, piece, setPiece, palette, setPalette, method, setMethod, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll };
+  return { crops, piece, setPiece, palette, setPalette, method, setMethod, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll, save, saveState };
 }
 
 // The editor canvas represents the padded space [-PAD, 1+PAD]. The master occupies the centre
@@ -283,6 +294,7 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
               <button type="button" onClick={ed.resetAll}>Reset all</button>
             </div>
             <button type="button" className="tileset-view-action" onClick={ed.copy}>{ed.copied ? 'Copied ✓' : 'Copy JSON'}</button>
+            <button type="button" className="tileset-view-action" disabled={ed.saveState === 'saving'} onClick={ed.save}>{ed.saveState === 'saving' ? 'Saving…' : ed.saveState === 'saved' ? 'Saved to database ✓' : ed.saveState === 'error' ? 'Save failed' : 'Save installed crops'}</button>
           </div>
         </section>
       </aside>
@@ -291,7 +303,7 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
 }
 
 export function PortraitEditor(): ReactElement {
-  const { crops, piece, setPiece, palette, setPalette, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll } = usePortraitEditor();
+  const { crops, piece, setPiece, palette, setPalette, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll, save, saveState } = usePortraitEditor();
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
@@ -307,7 +319,7 @@ export function PortraitEditor(): ReactElement {
       <main style={{ background: '#0b1016', color: '#cfe3ee', fontFamily: 'system-ui, sans-serif', padding: 24 }}>
       <p style={{ margin: '0 0 18px', color: '#7fa8bd', fontSize: 13 }}>
         Drag the crop into the transparent padding around the unit for headroom · scroll or the zoom slider sizes the crop · the crop is per-piece (shared across palettes).
-        Tune each unit, then <strong>Copy JSON</strong> and paste it back in chat.
+        Tune each unit, then save the installed crop geometry to the database.
       </p>
 
       <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -382,6 +394,7 @@ export function PortraitEditor(): ReactElement {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <strong style={{ fontSize: 13 }}>Export</strong>
             <button style={btnStyle(true)} onClick={copy}>{copied ? 'Copied ✓' : 'Copy JSON'}</button>
+            <button style={btnStyle(true)} disabled={saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved ✓' : saveState === 'error' ? 'Save failed' : 'Save installed crops'}</button>
           </div>
           <textarea readOnly value={json} spellCheck={false}
             style={{ width: '100%', height: 360, background: '#0e161e', color: '#bcd6e6', border: '1px solid #2a3b48',

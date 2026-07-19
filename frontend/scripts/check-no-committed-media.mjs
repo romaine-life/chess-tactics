@@ -62,7 +62,11 @@ const RETIRED_GIT_MEDIA_PATHS = [
   'frontend/scripts/vite-nine-slice-geometry-plugin.mjs',
   'frontend/config/native-rail-generation.json',
   'frontend/config/chrome-family-extraction',
+  'frontend/src/art/portraitCrops.json',
 ];
+const RETIRED_PORTRAIT_CROP_AUTHORITY = /\bCOMMITTED_?CROPS\b|portraitCrops\.json/;
+const RETIRED_TERRAIN_GAMEPLAY_MAP = /\b(?:FAMILY_TO_TERRAIN|TERRAIN_TO_FAMILY)\b|(?:\?\?|\|\|)\s*['"]grass['"]/;
+const INSTALLED_CONTENT_RUNTIME_SOURCE = /^(?:frontend|packages\/board-render)\/src\//;
 const PUBLIC_ROOT_PREFIX = 'frontend/public/';
 const PUBLIC_ASSET_PREFIX = 'frontend/public/assets/';
 const ALLOWED_PUBLIC_EXECUTABLE_FILES = new Set([
@@ -839,6 +843,25 @@ export function collectNoCommittedMediaViolations({
             kind: 'retired-wall-art-authority',
             path: relativePath,
             detail: 'wall art must project from DB-owned drawable records without a compiled baseline or parallel API',
+          });
+        }
+        if (relativePath !== 'frontend/scripts/check-no-committed-media.mjs'
+          && STATIC_AUTHORITY_CODE_EXTENSION.test(relativePath)
+          && !TEST_SOURCE_PATH.test(relativePath) && RETIRED_PORTRAIT_CROP_AUTHORITY.test(source)) {
+          violations.push({
+            kind: 'retired-portrait-crop-authority',
+            path: relativePath,
+            detail: 'installed portrait crops must come from DB-owned unit-portrait drawable behavior',
+          });
+        }
+        if (relativePath !== 'frontend/scripts/check-no-committed-media.mjs'
+          && STATIC_AUTHORITY_CODE_EXTENSION.test(relativePath)
+          && INSTALLED_CONTENT_RUNTIME_SOURCE.test(relativePath)
+          && !TEST_SOURCE_PATH.test(relativePath) && RETIRED_TERRAIN_GAMEPLAY_MAP.test(source)) {
+          violations.push({
+            kind: 'retired-terrain-gameplay-map',
+            path: relativePath,
+            detail: 'terrain family/gameplay mapping must come from DB-owned terrain-family behavior',
           });
         }
       }

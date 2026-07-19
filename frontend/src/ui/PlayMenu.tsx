@@ -31,7 +31,14 @@ import { skirmishProfileLevels } from './skirmishProfiles';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
 
-const carvedIcon = (name: string) => installedUiMedia(`ui-main-menu-icons-carved-${name}-png`);
+const PLAY_ICON_ROLES = {
+  'solo-skirmish': 'ui-main-menu-icons-carved-solo-skirmish-png',
+  'campaign-editor': 'ui-main-menu-icons-carved-campaign-editor-png',
+  'level-editor': 'ui-main-menu-icons-carved-level-editor-png',
+  lobbies: 'ui-main-menu-icons-carved-lobbies-png',
+} as const;
+type PlayIcon = keyof typeof PLAY_ICON_ROLES;
+const carvedIcon = (name: PlayIcon) => installedUiMedia(PLAY_ICON_ROLES[name]);
 const CAMPAIGN_ICON = carvedIcon('campaign-editor');
 
 function PlayRailTab({
@@ -43,7 +50,7 @@ function PlayRailTab({
 }: {
   label: string;
   href: string;
-  icon: string;
+  icon: PlayIcon;
   active: boolean;
   index: number;
 }): ReactElement {

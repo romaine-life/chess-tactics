@@ -1823,6 +1823,8 @@ async function main() {
       id: `terrain-family-${family}`, kind: 'terrain-family', label: `Synthetic ${family}`, sortOrder,
       behavior: {
         value: family,
+        gameplayTerrain: family,
+        rendersGameplayTerrains: family === 'stone' ? ['stone', 'road', 'bridge', 'cliff', 'rock'] : [family],
         roles: ['level-editor-scatter',
           ...(['grass', 'dirt', 'stone'].includes(family) ? ['prop-seat-preview', 'wall-art-preview'] : []),
           ...(['grass', 'stone', 'water'].includes(family) ? ['unit-art-preview'] : []),
