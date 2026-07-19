@@ -4,6 +4,7 @@ import {
   type BakeBounds,
   type BoardDrawOp,
 } from '@chess-tactics/board-render';
+import { loadDecodedImage, loadDecodedImageMap } from './imageResources';
 
 type CanvasImage = HTMLImageElement;
 
@@ -28,22 +29,9 @@ export interface BoardCanvasScratchRegion {
   height: number;
 }
 
-const imageCache = new Map<string, Promise<CanvasImage>>();
 const EMPTY_OCCLUSION_MASKS: readonly BoardDrawOp[] = [];
-
 export function loadCanvasImage(src: string): Promise<CanvasImage> {
-  const cached = imageCache.get(src);
-  if (cached) return cached;
-  const promise = new Promise<CanvasImage>((resolve) => {
-    const img = new Image();
-    img.decoding = 'async';
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(img);
-    img.src = src;
-    img.decode?.().catch(() => {});
-  });
-  imageCache.set(src, promise);
-  return promise;
+  return loadDecodedImage(src);
 }
 
 function imageReady(image: CanvasImage | undefined): image is CanvasImage {
@@ -328,6 +316,8 @@ export function BoardCanvasLayer({
   className = 'tileset-scene-layer',
   maskTint,
   occlusionMasks = EMPTY_OCCLUSION_MASKS,
+  onFirstFrame,
+  onFrameError,
 }: {
   ops: readonly BoardDrawOp[];
   bounds: BakeBounds;
@@ -336,6 +326,8 @@ export function BoardCanvasLayer({
   maskTint?: string;
   /** Canonical raised silhouettes that erase lower-depth additive art to reveal a pre-drawn plate. */
   occlusionMasks?: readonly BoardDrawOp[];
+  onFirstFrame?: () => void;
+  onFrameError?: (error: unknown) => void;
 }): ReactElement | null {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const orderedOps = useMemo(() => [...ops].sort((a, b) => a.z - b.z), [ops]);
@@ -371,22 +363,29 @@ export function BoardCanvasLayer({
       );
     };
 
-    void Promise.all(sources.map(async (src): Promise<[string, CanvasImage]> => [src, await loadCanvasImage(src)])).then((entries) => {
-      const images = new Map(entries);
+    if (sources.length === 0) {
+      // An empty compositor has no pixels to await; acknowledge during its effect so a
+      // sibling's state update cannot repeatedly cancel a scheduled empty-frame callback.
+      onFirstFrame?.();
+      return undefined;
+    }
+
+    void loadDecodedImageMap(sources).then((images) => {
       paint(images);
+      requestAnimationFrame(() => onFirstFrame?.());
       if (!animated) return;
       const tick = (timeMs: number): void => {
         paint(images, timeMs);
         raf = window.requestAnimationFrame(tick);
       };
       raf = window.requestAnimationFrame(tick);
-    });
+    }).catch((error) => onFrameError?.(error));
 
     return () => {
       cancelled = true;
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [bounds, maskTint, occlusionSignature, orderedOcclusionMasks, orderedOps, signature]);
+  }, [bounds, maskTint, occlusionSignature, onFirstFrame, onFrameError, orderedOcclusionMasks, orderedOps, signature]);
 
   if (orderedOps.length === 0) return null;
 

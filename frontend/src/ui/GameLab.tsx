@@ -190,7 +190,7 @@ export function GameLabCatalog({
           <span className="tileset-studio-card-image pages-card-image">
             {/* Baked board thumbnail — the same preview the Campaign Editor's level
                 list uses, so a level looks identical everywhere it's shown. */}
-            <LevelThumbnail level={o.level} width={132} height={88} alt="" />
+            <LevelThumbnail level={o.level} width={132} height={88} alt="" authoringPreview />
           </span>
           <span className="tileset-studio-card-meta">
             <span className="tileset-studio-card-text">

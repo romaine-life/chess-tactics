@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { tileFrameSrc, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
@@ -16,7 +16,8 @@ import { terrainTopSrc } from './BoardTerrainLayer';
 import { boundsForOps, drawBoardOps, isAnimatedGroundCoverOp, loadCanvasImage } from './BoardCanvasLayer';
 import { objectBaseZIndex } from './sceneDepth';
 import { ViewPane } from '../ui/shared/ViewPane';
-import { useBoardArtReveal } from './boardArtReady';
+import { useBoardFrameReveal } from './boardArtReady';
+import { loadingMark } from '../diagnostics/loadingTimeline';
 import { groundCoverSet } from '../core/groundCover';
 import { featureFrameSrc, fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
 import { resolveFeatureOverlays, resolveFenceOverlays, resolveFencePosts, resolveWallOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay, type ResolvedFencePost, type ResolvedWallOverlay } from '../core/featureAutotile';
@@ -666,6 +667,8 @@ function SkirmishSceneLayer({
   premovedIds,
   afterGhosts,
   occlusionMasks,
+  onFirstFrame,
+  onFrameError,
 }: {
   sceneBoard: EditorBoard;
   seed: number;
@@ -678,6 +681,8 @@ function SkirmishSceneLayer({
   premovedIds: ReadonlySet<string>;
   afterGhosts: ReturnType<typeof premoveGhosts>;
   occlusionMasks: readonly BoardDrawOp[];
+  onFirstFrame: () => void;
+  onFrameError: (error: unknown) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const motionRef = useRef<Map<string, PieceMotion>>(new Map());
@@ -818,13 +823,14 @@ function SkirmishSceneLayer({
         }
       };
       tick(performance.now());
-    });
+      requestAnimationFrame(onFirstFrame);
+    }).catch(onFrameError);
 
     return () => {
       cancelled = true;
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, occlusionMasks, premovedIds, staticOps]);
+  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, occlusionMasks, onFirstFrame, onFrameError, premovedIds, staticOps]);
 
   return (
     <canvas
@@ -1011,7 +1017,16 @@ export function SkirmishBoard({
     ),
     [board, fenceOverlays, fencePosts, livePieces, predrawnOcclusionMasks, predrawnPlate?.src, sceneUrls, wallArtUrls, wallOverlays],
   );
-  const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
+  const boardFrame = useBoardFrameReveal(boardArt.signature);
+  const boardReady = boardFrame.ready;
+  const acknowledgeTerrain = useCallback(() => boardFrame.acknowledge('terrain'), [boardFrame.acknowledge]);
+  const acknowledgeBarriers = useCallback(() => boardFrame.acknowledge('barriers'), [boardFrame.acknowledge]);
+  const acknowledgeScene = useCallback(() => boardFrame.acknowledge('scene'), [boardFrame.acknowledge]);
+  useEffect(() => {
+    if (!boardReady) return undefined;
+    const frame = requestAnimationFrame(() => loadingMark('board', 'container-first-revealed-frame', { assetCount: boardArt.urls.length }));
+    return () => cancelAnimationFrame(frame);
+  }, [boardArt.urls.length, boardReady]);
   // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
   // the tile signature so a new skirmish/replay re-arms it, but moves (signature stable) don't.
   const arrivalDelays = useMemo(() => computeArrivalDelays(livePieces), [livePieces]);
@@ -1371,9 +1386,17 @@ export function SkirmishBoard({
     <div
       data-testid="skirmish-board"
       data-interactive={interactive ? 'true' : 'false'}
-      className={`skirmish-board-lab ${boardReady ? '' : 'is-board-loading'} ${drag ? 'is-dragging' : ''} ${interactive ? '' : 'is-read-only'}`.trim()}
+      data-painted-layers={boardFrame.paintedLayers.join(',')}
+      className={`skirmish-board-lab ${boardReady ? '' : 'is-board-loading'} ${boardFrame.error ? 'is-board-error' : ''} ${drag ? 'is-dragging' : ''} ${interactive ? '' : 'is-read-only'}`.trim()}
     >
+      {boardFrame.error ? (
+        <div className="board-load-error" role="alert">
+          <strong>Board artwork could not be loaded.</strong>
+          <button type="button" onClick={boardFrame.retry}>Retry</button>
+        </div>
+      ) : null}
       <ViewPane
+        key={`${boardArt.signature}:${boardFrame.retryKey}`}
         kind="board"
         ariaLabel="Skirmish board viewport"
         zoom={boardZoom}
@@ -1396,6 +1419,9 @@ export function SkirmishBoard({
           ariaLabel="Skirmish board"
           showGrid={showGrid}
           predrawnPlate={predrawnPlate}
+          onTerrainFirstFrame={acknowledgeTerrain}
+          onBarrierFirstFrame={acknowledgeBarriers}
+          onFrameError={boardFrame.fail}
           sceneLayer={(
             <SkirmishSceneLayer
               sceneBoard={sceneBoard}
@@ -1409,6 +1435,8 @@ export function SkirmishBoard({
               premovedIds={premovedIds}
               afterGhosts={afterGhosts}
               occlusionMasks={predrawnOcclusionMasks}
+              onFirstFrame={acknowledgeScene}
+              onFrameError={boardFrame.fail}
             />
           )}
           renderCellOverlay={({ cell }) => {

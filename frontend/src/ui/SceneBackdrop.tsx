@@ -132,6 +132,7 @@ export function buildSceneBackdropNode(): HTMLDivElement {
 
   const canvas = document.createElement('div');
   canvas.className = 'scene-backdrop-canvas';
+  canvas.style.backgroundImage = `url("${resolvedLiveMediaUrl('ui/main-menu/background-scene-v1.avif')}")`;
 
   for (const a of SCENE_ANIMS) {
     const span = document.createElement('span');

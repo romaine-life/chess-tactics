@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react';
 import { ensureCampaignsHydrated, isUserWorkspaceAvailable } from '../campaign/hydrate';
 import {
   CAMPAIGN_PROGRESS_EVENT,
@@ -12,6 +12,7 @@ import type { Campaign as CampaignDoc, Level } from '../core/level';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { MODE_NAME } from '../core/objectives';
 import { LevelThumbnail } from '../render/LevelThumbnail';
+import { levelThumbnailUrl } from '../net/levelThumbnails';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { FittedTabLabel } from './shared/FittedTabLabel';
 import { KitScroll } from './KitScroll';
@@ -98,6 +99,54 @@ function ActionColumn({ children }: { children: ReactElement }): ReactElement {
   );
 }
 
+interface ThumbnailGateValue {
+  ready: (levelId: string) => void;
+  failed: (levelId: string, error: Error) => void;
+}
+
+const ThumbnailGateContext = createContext<ThumbnailGateValue | null>(null);
+
+function GatedLevelThumbnail(props: ComponentProps<typeof LevelThumbnail>): ReactElement {
+  const gate = useContext(ThumbnailGateContext);
+  return <LevelThumbnail {...props} onReady={gate?.ready} onError={gate?.failed} />;
+}
+
+function ThumbnailSurface({ levels, children }: { levels: readonly Level[]; children: ReactNode }): ReactElement {
+  const levelIds = levels.map((level) => level.id);
+  const signature = levels.map((level) => `${level.id}:${levelThumbnailUrl(level.id) ?? 'read-through'}`).join('|');
+  const [painted, setPainted] = useState<ReadonlySet<string>>(() => new Set());
+  const [failure, setFailure] = useState<Error | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  useLayoutEffect(() => {
+    setPainted(new Set());
+    setFailure(null);
+  }, [attempt, signature]);
+
+  const ready = useCallback((levelId: string) => {
+    setPainted((current) => current.has(levelId) ? current : new Set([...current, levelId]));
+  }, []);
+  const failed = useCallback((_levelId: string, error: Error) => setFailure(error), []);
+  const complete = levelIds.every((levelId) => painted.has(levelId));
+
+  return (
+    <ThumbnailGateContext.Provider value={{ ready, failed }}>
+      <div className={`thumbnail-surface ${complete && !failure ? 'is-ready' : 'is-loading'} ${failure ? 'is-error' : ''}`.trim()}>
+        <div className="thumbnail-surface-content" key={`${signature}:${attempt}`} aria-hidden={complete && !failure ? undefined : true}>
+          {children}
+        </div>
+        {!complete && !failure ? <div className="thumbnail-surface-status" role="status">Preparing levels…</div> : null}
+        {failure ? (
+          <div className="thumbnail-surface-status" role="alert">
+            <strong>Level previews could not be loaded.</strong>
+            <button type="button" onClick={() => setAttempt((value) => value + 1)}>Retry</button>
+          </div>
+        ) : null}
+      </div>
+    </ThumbnailGateContext.Provider>
+  );
+}
+
 function SkirmishProfilesPanel({
   levels,
   loading,
@@ -111,7 +160,7 @@ function SkirmishProfilesPanel({
 }): ReactElement {
   return (
     <ActionColumn>
-      <div className="settings-panel-content">
+      <ThumbnailSurface levels={levels}><div className="settings-panel-content">
         <section className="settings-section">
           <h3 className="settings-section-title">Skirmish</h3>
           <div className="settings-section-rows">
@@ -147,7 +196,7 @@ function SkirmishProfilesPanel({
             {levels.map((level) => (
               <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} key={level.id}>
                 <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
-                  <LevelThumbnail level={level} width={72} height={48} alt="" />
+                  <GatedLevelThumbnail level={level} width={72} height={48} alt="" />
                 </span>
                 <div className="settings-row-copy">
                   <h4>{level.name}</h4>
@@ -167,7 +216,7 @@ function SkirmishProfilesPanel({
             ))}
           </div>
         </section>
-      </div>
+      </div></ThumbnailSurface>
     </ActionColumn>
   );
 }
@@ -185,7 +234,7 @@ function StandaloneLevelsPanel({
 }): ReactElement {
   return (
     <ActionColumn>
-      <div className="settings-panel-content">
+      <ThumbnailSurface levels={levels}><div className="settings-panel-content">
         <section className="settings-section">
           <h3 className="settings-section-title">Levels</h3>
           <div className="settings-section-rows">
@@ -227,7 +276,7 @@ function StandaloneLevelsPanel({
               return (
                 <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} key={level.id}>
                   <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
-                    <LevelThumbnail level={level} width={72} height={48} alt="" />
+                    <GatedLevelThumbnail level={level} width={72} height={48} alt="" />
                   </span>
                   <div className="settings-row-copy">
                     <h4>{level.name}</h4>
@@ -248,7 +297,7 @@ function StandaloneLevelsPanel({
             })}
           </div>
         </section>
-      </div>
+      </div></ThumbnailSurface>
     </ActionColumn>
   );
 }
@@ -266,10 +315,11 @@ function CampaignLevelsPanel({
 }): ReactElement {
   const levelDocs = useCampaigns((state) => state.levels);
   const refs = orderedLevels(campaign);
+  const thumbnailLevels = refs.flatMap((ref) => levelDocs[ref.levelId] ? [levelDocs[ref.levelId]] : []);
 
   return (
     <ActionColumn>
-      <div className="settings-panel-content">
+      <ThumbnailSurface levels={thumbnailLevels}><div className="settings-panel-content">
         <section className="settings-section">
           <h3 className="settings-section-title">{campaign.name} — Levels</h3>
           <div className="settings-section-rows">
@@ -316,7 +366,7 @@ function CampaignLevelsPanel({
                 >
                   <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
                     {level
-                      ? <LevelThumbnail level={level} width={68} height={44} alt="" />
+                      ? <GatedLevelThumbnail level={level} width={68} height={44} alt="" />
                       : <span className="settings-row-thumb-empty" />}
                   </span>
                   <div className="settings-row-copy">
@@ -340,7 +390,7 @@ function CampaignLevelsPanel({
             })}
           </div>
         </section>
-      </div>
+      </div></ThumbnailSurface>
     </ActionColumn>
   );
 }

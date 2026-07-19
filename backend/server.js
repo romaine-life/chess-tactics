@@ -968,6 +968,25 @@ const MIGRATIONS = [
         ON drawable_asset_events (asset_id, created_at DESC, id DESC);
     `,
   },
+  {
+    version: 21,
+    name: 'immutable level thumbnail derivatives',
+    sql: `
+      CREATE TABLE IF NOT EXISTS level_thumbnail_derivatives (
+        authority_key       text        PRIMARY KEY,
+        content_version     text        NOT NULL,
+        blob_sha256         text        NOT NULL REFERENCES media_blobs(sha256) ON DELETE RESTRICT,
+        width               integer     NOT NULL CHECK (width > 0),
+        height              integer     NOT NULL CHECK (height > 0),
+        created_at          timestamptz NOT NULL DEFAULT now(),
+        updated_at          timestamptz NOT NULL DEFAULT now(),
+        CHECK (char_length(authority_key) BETWEEN 1 AND 512),
+        CHECK (char_length(content_version) BETWEEN 1 AND 512)
+      );
+      CREATE INDEX IF NOT EXISTS level_thumbnail_derivatives_blob_idx
+        ON level_thumbnail_derivatives (blob_sha256);
+    `,
+  },
 ];
 
 let pool = null;
@@ -4334,9 +4353,23 @@ app.post('/api/editor-documents/:documentId/save', async (req, res) => {
       }
     }
     const saved = await dbSaveEditorDocument(user.email, input.documentId, revision, level, campaignId);
+    const thumbnailAuthority = current.workspace_kind === 'official'
+      ? `official:${current.workspace_id}:${current.level_id}`
+      : `user:${user.email}:${current.level_id}`;
+    let thumbnailReady = true;
+    try {
+      await ensureLevelThumbnailDerivative(thumbnailAuthority, saved.row.body);
+    } catch (thumbnailError) {
+      // The canonical save has already committed. Never report that durable user
+      // work failed merely because its disposable list derivative could not be
+      // prepared; the read-through route will retry generation on the next read.
+      thumbnailReady = false;
+      console.error('saved level thumbnail preparation failed:', thumbnailError && thumbnailError.message);
+    }
     res.status(200).json({
       document: publicEditorDocument(saved.row),
       workspace_revision: saved.workspaceRevision,
+      thumbnail_ready: thumbnailReady,
     });
   } catch (error) {
     respondEditorDocumentError(res, error, 'save');
@@ -4445,7 +4478,11 @@ app.get('/api/campaign-workspace', async (req, res) => {
   if (!user) return;
   try {
     const row = await dbGetWorkspace(user.email);
-    res.status(200).json(publicCampaignWorkspace(row));
+    const workspace = publicCampaignWorkspace(row);
+    workspace.thumbnail_urls = await storedLevelThumbnailUrls(
+      Object.entries(workspace.levels).map(([levelId, level]) => [`user:${user.email}:${levelId}`, levelId, level]),
+    );
+    res.status(200).json(workspace);
   } catch (error) {
     dbUnavailable(res, 'campaign workspace read failed', error, 'workspace_unavailable');
   }
@@ -5033,8 +5070,13 @@ app.get('/api/official-campaigns/:id', async (req, res) => {
   }
   try {
     const document = await dbGetOfficialCampaigns(id);
+    const portfolio = publicOfficialCampaignsDocument(id, document);
+    const levels = isObjectRecord(portfolio.data?.levels) ? portfolio.data.levels : {};
     res.status(200).json({
-      portfolio: publicOfficialCampaignsDocument(id, document),
+      portfolio,
+      thumbnail_urls: await storedLevelThumbnailUrls(
+        Object.entries(levels).map(([levelId, level]) => [`official:${id}:${levelId}`, levelId, level]),
+      ),
       store_schema_version: OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION,
     });
   } catch (error) {
@@ -5084,9 +5126,19 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
       });
       return;
     }
+    const thumbnailResults = await Promise.allSettled(Object.entries(raw.data.levels).map(([levelId, level]) => (
+      ensureLevelThumbnailDerivative(`official:${id}:${levelId}`, level)
+    )));
+    const thumbnailReady = thumbnailResults.every((thumbnailResult) => thumbnailResult.status === 'fulfilled');
+    for (const thumbnailResult of thumbnailResults) {
+      if (thumbnailResult.status === 'rejected') {
+        console.error('saved official level thumbnail preparation failed:', thumbnailResult.reason && thumbnailResult.reason.message);
+      }
+    }
     res.status(200).json({
       portfolio: publicOfficialCampaignsDocument(id, result.row),
       store_schema_version: OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION,
+      thumbnail_ready: thumbnailReady,
     });
   } catch (error) {
     dbUnavailable(res, 'official campaigns write failed', error, 'official_campaign_store_unavailable');
@@ -9801,6 +9853,149 @@ function thumbnailVersion(boardHash, renderInputs) {
   const drawableCatalogRevision = renderInputs && renderInputs.drawableCatalogRevision ? `dc${renderInputs.drawableCatalogRevision}` : '';
   return [boardHash, propSeatsRevision, unitCatalogRevision, mediaCatalogRevision, drawableCatalogRevision].filter(Boolean).join('-');
 }
+
+async function storedLevelThumbnail(authorityKey) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT authority_key, content_version, blob_sha256, width, height
+       FROM level_thumbnail_derivatives WHERE authority_key = $1`,
+    [authorityKey],
+  );
+  return rows[0] || null;
+}
+
+async function storedLevelThumbnailUrls(authorityEntries) {
+  if (!authorityEntries.length) return {};
+  await ensureDbReady();
+  const keys = authorityEntries.map(([authorityKey]) => authorityKey);
+  const entryByAuthority = new Map(authorityEntries.map(([authorityKey, levelId, level]) => [authorityKey, { levelId, level }]));
+  const revisions = await currentThumbnailRevisions();
+  const { rows } = await pool.query(
+    `SELECT authority_key, content_version, blob_sha256
+       FROM level_thumbnail_derivatives
+      WHERE authority_key = ANY($1::text[])`,
+    [keys],
+  );
+  return Object.fromEntries(rows.flatMap((row) => {
+    const entry = entryByAuthority.get(row.authority_key);
+    if (!entry) return [];
+    const expected = thumbnailVersion(serverRender.boardHashForLevel(entry.level), revisions);
+    return row.content_version === expected ? [[entry.levelId, `/api/media/${row.blob_sha256}`]] : [];
+  }));
+}
+
+async function currentThumbnailRevisions() {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT
+       (SELECT revision FROM prop_seats WHERE id = 'default') AS prop_seats_revision,
+       (SELECT revision FROM unit_catalog_state WHERE singleton = true) AS unit_catalog_revision,
+       (SELECT revision FROM media_catalog_state WHERE singleton = true) AS media_catalog_revision,
+       (SELECT revision FROM drawable_catalog_state WHERE singleton = true) AS drawable_catalog_revision`,
+  );
+  const revisions = rows[0] || {};
+  return {
+    propSeatsRevision: Number(revisions.prop_seats_revision || 0),
+    unitCatalogRevision: Number(revisions.unit_catalog_revision || 0),
+    mediaCatalogRevision: Number(revisions.media_catalog_revision || 0),
+    drawableCatalogRevision: Number(revisions.drawable_catalog_revision || 0),
+  };
+}
+
+async function currentThumbnailContentVersion(level) {
+  if (!serverRender || typeof serverRender.boardHashForLevel !== 'function') {
+    throw new Error('thumbnail board hash unavailable');
+  }
+  return thumbnailVersion(serverRender.boardHashForLevel(level), await currentThumbnailRevisions());
+}
+
+const levelThumbnailDerivativeInFlight = new Map();
+
+async function createLevelThumbnailDerivative(authorityKey, level) {
+  if (!serverRender) throw new Error('thumbnail renderer unavailable');
+  const currentVersion = await currentThumbnailContentVersion(level);
+  const current = await storedLevelThumbnail(authorityKey);
+  if (current && current.content_version === currentVersion) return current;
+  const rendered = await withThumbnailRenderInputs(async (renderInputs) => {
+    const plan = serverRender.levelRenderPlan(level);
+    const contentVersion = thumbnailVersion(plan.contentHash, renderInputs);
+
+    const { renderBoardThumbnail, BOARD_THUMB_W, BOARD_THUMB_H } = require(path.join(bakedBackendDir, 'boardThumbnail'));
+    const png = await renderBoardThumbnail({
+      plan,
+      loadDynamicSprite: (src) => thumbnailDynamicSprite(src, renderInputs.mediaCatalog),
+      mediaCatalogRevision: renderInputs.mediaCatalogRevision,
+      sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
+    });
+    return { png, contentVersion, width: BOARD_THUMB_W, height: BOARD_THUMB_H };
+  });
+  const { png, contentVersion, width, height } = rendered;
+  const sha256 = crypto.createHash('sha256').update(png).digest('hex');
+  const blobKey = liveMediaBlobKey(sha256);
+  await writeLiveMediaBlob(blobKey, png, sha256, 'image/png');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO media_blobs (sha256, blob_key, media_type, byte_length, width, height, published_at)
+       VALUES ($1, $2, 'image/png', $3, $4, $5, now())
+       ON CONFLICT (sha256) DO UPDATE SET published_at = COALESCE(media_blobs.published_at, now())`,
+      [sha256, blobKey, png.length, width, height],
+    );
+    const { rows } = await client.query(
+      `INSERT INTO level_thumbnail_derivatives
+         (authority_key, content_version, blob_sha256, width, height)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (authority_key) DO UPDATE SET
+         content_version = EXCLUDED.content_version,
+         blob_sha256 = EXCLUDED.blob_sha256,
+         width = EXCLUDED.width,
+         height = EXCLUDED.height,
+         updated_at = now()
+       RETURNING authority_key, content_version, blob_sha256, width, height`,
+      [authorityKey, contentVersion, sha256, width, height],
+    );
+    await client.query('COMMIT');
+    return rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function ensureLevelThumbnailDerivative(authorityKey, level) {
+  const existing = levelThumbnailDerivativeInFlight.get(authorityKey);
+  if (existing) {
+    await existing.catch(() => {});
+    return ensureLevelThumbnailDerivative(authorityKey, level);
+  }
+  const pending = createLevelThumbnailDerivative(authorityKey, level);
+  levelThumbnailDerivativeInFlight.set(authorityKey, pending);
+  try {
+    return await pending;
+  } finally {
+    if (levelThumbnailDerivativeInFlight.get(authorityKey) === pending) {
+      levelThumbnailDerivativeInFlight.delete(authorityKey);
+    }
+  }
+}
+
+async function resolveListThumbnailTarget(req, res, id) {
+  if (OFFICIAL_WORKSPACE_ID_PATTERN.test(id)) {
+    const target = await resolveShareTarget({ levelId: id });
+    return target ? { authorityKey: `official:default:${id}`, level: target.level } : null;
+  }
+  if (!/^l\d+$/.test(id)) return null;
+  const user = await requireUser(req, res);
+  if (!user) return false;
+  const row = await dbGetWorkspace(user.email);
+  const level = row?.body?.levels?.[id];
+  return level && typeof level === 'object'
+    ? { authorityKey: `user:${user.email}:${id}`, level }
+    : null;
+}
 function playScreenName(input) {
   if (serverRender && typeof serverRender.playRouteScreenName === 'function') {
     try { return serverRender.playRouteScreenName({ path: '/play', ...input }); } catch { /* fall back below */ }
@@ -9886,10 +10081,27 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
   }
 });
 
+// Runtime list thumbnail. Canonical saves prebuild the same immutable derivative; this
+// read-through generation exists for levels created before migration 21.
+app.get(/^\/assets\/level-list-thumb\/(.+)\.png$/, async (req, res) => {
+  const id = String(req.params[0] || '');
+  try {
+    const target = await resolveListThumbnailTarget(req, res, id);
+    if (target === false) return;
+    if (!target) { res.status(404).send('not found'); return; }
+    const derivative = await ensureLevelThumbnailDerivative(target.authorityKey, target.level);
+    res.setHeader('Cache-Control', 'no-cache');
+    res.redirect(302, `/api/media/${derivative.blob_sha256}`);
+  } catch (error) {
+    console.error('level list thumbnail failed:', error && error.message);
+    res.status(503).json({ error: 'thumbnail_derivative_unavailable' });
+  }
+});
+
 // Stable semantic asset resolution. This is deliberately before every static
 // middleware so an absent DB slot can never fall through to a packaged file.
 // The level-thumbnail route above is the sole dynamic /assets namespace carveout.
-app.get(/^\/assets\/(?!level-thumb\/)(.+)$/, async (req, res) => {
+app.get(/^\/assets\/(?!level-thumb\/|level-list-thumb\/)(.+)$/, async (req, res) => {
   let slot = null;
   try {
     const encoded = req.path.slice('/assets/'.length);
