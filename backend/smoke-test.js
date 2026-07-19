@@ -344,7 +344,14 @@ async function seedSyntheticDrawable({ id, kind, label, sortOrder = 0, behavior,
      VALUES ($1, $2, $3, $4, 'active', $5::jsonb, $6::jsonb, 1, 'smoke-fixture')`,
     [id, kind, label, sortOrder, JSON.stringify(behavior), JSON.stringify(metadata)],
   );
-  for (const [role, slot] of Object.entries(media)) {
+  const usedSlots = new Set();
+  for (const [role, requestedSlot] of Object.entries(media)) {
+    let slot = requestedSlot;
+    if (usedSlots.has(slot)) {
+      slot = `smoke/drawables/${id}/${role}.png`;
+      await seedSyntheticReadinessMedia({ slot, domain: 'smoke-fixture', role, width: 32, height: 32 });
+    }
+    usedSlots.add(slot);
     await queryDb(
       'INSERT INTO drawable_asset_media (asset_id, role, slot) VALUES ($1, $2, $3)',
       [id, role, slot],
