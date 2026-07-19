@@ -1,9 +1,20 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { useSkirmish } from '../game/store';
+import { useSkirmishView } from '../game/skirmishView';
 import { runSkirmishShortcut, SHORTCUT_BINDINGS, skirmishRosterAction, skirmishUnitOwnerLabel } from './SkirmishHud';
 
 afterEach(() => {
   useSkirmish.setState({ selectedId: null, focusedId: null, premoves: [] });
+  useSkirmishView.setState({
+    showMoves: true,
+    showEnemyAttacks: true,
+    showBlocked: false,
+    showEnemyMoves: false,
+    showPlayerAttacks: false,
+    showPlayerMoves: false,
+    showPromotionZones: false,
+    showGrid: false,
+  });
 });
 
 describe('Skirmish HUD shortcuts', () => {
@@ -26,6 +37,50 @@ describe('Skirmish HUD shortcuts', () => {
     expect(useSkirmish.getState().selectedId).toBeNull();
     expect(useSkirmish.getState().focusedId).toBeNull();
     expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'player-piece', x: 2, y: 3 }]);
+  });
+
+  it('offers Clear all as a distinct action that turns off every board overlay only', () => {
+    useSkirmish.setState({
+      selectedId: 'player-piece',
+      focusedId: 'player-piece',
+      premoves: [
+        { pieceId: 'player-piece', x: 2, y: 3 },
+        { pieceId: 'player-piece', x: 3, y: 3 },
+      ],
+    });
+    useSkirmishView.setState({
+      showMoves: true,
+      showEnemyAttacks: true,
+      showBlocked: true,
+      showEnemyMoves: true,
+      showPlayerAttacks: true,
+      showPlayerMoves: true,
+      showPromotionZones: true,
+      showGrid: true,
+    });
+
+    expect(SHORTCUT_BINDINGS.t).toEqual({
+      kind: 'clear-overlays',
+      label: 'Clear all',
+      hint: 'Turn off all board overlays',
+    });
+    expect(runSkirmishShortcut('T')).toBe(true);
+    expect(useSkirmish.getState().premoves).toEqual([
+      { pieceId: 'player-piece', x: 2, y: 3 },
+      { pieceId: 'player-piece', x: 3, y: 3 },
+    ]);
+    expect(useSkirmish.getState().selectedId).toBe('player-piece');
+    expect(useSkirmish.getState().focusedId).toBe('player-piece');
+    expect(useSkirmishView.getState()).toMatchObject({
+      showMoves: false,
+      showEnemyAttacks: false,
+      showBlocked: false,
+      showEnemyMoves: false,
+      showPlayerAttacks: false,
+      showPlayerMoves: false,
+      showPromotionZones: false,
+      showGrid: false,
+    });
   });
 
   it('does not repeatedly execute Deselect all while R is held', () => {
