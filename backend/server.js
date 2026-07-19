@@ -8081,8 +8081,7 @@ function assertTerrainAcceptanceProof(rows, slotById, contract = null) {
     if (
       !isObjectRecord(ownProof) || ownProof.versionId !== row.id || ownProof.sha256 !== row.blob_sha256
       || Number(ownProof.rowRevision) + 1 !== Number(row.row_revision)
-      || (contract?.mode === 'group'
-        && canonicalJson(ownProof.faces) !== canonicalJson(['south', 'east']))
+      || (contract?.mode === 'group' && ownProof.role !== row.role)
     ) throw mediaMutationError('media_review_candidate_snapshot_stale', 409, { slot: row.slot });
     if (contract?.mode === 'group') {
       const canonical = canonicalJson(proof);

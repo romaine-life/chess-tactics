@@ -714,6 +714,8 @@ describe('no-committed-media guard', () => {
     'export function waterSideCanonicalProofBoard() {}',
     "const groupId = 'terrain/water/side-v1';",
     "const TEMPORARY_PREDRAWN_REVIEW_SLOT = 'boards/review/uncommitted/plate.png';",
+    'const abruptExposedEdge = true;',
+    "const exposedFaces = ['south', 'east'];",
     "const top = frameSrc.replace(/\\.png$/, '-top.png');",
   ])('rejects retired tile-side and filename-derived media paths: %s', (source) => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-tile-side-test-'));

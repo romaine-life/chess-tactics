@@ -150,7 +150,7 @@ const RUNTIME_MEDIA_POINTER_SOURCE_PATH = /^(?:backend\/|frontend\/(?:config|src
 const HARDCODED_IMMUTABLE_MEDIA_URL = /\/api\/media\/[0-9a-f]{64}\b/i;
 const RETIRED_CUTOVER_SOURCE_MARKERS = [
   {
-    pattern: /waterSideCanonicalProofBoard|terrain\/water\/side-v1|TEMPORARY_PREDRAWN_REVIEW_SLOT|\.replace\([^\n]{0,160}["'`]-top(?:-anim)?\.png["'`]/,
+    pattern: /waterSideCanonicalProofBoard|terrain\/water\/side-v1|TEMPORARY_PREDRAWN_REVIEW_SLOT|abruptExposedEdge|exposedFaces|\.replace\([^\n]{0,160}["'`]-top(?:-anim)?\.png["'`]/,
     detail: 'retired tile-coupled side proof, fabricated review slot, or filename-derived terrain media remains',
   },
   {
