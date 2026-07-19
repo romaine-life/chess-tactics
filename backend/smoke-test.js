@@ -551,6 +551,35 @@ async function validateEditorMigration16Preservation() {
   }
 }
 
+async function validateThumbnailRepairMigration22() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_thumbnail_migration_22');
+    await client.query('SET LOCAL search_path TO smoke_thumbnail_migration_22');
+    await client.query(`
+      CREATE TABLE media_blobs (sha256 text PRIMARY KEY);
+      CREATE TABLE schema_migrations (version integer PRIMARY KEY);
+      INSERT INTO schema_migrations (version) VALUES (21);
+    `);
+    await client.query(inlineMigrationSql(22));
+    const { rows } = await client.query(
+      "SELECT to_regclass('level_thumbnail_derivatives') AS derivative_table",
+    );
+    if (!rows[0]?.derivative_table) {
+      throw new Error('Migration 22 did not repair a database that recorded migration 21 without the thumbnail table');
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function waitForServer() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
@@ -587,6 +616,7 @@ async function main() {
     throw new Error('Supervisor did not initialize the hot backend entrypoint');
   }
   await validateEditorMigration16Preservation();
+  await validateThumbnailRepairMigration22();
   await resetDb();
 
   const missingPropSeats = await get('/api/prop-seats/default');
