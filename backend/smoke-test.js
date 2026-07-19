@@ -930,7 +930,7 @@ async function main() {
   const nativeCreate = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
     slot: surfaceTopSlots[0],
     domain: 'terrain',
-    role: 'side',
+    role: 'top',
     label: 'Native reviewed smoke asset',
     availabilityPolicy: 'critical',
     nativeEvidence: {
