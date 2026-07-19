@@ -3064,7 +3064,7 @@ async function main() {
     firstNewEditorSaveBody.thumbnail_ready !== true ||
     firstNewEditorSaveBody.document.dirty !== false
   ) {
-    throw new Error(`First Save should promote a new document: ${firstNewEditorSave.statusCode} ${firstNewEditorSave.body}`);
+    throw new Error(`First Save should promote a new document: ${firstNewEditorSave.statusCode} ${firstNewEditorSave.body}\nbackend output:\n${output}`);
   }
   const workspaceWithNewLevel = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
   const workspaceWithNewLevelBody = JSON.parse(workspaceWithNewLevel.body);
