@@ -132,7 +132,12 @@ function ThumbnailSurface({ levels, children }: { levels: readonly Level[]; chil
   return (
     <ThumbnailGateContext.Provider value={{ ready, failed }}>
       <div className={`thumbnail-surface ${complete && !failure ? 'is-ready' : 'is-loading'} ${failure ? 'is-error' : ''}`.trim()}>
-        <div className="thumbnail-surface-content" key={`${signature}:${attempt}`} aria-hidden={complete && !failure ? undefined : true}>
+        <div
+          className="thumbnail-surface-content"
+          key={`${signature}:${attempt}`}
+          aria-hidden={complete && !failure ? undefined : true}
+          inert={!complete || failure ? true : undefined}
+        >
           {children}
         </div>
         {!complete && !failure ? <div className="thumbnail-surface-status" role="status">Preparing levels…</div> : null}

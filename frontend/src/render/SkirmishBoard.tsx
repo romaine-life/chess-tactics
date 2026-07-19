@@ -1387,6 +1387,8 @@ export function SkirmishBoard({
       data-testid="skirmish-board"
       data-interactive={interactive ? 'true' : 'false'}
       data-painted-layers={boardFrame.paintedLayers.join(',')}
+      aria-busy={!boardReady && !boardFrame.error ? true : undefined}
+      inert={!boardReady && !boardFrame.error ? true : undefined}
       className={`skirmish-board-lab ${boardReady ? '' : 'is-board-loading'} ${boardFrame.error ? 'is-board-error' : ''} ${drag ? 'is-dragging' : ''} ${interactive ? '' : 'is-read-only'}`.trim()}
     >
       {boardFrame.error ? (

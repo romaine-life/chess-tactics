@@ -26,4 +26,10 @@ describe('professional loading architecture guards', () => {
   it('does not preload the complete Studio tileset from every Studio route', () => {
     expect(read('./ui/TilePreview.tsx')).not.toMatch(/allStudioAssets\.flatMap[\s\S]{0,300}new Image\(/);
   });
+
+  it('makes incomplete player surfaces inert as well as visually hidden', () => {
+    expect(read('./render/SkirmishBoard.tsx')).toContain('inert={!boardReady && !boardFrame.error ? true : undefined}');
+    expect(read('./ui/PlayMenu.tsx')).toContain('inert={!complete || failure ? true : undefined}');
+    expect(read('./style.css')).not.toContain('A failsafe in the hook');
+  });
 });

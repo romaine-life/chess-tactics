@@ -4422,11 +4422,9 @@ h1 {
   background: transparent;
 }
 
-/* Coordinated board reveal (render/boardArtReady). The board's terrain canvas and sprite
-   images load independently. The board is held hidden until its whole art set has DECODED,
-   then fades in as one unit on the same
-   320ms opacity fade the cold-load menu uses (ui/shell/coldReveal). A failsafe in the hook
-   reveals anyway if an asset stalls, so the board can never hang invisible. */
+/* Coordinated board reveal (render/boardArtReady). The independent terrain, barrier, and
+   scene compositors acknowledge an actual painted frame. Until all three have acknowledged,
+   the complete board stack stays hidden and inert; failures become the explicit retry surface. */
 .skirmish-board-lab {
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }

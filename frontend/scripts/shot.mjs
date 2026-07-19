@@ -10,6 +10,7 @@
 // Usage:
 //   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>]
 //     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold] [--assert-menu-atomic]
+//     [--assert-board-atomic]
 //     [--full] [--show-scrollbars]
 //
 // Examples:
@@ -35,6 +36,7 @@ const timeout = Math.max(1_000, Number(flag('timeout', 30_000)) || 30_000);
 const throttle = flag('throttle');
 const cold = has('cold');
 const assertMenuAtomic = has('assert-menu-atomic');
+const assertBoardAtomic = has('assert-board-atomic');
 const fullPage = has('full');
 const showScrollbars = has('show-scrollbars');
 
@@ -72,6 +74,28 @@ try {
           };
           const count = Number(state.bg) + Number(state.buttons) + Number(state.title);
           if (count > 0 && count < 3) window.__ctMenuAtomicViolations.push(state);
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+  }
+  if (assertBoardAtomic) {
+    await page.evaluateOnNewDocument(() => {
+      window.__ctBoardAtomicViolations = [];
+      window.__ctBoardAtomicSeen = 0;
+      const required = ['terrain', 'barriers', 'scene'];
+      const sample = () => {
+        for (const board of document.querySelectorAll('.skirmish-board-lab')) {
+          window.__ctBoardAtomicSeen += 1;
+          const layers = new Set((board.getAttribute('data-painted-layers') || '').split(',').filter(Boolean));
+          const complete = required.every((layer) => layers.has(layer));
+          const loading = board.classList.contains('is-board-loading');
+          const failed = board.classList.contains('is-board-error');
+          const opacity = Number.parseFloat(getComputedStyle(board).opacity);
+          if (!failed && ((!loading && !complete) || (loading && opacity > 0.001) || (loading && !board.inert))) {
+            window.__ctBoardAtomicViolations.push({ layers: [...layers], loading, failed, opacity, inert: board.inert });
+          }
         }
         requestAnimationFrame(sample);
       };
@@ -117,6 +141,23 @@ try {
       console.error(`menu exposed a partial frame: ${JSON.stringify(violations[0])}`);
       process.exitCode = 4;
       throw new Error('atomic menu assertion failed');
+    }
+  }
+  if (assertBoardAtomic) {
+    const result = await page.evaluate(() => ({
+      violations: window.__ctBoardAtomicViolations || [],
+      seen: window.__ctBoardAtomicSeen || 0,
+    }));
+    if (!result.seen) {
+      console.error('atomic board assertion observed no skirmish board');
+      process.exitCode = 5;
+      throw new Error('atomic board assertion had no target');
+    }
+    const violations = result.violations;
+    if (violations.length) {
+      console.error(`board exposed a partial or interactive frame: ${JSON.stringify(violations[0])}`);
+      process.exitCode = 5;
+      throw new Error('atomic board assertion failed');
     }
   }
 
