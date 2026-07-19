@@ -9808,7 +9808,7 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
       return _thumbCache.getOrCreate(cacheKey, async () => {
         const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
         const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
-        const appUi = renderInputs.drawableCatalog.assets.find((asset) => asset.id === 'app-ui' && asset.kind === 'app-ui');
+        const appUi = renderInputs.drawableCatalog.assets.find((asset) => asset.kind === 'app-ui' && asset.behavior?.roles?.includes('application-ui'));
         const thumbnailFont = renderInputs.drawableCatalog.assets.find((asset) => asset.kind === 'app-font' && asset.behavior?.thumbnail === true);
         const requiredUiMedia = (role) => {
           const src = appUi?.media?.[role]?.media?.immutableUrl;
@@ -9876,7 +9876,7 @@ async function ogTagsFor(req) {
   let title = OG_SITE_NAME;
   let description = OG_DEFAULT_DESC;
   const drawableCatalog = await dbReadDrawableCatalog();
-  const appUi = drawableCatalog.assets.find((asset) => asset.id === 'app-ui' && asset.kind === 'app-ui');
+  const appUi = drawableCatalog.assets.find((asset) => asset.kind === 'app-ui' && asset.behavior?.roles?.includes('application-ui'));
   const defaultOgPath = appUi?.media?.['og-default']?.media?.immutableUrl;
   if (!defaultOgPath) throw new Error('application UI role og-default is unavailable');
   let image = `${origin}${defaultOgPath}`;

@@ -108,3 +108,11 @@ export function requiredDrawableAsset(id: string, kind?: string): DrawableAsset 
   if (!asset || (kind && asset.kind !== kind)) throw failure(`required ${kind ?? 'asset'} ${id} is absent`);
   return asset;
 }
+
+export function requiredDrawableRole(kind: string, role: string): DrawableAsset {
+  const matches = drawableAssets(kind).filter((asset) => (
+    Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes(role)
+  ));
+  if (matches.length !== 1) throw failure(`required ${kind} role ${role} has ${matches.length} installed records`);
+  return matches[0];
+}

@@ -52,13 +52,13 @@ export function assertInstalledPresentationCatalog(): void {
   if (!drawableAssets('terrain-review').length) throw new Error('drawable catalog has no terrain review inventory');
   if (!drawableAssets('terrain-comparison').length) throw new Error('drawable catalog has no terrain comparison inventory');
   if (!drawableAssets('portrait-treatment').length) throw new Error('drawable catalog has no portrait treatment inventory');
-  const appUi = drawableAssets('app-ui').find((asset) => asset.id === 'app-ui');
+  const appUi = drawableAssets('app-ui').find((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('application-ui'));
   const requiredRoles = appUi?.behavior.requiredRoles;
   if (!appUi || !Array.isArray(requiredRoles) || requiredRoles.some((role) => typeof role !== 'string' || !appUi.media[role])) {
     throw new Error('drawable catalog has incomplete application UI media');
   }
   if (!drawableAssets('app-font').length) throw new Error('drawable catalog has no application font inventory');
-  const chrome = drawableAssets('chrome-family').find((asset) => asset.id === 'installed-chrome');
+  const chrome = drawableAssets('chrome-family').find((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('installed-chrome'));
   if (!chrome || ['outer-atom', 'outer-rail', 'inner-atom', 'inner-rail', 'divider-joint'].some((role) => !chrome.media[role])) {
     throw new Error('drawable catalog has incomplete installed Chrome');
   }
@@ -70,5 +70,9 @@ export function assertInstalledPresentationCatalog(): void {
       throw new Error(`drawable catalog has no nine-slice role ${role}`);
     }
   }
-  if (!drawableAssets('ui-scrollbar').length) throw new Error('drawable catalog has no UI scrollbar inventory');
+  const scrollbars = drawableAssets('ui-scrollbar');
+  if (!scrollbars.length) throw new Error('drawable catalog has no UI scrollbar inventory');
+  if (!scrollbars.some((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('installed-scrollbar'))) {
+    throw new Error('drawable catalog has no installed UI scrollbar');
+  }
 }

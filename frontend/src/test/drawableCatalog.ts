@@ -212,7 +212,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
   ];
   const appUiSpecs: DrawableCatalog['assets'] = [{
     id: 'app-ui', kind: 'app-ui', label: 'Test application UI', sortOrder: 0,
-    lifecycleState: 'active', behavior: { requiredRoles: appUiRoles }, metadata: {}, rowRevision: 1,
+    lifecycleState: 'active', behavior: { roles: ['application-ui'], requiredRoles: appUiRoles }, metadata: {}, rowRevision: 1,
     media: Object.fromEntries(appUiRoles.map((role) => [role, descriptor(`test/app-ui/${role}.png`)])),
   }, {
     id: 'test-app-font', kind: 'app-font', label: 'Test application font', sortOrder: 0,
@@ -220,7 +220,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     metadata: {}, rowRevision: 1, media: { font: descriptor('test/app-font/font.woff2') },
   }, {
     id: 'installed-chrome', kind: 'chrome-family', label: 'Test installed Chrome', sortOrder: 0,
-    lifecycleState: 'active', behavior: {
+    lifecycleState: 'active', behavior: { roles: ['installed-chrome'],
       outer: { atomSourceId: 'test/chrome/outer-atom.png', railSourceId: 'test/chrome/outer-rail.png', atomTurns: 0, atomSize: 41, railThickness: 24, atomX: -2, atomY: -2, atomLeftX: 0, atomRightX: 0, atomTopY: 0, atomBottomY: 0, railUnderlap: 14, railFit: 'stretch', fillMode: 'surface', fillTintId: 'blue', fillSurfaceId: 'baseline-stone-blue', fillSurfaceScale: 768, fillBoxLeft: 2, fillBoxRight: 2, fillBoxTop: 0, fillBoxBottom: 0, contentPadding: 31, fillAlpha: 0, atomAlignMode: 'manual', atomAnchorX: 18, atomAnchorY: 18, atomCoverX: 18, atomCoverY: 18, atomPreviewMode: 'live', titleTextX: -7, titleTextY: 12, titleFontSize: 26, titleVerticalAlign: 'center', titleHorizontalAlign: 'content-inset' },
       inner: { atomSourceId: 'test/chrome/inner-atom.png', railSourceId: 'test/chrome/inner-rail.png', atomTurns: 1, atomSize: 11, railThickness: 7, atomX: -3, atomY: -8, atomLeftX: -5, atomRightX: -4, atomTopY: 0, atomBottomY: 0, railUnderlap: 8, railFit: 'tile', fillMode: 'tint', fillTintId: 'night', fillSurfaceId: 'hybrid-stone-blue', fillSurfaceScale: 384, fillBoxLeft: 0, fillBoxRight: 0, fillBoxTop: 0, fillBoxBottom: 0, contentPadding: 0, fillAlpha: 0.82, atomAlignMode: 'manual', atomAnchorX: 6, atomAnchorY: 6, atomCoverX: 6, atomCoverY: 6, atomPreviewMode: 'live' },
       dividers: {
@@ -258,7 +258,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     ['oak-raw', 'Oak Raw', 'texture'],
   ].map(([id, label, previewKind], sortOrder) => ({
     id, kind: 'ui-scrollbar', label, sortOrder, lifecycleState: 'active' as const,
-    behavior: { previewKind }, metadata: {}, rowRevision: 1,
+    behavior: { previewKind, roles: id === 'oak-pixellab' ? ['installed-scrollbar'] : [] }, metadata: {}, rowRevision: 1,
     media: { preview: descriptor(`test/ui-scrollbars/${id}.png`, 24, 72) },
   }));
   const surfaceSpecs = [

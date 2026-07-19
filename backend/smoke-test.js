@@ -1880,7 +1880,7 @@ async function main() {
   ];
   await seedSyntheticDrawable({
     id: 'app-ui', kind: 'app-ui', label: 'Synthetic application UI',
-    behavior: { requiredRoles: appUiRoles },
+    behavior: { roles: ['application-ui'], requiredRoles: appUiRoles },
     media: Object.fromEntries(appUiRoles.map((role) => [role, sharedPresentationSlot])),
   });
   await seedSyntheticDrawable({
@@ -1890,7 +1890,7 @@ async function main() {
   });
   await seedSyntheticDrawable({
     id: 'test-ui-scrollbar', kind: 'ui-scrollbar', label: 'Synthetic UI scrollbar',
-    behavior: { previewKind: 'sprite' }, media: { preview: sharedPresentationSlot },
+    behavior: { previewKind: 'sprite', roles: ['installed-scrollbar'] }, media: { preview: sharedPresentationSlot },
   });
   const wallArtBatchRollback = await request(
     'PUT', '/api/admin/drawable-assets', adminJson,
@@ -1931,7 +1931,7 @@ async function main() {
   }
   await seedSyntheticDrawable({
     id: 'installed-chrome', kind: 'chrome-family', label: 'Synthetic installed Chrome',
-    behavior: {
+    behavior: { roles: ['installed-chrome'],
       outer: { atomSourceId: 'ui/chrome/outer/atom.png', railSourceId: 'ui/chrome/outer/rail.png', atomTurns: 0, atomSize: 41, railThickness: 24, atomX: 0, atomY: 0, atomLeftX: 0, atomRightX: 0, atomTopY: 0, atomBottomY: 0, railUnderlap: 14, railFit: 'stretch', fillMode: 'surface', fillTintId: 'blue', fillSurfaceId: 'baseline-stone-blue', fillSurfaceScale: 768, fillBoxLeft: 0, fillBoxRight: 0, fillBoxTop: 0, fillBoxBottom: 0, contentPadding: 31, fillAlpha: 0 },
       inner: { atomSourceId: 'ui/chrome/inner/atom.png', railSourceId: 'ui/chrome/inner/rail.png', atomTurns: 1, atomSize: 11, railThickness: 7, atomX: 0, atomY: 0, atomLeftX: 0, atomRightX: 0, atomTopY: 0, atomBottomY: 0, railUnderlap: 8, railFit: 'tile', fillMode: 'tint', fillTintId: 'night', fillSurfaceId: 'hybrid-stone-blue', fillSurfaceScale: 384, fillBoxLeft: 0, fillBoxRight: 0, fillBoxTop: 0, fillBoxBottom: 0, contentPadding: 0, fillAlpha: 0.82 },
       dividers: {

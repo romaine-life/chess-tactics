@@ -10,7 +10,7 @@ import {
   chromeUnitScopedSelectors,
   chromeUnitSelectors,
 } from './chromeUnitRegistry';
-import { requiredDrawableAsset } from '@chess-tactics/board-render';
+import { requiredDrawableRole } from '@chess-tactics/board-render';
 import { SURFACE_ASSETS } from './surfaceCatalog';
 
 export type RailFit = 'stretch' | 'tile';
@@ -221,7 +221,7 @@ type InstalledChromeDefaults = {
 };
 
 function installedChromeDefaults(): InstalledChromeDefaults {
-  const behavior = requiredDrawableAsset('installed-chrome', 'chrome-family').behavior;
+  const behavior = requiredDrawableRole('chrome-family', 'installed-chrome').behavior;
   if (!behavior.outer || !behavior.inner || !behavior.dividers) throw new Error('installed Chrome geometry is unavailable');
   return behavior as unknown as InstalledChromeDefaults;
 }

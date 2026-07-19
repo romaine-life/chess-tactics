@@ -11,7 +11,7 @@ import {
 } from './chromeCandidateSources';
 import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import { installedUiMedia } from './installedUiMedia';
-import { requiredDrawableAsset } from '@chess-tactics/board-render';
+import { requiredDrawableRole } from '@chess-tactics/board-render';
 import { saveDrawableAsset } from '../net/drawableCatalogAdmin';
 import {
   ChromeUnitAuditViewer,
@@ -383,7 +383,7 @@ function saveChromeLabState(targetId: string, state: ChromeLabTuneState): void {
 }
 
 async function saveChromeLabDefaults(payload: { target: string; outer: RoleTune; inner: RoleTune; dividers: DividerTunes }): Promise<string> {
-  const installed = requiredDrawableAsset('installed-chrome', 'chrome-family');
+  const installed = requiredDrawableRole('chrome-family', 'installed-chrome');
   await saveDrawableAsset({
     id: installed.id,
     kind: installed.kind,
@@ -395,7 +395,7 @@ async function saveChromeLabDefaults(payload: { target: string; outer: RoleTune;
     media: Object.fromEntries(Object.entries(installed.media).map(([role, binding]) => [role, binding.slot])),
     expectedRevision: installed.rowRevision,
   });
-  return 'database drawable installed-chrome';
+  return 'database installed Chrome role';
 }
 
 

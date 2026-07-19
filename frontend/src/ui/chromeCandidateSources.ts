@@ -1,4 +1,4 @@
-import { requiredDrawableAsset } from '@chess-tactics/board-render';
+import { requiredDrawableRole } from '@chess-tactics/board-render';
 import type {
   AdminLiveMediaCatalog,
   AdminLiveMediaVersion,
@@ -9,7 +9,7 @@ export type ChromeCandidateRole = ChromeRole | 'divider';
 export type ChromeCandidateKind = 'atom' | 'rail-repeat' | 'rail-long' | 'rail-sheet';
 export type ImageSize = { w: number; h: number };
 
-const installedChrome = () => requiredDrawableAsset('installed-chrome', 'chrome-family');
+const installedChrome = () => requiredDrawableRole('chrome-family', 'installed-chrome');
 const installedChromeSlot = (role: string): string => {
   const slot = installedChrome().media[role]?.slot;
   if (!slot) throw new Error(`installed Chrome role ${role} is unavailable`);

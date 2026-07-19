@@ -1,6 +1,6 @@
-import { drawableAssets, requiredDrawableAsset } from '@chess-tactics/board-render';
+import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
 
-const installed = () => requiredDrawableAsset('app-ui', 'app-ui');
+const installed = () => requiredDrawableRole('app-ui', 'application-ui');
 
 export function installedUiMedia(role: string): string {
   const media = installed().media[role]?.media;
@@ -21,6 +21,9 @@ export function installUiMediaCssVariables(): void {
   for (const [role, binding] of Object.entries(installed().media)) {
     style.setProperty(`--media-${role}`, `url("${binding.media.immutableUrl}")`);
   }
+  const scrollbar = requiredDrawableRole('ui-scrollbar', 'installed-scrollbar').media.preview?.media.immutableUrl;
+  if (!scrollbar) throw new Error('installed UI scrollbar media is unavailable');
+  style.setProperty('--media-ui-scrollbar-installed', `url("${scrollbar}")`);
 }
 
 /** Font faces are installed records too: Postgres owns both their descriptors

@@ -255,7 +255,7 @@ if (!/function\s+defaultRailFitForSource/.test(chromeRuntime)
   || !/export\s+function\s+dividerJointSources/.test(chromeRuntime)) {
   failures.push('Chrome runtime must preserve generic rail-fit and divider composition behavior');
 }
-if (!/requiredDrawableAsset\('installed-chrome', 'chrome-family'\)/.test(chromeRuntime)
+if (!/requiredDrawableRole\('chrome-family', 'installed-chrome'\)/.test(chromeRuntime)
   || !/saveDrawableAsset/.test(chromeLab)
   || /__chrome-lab\/defaults|chrome-lab-defaults\.json/.test(chromeRuntime + chromeLab)) {
   failures.push('Chrome Lab installed tuning must load and save through the database drawable record');
