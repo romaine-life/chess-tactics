@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { TERRAIN_SIDE_FACES, drawableAsset, drawableAssets, resolveTerrainSideExposure } from '@chess-tactics/board-render';
+import { drawableAsset, drawableAssets } from '@chess-tactics/board-render';
 import { tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
@@ -23,16 +23,12 @@ import {
   surfaceReviewBatch,
   surfaceReviewProofEvidence,
   surfaceSlotPrefix,
-  waterSideCanonicalProofBoard,
 } from './surfaceLiveMediaReview';
 
-// Inspector for the production surface-swap BOARD tileset (Blender edge + flat PixelLab top;
-// scripts/build-surface-tiles.py, ADR-0039/0040) as an embedded Studio Viewer kind (ADR-0058).
-// NOTE: distinct from the `surface` viewer kind, which is UI background-panel textures — these
-// are the iso board tiles under /assets/tiles/surface/. Board/grid in `.al-lab-main`, every
-// control in the one `.tileset-view-controls` panel, reached from the Tileset Surfaces catalog.
-// Runtime pixels stay backend-owned: this surface previews authenticated
-// candidates and records review/acceptance through ADR-0085 transactions.
+// Inspector for database-owned horizontal terrain surfaces. Subterrain is reviewed and
+// installed through its own drawable domain; this surface never mounts vertical material.
+// The embedded Studio viewer previews authenticated candidate bytes and records review and
+// acceptance through the live-media backend.
 
 export const SURFACE_TILE_FAMILIES: readonly string[] = new Proxy([] as string[], {
   get: (_target, property) => { const values = Object.keys(tileFamilies); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; },
@@ -73,7 +69,6 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
   const [crisp, setCrisp] = useState(true);
   // Story features are PARKED (ADR-0041) — default OFF so the board shows the continuity mural.
   const [story, setStory] = useState(false);
-  const [canonicalProof, setCanonicalProof] = useState(true);
   const [adminCatalog, setAdminCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [adminState, setAdminState] = useState<'loading' | 'ready' | 'unauthorized' | 'error'>('loading');
   const [adminError, setAdminError] = useState<string | null>(null);
@@ -185,9 +180,7 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
   const COLS = 11;
   const ROWS = 9;
   const board = useMemo(
-    () => canonicalProof && fam === 'water'
-      ? waterSideCanonicalProofBoard(tileFamilies.water)
-      : solveSocketBoard({
+    () => solveSocketBoard({
       assets: tileAssets as readonly TileAsset[],
       terrainMap: Array.from({ length: COLS * ROWS }, () => fam),
       seed,
@@ -195,7 +188,7 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
       rows: ROWS,
       familyAssets: tileFamilies,
     }),
-    [canonicalProof, fam, seed, story],
+    [fam, seed, story],
   );
   const mountedStableSlots = useMemo(() => {
     const occupied = new Set(board.cells.filter((cell) => cell.asset).map((cell) => `${cell.x}-${cell.y}`));
@@ -253,7 +246,8 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
   }, [previewKey, reviewBatch.versions]);
 
   const candidateBytesReady = previewState.key === previewKey && previewState.status === 'ready';
-  const proofMounted = view === 'board' && canonicalProof && unmountedSelectedSlots.length === 0 && candidateBytesReady;
+  const proofScaleLocked = reviewBatch.versions.length > 0;
+  const proofMounted = view === 'board' && proofScaleLocked && unmountedSelectedSlots.length === 0 && candidateBytesReady;
 
   const selectCandidate = (slot: string, id: string): void => {
     setSelectedVersionBySlot((current) => {
@@ -347,9 +341,7 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
     }
   };
 
-  const effectiveZoom = canonicalProof ? 1 : zoom;
-  // Translation preserves native 1x pixels and remains available so both long
-  // proof edges can be inspected in a narrow Studio pane. Only zoom is locked.
+  const effectiveZoom = proofScaleLocked ? 1 : zoom;
   const effectivePan = pan;
 
   return (
@@ -358,33 +350,15 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
       <section className={`al-lab-main ${view === 'board' ? 'stl-board-main' : ''}`.trim()} aria-label="Surface tileset preview">
         {view === 'board' ? (
           <ViewPane kind="board" ariaLabel="Surface tileset viewport" zoom={effectiveZoom} pan={effectivePan} minZoom={0.5} maxZoom={3}
-            onZoomChange={canonicalProof ? () => {} : setZoom} onPanChange={setPan}>
+            onZoomChange={proofScaleLocked ? () => {} : setZoom} onPanChange={setPan}>
             <BoardLabBoard
               board={board}
               assetFrameSrc={(a) => a.src}
               terrainSrcOverride={(stableSrc) => selectedOverrides.get(stableSrc)}
               boardZoom={effectiveZoom}
               boardPan={effectivePan}
-              className={`stl-board-surface ${crisp ? 'is-crisp' : ''} ${canonicalProof ? 'is-canonical-proof' : ''}`}
-              ariaLabel={canonicalProof && fam === 'water'
-                ? 'Canonical one-times Water side candidate proof with all eight variants on both exposed faces'
-                : 'Surface tileset board preview'}
-              renderCellOverlay={canonicalProof && fam === 'water'
-                ? ({ cell }) => {
-                  const labels = [
-                    ...(cell.y === 7 ? [`S${cell.x + 1}`] : []),
-                    ...(cell.x === 7 ? [`E${cell.y + 1}`] : []),
-                  ];
-                  return labels.length ? (
-                    <span
-                      className="stl-proof-index"
-                      aria-label={`Water side ${labels.join(' and ')} candidate proof`}
-                    >
-                      {labels.join(' · ')}
-                    </span>
-                  ) : null;
-                }
-                : undefined}
+              className={`stl-board-surface ${crisp ? 'is-crisp' : ''}`}
+              ariaLabel="Surface tileset board preview"
             />
           </ViewPane>
         ) : (
@@ -412,19 +386,14 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
             {view === 'board' ? (
               <>
                 <label className="tileset-catalog-zoom">
-                  <span>Zoom{canonicalProof ? ' · canonical 1×' : ''}</span>
-                  <input type="range" min={0.5} max={3} step={0.05} value={effectiveZoom} disabled={canonicalProof} onChange={(e) => setZoom(Number(e.target.value))} />
+                  <span>Zoom{proofScaleLocked ? ' · canonical 1×' : ''}</span>
+                  <input type="range" min={0.5} max={3} step={0.05} value={effectiveZoom} disabled={proofScaleLocked} onChange={(e) => setZoom(Number(e.target.value))} />
                 </label>
                 <div className="stl-toggles">
-                  <button type="button" className={`stl-toggle ${canonicalProof ? 'is-on' : ''}`} onClick={() => setCanonicalProof((value) => !value)}
-                    title="Lock asset-local scale to 1 and use the deterministic acceptance board">Canonical 1×</button>
-                  <button type="button" className="stl-toggle" disabled={canonicalProof} onClick={() => setSeed((s) => (s % 9999) + 1)} title="Re-roll the board tiles">↻ Re-roll</button>
+                  <button type="button" className="stl-toggle" onClick={() => setSeed((s) => (s % 9999) + 1)} title="Re-roll the board tiles">↻ Re-roll</button>
                   <button type="button" className={`stl-toggle ${crisp ? 'is-on' : ''}`} onClick={() => setCrisp((v) => !v)} title="Nearest-neighbour (pixelated) vs smooth">Crisp</button>
-                  <button type="button" disabled={canonicalProof} className={`stl-toggle ${story ? 'is-on' : ''}`} onClick={() => setStory((v) => !v)} title="Parked story edge-features (ADR-0041)">Story</button>
+                  <button type="button" className={`stl-toggle ${story ? 'is-on' : ''}`} onClick={() => setStory((v) => !v)} title="Parked story edge-features (ADR-0041)">Story</button>
                 </div>
-                {canonicalProof && fam === 'water' ? (
-                  <p className="stl-note stl-proof-note">South and east are fixed at native 1×: Water side slots 0–7 appear exactly once per face, in order.</p>
-                ) : null}
               </>
             ) : (
               <p className="stl-note">Each card pairs a baked production tile with the flat top-down surface it was projected from.</p>

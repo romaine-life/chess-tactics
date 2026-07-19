@@ -62,14 +62,11 @@ interface TerrainBounds {
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
 const expandedTopCache = new Map<string, HTMLCanvasElement | null>();
 
-function splitTopSrc(src: string): string {
-  return src.replace(/\.png$/, '-top.png');
-}
-
-
-export function terrainTopSrc(src: string, animFrames = 0): string {
-  if (src.startsWith('/api/media/')) return src;
-  return animFrames > 1 ? src.replace(/\.png$/, '-top-anim.png') : splitTopSrc(src);
+export function terrainTopSrc(src: string, _animFrames = 0): string {
+  if (!/^\/api\/media\/[0-9a-f]{64}$/.test(src)) {
+    throw new Error(`Terrain top must be a database-resolved immutable descriptor: ${src}`);
+  }
+  return src;
 }
 
 

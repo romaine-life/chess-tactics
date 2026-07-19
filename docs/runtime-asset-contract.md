@@ -122,7 +122,7 @@ exact-byte review instrument exist:
 | Projection | Runtime authority | Candidate ingress | Review and promotion |
 | --- | --- | --- | --- |
 | Board Unit Art | Unit Art Postgres catalog + private Blob | Unit Art APIs | Complete; atomic family acceptance after palette, direction, geometry, and native-pixel checks |
-| Water side faces | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; all eight faces are reviewed on the canonical board and accepted atomically |
+| Terrain surface tops | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; database-declared groups are reviewed on the canonical board and accepted atomically |
 | Other terrain and generic media domains | Shared live-media catalog + private Blob | Shared single/batch APIs | Deliberately blocked until that projection has a typed completeness validator, domain-owned exact-byte review instrument, backend proof validation, and atomic acceptance/rollback tests |
 | BGM | Backend-listed private Blob container | Blob administration | Existing range-streaming projection; intentionally not the generic candidate lifecycle |
 

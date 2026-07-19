@@ -21,18 +21,8 @@ export interface TileAsset extends TileSocketAsset {
   method?: string;
 }
 
-// PRODUCTION TILESET — surface-swap tiles. Each tile is a Blender-derived iso EDGE
-// (the codexfilter pixelation, perfect grid geometry) with a separately-generated
-// flat top-down PixelLab surface projected into the exact top diamond, then the side
-// faces palette-tied to a darker tone of that tile's own top so top↔side reads as one
-// material (the approved seam treatment). This sidesteps PixelLab's unreliable iso-top
-// drawing: Blender owns the geometry, PixelLab only paints a flat material.
-// On the BOARD these render as two layers — top over side (ADR-0039); split-tiles.py derives
-// the -top/-side halves, and `src` here is the combined sprite (the split source + the
-// catalog/inspector image).
-// Built by frontend/scripts/build-surface-tiles.py. Eight variants per family. The raw
-// PixelLab blocks, textured Blender tiles, and the rejected conversion methods are
-// non-production — see frontend/src/art/nonProductionTiles.ts.
+// Production terrain surfaces are database-owned horizontal walkable tops. Vertical
+// Subterrain is an independent, opt-in drawable and is never inferred from these rows.
 let cachedSurfaceCatalog: DrawableCatalog | null = null;
 let cachedSurfaceAssets: TileAsset[] = [];
 let cachedTileFamilies: Record<TileFamilyId, readonly TileAsset[]> = {};
@@ -92,10 +82,7 @@ export const tileFamilies: Record<TileFamilyId, readonly TileAsset[]> = new Prox
 
 export const tileFrameSrc = (asset: TileAsset): string => asset.src;
 
-// The TOP half of a surface tile — the flat diamond alone, no iso side. `src` is the tall
-// 96x180 iso block (art only in the upper diamond), so it shrinks to nothing in a small
-// preview box; the `-top` sibling (every split tile has one) fills a square chip and lets a
-// brush/palette preview FOCUS on the surface itself. Mirrors featureThumbSrc's intent.
+// The database-resolved top descriptor is also the palette preview source.
 export const tileTopSrc = (asset: TileAsset): string => asset.src;
 
 const materialDrawable = (kind: string, material: string) => {

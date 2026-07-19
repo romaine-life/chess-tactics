@@ -1084,7 +1084,9 @@ function StudioEditableBoard({
     cols,
     rows,
     cells: { ...placed, ...decorativeCells },
-    surface: predrawnPlate?.surface,
+    surface: predrawnPlate?.surface && 'slot' in predrawnPlate.surface
+      ? predrawnPlate.surface as PredrawnBoardSurface
+      : undefined,
     macroTiles: [...placedMacroTiles],
     units: placedUnits,
     doodads: placedDoodads,
@@ -6419,7 +6421,7 @@ export function LevelEditor(): ReactElement {
                   ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
                   : macroTileBrushAsset
                   ? <img className="le-thumb-macro" src={macroTileBrushAsset.src} alt="" draggable={false} />
-                  : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
+                  : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} />}
               </span>
             </span>
             <span className="le-brush-meta">

@@ -84,6 +84,10 @@ export function assertInstalledPresentationCatalog(): void {
   if (!drawableAssets('studio-page').length || drawableAssets('studio-page').some((asset) => !asset.media.thumbnail)) {
     throw new Error('drawable catalog has incomplete Studio page inventory');
   }
+  const chromeLabPages = drawableAssets('studio-page').filter((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('chrome-lab-page'));
+  if (chromeLabPages.length !== 1 || typeof chromeLabPages[0].behavior.chromeLabRoute !== 'string') {
+    throw new Error('drawable catalog must have one Chrome Lab page');
+  }
   const menuModes = drawableAssets('menu-mode');
   if (!menuModes.length || menuModes.some((asset) => !asset.media.icon)
     || menuModes.filter((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('settings')).length !== 1) {

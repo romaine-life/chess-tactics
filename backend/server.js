@@ -6843,9 +6843,6 @@ const VISUAL_MEDIA_DOMAINS = new Set([
   'background', 'portrait', 'prop', 'review-media', 'social-card', 'sprite-atlas',
   'terrain', 'ui-kit', 'unit-art', 'wall-decor',
 ]);
-const WATER_SIDE_REQUIRED_SLOTS = Object.freeze(
-  Array.from({ length: 8 }, (_, index) => `tiles/surface/water-${index}-side.png`),
-);
 const GROUND_COVER_SLOT_PATTERN = /^groundcover\/(grass|water|sand)\/v(0|[1-9][0-9]*)\.png$/;
 const GROUND_COVER_RUNTIME_KEYS = Object.freeze([
   'terrain', 'id', 'frameWidth', 'frameHeight', 'frameCount', 'baseX', 'baseY', 'contentWidth',
@@ -7055,31 +7052,23 @@ function mediaDomainProjectionIssue(row) {
     return 'ground-cover candidates remain bridge-only until their game-owned exact-byte review instrument exists';
   }
 
-  const suffixRole = row.slot?.endsWith('-top-anim.png') ? 'animation'
-    : row.slot?.endsWith('-top.png') ? 'top'
-      : row.slot?.endsWith('-side.png') ? 'side' : null;
-  if (suffixRole && row.role !== suffixRole) return `terrain slot suffix requires role ${suffixRole}`;
-  if (['top', 'side', 'animation'].includes(row.role) && !suffixRole) {
-    return `terrain ${row.role} role requires a matching semantic slot suffix`;
-  }
-  if (!WATER_SIDE_REQUIRED_SLOTS.includes(row.slot)) {
-    return 'terrain acceptance is currently registered only for the atomic Water side projection';
-  }
-  if (suffixRole && row.media_type !== 'image/png') return 'projected terrain faces require image/png';
-  if (suffixRole === 'top' || suffixRole === 'side') {
+  const terrainRole = ['top', 'side', 'animation'].includes(row.role) ? row.role : null;
+  if (!terrainRole) return `terrain role ${row.role} has no typed runtime projection`;
+  if (row.media_type !== 'image/png') return 'projected terrain surfaces require image/png';
+  if (terrainRole === 'top' || terrainRole === 'side') {
     if (Number(row.width) !== 96 || Number(row.height) !== 180) return 'terrain top/side frames must be native 96x180';
   }
-  if (suffixRole === 'animation') {
+  if (terrainRole === 'animation') {
     if (Number(row.height) !== 180 || Number(row.width) < 96 || Number(row.width) % 96 !== 0) {
       return 'terrain animation sheets must contain horizontal 96x180 frames';
     }
   }
-  if (runtime.value.face !== undefined && runtime.value.face !== suffixRole) return 'terrain runtime face must match the slot role';
+  if (runtime.value.face !== undefined && runtime.value.face !== terrainRole) return 'terrain runtime face must match the slot role';
   if (runtime.value.projection !== undefined && runtime.value.projection !== 'iso-96x180-v1') {
     return 'terrain runtime projection does not match the canonical board projection';
   }
-  const expectedFrameCount = suffixRole === 'animation' ? Number(row.width) / 96 : suffixRole ? 1 : null;
-  if (runtime.value.frameWidth !== undefined && runtime.value.frameWidth !== (suffixRole ? 96 : Number(row.width))) {
+  const expectedFrameCount = terrainRole === 'animation' ? Number(row.width) / 96 : 1;
+  if (runtime.value.frameWidth !== undefined && runtime.value.frameWidth !== 96) {
     return 'terrain runtime frameWidth does not match uploaded geometry';
   }
   if (runtime.value.frameHeight !== undefined && runtime.value.frameHeight !== Number(row.height)) {
@@ -7871,7 +7860,6 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
   ) throw mediaMutationError('invalid_media_review_proof', 409, 'canonical terrain proof fields are incomplete');
 
   const contract = mediaAcceptanceContract(current);
-  assertRequiredMediaAcceptanceContract(current, contract);
   const requiredSlots = contract.mode === 'group' ? contract.requiredSlots : [current.slot];
   const selected = evidence.selectedCandidates.filter(isObjectRecord);
   const selectedBySlot = new Map(selected.map((item) => [item.slot, item]));
@@ -7881,13 +7869,10 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     if (
       selected.length !== requiredSlots.length || selectedBySlot.size !== requiredSlots.length
       || snapshots.length !== requiredSlots.length || snapshotBySlot.size !== requiredSlots.length
-      || evidence.abruptExposedEdge !== true
-      || canonicalJson(evidence.exposedFaces) !== canonicalJson(['south', 'east'])
-      || requiredSlots.some((slot) => (
-        canonicalJson(selectedBySlot.get(slot)?.faces) !== canonicalJson(['south', 'east'])
-      ))
+      || evidence.surfaceOnly !== true
+      || requiredSlots.some((slot) => selectedBySlot.get(slot)?.role !== 'top')
       || !Array.isArray(evidence.acceptanceGroups)
-    ) throw mediaMutationError('invalid_media_review_proof', 409, 'group terrain proof must cover every required face exactly once');
+    ) throw mediaMutationError('invalid_media_review_proof', 409, 'group terrain proof must cover every required surface exactly once');
     const group = evidence.acceptanceGroups.find((item) => (
       isObjectRecord(item) && item.groupId === contract.groupId
       && canonicalJson(item.requiredSlots) === canonicalJson(requiredSlots)
@@ -8056,29 +8041,6 @@ function mediaAcceptanceContract(row) {
     throw mediaMutationError('media_slot_acceptance_contract_invalid', 409, { slot: row.slot });
   }
   return { mode: 'group', groupId, requiredSlots };
-}
-
-function requiredMediaAcceptanceContract(row) {
-  if (!WATER_SIDE_REQUIRED_SLOTS.includes(row.slot)) return null;
-  return {
-    mode: 'group',
-    groupId: 'terrain/water/side-v1',
-    requiredSlots: [...WATER_SIDE_REQUIRED_SLOTS],
-  };
-}
-
-function assertRequiredMediaAcceptanceContract(row, actual) {
-  const required = requiredMediaAcceptanceContract(row);
-  if (!required) return;
-  if (
-    actual.mode !== required.mode || actual.groupId !== required.groupId
-    || canonicalJson(actual.requiredSlots) !== canonicalJson(required.requiredSlots)
-  ) {
-    throw mediaMutationError('media_required_group_contract_missing', 409, {
-      slot: row.slot,
-      required,
-    });
-  }
 }
 
 function assertPredrawnBoardAcceptanceProof(row, slot) {
@@ -8288,7 +8250,6 @@ async function acceptMediaVersionBatch(items, actorEmail) {
     const grouped = new Map();
     for (const row of rows) {
       const contract = mediaAcceptanceContract(row);
-      assertRequiredMediaAcceptanceContract(row, contract);
       if (contract.mode !== 'group') continue;
       if (!grouped.has(contract.groupId)) grouped.set(contract.groupId, { required: contract.requiredSlots, rows: [] });
       const group = grouped.get(contract.groupId);

@@ -711,6 +711,29 @@ describe('no-committed-media guard', () => {
   });
 
   it.each([
+    'export function waterSideCanonicalProofBoard() {}',
+    "const groupId = 'terrain/water/side-v1';",
+    "const TEMPORARY_PREDRAWN_REVIEW_SLOT = 'boards/review/uncommitted/plate.png';",
+    "const top = frameSrc.replace(/\\.png$/, '-top.png');",
+  ])('rejects retired tile-side and filename-derived media paths: %s', (source) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-tile-side-test-'));
+    const relativePath = 'frontend/src/render/renamedTerrainPath.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${source}\n`, 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'retired tile-coupled side proof, fabricated review slot, or filename-derived terrain media remains',
+        }),
+      ]));
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
     'const SAMPLE_GAINS = { grass: 0.5 };',
     "const TERRAIN_SAMPLE = { grass: 'grass' };",
     "export const ARRIVAL_BAKED = { sample: 'arrival' };",

@@ -266,8 +266,8 @@ if (!/titleVerticalAlign/.test(chromeLab)
   || !/--le-panel-title-align-extra-x/.test(chromeRuntime + css)) {
   failures.push('Chrome Lab must expose title text alignment modes for vertical centering and contents-box horizontal alignment');
 }
-if (!/route:\s*'\/editor\/level\?chromeLab=1'/.test(chromeLab)) {
-  failures.push('Chrome Lab must load the level editor in preview mode so installed defaults do not fight live tuning CSS');
+if (!/drawableAssets\(['"]studio-page['"]\)/.test(chromeLab) || !/behavior\.chromeLabRoute/.test(chromeLab)) {
+  failures.push('Chrome Lab must load its preview-mode page routes from the database-owned Studio page projection');
 }
 if (!/chromeUnitsInHierarchyOrder\(\)\.map/.test(chromeLab) || !/ChromeUnitAuditViewer/.test(chromeLab)) {
   failures.push('Chrome Lab catalog must be generated from the hierarchy-ordered chrome unit registry and open the audit viewer for unit targets');

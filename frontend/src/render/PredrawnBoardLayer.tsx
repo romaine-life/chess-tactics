@@ -50,7 +50,7 @@ export type {
 };
 
 export interface PredrawnBoardPlate {
-  surface: PredrawnBoardSurface;
+  surface: Omit<PredrawnBoardSurface, 'slot'>;
   src: string;
   registration?: PredrawnBoardCornerRegistration;
 }
@@ -140,8 +140,6 @@ export function runtimePredrawnBoardPlate(surface: PredrawnBoardSurface): Predra
   };
 }
 
-const TEMPORARY_PREDRAWN_REVIEW_SLOT = 'boards/review/uncommitted/plate.png';
-
 /**
  * Mount a registered development candidate in the real editor even before it has an accepted
  * live-media surface. The synthetic surface supplies source-frame dimensions only; it is never
@@ -156,7 +154,6 @@ export function predrawnBoardPlateForEditorReview(
     return {
       surface: surface ?? {
         kind: 'predrawn',
-        slot: TEMPORARY_PREDRAWN_REVIEW_SLOT,
         frameWidth: registration.sourceWidth,
         frameHeight: registration.sourceHeight,
       },

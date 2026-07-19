@@ -150,6 +150,10 @@ const RUNTIME_MEDIA_POINTER_SOURCE_PATH = /^(?:backend\/|frontend\/(?:config|src
 const HARDCODED_IMMUTABLE_MEDIA_URL = /\/api\/media\/[0-9a-f]{64}\b/i;
 const RETIRED_CUTOVER_SOURCE_MARKERS = [
   {
+    pattern: /waterSideCanonicalProofBoard|terrain\/water\/side-v1|TEMPORARY_PREDRAWN_REVIEW_SLOT|\.replace\([^\n]{0,160}["'`]-top(?:-anim)?\.png["'`]/,
+    detail: 'retired tile-coupled side proof, fabricated review slot, or filename-derived terrain media remains',
+  },
+  {
     pattern: /chrome-lab-defaults\.json|nine-slice-registry\.json|config\/nine-slice|DEFAULT_OG_IMAGE|PREVIEW_KIND_BY_STABLE_SLOT|SCROLLBAR_SLOT_PREFIX|DEFAULT_(?:DIVIDER|NINE_SLICE)_ASSET[^\n]{0,160}["'](?:panel|mode-button)|requiredNineSliceAsset\(["'](?:panel|mode-button|panel-divider)["']\)/,
     detail: 'compiled installed presentation identity/default/configuration remains after drawable-catalog cutover',
   },

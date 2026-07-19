@@ -301,7 +301,8 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     ['main-menu', 'Main Menu', '/', 'functional'], ['settings', 'Settings', '/settings', 'functional'], ['skirmish', 'Skirmish', '/play', 'stub'],
     ['campaign-editor', 'Editor', '/editor', 'functional'], ['level-editor', 'Level Editor', '/editor/level', 'stub'], ['lobbies', 'Lobbies', '/lobbies', 'stub'],
   ].map(([value, label, route, viewerStatus], sortOrder) => ({ id: `studio-page-${value}`, kind: 'studio-page', label, sortOrder, lifecycleState: 'active',
-    behavior: { value, route, viewerStatus }, metadata: { blurb: `Test ${label}` }, rowRevision: 1, media: { thumbnail: descriptor(`test/pages/${value}.webp`, 640, 400) } }));
+    behavior: { value, route, viewerStatus, ...(value === 'level-editor' ? { roles: ['chrome-lab-page'], chromeLabRoute: '/editor/level?chromeLab=1' } : {}) },
+    metadata: { blurb: `Test ${label}`, ...(value === 'level-editor' ? { chromeLabBadge: 'outer + inner chrome' } : {}) }, rowRevision: 1, media: { thumbnail: descriptor(`test/pages/${value}.webp`, 640, 400) } }));
   const menuModeSpecs: DrawableCatalog['assets'] = [
     ['play', 'Play', '/play', 'ui-main-menu-icons-carved-solo-skirmish-png'], ['campaign-editor', 'Editor', '/editor', 'ui-main-menu-icons-carved-campaign-editor-png'],
     ['lobbies', 'Lobbies', '/lobbies', 'ui-main-menu-icons-carved-lobbies-png'], ['settings', 'Settings', '/settings', 'ui-main-menu-icons-carved-settings-png'],

@@ -22,12 +22,7 @@ export interface TileSocketAsset {
   terrains?: TileFamilyId[];
   pairId?: TerrainPairId;
   socketMask?: number;
-  /**
-   * Animated walkable surface: alongside the static `-top` half, the tile ships an
-   * N-frame horizontal sheet (`<src base>-top-anim.png`, frames left-to-right, each at
-   * the same 96x180 tile frame). The board renders the top layer from the sheet via a
-   * steps() background animation. Absent = static top.
-   */
+  /** Number of frames in the database-assigned animated top descriptor. Absent = static top. */
   topAnimFrames?: number;
 }
 

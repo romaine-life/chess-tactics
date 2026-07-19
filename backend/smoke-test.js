@@ -780,20 +780,20 @@ async function main() {
   if (emptyMediaCatalog.statusCode !== 200 || emptyMediaBody.schemaVersion !== 1 || emptyMediaBody.slots.length !== 0) {
     throw new Error(`Unexpected empty media catalog: ${emptyMediaCatalog.statusCode} ${emptyMediaCatalog.body}`);
   }
-  const waterSideSlots = Array.from({ length: 8 }, (_, index) => `tiles/surface/water-${index}-side.png`);
+  const surfaceTopSlots = Array.from({ length: 8 }, (_, index) => `smoke/terrain/surface-${index}`);
   const candidateBytes = syntheticPng(96, 180, '#16324a', '#4f8fb2');
   const candidateSha = crypto.createHash('sha256').update(candidateBytes).digest('hex');
   const candidateCreateBody = {
-    slot: waterSideSlots[0],
-    sourcePath: 'smoke/private-water-0-side.png',
+    slot: surfaceTopSlots[0],
+    sourcePath: 'smoke/private-surface-0.png',
     domain: 'terrain',
-    role: 'side',
+    role: 'top',
     label: 'Private smoke candidate',
     availabilityPolicy: 'critical',
     slotMetadata: {
       fixture: true,
       privatePrompt: 'must never leak publicly',
-      acceptance: { mode: 'group', groupId: 'terrain/water/side-v1', requiredSlots: waterSideSlots },
+      acceptance: { mode: 'group', groupId: 'smoke/terrain/surface-v1', requiredSlots: surfaceTopSlots },
     },
     metadata: { generation: 0 },
     provenance: { generator: 'synthetic-private-smoke' },
@@ -808,7 +808,7 @@ async function main() {
   const stagedMediaCatalog = await get('/api/asset-catalog');
   if (
     stagedMediaCatalog.statusCode !== 200
-    || JSON.parse(stagedMediaCatalog.body).slots.some((slot) => slot.slot === waterSideSlots[0])
+    || JSON.parse(stagedMediaCatalog.body).slots.some((slot) => slot.slot === surfaceTopSlots[0])
   ) throw new Error(`Unactivated critical staging slot leaked publicly: ${stagedMediaCatalog.statusCode} ${stagedMediaCatalog.body}`);
   const missingMediaRevision = await request(
     'PUT', `/api/admin/media-versions/${candidateVersion.id}/content`,
@@ -844,12 +844,12 @@ async function main() {
   const stagedAdminCatalog = JSON.parse((await get(
     '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
   )).body);
-  const stagedSlot = stagedAdminCatalog.slots.find((slot) => slot.slot === waterSideSlots[0]);
+  const stagedSlot = stagedAdminCatalog.slots.find((slot) => slot.slot === surfaceTopSlots[0]);
   if (
     stagedSlot.activeVersionId !== null || stagedSlot.versionStatus !== null
     || stagedSlot.lifecycleState !== 'staging' || stagedSlot.metadata.privatePrompt !== 'must never leak publicly'
   ) throw new Error(`Admin staging projection is wrong: ${JSON.stringify(stagedSlot)}`);
-  const stagedStableRoute = await get(`/assets/${waterSideSlots[0]}`);
+  const stagedStableRoute = await get(`/assets/${surfaceTopSlots[0]}`);
   if (stagedStableRoute.statusCode !== 404) {
     throw new Error(`Staging stable route should fail closed, not fall back: ${stagedStableRoute.statusCode}`);
   }
@@ -860,7 +860,7 @@ async function main() {
   // compatibility without reopening the retired mutation route. First patch the
   // staging contract through the API to invalidate the earlier empty-catalog cache.
   const stagingPatch = await request(
-    'PATCH', `/api/admin/media-slots/${waterSideSlots[0]}`, adminJson,
+    'PATCH', `/api/admin/media-slots/${surfaceTopSlots[0]}`, adminJson,
     JSON.stringify({ expectedRevision: stagedSlot.rowRevision, metadata: stagedSlot.metadata }), 5000,
   );
   const stagingPatchBody = JSON.parse(stagingPatch.body);
@@ -893,7 +893,7 @@ async function main() {
      UPDATE media_catalog_state SET revision = revision + 1, updated_at = now()
       WHERE singleton = true AND EXISTS (SELECT 1 FROM slot_update)
       RETURNING revision`,
-    [candidateVersion.id, candidateSha, waterSideSlots[0]],
+    [candidateVersion.id, candidateSha, surfaceTopSlots[0]],
   );
   if (Number(importedBridge.rows[0]?.revision) !== 1) {
     throw new Error(`Direct imported-bridge fixture failed: ${JSON.stringify(importedBridge.rows)}`);
@@ -906,12 +906,12 @@ async function main() {
   const bridgedAdminCatalog = JSON.parse((await get(
     '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
   )).body);
-  const bridgedSlot = bridgedAdminCatalog.slots.find((slot) => slot.slot === waterSideSlots[0]);
+  const bridgedSlot = bridgedAdminCatalog.slots.find((slot) => slot.slot === surfaceTopSlots[0]);
   if (
     bridgedSlot.activeVersionId !== candidateVersion.id || bridgedSlot.versionStatus !== 'legacy-bridge'
     || bridgedSlot.productionEligible !== false || bridgedSlot.metadata.privatePrompt !== 'must never leak publicly'
   ) throw new Error(`Admin imported-bridge projection is wrong: ${JSON.stringify(bridgedSlot)}`);
-  const partialStableBridge = await get(`/assets/${waterSideSlots[0]}`);
+  const partialStableBridge = await get(`/assets/${surfaceTopSlots[0]}`);
   if (partialStableBridge.statusCode !== 503) {
     throw new Error(`Incomplete group stable route should fail, not fall back: ${partialStableBridge.statusCode}`);
   }
@@ -928,7 +928,7 @@ async function main() {
   const acceptedBytes = syntheticPng(96, 180, '#102838', '#7bdcf4');
   const acceptedSha = crypto.createHash('sha256').update(acceptedBytes).digest('hex');
   const nativeCreate = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
-    slot: waterSideSlots[0],
+    slot: surfaceTopSlots[0],
     domain: 'terrain',
     role: 'side',
     label: 'Native reviewed smoke asset',
@@ -1016,8 +1016,8 @@ async function main() {
     throw new Error(`Private archived media verification failed: ${privateAdminRead.statusCode} ${privateAdminRead.body}`);
   }
 
-  const groupSlots = waterSideSlots;
-  const groupBytes = waterSideSlots.map((_, index) => syntheticPng(
+  const groupSlots = surfaceTopSlots;
+  const groupBytes = surfaceTopSlots.map((_, index) => syntheticPng(
     96, 180, `#${(0x102030 + index * 0x010305).toString(16).padStart(6, '0')}`, '#7bdcf4',
   ));
   groupBytes[0] = acceptedBytes;
@@ -1026,15 +1026,15 @@ async function main() {
     const sha = crypto.createHash('sha256').update(groupBytes[index]).digest('hex');
     const create = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
       slot: groupSlots[index],
-      sourcePath: `smoke/generated-water-${index}-side.png`,
+      sourcePath: `smoke/generated-surface-${index}.png`,
       domain: 'terrain',
-      role: 'side',
+      role: 'top',
       label: `Grouped smoke ${index + 1}`,
       availabilityPolicy: 'critical',
       slotMetadata: {
         acceptance: {
           mode: 'group',
-          groupId: 'terrain/water/side-v1',
+          groupId: 'smoke/terrain/surface-v1',
           requiredSlots: index === 1 ? [...groupSlots].reverse() : groupSlots,
         },
       },
@@ -1076,14 +1076,13 @@ async function main() {
     assetLocalScale: 1,
     spatialResampling: false,
     deterministicProof: true,
-    abruptExposedEdge: true,
-    exposedFaces: ['south', 'east'],
+    surfaceOnly: true,
     selectedCandidates: preparedGroupVersions.map((version) => ({
       slot: version.slot,
       versionId: version.id,
       sha256: version.sha256,
       rowRevision: version.rowRevision,
-      faces: ['south', 'east'],
+      role: 'top',
     })),
     slotSnapshots: groupSlotSnapshotsBeforeReview.map((slot) => ({
       slot: slot.slot,
@@ -1091,14 +1090,14 @@ async function main() {
       activeVersionId: slot.activeVersionId,
       lifecycleState: slot.lifecycleState,
     })),
-    acceptanceGroups: [{ groupId: 'terrain/water/side-v1', requiredSlots: groupSlots }],
+    acceptanceGroups: [{ groupId: 'smoke/terrain/surface-v1', requiredSlots: groupSlots }],
   };
   const groupReview = await request(
     'POST', '/api/admin/media-versions/review-batch', adminJson,
     JSON.stringify({
       items: preparedGroupVersions.map((version) => ({ id: version.id, expectedRevision: version.rowRevision })),
       approved: true,
-      notes: 'All eight Water side faces reviewed together at canonical 1x',
+      notes: 'All eight synthetic surface tops reviewed together at canonical 1x',
       surfaceUrl: groupSurfaceUrl,
       evidence: groupProof,
     }), 5000,
@@ -1147,9 +1146,9 @@ async function main() {
   if (
     acceptedFirstSlot.activeVersionId !== nativeVersion.id || acceptedFirstSlot.media.sha256 !== acceptedSha
     || acceptedFirstSlot.productionEligible !== true || acceptedFirstSlot.metadata.privatePrompt !== undefined
-    || acceptedFirstSlot.metadata.acceptance.groupId !== 'terrain/water/side-v1'
+    || acceptedFirstSlot.metadata.acceptance.groupId !== 'smoke/terrain/surface-v1'
   ) throw new Error(`Accepted Water pointer mismatch: ${JSON.stringify(acceptedFirstSlot)}`);
-  const stableAccepted = await get(`/assets/${waterSideSlots[0]}`);
+  const stableAccepted = await get(`/assets/${surfaceTopSlots[0]}`);
   if (stableAccepted.statusCode !== 302 || stableAccepted.headers.location !== `/api/media/${acceptedSha}`) {
     throw new Error(`Stable accepted Water slot did not resolve through backend: ${stableAccepted.statusCode}`);
   }
@@ -1310,7 +1309,7 @@ async function main() {
 
   const groupedSlotRows = groupSlots.map((slot) => groupedAdminCatalog.slots.find((item) => item.slot === slot));
   const slotContractUpdate = await request(
-    'PATCH', `/api/admin/media-slots/${waterSideSlots[0]}`, adminJson,
+    'PATCH', `/api/admin/media-slots/${surfaceTopSlots[0]}`, adminJson,
     JSON.stringify({
       expectedRevision: groupedSlotRows[0].rowRevision,
       metadata: { fixture: true, acceptance: { mode: 'standalone' } },
@@ -1339,7 +1338,7 @@ async function main() {
     JSON.stringify({
       items: groupedSlotRows.map((slot) => ({ slot: slot.slot, expectedRevision: slot.rowRevision })),
       reason: 'Retire the complete disposable smoke group',
-      evidence: { ownerConfirmed: true, fixture: 'live-media-smoke', groupId: 'terrain/water/side-v1' },
+      evidence: { ownerConfirmed: true, fixture: 'live-media-smoke', groupId: 'smoke/terrain/surface-v1' },
       confirmCriticalRetirement: true,
     }), 5000,
   );
@@ -1926,7 +1925,8 @@ async function main() {
     ['campaign-editor', 'Editor', '/editor', 'functional'], ['level-editor', 'Level Editor', '/editor/level', 'stub'], ['lobbies', 'Lobbies', '/lobbies', 'stub'],
   ].entries()) {
     await seedSyntheticDrawable({ id: `studio-page-${value}`, kind: 'studio-page', label, sortOrder,
-      behavior: { value, route, viewerStatus }, metadata: { blurb: `Synthetic ${label}` }, media: { thumbnail: sharedPresentationSlot } });
+      behavior: { value, route, viewerStatus, ...(value === 'level-editor' ? { roles: ['chrome-lab-page'], chromeLabRoute: '/editor/level?chromeLab=1' } : {}) },
+      metadata: { blurb: `Synthetic ${label}`, ...(value === 'level-editor' ? { chromeLabBadge: 'outer + inner chrome' } : {}) }, media: { thumbnail: sharedPresentationSlot } });
   }
   for (const [sortOrder, [value, label, route]] of [
     ['play', 'Play', '/play'], ['campaign-editor', 'Editor', '/editor'], ['lobbies', 'Lobbies', '/lobbies'], ['settings', 'Settings', '/settings'],

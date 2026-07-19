@@ -389,7 +389,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
         }
         const frameSrc = assetFrameSrc(tile, 0);
         if (!macroOwnedTerrain.has(key)) {
-          ops.push({ layer: 'terrain', src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
+          ops.push({ layer: 'terrain', src: frameSrc, dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
         }
       }
 

@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import {
-  liveMediaForSlot,
   resolveTerrainSideExposure,
   resolveTerrainSideFaces,
   subterrainFaceKey,
@@ -43,23 +42,10 @@ export type BoardLabTerrainSourceOverride<TAsset extends TileSocketAsset> = (
   context: BoardLabTerrainSourceContext<TAsset>,
 ) => string | undefined;
 
-/** Pin one stable semantic face URL to the immutable object in one hydrated catalog snapshot. */
-export function immutableBoardLabTerrainSrc(stableSrc: string): string {
-  if (/^\/api\/media\/[0-9a-f]{64}$/.test(stableSrc)) return stableSrc;
-  if (!stableSrc.startsWith('/assets/') || stableSrc.includes('?') || stableSrc.includes('#')) {
-    throw new Error(`Board terrain source is not a stable semantic asset URL: ${stableSrc}`);
-  }
-  let slot: string;
-  try {
-    slot = stableSrc.slice('/assets/'.length).split('/').map(decodeURIComponent).join('/');
-  } catch {
-    throw new Error(`Board terrain source contains an invalid encoded slot: ${stableSrc}`);
-  }
-  const media = liveMediaForSlot(slot).media;
-  if (media.url !== stableSrc) {
-    throw new Error(`Hydrated media slot ${slot} does not match its board URL.`);
-  }
-  return media.immutableUrl;
+/** Require the immutable descriptor already projected with the drawable row. */
+export function immutableBoardLabTerrainSrc(src: string): string {
+  if (!/^\/api\/media\/[0-9a-f]{64}$/.test(src)) throw new Error(`Board terrain source is not immutable: ${src}`);
+  return src;
 }
 
 /** Apply a review override only after the runtime frame has become its exact top/side slot. */
