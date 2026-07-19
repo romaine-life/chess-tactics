@@ -72,6 +72,23 @@ export function applyServerRenderSnapshot(snapshot: ServerRenderSnapshot): void 
   applyLiveUnitCatalog(snapshot.unitCatalog);
 }
 
+/**
+ * Install the bounded authorities needed by board pixels only.
+ *
+ * A compact level derivative must not depend on shell chrome, menu backgrounds, or
+ * other unrelated application media. The render plan remains fail-closed when it
+ * actually resolves a missing board resource through the typed catalogs.
+ */
+export function applyServerThumbnailSnapshot(snapshot: ServerRenderSnapshot): void {
+  applyLiveMediaCatalog(snapshot.mediaCatalog);
+  applyDrawableCatalog(snapshot.drawableCatalog);
+  applyGroundCoverCatalog();
+  applyWallDecorCatalog();
+  assertCriticalLiveMediaAvailable();
+  applyPropSeats(snapshot.propSeats);
+  applyLiveUnitCatalog(snapshot.unitCatalog);
+}
+
 export function worldBackgroundSrc(): string {
   return DEFAULT_BACKGROUND_SET.world;
 }

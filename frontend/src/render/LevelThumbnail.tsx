@@ -2,20 +2,11 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import type { Level } from '../core/level';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { bakeBoardThumbnail, boardContentHash, boardBounds } from './bakeBoardThumbnail';
+import { loadingError, loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
+import { levelThumbnailUrl } from '../net/levelThumbnails';
 
-// One flat baked <img> per level row — the LIST surface (the SELECTED level still shows the
-// live, interactive StudioEditableBoard). Both derive the board from levelToEditorBoard(level),
-// so the thumbnail matches what the author painted (and the old road->stone mis-map is gone).
-//
-// Performance contract (the reason this exists — many previews on one screen):
-//  - LAZY: the bake only runs when the row scrolls to/near the viewport (IntersectionObserver),
-//    not on mount, so a 200-row list doesn't rasterise 200 boards up front.
-//  - CACHED: the resulting object URL is memoised module-side by a CONTENT hash of the derived
-//    board, so identical boards share one bake and a board re-bakes only when its pixels change.
-//  - HiDPI without blur: bake at the displayed size AND a 2× variant; the <img> is integer-sized
-//    and nearest-neighbour, so pixel art is never fractionally downscaled.
-//  - STABLE LAYOUT: a fixed-size neutral placeholder holds the row's box before the bake lands,
-//    so lazy-loading works and the list doesn't reflow.
+// Player lists consume one compact immutable derivative produced by the backend. The board
+// conversion/bake path below is reserved for explicitly named unsaved authoring previews.
 
 // Module-level cache: contentHash -> the baked object URL (+ a refcount so a URL is only revoked
 // once every mounted thumbnail using it has released it). Survives remounts within the session.
@@ -82,24 +73,41 @@ export function LevelThumbnail({
   height,
   className,
   alt,
+  onReady,
+  onError,
+  authoringPreview = false,
 }: {
   level: Level;
   width: number;
   height: number;
   className?: string;
   alt?: string;
+  onReady?: (levelId: string) => void;
+  onError?: (levelId: string, error: Error) => void;
+  /** Studio/editor-only: render unsaved local board pixels instead of a canonical derivative. */
+  authoringPreview?: boolean;
 }): ReactElement {
-  const board = useMemo(() => levelToEditorBoard(level), [level]);
-  const contentHash = useMemo(() => boardContentHash(board), [board]);
-  // The native bake aspect ratio, so the placeholder + <img> box hold the board's true shape.
+  const board = useMemo(() => authoringPreview ? levelToEditorBoard(level) : null, [authoringPreview, level]);
+  const contentHash = useMemo(() => board ? boardContentHash(board) : `canonical:${level.id}`, [board, level.id]);
+  // Runtime derivatives have one fixed 3:2 delivery box. Authoring previews retain the
+  // unsaved board's native aspect ratio.
   const aspect = useMemo(() => {
+    if (!board) return 1.5;
     const bounds = boardBounds(board);
     return bounds.width > 0 && bounds.height > 0 ? bounds.width / bounds.height : 1;
   }, [board]);
 
+  const canonicalLevel = /^(?:off-[a-z]+(?:-[a-z]+)*|l\d+)$/.test(level.id);
+  const canonicalDerivative = !authoringPreview && canonicalLevel
+    ? levelThumbnailUrl(level.id) ?? `/assets/level-list-thumb/${encodeURIComponent(level.id)}.png`
+    : null;
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [near, setNear] = useState(false);
+  // Canonical derivatives are already compact delivery rasters: request them with the
+  // list data so a complete list can reveal together. Authoring-only client bakes stay
+  // proximity-gated because they are substantially more expensive.
+  const [near, setNear] = useState(canonicalDerivative !== null);
   const [url, setUrl] = useState<string | null>(null);
+  const [painted, setPainted] = useState(false);
 
   // Lazy gate: only flip `near` true once the row is at/near the viewport. Once seen, stay seen
   // (no need to un-bake when it scrolls away — the object URL is cheap and shared).
@@ -129,7 +137,20 @@ export function LevelThumbnail({
   // mount; re-keying on contentHash re-bakes when the board changes.
   useEffect(() => {
     if (!near) return undefined;
+    setPainted(false);
+    if (canonicalDerivative) {
+      setUrl(canonicalDerivative);
+      return () => setUrl(null);
+    }
+    if (!authoringPreview) {
+      const error = new Error(`Canonical thumbnail derivative is unavailable for level ${level.id}`);
+      loadingError('thumbnail', 'canonical-derivative-missing', error);
+      onError?.(level.id, error);
+      return undefined;
+    }
     let cancelled = false;
+    const startedAt = performance.now();
+    loadingMark('thumbnail', 'client-bake-start', { levelId: level.id, contentHash, scale: rasterScale() });
     // Exactly one acquire per effect run earns exactly one release. The acquire resolves
     // asynchronously, so release is owned by the acquire's settle handler — that's the only point
     // where the cache entry is guaranteed to exist (cleanup can run BEFORE the bake resolves, when
@@ -139,6 +160,7 @@ export function LevelThumbnail({
     // and never leaked.
     const scale = rasterScale();
     let acquired = false;
+    if (!board) return undefined;
     getThumbnailUrl(board, contentHash, scale)
       .then((nextUrl) => {
         acquired = true;
@@ -147,8 +169,10 @@ export function LevelThumbnail({
           return;
         }
         setUrl(nextUrl);
+        loadingMeasure('thumbnail', 'client-bake-url-ready', startedAt, { levelId: level.id, contentHash });
       })
-      .catch(() => {
+      .catch((error) => {
+        loadingError('thumbnail', 'client-bake-failed', error);
         /* a failed bake never acquired a ref; leave the placeholder in place. */
       });
     return () => {
@@ -160,7 +184,7 @@ export function LevelThumbnail({
       // Else the settle handler will see `cancelled` and release the ref once it resolves.
       setUrl(null);
     };
-  }, [near, board, contentHash]);
+  }, [near, authoringPreview, board, canonicalDerivative, contentHash, level.id, onError]);
 
   // Integer display dimensions; the box keeps the row's footprint stable whether or not the bake
   // has resolved. The image is letterboxed to the board's native aspect via object-fit:contain.
@@ -169,27 +193,41 @@ export function LevelThumbnail({
   return (
     <div
       ref={containerRef}
-      className={`level-thumbnail ${url ? 'is-ready' : 'is-pending'} ${className ?? ''}`.trim()}
+      className={`level-thumbnail ${painted ? 'is-ready' : 'is-pending'} ${className ?? ''}`.trim()}
       style={boxStyle}
       data-aspect={aspect.toFixed(3)}
-      aria-hidden={url ? undefined : true}
+      aria-hidden={painted ? undefined : true}
     >
       {url ? (
         <img
           src={url}
           width={Math.round(width)}
           height={Math.round(height)}
-          loading="lazy"
+          loading="eager"
           decoding="async"
           alt={alt ?? `${level.name} board`}
-          style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated', display: 'block' }}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated', display: 'block', opacity: painted ? 1 : 0 }}
           draggable={false}
+          onLoad={() => {
+            requestAnimationFrame(() => {
+              setPainted(true);
+              onReady?.(level.id);
+              loadingMark('thumbnail', 'first-painted-frame', { levelId: level.id, contentHash, derivative: Boolean(canonicalDerivative) });
+            });
+          }}
+          onError={(event) => {
+            setPainted(false);
+            const error = new Error(`Thumbnail failed: ${event.currentTarget.src}`);
+            loadingError('thumbnail', 'derivative-load-failed', error);
+            onError?.(level.id, error);
+          }}
         />
-      ) : (
+      ) : null}
+      {!painted ? (
         // Neutral, fixed-size placeholder: holds the layout (so lazy-loading + the observer work)
         // until the bake resolves. No spinner — a calm box reads better in a long list.
         <span className="level-thumbnail-placeholder" aria-hidden="true" style={{ display: 'block', width: '100%', height: '100%' }} />
-      )}
+      ) : null}
     </div>
   );
 }

@@ -4422,17 +4422,99 @@ h1 {
   background: transparent;
 }
 
-/* Coordinated board reveal (render/boardArtReady). The board's terrain canvas and sprite
-   images load independently. The board is held hidden until its whole art set has DECODED,
-   then fades in as one unit on the same
-   320ms opacity fade the cold-load menu uses (ui/shell/coldReveal). A failsafe in the hook
-   reveals anyway if an asset stalls, so the board can never hang invisible. */
+/* Coordinated board reveal (render/boardArtReady). The independent terrain, barrier, and
+   scene compositors acknowledge an actual painted frame. Until all three have acknowledged,
+   the complete board stack stays hidden and inert; failures become the explicit retry surface. */
 .skirmish-board-lab {
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
 .skirmish-board-lab.is-board-loading {
   opacity: 0;
 }
+
+/* Before the live catalog/backend is ready, do not trigger stable-slot font requests.
+   main.tsx explicitly loads the layout face and removes this class before App mounts. */
+body.loading-bootstrap,
+body.loading-bootstrap .app-startup-status {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.menu-load-error {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: var(--ds-color-text, #f4ead7);
+  background: #07101be6;
+  text-align: center;
+}
+.route-load-error {
+  min-height: calc(100vh - var(--app-titlebar-h, 72px));
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: var(--ds-color-text, #f4ead7);
+  background: #07101b;
+  text-align: center;
+}
+.skirmish-board-lab.is-board-error {
+  opacity: 1;
+}
+.skirmish-board-lab.is-board-error > .view-pane {
+  visibility: hidden;
+}
+.board-load-error {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: var(--ds-color-text, #f4ead7);
+  text-align: center;
+}
+
+.loading-lab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--tileset-controls-w, 286px);
+  height: 100%;
+  min-height: 0;
+}
+.loading-lab-stage {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  padding: 18px;
+}
+.loading-lab-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(90px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.loading-lab-summary > div {
+  background: #09111bd9;
+  border: 1px solid #496077;
+  display: grid;
+  gap: 3px;
+  padding: 9px 11px;
+}
+.loading-lab-summary strong { color: #d9c38b; font: 18px var(--ds-font-mono); }
+.loading-lab-summary span { color: var(--ds-ink-3); font-size: 11px; text-transform: uppercase; }
+.loading-lab-summary .is-error strong { color: #f39a91; }
+.loading-lab-table-wrap { min-height: 0; overflow: auto; border: 1px solid #34485c; background: #07101ad9; }
+.loading-lab-table { border-collapse: collapse; font: 11px/1.4 var(--ds-font-mono); width: 100%; }
+.loading-lab-table th { background: #152333; color: #d9c38b; position: sticky; text-align: left; top: 0; z-index: 1; }
+.loading-lab-table :is(th, td) { border-bottom: 1px solid #25384a; padding: 6px 8px; vertical-align: top; }
+.loading-lab-table td:nth-child(1), .loading-lab-table td:nth-child(2), .loading-lab-table td:nth-child(3) { white-space: nowrap; }
+.loading-lab-table td:nth-child(4) { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loading-lab-table .is-resource { color: #9ec7df; }
+.loading-lab-table .is-measure { color: #b7d9a8; }
+.loading-lab-table .is-error { color: #f39a91; }
 
 /* Strip the default .tileset-view-stage box (checkerboard fill + border + radius) on
    both in-game boards: the live skirmish board AND the level editor. They share the
@@ -8081,6 +8163,30 @@ body { font-size: 17px; }
 .ce-level-thumb-empty,
 .settings-row-thumb-empty {
   background: linear-gradient(180deg, #0a2a50 0%, #061322 100%);
+}
+
+.thumbnail-surface {
+  position: relative;
+  min-height: 120px;
+}
+.thumbnail-surface-content {
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
+}
+.thumbnail-surface.is-loading .thumbnail-surface-content,
+.thumbnail-surface.is-error .thumbnail-surface-content {
+  opacity: 0;
+  pointer-events: none;
+}
+.thumbnail-surface-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  min-height: 120px;
+  color: var(--ds-color-text, #f4ead7);
+  text-align: center;
 }
 
 .ce-row-actions {
