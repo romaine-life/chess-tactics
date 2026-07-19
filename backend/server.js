@@ -987,12 +987,35 @@ const MIGRATIONS = [
         ON level_thumbnail_derivatives (blob_sha256);
     `,
   },
+  {
+    version: 22,
+    name: 'repair immutable level thumbnail derivative schema',
+    // Production had already recorded migration number 21 from an earlier
+    // deployment state without this relation. Never rewrite recorded history:
+    // a new idempotent migration repairs the required schema deterministically.
+    sql: `
+      CREATE TABLE IF NOT EXISTS level_thumbnail_derivatives (
+        authority_key       text        PRIMARY KEY,
+        content_version     text        NOT NULL,
+        blob_sha256         text        NOT NULL REFERENCES media_blobs(sha256) ON DELETE RESTRICT,
+        width               integer     NOT NULL CHECK (width > 0),
+        height              integer     NOT NULL CHECK (height > 0),
+        created_at          timestamptz NOT NULL DEFAULT now(),
+        updated_at          timestamptz NOT NULL DEFAULT now(),
+        CHECK (char_length(authority_key) BETWEEN 1 AND 512),
+        CHECK (char_length(content_version) BETWEEN 1 AND 512)
+      );
+      CREATE INDEX IF NOT EXISTS level_thumbnail_derivatives_blob_idx
+        ON level_thumbnail_derivatives (blob_sha256);
+    `,
+  },
 ];
 
 let pool = null;
 let dbReady = false;
 let schemaReadinessPromise = null;
 const REQUIRED_SCHEMA_MIGRATION_VERSIONS = MIGRATIONS.map((migration) => migration.version);
+const REQUIRED_SCHEMA_RELATIONS = ['level_thumbnail_derivatives'];
 
 function buildPool() {
   if (databaseUrl) {
@@ -1059,6 +1082,7 @@ async function runMigrations() {
           throw error;
         }
       }
+      await checkRequiredSchemaRelations(client);
     } finally {
       await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_ADVISORY_LOCK_KEY]).catch(() => {});
     }
@@ -1073,6 +1097,21 @@ class SchemaMigrationRequiredError extends Error {
     this.name = 'SchemaMigrationRequiredError';
     this.code = 'schema_migration_required';
     this.details = details;
+  }
+}
+
+async function checkRequiredSchemaRelations(client) {
+  const { rows } = await client.query(
+    `SELECT relation
+       FROM unnest($1::text[]) AS required(relation)
+      WHERE to_regclass('public.' || relation) IS NULL`,
+    [REQUIRED_SCHEMA_RELATIONS],
+  );
+  const missing = rows.map((row) => row.relation);
+  if (missing.length) {
+    throw new SchemaMigrationRequiredError(`required schema relations missing: ${missing.join(', ')}`, {
+      missing_relations: missing,
+    });
   }
 }
 
@@ -1093,6 +1132,7 @@ async function checkMigrations() {
         missing_versions: missing,
       });
     }
+    await checkRequiredSchemaRelations(client);
   } finally {
     client.release();
   }
