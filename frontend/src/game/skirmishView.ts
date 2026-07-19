@@ -50,6 +50,8 @@ export interface SkirmishViewState {
   setZoom: (zoom: number) => void;
   setMinZoom: (zoom: number) => void;
   setPan: (pan: { x: number; y: number }) => void;
+  /** Hide every board information layer without changing camera position. */
+  clearOverlays: () => void;
   resetView: () => void;
 }
 
@@ -76,5 +78,15 @@ export const useSkirmishView = create<SkirmishViewState>((set) => ({
     return { minZoom, maxZoom, zoom: Math.min(maxZoom, Math.max(state.zoom, minZoom)) };
   }),
   setPan: (pan) => set({ pan }),
+  clearOverlays: () => set({
+    showMoves: false,
+    showEnemyAttacks: false,
+    showBlocked: false,
+    showEnemyMoves: false,
+    showPlayerAttacks: false,
+    showPlayerMoves: false,
+    showPromotionZones: false,
+    showGrid: false,
+  }),
   resetView: () => set((state) => ({ zoom: Math.max(DEFAULT_ZOOM, state.minZoom), pan: DEFAULT_PAN })),
 }));

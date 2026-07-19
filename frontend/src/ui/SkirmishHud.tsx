@@ -63,7 +63,8 @@ type OverlayFlag = 'showEnemyAttacks' | 'showEnemyMoves' | 'showPlayerAttacks' |
 type GridAction =
   | { kind: 'toggle'; flag: OverlayFlag; label: string; hint: string }
   | { kind: 'zoom'; dir: 1 | -1; label: string; hint: string }
-  | { kind: 'deselect'; label: string; hint: string };
+  | { kind: 'deselect'; label: string; hint: string }
+  | { kind: 'clear-overlays'; label: string; hint: string };
 
 const SHORTCUT_KEY_ROWS: string[][] = [
   ['q', 'w', 'e', 'r', 't'],
@@ -76,6 +77,7 @@ export const SHORTCUT_BINDINGS: Record<string, GridAction> = {
   w: { kind: 'toggle', flag: 'showEnemyMoves', label: 'Opp. moves', hint: 'Show all opponent legal-move squares' },
   e: { kind: 'toggle', flag: 'showGrid', label: 'Grid', hint: 'Show the board grid overlay' },
   r: { kind: 'deselect', label: 'Deselect all', hint: 'Clear the selected and focused units' },
+  t: { kind: 'clear-overlays', label: 'Clear all', hint: 'Turn off all board overlays' },
   a: { kind: 'toggle', flag: 'showPlayerAttacks', label: 'Your attacks', hint: 'Show all friendly attack squares' },
   s: { kind: 'toggle', flag: 'showPlayerMoves', label: 'Your moves', hint: 'Show all friendly legal-move squares' },
   z: { kind: 'zoom', dir: 1, label: 'Zoom in', hint: 'Zoom the board in' },
@@ -93,8 +95,10 @@ export function runSkirmishShortcut(key: string, repeat = false): boolean {
   } else if (action.kind === 'zoom') {
     const view = useSkirmishView.getState();
     view.setZoom(view.zoom + action.dir * ZOOM_STEP);
-  } else {
+  } else if (action.kind === 'deselect') {
     useSkirmish.getState().select(null);
+  } else {
+    useSkirmishView.getState().clearOverlays();
   }
   return true;
 }
