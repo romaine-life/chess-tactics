@@ -9846,12 +9846,18 @@ async function withThumbnailRenderInputs(task) {
     return task(renderInputs);
   });
 }
-function thumbnailVersion(boardHash, renderInputs) {
+function thumbnailVersion(sourceHash, renderInputs) {
   const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
   const unitCatalogRevision = renderInputs && renderInputs.unitCatalogRevision ? `uc${renderInputs.unitCatalogRevision}` : '';
   const mediaCatalogRevision = renderInputs && renderInputs.mediaCatalogRevision ? `mc${renderInputs.mediaCatalogRevision}` : '';
   const drawableCatalogRevision = renderInputs && renderInputs.drawableCatalogRevision ? `dc${renderInputs.drawableCatalogRevision}` : '';
-  return [boardHash, propSeatsRevision, unitCatalogRevision, mediaCatalogRevision, drawableCatalogRevision].filter(Boolean).join('-');
+  return [sourceHash, propSeatsRevision, unitCatalogRevision, mediaCatalogRevision, drawableCatalogRevision].filter(Boolean).join('-');
+}
+
+function levelThumbnailSourceHash(level) {
+  // Freshness must not depend on the process-global board renderer snapshot:
+  // another request is allowed to hydrate that mutable snapshot at any time.
+  return crypto.createHash('sha256').update(canonicalJson(level)).digest('hex');
 }
 
 async function storedLevelThumbnail(authorityKey) {
@@ -9879,7 +9885,7 @@ async function storedLevelThumbnailUrls(authorityEntries) {
   return Object.fromEntries(rows.flatMap((row) => {
     const entry = entryByAuthority.get(row.authority_key);
     if (!entry) return [];
-    const expected = thumbnailVersion(serverRender.boardHashForLevel(entry.level), revisions);
+    const expected = thumbnailVersion(levelThumbnailSourceHash(entry.level), revisions);
     return row.content_version === expected ? [[entry.levelId, `/api/media/${row.blob_sha256}`]] : [];
   }));
 }
@@ -9903,10 +9909,7 @@ async function currentThumbnailRevisions() {
 }
 
 async function currentThumbnailContentVersion(level) {
-  if (!serverRender || typeof serverRender.boardHashForLevel !== 'function') {
-    throw new Error('thumbnail board hash unavailable');
-  }
-  return thumbnailVersion(serverRender.boardHashForLevel(level), await currentThumbnailRevisions());
+  return thumbnailVersion(levelThumbnailSourceHash(level), await currentThumbnailRevisions());
 }
 
 const levelThumbnailDerivativeInFlight = new Map();
@@ -9918,7 +9921,7 @@ async function createLevelThumbnailDerivative(authorityKey, level) {
   if (current && current.content_version === currentVersion) return current;
   const rendered = await withThumbnailRenderInputs(async (renderInputs) => {
     const plan = serverRender.levelRenderPlan(level);
-    const contentVersion = thumbnailVersion(plan.contentHash, renderInputs);
+    const contentVersion = thumbnailVersion(levelThumbnailSourceHash(level), renderInputs);
 
     const { renderBoardThumbnail, BOARD_THUMB_W, BOARD_THUMB_H } = require(path.join(bakedBackendDir, 'boardThumbnail'));
     const png = await renderBoardThumbnail({

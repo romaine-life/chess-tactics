@@ -50,7 +50,9 @@ The required representative traces are cold and warm versions of:
   before App's first commit. Critical failure stays on one explicit retry surface.
 - Canonical level summaries project immutable Blob-backed list-thumbnail URLs. Missing or
   stale derivatives are generated server-side and published content-addressably; ordinary
-  player lists never reconstruct boards in the browser.
+  player lists never reconstruct boards in the browser. Derivative freshness is a pure
+  version of the canonical level document plus its live prop-seat, unit, media, and drawable
+  authority revisions; it never depends on mutable renderer-process state.
 - Initially presented level cards are one surface: the list remains hidden and inert until
   every expected thumbnail has painted, or it presents one retryable error.
 - Terrain and scene canvases share decoded image records and acknowledge their actual first
