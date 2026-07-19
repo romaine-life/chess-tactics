@@ -9816,7 +9816,10 @@ async function thumbnailMediaAvailabilityCatalog(mediaCatalog) {
 }
 async function loadThumbnailRenderInputs() {
   const [mediaCatalog, drawableCatalog, seats, unitCatalog] = await Promise.all([
-    publicMediaCatalog(),
+    // A derivative is stamped with the authority revisions it actually rendered.
+    // The public projection's short TTL is appropriate for request fan-out, but
+    // reusing it here can mint a brand-new derivative from an old media snapshot.
+    dbReadMediaCatalog(),
     dbReadDrawableCatalog(),
     thumbnailPropSeats(),
     publicUnitCatalog(),
@@ -9882,21 +9885,6 @@ async function storedLevelThumbnailUrls(authorityEntries) {
       WHERE authority_key = ANY($1::text[])`,
     [keys],
   );
-  if (process.env.NODE_ENV === 'test') {
-    const rowsByAuthority = new Map(rows.map((row) => [row.authority_key, row]));
-    for (const [authorityKey, levelId, level] of authorityEntries) {
-      const row = rowsByAuthority.get(authorityKey);
-      const expected = thumbnailVersion(levelThumbnailSourceHash(level), revisions);
-      if (!row || row.content_version !== expected) {
-        console.warn('thumbnail derivative projection mismatch:', JSON.stringify({
-          authorityKey,
-          levelId,
-          stored: row ? row.content_version : null,
-          expected,
-        }));
-      }
-    }
-  }
   return Object.fromEntries(rows.flatMap((row) => {
     const entry = entryByAuthority.get(row.authority_key);
     if (!entry) return [];
