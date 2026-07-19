@@ -44,9 +44,11 @@ export const PORTRAIT_METHODS: { key: PortraitMethod; label: string; sub: string
 // the shared crop frames identically to the smooth master.
 export function defaultPortraitMethod(): PortraitMethod {
   const rows = drawableAssets('portrait-treatment');
-  const preferred = rows.find((asset) => asset.behavior.default === true) ?? rows[0];
-  if (!preferred || typeof preferred.behavior.method !== 'string') throw new Error('drawable catalog has no default portrait treatment');
-  return preferred.behavior.method;
+  const methods = [...new Set(rows.filter((asset) => asset.behavior.default === true).map((asset) => asset.behavior.method))];
+  if (methods.length !== 1 || typeof methods[0] !== 'string') {
+    throw new Error(`drawable catalog must identify exactly one default portrait method; found ${methods.length}`);
+  }
+  return methods[0];
 }
 
 export function portraitMethodSupportsPalette(piece: Piece, method: PortraitMethod, palette: Palette): boolean {

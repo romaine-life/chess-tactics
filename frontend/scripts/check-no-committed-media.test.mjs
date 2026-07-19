@@ -765,6 +765,21 @@ describe('no-committed-media guard', () => {
     }
   });
 
+  it('rejects compiled editor terrain and animated-scene inventories after the drawable cutover', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-editor-scene-inventory-test-'));
+    const relativePath = 'frontend/src/ui/legacyScene.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "const LE_SCATTER_FAMILIES = ['grass']; const SCENE_SLOT = 'ui/main.png';\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ detail: 'compiled terrain/editor/scene presentation inventory remains after drawable-catalog cutover' }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it('rejects external source fetchers that bypass backend archival', () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'no-committed-source-fetch-test-'));
     const relativePath = 'frontend/scripts/fetch-art-source.mjs';

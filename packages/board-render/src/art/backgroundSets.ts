@@ -28,7 +28,9 @@ export const backgroundSets: readonly BackgroundSet[] = new Proxy([] as Backgrou
 
 export const defaultBackgroundSet = (): BackgroundSet => {
   const records = drawableAssets('background-set');
-  const preferred = records.find((asset) => asset.behavior.default === true) ?? records[0];
+  const defaults = records.filter((asset) => asset.behavior.default === true);
+  if (defaults.length !== 1) throw new Error(`drawable catalog must have exactly one default background set; found ${defaults.length}`);
+  const preferred = defaults[0];
   const result = currentBackgroundSets().find((set) => set.id === preferred?.id);
   if (!result) throw new Error('drawable catalog has no complete background set');
   return result;
@@ -37,6 +39,21 @@ export const defaultBackgroundSet = (): BackgroundSet => {
 export function assertInstalledPresentationCatalog(): void {
   const backgrounds = currentBackgroundSets();
   if (!backgrounds.length) throw new Error('drawable catalog has no complete background set');
+  if (drawableAssets('background-set').filter((asset) => asset.behavior.default === true).length !== 1) {
+    throw new Error('drawable catalog must have exactly one default background set');
+  }
+  const terrainFamilies = drawableAssets('terrain-family');
+  if (!terrainFamilies.length || terrainFamilies.filter((asset) => asset.behavior.default === true).length !== 1) {
+    throw new Error('drawable catalog must have terrain families and exactly one default');
+  }
+  const familyValues = terrainFamilies.map((asset) => String(asset.behavior.value ?? ''));
+  if (familyValues.some((family) => !family) || new Set(familyValues).size !== familyValues.length) {
+    throw new Error('drawable catalog terrain-family values must be nonempty and unique');
+  }
+  const scatter = terrainFamilies.filter((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('level-editor-scatter'));
+  if (!scatter.length || scatter.reduce((total, asset) => total + Number(asset.behavior.scatterDefaultShare ?? 0), 0) !== 100) {
+    throw new Error('drawable catalog scatter defaults must total 100');
+  }
   for (const piece of PIECES) {
     const portrait = drawableAssets('unit-portrait').find((asset) => asset.behavior.piece === piece);
     if (!portrait || PALETTES.some((palette) => !portrait.media[palette])) {
@@ -49,6 +66,9 @@ export function assertInstalledPresentationCatalog(): void {
   }
   const surfaces = drawableAssets('terrain-surface');
   if (!surfaces.length || surfaces.some((asset) => !asset.media.source)) throw new Error('drawable catalog has incomplete terrain source media');
+  if (familyValues.some((family) => !surfaces.some((surface) => surface.behavior.family === family))) {
+    throw new Error('drawable catalog has a terrain family without installed surfaces');
+  }
   if (!drawableAssets('terrain-review').length) throw new Error('drawable catalog has no terrain review inventory');
   if (!drawableAssets('terrain-comparison').length) throw new Error('drawable catalog has no terrain comparison inventory');
   if (!drawableAssets('portrait-treatment').length) throw new Error('drawable catalog has no portrait treatment inventory');
@@ -58,11 +78,30 @@ export function assertInstalledPresentationCatalog(): void {
     throw new Error('drawable catalog has incomplete application UI media');
   }
   if (!drawableAssets('app-font').length) throw new Error('drawable catalog has no application font inventory');
+  if (!drawableAssets('ui-kit-frame').length || drawableAssets('ui-kit-frame').some((asset) => !asset.media.frame)) {
+    throw new Error('drawable catalog has incomplete UI kit frame inventory');
+  }
+  if (!drawableAssets('studio-page').length || drawableAssets('studio-page').some((asset) => !asset.media.thumbnail)) {
+    throw new Error('drawable catalog has incomplete Studio page inventory');
+  }
+  const menuModes = drawableAssets('menu-mode');
+  if (!menuModes.length || menuModes.some((asset) => !asset.media.icon)
+    || menuModes.filter((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('settings')).length !== 1) {
+    throw new Error('drawable catalog has incomplete menu mode inventory');
+  }
   const chrome = drawableAssets('chrome-family').find((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('installed-chrome'));
   if (!chrome || ['outer-atom', 'outer-rail', 'inner-atom', 'inner-rail', 'divider-joint'].some((role) => !chrome.media[role])) {
     throw new Error('drawable catalog has incomplete installed Chrome');
   }
   if (!drawableAssets('artwork-reference').length) throw new Error('drawable catalog has no artwork reference inventory');
+  const scenes = drawableAssets('animated-scene');
+  const homepageScenes = scenes.filter((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('homepage-scene'));
+  if (homepageScenes.length !== 1 || !homepageScenes[0].media.background) throw new Error('drawable catalog must have one complete homepage scene');
+  const sceneRoles = new Set(scenes.flatMap((asset) => Array.isArray(asset.behavior.roles) ? asset.behavior.roles.filter((role): role is string => typeof role === 'string') : []));
+  const animations = drawableAssets('scene-animation');
+  if (!animations.length || animations.some((asset) => !asset.media.sheet || !sceneRoles.has(String(asset.behavior.sceneRole ?? '')))) {
+    throw new Error('drawable catalog has incomplete scene animations');
+  }
   const nineSlices = drawableAssets('nine-slice');
   if (!nineSlices.length) throw new Error('drawable catalog has no nine-slice inventory');
   for (const role of ['frame-editor-default', 'divider-editor-default', 'settings-panel', 'settings-tab']) {

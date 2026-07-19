@@ -140,7 +140,7 @@ import {
 import { featureFrameSrc, featureThumbSrc, fencePostThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
 import { resolveFeatureOverlays, resolveFencePosts, fenceVertexKey as canonicalFenceVertexKey, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, featureMaterials, fenceMaterials, wallMaterials, defaultFenceMaterial, defaultWallMaterial, defaultFeatureMaterial, featureMaterialLabel, fenceMaterialLabel, wallMaterialLabel, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, wallArtBadge, wallArtIdOrDefault, wallArtItems, wallArtLabel, wallArtPlacementSpanAtEdge, wallArtSpanEdges, wallArtSpanForId, type WallArtId } from '../core/wallArt';
-import { socketEdges, type EdgeName, type TileFamilyId } from '../core/tileSockets';
+import { defaultTerrainFamily, socketEdges, terrainFamiliesForRole, terrainFamilyRecords, type EdgeName, type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
 import { playableBorderFenceEdges, playableBorderRoadKeys } from '../core/playableBorder';
 import { scatterTerrainDetailed } from '../core/terrainScatter';
@@ -1181,7 +1181,7 @@ const leFamilyAssets = () => studioFamilies.reduce((acc, family) => {
 }, {} as Record<TileFamilyId, readonly StudioAsset[]>);
 const leAllTiles = () => studioFamilies.flatMap((family) => family.assets);
 const leDefaultTile = (): StudioAsset => {
-  const family = studioFamilies.find((candidate) => candidate.id === 'grass') ?? studioFamilies[0];
+  const family = studioFamilies.find((candidate) => candidate.id === defaultTerrainFamily().id);
   const tile = family?.assets.find((asset) => asset.kind === 'tile') ?? family?.assets[0];
   if (!tile) throw new Error('drawable catalog has no terrain surfaces');
   return tile;
@@ -1210,14 +1210,7 @@ const validMacroTilesForBoard = (board: EditorBoard): MacroTilePlacement[] => {
     .sort((a, b) => a.y - b.y || a.x - b.x || a.assetId.localeCompare(b.assetId));
 };
 // The terrain families the Generate (scatter) panel offers as toggles, in display order.
-const LE_SCATTER_FAMILIES: ReadonlyArray<{ id: TileFamilyId; label: string }> = [
-  { id: 'grass', label: 'Grass' },
-  { id: 'stone', label: 'Stone' },
-  { id: 'water', label: 'Water' },
-  { id: 'dirt', label: 'Dirt' },
-  { id: 'pebble', label: 'Pebble' },
-  { id: 'sand', label: 'Sand' },
-];
+const leScatterFamilies = () => terrainFamiliesForRole('level-editor-scatter');
 // One row of the Generate panel's terrain-region list. Duplicate terrains are allowed; `locked`
 // pins a row so the linked sliders don't rebalance it. `cover` holds this region's ground-cover
 // fill-in knobs (Coverage + Density, each a default plus a randomness amount, all 0..1); `expanded`
@@ -1240,10 +1233,23 @@ type ScatterRow = {
 // The three ground-cover sets that have art, offered on every region regardless of its terrain.
 const LE_COVER_TYPES = GROUND_COVER_ASSETS;
 const isGroundCoverId = (id: string): id is GroundCoverId => GROUND_COVER_ASSETS.some((asset) => asset.id === id);
-const defaultScatterRows = (): ScatterRow[] => [
-  { id: 0, terrain: 'grass', share: 60, locked: false, covers: [{ id: 1, type: 'grass', expanded: false, knobs: { ...DEFAULT_COVER } }], macroTileDensity: DEFAULT_MACRO_TILE_DENSITY, macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP },
-  { id: 1, terrain: 'stone', share: 40, locked: false, covers: [], macroTileDensity: DEFAULT_MACRO_TILE_DENSITY, macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP },
-];
+const defaultScatterRows = (): ScatterRow[] => {
+  const defaults = terrainFamilyRecords().filter((family) => typeof family.scatterDefaultShare === 'number' && family.scatterDefaultShare > 0);
+  if (!defaults.length || defaults.reduce((sum, family) => sum + family.scatterDefaultShare!, 0) !== 100) {
+    throw new Error('drawable catalog requires terrain scatter defaults totaling 100');
+  }
+  return defaults.map((family, index) => ({
+    id: index,
+    terrain: family.id,
+    share: family.scatterDefaultShare!,
+    locked: false,
+    covers: family.defaultGroundCoverId && isGroundCoverId(family.defaultGroundCoverId)
+      ? [{ id: index + 1, type: family.defaultGroundCoverId, expanded: false, knobs: { ...DEFAULT_COVER } }]
+      : [],
+    macroTileDensity: DEFAULT_MACRO_TILE_DENSITY,
+    macroTileBreakup: DEFAULT_MACRO_TILE_BREAKUP,
+  }));
+};
 const regionCellSort = (a: string, b: string): number => {
   const [ax, ay] = a.split(',').map(Number);
   const [bx, by] = b.split(',').map(Number);
@@ -1269,8 +1275,10 @@ const nextGeneratedRegionName = (regions: readonly BoardGeneratedRegion[]): stri
 };
 // A terrain's own cover set (grass tufts / water reeds / sand), or null — the default cover a region
 // picks up when it uses that terrain (the author can then change it to anything).
-const defaultCoverType = (terrain: TileFamilyId): GroundCoverId | null =>
-  isGroundCoverId(terrain) ? terrain : null;
+const defaultCoverType = (terrain: TileFamilyId): GroundCoverId | null => {
+  const id = terrainFamilyRecords().find((family) => family.id === terrain)?.defaultGroundCoverId;
+  return id && isGroundCoverId(id) ? id : null;
+};
 // Spatially-coherent value noise in [0,1] (bilinear over a hashed lattice) — drives cover patchiness
 // so the "randomness" knobs vary coverage/density across areas instead of per-cell static.
 function coverNoise(x: number, y: number, seed: number): number {
@@ -3723,7 +3731,7 @@ export function LevelEditor(): ReactElement {
     const total = 100 - scatterBuffer;
     const share = prev.length > 0 ? Math.max(1, Math.round(total / (prev.length + 1))) : total;
     const used = new Set(prev.map((s) => s.terrain));
-    const terrain = LE_SCATTER_FAMILIES.find((f) => !used.has(f.id))?.id ?? 'grass';
+    const terrain = leScatterFamilies().find((family) => !used.has(family.id))?.id ?? defaultTerrainFamily().id;
     const id = (scatterIdRef.current += 1);
     const dct = defaultCoverType(terrain);
     const covers = dct ? [{ id: (coverIdRef.current += 1), type: dct, expanded: false, knobs: { ...DEFAULT_COVER } }] : [];
@@ -6256,7 +6264,7 @@ export function LevelEditor(): ReactElement {
                       value={sec.terrain}
                       onChange={(terrain) => setSectionTerrain(sec.id, terrain)}
                       ariaLabel={`Region ${sectionIndex + 1} terrain`}
-                      options={LE_SCATTER_FAMILIES.map((family) => ({ value: family.id, label: family.label }))}
+                      options={leScatterFamilies().map((family) => ({ value: family.id, label: family.label }))}
                     />
                     <input
                       type="range"

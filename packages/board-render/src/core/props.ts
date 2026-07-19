@@ -286,7 +286,8 @@ function authoredPropDefs(seats: PropSeatMap, sourceProps: readonly PropDef[]): 
         ? sourceProp?.sprite
         : structureArtAsset(source.id)?.sprite;
     if (!sourceSprite) throw new Error(`authored prop "${id}" source "${source.id}" is unavailable`);
-    const sourceTerrains = sourceArt?.terrains ?? sourceProp?.terrains ?? ['grass', 'dirt', 'stone'];
+    const sourceTerrains = sourceArt?.terrains ?? sourceProp?.terrains;
+    if (!sourceTerrains?.length) throw new Error(`authored prop "${id}" source "${source.id}" has no installed terrain membership`);
     const sourceKind = sourceProp?.kind ?? sourceArt?.propKind ?? (sourceArt?.kind === 'tree' || sourceArt?.kind === 'rock' ? sourceArt.kind : 'house');
     out.push({
       id,

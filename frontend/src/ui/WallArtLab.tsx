@@ -47,6 +47,7 @@ import { saveLiveWallArt } from '../net/wallArt';
 import { mapSaveError } from '../campaign/save';
 import { SliderRow } from './dressing/SliderRow';
 import { ViewPane } from './shared/ViewPane';
+import { terrainFamiliesForRole } from '../core/tileSockets';
 
 const WALL_FRAME_W = WALL_FRAME_GEOMETRY.width;
 const WALL_FRAME_H = WALL_FRAME_GEOMETRY.height;
@@ -58,8 +59,13 @@ const WALL_STEP_X = 48;
 const WALL_STEP_Y = 27;
 const LAB_WEST_Y = 1;
 const LAB_NORTH_X = 1;
-const FAMILIES = ['grass', 'dirt', 'stone'] as const;
-type Family = (typeof FAMILIES)[number];
+type Family = string;
+const previewFamilies = () => terrainFamiliesForRole('wall-art-preview');
+const defaultPreviewFamily = (): Family => {
+  const family = terrainFamiliesForRole('wall-art-preview-default')[0];
+  if (!family) throw new Error('drawable catalog has no default wall-art preview terrain');
+  return family.id;
+};
 type TestPiece = {
   id: string;
   unitId: (typeof activeUnitFamilies)[number];
@@ -557,7 +563,7 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
   const [status, setStatus] = useState('');
   const [newArtName, setNewArtName] = useState('New Wall Art');
   const [newArtId, setNewArtId] = useState('new-wall-art');
-  const [family, setFamily] = useState<Family>('stone');
+  const [family, setFamily] = useState<Family>(defaultPreviewFamily);
   const [seed, setSeed] = useState(11);
   const [zoom, setZoom] = useState(1.45);
   // Full-body mirrors deliberately rise above the ordinary board silhouette. Give the Studio
@@ -1057,7 +1063,7 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
             <label className="tileset-category-select" title="The ground family under the preview board.">
               <span>Ground</span>
               <select value={family} onChange={(event) => setFamily(event.target.value as Family)} aria-label="Ground family">
-                {FAMILIES.map((item) => <option key={item} value={item}>{cap(item)}</option>)}
+                {previewFamilies().map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
             </label>
             <label className="tileset-catalog-zoom">

@@ -13,6 +13,7 @@ import { saveLiveSeats } from '../net/propSeats';
 import { mapSaveError } from '../campaign/save';
 import { currentDoodadAssets, type DoodadAsset } from './doodadCatalog';
 import { STRUCTURE_ART_ASSETS, structureArtAsset, type StructureArtAsset } from '../core/structureArt';
+import { terrainFamiliesForRole } from '../core/tileSockets';
 
 // The prop-seat editor as an embedded Studio Viewer kind (docs/studio-control-architecture.md,
 // ADR-0058): it renders into the shared studio shell — the board in `.al-lab-main`, EVERY
@@ -32,8 +33,13 @@ export interface StructureEditorDraft {
   copyFrom?: { target: StructurePlacement; id: string };
 }
 
-const FAMILIES = ['grass', 'dirt', 'stone'] as const;
-type Family = (typeof FAMILIES)[number];
+type Family = string;
+const previewFamilies = () => terrainFamiliesForRole('prop-seat-preview');
+const defaultPreviewFamily = (): Family => {
+  const family = terrainFamiliesForRole('prop-seat-preview-default')[0];
+  if (!family) throw new Error('drawable catalog has no default prop-seat preview terrain');
+  return family.id;
+};
 const COLS = 9;
 const ROWS = 7;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -164,7 +170,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
   };
   const initialDraft = draftSeed();
   const initialDraftPart = initialDraft.slots[0] ?? partFromSource(fallbackSource);
-  const [family, setFamily] = useState<Family>('grass');
+  const [family, setFamily] = useState<Family>(defaultPreviewFamily);
   const [seed, setSeed] = useState(7);
   const [zoom, setZoom] = useState(1.4);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -605,7 +611,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
             <label className="tileset-category-select" title="The ground family under the prop (preview only).">
               <span>Ground</span>
               <select value={family} onChange={(e) => setFamily(e.target.value as Family)} aria-label="Ground family">
-                {FAMILIES.map((f) => <option key={f} value={f}>{cap(f)}</option>)}
+                {previewFamilies().map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
             </label>
             <label className="tileset-catalog-zoom">

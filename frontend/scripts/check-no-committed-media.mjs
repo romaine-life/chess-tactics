@@ -213,6 +213,10 @@ const RETIRED_CUTOVER_SOURCE_MARKERS = [
     detail: 'compiled ground-cover/wall-decoration/prop inventory remains after drawable-catalog cutover',
   },
   {
+    pattern: /\b(?:LE_SCATTER_FAMILIES|STONE_SURFACES|MENU_MODES\s*:\s*[^=\n]+\s*=\s*\[|PAGE_ENTRIES\s*:\s*[^=\n]+\s*=\s*\[|SCENE_SLOT|SCENE_W|SCENE_H|SCENE_ANIM_SCENES\s*:\s*[^=\n]+\s*=\s*\[|SCENE_ANIMS\s*:\s*[^=\n]+\s*=\s*\[)\b/,
+    detail: 'compiled terrain/editor/scene presentation inventory remains after drawable-catalog cutover',
+  },
+  {
     pattern: /\b(?:SAMPLE_GAINS|TERRAIN_SAMPLE|ARRIVAL_BAKED|SFX_ASSETS)\b|Copy for Claude|(?:bake[^\n]{0,80}(?:SFX|sound)|(?:SFX|sound)[^\n]{0,80}bake)/i,
     detail: 'hardcoded or copy-to-source SFX profile authority remains after DB profile cutover',
   },

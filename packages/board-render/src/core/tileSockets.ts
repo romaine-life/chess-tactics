@@ -41,17 +41,62 @@ export interface TransitionSlot<TAsset extends TileSocketAsset = TileSocketAsset
 
 export const socketEdges: EdgeName[] = ['north', 'east', 'south', 'west'];
 
+export interface TerrainFamilyRecord {
+  id: TileFamilyId;
+  label: string;
+  purpose: string;
+  status: string;
+  review: string;
+  roles: string[];
+  defaultGroundCoverId?: string;
+  scatterDefaultShare?: number;
+}
+
+export function terrainFamilyRecords(): TerrainFamilyRecord[] {
+  return drawableAssets('terrain-family').map((asset) => {
+    const id = typeof asset.behavior.value === 'string' ? asset.behavior.value : asset.id;
+    return {
+      id,
+      label: asset.label,
+      purpose: typeof asset.metadata.purpose === 'string' ? asset.metadata.purpose : '',
+      status: typeof asset.metadata.status === 'string' ? asset.metadata.status : '',
+      review: typeof asset.metadata.review === 'string' ? asset.metadata.review : '',
+      roles: Array.isArray(asset.behavior.roles) ? asset.behavior.roles.filter((role): role is string => typeof role === 'string') : [],
+      defaultGroundCoverId: typeof asset.behavior.defaultGroundCoverId === 'string' ? asset.behavior.defaultGroundCoverId : undefined,
+      scatterDefaultShare: typeof asset.behavior.scatterDefaultShare === 'number' ? asset.behavior.scatterDefaultShare : undefined,
+    };
+  });
+}
+
+export function terrainFamiliesForRole(role: string): TerrainFamilyRecord[] {
+  return terrainFamilyRecords().filter((family) => family.roles.includes(role));
+}
+
+export function defaultTerrainFamily(): TerrainFamilyRecord {
+  const records = drawableAssets('terrain-family').filter((asset) => asset.behavior.default === true);
+  if (records.length !== 1) throw new Error(`drawable catalog requires exactly one default terrain family; found ${records.length}`);
+  const family = terrainFamilyRecords().find((candidate) => candidate.id === (records[0].behavior.value ?? records[0].id));
+  if (!family) throw new Error('drawable catalog default terrain family is unavailable');
+  return family;
+}
+
 export const terrainLabels: Record<TileFamilyId, string> = new Proxy({}, {
   get: (_target, family) => {
-    const record = drawableAssets('terrain-surface').find((asset) => asset.behavior.family === family);
-    return typeof record?.metadata.familyLabel === 'string' ? record.metadata.familyLabel : String(family);
+    return terrainFamilyRecords().find((record) => record.id === family)?.label ?? String(family);
   },
 });
 
 // The transition socket model is retained for the tile studio, but the shipped tileset
 // has no transition tiles — so on the board every boundary is a HARD EDGE (the solver
 // falls back to each cell's own family base; see solveSocketBoard).
-export const transitionPairs: TransitionPair[] = [];
+const currentTransitionPairs = (): TransitionPair[] => drawableAssets('terrain-transition').map((asset) => {
+  const terrains = asset.behavior.terrains;
+  if (!Array.isArray(terrains) || terrains.length !== 2 || terrains.some((family) => typeof family !== 'string')) {
+    throw new Error(`terrain transition ${asset.id} must identify exactly two families`);
+  }
+  return { id: typeof asset.behavior.value === 'string' ? asset.behavior.value : asset.id, label: asset.label, terrains: [terrains[0], terrains[1]] };
+});
+export const transitionPairs: TransitionPair[] = new Proxy([], { get: (_target, property) => { const values = currentTransitionPairs(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
 
 export function transitionPairById(pairId: TerrainPairId): TransitionPair {
   const pair = transitionPairs.find((candidate) => candidate.id === pairId);

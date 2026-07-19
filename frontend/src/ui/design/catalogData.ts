@@ -244,19 +244,6 @@ export function nineSliceCategory(id: string): NineSliceCategory | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// The five completed main-menu button widgets (live, assembled from assets).
-// ---------------------------------------------------------------------------
-export interface MenuMode { action: string; slug: string; icon: string; row: string; label: string }
-
-export const MENU_MODES: MenuMode[] = [
-  { action: 'party', slug: 'solo-skirmish', icon: 'button-icon.main-menu.sword', row: 'button-row.main-menu.solo-skirmish', label: 'Solo Skirmish' },
-  { action: 'campaigns', slug: 'campaign-editor', icon: 'button-icon.main-menu.crown', row: 'button-row.main-menu.campaign-editor', label: 'Campaign Editor' },
-  { action: 'level-editor-preview', slug: 'level-editor', icon: 'button-icon.main-menu.scroll', row: 'button-row.main-menu.level-editor', label: 'Level Editor' },
-  { action: 'lobbies', slug: 'lobbies', icon: 'button-icon.main-menu.people', row: 'button-row.main-menu.lobbies', label: 'Lobbies' },
-  { action: 'settings', slug: 'settings', icon: 'button-icon.main-menu.gear', row: 'button-row.main-menu.settings', label: 'Settings' },
-];
-
-// ---------------------------------------------------------------------------
 // Geometry helpers (ported verbatim from app.js). frameStyleForAsset crops a
 // sprite sheet to a rect via CSS custom properties the .catalog-frame /
 // .mode-button-* rules consume; insetStyle positions a slot inside a frame.

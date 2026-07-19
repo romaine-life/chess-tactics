@@ -8,7 +8,7 @@ import { ElementSelect, type ElementOption } from './dressing/ElementSelect';
 import { useInjectedStyle } from './dressing/useInjectedStyle';
 import { ICON_TREATS, iconTreatFilter, type IconTreat } from './dressing/iconTreat';
 import { MM_LIVE } from './dressing/mmLive';
-import { installedUiMedia } from './installedUiMedia';
+import { drawableAssets } from '@chess-tactics/board-render';
 
 // Read-only "Pages" catalog (ADR-0029): each app screen is a card; "View Selected" opens a
 // live Viewer. Selection is owned by the host (TilePreview). Cards reuse the shared studio
@@ -53,13 +53,6 @@ export function PagesLibraryStudio({
 
 
 // The live-media surface slots the menu slab can wear.
-const STONE_SURFACES = [
-  { name: 'stone-slate-blue', label: 'Slate blue' },
-  { name: 'stone-cobble-blue', label: 'Cobble blue' },
-  { name: 'stone-grey', label: 'Grey' },
-  { name: 'stone-sandstone', label: 'Sandstone' },
-  { name: 'wood-oak', label: 'Oak' },
-];
 
 // Icon-contrast treatments live in ./dressing/iconTreat (shared with the Settings tuner).
 
@@ -268,7 +261,7 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
                   <div className="pages-ctl-row">
                     <select value={surface} onChange={(e) => setSurface(e.target.value)} aria-label="Stone surface">
                       <option value="">Default · live stone</option>
-                      {STONE_SURFACES.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
+                      {SURFACE_ASSETS.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
                     </select>
                     {ctlReset(() => setSurface(''))}
                   </div>
@@ -348,14 +341,11 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
 
 // Kit frames an element can be forced to wear (backend `ui/kit/*` slots). 'shipped' leaves the element's
 // own frame — and its hover/selected/danger variants — untouched.
-const CE_KIT_FRAMES = [
-  { id: 'primary', label: 'Button · primary', file: installedUiMedia('ui-kit-button-primary-png') },
-  { id: 'neutral', label: 'Button · neutral', file: installedUiMedia('ui-kit-button-neutral-png') },
-  { id: 'danger', label: 'Button · danger', file: installedUiMedia('ui-kit-button-danger-png') },
-  { id: 'panel', label: 'Panel', file: installedUiMedia('ui-kit-panel-png') },
-  { id: 'row', label: 'Row', file: installedUiMedia('ui-kit-row-png') },
-  { id: 'field-input', label: 'Field', file: installedUiMedia('ui-kit-field-input-png') },
-] as const;
+const currentCeKitFrames = (): { id: string; label: string; file: string }[] => drawableAssets('ui-kit-frame').map((asset) => {
+  if (!asset.media.frame) throw new Error(`UI kit frame ${asset.id} has no frame media`);
+  return { id: String(asset.behavior.value ?? asset.id), label: asset.label, file: asset.media.frame.media.immutableUrl };
+});
+const CE_KIT_FRAMES: { id: string; label: string; file: string }[] = new Proxy([], { get: (_target, property) => { const values = currentCeKitFrames(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
 const CE_FRAME_FILE: Record<string, string> = Object.fromEntries(CE_KIT_FRAMES.map((f) => [f.id, f.file]));
 
 type CeFill = 'none' | 'color' | 'surface';

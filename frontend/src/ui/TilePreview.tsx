@@ -7,9 +7,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { currentLiveMediaCatalog, drawableAssets, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { tileFamilies, wallThumbSrc } from '../art/tileset';
-import type { WallMaterial } from '../core/featureAutotile';
+import { defaultWallMaterial, type WallMaterial } from '../core/featureAutotile';
 import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
 import {
+  defaultTerrainFamily,
   terrainLabels,
   transitionPairs,
   transitionPairById,
@@ -195,18 +196,18 @@ interface TilesetStudioRouteState {
 
 
 
-const studioDefaults: TilesetStudioRouteState = {
-  familyId: 'grass',
+const studioDefaults = (): TilesetStudioRouteState => ({
+  familyId: defaultTerrainFamily().id,
   studioMode: 'catalog',
   labMode: 'board',
   tileFilter: 'base',
-  selectedPairId: 'grass-stone',
+  selectedPairId: transitionPairs[0]?.id ?? '',
   boardMode: 'generated',
   boardScope: 'family',
   boardSize: 'small',
   boardSeed: 4217,
   brushKind: 'tile',
-};
+});
 
 
 const transitionAssets: StudioAsset[] = [];
@@ -225,9 +226,11 @@ const familyCounts = (family: StudioFamily): string => {
 const familySample = (family: StudioFamily): StudioAsset => family.assets.find((asset) => asset.kind === 'tile') ?? family.assets[0];
 
 const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
-  studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
+  studioFamilies.find((item) => item.id === familyId)
+  ?? studioFamilies.find((item) => item.id === defaultTerrainFamily().id)
+  ?? (() => { throw new Error('drawable catalog default terrain family has no Studio family'); })();
 
-const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
+const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
 const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver';
@@ -235,12 +238,13 @@ const isLabMode = (value: string | null): value is LabMode => value === 'board' 
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
 
-const isTerrainPairId = (value: string | null): value is TerrainPairId => value === 'grass-stone' || value === 'grass-water' || value === 'stone-water';
+const isTerrainPairId = (value: string | null): value is TerrainPairId => Boolean(value && transitionPairs.some((pair) => pair.id === value));
 const isUnitAssetId = (value: string | null): value is string => Boolean(
   value && (unitAssetById(value) || /^candidate:[0-9a-f-]{36}$/i.test(value)),
 );
 
 const readTilesetStudioRoute = (): TilesetStudioRouteState => {
+  const defaults = studioDefaults();
   const params = new URLSearchParams(window.location.search);
   const family = params.get('family');
   const mode = params.get('mode');
@@ -303,22 +307,22 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const rail = params.get('rail');
   // Destination is decoupled from category — any mode is valid with any category,
   // so the URL is taken at face value (no normalization).
-  const studioMode = isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
+  const studioMode = isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias ? 'viewer' : isStudioMode(mode) ? mode : defaults.studioMode;
   const routeCategory = isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isStudioCategory(normalizedCat) ? normalizedCat : undefined;
-  const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
+  const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : defaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushParam = params.get('brush');
   const brushKind =
     brushParam === 'unit' || explicitLabMode === 'unit' ? 'unit'
     : brushParam === 'doodad' || explicitLabMode === 'doodad' ? 'doodad'
-    : studioDefaults.brushKind;
+    : defaults.brushKind;
   const routeLabMode = explicitLabMode ?? (routeTileFilter === 'board' ? 'board' : brushKind === 'unit' ? 'unit' : brushKind === 'doodad' ? 'doodad' : 'tile');
   const effectiveTileFilter =
     studioMode === 'catalog'
-      ? routeTileFilter === 'board' ? studioDefaults.tileFilter : routeTileFilter
+      ? routeTileFilter === 'board' ? defaults.tileFilter : routeTileFilter
       : routeTileFilter;
   return {
-    familyId: isStudioFamilyId(family) ? family : studioDefaults.familyId,
+    familyId: isStudioFamilyId(family) ? family : defaults.familyId,
     studioMode,
     category: routeCategory,
     selectedAssetName: kit || undefined,
@@ -348,13 +352,13 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
       : isViewerKind(normalizedVk) ? normalizedVk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
-    selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
+    selectedPairId: isTerrainPairId(pair) ? pair : defaults.selectedPairId,
     selectedAssetId: isNineSliceAlias ? undefined : asset || undefined,
     selectedSlotMask: Number.isInteger(slot) && slot >= 1 && slot <= 14 ? slot : undefined,
-    boardMode: params.get('board') === 'concept' ? 'concept' : studioDefaults.boardMode,
-    boardScope: params.get('scope') === 'mixed' ? 'mixed' : studioDefaults.boardScope,
-    boardSize: params.get('size') === 'wide' ? 'wide' : studioDefaults.boardSize,
-    boardSeed: Number.isFinite(seed) && seed > 0 ? Math.floor(seed) : studioDefaults.boardSeed,
+    boardMode: params.get('board') === 'concept' ? 'concept' : defaults.boardMode,
+    boardScope: params.get('scope') === 'mixed' ? 'mixed' : defaults.boardScope,
+    boardSize: params.get('size') === 'wide' ? 'wide' : defaults.boardSize,
+    boardSeed: Number.isFinite(seed) && seed > 0 ? Math.floor(seed) : defaults.boardSeed,
     brushKind,
     selectedUnitId: isUnitAssetId(unit) ? unit : undefined,
   };
@@ -780,7 +784,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
 
   useEffect(() => {
     if (!familyTransitionPairs.some((pair) => pair.id === selectedPairId)) {
-      setSelectedPairId(familyTransitionPairs[0]?.id ?? 'grass-stone');
+      setSelectedPairId(familyTransitionPairs[0]?.id ?? '');
     }
   }, [familyTransitionPairs, selectedPairId]);
 
@@ -951,7 +955,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // render either of these; a new asset type is just another descriptor.
   const tileFamilyOf = new Map<string, StudioFamilyId>();
   for (const fam of studioFamilies) for (const a of fam.assets) tileFamilyOf.set(a.id, fam.id);
-  for (const a of nonProductionStudioTiles) tileFamilyOf.set(a.id, nonProductionTileFamilyOf.get(a.id) ?? 'grass');
+  for (const a of nonProductionStudioTiles) tileFamilyOf.set(a.id, nonProductionTileFamilyOf.get(a.id) ?? defaultTerrainFamily().id);
   const tilesCatalogType: CatalogType<StudioAsset> = {
     id: 'tiles',
     label: 'Tiles',
@@ -978,7 +982,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         id: 'family',
         label: 'Tile Family',
         options: studioFamilies.map((fam) => ({ id: fam.id, label: fam.label, sub: familyCounts(fam) })),
-        memberOf: (a) => [tileFamilyOf.get(a.id) ?? 'grass'],
+        memberOf: (a) => [tileFamilyOf.get(a.id) ?? defaultTerrainFamily().id],
         selected: selectedFamilyIds,
         toggle: (id) => toggleFamilyFilter(id as StudioFamilyId),
         selectAll: () => setSelectedFamilyIds(studioFamilies.map((fam) => fam.id)),
@@ -1227,7 +1231,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     id: 'wallart',
     label: 'Wall Art',
     assets: wallArtList,
-    card: (art) => ({ img: wallThumbSrc('stone'), title: art.label, badge: wallArtBadge(art.id) }),
+    card: (art) => ({ img: wallThumbSrc(defaultWallMaterial()), title: art.label, badge: wallArtBadge(art.id) }),
     cardMedia: (art) => <WallArtPreview art={art} zoom={zoom} />,
     sections: (visible) => [{ id: 'wallart', label: 'Wall Art', assets: [...visible] }],
     query: {
@@ -1351,7 +1355,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     id: 'animscenes',
     label: 'Animated Scenes',
     assets: SCENE_ANIM_SCENES,
-    card: (s) => ({ img: resolvedLiveMediaUrl(s.slot), title: s.label, badge: `${s.regionIds.length} waterfalls` }),
+    card: (s) => ({ img: s.background, title: s.label, badge: `${s.regionIds.length} waterfalls` }),
     sections: (visible) => [{ id: 'scenes', label: 'Scenes', assets: [...visible] }],
     query: {
       value: catalogQuery,

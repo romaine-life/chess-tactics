@@ -35,6 +35,22 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       media: { top: descriptor(`test/terrain/${family}-${variant}-top.png`), source: descriptor(`test/terrain/${family}-${variant}-source.png`) },
     })),
   );
+  const terrainFamilySpecs: DrawableCatalog['assets'] = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'].map((family, sortOrder) => ({
+    id: `terrain-family-${family}`, kind: 'terrain-family', label: family[0].toUpperCase() + family.slice(1), sortOrder,
+    lifecycleState: 'active', behavior: {
+      value: family,
+      roles: [
+        'level-editor-scatter',
+        ...(['grass', 'dirt', 'stone'].includes(family) ? ['prop-seat-preview', 'wall-art-preview'] : []),
+        ...(['grass', 'stone', 'water'].includes(family) ? ['unit-art-preview'] : []),
+        ...(family === 'grass' ? ['prop-seat-preview-default', 'unit-art-preview-default'] : []),
+        ...(family === 'stone' ? ['wall-art-preview-default'] : []),
+      ],
+      ...(family === 'grass' ? { default: true, scatterDefaultShare: 60, defaultGroundCoverId: 'grass' } : {}),
+      ...(family === 'stone' ? { scatterDefaultShare: 40 } : {}),
+      ...(family === 'sand' || family === 'water' ? { defaultGroundCoverId: family } : {}),
+    }, metadata: {}, rowRevision: 1, media: {},
+  }));
   const macroVariants: Record<string, Array<[string, string]>> = {
     grass: [['meadow-drift', 'Meadow drift'], ['soft-bands', 'Soft grass bands'], ['clover-field', 'Clover field'], ['damp-drift', 'Damp grass drift']],
     dirt: [['worn-field', 'Worn earth'], ['soft-wear', 'Soft earth wear'], ['compacted-drift', 'Compacted earth drift'], ['cracked-earth', 'Cracked earth']],
@@ -134,7 +150,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     id, kind: 'wall-art', label, sortOrder, lifecycleState: 'active' as const,
     behavior: { span, slots, ...(reflection ? { reflection } : {}) }, metadata: {}, rowRevision: 1, media: {},
   }));
-  const presentationSpecs = [
+  const presentationSpecs: DrawableCatalog['assets'] = [
     {
       id: 'test-background-set', kind: 'background-set', label: 'Test background', sortOrder: 0,
       lifecycleState: 'active' as const, behavior: { default: true }, metadata: {}, rowRevision: 1,
@@ -153,6 +169,12 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       media: Object.fromEntries(['south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east']
         .map((direction) => [direction, descriptor(`test/neutral/${id}-${direction}.png`, 64, 64)])),
     })),
+    { id: 'test-homepage-scene', kind: 'animated-scene', label: 'Test homepage scene', sortOrder: 0,
+      lifecycleState: 'active' as const, behavior: { roles: ['homepage-scene'], width: 320, height: 180 }, metadata: {}, rowRevision: 1,
+      media: { background: descriptor('test/scene/background.png', 320, 180) } },
+    { id: 'test-waterfall', kind: 'scene-animation', label: 'Test waterfall', sortOrder: 0,
+      lifecycleState: 'active' as const, behavior: { sceneRole: 'homepage-scene', x: 10, y: 20, width: 40, height: 50, frames: 12, frameMs: 140 }, metadata: {}, rowRevision: 1,
+      media: { sheet: descriptor('test/scene/waterfall.png', 480, 50) } },
   ];
   const terrainReviewSpecs: DrawableCatalog['assets'] = [
     { id: 'test-terrain-review', kind: 'terrain-review', label: 'Test terrain review', sortOrder: 0, lifecycleState: 'active' as const,
@@ -271,6 +293,20 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
   const sliderSpecs = [{ id: 'ui-slider-bronze-stone', kind: 'ui-slider', label: 'Bronze · Stone', sortOrder: 0, lifecycleState: 'active' as const,
     behavior: { value: 'bronze-stone', approach: 'css', material: 'bronze / stone', fill: '#c79b55', channel: '#26231e', edge: '#5a5248', handle: '#b88a45', handleLight: '#f0dba8', handleDark: '#5b4124', preferred: true },
     metadata: { description: 'Natural bronze and stone palette.' }, rowRevision: 1, media: {} }];
+  const uiKitFrameSpecs: DrawableCatalog['assets'] = ['primary', 'neutral', 'danger', 'panel', 'row', 'field-input'].map((value, sortOrder) => ({
+    id: `ui-kit-frame-${value}`, kind: 'ui-kit-frame', label: value, sortOrder, lifecycleState: 'active', behavior: { value }, metadata: {}, rowRevision: 1,
+    media: { frame: descriptor(`test/ui-kit/${value}.png`, 72, 72) },
+  }));
+  const studioPageSpecs: DrawableCatalog['assets'] = [
+    ['main-menu', 'Main Menu', '/', 'functional'], ['settings', 'Settings', '/settings', 'functional'], ['skirmish', 'Skirmish', '/play', 'stub'],
+    ['campaign-editor', 'Editor', '/editor', 'functional'], ['level-editor', 'Level Editor', '/editor/level', 'stub'], ['lobbies', 'Lobbies', '/lobbies', 'stub'],
+  ].map(([value, label, route, viewerStatus], sortOrder) => ({ id: `studio-page-${value}`, kind: 'studio-page', label, sortOrder, lifecycleState: 'active',
+    behavior: { value, route, viewerStatus }, metadata: { blurb: `Test ${label}` }, rowRevision: 1, media: { thumbnail: descriptor(`test/pages/${value}.webp`, 640, 400) } }));
+  const menuModeSpecs: DrawableCatalog['assets'] = [
+    ['play', 'Play', '/play', 'ui-main-menu-icons-carved-solo-skirmish-png'], ['campaign-editor', 'Editor', '/editor', 'ui-main-menu-icons-carved-campaign-editor-png'],
+    ['lobbies', 'Lobbies', '/lobbies', 'ui-main-menu-icons-carved-lobbies-png'], ['settings', 'Settings', '/settings', 'ui-main-menu-icons-carved-settings-png'],
+  ].map(([value, label, route, iconRole], sortOrder) => ({ id: `menu-mode-${value}`, kind: 'menu-mode', label, sortOrder, lifecycleState: 'active',
+    behavior: { value, route, ...(value === 'settings' ? { roles: ['settings'] } : {}) }, metadata: {}, rowRevision: 1, media: { icon: descriptor(`test/menu/${iconRole}.png`, 64, 64) } }));
   return {
     schemaVersion: 1,
     revision: 1,
@@ -287,7 +323,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       media: {
         surface: descriptor(`test/subterrain/${id}.png`),
       },
-    })), ...terrainSpecs, ...terrainReviewSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...wallArtSpecs, ...presentationSpecs, ...portraitTreatmentSpecs, ...appUiSpecs, ...nineSliceSpecs, ...scrollbarSpecs, ...surfaceSpecs, ...sliderSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
+    })), ...terrainFamilySpecs, ...terrainSpecs, ...terrainReviewSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...wallArtSpecs, ...presentationSpecs, ...portraitTreatmentSpecs, ...appUiSpecs, ...nineSliceSpecs, ...scrollbarSpecs, ...surfaceSpecs, ...sliderSpecs, ...uiKitFrameSpecs, ...studioPageSpecs, ...menuModeSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
       id, kind, label, sortOrder: index, lifecycleState: 'active' as const,
       behavior: { value, ...(isDefault ? { default: true } : {}) }, metadata: {}, rowRevision: 1,
       media: Object.fromEntries(roles.map((role) => [role, descriptor(`test/${id}-${role}.png`)])),

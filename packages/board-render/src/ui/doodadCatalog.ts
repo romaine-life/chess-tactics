@@ -80,7 +80,8 @@ export function currentDoodadAssets(): DoodadAsset[] {
     const sourceDoodad = source.kind === 'doodad' ? byBaseId.get(source.id) : undefined;
     const sourceGeometry = sourceArt?.sprite ?? sourceProp?.sprite ?? sourceDoodad?.sprite;
     if (!sourceGeometry) throw new Error(`doodad "${id}" source "${source.id}" has no live raster geometry`);
-    const sourceTerrains = sourceArt?.terrains ?? sourceProp?.terrains ?? sourceDoodad?.terrains ?? ['grass', 'dirt', 'stone'];
+    const sourceTerrains = sourceArt?.terrains ?? sourceProp?.terrains ?? sourceDoodad?.terrains;
+    if (!sourceTerrains?.length) throw new Error(`doodad "${id}" source "${source.id}" has no installed terrain membership`);
     byId.set(id, {
       id,
       label: seat.label ?? id,

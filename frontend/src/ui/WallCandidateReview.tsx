@@ -5,8 +5,9 @@ import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { BoardCanvasLayer, boundsForOps } from '../render/BoardCanvasLayer';
 import { wallOverlayZIndex } from '../render/sceneDepth';
+import { defaultWallMaterial, wallMaterials } from '../core/featureAutotile';
+import { defaultTerrainFamily } from '../core/tileSockets';
 
-const MATERIALS = ['stone', 'brick', 'mossy', 'basalt', 'palisade'] as const;
 const RUN_LABEL = '2026-07-14 full-height generated ';
 
 interface AdminMediaVersion {
@@ -32,7 +33,7 @@ export function WallCandidateReview(): ReactElement {
   const [error, setError] = useState('');
   const board = useMemo(() => solveSocketBoard({
     assets: tileAssets,
-    terrainMap: Array.from({ length: 36 }, () => 'grass' as const),
+    terrainMap: Array.from({ length: 36 }, () => defaultTerrainFamily().id),
     seed: 14,
     columns: 6,
     rows: 6,
@@ -67,8 +68,9 @@ export function WallCandidateReview(): ReactElement {
         z: wallOverlayZIndex({ x, y }),
       });
     };
-    push('stone', 9, 0, 0);
-    MATERIALS.slice(1).forEach((material, index) => {
+    const installedDefault = defaultWallMaterial();
+    push(installedDefault, 9, 0, 0);
+    wallMaterials().filter((material) => material !== installedDefault).forEach((material, index) => {
       push(material, 1, index + 1, 0);
       push(material, 8, 0, index + 1);
     });
@@ -76,7 +78,7 @@ export function WallCandidateReview(): ReactElement {
   }, [versions]);
 
   const bounds = useMemo(() => boundsForOps(ops, { minX: -64, minY: -192, width: 128, height: 336 }), [ops]);
-  const ready = ops.length === 9;
+  const ready = ops.length === 1 + (wallMaterials().length - 1) * 2;
 
   return (
     <main style={{ minHeight: 'calc(100vh - 84px)', padding: '18px 24px', background: 'rgba(4, 12, 18, 0.94)', color: '#d8e8e6' }}>

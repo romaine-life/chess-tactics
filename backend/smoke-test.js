@@ -1821,6 +1821,22 @@ async function main() {
   const sharedPresentationSlot = 'wall-decor/test-banner-base.png';
   for (const [sortOrder, family] of ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'].entries()) {
     await seedSyntheticDrawable({
+      id: `terrain-family-${family}`, kind: 'terrain-family', label: `Synthetic ${family}`, sortOrder,
+      behavior: {
+        value: family,
+        roles: ['level-editor-scatter',
+          ...(['grass', 'dirt', 'stone'].includes(family) ? ['prop-seat-preview', 'wall-art-preview'] : []),
+          ...(['grass', 'stone', 'water'].includes(family) ? ['unit-art-preview'] : []),
+          ...(family === 'grass' ? ['prop-seat-preview-default', 'unit-art-preview-default'] : []),
+          ...(family === 'stone' ? ['wall-art-preview-default'] : [])],
+        ...(family === 'grass' ? { default: true, scatterDefaultShare: 60, defaultGroundCoverId: 'grass' } : {}),
+        ...(family === 'stone' ? { scatterDefaultShare: 40 } : {}),
+        ...(['sand', 'water'].includes(family) ? { defaultGroundCoverId: family } : {}),
+      }, media: {},
+    });
+  }
+  for (const [sortOrder, family] of ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'].entries()) {
+    await seedSyntheticDrawable({
       id: `test-surface-${family}`, kind: 'terrain-surface', label: `Synthetic ${family} surface`, sortOrder,
       behavior: { family, role: 'base', probability: 1 }, metadata: { familyLabel: family },
       media: { top: sharedPresentationSlot, source: sharedPresentationSlot },
@@ -1839,6 +1855,15 @@ async function main() {
     behavior: { default: true },
     media: Object.fromEntries(['world', ...['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'].map((piece) => `portrait-${piece}`)]
       .map((role) => [role, sharedPresentationSlot])),
+  });
+  await seedSyntheticDrawable({
+    id: 'test-homepage-scene', kind: 'animated-scene', label: 'Synthetic homepage scene',
+    behavior: { roles: ['homepage-scene'], width: 320, height: 180 }, media: { background: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-waterfall', kind: 'scene-animation', label: 'Synthetic waterfall',
+    behavior: { sceneRole: 'homepage-scene', x: 10, y: 20, width: 40, height: 50, frames: 12, frameMs: 140 },
+    media: { sheet: sharedPresentationSlot },
   });
   for (const [sortOrder, piece] of ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'].entries()) {
     await seedSyntheticDrawable({
@@ -1892,6 +1917,23 @@ async function main() {
     id: 'test-ui-scrollbar', kind: 'ui-scrollbar', label: 'Synthetic UI scrollbar',
     behavior: { previewKind: 'sprite', roles: ['installed-scrollbar'] }, media: { preview: sharedPresentationSlot },
   });
+  for (const [sortOrder, value] of ['primary', 'neutral', 'danger', 'panel', 'row', 'field-input'].entries()) {
+    await seedSyntheticDrawable({ id: `ui-kit-frame-${value}`, kind: 'ui-kit-frame', label: `Synthetic ${value}`, sortOrder,
+      behavior: { value }, media: { frame: sharedPresentationSlot } });
+  }
+  for (const [sortOrder, [value, label, route, viewerStatus]] of [
+    ['main-menu', 'Main Menu', '/', 'functional'], ['settings', 'Settings', '/settings', 'functional'], ['skirmish', 'Skirmish', '/play', 'stub'],
+    ['campaign-editor', 'Editor', '/editor', 'functional'], ['level-editor', 'Level Editor', '/editor/level', 'stub'], ['lobbies', 'Lobbies', '/lobbies', 'stub'],
+  ].entries()) {
+    await seedSyntheticDrawable({ id: `studio-page-${value}`, kind: 'studio-page', label, sortOrder,
+      behavior: { value, route, viewerStatus }, metadata: { blurb: `Synthetic ${label}` }, media: { thumbnail: sharedPresentationSlot } });
+  }
+  for (const [sortOrder, [value, label, route]] of [
+    ['play', 'Play', '/play'], ['campaign-editor', 'Editor', '/editor'], ['lobbies', 'Lobbies', '/lobbies'], ['settings', 'Settings', '/settings'],
+  ].entries()) {
+    await seedSyntheticDrawable({ id: `menu-mode-${value}`, kind: 'menu-mode', label, sortOrder,
+      behavior: { value, route, ...(value === 'settings' ? { roles: ['settings'] } : {}) }, media: { icon: sharedPresentationSlot } });
+  }
   const wallArtBatchRollback = await request(
     'PUT', '/api/admin/drawable-assets', adminJson,
     JSON.stringify({ assets: [
