@@ -322,6 +322,21 @@ async function seedSyntheticPropSeats() {
   );
 }
 
+async function seedSyntheticDrawable({ id, kind, label, sortOrder = 0, behavior, metadata = {}, media }) {
+  await queryDb(
+    `INSERT INTO drawable_assets (id, kind, label, sort_order, lifecycle_state, behavior, metadata, row_revision, updated_by)
+     VALUES ($1, $2, $3, $4, 'active', $5::jsonb, $6::jsonb, 1, 'smoke-fixture')`,
+    [id, kind, label, sortOrder, JSON.stringify(behavior), JSON.stringify(metadata)],
+  );
+  for (const [role, slot] of Object.entries(media)) {
+    await queryDb(
+      'INSERT INTO drawable_asset_media (asset_id, role, slot) VALUES ($1, $2, $3)',
+      [id, role, slot],
+    );
+  }
+  await queryDb('UPDATE drawable_catalog_state SET revision = revision + 1, updated_at = now() WHERE singleton = true');
+}
+
 function syntheticPng(width = 512, height = 512, background = '#16324a', foreground = '#7dd7ff') {
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
@@ -1585,6 +1600,32 @@ async function main() {
       });
     }
   }
+  const readinessStructures = [
+    ['oak', 'tree', ['grass', 'dirt'], 96, 255, 1, { w: 2, h: 2 }],
+    ['cottage', 'house', ['grass', 'dirt', 'stone'], 91, 110, 0.62, { w: 2, h: 2 }],
+    ['cabin', 'house', ['grass', 'dirt', 'stone'], 118, 107, 0.35, { w: 1, h: 1 }],
+    ['lodge', 'house', ['grass', 'dirt', 'stone'], 103, 126, 1, { w: 2, h: 2 }],
+    ['rock', 'rock', ['grass', 'dirt', 'stone', 'pebble', 'sand'], 20, 44, 1, { w: 1, h: 1 }],
+    ['fieldstone', 'rock', ['grass', 'dirt', 'stone', 'pebble', 'sand'], 25, 46, 1, { w: 1, h: 1 }],
+  ];
+  for (const [index, [id, structureKind, terrains, anchorX, anchorY, scale, footprint]] of readinessStructures.entries()) {
+    await seedSyntheticDrawable({
+      id: `structure-${id}`, kind: 'structure', label: `Synthetic ${id}`, sortOrder: index,
+      behavior: { value: id, structureKind, terrains, anchorX, anchorY, scale, footprint, blocking: true },
+      media: { back: `props/${id}/back.png`, front: `props/${id}/front.png` },
+    });
+  }
+  for (const [index, terrain] of ['grass', 'water', 'sand'].entries()) {
+    await seedSyntheticDrawable({
+      id: `ground-cover-${terrain}`, kind: 'ground-cover', label: `Synthetic ${terrain}`, sortOrder: index,
+      behavior: {
+        terrain,
+        variants: [{ role: 'v0', terrain, id: 0, frameWidth: 40, frameHeight: 37, frameCount: 6, baseX: 20, baseY: 28, contentWidth: 18 }],
+        ...(terrain === 'water' ? { edgeOnly: true, count: { sparse: 2, filled: 3 } } : {}),
+      },
+      media: { v0: `groundcover/${terrain}/v0.png` },
+    });
+  }
   for (const [index, slot] of [
     'ui/chrome/outer/atom.png',
     'ui/chrome/outer/rail.png',
@@ -2027,13 +2068,13 @@ async function main() {
     throw new Error(`Orphan prop-seat variant should be rejected: ${orphanVariantWrite.statusCode} ${orphanVariantWrite.body}`);
   }
 
-  const incompletePropSeatsWrite = await request(
+  const reducedPropSeatsWrite = await request(
     'PUT', '/api/prop-seats/default',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: { oak: propSeatsDoc.oak }, expectedRevision: 3 }),
   );
-  if (incompletePropSeatsWrite.statusCode !== 400 || JSON.parse(incompletePropSeatsWrite.body).error !== 'invalid_prop_seats') {
-    throw new Error(`Incomplete prop-seat document should be rejected: ${incompletePropSeatsWrite.statusCode} ${incompletePropSeatsWrite.body}`);
+  if (reducedPropSeatsWrite.statusCode !== 200 || JSON.parse(reducedPropSeatsWrite.body).portfolio.revision !== 4) {
+    throw new Error(`DB-defined reduced prop-seat roster should be accepted: ${reducedPropSeatsWrite.statusCode} ${reducedPropSeatsWrite.body}`);
   }
 
   // --- New-format level persistence (/api/levels): per-user, DB-backed -------
