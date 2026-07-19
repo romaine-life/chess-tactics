@@ -3082,7 +3082,7 @@ async function main() {
     workspaceWithNewLevelBody.levels.l2.name !== 'New Working Level Autosaved' ||
     !/^\/api\/media\/[0-9a-f]{64}$/.test(workspaceWithNewLevelBody.thumbnail_urls.l2 || '')
   ) {
-    throw new Error(`First Save did not create the canonical Level: ${workspaceWithNewLevel.body}`);
+    throw new Error(`First Save did not create the canonical Level: ${workspaceWithNewLevel.body}\nbackend output:\n${output}`);
   }
   const storedListThumbnail = await get(workspaceWithNewLevelBody.thumbnail_urls.l2);
   if (storedListThumbnail.statusCode !== 200 || storedListThumbnail.headers['content-type'] !== 'image/png') {
