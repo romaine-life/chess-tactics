@@ -232,6 +232,22 @@ function get(path, headers, timeoutMs) {
   return request('GET', path, headers, null, timeoutMs);
 }
 
+function deleteEditorDocumentRequest(documentId, revision, cookie = null) {
+  const body = JSON.stringify({ revision });
+  return request(
+    'DELETE', `/api/editor-documents/${documentId}`,
+    {
+      ...(cookie ? { cookie } : {}),
+      'content-type': 'application/json',
+      // Node's HTTP client does not automatically frame a DELETE request body.
+      // Without this header Express receives no JSON and rejects the request
+      // before the owner-scoped lookup can return its intentional 404.
+      'content-length': Buffer.byteLength(body),
+    },
+    body,
+  );
+}
+
 // Open a long-lived SSE stream and expose its parsed `data:` frames. Unlike request()
 // (which reads to end with a 1s socket timeout), this keeps the connection open and lets
 // a test await stream conditions. Heartbeat comments (`:keepalive`) carry no `data:` line
@@ -2647,11 +2663,7 @@ async function main() {
       { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
       JSON.stringify({ revision: 1 }),
     ),
-    await request(
-      'DELETE', `/api/editor-documents/${rivalDocumentId}`,
-      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-      JSON.stringify({ revision: 1 }),
-    ),
+    await deleteEditorDocumentRequest(rivalDocumentId, 1, 'better-auth.session=abc'),
   ];
   if (adminMutationRequests.some((response) => response.statusCode !== 404)) {
     throw new Error(`Admin review access must not grant cross-owner mutation: ${adminMutationRequests.map((response) => `${response.statusCode} ${response.body}`).join(' / ')}`);
@@ -2897,18 +2909,6 @@ async function main() {
   // Deletion is a CAS-protected cleanup operation for never-saved private work
   // only. It stays owner-scoped, never grants public access, and never reaches a
   // canonical workspace Level.
-  const deleteEditorDocumentRequest = (documentId, revision, cookie = null) => {
-    const body = JSON.stringify({ revision });
-    return request(
-      'DELETE', `/api/editor-documents/${documentId}`,
-      {
-        ...(cookie ? { cookie } : {}),
-        'content-type': 'application/json',
-        'content-length': Buffer.byteLength(body),
-      },
-      body,
-    );
-  };
   const deleteCandidate = await request(
     'POST', '/api/editor-documents/resolve',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
