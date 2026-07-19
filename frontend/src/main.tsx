@@ -16,9 +16,11 @@ import { loadLiveSeats } from './net/propSeats';
 import { loadLiveWallArt } from './net/wallArt';
 import { loadLiveUnitCatalog } from './net/unitAssets';
 import { loadLiveMediaCatalog } from './net/liveMedia';
+import { loadDrawableCatalog } from './net/drawableCatalog';
 import { loadLiveSfxProfile } from './net/sfxProfile';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
+import { applyGroundCoverCatalog, applyWallDecorCatalog } from '@chess-tactics/board-render';
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
 // content-hashed + immutable — correct — but that does NOT save a tab that
@@ -68,8 +70,10 @@ if (root) {
   const reactRoot = createRoot(root);
   reactRoot.render(<main className="app-startup-status" role="status">Loading live assets...</main>);
 
-  void Promise.all([loadLiveMediaCatalog(), loadLiveUnitCatalog()])
+  void Promise.all([loadLiveMediaCatalog(), loadDrawableCatalog(), loadLiveUnitCatalog()])
     .then(async () => {
+      applyGroundCoverCatalog();
+      applyWallDecorCatalog();
       // Prop/doodad definitions derive active raster dimensions from the media
       // snapshot, so media must be installed before the complete seat document.
       // App is intentionally imported only after both authorities are hydrated:
@@ -92,6 +96,10 @@ if (root) {
     })
     .catch((error) => {
       console.error('live asset catalog startup failed:', error);
+      if (window.location.pathname === '/studio/drawables') {
+        void import('./ui/DrawableCatalogLab').then(({ DrawableCatalogLab }) => reactRoot.render(<DrawableCatalogLab />));
+        return;
+      }
       reactRoot.render(
         <main className="app-startup-status is-error" role="alert">
           <h1>Live assets unavailable</h1>

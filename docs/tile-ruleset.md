@@ -8,11 +8,9 @@ This document is the durable contract for board terrain assets. It defines what 
 | --- | --- |
 | Family | A terrain material group such as Grass, Stone, or Water. Families are the top-level socket identity for board generation. |
 | Base tile | A tile whose north, east, south, and west edges all socket to the same family. Base tiles fill same-family regions. |
-| Transition tile | A pair-aware tile whose four edges include two families. Transition tiles are the only legal way for one family to meet another family. |
 | Reference | A non-played guide asset used to show footprint, angle, or review context. References are not selected by board generation. |
 | Edge socket | The family declared for one tile edge. Edge order is always north, east, south, west. |
 | Legal board generation | A board placement process that only places tiles whose edge sockets match their placed neighbors. |
-| Missing art | A legal socket slot that has no production asset yet. Missing art is a coverage gap, not an illegal board rule. |
 
 ## Geometry Contract
 
@@ -43,8 +41,8 @@ an abrupt edge is an occupancy boundary, not a special terrain family.
 - Exposure and material selection are independent. A face override cannot force
   an occupied/internal face to render.
 - South and east may select different side materials at the same corner.
-- A base side is the fallback. Murals, story features, transitions, and
-  waterfalls are explicit per-face overrides.
+- There is no base side or terrain-derived fallback. Subterrain is independently
+  authored per exposed face; absence renders no vertical surface.
 - Water's ordinary abrupt treatment is a thin generated cap over dark substrate.
   Waterfall art requires an explicit connected feature.
 - The top seam-repair pass stays inside the occupied diamond union and cannot
@@ -60,18 +58,11 @@ Base tiles are family-local.
 - A base tile must never directly socket to another family.
 - Visual variants are allowed, but they must keep the same footprint and socket identity.
 
-## Transition Tiles
+## Terrain boundaries
 
-Transition tiles are pair-local.
-
-- Supported pair examples: Grass-Stone, Grass-Water, Stone-Water.
-- A transition tile declares one terrain pair and one four-edge socket mask.
-- Mask order is `N E S W`.
-- Mixed masks `0001` through `1110` are transition slots.
-- Pure masks `0000` and `1111` are not transition slots; they belong to base terrain.
-- Each pair has `14` valid transition slots.
-
-For a Grass-Stone transition, the mask records which edges use the secondary family for that pair. The UI must show the resolved edge sockets, not only the mask.
+The installed tileset has no transition-tile inventory. Adjacent terrain families meet at a hard
+top-surface boundary. The socket-mask helpers remain deterministic geometry utilities, but no
+compiled pair roster or transition catalog is installed by the application.
 
 ## Legal Board Generation
 

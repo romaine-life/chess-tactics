@@ -9,6 +9,7 @@
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fe?:{edgeKey:fenceMaterial},
 //   fp?:{vertexKey:fenceMaterial},
 //   wl?:{edgeKey:wallMaterial}, wa?:{anchorEdgeKey:wallArtId},
+//   st?:{"x,y:south|east":subterrainMaterial},
 //   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
 //   gr?:generatedRegionUnits, da?:1 }. `f` fills every cell, then `t` overrides — so a "mostly one tile"
 // board stays tiny; `h` punches intentional holes back out of that fill. The autotiling ribbon
@@ -27,12 +28,13 @@
 
 import type { GroundCoverDensity } from '../core/groundCover';
 import { macroTileAsset, macroTileBreakIndices, type MacroTilePlacement } from '../core/macroTiles';
-import { DEFAULT_WALL_MATERIAL, FENCE_MATERIALS, WALL_MATERIALS, type FeatureKind, type FeatureMaterial, type RoadMaterial, type RiverMaterial, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
+import { defaultWallMaterial, fenceMaterials, wallMaterials, type FeatureKind, type FeatureMaterial, type RoadMaterial, type RiverMaterial, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, type WallArtId } from '../core/wallArt';
 import { ZONE_COLORS, ZONE_TYPES, type ZoneColor, type ZoneType } from '../core/level';
 import type { TileFamilyId } from '../core/tileSockets';
 import { UNIT_FACINGS, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
 import type { UnitFacing } from '../core/types';
+import { cleanSubterrainPlacements, type SubterrainPlacementMap } from '../core/subterrain';
 
 /**
  * One painted autotiling feature cell (road or river): which linear feature it carries and its
@@ -129,6 +131,8 @@ export interface EditorBoard {
   /** Wall art mounted on existing perimeter walls, keyed by anchor edge. A wall art item may span
    * multiple wall edges; only the anchor is stored, matching props' anchor-cell model. */
   wallArt?: Record<string, WallArtId>;
+  /** Explicit opt-in vertical surfaces. A terrain tile never supplies a default. */
+  subterrain?: SubterrainPlacementMap;
   featureCuts: Record<string, true>;
   featureExits: Record<string, true>;
   /** Authored gameplay zone entries. Empty entries are allowed so the editor's zone dropdown can
@@ -151,8 +155,8 @@ const clampNumber = (value: unknown, fallback: number, min: number, max: number)
   typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
 const validZoneTypes = new Set<string>(ZONE_TYPES);
 const validZoneColors = new Set<string>(ZONE_COLORS);
-const validFenceMaterials = new Set<string>(FENCE_MATERIALS);
-const validWallMaterials = new Set<string>(WALL_MATERIALS);
+const validWallMaterial = (value: string): boolean => wallMaterials().includes(value);
+const validFenceMaterial = (value: string): boolean => fenceMaterials().includes(value);
 
 function cellParts(key: string): [number, number] | null {
   const [xs, ys] = key.split(',');
@@ -178,7 +182,7 @@ function cleanFencePosts(value: unknown, cols: number, rows: number): Record<str
     // extra components, and other aliases that could otherwise name the same geometric vertex.
     if (!Number.isInteger(x) || !Number.isInteger(y) || `${x},${y}` !== key) continue;
     if (x < 0 || x > cols || y < 0 || y > rows) continue;
-    if (typeof material !== 'string' || !validFenceMaterials.has(material)) continue;
+    if (typeof material !== 'string' || !validFenceMaterial(material)) continue;
     out[key] = material as FenceMaterial;
   }
   return out;
@@ -467,6 +471,8 @@ export function encodeBoard(b: EditorBoard): string {
   // same edge when the board is projected to a Level.
   if (b.walls && nonEmpty(b.walls)) wire.wl = b.walls;
   if (b.wallArt && nonEmpty(b.wallArt)) wire.wa = b.wallArt;
+  const subterrain = cleanSubterrainPlacements(b.subterrain, new Set(Object.keys(b.cells)));
+  if (nonEmpty(subterrain)) wire.st = subterrain;
   if (nonEmpty(b.featureCuts)) wire.rc = Object.keys(b.featureCuts);
   if (nonEmpty(b.featureExits)) wire.rx = Object.keys(b.featureExits);
   // Zones ride primarily as entries so same-type zones and empty authored zones survive a reopen.
@@ -523,9 +529,9 @@ export function decodeBoard(code: string): EditorBoard | null {
     const wallArtPlacements: Record<string, WallArtId> = {};
     if (w.wl) {
       for (const [k, raw] of Object.entries(w.wl as Record<string, string>)) {
-        if (validWallMaterials.has(raw)) walls[k] = raw as WallMaterial;
+        if (validWallMaterial(raw)) walls[k] = raw as WallMaterial;
         else if (wallArt(raw)) {
-          walls[k] = DEFAULT_WALL_MATERIAL;
+          walls[k] = defaultWallMaterial();
           if (!wallArtAtEdge(k, wallArtPlacements, { cols, rows })) wallArtPlacements[k] = raw;
         }
       }
@@ -567,6 +573,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       left: Math.max(0, Math.min(16, Math.round(Number(apronValues[3]) || 0))),
     };
     const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows, decorativeApron);
+    const subterrain = cleanSubterrainPlacements(w.st, new Set(Object.keys(cells)));
     return {
       cols, rows, decorativeApron,
       decorativeCells: (w.dt && typeof w.dt === 'object' && !Array.isArray(w.dt) ? w.dt : {}) as Record<string, string>,
@@ -582,6 +589,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       fencePosts,
       walls,
       wallArt: wallArtPlacements,
+      subterrain,
       featureCuts,
       featureExits,
       zoneEntries,

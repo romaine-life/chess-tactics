@@ -156,6 +156,24 @@ describe('boardCode round-trip', () => {
     expect(decodeBoard(encodeBoard(emptyBoard()))!.wallArt).toEqual({});
   });
 
+  it('round-trips explicit Subterrain and drops interior or unsupported faces', () => {
+    const board = emptyBoard({
+      cols: 2,
+      rows: 1,
+      cells: { '0,0': 'grass-surf-0', '1,0': 'grass-surf-0' },
+      subterrain: {
+        '0,0:east': 'earth',
+        '0,0:south': 'roots',
+        '1,0:east': 'bedrock',
+        '4,4:south': 'sand',
+      },
+    });
+    expect(decodeBoard(encodeBoard(board))!.subterrain).toEqual({
+      '0,0:south': 'roots',
+      '1,0:east': 'bedrock',
+    });
+  });
+
   it('round-trips faction default directions', () => {
     const board = emptyBoard({
       factionDirections: { 'navy-blue': 'north', crimson: 'south-east' },

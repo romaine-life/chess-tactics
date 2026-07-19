@@ -66,17 +66,12 @@ function splitTopSrc(src: string): string {
   return src.replace(/\.png$/, '-top.png');
 }
 
-function splitSideSrc(src: string): string {
-  return src.replace(/\.png$/, '-side.png');
-}
 
 export function terrainTopSrc(src: string, animFrames = 0): string {
+  if (src.startsWith('/api/media/')) return src;
   return animFrames > 1 ? src.replace(/\.png$/, '-top-anim.png') : splitTopSrc(src);
 }
 
-export function terrainSideSrc(src: string): string {
-  return splitSideSrc(src);
-}
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   const cached = imageCache.get(src);

@@ -1,4 +1,4 @@
-import manifest from '../art/macroTiles.json';
+import { drawableAssets } from '../art/drawableCatalog';
 import { TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
 import type { TileFamilyId } from './tileSockets';
 
@@ -32,53 +32,34 @@ export interface MacroTileFrame {
 export const DEFAULT_MACRO_TILE_DENSITY = 0.55;
 export const DEFAULT_MACRO_TILE_BREAKUP = 0.15;
 
-interface MacroTileManifest {
-  footprints: Array<{ columns: number; rows: number }>;
-  families: Array<{
-    id: TileFamilyId;
-    variants: Array<{ id: string; label: string; source: string; weight?: number }>;
-  }>;
-  extras?: Array<{
-    id: string;
-    label: string;
-    family: TileFamilyId;
-    columns: number;
-    rows: number;
-    weight?: number;
-  }>;
-}
+const currentMacroTileAssets = (): MacroTileAsset[] => drawableAssets('terrain-composite').map((asset) => {
+  const { family, columns, rows, weight, variantId } = asset.behavior;
+  const media = asset.media.surface?.media;
+  if (typeof family !== 'string' || !Number.isInteger(columns) || !Number.isInteger(rows) || !media) {
+    throw new Error(`terrain composite ${asset.id} lacks family, footprint, or surface media`);
+  }
+  return {
+    id: asset.id,
+    label: asset.label,
+    family,
+    columns: Number(columns),
+    rows: Number(rows),
+    src: media.immutableUrl,
+    weight: typeof weight === 'number' ? weight : 1,
+    ...(typeof variantId === 'string' ? { variantId } : {}),
+  };
+});
 
-const catalog = manifest as MacroTileManifest;
-
-export const macroTileAssets: readonly MacroTileAsset[] = [
-  ...catalog.families.flatMap((family) => catalog.footprints.flatMap((footprint) =>
-    family.variants.map((variant) => ({
-      id: `${family.id}-${variant.id}-${footprint.columns}x${footprint.rows}`,
-      label: `${variant.label} ${footprint.columns}x${footprint.rows}`,
-      family: family.id,
-      columns: footprint.columns,
-      rows: footprint.rows,
-      src: `/assets/tiles/macro-tiles/${family.id}-${variant.id}-${footprint.columns}x${footprint.rows}.png`,
-      weight: variant.weight ?? 1,
-      variantId: variant.id,
-    })),
-  )),
-  ...(catalog.extras ?? []).map((extra) => ({
-    id: extra.id,
-    label: extra.label,
-    family: extra.family,
-    columns: extra.columns,
-    rows: extra.rows,
-    src: `/assets/tiles/macro-tiles/${extra.id}.png`,
-    weight: extra.weight ?? 1,
-    variantId: extra.id,
-  })),
-];
-
-const assetById = new Map(macroTileAssets.map((asset) => [asset.id, asset]));
+export const macroTileAssets: readonly MacroTileAsset[] = new Proxy([] as MacroTileAsset[], {
+  get: (_target, property) => {
+    const current = currentMacroTileAssets();
+    const value = Reflect.get(current, property);
+    return typeof value === 'function' ? value.bind(current) : value;
+  },
+});
 
 export function macroTileAsset(id: string): MacroTileAsset | undefined {
-  return assetById.get(id);
+  return currentMacroTileAssets().find((asset) => asset.id === id);
 }
 
 /** Tight board-space frame for a projected rectangular cell footprint. */

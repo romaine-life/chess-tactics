@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { countIllegalEdges, generateSocketBoard, solveSocketBoard } from './tileBoardGenerator';
-import { transitionPairs } from './tileSockets';
-import type { TerrainPairId, TileFamilyId, TileSocketAsset } from './tileSockets';
+import type { TileFamilyId, TileSocketAsset } from './tileSockets';
 import type { FeatureKind, RoadMaterial } from './featureAutotile';
 
 type FeatureEntry = { kind: FeatureKind; material: RoadMaterial };
@@ -10,18 +9,6 @@ const road = (material: RoadMaterial = 'stone'): FeatureEntry => ({ kind: 'road'
 const grass: TileSocketAsset = { id: 'grass', kind: 'tile', role: 'base', probability: 1 };
 const stone: TileSocketAsset = { id: 'stone', kind: 'tile', role: 'base', probability: 1 };
 const water: TileSocketAsset = { id: 'water', kind: 'tile', role: 'base', probability: 1 };
-const grassEdge: TileSocketAsset = { id: 'grass-edge', kind: 'tile', role: 'edge', probability: 1 };
-const storyPiece: TileSocketAsset = { id: 'story-piece', kind: 'tile', role: 'story', probability: 1 };
-const storyCap: TileSocketAsset = { id: 'story-cap', kind: 'tile', role: 'story', probability: 1 };
-const grassStoneNorth: TileSocketAsset = {
-  id: 'grass-stone-n',
-  kind: 'tile',
-  role: 'transition',
-  probability: 1,
-  pairId: 'grass-stone',
-  terrains: ['grass', 'stone'],
-  socketMask: 0b0001,
-};
 
 const familyAssets: Record<TileFamilyId, TileSocketAsset[]> = {
   grass: [grass],
@@ -75,83 +62,12 @@ describe('solveSocketBoard feature layer', () => {
   });
 });
 
-describe('solveSocketBoard side layers', () => {
-  it('assigns edge material only to each cell\'s void-facing south and east faces', () => {
-    const board = solveSocketBoard({
-      assets: [grass],
-      terrainMap: Array.from({ length: 4 }, () => 'grass' as const),
-      seed: 1,
-      columns: 2,
-      rows: 2,
-      familyAssets,
-      edgeAssets: { grass: [grassEdge] },
-    });
-    const at = (x: number, y: number) => board.cells.find((cell) => cell.x === x && cell.y === y)!;
-
-    expect(at(0, 0).sideAssets).toBeUndefined();
-    expect(at(1, 0).sideAssets).toEqual({ east: grassEdge });
-    expect(at(0, 1).sideAssets).toEqual({ south: grassEdge });
-    expect(at(1, 1).sideAssets).toEqual({ east: grassEdge, south: grassEdge });
-  });
-
-  it('keeps east and south mural runs independent at the southeast corner', () => {
-    const mural = Array.from({ length: 5 }, (_, index): TileSocketAsset => ({
-      id: `mural-${index}`,
-      kind: 'tile',
-      role: 'edge',
-      probability: 1,
-    }));
-    const board = solveSocketBoard({
-      assets: [grass],
-      terrainMap: Array.from({ length: 12 }, () => 'grass' as const),
-      seed: 1,
-      columns: 3,
-      rows: 4,
-      familyAssets,
-      muralEdges: { grass: mural },
-    });
-    const at = (x: number, y: number) => board.cells.find((cell) => cell.x === x && cell.y === y)!;
-
-    expect([0, 1, 2, 3].map((y) => at(2, y).sideAssets?.east?.id)).toEqual([
-      'mural-0', 'mural-1', 'mural-2', 'mural-3',
-    ]);
-    expect([2, 1, 0].map((x) => at(x, 3).sideAssets?.south?.id)).toEqual([
-      'mural-0', 'mural-1', 'mural-2',
-    ]);
-    expect(at(2, 3).sideAssets).toEqual({ east: mural[3], south: mural[0] });
-  });
-
-  it('does not bend a straight east-face story feature onto the south face at the corner', () => {
-    const board = solveSocketBoard({
-      assets: [grass],
-      terrainMap: Array.from({ length: 36 }, () => 'grass' as const),
-      seed: 1,
-      columns: 6,
-      rows: 6,
-      familyAssets,
-      edgeAssets: { grass: [grassEdge] },
-      edgeFeatures: [{ id: 'story', pieces: Array.from({ length: 20 }, () => storyPiece), cap: storyCap }],
-    });
-    const corner = board.cells.find((cell) => cell.x === 5 && cell.y === 5)!;
-
-    expect(corner.sideAssets?.east).toBe(storyCap);
-    expect(corner.sideAssets?.south).toBe(grassEdge);
-  });
-});
-
 describe('generateSocketBoard', () => {
   it('is deterministic for a seed', () => {
-    const options = { assets: [grass, stone, grassStoneNorth], seed: 42, columns: 5, rows: 4, familyAssets };
+    const options = { assets: [grass, stone], seed: 42, columns: 5, rows: 4, familyAssets };
     const first = generateSocketBoard(options).cells.map((cell) => cell.asset?.id ?? cell.missing?.label);
     const second = generateSocketBoard(options).cells.map((cell) => cell.asset?.id ?? cell.missing?.label);
     expect(first).toEqual(second);
-  });
-
-  it('keeps generated neighboring sockets legal when possible', () => {
-    const board = generateSocketBoard({ assets: [grass, stone, grassStoneNorth], seed: 5, columns: 6, rows: 4, familyAssets });
-    expect(board.stats.placed).toBe(24);
-    expect(board.stats.illegalEdges).toBe(0);
-    expect(board.stats.missingPlacements).toBeGreaterThanOrEqual(0);
   });
 
   it('falls back to the cell family base at hard edges instead of leaving gaps', () => {
@@ -169,52 +85,4 @@ describe('generateSocketBoard', () => {
     ], familyAssets)).toBe(1);
   });
 
-  it('stress-tests complete mixed catalogs without illegal or unsupported placements', () => {
-    const completeCatalog = [grass, stone, water, ...transitionAssetsForPairs(['grass-stone', 'grass-water', 'stone-water'])];
-
-    for (let seed = 1; seed <= 80; seed += 1) {
-      const board = generateSocketBoard({ assets: completeCatalog, seed, columns: 10, rows: 7, familyAssets });
-
-      expect(board.stats.placed).toBe(70);
-      expect(board.stats.illegalEdges).toBe(0);
-      expect(board.stats.missingPlacements).toBe(0);
-      expect(board.cells.some((cell) => cell.missing?.kind === 'unsupported-junction')).toBe(false);
-    }
-  });
-
-  it('reports missing art without creating illegal neighbor edges', () => {
-    const catalogWithMissingArt = [
-      grass,
-      stone,
-      water,
-      ...transitionAssetsForPairs(['grass-stone', 'grass-water']),
-    ];
-
-    for (let seed = 1; seed <= 40; seed += 1) {
-      const board = generateSocketBoard({ assets: catalogWithMissingArt, seed, columns: 10, rows: 7, familyAssets });
-
-      expect(board.stats.illegalEdges).toBe(0);
-      expect(board.stats.missingPlacements).toBe(board.cells.filter((cell) => cell.missing).length);
-      expect(board.cells.every((cell) => cell.missing?.kind !== 'unsupported-junction')).toBe(true);
-    }
-  });
 });
-
-function transitionAssetsForPairs(pairIds: TerrainPairId[]): TileSocketAsset[] {
-  return transitionPairs
-    .filter((pair) => pairIds.includes(pair.id))
-    .flatMap((pair) =>
-      Array.from({ length: 14 }, (_, index) => {
-        const mask = index + 1;
-        return {
-          id: `${pair.id}-${mask.toString(2).padStart(4, '0')}`,
-          kind: 'tile',
-          role: 'transition',
-          probability: 1,
-          terrains: pair.terrains,
-          pairId: pair.id,
-          socketMask: mask,
-        } satisfies TileSocketAsset;
-      }),
-    );
-}

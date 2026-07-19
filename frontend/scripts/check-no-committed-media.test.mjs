@@ -650,6 +650,25 @@ describe('no-committed-media guard', () => {
     }
   });
 
+  it('rejects recreation of a compiled Subterrain inventory', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-subterrain-catalog-test-'));
+    const relativePath = 'packages/board-render/src/core/subterrainLegacy.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "export const SUBTERRAIN_MATERIALS = ['earth', 'roots'];\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          path: relativePath,
+          detail: 'compiled Subterrain inventory remains after drawable-catalog cutover',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it.each([
     'const SAMPLE_GAINS = { grass: 0.5 };',
     "const TERRAIN_SAMPLE = { grass: 'grass' };",
@@ -669,6 +688,36 @@ describe('no-committed-media guard', () => {
           path: relativePath,
           detail: 'hardcoded or copy-to-source SFX profile authority remains after DB profile cutover',
         }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a compiled wall material inventory after the drawable cutover', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-wall-inventory-test-'));
+    const relativePath = 'packages/board-render/src/core/walls.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "export const WALL_MATERIALS = ['stone', 'brick'];\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ detail: 'compiled feature/barrier material inventory remains after drawable-catalog cutover' }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects compiled ground-cover and wall-decoration inventories after the drawable cutover', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-drawable-inventory-test-'));
+    const relativePath = 'packages/board-render/src/core/decorLegacy.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "const GROUND_COVER_IDS = ['grass']; const WALL_DECOR_DEFINITIONS = []; const REQUIRED_PROP_SEAT_IDS = ['oak'];\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ detail: 'compiled ground-cover/wall-decoration/prop inventory remains after drawable-catalog cutover' }),
       ]);
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });

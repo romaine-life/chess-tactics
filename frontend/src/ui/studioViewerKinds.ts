@@ -18,7 +18,7 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   page: 'Page',
   chromelab: 'Chrome Lab',
   raillab: 'Rail Lab',
-  tileside: 'Tile Sides',
+  tileside: 'Subterrain',
   walldecor: 'Wall Art Sources',
   wallart: 'Wall Art',
   sfx: 'Sound Assignments',

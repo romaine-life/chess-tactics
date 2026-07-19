@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { applyDrawableCatalog } from '@chess-tactics/board-render';
 import {
   FEATURE_DIRS,
   featureDirtySet,
@@ -17,14 +18,36 @@ import {
   fenceVertexKey,
   parseFenceVertexKey,
   parseEdgeKey,
-  FENCE_MATERIALS,
-  DEFAULT_FENCE_MATERIAL,
-  WALL_MATERIALS,
-  DEFAULT_WALL_MATERIAL,
+  fenceMaterials,
+  defaultFenceMaterial,
+  wallMaterials,
+  defaultWallMaterial,
   isNorthWestBoundaryWallEdge,
 } from './featureAutotile';
 
 const setOf = (...keys: string[]): Set<string> => new Set(keys);
+
+beforeAll(() => applyDrawableCatalog({
+  schemaVersion: 1,
+  revision: 91,
+  updatedAt: null,
+  assets: [
+    ['road-dirt', 'road-material', 'dirt', 'Dirt', true],
+    ['road-cobble', 'road-material', 'cobble', 'Cobblestone', false],
+    ['river-water', 'river-material', 'water', 'Water', true],
+    ['fence-wood', 'fence-material', 'wood', 'Wood', true],
+    ['fence-stone', 'fence-material', 'stone', 'Stone', false],
+    ['wall-stone', 'wall-material', 'stone', 'Stone', true],
+    ['wall-brick', 'wall-material', 'brick', 'Brick', false],
+    ['wall-mossy', 'wall-material', 'mossy', 'Mossy Stone', false],
+    ['wall-basalt', 'wall-material', 'basalt', 'Basalt', false],
+    ['wall-palisade', 'wall-material', 'palisade', 'Palisade', false],
+  ].map(([id, kind, value, label, isDefault], sortOrder) => ({
+    id: id as string, kind: kind as string, label: label as string, sortOrder,
+    lifecycleState: 'active' as const, behavior: { value, default: isDefault }, metadata: {}, rowRevision: 1,
+    media: { thumb: { slot: `test/${id}.png`, media: { url: `/assets/test/${id}.png`, immutableUrl: `/api/media/${'a'.repeat(64)}`, sha256: 'a'.repeat(64), mediaType: 'image/png', byteLength: 1, width: 1, height: 1 } } },
+  })),
+}));
 
 describe('feature autotile bit convention', () => {
   it('orders edges N, E, S, W with bits 1, 2, 4, 8', () => {
@@ -292,8 +315,8 @@ describe('edge fences', () => {
   });
 
   it('exposes wood + stone fence materials with wood as the default', () => {
-    expect(FENCE_MATERIALS).toEqual(['wood', 'stone']);
-    expect(DEFAULT_FENCE_MATERIAL).toBe('wood');
+    expect(fenceMaterials()).toEqual(['wood', 'stone']);
+    expect(defaultFenceMaterial()).toBe('wood');
   });
 });
 
@@ -330,8 +353,8 @@ describe('edge walls', () => {
   });
 
   it('exposes stone wall materials with stone as the default', () => {
-    expect(WALL_MATERIALS).toEqual(['stone', 'brick', 'mossy', 'basalt', 'palisade']);
-    expect(DEFAULT_WALL_MATERIAL).toBe('stone');
+    expect(wallMaterials()).toEqual(['stone', 'brick', 'mossy', 'basalt', 'palisade']);
+    expect(defaultWallMaterial()).toBe('stone');
   });
 
   it('supports generated wall material variants', () => {

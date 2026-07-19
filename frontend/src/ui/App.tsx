@@ -38,6 +38,7 @@ const TilesetStudio = lazy(() => importTilePreview().then((m) => ({ default: m.T
 const LevelEditor = lazy(() => importLevelEditor().then((m) => ({ default: m.LevelEditor })));
 const PortraitEditor = lazy(() => importPortraitEditor().then((m) => ({ default: m.PortraitEditor })));
 const WallCandidateReview = lazy(() => import('./WallCandidateReview').then((m) => ({ default: m.WallCandidateReview })));
+const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((m) => ({ default: m.DrawableCatalogLab })));
 
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
 
@@ -386,6 +387,7 @@ function renderRoute(path: string): ReactElement {
   if (path === '/play') return <Skirmish />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   if (path === '/studio/wall-candidates') return <WallCandidateReview />;
+  if (path === '/studio/drawables') return <DrawableCatalogLab />;
   // /unit-studio is a deep-link alias into the Studio's embedded Unit Art
   // Viewer editor. The Studio canonicalises it to /studio after mount.
   if (path === '/unit-studio') return <TilesetStudio initialCategory="units" />;

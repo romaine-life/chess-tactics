@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, muralTiles, type TileAsset } from '../art/tileset';
+import { tileFrameSrc, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { GameState, Move, Piece, Side, TerrainType, UnitFacing, Vec } from '../core/types';
@@ -12,7 +12,7 @@ import { useSkirmishView } from '../game/skirmishView';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
 import { clientSide, opponentSide } from '../game/clientPerspective';
 import { BoardLabBoard, boardLabCellPosition, immutableBoardLabTerrainSrc } from './BoardLabBoard';
-import { terrainSideSrc, terrainTopSrc } from './BoardTerrainLayer';
+import { terrainTopSrc } from './BoardTerrainLayer';
 import { boundsForOps, drawBoardOps, isAnimatedGroundCoverOp, loadCanvasImage } from './BoardCanvasLayer';
 import { objectBaseZIndex } from './sceneDepth';
 import { ViewPane } from '../ui/shared/ViewPane';
@@ -24,7 +24,6 @@ import { wallArtSrcs } from '../core/wallArt';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 import { unitAnchorFraction, unitAssetById } from '../ui/unitCatalog';
 import {
-  TERRAIN_SIDE_FACES,
   UNIT_IMG_MAX_H,
   UNIT_IMG_MAX_W,
   boardBounds,
@@ -57,7 +56,7 @@ function terrainFamilyForGame(terrain: TerrainType | undefined): TileFamilyId | 
   return TERRAIN_TO_FAMILY[terrain];
 }
 
-const tileAssetById = new Map(tileAssets.map((asset) => [asset.id, asset]));
+const tileAssetById = (): Map<string, TileAsset> => new Map(tileAssets.map((asset) => [asset.id, asset]));
 
 function isPlayablePieceType(type: Piece['type']): type is PlayablePieceType {
   return (PLAYABLE_PIECE_TYPES as readonly Piece['type'][]).includes(type);
@@ -223,7 +222,6 @@ function resolveSkirmishGroundCover(
     for (const cell of result.cells) {
       if (!voids.has(`${cell.x},${cell.y}`)) continue;
       cell.asset = undefined;
-      cell.sideAssets = undefined;
       cell.feature = undefined;
       cell.groundCover = undefined;
       cell.missing = undefined;
@@ -300,8 +298,6 @@ function generatedSkirmishBoard(game: GameState, seed: number): SocketBoardResul
     rows: game.size.rows,
     familyAssets: tileFamilies,
     featureMap: legacyFeatureMapForGame(game),
-    edgeAssets: edgeTiles,
-    muralEdges: muralTiles,
   });
 }
 
@@ -314,7 +310,7 @@ function exactSkirmishBoard(
   const featureOverlays = featureOverlaysForBoard(exactBoard);
   const cells: SocketBoardCell<TileAsset>[] = base.cells.map((cell) => {
     const key = `${cell.x},${cell.y}`;
-    const exactAsset = tileAssetById.get(exactBoard.cells[key]);
+    const exactAsset = tileAssetById().get(exactBoard.cells[key]);
     const feature = featureOverlays[key] ?? undefined;
     if (!exactAsset) return { ...cell, feature };
 
@@ -322,7 +318,6 @@ function exactSkirmishBoard(
     return {
       ...cell,
       asset: exactAsset,
-      sideAssets: undefined,
       terrain,
       sockets: tileSocketsForAsset(exactAsset, tileFamilies),
       feature,
@@ -373,10 +368,6 @@ function collectBoardArt(
     if (cell.asset) {
       const top = tileFrameSrc(cell.asset);
       tiles.add(immutableBoardLabTerrainSrc(terrainTopSrc(top, cell.asset.topAnimFrames)));
-      for (const face of TERRAIN_SIDE_FACES) {
-        const side = tileFrameSrc(cell.sideAssets?.[face] ?? cell.asset);
-        tiles.add(immutableBoardLabTerrainSrc(terrainSideSrc(side)));
-      }
     }
     if (cell.feature) tiles.add(featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask));
     const cover = cell.groundCover;
@@ -1334,6 +1325,7 @@ export function SkirmishBoard({ interactive = true }: { interactive?: boolean } 
           board={board}
           assetFrameSrc={tileFrameSrc}
           macroTiles={exactBoard?.macroTiles}
+          subterrain={exactBoard?.subterrain}
           boardZoom={boardZoom}
           boardPan={boardPan}
           className="skirmish-board-surface"

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { TERRAIN_SIDE_FACES, resolveTerrainSideExposure } from '@chess-tactics/board-render';
-import { tileAssets, tileFamilies, edgeTiles, muralTiles, edgeFeatures, type TileAsset } from '../art/tileset';
+import { tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
-import { terrainSideSrc, terrainTopSrc } from '../render/BoardTerrainLayer';
+import { terrainTopSrc } from '../render/BoardTerrainLayer';
 import { isUnauthorized } from '../net/auth';
 import { loadLiveMediaCatalog } from '../net/liveMedia';
 import {
@@ -192,9 +192,6 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
       columns: COLS,
       rows: ROWS,
       familyAssets: tileFamilies,
-      edgeAssets: edgeTiles,
-      muralEdges: muralTiles,
-      edgeFeatures: story ? edgeFeatures : undefined,
     }),
     [canonicalProof, fam, seed, story],
   );
@@ -204,14 +201,6 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
     for (const cell of board.cells) {
       if (!cell.asset) continue;
       slots.add(terrainTopSrc(cell.asset.src, cell.asset.topAnimFrames));
-      const exposure = resolveTerrainSideExposure(
-        cell,
-        (x, y) => occupied.has(`${x}-${y}`),
-      );
-      for (const face of TERRAIN_SIDE_FACES) {
-        if (!exposure[face]) continue;
-        slots.add(terrainSideSrc((cell.sideAssets?.[face] ?? cell.asset).src));
-      }
     }
     return slots;
   }, [board]);

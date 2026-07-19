@@ -5,9 +5,9 @@
 // board-placeable thing is a catalogCategories entry + a focus, never a bespoke view or a
 // `category === '…'` branch.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { currentLiveMediaCatalog, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
-import { tileFamilies, edgeTiles, wallThumbSrc } from '../art/tileset';
-import { WALL_MATERIALS, WALL_MATERIAL_LABELS, type WallMaterial } from '../core/featureAutotile';
+import { currentLiveMediaCatalog, drawableAssets, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { tileFamilies, wallThumbSrc } from '../art/tileset';
+import type { WallMaterial } from '../core/featureAutotile';
 import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
 import {
   terrainLabels,
@@ -30,7 +30,7 @@ import { PORTRAIT_METHODS, PORTRAIT_PIECES, portraitMasterSrc, type PortraitMeth
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
 import { SurfaceLibraryStudio, SurfaceViewer } from './SurfaceLibraryStudio';
 import { TileSidesViewer } from './TileSidesViewer';
-import { TILE_SIDE_ITEMS, tileSideFamilyCount, type TileSideItem } from './tileSideCatalog';
+import { TILE_SIDE_ITEMS, type TileSideItem } from './tileSideCatalog';
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS } from './ChromeLab';
@@ -138,35 +138,13 @@ type PortraitCandidateAsset = { id: string; piece: PortraitPiece; method: Portra
 const PORTRAIT_CANDIDATE_ASSETS: PortraitCandidateAsset[] = PORTRAIT_PIECES.flatMap((piece) =>
   PORTRAIT_METHODS.map((m) => ({ id: `${piece}-${m.key}`, piece, method: m.key, methodLabel: m.label, methodSub: m.sub })));
 type WallCatalogAsset = { id: string; material: WallMaterial; label: string; badge: string; method: string; notes: string };
-const WALL_CATALOG_META: Record<WallMaterial, { method: string; notes: string }> = {
-  stone: {
-    method: 'Photoscan material + runtime geometry',
-    notes: 'Photoscanned wall texture from the staged wall pack, projected into the shipped north/west perimeter geometry.',
-  },
-  brick: {
-    method: 'Codex img2img material + runtime geometry',
-    notes: 'Method-gated Codex img2img brick material, projected into the same shipped north/west perimeter geometry.',
-  },
-  mossy: {
-    method: 'PixelLab material + runtime geometry',
-    notes: 'PixelLab tiles_pro mossy-stone material candidate, projected into the same shipped north/west perimeter geometry.',
-  },
-  basalt: {
-    method: 'PixelLab material + runtime geometry',
-    notes: 'PixelLab tiles_pro basalt material candidate, projected into the same shipped north/west perimeter geometry.',
-  },
-  palisade: {
-    method: 'PixelLab material + runtime geometry',
-    notes: 'PixelLab tiles_pro palisade-plank material candidate, projected into the same shipped north/west perimeter geometry.',
-  },
-};
-const WALL_CATALOG_ASSETS: WallCatalogAsset[] = WALL_MATERIALS.map((material) => ({
-  id: `wall-${material}`,
-  material,
-  label: `${WALL_MATERIAL_LABELS[material]} wall`,
-  badge: 'edge blocker',
-  method: WALL_CATALOG_META[material].method,
-  notes: WALL_CATALOG_META[material].notes,
+const wallCatalogAssets = (): WallCatalogAsset[] => drawableAssets('wall-material').map((asset) => ({
+  id: asset.id,
+  material: typeof asset.behavior.value === 'string' ? asset.behavior.value : asset.id,
+  label: asset.label,
+  badge: typeof asset.metadata.badge === 'string' ? asset.metadata.badge : 'edge blocker',
+  method: typeof asset.metadata.method === 'string' ? asset.metadata.method : '',
+  notes: typeof asset.metadata.notes === 'string' ? asset.metadata.notes : '',
 }));
 type TileFilter = 'base' | 'board';
 type LabMode = 'board' | 'tile' | 'unit' | 'doodad';
@@ -592,7 +570,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedFenceArtworkId, setSelectedFenceArtworkId] = useState<string>(initialRoute.selectedFenceArtworkId ?? '');
   const [fenceEditorLaunchError, setFenceEditorLaunchError] = useState<string | null>(null);
   const [wallArtDraftSourceId, setWallArtDraftSourceId] = useState<string | null>(null);
-  const [selectedWallId, setSelectedWallId] = useState<string>(WALL_CATALOG_ASSETS[0].id);
+  const [selectedWallId, setSelectedWallId] = useState<string>(() => wallCatalogAssets()[0]?.id ?? '');
   // Which family the embedded Tileset Surfaces inspector (Viewer 'surfacetiles' kind) opens on.
   const [selectedSurfaceFamily, setSelectedSurfaceFamily] = useState(initialRoute.selectedSurfaceFamily ?? SURFACE_TILE_FAMILIES[0]);
   // Which menu region the embedded Scene Animations inspector (Viewer 'sceneanim' kind) shows.
@@ -1270,7 +1248,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const wallsCatalogType: CatalogType<WallCatalogAsset> = {
     id: 'walls',
     label: 'Walls',
-    assets: WALL_CATALOG_ASSETS,
+    assets: wallCatalogAssets(),
     card: (wall) => ({ img: wallThumbSrc(wall.material), title: wall.label, badge: wall.badge }),
     sections: (visible) => [{ id: 'walls', label: 'Walls', assets: [...visible] }],
     query: {
@@ -1462,47 +1440,27 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // selector tabs / main pane / controls are rendered by mapping or reading the
   // active entry. Adding a category is one entry here — it cannot ship missing a
   // shared control. (docs/studio-control-architecture.md)
-  // Tile SIDES — a read-only inspection catalog. Same tiles as the placement catalog (plus the
-  // frayed perimeter edges), but routed to the Viewer instead of the Level Editor, and with no
-  // 🖌 arm action — it's for scrutinising the cliff/side faces, not painting. Descriptor path,
-  // so Search + family filter + Zoom + View-Selected come for free (ADR-0029).
-  const tileSideFamilies = Object.keys(tileFamilies) as TileFamilyId[];
+  // Subterrain — a read-only inspection catalog for the independently placeable vertical
+  // surfaces. Membership and media come from the database-owned drawable catalog.
   const tileSidesCatalogType: CatalogType<TileSideItem> = {
     id: 'tilesides',
-    label: 'Tile Sides',
+    label: 'Subterrain',
     assets: TILE_SIDE_ITEMS,
     card: (item) => ({ img: item.src, title: item.label, badge: item.role }),
     sections: (visible) => {
-      const edges = visible.filter((item) => item.role === 'edge');
-      const base = visible.filter((item) => item.role !== 'edge');
-      const out: { id: string; label: string; assets: TileSideItem[] }[] = [];
-      if (base.length) out.push({ id: 'tiles', label: 'Tiles', assets: base });
-      if (edges.length) out.push({ id: 'edges', label: 'Frayed perimeter edges', assets: edges });
-      return out;
+      return [{ id: 'subterrain', label: 'Subterrain surfaces', assets: [...visible] }];
     },
     query: {
       value: tileSideSearch,
       set: setTileSideSearch,
-      placeholder: 'family, role...',
-      match: (item, q) => [item.label, item.family, item.role].join(' ').toLowerCase().includes(q),
+      placeholder: 'subterrain surface...',
+      match: (item, q) => [item.label, item.role].join(' ').toLowerCase().includes(q),
     },
     zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
-    filters: [
-      {
-        id: 'family',
-        label: 'Tile Family',
-        options: tileSideFamilies.map((fam) => ({ id: fam, label: terrainLabels[fam], sub: `${tileSideFamilyCount(fam)} tiles` })),
-        memberOf: (item) => [item.family],
-        selected: selectedSideFamilies,
-        toggle: (id) => setSelectedSideFamilies((cur) => (cur.includes(id as TileFamilyId) ? cur.filter((x) => x !== id) : [...cur, id as TileFamilyId])),
-        selectAll: () => setSelectedSideFamilies(tileSideFamilies),
-        clear: () => setSelectedSideFamilies([]),
-      },
-    ],
     onSelect: (item) => setSelectedTileSideId(item.id),
     onView: (item) => { setSelectedTileSideId(item.id); openViewer('tileside'); },
     selectedId: selectedTileSideId,
-    note: 'Inspect each tile’s cliff/side faces — includes the frayed perimeter edges.',
+    note: 'Inspect opt-in vertical Subterrain surfaces. These are independent from terrain tiles.',
   };
   const fencesCatalogType: CatalogType<FenceArtKit> = {
     id: 'fences',
@@ -1551,7 +1509,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: <CatalogControls type={tilesCatalogType} />,
     },
     {
-      id: 'tilesides', label: 'Tile Sides', hint: 'Inspect the cliff/side faces of every tile, including the frayed perimeter edges.',
+      id: 'tilesides', label: 'Subterrain', hint: 'Inspect the opt-in vertical surfaces independently from terrain tiles.',
       main: <CatalogGrid type={tileSidesCatalogType} />,
       controls: <CatalogControls type={tileSidesCatalogType} />,
     },

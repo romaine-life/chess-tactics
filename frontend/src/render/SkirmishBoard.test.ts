@@ -42,7 +42,7 @@ const exactBoard = (): EditorBoard => {
 };
 
 describe('buildSkirmishBoard', () => {
-  it('uses the continuity mural for generated gameplay perimeter faces', () => {
+  it('does not synthesize subterrain for generated gameplay perimeter faces', () => {
     const generated = createSkirmish({ seed: 1, size: { cols: 3, rows: 4 } });
     const game = {
       ...generated,
@@ -53,10 +53,9 @@ describe('buildSkirmishBoard', () => {
         elevation: 0,
       })),
     };
-    const corner = buildSkirmishBoard(game, 1).cells.find((cell) => cell.x === 2 && cell.y === 3)!;
-
-    expect(corner.sideAssets?.east?.id).toBe('grass-mural-3');
-    expect(corner.sideAssets?.south?.id).toBe('grass-mural-0');
+    const board = buildSkirmishBoard(game, 1);
+    expect(board.cells).toHaveLength(12);
+    expect(board.cells.every((cell) => !('sideAssets' in cell))).toBe(true);
   });
 
   it('uses exact tile ids from saved boardCode instead of seed-picked variants', () => {

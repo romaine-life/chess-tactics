@@ -38,8 +38,9 @@ import {
   TERRAIN_SIDE_FACES,
   resolveTerrainSideExposure,
   resolveTerrainSideFaces,
-  resolveTerrainSideMaterials,
+  type TerrainSideMaterials,
 } from './terrainSides';
+import { subterrainFaceKey, subterrainMaterialSrc } from '../core/subterrain';
 import {
   mirrorGlassOpsForSurfaces,
   mirrorSurfacesForPlacements,
@@ -125,8 +126,8 @@ export interface BoardDrawOptions {
   ambientCover?: boolean;
 }
 
-const studioTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
-const resolveTile = (id: string): StudioAsset | undefined => studioTiles.find((asset) => asset.id === id);
+const resolveTile = (id: string): StudioAsset | undefined =>
+  studioFamilies.flatMap((family) => family.assets).find((asset) => asset.id === id);
 const resolveUnit = (id: string): UnitAsset | undefined => unitArtForId(id);
 const resolveDoodad = (id: string): DoodadAsset | undefined => doodadAsset(id);
 
@@ -317,12 +318,12 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
 
       const tile = board.cells[key] ? resolveTile(board.cells[key]) : undefined;
       if (tile) {
-        const frameSrc = assetFrameSrc(tile, 0);
         const sideFaces = resolveTerrainSideFaces(
           resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupiedTerrain.has(`${nextX},${nextY}`)),
-          resolveTerrainSideMaterials(tile, undefined, (source) => (
-            assetFrameSrc(source, 0).replace(/\.png$/, '-side.png')
-          )),
+          Object.fromEntries(TERRAIN_SIDE_FACES.flatMap((face) => {
+            const material = board.subterrain?.[subterrainFaceKey(x, y, face)];
+            return material ? [[face, subterrainMaterialSrc(material)]] : [];
+          })) as TerrainSideMaterials<string>,
         );
         for (const face of TERRAIN_SIDE_FACES) {
           const { exposed, material } = sideFaces[face];
@@ -342,6 +343,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
             z: zIndex,
           });
         }
+        const frameSrc = assetFrameSrc(tile, 0);
         if (!macroOwnedTerrain.has(key)) {
           ops.push({ layer: 'terrain', src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
         }
@@ -560,6 +562,7 @@ export function boardContentHash(board: RenderBoard): string {
     `fp:${sortedEntries(board.fencePosts ?? {})}`,
     `wl:${sortedEntries(board.walls ?? {})}`,
     `wa:${sortedEntries(board.wallArt ?? {})}`,
+    `st:${sortedEntries(board.subterrain ?? {})}`,
     `x:${sortedEntries(board.featureCuts)}`,
     `xe:${sortedEntries(board.featureExits)}`,
   ];
