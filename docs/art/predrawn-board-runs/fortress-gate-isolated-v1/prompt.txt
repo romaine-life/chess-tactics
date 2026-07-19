@@ -1,0 +1,86 @@
+Use case: stylized-concept
+Asset type: exact 3840x2160 full-screen 16:9 tactical-game battlefield art
+
+PRIMARY REQUEST
+Paint one continuous, polished environment containing the exact authored 5-column by 11-row battlefield described below. Derive the environment, materials, palette, lighting, texture language, and finish only from Image 1. Make the playable perimeter unmistakable through a coherent in-world environmental boundary, while the surrounding environment continues naturally to every edge of the frame.
+
+CAMERA-OVERSCAN FRAME
+Output exactly 3840x2160 pixels. Keep the complete playable board and its immediate environmental boundary inside the centered 60% of the frame in both screen axes: x=20%..80% and y=20%..80%. The outer 20% on every edge is additional continuous, meaningful scenery naturally extrapolated from Image 1 for camera roaming. It is not padding or crop allowance. Do not enlarge, compact, distort, or redesign the board to fill the extra canvas. Do not extend the board grid into the surrounding scenery.
+
+REFERENCE ROLES — STRICT AUTHORITY ORDER
+Image 1 is the only image input. It is the canonical unit-free, ground-cover-free, top-surfaces-only render of this exact level. Its complete 5x11 board, projection, cell count, roads, barriers, props, materials, and landmark positions are authoritative. It contains no decorative board sides. Do not invent a vertical board skirt, cliff face, attached side strip, extra row, or extra column.
+No prior candidate, accepted plate, beauty render, geometry-guide image, or unrelated style image is supplied.
+
+PROJECTION CONTRACT
+Use a parallel orthographic isometric board plane, not perspective convergence. Grid x+ moves down-right at approximately 29 degrees from horizontal. Grid y+ moves down-left at approximately 151 degrees from horizontal. The projected step vectors have equal screen length. There are exactly 5 steps across the short axis and exactly 11 steps along the long axis. Preserve the elongated parallelogram in Image 1. Do not turn it into a square, compact rhombus, symmetric diamond, trapezoid, or perspective wedge.
+
+COORDINATE CONVENTION
+Coordinates are (x,y), x=0..4, y=0..10. No playable coordinate exists beyond those ranges.
+S = flat passable ordinary terrain whose appearance is owned by Image 1
+T = flat passable fortified surface at the same gameplay elevation as ordinary terrain
+R = cobblestone road overlay with no elevation change
+B = compact impassable boulder occupying exactly one tile
+H = compact impassable cottage occupying exactly one tile
+
+EXACT 55-TILE CONTENT, x=0 through x=4 on every row
+y=0: S, S, S, S, S
+y=1: S, S, S, S, S
+y=2: S, S, S, S, S
+y=3: S, S+R, S+R, S+R, S+R
+y=4: S, S+R, S, S, S
+y=5: T+B, T+R, T, T+R, T+H
+y=6: S, S, S, S+R, S
+y=7: S, S, S, S+R, S
+y=8: S, S, S, S+R, S+R
+y=9: S, S, S, S, S+R
+y=10: S, S, S, S, S+R
+
+SURFACE CONTINUITY CONTRACT
+Tile coordinates are semantic addresses, not visible square texture swatches. Do not preserve, redraw, or imply the individual square boundaries of ordinary terrain tiles. Continue the ordinary terrain visible in Image 1 as one continuous natural surface, with variation derived from that image rather than invented from a named biome. Variations may cross many cell boundaries and must not reveal the hidden grid. Only authored roads, fixed footprints, blocking edge objects, and the exact outer perimeter may align visibly to cell geometry.
+
+EXACT ROAD GRAPH
+Segment A is exactly:
+(1,5) -> (1,4) -> (1,3) -> (2,3) -> (3,3) -> (4,3) -> terminates at the east perimeter threshold.
+Segment B is exactly:
+(3,5) -> (3,6) -> (3,7) -> (3,8) -> (4,8) -> (4,9) -> (4,10) -> terminates at the south-east perimeter threshold.
+Do not add road to a coordinate absent from these segments. An exit threshold ends at the playable perimeter; it does not imply another tile or column outside the board.
+
+EXACT BLOCKING STONE-FENCE / WALL EDGES
+Each pair below is one impassable shared edge. Render a low stone fence, wall, or fortified barrier centered on that edge without consuming either adjacent tile:
+0,5|0,6
+1,5|1,6
+1,5|2,5
+0,4|0,5
+4,5|4,6
+4,4|4,5
+3,4|3,5
+2,5|3,5
+There are exactly 8 blocking edges. Preserve their topology and do not merge them into a different enclosure.
+
+EXACT FIXED FOOTPRINTS
+Compact boulder at (0,5), exactly one tile in footprint and impassable.
+Compact cottage at (4,5), exactly one tile in footprint and impassable.
+Do not add, move, enlarge, or reinterpret a footprint.
+
+EXACT PLAYABLE PERIMETER
+The playable boundary is the outer edge of the exact 5x11 board:
+- outer y=0 edges of x=0 through x=4
+- outer y=10 edges of x=0 through x=4
+- outer x=0 edges of y=0 through y=10
+- outer x=4 edges of y=0 through y=10
+Every tile with x=0, x=4, y=0, or y=10 is a border tile.
+The east perimeter is the outer edge of column x=4. Surrounding scenery begins immediately after that edge. It is never a sixth column and must contain no grid-aligned tile strip.
+
+BOUNDARY APPEARANCE
+Boundary LOCATION is fixed. Derive its appearance from the materials and environmental vocabulary already visible in Image 1, and carry that treatment around the exact outer perimeter. Leave natural openings only at the declared road thresholds, but make both thresholds unmistakable. The outside world remains artistically continuous yet clearly non-playable. The boundary is a top-surface transition, not a vertical side wall or a second strip of terrain.
+
+SCENE AND STYLE
+Extend the visual language of Image 1 into a seamless full-screen scene. Do not substitute a separately named biome, palette, lighting scheme, or style. Preserve the authored fortified crossing and make exterior scenery visibly non-playable without extending the grid.
+Keep the entire playable surface at one uniform gameplay elevation. Seam terrain, roads, footprints, edge objects, perimeter, and surrounding environment into one professional continuous painting.
+
+CONSTRAINTS
+No units, chess pieces, people, creatures, UI, coordinate labels, text, watermark, or baked grid lines.
+No black box, black void, floating board, vignette frame, hard crop, vertical board skirt, cliff face, attached side strip, extra row, or extra column.
+No unstated ramps, cliffs within the playable area, height tiers, pits, tactical elevation, buildings, blockers, fences, or road branches.
+No checkerboard, patchwork quilt, square terrain swatches, cell-by-cell tinting, or terrain seams that reveal ordinary tile boundaries.
+The board has exactly 5 columns, x=0 through x=4. Do not draw a sixth column on the east side. Geometry and semantics above override all artistic discretion.

@@ -41,9 +41,14 @@ export interface SkirmishViewState {
   /** Draw a deliberate board grid overlay. Default off so terrain can flow naturally. */
   showGrid: boolean;
   zoom: number;
+  /** Dynamic floor reported by the live board viewport (higher for full-scene pre-drawn art). */
+  minZoom: number;
+  /** Ordinary cap, raised only when a pre-drawn scene needs a higher coverage floor. */
+  maxZoom: number;
   pan: { x: number; y: number };
   toggle: (key: OverlayKey) => void;
   setZoom: (zoom: number) => void;
+  setMinZoom: (zoom: number) => void;
   setPan: (pan: { x: number; y: number }) => void;
   resetView: () => void;
 }
@@ -58,9 +63,18 @@ export const useSkirmishView = create<SkirmishViewState>((set) => ({
   showPromotionZones: false,
   showGrid: false,
   zoom: DEFAULT_ZOOM,
+  minZoom: MIN_ZOOM,
+  maxZoom: MAX_ZOOM,
   pan: DEFAULT_PAN,
   toggle: (key) => set((s) => ({ [key]: !s[key] })),
-  setZoom: (zoom) => set({ zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(zoom.toFixed(2)))) }),
+  setZoom: (zoom) => set((state) => ({
+    zoom: Math.min(state.maxZoom, Math.max(state.minZoom, Number(zoom.toFixed(2)))),
+  })),
+  setMinZoom: (zoom) => set((state) => {
+    const minZoom = Math.max(MIN_ZOOM, Number(zoom.toFixed(2)));
+    const maxZoom = Math.max(MAX_ZOOM, minZoom);
+    return { minZoom, maxZoom, zoom: Math.min(maxZoom, Math.max(state.zoom, minZoom)) };
+  }),
   setPan: (pan) => set({ pan }),
-  resetView: () => set({ zoom: DEFAULT_ZOOM, pan: DEFAULT_PAN }),
+  resetView: () => set((state) => ({ zoom: Math.max(DEFAULT_ZOOM, state.minZoom), pan: DEFAULT_PAN })),
 }));

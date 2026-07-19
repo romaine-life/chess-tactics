@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: "accepted; whole-board scene-alignment exception added by ADR-0118"
 date: 2026-07-10
 deciders: Nelson
+partially_superseded_by: "[ADR-0118](0118-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md)"
 ---
 
 # ADR-0076: Scaling is calibration — accepted production art is regenerated at native 1×

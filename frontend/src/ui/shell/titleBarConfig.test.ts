@@ -30,4 +30,19 @@ describe('titleBarConfig play route screen names', () => {
   it('keeps skirmish level links in skirmish context', () => {
     expect(titleBarConfig('/play', '?levelId=skirmish-profile-default&mode=skirmish')?.screenName).toBe('Skirmish');
   });
+
+  it('uses the shared control lane for play routes with or without a return target', () => {
+    expect(titleBarConfig('/play', '?mode=test&returnTo=%2Feditor%2Flevel%3Fdocument%3Ddoc-1')?.barClass)
+      .toBe('skirmish-topbar');
+    expect(titleBarConfig('/play', '?board=current-position')?.barClass).toBe('skirmish-topbar');
+    expect(titleBarConfig('/play', '?levelId=l1&mode=test')?.barClass).toBe('skirmish-topbar');
+    expect(titleBarConfig('/play', '?levelId=l1&mode=campaign')?.barClass).toBe('skirmish-topbar');
+  });
+
+  it('names the owner-operated pre-drawn reference tool', () => {
+    expect(titleBarConfig('/predrawn-reference')).toMatchObject({
+      screenName: 'Pre-drawn Reference',
+      barClass: 'predrawn-reference-topbar',
+    });
+  });
 });

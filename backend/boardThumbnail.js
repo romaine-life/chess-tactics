@@ -4,6 +4,10 @@
 
 const { createHash } = require('node:crypto');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const {
+  predrawnOcclusionMasksInFront,
+  rasterizePredrawnBoardPixels,
+} = require('@chess-tactics/board-render');
 
 const CARD_W = 1200;
 const CARD_H = 630;
@@ -14,7 +18,7 @@ const HERO_TOP = TITLEBAR_H;
 const HERO_BOTTOM = CARD_H;
 
 const MAX_RASTER_PIXELS = 8 * 1024 * 1024;
-const MAX_PNG_FALLBACK_PIXELS = 1 * 1024 * 1024;
+const MAX_PNG_FALLBACK_PIXELS = 2 * 1024 * 1024;
 const SPRITE_CACHE_MAX_WEIGHT = 32 * 1024 * 1024;
 const SPRITE_SOURCE_BINDING_MAX = 512;
 // Uploads may be as large as 32 MiB and decoded rasters may occupy another
@@ -178,8 +182,8 @@ function pngHeaderDimensions(bytes) {
   const width = bytes.readUInt32BE(16);
   const height = bytes.readUInt32BE(20);
   // PNGjs fallback temporarily owns decoded.data, ImageData, and a canvas.
-  // Keep that multi-copy path for the known small legacy PNGs only; a large
-  // Skia decode failure is safer to omit/fail than to exhaust the pod.
+  // Keep that multi-copy path bounded to small and native pre-drawn scenes; a
+  // larger Skia decode failure is safer to omit/fail than to exhaust the pod.
   if (!width || !height || width * height > MAX_PNG_FALLBACK_PIXELS) return null;
   return { width, height };
 }
@@ -495,6 +499,200 @@ async function paintTitleBar(
   ctx.shadowOffsetY = 0;
 }
 
+function projectedDrawRect(op, projection) {
+  return {
+    x: projection.originX + (op.dx - projection.minX) * projection.scale,
+    y: projection.originY + (op.dy - projection.minY) * projection.scale,
+    width: op.dw * projection.scale,
+    height: op.dh * projection.scale,
+  };
+}
+
+function intersectPixelRect(rect, clipRect) {
+  const left = Math.max(Math.floor(rect.x), Math.floor(clipRect.x));
+  const top = Math.max(Math.floor(rect.y), Math.floor(clipRect.y));
+  const right = Math.min(
+    Math.ceil(rect.x + rect.width),
+    Math.ceil(clipRect.x + clipRect.width),
+  );
+  const bottom = Math.min(
+    Math.ceil(rect.y + rect.height),
+    Math.ceil(clipRect.y + clipRect.height),
+  );
+  if (right <= left || bottom <= top) return null;
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+function withThumbnailOpacity(target, opacity, draw) {
+  const factor = opacity == null ? 1 : Math.max(0, Math.min(1, opacity));
+  if (factor >= 1) {
+    draw();
+    return;
+  }
+  const previous = target.globalAlpha;
+  target.globalAlpha = previous * factor;
+  try {
+    draw();
+  } finally {
+    target.globalAlpha = previous;
+  }
+}
+
+function paintPredrawnThumbnailOp(
+  target,
+  op,
+  img,
+  projection,
+  offsetX = 0,
+  offsetY = 0,
+  createRasterCanvas = createCanvas,
+) {
+  const transform = op.predrawnTransform;
+  if (!transform) throw new Error('pre-drawn thumbnail op has no registered transform');
+  const projected = projectedDrawRect(op, projection);
+  const left = Math.floor(Math.min(projected.x, projected.x + projected.width));
+  const top = Math.floor(Math.min(projected.y, projected.y + projected.height));
+  const right = Math.ceil(Math.max(projected.x, projected.x + projected.width));
+  const bottom = Math.ceil(Math.max(projected.y, projected.y + projected.height));
+  const width = right - left;
+  const height = bottom - top;
+  if (width <= 0 || height <= 0) return null;
+
+  const sourceCanvas = createRasterCanvas(transform.frameWidth, transform.frameHeight);
+  const sourceContext = sourceCanvas.getContext('2d');
+  sourceContext.imageSmoothingEnabled = true;
+  sourceContext.drawImage(img, 0, 0, transform.frameWidth, transform.frameHeight);
+  const source = sourceContext.getImageData(0, 0, transform.frameWidth, transform.frameHeight);
+  const pixels = rasterizePredrawnBoardPixels({
+    width: transform.frameWidth,
+    height: transform.frameHeight,
+    data: source.data,
+  }, transform, {
+    minX: projection.minX + (left - projection.originX) / projection.scale,
+    minY: projection.minY + (top - projection.originY) / projection.scale,
+    width: width / projection.scale,
+    height: height / projection.scale,
+    pixelWidth: width,
+    pixelHeight: height,
+  });
+
+  const rasterCanvas = createRasterCanvas(width, height);
+  const rasterContext = rasterCanvas.getContext('2d');
+  const output = rasterContext.createImageData(width, height);
+  output.data.set(pixels);
+  rasterContext.putImageData(output, 0, 0);
+  target.drawImage(rasterCanvas, left - offsetX, top - offsetY);
+  return { x: left, y: top, width, height };
+}
+
+function paintThumbnailOp(target, op, img, projection, offsetX = 0, offsetY = 0) {
+  const projected = projectedDrawRect(op, projection);
+  const dx = projected.x - offsetX;
+  const dy = projected.y - offsetY;
+  const dw = projected.width;
+  const dh = projected.height;
+  const clipped = Array.isArray(op.clipPolygons) && op.clipPolygons.length > 0;
+
+  withThumbnailOpacity(target, op.opacity, () => {
+    if (op.predrawnTransform) {
+      paintPredrawnThumbnailOp(target, op, img, projection, offsetX, offsetY);
+      return;
+    }
+    if (clipped) {
+      target.save();
+      target.beginPath();
+      for (const polygon of op.clipPolygons) {
+        if (!Array.isArray(polygon) || polygon.length < 6) continue;
+        target.moveTo(
+          projection.originX + (polygon[0] - projection.minX) * projection.scale - offsetX,
+          projection.originY + (polygon[1] - projection.minY) * projection.scale - offsetY,
+        );
+        for (let index = 2; index + 1 < polygon.length; index += 2) {
+          target.lineTo(
+            projection.originX + (polygon[index] - projection.minX) * projection.scale - offsetX,
+            projection.originY + (polygon[index + 1] - projection.minY) * projection.scale - offsetY,
+          );
+        }
+        target.closePath();
+      }
+      target.clip();
+    }
+
+    try {
+      if (op.flipX) {
+        target.save();
+        target.translate(dx + dw, dy);
+        target.scale(-1, 1);
+      }
+      try {
+        const drawX = op.flipX ? 0 : dx;
+        const drawY = op.flipX ? 0 : dy;
+        if (op.contain) {
+          const boxW = op.dw;
+          const boxH = op.dh;
+          const natW = img.width || boxW;
+          const natH = img.height || boxH;
+          const fit = Math.min(boxW / natW, boxH / natH);
+          const w = natW * fit;
+          const h = natH * fit;
+          const cx = drawX + (op.dw - w) * projection.scale / 2;
+          const cy = drawY + (op.dh - h) * projection.scale / 2;
+          target.drawImage(img, cx, cy, w * projection.scale, h * projection.scale);
+        } else if (op.sw != null) {
+          target.drawImage(
+            img,
+            op.sx || 0,
+            op.sy || 0,
+            op.sw,
+            op.sh || op.dh,
+            drawX,
+            drawY,
+            dw,
+            dh,
+          );
+        } else {
+          target.drawImage(img, drawX, drawY, dw, dh);
+        }
+      } finally {
+        if (op.flipX) target.restore();
+      }
+    } finally {
+      if (clipped) target.restore();
+    }
+  });
+}
+
+function paintOccludedThumbnailOp({
+  target,
+  op,
+  image,
+  masks,
+  images,
+  projection,
+  clipRect,
+  createScratchCanvas = createCanvas,
+}) {
+  const scratchRect = intersectPixelRect(projectedDrawRect(op, projection), clipRect);
+  if (!scratchRect) return null;
+
+  const scratch = createScratchCanvas(scratchRect.width, scratchRect.height);
+  const scratchCtx = scratch.getContext('2d');
+  scratchCtx.imageSmoothingEnabled = false;
+  scratchCtx.globalCompositeOperation = 'source-over';
+  paintThumbnailOp(scratchCtx, op, image, projection, scratchRect.x, scratchRect.y);
+  scratchCtx.save();
+  scratchCtx.globalCompositeOperation = 'destination-out';
+  for (const mask of masks) {
+    const maskImage = images.get(mask.src);
+    if (maskImage) {
+      paintThumbnailOp(scratchCtx, mask, maskImage, projection, scratchRect.x, scratchRect.y);
+    }
+  }
+  scratchCtx.restore();
+  target.drawImage(scratch, scratchRect.x, scratchRect.y);
+  return scratchRect;
+}
+
 async function renderLevelCard({
   plan,
   title,
@@ -526,6 +724,7 @@ async function renderLevelCard({
   );
 
   const { ops, bounds } = plan;
+  const occlusionMasks = Array.isArray(plan.occlusionMasks) ? plan.occlusionMasks : [];
   const fitBounds = plan.framingBounds || bounds;
   const heroW = CARD_W - PAD * 2;
   const heroH = HERO_BOTTOM - HERO_TOP;
@@ -537,7 +736,7 @@ async function renderLevelCard({
   ctx.imageSmoothingEnabled = false;
 
   const images = new Map();
-  const uniqueSources = [...new Set(ops.map((op) => op.src))];
+  const uniqueSources = [...new Set([...ops, ...occlusionMasks].map((op) => op.src))];
   const loadedImages = await mapWithConcurrency(uniqueSources, SPRITE_LOAD_CONCURRENCY, (src) => (
     loadSprite(
       src,
@@ -552,45 +751,33 @@ async function renderLevelCard({
   ctx.beginPath();
   ctx.rect(0, HERO_TOP, CARD_W, heroH);
   ctx.clip();
+  const projection = {
+    originX,
+    originY,
+    minX: fitBounds.minX,
+    minY: fitBounds.minY,
+    scale,
+  };
+  const heroClipRect = { x: 0, y: HERO_TOP, width: CARD_W, height: heroH };
   for (const op of ops) {
     const img = images.get(op.src);
     if (!img) continue;
-    const dx = originX + (op.dx - fitBounds.minX) * scale;
-    const dy = originY + (op.dy - fitBounds.minY) * scale;
-    const clipped = Array.isArray(op.clipPolygons) && op.clipPolygons.length > 0;
-    if (clipped) {
-      ctx.save();
-      ctx.beginPath();
-      for (const polygon of op.clipPolygons) {
-        if (!Array.isArray(polygon) || polygon.length < 6) continue;
-        ctx.moveTo(originX + (polygon[0] - fitBounds.minX) * scale, originY + (polygon[1] - fitBounds.minY) * scale);
-        for (let index = 2; index + 1 < polygon.length; index += 2) {
-          ctx.lineTo(originX + (polygon[index] - fitBounds.minX) * scale, originY + (polygon[index + 1] - fitBounds.minY) * scale);
-        }
-        ctx.closePath();
-      }
-      ctx.clip();
+    const masksInFront = op.layer === 'scene'
+      ? predrawnOcclusionMasksInFront(op, occlusionMasks)
+      : [];
+    if (!masksInFront.length) {
+      paintThumbnailOp(ctx, op, img, projection);
+      continue;
     }
-    try {
-      if (op.contain) {
-        const boxW = op.dw;
-        const boxH = op.dh;
-        const natW = img.width || boxW;
-        const natH = img.height || boxH;
-        const fit = Math.min(boxW / natW, boxH / natH);
-        const w = natW * fit;
-        const h = natH * fit;
-        const cx = op.dx + (op.dw - w) / 2;
-        const cy = op.dy + (op.dh - h) / 2;
-        ctx.drawImage(img, originX + (cx - fitBounds.minX) * scale, originY + (cy - fitBounds.minY) * scale, w * scale, h * scale);
-      } else if (op.sw != null) {
-        ctx.drawImage(img, op.sx || 0, op.sy || 0, op.sw, op.sh || op.dh, dx, dy, op.dw * scale, op.dh * scale);
-      } else {
-        ctx.drawImage(img, dx, dy, op.dw * scale, op.dh * scale);
-      }
-    } finally {
-      if (clipped) ctx.restore();
-    }
+    paintOccludedThumbnailOp({
+      target: ctx,
+      op,
+      image: img,
+      masks: masksInFront,
+      images,
+      projection,
+      clipRect: heroClipRect,
+    });
   }
   ctx.restore();
 
@@ -638,7 +825,11 @@ module.exports = {
     immutableSourceSha,
     loadSpriteWithAvailability,
     mapWithConcurrency,
+    paintOccludedThumbnailOp,
+    paintPredrawnThumbnailOp,
+    paintThumbnailOp,
     pngHeaderDimensions,
+    projectedDrawRect,
     sha256,
     sourceAvailabilityPolicy,
     constants: {

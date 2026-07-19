@@ -144,6 +144,40 @@ they are standing destinations.
   remains browse-only. These editors switch the Viewer kind in place and are
   **never** separate routes or pages; legacy deep links only enter this Viewer state.
 
+## Editable board input
+
+Per [ADR-0128](adr/0128-level-editor-secondary-drag-is-pan-only.md), the Level
+Editor's primary mouse button performs the active tool action, while the
+secondary button is pan-only everywhere in the board viewport, including over
+filled terrain and object or barrier hit targets. Erasure requires the explicit
+Erase tool; board targets never erase from a right-click or context-menu event,
+and no movement threshold decides whether a navigation gesture becomes
+destructive. Secondary gestures delegate to the canonical shared `ViewPane` so
+playable and scenic content follow the same pan behavior.
+
+## Terrain area authoring
+
+Per [ADR-0129](adr/0129-level-editor-terrain-authoring-is-explicit-and-area-scoped.md), Generate
+and Tile share one connected-terrain-area selector over the resolved playable-plus-scenic surface.
+Generate may save and rerun that scope; Tile selection remains transient. Tile's Fill selected area
+action stamps the exact armed single tile across the selected area in one undoable edit and leaves
+every coordinate outside it unchanged.
+
+Per [ADR-0131](adr/0131-sparse-scenic-terrain-separates-footprint-from-material.md), the Scenic
+terrain instrument keeps its North, East, South, West, and All directions rectangle controls and
+adds a distinct **Fill visible area** action. The shared `ViewPane` reports its live dimensions;
+current pan, zoom, and canonical projection determine the exact non-playable tile diamonds that
+intersect the visible work area. The action adds only those cells to the persisted
+`decorativeFootprint`, not an enclosing rectangle or its offscreen tips. `decorativeCells` remains
+the sole material store, so hidden material outside both the footprint and a reduced rectangle does
+not reactivate itself. Grass writes canonical grass, while Match reference materializes only the
+exact clamped playable-boundary tile and gives a projected void footprint membership without
+material. Existing authored material remains unchanged, erasing a sparse cell removes its footprint
+membership, one click creates one Undo step, and invalid or oversized requests report a no-op or
+limit instead of a partial result. This reachable, camera-aware action is the owner instrument for
+filling what is actually on screen; adding or undoing its sparse cells cannot recenter the editor
+board.
+
 ## Visual standard — instrument-grade, not boxes
 
 Dense and restrained. A tier selector is a tight **segmented control** — one

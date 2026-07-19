@@ -131,6 +131,10 @@ export function currentBoardTestHref(input: {
   appendTimeControlParams(playParams, input.timeControl);
   appendLevelEventsParam(playParams, input.events);
   appendVictoryRulesParam(playParams, input.victory);
+  const predrawnPreview = backParams.get('predrawnPreview');
+  if (predrawnPreview) playParams.set('predrawnPreview', predrawnPreview);
+  const predrawnCorners = backParams.get('predrawnCorners');
+  if (predrawnCorners) playParams.set('predrawnCorners', predrawnCorners);
   return `/play?${playParams.toString()}`;
 }
 

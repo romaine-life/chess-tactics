@@ -32,7 +32,7 @@ await build({
 const require = createRequire(import.meta.url);
 delete require.cache[outfile];
 const mod = require(outfile);
-for (const name of ['levelRenderPlan', 'boardHashForLevel', 'hydratePropSeats', 'applyLiveMediaCatalog', 'applyServerRenderSnapshot', 'boardDrawOps', 'boardSocialFramingBounds', 'playRouteScreenName', 'unitAssetProductionEligibility']) {
+for (const name of ['levelRenderPlan', 'boardHashForLevel', 'hydratePropSeats', 'applyLiveMediaCatalog', 'applyServerRenderSnapshot', 'boardDrawOps', 'boardSocialFramingBounds', 'buildPredrawnGenerationDefinition', 'playRouteScreenName', 'unitAssetProductionEligibility']) {
   if (typeof mod[name] !== 'function') {
     console.error(`@chess-tactics/board-render missing expected export: ${name}`);
     process.exit(1);

@@ -11,7 +11,13 @@
 //   wl?:{edgeKey:wallMaterial}, wa?:{anchorEdgeKey:wallArtId},
 //   st?:{"x,y:south|east":subterrainMaterial},
 //   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
-//   gr?:generatedRegionUnits, da?:1 }. `f` fills every cell, then `t` overrides — so a "mostly one tile"
+//   gr?:generatedRegionUnits,
+//   pd?:[semanticMediaSlot,referenceFrameWidth,referenceFrameHeight,registration?],
+//   da?:[top,right,bottom,left], df?:[cell], dt?:{cell:tileId}, dr?:{cell:feature},
+//   dfe?:{edgeKey:fenceMaterial}, dfp?:{vertexKey:fenceMaterial}, dwl?:{edgeKey:wallMaterial} }.
+// `pd[3]` is the stable compact legacy/v2/v3/v4 registration string. Three-field `pd` records
+// remain the byte-identical unregistered form.
+// `f` fills every cell, then `t` overrides — so a "mostly one tile"
 // board stays tiny; `h` punches intentional holes back out of that fill. The autotiling ribbon
 // features split per kind on the wire (rd=roads, rv=rivers) and merge into one `features` map on
 // decode. FENCES are edge-based, not per-cell: `fe` maps a shared-edge key (roadEdgeKey "x,y|x,y")
@@ -23,7 +29,7 @@
 // for old links/clients. `gr` stores editor-only generated-region units: saved cell selections
 // plus the Generate panel settings needed to rerun them. base64url of the JSON (no padding, +/ -> -_).
 //
-// FORWARD/BACK-COMPAT: `z`/`p`/`fe`/`fp`/`wl`/`wa` are emitted only when non-empty, so a board without them
+// FORWARD/BACK-COMPAT: `z`/`p`/`fe`/`fp`/`wl`/`wa`/`df` are emitted only when non-empty, so a board without them
 // encodes byte-identically to a code that predates them, and an OLD code decodes them to empty.
 
 import type { GroundCoverDensity } from '../core/groundCover';
@@ -35,6 +41,12 @@ import type { TileFamilyId } from '../core/tileSockets';
 import { UNIT_FACINGS, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
 import type { UnitFacing } from '../core/types';
 import { cleanSubterrainPlacements, type SubterrainPlacementMap } from '../core/subterrain';
+import {
+  normalizePredrawnBoardRegistration,
+  parsePredrawnBoardRegistration,
+  serializePredrawnBoardPreviewRegistration,
+  type PredrawnBoardCornerRegistration,
+} from '../render/predrawnRegistration';
 
 /**
  * One painted autotiling feature cell (road or river): which linear feature it carries and its
@@ -54,6 +66,21 @@ export interface EditorZoneEntry {
 }
 
 export type BoardFactionDirections = Partial<Record<UnitPalette, UnitFacing>>;
+
+/**
+ * One continuous board illustration registered against the canonical centred board viewport.
+ * The media id is a stable live-media slot, never a candidate URL or repository filename.
+ * `frameWidth`/`frameHeight` are the canonical 1x review-frame dimensions the generated image
+ * is scaled into; they do not claim that imagegen preserved the grid proportions internally.
+ */
+export interface PredrawnBoardSurface {
+  kind: 'predrawn';
+  slot: string;
+  frameWidth: number;
+  frameHeight: number;
+  /** Optional whole-plate alignment consumed by saved editor, viewer, and gameplay surfaces. */
+  registration?: PredrawnBoardCornerRegistration;
+}
 
 export type BoardGeneratedRegionCover = {
   type: TileFamilyId;
@@ -94,6 +121,8 @@ export interface EditorBoard {
   decorativeApron?: { top: number; right: number; bottom: number; left: number };
   /** Render-only generated terrain keyed by coordinates outside the playable board. */
   decorativeCells?: Record<string, string>;
+  /** Explicit render-only scenic cells outside the playable board, independent of their material. */
+  decorativeFootprint?: string[];
   decorativeFeatures?: Record<string, FeatureCell>;
   decorativeFences?: Record<string, FenceMaterial>;
   decorativeFencePosts?: Record<string, FenceMaterial>;
@@ -103,6 +132,8 @@ export interface EditorBoard {
   /** Per-faction default facing used when the level editor places new units. */
   factionDirections?: BoardFactionDirections;
   cells: Record<string, string>;
+  /** Absent means ordinary composed terrain tiles; present replaces baked board art with one plate. */
+  surface?: PredrawnBoardSurface;
   /** Opaque multi-cell terrain tops that replace the covered 1x1 top sprites. */
   macroTiles?: MacroTilePlacement[];
   units: Record<string, { unitId: string; direction: string; faction: string }>;
@@ -157,6 +188,42 @@ const validZoneTypes = new Set<string>(ZONE_TYPES);
 const validZoneColors = new Set<string>(ZONE_COLORS);
 const validWallMaterial = (value: string): boolean => wallMaterials().includes(value);
 const validFenceMaterial = (value: string): boolean => fenceMaterials().includes(value);
+const mediaSlotSegmentPattern = /^[A-Za-z0-9_][A-Za-z0-9._@+-]*$/;
+const MAX_PREDRAWN_FRAME_DIMENSION = 8192;
+
+/** Validate the persisted half of a pre-drawn surface without resolving its live media. */
+export function normalizePredrawnBoardSurface(value: unknown): PredrawnBoardSurface | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if (record.kind !== 'predrawn' || typeof record.slot !== 'string') return undefined;
+  const slot = record.slot.trim();
+  const segments = slot.split('/');
+  if (
+    !slot
+    || slot.length > 512
+    || slot.includes('//')
+    || slot.endsWith('/')
+    || segments.some((segment) => segment === '.' || segment === '..' || !mediaSlotSegmentPattern.test(segment))
+  ) return undefined;
+  const frameWidth = Number(record.frameWidth);
+  const frameHeight = Number(record.frameHeight);
+  if (
+    !Number.isSafeInteger(frameWidth)
+    || !Number.isSafeInteger(frameHeight)
+    || frameWidth < 1
+    || frameHeight < 1
+    || frameWidth > MAX_PREDRAWN_FRAME_DIMENSION
+    || frameHeight > MAX_PREDRAWN_FRAME_DIMENSION
+  ) return undefined;
+  const registration = normalizePredrawnBoardRegistration(record.registration);
+  return {
+    kind: 'predrawn',
+    slot,
+    frameWidth,
+    frameHeight,
+    ...(registration ? { registration } : {}),
+  };
+}
 
 function cellParts(key: string): [number, number] | null {
   const [xs, ys] = key.split(',');
@@ -194,6 +261,25 @@ function sortCellKeys(keys: string[]): string[] {
     const pb = cellParts(b) ?? [0, 0];
     return pa[1] - pb[1] || pa[0] - pb[0];
   });
+}
+
+/** Keep only canonical safe-integer cell keys outside the playable board. */
+function cleanDecorativeFootprint(value: unknown, cols: number, rows: number): string[] {
+  if (!Array.isArray(value)) return [];
+  const keys = new Set<string>();
+  for (const rawKey of value) {
+    if (typeof rawKey !== 'string') continue;
+    const parts = rawKey.split(',');
+    if (parts.length !== 2) continue;
+    const x = Number(parts[0]);
+    const y = Number(parts[1]);
+    // Exact re-serialization rejects fractions, whitespace, leading zeroes, exponents, and aliases
+    // such as `-0` that could otherwise name the same logical cell more than once.
+    if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y) || `${x},${y}` !== rawKey) continue;
+    if (x >= 0 && x < cols && y >= 0 && y < rows) continue;
+    keys.add(rawKey);
+  }
+  return sortCellKeys([...keys]);
 }
 
 function normalizeZoneEntries(entries: readonly EditorZoneEntry[] | undefined, cols: number, rows: number): EditorZoneEntry[] {
@@ -426,9 +512,20 @@ export function encodeBoard(b: EditorBoard): string {
     if (!(key in b.cells)) h.push(key);
   }
   const wire: Record<string, unknown> = { c: b.cols, r: b.rows };
+  const surface = normalizePredrawnBoardSurface(b.surface);
+  if (surface) wire.pd = [
+    surface.slot,
+    surface.frameWidth,
+    surface.frameHeight,
+    ...(surface.registration
+      ? [serializePredrawnBoardPreviewRegistration(surface.registration)]
+      : []),
+  ];
   if (b.decorativeApron && Object.values(b.decorativeApron).some((value) => value > 0)) {
     wire.da = [b.decorativeApron.top, b.decorativeApron.right, b.decorativeApron.bottom, b.decorativeApron.left];
   }
+  const decorativeFootprint = cleanDecorativeFootprint(b.decorativeFootprint, b.cols, b.rows);
+  if (decorativeFootprint.length) wire.df = decorativeFootprint;
   if (b.decorativeCells && nonEmpty(b.decorativeCells)) wire.dt = b.decorativeCells;
   if (b.decorativeFeatures && nonEmpty(b.decorativeFeatures)) wire.dr = b.decorativeFeatures;
   if (b.decorativeFences && nonEmpty(b.decorativeFences)) wire.dfe = b.decorativeFences;
@@ -573,9 +670,21 @@ export function decodeBoard(code: string): EditorBoard | null {
       left: Math.max(0, Math.min(16, Math.round(Number(apronValues[3]) || 0))),
     };
     const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows, decorativeApron);
+    const surface = Array.isArray(w.pd)
+      ? normalizePredrawnBoardSurface({
+        kind: 'predrawn',
+        slot: w.pd[0],
+        frameWidth: w.pd[1],
+        frameHeight: w.pd[2],
+        registration: typeof w.pd[3] === 'string'
+          ? parsePredrawnBoardRegistration(w.pd[3])
+          : undefined,
+      })
+      : undefined;
     const subterrain = cleanSubterrainPlacements(w.st, new Set(Object.keys(cells)));
     return {
-      cols, rows, decorativeApron,
+      cols, rows, decorativeApron, surface,
+      decorativeFootprint: cleanDecorativeFootprint(w.df, cols, rows),
       decorativeCells: (w.dt && typeof w.dt === 'object' && !Array.isArray(w.dt) ? w.dt : {}) as Record<string, string>,
       decorativeFeatures: (w.dr && typeof w.dr === 'object' && !Array.isArray(w.dr) ? w.dr : {}) as Record<string, FeatureCell>,
       decorativeFences: (w.dfe && typeof w.dfe === 'object' && !Array.isArray(w.dfe) ? w.dfe : {}) as Record<string, FenceMaterial>,

@@ -6,11 +6,15 @@ import {
   boardContentHash,
   boardDrawOps,
   boardSocialFramingBounds,
+  predrawnOcclusionMaskOps,
+  predrawnOcclusionMasksInFront,
+  rasterizePredrawnBoardPixels,
   uniqueDrawSrcs,
   type BakeBounds,
   type BoardDrawOp,
 } from '@chess-tactics/board-render';
 import type { EditorBoard } from '../ui/boardCode';
+import { boardCanvasScratchRegion } from './BoardCanvasLayer';
 
 export {
   BAKE_GEOMETRY,
@@ -23,6 +27,16 @@ export {
 
 type Canvas2D = HTMLCanvasElement | OffscreenCanvas;
 type ThumbnailContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+export interface BoardThumbnailScratchSurface {
+  canvas: Canvas2D;
+  context: ThumbnailContext;
+}
+
+export type BoardThumbnailScratchFactory = (
+  width: number,
+  height: number,
+) => BoardThumbnailScratchSurface | undefined;
 
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
 
@@ -51,6 +65,74 @@ function createCanvas(width: number, height: number): Canvas2D {
   return canvas;
 }
 
+export type PredrawnBoardThumbnailPainter = (
+  ctx: ThumbnailContext,
+  image: HTMLImageElement,
+  op: BoardDrawOp,
+  bounds: BakeBounds,
+  scale: number,
+) => void;
+
+/** Paint one registered complete scene through the shared destination-to-source raster map. */
+export const paintPredrawnBoardThumbnailOp: PredrawnBoardThumbnailPainter = (
+  ctx,
+  image,
+  op,
+  bounds,
+  scale,
+): void => {
+  const transform = op.predrawnTransform;
+  if (!transform) throw new Error('pre-drawn thumbnail op has no registered transform');
+  const region = boardCanvasScratchRegion(op, bounds, scale);
+  if (!region) return;
+
+  const sourceCanvas = createCanvas(transform.frameWidth, transform.frameHeight);
+  const sourceContext = sourceCanvas.getContext('2d') as ThumbnailContext | null;
+  if (!sourceContext) throw new Error('pre-drawn thumbnail source context is unavailable');
+  sourceContext.imageSmoothingEnabled = true;
+  sourceContext.drawImage(image, 0, 0, transform.frameWidth, transform.frameHeight);
+  const source = sourceContext.getImageData(0, 0, transform.frameWidth, transform.frameHeight);
+  const pixels = rasterizePredrawnBoardPixels({
+    width: transform.frameWidth,
+    height: transform.frameHeight,
+    data: source.data,
+  }, transform, {
+    minX: region.bounds.minX,
+    minY: region.bounds.minY,
+    width: region.bounds.width,
+    height: region.bounds.height,
+    pixelWidth: region.width,
+    pixelHeight: region.height,
+  });
+
+  const targetCanvas = createCanvas(region.width, region.height);
+  const targetContext = targetCanvas.getContext('2d') as ThumbnailContext | null;
+  if (!targetContext) throw new Error('pre-drawn thumbnail target context is unavailable');
+  const output = targetContext.createImageData(region.width, region.height);
+  output.data.set(pixels);
+  targetContext.putImageData(output, 0, 0);
+  ctx.drawImage(
+    targetCanvas,
+    0,
+    0,
+    region.width,
+    region.height,
+    region.offsetX,
+    region.offsetY,
+    region.width,
+    region.height,
+  );
+};
+
+function createBoardThumbnailScratchSurface(
+  width: number,
+  height: number,
+): BoardThumbnailScratchSurface | undefined {
+  const canvas = createCanvas(width, height);
+  const context = canvas.getContext('2d') as ThumbnailContext | null;
+  return context ? { canvas, context } : undefined;
+}
+
 function canvasToBlob(canvas: Canvas2D): Promise<Blob> {
   if ('convertToBlob' in canvas) return canvas.convertToBlob({ type: 'image/png' });
   return new Promise<Blob>((resolve, reject) => {
@@ -61,12 +143,13 @@ function canvasToBlob(canvas: Canvas2D): Promise<Blob> {
 async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ canvas: Canvas2D; bounds: BakeBounds } | null> {
   const bounds = boardBounds(board);
   const ops = boardDrawOps(board);
+  const occlusionMasks = board.surface?.kind === 'predrawn' ? predrawnOcclusionMaskOps(board) : [];
   const canvas = createCanvas(Math.max(1, Math.round(bounds.width * scale)), Math.max(1, Math.round(bounds.height * scale)));
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
   if (!ctx) return null;
   ctx.imageSmoothingEnabled = false;
 
-  const srcs = [...new Set(ops.map((op) => op.src))];
+  const srcs = [...new Set([...ops, ...occlusionMasks].map((op) => op.src))];
   const images = new Map<string, HTMLImageElement>();
   await Promise.all(
     srcs.map(async (src) => {
@@ -78,12 +161,61 @@ async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ c
     }),
   );
 
+  drawBoardThumbnailOps(ctx, ops, bounds, scale, images, occlusionMasks);
+  return { canvas, bounds };
+}
+
+export function drawBoardThumbnailOps(
+  ctx: ThumbnailContext,
+  ops: readonly BoardDrawOp[],
+  bounds: BakeBounds,
+  scale: number,
+  images: ReadonlyMap<string, HTMLImageElement>,
+  occlusionMasks: readonly BoardDrawOp[] = [],
+  scratchFactory: BoardThumbnailScratchFactory = createBoardThumbnailScratchSurface,
+): void {
+  let scratch: BoardThumbnailScratchSurface | undefined;
   for (const op of ops) {
     const img = images.get(op.src);
     if (!img) continue;
-    paintBoardThumbnailOp(ctx, img, op, bounds, scale);
+    const masksInFront = op.layer === 'scene'
+      ? predrawnOcclusionMasksInFront(op, occlusionMasks)
+      : [];
+    if (masksInFront.length === 0) {
+      paintBoardThumbnailOp(ctx, img, op, bounds, scale);
+      continue;
+    }
+    const region = boardCanvasScratchRegion(op, bounds, scale);
+    if (!region) continue;
+    scratch ??= scratchFactory(region.width, region.height);
+    if (!scratch) continue;
+    if (scratch.canvas.width < region.width) scratch.canvas.width = region.width;
+    if (scratch.canvas.height < region.height) scratch.canvas.height = region.height;
+    const scratchContext = scratch.context;
+    scratchContext.clearRect(0, 0, region.width, region.height);
+    scratchContext.imageSmoothingEnabled = false;
+    scratchContext.globalCompositeOperation = 'source-over';
+    scratchContext.globalAlpha = 1;
+    paintBoardThumbnailOp(scratchContext, img, op, region.bounds, scale);
+    scratchContext.save();
+    scratchContext.globalCompositeOperation = 'destination-out';
+    for (const mask of masksInFront) {
+      const maskImage = images.get(mask.src);
+      if (maskImage) paintBoardThumbnailOp(scratchContext, maskImage, mask, region.bounds, scale);
+    }
+    scratchContext.restore();
+    ctx.drawImage(
+      scratch.canvas,
+      0,
+      0,
+      region.width,
+      region.height,
+      region.offsetX,
+      region.offsetY,
+      region.width,
+      region.height,
+    );
   }
-  return { canvas, bounds };
 }
 
 function withOpacity(ctx: ThumbnailContext, opacity: number | undefined, draw: () => void): void {
@@ -159,7 +291,12 @@ export function paintBoardThumbnailOp(
   op: BoardDrawOp,
   bounds: BakeBounds,
   scale: number,
+  predrawnPainter: PredrawnBoardThumbnailPainter = paintPredrawnBoardThumbnailOp,
 ): void {
+  if (op.predrawnTransform) {
+    withOpacity(ctx, op.opacity, () => predrawnPainter(ctx, img, op, bounds, scale));
+    return;
+  }
   withOpacity(ctx, op.opacity, () => {
     withClipPolygons(ctx, op, bounds, scale, () => {
       withFlipX(ctx, op, bounds, scale, (dx, dy) => {

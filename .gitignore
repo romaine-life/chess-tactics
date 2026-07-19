@@ -23,6 +23,8 @@ npm-debug.log
 frontend/.codex-vite-*.log
 frontend/.chrome-campaign-proof/
 tmp-shots/
+frontend/tmp-dev/
+frontend/tmp-review/
 .unit-art-output/
 docs/art/**/runs/evidence/
 

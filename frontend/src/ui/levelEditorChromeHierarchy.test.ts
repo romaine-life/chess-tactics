@@ -42,6 +42,58 @@ function expectRegisteredFamily(source: string, legacyClass: string, unit: strin
 }
 
 describe('Level Editor chrome hierarchy', () => {
+  it('labels scenic terrain extents with the board cardinal edges', () => {
+    expect(levelEditor).toContain("import { socketEdges, type EdgeName, type TileFamilyId } from '../core/tileSockets';");
+    expect(levelEditor).toMatch(/SCENIC_TERRAIN_EXTENT_BY_BOARD_EDGE[\s\S]*?north: 'top',[\s\S]*?east: 'right',[\s\S]*?south: 'bottom',[\s\S]*?west: 'left'/);
+    expect(levelEditor).toContain('{socketEdges.map((edge) => {');
+    expect(levelEditor).toContain('const cardinalLabel = edge[0].toUpperCase() + edge.slice(1);');
+    expect(levelEditor).toContain('beyond the ${edge} edge');
+    expect(levelEditor).toContain('extension = extendDecorativeTerrainApron<string>(');
+    expect(levelEditor).toContain("type ScenicTerrainGenerationMode = 'match-reference' | 'grass';");
+    expect(levelEditor).toContain("{ value: 'match-reference', label: 'Match reference tile' }");
+    expect(levelEditor).toContain("{ value: 'grass', label: 'Grass' }");
+    expect(levelEditor).toContain('ariaLabel="Scenic terrain generation mode"');
+    expect(levelEditor).toContain("? { kind: 'fill' as const, value: leDefaultTile().id }");
+    expect(levelEditor).toContain(": { kind: 'match-reference' as const }");
+    expect(levelEditor).toContain('onIncrease={() => stepScenicTerrainExtent(side, 1)}');
+    expect(levelEditor).toContain('onDecrease={() => stepScenicTerrainExtent(side, -1)}');
+    expect(levelEditor).toContain('<span className="le-ctrllabel">All directions</span>');
+    expect(levelEditor).toContain('decreaseLabel="Reduce scenic terrain one tile in all four directions"');
+    expect(levelEditor).toContain('increaseLabel="Extend scenic terrain one tile in all four directions"');
+    expect(levelEditor).toContain('onDecrease={() => stepScenicTerrainExtents(SCENIC_TERRAIN_SIDES, -1)}');
+    expect(levelEditor).toContain('onIncrease={() => stepScenicTerrainExtents(SCENIC_TERRAIN_SIDES, 1)}');
+    expect(levelEditor).toContain('fillScenicTerrainViewportTargets,');
+    expect(levelEditor).toContain('scenicTerrainTargetsForViewport,');
+    expect(levelEditor).toContain("from './levelEditorViewportTerrain';");
+    expect(levelEditor).toContain('onViewportSizeChange={setViewViewportSize}');
+    expect(levelEditor).toContain('activeScenicCellKeys: scenicTerrainCoordinateKeys');
+    expect(levelEditor).toContain('const playableGridCells = cells.filter(');
+    expect(levelEditor).toContain('originCells={playableGridCells}');
+    expect(levelEditor).toContain('onClick={fillVisibleScenicTerrain}');
+    expect(levelEditor).toContain('>Fill visible area</button>');
+    expect(levelEditor).not.toContain("(['top', 'right', 'bottom', 'left'] as const).map");
+  });
+
+  it('shares connected terrain selection with an atomic exact-tile area fill', () => {
+    expect(levelEditor).toContain("import { paintTerrainArea } from './levelEditorTerrainEditing';");
+    expect(levelEditor).toContain('const terrainPatchCellsAt = (x: number, y: number): string[] => {');
+    expect(levelEditor).toContain("if (layer !== 'generate') {");
+    expect(levelEditor).toContain('setActiveGeneratedRegionId(null);');
+    expect(levelEditor).toContain('setRegionSelection(new Set(cells));');
+    expect(levelEditor).toContain("setTool('brush');");
+    expect(levelEditor).toContain('onRegionStart={selectTerrainArea}');
+    expect(levelEditor).toContain('const next = paintTerrainArea(currentEditorBoardRef.current, regionSelection, brushAsset.id);');
+    expect(levelEditor).toContain("onClick={() => setTool(tool === 'region' ? 'brush' : 'region')}");
+    expect(levelEditor).toContain(">{tool === 'region' ? 'Selecting…' : 'Select area'}</button>");
+    expect(levelEditor).toContain('disabled={regionSelection.size === 0}');
+    expect(levelEditor).toContain('onClick={fillSelectedTileArea}');
+    expect(levelEditor).toContain('>Fill selected area</button>');
+    expect(levelEditor).toContain('renderCellOverlay={regionCells && regionCells.size > 0');
+    expect(levelEditor).toContain("? (cell) => regionCells.has(`${cell.x},${cell.y}`)");
+    expect(levelEditor.match(/<span className="le-region-cell"/g)).toHaveLength(1);
+    expect(styleCss).toMatch(/\.le-region-cell\s*\{[\s\S]*?top:\s*0;/);
+  });
+
   it('registers every audited Board view control under its semantic parent', () => {
     const controls = [
       ['adjustZoom(-0.1)', 'inner-minus-key'],
@@ -148,6 +200,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(nativeSelectOpenings.some((opening) => opening.includes("chromeUnitClassNames('inner-dropdown'"))).toBe(false);
     expect(levelEditor).toMatch(/<HouseSelect<FactionControl>[\s\S]*?ariaLabel=\{`\$\{LE_FACTION_LABELS\[faction\]\} control`\}/);
     expect(levelEditor).toMatch(/<HouseSelect<string>[\s\S]*?ariaLabel="Saved generated region"/);
+    expect(levelEditor).toMatch(/<HouseSelect<ScenicTerrainGenerationMode>[\s\S]*?ariaLabel="Scenic terrain generation mode"/);
     expect(levelEditor).toMatch(/<HouseSelect<TileFamilyId>[\s\S]*?className="le-gen-region-select"[\s\S]*?ariaLabel=\{`Region \$\{sectionIndex \+ 1\} terrain`\}/);
     expect(levelEditor).toMatch(/<HouseSelect<GroundCoverId>[\s\S]*?className="le-gen-cover-select"[\s\S]*?ariaLabel=\{`Region \$\{sectionIndex \+ 1\} cover \$\{coverIndex \+ 1\} set`\}/);
     expect(levelEditor).toContain('<div className="le-faction-fields">');

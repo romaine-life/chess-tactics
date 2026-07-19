@@ -66,10 +66,10 @@ export function isEnemy(piece: Piece, target: Piece | null): boolean {
 export interface MoveEnv {
   terrain?: TerrainIndex;
   /**
-   * Edge fences as canonical edge keys (roadEdgeKey "x,y|x,y"). A move that CROSSES a fenced edge
-   * is forbidden. Only an orthogonal step crosses an edge, so a knight (never orthogonally
-   * adjacent) and a diagonal slide/step pass a lone fence freely — the "knights hop" rule, like
-   * water. Omit for no fences.
+   * Edge barriers as canonical edge keys (roadEdgeKey "x,y|x,y"). An orthogonal crossing is
+   * blocked by its shared edge. A diagonal crossing is blocked only when both orthogonal routes
+   * around the shared corner are closed; a lone barrier leaves one route open. Knights and other
+   * non-adjacent jumps hop barriers. Omit for no barriers.
    */
   fences?: ReadonlySet<string>;
   /**
@@ -86,7 +86,7 @@ function blockedByTerrain(env: MoveEnv | undefined, originElev: number, x: numbe
   return !!env?.terrain && !canTraverse(env.terrain, originElev, x, y);
 }
 
-/** Whether a fence in `env` blocks the orthogonal crossing (ax,ay)→(bx,by). No-op off-fence/diagonal. */
+/** Whether the authored edge barriers in `env` close the adjacent crossing (ax,ay)→(bx,by). */
 function fenceBlocks(env: MoveEnv | undefined, ax: number, ay: number, bx: number, by: number): boolean {
   return fenceBlocksCrossing(env?.fences, ax, ay, bx, by);
 }
@@ -148,7 +148,7 @@ function rayMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, dirs:
       const x = piece.x + dx * step;
       const y = piece.y + dy * step;
       if (!inBounds(x, y, size)) break;
-      if (fenceBlocks(env, x - dx, y - dy, x, y)) break; // a fence walls this step (orthogonal rays)
+      if (fenceBlocks(env, x - dx, y - dy, x, y)) break; // an edge barrier closes this ray step
       if (blockedByTerrain(env, originElev, x, y)) break; // terrain wall ends the ray
       const occ = pieceAt(pieces, x, y);
       if (occ) {
@@ -168,7 +168,7 @@ function stepMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, delt
     const x = piece.x + dx;
     const y = piece.y + dy;
     if (!inBounds(x, y, size)) continue;
-    if (fenceBlocks(env, piece.x, piece.y, x, y)) continue; // an orthogonal step across a fence is walled (knights hop)
+    if (fenceBlocks(env, piece.x, piece.y, x, y)) continue; // closed edge/corner; knights still hop
     if (blockedByTerrain(env, originElev, x, y)) continue;
     const occ = pieceAt(pieces, x, y);
     if (!occ) {
@@ -185,8 +185,8 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
   const moves: Move[] = [];
   const oneX = piece.x + forwardX;
   const oneY = piece.y + forwardY;
-  // A forward step across a fenced edge is walled (only matters for an orthogonal-forward pawn;
-  // a diagonally-oriented pawn crosses a corner, which a lone fence never blocks).
+  // A flat edge blocks orthogonal travel; a diagonally-oriented pawn can pass an open corner but
+  // not one whose two routes are closed.
   if (inBounds(oneX, oneY, size) && !pieceAt(pieces, oneX, oneY) && !blockedByTerrain(env, originElev, oneX, oneY) && !fenceBlocks(env, piece.x, piece.y, oneX, oneY)) {
     moves.push({ x: oneX, y: oneY });
     const twoX = piece.x + forwardX * 2;
@@ -200,6 +200,7 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
     const x = piece.x + dx;
     const y = piece.y + dy;
     if (!inBounds(x, y, size)) continue;
+    if (fenceBlocks(env, piece.x, piece.y, x, y)) continue;
     if (blockedByTerrain(env, originElev, x, y)) continue;
     const occ = pieceAt(pieces, x, y);
     if (isEnemy(piece, occ)) moves.push({ x, y, capture: occ!.id });
@@ -218,7 +219,7 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
       const capturedX = x - forwardX;
       const capturedY = y - forwardY;
       if (last.to.x !== capturedX || last.to.y !== capturedY || target?.id !== last.pieceId) continue;
-      if (inBounds(x, y, size) && !pieceAt(pieces, x, y) && !blockedByTerrain(env, originElev, x, y)) {
+      if (inBounds(x, y, size) && !pieceAt(pieces, x, y) && !fenceBlocks(env, piece.x, piece.y, x, y) && !blockedByTerrain(env, originElev, x, y)) {
         moves.push({ x, y, capture: last.pieceId, enPassant: true });
       }
     }
@@ -492,7 +493,7 @@ export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: Bo
     for (const [dx, dy] of pawnCaptureVectors(piece)) {
       const x = piece.x + dx;
       const y = piece.y + dy;
-      if (inBounds(x, y, size) && !blockedByTerrain(env, originElev, x, y)) out.push({ x, y });
+      if (inBounds(x, y, size) && !fenceBlocks(env, piece.x, piece.y, x, y) && !blockedByTerrain(env, originElev, x, y)) out.push({ x, y });
     }
     return out;
   }
@@ -511,7 +512,7 @@ export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: Bo
       const x = piece.x + dx * step;
       const y = piece.y + dy * step;
       if (!inBounds(x, y, size)) break;
-      if (fenceBlocks(env, x - dx, y - dy, x, y)) break; // a fence walls the threat ray (orthogonal)
+      if (fenceBlocks(env, x - dx, y - dy, x, y)) break; // an edge barrier closes this threat step
       if (blockedByTerrain(env, originElev, x, y)) break; // a terrain wall ends the threat ray
       out.push({ x, y });
       if (pieceAt(pieces, x, y)) break;

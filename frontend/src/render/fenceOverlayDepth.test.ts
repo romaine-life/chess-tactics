@@ -9,37 +9,47 @@ import {
   wallArtOverlayZIndex,
   wallOverlayZIndex,
 } from './fenceOverlayDepth';
-import { GROUND_COVER_FRONT_DEPTH_OFFSET, OBJECT_DEPTH_OFFSET, STRUCTURE_BACK_DEPTH_DELTA, objectBaseZIndex } from './sceneDepth';
+import {
+  GROUND_COVER_BACK_DEPTH_OFFSET,
+  GROUND_COVER_FRONT_DEPTH_OFFSET,
+  OBJECT_DEPTH_OFFSET,
+  groundCoverZIndex,
+  objectBaseZIndex,
+  structureBackZIndex,
+} from './sceneDepth';
 
 describe('fenceOverlayZIndex', () => {
-  it('places an edge fence above ground cover and below same-cell object art', () => {
+  it('keeps the barrier lane below object art without flattening the grass bracket', () => {
     const ownerCell = { x: 2, y: 3 };
-    const ownerCoverFrontZIndex = ownerCell.x + ownerCell.y + GROUND_COVER_FRONT_DEPTH_OFFSET;
-    const neighborCoverFrontZIndex = ownerCell.x + 1 + ownerCell.y + GROUND_COVER_FRONT_DEPTH_OFFSET;
-    const nearbyForegroundCoverFrontZIndex = ownerCell.x + 2 + ownerCell.y + GROUND_COVER_FRONT_DEPTH_OFFSET;
-    const ownerObjectBackZIndex = ownerCell.x + ownerCell.y + OBJECT_DEPTH_OFFSET + STRUCTURE_BACK_DEPTH_DELTA;
+    const ownerCoverBackZIndex = groundCoverZIndex(ownerCell, -1);
+    const ownerCoverFrontZIndex = groundCoverZIndex(ownerCell, 1);
+    const ownerObjectBackZIndex = structureBackZIndex(ownerCell);
+    const ownerObjectZIndex = objectBaseZIndex(ownerCell);
     const fenceZIndex = fenceOverlayZIndex(ownerCell);
 
-    expect(GROUND_COVER_FRONT_DEPTH_OFFSET).toBe(OBJECT_DEPTH_OFFSET - 11);
+    expect(GROUND_COVER_BACK_DEPTH_OFFSET).toBe(OBJECT_DEPTH_OFFSET - 1);
+    expect(GROUND_COVER_FRONT_DEPTH_OFFSET).toBe(OBJECT_DEPTH_OFFSET + 1);
     expect(FENCE_OVERLAY_DEPTH_OFFSET).toBe(OBJECT_DEPTH_OFFSET - 2);
-    expect(fenceZIndex).toBeGreaterThan(ownerCoverFrontZIndex);
-    expect(fenceZIndex).toBeGreaterThan(neighborCoverFrontZIndex);
-    expect(fenceZIndex).toBeGreaterThan(nearbyForegroundCoverFrontZIndex);
+    expect(fenceZIndex).toBeLessThan(ownerCoverBackZIndex);
     expect(fenceZIndex).toBeLessThan(ownerObjectBackZIndex);
+    expect(ownerCoverBackZIndex).toBeLessThan(ownerObjectZIndex);
+    expect(ownerCoverFrontZIndex).toBeGreaterThan(ownerObjectZIndex);
   });
 });
 
 describe('wallOverlayZIndex', () => {
-  it('places a perimeter wall above ground cover and below same-cell structure art', () => {
+  it('keeps a perimeter wall in the background barrier lane while grass brackets the unit', () => {
     const ownerCell = { x: 2, y: 3 };
-    const ownerCoverFrontZIndex = ownerCell.x + ownerCell.y + GROUND_COVER_FRONT_DEPTH_OFFSET;
-    const ownerStructureBackZIndex = ownerCell.x + ownerCell.y + OBJECT_DEPTH_OFFSET + STRUCTURE_BACK_DEPTH_DELTA;
+    const ownerCoverBackZIndex = groundCoverZIndex(ownerCell, -1);
+    const ownerCoverFrontZIndex = groundCoverZIndex(ownerCell, 1);
+    const ownerStructureBackZIndex = structureBackZIndex(ownerCell);
     const wallZIndex = wallOverlayZIndex(ownerCell);
 
     expect(WALL_OVERLAY_DEPTH_OFFSET).toBe(OBJECT_DEPTH_OFFSET - 2);
-    expect(wallZIndex).toBeGreaterThan(ownerCoverFrontZIndex);
+    expect(wallZIndex).toBeLessThan(ownerCoverBackZIndex);
     expect(wallZIndex).toBeLessThan(ownerStructureBackZIndex);
     expect(wallZIndex).toBeLessThan(objectBaseZIndex(ownerCell));
+    expect(ownerCoverFrontZIndex).toBeGreaterThan(objectBaseZIndex(ownerCell));
   });
 });
 

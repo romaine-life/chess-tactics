@@ -6,6 +6,10 @@ const encodeWire = (wire: unknown): string => btoa(JSON.stringify(wire))
   .replace(/\//g, '_')
   .replace(/=+$/, '');
 
+const decodeWire = (code: string): Record<string, unknown> => JSON.parse(atob(
+  code.replace(/-/g, '+').replace(/_/g, '/'),
+)) as Record<string, unknown>;
+
 const emptyBoard = (over: Partial<EditorBoard> = {}): EditorBoard => ({
   cols: 6,
   rows: 5,
@@ -43,6 +47,47 @@ describe('boardCode round-trip', () => {
     expect(decoded?.decorativeApron).toEqual(decorativeApron);
     expect(decoded?.decorativeCells).toEqual(decorativeCells);
     expect(decodeBoard(encodeBoard(emptyBoard()))?.decorativeApron).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  });
+
+  it('round-trips a sparse scenic footprint as a sorted, deduplicated wire list', () => {
+    const code = encodeBoard(emptyBoard({
+      decorativeFootprint: ['-1,2', '6,1', '0,-2', '6,1', '2,2', '1.5,2', '01,2', '9007199254740992,0'],
+    }));
+
+    expect(decodeWire(code).df).toEqual(['0,-2', '6,1', '-1,2']);
+    expect(decodeBoard(code)?.decorativeFootprint).toEqual(['0,-2', '6,1', '-1,2']);
+    expect(decodeBoard(code)?.decorativeCells).toEqual({});
+  });
+
+  it('drops malformed and playable sparse-footprint keys on decode', () => {
+    const decoded = decodeBoard(encodeWire({
+      c: 6,
+      r: 5,
+      df: [
+        '-1,0',
+        '6,4',
+        '0,5',
+        '0,0',
+        '5,4',
+        '1.5,2',
+        '01,2',
+        '1, 2',
+        '-0,5',
+        '1e2,5',
+        '9007199254740992,0',
+        '0,-9007199254740991',
+        '-1,0',
+        7,
+        null,
+      ],
+    }));
+
+    expect(decoded?.decorativeFootprint).toEqual(['0,-9007199254740991', '-1,0', '6,4', '0,5']);
+  });
+
+  it('omits an empty sparse footprint and decodes old board codes to an empty footprint', () => {
+    expect(encodeBoard(emptyBoard({ decorativeFootprint: [] }))).toBe(encodeBoard(emptyBoard()));
+    expect(decodeBoard(encodeBoard(emptyBoard()))?.decorativeFootprint).toEqual([]);
   });
 
   it('round-trips decorative roads, fences, posts, and walls separately from gameplay channels', () => {
@@ -236,5 +281,94 @@ describe('boardCode round-trip', () => {
   it('encodes a generated-region-free board byte-identically to a code that predates region units', () => {
     expect(encodeBoard(emptyBoard({ generatedRegions: [] }))).toBe(encodeBoard(emptyBoard()));
     expect(decodeBoard(encodeBoard(emptyBoard()))!.generatedRegions).toEqual([]);
+  });
+
+  it('round-trips a pre-drawn board as a semantic media slot plus canonical review frame', () => {
+    const surface: NonNullable<EditorBoard['surface']> = {
+      kind: 'predrawn',
+      slot: 'boards/fortress-gate/plate.png',
+      frameWidth: 950,
+      frameHeight: 565,
+    };
+    const code = encodeBoard(emptyBoard({ surface }));
+    expect(decodeWire(code).pd).toEqual(['boards/fortress-gate/plate.png', 950, 565]);
+    expect(decodeBoard(code)?.surface).toEqual(surface);
+  });
+
+  it('round-trips the persisted Fortress Gate v4 whole-plate registration', () => {
+    const surface: NonNullable<EditorBoard['surface']> = {
+      kind: 'predrawn',
+      slot: 'boards/fortress-gate/plate.png',
+      frameWidth: 1672,
+      frameHeight: 941,
+      registration: {
+        sourceWidth: 1672,
+        sourceHeight: 941,
+        north: [1034.223, 96.015],
+        east: [1375.402, 300.134],
+        south: [611.986, 723.847],
+        west: [281.123, 532.992],
+        gridColumns: 5,
+        gridRows: 11,
+        columnGuides: [0, 0.2, 0.4, 0.6, 0.8, 1],
+        rowGuides: [0, 0.090909, 0.181818, 0.272727, 0.363636, 0.454545, 0.545455, 0.636364, 0.727273, 0.818182, 0.909091, 1],
+        boundaryReference: {
+          north: [1020.229, 112.223],
+          east: [1346.622, 295.818],
+          south: [628.558, 699.729],
+          west: [302.166, 516.133],
+        },
+      },
+    };
+
+    const code = encodeBoard(emptyBoard({ surface }));
+    expect(decodeWire(code).pd).toEqual([
+      'boards/fortress-gate/plate.png',
+      1672,
+      941,
+      'v4;1672,941,1034.223,96.015,1375.402,300.134,611.986,723.847,281.123,532.992;5,11;0,0.2,0.4,0.6,0.8,1;0,0.090909,0.181818,0.272727,0.363636,0.454545,0.545455,0.636364,0.727273,0.818182,0.909091,1;1020.229,112.223,1346.622,295.818,628.558,699.729,302.166,516.133',
+    ]);
+    expect(decodeBoard(code)?.surface).toEqual(surface);
+  });
+
+  it('keeps legacy three-field pre-drawn records byte-identical and unregistered', () => {
+    const legacyCode = encodeWire({
+      c: 6,
+      r: 5,
+      pd: ['boards/fortress-gate/plate.png', 950, 565],
+    });
+    const decoded = decodeBoard(legacyCode)!;
+
+    expect(decoded.surface).toEqual({
+      kind: 'predrawn',
+      slot: 'boards/fortress-gate/plate.png',
+      frameWidth: 950,
+      frameHeight: 565,
+    });
+    expect(encodeBoard(decoded)).toBe(legacyCode);
+  });
+
+  it('drops malformed persisted alignment while retaining a valid plate surface', () => {
+    const decoded = decodeBoard(encodeWire({
+      c: 6,
+      r: 5,
+      pd: ['boards/fortress-gate/plate.png', 950, 565, 'v4;not-valid'],
+    }));
+
+    expect(decoded?.surface).toEqual({
+      kind: 'predrawn',
+      slot: 'boards/fortress-gate/plate.png',
+      frameWidth: 950,
+      frameHeight: 565,
+    });
+  });
+
+  it('drops malformed pre-drawn surface records instead of persisting arbitrary URLs', () => {
+    const decoded = decodeBoard(encodeWire({
+      c: 6,
+      r: 5,
+      pd: ['https://example.com/board.png', 950, 565],
+    }));
+    expect(decoded?.surface).toBeUndefined();
   });
 });

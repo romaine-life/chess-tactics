@@ -1,12 +1,35 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactElement } from 'react';
 import {
+  predrawnOcclusionMasksInFront,
   type BakeBounds,
   type BoardDrawOp,
 } from '@chess-tactics/board-render';
 
 type CanvasImage = HTMLImageElement;
 
+export interface BoardCanvasScratchSurface {
+  canvas: HTMLCanvasElement;
+  context: CanvasRenderingContext2D;
+}
+
+export type BoardCanvasScratchFactory = (
+  width: number,
+  height: number,
+) => BoardCanvasScratchSurface | undefined;
+
+export interface BoardCanvasScratchRegion {
+  /** Board-space bounds whose origin maps to scratch pixel (0, 0). */
+  bounds: BakeBounds;
+  /** Destination-canvas pixel offset for the bounded scratch result. */
+  offsetX: number;
+  offsetY: number;
+  /** Scratch/destination dimensions in physical canvas pixels. */
+  width: number;
+  height: number;
+}
+
 const imageCache = new Map<string, Promise<CanvasImage>>();
+const EMPTY_OCCLUSION_MASKS: readonly BoardDrawOp[] = [];
 
 export function loadCanvasImage(src: string): Promise<CanvasImage> {
   const cached = imageCache.get(src);
@@ -25,6 +48,63 @@ export function loadCanvasImage(src: string): Promise<CanvasImage> {
 
 function imageReady(image: CanvasImage | undefined): image is CanvasImage {
   return !!image?.complete && image.naturalWidth > 0;
+}
+
+function createBoardCanvasScratchSurface(
+  width: number,
+  height: number,
+): BoardCanvasScratchSurface | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  return context ? { canvas, context } : undefined;
+}
+
+/**
+ * Return the smallest whole-pixel destination region that can contain an op inside the render
+ * bounds. The board-space origin is reconstructed from that rounded pixel edge so painting the op
+ * and its masks into the scratch surface uses exactly the same coordinates as the main canvas.
+ */
+export function boardCanvasScratchRegion(
+  op: BoardDrawOp,
+  bounds: BakeBounds,
+  scale = 1,
+): BoardCanvasScratchRegion | undefined {
+  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  const boundsRight = bounds.minX + bounds.width;
+  const boundsBottom = bounds.minY + bounds.height;
+  const opRight = op.dx + op.dw;
+  const opBottom = op.dy + op.dh;
+  const left = Math.max(bounds.minX, Math.min(op.dx, opRight));
+  const top = Math.max(bounds.minY, Math.min(op.dy, opBottom));
+  const right = Math.min(boundsRight, Math.max(op.dx, opRight));
+  const bottom = Math.min(boundsBottom, Math.max(op.dy, opBottom));
+  if (right <= left || bottom <= top) return undefined;
+
+  const canvasWidth = Math.max(1, Math.round(bounds.width * safeScale));
+  const canvasHeight = Math.max(1, Math.round(bounds.height * safeScale));
+  const offsetX = Math.max(0, Math.floor((left - bounds.minX) * safeScale));
+  const offsetY = Math.max(0, Math.floor((top - bounds.minY) * safeScale));
+  const rightPx = Math.min(canvasWidth, Math.ceil((right - bounds.minX) * safeScale));
+  const bottomPx = Math.min(canvasHeight, Math.ceil((bottom - bounds.minY) * safeScale));
+  const width = rightPx - offsetX;
+  const height = bottomPx - offsetY;
+  if (width <= 0 || height <= 0) return undefined;
+
+  return {
+    bounds: {
+      minX: bounds.minX + offsetX / safeScale,
+      minY: bounds.minY + offsetY / safeScale,
+      width: width / safeScale,
+      height: height / safeScale,
+    },
+    offsetX,
+    offsetY,
+    width,
+    height,
+  };
 }
 
 export function isAnimatedGroundCoverOp(op: BoardDrawOp): boolean {
@@ -145,13 +225,60 @@ export function drawBoardOps(
   bounds: BakeBounds,
   images: ReadonlyMap<string, CanvasImage>,
   timeMs: number,
+  maskTint?: string,
+  occlusionMasks: readonly BoardDrawOp[] = [],
+  scratchFactory: BoardCanvasScratchFactory = createBoardCanvasScratchSurface,
 ): void {
   ctx.clearRect(0, 0, bounds.width, bounds.height);
   ctx.imageSmoothingEnabled = false;
+  let scratch: BoardCanvasScratchSurface | undefined;
   for (const op of ops) {
     const img = images.get(op.src);
     if (!imageReady(img)) continue;
-    paintOp(ctx, img, op, bounds, timeMs);
+    const masksInFront = op.layer === 'scene'
+      ? predrawnOcclusionMasksInFront(op, occlusionMasks)
+      : [];
+    if (masksInFront.length === 0) {
+      paintOp(ctx, img, op, bounds, timeMs);
+      continue;
+    }
+    const region = boardCanvasScratchRegion(op, bounds);
+    if (!region) continue;
+    scratch ??= scratchFactory(region.width, region.height);
+    if (!scratch) continue;
+    if (scratch.canvas.width < region.width) scratch.canvas.width = region.width;
+    if (scratch.canvas.height < region.height) scratch.canvas.height = region.height;
+    const scratchCtx = scratch.context;
+    scratchCtx.clearRect(0, 0, region.width, region.height);
+    scratchCtx.imageSmoothingEnabled = false;
+    scratchCtx.globalCompositeOperation = 'source-over';
+    scratchCtx.globalAlpha = 1;
+    paintOp(scratchCtx, img, op, region.bounds, timeMs);
+    scratchCtx.save();
+    scratchCtx.globalCompositeOperation = 'destination-out';
+    for (const mask of masksInFront) {
+      const maskImage = images.get(mask.src);
+      if (imageReady(maskImage)) paintOp(scratchCtx, maskImage, mask, region.bounds, timeMs);
+    }
+    scratchCtx.restore();
+    ctx.drawImage(
+      scratch.canvas,
+      0,
+      0,
+      region.width,
+      region.height,
+      region.offsetX,
+      region.offsetY,
+      region.width,
+      region.height,
+    );
+  }
+  if (maskTint) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = maskTint;
+    ctx.fillRect(0, 0, bounds.width, bounds.height);
+    ctx.restore();
   }
 }
 
@@ -199,14 +326,28 @@ export function BoardCanvasLayer({
   ops,
   bounds,
   className = 'tileset-scene-layer',
+  maskTint,
+  occlusionMasks = EMPTY_OCCLUSION_MASKS,
 }: {
   ops: readonly BoardDrawOp[];
   bounds: BakeBounds;
   className?: string;
+  /** Review mask: replace every drawn sprite pixel with one solid color while preserving alpha. */
+  maskTint?: string;
+  /** Canonical raised silhouettes that erase lower-depth additive art to reveal a pre-drawn plate. */
+  occlusionMasks?: readonly BoardDrawOp[];
 }): ReactElement | null {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const orderedOps = useMemo(() => [...ops].sort((a, b) => a.z - b.z), [ops]);
   const signature = useMemo(() => orderedOps.map(opSignature).join('|'), [orderedOps]);
+  const orderedOcclusionMasks = useMemo(
+    () => [...occlusionMasks].sort((a, b) => a.z - b.z),
+    [occlusionMasks],
+  );
+  const occlusionSignature = useMemo(
+    () => orderedOcclusionMasks.map(opSignature).join('|'),
+    [orderedOcclusionMasks],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -215,11 +356,19 @@ export function BoardCanvasLayer({
 
     let cancelled = false;
     let raf = 0;
-    const sources = [...new Set(orderedOps.map((op) => op.src))];
+    const sources = [...new Set([...orderedOps, ...orderedOcclusionMasks].map((op) => op.src))];
     const animated = orderedOps.some(isAnimatedGroundCoverOp);
 
     const paint = (images: ReadonlyMap<string, CanvasImage>, timeMs = performance.now()): void => {
-      if (!cancelled) drawBoardOps(ctx, orderedOps, bounds, images, timeMs);
+      if (!cancelled) drawBoardOps(
+        ctx,
+        orderedOps,
+        bounds,
+        images,
+        timeMs,
+        maskTint,
+        orderedOcclusionMasks,
+      );
     };
 
     void Promise.all(sources.map(async (src): Promise<[string, CanvasImage]> => [src, await loadCanvasImage(src)])).then((entries) => {
@@ -237,7 +386,7 @@ export function BoardCanvasLayer({
       cancelled = true;
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [bounds, orderedOps, signature]);
+  }, [bounds, maskTint, occlusionSignature, orderedOcclusionMasks, orderedOps, signature]);
 
   if (orderedOps.length === 0) return null;
 

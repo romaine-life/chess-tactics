@@ -230,9 +230,10 @@ export function featurePiece(mask: number): FeaturePiece {
 // It is NOT a FeatureKind: it is stored edge-keyed (roadEdgeKey), like a cut/exit, as
 // `Record<edgeKey, FenceMaterial>` in the editor and a parallel channel through the level.
 //
-//   • COLLISION reads the raw edge set: a crossing (ax,ay)→(bx,by) is blocked iff its
-//     roadEdgeKey is fenced. Only orthogonal steps ever cross an edge, so knights (whose
-//     jumps are never orthogonally-adjacent) and diagonal slides pass a lone fence freely.
+//   • COLLISION reads the raw edge set. An orthogonal crossing is blocked iff its
+//     roadEdgeKey is fenced. A diagonal crossing can travel around the shared corner by
+//     either of two orthogonal routes, so it is blocked only when both routes are closed.
+//     Knights and other non-adjacent jumps still hop fences.
 //   • RENDERING draws each edge exactly once: a cell paints rails on its OWN E (SE) and S
 //     (SW) diamond sides, so the upper-left cell of every fenced pair owns the draw (boundary
 //     N/W rails are owned by the off-board phantom cell). Bits: E = 2, S = 4 (same as
@@ -300,9 +301,11 @@ export function isOrthogonalPair(ax: number, ay: number, bx: number, by: number)
 }
 
 /**
- * True iff a fence blocks the crossing (ax,ay)→(bx,by). Only orthogonal crossings can be
- * fenced, so a diagonal/knight step (whose cells aren't orthogonally adjacent) is never
- * blocked by a lone fence — it hops. Safe on any input: a non-adjacent pair returns false.
+ * True iff fences block the adjacent crossing (ax,ay)→(bx,by). An orthogonal step has one
+ * shared edge. A diagonal step has two routes around its shared corner (horizontal-first or
+ * vertical-first) and is blocked only when each route encounters a fence. A lone fence leaves
+ * the other route open. Safe on any input: a non-adjacent pair, including a knight jump,
+ * returns false.
  */
 export function fenceBlocksCrossing(
   fences: ReadonlySet<string> | undefined,
@@ -312,8 +315,27 @@ export function fenceBlocksCrossing(
   by: number,
 ): boolean {
   if (!fences || fences.size === 0) return false;
-  if (!isOrthogonalPair(ax, ay, bx, by)) return false;
-  return fences.has(roadEdgeKey(ax, ay, bx, by));
+  if (isOrthogonalPair(ax, ay, bx, by)) {
+    return fences.has(roadEdgeKey(ax, ay, bx, by));
+  }
+
+  const dx = bx - ax;
+  const dy = by - ay;
+  if (Math.abs(dx) !== 1 || Math.abs(dy) !== 1) return false;
+
+  const horizontalFirstX = bx;
+  const horizontalFirstY = ay;
+  const horizontalFirstBlocked =
+    fences.has(roadEdgeKey(ax, ay, horizontalFirstX, horizontalFirstY))
+    || fences.has(roadEdgeKey(horizontalFirstX, horizontalFirstY, bx, by));
+
+  const verticalFirstX = ax;
+  const verticalFirstY = by;
+  const verticalFirstBlocked =
+    fences.has(roadEdgeKey(ax, ay, verticalFirstX, verticalFirstY))
+    || fences.has(roadEdgeKey(verticalFirstX, verticalFirstY, bx, by));
+
+  return horizontalFirstBlocked && verticalFirstBlocked;
 }
 
 /** A fenced cell resolved to its rail selector. */

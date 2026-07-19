@@ -67,6 +67,7 @@ export function routeScreenKey(pathname: string): string {
   // /play/select/* falls through to 'menu'; only the live board at exact /play is here.)
   if (
     path === '/play' ||
+    path === '/predrawn-reference' ||
     path === '/portrait-editor' ||
     path === '/party'
   ) {

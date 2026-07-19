@@ -36,6 +36,18 @@ returns `409 prop_seats_revision_conflict` with `currentRevision`. PropSeatLab
 keeps the startup revision and advances it only from a successful save response,
 so sequential edits cannot silently overwrite a newer document.
 
+Pre-drawn automatic occlusion under ADR-0117 adds no stored document or media
+field. The runtime re-derives the seed alpha and depth from the same canonical
+board geometry already carried by the Level. Under ADR-0118, the pre-drawn
+background declaration persists its semantic surface slot, actual image
+dimensions, and exact approved versioned whole-image alignment. The pinned
+boundary may round-trip inside that alignment but remains display-only; the
+declaration does not persist a preview URL, candidate id, browser-local key, or
+picker state. A future
+plate-specific paint/erase artifact is not authorized to enter `boardCode`, a
+working-copy-only field, or browser-local runtime state without a separate
+persistence decision.
+
 ## Level editor working copies
 
 The Level Editor uses a normal private document model, not a public-link map
@@ -47,10 +59,12 @@ inside one account and are never used as an editor URL authority. Loading or
 copying a document address does not create a public record, grant access,
 publish, save, or rewrite the URL (see ADR-0068). Opening a campaign's account-local
 `levelId` route may resolve its document once and replace the address with that stable opaque id;
-this is editor initialization, never an effect of copying. A request still filters by
-both the signed-in owner and `document_id`, so pasting another account's URL
-returns not found instead of accidentally resolving the viewer's unrelated
-level with the same per-owner id.
+this is editor initialization, never an effect of copying. A direct
+`GET /api/editor-documents/:documentId` filters by both the signed-in owner and
+`document_id` for an ordinary account. An authenticated allowlisted administrator may instead
+read an existing row by that exact opaque ID for review (ADR-0132). This exception does not apply
+to the owner-scoped document list, resolve/create, autosave, Save, Discard, or Delete, and an
+unknown or deleted ID still returns not found.
 
 `GET /api/editor-documents` is the private, authenticated recent-document
 index. Dirty work is ordered before clean documents, and `status=dirty` or

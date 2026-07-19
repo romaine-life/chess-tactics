@@ -4,7 +4,7 @@ import { SkirmishHud } from './SkirmishHud';
 import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
-import { TitleBarStatus } from './shell/TitleBarControls';
+import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
 import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
 import {
@@ -51,6 +51,15 @@ import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progres
 import { navigateApp, readValidatedReturnTo } from './navigation';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { PLAY_SKIRMISH_SELECTOR_HREF, playCampaignSelectorHref } from './playHubRoute';
+import { PredrawnCornerPicker } from './PredrawnCornerPicker';
+import {
+  predrawnBoardPreviewRegistration,
+  predrawnBoardPreviewSrc,
+  serializePredrawnBoardPreviewRegistration,
+  storedPredrawnBoardRegistration,
+  type PredrawnBoardCornerRegistration,
+} from '../render/PredrawnBoardLayer';
+import { useSkirmishView } from '../game/skirmishView';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
 
@@ -58,6 +67,20 @@ export function Skirmish() {
   const installedChromeCss = useInstalledChromeCss();
   const routeSearch = window.location.search;
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
+  const predrawnPreview = useMemo(
+    () => predrawnBoardPreviewSrc(routeSearch, window.location.origin),
+    [routeSearch],
+  );
+  const predrawnRegistration = useMemo(
+    () => predrawnPreview
+      ? storedPredrawnBoardRegistration(predrawnPreview)
+        ?? predrawnBoardPreviewRegistration(routeSearch)
+      : predrawnBoardPreviewRegistration(routeSearch),
+    [predrawnPreview, routeSearch],
+  );
+  const [predrawnPickerOpen, setPredrawnPickerOpen] = useState(
+    () => routeParams.get('predrawnPicker') === '1',
+  );
   const routeCampaignId = routeParams.get('campaignId');
   const routeLevelId = routeParams.get('levelId');
   const routeMode = routeParams.get('mode');
@@ -111,8 +134,12 @@ export function Skirmish() {
     appendTimeControlParams(params, scenarioTimeControl ?? undefined);
     appendLevelEventsParam(params, routeEvents);
     appendVictoryRulesParam(params, routeVictory);
+    const predrawnPreview = routeParams.get('predrawnPreview');
+    if (predrawnPreview) params.set('predrawnPreview', predrawnPreview);
+    const predrawnCorners = routeParams.get('predrawnCorners');
+    if (predrawnCorners) params.set('predrawnCorners', predrawnCorners);
     return `/editor/level?${params.toString()}`;
-  }, [routeBoard, routeLevelName, routeObjective, routeSurviveTurns, scenarioTimeControl, routeEvents, routeVictory]);
+  }, [routeBoard, routeLevelName, routeObjective, routeSurviveTurns, scenarioTimeControl, routeEvents, routeVictory, routeParams]);
   const levelReturnHref = useMemo(() => {
     if (routeMode !== 'test' || !routeLevelId) return null;
     const params = new URLSearchParams({ levelId: routeLevelId });
@@ -226,6 +253,13 @@ export function Skirmish() {
       useSkirmish.getState().leaveNetSession(net.lobbyId);
     }
     navigateApp('/lobbies', { replace: true });
+  };
+
+  const savePredrawnRegistration = (registration: PredrawnBoardCornerRegistration): void => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('predrawnCorners', serializePredrawnBoardPreviewRegistration(registration));
+    if (!useSkirmishView.getState().showGrid) useSkirmishView.getState().toggle('showGrid');
+    navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
   };
 
   // A move-derived result is just as durable as resignation: each seat independently
@@ -940,6 +974,24 @@ export function Skirmish() {
         </div>
       </TitleBarSlot>
 
+      {/* Test play is an authoring loop, so its return is a persistent title-bar action rather
+          than an easy-to-miss floating chip. The target still comes from the validated exact
+          editor snapshot above; this only gives that existing route its canonical home. */}
+      {returnHref ? (
+        <TitleBarControlContribution
+          ariaLabel="Playtest navigation"
+          controls={[{
+            id: 'skirmish-return',
+            kind: 'navigation',
+            presentation: 'return',
+            label: returnIsEditor ? '‹ Back to editor' : '‹ Back',
+            destination: returnHref,
+            title: returnIsEditor ? 'Return to the board editor with this position.' : 'Return to the previous screen.',
+            testId: 'skirmish-return',
+          }]}
+        />
+      ) : null}
+
       {/* The bottom-centre ornament diamond becomes a Retry button in single-player: one
           click restarts the current battle. Portals into the shell bar's stud slot (ADR-0042)
           so it sits exactly on the decorative nailhead without disturbing any other bar track. */}
@@ -958,22 +1010,6 @@ export function Skirmish() {
         </TitleBarSlot>
       ) : null}
 
-      {/* Live-test loop: a persistent, non-blocking "‹ Back to editor" lets you jump back to tweak
-          the position at any point. It uses ?returnTo when present, and falls back to the editor
-          route for board-link / saved-level test URLs. Skirmish contributes no before-divider controls,
-          so — like the netplay return — this rides a fixed corner chip rather than the bar. */}
-      {returnHref ? (
-        <NavButton
-          data-chrome-unit="inner-text-button"
-          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active', 'skirmish-return-editor')}
-          data-testid="skirmish-return"
-          to={returnHref}
-          title="Return to the board editor with this position."
-        >
-          {returnIsEditor ? '‹ Back to editor' : '‹ Back'}
-        </NavButton>
-      ) : null}
-
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">
         <div className="skirmish-field">
           <div className="skirmish-board-frame">
@@ -984,7 +1020,15 @@ export function Skirmish() {
                   {returnIsEditor ? 'Back to editor' : 'Back to Play'}
                 </NavButton>
               </InnerChromeBox>
-            ) : boardSettled ? <SkirmishBoard interactive={!net || (netSeatInteractive && !netRelayFrozen)} /> : routeLobby ? (
+            ) : boardSettled ? (
+              <SkirmishBoard
+                interactive={!net || (netSeatInteractive && !netRelayFrozen)}
+                predrawnReview={predrawnPreview ? {
+                  src: predrawnPreview,
+                  registration: predrawnRegistration,
+                } : undefined}
+              />
+            ) : routeLobby ? (
               <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="status">
                 <strong>{netError ?? 'Connecting…'}</strong>
                 <small>Multiplayer</small>
@@ -1019,7 +1063,19 @@ export function Skirmish() {
         returnHref={returnHref}
         returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
         netInteractive={netSeatInteractive}
+        onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
       />
+
+      {predrawnPickerOpen && predrawnPreview ? (
+        <PredrawnCornerPicker
+          src={predrawnPreview}
+          initialRegistration={predrawnRegistration}
+          columns={activeLevel?.board.cols ?? 1}
+          rows={activeLevel?.board.rows ?? 1}
+          onChange={savePredrawnRegistration}
+          onClose={() => setPredrawnPickerOpen(false)}
+        />
+      ) : null}
 
       {isCampaignPlay && routeCampaignId && routeLevel && game.winner && (
         <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result">

@@ -6,13 +6,14 @@ import {
   uniqueDrawSrcs,
   boardBounds,
   boardSocialFramingBounds,
+  drawBoardThumbnailOps,
   largestSolidRect,
   paintBoardThumbnailOp,
 } from './bakeBoardThumbnail';
 import { roadEdgeKey } from '../core/featureAutotile';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
-import { fencePostZIndex, objectBaseZIndex, structureBackZIndex } from './sceneDepth';
+import { CELL_DEPTH_STRIDE, fencePostZIndex, objectBaseZIndex, structureBackZIndex } from './sceneDepth';
 import type { EditorBoard } from '../ui/boardCode';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
@@ -79,6 +80,9 @@ function recordingContext(initialAlpha = 1): { ctx: CanvasRenderingContext2D; ca
   const ctx = {
     get globalAlpha() { return alpha; },
     set globalAlpha(value: number) { alpha = value; record('globalAlpha', value); },
+    imageSmoothingEnabled: true,
+    globalCompositeOperation: 'source-over' as GlobalCompositeOperation,
+    clearRect: (...args: unknown[]) => record('clearRect', ...args),
     save: () => record('save'),
     restore: () => record('restore'),
     beginPath: () => record('beginPath'),
@@ -94,6 +98,44 @@ function recordingContext(initialAlpha = 1): { ctx: CanvasRenderingContext2D; ca
 }
 
 describe('paintBoardThumbnailOp — draw-op composition parity', () => {
+  it('dispatches a saved registered plate through the projective raster painter', () => {
+    const registration = {
+      sourceWidth: 10,
+      sourceHeight: 10,
+      north: [0, 0] as const,
+      east: [10, 0] as const,
+      south: [10, 10] as const,
+      west: [0, 10] as const,
+      gridColumns: 1,
+      gridRows: 1,
+      columnGuides: [0, 1],
+      rowGuides: [0, 1],
+    };
+    const board: EditorBoard = {
+      ...blank(1, 1),
+      surface: {
+        kind: 'predrawn',
+        slot: 'boards/test/registered.png',
+        frameWidth: 10,
+        frameHeight: 10,
+        registration,
+      },
+    };
+    const op = boardDrawOps(board)[0];
+    const bounds = boardBounds(board);
+    const image = { naturalWidth: 10, naturalHeight: 10 } as HTMLImageElement;
+    const { ctx, calls } = recordingContext();
+    const dispatched: unknown[][] = [];
+
+    paintBoardThumbnailOp(ctx, image, op, bounds, 2, (...args) => {
+      dispatched.push(args);
+    });
+
+    expect(op.predrawnTransform).toBeDefined();
+    expect(dispatched).toEqual([[ctx, image, op, bounds, 2]]);
+    expect(calls.some((call) => call.name === 'drawImage')).toBe(false);
+  });
+
   it('clips in fixed board coordinates, flips inside the op box, and multiplies then restores alpha', () => {
     const { ctx, calls } = recordingContext(0.5);
     const image = { naturalWidth: 8, naturalHeight: 8 } as HTMLImageElement;
@@ -168,6 +210,58 @@ describe('paintBoardThumbnailOp — draw-op composition parity', () => {
     expect(calls.find((call) => call.name === 'translate')?.args).toEqual([200, 0]);
     expect(calls.find((call) => call.name === 'drawImage')?.args).toEqual([
       image, 22, 97, 156, 46,
+    ]);
+  });
+
+  it('bounds the thumbnail scratch surface to the scaled live-op intersection on a 4K board', () => {
+    const { ctx: main, calls: mainCalls } = recordingContext();
+    const { ctx: scratchContext } = recordingContext();
+    const scratchCanvas = { width: 20, height: 10 } as HTMLCanvasElement;
+    const image = { naturalWidth: 20, naturalHeight: 20 } as HTMLImageElement;
+    const op: BoardDrawOp = {
+      layer: 'scene',
+      src: '/unit.png',
+      dx: 3990,
+      dy: 3995,
+      dw: 20,
+      dh: 20,
+      z: 1,
+    };
+    const mask: BoardDrawOp = {
+      layer: 'scene',
+      src: '/mask.png',
+      dx: 3980,
+      dy: 3980,
+      dw: 40,
+      dh: 40,
+      z: 2,
+    };
+    const requestedSizes: Array<[number, number]> = [];
+
+    drawBoardThumbnailOps(
+      main,
+      [op],
+      { minX: 0, minY: 0, width: 4000, height: 4000 },
+      2,
+      new Map([['/unit.png', image], ['/mask.png', image]]),
+      [mask],
+      (width, height) => {
+        requestedSizes.push([width, height]);
+        return { canvas: scratchCanvas, context: scratchContext };
+      },
+    );
+
+    expect(requestedSizes).toEqual([[20, 10]]);
+    expect(mainCalls.find((call) => call.name === 'drawImage')?.args).toEqual([
+      scratchCanvas,
+      0,
+      0,
+      20,
+      10,
+      7980,
+      7990,
+      20,
+      10,
     ]);
   });
 });
@@ -417,7 +511,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
   });
 
   it('brackets a prop around a unit standing on its front-most footprint cell', () => {
-    // Cottage (2×2) at (3,2) → front cell (4,3) → base 20007: back 20006 < unit 20007 < front 20008.
+    // Cottage (2×2) at (3,2) → front cell (4,3): back < seated unit < front.
     const board: EditorBoard = {
       ...blank(8, 6),
       props: { '3,2': { propId: 'cottage' } },
@@ -500,7 +594,37 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(macroTileOp?.clipPolygons?.every((polygon) => polygon.length === 8)).toBe(true);
   });
 
-  it('draws edge fences above ground cover and below object/unit draw order', () => {
+  it('keeps rear and foreground grass on opposite sides of a seated unit', () => {
+    const surfaces: Array<EditorBoard['surface']> = [
+      undefined,
+      {
+        kind: 'predrawn',
+        slot: 'boards/test/grass-bracket.png',
+        frameWidth: 640,
+        frameHeight: 360,
+      },
+    ];
+
+    for (const surface of surfaces) {
+      const board: EditorBoard = {
+        ...blank(3, 3),
+        surface,
+        cells: { '1,1': TILE },
+        cover: { '1,1': 'filled' },
+        units: { '1,1': UNIT },
+      };
+      const ops = boardDrawOps(board);
+      const unit = ops.find((op) => op.contain);
+      const coverSources = grassCoverSources();
+      const coverOps = ops.filter((op) => coverSources.has(op.src));
+
+      expect(unit).toBeDefined();
+      expect(coverOps.some((op) => op.z < unit!.z)).toBe(true);
+      expect(coverOps.some((op) => op.z > unit!.z)).toBe(true);
+    }
+  });
+
+  it('draws edge fences in the barrier lane below object/unit draw order', () => {
     const board: EditorBoard = {
       ...blank(4, 4),
       cells: { '1,1': TILE, '2,1': TILE, '2,2': TILE },
@@ -537,10 +661,10 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(rightPost?.z).toBe(fencePostZIndex({ x: 2, y: 1 }));
     expect(frontPost?.z).toBe(fencePostZIndex({ x: 2, y: 2 }));
     expect(rightPost?.z).toBe(fence!.z + 0.5);
-    expect(frontPost?.z).toBe(fence!.z + 1.5);
+    expect(frontPost?.z).toBe(fence!.z + CELL_DEPTH_STRIDE + 0.5);
     expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(rightPost!));
     expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(frontPost!));
-    expect(fence!.z).toBeGreaterThan(Math.max(...coverOps.map((op) => op.z)));
+    expect(fence!.z).toBeLessThan(Math.min(...coverOps.map((op) => op.z)));
     expect(fence!.z).toBeLessThan(ownerUnit!.z);
     expect(fence!.z).toBeLessThan(nearUnit!.z);
     expect(fence!.z).toBeLessThan(doodadBack!.z);
@@ -560,7 +684,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
 
       expect(posts).toHaveLength(2);
       expect(rear.z).toBe(rail.z + 0.5);
-      expect(front.z).toBe(rail.z + 1.5);
+      expect(front.z).toBe(rail.z + CELL_DEPTH_STRIDE + 0.5);
       expect(ops.indexOf(rail)).toBeLessThan(ops.indexOf(rear));
       expect(ops.indexOf(rail)).toBeLessThan(ops.indexOf(front));
     }

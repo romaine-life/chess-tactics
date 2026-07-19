@@ -15,7 +15,10 @@ backdrops, also use `docs/lore-anti-story.md` and
 Production raster sizing is governed by
 [ADR-0076](adr/0076-scaling-is-calibration-production-art-is-native-1x.md):
 scaling may calibrate a candidate, but acceptance requires regenerated native
-pixels and a 1:1 canonical runtime path.
+pixels and a 1:1 canonical runtime path. The narrow whole-board exception is
+[ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md):
+an accepted pre-drawn scene keeps its exact bytes and the renderer applies its
+saved continuous whole-image alignment.
 
 Storage and promotion are governed by
 [ADR-0085](adr/0085-runtime-assets-are-live-storage-backed.md): generated media
@@ -134,6 +137,100 @@ The skirmish board should converge on a real pixel asset renderer:
 Rendered board concepts are still valuable, but they should become references,
 crop sources, or temporary bridge images while the real tile and piece kits are
 being produced.
+
+### Pre-drawn Whole-Level Plates
+
+The pre-drawn board path is the deliberate complete-plate exception to the
+ordinary composited-tile direction above. Under ADR-0107 through ADR-0110 and ADR-0133 through ADR-0135, one
+continuous generated painting may replace the ordinary terrain, road, prop, and
+barrier pixels for a specific authored level while the canonical level remains
+the sole authority for gameplay geometry and live units, grid, selection, and
+tactical overlays.
+
+Per [ADR-0109](adr/0109-predrawn-generation-packets-preserve-authored-level-semantics.md),
+whole-level generation must not ask a model to infer the playable board from a
+beauty render alone. Every request uses an authored-level packet containing:
+
+- a unit-free exact projected grid and perimeter guide;
+- board dimensions and projected axis directions;
+- a canonical coordinate-by-coordinate terrain and footprint dump;
+- exact road connectivity, blocking shared edges, exits, and outer boundary
+  edges;
+- the canonical top-only image as the authority for environment, materials,
+  palette, lighting, texture language, and finish, with no named biome supplied
+  by text and no prior whole-level image reference in the default isolated test;
+  and
+- explicit prohibitions against baked units, invented gameplay height, expanded
+  footprints, extra roads, and a model-invented perimeter.
+
+The top-only art authority also suppresses additive ground cover, including
+grass. Cover creates avoidable occlusion around geometry and may be composed from
+its accepted generated runtime layer later; terrain, roads, barriers, and props
+remain visible in the export.
+
+Per
+[ADR-0122](adr/0122-predrawn-occlusion-derives-from-canonical-raised-geometry.md),
+candidate review does not ask a visual model to segment those barriers or props.
+The runtime derives a per-depth alpha seed from the canonical raised sprites and
+shows that exact seed in magenta over the registered plate. The owner compares
+the real `Occlusion` before/after pass and the `Seed mask`; a plate whose painted
+silhouettes do not agree closely enough with that deterministic proof is not
+made acceptable by an unreviewed inferred mask.
+
+Per [ADR-0120](adr/0120-canonical-top-only-image-owns-predrawn-appearance.md),
+the guide owns spatial geometry and appearance, while the semantic dump owns
+gameplay meaning. The default test passes no
+prior candidate, accepted plate, beauty render, or unrelated board image.
+Boundary appearance may be generated creatively, but its location is the
+canonical outer edge of the board. The
+mutable process and prompt wording live in
+[`art/predrawn-board-generation.md`](art/predrawn-board-generation.md); exact run
+prompts remain text provenance while candidate media follows the live-storage
+contract.
+
+No pre-drawn generation call may be assembled only in chat or reconstructed
+from documentation amendments. Before generation, the shared preflight builder
+must materialize and validate one complete `prompt.txt`, semantic packet,
+ordered reference manifest with content hashes, and request manifest. Per
+[ADR-0125](adr/0125-predrawn-preparation-self-validates-before-generation.md),
+successful deterministic preflight reports `ready-for-generation` without an
+owner checkpoint. Any subsequent prompt, model, parameter, semantic, or
+reference change creates a new preflighted run. Mandatory owner judgment begins
+with the generated candidate mounted on the game-owned review surface.
+
+Per [ADR-0110](adr/0110-owner-fitted-grid-defines-predrawn-review-rectification.md),
+candidate review exposes the complete authored grid over the untouched source.
+The owner may fit monotonic row and column guides and inspect their correction
+range. Large, non-separable, or semantic drift still rejects the generation;
+the whole-image alignment cannot hide an incorrect level.
+
+Per [ADR-0111](adr/0111-predrawn-refit-target-dimensions-are-owner-configurable.md),
+the review instrument's target row and column counts are owner-configurable. If
+the candidate visibly contains an extra row or column, the owner sets the target
+to the painted count before fitting guides. That target controls the refit
+topology and the temporary post-picker review overlay. Per
+[ADR-0112](adr/0112-predrawn-review-overlay-uses-the-saved-refit-grid.md), this
+overlay retains the chosen count after `DONE`; canonical level dimensions,
+interactive cells, and gameplay remain unchanged, leaving the generated excess
+visible as evidence for the next generation pass.
+
+Per
+[ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md),
+an accepted whole-level plate keeps the exact approved bytes at their actual
+pixel dimensions. Promotion saves the stable media slot plus the
+exact approved versioned alignment payload in the Level. Its four corners,
+refit counts, and monotonic guides drive the renderer; its pinned boundary
+round-trips as display-only evidence. Promotion does not bake the transform,
+resize the image, or persist a preview URL or candidate id. One continuous
+whole-image transform is allowed, but independent object and layer warps remain
+forbidden.
+
+Generation should reserve meaningful continuous scenery outside every playable
+edge for camera travel. A centered safe area is useful prompt guidance, not an
+exact acceptance measurement, and there is no mandatory 3840x2160 output.
+Review tests four-direction panning at the centered viewport-cover zoom floor in
+the real shared viewer. More source pixels at the same grid-to-frame ratio do
+not create more camera room.
 
 ### Full-Height Wall Assets
 

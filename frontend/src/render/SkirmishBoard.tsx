@@ -24,12 +24,19 @@ import { wallArtSrcs } from '../core/wallArt';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 import { unitAnchorFraction, unitAssetById } from '../ui/unitCatalog';
 import {
+  predrawnBoardCoverPolygon,
+  runtimePredrawnBoardPlate,
+  type PredrawnBoardCornerRegistration,
+  type PredrawnBoardPlate,
+} from './PredrawnBoardLayer';
+import {
   UNIT_IMG_MAX_H,
   UNIT_IMG_MAX_W,
   boardBounds,
   boardDrawOps,
   mirrorFacingPlan,
   mirrorSurfacesForPlacements,
+  predrawnOcclusionMaskOps,
   reflectedOpsForSubjects,
   unprojectBoardPoint,
   type BakeBounds,
@@ -244,6 +251,7 @@ function sceneBoardForSkirmish(
   board: SocketBoardResult<TileAsset>,
   exactBoard: EditorBoard | null,
 ): EditorBoard {
+  const predrawn = exactBoard?.surface?.kind === 'predrawn';
   const cells: Record<string, string> = {};
   const coverTypes: Record<string, TileFamilyId> = {};
   for (const cell of board.cells) {
@@ -258,17 +266,19 @@ function sceneBoardForSkirmish(
     playerFaction: exactBoard?.playerFaction,
     factionDirections: exactBoard?.factionDirections ?? {},
     cells,
+    surface: exactBoard?.surface,
     macroTiles: exactBoard?.macroTiles,
+    subterrain: exactBoard?.subterrain,
     units: {},
     doodads: {},
     props: Object.fromEntries((game.props ?? []).map((prop) => [`${prop.x},${prop.y}`, { propId: prop.propId }])),
     cover: coverMapRecordForGame(game, exactBoard),
     coverTypes: exactBoard?.coverTypes ?? coverTypes,
     features: exactBoard?.features ?? {},
-    fences: exactBoard?.fences ?? {},
-    fencePosts: exactBoard?.fencePosts ?? {},
-    walls: exactBoard?.walls ?? {},
-    wallArt: exactBoard?.wallArt ?? {},
+    fences: predrawn ? {} : exactBoard?.fences ?? {},
+    fencePosts: predrawn ? {} : exactBoard?.fencePosts ?? {},
+    walls: predrawn ? {} : exactBoard?.walls ?? {},
+    wallArt: predrawn ? {} : exactBoard?.wallArt ?? {},
     featureCuts: exactBoard?.featureCuts ?? {},
     featureExits: exactBoard?.featureExits ?? {},
     zoneEntries: exactBoard?.zoneEntries ?? [],
@@ -357,25 +367,32 @@ function collectBoardArt(
   wallOverlays: ReadonlyMap<string, ResolvedWallOverlay>,
   wallArtUrls: readonly string[],
   sceneUrls: readonly string[],
+  occlusionUrls: readonly string[],
+  predrawnSrc?: string,
 ): { urls: string[]; signature: string } {
   const tiles = new Set<string>();
-  for (const fence of fenceOverlays.values()) tiles.add(fenceFrameSrc(fence.material, fence.mask));
-  for (const post of fencePosts.values()) tiles.add(fencePostSrc(post.material));
-  for (const wall of wallOverlays.values()) tiles.add(wallFrameSrc(wall.material, wall.mask));
-  for (const url of wallArtUrls) tiles.add(url);
   for (const url of sceneUrls) tiles.add(url);
-  for (const cell of board.cells) {
-    if (cell.asset) {
-      const top = tileFrameSrc(cell.asset);
-      tiles.add(immutableBoardLabTerrainSrc(terrainTopSrc(top, cell.asset.topAnimFrames)));
-    }
-    if (cell.feature) tiles.add(featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask));
-    const cover = cell.groundCover;
-    if (cover) {
-      const set = groundCoverSet(cell.terrain);
-      if (set) for (const tuft of cover.tufts) {
-        const variant = set.variants.find((entry) => entry.id === tuft.variant);
-        if (variant) tiles.add(variant.src);
+  for (const url of occlusionUrls) tiles.add(url);
+  if (predrawnSrc) {
+    tiles.add(predrawnSrc);
+  } else {
+    for (const fence of fenceOverlays.values()) tiles.add(fenceFrameSrc(fence.material, fence.mask));
+    for (const post of fencePosts.values()) tiles.add(fencePostSrc(post.material));
+    for (const wall of wallOverlays.values()) tiles.add(wallFrameSrc(wall.material, wall.mask));
+    for (const url of wallArtUrls) tiles.add(url);
+    for (const cell of board.cells) {
+      if (cell.asset) {
+        const top = tileFrameSrc(cell.asset);
+        tiles.add(immutableBoardLabTerrainSrc(terrainTopSrc(top, cell.asset.topAnimFrames)));
+      }
+      if (cell.feature) tiles.add(featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask));
+      const cover = cell.groundCover;
+      if (cover) {
+        const set = groundCoverSet(cell.terrain);
+        if (set) for (const tuft of cover.tufts) {
+          const variant = set.variants.find((entry) => entry.id === tuft.variant);
+          if (variant) tiles.add(variant.src);
+        }
       }
     }
   }
@@ -648,6 +665,7 @@ function SkirmishSceneLayer({
   noHopId,
   premovedIds,
   afterGhosts,
+  occlusionMasks,
 }: {
   sceneBoard: EditorBoard;
   seed: number;
@@ -659,6 +677,7 @@ function SkirmishSceneLayer({
   noHopId: string | null;
   premovedIds: ReadonlySet<string>;
   afterGhosts: ReturnType<typeof premoveGhosts>;
+  occlusionMasks: readonly BoardDrawOp[];
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const motionRef = useRef<Map<string, PieceMotion>>(new Map());
@@ -729,7 +748,12 @@ function SkirmishSceneLayer({
     ].filter((src): src is string => !!src);
     const mirrorFaces = [...new Set(mirrorSurfaces.map((surface) => surface.face))];
     const reflectedUnitSources = livePieces.flatMap((piece) => mirrorSpriteSourcesForPiece(piece, mirrorFaces));
-    const sources = [...new Set([...staticOps.map((op) => op.src), ...unitSources, ...reflectedUnitSources])];
+    const sources = [...new Set([
+      ...staticOps.map((op) => op.src),
+      ...occlusionMasks.map((op) => op.src),
+      ...unitSources,
+      ...reflectedUnitSources,
+    ])];
     const hasAnimatedGroundCover = staticOps.some(isAnimatedGroundCoverOp);
 
     const frameOps = (timeMs: number): BoardDrawOp[] => {
@@ -788,7 +812,7 @@ function SkirmishSceneLayer({
       const images = new Map(entries);
       const tick = (timeMs: number): void => {
         if (cancelled) return;
-        drawBoardOps(ctx, frameOps(timeMs), bounds, images, timeMs);
+        drawBoardOps(ctx, frameOps(timeMs), bounds, images, timeMs, undefined, occlusionMasks);
         if (hasAnimatedGroundCover || arriving || hasActiveMotion(timeMs)) {
           raf = window.requestAnimationFrame(tick);
         }
@@ -800,7 +824,7 @@ function SkirmishSceneLayer({
       cancelled = true;
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, premovedIds, staticOps]);
+  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, occlusionMasks, premovedIds, staticOps]);
 
   return (
     <canvas
@@ -814,7 +838,16 @@ function SkirmishSceneLayer({
   );
 }
 
-export function SkirmishBoard({ interactive = true }: { interactive?: boolean } = {}) {
+export function SkirmishBoard({
+  interactive = true,
+  predrawnReview,
+}: {
+  interactive?: boolean;
+  predrawnReview?: {
+    src: string;
+    registration?: PredrawnBoardCornerRegistration;
+  };
+} = {}) {
   // Board-view state lives in the shared view store so the HUD's "View" tab owns
   // the controls and the playfield stays clean of floating buttons.
   const showMoves = useSkirmishView((s) => s.showMoves);
@@ -826,8 +859,10 @@ export function SkirmishBoard({ interactive = true }: { interactive?: boolean } 
   const showPromotionZones = useSkirmishView((s) => s.showPromotionZones);
   const showGrid = useSkirmishView((s) => s.showGrid);
   const boardZoom = useSkirmishView((s) => s.zoom);
+  const boardMaxZoom = useSkirmishView((s) => s.maxZoom);
   const boardPan = useSkirmishView((s) => s.pan);
   const setZoom = useSkirmishView((s) => s.setZoom);
+  const setMinZoom = useSkirmishView((s) => s.setMinZoom);
   const setBoardPan = useSkirmishView((s) => s.setPan);
   const game = useSkirmish((s) => s.game);
   const env = useSkirmish((s) => s.env);
@@ -918,6 +953,23 @@ export function SkirmishBoard({ interactive = true }: { interactive?: boolean } 
   }, [env, game.pieces, game.size, game.turn, game.winner, netMovePending, pendingPromotion, premoveMode, selectedId, localSide]);
   const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
   const exactBoard = useMemo(() => resolveBoardCode(game), [game.boardCode, game.size.cols, game.size.rows]);
+  const predrawnOcclusionMasks = useMemo(
+    () => exactBoard?.surface?.kind === 'predrawn'
+      ? predrawnOcclusionMaskOps(exactBoard)
+      : [],
+    [exactBoard],
+  );
+  const predrawnPlate = useMemo<PredrawnBoardPlate | undefined>(() => {
+    const surface = exactBoard?.surface;
+    if (!surface) return undefined;
+    return predrawnReview
+      ? { surface, src: predrawnReview.src, registration: predrawnReview.registration }
+      : runtimePredrawnBoardPlate(surface);
+  }, [exactBoard, predrawnReview]);
+  const predrawnCoverPolygon = useMemo(
+    () => predrawnPlate ? predrawnBoardCoverPolygon(predrawnPlate, board.cells) : undefined,
+    [board.cells, predrawnPlate],
+  );
   const ambientSceneCover = !exactBoard;
   const sceneBoard = useMemo(() => sceneBoardForSkirmish(game, board, exactBoard), [board, exactBoard, game.props, game.size.cols, game.size.rows, game.terrain]);
   // Edge fences resolve from the authored board code (each shared edge → its upper-left cell's
@@ -946,8 +998,18 @@ export function SkirmishBoard({ interactive = true }: { interactive?: boolean } 
   // unit — no per-tile popcorn (see render/boardArtReady). The signature is the tile set
   // (stable across moves), so this arms once per board/seed, not on every move.
   const boardArt = useMemo(
-    () => collectBoardArt(board, livePieces, fenceOverlays, fencePosts, wallOverlays, wallArtUrls, sceneUrls),
-    [board, fenceOverlays, fencePosts, livePieces, sceneUrls, wallArtUrls, wallOverlays],
+    () => collectBoardArt(
+      board,
+      livePieces,
+      fenceOverlays,
+      fencePosts,
+      wallOverlays,
+      wallArtUrls,
+      sceneUrls,
+      predrawnOcclusionMasks.map((op) => op.src),
+      predrawnPlate?.src,
+    ),
+    [board, fenceOverlays, fencePosts, livePieces, predrawnOcclusionMasks, predrawnPlate?.src, sceneUrls, wallArtUrls, wallOverlays],
   );
   const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
   // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
@@ -1317,9 +1379,11 @@ export function SkirmishBoard({ interactive = true }: { interactive?: boolean } 
         zoom={boardZoom}
         pan={boardPan}
         minZoom={0.55}
-        maxZoom={1.45}
+        maxZoom={boardMaxZoom}
         onZoomChange={setZoom}
         onPanChange={setBoardPan}
+        coverPolygon={predrawnCoverPolygon}
+        onMinimumZoomChange={setMinZoom}
       >
         <BoardLabBoard
           board={board}
@@ -1331,6 +1395,7 @@ export function SkirmishBoard({ interactive = true }: { interactive?: boolean } 
           className="skirmish-board-surface"
           ariaLabel="Skirmish board"
           showGrid={showGrid}
+          predrawnPlate={predrawnPlate}
           sceneLayer={(
             <SkirmishSceneLayer
               sceneBoard={sceneBoard}
@@ -1343,6 +1408,7 @@ export function SkirmishBoard({ interactive = true }: { interactive?: boolean } 
               noHopId={noHopId}
               premovedIds={premovedIds}
               afterGhosts={afterGhosts}
+              occlusionMasks={predrawnOcclusionMasks}
             />
           )}
           renderCellOverlay={({ cell }) => {

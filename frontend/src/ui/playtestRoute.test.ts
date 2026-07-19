@@ -83,7 +83,7 @@ describe('playtest route helpers', () => {
       levelName: 'Current board',
       objective: 'rival-kings',
       surviveTurns: 12,
-      editorSearch: '?from=studio&document=doc-42',
+      editorSearch: '?from=studio&document=doc-42&predrawnPreview=%2Ftmp-shots%2Fplate.png&predrawnCorners=1628%2C966%2C1092%2C13%2C1553%2C242%2C553%2C758%2C82%2C535',
       campaignId: 'off-c-crown-valoria',
       levelId: 'off-l-fortress-gate',
       documentRevision: 17,
@@ -96,6 +96,8 @@ describe('playtest route helpers', () => {
     expect(play.searchParams.get('name')).toBe('Current board');
     expect(play.searchParams.get('survive')).toBe('12');
     expect(play.searchParams.get('mode')).toBe('test');
+    expect(play.searchParams.get('predrawnPreview')).toBe('/tmp-shots/plate.png');
+    expect(play.searchParams.get('predrawnCorners')).toBe('1628,966,1092,13,1553,242,553,758,82,535');
 
     const back = new URL(play.searchParams.get('returnTo')!, 'https://chess.test');
     expect(back.pathname).toBe('/editor/level');
@@ -109,6 +111,8 @@ describe('playtest route helpers', () => {
     expect(back.searchParams.get('from')).toBe('studio');
     expect(back.searchParams.get('document')).toBe('doc-42');
     expect(back.searchParams.get('docRev')).toBe('17');
+    expect(back.searchParams.get('predrawnPreview')).toBe('/tmp-shots/plate.png');
+    expect(back.searchParams.get('predrawnCorners')).toBe('1628,966,1092,13,1553,242,553,758,82,535');
   });
 
   it('prefers the explicit editor return over the board-only fallback', () => {
