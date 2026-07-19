@@ -10,7 +10,7 @@ import {
   chromeUnitScopedSelectors,
   chromeUnitSelectors,
 } from './chromeUnitRegistry';
-import committedChromeLabDefaults from '../../config/chrome-lab-defaults.json';
+import { requiredDrawableAsset } from '@chess-tactics/board-render';
 import { SURFACE_ASSETS } from './surfaceCatalog';
 
 export type RailFit = 'stretch' | 'tile';
@@ -214,13 +214,17 @@ export type DividerRender = {
 
 export type DividerRenders = Record<ChromeRole, DividerRender>;
 
-type CommittedChromeLabDefaults = {
+type InstalledChromeDefaults = {
   outer: RoleTune;
   inner: RoleTune;
   dividers: DividerTunes;
 };
 
-const COMMITTED_CHROME_LAB_DEFAULTS = committedChromeLabDefaults as unknown as CommittedChromeLabDefaults;
+function installedChromeDefaults(): InstalledChromeDefaults {
+  const behavior = requiredDrawableAsset('installed-chrome', 'chrome-family').behavior;
+  if (!behavior.outer || !behavior.inner || !behavior.dividers) throw new Error('installed Chrome geometry is unavailable');
+  return behavior as unknown as InstalledChromeDefaults;
+}
 
 export type DividerAtomOverlay = {
   left: string;
@@ -247,11 +251,12 @@ export type AtomAlignmentReadout = {
   finalBottomY: number;
 };
 export function roleDefault(role: ChromeRole): RoleTune {
-  return { ...(role === 'outer' ? COMMITTED_CHROME_LAB_DEFAULTS.outer : COMMITTED_CHROME_LAB_DEFAULTS.inner) };
+  const defaults = installedChromeDefaults();
+  return { ...(role === 'outer' ? defaults.outer : defaults.inner) };
 }
 
 export function dividerDefault(role: ChromeRole = 'outer'): DividerTune {
-  return { ...COMMITTED_CHROME_LAB_DEFAULTS.dividers[role] };
+  return { ...installedChromeDefaults().dividers[role] };
 }
 export function defaultRailFitForSource(sourceId: string, fallback: RailFit = 'stretch'): RailFit {
   const source = chromeSourceById(sourceId);

@@ -52,4 +52,23 @@ export function assertInstalledPresentationCatalog(): void {
   if (!drawableAssets('terrain-review').length) throw new Error('drawable catalog has no terrain review inventory');
   if (!drawableAssets('terrain-comparison').length) throw new Error('drawable catalog has no terrain comparison inventory');
   if (!drawableAssets('portrait-treatment').length) throw new Error('drawable catalog has no portrait treatment inventory');
+  const appUi = drawableAssets('app-ui').find((asset) => asset.id === 'app-ui');
+  const requiredRoles = appUi?.behavior.requiredRoles;
+  if (!appUi || !Array.isArray(requiredRoles) || requiredRoles.some((role) => typeof role !== 'string' || !appUi.media[role])) {
+    throw new Error('drawable catalog has incomplete application UI media');
+  }
+  if (!drawableAssets('app-font').length) throw new Error('drawable catalog has no application font inventory');
+  const chrome = drawableAssets('chrome-family').find((asset) => asset.id === 'installed-chrome');
+  if (!chrome || ['outer-atom', 'outer-rail', 'inner-atom', 'inner-rail', 'divider-joint'].some((role) => !chrome.media[role])) {
+    throw new Error('drawable catalog has incomplete installed Chrome');
+  }
+  if (!drawableAssets('artwork-reference').length) throw new Error('drawable catalog has no artwork reference inventory');
+  const nineSlices = drawableAssets('nine-slice');
+  if (!nineSlices.length) throw new Error('drawable catalog has no nine-slice inventory');
+  for (const role of ['frame-editor-default', 'divider-editor-default', 'settings-panel', 'settings-tab']) {
+    if (!nineSlices.some((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes(role))) {
+      throw new Error(`drawable catalog has no nine-slice role ${role}`);
+    }
+  }
+  if (!drawableAssets('ui-scrollbar').length) throw new Error('drawable catalog has no UI scrollbar inventory');
 }

@@ -53,6 +53,15 @@ const RETIRED_GIT_MEDIA_PATHS = [
   'packages/board-render/src/art/macroTiles.json',
   'frontend/src/core/wallArt.json',
   'packages/board-render/src/core/wallArt.json',
+  'frontend/config/chrome-lab-defaults.json',
+  'frontend/config/nine-slice-registry.json',
+  'frontend/config/nine-slice',
+  'frontend/src/generated/nine-slice.css',
+  'frontend/scripts/nine-slice-kit.mjs',
+  'frontend/scripts/vite-chrome-lab-defaults-plugin.mjs',
+  'frontend/scripts/vite-nine-slice-geometry-plugin.mjs',
+  'frontend/config/native-rail-generation.json',
+  'frontend/config/chrome-family-extraction',
 ];
 const PUBLIC_ROOT_PREFIX = 'frontend/public/';
 const PUBLIC_ASSET_PREFIX = 'frontend/public/assets/';
@@ -140,6 +149,10 @@ const STATIC_AUTHORITY_CONFIG_EXTENSION = /\.(?:jsonl|toml|ya?ml)$/;
 const RUNTIME_MEDIA_POINTER_SOURCE_PATH = /^(?:backend\/|frontend\/(?:config|src)\/|packages\/)/;
 const HARDCODED_IMMUTABLE_MEDIA_URL = /\/api\/media\/[0-9a-f]{64}\b/i;
 const RETIRED_CUTOVER_SOURCE_MARKERS = [
+  {
+    pattern: /chrome-lab-defaults\.json|nine-slice-registry\.json|config\/nine-slice|DEFAULT_OG_IMAGE|PREVIEW_KIND_BY_STABLE_SLOT|SCROLLBAR_SLOT_PREFIX|DEFAULT_(?:DIVIDER|NINE_SLICE)_ASSET[^\n]{0,160}["'](?:panel|mode-button)|requiredNineSliceAsset\(["'](?:panel|mode-button|panel-divider)["']\)/,
+    detail: 'compiled installed presentation identity/default/configuration remains after drawable-catalog cutover',
+  },
   {
     pattern: /LIVE_MEDIA_(?:SERVING|IMPORT)_ENABLED|liveMedia(?:Serving|Import)Enabled/,
     detail: 'temporary live-media serving/import switch remains after final cutover',

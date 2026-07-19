@@ -650,6 +650,47 @@ describe('no-committed-media guard', () => {
     }
   });
 
+  it.each([
+    'frontend/config/chrome-lab-defaults.json',
+    'frontend/config/nine-slice-registry.json',
+    'frontend/config/nine-slice/panel.json',
+    'frontend/src/generated/nine-slice.css',
+    'frontend/scripts/nine-slice-kit.mjs',
+    'frontend/scripts/vite-chrome-lab-defaults-plugin.mjs',
+    'frontend/scripts/vite-nine-slice-geometry-plugin.mjs',
+  ])('permanently rejects recreation of retired presentation authority %s', (relativePath) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-presentation-path-test-'));
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, '{}\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'retired-git-media-path' }),
+      ]));
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    "const DEFAULT_OG_IMAGE = '/assets/og/default.png';",
+    "const PREVIEW_KIND_BY_STABLE_SLOT = { 'ui/scrollbars/oak.png': 'sprite' };",
+    "import registry from '../../config/nine-slice-registry.json';",
+  ])('rejects renamed compiled presentation authority: %s', (source) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-presentation-source-test-'));
+    const relativePath = 'frontend/src/ui/renamedPresentationAuthority.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${source}\n`, 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ detail: 'compiled installed presentation identity/default/configuration remains after drawable-catalog cutover' }),
+      ]));
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it('rejects recreation of a compiled Subterrain inventory', () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-subterrain-catalog-test-'));
     const relativePath = 'packages/board-render/src/core/subterrainLegacy.ts';

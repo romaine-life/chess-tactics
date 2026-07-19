@@ -45,3 +45,16 @@ export function installUiFonts(): void {
   element.textContent = rules.join('\n');
   document.head.appendChild(element);
 }
+
+export function installNineSliceCssVariables(): void {
+  const style = document.documentElement.style;
+  for (const asset of drawableAssets('nine-slice')) {
+    const variables = asset.behavior.cssVariables;
+    if (variables === undefined) continue;
+    if (!variables || typeof variables !== 'object' || Array.isArray(variables)) throw new Error(`nine-slice ${asset.id} has invalid CSS variables`);
+    for (const [name, value] of Object.entries(variables)) {
+      if (!/^--[a-z][a-z0-9-]*$/.test(name) || (typeof value !== 'string' && typeof value !== 'number')) throw new Error(`nine-slice ${asset.id} has invalid CSS variable ${name}`);
+      style.setProperty(name, String(value));
+    }
+  }
+}

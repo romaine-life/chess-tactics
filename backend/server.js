@@ -9621,7 +9621,6 @@ function makeStaticCacheHeaders(rootDir) {
 // and renderer/catalog/media failures are explicit 503s.
 const OG_SITE_NAME = 'Chess Tactics';
 const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
-const DEFAULT_OG_IMAGE = '/assets/og/default.png';
 // Owner-facing objective labels — mirrors frontend core/objectives.ts MODE_NAME (5 stable entries).
 const OG_MODE_NAME = {
   'capture-all': 'Last Man Standing', 'capture-king': 'King Assault',
@@ -9876,7 +9875,11 @@ async function ogTagsFor(req) {
 
   let title = OG_SITE_NAME;
   let description = OG_DEFAULT_DESC;
-  let image = `${origin}${DEFAULT_OG_IMAGE}`;
+  const drawableCatalog = await dbReadDrawableCatalog();
+  const appUi = drawableCatalog.assets.find((asset) => asset.id === 'app-ui' && asset.kind === 'app-ui');
+  const defaultOgPath = appUi?.media?.['og-default']?.media?.immutableUrl;
+  if (!defaultOgPath) throw new Error('application UI role og-default is unavailable');
+  let image = `${origin}${defaultOgPath}`;
   if (target) {
     title = target.title || OG_SITE_NAME;
     description = target.description || target.subtitle || OG_DEFAULT_DESC;

@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  applyDrawableCatalog,
   applyLiveMediaCatalog,
+  resetDrawableCatalog,
   liveMediaSlotUrl,
   resetLiveMediaCatalog,
   type LiveMediaCatalog,
 } from '@chess-tactics/board-render';
 import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMediaAdmin';
 import { testGroundCoverCatalog } from '../test/liveMediaCatalog';
+import { testDrawableCatalog } from '../test/drawableCatalog';
 import {
   CHROME_LIVE_SLOTS,
   assertInstalledChromeSlots,
@@ -101,9 +104,13 @@ function adminCatalog(versions: AdminLiveMediaVersion[]): AdminLiveMediaCatalog 
 }
 
 describe('live Chrome sources', () => {
-  beforeEach(() => applyLiveMediaCatalog(publicCatalog()));
+  beforeEach(() => {
+    applyDrawableCatalog(testDrawableCatalog());
+    applyLiveMediaCatalog(publicCatalog());
+  });
   afterEach(() => {
     clearChromeAdminCatalog();
+    resetDrawableCatalog();
     resetLiveMediaCatalog();
   });
 
@@ -115,7 +122,7 @@ describe('live Chrome sources', () => {
         authority: 'installed-slot',
         sourceSheetPath: slot,
       });
-      expect(chromeSourceById(slot).src).toMatch(/^\/api\/media\/[0-9]{64}$/);
+      expect(chromeSourceById(slot).src).toMatch(/^\/api\/media\/[0-9a-f]{64}$/);
     }
     expect(chromeSourcesFor('outer', 'atom')[0].id).toBe(CHROME_LIVE_SLOTS.outerAtom);
     expect(chromeSourcesFor('outer', 'rail')[0]).toMatchObject({ id: CHROME_LIVE_SLOTS.outerRail, kind: 'rail-sheet' });
@@ -124,10 +131,11 @@ describe('live Chrome sources', () => {
   });
 
   it('fails closed when any installed Chrome slot is absent', () => {
-    const missing = publicCatalog();
-    missing.slots = missing.slots.filter((entry) => entry.slot !== CHROME_LIVE_SLOTS.dividerJoint);
-    applyLiveMediaCatalog(missing);
-    expect(() => assertInstalledChromeSlots()).toThrow(CHROME_LIVE_SLOTS.dividerJoint);
+    const missing = testDrawableCatalog();
+    const installedChrome = missing.assets.find((asset) => asset.id === 'installed-chrome')!;
+    delete installedChrome.media['divider-joint'];
+    applyDrawableCatalog(missing);
+    expect(() => assertInstalledChromeSlots()).toThrow(/divider-joint/);
   });
 
   it('hydrates private choices from importer metadata and uses the authenticated content URL', () => {

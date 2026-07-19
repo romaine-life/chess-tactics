@@ -2,8 +2,8 @@
 // status, and runtime metadata come from one hydrated backend catalog snapshot.
 // Git contributes only taxonomy and editable nine-slice/structure geometry.
 import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import nineSliceRegistry from '../../../config/nine-slice-registry.json';
 import { structureArtAsset } from '../../core/structureArt';
+import { nineSliceCatalogAssets } from '../nineSliceCatalog';
 import {
   mediaDimensions,
   studioProductionLabel,
@@ -24,18 +24,9 @@ export const ASSET_TYPE_FACETS: { value: AssetTypeFacet; label: string }[] = [
   { value: 'structure', label: 'Structure Art' },
 ];
 
-interface RegistryAsset {
-  label: string;
-  kind?: string;
-  variants: { out: string; swap?: string }[];
-}
-
-const REG_ASSETS = (nineSliceRegistry as { assets: Record<string, RegistryAsset> }).assets;
-const EDITOR_ASSET: Record<string, string> = {};
-// Bars and junctions are composed geometry, not editable four-corner frames.
-for (const [id, asset] of Object.entries(REG_ASSETS)) {
-  if (asset.kind === 'bar' || asset.kind === 'junction') continue;
-  for (const variant of asset.variants) EDITOR_ASSET[`ui/kit/${variant.out}`] = id;
+function editorAssetForSlot(slot: string): string | undefined {
+  return nineSliceCatalogAssets().find((asset) => asset.kind === 'frame'
+    && Object.values(asset.record.media).some((binding) => binding.slot === slot))?.id;
 }
 
 function runtimeSummary(item: StudioAssetRecord): string[] {
@@ -91,15 +82,15 @@ function buildSections(items: StudioAssetRecord[]): AssetSection[] {
 
   const frameItems = items.filter((item) => item.type === 'frames');
   const claimed = new Set<string>();
-  for (const [id, asset] of Object.entries(REG_ASSETS)) {
-    const variants = asset.variants.flatMap((variant) => {
-      const slot = `ui/kit/${variant.out}`;
+  for (const asset of nineSliceCatalogAssets()) {
+    const variants = Object.entries(asset.record.media).flatMap(([role, binding]) => {
+      const slot = binding.slot;
       const item = frameItems.find((candidate) => candidate.primary.slot === slot);
       if (!item) return [];
       claimed.add(item.id);
-      return [{ item, sub: itemSub(item, variant.swap ? 'active / selected' : 'default') }];
+      return [{ item, sub: itemSub(item, role === 'target' ? 'default' : role) }];
     });
-    if (variants.length) sections.push({ key: `frame-${id}`, label: asset.label, items: variants });
+    if (variants.length) sections.push({ key: `frame-${asset.id}`, label: asset.label, items: variants });
   }
   const otherFrames = frameItems
     .filter((item) => !claimed.has(item.id))
@@ -175,10 +166,10 @@ function runtimeSlice(item: StudioAssetRecord): { top: number; right: number; bo
 
 function dividerAssetIdForItem(item: StudioAssetRecord): string | undefined {
   const slots = new Set(item.slots.map((slot) => slot.slot));
-  return Object.entries(REG_ASSETS).find(([, asset]) => (
+  return nineSliceCatalogAssets().find((asset) => (
     asset.kind === 'bar'
-    && asset.variants.some((variant) => slots.has(`ui/kit/${variant.out}`))
-  ))?.[0];
+    && Object.values(asset.record.media).some((binding) => slots.has(binding.slot))
+  ))?.id;
 }
 
 export function AssetLab({ library, name, header, onEditFrame, onOpenDivider }: {
@@ -190,7 +181,7 @@ export function AssetLab({ library, name, header, onEditFrame, onOpenDivider }: 
 }): ReactElement {
   const item = name ? findAsset(library, name) : null;
   const geometry = item?.structureId ? structureArtAsset(item.structureId) : undefined;
-  const editableFrameId = item ? EDITOR_ASSET[item.primary.slot] : undefined;
+  const editableFrameId = item ? editorAssetForSlot(item.primary.slot) : undefined;
   const dividerAssetId = item ? dividerAssetIdForItem(item) : undefined;
   const slice = item ? runtimeSlice(item) : null;
   const fallbackSlice = item ? Math.max(2, Math.floor(Math.min(item.width ?? 1, item.height ?? 1) / 3)) : 2;

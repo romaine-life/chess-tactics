@@ -1857,6 +1857,7 @@ async function main() {
     });
   }
   const appUiRoles = [
+    'og-default',
     'ui-main-menu-background-scene-v1-avif',
     'ui-kit-icons-brand-shield-png',
     'ui-surfaces-baseline-stone-blue-avif',
@@ -1879,6 +1880,10 @@ async function main() {
     id: 'test-app-font', kind: 'app-font', label: 'Synthetic application font',
     behavior: { family: 'Synthetic UI', style: 'normal', weight: 400, display: 'swap', format: 'woff2' },
     media: { font: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-ui-scrollbar', kind: 'ui-scrollbar', label: 'Synthetic UI scrollbar',
+    behavior: { previewKind: 'sprite' }, media: { preview: sharedPresentationSlot },
   });
   const wallArtBatchRollback = await request(
     'PUT', '/api/admin/drawable-assets', adminJson,
@@ -1917,6 +1922,33 @@ async function main() {
       slot, domain: 'ui-kit', role: 'media', width: 32 + index, height: 32 + index,
     });
   }
+  await seedSyntheticDrawable({
+    id: 'installed-chrome', kind: 'chrome-family', label: 'Synthetic installed Chrome',
+    behavior: {
+      outer: { atomSourceId: 'ui/chrome/outer/atom.png', railSourceId: 'ui/chrome/outer/rail.png', atomTurns: 0, atomSize: 41, railThickness: 24, atomX: 0, atomY: 0, atomLeftX: 0, atomRightX: 0, atomTopY: 0, atomBottomY: 0, railUnderlap: 14, railFit: 'stretch', fillMode: 'surface', fillTintId: 'blue', fillSurfaceId: 'baseline-stone-blue', fillSurfaceScale: 768, fillBoxLeft: 0, fillBoxRight: 0, fillBoxTop: 0, fillBoxBottom: 0, contentPadding: 31, fillAlpha: 0 },
+      inner: { atomSourceId: 'ui/chrome/inner/atom.png', railSourceId: 'ui/chrome/inner/rail.png', atomTurns: 1, atomSize: 11, railThickness: 7, atomX: 0, atomY: 0, atomLeftX: 0, atomRightX: 0, atomTopY: 0, atomBottomY: 0, railUnderlap: 8, railFit: 'tile', fillMode: 'tint', fillTintId: 'night', fillSurfaceId: 'hybrid-stone-blue', fillSurfaceScale: 384, fillBoxLeft: 0, fillBoxRight: 0, fillBoxTop: 0, fillBoxBottom: 0, contentPadding: 0, fillAlpha: 0.82 },
+      dividers: {
+        outer: { atomSourceId: 'ui/chrome/divider/joint.png', atomTurns: 0, atomSize: 32, bandHeight: 34, atomX: 0, atomY: 0, atomLeftX: 0, atomRightX: 0, atomLeftY: 0, atomRightY: 0 },
+        inner: { atomSourceId: 'ui/chrome/divider/joint.png', atomTurns: 0, atomSize: 11, bandHeight: 7, atomX: 0, atomY: 0, atomLeftX: 0, atomRightX: 0, atomLeftY: 0, atomRightY: 0 },
+      },
+    },
+    media: { 'outer-atom': 'ui/chrome/outer/atom.png', 'outer-rail': 'ui/chrome/outer/rail.png', 'inner-atom': 'ui/chrome/inner/atom.png', 'inner-rail': 'ui/chrome/inner/rail.png', 'divider-joint': 'ui/chrome/divider/joint.png' },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-artwork-reference', kind: 'artwork-reference', label: 'Synthetic artwork reference',
+    behavior: { route: '/' }, media: { concept: sharedPresentationSlot },
+  });
+  const testNineSliceGeometry = { coolCorners: { tl: { dx: 0, dy: 0 }, tr: { dx: 0, dy: 0 }, bl: { dx: 0, dy: 0 }, br: { dx: 0, dy: 0 } }, pipes: { top: 0, bottom: 0, left: 0, right: 0 }, frameScale: 1, brackets: { tl: { dx: 0, dy: 0 }, tr: { dx: 0, dy: 0 }, bl: { dx: 0, dy: 0 }, br: { dx: 0, dy: 0 } }, bracketScale: 1, content: 8, fill: 4 };
+  for (const [sortOrder, id] of ['panel', 'mode-button'].entries()) await seedSyntheticDrawable({
+    id, kind: 'nine-slice', label: `Synthetic ${id}`, sortOrder,
+    behavior: { kind: 'frame', roles: id === 'mode-button' ? ['frame-editor-default', 'settings-tab'] : ['settings-panel'], frame: { w: 96, h: 96 }, geometry: testNineSliceGeometry },
+    media: { corner: sharedPresentationSlot, edge: sharedPresentationSlot, fill: sharedPresentationSlot, target: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'panel-divider', kind: 'nine-slice', label: 'Synthetic divider', sortOrder: 2,
+    behavior: { kind: 'bar', roles: ['divider-editor-default'], frame: { w: 96, h: 24 }, railSource: 'edge', railFit: 'tile', geometry: { frameWidth: 16, reach: 14, dividerH: 34, scale: 1, count: 3, backing: 'fill', jx: 0, jy: 0 } },
+    media: { edge: sharedPresentationSlot, tee: sharedPresentationSlot, 'panel-line': sharedPresentationSlot, 'host-frame': sharedPresentationSlot, 'host-line': sharedPresentationSlot },
+  });
 
   const completeReadiness = await get('/ready', {}, 5000);
   const completeReadinessBody = JSON.parse(completeReadiness.body);
@@ -2193,7 +2225,7 @@ async function main() {
     officialPlay.statusCode !== 200 ||
     !officialPlay.body.includes('Test Level') ||
     !officialPlay.body.includes('/assets/level-thumb/off-l-test.png') ||
-    officialPlay.body.includes('/assets/og/default.png')
+    officialPlay.body.includes('/api/media/')
   ) {
     throw new Error(`Official play page should advertise the level thumbnail: ${officialPlay.statusCode}`);
   }

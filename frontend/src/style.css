@@ -8192,7 +8192,7 @@ body { font-size: 17px; }
   pointer-events: none;
 }
 /* The board viewport stops at the panel's hand-tuned FILL box (--ns-fill-panel, generated from
-   config/nine-slice/panel.json — the eye-tuned "where a backing surface stops" line), not the raw
+   the installed panel drawable's eye-tuned "where a backing surface stops" line, not the raw
    footprint: the frame ornament may bleed outside it. The var is in the SPRITE'S native px (the
    nine-slice editor's Boxes canvas tunes against the 72×72 asset, 24px border cells); this frame
    draws those cells at a 12px border, so consumption scales by 12/24 — an eye-tuned line lands on
@@ -8505,8 +8505,7 @@ body { font-size: 17px; }
 .tile-preview-board-shell {
   min-height: 760px;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(4, 13, 24, 0.74), rgba(5, 9, 14, 0.9)),
+  background: linear-gradient(180deg, rgba(4, 13, 24, 0.74), rgba(5, 9, 14, 0.9));
 
   border: 1px solid rgba(67, 127, 179, 0.36);
   border-radius: 6px;
@@ -12929,8 +12928,7 @@ button.tileset-relationship-cell {
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
-  background:
-    linear-gradient(180deg, rgba(4, 11, 18, 0.28), rgba(2, 5, 9, 0.78)),
+  background: linear-gradient(180deg, rgba(4, 11, 18, 0.28), rgba(2, 5, 9, 0.78));
 
   border: 1px solid rgba(67, 127, 179, 0.22);
   border-radius: 4px;

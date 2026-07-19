@@ -49,10 +49,9 @@ describe('availability-critical server renderer snapshot', () => {
 
   it('rejects a missing installed Chrome role', () => {
     const snapshot = completeSnapshot();
-    snapshot.mediaCatalog.slots = snapshot.mediaCatalog.slots.filter((slot) => (
-      slot.slot !== 'ui/chrome/divider/joint.png'
-    ));
-    expect(() => applyServerRenderSnapshot(snapshot)).toThrow(/divider\/joint/);
+    const installedChrome = snapshot.drawableCatalog.assets.find((asset) => asset.id === 'installed-chrome')!;
+    delete installedChrome.media['divider-joint'];
+    expect(() => applyServerRenderSnapshot(snapshot)).toThrow(/installed Chrome|divider-joint/);
   });
 
   it('rejects a prop document whose authored source has no live raster slots', () => {

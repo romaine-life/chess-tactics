@@ -17,13 +17,14 @@
 // Edge handedness: right = rot90(scaled edge), left = flipH(right), bottom =
 // flipV(top) — every mirror/rotation AFTER scaling, identical to the Node bake.
 //
-// The editor reads code-owned geometry from config/nine-slice and previews it
+// The editor reads installed geometry from the drawable catalog and previews it
 // against live media slots. In dev, Save geometry updates only those JSON shape
 // files; it never writes media or promotion state to Git.
 // Routing follows repo convention (lazy in App.tsx).
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import nineSliceRegistry from '../../config/nine-slice-registry.json';
 import { SURFACE_ASSETS } from './surfaceCatalog';
+import { nineSliceCatalogAssets, requiredNineSliceRole } from './nineSliceCatalog';
+import { saveDrawableAssetBatch } from '../net/drawableCatalogAdmin';
 
 type Off = { dx: number; dy: number };
 type Frame = { w: number; h: number };
@@ -50,32 +51,20 @@ type Asset = { id: string; label: string; corner: string; edge: string; fill: st
 // `bar` (divider) assets declare only `edge`; corner/fill are optional so the registry JSON
 // (which now holds a bar) still satisfies this type. Bars are filtered out before ASSETS reads
 // corner/fill, so the frame path only ever sees the full atom set.
-type RegAsset = { label: string; theme?: string; kind?: string; sides?: string; atoms: { corner?: string; edge?: string; fill?: string }; frame: Frame; carve?: boolean; flipSides?: boolean; variants: { out: string }[] };
-const REGISTRY = (nineSliceRegistry as { assets: Record<string, RegAsset> }).assets;
-const CONFIG_MODULES = import.meta.glob('../../config/nine-slice/*.json', {
-  eager: true,
-  import: 'default',
-}) as Record<string, unknown>;
-const CONFIG_BY_ASSET = Object.values(CONFIG_MODULES).reduce<Record<string, object>>((result, raw) => {
-  if (raw && typeof raw === 'object' && !Array.isArray(raw) && typeof (raw as { asset?: unknown }).asset === 'string') {
-    result[(raw as { asset: string }).asset] = raw;
-  }
-  return result;
-}, {});
 // `bar` (divider) and `junction` (tee/cross) assets are composed straight from atoms with no
 // per-corner geometry, so this 3×3 corner editor can't calibrate them — their pixels are fully
 // determined by construction. Excluded here (a frame needs the full corner/edge/fill triple).
-const ASSETS: Asset[] = Object.entries(REGISTRY).filter(([, a]) => a.kind !== 'bar' && a.kind !== 'junction').map(([id, a]) => ({
-  id,
-  label: a.label,
-  corner: `/assets/ui/kit/atoms/${a.atoms.corner}.png`,
-  edge: `/assets/ui/kit/atoms/${a.atoms.edge}.png`,
-  fill: `/assets/ui/kit/atoms/${a.atoms.fill}.png`,
-  target: `/assets/ui/kit/${a.variants[0].out}`,
-  frame: a.frame,
-  carve: !!a.carve,
-  flipSides: !!a.flipSides,
-  theme: a.theme,
+const ASSETS: Asset[] = nineSliceCatalogAssets().filter((asset) => asset.kind === 'frame').map((asset) => ({
+  id: asset.id,
+  label: asset.label,
+  corner: asset.media.corner,
+  edge: asset.media.edge,
+  fill: asset.media.fill,
+  target: asset.media.target,
+  frame: asset.frame,
+  carve: asset.carve,
+  flipSides: asset.flipSides,
+  theme: asset.theme,
 }));
 // The family (same theme) an asset belongs to — the frames that share one shape.
 function familyOf(assetId: string): Asset[] {
@@ -231,7 +220,7 @@ function normalizedEdit(value: unknown, fallback: EditState = DEFAULT_EDIT): Edi
 
 function pastedAssetId(value: unknown): string | null {
   const asset = asRecord(value).asset;
-  return typeof asset === 'string' && REGISTRY[asset] ? asset : null;
+  return typeof asset === 'string' && ASSETS.some((entry) => entry.id === asset) ? asset : null;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -443,7 +432,7 @@ function buildFrameCanvas(L: Loaded, edit: EditState, w: number, h: number, carv
 // Editor asset ids + labels, exported so the host studio can default/seed the frame
 // selection without reaching into the registry itself.
 export const NINE_SLICE_ASSETS: { id: string; label: string }[] = ASSETS.map((a) => ({ id: a.id, label: a.label }));
-export const DEFAULT_NINE_SLICE_ASSET = ASSETS[0].id;
+export const DEFAULT_NINE_SLICE_ASSET = requiredNineSliceRole('frame-editor-default').id;
 
 // The 9-slice editor as an embedded studio surface — the Assets editing kind, the
 // frame twin of PortraitLab. It renders [main][aside] straight into the studio
@@ -575,7 +564,7 @@ export function NineSliceLab({ assetId, onAssetId, header, zoom = 1 }: { assetId
   const baselineRef = useRef<Record<string, EditState>>({});
   useEffect(() => {
     if (hydrated.current.has(aid)) return;
-    const config = CONFIG_BY_ASSET[aid];
+    const config = nineSliceCatalogAssets().find((entry) => entry.id === aid)?.geometry;
     if (!config) return;
     hydrated.current.add(aid);
     const hydratedEdit = normalizedEdit(config);
@@ -916,19 +905,27 @@ export function NineSliceLab({ assetId, onAssetId, header, zoom = 1 }: { assetId
   const saveGeometry = async () => {
     setSaveMsg('saving geometry…');
     try {
-      const response = await fetch('/__nine-slice/geometry', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: exportJson,
-      });
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-      if (result.mediaWritten !== false || result.promotionChanged !== false) {
-        throw new Error('geometry endpoint crossed the live-media ownership boundary');
-      }
+      const selected = nineSliceCatalogAssets().find((entry) => entry.id === aid);
+      if (!selected) throw new Error(`nine-slice ${aid} is unavailable`);
+      const shape = { coolCorners: edit.coolCorners, pipes: edit.pipes, frameScale: edit.frameScale, brackets: edit.brackets, bracketScale: edit.bracketScale };
+      const members = selected.theme ? nineSliceCatalogAssets().filter((entry) => entry.theme === selected.theme) : [selected];
+      await saveDrawableAssetBatch(members.map((member) => {
+        const own = member.id === aid ? { content: edit.content, fill: edit.fill } : {
+          content: member.geometry.content,
+          fill: member.geometry.fill,
+        };
+        return {
+          id: member.id, kind: member.record.kind, label: member.label, sortOrder: member.record.sortOrder,
+          lifecycleState: member.record.lifecycleState,
+          behavior: { ...member.record.behavior, geometry: { ...member.geometry, ...shape, ...own } },
+          metadata: member.record.metadata,
+          media: Object.fromEntries(Object.entries(member.record.media).map(([role, binding]) => [role, binding.slot])),
+          expectedRevision: member.record.rowRevision,
+        };
+      }));
       baselineRef.current[aid] = edit;
-      const scope = result.theme ? `${result.theme} geometry + ${result.asset} boxes` : `${result.asset} geometry`;
-      setSaveMsg(`saved ${scope} · no media or promotion changed`);
+      const scope = selected.theme ? `${selected.theme} geometry + ${selected.id} boxes` : `${selected.id} geometry`;
+      setSaveMsg(`saved ${scope} to database`);
     } catch (error) {
       setSaveMsg(`error: ${String(error)}`);
     }

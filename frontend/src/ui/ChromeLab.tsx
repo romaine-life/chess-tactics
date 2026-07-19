@@ -11,6 +11,8 @@ import {
 } from './chromeCandidateSources';
 import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import { installedUiMedia } from './installedUiMedia';
+import { requiredDrawableAsset } from '@chess-tactics/board-render';
+import { saveDrawableAsset } from '../net/drawableCatalogAdmin';
 import {
   ChromeUnitAuditViewer,
   ChromeUnitSpecimen,
@@ -380,15 +382,20 @@ function saveChromeLabState(targetId: string, state: ChromeLabTuneState): void {
   }
 }
 
-async function saveChromeLabDefaultsToDisk(payload: { target: string; outer: RoleTune; inner: RoleTune; dividers: DividerTunes }): Promise<string> {
-  const response = await fetch('/__chrome-lab/defaults', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
+async function saveChromeLabDefaults(payload: { target: string; outer: RoleTune; inner: RoleTune; dividers: DividerTunes }): Promise<string> {
+  const installed = requiredDrawableAsset('installed-chrome', 'chrome-family');
+  await saveDrawableAsset({
+    id: installed.id,
+    kind: installed.kind,
+    label: installed.label,
+    sortOrder: installed.sortOrder,
+    lifecycleState: installed.lifecycleState,
+    behavior: payload,
+    metadata: installed.metadata,
+    media: Object.fromEntries(Object.entries(installed.media).map(([role, binding]) => [role, binding.slot])),
+    expectedRevision: installed.rowRevision,
   });
-  const body = await response.json().catch(() => null) as { ok?: boolean; path?: string; error?: string } | null;
-  if (!response.ok || !body?.ok) throw new Error(body?.error || `save failed (${response.status})`);
-  return body.path || 'config/chrome-lab-defaults.json';
+  return 'database drawable installed-chrome';
 }
 
 
@@ -1529,7 +1536,7 @@ function ChromeLabUnitViewer({
   const saveDefaults = async (): Promise<void> => {
     setSaveMsg('saving...');
     try {
-      const path = await saveChromeLabDefaultsToDisk(installedChromeTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, dividers));
+      const path = await saveChromeLabDefaults(installedChromeTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, dividers));
       setSaveMsg(`saved ${path}`);
     } catch (error) {
       setSaveMsg(`error: ${error instanceof Error ? error.message : String(error)}`);
@@ -1799,7 +1806,7 @@ function ChromeLabPageViewer({
   const saveDefaults = async (): Promise<void> => {
     setSaveMsg('saving...');
     try {
-      const path = await saveChromeLabDefaultsToDisk(installedChromeTuningPayload(target.id, outer, inner, dividers));
+      const path = await saveChromeLabDefaults(installedChromeTuningPayload(target.id, outer, inner, dividers));
       setSaveMsg(`saved ${path}`);
     } catch (error) {
       setSaveMsg(`error: ${error instanceof Error ? error.message : String(error)}`);

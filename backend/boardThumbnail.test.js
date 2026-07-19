@@ -91,7 +91,7 @@ test('sprite and font bytes can share one process-wide source limiter', async ()
       store.load(`/assets/shared-${index}.png`, () => trackLoad(`sprite-${index}`), 1)
     )),
     ...Array.from({ length: 4 }, (_, index) => (
-      fonts.ensure(() => trackLoad(`font-${index}`), index)
+      fonts.ensure(() => trackLoad(`font-${index}`), index, `/api/media/${String(index).padStart(64, '0')}`)
     )),
   ]);
 
@@ -338,7 +338,7 @@ test('font registration is keyed by font SHA, not catalog revision aliases', asy
   const expectedFamily = `AW2 Server ${sha256(bytes)}`;
 
   for (let revision = 1; revision <= 20; revision += 1) {
-    assert.equal(await registry.ensure(async () => bytes, revision), expectedFamily);
+    assert.equal(await registry.ensure(async () => bytes, revision, `/api/media/${sha256(bytes)}`), expectedFamily);
   }
   assert.equal(registered.length, 1);
   assert.deepEqual(registry.stats(), { registrations: 1, sourceBindings: 3 });
@@ -347,12 +347,12 @@ test('font registration is keyed by font SHA, not catalog revision aliases', asy
   assert.equal(await registry.ensure(async () => {
     unexpectedReload = true;
     return Buffer.from('wrong');
-  }, 20), expectedFamily);
+  }, 20, `/api/media/${sha256(bytes)}`), expectedFamily);
   assert.equal(unexpectedReload, false);
 
   const changedBytes = Buffer.from('changed-font-file');
   assert.equal(
-    await registry.ensure(async () => changedBytes, 21),
+    await registry.ensure(async () => changedBytes, 21, `/api/media/${sha256(changedBytes)}`),
     `AW2 Server ${sha256(changedBytes)}`,
   );
   assert.equal(registered.length, 2);

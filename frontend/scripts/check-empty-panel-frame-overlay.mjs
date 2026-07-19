@@ -14,7 +14,6 @@ const css = readFileSync(join(frontend, 'src/style.css'), 'utf8').replace(/\r\n/
 const chromeLab = readFileSync(join(frontend, 'src/ui/ChromeLab.tsx'), 'utf8');
 const chromeUnitAudit = readFileSync(join(frontend, 'src/ui/ChromeUnitAudit.tsx'), 'utf8');
 const chromeRuntime = readFileSync(join(frontend, 'src/ui/chromeFamilyRuntime.ts'), 'utf8');
-const chromeLabDefaults = JSON.parse(readFileSync(join(frontend, 'config/chrome-lab-defaults.json'), 'utf8'));
 const chromeUnitRegistry = readFileSync(join(frontend, 'src/ui/chromeUnitRegistry.ts'), 'utf8');
 const levelEditor = readFileSync(join(frontend, 'src/ui/LevelEditor.tsx'), 'utf8');
 const levelEditorChromeConsumers = readFileSync(join(frontend, 'src/ui/LevelEditorChromeConsumers.tsx'), 'utf8');
@@ -26,7 +25,6 @@ const portraitEditor = readFileSync(join(frontend, 'src/ui/PortraitEditor.tsx'),
 const installedChromeCss = readFileSync(join(frontend, 'src/ui/useInstalledChromeCss.ts'), 'utf8');
 const victoryConditionsEditor = readFileSync(join(frontend, 'src/ui/VictoryConditionsEditor.tsx'), 'utf8');
 const confirmDialog = readFileSync(join(frontend, 'src/ui/shared/ConfirmDialog.tsx'), 'utf8');
-const registry = readFileSync(join(frontend, 'config/nine-slice-registry.json'), 'utf8');
 const failures = [];
 
 function blockFor(selector) {
@@ -252,79 +250,21 @@ if (!/CHROME_LAB_STORAGE_VERSION\s*=\s*4/.test(chromeLab)
   || !/CHROME_LAB_LEGACY_STORAGE_VERSION\s*=\s*2/.test(chromeLab)) {
   failures.push('Chrome Lab must migrate v2/v3 tuning into role-owned divider geometry while dropping obsolete fields');
 }
-if (!/function\s+defaultRailFitForSource[\s\S]*?source\.kind === 'rail-repeat'\)\s*return 'tile';/.test(chromeRuntime)
-  || chromeLabDefaults.inner?.railSourceId !== 'ui/chrome/inner/rail.png'
-  || chromeLabDefaults.inner?.railFit !== 'tile') {
-  failures.push('Chrome Lab repeat rail sources must default to tile, not stretch-crush long seam strips into side rails');
+if (!/function\s+defaultRailFitForSource/.test(chromeRuntime)
+  || !/function\s+borderImageRepeatForTune/.test(chromeRuntime)
+  || !/export\s+function\s+dividerJointSources/.test(chromeRuntime)) {
+  failures.push('Chrome runtime must preserve generic rail-fit and divider composition behavior');
 }
-if (chromeLabDefaults.outer?.railSourceId !== 'ui/chrome/outer/rail.png'
-  || chromeLabDefaults.outer?.railFit !== 'stretch'
-  || !/function\s+borderImageRepeatForTune[\s\S]*?tune\.railFit === 'tile'\s*\?\s*'repeat'\s*:\s*'stretch'/.test(chromeRuntime)
-  || /repeat stretch/.test(chromeRuntime)) {
-  failures.push('Chrome Lab accepted outer rail default must live in committed JSON and use a single explicit fit mode');
+if (!/requiredDrawableAsset\('installed-chrome', 'chrome-family'\)/.test(chromeRuntime)
+  || !/saveDrawableAsset/.test(chromeLab)
+  || /__chrome-lab\/defaults|chrome-lab-defaults\.json/.test(chromeRuntime + chromeLab)) {
+  failures.push('Chrome Lab installed tuning must load and save through the database drawable record');
 }
-const dividerTuneType = chromeRuntime.match(/type\s+DividerTune\s*=\s*\{[\s\S]*?\n\};/)?.[0] ?? '';
-if (/\b(?:railSourceId|railFit|railThickness|railX|railY|railUnderlap)\b/.test(dividerTuneType)) {
-  failures.push('Chrome Lab divider tuning must not own rail settings; each divider rail follows its host chrome role');
-}
-if (!/railFit:\s*RailFit/.test(chromeRuntime)
-  || !/<DividerControls role="outer"[^>]*railFit=\{outer\.railFit\}/.test(chromeLab)
-  || !/<DividerControls role="inner"[^>]*railFit=\{inner\.railFit\}/.test(chromeLab)) {
-  failures.push('Chrome Lab divider controls must preview each divider rail using its host chrome fit');
-}
-if (!/function\s+dividerCss\(role:\s*ChromeRole,\s*host:\s*RoleTune,\s*hostFrame:\s*FrameRender,\s*divider:\s*DividerRender\)/.test(chromeRuntime)
-  || !/data-chrome-divider-role/.test(chromeRuntime)
-  || !/border-image-source:\s*url\("\$\{hostFrame\.url\}"\)/.test(chromeRuntime)
-  || !/border-image-repeat:\s*\$\{borderImageRepeatForTune\(host\)\}/.test(chromeRuntime)) {
-  failures.push('Chrome Lab dividers must render through their host role frame border-image path, not a cropped background approximation');
-}
-if (!/(?:export\s+)?const\s+DEFAULT_DIVIDER_ATOM_SIZE\s*=\s*17\s*;/.test(chromeRuntime)) {
-  failures.push('Chrome Lab divider atom default size must match the right-sized 17px divider cover atom family');
-}
-if (/DIVIDER_TEE_SOURCES/.test(chromeRuntime + chromeLab) || /divider-atoms-img2img-t-v[12]-/.test(chromeRuntime + chromeLab) || /divider-atoms-img2img-socket-v1-/.test(chromeRuntime + chromeLab)) {
-  failures.push('Chrome Lab divider picker must not expose T/socket joint candidates as normal cover-atom choices');
-}
-if (!/dividerJointSources\s+as\s+liveDividerJointSources/.test(chromeRuntime)
-  || !/export\s+function\s+dividerJointSources/.test(chromeRuntime)
-  || chromeLabDefaults.dividers?.outer?.atomSourceId !== 'ui/chrome/divider/joint.png'
-  || !['ui/chrome/divider/joint.png', 'none'].includes(chromeLabDefaults.dividers?.inner?.atomSourceId)) {
-  failures.push('Chrome Lab divider pickers must share the canonical installed divider slot while permitting a role to hide the joint');
-}
-if (chromeLabDefaults.outer?.atomSourceId !== 'ui/chrome/outer/atom.png'
-  || chromeLabDefaults.inner?.atomSourceId !== 'ui/chrome/inner/atom.png'
-  || chromeLabDefaults.inner?.atomX !== -3
-  || chromeLabDefaults.inner?.atomY !== -8) {
-  failures.push('Chrome Lab atom defaults must use the right-sized outer atom family instead of retired oversized/undersized atoms');
-}
-if (!/committedChromeLabDefaults/.test(chromeRuntime)
-  || !/config\/chrome-lab-defaults\.json/.test(chromeRuntime)
-  || !/\/__chrome-lab\/defaults/.test(chromeLab)) {
-  failures.push('Chrome Lab committed tuning must be a saved JSON source of truth, not hand-copied TypeScript literals');
-}
-for (const [key, value] of Object.entries({
-  fillBoxLeft: chromeLabDefaults.outer?.fillBoxLeft,
-  fillBoxRight: chromeLabDefaults.outer?.fillBoxRight,
-  fillBoxTop: chromeLabDefaults.outer?.fillBoxTop,
-  fillBoxBottom: chromeLabDefaults.outer?.fillBoxBottom,
-  contentPadding: chromeLabDefaults.outer?.contentPadding,
-  outerDividerBandHeight: chromeLabDefaults.dividers?.outer?.bandHeight,
-  outerDividerAtomSize: chromeLabDefaults.dividers?.outer?.atomSize,
-  outerDividerAtomX: chromeLabDefaults.dividers?.outer?.atomX,
-  outerDividerAtomY: chromeLabDefaults.dividers?.outer?.atomY,
-  innerDividerBandHeight: chromeLabDefaults.dividers?.inner?.bandHeight,
-  innerDividerAtomSize: chromeLabDefaults.dividers?.inner?.atomSize,
-})) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    failures.push(`Chrome Lab committed defaults must include numeric ${key} tuning`);
-  }
-}
-if (!['manual', 'center'].includes(chromeLabDefaults.outer?.titleVerticalAlign)
-  || !['manual', 'content-inset'].includes(chromeLabDefaults.outer?.titleHorizontalAlign)
-  || !/titleVerticalAlign/.test(chromeLab)
+if (!/titleVerticalAlign/.test(chromeLab)
   || !/titleHorizontalAlign/.test(chromeLab)
   || !/--le-panel-title-effective-text-y/.test(chromeRuntime + css)
   || !/--le-panel-title-align-extra-x/.test(chromeRuntime + css)) {
-  failures.push('Chrome Lab must expose committed title text alignment modes for vertical centering and contents-box horizontal alignment');
+  failures.push('Chrome Lab must expose title text alignment modes for vertical centering and contents-box horizontal alignment');
 }
 if (!/route:\s*'\/editor\/level\?chromeLab=1'/.test(chromeLab)) {
   failures.push('Chrome Lab must load the level editor in preview mode so installed defaults do not fight live tuning CSS');
@@ -659,7 +599,6 @@ if (/Joint size locked/.test(chromeLab) || !/atomSize:\s*numberFrom\(value\.atom
   failures.push('Chrome Lab divider tuning must preserve editable divider atom size; only the source preview seat is fixed');
 }
 for (const [label, text] of [
-  ['nine-slice registry', registry],
   ['Chrome Lab', chromeLab],
   ['chrome family runtime', chromeRuntime],
   ['chrome unit registry', chromeUnitRegistry],

@@ -5,16 +5,15 @@ import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { ElementSelect, type ElementOption } from './dressing/ElementSelect';
 import { useInjectedStyle } from './dressing/useInjectedStyle';
 import { ICON_TREATS, iconTreatFilter, type IconTreat } from './dressing/iconTreat';
-import panelCfg from '../../config/nine-slice/panel.json';
-import modeButtonCfg from '../../config/nine-slice/mode-button.json';
+import { requiredNineSliceRole } from './nineSliceCatalog';
 
 // Each frame's FILL boundary (px inset from the footprint) — set by eye in the 9-slice editor,
-// stored in config/nine-slice/<asset>.json. The surface clips to it so it stops where the frame's
+// stored on the installed drawable record. The surface clips to it so it stops where the frame's
 // visual interior begins, while the frame's corners bleed outside it. (See ADR-0034.)
-type FrameId = 'panel' | 'mode-button';
-const FRAME_FILL: Record<FrameId, number> = {
-  panel: (panelCfg as { fill?: number }).fill ?? 0,
-  'mode-button': (modeButtonCfg as { fill?: number }).fill ?? 0,
+type FrameRole = 'settings-panel' | 'settings-tab';
+const fillForRole = (role: FrameRole): number => {
+  const fill = requiredNineSliceRole(role).geometry.fill;
+  return typeof fill === 'number' ? fill : 0;
 };
 
 // The Settings dressing room: iframes the REAL /settings page and lets you tune each element —
@@ -38,7 +37,7 @@ interface RegionDef {
   // the surface shows through while the frame art is preserved.
   frame: string;
   frameWidth: number; // border-image rendered width (px) = the element's native border-width
-  configId: FrameId; // which frame config supplies this region's FILL boundary
+  configId: FrameRole; // which database role supplies this region's FILL boundary
   isBox: boolean;
   geom: GeomKey[]; // geometry knobs this element exposes
   inherited?: string; // read-only note: knobs owned by the Main Menu tuner (shared rules)
@@ -47,10 +46,10 @@ interface RegionDef {
 // Selectors verified against the live Settings DOM. `[data-testid="settings"]` is on the
 // .settings-art-route wrapper, so these scope every override to the real Settings screen.
 const REGIONS: RegionDef[] = [
-  { id: 'tabsBox', label: 'Rail box', selector: '[data-testid="settings"] .settings-rail-frame', hint: 'The left rail container holding the tab buttons.', frame: 'var(--media-ui-explore-frames-panel-line-png) 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true, geom: ['padX', 'padY', 'gap'], inherited: 'Rail width & offset (X / Y) are shared with the Main Menu buttons — tune them in the Main Menu dressing room.' },
-  { id: 'buttons', label: 'Rail tabs', selector: '[data-testid="settings"] .settings-tab', hint: 'The individual tab buttons inside the rail.', frame: 'var(--media-ui-explore-frames-panel-line-png) 24 / 12px round', frameWidth: 12, configId: 'mode-button', isBox: false, geom: ['minH', 'padX', 'padY', 'gap', 'iconSize', 'iconX'], inherited: 'Width, offset (X / Y) & label position are shared with the Main Menu buttons — tune them in the Main Menu dressing room.' },
-  { id: 'rowsBox', label: 'Rows box', selector: '[data-testid="settings"] .settings-main-frame', hint: 'The main panel container holding the rows.', frame: 'var(--media-ui-explore-frames-panel-line-png) 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true, geom: ['width', 'padX', 'padY', 'moveX', 'moveY'] },
-  { id: 'rows', label: 'Setting rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows.', frame: 'var(--media-ui-explore-frames-panel-line-png) 24 / 14px round', frameWidth: 14, configId: 'panel', isBox: false, geom: ['minH', 'width', 'padX', 'padY', 'moveX', 'moveY'] },
+  { id: 'tabsBox', label: 'Rail box', selector: '[data-testid="settings"] .settings-rail-frame', hint: 'The left rail container holding the tab buttons.', frame: 'var(--media-ui-explore-frames-panel-line-png) 24 / 16px round', frameWidth: 16, configId: 'settings-panel', isBox: true, geom: ['padX', 'padY', 'gap'], inherited: 'Rail width & offset (X / Y) are shared with the Main Menu buttons — tune them in the Main Menu dressing room.' },
+  { id: 'buttons', label: 'Rail tabs', selector: '[data-testid="settings"] .settings-tab', hint: 'The individual tab buttons inside the rail.', frame: 'var(--media-ui-explore-frames-panel-line-png) 24 / 12px round', frameWidth: 12, configId: 'settings-tab', isBox: false, geom: ['minH', 'padX', 'padY', 'gap', 'iconSize', 'iconX'], inherited: 'Width, offset (X / Y) & label position are shared with the Main Menu buttons — tune them in the Main Menu dressing room.' },
+  { id: 'rowsBox', label: 'Rows box', selector: '[data-testid="settings"] .settings-main-frame', hint: 'The main panel container holding the rows.', frame: 'var(--media-ui-explore-frames-panel-line-png) 24 / 16px round', frameWidth: 16, configId: 'settings-panel', isBox: true, geom: ['width', 'padX', 'padY', 'moveX', 'moveY'] },
+  { id: 'rows', label: 'Setting rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows.', frame: 'var(--media-ui-explore-frames-panel-line-png) 24 / 14px round', frameWidth: 14, configId: 'settings-panel', isBox: false, geom: ['minH', 'width', 'padX', 'padY', 'moveX', 'moveY'] },
 ];
 
 const BOX_IDS: BoxId[] = ['tabsBox', 'rowsBox'];
@@ -153,7 +152,7 @@ function buildCss(config: DressingConfig, base: Record<RegionId, GeomBase>): str
       const asset = SURFACE_ASSETS.find((s) => s.name === name);
       if (asset) {
         const surfaceBg = `url("${asset.file}") ${offsetX}px ${offsetY}px / ${tilePx}px repeat fixed`;
-        const fill = FRAME_FILL[region.configId] ?? 0;
+        const fill = fillForRole(region.configId);
         if (fill > 0) {
           // FILL clip: border-width shrinks to the fill inset so background-clip:padding-box lands
           // on the fill box, while border-image-width keeps the frame's full thickness. effPad

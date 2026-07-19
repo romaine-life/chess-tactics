@@ -5,7 +5,6 @@ import { applyPropSeats, currentSeats, type PropSeatMap } from './core/props';
 import {
   applyLiveMediaCatalog,
   assertCriticalLiveMediaAvailable,
-  assertInstalledChromeLiveMediaAvailable,
   type LiveMediaCatalog,
 } from './art/liveMediaCatalog';
 import { applyLiveUnitCatalog, type LiveUnitCatalog } from './ui/unitCatalog';
@@ -70,7 +69,6 @@ export function applyServerRenderSnapshot(snapshot: ServerRenderSnapshot): void 
   applyWallArtCatalog();
   assertInstalledPresentationCatalog();
   assertCriticalLiveMediaAvailable();
-  assertInstalledChromeLiveMediaAvailable();
   applyPropSeats(snapshot.propSeats);
   applyLiveUnitCatalog(snapshot.unitCatalog);
 }

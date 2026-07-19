@@ -3,9 +3,6 @@
 // music, and mounts the React router. (Account/auth chrome lives in the React
 // app-shell title bar now — src/ui/shared/HeaderAccountCluster.)
 import './style.css';
-// Generated from code-owned nine-slice geometry — carries each frame's content
-// and fill boxes as CSS variables without baking or promoting media.
-import './generated/nine-slice.css';
 import { createRoot } from 'react-dom/client';
 import { armForColdHome, isMainMenuPath } from './ui/shell/coldReveal';
 // @ts-ignore — bgm.js is untyped legacy JS, imported for its side-effecting init.
@@ -19,7 +16,7 @@ import { loadDrawableCatalog } from './net/drawableCatalog';
 import { loadLiveSfxProfile } from './net/sfxProfile';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
-import { installUiFonts, installUiMediaCssVariables, installedUiMedia } from './ui/installedUiMedia';
+import { installNineSliceCssVariables, installUiFonts, installUiMediaCssVariables, installedUiMedia } from './ui/installedUiMedia';
 import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, assertInstalledPresentationCatalog } from '@chess-tactics/board-render';
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
@@ -66,6 +63,7 @@ if (root) {
       assertInstalledPresentationCatalog();
       installUiMediaCssVariables();
       installUiFonts();
+      installNineSliceCssVariables();
       try { initBgm(installedUiMedia('ui-kit-icons-music-png')); } catch { /* background music is decorative */ }
       if (isMainMenuPath(window.location.pathname)) {
         const bgPreload = document.createElement('link');
