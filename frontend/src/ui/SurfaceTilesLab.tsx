@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { TERRAIN_SIDE_FACES, resolveTerrainSideExposure } from '@chess-tactics/board-render';
+import { TERRAIN_SIDE_FACES, drawableAsset, resolveTerrainSideExposure } from '@chess-tactics/board-render';
 import { tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
@@ -35,25 +35,28 @@ import {
 // Runtime pixels stay backend-owned: this surface previews authenticated
 // candidates and records review/acceptance through ADR-0085 transactions.
 
-export const SURFACE_TILE_FAMILIES = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'] as const;
-type Family = (typeof SURFACE_TILE_FAMILIES)[number];
-const MAX_PER_FAMILY = 14;
+export const SURFACE_TILE_FAMILIES: readonly string[] = new Proxy([] as string[], {
+  get: (_target, property) => { const values = Object.keys(tileFamilies); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; },
+});
+type Family = keyof typeof tileFamilies;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export const surfaceTileCap = cap;
 const isFamily = (f: string): f is Family => (SURFACE_TILE_FAMILIES as readonly string[]).includes(f);
 
-function Card({ family, n }: { family: Family; n: number }): ReactElement | null {
+function Card({ asset, n }: { asset: TileAsset; n: number }): ReactElement | null {
   const [ok, setOk] = useState(true);
   if (!ok) return null;
+  const source = drawableAsset(asset.id)?.media.source?.media.immutableUrl;
+  if (!source) throw new Error(`terrain surface ${asset.id} has no source media`);
   return (
     <div className="stl-card">
-      <div className="stl-card-head">{cap(family)} {n + 1}</div>
+      <div className="stl-card-head">{asset.label}</div>
       <div className="stl-stage stl-stage--tile">
-        <img className="stl-px" src={`/assets/tiles/surface/${family}-${n}.png`} alt={`${family} ${n + 1}`}
+        <img className="stl-px" src={asset.src} alt={asset.label}
           draggable={false} onError={() => setOk(false)} />
       </div>
       <div className="stl-stage stl-stage--flat">
-        <img className="stl-px" src={`/assets/tiles/surface-lab/${family}-surf-${n}.png`} alt={`${family} ${n + 1} surface`} draggable={false} />
+        <img className="stl-px" src={source} alt={`${asset.label} source`} draggable={false} />
       </div>
       <div className="stl-card-foot">surface ↑ · tile ↑↑</div>
     </div>
@@ -63,7 +66,7 @@ function Card({ family, n }: { family: Family; n: number }): ReactElement | null
 export function SurfaceTilesLab({ family, onFamily, header }: {
   family: string; onFamily: (f: string) => void; header?: ReactNode;
 }): ReactElement {
-  const fam: Family = isFamily(family) ? family : 'grass';
+  const fam: Family = isFamily(family) ? family : SURFACE_TILE_FAMILIES[0] as Family;
   const [view, setView] = useState<'board' | 'tiles'>('board');
   const [seed, setSeed] = useState(7);
   const [zoom, setZoom] = useState(1.1);
@@ -386,7 +389,7 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
           </ViewPane>
         ) : (
           <div className="stl-grid" key={fam}>
-            {Array.from({ length: MAX_PER_FAMILY }, (_, n) => <Card key={`${fam}-${n}`} family={fam} n={n} />)}
+            {tileFamilies[fam].map((asset, n) => <Card key={asset.id} asset={asset} n={n} />)}
           </div>
         )}
       </section>

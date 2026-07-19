@@ -32,7 +32,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       behavior: { family, role: variant === 0 ? 'base' : 'variant', probability: variant === 0 ? 1 : 0.8 },
       metadata: { familyLabel: family[0].toUpperCase() + family.slice(1), status: 'Production' },
       rowRevision: 1,
-      media: { top: descriptor(`test/terrain/${family}-${variant}-top.png`) },
+      media: { top: descriptor(`test/terrain/${family}-${variant}-top.png`), source: descriptor(`test/terrain/${family}-${variant}-source.png`) },
     })),
   );
   const macroVariants: Record<string, Array<[string, string]>> = {
@@ -134,6 +134,34 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     id, kind: 'wall-art', label, sortOrder, lifecycleState: 'active' as const,
     behavior: { span, slots, ...(reflection ? { reflection } : {}) }, metadata: {}, rowRevision: 1, media: {},
   }));
+  const presentationSpecs = [
+    {
+      id: 'test-background-set', kind: 'background-set', label: 'Test background', sortOrder: 0,
+      lifecycleState: 'active' as const, behavior: { default: true }, metadata: {}, rowRevision: 1,
+      media: Object.fromEntries(['world', ...['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'].map((piece) => `portrait-${piece}`)]
+        .map((role) => [role, descriptor(`test/background/${role}.png`, 320, 180)])),
+    },
+    ...['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'].map((piece, sortOrder) => ({
+      id: `test-portrait-${piece}`, kind: 'unit-portrait', label: `Test ${piece} portraits`, sortOrder,
+      lifecycleState: 'active' as const, behavior: { piece }, metadata: {}, rowRevision: 1,
+      media: Object.fromEntries(['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white']
+        .map((palette) => [palette, descriptor(`test/portrait/${piece}-${palette}.png`, 96, 96)])),
+    })),
+    ...['test-neutral-stone-a', 'test-neutral-stone-b'].map((id, sortOrder) => ({
+      id, kind: 'neutral-unit-art', label: `Test neutral stone ${sortOrder + 1}`, sortOrder,
+      lifecycleState: 'active' as const, behavior: {}, metadata: {}, rowRevision: 1,
+      media: Object.fromEntries(['south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east']
+        .map((direction) => [direction, descriptor(`test/neutral/${id}-${direction}.png`, 64, 64)])),
+    })),
+  ];
+  const terrainReviewSpecs: DrawableCatalog['assets'] = [
+    { id: 'test-terrain-review', kind: 'terrain-review', label: 'Test terrain review', sortOrder: 0, lifecycleState: 'active' as const,
+      behavior: { family: 'grass', role: 'variant' }, metadata: { method: 'Synthetic', status: 'Test-only' }, rowRevision: 1,
+      media: { preview: descriptor('test/terrain/review.png') } },
+    { id: 'test-terrain-comparison', kind: 'terrain-comparison', label: 'Test terrain comparison', sortOrder: 0, lifecycleState: 'active' as const,
+      behavior: { family: 'grass', variant: 0 }, metadata: {}, rowRevision: 1,
+      media: { raw: descriptor('test/terrain/raw.png'), processed: descriptor('test/terrain/processed.png') } },
+  ];
   const surfaceSpecs = [
     ['hybrid-stone-blue', 'Hybrid · Stone Blue', 'hybrid', 'stone-blue'], ['hybrid-wood-oak', 'Hybrid · Oak', 'hybrid', 'wood-oak'],
     ['pixel-model-stone-blue', 'Pixel-model · Stone Blue', 'pixel-model', 'stone-blue'], ['baseline-stone-blue', 'Baseline · Stone Blue', 'baseline', 'stone-blue'],
@@ -160,7 +188,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       media: {
         surface: descriptor(`test/subterrain/${id}.png`),
       },
-    })), ...terrainSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...wallArtSpecs, ...surfaceSpecs, ...sliderSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
+    })), ...terrainSpecs, ...terrainReviewSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...wallArtSpecs, ...presentationSpecs, ...surfaceSpecs, ...sliderSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
       id, kind, label, sortOrder: index, lifecycleState: 'active' as const,
       behavior: { value, ...(isDefault ? { default: true } : {}) }, metadata: {}, rowRevision: 1,
       media: Object.fromEntries(roles.map((role) => [role, descriptor(`test/${id}-${role}.png`)])),

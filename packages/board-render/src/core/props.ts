@@ -284,7 +284,7 @@ function authoredPropDefs(seats: PropSeatMap, sourceProps: readonly PropDef[]): 
       ? sourceArt?.sprite
       : source.kind === 'prop'
         ? sourceProp?.sprite
-        : { ...structureRasterDimensions(`/assets/doodads/${source.id}`), anchorX: s.anchorX, anchorY: s.anchorY };
+        : structureArtAsset(source.id)?.sprite;
     if (!sourceSprite) throw new Error(`authored prop "${id}" source "${source.id}" is unavailable`);
     const sourceTerrains = sourceArt?.terrains ?? sourceProp?.terrains ?? ['grass', 'dirt', 'stone'];
     const sourceKind = sourceProp?.kind ?? sourceArt?.propKind ?? (sourceArt?.kind === 'tree' || sourceArt?.kind === 'rock' ? sourceArt.kind : 'house');

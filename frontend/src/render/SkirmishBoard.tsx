@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { drawableAssets } from '@chess-tactics/board-render';
 import { tileFrameSrc, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
@@ -102,7 +103,6 @@ export function mirrorSpriteSourcesForPiece(
 // Neutral rocks: two boulder variants x 8 rotations. Pick deterministically from the
 // piece id so each rock on the board looks distinct (no repeated-blob feel) yet stays
 // stable across re-renders.
-const ROCK_VARIANTS = ['boulder', 'granite'] as const;
 const ROCK_DIRECTIONS = ['south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east'] as const;
 function hashId(id: string): number {
   let h = 2166136261;
@@ -114,9 +114,13 @@ function hashId(id: string): number {
 }
 function rockSpritePath(piece: Piece): string {
   const h = hashId(piece.id);
-  const variant = ROCK_VARIANTS[h % ROCK_VARIANTS.length];
+  const variants = drawableAssets('neutral-unit-art');
+  if (!variants.length) throw new Error('drawable catalog has no neutral unit art');
+  const variant = variants[h % variants.length];
   const dir = ROCK_DIRECTIONS[(h >>> 5) % ROCK_DIRECTIONS.length];
-  return `/assets/units/rock/${variant}/${dir}.png`;
+  const src = variant.media[dir]?.media.immutableUrl;
+  if (!src) throw new Error(`neutral unit art ${variant.id} has no ${dir} media`);
+  return src;
 }
 
 // Prop colliders are neutral `rock` pieces stamped under a multi-cell prop (id `prop-…`); their

@@ -30,7 +30,7 @@ const sourceSpritePath = (source: StructureSourceRef, half: 'back' | 'front'): s
   if (def?.spriteSource && (def.spriteSource.kind !== 'prop' || def.spriteSource.id !== source.id)) {
     return sourceSpritePath(def.spriteSource, half);
   }
-  return `/assets/props/${def?.spriteId ?? source.id}/${half}.png`;
+  throw new Error(`doodad source "${source.id}" has no DB-owned drawable media`);
 };
 const sprite = (id: string, half: 'back' | 'front') => structureArtHalfSrc(id, half);
 const doodadFromArt = (id: string, label: string): DoodadAsset => {

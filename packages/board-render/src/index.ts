@@ -1,5 +1,5 @@
 import type { Level } from './core/level';
-import { DEFAULT_BACKGROUND_SET } from './art/backgroundSets';
+import { assertInstalledPresentationCatalog, defaultBackgroundSet } from './art/backgroundSets';
 import { levelToEditorBoard } from './core/levelBoard';
 import { applyPropSeats, currentSeats, type PropSeatMap } from './core/props';
 import {
@@ -68,6 +68,7 @@ export function applyServerRenderSnapshot(snapshot: ServerRenderSnapshot): void 
   applyGroundCoverCatalog();
   applyWallDecorCatalog();
   applyWallArtCatalog();
+  assertInstalledPresentationCatalog();
   assertCriticalLiveMediaAvailable();
   assertInstalledChromeLiveMediaAvailable();
   applyPropSeats(snapshot.propSeats);
@@ -75,7 +76,7 @@ export function applyServerRenderSnapshot(snapshot: ServerRenderSnapshot): void 
 }
 
 export function worldBackgroundSrc(): string {
-  return DEFAULT_BACKGROUND_SET.world;
+  return defaultBackgroundSet().world;
 }
 
 export * from './art/backgroundSets';

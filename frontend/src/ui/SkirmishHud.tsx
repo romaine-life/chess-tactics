@@ -5,7 +5,7 @@ import { livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, isPlayablePieceType, paletteForSide, pieceSpritePath } from '../core/pieces';
 import type { Piece, PieceType, PromotionPieceType, Side } from '../core/types';
 import type { TimeControl } from '../core/level';
-import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
+import { defaultBackgroundSet } from '../art/backgroundSets';
 // One shared "unit portrait box" (master render + crop + the fill-frame) — the Selected-Unit
 // portrait AND the roster slots both render through it, so framing/fill/crop are defined once and
 // never re-derived per surface. See docs/portrait-contract.md.
@@ -279,7 +279,7 @@ export function SkirmishHud({
   const selected = game.pieces.find((piece) => piece.id === selectedId && piece.alive) ?? null;
   const focused = game.pieces.find((piece) => piece.id === focusedId && piece.alive) ?? selected;
   const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins.'];
-  const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? DEFAULT_BACKGROUND_SET.portraits[focused.type] : null;
+  const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? defaultBackgroundSet().portraits[focused.type] : null;
   const promotingPiece = pendingPromotion ? game.pieces.find((piece) => piece.id === pendingPromotion.pieceId) ?? null : null;
   const turnLabel = clientTurnLabel(game, localSide, !!net?.pendingMove);
 

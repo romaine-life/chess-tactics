@@ -1306,7 +1306,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     id: 'surfacetiles',
     label: 'Tileset Surfaces',
     assets: surfaceFamilyAssets,
-    card: (f) => ({ img: `/assets/tiles/surface/${f.id}-0.png`, title: f.label, badge: 'board tileset' }),
+    card: (f) => ({ img: tileFamilies[f.id]?.[0]?.src ?? '', title: f.label, badge: 'board tileset' }),
     sections: (visible) => [{ id: 'surfacetiles', label: 'Families', assets: [...visible] }],
     query: {
       value: catalogQuery,

@@ -19,7 +19,7 @@ import { loadDrawableCatalog } from './net/drawableCatalog';
 import { loadLiveSfxProfile } from './net/sfxProfile';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
-import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog } from '@chess-tactics/board-render';
+import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, assertInstalledPresentationCatalog } from '@chess-tactics/board-render';
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
 // content-hashed + immutable — correct — but that does NOT save a tab that
@@ -74,6 +74,7 @@ if (root) {
       applyGroundCoverCatalog();
       applyWallDecorCatalog();
       applyWallArtCatalog();
+      assertInstalledPresentationCatalog();
       // Prop/doodad definitions derive active raster dimensions from the media
       // snapshot, so media must be installed before the complete seat document.
       // App is intentionally imported only after both authorities are hydrated:

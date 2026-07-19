@@ -1811,6 +1811,44 @@ async function main() {
     },
     media: {},
   });
+  const sharedPresentationSlot = 'wall-decor/test-banner-base.png';
+  for (const [sortOrder, family] of ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'].entries()) {
+    await seedSyntheticDrawable({
+      id: `test-surface-${family}`, kind: 'terrain-surface', label: `Synthetic ${family} surface`, sortOrder,
+      behavior: { family, role: 'base', probability: 1 }, metadata: { familyLabel: family },
+      media: { top: sharedPresentationSlot, source: sharedPresentationSlot },
+    });
+  }
+  await seedSyntheticDrawable({
+    id: 'test-terrain-review', kind: 'terrain-review', label: 'Synthetic terrain review',
+    behavior: { family: 'grass', role: 'variant' }, media: { preview: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-terrain-comparison', kind: 'terrain-comparison', label: 'Synthetic terrain comparison',
+    behavior: { family: 'grass', variant: 0 }, media: { raw: sharedPresentationSlot, processed: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-background-set', kind: 'background-set', label: 'Synthetic background set',
+    behavior: { default: true },
+    media: Object.fromEntries(['world', ...['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'].map((piece) => `portrait-${piece}`)]
+      .map((role) => [role, sharedPresentationSlot])),
+  });
+  for (const [sortOrder, piece] of ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'].entries()) {
+    await seedSyntheticDrawable({
+      id: `test-portrait-${piece}`, kind: 'unit-portrait', label: `Synthetic ${piece} portraits`, sortOrder,
+      behavior: { piece },
+      media: Object.fromEntries(['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white']
+        .map((palette) => [palette, sharedPresentationSlot])),
+    });
+  }
+  for (const [sortOrder, id] of ['test-neutral-stone-a', 'test-neutral-stone-b'].entries()) {
+    await seedSyntheticDrawable({
+      id, kind: 'neutral-unit-art', label: `Synthetic neutral stone ${sortOrder + 1}`, sortOrder,
+      behavior: {},
+      media: Object.fromEntries(['south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east']
+        .map((direction) => [direction, sharedPresentationSlot])),
+    });
+  }
   const wallArtBatchRollback = await request(
     'PUT', '/api/admin/drawable-assets', adminJson,
     JSON.stringify({ assets: [
