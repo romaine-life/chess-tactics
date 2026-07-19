@@ -9,7 +9,11 @@ RUN cd frontend && npm ci
 
 COPY frontend/ frontend/
 RUN npm --prefix packages/board-render run build
-RUN npm --prefix frontend run build
+# The repository-wide committed-media guard runs before this image build. The
+# Docker context intentionally has no Git metadata or Git executable, so this
+# stage builds the frontend and then checks only the packaged output.
+RUN cd frontend && npm exec -- vite build && \
+    node scripts/check-no-committed-media.mjs --built-output-only
 # DOM-free engine bundle for the headless training Job (backend/train-worker.mjs).
 RUN npm --prefix frontend run build:trainer
 
