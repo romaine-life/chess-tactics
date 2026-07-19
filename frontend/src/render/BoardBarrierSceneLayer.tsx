@@ -1,4 +1,4 @@
-import { useMemo, type ReactElement } from 'react';
+import { useLayoutEffect, useMemo, type ReactElement } from 'react';
 import { WALL_FRAME_GEOMETRY, type BakeBounds, type BoardDrawOp } from '@chess-tactics/board-render';
 import { fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
 import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
@@ -124,17 +124,25 @@ export function BoardBarrierSceneLayer({
   wallOverlays,
   wallArt,
   wallBounds,
+  onFirstFrame,
+  onFrameError,
 }: {
   fenceOverlays?: ReadonlyMap<string, ResolvedFenceOverlay>;
   fencePosts?: ReadonlyMap<string, ResolvedFencePost>;
   wallOverlays?: ReadonlyMap<string, ResolvedWallOverlay>;
   wallArt?: WallArtPlacementMap;
   wallBounds?: { cols: number; rows: number };
+  onFirstFrame?: () => void;
+  onFrameError?: (error: unknown) => void;
 }): ReactElement | null {
   const ops = useMemo(
     () => barrierOps({ fenceOverlays, fencePosts, wallOverlays, wallArt, wallBounds }),
     [fenceOverlays, fencePosts, wallArt, wallBounds, wallOverlays],
   );
   const bounds = useMemo(() => boundsForOps(ops, FALLBACK_BOUNDS), [ops]);
-  return <BoardCanvasLayer ops={ops} bounds={bounds} />;
+  useLayoutEffect(() => {
+    if (ops.length === 0) onFirstFrame?.();
+  }, [onFirstFrame, ops.length]);
+  if (ops.length === 0) return null;
+  return <BoardCanvasLayer ops={ops} bounds={bounds} onFirstFrame={onFirstFrame} onFrameError={onFrameError} />;
 }

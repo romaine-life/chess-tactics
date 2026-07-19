@@ -814,11 +814,62 @@ async function renderLevelCard({
   return canvas.toBuffer('image/png');
 }
 
+const BOARD_THUMB_W = 288;
+const BOARD_THUMB_H = 192;
+
+/** Compact runtime derivative for level lists. No title chrome or background scene. */
+async function renderBoardThumbnail({ plan, loadDynamicSprite, mediaCatalogRevision, sourceAvailability }) {
+  const renderRevision = normalizeRevision(mediaCatalogRevision);
+  const canvas = createCanvas(BOARD_THUMB_W, BOARD_THUMB_H);
+  const ctx = canvas.getContext('2d');
+  const { ops, bounds } = plan;
+  const fitBounds = plan.framingBounds || bounds;
+  const pad = 8;
+  const scale = Math.min(
+    (BOARD_THUMB_W - pad * 2) / Math.max(1, fitBounds.width),
+    (BOARD_THUMB_H - pad * 2) / Math.max(1, fitBounds.height),
+  );
+  const originX = (BOARD_THUMB_W - fitBounds.width * scale) / 2;
+  const originY = (BOARD_THUMB_H - fitBounds.height * scale) / 2;
+  const uniqueSources = [...new Set(ops.map((op) => op.src))];
+  const loaded = await mapWithConcurrency(uniqueSources, SPRITE_LOAD_CONCURRENCY, (src) => (
+    loadSprite(src, loadDynamicSprite, renderRevision, sourceAvailabilityPolicy(sourceAvailability, src))
+  ));
+  const images = new Map(uniqueSources.map((src, index) => [src, loaded[index]]));
+  ctx.imageSmoothingEnabled = false;
+  for (const op of ops) {
+    const image = images.get(op.src);
+    if (!image) continue;
+    const dx = originX + (op.dx - fitBounds.minX) * scale;
+    const dy = originY + (op.dy - fitBounds.minY) * scale;
+    if (op.contain) {
+      const fit = Math.min(op.dw / Math.max(1, image.width), op.dh / Math.max(1, image.height));
+      const width = image.width * fit;
+      const height = image.height * fit;
+      ctx.drawImage(
+        image,
+        originX + (op.dx + (op.dw - width) / 2 - fitBounds.minX) * scale,
+        originY + (op.dy + (op.dh - height) / 2 - fitBounds.minY) * scale,
+        width * scale,
+        height * scale,
+      );
+    } else if (op.sw != null) {
+      ctx.drawImage(image, op.sx || 0, op.sy || 0, op.sw, op.sh || op.dh, dx, dy, op.dw * scale, op.dh * scale);
+    } else {
+      ctx.drawImage(image, dx, dy, op.dw * scale, op.dh * scale);
+    }
+  }
+  return canvas.toBuffer('image/png');
+}
+
 module.exports = {
   renderLevelCard,
+  renderBoardThumbnail,
   decodeSprite,
   CARD_W,
   CARD_H,
+  BOARD_THUMB_W,
+  BOARD_THUMB_H,
   __testing: {
     BoundedLruMap,
     WeightedLruCache,

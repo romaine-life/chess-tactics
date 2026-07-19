@@ -111,6 +111,7 @@ import {
   shouldRestoreLocalEditorRecovery,
 } from './levelEditorPersistence';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { loadingMark } from '../diagnostics/loadingTimeline';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { LevelEditorControlsPanel, LevelEditorEventsOverlay } from './LevelEditorChromeConsumers';
@@ -2372,6 +2373,11 @@ export function LevelEditor(): ReactElement {
   // Do not expose an editable board until the durable document has had a chance to resolve. On a
   // signed-out/offline visit we deliberately fall back to the browser recovery copy instead.
   const [editorReady, setEditorReady] = useState(false);
+  useEffect(() => {
+    if (!editorReady) return undefined;
+    const frame = requestAnimationFrame(() => loadingMark('editor', 'chrome-first-ready-frame'));
+    return () => cancelAnimationFrame(frame);
+  }, [editorReady]);
   const [targetBaselineResolved, setTargetBaselineResolved] = useState(!routeParams.levelId || Boolean(initialTargetLevel));
   const [editorDocument, setEditorDocument] = useState<EditorDocument | null>(null);
   const [editorLoadError, setEditorLoadError] = useState<{ title: string; detail: string; signIn?: boolean; retry?: boolean } | null>(null);

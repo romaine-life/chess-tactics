@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
 import { Settings } from './Settings';
 import { PlayMenu } from './PlayMenu';
 import { Lobbies } from './Lobbies';
@@ -8,13 +9,14 @@ import { NavButton } from './shared/NavButton';
 import { FittedTabLabel } from './shared/FittedTabLabel';
 import { isPlaySelectorPath, PLAY_SKIRMISH_SELECTOR_HREF } from './playHubRoute';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { loadDecodedImage } from '../render/imageResources';
 
 // The Editor is heavier / code-split out of the menu bundle — lazy-loaded only when its
 // destination opens, inside a LOCAL Suspense so the fallback shows in the destination column
 // (not the whole menu). Settings, Play, and Lobbies are light enough to import directly.
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
-import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
+import { getSnapshot, markFailed, markReady, subscribe } from './shell/coldReveal';
 import { installedUiMedia } from './installedUiMedia';
 
 const BRAND_SHIELD = () => installedUiMedia('ui-kit-icons-brand-shield-png');
@@ -114,11 +116,11 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
     const t = window.setTimeout(() => { setRenderedDest(null); setLeaving(false); }, DEST_FADE_MS);
     return () => window.clearTimeout(t);
   }, [dest, renderedDest]);
-  // Cold-load reveal: the menu's layers fade in in a fixed order — background -> title
-  // -> buttons (rain drifts in last on its own) — driven by the shared reveal director
+  // Cold-load reveal: background, title, and buttons are withheld as one complete unit
+  // (rain remains decorative) by the shared reveal director
   // (see shell/coldReveal). Here MainMenu just REPORTS readiness for the title's brand
   // mark and the buttons' art (icons + stone surface) and gates the background + button
-  // layers off the director's stage; the director owns the ordering and the background
+  // layers off the director's stage; the director owns the atomic gate and the background
   // probe. On any non-cold load the store is already fully revealed, so this is inert.
   const reveal = useSyncExternalStore(subscribe, getSnapshot);
   useEffect(() => {
@@ -143,22 +145,19 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
   }, []);
 
   useEffect(() => {
-    // Warm + decode each layer's art, then signal the director. decode() resolves once
-    // the bitmap is ready; failures (404 / no-AVIF UA) resolve too so a watchdog backstops.
-    const decode = (src: string): Promise<void> => {
-      const img = new Image();
-      img.decoding = 'async';
-      img.src = src;
-      return (img.decode?.() ?? Promise.reject(new Error('decode unsupported'))).then(
-        () => {},
-        () => {},
-      );
-    };
+    const startedAt = performance.now();
+    loadingMark('menu', 'critical-art-decode-start');
     // Title: the brand shield + the wooden bar surface, so the bar reveals whole.
-    void Promise.allSettled([BRAND_SHIELD(), TITLE_SURFACE()].map(decode)).then(() => markReady('title'));
+    void Promise.all([BRAND_SHIELD(), TITLE_SURFACE()].map(loadDecodedImage)).then(() => {
+      markReady('title');
+      loadingMeasure('menu', 'title-art-decoded', startedAt);
+    }).catch(markFailed);
     // Buttons: the carved icons + the heaviest stone rail surface.
     const buttonArt = [SETTINGS_ICON(), STONE_SURFACE(), ...MENU_TABS.map((tab) => tab.icon)];
-    void Promise.allSettled(buttonArt.map(decode)).then(() => markReady('buttons'));
+    void Promise.all(buttonArt.map(loadDecodedImage)).then(() => {
+      markReady('buttons');
+      requestAnimationFrame(() => loadingMeasure('menu', 'button-art-first-painted-frame', startedAt, { assetCount: buttonArt.length }));
+    }).catch(markFailed);
   }, []);
 
   return (
@@ -169,6 +168,12 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
       data-reveal-buttons={reveal.has('buttons') && entered ? '' : undefined}
     >
       <HomepageBackdrop />
+      {reveal.error ? (
+        <div className="menu-load-error" role="alert">
+          <strong>Menu artwork could not be loaded.</strong>
+          <button type="button" onClick={() => window.location.reload()}>Retry</button>
+        </div>
+      ) : null}
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings.
           The rail is placed by the shared .settings-shell rule alone (ADR-0062) — no

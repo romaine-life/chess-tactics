@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, type ReactNode } from 'react';
 import {
   resolveTerrainSideExposure,
   resolveTerrainSideFaces,
@@ -96,6 +96,9 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   wallBounds?: { cols: number; rows: number };
   /** Additional board-art canvas for generated boards (ground cover, props, units, etc.). */
   sceneLayer?: ReactNode;
+  onTerrainFirstFrame?: () => void;
+  onBarrierFirstFrame?: () => void;
+  onFrameError?: (error: unknown) => void;
   children?: ReactNode;
 }
 
@@ -150,6 +153,9 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   wallArt,
   wallBounds,
   sceneLayer,
+  onTerrainFirstFrame,
+  onBarrierFirstFrame,
+  onFrameError,
   children,
 }: BoardLabBoardProps<TAsset>) {
   const sourceCells = board.cells;
@@ -192,6 +198,13 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
     },
   });
 
+  // A pre-drawn plate replaces the barrier compositor as well as terrain. Acknowledge
+  // that intentionally empty layer explicitly; terrain is acknowledged by the plate's
+  // real image/canvas consumer below.
+  useLayoutEffect(() => {
+    if (predrawnPlate) onBarrierFirstFrame?.();
+  }, [onBarrierFirstFrame, predrawnPlate]);
+
   return (
     <TileGrid
       cells={cells}
@@ -202,9 +215,9 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       backgroundLayer={(
         <>
           {predrawnPlate
-            ? <PredrawnBoardLayer plate={predrawnPlate} cells={sourceCells} />
-            : <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(resolvedMacroTiles)} />}
-          {!predrawnPlate ? <BoardBarrierSceneLayer fenceOverlays={fenceOverlays} fencePosts={fencePosts} wallOverlays={wallOverlays} wallArt={wallArt} wallBounds={wallBounds} /> : null}
+            ? <PredrawnBoardLayer plate={predrawnPlate} cells={sourceCells} onFirstFrame={onTerrainFirstFrame} onFrameError={onFrameError} />
+            : <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(resolvedMacroTiles)} onFirstFrame={onTerrainFirstFrame} onFrameError={onFrameError} />}
+          {!predrawnPlate ? <BoardBarrierSceneLayer fenceOverlays={fenceOverlays} fencePosts={fencePosts} wallOverlays={wallOverlays} wallArt={wallArt} wallBounds={wallBounds} onFirstFrame={onBarrierFirstFrame} onFrameError={onFrameError} /> : null}
           {sceneLayer}
         </>
       )}

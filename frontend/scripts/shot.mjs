@@ -8,7 +8,10 @@
 // focused, repeatable PNG. Read it to view.
 //
 // Usage:
-//   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>] [--full] [--show-scrollbars]
+//   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>]
+//     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold] [--assert-menu-atomic]
+//     [--assert-board-atomic]
+//     [--full] [--show-scrollbars]
 //
 // Examples:
 //   node scripts/shot.mjs http://127.0.0.1:5199/play/select/skirmish --select '.menu-dest'
@@ -29,6 +32,11 @@ const out = resolve(process.cwd(), flag('out', 'tmp-shots/shot.png'));
 const [w, h] = String(flag('size', '1280x800')).split('x').map(Number);
 const scale = Math.max(1, Number(flag('scale', 1)) || 1); // deviceScaleFactor — bump for small elements
 const readyExpr = flag('ready');
+const timeout = Math.max(1_000, Number(flag('timeout', 30_000)) || 30_000);
+const throttle = flag('throttle');
+const cold = has('cold');
+const assertMenuAtomic = has('assert-menu-atomic');
+const assertBoardAtomic = has('assert-board-atomic');
 const fullPage = has('full');
 const showScrollbars = has('show-scrollbars');
 
@@ -39,7 +47,7 @@ const CHROMES = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 ];
 const executablePath = CHROMES.find(existsSync);
-if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--full]'); process.exit(2); }
+if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--timeout ms] [--throttle slow-4g|slow-3g] [--cold] [--full]'); process.exit(2); }
 if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n')); process.exit(1); }
 mkdirSync(dirname(out), { recursive: true });
 
@@ -52,20 +60,106 @@ const browser = await puppeteer.launch({
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: w, height: h, deviceScaleFactor: scale });
-  // Prefer a fully-idle network, but live routes with persistent connections
-  // (e.g. the main menu's rain ambience) never reach networkidle0 — fall back to
-  // domcontentloaded so those pages still capture. The --ready gate below ensures
-  // content is actually present before the grab.
-  await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 })
-    .catch(() => page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }));
+  if (assertMenuAtomic) {
+    await page.evaluateOnNewDocument(() => {
+      window.__ctMenuAtomicViolations = [];
+      const sample = () => {
+        const menu = document.querySelector('.main-menu-layer');
+        if (menu) {
+          const title = document.querySelector('.app-titlebar');
+          const state = {
+            bg: menu.hasAttribute('data-reveal-bg'),
+            buttons: menu.hasAttribute('data-reveal-buttons'),
+            title: Boolean(title && !title.classList.contains('reveal-pending')),
+          };
+          const count = Number(state.bg) + Number(state.buttons) + Number(state.title);
+          if (count > 0 && count < 3) window.__ctMenuAtomicViolations.push(state);
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+  }
+  if (assertBoardAtomic) {
+    await page.evaluateOnNewDocument(() => {
+      window.__ctBoardAtomicViolations = [];
+      window.__ctBoardAtomicSeen = 0;
+      const required = ['terrain', 'barriers', 'scene'];
+      const sample = () => {
+        for (const board of document.querySelectorAll('.skirmish-board-lab')) {
+          window.__ctBoardAtomicSeen += 1;
+          const layers = new Set((board.getAttribute('data-painted-layers') || '').split(',').filter(Boolean));
+          const complete = required.every((layer) => layers.has(layer));
+          const loading = board.classList.contains('is-board-loading');
+          const failed = board.classList.contains('is-board-error');
+          const opacity = Number.parseFloat(getComputedStyle(board).opacity);
+          if (!failed && ((!loading && !complete) || (loading && opacity > 0.001) || (loading && !board.inert))) {
+            window.__ctBoardAtomicViolations.push({ layers: [...layers], loading, failed, opacity, inert: board.inert });
+          }
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+  }
+  const throttleProfiles = {
+    // DevTools-style profiles. Throughput values are bytes/second.
+    'slow-4g': { latency: 150, downloadThroughput: 1_600_000 / 8, uploadThroughput: 750_000 / 8 },
+    'slow-3g': { latency: 400, downloadThroughput: 500_000 / 8, uploadThroughput: 500_000 / 8 },
+  };
+  if (throttle && !throttleProfiles[throttle]) {
+    console.error(`unknown throttle profile: ${throttle}`);
+    process.exit(2);
+  }
+  if (cold || throttle) {
+    const cdp = await page.createCDPSession();
+    await cdp.send('Network.enable');
+    if (cold) await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
+    if (throttle) {
+      await cdp.send('Network.emulateNetworkConditions', {
+        offline: false,
+        connectionType: 'cellular4g',
+        ...throttleProfiles[throttle],
+      });
+    }
+  }
+  // One navigation only: retrying a timed-out navigation silently doubles cold-load work.
+  // Persistent ambience connections also make network-idle an invalid readiness signal.
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
 
   // Determinism: kill animations/transitions so a live screen captures identically every run.
   await page.addStyleTag({ content: `*,*::before,*::after{animation:none!important;transition:none!important;animation-duration:0s!important;caret-color:transparent!important;scroll-behavior:auto!important}` });
 
   // Readiness: explicit gate if given, else a quick best-effort wait on window.__ready (fixtures set it).
-  await page.waitForFunction(readyExpr || 'window.__ready===true', { timeout: readyExpr ? 15000 : 1200 }).catch(() => {});
+  await page.waitForFunction(readyExpr || 'window.__ready===true', { timeout: readyExpr ? timeout : 1200 }).catch(() => {});
   await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
   await new Promise((r) => setTimeout(r, 200));
+
+  if (assertMenuAtomic) {
+    const violations = await page.evaluate(() => window.__ctMenuAtomicViolations || []);
+    if (violations.length) {
+      console.error(`menu exposed a partial frame: ${JSON.stringify(violations[0])}`);
+      process.exitCode = 4;
+      throw new Error('atomic menu assertion failed');
+    }
+  }
+  if (assertBoardAtomic) {
+    const result = await page.evaluate(() => ({
+      violations: window.__ctBoardAtomicViolations || [],
+      seen: window.__ctBoardAtomicSeen || 0,
+    }));
+    if (!result.seen) {
+      console.error('atomic board assertion observed no skirmish board');
+      process.exitCode = 5;
+      throw new Error('atomic board assertion had no target');
+    }
+    const violations = result.violations;
+    if (violations.length) {
+      console.error(`board exposed a partial or interactive frame: ${JSON.stringify(violations[0])}`);
+      process.exitCode = 5;
+      throw new Error('atomic board assertion failed');
+    }
+  }
 
   if (select) {
     let el = await page.$(select);

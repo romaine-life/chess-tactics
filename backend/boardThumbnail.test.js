@@ -6,7 +6,7 @@ const {
   predrawnBoardRasterTransform,
 } = require('@chess-tactics/board-render');
 
-const { __testing } = require('./boardThumbnail');
+const { __testing, renderBoardThumbnail, BOARD_THUMB_W, BOARD_THUMB_H } = require('./boardThumbnail');
 
 const {
   ThumbnailAssetStore,
@@ -36,6 +36,24 @@ function deferred() {
 function fakeDecoder(bytes) {
   return { width: 1, height: 1, payload: bytes.toString('utf8') };
 }
+
+test('runtime list derivative is a compact fixed-size PNG and needs no shell artwork', async () => {
+  let unexpectedLoad = false;
+  const png = await renderBoardThumbnail({
+    plan: {
+      ops: [],
+      bounds: { minX: 0, minY: 0, width: 1, height: 1 },
+      framingBounds: { minX: 0, minY: 0, width: 1, height: 1 },
+    },
+    loadDynamicSprite: async () => {
+      unexpectedLoad = true;
+      throw new Error('empty board should not request artwork');
+    },
+    mediaCatalogRevision: 1,
+  });
+  assert.deepEqual(pngHeaderDimensions(png), { width: BOARD_THUMB_W, height: BOARD_THUMB_H });
+  assert.equal(unexpectedLoad, false);
+});
 
 test('production source loading and decoding serialize maximum-size assets', () => {
   assert.equal(constants.SPRITE_LOAD_CONCURRENCY, 1);

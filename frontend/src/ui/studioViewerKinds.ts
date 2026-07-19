@@ -25,6 +25,7 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   gamelab: 'Game Lab',
   gym: 'Training Gym',
   solver: 'Board Solver',
+  loading: 'Loading Lab',
 } as const;
 
 export type ViewerKind = keyof typeof STUDIO_VIEWER_KIND_LABELS;

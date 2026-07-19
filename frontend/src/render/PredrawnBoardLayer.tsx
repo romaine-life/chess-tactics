@@ -26,6 +26,7 @@ import {
   type PredrawnBoundaryReference,
   type PredrawnPoint,
 } from '@chess-tactics/board-render';
+import { loadDecodedImage } from './imageResources';
 
 export {
   clampPredrawnGuide,
@@ -286,9 +287,13 @@ function drawRectifiedPlate(
 function PredrawnRectifiedCanvas({
   plate,
   style,
+  onFirstFrame,
+  onFrameError,
 }: {
   plate: PredrawnBoardPlate & { registration: PredrawnBoardCornerRegistration };
   style: CSSProperties;
+  onFirstFrame?: () => void;
+  onFrameError?: (error: unknown) => void;
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
@@ -297,28 +302,29 @@ function PredrawnRectifiedCanvas({
   useEffect(() => {
     let cancelled = false;
     setReady(false);
-    const image = new Image();
-    image.decoding = 'async';
-    image.onload = () => {
+    void loadDecodedImage(plate.src).then((image) => {
       if (cancelled || !canvasRef.current) return;
       const canvas = canvasRef.current;
       canvas.width = plate.surface.frameWidth;
       canvas.height = plate.surface.frameHeight;
       try {
-        setReady(drawRectifiedPlate(
+        const painted = drawRectifiedPlate(
           canvas,
           image,
           plate.registration,
           plate.surface.frameWidth,
           plate.surface.frameHeight,
-        ));
-      } catch {
+        );
+        setReady(painted);
+        if (!painted) throw new Error('Pre-drawn board canvas could not be composed.');
+        requestAnimationFrame(() => onFirstFrame?.());
+      } catch (error) {
         setReady(false);
+        onFrameError?.(error);
       }
-    };
-    image.src = plate.src;
+    }).catch((error) => onFrameError?.(error));
     return () => { cancelled = true; };
-  }, [plate.src, plate.surface.frameHeight, plate.surface.frameWidth, registrationKey]);
+  }, [onFirstFrame, onFrameError, plate.src, plate.surface.frameHeight, plate.surface.frameWidth, registrationKey]);
 
   return (
     <canvas
@@ -334,9 +340,13 @@ function PredrawnRectifiedCanvas({
 export function PredrawnBoardLayer({
   plate,
   cells,
+  onFirstFrame,
+  onFrameError,
 }: {
   plate: PredrawnBoardPlate;
   cells: readonly { x: number; y: number }[];
+  onFirstFrame?: () => void;
+  onFrameError?: (error: unknown) => void;
 }): ReactElement {
   const homography = plate.registration
     ? predrawnBoardHomography(plate.surface, cells, plate.registration)
@@ -382,11 +392,15 @@ export function PredrawnBoardLayer({
         decoding="async"
         draggable={false}
         style={style}
+        onLoad={() => { if (!rectified) requestAnimationFrame(() => onFirstFrame?.()); }}
+        onError={() => onFrameError?.(new Error(`Pre-drawn board image failed: ${plate.src}`))}
       />
       {rectified ? (
         <PredrawnRectifiedCanvas
           plate={plate as PredrawnBoardPlate & { registration: PredrawnBoardCornerRegistration }}
           style={style}
+          onFirstFrame={onFirstFrame}
+          onFrameError={onFrameError}
         />
       ) : null}
     </>

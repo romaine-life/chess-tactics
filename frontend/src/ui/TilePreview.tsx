@@ -38,6 +38,7 @@ import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS } from './ChromeLab';
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
+import { LoadingLab } from './LoadingLab';
 import { GymCatalog, GymViewer, type GymMode } from './Gym';
 import { SolveCatalog, SolveViewer } from './SolveRuns';
 import { PAGE_ENTRIES } from './pagesCatalog';
@@ -660,7 +661,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   };
   const visibleCatalogBaseAssets = catalogBaseAssets.filter(matchesCatalogQuery);
   const visibleCatalogCount = selectedCollectionFilters.includes('base') ? visibleCatalogBaseAssets.length : 0;
-  const selectedTransitionSlot = selectedSlotMask
+  const selectedTransitionSlot = selectedSlotMask && selectedPair
     ? transitionSlotsForPair(selectedPair, transitionAssets).find((slot) => slot.mask === selectedSlotMask)
     : undefined;
   const selectedAssetPair = selectedAsset.pairId ? transitionPairById(selectedAsset.pairId) : undefined;
@@ -709,22 +710,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     if (!fenceArtCatalog.length) return;
     setSelectedFenceArtworkId((current) => fenceArtKit(fenceArtCatalog, current)?.id ?? fenceArtCatalog[0].id);
   }, [fenceArtCatalog]);
-
-  useEffect(() => {
-    const assetSources = allStudioAssets.flatMap((asset) => [asset.src, ...(asset.animation?.frames ?? [])]);
-    const preloadedImages = Array.from(new Set(assetSources)).map((src) => {
-      const image = new Image();
-      image.decoding = 'sync';
-      image.src = src;
-      return image;
-    });
-
-    return () => {
-      preloadedImages.forEach((image) => {
-        image.src = '';
-      });
-    };
-  }, [allStudioAssets]);
 
   useEffect(() => {
     const syncFromRoute = () => {
@@ -1989,6 +1974,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                         ? <GymViewer levelId={selectedGymLevelId} header={studioViewerHeader} initialMode={initialGymTab} />
                         : viewerKind === 'solver'
                         ? <SolveViewer levelId={selectedSolverLevelId} header={studioViewerHeader} tab={solverTab} onTabChange={setSolverTab} />
+                        : viewerKind === 'loading'
+                        ? <LoadingLab header={studioViewerHeader} />
                         : viewerKind === 'tileside'
                           ? <TileSidesViewer name={selectedTileSideId} header={studioViewerHeader} />
                           : viewerKind === 'walldecor'

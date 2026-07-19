@@ -410,7 +410,7 @@ function LevelRow({
     >
       <div data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
         {level ? (
-          <LevelThumbnail level={level} width={68} height={44} />
+          <LevelThumbnail level={level} width={68} height={44} authoringPreview />
         ) : (
           <span className="settings-row-thumb-empty" />
         )}

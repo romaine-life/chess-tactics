@@ -18,6 +18,34 @@ import { initUnitSizeTuning } from './ui/unitSizeTuning';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
 import { installNineSliceCssVariables, installUiFonts, installUiMediaCssVariables, installedUiMedia } from './ui/installedUiMedia';
 import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, assertInstalledPresentationCatalog } from '@chess-tactics/board-render';
+import { installLoadingResourceObserver, loadingError, loadingMark, loadingMeasure } from './diagnostics/loadingTimeline';
+import { composeInstalledChromeCss } from './ui/useInstalledChromeCss';
+
+installLoadingResourceObserver();
+loadingMark('app', 'entry-module');
+
+async function retryStartup<T>(label: string, task: () => Promise<T>, attempts = 4): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      loadingError('app', `${label}-attempt-${attempt}-failed`, error);
+      if (attempt < attempts) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 200 * (2 ** (attempt - 1))));
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function loadCriticalFonts(): Promise<void> {
+  await document.fonts.load('19px "Advance Wars 2 GBA"', 'CHESS TACTICS Play Settings');
+  if (!document.fonts.check('19px "Advance Wars 2 GBA"', 'CHESS TACTICS Play Settings')) {
+    throw new Error('The layout-critical interface font did not become available.');
+  }
+}
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
 // content-hashed + immutable — correct — but that does NOT save a tab that
@@ -40,8 +68,8 @@ const shell = document.querySelector('.shell');
 if (shell instanceof HTMLElement) shell.style.visibility = 'visible';
 
 // Cold-load reveal (see ui/shell/coldReveal). On a fresh main-menu load, sequence the
-// menu's layers in a fixed order — background -> title -> buttons — then let rain drift
-// in. Arm BEFORE React renders so the first paint is already in the hidden/pending
+// menu's background, title, and buttons as one complete visual unit, then let rain drift
+// independently. Arm BEFORE React renders so the first paint is already in the hidden/pending
 // state; it no-ops (everything stays revealed) on every other route and on later
 // soft navigations. The route-scoped background preload moves the scene — first in the
 // order — to the front of the network queue without taxing other routes (the global
@@ -52,10 +80,12 @@ try { primeSfx(); } catch { /* sound effects are decorative */ }
 
 const root = document.getElementById('root');
 if (root) {
+  const startupAt = performance.now();
   const reactRoot = createRoot(root);
   reactRoot.render(<main className="app-startup-status" role="status">Loading live assets...</main>);
+  loadingMark('app', 'startup-placeholder-painted');
 
-  void Promise.all([loadLiveMediaCatalog(), loadDrawableCatalog(), loadLiveUnitCatalog()])
+  void retryStartup('critical-catalogs', () => Promise.all([loadLiveMediaCatalog(), loadDrawableCatalog(), loadLiveUnitCatalog()]))
     .then(async () => {
       applyGroundCoverCatalog();
       applyWallDecorCatalog();
@@ -65,6 +95,7 @@ if (root) {
       installUiFonts();
       installNineSliceCssVariables();
       try { initBgm(installedUiMedia('ui-kit-icons-music-png')); } catch { /* background music is decorative */ }
+      loadingMeasure('app', 'critical-catalogs-ready', startupAt);
       if (isMainMenuPath(window.location.pathname)) {
         const bgPreload = document.createElement('link');
         bgPreload.rel = 'preload';
@@ -74,13 +105,21 @@ if (root) {
         bgPreload.setAttribute('fetchpriority', 'high');
         document.head.appendChild(bgPreload);
       }
-      armForColdHome();
       // Prop/doodad definitions derive active raster dimensions from the media
       // snapshot, so media must be installed before the complete seat document.
       // App is intentionally imported only after both authorities are hydrated:
       // modules that derive prop shelves at import time can never observe [] or
       // a packaged fallback.
-      await loadLiveSeats();
+      await retryStartup('prop-seats', loadLiveSeats);
+      loadingMeasure('app', 'critical-seats-ready', startupAt);
+      await retryStartup('critical-fonts', loadCriticalFonts);
+      document.body.classList.remove('loading-bootstrap');
+      loadingMeasure('app', 'critical-fonts-ready', startupAt);
+      await retryStartup('installed-chrome', composeInstalledChromeCss);
+      loadingMeasure('app', 'critical-chrome-ready', startupAt);
+      // The real menu has not mounted yet, so arming here still precedes its first
+      // paint while allowing the director to pin the hydrated immutable background.
+      armForColdHome();
       // SFX are decorative: hydrate their DB-owned profile before importing the
       // Studio/runtime consumers, but keep honest silence when the row is missing
       // or temporarily unavailable. There is no committed profile fallback.
@@ -89,8 +128,10 @@ if (root) {
       initUnitSizeTuning();
       const { App } = await import('./ui/App');
       reactRoot.render(<App />);
+      requestAnimationFrame(() => loadingMeasure('app', 'first-app-frame', startupAt));
     })
     .catch((error) => {
+      loadingError('app', 'critical-startup-failed', error);
       console.error('live asset catalog startup failed:', error);
       if (window.location.pathname === '/studio/drawables') {
         void import('./ui/DrawableCatalogLab').then(({ DrawableCatalogLab }) => reactRoot.render(<DrawableCatalogLab />));
