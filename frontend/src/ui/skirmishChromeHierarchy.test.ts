@@ -66,7 +66,17 @@ describe('Skirmish chrome hierarchy', () => {
     const centerSlot = skirmish.match(/<TitleBarSlot region="center">([\s\S]*?)<\/TitleBarSlot>/)?.[1] ?? '';
     expect(centerSlot.match(/<TitleBarStatus\b/g)).toHaveLength(3);
     expect(centerSlot).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
-    expect(skirmish).toContain("import { TitleBarStatus } from './shell/TitleBarControls';");
+    expect(skirmish).toMatch(/import \{[^}]*TitleBarStatus[^}]*\} from '\.\/shell\/TitleBarControls';/);
+  });
+
+  it('keeps the playtest return in the canonical typed title-bar control lane', () => {
+    expect(skirmish).toContain('<TitleBarControlContribution');
+    expect(skirmish).toContain('ariaLabel="Playtest navigation"');
+    expect(skirmish).toContain("id: 'skirmish-return'");
+    expect(skirmish).toContain('destination: returnHref');
+    expect(skirmish).toContain("testId: 'skirmish-return'");
+    expect(skirmish).not.toContain('skirmish-return-editor');
+    expect(styleCss).not.toContain('.skirmish-return-editor');
   });
 
   it('uses the registered outer panel and explicit inner boxes', () => {

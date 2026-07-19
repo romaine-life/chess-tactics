@@ -197,14 +197,36 @@ describe('edge fences', () => {
     expect(parseEdgeKey('nope')).toBeNull();
   });
 
-  it('blocks only the orthogonal crossing it sits on (knights + diagonals hop)', () => {
+  it('blocks its orthogonal crossing while lone fences leave a diagonal route open', () => {
     const fences = setOf(roadEdgeKey(1, 1, 2, 1)); // a wall between (1,1) and (2,1)
     expect(fenceBlocksCrossing(fences, 1, 1, 2, 1)).toBe(true);
     expect(fenceBlocksCrossing(fences, 2, 1, 1, 1)).toBe(true); // order-independent
     expect(fenceBlocksCrossing(fences, 1, 1, 1, 2)).toBe(false); // a different edge
-    expect(fenceBlocksCrossing(fences, 1, 1, 2, 2)).toBe(false); // diagonal — never blocked
+    expect(fenceBlocksCrossing(fences, 1, 1, 2, 2)).toBe(false); // diagonal — other route remains open
     expect(fenceBlocksCrossing(fences, 1, 1, 3, 1)).toBe(false); // 2 apart — not a crossing
+    expect(fenceBlocksCrossing(fences, 1, 1, 2, 3)).toBe(false); // knight jump — hops
     expect(fenceBlocksCrossing(undefined, 1, 1, 2, 1)).toBe(false);
+  });
+
+  it('blocks a diagonal only when both orthogonal routes around its corner are closed', () => {
+    // Fortress Gate regression: moving (2,4)→(3,5) can route east-then-south or
+    // south-then-east. The north and west edges of (3,5) close those two routes.
+    const northOfDestination = roadEdgeKey(3, 4, 3, 5);
+    const westOfDestination = roadEdgeKey(2, 5, 3, 5);
+
+    expect(fenceBlocksCrossing(setOf(northOfDestination), 2, 4, 3, 5)).toBe(false);
+    expect(fenceBlocksCrossing(setOf(westOfDestination), 2, 4, 3, 5)).toBe(false);
+    const closedCorner = setOf(northOfDestination, westOfDestination);
+    expect(fenceBlocksCrossing(closedCorner, 2, 4, 3, 5)).toBe(true);
+    expect(fenceBlocksCrossing(closedCorner, 3, 5, 2, 4)).toBe(true); // order-independent
+  });
+
+  it('leaves a diagonal open when two barriers close the same route but the other route is clear', () => {
+    const horizontalFirstOnly = setOf(
+      roadEdgeKey(1, 1, 2, 1),
+      roadEdgeKey(2, 1, 2, 2),
+    );
+    expect(fenceBlocksCrossing(horizontalFirstOnly, 1, 1, 2, 2)).toBe(false);
   });
 
   it('assigns isolated E/S rails once and resolves their endpoints as canonical posts', () => {

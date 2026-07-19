@@ -19,6 +19,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs",
     "typecheck": "node ../../frontend/node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"
   }
 }

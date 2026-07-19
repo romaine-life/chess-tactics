@@ -1,5 +1,10 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const { createCanvas } = require('@napi-rs/canvas');
+const {
+  predrawnBoardRasterBounds,
+  predrawnBoardRasterTransform,
+} = require('@chess-tactics/board-render');
 
 const { __testing } = require('./boardThumbnail');
 
@@ -11,6 +16,8 @@ const {
   constants,
   loadSpriteWithAvailability,
   mapWithConcurrency,
+  paintOccludedThumbnailOp,
+  paintPredrawnThumbnailOp,
   pngHeaderDimensions,
   sha256,
   sourceAvailabilityPolicy,
@@ -114,7 +121,7 @@ test('default thumbnail peak model stays below the 256 MiB pod budget', () => {
   assert.ok(modeledPeak < 256 * MIB);
 });
 
-test('multi-copy PNG fallback is restricted to small legacy rasters', () => {
+test('multi-copy PNG fallback admits a native pre-drawn scene but rejects large rasters', () => {
   const header = (width, height) => {
     const bytes = Buffer.alloc(24);
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes);
@@ -125,6 +132,7 @@ test('multi-copy PNG fallback is restricted to small legacy rasters', () => {
   };
 
   assert.deepEqual(pngHeaderDimensions(header(512, 512)), { width: 512, height: 512 });
+  assert.deepEqual(pngHeaderDimensions(header(1672, 941)), { width: 1672, height: 941 });
   assert.equal(pngHeaderDimensions(header(2048, 2048)), null);
 });
 
@@ -348,4 +356,133 @@ test('font registration is keyed by font SHA, not catalog revision aliases', asy
     `AW2 Server ${sha256(changedBytes)}`,
   );
   assert.equal(registered.length, 2);
+});
+
+test('occluded thumbnail draws preserve flip and opacity in a sprite-local scratch canvas', () => {
+  const source = createCanvas(4, 1);
+  const sourceCtx = source.getContext('2d');
+  for (const [x, color] of ['#ff0000', '#00ff00', '#0000ff', '#ffff00'].entries()) {
+    sourceCtx.fillStyle = color;
+    sourceCtx.fillRect(x, 0, 1, 1);
+  }
+
+  const maskSource = createCanvas(2, 1);
+  const maskCtx = maskSource.getContext('2d');
+  maskCtx.fillStyle = '#ffffff';
+  maskCtx.fillRect(0, 0, 1, 1);
+
+  const target = createCanvas(6, 1);
+  const allocations = [];
+  const op = {
+    src: 'subject',
+    layer: 'scene',
+    dx: 1,
+    dy: 0,
+    dw: 4,
+    dh: 1,
+    z: 1,
+    flipX: true,
+    opacity: 0.5,
+  };
+  const mask = {
+    src: 'mask',
+    layer: 'scene',
+    dx: 1,
+    dy: 0,
+    dw: 2,
+    dh: 1,
+    z: 2,
+    flipX: true,
+  };
+
+  const scratchRect = paintOccludedThumbnailOp({
+    target: target.getContext('2d'),
+    op,
+    image: source,
+    masks: [mask],
+    images: new Map([['mask', maskSource]]),
+    projection: { originX: 0, originY: 0, minX: 0, minY: 0, scale: 1 },
+    clipRect: { x: 0, y: 0, width: 6, height: 1 },
+    createScratchCanvas(width, height) {
+      allocations.push([width, height]);
+      return createCanvas(width, height);
+    },
+  });
+
+  assert.deepEqual(scratchRect, { x: 1, y: 0, width: 4, height: 1 });
+  assert.deepEqual(allocations, [[4, 1]]);
+  const pixels = target.getContext('2d').getImageData(0, 0, 6, 1).data;
+  const pixel = (x) => Array.from(pixels.slice(x * 4, x * 4 + 4));
+  assert.deepEqual(pixel(0), [0, 0, 0, 0]);
+  assert.deepEqual(pixel(1).slice(0, 3), [255, 255, 0]);
+  assert.ok(pixel(1)[3] === 127 || pixel(1)[3] === 128);
+  assert.deepEqual(pixel(2), [0, 0, 0, 0]);
+  assert.deepEqual(pixel(3).slice(0, 3), [0, 255, 0]);
+  assert.ok(pixel(3)[3] === 127 || pixel(3)[3] === 128);
+  assert.deepEqual(pixel(4).slice(0, 3), [255, 0, 0]);
+  assert.ok(pixel(4)[3] === 127 || pixel(4)[3] === 128);
+  assert.deepEqual(pixel(5), [0, 0, 0, 0]);
+});
+
+test('registered pre-drawn thumbnail pixels follow the shared projective raster transform', () => {
+  const registration = {
+    sourceWidth: 4,
+    sourceHeight: 4,
+    north: [0, 0],
+    east: [4, 0],
+    south: [4, 4],
+    west: [0, 4],
+    gridColumns: 1,
+    gridRows: 1,
+    columnGuides: [0, 1],
+    rowGuides: [0, 1],
+  };
+  const surface = {
+    kind: 'predrawn',
+    slot: 'boards/test/registered.png',
+    frameWidth: 4,
+    frameHeight: 4,
+    registration,
+  };
+  const transform = predrawnBoardRasterTransform(surface, [{ x: 0, y: 0 }], registration);
+  assert.ok(transform);
+  const bounds = predrawnBoardRasterBounds(transform);
+  assert.ok(bounds);
+
+  const source = createCanvas(4, 4);
+  const sourceContext = source.getContext('2d');
+  sourceContext.fillStyle = '#ef3b24';
+  sourceContext.fillRect(0, 0, 4, 4);
+
+  const width = Math.ceil(bounds.width);
+  const height = Math.ceil(bounds.height);
+  const target = createCanvas(width, height);
+  const painted = paintPredrawnThumbnailOp(
+    target.getContext('2d'),
+    {
+      src: 'registered',
+      layer: 'terrain',
+      dx: bounds.minX,
+      dy: bounds.minY,
+      dw: bounds.width,
+      dh: bounds.height,
+      z: -100000,
+      predrawnTransform: transform,
+    },
+    source,
+    {
+      originX: 0,
+      originY: 0,
+      minX: bounds.minX,
+      minY: bounds.minY,
+      scale: 1,
+    },
+  );
+
+  assert.deepEqual(painted, { x: 0, y: 0, width, height });
+  const pixels = target.getContext('2d').getImageData(0, 0, width, height).data;
+  const alphaAt = (x, y) => pixels[(y * width + x) * 4 + 3];
+  assert.equal(alphaAt(0, 0), 0);
+  assert.equal(alphaAt(width - 1, 0), 0);
+  assert.ok(alphaAt(Math.floor(width / 2), Math.floor(height / 2)) > 240);
 });

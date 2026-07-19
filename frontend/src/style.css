@@ -4178,10 +4178,10 @@ h1 {
   grid-row: 1;
 }
 
-/* Higher specificity than .settings-header-frame so the in-game three-section centred
-   layout wins over the menu's 2-trailing grid: brand (left) · live status (centre) ·
-   account cluster (right). Scoped to the bar element (it lives in the app shell now,
-   outside .skirmish-screen) — two classes still out-rank the single .settings-header-frame. */
+/* Higher specificity than .settings-header-frame so the ordinary in-game three-section
+   centred layout wins over the menu's 2-trailing grid: brand (left) · live status (centre) ·
+   account cluster (right). Test play adds its return track below. Scoped to the bar element
+   (it lives in the app shell now, outside .skirmish-screen). */
 .app-shell-titlebar.skirmish-topbar {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
@@ -5624,16 +5624,14 @@ h1 {
   width: 100%;
 }
 .le-actions-dock .le-play-board:disabled { opacity: .45; }
-
-/* Test-play "‹ Back to editor": a persistent, non-blocking return to the editor board that
-   launched the test (only present when the match carries a valid ?returnTo). Fixed corner chip
-   — Skirmish contributes no before-divider controls — clear of the centered board and side HUD. */
-.skirmish-return-editor {
-  bottom: 24px;
-  left: 24px;
-  position: fixed;
-  z-index: 40;
+.le-action-primary-row {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: var(--ds-inline, 8px);
 }
+.le-action-primary-row .le-play-board { margin-top: 0; }
+
 /* Pinned Actions dock in the rail: universal tools + Undo/Redo as compact icon-only
    squares. Labels ride aria-label + title; the button chrome comes from the inner
    role, while the icons are glyph-only. Current-board Test lives below; Save/Publish
@@ -6287,13 +6285,14 @@ h1 {
   opacity: 1;
 }
 
-/* Marquee selection highlight for the Generate scope — same diamond seating as the zone tint, in
-   a distinct cyan so it reads as "these cells will be generated", not a gameplay zone. Painted
-   before the selection ring in the DOM so a single-cell ring still shows on top at equal z. */
+/* Marquee selection highlight for the Generate/Tile scope. TileGrid's flat overlay cell is
+   already seated at the top edge of the surface diamond, so this begins at 0 rather than applying
+   the terrain-frame equator offset again. Keeping it in that 10k overlay band makes north/west
+   scenic coordinates visible above the terrain canvas while structures remain above it. */
 .le-region-cell {
   position: absolute;
   left: 0;
-  top: var(--iso-tile-surface-top);
+  top: 0;
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -13148,6 +13147,13 @@ button.tileset-relationship-cell {
   -webkit-user-select: none;
 }
 
+.tileset-scene-layer.predrawn-occlusion-seed-layer {
+  filter: drop-shadow(0 0 1px #12000f);
+  opacity: 0.72;
+  pointer-events: none;
+  z-index: 31000;
+}
+
 .predrawn-board-layer {
   image-rendering: auto;
   max-width: none;
@@ -17497,4 +17503,167 @@ button.tileset-relationship-cell {
   grid-template-columns: repeat(3, var(--le-inner-square, 38px));
   grid-template-rows: repeat(3, var(--le-inner-square, 38px));
   width: calc(var(--le-inner-square, 38px) * 3 + 8px);
+}
+
+/* Owner-operated, level-driven source image for pre-drawn whole-board generation. The dark
+   rectangle is the exact screenshot target; controls and measurements deliberately live outside
+   it so the image model receives only canonical board pixels plus measured clear space. */
+.predrawn-reference-tool {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  padding: calc(var(--app-header-h) + 24px) 24px 40px;
+  background: #10141b;
+  color: #dfe9f4;
+  font-family: var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.predrawn-reference-toolbar {
+  display: grid;
+  gap: 14px;
+  margin: 0 auto 20px;
+  max-width: 1120px;
+}
+
+.predrawn-reference-toolbar h1,
+.predrawn-reference-toolbar p {
+  margin: 0;
+}
+
+.predrawn-reference-toolbar h1 {
+  font-size: 24px;
+}
+
+.predrawn-reference-toolbar > div > p,
+.predrawn-reference-meta,
+.predrawn-reference-message {
+  color: #9eb1c5;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.predrawn-reference-toolbar form {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(240px, 1fr) auto;
+}
+
+.predrawn-reference-toolbar label {
+  color: #9eb1c5;
+  font-size: 11px;
+  font-weight: 800;
+  grid-column: 1 / -1;
+  text-transform: uppercase;
+}
+
+.predrawn-reference-toolbar input,
+.predrawn-reference-toolbar button {
+  box-sizing: border-box;
+  min-height: 40px;
+}
+
+.predrawn-reference-toolbar input {
+  border: 1px solid #4a5d70;
+  border-radius: 4px;
+  background: #090d12;
+  color: #eef6ff;
+  font: 600 14px/1.2 ui-monospace, monospace;
+  padding: 8px 10px;
+}
+
+.predrawn-reference-toolbar button {
+  border: 1px solid #6488aa;
+  border-radius: 4px;
+  background: #22364a;
+  color: #eef6ff;
+  cursor: pointer;
+  font: 700 13px/1 var(--ds-font-sans, system-ui, sans-serif);
+  padding: 0 18px;
+}
+
+.predrawn-reference-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+
+.predrawn-reference-ready-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  justify-content: space-between;
+}
+
+.predrawn-reference-download {
+  flex: 0 0 auto;
+}
+
+.predrawn-reference-meta strong {
+  color: #eef6ff;
+}
+
+.predrawn-reference-message {
+  margin: 40px auto;
+  max-width: 1120px;
+}
+
+.predrawn-reference-message.is-error {
+  color: #ff9f9f;
+}
+
+.predrawn-reference-scroll {
+  border: 1px solid #263442;
+  border-radius: 6px;
+  background: #080b0f;
+  box-sizing: border-box;
+  margin: 0 auto;
+  overflow: auto;
+  padding: 24px;
+}
+
+.predrawn-reference-export-frame {
+  position: relative;
+  overflow: hidden;
+  background: #0c0d11;
+  box-shadow: 0 0 0 1px rgba(125, 155, 184, 0.28);
+  flex: 0 0 auto;
+}
+
+.predrawn-reference-export-frame .tileset-placement-board {
+  pointer-events: none;
+}
+
+/* Empty gameplay cells are transparent source geometry, not editor hit targets. Never leak the
+   editor's faint placeholder diamonds into the one image supplied to the generator. */
+.tileset-placement-board.is-top-surface-art-export .tileset-placement-cell.is-empty::before {
+  display: none;
+}
+
+/* The normal owner tool keeps the shared app header. Its explicit capture mode is an export
+   transaction, not another interactive screen: remove every app/control ancestor from the exact
+   selector shot so fixed chrome can never be composited into the model's only image input. */
+html.predrawn-reference-capture-mode .app-shell-titlebar,
+html.predrawn-reference-capture-mode .route-veil,
+html.predrawn-reference-capture-mode .update-banner,
+html.predrawn-reference-capture-mode .predrawn-reference-toolbar {
+  display: none !important;
+}
+
+html.predrawn-reference-capture-mode .predrawn-reference-tool {
+  min-height: 0;
+  width: max-content;
+  padding: 0;
+}
+
+html.predrawn-reference-capture-mode .predrawn-reference-scroll {
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  overflow: visible;
+  padding: 0;
+}
+
+html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
+  box-shadow: none;
 }

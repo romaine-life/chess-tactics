@@ -12,6 +12,7 @@ import {
   positionKey,
   recordPosition,
   ruleDraw,
+  sideInCheck,
   type MoveEnv,
 } from './rules';
 import { roadEdgeKey } from './featureAutotile';
@@ -490,6 +491,60 @@ describe('edge fences (movement blocking)', () => {
     const bishop = P('player', 'bishop', 4, 4);
     const env: MoveEnv = { fences: new Set([roadEdgeKey(4, 4, 5, 4)]) };
     expect(has(legalMoves(bishop, [bishop], SIZE, env), 5, 5)).toBe(true);
+  });
+
+  it('stops a diagonal threat when joined fences close both routes around the corner', () => {
+    const queen = P('enemy', 'queen', 2, 4);
+    const king = P('player', 'king', 3, 5);
+    const env: MoveEnv = { fences: new Set([
+      roadEdgeKey(3, 4, 3, 5), // north edge of the threatened square
+      roadEdgeKey(2, 5, 3, 5), // west edge of the threatened square
+    ]) };
+    expect(has(legalMoves(queen, [queen, king], SIZE, env), 3, 5)).toBe(false);
+    const threats = attackedSquares(queen, [queen], SIZE, env);
+    expect(has(threats, 3, 5)).toBe(false);
+    expect(has(threats, 4, 6)).toBe(false); // the closed corner stops the rest of the ray
+    expect(sideInCheck({ size: SIZE, pieces: [queen, king], turn: 'player', winner: null }, 'player', env)).toBe(false);
+  });
+
+  it('applies a closed corner to king movement and attacks', () => {
+    const king = P('player', 'king', 2, 4);
+    const env: MoveEnv = { fences: new Set([
+      roadEdgeKey(3, 4, 3, 5),
+      roadEdgeKey(2, 5, 3, 5),
+    ]) };
+    expect(has(legalMoves(king, [king], SIZE, env), 3, 5)).toBe(false);
+    expect(has(attackedSquares(king, [king], SIZE, env), 3, 5)).toBe(false);
+  });
+
+  it('applies a closed corner to pawn captures, attacks, and en passant', () => {
+    const pawn = P('player', 'pawn', 2, 4);
+    const target = P('enemy', 'pawn', 3, 3);
+    const closedCapture: MoveEnv = { fences: new Set([
+      roadEdgeKey(3, 4, 3, 3),
+      roadEdgeKey(2, 3, 3, 3),
+    ]) };
+    expect(has(legalMoves(pawn, [pawn, target], SIZE, closedCapture), 3, 3)).toBe(false);
+    expect(has(attackedSquares(pawn, [pawn, target], SIZE, closedCapture), 3, 3)).toBe(false);
+
+    const enPassantPawn = P('player', 'pawn', 4, 3);
+    const passedPawn = P('enemy', 'pawn', 3, 3);
+    const closedEnPassant: MoveEnv = {
+      fences: new Set([
+        roadEdgeKey(3, 3, 3, 2),
+        roadEdgeKey(4, 2, 3, 2),
+      ]),
+      lastMove: { pieceId: passedPawn.id, pieceType: 'pawn', side: 'enemy', from: { x: 3, y: 1 }, to: { x: 3, y: 3 } },
+    };
+    expect(has(legalMoves(enPassantPawn, [enPassantPawn, passedPawn], SIZE, closedEnPassant), 3, 2)).toBe(false);
+  });
+
+  it('blocks an orthogonal pawn capture across one flat wall', () => {
+    const pawn = P('player', 'pawn', 2, 4, { pawnForward: 'north-east' });
+    const target = P('enemy', 'pawn', 3, 4);
+    const env: MoveEnv = { fences: new Set([roadEdgeKey(2, 4, 3, 4)]) };
+    expect(has(legalMoves(pawn, [pawn, target], SIZE, env), 3, 4)).toBe(false);
+    expect(has(attackedSquares(pawn, [pawn, target], SIZE, env), 3, 4)).toBe(false);
   });
 
   it('stops a pawn from stepping across a fenced forward edge', () => {

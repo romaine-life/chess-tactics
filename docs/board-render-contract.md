@@ -212,23 +212,84 @@ not generic renderer padding.
 ### Level Editor scenic terrain apron
 
 Per [ADR-0096](adr/0096-level-editor-scenic-terrain-apron-is-decoration-only.md), the Level
-Editor's persisted Scenic terrain rectangle may extend nearest-edge terrain tops independently by
-zero to sixteen cells beyond its top, right, bottom, and left sides for an art-generation handoff
-view. Decorative apron animation stays on frame zero. Those apron coordinates exist only in the terrain compositor.
-Scenic cells use the ordinary editor region-selection and scoped Generate path. Generate rewrites
-exactly the selected area across either side of the playable boundary and persists outside terrain
-in the separate decorative-cell channel. The apron uses a separate static canvas.
-The editor exposes separate Playable grid and Whole grid overlays; the former is always bounded to
-the tactical board, and the latter includes scenic cells.
+Editor's persisted Scenic terrain rectangle may extend terrain independently by zero to sixteen
+cells beyond its top, right, bottom, and left sides for an art-generation handoff view. Those four
+names remain the storage compatibility fields; the editor labels them by the board's canonical
+North, East, South, and West edges. Per
+[ADR-0131](adr/0131-sparse-scenic-terrain-separates-footprint-from-material.md), the active visual
+terrain surface is the union of that optional rectangle and every valid non-playable coordinate in
+the compact persisted `decorativeFootprint` set. The footprint records activity only;
+`decorativeCells` remains the sole material store. Authored material outside both the rectangle and
+footprint stays hidden, preserving rectangle shrink and re-expansion. Scenic coordinates exist only
+in the visual board projection.
+Scenic cells use the ordinary editor
+region-selection and scoped Generate path. Generate rewrites exactly the selected area across
+either side of the playable boundary and persists outside terrain in the separate decorative-cell
+channel. The editor exposes separate Playable grid and Whole grid overlays; the former is always
+bounded to the tactical board, and the latter includes the rectangle-plus-footprint scenic surface.
 
-Per [ADR-0098](adr/0098-authored-board-extends-beyond-playable-grid.md), the full scenic rectangle is
-the authored visual board. Ordinary terrain, road, river, fence, north/west wall-face, prop, doodad,
-and cover tools use their canonical placement and renderer paths on either side of the playable
-boundary, without per-tool Scenic toggles. Units and gameplay zones remain playable-only. Board
-code preserves the complete visual scene; Level terrain, barriers, collision, movement, objectives,
-promotion, and solver state project only the playable rectangle. The apron suppresses perimeter
-side exposure where visual terrain continues; interior authored holes retain ordinary exposure. A
-board without an authored terrain top does not synthesize an apron.
+Per
+[ADR-0126](adr/0126-scenic-terrain-preserves-boundary-topology-in-one-depth-pass.md),
+an unpainted scenic coordinate clamps to the exact corresponding playable boundary coordinate and
+inherits terrain only when that coordinate owns a terrain top. Synthesis never searches for a
+nearby occupied substitute. An explicitly authored scenic terrain cell overrides synthesis at its
+own coordinate.
+
+Per
+[ADR-0127](adr/0127-scenic-terrain-extent-growth-copies-the-authored-canvas-edge.md)
+and [ADR-0129](adr/0129-level-editor-terrain-authoring-is-explicit-and-area-scoped.md),
+increasing a cardinal extent is a separate deterministic authoring operation with an explicit
+Generation mode. **Match reference tile** copies an explicit scenic terrain tile only from the
+directly adjacent, exactly aligned coordinate on the old whole-canvas edge; an unpainted or playable
+source leaves the destination unpainted for ADR-0126 exact playable-boundary fallback. **Grass**
+instead writes the canonical base grass tile into every otherwise-unauthored destination in the new
+band. Both preserve an already authored destination. Growth performs no ray, nearest-neighbor,
+sideways, diagonal, pixel, or model search. Multi-cell increases proceed as ordered one-cell steps;
+all-directions uses North, East, South, West order and one undo transaction. Reducing and later
+re-extending preserves hidden authored destinations. The Generation choice is transient tool state;
+the resulting explicit scenic tile identifiers are the persisted authority.
+
+The distinct **Fill visible area** action does not grow those extents. The shared `ViewPane`
+reports its live content dimensions from its `ResizeObserver`; the editor combines those dimensions
+with current pan and zoom, then uses the canonical isometric projection and exact
+tile-diamond/viewport intersection to identify currently visible non-playable coordinates. It
+adds only that sparse set to `decorativeFootprint`, so no surrounding offscreen diamond tips are
+created. Existing authored material is preserved. In **Grass** mode it writes the canonical base
+grass tile at an otherwise-unauthored destination. In **Match reference tile** mode, each
+otherwise-unauthored destination resolves only from its exact clamped playable boundary coordinate
+under ADR-0126 and writes material only when that coordinate owns terrain; an exact projected void
+receives footprint membership but no material. Viewport fill performs no scenic-edge search, ray
+or nearest-neighbor scan, pixel inspection, or model inference. One successful click commits both
+footprint and material changes as one undoable edit. An invalid or oversized request reports a
+no-op or limit and must not partially change either authority. Erasing an active sparse coordinate
+removes its footprint membership, so retained material outside the rectangle does not reactivate
+itself.
+
+This same resolved topology governs rendering, region-family selection, and scoped Generate input.
+The Tile layer uses that same connected-area selection without creating a saved Generate region.
+Its Fill selected area action atomically writes the exact selected single tile to playable and scenic
+destinations, breaking overlapping composite terrain placements only where it writes and changing
+nothing outside the selection.
+Playable and scenic terrain share one depth-coherent compositor pass, so nearer scenic tops cover
+farther side faces.
+While any rectangular or sparse scenic terrain is active, the complete terrain pass stays on
+animation frame zero rather than continuously repainting a large canvas. Ordinary playable
+animation resumes only when the scenic surface is empty.
+
+Per [ADR-0098](adr/0098-authored-board-extends-beyond-playable-grid.md), extended by ADR-0131's
+rectangle-plus-footprint surface, each active scenic coordinate belongs to the authored visual
+board. Ordinary terrain, road, river, fence, north/west wall-face, prop, doodad, and cover tools use
+their canonical placement and renderer paths on either side of the playable boundary, without
+per-tool Scenic toggles. Rendering, hit editing, Whole grid display, and resolved-area selection all
+recognize the same active union. Units and gameplay zones remain playable-only. Board code
+preserves the complete visual scene; Level terrain, barriers, collision, movement, objectives,
+promotion, and solver state project only the playable rectangle. Scenic terrain suppresses
+perimeter side exposure where resolved visual terrain continues and retains ordinary exposure
+beside a resolved void. A board without an authored terrain top does not synthesize scenic terrain.
+
+The Level Editor anchors its `TileGrid` origin to the playable cells. Adding or undoing rectangular
+or sparse scenic terrain therefore does not recenter the projected board or move the camera; the
+canonical board-space projection itself remains unchanged.
 
 ## Composed terrain and macrotiles
 
@@ -266,11 +327,34 @@ controls the visible temporary review grid after the picker closes, so the
 chosen count does not appear to revert. Playable cells, hit targets, movement,
 and level dimensions remain authored-level data; the review grid is visual
 calibration evidence only. A generated extra row or column therefore remains
-visible instead of being compressed or hidden. These calibration
-coordinates are not persisted in the level, and
-production acceptance still requires a native-frame plate under ADR-0076. Units,
-selection and tactical state, doodads, and animated ground cover remain ordinary
-board-space overlays.
+visible instead of being compressed or hidden.
+
+Per
+[ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md),
+promotion keeps the approved image bytes untouched at their actual dimensions
+and copies the renderer-affecting alignment into the Level's pre-drawn
+background declaration. That declaration contains the semantic live-media slot,
+actual image width and height, and the exact approved versioned alignment: four
+source-pixel corners, refit counts, monotonic row and column guides, and the
+version-4 pinned boundary. Every renderer applies the renderer-affecting values
+to the one continuous image. The pinned boundary round-trips but remains
+display-only. The temporary source URL, candidate id, browser-local record, and
+picker state are not persisted in the Level. Units, selection and tactical
+state, doodads, and animated ground cover remain ordinary board-space overlays.
+
+Per
+[ADR-0122](adr/0122-predrawn-occlusion-derives-from-canonical-raised-geometry.md),
+those additive overlays are occluded by deterministic canonical raised geometry,
+not by classifying plate pixels. The shared planner removes every non-occluder
+family and reuses canonical alpha. Props and walls retain their scene depth;
+fence rails and posts use the half-depth plane of their canonical board edge.
+A strictly nearer overlapping mask erases one isolated
+additive draw before composition, revealing the unchanged plate beneath; equal
+depth retains stable painter order. The plate and terrain are never erased,
+split, cropped, or independently aligned. Editor, viewer, gameplay, browser
+thumbnail, and server thumbnail use this same planner and preload its mask
+sources with visible art. The editor exposes both the real clipping pass and a
+magenta seed overlay as deep-linkable before/after owner proofs.
 
 Per [ADR-0106](adr/0106-predrawn-registration-is-owner-picked-source-geometry.md)
 and [ADR-0108](adr/0108-predrawn-registration-is-local-first-and-explicitly-saved.md),
@@ -305,7 +389,9 @@ reference. Its contrasting four-line outline and independently draggable handles
 remain visible while the working grid is snapped or edited. Version-4
 registration preserves that reference across save and reopen, but the reference
 is display-only and never participates in the homography, rectification, review
-grid, hit targets, or gameplay.
+grid, hit targets, or gameplay. If that candidate is promoted, the exact
+version-4 payload, including this reference, round-trips in the pre-drawn
+background declaration without giving the reference runtime authority.
 
 Per [ADR-0115](adr/0115-predrawn-registration-handoff-is-a-compact-copy-packet.md),
 `COPY CODEX HANDOFF` is enabled only after `SAVE REGISTRATION` has read back and
@@ -323,14 +409,24 @@ persisted pre-drawn surface. Its temporary source and synthetic review surface
 exist only in memory and are never serialized into the working copy or level.
 `DONE` removes the picker-open route flag so a refresh stays in the editor.
 
-Per [ADR-0117](adr/0117-predrawn-scenes-own-a-viewport-cover-zoom-floor.md),
+Per [ADR-0121](adr/0121-predrawn-pan-stops-at-art-boundary.md),
 the transformed convex boundary of the complete source frame—not the playable
 grid diamond—defines a viewport-cover zoom floor while any pre-drawn plate is
-active. The shared `ViewPane` recomputes that floor from its live dimensions and
-current pan, rounds upward to the control precision, and reports it to editor and
-gameplay zoom controls. Wheel, stepper, shortcut, and reset paths must not cross
-it. If the floor exceeds the ordinary gameplay cap, the cap rises to the floor;
-ordinary tiled boards retain their existing zoom range.
+active. The shared `ViewPane` recomputes one centered floor from its live
+dimensions, rounds upward to the control precision, and reports it to editor and
+gameplay zoom controls. Pan never changes that floor: it proceeds until the
+viewport reaches the transformed art edge and then stops. Zoom and resize clamp
+an existing pan back inside. Wheel, stepper, shortcut, and reset paths must not
+cross the floor. If it exceeds the ordinary gameplay cap, the cap rises to the
+floor; ordinary tiled boards retain their existing zoom range.
+
+Per [ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md),
+the cover floor is a safety limit rather than a substitute for camera room. The
+accepted image keeps its actual dimensions; no fixed pixel dimensions or exact
+board-to-frame percentage are an acceptance gate. Continuous world art outside
+the playable boundary must supply owner-approved pan travel in the real shared
+viewer. Raising resolution without changing the composition does not create
+camera room.
 
 While this surface is active, the editor must reject changes to dimensions,
 cells, macrotiles, roads, props, fences, walls, wall art, generated regions, cuts,

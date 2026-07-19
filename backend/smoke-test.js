@@ -1129,6 +1129,147 @@ async function main() {
     archivedBridge.status !== 'archived'
     || !groupedAdminCatalog.events.some((event) => event.action === 'accepted-batch' && event.versionId === nativeVersion.id)
   ) throw new Error(`Media replacement/audit is incomplete: ${JSON.stringify(groupedAdminCatalog)}`);
+
+  // One complete pre-drawn board plate: candidate-declared native dimensions,
+  // exact owner v4 alignment proof, slot/version/hash snapshots, transactional
+  // CAS rollback, and stable runtime publication all use the shared lifecycle.
+  const predrawnSlot = 'boards/fortress-gate/plate.png';
+  const predrawnBytes = syntheticPng(1672, 941, '#263648', '#d7b878');
+  const predrawnSha = crypto.createHash('sha256').update(predrawnBytes).digest('hex');
+  const predrawnCreate = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
+    slot: predrawnSlot,
+    domain: 'background',
+    role: 'media',
+    label: 'Fortress Gate pre-drawn plate smoke candidate',
+    availabilityPolicy: 'critical',
+    metadata: {
+      runtime: {
+        component: 'predrawn-board-plate',
+        variant: 'fortress-gate',
+        frameWidth: 1672,
+        frameHeight: 941,
+        frameCount: 1,
+      },
+    },
+    provenance: { generator: 'synthetic-predrawn-board-smoke', levelId: 'off-l-fortress-gate' },
+    nativeEvidence: {
+      native1x: true,
+      spatialResampling: false,
+      sourceWidth: 1672,
+      sourceHeight: 941,
+      sourceSha256: predrawnSha,
+    },
+  }), 5000);
+  if (predrawnCreate.statusCode !== 201) {
+    throw new Error(`Pre-drawn board candidate create failed: ${predrawnCreate.statusCode} ${predrawnCreate.body}`);
+  }
+  const predrawnVersion = JSON.parse(predrawnCreate.body).version;
+  const predrawnUpload = await request(
+    'PUT', `/api/admin/media-versions/${predrawnVersion.id}/content`,
+    { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, predrawnBytes, 5000,
+  );
+  const predrawnUploaded = JSON.parse(predrawnUpload.body).version;
+  if (
+    predrawnUpload.statusCode !== 200 || predrawnUploaded.rowRevision !== 1
+    || predrawnUploaded.media.sha256 !== predrawnSha
+    || predrawnUploaded.media.width !== 1672 || predrawnUploaded.media.height !== 941
+  ) throw new Error(`Pre-drawn board upload did not preserve exact bytes/geometry: ${predrawnUpload.statusCode} ${predrawnUpload.body}`);
+  const predrawnStagedCatalog = JSON.parse((await get(
+    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+  )).body);
+  const predrawnSlotBeforeReview = predrawnStagedCatalog.slots.find((slot) => slot.slot === predrawnSlot);
+  if (!predrawnSlotBeforeReview || predrawnSlotBeforeReview.activeVersionId !== null) {
+    throw new Error(`Pre-drawn board staging slot is invalid: ${JSON.stringify(predrawnSlotBeforeReview)}`);
+  }
+  const predrawnSurfaceUrl = `http://127.0.0.1:${port}/editor/level?levelId=off-l-fortress-gate&document=predrawn-smoke`;
+  const predrawnAlignment = 'v4;1672,941,1034.223,96.015,1375.402,300.134,611.986,723.847,281.123,532.992;5,11;0,0.2,0.4,0.6,0.8,1;0,0.090909,0.181818,0.272727,0.363636,0.454545,0.545455,0.636364,0.727273,0.818182,0.909091,1;1020.229,112.223,1346.622,295.818,628.558,699.729,302.166,516.133';
+  const predrawnProof = {
+    schema: 'predrawn-board-canonical-level-proof-v1',
+    surfaceUrl: predrawnSurfaceUrl,
+    renderer: 'LevelEditor/PredrawnBoardLayer',
+    canonicalScale: 1,
+    assetLocalScale: 1,
+    alignmentApplied: true,
+    alignment: predrawnAlignment,
+    alignmentSha256: crypto.createHash('sha256').update(predrawnAlignment, 'utf8').digest('hex'),
+    deterministicProof: true,
+    boardSlug: 'fortress-gate',
+    levelId: 'off-l-fortress-gate',
+    frameWidth: 1672,
+    frameHeight: 941,
+    previewSha256: predrawnSha,
+    selectedCandidates: [{
+      slot: predrawnSlot,
+      versionId: predrawnVersion.id,
+      sha256: predrawnSha,
+      rowRevision: 1,
+    }],
+    slotSnapshots: [{
+      slot: predrawnSlot,
+      rowRevision: predrawnSlotBeforeReview.rowRevision,
+      activeVersionId: predrawnSlotBeforeReview.activeVersionId,
+      lifecycleState: predrawnSlotBeforeReview.lifecycleState,
+    }],
+  };
+  const predrawnReview = await request(
+    'POST', `/api/admin/media-versions/${predrawnVersion.id}/review`, adminJson,
+    JSON.stringify({
+      expectedRevision: 1,
+      approved: true,
+      notes: 'Exact registered plate reviewed with its owner-saved v4 alignment.',
+      surfaceUrl: predrawnSurfaceUrl,
+      evidence: predrawnProof,
+    }), 5000,
+  );
+  if (predrawnReview.statusCode !== 200 || JSON.parse(predrawnReview.body).version.rowRevision !== 2) {
+    throw new Error(`Pre-drawn board owner review failed: ${predrawnReview.statusCode} ${predrawnReview.body}`);
+  }
+  const rejectedPredrawnAccept = await request(
+    'POST', `/api/admin/media-versions/${predrawnVersion.id}/accept`, adminJson,
+    JSON.stringify({
+      expectedRevision: 2,
+      expectedSlotRevision: predrawnSlotBeforeReview.rowRevision + 1,
+      expectedActiveVersionId: null,
+    }), 5000,
+  );
+  if (
+    rejectedPredrawnAccept.statusCode !== 409
+    || JSON.parse(rejectedPredrawnAccept.body).error !== 'media_slot_conflict'
+  ) throw new Error(`Pre-drawn board stale CAS should fail atomically: ${rejectedPredrawnAccept.statusCode} ${rejectedPredrawnAccept.body}`);
+  const predrawnAfterRollback = JSON.parse((await get(
+    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+  )).body);
+  const rolledBackPredrawnSlot = predrawnAfterRollback.slots.find((slot) => slot.slot === predrawnSlot);
+  const rolledBackPredrawnVersion = predrawnAfterRollback.versions.find((version) => version.id === predrawnVersion.id);
+  if (
+    rolledBackPredrawnSlot.activeVersionId !== null
+    || rolledBackPredrawnSlot.rowRevision !== predrawnSlotBeforeReview.rowRevision
+    || rolledBackPredrawnVersion.status !== 'candidate' || rolledBackPredrawnVersion.rowRevision !== 2
+  ) throw new Error(`Pre-drawn board failed acceptance mutated catalog state: ${JSON.stringify({ rolledBackPredrawnSlot, rolledBackPredrawnVersion })}`);
+  const predrawnAccept = await request(
+    'POST', `/api/admin/media-versions/${predrawnVersion.id}/accept`, adminJson,
+    JSON.stringify({
+      expectedRevision: 2,
+      expectedSlotRevision: predrawnSlotBeforeReview.rowRevision,
+      expectedActiveVersionId: null,
+    }), 5000,
+  );
+  if (
+    predrawnAccept.statusCode !== 200 || JSON.parse(predrawnAccept.body).version.status !== 'accepted'
+  ) throw new Error(`Pre-drawn board acceptance failed: ${predrawnAccept.statusCode} ${predrawnAccept.body}`);
+  const predrawnPublicCatalog = JSON.parse((await get('/api/asset-catalog')).body);
+  const acceptedPredrawn = predrawnPublicCatalog.slots.find((slot) => slot.slot === predrawnSlot);
+  if (
+    acceptedPredrawn?.versionStatus !== 'accepted' || acceptedPredrawn.media.sha256 !== predrawnSha
+    || acceptedPredrawn.media.width !== 1672 || acceptedPredrawn.media.height !== 941
+    || acceptedPredrawn.versionMetadata.runtime.frameWidth !== 1672
+    || acceptedPredrawn.versionMetadata.runtime.frameHeight !== 941
+  ) throw new Error(`Accepted pre-drawn board projection is invalid: ${JSON.stringify(acceptedPredrawn)}`);
+  const stablePredrawn = await get(`/assets/${predrawnSlot}`);
+  if (stablePredrawn.statusCode !== 302 || stablePredrawn.headers.location !== `/api/media/${predrawnSha}`) {
+    throw new Error(`Stable pre-drawn board slot did not resolve exact accepted bytes: ${stablePredrawn.statusCode}`);
+  }
+
   const groupedSlotRows = groupSlots.map((slot) => groupedAdminCatalog.slots.find((item) => item.slot === slot));
   const slotContractUpdate = await request(
     'PATCH', `/api/admin/media-slots/${waterSideSlots[0]}`, adminJson,
@@ -2289,6 +2430,19 @@ async function main() {
   ) {
     throw new Error(`Unauthorized GET mutated an official working copy: ${JSON.stringify(untouchedUnauthorizedOfficial.rows[0])}`);
   }
+  const adminLoadsRivalOfficialDocument = await get(
+    '/api/editor-documents/legacy-jkmnpqrs',
+    { cookie: 'better-auth.session=abc' },
+  );
+  const adminLoadsRivalOfficialBody = JSON.parse(adminLoadsRivalOfficialDocument.body);
+  if (
+    adminLoadsRivalOfficialDocument.statusCode !== 200 ||
+    adminLoadsRivalOfficialBody.document.document_id !== 'legacy-jkmnpqrs' ||
+    adminLoadsRivalOfficialBody.document.workspace_kind !== 'official' ||
+    adminLoadsRivalOfficialBody.document.level.name !== officialWorkspace.levels['off-l-test'].name
+  ) {
+    throw new Error(`Admin could not open an existing official editor document by opaque id: ${adminLoadsRivalOfficialDocument.statusCode} ${adminLoadsRivalOfficialDocument.body}`);
+  }
   const anonymousEditorDocumentList = await get('/api/editor-documents');
   if (anonymousEditorDocumentList.statusCode !== 401) {
     throw new Error(`Editor document discovery must require sign-in: ${anonymousEditorDocumentList.statusCode} ${anonymousEditorDocumentList.body}`);
@@ -2437,7 +2591,8 @@ async function main() {
     throw new Error(`Editor documents must be account-scoped: ${rivalEditorRead.statusCode} ${rivalEditorRead.body}`);
   }
   // Per-owner level ids can collide. Give the rival their own `smoke-1` and
-  // prove the globally opaque document address still cannot cross accounts.
+  // prove that an opaque id selects the exact row while ordinary access stays
+  // owner-only and admin review does not become discovery or mutation access.
   const rivalCollisionWorkspace = await request(
     'PUT', '/api/campaign-workspace',
     { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
@@ -2461,8 +2616,45 @@ async function main() {
     throw new Error(`Colliding owner level ids must receive distinct document ids: ${rivalResolvedEditor.statusCode} ${rivalResolvedEditor.body}`);
   }
   const playerReadsRivalDocument = await get(`/api/editor-documents/${rivalDocumentId}`, { cookie: 'better-auth.session=abc' });
-  if (playerReadsRivalDocument.statusCode !== 404) {
-    throw new Error(`Player must not resolve rival's opaque editor document: ${playerReadsRivalDocument.statusCode} ${playerReadsRivalDocument.body}`);
+  const playerReadsRivalDocumentBody = JSON.parse(playerReadsRivalDocument.body);
+  if (
+    playerReadsRivalDocument.statusCode !== 200 ||
+    playerReadsRivalDocumentBody.document.document_id !== rivalDocumentId ||
+    playerReadsRivalDocumentBody.document.level.name !== 'Smoke Level'
+  ) {
+    throw new Error(`Admin could not open an existing editor document by opaque id: ${playerReadsRivalDocument.statusCode} ${playerReadsRivalDocument.body}`);
+  }
+  const adminDocumentListAfterRivalResolve = await get('/api/editor-documents', { cookie: 'better-auth.session=abc' });
+  if (
+    adminDocumentListAfterRivalResolve.statusCode !== 200 ||
+    JSON.parse(adminDocumentListAfterRivalResolve.body).documents.some((entry) => entry.document_id === rivalDocumentId)
+  ) {
+    throw new Error(`Admin document discovery leaked another owner's work: ${adminDocumentListAfterRivalResolve.statusCode} ${adminDocumentListAfterRivalResolve.body}`);
+  }
+  const adminMutationRequests = [
+    await request(
+      'PUT', `/api/editor-documents/${rivalDocumentId}`,
+      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      JSON.stringify({ revision: 1, level: { ...workspaceLevel, name: 'Admin Must Not Autosave' } }),
+    ),
+    await request(
+      'POST', `/api/editor-documents/${rivalDocumentId}/save`,
+      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      JSON.stringify({ revision: 1 }),
+    ),
+    await request(
+      'POST', `/api/editor-documents/${rivalDocumentId}/discard`,
+      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      JSON.stringify({ revision: 1 }),
+    ),
+    await request(
+      'DELETE', `/api/editor-documents/${rivalDocumentId}`,
+      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      JSON.stringify({ revision: 1 }),
+    ),
+  ];
+  if (adminMutationRequests.some((response) => response.statusCode !== 404)) {
+    throw new Error(`Admin review access must not grant cross-owner mutation: ${adminMutationRequests.map((response) => `${response.statusCode} ${response.body}`).join(' / ')}`);
   }
 
   const discardedEditor = await request(

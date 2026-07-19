@@ -11,6 +11,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "shot": "node scripts/shot.mjs",
     "predrawn:detect": "node scripts/detect-predrawn-board.mjs",
+    "predrawn:build-run": "node scripts/build-predrawn-generation-run.mjs",
+    "predrawn:prepare": "node scripts/prepare-predrawn-generation-run.mjs",
     "e2e:lobby": "node scripts/lobby-e2e.mjs",
     "vendor:ambience": "node scripts/vendor-ambience.mjs",
     "assets:build:macro-tiles": "python scripts/build-macro-tiles.py",

@@ -69,6 +69,8 @@ describe('route screen key (ADR-0051 exit-dissolve grouping)', () => {
     expect(routeScreenKey('/settings')).not.toBe(routeScreenKey('/level-editor'));
     expect(routeScreenKey('/')).not.toBe(routeScreenKey('/play'));
     expect(routeScreenKey('/play/select/skirmish')).not.toBe(routeScreenKey('/play'));
+    expect(routeScreenKey('/predrawn-reference')).toBe('/predrawn-reference');
+    expect(routeScreenKey('/predrawn-reference')).not.toBe(routeScreenKey('/'));
   });
 
   it('mirrors renderRoute: menu aliases and unmatched paths ARE the menu screen', () => {

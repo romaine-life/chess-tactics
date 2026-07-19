@@ -170,6 +170,38 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
     expect(css).toContain('inset: -23px;');
   });
 
+  it('lets viewport-edge control dividers flow offscreen without a floating right joint', () => {
+    const outer = roleDefault('outer');
+    const inner = roleDefault('inner');
+    const dividerRenders = {
+      ...dividers,
+      outer: {
+        ...outerDivider,
+        atomOverlay: {
+          left: 'left-joint.png',
+          right: 'right-joint.png',
+          width: 24,
+          height: 24,
+          outset: 12,
+          leftX: -4,
+          rightX: -4,
+          leftY: -3,
+          rightY: -3,
+        },
+      },
+    };
+    const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), dividerRenders);
+    const viewportEdgeSelector = ':root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]::after';
+    const viewportEdgeRuleStart = css.indexOf(`${viewportEdgeSelector} {`);
+    const viewportEdgeRule = css.slice(viewportEdgeRuleStart, css.indexOf('}', viewportEdgeRuleStart) + 1);
+
+    expect(css).toContain('background-image: url("left-joint.png"), url("right-joint.png");');
+    expect(viewportEdgeRuleStart).toBeGreaterThanOrEqual(0);
+    expect(viewportEdgeRule).toContain('background-image: url("left-joint.png");');
+    expect(viewportEdgeRule).not.toContain('right-joint.png');
+    expect(css).toMatch(/\[data-chrome-divider-role="outer"\]::before \{[\s\S]*?left: 0;[\s\S]*?right: 0;/);
+  });
+
   it('targets real hierarchy classes and registry legacy selectors on every family surface', () => {
     const outer = roleDefault('outer');
     const inner = roleDefault('inner');

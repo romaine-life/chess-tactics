@@ -1,0 +1,263 @@
+{
+  "blockingEdges": [
+    [
+      [
+        0,
+        5
+      ],
+      [
+        0,
+        6
+      ]
+    ],
+    [
+      [
+        1,
+        5
+      ],
+      [
+        1,
+        6
+      ]
+    ],
+    [
+      [
+        1,
+        5
+      ],
+      [
+        2,
+        5
+      ]
+    ],
+    [
+      [
+        0,
+        4
+      ],
+      [
+        0,
+        5
+      ]
+    ],
+    [
+      [
+        4,
+        5
+      ],
+      [
+        4,
+        6
+      ]
+    ],
+    [
+      [
+        4,
+        4
+      ],
+      [
+        4,
+        5
+      ]
+    ],
+    [
+      [
+        3,
+        4
+      ],
+      [
+        3,
+        5
+      ]
+    ],
+    [
+      [
+        2,
+        5
+      ],
+      [
+        3,
+        5
+      ]
+    ]
+  ],
+  "board": {
+    "columns": 5,
+    "matrix": [
+      [
+        "S",
+        "S",
+        "S",
+        "S",
+        "S"
+      ],
+      [
+        "S",
+        "S",
+        "S",
+        "S",
+        "S"
+      ],
+      [
+        "S",
+        "S",
+        "S",
+        "S",
+        "S"
+      ],
+      [
+        "S",
+        "S+R",
+        "S+R",
+        "S+R",
+        "S+R"
+      ],
+      [
+        "S",
+        "S+R",
+        "S",
+        "S",
+        "S"
+      ],
+      [
+        "T+B",
+        "T+R",
+        "T",
+        "T+R",
+        "T+H"
+      ],
+      [
+        "S",
+        "S",
+        "S",
+        "S+R",
+        "S"
+      ],
+      [
+        "S",
+        "S",
+        "S",
+        "S+R",
+        "S"
+      ],
+      [
+        "S",
+        "S",
+        "S",
+        "S+R",
+        "S+R"
+      ],
+      [
+        "S",
+        "S",
+        "S",
+        "S",
+        "S+R"
+      ],
+      [
+        "S",
+        "S",
+        "S",
+        "S",
+        "S+R"
+      ]
+    ],
+    "rows": 11,
+    "tokens": {
+      "B": "compact impassable boulder occupying exactly one tile",
+      "H": "compact impassable cottage occupying exactly one tile",
+      "R": "cobblestone road overlay with no elevation change",
+      "S": "flat passable ordinary terrain whose appearance is owned by Image 1",
+      "T": "flat passable fortified surface at the same gameplay elevation as ordinary terrain"
+    }
+  },
+  "levelId": "off-l-fortress-gate",
+  "props": [
+    {
+      "cell": [
+        0,
+        5
+      ],
+      "id": "fieldstone",
+      "label": "Compact boulder",
+      "token": "B"
+    },
+    {
+      "cell": [
+        4,
+        5
+      ],
+      "id": "cottage-small",
+      "label": "Compact cottage",
+      "token": "H"
+    }
+  ],
+  "roads": [
+    {
+      "cells": [
+        [
+          1,
+          5
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "exit": "east",
+      "id": "A"
+    },
+    {
+      "cells": [
+        [
+          3,
+          5
+        ],
+        [
+          3,
+          6
+        ],
+        [
+          3,
+          7
+        ],
+        [
+          3,
+          8
+        ],
+        [
+          4,
+          8
+        ],
+        [
+          4,
+          9
+        ],
+        [
+          4,
+          10
+        ]
+      ],
+      "exit": "south-east",
+      "id": "B"
+    }
+  ],
+  "runId": "fortress-gate-isolated-v1",
+  "schemaVersion": 1
+}

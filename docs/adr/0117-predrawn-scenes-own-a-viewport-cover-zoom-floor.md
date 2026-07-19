@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: "superseded by ADR-0116"
 date: 2026-07-14
 deciders: Nelson, Codex
+superseded_by: "[ADR-0116](0116-predrawn-pan-stops-at-art-boundary.md)"
 ---
 
 # ADR-0117: Pre-drawn scenes own a viewport-cover zoom floor

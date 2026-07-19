@@ -59,6 +59,18 @@ export interface AcceptLiveMediaVersionInput {
   expectedActiveVersionId: string | null;
 }
 
+export interface CreateLiveMediaVersionInput {
+  slot: string;
+  domain: string;
+  role: string;
+  label: string;
+  availabilityPolicy?: LiveMediaAvailabilityPolicy;
+  metadata?: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+  nativeEvidence?: Record<string, unknown>;
+  slotMetadata?: Record<string, unknown>;
+}
+
 async function jsonResponse<T>(action: string, response: Response): Promise<T> {
   if (!response.ok) throw await HttpError.fromResponse(action, response);
   return response.json() as Promise<T>;
@@ -70,6 +82,44 @@ export async function fetchAdminLiveMediaCatalog(): Promise<AdminLiveMediaCatalo
     credentials: 'include',
   });
   return jsonResponse<AdminLiveMediaCatalog>('load-live-media-admin-catalog', response);
+}
+
+/** Create the private candidate row before its immutable bytes are uploaded. */
+export async function createLiveMediaVersion(
+  input: CreateLiveMediaVersionInput,
+  idempotencyKey: string,
+): Promise<AdminLiveMediaVersion> {
+  const response = await fetch('/api/admin/media-versions', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+    },
+    body: JSON.stringify(input),
+  });
+  const body = await jsonResponse<{ version: AdminLiveMediaVersion }>('create-live-media-version', response);
+  return body.version;
+}
+
+/** Attach exact immutable bytes to a still-private candidate using its observed revision. */
+export async function uploadLiveMediaVersionContent(input: {
+  id: string;
+  expectedRevision: number;
+  bytes: Blob;
+  mediaType: string;
+}): Promise<AdminLiveMediaVersion> {
+  const response = await fetch(`/api/admin/media-versions/${encodeURIComponent(input.id)}/content`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: {
+      'Content-Type': input.mediaType,
+      'If-Match': `"${input.expectedRevision}"`,
+    },
+    body: input.bytes,
+  });
+  const body = await jsonResponse<{ version: AdminLiveMediaVersion }>('upload-live-media-version-content', response);
+  return body.version;
 }
 
 export async function reviewLiveMediaVersion(input: {

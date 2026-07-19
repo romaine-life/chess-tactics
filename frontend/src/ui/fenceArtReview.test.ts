@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boardDrawOps } from '@chess-tactics/board-render';
+import { CELL_DEPTH_STRIDE, boardDrawOps } from '@chess-tactics/board-render';
 import { roadEdgeKey } from '../core/featureAutotile';
 import type { EditorDocumentSummary } from '../net/editorDocuments';
 import type {
@@ -305,7 +305,10 @@ describe('fence art review', () => {
       const posts = transformed.filter((op) => op.src === kit.post).sort((a, b) => a.z - b.z);
       const ordered = [...transformed].sort((a, b) => a.z - b.z);
 
-      expect(posts.map((post) => post.z)).toEqual([rail.z + 0.5, rail.z + 1.5]);
+      expect(posts.map((post) => post.z)).toEqual([
+        rail.z + 0.5,
+        rail.z + CELL_DEPTH_STRIDE + 0.5,
+      ]);
       expect(ordered.indexOf(rail)).toBeLessThan(ordered.indexOf(posts[0]));
       expect(ordered.indexOf(rail)).toBeLessThan(ordered.indexOf(posts[1]));
     }

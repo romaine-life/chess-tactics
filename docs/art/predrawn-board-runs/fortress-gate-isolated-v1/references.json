@@ -1,0 +1,14 @@
+{
+  "references": [
+    {
+      "height": 1600,
+      "index": 1,
+      "role": "canonical-unit-free-ground-cover-free-top-surfaces-only-art-authority",
+      "sha256": "cb8dd356033695ce052e7c8f22b570e80828297b5ff65b0b8c06a1cde710f8bb",
+      "sourceSlot": "canonical-level-export/off-l-fortress-gate/top-only-no-cover",
+      "width": 2400
+    }
+  ],
+  "runId": "fortress-gate-isolated-v1",
+  "schemaVersion": 1
+}

@@ -11,6 +11,9 @@ backend failure as the blocker.
 ## Level Editor persistence rule
 
 The stable `/editor/level?document=<opaque-id>&levelId=<id>` URL identifies its private editor document; `levelId` alone is account-local and is never the URL authority.
+Its owner, or an authenticated allowlisted administrator given that exact opaque URL, may read the
+existing document. Admin review does not grant cross-owner listing or mutation access, and a
+missing ID remains not found; hand off only a URL whose document was acknowledged by the backend.
 Authenticated edits autosave to a durable server-side working copy. **Save** promotes
 that copy to the canonical level, and **Discard changes** restores the working copy
 from canonical. Copying the browser URL must remain side-effect free: it does not

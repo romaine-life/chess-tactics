@@ -11,13 +11,19 @@ The generated image and its reference media remain local/private candidate
 bytes. This file preserves only the text and deterministic semantic provenance
 allowed in Git by ADR-0085.
 
+The next isolated run is assembled and preflighted from
+[`predrawn-board-runs/fortress-gate-isolated-v1/definition.json`](predrawn-board-runs/fortress-gate-isolated-v1/definition.json).
+Its generated `prompt.txt`, packet, reference hashes, and request manifest in
+that directory are the exact pending request authority. The historical prompt
+below remains historical and must not be sent as the current request.
+
 ## Reference roles used
 
 1. Unit-free 5x11 wire guide: exact geometry and placement authority.
 2. Authored desert board render: material and landmark reference.
-3. Prior full-screen desert pass: art direction only, explicitly denied geometry
-   authority.
-4. Accepted skirmish artwork: pixel-art finish and tactical readability only.
+3. Prior full-screen desert pass and accepted skirmish artwork were supplied as
+   appearance references in this historical run. ADR-0114 removes both from the
+   isolated pipeline test; they must not be passed to the next regeneration.
 
 ## Canonical semantic packet
 
@@ -173,6 +179,15 @@ Geometry and semantics above override all artistic discretion.
 
 ## What changed from the weaker passes
 
+The exploratory prompt above predates the camera-room work. ADR-0118 supersedes
+the later fixed 3840x2160 requirement: a candidate keeps its actual output
+dimensions, and it is not enlarged or regenerated only to hit a pixel count.
+Future runs keep the semantic packet unchanged and aim to hold the complete 5x11
+grid plus its immediate boundary in a centered safe area, with additional
+continuous scenery on every edge for camera roaming. The exact percentage is
+prompt guidance; useful four-direction panning in the real viewer is the review
+authority.
+
 - The model was not asked to infer the board from the beauty render.
 - The 5:11 ratio and two axis directions were stated and also shown.
 - Every road tile and blocking edge was declared semantically.
@@ -187,7 +202,7 @@ Geometry and semantics above override all artistic discretion.
 
 The next experiment removes every source image containing a decorative vertical
 board skirt or cliff face. The unit-free wire guide is the only geometry input;
-prior full-scene art may be used only for finish and atmosphere.
+no prior full-scene art is passed; finish and atmosphere are described in text.
 
 The prompt adds this exact terrain interpretation:
 

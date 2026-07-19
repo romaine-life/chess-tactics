@@ -25,13 +25,33 @@ Game data and code refer to stable semantic slots such as a terrain layer role o
 UI-kit part. They never persist a candidate UUID, blob hash, generated filename,
 repository path, or currently accepted URL.
 
-A pre-drawn board persists its plate's semantic slot and declared native
-reference-frame dimensions. A same-origin temporary preview URL may substitute
-candidate bytes during development review, and a source-scoped browser-local
-record may hold the owner-fitted corner/row/column calibration from ADR-0110.
-Neither the candidate URL nor that review rectification is serialized into the
-level; accepted plate bytes still resolve through the live-media catalog at the
-declared native frame.
+A pre-drawn board persists its background's semantic slot, the accepted image's
+actual pixel width and height, and the versioned whole-image alignment geometry
+defined by
+[ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md).
+That payload contains the four owner-approved source-pixel board corners, refit
+row and column counts, monotonic normalized guides that the renderer uses, and
+the version-4 pinned boundary. It is canonical Level data because it preserves
+the exact approved registration; the pinned boundary remains display-only and
+does not affect rendering or gameplay. The accepted image has no required
+3840x2160 size and is not resized or regenerated solely to reach one.
+
+A same-origin temporary preview URL and a source-scoped browser-local record may
+substitute candidate bytes and hold pending alignment during development review.
+Promotion copies the exact approved versioned alignment into the pre-drawn
+background declaration. The preview URL, candidate id, blob hash, browser-local
+key, and picker state are never serialized into the Level. Accepted bytes still
+resolve through the live-media catalog's stable semantic slot.
+
+Per
+[ADR-0122](adr/0122-predrawn-occlusion-derives-from-canonical-raised-geometry.md),
+the current automatic occlusion seed is not another runtime asset. Its alpha and
+depth are derived deterministically from the board's canonical raised geometry
+through the shared render planner. No mask bytes, candidate id, URL, occlusion
+slot, or depth value is added to level data or the live-media catalog.
+Any future owner-painted correction and accepted mask artifact requires a
+separate authoring and storage decision rather than a local or repository
+fallback.
 
 The stable route `/assets/<slot>` is a backend route, not a filesystem path. The
 backend resolves it through the current active pointer and redirects or serves

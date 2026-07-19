@@ -38,6 +38,7 @@ export function LevelEditorControlsPanel({
   onRedo,
   playBoardHref,
   playBoardEnabled = Boolean(playBoardHref),
+  extraActions,
   className = '',
   scrollClassName = '',
   style,
@@ -56,6 +57,7 @@ export function LevelEditorControlsPanel({
   onRedo: () => void;
   playBoardHref?: string;
   playBoardEnabled?: boolean;
+  extraActions?: ReactNode;
   className?: string;
   scrollClassName?: string;
   style?: CSSProperties;
@@ -72,6 +74,11 @@ export function LevelEditorControlsPanel({
     const nextLayer = adjacentLevelEditorLayer(layer, layerOptions, direction);
     if (nextLayer && nextLayer !== layer) onLayerChange(nextLayer);
   };
+  const playAction = playBoardEnabled && playBoardHref ? (
+    <NavButton className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-play-board')} data-chrome-unit="inner-text-button" data-testid="le-test" to={playBoardHref} title={playTitle}>▶ Play test</NavButton>
+  ) : (
+    <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-play-board')} data-testid="le-test" disabled title={playTitle}>▶ Play test</button>
+  );
 
   return (
     <OuterChromeBox
@@ -148,11 +155,7 @@ export function LevelEditorControlsPanel({
               title={canRedo ? 'Redo the last undone edit.' : 'Nothing to redo.'}
             ><span className="le-ico ic-redo" aria-hidden="true" /></button>
           </div>
-          {playBoardEnabled && playBoardHref ? (
-            <NavButton className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-play-board')} data-chrome-unit="inner-text-button" data-testid="le-test" to={playBoardHref} title={playTitle}>▶ Play test</NavButton>
-          ) : (
-            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-play-board')} data-testid="le-test" disabled title={playTitle}>▶ Play test</button>
-          )}
+          {extraActions ? <div className="le-action-primary-row">{playAction}{extraActions}</div> : playAction}
         </section>
 
         <div className="le-control-divider-host" aria-hidden="true">

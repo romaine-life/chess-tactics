@@ -4,7 +4,7 @@ import { SkirmishHud } from './SkirmishHud';
 import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
-import { TitleBarStatus } from './shell/TitleBarControls';
+import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
 import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
 import {
@@ -974,6 +974,24 @@ export function Skirmish() {
         </div>
       </TitleBarSlot>
 
+      {/* Test play is an authoring loop, so its return is a persistent title-bar action rather
+          than an easy-to-miss floating chip. The target still comes from the validated exact
+          editor snapshot above; this only gives that existing route its canonical home. */}
+      {returnHref ? (
+        <TitleBarControlContribution
+          ariaLabel="Playtest navigation"
+          controls={[{
+            id: 'skirmish-return',
+            kind: 'navigation',
+            presentation: 'return',
+            label: returnIsEditor ? '‹ Back to editor' : '‹ Back',
+            destination: returnHref,
+            title: returnIsEditor ? 'Return to the board editor with this position.' : 'Return to the previous screen.',
+            testId: 'skirmish-return',
+          }]}
+        />
+      ) : null}
+
       {/* The bottom-centre ornament diamond becomes a Retry button in single-player: one
           click restarts the current battle. Portals into the shell bar's stud slot (ADR-0042)
           so it sits exactly on the decorative nailhead without disturbing any other bar track. */}
@@ -990,22 +1008,6 @@ export function Skirmish() {
             <RestartGlyph className="skirmish-retry-stud-glyph" />
           </button>
         </TitleBarSlot>
-      ) : null}
-
-      {/* Live-test loop: a persistent, non-blocking "‹ Back to editor" lets you jump back to tweak
-          the position at any point. It uses ?returnTo when present, and falls back to the editor
-          route for board-link / saved-level test URLs. Skirmish contributes no before-divider controls,
-          so — like the netplay return — this rides a fixed corner chip rather than the bar. */}
-      {returnHref ? (
-        <NavButton
-          data-chrome-unit="inner-text-button"
-          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active', 'skirmish-return-editor')}
-          data-testid="skirmish-return"
-          to={returnHref}
-          title="Return to the board editor with this position."
-        >
-          {returnIsEditor ? '‹ Back to editor' : '‹ Back'}
-        </NavButton>
       ) : null}
 
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">

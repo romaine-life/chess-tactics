@@ -37,11 +37,22 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
   }
   // Dev / inspector tools — the shared bar with just brand + account cluster.
   if (path === '/portrait-editor') return { screenName: 'Portrait Editor' };
+  if (path === '/predrawn-reference') {
+    return {
+      screenName: 'Pre-drawn Reference',
+      barClass: 'predrawn-reference-topbar',
+    };
+  }
 
   if (path === '/play') {
     // studSlot lets a single-player battle turn the ornament diamond into a Retry button
     // (the Skirmish screen portals it in, netplay omitted).
-    return { screenName: playRouteScreenName({ path, search }), barClass: 'skirmish-topbar', centerSlot: true, studSlot: true };
+    return {
+      screenName: playRouteScreenName({ path, search }),
+      barClass: 'skirmish-topbar',
+      centerSlot: true,
+      studSlot: true,
+    };
   }
   if (isPlaySelectorPath(path)) {
     return { screenName: 'Play', signInReturnTo: path, barClass: 'main-menu-twin-header' };

@@ -68,8 +68,26 @@ try {
   await new Promise((r) => setTimeout(r, 200));
 
   if (select) {
-    const el = await page.$(select);
+    let el = await page.$(select);
     if (!el) { console.error(`selector not found: ${select}`); process.exit(3); }
+
+    // Canvas-backed elements outside the viewport can be captured at the right dimensions while
+    // Chrome leaves the off-viewport pixels unpainted. Grow the viewport from the selector's
+    // measured CSS bounds before taking the element screenshot so large boards are complete
+    // without callers guessing or hard-coding an image size.
+    const initialBox = await el.boundingBox();
+    if (!initialBox) { console.error(`selector has no rendered bounds: ${select}`); process.exit(3); }
+    const viewport = page.viewport() ?? { width: w, height: h, deviceScaleFactor: scale };
+    const measuredWidth = Math.max(viewport.width, Math.ceil(initialBox.width));
+    const measuredHeight = Math.max(viewport.height, Math.ceil(initialBox.height));
+    if (measuredWidth !== viewport.width || measuredHeight !== viewport.height) {
+      await page.setViewport({ width: measuredWidth, height: measuredHeight, deviceScaleFactor: scale });
+      await page.evaluate(() => new Promise((resolveFrame) => {
+        window.requestAnimationFrame(() => window.requestAnimationFrame(resolveFrame));
+      }));
+      el = await page.$(select);
+      if (!el) { console.error(`selector disappeared after measured viewport resize: ${select}`); process.exit(3); }
+    }
     await el.screenshot({ path: out });
   } else {
     await page.screenshot({ path: out, fullPage });

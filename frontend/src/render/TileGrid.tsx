@@ -29,6 +29,8 @@ export interface TileGridCell {
 
 export interface TileGridProps {
   cells: readonly TileGridCell[];
+  /** Optional stable geometry used only to centre the board, independent of rendered scenery. */
+  originCells?: readonly { x: number; y: number }[];
   className?: string;
   ariaLabel?: string;
   boardZoom?: number;
@@ -51,6 +53,7 @@ function dataAttributes(data?: Record<string, string | number | undefined>): Rec
 
 export function TileGrid({
   cells,
+  originCells,
   className = '',
   ariaLabel = 'Tile board',
   boardZoom = 1,
@@ -61,7 +64,7 @@ export function TileGrid({
   renderCellOverlay,
   children,
 }: TileGridProps) {
-  const metrics = boardLabMetrics(cells);
+  const metrics = boardLabMetrics(originCells ?? cells);
 
   return (
     <div

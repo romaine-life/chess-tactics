@@ -19,6 +19,28 @@ export interface ViewPanePoint {
   y: number;
 }
 
+export interface ViewPaneViewportSize {
+  width: number;
+  height: number;
+}
+
+export function zoomAfterMinimumChange({
+  zoom,
+  minimum,
+  automaticFloorZoom,
+}: {
+  zoom: number;
+  minimum: number;
+  automaticFloorZoom: number | null;
+}): { zoom: number; automaticFloorZoom: number | null } {
+  const followsAutomaticFloor = automaticFloorZoom !== null
+    && Math.abs(zoom - automaticFloorZoom) < 1e-9;
+  if (zoom < minimum || followsAutomaticFloor) {
+    return { zoom: minimum, automaticFloorZoom: minimum };
+  }
+  return { zoom, automaticFloorZoom: null };
+}
+
 function polygonSignedArea(polygon: readonly ViewPanePoint[]): number {
   return polygon.reduce((sum, point, index) => {
     const next = polygon[(index + 1) % polygon.length];
@@ -39,15 +61,77 @@ function convexPolygonContains(
   });
 }
 
+function viewportCoveredAtPan({
+  viewport,
+  polygon,
+  zoom,
+  pan,
+}: {
+  viewport: { width: number; height: number };
+  polygon: readonly ViewPanePoint[];
+  zoom: number;
+  pan: ViewPanePoint;
+}): boolean {
+  if (polygon.length < 3 || zoom <= 0) return false;
+  const area = polygonSignedArea(polygon);
+  if (Math.abs(area) < 1e-7) return false;
+  const orientation = area > 0 ? 1 : -1;
+  const viewportCorners = [
+    { x: -viewport.width / 2, y: -viewport.height / 2 },
+    { x: viewport.width / 2, y: -viewport.height / 2 },
+    { x: viewport.width / 2, y: viewport.height / 2 },
+    { x: -viewport.width / 2, y: viewport.height / 2 },
+  ];
+  return viewportCorners.every((corner) => convexPolygonContains(
+    polygon,
+    { x: (corner.x - pan.x) / zoom, y: (corner.y - pan.y) / zoom },
+    orientation,
+  ));
+}
+
+/** Stops a pan on the first transformed art edge that reaches the viewport. */
+export function constrainPanToCoverViewport({
+  viewport,
+  polygon,
+  zoom,
+  from,
+  to,
+}: {
+  viewport: { width: number; height: number };
+  polygon: readonly ViewPanePoint[];
+  zoom: number;
+  from: ViewPanePoint;
+  to: ViewPanePoint;
+}): ViewPanePoint {
+  const covers = (pan: ViewPanePoint): boolean => viewportCoveredAtPan({ viewport, polygon, zoom, pan });
+  if (covers(to)) return to;
+  const start = covers(from) ? from : { x: 0, y: 0 };
+  if (!covers(start)) return from;
+  let low = 0;
+  let high = 1;
+  for (let iteration = 0; iteration < 32; iteration += 1) {
+    const middle = (low + high) / 2;
+    const candidate = {
+      x: start.x + (to.x - start.x) * middle,
+      y: start.y + (to.y - start.y) * middle,
+    };
+    if (covers(candidate)) low = middle;
+    else high = middle;
+  }
+  return {
+    x: start.x + (to.x - start.x) * low,
+    y: start.y + (to.y - start.y) * low,
+  };
+}
+
 /**
  * Smallest two-decimal zoom whose centred transformed content covers every viewport corner.
  * The polygon uses the same board-centred coordinate system as `.tileset-generated-board`;
- * pan is screen-space because the shared board transform applies it before scale.
+ * The floor is centered and independent of pan. Pan is constrained separately at the art edge.
  */
 export function minimumZoomToCoverViewport({
   viewport,
   polygon,
-  pan = { x: 0, y: 0 },
   minZoom,
   maxZoom,
 }: {
@@ -79,7 +163,7 @@ export function minimumZoomToCoverViewport({
   ];
   const covers = (zoom: number): boolean => viewportCorners.every((corner) => convexPolygonContains(
     polygon,
-    { x: (corner.x - pan.x) / zoom, y: (corner.y - pan.y) / zoom },
+    { x: corner.x / zoom, y: corner.y / zoom },
     orientation,
   ));
   if (covers(lower)) return lower;
@@ -105,6 +189,7 @@ export function ViewPane({
   onPanChange,
   coverPolygon,
   onMinimumZoomChange,
+  onViewportSizeChange,
   onAssetClick,
   children,
 }: {
@@ -120,11 +205,15 @@ export function ViewPane({
   coverPolygon?: readonly ViewPanePoint[];
   /** Reports the viewport-derived floor so external steppers clamp identically to the wheel. */
   onMinimumZoomChange?: (zoom: number) => void;
+  /** Reports the live drawable viewport used by projection-aware editor actions. */
+  onViewportSizeChange?: (size: ViewPaneViewportSize) => void;
   onAssetClick?: (assetId: string) => void;
   children: ReactNode;
 }): ReactElement {
   const stageRef = useRef<HTMLElement>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; assetId?: string } | null>(null);
+  const automaticFloorZoomRef = useRef<number | null>(null);
+  const lastViewportSizeRef = useRef<ViewPaneViewportSize | null>(null);
   const didDragRef = useRef(false);
   const [resolvedMinZoom, setResolvedMinZoom] = useState(minZoom);
   const resolvedMaxZoom = Math.max(maxZoom, resolvedMinZoom);
@@ -133,11 +222,20 @@ export function ViewPane({
     const stage = stageRef.current;
     if (!stage) return undefined;
     const updateMinimum = (): void => {
+      const viewport = { width: stage.clientWidth, height: stage.clientHeight };
+      const previousViewport = lastViewportSizeRef.current;
+      if (
+        !previousViewport
+        || previousViewport.width !== viewport.width
+        || previousViewport.height !== viewport.height
+      ) {
+        lastViewportSizeRef.current = viewport;
+        onViewportSizeChange?.(viewport);
+      }
       const next = coverPolygon
         ? minimumZoomToCoverViewport({
-            viewport: { width: stage.clientWidth, height: stage.clientHeight },
+            viewport,
             polygon: coverPolygon,
-            pan,
             minZoom,
             maxZoom: Math.max(maxZoom, COVER_SEARCH_MAX_ZOOM),
           })
@@ -148,11 +246,32 @@ export function ViewPane({
     const observer = new ResizeObserver(updateMinimum);
     observer.observe(stage);
     return () => observer.disconnect();
-  }, [coverPolygon, maxZoom, minZoom, pan]);
+  }, [coverPolygon, maxZoom, minZoom, onViewportSizeChange]);
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || !coverPolygon) return;
+    const constrained = constrainPanToCoverViewport({
+      viewport: { width: stage.clientWidth, height: stage.clientHeight },
+      polygon: coverPolygon,
+      zoom,
+      from: { x: 0, y: 0 },
+      to: pan,
+    });
+    if (Math.abs(constrained.x - pan.x) >= 1e-7 || Math.abs(constrained.y - pan.y) >= 1e-7) {
+      onPanChange(constrained);
+    }
+  }, [coverPolygon, onPanChange, pan, zoom]);
 
   useLayoutEffect(() => {
     onMinimumZoomChange?.(resolvedMinZoom);
-    if (zoom < resolvedMinZoom) onZoomChange(resolvedMinZoom);
+    const next = zoomAfterMinimumChange({
+      zoom,
+      minimum: resolvedMinZoom,
+      automaticFloorZoom: automaticFloorZoomRef.current,
+    });
+    automaticFloorZoomRef.current = next.automaticFloorZoom;
+    if (Math.abs(next.zoom - zoom) >= 1e-9) onZoomChange(next.zoom);
   }, [onMinimumZoomChange, onZoomChange, resolvedMinZoom, zoom]);
 
   const startPan = (event: PointerEvent<HTMLElement>) => {
@@ -176,10 +295,20 @@ export function ViewPane({
     if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) {
       didDragRef.current = true;
     }
-    onPanChange({
+    const candidate = {
       x: drag.originX + event.clientX - drag.startX,
       y: drag.originY + event.clientY - drag.startY,
-    });
+    };
+    const stage = stageRef.current;
+    onPanChange(stage && coverPolygon
+      ? constrainPanToCoverViewport({
+          viewport: { width: stage.clientWidth, height: stage.clientHeight },
+          polygon: coverPolygon,
+          zoom,
+          from: pan,
+          to: candidate,
+        })
+      : candidate);
   };
 
   const endPan = (event: PointerEvent<HTMLElement>) => {
@@ -198,7 +327,18 @@ export function ViewPane({
   const zoomPane = (event: WheelEvent<HTMLElement>) => {
     event.preventDefault();
     const direction = event.deltaY < 0 ? 1 : -1;
-    onZoomChange(clamp(Number((zoom + direction * 0.05).toFixed(2)), resolvedMinZoom, resolvedMaxZoom));
+    const nextZoom = clamp(Number((zoom + direction * 0.05).toFixed(2)), resolvedMinZoom, resolvedMaxZoom);
+    const stage = stageRef.current;
+    if (stage && coverPolygon) {
+      onPanChange(constrainPanToCoverViewport({
+        viewport: { width: stage.clientWidth, height: stage.clientHeight },
+        polygon: coverPolygon,
+        zoom: nextZoom,
+        from: { x: 0, y: 0 },
+        to: pan,
+      }));
+    }
+    onZoomChange(nextZoom);
   };
 
   return (

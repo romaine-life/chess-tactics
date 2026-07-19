@@ -482,7 +482,8 @@ export function SkirmishHud({
                 <div className="skirmish-view-row">
                   <button
                     type="button"
-                    className="app-header-button app-header-button-active"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                     data-testid="open-predrawn-registration"
                     onClick={onOpenPredrawnRegistration}
                   >Pick corners</button>

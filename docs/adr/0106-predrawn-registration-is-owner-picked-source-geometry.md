@@ -1,9 +1,9 @@
 ---
-status: "accepted; separate Apply transaction superseded by ADR-0107; corner-only instrument superseded by ADR-0110"
+status: "accepted; separate Apply transaction superseded by ADR-0107; corner-only instrument superseded by ADR-0110; non-persisted production-alignment clause superseded by ADR-0123"
 date: 2026-07-13
 deciders: Nelson, Codex
 partially_supersedes: "[ADR-0105](0105-predrawn-candidate-review-uses-exact-board-plane-registration.md)"
-partially_superseded_by: "[ADR-0107](0107-predrawn-registration-has-no-unsaved-dialog-state.md) and [ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md)"
+partially_superseded_by: "[ADR-0107](0107-predrawn-registration-has-no-unsaved-dialog-state.md), [ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md), and [ADR-0123](0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md)"
 ---
 
 # ADR-0106: Pre-drawn registration is owner-picked source geometry

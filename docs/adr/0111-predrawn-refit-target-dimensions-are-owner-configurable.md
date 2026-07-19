@@ -1,9 +1,9 @@
 ---
-status: "accepted; post-picker review-grid clause superseded by ADR-0112"
+status: "accepted; post-picker review-grid clause superseded by ADR-0112; regeneration-only production clause superseded by ADR-0123"
 date: 2026-07-13
 deciders: Nelson, Codex
 partially_supersedes: "[ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md)"
-partially_superseded_by: "[ADR-0112](0112-predrawn-review-overlay-uses-the-saved-refit-grid.md)"
+partially_superseded_by: "[ADR-0112](0112-predrawn-review-overlay-uses-the-saved-refit-grid.md) and [ADR-0123](0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md)"
 ---
 
 # ADR-0111: Pre-drawn refit target dimensions are owner-configurable

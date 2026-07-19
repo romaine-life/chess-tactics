@@ -1,0 +1,16 @@
+{
+  "mode": "isolated-top-only",
+  "model": "imagegen-current",
+  "output": {
+    "height": 2160,
+    "mimeType": "image/png",
+    "width": 3840
+  },
+  "packetSha256": "f29aa39c7e8ea72c9537f1571e92a7b7f1763d5e81fb7e900926bb74290c75dd",
+  "promptSha256": "72bd42f94209136e2d3af5d557e1cb3fb673b4a47b64b265aa19c113513e4dd8",
+  "provider": "openai",
+  "referencesSha256": "8e6c7a18b5205b251af0189143b6fb3f731a1a6bdc6b87e03c68ebd1a30a7fb4",
+  "runId": "fortress-gate-isolated-v1",
+  "schemaVersion": 1,
+  "status": "ready-for-generation"
+}

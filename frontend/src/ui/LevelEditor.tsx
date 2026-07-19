@@ -4,13 +4,14 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { resolveDecorativeWallOverlays, resolveTerrainSideExposure } from '@chess-tactics/board-render';
+import { resolveDecorativeWallOverlays, resolveTerrainSideExposure, withPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
 import { BoardBarrierSceneLayer } from '../render/BoardBarrierSceneLayer';
+import { PredrawnOcclusionSeedLayer } from '../render/PredrawnOcclusion';
 import {
   FENCE_ART_REVIEW_ID,
   transformFenceArtReviewOps,
@@ -25,9 +26,19 @@ import {
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { BoardGridLayer } from '../render/BoardGridLayer';
 import { BoardTerrainLayer, terrainCanvasMacroTiles, type TerrainCanvasCell } from '../render/BoardTerrainLayer';
-import { decorativeTerrainApronCells, withDecorativeTerrainFeatures, type DecorativeTerrainExtents } from '../render/decorativeTerrainApron';
+import {
+  decorativeTerrainApronCells,
+  decorativeTerrainApronCoordinates,
+  extendDecorativeTerrainApron,
+  scenicTerrainRenderCells,
+  scenicTerrainValueAt,
+  withDecorativeTerrainFeatures,
+  type DecorativeTerrainSide,
+  type DecorativeTerrainExtents,
+} from '../render/decorativeTerrainApron';
 import { studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
-import { ViewPane } from './shared/ViewPane';
+import { ViewPane, type ViewPaneViewportSize } from './shared/ViewPane';
+import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
@@ -51,6 +62,11 @@ import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } fro
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { WallArtPreview } from './WallArtLab';
 import { readBoardParam, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell, type PredrawnBoardSurface } from './boardCode';
+import { paintTerrainArea } from './levelEditorTerrainEditing';
+import {
+  fillScenicTerrainViewportTargets,
+  scenicTerrainTargetsForViewport,
+} from './levelEditorViewportTerrain';
 import {
   PredrawnBoardLayer,
   predrawnBoardCoverPolygon,
@@ -65,6 +81,12 @@ import {
 } from '../render/PredrawnBoardLayer';
 import { PredrawnCornerPicker } from './PredrawnCornerPicker';
 import { isPredrawnLockedLayer, predrawnEditorHrefAfterPicker, preservesPredrawnBakedArt } from './predrawnEditorPolicy';
+import {
+  installPredrawnBoardMedia,
+  predrawnBoardGenerationProvenance,
+} from './predrawnBoardOnboarding';
+import { predrawnReferenceHref } from './PredrawnReference';
+import { loadLiveMediaCatalog } from '../net/liveMedia';
 import { removeZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
 import {
   currentBoardTestHref,
@@ -118,7 +140,7 @@ import {
 import { featureFrameSrc, featureThumbSrc, fencePostThumbSrc, fenceThumbSrc, tileTopSrc, wallThumbSrc } from '../art/tileset';
 import { resolveFeatureOverlays, resolveFencePosts, fenceVertexKey as canonicalFenceVertexKey, roadEdgeKey, isNorthWestBoundaryWallEdge, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, WALL_MATERIALS, DEFAULT_FENCE_MATERIAL, DEFAULT_WALL_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, WALL_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, wallArtBadge, wallArtIdOrDefault, wallArtItems, wallArtLabel, wallArtPlacementSpanAtEdge, wallArtSpanEdges, wallArtSpanForId, type WallArtId } from '../core/wallArt';
-import { type TileFamilyId } from '../core/tileSockets';
+import { socketEdges, type EdgeName, type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
 import { playableBorderFenceEdges, playableBorderRoadKeys } from '../core/playableBorder';
 import { scatterTerrainDetailed } from '../core/terrainScatter';
@@ -185,6 +207,24 @@ type MoveSubject =
 
 type FencePaintTarget = 'rail' | 'post';
 type FenceVertexCorner = 'back' | 'right' | 'front' | 'left';
+
+const SCENIC_TERRAIN_EXTENT_BY_BOARD_EDGE = {
+  north: 'top',
+  east: 'right',
+  south: 'bottom',
+  west: 'left',
+} as const satisfies Record<EdgeName, keyof DecorativeTerrainExtents>;
+
+const SCENIC_TERRAIN_SIDES: readonly DecorativeTerrainSide[] = socketEdges.map(
+  (edge) => SCENIC_TERRAIN_EXTENT_BY_BOARD_EDGE[edge],
+);
+const MAX_SCENIC_TERRAIN_EXTENT = 16;
+const MAX_SCENIC_TERRAIN_GENERATION_AREA = 250_000;
+type ScenicTerrainGenerationMode = 'match-reference' | 'grass';
+const SCENIC_TERRAIN_GENERATION_OPTIONS: ReadonlyArray<{ value: ScenicTerrainGenerationMode; label: string }> = [
+  { value: 'match-reference', label: 'Match reference tile' },
+  { value: 'grass', label: 'Grass' },
+];
 
 const FENCE_VERTEX_CORNERS: ReadonlyArray<{
   id: FenceVertexCorner;
@@ -301,6 +341,8 @@ function StudioEditableBoard({
   boardZoom,
   boardPan,
   gridScope = 'off',
+  predrawnOcclusionEnabled = true,
+  showPredrawnOcclusionSeed = false,
   predrawnPlate,
   tacticalPreview,
   animationFrame,
@@ -316,6 +358,7 @@ function StudioEditableBoard({
   onRegionStart,
   decorativeApron,
   decorativeCells = {},
+  decorativeFootprint = [],
   decorativeFences = {}, decorativeFencePosts = {}, decorativeWalls = {},
   allowDecorativeEditing = false,
 }: {
@@ -383,6 +426,10 @@ function StudioEditableBoard({
   boardZoom: number;
   boardPan: { x: number; y: number };
   gridScope?: 'off' | 'playable' | 'whole';
+  /** Before/after proof switch for the automatic plate occlusion pass. */
+  predrawnOcclusionEnabled?: boolean;
+  /** Review the deterministic fence/prop/wall alpha proposal over a registered plate. */
+  showPredrawnOcclusionSeed?: boolean;
   /** Complete board illustration; when present the baked terrain/prop/barrier pixels are not drawn. */
   predrawnPlate?: PredrawnBoardPlate;
   tacticalPreview?: BoardTacticalPreview;
@@ -407,6 +454,7 @@ function StudioEditableBoard({
   /** Draw visual-only terrain beyond the tactical grid for art handoff. */
   decorativeApron: DecorativeTerrainExtents;
   decorativeCells?: Record<string, string>;
+  decorativeFootprint?: readonly string[];
   decorativeFences?: Record<string, FenceMaterial>;
   decorativeFencePosts?: Record<string, FenceMaterial>;
   decorativeWalls?: Record<string, WallMaterial>;
@@ -470,7 +518,7 @@ function StudioEditableBoard({
     }
     return nearest.id;
   };
-  // Toggle an edge barrier on the diamond edge under the cursor (brush adds, erase/right-click removes).
+  // Toggle an edge barrier on the diamond edge under the cursor (Brush adds; Erase removes).
   const applyBarrierAt = (x: number, y: number, edge: FeatureEdge, erasing: boolean): void => {
     const { key } = edgeTarget(x, y, edge);
     if (wallTool) {
@@ -554,9 +602,31 @@ function StudioEditableBoard({
       .filter(([, id]) => !!resolveAsset(id))
       .map(([key]) => key),
   );
-  const apronContains = (x: number, y: number): boolean =>
-    x >= -decorativeApron.left && x < cols + decorativeApron.right
-    && y >= -decorativeApron.top && y < rows + decorativeApron.bottom;
+  const scenicCoordinates = decorativeTerrainApronCoordinates(
+    cols,
+    rows,
+    decorativeApron,
+    decorativeFootprint,
+  );
+  const scenicCoordinateKeys = new Set(scenicCoordinates.map(({ x, y }) => `${x},${y}`));
+  const scenicContains = (x: number, y: number): boolean => scenicCoordinateKeys.has(`${x},${y}`);
+  const visibleTerrainAssetIdAt = (x: number, y: number): string | undefined => {
+    if (!scenicContains(x, y)) return undefined;
+    return scenicTerrainValueAt(
+      x,
+      y,
+      cols,
+      rows,
+      (sourceX, sourceY) => {
+        const id = placed[`${sourceX},${sourceY}`];
+        return id && resolveAsset(id) ? id : undefined;
+      },
+      (authoredX, authoredY) => {
+        const id = decorativeCells[`${authoredX},${authoredY}`];
+        return id && resolveAsset(id) ? id : undefined;
+      },
+    );
+  };
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < cols; x += 1) {
       const key = `${x},${y}`;
@@ -564,8 +634,8 @@ function StudioEditableBoard({
       const asset = assetId ? resolveAsset(assetId) : undefined;
       const sideExposure = resolveTerrainSideExposure(
         { x, y },
-        (nextX, nextY) => apronContains(nextX, nextY) && (nextX < 0 || nextX >= cols || nextY < 0 || nextY >= rows)
-          ? true
+        (nextX, nextY) => scenicContains(nextX, nextY) && (nextX < 0 || nextX >= cols || nextY < 0 || nextY >= rows)
+          ? Boolean(visibleTerrainAssetIdAt(nextX, nextY))
           : occupiedTiles.has(`${nextX},${nextY}`),
       );
       terrainCells.push(studioTerrainCanvasCell({
@@ -607,9 +677,6 @@ function StudioEditableBoard({
                 seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
                 which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
             {placedZones[key] ? <span className={`le-zone-cell le-zone-${placedZones[key]}`} aria-hidden="true" /> : null}
-            {/* Selected-patch highlight — a tinted diamond seated exactly like the zone tint, so
-                the author sees which cells a Generate will fill. */}
-            {regionCells?.has(key) ? <span className="le-region-cell" aria-hidden="true" /> : null}
             {/* Fence edge hint: highlight the diamond side under the cursor so you see where the rail
                 lands before clicking. The SVG is seated exactly like the hit diamond (surface-top). */}
             {fenceHere ? (
@@ -631,7 +698,7 @@ function StudioEditableBoard({
             <span
               className="tileset-cell-hit"
               onPointerDown={(event) => {
-                if (event.button === 2) return; // right-click erases via onContextMenu
+                if (event.button !== 0) return; // non-primary input belongs to ViewPane panning
                 event.stopPropagation(); // don't let the ViewPane start a pan while editing
                 if (placementTargetTool && (tool === 'brush' || tool === 'erase')) {
                   if (fencePostTool) applyFencePostAt(x, y, vertexAtPointer(event), tool === 'erase');
@@ -667,12 +734,6 @@ function StudioEditableBoard({
                   finishMoveAt({ x, y });
                 }
               }}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                if (fencePostTool) applyFencePostAt(x, y, vertexAtPointer(event), true);
-                else if (placementTargetTool) applyBarrierAt(x, y, edgeAtPointer(event), true);
-                else onErase(x, y);
-              }}
             />
           </>
         ),
@@ -680,45 +741,38 @@ function StudioEditableBoard({
     }
   }
 
-  // Keep the large static apron off the playable terrain canvas. Animated playable tiles may
-  // repaint every frame; sharing that canvas would redraw the whole decorative rectangle too.
+  // Scenic and playable terrain share one depth order. Freeze the combined review surface so a
+  // large authored rectangle remains a stable, inexpensive art-handoff frame.
   const authoredApron = new Map<string, TerrainCanvasCell>();
   for (const [key, assetId] of Object.entries(decorativeCells)) {
     const [x, y] = key.split(',').map(Number);
     const asset = resolveAsset(assetId);
-    if (!asset || !apronContains(x, y) || (x >= 0 && x < cols && y >= 0 && y < rows)) continue;
+    if (!asset || !scenicContains(x, y) || (x >= 0 && x < cols && y >= 0 && y < rows)) continue;
     authoredApron.set(key, {
       ...studioTerrainCanvasCell({ key: `decorative:${key}`, x, y, tileAsset: asset, feature: placedFeatures[key], animationFrame: 0, hidden, sideExposure: resolveTerrainSideExposure({ x, y }, () => true) }),
       animate: false,
     });
   }
   const apronTerrainCells = withDecorativeTerrainFeatures(
-    decorativeTerrainApronCells(terrainCells, cols, rows, decorativeApron, authoredApron),
+    decorativeTerrainApronCells(terrainCells, cols, rows, decorativeApron, authoredApron, decorativeFootprint),
     placedFeatures,
     (feature) => featureFrameSrc(feature.kind, feature.material, feature.mask),
   );
-  const apronBaseCells = apronTerrainCells.map(({ featureSrc: _featureSrc, ...cell }) => cell);
-  const apronFeatureCells = apronTerrainCells.flatMap((cell) => cell.featureSrc ? [{
-    key: `decorative-feature:${cell.x},${cell.y}`,
-    x: cell.x,
-    y: cell.y,
-    featureSrc: cell.featureSrc,
-  }] : []);
-  for (const cell of apronTerrainCells) {
-    const key = `${cell.x},${cell.y}`;
-    const fenceHere = placementTargetTool && !fencePostTool && hoverEdge?.x === cell.x && hoverEdge?.y === cell.y ? hoverEdge.edge : null;
-    const postHere = fencePostTool && hoverPost?.x === cell.x && hoverPost?.y === cell.y
+  const scenicTerrainCells = scenicTerrainRenderCells(terrainCells, apronTerrainCells);
+  for (const coordinate of scenicCoordinates) {
+    const key = `${coordinate.x},${coordinate.y}`;
+    const fenceHere = placementTargetTool && !fencePostTool && hoverEdge?.x === coordinate.x && hoverEdge?.y === coordinate.y ? hoverEdge.edge : null;
+    const postHere = fencePostTool && hoverPost?.x === coordinate.x && hoverPost?.y === coordinate.y
       ? FENCE_VERTEX_CORNERS.find((corner) => corner.id === hoverPost.corner) ?? null
       : null;
     cells.push({
       key: `decorative-hit:${key}`,
-      x: cell.x,
-      y: cell.y,
+      x: coordinate.x,
+      y: coordinate.y,
       className: 'tileset-placement-cell is-decorative',
-      data: { 'data-board-x': cell.x, 'data-board-y': cell.y, 'data-decorative-cell': 'true' },
+      data: { 'data-board-x': coordinate.x, 'data-board-y': coordinate.y, 'data-decorative-cell': 'true' },
       children: (
         <>
-          {regionCells?.has(key) ? <span className="le-region-cell" aria-hidden="true" /> : null}
           {fenceHere ? (
             <svg className="le-fence-edge-hint" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               <line x1={EDGE_LINE[fenceHere][0]} y1={EDGE_LINE[fenceHere][1]} x2={EDGE_LINE[fenceHere][2]} y2={EDGE_LINE[fenceHere][3]} />
@@ -735,34 +789,27 @@ function StudioEditableBoard({
             <span
               className="tileset-cell-hit"
               onPointerDown={(event) => {
+                if (event.button !== 0) return;
                 event.stopPropagation();
-                if (tool === 'region') onRegionStart?.(cell.x, cell.y);
+                if (tool === 'region') onRegionStart?.(coordinate.x, coordinate.y);
                 else if (placementTargetTool && (tool === 'brush' || tool === 'erase')) {
-                  if (fencePostTool) { applyFencePostAt(cell.x, cell.y, vertexAtPointer(event), tool === 'erase'); return; }
+                  if (fencePostTool) { applyFencePostAt(coordinate.x, coordinate.y, vertexAtPointer(event), tool === 'erase'); return; }
                   const edge = edgeAtPointer(event);
                   if (wallTool && edge !== 'N' && edge !== 'W') return;
-                  applyBarrierAt(cell.x, cell.y, edge, tool === 'erase');
-                } else if (tool === 'brush') { paintingRef.current = true; onPaint(cell.x, cell.y); }
-                else if (tool === 'erase') { paintingRef.current = true; onErase(cell.x, cell.y); }
+                  applyBarrierAt(coordinate.x, coordinate.y, edge, tool === 'erase');
+                } else if (tool === 'brush') { paintingRef.current = true; onPaint(coordinate.x, coordinate.y); }
+                else if (tool === 'erase') { paintingRef.current = true; onErase(coordinate.x, coordinate.y); }
               }}
               onPointerEnter={() => {
                 if (placementTargetTool || !paintingRef.current) return;
-                if (tool === 'brush') onPaint(cell.x, cell.y);
-                else if (tool === 'erase') onErase(cell.x, cell.y);
+                if (tool === 'brush') onPaint(coordinate.x, coordinate.y);
+                else if (tool === 'erase') onErase(coordinate.x, coordinate.y);
               }}
               onPointerMove={placementTargetTool ? (event) => {
-                if (fencePostTool) hoverFencePost(cell.x, cell.y, vertexAtPointer(event));
-                else hoverBarrierEdge(cell.x, cell.y, edgeAtPointer(event));
+                if (fencePostTool) hoverFencePost(coordinate.x, coordinate.y, vertexAtPointer(event));
+                else hoverBarrierEdge(coordinate.x, coordinate.y, edgeAtPointer(event));
               } : undefined}
               onPointerUp={() => { paintingRef.current = false; }}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                if (!placementTargetTool) { onErase(cell.x, cell.y); return; }
-                if (fencePostTool) { applyFencePostAt(cell.x, cell.y, vertexAtPointer(event), true); return; }
-                const edge = edgeAtPointer(event);
-                if (wallTool && edge !== 'N' && edge !== 'W') return;
-                applyBarrierAt(cell.x, cell.y, edge, true);
-              }}
             />
           ) : null}
         </>
@@ -823,7 +870,7 @@ function StudioEditableBoard({
           tabIndex={0}
           style={{ left: geometry.left, top: geometry.top, width: geometry.width, height: geometry.height, zIndex: 30000 + x + y }}
           onPointerDown={(event) => {
-            if (event.button === 2) return;
+            if (event.button !== 0) return;
             event.preventDefault();
             event.stopPropagation();
             apply(tool === 'erase');
@@ -832,11 +879,6 @@ function StudioEditableBoard({
             if (event.key !== 'Enter' && event.key !== ' ') return;
             event.preventDefault();
             apply(tool === 'erase');
-          }}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            apply(true);
           }}
         >
           <title>{label}</title>
@@ -859,12 +901,11 @@ function StudioEditableBoard({
           className="tileset-doodad-hit"
           style={{ position: 'absolute', left, top, zIndex: objectBaseZIndex({ x: cx, y: cy }) + 2, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' || tool === 'move' || movingFrom ? 'none' : 'auto' }}
           onPointerDown={(event) => {
-            if (event.button === 2) return;
+            if (event.button !== 0) return;
             event.stopPropagation();
             if (tool !== 'select') paintingRef.current = true;
             applyTool(cx, cy);
           }}
-          onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
         />,
       );
     }
@@ -901,7 +942,7 @@ function StudioEditableBoard({
           pointerEvents: tool === 'brush' || movingFrom ? 'none' : 'auto',
         }}
         onPointerDown={(event) => {
-          if (event.button === 2) return;
+          if (event.button !== 0) return;
           event.stopPropagation();
           if (tool === 'move') {
             setMovingFrom({ kind: 'prop', x: ax, y: ay, propId: placement.propId });
@@ -911,7 +952,6 @@ function StudioEditableBoard({
           if (tool !== 'select') paintingRef.current = true;
           applyTool(ax, ay);
         }}
-        onContextMenu={(event) => { event.preventDefault(); onErase(ax, ay); }}
       />,
     );
   }
@@ -1014,9 +1054,10 @@ function StudioEditableBoard({
 
   // Registration is defined against the tactical grid. A scenic apron may coexist in persisted
   // editor data, but it must not change the plate's alignment or add rows to its review overlay.
-  const predrawnGridCells = predrawnPlate
-    ? cells.filter((cell) => cell.x >= 0 && cell.x < cols && cell.y >= 0 && cell.y < rows)
-    : cells;
+  const playableGridCells = cells.filter(
+    (cell) => cell.x >= 0 && cell.x < cols && cell.y >= 0 && cell.y < rows,
+  );
+  const predrawnGridCells = predrawnPlate ? playableGridCells : cells;
 
   const sceneBoard: EditorBoard = {
     cols,
@@ -1048,23 +1089,25 @@ function StudioEditableBoard({
   return (
     <TileGrid
       cells={cells}
+      originCells={playableGridCells}
       className={`tileset-placement-board is-tool-${tool}`}
       ariaLabel="Editable tile board"
       boardZoom={boardZoom}
       boardPan={boardPan}
+      renderCellOverlay={regionCells && regionCells.size > 0
+        ? (cell) => regionCells.has(`${cell.x},${cell.y}`)
+          ? <span className="le-region-cell" aria-hidden="true" />
+          : null
+        : undefined}
       backgroundLayer={(
         <>
           {predrawnPlate && !hidden?.tile
             ? <PredrawnBoardLayer plate={predrawnPlate} cells={predrawnGridCells} />
             : !predrawnPlate
-              ? <>
-                  {apronBaseCells.length ? <BoardTerrainLayer cells={apronBaseCells} /> : null}
-                  <BoardTerrainLayer
-                    cells={terrainCells}
-                    macroTiles={hidden?.tile ? [] : terrainCanvasMacroTiles(placedMacroTiles)}
-                  />
-                  {apronFeatureCells.length ? <BoardTerrainLayer cells={apronFeatureCells} /> : null}
-                </>
+              ? <BoardTerrainLayer
+                  cells={scenicTerrainCells}
+                  macroTiles={hidden?.tile ? [] : terrainCanvasMacroTiles(placedMacroTiles)}
+                />
               : null}
           <BoardSceneLayer
             board={sceneBoard}
@@ -1072,9 +1115,13 @@ function StudioEditableBoard({
             coverSeed={coverSeed}
             ambientCover={false}
             omitTerrain
+            predrawnOcclusion={predrawnOcclusionEnabled}
             transformOps={fenceArtwork ? ((ops, board) => transformFenceArtReviewOps(ops, board, fenceArtwork)) : undefined}
           />
           {!predrawnPlate ? <BoardBarrierSceneLayer wallOverlays={resolveDecorativeWallOverlays(outerWalls)} /> : null}
+          {predrawnPlate && showPredrawnOcclusionSeed
+            ? <PredrawnOcclusionSeedLayer board={sceneBoard} />
+            : null}
         </>
       )}
       onPointerUp={endInteraction}
@@ -2360,6 +2407,21 @@ export function LevelEditor(): ReactElement {
   const [decorativeApron, setDecorativeApron] = useState<DecorativeTerrainExtents>(() =>
     initialBoard?.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 });
   const [decorativeCells, setDecorativeCells] = useState<Record<string, string>>(() => initialBoard?.decorativeCells ?? {});
+  const [decorativeFootprint, setDecorativeFootprint] = useState<string[]>(() => initialBoard?.decorativeFootprint ?? []);
+  const scenicTerrainCoordinates = useMemo(
+    () => decorativeTerrainApronCoordinates(
+      boardCols,
+      boardRows,
+      decorativeApron,
+      decorativeFootprint,
+    ),
+    [boardCols, boardRows, decorativeApron, decorativeFootprint],
+  );
+  const scenicTerrainCoordinateKeys = useMemo(
+    () => new Set(scenicTerrainCoordinates.map(({ x, y }) => `${x},${y}`)),
+    [scenicTerrainCoordinates],
+  );
+  const [scenicTerrainGenerationMode, setScenicTerrainGenerationMode] = useState<ScenicTerrainGenerationMode>('match-reference');
   const [decorativeFeatures, setDecorativeFeatures] = useState<Record<string, FeatureCell>>(() => initialBoard?.decorativeFeatures ?? {});
   const [decorativeFences, setDecorativeFences] = useState<Record<string, FenceMaterial>>(() => initialBoard?.decorativeFences ?? {});
   const [decorativeFencePosts, setDecorativeFencePosts] = useState<Record<string, FenceMaterial>>(() => initialBoard?.decorativeFencePosts ?? {});
@@ -2373,7 +2435,7 @@ export function LevelEditor(): ReactElement {
   const [macroTileBrushId, setMacroTileBrushId] = useState<string | null>(null);
   const [macroTileFootprint, setMacroTileFootprint] = useState(leMacroTileFootprints[0] ?? '2x2');
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
-  // Marquee region selection — the scope a Generate fills. "x,y" cell keys; empty ⇒ whole board.
+  // Connected terrain-area selection shared by Generate and raw Tile Fill. "x,y" cell keys.
   const [regionSelection, setRegionSelection] = useState<Set<string>>(() => new Set());
   // Saved generated-region units: rerunnable selections plus the Generate panel settings they used.
   const [generatedRegions, setGeneratedRegions] = useState<BoardGeneratedRegion[]>(() => initialGeneratedRegions);
@@ -2389,6 +2451,7 @@ export function LevelEditor(): ReactElement {
   const [viewMinZoom, setViewMinZoom] = useState(0.4);
   const viewMaxZoom = Math.max(4, viewMinZoom);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [viewViewportSize, setViewViewportSize] = useState<ViewPaneViewportSize | null>(null);
   const predrawnCoverCells = useMemo(
     () => Array.from({ length: boardRows }, (_, y) =>
       Array.from({ length: boardCols }, (__, x) => ({ x, y }))).flat(),
@@ -2402,6 +2465,28 @@ export function LevelEditor(): ReactElement {
   );
   const [gridScope, setGridScope] = useState<'off' | 'playable' | 'whole'>('off');
   const toggleRegisteredGrid = (): void => setGridScope((value) => value === 'off' ? 'whole' : 'off');
+  const [predrawnOcclusionEnabled, setPredrawnOcclusionEnabled] = useState(
+    () => new URL(window.location.href).searchParams.get('predrawnOcclusion') !== '0',
+  );
+  const [showPredrawnOcclusionSeed, setShowPredrawnOcclusionSeed] = useState(
+    () => new URL(window.location.href).searchParams.get('predrawnOcclusionSeed') === '1',
+  );
+  const togglePredrawnOcclusion = (): void => {
+    const next = !predrawnOcclusionEnabled;
+    const url = new URL(window.location.href);
+    if (next) url.searchParams.delete('predrawnOcclusion');
+    else url.searchParams.set('predrawnOcclusion', '0');
+    setPredrawnOcclusionEnabled(next);
+    navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
+  };
+  const togglePredrawnOcclusionSeed = (): void => {
+    const next = !showPredrawnOcclusionSeed;
+    const url = new URL(window.location.href);
+    if (next) url.searchParams.set('predrawnOcclusionSeed', '1');
+    else url.searchParams.delete('predrawnOcclusionSeed');
+    setShowPredrawnOcclusionSeed(next);
+    navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
+  };
   const [predrawnPickerOpen, setPredrawnPickerOpen] = useState(
     () => new URL(window.location.href).searchParams.get('predrawnPicker') === '1',
   );
@@ -2614,6 +2699,7 @@ export function LevelEditor(): ReactElement {
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
   const [saving, setSaving] = useState(false);
+  const [predrawnInstallState, setPredrawnInstallState] = useState<'idle' | 'working' | 'installed' | 'error'>('idle');
   const [me, setMe] = useState<AuthUser | null>(null);
   const isAdmin = Boolean(me?.is_admin);
   const { ask, dialog: confirmDialog } = useConfirm();
@@ -2732,6 +2818,7 @@ export function LevelEditor(): ReactElement {
     setBoardRows(board.rows);
     setDecorativeApron(board.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 });
     setDecorativeCells(board.decorativeCells ?? {});
+    setDecorativeFootprint(board.decorativeFootprint ?? []);
     setDecorativeFeatures(board.decorativeFeatures ?? {});
     setDecorativeFences(board.decorativeFences ?? {});
     setDecorativeFencePosts(board.decorativeFencePosts ?? {});
@@ -2786,8 +2873,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, decorativeApron, decorativeCells, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, surface: boardSurface, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, decorativeApron, decorativeCells, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardSurface, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, surface: boardSurface, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardSurface, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -2796,6 +2883,7 @@ export function LevelEditor(): ReactElement {
     setBoardRows(board.rows);
     setDecorativeApron(board.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 });
     setDecorativeCells(board.decorativeCells ?? {});
+    setDecorativeFootprint(board.decorativeFootprint ?? []);
     setDecorativeFeatures(board.decorativeFeatures ?? {});
     setDecorativeFences(board.decorativeFences ?? {});
     setDecorativeFencePosts(board.decorativeFencePosts ?? {});
@@ -2838,6 +2926,106 @@ export function LevelEditor(): ReactElement {
     applyEditorBoard(normalized);
     if (selection !== undefined) setSelectedCell(selection);
     return true;
+  };
+  const fillVisibleScenicTerrain = (): void => {
+    if (!viewViewportSize) {
+      reportStatus('Visible terrain fill is not ready yet.', 'info', 'The board viewport is still being measured.');
+      return;
+    }
+    const targetResult = scenicTerrainTargetsForViewport({
+      cols: boardCols,
+      rows: boardRows,
+      viewport: viewViewportSize,
+      zoom: viewZoom,
+      pan: viewPan,
+      activeScenicCellKeys: scenicTerrainCoordinateKeys,
+    });
+    if (targetResult.status === 'invalid-input') {
+      reportStatus('Visible terrain fill could not read this view.', 'warning', 'Reset the board view, then try again.');
+      return;
+    }
+    if (targetResult.status === 'limit-reached') {
+      reportStatus(
+        'Visible terrain fill is too large.',
+        'warning',
+        `Zoom in until the view needs fewer than ${targetResult.limit.toLocaleString()} new tiles. Nothing was changed.`,
+      );
+      return;
+    }
+    if (targetResult.targets.length === 0) {
+      reportStatus('The visible area is already filled.', 'info');
+      return;
+    }
+    const current = currentEditorBoardRef.current;
+    const beforeFootprint = new Set(current.decorativeFootprint ?? []);
+    const next = fillScenicTerrainViewportTargets(
+      current,
+      targetResult.targets,
+      scenicTerrainGenerationMode === 'grass'
+        ? { kind: 'grass', tileId: leDefaultTile.id }
+        : { kind: 'match-reference' },
+    );
+    const addedKeys = (next.decorativeFootprint ?? []).filter((key) => !beforeFootprint.has(key));
+    const addedCount = addedKeys.length;
+    const blankCount = addedKeys.filter(
+      (key) => !Object.prototype.hasOwnProperty.call(next.decorativeCells ?? {}, key),
+    ).length;
+    if (addedCount <= 0 || !commitEditorBoard(next)) return;
+    reportStatus(
+      `Filled ${addedCount.toLocaleString()} visible scenic cell${addedCount === 1 ? '' : 's'}.`,
+      'success',
+      `Only tile diamonds touching the current view were added. Undo restores the whole fill.${blankCount > 0 ? ` ${blankCount.toLocaleString()} aligned reference${blankCount === 1 ? ' was' : 's were'} empty, so those cells remain blank.` : ''}`,
+    );
+  };
+  const extendScenicTerrain = (sides: readonly DecorativeTerrainSide[]): void => {
+    const current = currentEditorBoardRef.current;
+    const growthMode = scenicTerrainGenerationMode === 'grass'
+      ? { kind: 'fill' as const, value: leDefaultTile.id }
+      : { kind: 'match-reference' as const };
+    let extension = {
+      extents: current.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 },
+      authored: current.decorativeCells ?? {},
+    };
+    let changed = false;
+    for (const side of sides) {
+      if (extension.extents[side] >= MAX_SCENIC_TERRAIN_EXTENT) continue;
+      extension = extendDecorativeTerrainApron<string>(
+        current.cols,
+        current.rows,
+        extension.extents,
+        extension.authored,
+        side,
+        growthMode,
+      );
+      changed = true;
+    }
+    if (!changed) return;
+    const next = cloneEditorBoard(current);
+    next.decorativeApron = extension.extents;
+    next.decorativeCells = extension.authored;
+    commitEditorBoard(next);
+  };
+  const stepScenicTerrainExtents = (sides: readonly DecorativeTerrainSide[], delta: -1 | 1): void => {
+    if (delta > 0) {
+      extendScenicTerrain(sides);
+      return;
+    }
+    const current = currentEditorBoardRef.current;
+    const extents = current.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 };
+    const reducedExtents = { ...extents };
+    let changed = false;
+    for (const side of sides) {
+      if (reducedExtents[side] <= 0) continue;
+      reducedExtents[side] -= 1;
+      changed = true;
+    }
+    if (!changed) return;
+    const next = cloneEditorBoard(current);
+    next.decorativeApron = reducedExtents;
+    commitEditorBoard(next);
+  };
+  const stepScenicTerrainExtent = (side: DecorativeTerrainSide, delta: -1 | 1): void => {
+    stepScenicTerrainExtents([side], delta);
   };
   // In both directions the DEPARTING board must be snapshotted BEFORE queueing the stack
   // update: React runs the updater after this handler has already repointed
@@ -2923,12 +3111,15 @@ export function LevelEditor(): ReactElement {
   const propBrushDef = resolvePropDef(propBrushId) ?? PROP_DEFS[0];
   const authoredCellTileId = (x: number, y: number): string | undefined => {
     const key = `${x},${y}`;
-    if (cellWithinBoard(key)) return boardCells[key];
-    if (!cellWithinScenicRectangle(key)) return undefined;
-    if (decorativeCells[key]) return decorativeCells[key];
-    const sourceX = Math.max(0, Math.min(boardCols - 1, x));
-    const sourceY = Math.max(0, Math.min(boardRows - 1, y));
-    return boardCells[`${sourceX},${sourceY}`];
+    if (!cellWithinScenicSurface(key)) return undefined;
+    return scenicTerrainValueAt(
+      x,
+      y,
+      boardCols,
+      boardRows,
+      (sourceX, sourceY) => boardCells[`${sourceX},${sourceY}`],
+      (authoredX, authoredY) => decorativeCells[`${authoredX},${authoredY}`],
+    );
   };
   // Generalised doodadFitsTile for a W×H footprint: EVERY footprint cell must be in the authored
   // rectangle AND its visible terrain must accept the prop. Gameplay projection later ignores
@@ -3145,7 +3336,10 @@ export function LevelEditor(): ReactElement {
     if (cellWithinBoard(key)) {
       next.macroTiles = breakMacroTilesAtCell(next.macroTiles, x, y);
       delete next.cells[key];
-    } else delete next.decorativeCells?.[key];
+    } else {
+      delete next.decorativeCells?.[key];
+      next.decorativeFootprint = (next.decorativeFootprint ?? []).filter((coordinate) => coordinate !== key);
+    }
     commitEditorBoard(next);
   };
   const selectFenceArtwork = (id: string): void => {
@@ -3284,7 +3478,7 @@ export function LevelEditor(): ReactElement {
     setWallArtPlacementFeedback({ tone: 'ready', message: `Removed ${wallArtLabel(hit.artId)}.` });
   };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, decorativeCells: {}, decorativeFeatures: {}, decorativeFences: {}, decorativeFencePosts: {}, decorativeWalls: {}, macroTiles: [], units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, fencePosts: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, decorativeCells: {}, decorativeFootprint: [], decorativeFeatures: {}, decorativeFences: {}, decorativeFencePosts: {}, decorativeWalls: {}, macroTiles: [], units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, fencePosts: {}, walls: {}, wallArt: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
     setActiveGeneratedRegionId(null);
     setRegionSelection(new Set());
   };
@@ -3329,6 +3523,11 @@ export function LevelEditor(): ReactElement {
       }
     commitEditorBoard(next);
   };
+  const fillSelectedTileArea = (): void => {
+    if (regionSelection.size === 0) return;
+    const next = paintTerrainArea(currentEditorBoardRef.current, regionSelection, brushAsset.id);
+    commitEditorBoard(next);
+  };
   const randomizeBoardTiles = (): void => {
     const seed = (Date.now() ^ (boardCols * 73856093) ^ (boardRows * 19349663)) >>> 0;
     const generated = generateSocketBoard({
@@ -3351,11 +3550,11 @@ export function LevelEditor(): ReactElement {
     const [x, y] = key.split(',').map(Number);
     return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < cols && y < rows;
   };
-  const cellWithinScenicRectangle = (key: string): boolean => {
+  const cellWithinScenicSurface = (key: string): boolean => {
     const [x, y] = key.split(',').map(Number);
-    return Number.isInteger(x) && Number.isInteger(y)
-      && x >= -decorativeApron.left && x < boardCols + decorativeApron.right
-      && y >= -decorativeApron.top && y < boardRows + decorativeApron.bottom;
+    if (!Number.isInteger(x) || !Number.isInteger(y)) return false;
+    return (x >= 0 && x < boardCols && y >= 0 && y < boardRows)
+      || scenicTerrainCoordinateKeys.has(key);
   };
   const hydrateGeneratedRegionSections = (sections: BoardGeneratedRegionSection[], legacyDensity?: number): ScatterRow[] => {
     const existingSections = sections.length > 0;
@@ -3394,7 +3593,7 @@ export function LevelEditor(): ReactElement {
     }
     const region = generatedRegions.find((r) => r.id === id);
     if (!region) return;
-    const cells = sortRegionCells(region.cells.filter((key) => cellWithinScenicRectangle(key)));
+    const cells = sortRegionCells(region.cells.filter((key) => cellWithinScenicSurface(key)));
     setActiveGeneratedRegionId(region.id);
     setRegionSelection(new Set(cells));
     setScatterBuffer(region.buffer);
@@ -3412,15 +3611,13 @@ export function LevelEditor(): ReactElement {
       setRegionSelection(new Set());
     }
   };
-  // "Select region" = click an already-drawn clump. From the clicked cell, flood-fill every
-  // orthogonally-connected cell of the SAME terrain family (empty matches empty), so one click
-  // grabs exactly that patch and "knows how big it is". There is no rectangle marquee — to scope a
-  // rectangle, paint the tiles first, then click the patch. Bounded to the board; cheap for a
-  // hand-authored board.
-  const regionSelectPatch = (x: number, y: number): void => {
+  // Area selection is shared by Generate and raw Tile Fill. Clicking one cell flood-fills its
+  // orthogonally connected same-terrain-family patch (empty matches empty), including the scenic
+  // rectangle's resolved terrain. Generate may save that area as a rerunnable region; Tile keeps
+  // the selection transient and paints it in one edit.
+  const terrainPatchCellsAt = (x: number, y: number): string[] => {
     const familyAt = (cx: number, cy: number): string => {
-      const key = `${cx},${cy}`;
-      const id = cx >= 0 && cx < boardCols && cy >= 0 && cy < boardRows ? boardCells[key] : decorativeCells[key];
+      const id = authoredCellTileId(cx, cy);
       return id ? (leFamilyOfTile(id)?.id ?? '?') : '';
     };
     const target = familyAt(x, y);
@@ -3428,14 +3625,21 @@ export function LevelEditor(): ReactElement {
     const stack: Array<[number, number]> = [[x, y]];
     while (stack.length > 0) {
       const [cx, cy] = stack.pop()!;
-      if (cx < -decorativeApron.left || cy < -decorativeApron.top
-        || cx >= boardCols + decorativeApron.right || cy >= boardRows + decorativeApron.bottom) continue;
       const key = `${cx},${cy}`;
-      if (found.has(key) || familyAt(cx, cy) !== target) continue;
+      if (!cellWithinScenicSurface(key) || found.has(key) || familyAt(cx, cy) !== target) continue;
       found.add(key);
       stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
     }
-    const cells = sortRegionCells(found);
+    return sortRegionCells(found);
+  };
+  const selectTerrainArea = (x: number, y: number): void => {
+    const cells = terrainPatchCellsAt(x, y);
+    if (layer !== 'generate') {
+      setActiveGeneratedRegionId(null);
+      setRegionSelection(new Set(cells));
+      setTool('brush');
+      return;
+    }
     const existing = generatedRegions.find((region) => regionCellsEqual(sortRegionCells(region.cells), cells));
     if (existing) {
       selectGeneratedRegionUnit(existing.id);
@@ -3458,7 +3662,7 @@ export function LevelEditor(): ReactElement {
   // How many cells a share applies to right now: the marquee selection if any, else the whole board.
   const scopeCells = regionSelection.size > 0
     ? regionSelection.size
-    : (boardCols + decorativeApron.left + decorativeApron.right) * (boardRows + decorativeApron.top + decorativeApron.bottom);
+    : boardCols * boardRows + scenicTerrainCoordinates.length;
   const setSectionShare = (id: number, value: number): void => setScatterSections((prev) => rebalanceShares(prev, id, value, scatterBuffer));
   const setSectionTerrain = (id: number, terrain: TileFamilyId): void => setScatterSections((prev) => prev.map((s) => (s.id === id ? { ...s, terrain } : s)));
   const toggleSectionLock = (id: number): void => setScatterSections((prev) => prev.map((s) => (s.id === id ? { ...s, locked: !s.locked } : s)));
@@ -3516,31 +3720,48 @@ export function LevelEditor(): ReactElement {
   const generateScatter = (): void => {
     const sections = scatterSections.map((s) => ({ terrain: s.terrain, share: s.share }));
     if (sections.length === 0) return;
-    const selectedRegionCells = sortRegionCells([...regionSelection].filter((key) => cellWithinScenicRectangle(key)));
+    const selectedRegionCells = sortRegionCells([...regionSelection].filter((key) => cellWithinScenicSurface(key)));
     const seed = Date.now() >>> 0; // a fresh layout each press; the committed board is the artifact
     const cols = boardCols;
     const rows = boardRows;
-    const generateApron = Object.values(decorativeApron).some((value) => value > 0);
-    const offsetX = generateApron ? decorativeApron.left : 0;
-    const offsetY = generateApron ? decorativeApron.top : 0;
-    const generationCols = generateApron ? cols + decorativeApron.left + decorativeApron.right : cols;
-    const generationRows = generateApron ? rows + decorativeApron.top + decorativeApron.bottom : rows;
+    const wholeSurfaceCells = [
+      ...Array.from({ length: rows }, (_, y) => Array.from({ length: cols }, (__, x) => `${x},${y}`)).flat(),
+      ...scenicTerrainCoordinates.map(({ x, y }) => `${x},${y}`),
+    ];
+    const targetCells = selectedRegionCells.length > 0 ? selectedRegionCells : wholeSurfaceCells;
+    const surfaceCoordinates = wholeSurfaceCells.map((key) => {
+      const [x, y] = key.split(',').map(Number);
+      return { x, y };
+    });
+    const minX = Math.min(...surfaceCoordinates.map(({ x }) => x));
+    const maxX = Math.max(...surfaceCoordinates.map(({ x }) => x));
+    const minY = Math.min(...surfaceCoordinates.map(({ y }) => y));
+    const maxY = Math.max(...surfaceCoordinates.map(({ y }) => y));
+    const offsetX = -minX;
+    const offsetY = -minY;
+    const generationCols = maxX - minX + 1;
+    const generationRows = maxY - minY + 1;
+    if (generationCols * generationRows > MAX_SCENIC_TERRAIN_GENERATION_AREA) {
+      reportStatus(
+        'This terrain surface is too spread out to generate safely.',
+        'warning',
+        'Select a smaller connected area before running Generate.',
+      );
+      return;
+    }
+    const generateApron = scenicTerrainCoordinates.length > 0;
     const baseMap: (TileFamilyId | undefined)[] = Array.from({ length: generationCols * generationRows }, (_, i) => {
       const x = (i % generationCols) - offsetX;
       const y = ((i / generationCols) | 0) - offsetY;
-      const id = x >= 0 && x < cols && y >= 0 && y < rows
-        ? boardCells[`${x},${y}`]
-        : decorativeCells[`${x},${y}`];
+      const id = authoredCellTileId(x, y);
       return id ? (leFamilyOfTile(id)?.id as TileFamilyId | undefined) : undefined;
     });
-    const region = selectedRegionCells.length > 0
-      ? new Set(
-          selectedRegionCells.map((key) => {
-            const [x, y] = key.split(',').map(Number);
-            return (y + offsetY) * generationCols + x + offsetX;
-          }),
-        )
-      : undefined;
+    const region = new Set(
+      targetCells.map((key) => {
+        const [x, y] = key.split(',').map(Number);
+        return (y + offsetY) * generationCols + x + offsetX;
+      }),
+    );
     const generatedScatter = scatterTerrainDetailed({
       columns: generationCols,
       rows: generationRows,
@@ -3565,14 +3786,13 @@ export function LevelEditor(): ReactElement {
     const solved = { ...fullSolved, cells: solvedCells };
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     if (generateApron) {
-      if (!region) next.decorativeCells = {};
-      else if (!next.decorativeCells) next.decorativeCells = {};
+      if (!next.decorativeCells) next.decorativeCells = {};
       for (const cell of fullSolved.cells) {
         const x = cell.x - offsetX;
         const y = cell.y - offsetY;
         if (x >= 0 && x < cols && y >= 0 && y < rows) continue;
         const fullIndex = cell.y * generationCols + cell.x;
-        if (region && !region.has(fullIndex)) continue;
+        if (!region.has(fullIndex)) continue;
         next.decorativeCells[`${x},${y}`] = cell.asset?.id ?? leDefaultTile.id;
       }
     }
@@ -4673,6 +4893,131 @@ export function LevelEditor(): ReactElement {
     }
   };
 
+  const installPredrawnLevelArt = async (): Promise<void> => {
+    if (saving || predrawnInstallState === 'working') return;
+    if (
+      !import.meta.env.DEV
+      || !isAdmin
+      || !predrawnPreview
+      || !predrawnRegistration
+      || !targetLevelId
+      || !targetLevel
+      || !editorDocument
+      || documentRevisionRef.current === null
+    ) {
+      reportStatus('The level art cannot be installed from this view.', 'warning', 'Use the signed-in admin Level Editor with a saved alignment.');
+      return;
+    }
+    if (documentConflictRef.current) {
+      reportStatus('Install stopped by a revision conflict.', 'warning', 'Nothing was published. Resolve the working-copy conflict first.');
+      return;
+    }
+    if (
+      dirty
+      || campaignAssignmentDirty
+    ) {
+      reportStatus(
+        'Install stopped because the level has other changes.',
+        'warning',
+        'Save or discard those changes first. Installing art never folds unrelated edits into the level.',
+      );
+      return;
+    }
+    const alignment = serializePredrawnBoardPreviewRegistration(predrawnRegistration);
+    if (!alignment.startsWith('v4;')) {
+      reportStatus('Install needs the complete saved alignment.', 'warning', 'Save all four art corners, grid guides, and boundary handles first.');
+      return;
+    }
+    if (!(await ask({
+      title: `Install this art for ${targetLevel.name}?`,
+      message: 'This publishes the exact image and alignment you reviewed. Unit placement, terrain logic, fences, rules, and campaign position stay unchanged.',
+      confirmLabel: 'Install art',
+      cancelLabel: 'Cancel',
+    }))) return;
+
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    setSaving(true);
+    setPredrawnInstallState('working');
+    let mediaAccepted = false;
+    try {
+      if (autosavePromiseRef.current) await autosavePromiseRef.current;
+      if (documentConflictRef.current) throw new Error('The working copy changed while the image was being prepared.');
+      const revision = documentRevisionRef.current;
+      if (revision === null) throw new Error('The working-copy revision is unavailable.');
+
+      const installed = await installPredrawnBoardMedia({
+        levelId: targetLevelId,
+        levelName: targetLevel.name,
+        previewSrc: predrawnPreview,
+        surfaceUrl: window.location.href,
+        alignment,
+        frameWidth: predrawnRegistration.sourceWidth,
+        frameHeight: predrawnRegistration.sourceHeight,
+        provenance: predrawnBoardGenerationProvenance(targetLevelId, predrawnPreview),
+      });
+      mediaAccepted = true;
+      await loadLiveMediaCatalog();
+      const patchedLevel = withPredrawnBoardSurface(targetLevel, {
+        kind: 'predrawn',
+        slot: installed.slot,
+        frameWidth: predrawnRegistration.sourceWidth,
+        frameHeight: predrawnRegistration.sourceHeight,
+        registration: predrawnRegistration,
+      });
+      const saved = await saveEditorDocument(editorDocument.document_id, revision, patchedLevel);
+      const doc = saved.document;
+      if (saved.workspace_revision !== null) {
+        if (doc.workspace_kind === 'official') useCampaigns.getState().setOfficialWorkspaceRevision(saved.workspace_revision);
+        else useCampaigns.getState().setUserWorkspaceRevision(saved.workspace_revision);
+      }
+      documentRevisionRef.current = doc.revision;
+      documentConflictRef.current = false;
+      documentConflictKindRef.current = null;
+      lastCloudSyncedSigRef.current = levelEditorLevelSignature(doc.level);
+      setEditorDocument(doc);
+      setCloudSaveState('saved');
+      setCloudSaveDetail(null);
+      useCampaigns.getState().replaceLevel(doc.level);
+      applyLevelDocument(doc.level, { editingId: doc.level_id, clean: true });
+      setSavedSig(normalizedLevelEditorSignature(doc.level));
+      setTargetBaselineResolved(true);
+      setCampaignAssignmentId(savedCampaignAssignmentId);
+      clearLevelEditorDraft(draftKey);
+      setGridScope('off');
+      setShowPredrawnOcclusionSeed(false);
+      setPredrawnInstallState('installed');
+
+      const url = new URL(window.location.href);
+      for (const parameter of ['predrawnPreview', 'predrawnCorners', 'predrawnPicker', 'predrawnOcclusionSeed', 'predrawnOcclusion']) {
+        url.searchParams.delete(parameter);
+      }
+      setPredrawnReviewSearch(url.search);
+      navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
+      reportStatus('Level art installed.', 'success', 'The original units and gameplay data were preserved; campaign play now uses this image and alignment.');
+    } catch (error) {
+      setPredrawnInstallState('error');
+      if (isEditorDocumentConflict(error)) {
+        documentRevisionRef.current = error.document.revision;
+        documentConflictRef.current = true;
+        documentConflictKindRef.current = isEditorDocumentBaselineConflict(error) ? 'baseline' : 'revision';
+        setEditorDocument(error.document);
+        setCloudSaveState('conflict');
+      }
+      reportStatus(
+        'Level art was not installed.',
+        'error',
+        mediaAccepted
+          ? `The exact image is safely stored, but the level remained unchanged. Resolve the save conflict and retry. ${error instanceof Error ? error.message : String(error)}`
+          : error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const discardChanges = async (): Promise<void> => {
     if (!editorDocument || !targetLevelId || !editorDocument.has_saved_baseline) return;
     if (!me?.signed_in || documentRevisionRef.current === null) {
@@ -5351,6 +5696,7 @@ export function LevelEditor(): ReactElement {
               onPanChange={setViewPan}
               coverPolygon={predrawnCoverPolygon}
               onMinimumZoomChange={setViewMinZoom}
+              onViewportSizeChange={setViewViewportSize}
             >
               <div className="tileset-view-board-content is-board" data-art-review={activeFenceArtwork ? FENCE_ART_REVIEW_ID : undefined} data-fence-art={activeFenceArtwork?.id}>
                 {editorLoadError ? (
@@ -5389,6 +5735,8 @@ export function LevelEditor(): ReactElement {
                     boardZoom={viewZoom}
                     boardPan={viewPan}
                     gridScope={gridScope}
+                    predrawnOcclusionEnabled={predrawnOcclusionEnabled}
+                    showPredrawnOcclusionSeed={showPredrawnOcclusionSeed}
                     predrawnPlate={editorPredrawnPlate}
                     tacticalPreview={tacticalPreview}
                     animationFrame={animationFrame}
@@ -5421,9 +5769,10 @@ export function LevelEditor(): ReactElement {
                     propBrush={brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
                     macroTileBrush={brushKind === 'tile' ? macroTileBrushAsset : null}
                     regionCells={regionSelection}
-                    onRegionStart={regionSelectPatch}
+                    onRegionStart={selectTerrainArea}
                     decorativeApron={decorativeApron}
                     decorativeCells={decorativeCells}
+                    decorativeFootprint={decorativeFootprint}
                     decorativeFences={decorativeFences}
                     decorativeFencePosts={decorativeFencePosts}
                     decorativeWalls={decorativeWalls}
@@ -5525,6 +5874,16 @@ export function LevelEditor(): ReactElement {
         onUndo={undoBoard}
         onRedo={redoBoard}
         playBoardHref={testHref}
+        extraActions={isAdmin && predrawnPreview ? (
+          <button
+            type="button"
+            data-chrome-unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-play-board', predrawnInstallState === 'installed' && 'active')}
+            data-testid="install-predrawn-level-art"
+            disabled={saving || !predrawnRegistration}
+            onClick={() => { void installPredrawnLevelArt(); }}
+          >{predrawnInstallState === 'working' ? 'Installing…' : predrawnInstallState === 'installed' ? 'Installed' : 'Install level art'}</button>
+        ) : undefined}
         inert={!editorReady || saving}
         ariaBusy={!editorReady || saving}
       >
@@ -5695,20 +6054,55 @@ export function LevelEditor(): ReactElement {
                 <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
                 <p className="le-board-note">Choose the side, then add or remove columns and rows there. Shrinking drops content outside the new bounds.</p>
                 <h3>Scenic terrain rectangle</h3>
-                {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
-                  <div className="le-ctrlrow" key={side}>
-                    <span className="le-ctrllabel">{side[0].toUpperCase() + side.slice(1)}</span>
-                    <Stepper
-                      value={decorativeApron[side]}
-                      suffix=" tiles"
-                      decreaseLabel={`Reduce scenic terrain on the ${side}`}
-                      increaseLabel={`Extend scenic terrain on the ${side}`}
-                      onDecrease={() => setDecorativeApron((current) => ({ ...current, [side]: Math.max(0, current[side] - 1) }))}
-                      onIncrease={() => setDecorativeApron((current) => ({ ...current, [side]: Math.min(16, current[side] + 1) }))}
-                    />
-                  </div>
-                ))}
-                <p className="le-board-note">Extend only the sides needed for the art-handoff rectangle. These tiles are decorative only and cannot hold units, zones, features, or moves.</p>
+                <div className="le-ctrlrow">
+                  <span className="le-ctrllabel">Generation</span>
+                  <HouseSelect<ScenicTerrainGenerationMode>
+                    value={scenicTerrainGenerationMode}
+                    onChange={setScenicTerrainGenerationMode}
+                    ariaLabel="Scenic terrain generation mode"
+                    options={SCENIC_TERRAIN_GENERATION_OPTIONS}
+                  />
+                </div>
+                {socketEdges.map((edge) => {
+                  const side = SCENIC_TERRAIN_EXTENT_BY_BOARD_EDGE[edge];
+                  const cardinalLabel = edge[0].toUpperCase() + edge.slice(1);
+                  return (
+                    <div className="le-ctrlrow" key={edge}>
+                      <span className="le-ctrllabel">{cardinalLabel}</span>
+                      <Stepper
+                        value={decorativeApron[side]}
+                        suffix=" tiles"
+                        decreaseLabel={`Reduce scenic terrain beyond the ${edge} edge`}
+                        increaseLabel={`Extend scenic terrain beyond the ${edge} edge`}
+                        onDecrease={() => stepScenicTerrainExtent(side, -1)}
+                        onIncrease={() => stepScenicTerrainExtent(side, 1)}
+                      />
+                    </div>
+                  );
+                })}
+                <div className="le-ctrlrow">
+                  <span className="le-ctrllabel">All directions</span>
+                  <Stepper
+                    value={1}
+                    suffix=" tile"
+                    decreaseLabel="Reduce scenic terrain one tile in all four directions"
+                    increaseLabel="Extend scenic terrain one tile in all four directions"
+                    onDecrease={() => stepScenicTerrainExtents(SCENIC_TERRAIN_SIDES, -1)}
+                    onIncrease={() => stepScenicTerrainExtents(SCENIC_TERRAIN_SIDES, 1)}
+                  />
+                </div>
+                <div className="le-ctrlrow">
+                  <span className="le-ctrllabel">Visible area</span>
+                  <button
+                    type="button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                    disabled={!viewViewportSize}
+                    onClick={fillVisibleScenicTerrain}
+                    title="Add only scenic tile diamonds that touch the currently visible board viewport."
+                  >Fill visible area</button>
+                </div>
+                <p className="le-board-note">Use the cardinal steppers for a complete art-handoff rectangle, or fill only the current view without adding its off-screen diamond tips. Scenic tiles never change legal moves.</p>
                 <div className="le-board-actions">
                   <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
                   <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, path, fence rail, post, wall, and wall artwork from the board.">Clear</button>
@@ -6299,11 +6693,11 @@ export function LevelEditor(): ReactElement {
             <p className="le-board-note">
               {fencePaintTarget === 'rail' ? <>
                 Hover a tile and the nearest <strong>edge</strong> highlights; click to drop a rail on that edge
-                (right-click or the Erase tool removes it). Boundary rails are visual; a fenced edge between
+                (select Erase, then click to remove it). Boundary rails are visual; a fenced edge between
                 two board tiles can&rsquo;t be crossed — both tiles stay walkable, and knights hop it (like water).
               </> : <>
                 Hover a tile and the nearest <strong>corner</strong> highlights; click to author a post at that shared
-                grid vertex. Posts may stand alone. Right-click or Erase removes only the authored post; an automatic
+                grid vertex. Posts may stand alone. Select Erase, then click to remove only the authored post; an automatic
                 post still appears wherever exactly one rail ends.
               </>}
             </p>
@@ -6461,6 +6855,35 @@ export function LevelEditor(): ReactElement {
         {brushKind === 'tile' && !macroTileBrushAsset ? (
           <section className="skirmish-card">
             <h2>Tile Fill</h2>
+            <div className="le-gen-scope">
+              <button
+                type="button"
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tool === 'region' && 'active')}
+                onClick={() => setTool(tool === 'region' ? 'brush' : 'region')}
+                title="Click a terrain patch to select its complete connected area. Click this button again to stop."
+              >{tool === 'region' ? 'Selecting…' : 'Select area'}</button>
+              <span className="le-gen-scope-label">{regionSelection.size > 0 ? `${regionSelection.size} cells` : 'No area selected'}</span>
+              {regionSelection.size > 0 ? (
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={clearRegion}
+                  title="Clear the selected tile-fill area."
+                >Clear</button>
+              ) : null}
+            </div>
+            {tool === 'region' ? <p className="le-board-note">Click a terrain patch to select its complete connected area. The selected tile can then fill that area in one edit.</p> : null}
+            <button
+              type="button"
+              data-chrome-unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+              style={{ width: '100%', marginTop: 8 }}
+              disabled={regionSelection.size === 0}
+              onClick={fillSelectedTileArea}
+              title="Paint the exact selected tile across the selected area."
+            >Fill selected area</button>
             <div className="le-seg">
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => fillBoard('empty')} title="Fill blank terrain cells with the current tile brush.">Empty</button>
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => fillBoard('all')} title="Fill the whole terrain layer with the current tile brush.">Whole</button>
@@ -6508,17 +6931,51 @@ export function LevelEditor(): ReactElement {
               )}
             </div>
           </div>
-          {isPredrawnBoard && predrawnPreview ? (
+          {isAdmin && targetLevelId ? (
             <div className="skirmish-view-group">
-              <span className="skirmish-eyebrow">Pre-drawn plate</span>
+              <span className="skirmish-eyebrow">Pre-drawn art</span>
               <div className="skirmish-view-row">
-                <button
-                  type="button"
+                <NavButton
+                  to={() => predrawnReferenceHref(
+                    targetLevelId,
+                    editorDocument
+                      ? levelEditorHrefForDocument(window.location.href, {
+                          levelId: editorDocument.level_id,
+                          documentId: editorDocument.document_id,
+                        })
+                      : `${window.location.pathname}${window.location.search}${window.location.hash}`,
+                  )}
                   data-chrome-unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
-                  data-testid="open-predrawn-registration"
-                  onClick={() => setPredrawnPickerOpen(true)}
-                >Pick corners</button>
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  data-testid="open-predrawn-reference"
+                >Reference</NavButton>
+                {isPredrawnBoard && predrawnPreview ? (
+                  <>
+                    <button
+                      type="button"
+                      data-chrome-unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
+                      data-testid="open-predrawn-registration"
+                      onClick={() => setPredrawnPickerOpen(true)}
+                    >Pick corners</button>
+                    <button
+                      type="button"
+                      data-chrome-unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', predrawnOcclusionEnabled && 'active')}
+                      data-testid="toggle-predrawn-occlusion"
+                      aria-pressed={predrawnOcclusionEnabled}
+                      onClick={togglePredrawnOcclusion}
+                    >Occlusion</button>
+                    <button
+                      type="button"
+                      data-chrome-unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showPredrawnOcclusionSeed && 'active')}
+                      data-testid="toggle-predrawn-occlusion-seed"
+                      aria-pressed={showPredrawnOcclusionSeed}
+                      onClick={togglePredrawnOcclusionSeed}
+                    >Seed mask</button>
+                  </>
+                ) : null}
               </div>
             </div>
           ) : null}

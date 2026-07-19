@@ -34,7 +34,12 @@ import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 import { macroTileAsset, macroTileBreakIndices, macroTileFrame, macroTileOwnedCellIndices, resolveMacroTilePlacements } from '../core/macroTiles';
 import { liveMediaSlotUrl } from '../art/liveMediaCatalog';
-import { predrawnBoardPlacement } from './predrawnBoard';
+import {
+  predrawnBoardPlacement,
+  predrawnBoardRasterBounds,
+  predrawnBoardRasterTransform,
+  type PredrawnBoardRasterTransform,
+} from './predrawnBoard';
 import {
   TERRAIN_SIDE_FACE_COLUMN,
   TERRAIN_SIDE_FACES,
@@ -97,6 +102,8 @@ export interface BoardDrawOp {
   animation?: BoardSpriteAnimation;
   /** Board-space polygon paths used to expose broken cells inside a composite terrain image. */
   clipPolygons?: number[][];
+  /** Complete-scene inverse raster map. Present only on a persisted registered pre-drawn plate. */
+  predrawnTransform?: PredrawnBoardRasterTransform;
 }
 
 export function isBoardDrawOpInLayer(
@@ -125,6 +132,8 @@ export type RenderBoard = EditorBoard;
 export interface BoardDrawOptions {
   coverSeed?: number;
   ambientCover?: boolean;
+  /** Generation-reference mode: retain terrain tops/features while omitting exposed skirts. */
+  topSurfacesOnly?: boolean;
 }
 
 const studioTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
@@ -276,7 +285,20 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   if (predrawn) {
     const gridCells = Array.from({ length: board.rows }, (_, y) =>
       Array.from({ length: board.cols }, (__, x) => ({ x, y }))).flat();
-    const placement = predrawnBoardPlacement(predrawn, gridCells);
+    const registeredTransform = predrawn.registration
+      ? predrawnBoardRasterTransform(predrawn, gridCells, predrawn.registration)
+      : undefined;
+    const registeredBounds = registeredTransform
+      ? predrawnBoardRasterBounds(registeredTransform)
+      : undefined;
+    const placement = registeredBounds
+      ? {
+          left: registeredBounds.minX,
+          top: registeredBounds.minY,
+          width: registeredBounds.width,
+          height: registeredBounds.height,
+        }
+      : predrawnBoardPlacement(predrawn, gridCells);
     ops.push({
       layer: 'terrain',
       src: liveMediaSlotUrl(predrawn.slot),
@@ -285,6 +307,9 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       dw: placement.width,
       dh: placement.height,
       z: -100000,
+      ...(registeredTransform && registeredBounds
+        ? { predrawnTransform: registeredTransform }
+        : {}),
     });
   }
 
@@ -335,29 +360,31 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       const tile = board.cells[key] ? resolveTile(board.cells[key]) : undefined;
       if (tile && !predrawn) {
         const frameSrc = assetFrameSrc(tile, 0);
-        const sideFaces = resolveTerrainSideFaces(
-          resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupiedTerrain.has(`${nextX},${nextY}`)),
-          resolveTerrainSideMaterials(tile, undefined, (source) => (
-            assetFrameSrc(source, 0).replace(/\.png$/, '-side.png')
-          )),
-        );
-        for (const face of TERRAIN_SIDE_FACES) {
-          const { exposed, material } = sideFaces[face];
-          if (!exposed || !material) continue;
-          const faceX = TERRAIN_SIDE_FACE_COLUMN[face] * TILE_STEP_X;
-          ops.push({
-            layer: 'terrain',
-            src: material,
-            sx: faceX,
-            sy: 0,
-            sw: TILE_STEP_X,
-            sh: TILE_FRAME_H,
-            dx: frameX + faceX,
-            dy: frameY,
-            dw: TILE_STEP_X,
-            dh: TILE_FRAME_H,
-            z: zIndex,
-          });
+        if (!options.topSurfacesOnly) {
+          const sideFaces = resolveTerrainSideFaces(
+            resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupiedTerrain.has(`${nextX},${nextY}`)),
+            resolveTerrainSideMaterials(tile, undefined, (source) => (
+              assetFrameSrc(source, 0).replace(/\.png$/, '-side.png')
+            )),
+          );
+          for (const face of TERRAIN_SIDE_FACES) {
+            const { exposed, material } = sideFaces[face];
+            if (!exposed || !material) continue;
+            const faceX = TERRAIN_SIDE_FACE_COLUMN[face] * TILE_STEP_X;
+            ops.push({
+              layer: 'terrain',
+              src: material,
+              sx: faceX,
+              sy: 0,
+              sw: TILE_STEP_X,
+              sh: TILE_FRAME_H,
+              dx: frameX + faceX,
+              dy: frameY,
+              dw: TILE_STEP_X,
+              dh: TILE_FRAME_H,
+              z: zIndex,
+            });
+          }
         }
         if (!macroOwnedTerrain.has(key)) {
           ops.push({ layer: 'terrain', src: frameSrc.replace(/\.png$/, '-top.png'), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
@@ -613,6 +640,9 @@ export function boardBounds(board: RenderBoard, options: BoardDrawOptions = {}):
 
 export function boardSocialFramingBounds(board: RenderBoard): BakeBounds {
   const drawBounds = boardBounds(board);
+  // A registered complete scene owns meaningful pixels beyond the logical board boundary. Server
+  // cards must fit that transformed full frame rather than applying the ordinary tile-relief crop.
+  if (board.surface?.kind === 'predrawn') return drawBounds;
   let surfaceMaxY = -Infinity;
   for (const key of Object.keys(board.cells)) {
     const [x, y] = key.split(',').map(Number);

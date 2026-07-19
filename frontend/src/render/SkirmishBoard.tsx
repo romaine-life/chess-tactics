@@ -37,6 +37,7 @@ import {
   boardDrawOps,
   mirrorFacingPlan,
   mirrorSurfacesForPlacements,
+  predrawnOcclusionMaskOps,
   reflectedOpsForSubjects,
   unprojectBoardPoint,
   type BakeBounds,
@@ -370,10 +371,12 @@ function collectBoardArt(
   wallOverlays: ReadonlyMap<string, ResolvedWallOverlay>,
   wallArtUrls: readonly string[],
   sceneUrls: readonly string[],
+  occlusionUrls: readonly string[],
   predrawnSrc?: string,
 ): { urls: string[]; signature: string } {
   const tiles = new Set<string>();
   for (const url of sceneUrls) tiles.add(url);
+  for (const url of occlusionUrls) tiles.add(url);
   if (predrawnSrc) {
     tiles.add(predrawnSrc);
   } else {
@@ -670,6 +673,7 @@ function SkirmishSceneLayer({
   noHopId,
   premovedIds,
   afterGhosts,
+  occlusionMasks,
 }: {
   sceneBoard: EditorBoard;
   seed: number;
@@ -681,6 +685,7 @@ function SkirmishSceneLayer({
   noHopId: string | null;
   premovedIds: ReadonlySet<string>;
   afterGhosts: ReturnType<typeof premoveGhosts>;
+  occlusionMasks: readonly BoardDrawOp[];
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const motionRef = useRef<Map<string, PieceMotion>>(new Map());
@@ -751,7 +756,12 @@ function SkirmishSceneLayer({
     ].filter((src): src is string => !!src);
     const mirrorFaces = [...new Set(mirrorSurfaces.map((surface) => surface.face))];
     const reflectedUnitSources = livePieces.flatMap((piece) => mirrorSpriteSourcesForPiece(piece, mirrorFaces));
-    const sources = [...new Set([...staticOps.map((op) => op.src), ...unitSources, ...reflectedUnitSources])];
+    const sources = [...new Set([
+      ...staticOps.map((op) => op.src),
+      ...occlusionMasks.map((op) => op.src),
+      ...unitSources,
+      ...reflectedUnitSources,
+    ])];
     const hasAnimatedGroundCover = staticOps.some(isAnimatedGroundCoverOp);
 
     const frameOps = (timeMs: number): BoardDrawOp[] => {
@@ -810,7 +820,7 @@ function SkirmishSceneLayer({
       const images = new Map(entries);
       const tick = (timeMs: number): void => {
         if (cancelled) return;
-        drawBoardOps(ctx, frameOps(timeMs), bounds, images, timeMs);
+        drawBoardOps(ctx, frameOps(timeMs), bounds, images, timeMs, undefined, occlusionMasks);
         if (hasAnimatedGroundCover || arriving || hasActiveMotion(timeMs)) {
           raf = window.requestAnimationFrame(tick);
         }
@@ -822,7 +832,7 @@ function SkirmishSceneLayer({
       cancelled = true;
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, premovedIds, staticOps]);
+  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, occlusionMasks, premovedIds, staticOps]);
 
   return (
     <canvas
@@ -951,6 +961,12 @@ export function SkirmishBoard({
   }, [env, game.pieces, game.size, game.turn, game.winner, netMovePending, pendingPromotion, premoveMode, selectedId, localSide]);
   const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
   const exactBoard = useMemo(() => resolveBoardCode(game), [game.boardCode, game.size.cols, game.size.rows]);
+  const predrawnOcclusionMasks = useMemo(
+    () => exactBoard?.surface?.kind === 'predrawn'
+      ? predrawnOcclusionMaskOps(exactBoard)
+      : [],
+    [exactBoard],
+  );
   const predrawnPlate = useMemo<PredrawnBoardPlate | undefined>(() => {
     const surface = exactBoard?.surface;
     if (!surface) return undefined;
@@ -990,8 +1006,18 @@ export function SkirmishBoard({
   // unit — no per-tile popcorn (see render/boardArtReady). The signature is the tile set
   // (stable across moves), so this arms once per board/seed, not on every move.
   const boardArt = useMemo(
-    () => collectBoardArt(board, livePieces, fenceOverlays, fencePosts, wallOverlays, wallArtUrls, sceneUrls, predrawnPlate?.src),
-    [board, fenceOverlays, fencePosts, livePieces, predrawnPlate?.src, sceneUrls, wallArtUrls, wallOverlays],
+    () => collectBoardArt(
+      board,
+      livePieces,
+      fenceOverlays,
+      fencePosts,
+      wallOverlays,
+      wallArtUrls,
+      sceneUrls,
+      predrawnOcclusionMasks.map((op) => op.src),
+      predrawnPlate?.src,
+    ),
+    [board, fenceOverlays, fencePosts, livePieces, predrawnOcclusionMasks, predrawnPlate?.src, sceneUrls, wallArtUrls, wallOverlays],
   );
   const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
   // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
@@ -1389,6 +1415,7 @@ export function SkirmishBoard({
               noHopId={noHopId}
               premovedIds={premovedIds}
               afterGhosts={afterGhosts}
+              occlusionMasks={predrawnOcclusionMasks}
             />
           )}
           renderCellOverlay={({ cell }) => {

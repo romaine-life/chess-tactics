@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { boardDrawOps, predrawnBoardPlacement, type EditorBoard } from '@chess-tactics/board-render';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  applyLiveMediaCatalog,
+  boardDrawOps,
+  predrawnBoardPlacement,
+  resetLiveMediaCatalog,
+  type EditorBoard,
+} from '@chess-tactics/board-render';
+import { testGroundCoverCatalog } from '../test/liveMediaCatalog';
 import {
   predrawnBoardHomography,
   predrawnBoardCoverPolygon,
@@ -15,6 +22,7 @@ import {
   savePredrawnBoardRegistrationLocally,
   serializePredrawnBoardPreviewRegistration,
   serializePredrawnRegistrationHandoff,
+  runtimePredrawnBoardPlate,
   storedPredrawnBoardRegistration,
   storePredrawnBoardRegistration,
 } from './PredrawnBoardLayer';
@@ -41,6 +49,8 @@ const board = (): EditorBoard => ({
   featureExits: {},
 });
 
+afterEach(() => resetLiveMediaCatalog());
+
 describe('pre-drawn board surface', () => {
   it('registers the complete review frame against canonical board centering', () => {
     const cells = Array.from({ length: 11 }, (_, y) =>
@@ -50,6 +60,67 @@ describe('pre-drawn board surface', () => {
       top: -71.5,
       width: 950,
       height: 565,
+    });
+  });
+
+  it('carries persisted registration into runtime plates while legacy surfaces stay unregistered', () => {
+    const sha256 = 'a'.repeat(64);
+    applyLiveMediaCatalog(testGroundCoverCatalog([{
+      slot: surface.slot,
+      domain: 'review-media',
+      role: 'plate',
+      availabilityPolicy: 'critical',
+      activeVersionId: '10000000-0000-4000-8000-000000000001',
+      rowRevision: 1,
+      metadata: {},
+      versionStatus: 'accepted',
+      productionEligible: true,
+      versionMetadata: {},
+      provenance: {},
+      nativeEvidence: {},
+      media: {
+        url: `/assets/${surface.slot}`,
+        immutableUrl: `/api/media/${sha256}`,
+        sha256,
+        mediaType: 'image/png',
+        width: 1672,
+        height: 941,
+        byteLength: 1,
+      },
+    }]));
+    const registration = {
+      sourceWidth: 1672,
+      sourceHeight: 941,
+      north: [1034.223, 96.015] as const,
+      east: [1375.402, 300.134] as const,
+      south: [611.986, 723.847] as const,
+      west: [281.123, 532.992] as const,
+      gridColumns: 5,
+      gridRows: 11,
+      columnGuides: [0, 0.2, 0.4, 0.6, 0.8, 1],
+      rowGuides: [0, 0.090909, 0.181818, 0.272727, 0.363636, 0.454545, 0.545455, 0.636364, 0.727273, 0.818182, 0.909091, 1],
+      boundaryReference: {
+        north: [1020.229, 112.223] as const,
+        east: [1346.622, 295.818] as const,
+        south: [628.558, 699.729] as const,
+        west: [302.166, 516.133] as const,
+      },
+    };
+    const registeredSurface = {
+      ...surface,
+      frameWidth: 1672,
+      frameHeight: 941,
+      registration,
+    };
+
+    expect(runtimePredrawnBoardPlate(registeredSurface)).toEqual({
+      surface: registeredSurface,
+      src: `/api/media/${sha256}`,
+      registration,
+    });
+    expect(runtimePredrawnBoardPlate(surface)).toEqual({
+      surface,
+      src: `/api/media/${sha256}`,
     });
   });
 

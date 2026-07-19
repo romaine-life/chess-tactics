@@ -829,6 +829,9 @@ ${overlaySelector} {
 function dividerCss(role: ChromeRole, host: RoleTune, hostFrame: FrameRender, divider: DividerRender): string {
   if (!hostFrame.url) return '';
   const selector = `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="${role}"]`;
+  const viewportEdgeControlsSelector = role === 'outer'
+    ? `:root:has(.app-titlebar.chrome-rails-offscreen) ${CHROME_FAMILY_SURFACE_SELECTOR} .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]`
+    : '';
   const railWidth = divider.railHeight;
   const railTop = Math.round((divider.height - railWidth) / 2);
   const reach = role === 'outer' ? roleContentInset(host) : renderedRailThickness(host);
@@ -857,6 +860,13 @@ ${selector}::after {
   position: absolute;
   z-index: 1;
 }
+${viewportEdgeControlsSelector ? `
+${viewportEdgeControlsSelector}::after {
+  background-image: url("${overlay.left}");
+  background-position: left ${leftX} top ${leftY};
+  background-size: ${cssPx(overlay.width)} ${cssPx(overlay.height)};
+}
+` : ''}
 `;
   }
   return `

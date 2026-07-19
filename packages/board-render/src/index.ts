@@ -10,11 +10,13 @@ import {
 } from './art/liveMediaCatalog';
 import { applyLiveUnitCatalog, type LiveUnitCatalog } from './ui/unitCatalog';
 import { boardBounds, boardContentHash, boardDrawOps, boardSocialFramingBounds, type BakeBounds, type BoardDrawOp } from './render/renderPlan';
+import { predrawnOcclusionMaskOps } from './render/predrawnOcclusion';
 
 export type ServerDrawOp = BoardDrawOp;
 
 export interface ServerRenderPlan {
   ops: ServerDrawOp[];
+  occlusionMasks: ServerDrawOp[];
   bounds: BakeBounds;
   framingBounds: BakeBounds;
   contentHash: string;
@@ -25,6 +27,7 @@ export function levelRenderPlan(level: Level): ServerRenderPlan {
   const board = levelToEditorBoard(level);
   return {
     ops: boardDrawOps(board),
+    occlusionMasks: board.surface?.kind === 'predrawn' ? predrawnOcclusionMaskOps(board) : [],
     bounds: boardBounds(board),
     framingBounds: boardSocialFramingBounds(board),
     contentHash: boardContentHash(board),
@@ -75,6 +78,8 @@ export * from './core/featureAutotile';
 export * from './core/groundCover';
 export * from './core/level';
 export * from './core/levelBoard';
+export * from './core/predrawnLevel';
+export * from './core/predrawnGeneration';
 export * from './core/pieces';
 export * from './core/unitSpriteRegistry';
 export * from './core/playRoutePresentation';
@@ -89,6 +94,8 @@ export * from './render/boardProjection';
 export * from './render/fenceOverlayDepth';
 export * from './render/mirrorReflection';
 export * from './render/predrawnBoard';
+export * from './render/predrawnOcclusion';
+export * from './render/predrawnRegistration';
 export * from './render/renderPlan';
 export * from './render/sceneDepth';
 export * from './render/structureGeometry';

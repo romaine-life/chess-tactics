@@ -11,9 +11,12 @@ import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 import { resolveMacroTilePlacements } from '../core/macroTiles';
 import {
+  boardBounds,
+  boardLabMetrics,
   resolveTerrainSideExposure,
   resolveTerrainSideFaces,
   resolveTerrainSideMaterials,
+  type BakeBounds,
   type TerrainSideExposure,
 } from '@chess-tactics/board-render';
 import { PredrawnBoardLayer, runtimePredrawnBoardPlate } from './PredrawnBoardLayer';
@@ -36,6 +39,69 @@ export interface BoardLayerVisibility {
 // "x,y". The editor derives these live; the read-only viewer derives them from the painted set.
 // Reuses the canonical ResolvedFeatureOverlay shape.
 export type FeatureOverlayMap = Record<string, ResolvedFeatureOverlay>;
+
+/**
+ * Derive the one canonical image-generation reference from saved board data.
+ *
+ * The reference keeps authored terrain, roads, doodads, props, fences, and walls, but removes
+ * every visual channel that would either hide that geometry or feed a previous accepted scene
+ * back into a fresh generation run. Terrain side faces are suppressed by `topSurfacesOnly` at
+ * render time because they are a presentation choice rather than another saved board channel.
+ */
+export function boardForTopSurfaceArtExport(board: EditorBoard): EditorBoard {
+  return {
+    ...board,
+    surface: undefined,
+    units: {},
+    cover: {},
+    coverTypes: {},
+  };
+}
+
+export interface TopSurfaceArtExportFrame {
+  width: number;
+  height: number;
+  padding: number;
+  paintBounds: BakeBounds;
+  boardPan: { x: number; y: number };
+}
+
+/** Default clear border around the complete measured paint bounds in the exported PNG. */
+export const TOP_SURFACE_ART_EXPORT_PADDING = 96;
+
+/**
+ * Size and position a top-only reference from the renderer's complete draw bounds.
+ *
+ * This replaces the old per-level fixed viewport and guessed CSS scale. The returned frame is
+ * exactly the measured non-background draw rectangle plus `padding` on all four sides, while the
+ * pan compensates for TileGrid's canonical centering transform. A caller can therefore capture
+ * the frame element directly without knowing the level's row/column count or projected aspect.
+ */
+export function topSurfaceArtExportFrame(
+  board: EditorBoard,
+  padding = TOP_SURFACE_ART_EXPORT_PADDING,
+): TopSurfaceArtExportFrame {
+  const sourceBoard = boardForTopSurfaceArtExport(board);
+  const safePadding = Number.isFinite(padding) ? Math.max(1, Math.ceil(padding)) : TOP_SURFACE_ART_EXPORT_PADDING;
+  const paintBounds = boardBounds(sourceBoard, { ambientCover: false, topSurfacesOnly: true });
+  const cells = Array.from({ length: sourceBoard.rows }, (_, y) => (
+    Array.from({ length: sourceBoard.cols }, (__, x) => ({ x, y }))
+  )).flat();
+  const metrics = boardLabMetrics(cells);
+  const width = Math.ceil(paintBounds.width + safePadding * 2);
+  const height = Math.ceil(paintBounds.height + safePadding * 2);
+
+  return {
+    width,
+    height,
+    padding: safePadding,
+    paintBounds,
+    boardPan: {
+      x: safePadding - paintBounds.minX - metrics.originLeft - width / 2,
+      y: safePadding - paintBounds.minY - metrics.originTop - height / 2,
+    },
+  };
+}
 
 const allTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
 const resolveTileAsset = (id: string): StudioAsset | undefined => allTiles.find((asset) => asset.id === id);
@@ -129,6 +195,8 @@ export function StudioReadOnlyBoard({
   boardPan = { x: 0, y: 0 },
   className = '',
   ariaLabel = 'Level board',
+  hidden,
+  topSurfacesOnly = false,
 }: {
   board: EditorBoard;
   animationFrame?: number;
@@ -137,6 +205,9 @@ export function StudioReadOnlyBoard({
   boardPan?: { x: number; y: number };
   className?: string;
   ariaLabel?: string;
+  hidden?: BoardLayerVisibility;
+  /** Generation-reference view: preserve authored art/objects while suppressing terrain skirts. */
+  topSurfacesOnly?: boolean;
 }): ReactElement {
   const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts, board.featureExits);
   const gridCells: TileGridCell[] = [];
@@ -150,8 +221,10 @@ export function StudioReadOnlyBoard({
     for (let x = 0; x < board.cols; x += 1) {
       const key = `${x},${y}`;
       const tileAsset = board.cells[key] ? resolveTileAsset(board.cells[key]) : undefined;
-      const sideExposure = resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupied.has(`${nextX},${nextY}`));
-      terrainCells.push(studioTerrainCanvasCell({ key, x, y, tileAsset, feature: featureOverlays[key], animationFrame, sideExposure }));
+      const sideExposure = topSurfacesOnly
+        ? { south: false, east: false }
+        : resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupied.has(`${nextX},${nextY}`));
+      terrainCells.push(studioTerrainCanvasCell({ key, x, y, tileAsset, feature: featureOverlays[key], animationFrame, hidden, sideExposure }));
       gridCells.push({
         key,
         x,
@@ -167,11 +240,12 @@ export function StudioReadOnlyBoard({
     familyAt: (x, y) => familyOfTile(board.cells[`${x},${y}`] ?? ''),
   });
   const predrawnPlate = board.surface ? runtimePredrawnBoardPlate(board.surface) : undefined;
+  const sceneBoard = topSurfacesOnly ? boardForTopSurfaceArtExport(board) : board;
 
   return (
     <TileGrid
       cells={gridCells}
-      className={`tileset-placement-board is-readonly ${className}`.trim()}
+      className={`tileset-placement-board is-readonly${topSurfacesOnly ? ' is-top-surface-art-export' : ''} ${className}`.trim()}
       ariaLabel={ariaLabel}
       boardZoom={boardZoom}
       boardPan={boardPan}
@@ -180,7 +254,7 @@ export function StudioReadOnlyBoard({
           {predrawnPlate
             ? <PredrawnBoardLayer plate={predrawnPlate} cells={gridCells} />
             : <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(macroTiles)} />}
-          <BoardSceneLayer board={board} coverSeed={coverSeed} ambientCover={false} omitTerrain />
+          <BoardSceneLayer board={sceneBoard} hidden={hidden} coverSeed={coverSeed} ambientCover={false} omitTerrain />
         </>
       )}
     />

@@ -13,6 +13,9 @@ const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'rend
 const {
   liveCatalogReadinessIssue,
   nativeMediaEvidenceIssue,
+  predrawnBoardMediaIssue,
+  predrawnBoardOwnerProofIssue,
+  predrawnBoardSlotSlug,
   preservesNativeEvidenceForUpload,
 } = require(path.join(bakedBackendDir, 'liveMediaPolicy'));
 let serverRender = null;
@@ -3631,6 +3634,20 @@ async function dbGetEditorDocument(ownerEmail, documentId, client = pool) {
   return rows[0] || null;
 }
 
+async function dbGetEditorDocumentForViewer(viewerEmail, documentId, client = pool) {
+  if (!isAdminEmail(viewerEmail)) {
+    return dbGetEditorDocument(viewerEmail, documentId, client);
+  }
+  await ensureDbReady();
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_DOCUMENT_COLUMNS}
+       FROM level_working_copies
+      WHERE document_id = $1`,
+    [documentId],
+  );
+  return rows[0] || null;
+}
+
 async function dbListEditorDocuments(ownerEmail, {
   includeOfficial = false,
   status = 'all',
@@ -4181,10 +4198,12 @@ app.get('/api/editor-documents/:documentId', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
   try {
-    const stored = await dbGetEditorDocument(user.email, input.documentId);
+    // An opaque document link is sufficient discovery for an authenticated admin,
+    // but it does not broaden the owner-scoped list or any mutation endpoint.
+    const stored = await dbGetEditorDocumentForViewer(user.email, input.documentId);
     if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
     if (!editorDocumentRowIsAuthorized(stored, user, res)) return;
-    const row = await dbLoadEditorDocument(user.email, input.documentId);
+    const row = await dbLoadEditorDocument(stored.owner_email, input.documentId);
     if (!row) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
     res.status(200).json({ document: publicEditorDocument(row) });
   } catch (error) {
@@ -6664,7 +6683,10 @@ function reviewedMediaEvidenceIssue(row) {
   if (evidence.approved !== true || !evidence.approvedBy || !evidence.approvedAt) return 'owner review approval is required';
   if (evidence.contentSha256 !== row.blob_sha256) return 'owner review does not cover the current media bytes';
   const proof = isObjectRecord(evidence.evidence) ? evidence.evidence : {};
-  if (row.domain === 'terrain') {
+  if (predrawnBoardSlotSlug(row.slot)) {
+    const issue = predrawnBoardOwnerProofIssue(row, proof, evidence.surfaceUrl);
+    if (issue) return issue;
+  } else if (row.domain === 'terrain') {
     if (proof.schema !== 'terrain-surface-canonical-board-proof-v1') return 'terrain review requires the canonical board proof schema';
     if (proof.renderer !== 'BoardLabBoard/BoardTerrainLayer') return 'terrain review proof renderer is invalid';
     if (proof.canonicalScale !== 1 || proof.assetLocalScale !== 1 || proof.spatialResampling !== false) {
@@ -6873,6 +6895,12 @@ function publicRuntimeVersionMetadata(row) {
 function mediaDomainProjectionIssue(row) {
   const runtime = runtimeMetadataProjection(row);
   if (runtime.error) return runtime.error;
+  if (predrawnBoardSlotSlug(row.slot)) {
+    if (mediaAcceptanceContract(row).mode !== 'standalone') {
+      return 'pre-drawn board plates require standalone atomic acceptance';
+    }
+    return predrawnBoardMediaIssue(row, runtime.value);
+  }
   const knownDomain = VISUAL_MEDIA_DOMAINS.has(row.domain) || row.domain === 'font' || row.domain === 'sfx';
   if (!knownDomain) return `runtime acceptance requires a registered domain projection, not ${row.domain}`;
   if (row.domain !== 'terrain') {
@@ -7550,7 +7578,8 @@ function gameOwnedReviewSurfaceUrl(req, raw) {
     const sameOrigin = requestOrigin
       ? url.origin === requestOrigin
       : url.host.toLowerCase() === String(req.get('host') || '').toLowerCase();
-    if (!sameOrigin || (url.protocol !== 'http:' && url.protocol !== 'https:') || url.pathname !== '/studio' || url.hash) return null;
+    const gameOwnedPath = url.pathname === '/studio' || url.pathname === '/editor/level';
+    if (!sameOrigin || (url.protocol !== 'http:' && url.protocol !== 'https:') || !gameOwnedPath || url.hash) return null;
     return url.toString();
   } catch {
     return null;
@@ -7558,6 +7587,33 @@ function gameOwnedReviewSurfaceUrl(req, raw) {
 }
 
 async function validateMediaReviewProofSnapshot(client, current, evidence, surfaceUrl) {
+  if (predrawnBoardSlotSlug(current.slot)) {
+    const projectionIssue = mediaDomainProjectionIssue(current);
+    if (projectionIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: projectionIssue });
+    }
+    const proofIssue = predrawnBoardOwnerProofIssue(current, evidence, surfaceUrl);
+    if (proofIssue) throw mediaMutationError('invalid_media_review_proof', 409, proofIssue);
+    const selected = evidence.selectedCandidates[0];
+    const snapshot = evidence.slotSnapshots[0];
+    const slotResult = await client.query(
+      'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = $1',
+      [current.slot],
+    );
+    const slotRow = slotResult.rows[0];
+    if (!slotRow) throw mediaMutationError('media_slot_not_found', 404);
+    if (
+      Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'slot snapshot mismatch' });
+    if (
+      current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    return;
+  }
+  if (new URL(surfaceUrl).pathname !== '/studio') {
+    throw mediaMutationError('invalid_media_review_proof', 409, 'this media domain requires its Studio proof surface');
+  }
   if (current.domain !== 'terrain') {
     const contract = mediaAcceptanceContract(current);
     if (contract.mode === 'group') {
@@ -7685,7 +7741,7 @@ function mediaReviewRequest(req) {
   const surfaceUrl = gameOwnedReviewSurfaceUrl(req, raw.surfaceUrl ?? raw.surface_url);
   const evidence = mediaJsonObject(raw.evidence, {});
   if (!notes || !surfaceUrl || !evidence || !Object.keys(evidence).length) {
-    throw mediaMutationError('invalid_media_review', 400, 'notes, same-origin Studio surfaceUrl, and non-empty evidence are required');
+    throw mediaMutationError('invalid_media_review', 400, 'notes, same-origin game-owned surfaceUrl, and non-empty evidence are required');
   }
   return { raw, notes, surfaceUrl, evidence };
 }
@@ -7831,6 +7887,24 @@ function assertRequiredMediaAcceptanceContract(row, actual) {
       required,
     });
   }
+}
+
+function assertPredrawnBoardAcceptanceProof(row, slot) {
+  if (!predrawnBoardSlotSlug(row.slot)) return;
+  if (mediaAcceptanceContract(row).mode !== 'standalone') {
+    throw mediaMutationError('media_group_contract_mismatch', 409, { slot: row.slot });
+  }
+  const review = isObjectRecord(row.review_evidence) ? row.review_evidence : {};
+  const proof = isObjectRecord(review.evidence) ? review.evidence : {};
+  const issue = predrawnBoardOwnerProofIssue(row, proof, review.surfaceUrl);
+  if (issue) throw mediaMutationError('media_owner_review_required', 409, { slot: row.slot, reason: issue });
+  const selected = proof.selectedCandidates[0];
+  const snapshot = proof.slotSnapshots[0];
+  if (
+    Number(selected.rowRevision) + 1 !== Number(row.row_revision)
+    || !slot || Number(snapshot.rowRevision) !== Number(slot.row_revision)
+    || (snapshot.activeVersionId ?? null) !== (slot.active_version_id ? String(slot.active_version_id) : null)
+  ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
 }
 
 function assertTerrainAcceptanceProof(rows, slotById, contract = null) {
@@ -8015,6 +8089,7 @@ async function acceptMediaVersionBatch(items, actorEmail) {
       if (row.domain === 'terrain' && mediaAcceptanceContract(row).mode === 'standalone') {
         assertTerrainAcceptanceProof([row], slotById);
       }
+      assertPredrawnBoardAcceptanceProof(row, slotById.get(row.slot));
     }
 
     const bySlot = new Map(rows.map((row) => [row.slot, row]));

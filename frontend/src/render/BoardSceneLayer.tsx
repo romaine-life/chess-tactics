@@ -3,6 +3,7 @@ import {
   boardBounds,
   boardContentHash,
   boardDrawOps,
+  predrawnOcclusionMaskOps,
   withoutBoardDrawLayers,
   type BoardDrawOp,
 } from '@chess-tactics/board-render';
@@ -28,6 +29,9 @@ export function BoardSceneLayer({
   ambientCover = false,
   omitTerrain = true,
   transformOps,
+  maskTint,
+  className,
+  predrawnOcclusion = true,
 }: {
   board: EditorBoard;
   hidden?: { tile: boolean; unit: boolean; doodad: boolean };
@@ -37,6 +41,10 @@ export function BoardSceneLayer({
   omitTerrain?: boolean;
   /** Review-only visual substitution applied before the one globally depth-sorted scene canvas. */
   transformOps?: BoardSceneOpsTransform;
+  maskTint?: string;
+  className?: string;
+  /** Owner proof can suppress clipping; gameplay and ordinary viewers keep it enabled. */
+  predrawnOcclusion?: boolean;
 }): ReactElement | null {
   const sourceBoard = useMemo(() => visualBoard(board, hidden), [board, hidden]);
   const contentHash = useMemo(() => `${boardContentHash(sourceBoard)}|cover:${coverSeed}|ambient:${ambientCover ? 1 : 0}`, [ambientCover, coverSeed, sourceBoard]);
@@ -50,6 +58,20 @@ export function BoardSceneLayer({
         ? withoutBoardDrawLayers(transformed, 'terrain')
         : transformed;
   }, [ambientCover, contentHash, coverSeed, hidden?.tile, omitTerrain, sourceBoard, transformOps]);
+  const occlusionMasks = useMemo(
+    () => predrawnOcclusion && board.surface?.kind === 'predrawn' && !hidden?.tile
+      ? predrawnOcclusionMaskOps(board)
+      : [],
+    [board, hidden?.tile, predrawnOcclusion],
+  );
 
-  return <BoardCanvasLayer ops={ops} bounds={bounds} />;
+  return (
+    <BoardCanvasLayer
+      ops={ops}
+      bounds={bounds}
+      maskTint={maskTint}
+      className={className}
+      occlusionMasks={occlusionMasks}
+    />
+  );
 }
