@@ -1,6 +1,6 @@
 import type { TileAssetKind, TileFamilyId, TileSocketAsset } from '../core/tileSockets';
 import type { FeatureKind, FeatureMaterial, FenceMaterial, WallMaterial } from '../core/featureAutotile';
-import { drawableAssets } from './drawableCatalog';
+import { currentDrawableCatalog, drawableAssets, type DrawableCatalog } from './drawableCatalog';
 
 export interface TileAsset extends TileSocketAsset {
   id: string;
@@ -33,7 +33,14 @@ export interface TileAsset extends TileSocketAsset {
 // Built by frontend/scripts/build-surface-tiles.py. Eight variants per family. The raw
 // PixelLab blocks, textured Blender tiles, and the rejected conversion methods are
 // non-production — see frontend/src/art/nonProductionTiles.ts.
-const surfaceAssets = (): TileAsset[] => drawableAssets('terrain-surface').map((asset) => {
+let cachedSurfaceCatalog: DrawableCatalog | null = null;
+let cachedSurfaceAssets: TileAsset[] = [];
+let cachedTileFamilies: Record<TileFamilyId, readonly TileAsset[]> = {};
+
+const surfaceAssets = (): TileAsset[] => {
+  const catalog = currentDrawableCatalog();
+  if (cachedSurfaceCatalog === catalog) return cachedSurfaceAssets;
+  const assets = drawableAssets('terrain-surface').map((asset): TileAsset => {
   const family = asset.behavior.family;
   const top = asset.media.top?.media;
   if (typeof family !== 'string' || !top) throw new Error(`terrain surface ${asset.id} lacks family/top data`);
@@ -50,15 +57,21 @@ const surfaceAssets = (): TileAsset[] => drawableAssets('terrain-surface').map((
     terrains: [family as TileFamilyId],
     ...(typeof asset.behavior.topAnimFrames === 'number' ? { topAnimFrames: asset.behavior.topAnimFrames } : {}),
   };
-});
-
-const currentTileFamilies = (): Record<TileFamilyId, readonly TileAsset[]> => {
+  });
   const grouped: Record<string, TileAsset[]> = {};
-  for (const asset of surfaceAssets()) {
+  for (const asset of assets) {
     const family = asset.terrains?.[0];
     if (family) (grouped[family] ??= []).push(asset);
   }
-  return grouped as Record<TileFamilyId, readonly TileAsset[]>;
+  cachedSurfaceCatalog = catalog;
+  cachedSurfaceAssets = assets;
+  cachedTileFamilies = grouped as Record<TileFamilyId, readonly TileAsset[]>;
+  return assets;
+};
+
+const currentTileFamilies = (): Record<TileFamilyId, readonly TileAsset[]> => {
+  surfaceAssets();
+  return cachedTileFamilies;
 };
 const dynamicArray = <T>(read: () => T[]): T[] => new Proxy([] as T[], {
   get: (_target, property) => {
