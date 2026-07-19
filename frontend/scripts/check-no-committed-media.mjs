@@ -51,6 +51,8 @@ const RETIRED_GIT_MEDIA_PATHS = [
   'frontend/src/ui/design/wallDecorManifest.json',
   'packages/board-render/src/ui/design/wallDecorManifest.json',
   'packages/board-render/src/art/macroTiles.json',
+  'frontend/src/core/wallArt.json',
+  'packages/board-render/src/core/wallArt.json',
 ];
 const PUBLIC_ROOT_PREFIX = 'frontend/public/';
 const PUBLIC_ASSET_PREFIX = 'frontend/public/assets/';
@@ -118,6 +120,7 @@ const STATIC_SCROLLBAR_MEDIA_ROW = /\{[^{}]{0,600}\b(?:file|src|url)\s*:\s*["'`]
 const OLD_PUBLIC_ASSET_FILESYSTEM = /(?:frontend\/)?public\/assets(?:\/|\b)/i;
 const OLD_DEDICATED_SOURCE_FILESYSTEM = /frontend\/scripts\/groundcover\/src(?:\/|\b)/i;
 const BACKEND_SOURCE_PATH_IDENTIFIER = /(?:["']sourcePath["']|\bsourcePath)\s*:/;
+const RETIRED_WALL_ART_AUTHORITY = /\b(?:applyLiveWallArt|loadLiveWallArt|BASELINE_WALL_ART|wallArtJson)\b|\/api\/wall-art\//;
 const MEDIA_GUARD_INSPECTORS = new Set([
   'frontend/scripts/check-empty-panel-frame-overlay.mjs',
   'frontend/scripts/check-no-committed-media.mjs',
@@ -807,6 +810,14 @@ export function collectNoCommittedMediaViolations({
             kind: 'embedded-media',
             path: relativePath,
             detail: embeddedReason,
+          });
+        }
+        if (relativePath !== 'frontend/scripts/check-no-committed-media.mjs'
+          && !TEST_SOURCE_PATH.test(relativePath) && RETIRED_WALL_ART_AUTHORITY.test(source)) {
+          violations.push({
+            kind: 'retired-wall-art-authority',
+            path: relativePath,
+            detail: 'wall art must project from DB-owned drawable records without a compiled baseline or parallel API',
           });
         }
       }

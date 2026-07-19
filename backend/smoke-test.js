@@ -1783,6 +1783,60 @@ async function main() {
       media: { v0: `groundcover/${terrain}/v0.png` },
     });
   }
+  for (const [role, [width, height]] of Object.entries({ base: [72, 96], west: [26, 84], north: [26, 84] })) {
+    await seedSyntheticReadinessMedia({
+      slot: `wall-decor/test-banner-${role}.png`, domain: 'wall-decor', role, width, height,
+    });
+  }
+  await seedSyntheticDrawable({
+    id: 'test-banner-source', kind: 'wall-decor', label: 'Synthetic banner source',
+    behavior: {
+      decorKind: 'banner', mountX: 36, mountY: 10,
+      faces: {
+        west: { mountX: 13, mountY: 10, previewX: 42, previewY: 24 },
+        north: { mountX: 13, mountY: 11, previewX: 84, previewY: 24 },
+      },
+    },
+    media: {
+      base: 'wall-decor/test-banner-base.png',
+      west: 'wall-decor/test-banner-west.png',
+      north: 'wall-decor/test-banner-north.png',
+    },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-wall-art', kind: 'wall-art', label: 'Synthetic wall art',
+    behavior: {
+      span: 1,
+      slots: [{ id: 'test-west', sourceId: 'test-banner-source', face: 'west', x: 42, y: 24, scale: 1 }],
+    },
+    media: {},
+  });
+  const wallArtBatchRollback = await request(
+    'PUT', '/api/admin/drawable-assets', adminJson,
+    JSON.stringify({ assets: [
+      {
+        id: 'test-wall-art', kind: 'wall-art', label: 'Must roll back', sortOrder: 0,
+        lifecycleState: 'active', behavior: {
+          span: 1,
+          slots: [{ id: 'test-west', sourceId: 'test-banner-source', face: 'west', x: 42, y: 24, scale: 1 }],
+        }, metadata: {}, media: {}, expectedRevision: 1,
+      },
+      {
+        id: 'test-missing-wall-art', kind: 'wall-art', label: 'Missing conflict row', sortOrder: 1,
+        lifecycleState: 'active', behavior: { span: 1, slots: [] }, metadata: {}, media: {}, expectedRevision: 1,
+      },
+    ] }), 5000,
+  );
+  if (
+    wallArtBatchRollback.statusCode !== 404
+    || JSON.parse(wallArtBatchRollback.body).error !== 'drawable_asset_not_found'
+  ) throw new Error(`Drawable batch conflict should fail atomically: ${wallArtBatchRollback.statusCode} ${wallArtBatchRollback.body}`);
+  const drawableAfterRollback = JSON.parse((await get(
+    '/api/admin/drawable-assets', { cookie: 'better-auth.session=abc' }, 5000,
+  )).body).assets.find((asset) => asset.id === 'test-wall-art');
+  if (drawableAfterRollback?.label !== 'Synthetic wall art' || drawableAfterRollback?.rowRevision !== 1) {
+    throw new Error(`Drawable batch conflict did not roll back: ${JSON.stringify(drawableAfterRollback)}`);
+  }
   for (const [index, slot] of [
     'ui/chrome/outer/atom.png',
     'ui/chrome/outer/rail.png',

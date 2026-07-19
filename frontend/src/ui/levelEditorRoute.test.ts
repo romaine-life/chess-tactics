@@ -72,14 +72,14 @@ describe('level editor route helpers', () => {
     const href = levelEditorHrefWithRouteState('/editor/level?levelId=l18&document=doc-18', {
       layer: 'wallart',
       brushKind: 'wallart',
-      brush: 'mirror-grand-gallery-wall',
+      brush: 'test-art-mirror-grand-gallery',
     });
 
-    expect(href).toBe('/editor/level?levelId=l18&document=doc-18&layer=wallart&kind=wallart&brush=mirror-grand-gallery-wall');
+    expect(href).toBe('/editor/level?levelId=l18&document=doc-18&layer=wallart&kind=wallart&brush=test-art-mirror-grand-gallery');
     expect(readLevelEditorRouteState(new URL(href, 'https://example.test').search)).toEqual({
       layer: 'wallart',
       brushKind: 'wallart',
-      brush: 'mirror-grand-gallery-wall',
+      brush: 'test-art-mirror-grand-gallery',
     });
   });
 

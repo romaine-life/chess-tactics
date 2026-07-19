@@ -12,6 +12,7 @@ import { applyLiveUnitCatalog, type LiveUnitCatalog } from './ui/unitCatalog';
 import { applyDrawableCatalog, type DrawableCatalog } from './art/drawableCatalog';
 import { applyGroundCoverCatalog } from './core/groundCover';
 import { applyWallDecorCatalog } from './core/wallDecor';
+import { applyWallArtCatalog } from './core/wallArt';
 import { boardBounds, boardContentHash, boardDrawOps, boardSocialFramingBounds, type BakeBounds, type BoardDrawOp } from './render/renderPlan';
 import { predrawnOcclusionMaskOps } from './render/predrawnOcclusion';
 
@@ -66,6 +67,7 @@ export function applyServerRenderSnapshot(snapshot: ServerRenderSnapshot): void 
   applyDrawableCatalog(snapshot.drawableCatalog);
   applyGroundCoverCatalog();
   applyWallDecorCatalog();
+  applyWallArtCatalog();
   assertCriticalLiveMediaAvailable();
   assertInstalledChromeLiveMediaAvailable();
   applyPropSeats(snapshot.propSeats);

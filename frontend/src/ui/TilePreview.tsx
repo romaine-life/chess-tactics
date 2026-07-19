@@ -788,7 +788,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     if (tileFilter !== 'board' && visibleAssets.length > 0) {
       setSelectedAssetId((currentAssetId) => (visibleAssets.some((asset) => asset.id === currentAssetId) ? currentAssetId : visibleAssets[0].id));
     }
-  }, [family, selectedPair.id, tileFilter]);
+  }, [family, selectedPair?.id, tileFilter]);
 
   useEffect(() => {
     setSelectedSlotMask(undefined);

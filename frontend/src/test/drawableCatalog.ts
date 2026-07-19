@@ -1,4 +1,4 @@
-import { applyDrawableCatalog, applyGroundCoverCatalog, applyWallDecorCatalog, type DrawableCatalog } from '@chess-tactics/board-render';
+import { applyDrawableCatalog, applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, type DrawableCatalog } from '@chess-tactics/board-render';
 
 export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 'bedrock']): DrawableCatalog {
   const descriptor = (slot: string, width = 96, height = 180) => {
@@ -89,20 +89,20 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       media: Object.fromEntries(variants.map(({ role, id }) => [role, descriptor(`test/groundcover/${terrain}/v${id}.png`, 240, 37)])) };
   });
   const mirrorSpecs = [
-    ['mirror-keep', 'Keep Mirror', 36, 44, 'authored-crop',
+    ['test-mirror-keep', 'Keep Mirror', 36, 44, 'authored-crop',
       { west: { mountX: 17, mountY: 35, previewX: 42, previewY: 44, aperture: [0.241176, 0.295423, 0.758824, 0.155986, 0.758824, 0.67993, 0.241176, 0.819366] }, north: { mountX: 17, mountY: 35, previewX: 84, previewY: 44, aperture: [0.241176, 0.166549, 0.758824, 0.305986, 0.758824, 0.82993, 0.241176, 0.690493] } }],
-    ['mirror-court-oval', 'Court Oval', 36, 44, 'authored-crop',
+    ['test-mirror-court-oval', 'Court Oval', 36, 44, 'authored-crop',
       { west: { mountX: 15, mountY: 27, previewX: 42, previewY: 44, aperture: [0.5, 0.263289, 0.766, 0.499978, 0.5, 0.812763, 0.234, 0.657478, 0.304, 0.402719] }, north: { mountX: 15, mountY: 28, previewX: 84, previewY: 44, aperture: [0.5, 0.274254, 0.766, 0.668443, 0.5, 0.823728, 0.234, 0.510943, 0.304, 0.297632] } }],
-    ['mirror-chapel-glass', 'Chapel Glass', 36, 48, 'authored-crop',
+    ['test-mirror-chapel-glass', 'Chapel Glass', 36, 48, 'authored-crop',
       { west: { mountX: 16, mountY: 32, previewX: 42, previewY: 46, aperture: [0.5, 0.146458, 0.6375, 0.187639, 0.72, 0.280347, 0.72, 0.667569, 0.28, 0.777569, 0.28, 0.390347, 0.3625, 0.256389] }, north: { mountX: 16, mountY: 32, previewX: 84, previewY: 46, aperture: [0.5, 0.156875, 0.6375, 0.266806, 0.72, 0.400764, 0.72, 0.787986, 0.28, 0.677986, 0.28, 0.290764, 0.3625, 0.198056] } }],
-    ['mirror-witch-eye', "Witch's Eye", 36, 36, 'authored-crop',
+    ['test-mirror-witch-eye', "Witch's Eye", 36, 36, 'authored-crop',
       { west: { mountX: 19, mountY: 19, previewX: 42, previewY: 42, aperture: [0.5, 0.193056, 0.787368, 0.308556, 0.698947, 0.527889, 0.5, 0.697056, 0.212632, 0.581556, 0.234737, 0.332556] }, north: { mountX: 19, mountY: 20, previewX: 84, previewY: 42, aperture: [0.5, 0.206944, 0.787368, 0.595444, 0.698947, 0.730778, 0.5, 0.710944, 0.212632, 0.322444, 0.234737, 0.426278] } }],
-    ['mirror-grand-gallery', 'Grand Gallery Mirror', 108, 215, 'full-body',
+    ['test-mirror-grand-gallery', 'Grand Gallery Mirror', 108, 215, 'full-body',
       { west: { mountX: 119, mountY: 152, previewX: 42, previewY: 72, aperture: [0.043662, 0.327792, 0.956338, 0.024042, 0.956338, 0.668042, 0.043662, 0.971792] }, north: { mountX: 23, mountY: 152, previewX: 86, previewY: 72, aperture: [0.956338, 0.971792, 0.043662, 0.668042, 0.043662, 0.024042, 0.956338, 0.327792] } }],
   ].map(([id, label, mountX, mountY, mirrorCoverage, faces], sortOrder) => ({
     id: id as string, kind: 'wall-decor', label: label as string, sortOrder, lifecycleState: 'active' as const,
     behavior: { decorKind: 'mirror', mountX, mountY, mirrorCoverage, faces }, metadata: { kindLabel: 'Mirrors' }, rowRevision: 1,
-    media: Object.fromEntries(['base', 'west', 'north', 'west-glass', 'north-glass'].map((role) => [role, descriptor(`test/wall-decor/${id}-${role}.png`, id === 'mirror-grand-gallery' ? 240 : 72, id === 'mirror-grand-gallery' ? 240 : 88)])),
+    media: Object.fromEntries(['base', 'west', 'north', 'west-glass', 'north-glass'].map((role) => [role, descriptor(`test/wall-decor/${id}-${role}.png`, id === 'test-mirror-grand-gallery' ? 240 : 72, id === 'test-mirror-grand-gallery' ? 240 : 88)])),
   }));
   const staticDecorSpecs = [
     ['banner-tattered', 'Tattered Banner', 'banner', 36, 10, { west: { mountX: 13, mountY: 10, previewX: 42, previewY: 24 }, north: { mountX: 13, mountY: 11, previewX: 84, previewY: 24 } }, 'Banners'],
@@ -113,6 +113,26 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     id: id as string, kind: 'wall-decor', label: label as string, sortOrder: 100 + sortOrder, lifecycleState: 'active' as const,
     behavior: { decorKind, mountX, mountY, faces }, metadata: { kindLabel }, rowRevision: 1,
     media: Object.fromEntries(['base', 'west', 'north'].map((role) => [role, descriptor(`test/wall-decor/${id}-${role}.png`, role === 'base' ? 72 : 26, role === 'base' ? 96 : 84)])),
+  }));
+  const wallArtEntries = [
+    { id: 'test-banner-pair', label: 'Test banner pair', span: 2, reflection: undefined, slots: [
+      { id: 'test-banner-west', sourceId: 'banner-tattered', face: 'west', x: 42, y: 24, scale: 1 },
+      { id: 'test-banner-north', sourceId: 'banner-tattered', face: 'north', x: 84, y: 24, scale: 1 },
+    ] },
+    ...mirrorSpecs.map((source) => ({
+      id: `test-art-${source.id.replace(/^test-/, '')}`,
+      label: `Test ${source.label}`,
+      span: source.id === 'test-mirror-grand-gallery' ? 3 : 1,
+      reflection: { opacity: 0.75 },
+      slots: [
+        { id: `${source.id}-west`, sourceId: source.id, face: 'west', x: 42, y: source.id === 'test-mirror-grand-gallery' ? 72 : 44, scale: 1 },
+        { id: `${source.id}-north`, sourceId: source.id, face: 'north', x: source.id === 'test-mirror-grand-gallery' ? 86 : 84, y: source.id === 'test-mirror-grand-gallery' ? 72 : 44, scale: 1 },
+      ],
+    })),
+  ];
+  const wallArtSpecs = wallArtEntries.map(({ id, label, span, slots, reflection }, sortOrder) => ({
+    id, kind: 'wall-art', label, sortOrder, lifecycleState: 'active' as const,
+    behavior: { span, slots, ...(reflection ? { reflection } : {}) }, metadata: {}, rowRevision: 1, media: {},
   }));
   const surfaceSpecs = [
     ['hybrid-stone-blue', 'Hybrid · Stone Blue', 'hybrid', 'stone-blue'], ['hybrid-wood-oak', 'Hybrid · Oak', 'hybrid', 'wood-oak'],
@@ -140,7 +160,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       media: {
         surface: descriptor(`test/subterrain/${id}.png`),
       },
-    })), ...terrainSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...surfaceSpecs, ...sliderSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
+    })), ...terrainSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...wallArtSpecs, ...surfaceSpecs, ...sliderSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
       id, kind, label, sortOrder: index, lifecycleState: 'active' as const,
       behavior: { value, ...(isDefault ? { default: true } : {}) }, metadata: {}, rowRevision: 1,
       media: Object.fromEntries(roles.map((role) => [role, descriptor(`test/${id}-${role}.png`)])),
@@ -152,4 +172,5 @@ export function applyTestDrawableCatalog(ids?: readonly string[]): void {
   applyDrawableCatalog(testDrawableCatalog(ids));
   applyGroundCoverCatalog();
   applyWallDecorCatalog();
+  applyWallArtCatalog();
 }

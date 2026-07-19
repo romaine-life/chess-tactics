@@ -40,8 +40,10 @@ import {
 import { wallFrameSrc } from '../art/tileset';
 import { testGroundCoverCatalog, testWallDecorMediaSlots } from '../test/liveMediaCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
+import { applyTestDrawableCatalog } from '../test/drawableCatalog';
 
 beforeAll(() => {
+  applyTestDrawableCatalog();
   applyLiveMediaCatalog(testGroundCoverCatalog(testWallDecorMediaSlots()));
   applyLiveUnitCatalog(testLiveUnitCatalog());
 });
@@ -91,7 +93,7 @@ describe('mirror metadata and normalized optics', () => {
     }
     expect(mirrors.every((mirror) => ['authored-crop', 'full-body'].includes(mirror.mirrorCoverage))).toBe(true);
     expect(mirrors.filter((mirror) => mirror.mirrorCoverage === 'full-body').map((mirror) => mirror.id)).toEqual([
-      'mirror-grand-gallery',
+      'test-mirror-grand-gallery',
     ]);
   });
 
@@ -108,10 +110,10 @@ describe('mirror metadata and normalized optics', () => {
 
   it('preloads both the foreground frame and generated glass backing', () => {
     const edge = roadEdgeKey(0, 0, -1, 0);
-    const keep = wallDecorAsset('mirror-keep');
+    const keep = wallDecorAsset('test-mirror-keep');
     expect(keep?.kind).toBe('mirror');
     if (!keep || keep.kind !== 'mirror') return;
-    expect(wallArtSrcs({ [edge]: 'mirror-keep-wall' }, { cols: 4, rows: 4 })).toEqual([
+    expect(wallArtSrcs({ [edge]: 'test-art-mirror-keep' }, { cols: 4, rows: 4 })).toEqual([
       keep.faces.west.src,
       keep.faces.west.glassSrc,
     ]);
@@ -120,7 +122,7 @@ describe('mirror metadata and normalized optics', () => {
 
 describe('canonical mirror math', () => {
   it('reflects continuous board-grid coordinates exactly across the supporting wall', () => {
-    const art = wallArt('mirror-keep-wall')!;
+    const art = wallArt('test-art-mirror-keep')!;
     const grid = { x: 2.25, y: 1.5 };
     const west = mirrorSurfacesForArt(art, { x: 0, y: 0, face: 'west' })[0];
     const north = mirrorSurfacesForArt(art, { x: 0, y: 0, face: 'north' })[0];
@@ -135,7 +137,7 @@ describe('canonical mirror math', () => {
   });
 
   it('moves west and north reflections along their projected wall-normal grid axes', () => {
-    const art = wallArt('mirror-keep-wall')!;
+    const art = wallArt('test-art-mirror-keep')!;
     const west = mirrorSurfacesForArt(art, { x: 0, y: 0, face: 'west' })[0];
     const north = mirrorSurfacesForArt(art, { x: 0, y: 0, face: 'north' })[0];
 
@@ -160,11 +162,11 @@ describe('canonical mirror math', () => {
     const westEdge = roadEdgeKey(0, 1, -1, 1);
     const northEdge = roadEdgeKey(1, 0, 1, -1);
     const west = mirrorSurfacesForPlacements(
-      { [westEdge]: 'mirror-grand-gallery-wall' },
+      { [westEdge]: 'test-art-mirror-grand-gallery' },
       { cols: 6, rows: 6 },
     )[0];
     const north = mirrorSurfacesForPlacements(
-      { [northEdge]: 'mirror-grand-gallery-wall' },
+      { [northEdge]: 'test-art-mirror-grand-gallery' },
       { cols: 6, rows: 6 },
     )[0];
     const queen = reflectionSubject('queen.png', { x: 0, y: 0 });
@@ -183,11 +185,11 @@ describe('canonical mirror math', () => {
 
   it('uses exact continuous half-open corridor boundaries while a subject moves', () => {
     const west = mirrorSurfacesForPlacements(
-      { [roadEdgeKey(0, 1, -1, 1)]: 'mirror-grand-gallery-wall' },
+      { [roadEdgeKey(0, 1, -1, 1)]: 'test-art-mirror-grand-gallery' },
       { cols: 6, rows: 6 },
     )[0];
     const north = mirrorSurfacesForPlacements(
-      { [roadEdgeKey(1, 0, 1, -1)]: 'mirror-grand-gallery-wall' },
+      { [roadEdgeKey(1, 0, 1, -1)]: 'test-art-mirror-grand-gallery' },
       { cols: 6, rows: 6 },
     )[0];
 
@@ -238,7 +240,7 @@ describe('aperture clipping and continuous spans', () => {
   });
 
   it('clips, tints, preserves exact dimensions, and flips the subject through the frame aperture', () => {
-    const art = wallArt('mirror-keep-wall')!;
+    const art = wallArt('test-art-mirror-keep')!;
     const surface = mirrorSurfacesForArt(art, { x: 0, y: 0, face: 'west' })[0];
     const seat = projectBoardPoint({ x: 0, y: 0 });
     const op: BoardDrawOp = { src: 'pawn-east.png', dx: seat.left - 100, dy: seat.top - 30, dw: 200, dh: 30, z: 20000, opacity: 0.5 };
@@ -262,7 +264,7 @@ describe('aperture clipping and continuous spans', () => {
 
   it('keeps a three-wall gallery as one aperture split only into depth clips', () => {
     const edge = roadEdgeKey(0, 1, -1, 1);
-    const surfaces = mirrorSurfacesForPlacements({ [edge]: 'mirror-grand-gallery-wall' }, { cols: 6, rows: 6 });
+    const surfaces = mirrorSurfacesForPlacements({ [edge]: 'test-art-mirror-grand-gallery' }, { cols: 6, rows: 6 });
     expect(surfaces).toHaveLength(1);
     expect(surfaces[0].span).toBe(3);
     expect(surfaces[0].segments).toHaveLength(3);
@@ -270,7 +272,7 @@ describe('aperture clipping and continuous spans', () => {
     expect(new Set(surfaces[0].segments.map((segment) => segment.z)).size).toBe(3);
 
     const frames = wallArtFrameOpsForPlacements(
-      { [edge]: 'mirror-grand-gallery-wall' },
+      { [edge]: 'test-art-mirror-grand-gallery' },
       { cols: 6, rows: 6 },
       { hasWall: () => true },
     );
@@ -291,7 +293,7 @@ describe('aperture clipping and continuous spans', () => {
     }
 
     const northEdge = roadEdgeKey(1, 0, 1, -1);
-    const north = mirrorSurfacesForPlacements({ [northEdge]: 'mirror-grand-gallery-wall' }, { cols: 6, rows: 6 });
+    const north = mirrorSurfacesForPlacements({ [northEdge]: 'test-art-mirror-grand-gallery' }, { cols: 6, rows: 6 });
     expect(north).toHaveLength(1);
     expect(north[0].segments.map((segment) => segment.anchor)).toEqual([
       { x: 1, y: 0 },
@@ -337,7 +339,7 @@ describe('aperture clipping and continuous spans', () => {
   });
 
   it('grounds the full-body gallery while its generated source grows upward', () => {
-    const gallery = wallArt('mirror-grand-gallery-wall')!;
+    const gallery = wallArt('test-art-mirror-grand-gallery')!;
     expect(gallery.slots.map(({ face, x, y, scale }) => ({ face, x, y, scale }))).toEqual([
       { face: 'west', x: 42, y: 72, scale: 1 },
       { face: 'north', x: 86, y: 72, scale: 1 },
@@ -348,7 +350,7 @@ describe('aperture clipping and continuous spans', () => {
     const edge = roadEdgeKey(0, 0, -1, 0);
     let checked = 0;
     const frames = wallArtFrameOpsForPlacements(
-      { [edge]: 'mirror-grand-gallery-wall' },
+      { [edge]: 'test-art-mirror-grand-gallery' },
       { cols: 6, rows: 6 },
       { hasWall: () => ++checked !== 2 },
     );
@@ -362,14 +364,14 @@ describe('static EditorBoard reflection parity', () => {
     const board: EditorBoard = {
       ...blank(),
       walls: { [edge]: 'stone' },
-      wallArt: { [edge]: 'mirror-keep-wall' },
+      wallArt: { [edge]: 'test-art-mirror-keep' },
       units: { '0,0': { unitId: 'pawn', direction: 'east', faction: 'navy-blue' } },
     };
     const ops = boardDrawOps(board);
     const wall = ops.find((op) => op.src === wallFrameSrc('stone', 8))!;
     const glass = ops.find((op) => op.z === mirrorGlassOverlayZIndex({ x: 0, y: 0 }))!;
     const reflection = ops.find((op) => op.contain && op.clipPolygons?.length)!;
-    const keepFrameSource = wallDecorAsset('mirror-keep');
+    const keepFrameSource = wallDecorAsset('test-mirror-keep');
     expect(keepFrameSource?.kind).toBe('mirror');
     if (!keepFrameSource || keepFrameSource.kind !== 'mirror') return;
     const frameSrc = keepFrameSource.faces.west.src;
@@ -377,7 +379,7 @@ describe('static EditorBoard reflection parity', () => {
     const physical = ops.find((op) => op.contain && !op.clipPolygons)!;
     const unit = unitArtForId('pawn')!;
 
-    const keep = wallDecorAsset('mirror-keep');
+    const keep = wallDecorAsset('test-mirror-keep');
     expect(keep?.kind).toBe('mirror');
     if (!keep || keep.kind !== 'mirror') return;
     expect(glass.src).toBe(keep.faces.west.glassSrc);
@@ -403,8 +405,8 @@ describe('static EditorBoard reflection parity', () => {
         ...blank(),
         walls: { [westEdge]: 'stone', [northEdge]: 'stone' },
         wallArt: {
-          [westEdge]: 'mirror-keep-wall',
-          [northEdge]: 'mirror-keep-wall',
+          [westEdge]: 'test-art-mirror-keep',
+          [northEdge]: 'test-art-mirror-keep',
         },
         units: { '1,1': { unitId: 'knight', direction: 'west', faction: 'navy-blue' } },
       };
@@ -413,11 +415,11 @@ describe('static EditorBoard reflection parity', () => {
       const physical = ops.find((op) => op.contain && !op.clipPolygons);
       const unit = unitArtForId('knight')!;
       const westClip = mirrorSurfacesForPlacements(
-        { [westEdge]: 'mirror-keep-wall' },
+        { [westEdge]: 'test-art-mirror-keep' },
         { cols: board.cols, rows: board.rows },
       )[0].segments[0].apertureClip;
       const northClip = mirrorSurfacesForPlacements(
-        { [northEdge]: 'mirror-keep-wall' },
+        { [northEdge]: 'test-art-mirror-keep' },
         { cols: board.cols, rows: board.rows },
       )[0].segments[0].apertureClip;
 

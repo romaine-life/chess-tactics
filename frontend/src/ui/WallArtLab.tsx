@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerE
 import { tileAssets, tileFamilies, wallFrameSrc, type TileAsset } from '../art/tileset';
 import { defaultWallMaterial, roadEdgeKey, type WallMaterial } from '../core/featureAutotile';
 import {
-  applyLiveWallArt,
   currentWallArt,
   normalizeWallArtReflection,
   slotSource,
@@ -573,7 +572,7 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
   const drag = useRef<{ pointerId: number; index: number; px: number; py: number; x: number; y: number } | null>(null);
   const committedMap = currentWallArt();
   const ids = useMemo(() => Object.keys(draftMap).sort(), [draftMap]);
-  const activeId = ids.includes(artId ?? '') ? artId! : ids[0] ?? 'banner-stone-wall';
+  const activeId = ids.includes(artId ?? '') ? artId! : ids[0] ?? '';
   const activeEntry = draftMap[activeId] ?? { label: activeId, slots: [] };
   const art = entryAsWallArt(activeId, activeEntry);
   const activeSlotIndex = Math.min(selectedSlotIndex, Math.max(0, art.slots.length - 1));
@@ -842,7 +841,6 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
     setStatus('saving...');
     try {
       await saveLiveWallArt(draftMap);
-      applyLiveWallArt(draftMap);
       setStatus('saved - live now');
     } catch (err) {
       const result = mapSaveError(err);

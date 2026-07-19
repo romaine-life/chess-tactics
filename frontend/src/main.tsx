@@ -13,14 +13,13 @@ import { initBgm } from './bgm.js';
 import { primeSfx } from './sfx';
 import { initProgressSync } from './campaign/progressSync';
 import { loadLiveSeats } from './net/propSeats';
-import { loadLiveWallArt } from './net/wallArt';
 import { loadLiveUnitCatalog } from './net/unitAssets';
 import { loadLiveMediaCatalog } from './net/liveMedia';
 import { loadDrawableCatalog } from './net/drawableCatalog';
 import { loadLiveSfxProfile } from './net/sfxProfile';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
-import { applyGroundCoverCatalog, applyWallDecorCatalog } from '@chess-tactics/board-render';
+import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog } from '@chess-tactics/board-render';
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
 // content-hashed + immutable — correct — but that does NOT save a tab that
@@ -74,6 +73,7 @@ if (root) {
     .then(async () => {
       applyGroundCoverCatalog();
       applyWallDecorCatalog();
+      applyWallArtCatalog();
       // Prop/doodad definitions derive active raster dimensions from the media
       // snapshot, so media must be installed before the complete seat document.
       // App is intentionally imported only after both authorities are hydrated:
@@ -88,11 +88,6 @@ if (root) {
       initUnitSizeTuning();
       const { App } = await import('./ui/App');
       reactRoot.render(<App />);
-      // Wall art is explicitly decorative. Media, Unit Art, and prop seats are
-      // absent from this fail-soft group: the app does not render without them.
-      void loadLiveWallArt()
-        .then((changed) => { if (changed) reactRoot.render(<App />); })
-        .catch(() => { /* wall art is decorative */ });
     })
     .catch((error) => {
       console.error('live asset catalog startup failed:', error);
