@@ -1840,6 +1840,13 @@ async function main() {
       media: Object.fromEntries(['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white']
         .map((palette) => [palette, sharedPresentationSlot])),
     });
+    await seedSyntheticDrawable({
+      id: `test-portrait-treatment-${piece}`, kind: 'portrait-treatment', label: `Synthetic ${piece} treatment`, sortOrder,
+      behavior: { piece, method: 'test-treatment', defaultPalette: 'navy-blue', default: true },
+      metadata: { methodLabel: 'Test treatment', methodDescription: 'Synthetic portrait treatment' },
+      media: Object.fromEntries(['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white']
+        .map((palette) => [palette, sharedPresentationSlot])),
+    });
   }
   for (const [sortOrder, id] of ['test-neutral-stone-a', 'test-neutral-stone-b'].entries()) {
     await seedSyntheticDrawable({
@@ -1849,6 +1856,30 @@ async function main() {
         .map((direction) => [direction, sharedPresentationSlot])),
     });
   }
+  const appUiRoles = [
+    'ui-main-menu-background-scene-v1-avif',
+    'ui-kit-icons-brand-shield-png',
+    'ui-surfaces-baseline-stone-blue-avif',
+    'ui-surfaces-hybrid-wood-oak-png',
+    'ui-main-menu-icons-carved-settings-png',
+    'ui-main-menu-icons-carved-solo-skirmish-png',
+    'ui-main-menu-icons-carved-campaign-editor-png',
+    'ui-main-menu-icons-carved-lobbies-png',
+    'ui-kit-icons-gear-png',
+    'ui-kit-icons-speaker-png',
+    'ui-kit-icons-knight-png',
+    'ui-kit-icons-wrench-png',
+  ];
+  await seedSyntheticDrawable({
+    id: 'app-ui', kind: 'app-ui', label: 'Synthetic application UI',
+    behavior: { requiredRoles: appUiRoles },
+    media: Object.fromEntries(appUiRoles.map((role) => [role, sharedPresentationSlot])),
+  });
+  await seedSyntheticDrawable({
+    id: 'test-app-font', kind: 'app-font', label: 'Synthetic application font',
+    behavior: { family: 'Synthetic UI', style: 'normal', weight: 400, display: 'swap', format: 'woff2' },
+    media: { font: sharedPresentationSlot },
+  });
   const wallArtBatchRollback = await request(
     'PUT', '/api/admin/drawable-assets', adminJson,
     JSON.stringify({ assets: [

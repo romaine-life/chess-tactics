@@ -19,6 +19,7 @@ import { loadDrawableCatalog } from './net/drawableCatalog';
 import { loadLiveSfxProfile } from './net/sfxProfile';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
+import { installUiFonts, installUiMediaCssVariables, installedUiMedia } from './ui/installedUiMedia';
 import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, assertInstalledPresentationCatalog } from '@chess-tactics/board-render';
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
@@ -48,18 +49,6 @@ if (shell instanceof HTMLElement) shell.style.visibility = 'visible';
 // soft navigations. The route-scoped background preload moves the scene — first in the
 // order — to the front of the network queue without taxing other routes (the global
 // preload was deliberately removed; see index.html).
-if (isMainMenuPath(window.location.pathname)) {
-  const bgPreload = document.createElement('link');
-  bgPreload.rel = 'preload';
-  bgPreload.as = 'image';
-  bgPreload.type = 'image/avif';
-  bgPreload.href = '/assets/ui/main-menu/background-scene-v1.avif';
-  bgPreload.setAttribute('fetchpriority', 'high');
-  document.head.appendChild(bgPreload);
-}
-armForColdHome();
-
-try { initBgm(); } catch { /* background music is decorative */ }
 // Arm authored terrain SFX on the first user gesture (mirrors initBgm). Only
 // attaches listeners — no AudioContext until a gesture, so it's cheap + autoplay-safe.
 try { primeSfx(); } catch { /* sound effects are decorative */ }
@@ -75,6 +64,19 @@ if (root) {
       applyWallDecorCatalog();
       applyWallArtCatalog();
       assertInstalledPresentationCatalog();
+      installUiMediaCssVariables();
+      installUiFonts();
+      try { initBgm(installedUiMedia('ui-kit-icons-music-png')); } catch { /* background music is decorative */ }
+      if (isMainMenuPath(window.location.pathname)) {
+        const bgPreload = document.createElement('link');
+        bgPreload.rel = 'preload';
+        bgPreload.as = 'image';
+        bgPreload.type = 'image/avif';
+        bgPreload.href = installedUiMedia('ui-main-menu-background-scene-v1-avif');
+        bgPreload.setAttribute('fetchpriority', 'high');
+        document.head.appendChild(bgPreload);
+      }
+      armForColdHome();
       // Prop/doodad definitions derive active raster dimensions from the media
       // snapshot, so media must be installed before the complete seat document.
       // App is intentionally imported only after both authorities are hydrated:

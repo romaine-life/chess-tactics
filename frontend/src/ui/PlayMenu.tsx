@@ -29,9 +29,10 @@ import { NavButton } from './shared/NavButton';
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 import { skirmishProfileLevels } from './skirmishProfiles';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { installedUiMedia } from './installedUiMedia';
 
-const ICONS = '/assets/ui/main-menu/icons-carved';
-const CAMPAIGN_ICON = `${ICONS}/campaign-editor.png`;
+const carvedIcon = (name: string) => installedUiMedia(`ui-main-menu-icons-carved-${name}-png`);
+const CAMPAIGN_ICON = carvedIcon('campaign-editor');
 
 function PlayRailTab({
   label,
@@ -55,7 +56,7 @@ function PlayRailTab({
       aria-current={active ? 'page' : undefined}
     >
       <span className="settings-tab-icon" aria-hidden="true">
-        <img src={`${ICONS}/${icon}.png`} alt="" />
+        <img src={carvedIcon(icon)} alt="" />
       </span>
       <FittedTabLabel>{label}</FittedTabLabel>
     </NavButton>

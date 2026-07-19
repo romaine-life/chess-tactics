@@ -12,11 +12,11 @@ import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { TitleBarControlContribution } from './shell/TitleBarControls';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { installedUiMedia } from './installedUiMedia';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
 const SETTINGS_KEY = 'chess-tactics-settings-v1';
-const ASSET_BASE = '/assets/ui/settings';
 // How long the panel body fades out before swapping in the next menu's controls,
 // then fades back in. MUST match --ds-duration-fade on .settings-panel-content in style.css
 // (the ONE shared fade duration, ADR-0046 — same speed as the screen entrance).
@@ -115,7 +115,7 @@ const creatorTools: CreatorTool[] = [
 
 function asset(file: string): string {
   // Use the shared UI kit's generated glyphs: icon-gear-generated.png -> kit/icons/gear.png
-  return `/assets/ui/kit/icons/${file.replace(/^icon-/, '').replace(/-generated/, '')}`;
+  return installedUiMedia(`ui-kit-icons-${file.replace(/^icon-/, '').replace(/-generated/, '').replace(/\.png$/, '')}-png`);
 }
 
 // Build / server provenance, stamped by vite.config buildInfo, surfaced in About so

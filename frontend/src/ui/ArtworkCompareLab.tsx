@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { drawableAssets } from '@chess-tactics/board-render';
 
 // Art-vs-live fidelity compare as an embedded Studio Viewer kind (ADR-0058; supersedes the
 // standalone-route decision of ADR-0005). Two comparison stages in `.al-lab-main`; both source
@@ -14,19 +15,20 @@ import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode
 // *modified* comparison no longer re-serialises to the URL — the live compare is unaffected.
 
 type ArtEntry = { id: string; label: string; src: string; route: string };
-const INSPO = '/assets/artwork/inspiration/ui-screen-concepts';
-const ART: ArtEntry[] = [
-  { id: 'settings-general', label: 'Settings · General', src: `${INSPO}/generated/settings-general-concept-v1.png`, route: '/settings/general' },
-  { id: 'settings-audio', label: 'Settings · Audio', src: `${INSPO}/generated/settings-audio-concept-v1.png`, route: '/settings/audio' },
-  { id: 'settings-gameplay', label: 'Settings · Gameplay', src: `${INSPO}/generated/settings-gameplay-concept-v1.png`, route: '/settings/gameplay' },
-  { id: 'settings-creator-tools', label: 'Settings · Creator Tools', src: `${INSPO}/generated/settings-creator-tools-concept-v1.png`, route: '/settings/creator-tools' },
-  { id: 'settings-overview', label: 'Settings · Overview', src: `${INSPO}/generated/settings-page-concept-v1.png`, route: '/settings/general' },
-  { id: 'main-menu', label: 'Main Menu', src: `${INSPO}/01-main-menu-aspirational.png`, route: '/' },
-  { id: 'campaign-editor', label: 'Campaign Editor', src: `${INSPO}/02-campaign-editor.png`, route: '/editor' },
-  { id: 'level-editor', label: 'Level Editor', src: `${INSPO}/03-level-editor.png`, route: '/editor/level' },
-  { id: 'skirmish', label: 'Skirmish', src: `${INSPO}/04-skirmish.png`, route: '/play/select/skirmish' },
-];
-const ROUTES = Array.from(new Set(ART.map((a) => a.route)));
+const artEntries = (): ArtEntry[] => drawableAssets('artwork-reference').map((asset) => {
+  const route = asset.behavior.route;
+  const concept = asset.media.concept?.media;
+  if (typeof route !== 'string' || !concept) throw new Error(`artwork reference ${asset.id} is incomplete`);
+  return { id: asset.id, label: asset.label, src: concept.immutableUrl, route };
+});
+const ART: ArtEntry[] = new Proxy([], {
+  get: (_target, property) => {
+    const values = artEntries();
+    const value = Reflect.get(values, property);
+    return typeof value === 'function' ? value.bind(values) : value;
+  },
+});
+const routes = (): string[] => Array.from(new Set(artEntries().map((entry) => entry.route)));
 const LIVE_W = 1440;
 const LIVE_H = 900;
 
@@ -44,7 +46,7 @@ function parseSource(s: string): Source {
 function defaultOpts(): Opt[] {
   return [
     ...ART.map((a) => ({ label: `ART · ${a.label}`, src: `art:${a.id}`, css: '' })),
-    ...ROUTES.map((r) => ({ label: `LIVE · ${r}`, src: `live:${r}`, css: '' })),
+    ...routes().map((r) => ({ label: `LIVE · ${r}`, src: `live:${r}`, css: '' })),
   ];
 }
 function inject(ifr: HTMLIFrameElement | null, css: string): void {

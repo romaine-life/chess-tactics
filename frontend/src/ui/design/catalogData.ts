@@ -6,7 +6,6 @@
 // widgets. Rendering reuses the original CSS (still in style.css), so the React
 // surface is pixel-faithful to what was built.
 import type { CSSProperties } from 'react';
-import optimizedImagesRaw from './optimized-images.json';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface AssetState { label?: string; rect: Rect }
@@ -38,36 +37,14 @@ export interface Asset {
   rect?: Rect;
   rules?: AssetRules;
 }
-// ---------------------------------------------------------------------------
-// Optimized runtime image formats (first-visit load). The live-media catalog
-// owns every format-specific slot; optimized-images.json is only the renderer's
-// deterministic preference list. imageCssValue() emits the known semantic slots
-// as an image-set, and the backend resolves each request to its active version.
-// ---------------------------------------------------------------------------
-interface OptimizedImagesFile { schemaVersion: number; targets: { path: string }[] }
-const optimizedImages = optimizedImagesRaw as unknown as OptimizedImagesFile;
-const OPTIMIZED_IMAGE_PATHS: ReadonlySet<string> = new Set(
-  (optimizedImages.targets || []).map((target) => target.path),
-);
-
 function sanitizeCssUrl(raw: string): string {
   return String(raw || '').replace(/["'\\\n\r]/g, '');
 }
 
-// Returns a CSS <image> value for an asset image URL: an image-set() with
-// AVIF/WebP/PNG semantic slots when variants are declared, otherwise a plain
-// live slot URL. Exported for the runtime asset surfaces and tests.
+// The drawable projection has already selected one immutable media version.
 export function imageCssValue(imageUrl: string): string {
   const clean = sanitizeCssUrl(imageUrl);
   if (!clean) return 'none';
-  if (clean.endsWith('.png') && OPTIMIZED_IMAGE_PATHS.has(clean)) {
-    const variant = (ext: string) => clean.replace(/\.png$/, ext);
-    return (
-      `image-set(url(${variant('.avif')}) type("image/avif"), ` +
-      `url(${variant('.webp')}) type("image/webp"), ` +
-      `url(${clean}) type("image/png"))`
-    );
-  }
   return `url(${clean})`;
 }
 
@@ -75,9 +52,7 @@ export function imageCssValue(imageUrl: string): string {
 // of imageCssValue's image-set (AVIF when optimized, else the PNG). Lets callers
 // preload/await exactly what the CSS background will use, with no double-fetch.
 export function bestImageUrl(imageUrl: string): string {
-  const clean = sanitizeCssUrl(imageUrl);
-  if (clean.endsWith('.png') && OPTIMIZED_IMAGE_PATHS.has(clean)) return clean.replace(/\.png$/, '.avif');
-  return clean;
+  return sanitizeCssUrl(imageUrl);
 }
 
 // ---------------------------------------------------------------------------

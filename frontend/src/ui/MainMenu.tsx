@@ -15,16 +15,17 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
+import { installedUiMedia } from './installedUiMedia';
 
-const ICONS = '/assets/ui/main-menu/icons-carved';
-const BRAND_SHIELD = '/assets/ui/kit/icons/brand-shield.png';
+const menuIcon = (slug: string): string => installedUiMedia(`ui-main-menu-icons-carved-${slug}-png`);
+const BRAND_SHIELD = () => installedUiMedia('ui-kit-icons-brand-shield-png');
 // The heaviest button asset — the carved-stone surface behind every rail tab. The
 // buttons layer only counts as "ready" once this (plus the icons) has decoded, so the
 // rail never reveals as bare panels with the stone snapping in underneath later.
-const STONE_SURFACE = '/assets/ui/surfaces/baseline-stone-blue.avif';
+const STONE_SURFACE = () => installedUiMedia('ui-surfaces-baseline-stone-blue-avif');
 // The title bar's wooden surface — gate the title layer on it (plus the brand shield)
 // so the bar reveals whole, not wordmark-first then wood.
-const TITLE_SURFACE = '/assets/ui/surfaces/hybrid-wood-oak.png';
+const TITLE_SURFACE = () => installedUiMedia('ui-surfaces-hybrid-wood-oak-png');
 
 const MODE_HREFS: Record<string, string> = {
   'campaign-editor': '/editor',
@@ -64,7 +65,7 @@ const MENU_TABS: MenuTab[] = [
 // The trailing-edge Settings control (carved gear) — moved out of the rail into the
 // account cluster (ADR-0036). Lives next to the avatar so the top-right reads as one
 // "settings + user" unit.
-const SETTINGS_ICON = `${ICONS}/settings.png`;
+const SETTINGS_ICON = () => menuIcon('settings');
 
 // A mode entry rendered as a settings-style rail tab (shared baked-skin frame —
 // line frame over the stone surface — carved icon + label). The same chrome the
@@ -88,7 +89,7 @@ function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?:
       style={{ ['--tab-index' as string]: index }}
     >
       <span className="settings-tab-icon" aria-hidden="true">
-        <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
+        <img src={menuIcon(tab.iconSlug)} alt="" />
       </span>
       <FittedTabLabel>{tab.label}</FittedTabLabel>
     </NavButton>
@@ -176,9 +177,9 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
       );
     };
     // Title: the brand shield + the wooden bar surface, so the bar reveals whole.
-    void Promise.allSettled([BRAND_SHIELD, TITLE_SURFACE].map(decode)).then(() => markReady('title'));
+    void Promise.allSettled([BRAND_SHIELD(), TITLE_SURFACE()].map(decode)).then(() => markReady('title'));
     // Buttons: the carved icons + the heaviest stone rail surface.
-    const buttonArt = [SETTINGS_ICON, STONE_SURFACE, ...MENU_TABS.map((tab) => `${ICONS}/${tab.iconSlug}.png`)];
+    const buttonArt = [SETTINGS_ICON(), STONE_SURFACE(), ...MENU_TABS.map((tab) => menuIcon(tab.iconSlug))];
     void Promise.allSettled(buttonArt.map(decode)).then(() => markReady('buttons'));
   }, []);
 

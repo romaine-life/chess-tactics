@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { TERRAIN_SIDE_FACES, drawableAsset, resolveTerrainSideExposure } from '@chess-tactics/board-render';
+import { TERRAIN_SIDE_FACES, drawableAsset, drawableAssets, resolveTerrainSideExposure } from '@chess-tactics/board-render';
 import { tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
-import { terrainTopSrc } from '../render/BoardTerrainLayer';
 import { isUnauthorized } from '../net/auth';
 import { loadLiveMediaCatalog } from '../net/liveMedia';
 import {
@@ -203,13 +202,14 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
     const slots = new Set<string>();
     for (const cell of board.cells) {
       if (!cell.asset) continue;
-      slots.add(terrainTopSrc(cell.asset.src, cell.asset.topAnimFrames));
+      const source = drawableAssets('terrain-surface').find((asset) => asset.media.top?.media.immutableUrl === cell.asset?.src);
+      if (source?.media.top?.slot) slots.add(source.media.top.slot);
     }
     return slots;
   }, [board]);
   const unmountedSelectedSlots = reviewBatch.versions
     .map((version) => version.slot)
-    .filter((slot): slot is string => Boolean(slot) && !mountedStableSlots.has(`/assets/${slot}`));
+    .filter((slot): slot is string => typeof slot === 'string' && !mountedStableSlots.has(slot));
   const previewKey = reviewBatch.versions
     .map((version) => `${version.id}:${version.media?.sha256 ?? ''}:${version.media?.url ?? ''}`)
     .join('|');

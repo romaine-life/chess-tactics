@@ -11,6 +11,7 @@ import {
   chromeUnitSelectors,
 } from './chromeUnitRegistry';
 import committedChromeLabDefaults from '../../config/chrome-lab-defaults.json';
+import { SURFACE_ASSETS } from './surfaceCatalog';
 
 export type RailFit = 'stretch' | 'tile';
 export type AtomAlignmentMode = 'manual' | 'rail-center' | 'anchor' | 'edge-cover';
@@ -19,13 +20,7 @@ export type ChromeFillMode = 'none' | 'tint' | 'surface';
 export type TitleVerticalAlign = 'manual' | 'center';
 export type TitleHorizontalAlign = 'manual' | 'content-inset';
 export type ChromeFillTintId = 'night' | 'blue' | 'steel' | 'oak' | 'ember';
-export type ChromeFillSurfaceId =
-  | 'hybrid-stone-blue'
-  | 'hybrid-wood-oak'
-  | 'baseline-stone-blue'
-  | 'baseline-wood-oak'
-  | 'stone-slate-blue'
-  | 'stone-grey';
+export type ChromeFillSurfaceId = string;
 
 export const NO_ATOM_SOURCE_ID = 'none';
 export const DIVIDER_H = 34;
@@ -50,14 +45,13 @@ export const CHROME_FILL_TINTS = [
   { id: 'oak', label: 'Oak shadow', rgb: [44, 24, 10] },
   { id: 'ember', label: 'Ember', rgb: [50, 11, 13] },
 ] satisfies Array<{ id: ChromeFillTintId; label: string; rgb: [number, number, number] }>;
-export const CHROME_FILL_SURFACES = [
-  { id: 'hybrid-stone-blue', label: 'Hybrid stone blue', src: '/assets/ui/surfaces/hybrid-stone-blue.png' },
-  { id: 'hybrid-wood-oak', label: 'Hybrid wood oak', src: '/assets/ui/surfaces/hybrid-wood-oak.png' },
-  { id: 'baseline-stone-blue', label: 'Baseline stone blue', src: '/assets/ui/surfaces/baseline-stone-blue.png' },
-  { id: 'baseline-wood-oak', label: 'Baseline wood oak', src: '/assets/ui/surfaces/baseline-wood-oak.png' },
-  { id: 'stone-slate-blue', label: 'Slate stone blue', src: '/assets/ui/surfaces/stone-slate-blue.png' },
-  { id: 'stone-grey', label: 'Grey stone', src: '/assets/ui/surfaces/stone-grey.png' },
-] satisfies Array<{ id: ChromeFillSurfaceId; label: string; src: string }>;
+export const CHROME_FILL_SURFACES: Array<{ id: ChromeFillSurfaceId; label: string; src: string }> = new Proxy([], {
+  get: (_target, property) => {
+    const values = SURFACE_ASSETS.map((asset) => ({ id: asset.name, label: asset.label, src: asset.file }));
+    const value = Reflect.get(values, property);
+    return typeof value === 'function' ? value.bind(values) : value;
+  },
+});
 
 export type DividerJointSource = Pick<ChromeCandidateSource, 'id' | 'label' | 'src' | 'width' | 'height'>;
 export type SourcePreviewBox = { width: number; height: number };

@@ -10,6 +10,7 @@ import {
   type ChromeRole,
 } from './chromeCandidateSources';
 import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
+import { installedUiMedia } from './installedUiMedia';
 import {
   ChromeUnitAuditViewer,
   ChromeUnitSpecimen,
@@ -136,7 +137,7 @@ export const CHROME_LAB_TARGETS: ChromeLabTarget[] = [
     label: 'Level Editor',
     kind: 'page',
     route: '/editor/level?chromeLab=1',
-    thumb: '/assets/ui/pages/level-editor.webp',
+    thumb: installedUiMedia('ui-pages-level-editor-webp'),
     badge: 'outer + inner chrome',
   },
   ...chromeUnitsInHierarchyOrder().map((unit): ChromeLabUnitTarget => ({

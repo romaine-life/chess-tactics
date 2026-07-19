@@ -51,4 +51,5 @@ export function assertInstalledPresentationCatalog(): void {
   if (!surfaces.length || surfaces.some((asset) => !asset.media.source)) throw new Error('drawable catalog has incomplete terrain source media');
   if (!drawableAssets('terrain-review').length) throw new Error('drawable catalog has no terrain review inventory');
   if (!drawableAssets('terrain-comparison').length) throw new Error('drawable catalog has no terrain comparison inventory');
+  if (!drawableAssets('portrait-treatment').length) throw new Error('drawable catalog has no portrait treatment inventory');
 }

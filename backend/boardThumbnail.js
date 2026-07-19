@@ -27,7 +27,6 @@ const SPRITE_SOURCE_BINDING_MAX = 512;
 const SPRITE_LOAD_CONCURRENCY = 1;
 const SPRITE_DECODE_CONCURRENCY = 1;
 const FONT_SOURCE_BINDING_MAX = 8;
-const FONT_SRC = '/assets/fonts/advance-wars-2-gba/advance-wars-2-gba.otf';
 const AVAILABILITY_CRITICAL = 'critical';
 const AVAILABILITY_DECORATIVE = 'decorative';
 
@@ -331,9 +330,10 @@ class ThumbnailFontRegistry {
     this.sourceLoadLimiter = sourceLoadLimiter || new Semaphore(SPRITE_LOAD_CONCURRENCY);
   }
 
-  async ensure(loadDynamicSprite, revision) {
+  async ensure(loadDynamicSprite, revision, fontSrc) {
     if (typeof loadDynamicSprite !== 'function') throw new Error('live media loader is unavailable');
-    const sourceKey = JSON.stringify([normalizeRevision(revision), FONT_SRC]);
+    if (typeof fontSrc !== 'string' || !fontSrc) throw new Error('live thumbnail font is unavailable');
+    const sourceKey = JSON.stringify([normalizeRevision(revision), fontSrc]);
     const boundSha = this.sourceBindings.get(sourceKey);
     if (boundSha && this.registrations.has(boundSha)) return this.registrations.get(boundSha).family;
 
@@ -341,7 +341,7 @@ class ThumbnailFontRegistry {
     if (existingLoad) return existingLoad;
 
     const loadPromise = this.sourceLoadLimiter.run(async () => {
-      const bytes = normalizeLoadedBytes(await loadDynamicSprite(FONT_SRC), FONT_SRC);
+      const bytes = normalizeLoadedBytes(await loadDynamicSprite(fontSrc), fontSrc);
       const contentSha = sha256(bytes);
       this.sourceBindings.set(sourceKey, contentSha);
       const existing = this.registrations.get(contentSha);
@@ -454,12 +454,13 @@ async function paintTitleBar(
   mediaCatalogRevision,
   fontFamily,
   sourceAvailability,
+  uiMedia,
 ) {
   const [wood, band, diamond, shield] = await mapWithConcurrency([
-    '/assets/ui/surfaces/hybrid-wood-oak.png',
-    '/assets/ui/titlebar/band-forged.png',
-    '/assets/ui/titlebar/joint-diamond-forged.png',
-    '/assets/ui/kit/icons/brand-shield.png',
+    uiMedia.wood,
+    uiMedia.band,
+    uiMedia.diamond,
+    uiMedia.shield,
   ], SPRITE_LOAD_CONCURRENCY, (src) => (
     loadSprite(
       src,
@@ -702,13 +703,15 @@ async function renderLevelCard({
   loadDynamicSprite,
   mediaCatalogRevision,
   sourceAvailability,
+  uiMedia,
+  fontSrc,
 }) {
   const renderRevision = normalizeRevision(mediaCatalogRevision);
   let fontFamily;
   try {
-    fontFamily = await thumbnailFontRegistry.ensure(loadDynamicSprite, renderRevision);
+    fontFamily = await thumbnailFontRegistry.ensure(loadDynamicSprite, renderRevision, fontSrc);
   } catch (error) {
-    if (sourceAvailabilityPolicy(sourceAvailability, FONT_SRC) === AVAILABILITY_DECORATIVE) {
+    if (sourceAvailabilityPolicy(sourceAvailability, fontSrc) === AVAILABILITY_DECORATIVE) {
       fontFamily = 'sans-serif';
     } else throw error;
   }
@@ -721,6 +724,7 @@ async function renderLevelCard({
     loadDynamicSprite,
     renderRevision,
     sourceAvailability,
+    uiMedia,
   );
 
   const { ops, bounds } = plan;

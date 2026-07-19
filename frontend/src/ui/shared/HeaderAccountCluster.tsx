@@ -3,6 +3,7 @@ import { fetchMe, goSignIn, updateDisplayName, type AuthUser } from '../../net/a
 import { normalizeRoutePath } from '../navigation';
 import { TitleBarIconButtonPrimitive } from '../shell/TitleBarControls';
 import { AccountMenu } from './AccountMenu';
+import { installedUiMedia } from '../installedUiMedia';
 
 // The shared trailing-edge "settings + user" cluster for the standard app title
 // bar (ADR-0023/0036): an icon-only Settings gear next to the account control —
@@ -11,8 +12,8 @@ import { AccountMenu } from './AccountMenu';
 // hand-rolled copy. (Settings and Campaign keep their own bespoke account readout
 // for now; this is the canonical cluster for everything else.)
 
-const SETTINGS_ICON = '/assets/ui/main-menu/icons-carved/settings.png';
-const SIGN_IN_ICON = '/assets/ui/kit/icons/sign-in.png';
+const SETTINGS_ICON = installedUiMedia('ui-main-menu-icons-carved-settings-png');
+const SIGN_IN_ICON = installedUiMedia('ui-kit-icons-sign-in-png');
 
 // The gear's target: send the CURRENT location along as ?returnTo so Settings can
 // offer a real "‹ Back" to the screen the user left (validated via readValidatedReturnTo

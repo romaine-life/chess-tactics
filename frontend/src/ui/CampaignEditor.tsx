@@ -39,20 +39,21 @@ import {
 } from './campaignEditorRecentDrafts';
 import { clearScopedLevelEditorDraft, rebaseScopedLevelEditorDraft } from './levelEditorDraft';
 import { levelEditorLevelSignature } from './levelEditorSignature';
+import { installedUiMedia } from './installedUiMedia';
 
 const CE_ICONS = {
-  favorite: '/assets/ui/kit/icons/brand-shield.png',
-  'chevron-up': '/assets/ui/kit/icons/chevron-up.png',
-  'chevron-down': '/assets/ui/kit/icons/chevron-down.png',
-  delete: '/assets/ui/kit/icons/delete.png',
-  lock: '/assets/ui/kit/icons/lock.png',
-  pencil: '/assets/ui/kit/icons/pencil.png',
-  save: '/assets/ui/kit/icons/save.png',
+  favorite: installedUiMedia('ui-kit-icons-brand-shield-png'),
+  'chevron-up': installedUiMedia('ui-kit-icons-chevron-up-png'),
+  'chevron-down': installedUiMedia('ui-kit-icons-chevron-down-png'),
+  delete: installedUiMedia('ui-kit-icons-delete-png'),
+  lock: installedUiMedia('ui-kit-icons-lock-png'),
+  pencil: installedUiMedia('ui-kit-icons-pencil-png'),
+  save: installedUiMedia('ui-kit-icons-save-png'),
 } as const;
 
 // The carved rail-tab icon, shared with the play-side Campaign section (PlayMenu.tsx) so a
 // campaign looks identical whether you're picking one to play or one to edit.
-const CAMPAIGN_TAB_ICON = '/assets/ui/main-menu/icons-carved/campaign-editor.png';
+const CAMPAIGN_TAB_ICON = installedUiMedia('ui-main-menu-icons-carved-campaign-editor-png');
 
 export type CampaignCollection = 'campaign' | 'unassigned' | 'skirmish-profiles';
 

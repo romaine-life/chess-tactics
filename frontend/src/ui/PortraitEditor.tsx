@@ -7,13 +7,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement, ReactNode, WheelEvent as ReactWheelEvent } from 'react';
 import COMMITTED_CROPS from '../art/portraitCrops.json';
-import { UNIT_PALETTE_LABELS, type UnitPalette } from '../core/pieces';
-import { PORTRAIT_METHODS, portraitMasterSrc, type PortraitMethod } from './portraitCandidates';
+import { UNIT_PALETTES, UNIT_PALETTE_LABELS, type UnitPalette } from '../core/pieces';
+import { PORTRAIT_METHODS, defaultPortraitMethod, portraitMasterSrc, portraitMethodSupportsPalette, type PortraitMethod } from './portraitCandidates';
 import { PaletteSelect } from './shared/PaletteSelect';
 import { InnerChromeBox } from './shared/ChromeBox';
 
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const;
-const paletteEnabledForMethod = (method: PortraitMethod): boolean => method === 'smooth' || method === 'codex-stone';
+const paletteEnabledForMethod = (piece: Piece, method: PortraitMethod): boolean => (
+  UNIT_PALETTES.some((palette) => palette !== 'navy-blue' && portraitMethodSupportsPalette(piece, method, palette))
+);
 export type Piece = (typeof PIECES)[number];
 export type Palette = UnitPalette;
 export type Crop = { cx: number; cy: number; s: number };
@@ -52,7 +54,7 @@ function clampCrop({ cx, cy, s }: Crop): Crop {
   return { s: ss, cx: fit(cx), cy: fit(cy) };
 }
 
-export const masterSrc = (piece: Piece, pal: Palette, method: PortraitMethod = 'smooth') => portraitMasterSrc(piece, pal, method);
+export const masterSrc = (piece: Piece, pal: Palette, method: PortraitMethod = defaultPortraitMethod()) => portraitMasterSrc(piece, pal, method);
 
 // Render the cropped region of a square master to fill a frame, via an absolutely
 // positioned img (width 1/s of the frame, translated so the crop centre is centred).
@@ -118,7 +120,7 @@ function usePortraitEditor() {
   const [crops, setCrops] = useState<Record<Piece, Crop>>(loadCrops);
   const [piece, setPiece] = useState<Piece>('pawn');
   const [palette, setPalette] = useState<Palette>('navy-blue');
-  const [method, setMethod] = useState<PortraitMethod>('smooth');
+  const [method, setMethod] = useState<PortraitMethod>(() => defaultPortraitMethod());
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; cx: number; cy: number } | null>(null);
 
@@ -197,7 +199,7 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
   const ed = usePortraitEditor();
   const { crops, piece, palette, method, crop } = ed;
   const CANVAS = 360;
-  const paletteEnabled = paletteEnabledForMethod(method);
+  const paletteEnabled = paletteEnabledForMethod(piece, method);
   return (
     <>
       <section className="al-lab-main" aria-label="Portrait crop editor">

@@ -20,6 +20,7 @@
 // the store stays in its default fully-revealed state, so nothing ever hides or blinks.
 
 export type RevealLayer = 'bg' | 'title' | 'buttons' | 'rain';
+import { installedUiMedia } from '../installedUiMedia';
 
 const LADDER: RevealLayer[] = ['bg', 'title', 'buttons', 'rain'];
 const LAST = LADDER.length - 1;
@@ -30,7 +31,6 @@ const LAST = LADDER.length - 1;
 // truly on screen, in order). The failsafe only force-completes a genuinely stuck load.
 const FAILSAFE_MS = 8000;
 
-const BACKGROUND_URL = '/assets/ui/main-menu/background-scene-v1.avif';
 
 // stageIndex = the highest ladder layer currently allowed to be visible. Default is
 // LAST (everything revealed) so any route that never arms shows instantly.
@@ -133,7 +133,7 @@ export function armForColdHome(): void {
   }
   img.onload = () => markReady('bg');
   img.onerror = () => markReady('bg'); // missing/undecodable background: proceed, don't stall
-  img.src = BACKGROUND_URL;
+  img.src = installedUiMedia('ui-main-menu-background-scene-v1-avif');
 
   // Title + buttons readiness is reported by MainMenu when their art loads (its decode
   // helper resolves on success OR failure), so no per-layer timers are needed and

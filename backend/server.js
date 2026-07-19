@@ -9809,6 +9809,15 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
       return _thumbCache.getOrCreate(cacheKey, async () => {
         const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
         const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
+        const appUi = renderInputs.drawableCatalog.assets.find((asset) => asset.id === 'app-ui' && asset.kind === 'app-ui');
+        const thumbnailFont = renderInputs.drawableCatalog.assets.find((asset) => asset.kind === 'app-font' && asset.behavior?.thumbnail === true);
+        const requiredUiMedia = (role) => {
+          const src = appUi?.media?.[role]?.media?.immutableUrl;
+          if (!src) throw new Error(`thumbnail UI media role is unavailable: ${role}`);
+          return src;
+        };
+        const fontSrc = thumbnailFont?.media?.font?.media?.immutableUrl;
+        if (!fontSrc) throw new Error('thumbnail font record is unavailable');
         return renderLevelCard({
           plan,
           title: target.title,
@@ -9818,6 +9827,13 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
           loadDynamicSprite: (src) => thumbnailDynamicSprite(src, renderInputs.mediaCatalog),
           mediaCatalogRevision: renderInputs.mediaCatalogRevision,
           sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
+          fontSrc,
+          uiMedia: {
+            wood: requiredUiMedia('ui-surfaces-hybrid-wood-oak-png'),
+            band: requiredUiMedia('ui-titlebar-band-forged-png'),
+            diamond: requiredUiMedia('ui-titlebar-joint-diamond-forged-png'),
+            shield: requiredUiMedia('ui-kit-icons-brand-shield-png'),
+          },
         });
       });
     });

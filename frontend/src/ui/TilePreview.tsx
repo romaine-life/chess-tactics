@@ -39,6 +39,7 @@ import { GameLabCatalog, GameLabViewer } from './GameLab';
 import { GymCatalog, GymViewer, type GymMode } from './Gym';
 import { SolveCatalog, SolveViewer } from './SolveRuns';
 import { PAGE_ENTRIES } from './pagesCatalog';
+import { installedUiMedia } from './installedUiMedia';
 import { SliderRow } from './dressing/SliderRow';
 import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
 import { SfxLibraryStudio, SfxViewer } from './SfxLibraryStudio';
@@ -1851,7 +1852,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       presentation: 'icon',
       label: 'Catalog',
       title: 'Catalog — browse the catalogs.',
-      iconSrc: '/assets/ui/kit/icons/studio-catalog.png',
+      iconSrc: installedUiMedia('ui-kit-icons-studio-catalog-png'),
       active: studioMode === 'catalog',
       pressed: studioMode === 'catalog',
       onActivate: openCatalogMode,
@@ -1862,7 +1863,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       presentation: 'icon',
       label: 'Lab',
       title: 'Lab — open the Level Editor to paint tiles and units and set the board size.',
-      iconSrc: '/assets/ui/kit/icons/studio-lab.png',
+      iconSrc: installedUiMedia('ui-kit-icons-studio-lab-png'),
       destination: '/editor/level?from=studio',
     },
     {
@@ -1871,7 +1872,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       presentation: 'icon',
       label: 'Viewer',
       title: 'Viewer — view one finished asset or artwork.',
-      iconSrc: '/assets/ui/kit/icons/studio-viewer.png',
+      iconSrc: installedUiMedia('ui-kit-icons-studio-viewer-png'),
       active: studioMode === 'viewer',
       pressed: studioMode === 'viewer',
       onActivate: () => setStudioMode('viewer'),

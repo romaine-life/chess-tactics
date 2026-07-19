@@ -2,6 +2,7 @@ import type { CSSProperties, ReactElement } from 'react';
 import { groundCoverSet, type CoverSet, type CoverVariantMeta } from '../core/groundCover';
 import { terrainLabels, type TileFamilyId } from '../core/tileSockets';
 import { drawableAssets } from '@chess-tactics/board-render';
+import { tileFamilies } from '../art/tileset';
 
 export type GroundCoverId = TileFamilyId;
 
@@ -60,7 +61,7 @@ export function GroundCoverPreview({ asset, zoom = 1 }: { asset: GroundCoverCata
   ];
   return (
     <span className="ground-cover-preview" style={{ '--tile-zoom': zoom } as CSSProperties} aria-hidden="true">
-      <img className="ground-cover-preview-tile" src={`/assets/tiles/surface/${asset.id}-0-top.png`} alt="" draggable={false} />
+      <img className="ground-cover-preview-tile" src={tileFamilies[asset.id]?.[0]?.src ?? ''} alt="" draggable={false} />
       {variants.map((meta, index) => {
         const [x, y] = positions[index] ?? [50, 54];
         return <span key={meta.id} className="ground-cover-preview-tuft gc-tuft" style={tuftStyle(asset, meta, x, y)} />;
