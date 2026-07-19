@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { edgeTiles, muralTiles, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
+import { tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { UNIT_PALETTE_LABELS, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
@@ -68,14 +68,12 @@ export function UnitArtLab({
   const deliveryRaster = unitDeliveryRasterForAsset(selectedUnit, sizes);
   const board = useMemo(
     () => solveSocketBoard({
-      assets: tileAssets as readonly TileAsset[],
+      assets: tileAssets,
       terrainMap: Array.from({ length: 8 * 7 }, () => ground),
       seed: 4217,
       columns: 8,
       rows: 7,
       familyAssets: tileFamilies,
-      edgeAssets: edgeTiles,
-      muralEdges: muralTiles,
     }),
     [ground],
   );

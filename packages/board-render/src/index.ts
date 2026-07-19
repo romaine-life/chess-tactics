@@ -9,6 +9,9 @@ import {
   type LiveMediaCatalog,
 } from './art/liveMediaCatalog';
 import { applyLiveUnitCatalog, type LiveUnitCatalog } from './ui/unitCatalog';
+import { applyDrawableCatalog, type DrawableCatalog } from './art/drawableCatalog';
+import { applyGroundCoverCatalog } from './core/groundCover';
+import { applyWallDecorCatalog } from './core/wallDecor';
 import { boardBounds, boardContentHash, boardDrawOps, boardSocialFramingBounds, type BakeBounds, type BoardDrawOp } from './render/renderPlan';
 import { predrawnOcclusionMaskOps } from './render/predrawnOcclusion';
 
@@ -45,6 +48,7 @@ export function hydratePropSeats(seats: PropSeatMap): boolean {
 
 export interface ServerRenderSnapshot {
   mediaCatalog: LiveMediaCatalog;
+  drawableCatalog: DrawableCatalog;
   propSeats: PropSeatMap;
   unitCatalog: LiveUnitCatalog;
 }
@@ -59,6 +63,9 @@ export interface ServerRenderSnapshot {
  */
 export function applyServerRenderSnapshot(snapshot: ServerRenderSnapshot): void {
   applyLiveMediaCatalog(snapshot.mediaCatalog);
+  applyDrawableCatalog(snapshot.drawableCatalog);
+  applyGroundCoverCatalog();
+  applyWallDecorCatalog();
   assertCriticalLiveMediaAvailable();
   assertInstalledChromeLiveMediaAvailable();
   applyPropSeats(snapshot.propSeats);
@@ -70,6 +77,7 @@ export function worldBackgroundSrc(): string {
 }
 
 export * from './art/backgroundSets';
+export * from './art/drawableCatalog';
 export * from './art/liveMediaCatalog';
 export * from './art/projectionContract';
 export * from './art/tileset';
@@ -89,6 +97,7 @@ export * from './core/macroTiles';
 export * from './core/tileSockets';
 export * from './core/types';
 export * from './core/wallArt';
+export * from './core/subterrain';
 export * from './core/wallDecor';
 export * from './render/boardProjection';
 export * from './render/fenceOverlayDepth';

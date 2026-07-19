@@ -2,15 +2,15 @@
 status: "accepted; separate Apply transaction superseded by ADR-0107; corner-only instrument superseded by ADR-0110; non-persisted production-alignment clause superseded by ADR-0123"
 date: 2026-07-13
 deciders: Nelson, Codex
-partially_supersedes: "[ADR-0105](0105-predrawn-candidate-review-uses-exact-board-plane-registration.md)"
+partially_supersedes: "[ADR-0134](0134-predrawn-candidate-review-uses-exact-board-plane-registration.md)"
 partially_superseded_by: "[ADR-0107](0107-predrawn-registration-has-no-unsaved-dialog-state.md), [ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md), and [ADR-0123](0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md)"
 ---
 
-# ADR-0106: Pre-drawn registration is owner-picked source geometry
+# ADR-0135: Pre-drawn registration is owner-picked source geometry
 
 ## Context
 
-ADR-0105 made whole-plate registration exact once four source corners were known,
+ADR-0134 made whole-plate registration exact once four source corners were known,
 but it gave the automatic top-profile detector too much authority over what those
 corners meant. The detector fit real image lines with low numeric residual and
 still inferred the wrong semantic south point. A confident line fit can answer
@@ -46,10 +46,10 @@ the existing editor/play round trip. It is not saved into level data.
 
 Automatic detection may seed the four handles or provide evidence, but it is not
 the semantic authority and may not silently overwrite owner-picked coordinates.
-The exact whole-image homography from ADR-0105 remains the registration operation;
+The exact whole-image homography from ADR-0134 remains the registration operation;
 per-object and per-cell correction remain forbidden.
 
-Production acceptance remains governed by ADR-0076 and ADR-0105: registration is
+Production acceptance remains governed by ADR-0076 and ADR-0134: registration is
 candidate calibration evidence, and the accepted plate must be regenerated at
 its native canonical frame rather than shipping the review resampling.
 

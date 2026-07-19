@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode } from 'react';
-import { edgeTiles, muralTiles, tileAssets, tileFamilies, wallFrameSrc, type TileAsset } from '../art/tileset';
-import { DEFAULT_WALL_MATERIAL, roadEdgeKey } from '../core/featureAutotile';
+import { tileAssets, tileFamilies, wallFrameSrc, type TileAsset } from '../art/tileset';
+import { defaultWallMaterial, roadEdgeKey, type WallMaterial } from '../core/featureAutotile';
 import {
   applyLiveWallArt,
   currentWallArt,
@@ -526,7 +526,7 @@ export function WallArtPreview({ art, zoom = 1 }: { art: WallArt; zoom?: number 
         <img
           key={frame.key}
           className="wall-asset-preview-wall"
-          src={wallFrameSrc(DEFAULT_WALL_MATERIAL, 9)}
+          src={wallFrameSrc(defaultWallMaterial(), 9)}
           alt=""
           draggable={false}
           style={{ left: offsetX + frame.left * scale, top: offsetY + frame.top * scale, width: supportingWall.width * scale, height: supportingWall.height * scale }}
@@ -585,22 +585,21 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
   }), [art.span]);
   const board = useMemo(
     () => solveSocketBoard({
-      assets: tileAssets as readonly TileAsset[],
+      assets: tileAssets,
       terrainMap: Array.from({ length: boardBounds.cols * boardBounds.rows }, () => family),
       seed,
       columns: boardBounds.cols,
       rows: boardBounds.rows,
       familyAssets: tileFamilies,
-      edgeAssets: edgeTiles,
-      muralEdges: muralTiles,
     }),
     [boardBounds.cols, boardBounds.rows, family, seed],
   );
   const walls = useMemo(() => {
-    const walls: Record<string, typeof DEFAULT_WALL_MATERIAL> = {};
+    const walls: Record<string, WallMaterial> = {};
+    const material = defaultWallMaterial();
     for (let i = 0; i < art.span; i += 1) {
-      walls[roadEdgeKey(0, LAB_WEST_Y + i, -1, LAB_WEST_Y + i)] = DEFAULT_WALL_MATERIAL;
-      walls[roadEdgeKey(LAB_NORTH_X + i, 0, LAB_NORTH_X + i, -1)] = DEFAULT_WALL_MATERIAL;
+      walls[roadEdgeKey(0, LAB_WEST_Y + i, -1, LAB_WEST_Y + i)] = material;
+      walls[roadEdgeKey(LAB_NORTH_X + i, 0, LAB_NORTH_X + i, -1)] = material;
     }
     return walls;
   }, [art.span, boardBounds]);

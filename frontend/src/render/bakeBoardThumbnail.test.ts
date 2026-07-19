@@ -19,23 +19,34 @@ import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 import {
   applyLiveMediaCatalog,
+  groundCoverSet,
+  resetDrawableCatalog,
   resetPropSeats,
   resetLiveMediaCatalog,
+  wallDecorAsset,
   withoutBoardDrawLayers,
   type BoardDrawOp,
 } from '@chess-tactics/board-render';
 import { testGroundCoverCatalog, testStructureMediaSlots, testWallDecorMediaSlots } from '../test/liveMediaCatalog';
 import { applyTestPropSeats } from '../test/livePropSeats';
+import { applyTestDrawableCatalog } from '../test/drawableCatalog';
+import { featureFrameSrc, fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
+import { tileFamilies } from '../art/tileset';
+import { subterrainMaterialSrc } from '@chess-tactics/board-render';
+import { structureArtHalfSrc } from '../core/structureArt';
+import { macroTileAsset } from '../core/macroTiles';
 
 beforeAll(() => {
   applyLiveUnitCatalog(testLiveUnitCatalog());
   applyLiveMediaCatalog(testGroundCoverCatalog([...testStructureMediaSlots(), ...testWallDecorMediaSlots()]));
   applyTestPropSeats();
+  applyTestDrawableCatalog();
 });
 afterAll(() => {
   resetPropSeats();
   resetLiveUnitCatalog();
   resetLiveMediaCatalog();
+  resetDrawableCatalog();
 });
 
 // Coverage (opaque fraction) of a rect under an opacity predicate — the property object-fit:cover
@@ -58,7 +69,7 @@ const blank = (cols = 4, rows = 4): EditorBoard => ({
 // production unit, a doodad).
 const TILE = 'grass-surf-0';
 const UNIT = { unitId: 'rook', direction: 'south', faction: 'navy-blue' };
-const GRASS_COVER_SRC = `/api/media/${'a'.repeat(64)}`;
+const grassCoverSources = (): Set<string> => new Set(groundCoverSet('grass')!.variants.map((variant) => variant.src));
 
 type CanvasCall = { name: string; args: unknown[]; alpha: number };
 
@@ -355,18 +366,29 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
   it('collapses a board tiled with one family to a single tile src', () => {
     const board: EditorBoard = { ...blank(2, 2), cells: { '0,0': TILE, '1,0': TILE, '0,1': TILE, '1,1': TILE } };
     const srcs = uniqueDrawSrcs(board);
-    // The composed renderer decodes one top and one exposed-side source for the family.
-    const tileSrcs = srcs.filter((s) => s.includes('grass') && !s.includes('groundcover'));
-    expect(tileSrcs).toHaveLength(2);
-    const topSrc = tileSrcs.find((src) => src.endsWith('-top.png'))!;
-    const sideSrc = tileSrcs.find((src) => src.endsWith('-side.png'))!;
+    // Tile-only boards decode only the top. Subterrain is opt-in and never family-derived.
+    const tileSrcs = srcs.filter((s) => s === boardDrawOps(board).find((op) => op.layer === 'terrain')?.src);
+    expect(tileSrcs).toHaveLength(1);
+    const topSrc = tileSrcs[0];
     expect(boardDrawOps(board).filter((op) => op.src === topSrc)).toHaveLength(4);
-    const sideOps = boardDrawOps(board).filter((op) => op.src === sideSrc);
-    expect(sideOps).toHaveLength(4);
-    expect(sideOps.filter((op) => op.sx === 0 && op.sw === 48 && op.dw === 48)).toHaveLength(2);
-    expect(sideOps.filter((op) => op.sx === 48 && op.sw === 48 && op.dw === 48)).toHaveLength(2);
+    expect(boardDrawOps(board).filter((op) => op.src.endsWith('-side.png'))).toHaveLength(0);
     // Exact editor boards do not invent ambient cover when their authored cover map is empty.
-    expect(srcs).not.toContain(GRASS_COVER_SRC);
+    expect(srcs.some((src) => grassCoverSources().has(src))).toBe(false);
+  });
+
+  it('draws only explicitly authored Subterrain faces', () => {
+    const board: EditorBoard = {
+      ...blank(2, 2),
+      cells: { '0,0': TILE, '1,0': TILE, '0,1': TILE, '1,1': TILE },
+      subterrain: { '1,1:south': 'earth', '1,1:east': 'bedrock' },
+    };
+    const subterrainSrcs = [subterrainMaterialSrc('earth'), subterrainMaterialSrc('bedrock')];
+    const sideOps = boardDrawOps(board).filter((op) => subterrainSrcs.includes(op.src));
+    expect(sideOps).toHaveLength(2);
+    expect(sideOps.map((op) => op.src)).toEqual([
+      subterrainMaterialSrc('earth'),
+      subterrainMaterialSrc('bedrock'),
+    ]);
   });
 
   it('returns no srcs for a blank (untiled) board', () => {
@@ -380,7 +402,7 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
       cells: { '0,0': TILE },
       cover: { '0,0': 'filled' },
     };
-    expect(uniqueDrawSrcs(board)).toContain(GRASS_COVER_SRC);
+    expect(uniqueDrawSrcs(board).some((src) => grassCoverSources().has(src))).toBe(true);
   });
 
   it('deduplicates shared fence post artwork while retaining the rail frame', () => {
@@ -389,29 +411,29 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
       fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' },
     };
     const srcs = uniqueDrawSrcs(board);
-    expect(srcs).toContain('/assets/tiles/feature/fence-wood-2.png');
-    expect(srcs.filter((src) => src === '/assets/tiles/feature/fence-wood-post.png')).toHaveLength(1);
-    expect(boardDrawOps(board).filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png')).toHaveLength(2);
+    expect(srcs).toContain(fenceFrameSrc('wood', 2));
+    expect(srcs.filter((src) => src === fencePostSrc('wood'))).toHaveLength(1);
+    expect(boardDrawOps(board).filter((op) => op.src === fencePostSrc('wood'))).toHaveLength(2);
   });
 
   it('includes standalone explicitly-authored posts without requiring a rail', () => {
     const board: EditorBoard = { ...blank(), fencePosts: { '2,2': 'stone' } };
-    expect(uniqueDrawSrcs(board)).toEqual(['/assets/tiles/feature/fence-stone-post.png']);
+    expect(uniqueDrawSrcs(board)).toEqual([fencePostSrc('stone')]);
     expect(boardDrawOps(board)).toHaveLength(1);
   });
 
   it('a doodad contributes its back AND front halves as distinct srcs', () => {
     const board: EditorBoard = { ...blank(), doodads: { '1,1': { doodadId: 'boulder' } } };
     const srcs = uniqueDrawSrcs(board);
-    expect(srcs.some((s) => s.includes('boulder') && s.includes('back'))).toBe(true);
-    expect(srcs.some((s) => s.includes('boulder') && s.includes('front'))).toBe(true);
+    expect(srcs).toContain(structureArtHalfSrc('boulder', 'back'));
+    expect(srcs).toContain(structureArtHalfSrc('boulder', 'front'));
   });
 
   it('a prop contributes its back AND front halves; unknown prop ids are skipped', () => {
     const board: EditorBoard = { ...blank(8, 6), props: { '3,2': { propId: 'cottage' } } };
     const srcs = uniqueDrawSrcs(board);
-    expect(srcs).toContain('/assets/props/cottage/back.png');
-    expect(srcs).toContain('/assets/props/cottage/front.png');
+    expect(srcs).toContain(structureArtHalfSrc('cottage', 'back'));
+    expect(srcs).toContain(structureArtHalfSrc('cottage', 'front'));
     const unknown: EditorBoard = { ...blank(8, 6), props: { '3,2': { propId: 'not-a-prop' } } };
     expect(uniqueDrawSrcs(unknown)).toEqual([]);
   });
@@ -426,7 +448,7 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
       macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
     };
     const sources = uniqueDrawSrcs(board);
-    expect(sources).toContain('/assets/tiles/macro-tiles/grass-soft-bands-3x3.png');
+    expect(sources).toContain(macroTileAsset('grass-soft-bands-3x3')?.src);
     expect(sources.some((source) => source.endsWith('grass-0-top.png'))).toBe(false);
   });
 });
@@ -496,8 +518,8 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       units: { '4,3': UNIT },
     };
     const ops = boardDrawOps(board);
-    const back = ops.find((op) => op.src === '/assets/props/cottage/back.png');
-    const front = ops.find((op) => op.src === '/assets/props/cottage/front.png');
+    const back = ops.find((op) => op.src === structureArtHalfSrc('cottage', 'back'));
+    const front = ops.find((op) => op.src === structureArtHalfSrc('cottage', 'front'));
     const unit = ops.find((op) => op.contain);
     expect(back!.z).toBeLessThan(unit!.z);
     expect(front!.z).toBeGreaterThan(unit!.z);
@@ -519,8 +541,8 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       props: { '3,2': { propId: 'oak' } },
     };
     const ops = boardDrawOps(board);
-    const back = ops.find((op) => op.src === '/assets/props/oak/back.png');
-    const front = ops.find((op) => op.src === '/assets/props/oak/front.png');
+    const back = ops.find((op) => op.src === structureArtHalfSrc('oak', 'back'));
+    const front = ops.find((op) => op.src === structureArtHalfSrc('oak', 'front'));
     expect(back).toBeDefined();
     expect(front).toBeDefined();
     expect(back!.sx).toBeUndefined();
@@ -540,9 +562,9 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       features: { '1,1': { kind: 'road', material: 'cobble' } },
     };
     const ops = boardDrawOps(board);
-    const tileOps = ops.filter((op) => op.src.endsWith('grass-0-top.png'));
-    const macroTileOp = ops.find((op) => op.src.includes('macro-tiles'));
-    const featureOp = ops.find((op) => op.src.includes('feature') || op.src.includes('road'));
+    const tileOps = ops.filter((op) => op.src === tileFamilies.grass[0].src);
+    const macroTileOp = ops.find((op) => op.src === macroTileAsset('grass-soft-bands-3x3')?.src);
+    const featureOp = ops.find((op) => op.src === featureFrameSrc('road', 'cobble', 0));
     expect(tileOps).toHaveLength(1);
     expect(macroTileOp).toBeDefined();
     expect(featureOp).toBeDefined();
@@ -564,8 +586,8 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0, breaks: [4] }],
     };
     const ops = boardDrawOps(board);
-    const tileOps = ops.filter((op) => op.src.endsWith('grass-0-top.png'));
-    const macroTileOp = ops.find((op) => op.src.includes('macro-tiles'));
+    const tileOps = ops.filter((op) => op.src === tileFamilies.grass[0].src);
+    const macroTileOp = ops.find((op) => op.src === macroTileAsset('grass-soft-bands-3x3')?.src);
 
     expect(tileOps).toHaveLength(1);
     expect(macroTileOp?.clipPolygons).toHaveLength(8);
@@ -593,7 +615,8 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       };
       const ops = boardDrawOps(board);
       const unit = ops.find((op) => op.contain);
-      const coverOps = ops.filter((op) => op.src === GRASS_COVER_SRC);
+      const coverSources = grassCoverSources();
+      const coverOps = ops.filter((op) => coverSources.has(op.src));
 
       expect(unit).toBeDefined();
       expect(coverOps.some((op) => op.z < unit!.z)).toBe(true);
@@ -611,13 +634,14 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       doodads: { '1,1': { doodadId: 'boulder' } },
     };
     const ops = boardDrawOps(board);
-    const fence = ops.find((op) => op.src === '/assets/tiles/feature/fence-wood-2.png');
-    const posts = ops.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png');
+    const fence = ops.find((op) => op.src === fenceFrameSrc('wood', 2));
+    const posts = ops.filter((op) => op.src === fencePostSrc('wood'));
     const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 1, y: 1 }));
     const nearUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 2, y: 1 }));
-    const coverOps = ops.filter((op) => op.src === GRASS_COVER_SRC);
-    const doodadBack = ops.find((op) => op.src === '/assets/doodads/boulder/back.png');
-    const doodadFront = ops.find((op) => op.src === '/assets/doodads/boulder/front.png');
+    const coverSources = grassCoverSources();
+    const coverOps = ops.filter((op) => coverSources.has(op.src));
+    const doodadBack = ops.find((op) => op.src === structureArtHalfSrc('boulder', 'back'));
+    const doodadFront = ops.find((op) => op.src === structureArtHalfSrc('boulder', 'front'));
     expect(fence).toBeDefined();
     expect(posts).toHaveLength(2);
     const ownerLeft = 0;
@@ -650,12 +674,12 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
 
   it('puts both endpoints of E- and S-rails behind their capping posts', () => {
     for (const [edge, src] of [
-      [roadEdgeKey(1, 1, 2, 1), '/assets/tiles/feature/fence-wood-2.png'],
-      [roadEdgeKey(1, 1, 1, 2), '/assets/tiles/feature/fence-wood-4.png'],
+      [roadEdgeKey(1, 1, 2, 1), fenceFrameSrc('wood', 2)],
+      [roadEdgeKey(1, 1, 1, 2), fenceFrameSrc('wood', 4)],
     ] as const) {
       const ops = boardDrawOps({ ...blank(4, 4), fences: { [edge]: 'wood' } });
       const rail = ops.find((op) => op.src === src)!;
-      const posts = ops.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png');
+      const posts = ops.filter((op) => op.src === fencePostSrc('wood'));
       const [rear, front] = [...posts].sort((a, b) => a.z - b.z);
 
       expect(posts).toHaveLength(2);
@@ -679,8 +703,9 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     };
     const ops = boardDrawOps(board);
     const postZ = fencePostZIndex({ x: 2, y: 2 });
-    const post = ops.find((op) => op.src === '/assets/tiles/feature/fence-wood-post.png' && op.z === postZ)!;
-    const incidentRails = ops.filter((op) => op.src.startsWith('/assets/tiles/feature/fence-wood-') && !op.src.endsWith('-post.png'));
+    const post = ops.find((op) => op.src === fencePostSrc('wood') && op.z === postZ)!;
+    const railSrcs = new Set([2, 4, 6].map((mask) => fenceFrameSrc('wood', mask)));
+    const incidentRails = ops.filter((op) => railSrcs.has(op.src));
 
     expect(incidentRails).toHaveLength(3);
     expect(incidentRails.every((rail) => rail.z < post.z)).toBe(true);
@@ -696,10 +721,10 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       },
     };
     const ops = boardDrawOps(board);
-    const northRail = ops.find((op) => op.src === '/assets/tiles/feature/fence-wood-4.png');
-    const westRail = ops.find((op) => op.src === '/assets/tiles/feature/fence-stone-2.png');
-    const woodPosts = ops.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png');
-    const stonePosts = ops.filter((op) => op.src === '/assets/tiles/feature/fence-stone-post.png');
+    const northRail = ops.find((op) => op.src === fenceFrameSrc('wood', 4));
+    const westRail = ops.find((op) => op.src === fenceFrameSrc('stone', 2));
+    const woodPosts = ops.filter((op) => op.src === fencePostSrc('wood'));
+    const stonePosts = ops.filter((op) => op.src === fencePostSrc('stone'));
 
     expect(northRail).toBeDefined();
     expect(westRail).toBeDefined();
@@ -730,8 +755,8 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       fencePosts: { '1,1': 'stone' },
     };
     const ops = boardDrawOps(board);
-    expect(ops.filter((op) => op.src === '/assets/tiles/feature/fence-stone-post.png')).toHaveLength(1);
-    expect(ops.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png')).toHaveLength(3);
+    expect(ops.filter((op) => op.src === fencePostSrc('stone'))).toHaveLength(1);
+    expect(ops.filter((op) => op.src === fencePostSrc('wood'))).toHaveLength(3);
   });
 
   it('replaces an automatic endpoint with one explicit post instead of drawing both', () => {
@@ -740,10 +765,10 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' },
       fencePosts: { '2,1': 'stone' },
     };
-    const postOps = boardDrawOps(board).filter((op) => op.src.endsWith('-post.png'));
+    const postOps = boardDrawOps(board).filter((op) => op.src === fencePostSrc('stone') || op.src === fencePostSrc('wood'));
     expect(postOps).toHaveLength(2);
-    expect(postOps.filter((op) => op.src === '/assets/tiles/feature/fence-stone-post.png')).toHaveLength(1);
-    expect(postOps.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png')).toHaveLength(1);
+    expect(postOps.filter((op) => op.src === fencePostSrc('stone'))).toHaveLength(1);
+    expect(postOps.filter((op) => op.src === fencePostSrc('wood'))).toHaveLength(1);
   });
 
   it('draws north/west perimeter walls with the wall frame anchor', () => {
@@ -754,7 +779,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       units: { '1,0': UNIT },
     };
     const ops = boardDrawOps(board);
-    const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-1.png');
+    const wall = ops.find((op) => op.src === wallFrameSrc('stone', 1));
     const ownerUnit = ops.find((op) => op.contain && op.z === objectBaseZIndex({ x: 1, y: 0 }));
     expect(wall).toBeDefined();
     expect(ownerUnit).toBeDefined();
@@ -773,9 +798,9 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       props: { '1,0': { propId: 'fieldstone' } },
     };
     const ops = boardDrawOps(board);
-    const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-1.png');
-    const structureBack = ops.find((op) => op.src === '/assets/props/fieldstone/back.png');
-    const structureFront = ops.find((op) => op.src === '/assets/props/fieldstone/front.png');
+    const wall = ops.find((op) => op.src === wallFrameSrc('stone', 1));
+    const structureBack = ops.find((op) => op.src === structureArtHalfSrc('fieldstone', 'back'));
+    const structureFront = ops.find((op) => op.src === structureArtHalfSrc('fieldstone', 'front'));
 
     expect(wall).toBeDefined();
     expect(structureBack).toBeDefined();
@@ -795,9 +820,9 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       props: { '0,0': { propId: 'fieldstone' } },
     };
     const ops = boardDrawOps(board);
-    const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-8.png');
-    const art = ops.find((op) => op.src === testWallDecorMediaSlots()[1].media.immutableUrl);
-    const structureBack = ops.find((op) => op.src === '/assets/props/fieldstone/back.png');
+    const wall = ops.find((op) => op.src === wallFrameSrc('stone', 8));
+    const art = ops.find((op) => op.src === wallDecorAsset('banner-tattered')?.faces.west.src);
+    const structureBack = ops.find((op) => op.src === structureArtHalfSrc('fieldstone', 'back'));
 
     expect(wall).toBeDefined();
     expect(art).toBeDefined();

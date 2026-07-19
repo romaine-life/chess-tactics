@@ -16,7 +16,7 @@ import type { PlacedProp } from './props';
 import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { TileFamilyId } from './tileSockets';
 import { decodeBoard, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type EditorBoard, type EditorZoneEntry } from '../ui/boardCode';
-import { parseEdgeKey, isOrthogonalPair, isNorthWestBoundaryWallEdge, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
+import { parseEdgeKey, isOrthogonalPair, isNorthWestBoundaryWallEdge, defaultFenceMaterial } from './featureAutotile';
 import { studioFamilies } from '../ui/studioBoard';
 import { isUnitPalette } from './pieces';
 import { unitFamilyForId, type Faction } from '../ui/unitCatalog';
@@ -260,7 +260,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
   const fences: EditorBoard['fences'] = {};
   for (const edge of level.layers.fences ?? []) {
     if (!fenceTouchesBoard(edge, cols, rows)) continue;
-    fences[edge] = DEFAULT_FENCE_MATERIAL;
+    fences[edge] = defaultFenceMaterial();
   }
   const hasAuthoredPlayer = level.layers.units.some((unit) => unit.side === 'player');
   return {

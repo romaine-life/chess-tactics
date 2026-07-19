@@ -64,7 +64,7 @@ under ADR-0085 and are not committed to Git.
 
 Generation does not make a candidate production-ready. Candidate review still
 uses the real game surface, live grid, and owner-picked registration governed by
-ADR-0105 through ADR-0108. The canonical level remains gameplay-authoritative.
+ADR-0134, ADR-0135, ADR-0107, and ADR-0108. The canonical level remains gameplay-authoritative.
 
 ## Consequences
 

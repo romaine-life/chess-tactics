@@ -1,6 +1,5 @@
 import { useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { TILE_SIDE_ITEMS, tileSideItemById } from './tileSideCatalog';
-import { terrainLabels } from '../core/tileSockets';
 
 // Read-only Viewer for a single tile's SIDE faces — the tile shown big on an inspection
 // backdrop with a zoom up to 8× so you can scrutinise the cliff cross-section pixel-by-pixel.
@@ -25,11 +24,11 @@ export function TileSidesViewer({ name, header }: { name?: string; header?: Reac
   };
   return (
     <>
-      <section className="al-lab-main surface-view-main" aria-label="Tile side preview">
+      <section className="al-lab-main surface-view-main" aria-label="Subterrain preview">
         <div className="surface-view-stage tile-side-stage" style={stage}>
           <img
             src={item.src}
-            alt={`${item.label} side faces`}
+            alt={`${item.label} subterrain surface`}
             width={width}
             height={height}
             style={{ imageRendering: 'pixelated' }}
@@ -55,11 +54,10 @@ export function TileSidesViewer({ name, header }: { name?: string; header?: Reac
             </label>
             <button type="button" className="tileset-view-action pages-reset" onClick={() => { setZoom(3); setBackdrop('void'); }}>Reset to defaults</button>
             <dl className="al-meta">
-              <div><dt>Tile</dt><dd>{item.label}</dd></div>
-              <div><dt>Family</dt><dd>{terrainLabels[item.family]}</dd></div>
+              <div><dt>Surface</dt><dd>{item.label}</dd></div>
               <div><dt>Role</dt><dd>{item.role}</dd></div>
               <div><dt>Canvas</dt><dd>96 × 180 px</dd></div>
-              <div><dt>Side face</dt><dd>≈ 85 px below the top diamond</dd></div>
+              <div><dt>Placement</dt><dd>Explicit south/east exposed face</dd></div>
             </dl>
           </div>
         </section>

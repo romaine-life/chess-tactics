@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import test from 'node:test';
+import test, { after, before } from 'node:test';
+import { installTestDrawableCatalog, resetTestDrawableCatalog } from './drawableCatalog.mjs';
 
 const require = createRequire(import.meta.url);
 const {
@@ -8,12 +9,18 @@ const {
   fencePostZIndex,
   CELL_DEPTH_STRIDE,
   FENCE_POST_DEPTH_BIAS,
+  fenceFrameSrc,
+  fencePostSrc,
   objectBaseZIndex,
   predrawnOcclusionMaskOps,
   predrawnOcclusionMasksInFront,
   predrawnOcclusionSeedBoard,
+  wallFrameSrc,
   wallOverlayZIndex,
 } = require('../dist/index.cjs');
+
+before(installTestDrawableCatalog);
+after(resetTestDrawableCatalog);
 
 function board(overrides = {}) {
   return {
@@ -74,8 +81,8 @@ test('predrawnOcclusionMaskOps reuses canonical rail/post alpha geometry at edge
     fences: { '1,1|2,1': 'wood' },
     fencePosts: {},
   }));
-  const rail = masks.find((op) => op.src === '/assets/tiles/feature/fence-wood-2.png');
-  const posts = masks.filter((op) => op.src === '/assets/tiles/feature/fence-wood-post.png');
+  const rail = masks.find((op) => op.src === fenceFrameSrc('wood', 2));
+  const posts = masks.filter((op) => op.src === fencePostSrc('wood'));
 
   assert.ok(rail);
   assert.equal(rail.layer, 'scene');
@@ -102,7 +109,7 @@ test('canonical fence edge depth masks the owner-cell unit but not the adjacent 
     fences: { '1,1|2,1': 'wood' },
     fencePosts: {},
   }));
-  const rail = masks.find((op) => op.src === '/assets/tiles/feature/fence-wood-2.png');
+  const rail = masks.find((op) => op.src === fenceFrameSrc('wood', 2));
   const postDelta = 2 + CELL_DEPTH_STRIDE / 2 - FENCE_POST_DEPTH_BIAS;
   const backPost = masks.find((op) => op.z === fencePostZIndex({ x: 2, y: 1 }) + postDelta);
 
@@ -138,7 +145,7 @@ test('non-fence raised masks keep their canonical depth', () => {
     fencePosts: {},
     walls: { '0,0|0,-1': 'stone' },
   }));
-  const wall = masks.find((op) => op.src === '/assets/tiles/feature/wall-stone-1.png');
+  const wall = masks.find((op) => op.src === wallFrameSrc('stone', 1));
 
   assert.ok(wall);
   assert.equal(wall.z, wallOverlayZIndex({ x: 0, y: 0 }));

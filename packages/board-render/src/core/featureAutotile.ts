@@ -1,3 +1,5 @@
+import { drawableAssets } from '../art/drawableCatalog';
+
 // Linear-feature autotiling (roads and rivers) + edge fences. A "linear feature" is a
 // ribbon a level author DRAWS across cells — the engine derives each cell's art from which
 // of its 4 cardinal neighbours also carry the same feature. This is the canonical
@@ -31,33 +33,41 @@ export type FeatureKind = 'road' | 'river';
 // A feature's surface look. Within a kind, all cells connect regardless of material
 // (the shape flows, the surface can change per cell); the author picks which to paint.
 // Each is a baked 16-mask set (<kind>-<material>-<mask>.png).
-export type RoadMaterial = 'dirt' | 'cobble' | 'stone' | 'pebble';
-export type RiverMaterial = 'water';
+export type RoadMaterial = string;
+export type RiverMaterial = string;
 export type FeatureMaterial = RoadMaterial | RiverMaterial;
 
 // Authored codex-heal materials that ship (build-feature-tiles.py). stone/pebble stay
 // valid types but aren't in the palette until they get the same treatment.
-export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt', 'cobble'];
-export const RIVER_MATERIALS: readonly RiverMaterial[] = ['water'];
-export const FEATURE_MATERIAL_LABELS: Record<FeatureMaterial, string> = {
-  dirt: 'Dirt',
-  cobble: 'Cobblestone',
-  stone: 'Stone',
-  pebble: 'Gravel',
-  water: 'Water',
+const featureMaterialKind = (kind: FeatureKind): string => `${kind}-material`;
+const materialValue = (asset: { id: string; behavior: Record<string, unknown> }): string =>
+  typeof asset.behavior.value === 'string' ? asset.behavior.value : asset.id;
+const materialAsset = (kind: string, value: string) => drawableAssets(kind).find((asset) => materialValue(asset) === value);
+
+export const featureMaterialLabel = (material: FeatureMaterial, kind?: FeatureKind): string => {
+  if (kind) {
+    const asset = materialAsset(featureMaterialKind(kind), material);
+    if (!asset) throw new Error(`drawable catalog has no ${kind} material ${material}`);
+    return asset.label;
+  }
+  const asset = drawableAssets().find((candidate) => materialValue(candidate) === material
+    && (candidate.kind === 'road-material' || candidate.kind === 'river-material'));
+  if (!asset) throw new Error(`drawable catalog has no feature material ${material}`);
+  return asset.label;
 };
-// Back-compat alias (roads referenced this name before rivers existed).
-export const ROAD_MATERIAL_LABELS = FEATURE_MATERIAL_LABELS;
-export const DEFAULT_ROAD_MATERIAL: RoadMaterial = 'dirt';
-export const DEFAULT_RIVER_MATERIAL: RiverMaterial = 'water';
 
 /** Selectable materials for a feature kind (editor palette). */
 export const featureMaterials = (kind: FeatureKind): readonly FeatureMaterial[] =>
-  kind === 'river' ? RIVER_MATERIALS : ROAD_MATERIALS;
+  drawableAssets(featureMaterialKind(kind)).map(materialValue);
 
 /** The default brush material for a feature kind. */
 export const defaultFeatureMaterial = (kind: FeatureKind): FeatureMaterial =>
-  kind === 'river' ? DEFAULT_RIVER_MATERIAL : DEFAULT_ROAD_MATERIAL;
+  (() => {
+    const assets = drawableAssets(featureMaterialKind(kind));
+    const selected = assets.find((asset) => asset.behavior.default === true) ?? assets[0];
+    if (!selected) throw new Error(`drawable catalog has no ${kind} materials`);
+    return materialValue(selected);
+  })();
 
 export type FeatureEdge = 'N' | 'E' | 'S' | 'W';
 
@@ -232,10 +242,19 @@ export function featurePiece(mask: number): FeaturePiece {
 // ────────────────────────────────────────────────────────────────────────────────────
 
 /** Fence surface look — one baked rail set per material (fence-<material>-<mask>.png). */
-export type FenceMaterial = 'wood' | 'stone';
-export const FENCE_MATERIALS: readonly FenceMaterial[] = ['wood', 'stone'];
-export const DEFAULT_FENCE_MATERIAL: FenceMaterial = 'wood';
-export const FENCE_MATERIAL_LABELS: Record<FenceMaterial, string> = { wood: 'Wood', stone: 'Stone' };
+export type FenceMaterial = string;
+export const fenceMaterials = (): readonly FenceMaterial[] => drawableAssets('fence-material').map(materialValue);
+export const defaultFenceMaterial = (): FenceMaterial => {
+  const assets = drawableAssets('fence-material');
+  const selected = assets.find((asset) => asset.behavior.default === true) ?? assets[0];
+  if (!selected) throw new Error('drawable catalog has no fence materials');
+  return materialValue(selected);
+};
+export const fenceMaterialLabel = (material: FenceMaterial): string => {
+  const asset = materialAsset('fence-material', material);
+  if (!asset) throw new Error(`drawable catalog has no fence material ${material}`);
+  return asset.label;
+};
 
 /** The E(2) and S(4) render bits — a per-cell fence frame only ever shows its two FRONT sides. */
 export const FENCE_RENDER_MASKS = [2, 4, 6] as const;
@@ -245,15 +264,18 @@ export const FENCE_RENDER_MASKS = [2, 4, 6] as const;
  * Walls share the edge-keyed movement contract with fences, but are valid only on
  * the map's northmost/westmost perimeter. They render on N(1)/W(8) tile sides.
  */
-export type WallMaterial = 'stone' | 'brick' | 'mossy' | 'basalt' | 'palisade';
-export const WALL_MATERIALS: readonly WallMaterial[] = ['stone', 'brick', 'mossy', 'basalt', 'palisade'];
-export const DEFAULT_WALL_MATERIAL: WallMaterial = 'stone';
-export const WALL_MATERIAL_LABELS: Record<WallMaterial, string> = {
-  stone: 'Stone',
-  brick: 'Brick',
-  mossy: 'Mossy Stone',
-  basalt: 'Basalt',
-  palisade: 'Palisade',
+export type WallMaterial = string;
+export const wallMaterials = (): readonly WallMaterial[] => drawableAssets('wall-material').map(materialValue);
+export const defaultWallMaterial = (): WallMaterial => {
+  const assets = drawableAssets('wall-material');
+  const selected = assets.find((asset) => asset.behavior.default === true) ?? assets[0];
+  if (!selected) throw new Error('drawable catalog has no wall materials');
+  return materialValue(selected);
+};
+export const wallMaterialLabel = (material: WallMaterial): string => {
+  const asset = materialAsset('wall-material', material);
+  if (!asset) throw new Error(`drawable catalog has no wall material ${material}`);
+  return asset.label;
 };
 
 /** The N(1) and W(8) render bits — wall frames show only the BACK sides of their owner cell. */

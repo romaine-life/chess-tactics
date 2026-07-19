@@ -1,8 +1,8 @@
 ---
-status: "superseded by ADR-0105"
+status: "superseded by ADR-0134"
 date: 2026-07-13
 deciders: Nelson, Codex
-superseded_by: "[ADR-0105](0105-predrawn-candidate-review-uses-exact-board-plane-registration.md)"
+superseded_by: "[ADR-0134](0134-predrawn-candidate-review-uses-exact-board-plane-registration.md)"
 ---
 
 # ADR-0133: Pre-drawn boards use one registered live-media plate

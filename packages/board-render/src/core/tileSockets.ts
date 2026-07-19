@@ -1,5 +1,7 @@
-export type TileFamilyId = 'grass' | 'stone' | 'water' | 'dirt' | 'pebble' | 'sand';
-export type TerrainPairId = 'grass-stone' | 'grass-water' | 'stone-water';
+import { drawableAssets } from '../art/drawableCatalog';
+
+export type TileFamilyId = string;
+export type TerrainPairId = string;
 export type EdgeName = 'north' | 'east' | 'south' | 'west';
 export type TileAssetKind = 'tile' | 'reference';
 
@@ -39,26 +41,22 @@ export interface TransitionSlot<TAsset extends TileSocketAsset = TileSocketAsset
 
 export const socketEdges: EdgeName[] = ['north', 'east', 'south', 'west'];
 
-export const terrainLabels: Record<TileFamilyId, string> = {
-  grass: 'Grass',
-  stone: 'Stone',
-  water: 'Water',
-  dirt: 'Dirt',
-  pebble: 'Pebble',
-  sand: 'Sand',
-};
+export const terrainLabels: Record<TileFamilyId, string> = new Proxy({}, {
+  get: (_target, family) => {
+    const record = drawableAssets('terrain-surface').find((asset) => asset.behavior.family === family);
+    return typeof record?.metadata.familyLabel === 'string' ? record.metadata.familyLabel : String(family);
+  },
+});
 
 // The transition socket model is retained for the tile studio, but the shipped tileset
 // has no transition tiles — so on the board every boundary is a HARD EDGE (the solver
 // falls back to each cell's own family base; see solveSocketBoard).
-export const transitionPairs: TransitionPair[] = [
-  { id: 'grass-stone', label: 'Grass-Stone', terrains: ['grass', 'stone'] },
-  { id: 'grass-water', label: 'Grass-Water', terrains: ['grass', 'water'] },
-  { id: 'stone-water', label: 'Stone-Water', terrains: ['stone', 'water'] },
-];
+export const transitionPairs: TransitionPair[] = [];
 
 export function transitionPairById(pairId: TerrainPairId): TransitionPair {
-  return transitionPairs.find((pair) => pair.id === pairId) ?? transitionPairs[0];
+  const pair = transitionPairs.find((candidate) => candidate.id === pairId);
+  if (!pair) throw new Error(`drawable catalog has no transition pair ${pairId}`);
+  return pair;
 }
 
 export function transitionPairsForFamily(familyId: TileFamilyId): TransitionPair[] {
@@ -100,7 +98,9 @@ export function familyIdForAsset<TAsset extends TileSocketAsset>(
   familyAssets: Record<TileFamilyId, readonly TAsset[]>,
 ): TileFamilyId {
   const owningFamily = Object.entries(familyAssets).find(([, assets]) => assets.some((item) => item.id === asset.id))?.[0] as TileFamilyId | undefined;
-  return owningFamily ?? asset.terrains?.[0] ?? 'grass';
+  const fallback = Object.keys(familyAssets)[0];
+  if (!owningFamily && !asset.terrains?.[0] && !fallback) throw new Error(`tile asset ${asset.id} has no family`);
+  return owningFamily ?? asset.terrains?.[0] ?? fallback;
 }
 
 export function tileSocketsForAsset<TAsset extends TileSocketAsset>(

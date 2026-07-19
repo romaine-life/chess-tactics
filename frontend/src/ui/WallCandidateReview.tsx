@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { WALL_FRAME_GEOMETRY, type BoardDrawOp } from '@chess-tactics/board-render';
-import { edgeTiles, muralTiles, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
+import { tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { BoardCanvasLayer, boundsForOps } from '../render/BoardCanvasLayer';
@@ -31,14 +31,12 @@ export function WallCandidateReview(): ReactElement {
   const [versions, setVersions] = useState<AdminMediaVersion[]>([]);
   const [error, setError] = useState('');
   const board = useMemo(() => solveSocketBoard({
-    assets: tileAssets as readonly TileAsset[],
+    assets: tileAssets,
     terrainMap: Array.from({ length: 36 }, () => 'grass' as const),
     seed: 14,
     columns: 6,
     rows: 6,
     familyAssets: tileFamilies,
-    edgeAssets: edgeTiles,
-    muralEdges: muralTiles,
   }), []);
 
   useEffect(() => {

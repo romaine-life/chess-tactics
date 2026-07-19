@@ -53,7 +53,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain("{ value: 'match-reference', label: 'Match reference tile' }");
     expect(levelEditor).toContain("{ value: 'grass', label: 'Grass' }");
     expect(levelEditor).toContain('ariaLabel="Scenic terrain generation mode"');
-    expect(levelEditor).toContain("? { kind: 'fill' as const, value: leDefaultTile.id }");
+    expect(levelEditor).toContain("? { kind: 'fill' as const, value: leDefaultTile().id }");
     expect(levelEditor).toContain(": { kind: 'match-reference' as const }");
     expect(levelEditor).toContain('onIncrease={() => stepScenicTerrainExtent(side, 1)}');
     expect(levelEditor).toContain('onDecrease={() => stepScenicTerrainExtent(side, -1)}');

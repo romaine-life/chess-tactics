@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { applyLiveMediaCatalog, boardDrawOps, boardLabMetrics, resetLiveMediaCatalog } from '@chess-tactics/board-render';
+import {
+  applyLiveMediaCatalog,
+  boardDrawOps,
+  boardLabMetrics,
+  resetLiveMediaCatalog,
+  subterrainMaterialSrc,
+} from '@chess-tactics/board-render';
 import { roadEdgeKey } from '../core/featureAutotile';
 import { testGroundCoverCatalog } from '../test/liveMediaCatalog';
 import type { EditorBoard } from '../ui/boardCode';
@@ -89,12 +95,17 @@ describe('boardForTopSurfaceArtExport', () => {
       fencePosts: {},
       walls: {},
       wallArt: {},
+      subterrain: { '0,0:south': 'earth', '0,0:east': 'bedrock' },
       featureCuts: {},
       featureExits: {},
     } satisfies EditorBoard;
+    const sideSources = new Set([
+      subterrainMaterialSrc('earth'),
+      subterrainMaterialSrc('bedrock'),
+    ]);
 
-    expect(boardDrawOps(board).some((op) => op.src.includes('-side.png'))).toBe(true);
-    expect(boardDrawOps(board, { topSurfacesOnly: true }).some((op) => op.src.includes('-side.png'))).toBe(false);
+    expect(boardDrawOps(board).filter((op) => sideSources.has(op.src))).toHaveLength(2);
+    expect(boardDrawOps(board, { topSurfacesOnly: true }).some((op) => sideSources.has(op.src))).toBe(false);
   });
 });
 

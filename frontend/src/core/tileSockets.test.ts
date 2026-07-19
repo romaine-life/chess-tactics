@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   baseSocketsForFamily,
-  transitionPairById,
   transitionSlotsForPair,
   transitionSocketsForMask,
   tileSocketsForAsset,
   type TileSocketAsset,
   type TileFamilyId,
 } from './tileSockets';
+
+const grassStone = { id: 'grass-stone', label: 'Grass-Stone', terrains: ['grass', 'stone'] as [string, string] };
+const grassWater = { id: 'grass-water', label: 'Grass-Water', terrains: ['grass', 'water'] as [string, string] };
 
 const familyAssets: Record<TileFamilyId, TileSocketAsset[]> = {
   grass: [{ id: 'grass-a', kind: 'tile', role: 'base', probability: 1 }],
@@ -20,7 +22,7 @@ const familyAssets: Record<TileFamilyId, TileSocketAsset[]> = {
 
 describe('tile socket masks', () => {
   it('uses north, east, south, west bit order', () => {
-    const sockets = transitionSocketsForMask(0b0011, transitionPairById('grass-stone'));
+    const sockets = transitionSocketsForMask(0b0011, grassStone);
     expect(sockets).toEqual({
       north: 'grass',
       east: 'grass',
@@ -30,7 +32,7 @@ describe('tile socket masks', () => {
   });
 
   it('generates the 14 mixed transition slots', () => {
-    const slots = transitionSlotsForPair(transitionPairById('grass-water'), []);
+    const slots = transitionSlotsForPair(grassWater, []);
     expect(slots).toHaveLength(14);
     expect(slots[0].code).toBe('0001');
     expect(slots[13].code).toBe('1110');
@@ -55,21 +57,4 @@ describe('tileSocketsForAsset', () => {
     });
   });
 
-  it('resolves transition tiles from pair and mask', () => {
-    const asset: TileSocketAsset = {
-      id: 'grass-stone-ne',
-      kind: 'tile',
-      role: 'transition',
-      probability: 1,
-      pairId: 'grass-stone',
-      terrains: ['grass', 'stone'],
-      socketMask: 0b0011,
-    };
-    expect(tileSocketsForAsset(asset, familyAssets)).toEqual({
-      north: 'grass',
-      east: 'grass',
-      south: 'stone',
-      west: 'stone',
-    });
-  });
 });

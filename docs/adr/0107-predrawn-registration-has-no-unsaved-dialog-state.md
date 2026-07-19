@@ -2,7 +2,7 @@
 status: "accepted; immediate-write/no-save-action clause superseded by ADR-0108"
 date: 2026-07-13
 deciders: Nelson, Codex
-partially_supersedes: "[ADR-0106](0106-predrawn-registration-is-owner-picked-source-geometry.md)"
+partially_supersedes: "[ADR-0135](0135-predrawn-registration-is-owner-picked-source-geometry.md)"
 partially_superseded_by: "[ADR-0108](0108-predrawn-registration-is-local-first-and-explicitly-saved.md)"
 ---
 
@@ -10,7 +10,7 @@ partially_superseded_by: "[ADR-0108](0108-predrawn-registration-is-local-first-a
 
 ## Context
 
-ADR-0106 required an owner-operated source-corner picker but specified a separate
+ADR-0135 required an owner-operated source-corner picker but specified a separate
 Apply action. That left a newly picked point only in React dialog state until a
 second gesture committed it. A tab reconnect, refresh, or inspection could then
 reconstruct the picker from the unchanged URL and lose the owner's selection.

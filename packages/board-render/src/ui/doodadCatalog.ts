@@ -3,7 +3,7 @@
 // sorts between them — back tucks behind, front falls over the shins. Mirrors unitCatalog.
 
 import { currentSeats, propDef, structurePartsFromSeat, type StructurePart, type StructureSourceRef } from '../core/props';
-import { structureArtAsset, structureArtHalfSrc } from '../core/structureArt';
+import { STRUCTURE_ART_ASSETS, structureArtAsset, structureArtHalfSrc } from '../core/structureArt';
 
 export interface DoodadAsset {
   id: string;
@@ -54,12 +54,13 @@ const doodadFromArt = (id: string, label: string): DoodadAsset => {
 // Grass tuft retired: ambient grass is now the general ground-cover tile feature
 // (core/groundCover + the board scene canvas), not a placed doodad. The glossary keeps the
 // grass-tuft sprites only as a static figure illustrating the back/front split.
-export const DOODAD_ASSETS = [
-  { id: 'boulder', label: 'Boulder' },
-  { id: 'stump', label: 'Tree stump' },
-  { id: 'fern', label: 'Fern' },
-  { id: 'flower', label: 'Flower' },
-];
+export const DOODAD_ASSETS: Array<{ id: string; label: string }> = new Proxy([], {
+  get: (_target, property) => {
+    const current = STRUCTURE_ART_ASSETS.filter((asset) => asset.kind === 'doodad').map(({ id, label }) => ({ id, label }));
+    const value = Reflect.get(current, property);
+    return typeof value === 'function' ? value.bind(current) : value;
+  },
+});
 
 function baseDoodadAssets(): DoodadAsset[] {
   return DOODAD_ASSETS.map(({ id, label }) => doodadFromArt(id, label));

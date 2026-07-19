@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import test from 'node:test';
+import test, { after, before } from 'node:test';
+import { installTestDrawableCatalog, resetTestDrawableCatalog } from './drawableCatalog.mjs';
 
 const require = createRequire(import.meta.url);
 const {
   buildPredrawnGenerationDefinition,
   encodeBoard,
 } = require('../dist/index.cjs');
+
+before(installTestDrawableCatalog);
+after(resetTestDrawableCatalog);
 
 const HOLD_BRIDGE = [
   'RRRRRVVRAAGR',

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/start-vite-dev.mjs",
-    "build": "vite build && node scripts/check-no-committed-media.mjs --built-output-only",
+    "build": "node scripts/check-no-committed-media.mjs && vite build && node scripts/check-no-committed-media.mjs --built-output-only",
     "build:trainer": "vite build --config vite.trainer.config.js",
     "build:board-render": "npm --prefix ../packages/board-render run build",
     "preview": "vite preview --host 0.0.0.0",

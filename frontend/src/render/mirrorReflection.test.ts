@@ -37,6 +37,7 @@ import {
   type EditorBoard,
   type MirrorReflectionSubject,
 } from '@chess-tactics/board-render';
+import { wallFrameSrc } from '../art/tileset';
 import { testGroundCoverCatalog, testWallDecorMediaSlots } from '../test/liveMediaCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 
@@ -365,7 +366,7 @@ describe('static EditorBoard reflection parity', () => {
       units: { '0,0': { unitId: 'pawn', direction: 'east', faction: 'navy-blue' } },
     };
     const ops = boardDrawOps(board);
-    const wall = ops.find((op) => op.src === '/assets/tiles/feature/wall-stone-8.png')!;
+    const wall = ops.find((op) => op.src === wallFrameSrc('stone', 8))!;
     const glass = ops.find((op) => op.z === mirrorGlassOverlayZIndex({ x: 0, y: 0 }))!;
     const reflection = ops.find((op) => op.contain && op.clipPolygons?.length)!;
     const keepFrameSource = wallDecorAsset('mirror-keep');

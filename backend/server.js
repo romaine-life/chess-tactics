@@ -914,6 +914,60 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 20,
+    name: 'database-owned drawable catalog',
+    // Logical installed content is distinct from its media roles. Git owns the
+    // renderer's behavior vocabulary; these rows own the installed inventory,
+    // labels, ordering, configuration, and semantic-slot membership.
+    sql: `
+      CREATE TABLE IF NOT EXISTS drawable_assets (
+        id                  text        PRIMARY KEY,
+        kind                text        NOT NULL,
+        label               text        NOT NULL,
+        sort_order          integer     NOT NULL DEFAULT 0,
+        lifecycle_state     text        NOT NULL DEFAULT 'active'
+          CHECK (lifecycle_state IN ('active', 'retired')),
+        behavior            jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        metadata            jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        row_revision        bigint      NOT NULL DEFAULT 0 CHECK (row_revision >= 0),
+        created_at          timestamptz NOT NULL DEFAULT now(),
+        updated_at          timestamptz NOT NULL DEFAULT now(),
+        updated_by          text,
+        CHECK (id ~ '^[a-z][a-z0-9._-]{0,127}$'),
+        CHECK (kind ~ '^[a-z][a-z0-9._-]{0,63}$'),
+        CHECK (char_length(label) BETWEEN 1 AND 160)
+      );
+
+      CREATE TABLE IF NOT EXISTS drawable_asset_media (
+        asset_id            text        NOT NULL REFERENCES drawable_assets(id) ON DELETE CASCADE,
+        role                text        NOT NULL CHECK (role ~ '^[a-z][a-z0-9._-]{0,63}$'),
+        slot                text        NOT NULL REFERENCES media_slots(slot) ON DELETE RESTRICT,
+        PRIMARY KEY (asset_id, role),
+        UNIQUE (asset_id, slot)
+      );
+      CREATE INDEX IF NOT EXISTS drawable_asset_media_slot_idx ON drawable_asset_media (slot);
+
+      CREATE TABLE IF NOT EXISTS drawable_catalog_state (
+        singleton           boolean     PRIMARY KEY DEFAULT true CHECK (singleton),
+        revision            bigint      NOT NULL DEFAULT 0 CHECK (revision >= 0),
+        updated_at          timestamptz NOT NULL DEFAULT now()
+      );
+      INSERT INTO drawable_catalog_state (singleton) VALUES (true)
+        ON CONFLICT (singleton) DO NOTHING;
+
+      CREATE TABLE IF NOT EXISTS drawable_asset_events (
+        id                  bigserial   PRIMARY KEY,
+        asset_id            text        NOT NULL,
+        action              text        NOT NULL,
+        actor_email         text,
+        details             jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        created_at          timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS drawable_asset_events_asset_idx
+        ON drawable_asset_events (asset_id, created_at DESC, id DESC);
+    `,
+  },
 ];
 
 let pool = null;
@@ -5047,7 +5101,6 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
 const PROP_SEATS_STORE_SCHEMA_VERSION = 1;
 const PROP_SEATS_LOCK_KEY = 4300193003;
 const PROP_SEATS_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
-const REQUIRED_PROP_SEAT_IDS = Object.freeze(['oak', 'cottage', 'cabin', 'lodge', 'rock', 'fieldstone']);
 function propSeatsRowId(raw) {
   const id = String(raw || '').trim();
   return PROP_SEATS_ROW_ID_PATTERN.test(id) ? id : null;
@@ -5060,11 +5113,8 @@ const PROP_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 // THE SAME document (no orphan size-variant — the server-side analog of /prop-lab base-protection).
 function validatePropSeatsData(data, { requireComplete = false } = {}) {
   if (!isObjectRecord(data)) return 'prop seats must be an object map of propId → seat';
-  if (requireComplete) {
-    for (const id of REQUIRED_PROP_SEAT_IDS) {
-      if (!Object.hasOwn(data, id)) return `required prop seat "${id}" is missing`;
-    }
-  }
+  const baseIds = Object.entries(data).filter(([, seat]) => isObjectRecord(seat) && !seat.base && !seat.placement).map(([id]) => id);
+  if (requireComplete && !baseIds.length) return 'prop seats must contain at least one installed base prop';
   for (const [id, seat] of Object.entries(data)) {
     if (!PROP_ID_PATTERN.test(id)) return `prop id "${id}" must be a lowercase slug`;
     if (!isObjectRecord(seat)) return `seat "${id}" must be an object`;
@@ -5087,11 +5137,8 @@ function validatePropSeatsData(data, { requireComplete = false } = {}) {
     if (Object.hasOwn(seat, 'base') && (typeof seat.base !== 'string' || !Object.hasOwn(data, seat.base))) {
       return `seat "${id}" base "${seat.base}" must reference an existing prop in the same document`;
     }
-    if (Object.hasOwn(seat, 'base') && !REQUIRED_PROP_SEAT_IDS.includes(seat.base)) {
-      return `seat "${id}" base "${seat.base}" must reference a code-owned base prop`;
-    }
-    if (REQUIRED_PROP_SEAT_IDS.includes(id) && (Object.hasOwn(seat, 'base') || Object.hasOwn(seat, 'placement'))) {
-      return `required prop seat "${id}" cannot be a variant or authored placement`;
+    if (Object.hasOwn(seat, 'base') && !baseIds.includes(seat.base)) {
+      return `seat "${id}" base "${seat.base}" must reference an installed base prop`;
     }
     if (Object.hasOwn(seat, 'placement') && seat.placement !== 'prop' && seat.placement !== 'doodad') {
       return `seat "${id}" placement must be prop or doodad`;
@@ -5107,9 +5154,6 @@ function validatePropSeatsData(data, { requireComplete = false } = {}) {
     )) return `seat "${id}" source must be an asset/prop/doodad source`;
     if (seat.placement && !Object.hasOwn(seat, 'source') && !Object.hasOwn(seat, 'parts')) {
       return `seat "${id}" authored placement needs source or parts`;
-    }
-    if (!REQUIRED_PROP_SEAT_IDS.includes(id) && !seat.base && !seat.placement) {
-      return `seat "${id}" must be a variant or authored placement`;
     }
     if (Object.hasOwn(seat, 'kind') && seat.kind !== 'tree' && seat.kind !== 'house' && seat.kind !== 'rock') {
       return `seat "${id}" kind is invalid`;
@@ -5605,6 +5649,165 @@ app.put('/api/sfx-profiles/:id', async (req, res) => {
     dbUnavailable(res, 'SFX profile write failed', error, 'sfx_profile_unavailable');
   }
 });
+
+// --- Database-owned drawable catalog ---------------------------------------
+// A drawable is an installed content record. Its `kind` selects code-owned
+// behavior; every concrete id, label, order, configuration value, and media-role
+// assignment comes from Postgres. Consumers must not reconstruct this inventory
+// from semantic-slot filenames.
+const DRAWABLE_CATALOG_SCHEMA_VERSION = 1;
+const DRAWABLE_ID_PATTERN = /^[a-z][a-z0-9._-]{0,127}$/;
+const DRAWABLE_KIND_PATTERN = /^[a-z][a-z0-9._-]{0,63}$/;
+const DRAWABLE_ROLE_PATTERN = /^[a-z][a-z0-9._-]{0,63}$/;
+
+function normalizeDrawableInput(raw) {
+  if (!isObjectRecord(raw)) return { error: 'drawable must be an object' };
+  const id = typeof raw.id === 'string' ? raw.id.trim() : '';
+  const kind = typeof raw.kind === 'string' ? raw.kind.trim() : '';
+  const label = typeof raw.label === 'string' ? raw.label.trim() : '';
+  const sortOrder = raw.sortOrder ?? raw.sort_order ?? 0;
+  const lifecycleState = raw.lifecycleState ?? raw.lifecycle_state ?? 'active';
+  const behavior = raw.behavior ?? {};
+  const metadata = raw.metadata ?? {};
+  const media = raw.media ?? raw.mediaRoles ?? raw.media_roles;
+  if (!DRAWABLE_ID_PATTERN.test(id)) return { error: 'id must be a lowercase drawable slug' };
+  if (!DRAWABLE_KIND_PATTERN.test(kind)) return { error: 'kind must be a lowercase behavior slug' };
+  if (!label || label.length > 160) return { error: 'label must contain 1-160 characters' };
+  if (!Number.isSafeInteger(sortOrder)) return { error: 'sortOrder must be an integer' };
+  if (lifecycleState !== 'active' && lifecycleState !== 'retired') return { error: 'lifecycleState must be active or retired' };
+  if (!isObjectRecord(behavior)) return { error: 'behavior must be an object' };
+  if (!isObjectRecord(metadata)) return { error: 'metadata must be an object' };
+  if (!isObjectRecord(media)) return { error: 'media must be a role-to-slot object' };
+  const roles = [];
+  for (const [role, rawSlot] of Object.entries(media)) {
+    const slot = mediaSlotId(rawSlot);
+    if (!DRAWABLE_ROLE_PATTERN.test(role)) return { error: `invalid media role "${role}"` };
+    if (!slot) return { error: `media role "${role}" has an invalid semantic slot` };
+    roles.push({ role, slot });
+  }
+  roles.sort((left, right) => left.role.localeCompare(right.role));
+  return { value: { id, kind, label, sortOrder, lifecycleState, behavior, metadata, roles } };
+}
+
+async function dbReadDrawableCatalog({ includeRetired = false } = {}) {
+  await ensureDbReady();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const state = await client.query('SELECT revision, updated_at FROM drawable_catalog_state WHERE singleton = true');
+    const assets = await client.query(
+      `SELECT id, kind, label, sort_order, lifecycle_state, behavior, metadata, row_revision
+         FROM drawable_assets
+        WHERE ($1::boolean OR lifecycle_state = 'active')
+        ORDER BY kind, sort_order, label, id`,
+      [includeRetired],
+    );
+    const media = await client.query(
+      `SELECT dam.asset_id, dam.role, dam.slot,
+              s.lifecycle_state AS slot_lifecycle_state,
+              v.status AS version_status, b.sha256, b.media_type, b.byte_length, b.width, b.height
+         FROM drawable_asset_media dam
+         JOIN drawable_assets da ON da.id = dam.asset_id
+         LEFT JOIN media_slots s ON s.slot = dam.slot
+         LEFT JOIN media_versions v ON v.id = s.active_version_id AND v.slot = s.slot
+         LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+        WHERE ($1::boolean OR da.lifecycle_state = 'active')
+        ORDER BY dam.asset_id, dam.role`,
+      [includeRetired],
+    );
+    await client.query('COMMIT');
+    const rolesByAsset = new Map();
+    for (const row of media.rows) {
+      const usable = row.slot_lifecycle_state === 'active'
+        && ['accepted', 'legacy-bridge'].includes(row.version_status) && row.sha256;
+      if (!usable && !includeRetired) {
+        throw mediaMutationError('drawable_catalog_incomplete', 503, { assetId: row.asset_id, role: row.role, slot: row.slot });
+      }
+      const roles = rolesByAsset.get(row.asset_id) ?? {};
+      roles[row.role] = {
+        slot: row.slot,
+        ...(usable ? { media: {
+          url: encodedMediaSlotUrl(row.slot),
+          immutableUrl: immutableMediaUrl(row.sha256),
+          sha256: row.sha256,
+          mediaType: row.media_type,
+          byteLength: Number(row.byte_length),
+          width: row.width === null ? null : Number(row.width),
+          height: row.height === null ? null : Number(row.height),
+        } } : { media: null }),
+      };
+      rolesByAsset.set(row.asset_id, roles);
+    }
+    return {
+      schemaVersion: DRAWABLE_CATALOG_SCHEMA_VERSION,
+      revision: Number(state.rows[0]?.revision || 0),
+      updatedAt: nullableTimestampString(state.rows[0]?.updated_at),
+      assets: assets.rows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        label: row.label,
+        sortOrder: Number(row.sort_order),
+        lifecycleState: row.lifecycle_state,
+        behavior: row.behavior || {},
+        metadata: row.metadata || {},
+        rowRevision: Number(row.row_revision),
+        media: rolesByAsset.get(row.id) ?? {},
+      })),
+    };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original failure */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function dbUpsertDrawable(input, expectedRevision, actorEmail) {
+  await ensureDbReady();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const currentResult = await client.query('SELECT * FROM drawable_assets WHERE id = $1 FOR UPDATE', [input.id]);
+    const current = currentResult.rows[0] || null;
+    if (current && Number(current.row_revision) !== expectedRevision) {
+      throw mediaMutationError('drawable_asset_conflict', 409, { currentRevision: Number(current.row_revision) });
+    }
+    if (!current && expectedRevision !== 0) throw mediaMutationError('drawable_asset_not_found', 404);
+    const slots = input.roles.map(({ slot }) => slot);
+    const slotResult = await client.query('SELECT slot FROM media_slots WHERE slot = ANY($1::text[])', [slots]);
+    const found = new Set(slotResult.rows.map((row) => row.slot));
+    const missing = slots.filter((slot) => !found.has(slot));
+    if (missing.length) throw mediaMutationError('drawable_media_slot_not_found', 400, { slots: missing });
+    await client.query(
+      `INSERT INTO drawable_assets (id, kind, label, sort_order, lifecycle_state, behavior, metadata, row_revision, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 1, $8)
+       ON CONFLICT (id) DO UPDATE SET kind = EXCLUDED.kind, label = EXCLUDED.label,
+         sort_order = EXCLUDED.sort_order, lifecycle_state = EXCLUDED.lifecycle_state,
+         behavior = EXCLUDED.behavior, metadata = EXCLUDED.metadata,
+         row_revision = drawable_assets.row_revision + 1, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+      [input.id, input.kind, input.label, input.sortOrder, input.lifecycleState,
+        JSON.stringify(input.behavior), JSON.stringify(input.metadata), actorEmail],
+    );
+    await client.query('DELETE FROM drawable_asset_media WHERE asset_id = $1', [input.id]);
+    for (const role of input.roles) {
+      await client.query('INSERT INTO drawable_asset_media (asset_id, role, slot) VALUES ($1, $2, $3)', [input.id, role.role, role.slot]);
+    }
+    const nextRevision = await client.query(
+      'UPDATE drawable_catalog_state SET revision = revision + 1, updated_at = now() WHERE singleton = true RETURNING revision',
+    );
+    await client.query(
+      'INSERT INTO drawable_asset_events (asset_id, action, actor_email, details) VALUES ($1, $2, $3, $4::jsonb)',
+      [input.id, current ? 'updated' : 'created', actorEmail, JSON.stringify({ kind: input.kind, roles: input.roles })],
+    );
+    await client.query('COMMIT');
+    return Number(nextRevision.rows[0].revision);
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original failure */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 
 // --- Shared live-media catalog ---------------------------------------------
 // Stable semantic slots are the only public names. Candidate/source identities
@@ -6457,8 +6660,9 @@ async function liveMediaReadiness() {
   // Read all three DB authorities afresh. Public endpoints may use short-lived
   // caches, but a Kubernetes probe must observe current catalog state and run
   // the exact typed renderer projections that browser boot/thumbnails require.
-  const [catalog, propSeatsRow, unitCatalog] = await Promise.all([
+  const [catalog, drawableCatalog, propSeatsRow, unitCatalog] = await Promise.all([
     dbReadMediaCatalog(),
+    dbReadDrawableCatalog(),
     dbGetPropSeats('default'),
     dbReadUnitCatalog(),
   ]);
@@ -6475,6 +6679,7 @@ async function liveMediaReadiness() {
   await withServerRenderCriticalSection(() => {
     serverRender.applyServerRenderSnapshot({
       mediaCatalog: catalog,
+      drawableCatalog,
       propSeats: propSeats.data,
       unitCatalog,
     });
@@ -7100,6 +7305,49 @@ function mediaVersionPatch(raw, current) {
   if (!Object.keys(patch).length) return { error: 'no editable media version fields supplied' };
   return { value: patch };
 }
+
+app.get('/api/drawable-catalog', async (req, res) => {
+  try {
+    const catalog = await dbReadDrawableCatalog();
+    const etag = `"drawable-catalog-${catalog.revision}"`;
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) { res.status(304).end(); return; }
+    res.status(200).json(catalog);
+  } catch (error) {
+    if (error && error.mediaCode) { sendMediaMutationError(res, error, 'drawable_catalog_unavailable'); return; }
+    dbUnavailable(res, 'drawable catalog read failed', error, 'drawable_catalog_unavailable');
+  }
+});
+
+app.get('/api/admin/drawable-assets', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json(await dbReadDrawableCatalog({ includeRetired: true }));
+  } catch (error) {
+    if (error && error.mediaCode) { sendMediaMutationError(res, error, 'drawable_catalog_unavailable'); return; }
+    dbUnavailable(res, 'drawable admin catalog read failed', error, 'drawable_catalog_unavailable');
+  }
+});
+
+app.put('/api/admin/drawable-assets/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const raw = isObjectRecord(req.body) ? { ...req.body, id: req.params.id } : { id: req.params.id };
+  const normalized = normalizeDrawableInput(raw);
+  if (normalized.error) { res.status(400).json({ error: 'invalid_drawable_asset', details: normalized.error }); return; }
+  try {
+    const expectedRevision = requireMediaExpectedRevision(req);
+    const catalogRevision = await dbUpsertDrawable(normalized.value, expectedRevision, user.email);
+    const catalog = await dbReadDrawableCatalog({ includeRetired: true });
+    res.status(200).json({ asset: catalog.assets.find((asset) => asset.id === normalized.value.id), catalogRevision });
+  } catch (error) {
+    if (error && error.mediaCode) { sendMediaMutationError(res, error, 'drawable_asset_write_failed'); return; }
+    dbUnavailable(res, 'drawable asset write failed', error, 'drawable_catalog_unavailable');
+  }
+});
 
 app.get('/api/asset-catalog', async (req, res) => {
   try {
@@ -9515,8 +9763,9 @@ async function thumbnailMediaAvailabilityCatalog(mediaCatalog) {
   }
 }
 async function loadThumbnailRenderInputs() {
-  const [mediaCatalog, seats, unitCatalog] = await Promise.all([
+  const [mediaCatalog, drawableCatalog, seats, unitCatalog] = await Promise.all([
     publicMediaCatalog(),
+    dbReadDrawableCatalog(),
     thumbnailPropSeats(),
     publicUnitCatalog(),
   ]);
@@ -9527,7 +9776,9 @@ async function loadThumbnailRenderInputs() {
     propSeatsRevision: seats.revision || 0,
     unitCatalogRevision,
     mediaCatalogRevision,
+    drawableCatalogRevision: drawableCatalog.revision || 0,
     mediaCatalog,
+    drawableCatalog,
     mediaAvailability,
     propSeats: seats.data,
     unitCatalog,
@@ -9547,7 +9798,8 @@ function thumbnailVersion(boardHash, renderInputs) {
   const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
   const unitCatalogRevision = renderInputs && renderInputs.unitCatalogRevision ? `uc${renderInputs.unitCatalogRevision}` : '';
   const mediaCatalogRevision = renderInputs && renderInputs.mediaCatalogRevision ? `mc${renderInputs.mediaCatalogRevision}` : '';
-  return [boardHash, propSeatsRevision, unitCatalogRevision, mediaCatalogRevision].filter(Boolean).join('-');
+  const drawableCatalogRevision = renderInputs && renderInputs.drawableCatalogRevision ? `dc${renderInputs.drawableCatalogRevision}` : '';
+  return [boardHash, propSeatsRevision, unitCatalogRevision, mediaCatalogRevision, drawableCatalogRevision].filter(Boolean).join('-');
 }
 function playScreenName(input) {
   if (serverRender && typeof serverRender.playRouteScreenName === 'function') {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { tileAssets, tileFamilies, edgeTiles, muralTiles, type TileAsset } from '../art/tileset';
+import { tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { PropSprite } from '../render/BoardStructure';
@@ -258,14 +258,12 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
 
   const board = useMemo(
     () => solveSocketBoard({
-      assets: tileAssets as readonly TileAsset[],
+      assets: tileAssets,
       terrainMap: Array.from({ length: COLS * ROWS }, () => family),
       seed,
       columns: COLS,
       rows: ROWS,
       familyAssets: tileFamilies,
-      edgeAssets: edgeTiles,
-      muralEdges: muralTiles,
     }),
     [family, seed],
   );

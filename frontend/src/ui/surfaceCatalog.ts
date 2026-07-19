@@ -1,23 +1,23 @@
-// Stable background-surface slots — seamless, tileable pixel-art tiles used to
-// fill panel/frame interiors. The backend catalog owns their active versions;
-// this module owns only UI labels and repeat geometry.
+import { drawableAssets } from '@chess-tactics/board-render';
 
 export interface SurfaceAsset {
   name: string;
   label: string;
-  approach: 'hybrid' | 'pixel-model' | 'baseline' | 'pixellab';
+  approach: string;
   material: string;
-  file: string; // backend-resolved stable semantic slot
-  tilePx: number; // intended on-screen tile size for repeat-tiling
+  file: string;
+  tilePx: number;
 }
 
-export const SURFACE_TILE_PX = 1024;
+const current = (): SurfaceAsset[] => drawableAssets('ui-surface').map((asset) => ({
+  name: String(asset.behavior.value ?? asset.id),
+  label: asset.label,
+  approach: String(asset.behavior.approach ?? ''),
+  material: String(asset.behavior.material ?? ''),
+  file: asset.media.surface.media.immutableUrl,
+  tilePx: Number(asset.behavior.tilePx),
+}));
 
-export const SURFACE_ASSETS: SurfaceAsset[] = [
-  { name: 'hybrid-stone-blue', label: 'Hybrid · Stone Blue', approach: 'hybrid', material: 'stone-blue', file: '/assets/ui/surfaces/hybrid-stone-blue.png', tilePx: SURFACE_TILE_PX },
-  { name: 'hybrid-wood-oak', label: 'Hybrid · Oak', approach: 'hybrid', material: 'wood-oak', file: '/assets/ui/surfaces/hybrid-wood-oak.png', tilePx: SURFACE_TILE_PX },
-  { name: 'pixel-model-stone-blue', label: 'Pixel-model · Stone Blue', approach: 'pixel-model', material: 'stone-blue', file: '/assets/ui/surfaces/pixel-model-stone-blue.png', tilePx: SURFACE_TILE_PX },
-  { name: 'baseline-stone-blue', label: 'Baseline · Stone Blue', approach: 'baseline', material: 'stone-blue', file: '/assets/ui/surfaces/baseline-stone-blue.png', tilePx: SURFACE_TILE_PX },
-  { name: 'baseline-wood-oak', label: 'Baseline · Oak', approach: 'baseline', material: 'wood-oak', file: '/assets/ui/surfaces/baseline-wood-oak.png', tilePx: SURFACE_TILE_PX },
-  { name: 'pixellab-stone-blue', label: 'PixelLab · Stone Blue', approach: 'pixellab', material: 'stone-blue', file: '/assets/ui/surfaces/pixellab-stone-blue.png', tilePx: SURFACE_TILE_PX },
-];
+export const SURFACE_ASSETS: SurfaceAsset[] = new Proxy([] as SurfaceAsset[], {
+  get(_target, property) { const values = current(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; },
+});

@@ -1,12 +1,12 @@
 ---
-status: "accepted; automatic corner authority superseded by ADR-0106; four-corner-only correction superseded by ADR-0110; development-only production-registration clause superseded by ADR-0123"
+status: "accepted; automatic corner authority superseded by ADR-0135; four-corner-only correction superseded by ADR-0110; development-only production-registration clause superseded by ADR-0123"
 date: 2026-07-13
 deciders: Nelson, Codex
 supersedes: "[ADR-0133](0133-pre-drawn-boards-use-one-registered-live-media-plate.md)"
-partially_superseded_by: "[ADR-0106](0106-predrawn-registration-is-owner-picked-source-geometry.md), [ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md), and [ADR-0123](0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md)"
+partially_superseded_by: "[ADR-0135](0135-predrawn-registration-is-owner-picked-source-geometry.md), [ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md), and [ADR-0123](0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md)"
 ---
 
-# ADR-0105: Pre-drawn candidate review uses exact board-plane registration
+# ADR-0134: Pre-drawn candidate review uses exact board-plane registration
 
 ## Context
 

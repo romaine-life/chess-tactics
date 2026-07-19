@@ -18,9 +18,9 @@ describe('buildTileCoverageReport', () => {
       { id: 'bad-transition', kind: 'tile', role: 'transition', probability: 1, pairId: 'grass-water', socketMask: 15 },
     ]);
 
-    expect(report.expectedTransitionSlots).toBe(42);
-    expect(report.filledTransitionSlots).toBe(1);
-    expect(report.missingTransitionSlots).toHaveLength(41);
+    expect(report.expectedTransitionSlots).toBe(0);
+    expect(report.filledTransitionSlots).toBe(0);
+    expect(report.missingTransitionSlots).toHaveLength(0);
     expect(report.invalidTransitionAssets.map((asset) => asset.id)).toEqual(['bad-transition']);
     expect(report.familiesWithoutBase).toEqual(['water', 'dirt', 'pebble', 'sand']);
   });

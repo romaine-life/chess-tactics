@@ -434,6 +434,7 @@ export default defineConfig(async ({ command }) => {
     : [];
   return {
     plugins: [react(), buildInfo(), nineSliceGeometrySave(), chromeLabDefaultsSave(), ...devApiPlugins],
+    test: { setupFiles: ['./src/test/setupDrawableCatalog.ts'] },
     // `/assets/*` belongs exclusively to backend-resolved live media. Keep
     // executable Vite chunks in a disjoint namespace so production code can
     // never be mistaken for a semantic media slot.

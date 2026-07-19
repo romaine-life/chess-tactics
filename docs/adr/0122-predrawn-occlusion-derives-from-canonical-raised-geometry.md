@@ -55,7 +55,7 @@ would be a separate storage and authoring decision.
 
 This decision does not split, crop, mask, or independently align the plate. It
 only removes additive overlay pixels that canonical raised art places in front,
-so ADR-0105's one complete plate and one registration transform remain intact.
+so ADR-0134's one complete plate and one registration transform remain intact.
 
 ## Consequences
 

@@ -187,22 +187,21 @@ this contract corrects.
 ### Exposed faces and abrupt cuts
 
 Per [ADR-0087](adr/0087-exposed-terrain-faces-own-independent-edge-treatments.md),
-side topology is face-level. The fixed camera sees logical south and east: south
+vertical topology is face-level, while [ADR-0105](adr/0105-subterrain-is-an-opt-in-drawable-surface.md)
+makes its material an explicit opt-in Subterrain placement. The fixed camera sees logical south and east: south
 is exposed when `(x, y + 1)` is void, and east when `(x + 1, y)` is void. The
 canonical 96x180 side frame stores south in columns `0..47` and east in columns
-`48..95`; a compositor draws only the exposed half. A per-face override may
-select a different material for a mural, story feature, transition treatment,
-or explicit waterfall. An override never makes an interior face visible.
+`48..95`; a compositor draws only the exposed half. A persisted placement may select
+a Subterrain material. It never makes an interior face visible, and an exposed face
+without a placement remains empty.
 
 `packages/board-render/src/render/terrainSides.ts` is the shared topology,
-material-fallback, and source-half authority. Gameplay, Studio/editor views,
+placement resolution and source-half authority. Gameplay, Studio/editor views,
 client bakes, and server thumbnails must consume it rather than inventing local
 exposure rules.
 
-Abruptness comes from occupancy; treatment comes from live media. Ordinary Water
-at a map cut uses generated native pixels for a thin meniscus over dark
-substrate. A waterfall is an explicit connected feature, not the fallback for
-every Water/void boundary.
+Abruptness comes from occupancy; treatment exists only when authored. Water cuts,
+earth, rock, murals, and waterfalls are Subterrain choices, never tile or void-boundary fallbacks.
 
 The runtime's two-pixel top dilation is seam-repair geometry. It is clipped to
 the union of occupied logical diamonds, including holes, and must never paint a
@@ -295,7 +294,7 @@ canonical board-space projection itself remains unchanged.
 
 The runtime board is one composed terrain canvas, but its source data remains layered:
 
-1. Exposed 1x1 tile sides.
+1. Explicitly authored Subterrain surfaces on exposed south/east faces.
 2. Exactly one terrain top for every playable cell: either its 1x1 top sprite or the clipped
    portion of a macrotile from `EditorBoard.macroTiles` that owns the cell.
 3. Road and river feature overlays.
@@ -303,7 +302,7 @@ The runtime board is one composed terrain canvas, but its source data remains la
 
 ### Pre-drawn board surfaces
 
-Per [ADR-0105](adr/0105-predrawn-candidate-review-uses-exact-board-plane-registration.md),
+Per [ADR-0134](adr/0134-predrawn-candidate-review-uses-exact-board-plane-registration.md),
 a board may replace the composed terrain, feature, prop, fence, wall, and wall-art
 pixels with one complete pre-drawn live-media plate. Its ordinary cell and object
 data remain present and gameplay-authoritative; this is a render mode, not a
@@ -356,7 +355,7 @@ thumbnail, and server thumbnail use this same planner and preload its mask
 sources with visible art. The editor exposes both the real clipping pass and a
 magenta seed overlay as deep-linkable before/after owner proofs.
 
-Per [ADR-0106](adr/0106-predrawn-registration-is-owner-picked-source-geometry.md)
+Per [ADR-0135](adr/0135-predrawn-registration-is-owner-picked-source-geometry.md)
 and [ADR-0108](adr/0108-predrawn-registration-is-local-first-and-explicitly-saved.md),
 the four source corners and the full internal row/column fit are owner-authorable
 in the running app against the untouched candidate image. Automatic geometry may
