@@ -2233,6 +2233,16 @@ async function main() {
   if (reducedPropSeatsWrite.statusCode !== 200 || JSON.parse(reducedPropSeatsWrite.body).portfolio.revision !== 4) {
     throw new Error(`DB-defined reduced prop-seat roster should be accepted: ${reducedPropSeatsWrite.statusCode} ${reducedPropSeatsWrite.body}`);
   }
+  // Restore the complete renderer document for the later thumbnail integration
+  // checks. The reduced-roster assertion above remains independent and durable.
+  const restoredPropSeatsWrite = await request(
+    'PUT', '/api/prop-seats/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: propSeatsDoc, expectedRevision: 4 }),
+  );
+  if (restoredPropSeatsWrite.statusCode !== 200 || JSON.parse(restoredPropSeatsWrite.body).portfolio.revision !== 5) {
+    throw new Error(`Complete prop-seat smoke fixture was not restored: ${restoredPropSeatsWrite.statusCode} ${restoredPropSeatsWrite.body}`);
+  }
 
   // --- New-format level persistence (/api/levels): per-user, DB-backed -------
   const levelBody = { name: 'Smoke Level', board: { cols: 8, rows: 12 }, layers: { terrain: [], units: [] } };
@@ -3140,7 +3150,14 @@ async function main() {
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
     JSON.stringify({
       revision: 1,
-      level: { ...officialWorkspace.levels['off-l-test'], name: 'Official Exact Save' },
+      level: {
+        ...officialWorkspace.levels['off-l-test'],
+        name: 'Official Exact Save',
+        layers: {
+          ...officialWorkspace.levels['off-l-test'].layers,
+          terrain: [{ x: 0, y: 0, terrain: 'grass', elevation: 0 }],
+        },
+      },
     }),
   );
   const officialEditorSaveBody = JSON.parse(officialEditorSave.body);
