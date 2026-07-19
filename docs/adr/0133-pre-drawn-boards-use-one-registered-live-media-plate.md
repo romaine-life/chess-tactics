@@ -5,7 +5,7 @@ deciders: Nelson, Codex
 superseded_by: "[ADR-0105](0105-predrawn-candidate-review-uses-exact-board-plane-registration.md)"
 ---
 
-# ADR-0104: Pre-drawn boards use one registered live-media plate
+# ADR-0133: Pre-drawn boards use one registered live-media plate
 
 ## Context
 

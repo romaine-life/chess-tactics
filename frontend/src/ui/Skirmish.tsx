@@ -994,7 +994,7 @@ export function Skirmish() {
 
       {/* Live-test loop: a persistent, non-blocking "‹ Back to editor" lets you jump back to tweak
           the position at any point. It uses ?returnTo when present, and falls back to the editor
-          route for board-link / saved-level test URLs. The skirmish title bar has no actions slot,
+          route for board-link / saved-level test URLs. Skirmish contributes no before-divider controls,
           so — like the netplay return — this rides a fixed corner chip rather than the bar. */}
       {returnHref ? (
         <NavButton

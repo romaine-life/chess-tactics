@@ -13,7 +13,7 @@ import { levelObjectiveLine } from './LevelInfoCompact';
 import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
-import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
+import { TitleBarControlContribution } from './shell/TitleBarControls';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { KitScroll } from './KitScroll';
@@ -1501,12 +1501,18 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       {confirmDialog}
       {/* One continuous HomepageBackdrop (scene + synced rain), shared across the menu family. */}
       <HomepageBackdrop />
-      {/* ‹ Back to the menu — trailing actions slot (the brand lockup remains the leading anchor). */}
-      <TitleBarSlot region="actions">
-        <TitleBarActions aria-label="Editor navigation">
-          <TitleBarButton variant="return" data-testid="editor-back" to="/" title="Back to the menu">‹ Back</TitleBarButton>
-        </TitleBarActions>
-      </TitleBarSlot>
+      <TitleBarControlContribution
+        ariaLabel="Editor navigation"
+        controls={[{
+          id: 'editor-back',
+          kind: 'navigation',
+          presentation: 'return',
+          label: '‹ Back',
+          destination: '/',
+          title: 'Back to the menu',
+          testId: 'editor-back',
+        }]}
+      />
       {centerSlot}
       <div className="settings-screen main-menu-twin-screen ce-editor-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell ce-editor-shell" ready={loaded}>

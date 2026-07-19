@@ -2,7 +2,7 @@
 status: "accepted; automatic corner-authority clause superseded by ADR-0106; four-corner-only correction superseded by ADR-0110"
 date: 2026-07-13
 deciders: Nelson, Codex
-supersedes: "[ADR-0104](0104-pre-drawn-boards-use-one-registered-live-media-plate.md)"
+supersedes: "[ADR-0133](0133-pre-drawn-boards-use-one-registered-live-media-plate.md)"
 partially_superseded_by: "[ADR-0106](0106-predrawn-registration-is-owner-picked-source-geometry.md) and [ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md)"
 ---
 
@@ -10,7 +10,7 @@ partially_superseded_by: "[ADR-0106](0106-predrawn-registration-is-owner-picked-
 
 ## Context
 
-ADR-0104 established the pre-drawn board as one continuous plate over unchanged,
+ADR-0133 established the pre-drawn board as one continuous plate over unchanged,
 gameplay-authoritative level geometry. It limited review calibration to scale and
 translation. In practice, a generated candidate can preserve the intended board
 and still return with slightly different isometric framing. A scale/translation

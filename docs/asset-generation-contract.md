@@ -138,7 +138,7 @@ being produced.
 ### Pre-drawn Whole-Level Plates
 
 The pre-drawn board path is the deliberate complete-plate exception to the
-ordinary composited-tile direction above. Under ADR-0104 through ADR-0110, one
+ordinary composited-tile direction above. Under ADR-0133 and ADR-0105 through ADR-0110, one
 continuous generated painting may replace the ordinary terrain, road, prop, and
 barrier pixels for a specific authored level while the canonical level remains
 the sole authority for gameplay geometry and live units, grid, selection, and

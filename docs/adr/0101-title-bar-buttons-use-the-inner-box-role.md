@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: "accepted; routed caller-access mechanism superseded by ADR-0104"
 date: 2026-07-15
 deciders: Nelson, Codex
+partially_superseded_by: "[ADR-0104](0104-title-bar-controls-are-typed-contributions-to-one-lane.md)"
 ---
 
 # ADR-0101: Title-bar buttons use the inner-box role

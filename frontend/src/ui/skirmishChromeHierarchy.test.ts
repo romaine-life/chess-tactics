@@ -33,31 +33,33 @@ describe('Skirmish chrome hierarchy', () => {
     expect(styleCss).toMatch(/@media \(max-width: 860px\)[\s\S]*?\.skirmish-screen\s*\{[\s\S]*?overflow-x:\s*hidden;[\s\S]*?overflow-y:\s*auto;/);
   });
 
-  it('uses one branched shell divider instead of two complete outer boxes (ADR-0096)', () => {
+  it('uses one typed control lane and one branched shell divider (ADR-0100/0104)', () => {
     expect(appTitleBar).toContain('chrome-family-surface chrome-rails-offscreen');
     expect(appTitleBar).not.toContain('chromeCorners');
     expect(appTitleBar).not.toContain('cornerPreviewClass');
     expect(appTitleBar).toContain('<span className="app-shell-outer-divider" aria-hidden="true" />');
-    expect(appTitleBar).toContain('app-shell-rail-junction--persistent-controls');
-    expect(appTitleBar).toMatch(/app-shell-rail-junction--persistent-controls[^]*?<div className="app-titlebar-trailing-menu">/);
-    expect(appTitleBar).not.toMatch(/<div className="app-titlebar-trailing-menu">\s*<span className="app-shell-rail-junction/);
+    expect(appTitleBar).toContain('app-shell-rail-junction--persistent-divider');
+    expect(appTitleBar).toMatch(/<div className="app-titlebar-control-lane">[^]*?app-titlebar-contribution-target[^]*?app-titlebar-persistent-divider[^]*?<HeaderAccountCluster/);
+    expect(appTitleBar).not.toContain('app-titlebar-trailing-menu');
     expect(appTitleBar).toContain('app-shell-rail-junction--control-branch');
     expect(appTitleBar).toContain('app-shell-rail-junction--right-continuation');
     expect(styleCss).toMatch(/\.settings-header-frame\.app-titlebar\s*\{[\s\S]*?align-content:\s*stretch;/);
-    expect(styleCss).toMatch(/\.app-titlebar-trailing-menu\s*\{[\s\S]*?align-self:\s*start;[\s\S]*?block-size:\s*calc\(var\(--app-header-h\) - var\(--titlebar-rule-h\)\);[\s\S]*?margin-block:\s*calc\(-1 \* var\(--ds-titlebar-inset\)\) 0;/);
+    expect(styleCss).toMatch(/\.app-titlebar-control-lane\s*\{[\s\S]*?align-items:\s*center;[\s\S]*?block-size:\s*calc\(var\(--app-header-h\) - var\(--titlebar-rule-h\)\);[\s\S]*?gap:\s*var\(--titlebar-control-gap\);[\s\S]*?margin-block:\s*calc\(-1 \* var\(--ds-titlebar-inset\)\) 0;/);
     expect(styleCss).toMatch(/:root\s*\{\s*--skirmish-rail-w:\s*clamp\(176px, 30vw, 300px\);/);
     expect(styleCss).toMatch(/\.app-shell-titlebar\.settings-header-frame\s*\{[\s\S]*?--ds-titlebar-inset:\s*6px;[\s\S]*?padding-block:\s*var\(--ds-titlebar-inset\);/);
     expect(chromeRuntime).toContain('.app-shell-outer-divider::before');
-    expect(chromeRuntime).toContain('.app-shell-rail-junction--persistent-controls');
-    expect(chromeRuntime).toContain('anchor(--app-titlebar-persistent-controls left)');
+    expect(chromeRuntime).toContain('.app-shell-rail-junction--persistent-divider');
+    expect(chromeRuntime).toContain('anchor(--app-titlebar-persistent-divider left)');
     expect(chromeRuntime).toContain('right: calc(var(--skirmish-rail-w) - var(--le-chrome-outer-rail-w) / 2');
-    expect(styleCss).toMatch(/\.app-titlebar-trailing-menu\s*\{[\s\S]*?anchor-name:\s*--app-titlebar-persistent-controls;/);
+    expect(styleCss).toMatch(/\.app-titlebar-persistent-divider\s*\{[\s\S]*?anchor-name:\s*--app-titlebar-persistent-divider;/);
     expect(chromeRuntime).toContain('.app-shell-rail-junction--control-branch');
     expect(chromeRuntime).toContain('border-width: ${outerRailWidth}px ${outerRailWidth}px 0;');
     expect(chromeRuntime).toContain('border-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;');
     expect(chromeRuntime).toContain('url("${outerFrame.atomOverlay.tl}"), url("${outerFrame.atomOverlay.tr}"), url("${outerFrame.atomOverlay.bl}")');
     expect(chromeRuntime).toContain('url("${outerFrame.atomOverlay.bl}"), url("${outerFrame.atomOverlay.br}")');
-    expect(styleCss).toMatch(/\.app-titlebar-trailing-menu\s*\{[\s\S]*?--titlebar-persistent-gap:\s*max\(0px, calc\(\(var\(--app-header-h\) - var\(--titlebar-rule-h\) - var\(--titlebar-control-size\)\) \/ 2\)\);[\s\S]*?--titlebar-control-gap:\s*var\(--titlebar-persistent-gap\);[\s\S]*?justify-self:\s*end;[\s\S]*?padding-inline-start:\s*calc\(var\(--le-chrome-outer-rail-w, 12px\) \+ var\(--titlebar-persistent-gap\)\)/);
+    expect(styleCss).toMatch(/\.settings-header-frame\s*\{[\s\S]*?--titlebar-control-gap:\s*var\(--ds-space-2\);[\s\S]*?column-gap:\s*var\(--titlebar-control-gap\)/);
+    expect(styleCss).toMatch(/\.app-titlebar-control-lane\s*\{[\s\S]*?justify-self:\s*end;[\s\S]*?margin-inline-end:\s*calc\(var\(--titlebar-control-gap\) - var\(--titlebar-pad-inline\)\)/);
+    expect(styleCss).toMatch(/\.app-titlebar-contributed-controls\s*\{[\s\S]*?gap:\s*var\(--titlebar-control-gap\)/);
   });
 
   it('registers every level-specific title-bar status box as inner chrome', () => {

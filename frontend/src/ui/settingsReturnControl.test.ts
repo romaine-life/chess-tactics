@@ -7,7 +7,9 @@ const src = readFileSync(new URL('./Settings.tsx', import.meta.url), 'utf8');
 
 describe('Settings return control', () => {
   it('keeps the title-bar back control mounted in the embedded menu shell', () => {
-    expect(src).toContain('const returnSlot = returnTo ? (');
-    expect(src.replace(/\s+/g, '')).toContain('if(embedded)return<>{returnSlot}{inner}</>;');
+    expect(src).toContain('const returnControl = returnTo ? (');
+    expect(src).toContain('<TitleBarControlContribution');
+    expect(src).toContain("kind: 'navigation'");
+    expect(src.replace(/\s+/g, '')).toContain('if(embedded)return<>{returnControl}{inner}</>;');
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { TitleBarButton } from '../shell/TitleBarControls';
+import { TitleBarButtonPrimitive } from '../shell/TitleBarControls';
 
 // The signed-in account control for the trailing edge of the app chrome: an
 // icon-only avatar button (Gravatar) that opens a small kit-framed menu. The menu
@@ -71,7 +71,7 @@ export function AccountMenu({ name, email, avatarUrl, onRename, onSignOut, defau
 
   return (
     <div className="account-menu-root" ref={rootRef}>
-      <TitleBarButton
+      <TitleBarButtonPrimitive
         variant="icon"
         className="cluster-icon-button account-avatar-button"
         aria-haspopup="menu"
@@ -80,7 +80,7 @@ export function AccountMenu({ name, email, avatarUrl, onRename, onSignOut, defau
         onClick={() => setOpen((v) => !v)}
       >
         {avatar('account-avatar-img')}
-      </TitleBarButton>
+      </TitleBarButtonPrimitive>
 
       {open && (
         <div className="account-menu" role="menu" aria-label="Account">

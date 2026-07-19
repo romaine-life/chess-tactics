@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { fetchMe, goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
 import { normalizeRoutePath } from '../navigation';
-import { TitleBarIconButton } from '../shell/TitleBarControls';
+import { TitleBarIconButtonPrimitive } from '../shell/TitleBarControls';
 import { AccountMenu } from './AccountMenu';
 
 // The shared trailing-edge "settings + user" cluster for the standard app title
@@ -99,7 +99,7 @@ export function HeaderAccountCluster({
         // editor rewrite their query via replaceState WITHOUT re-rendering this persistent
         // bar, which is why the anchor this replaced needed a pointerdown/keydown
         // just-in-time href rewrite hack (ADR-0052 retires it).
-        <TitleBarIconButton className="cluster-icon-button" to={() => settingsHref()} label="Settings" title="Settings" iconSrc={SETTINGS_ICON} />
+        <TitleBarIconButtonPrimitive className="cluster-icon-button" to={() => settingsHref()} label="Settings" title="Settings" iconSrc={SETTINGS_ICON} />
       ) : null}
       {signedIn ? (
         <AccountMenu
@@ -114,7 +114,7 @@ export function HeaderAccountCluster({
       ) : (
         // A button, not an anchor (ADR-0052): the sign-in is still a full-page trip to
         // the auth backend — goSignIn sets window.location — it just shows no URL.
-        <TitleBarIconButton
+        <TitleBarIconButtonPrimitive
           active
           className="cluster-icon-button account-sign-in-button"
           label="Sign in"
