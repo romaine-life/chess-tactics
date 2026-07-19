@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:10454865ccc021509e53510d296fc7c49d4bd70feff2b0bb9b3863424083ab4f"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:a40fd37653aa9767b5e59baf7aa70f59e6397897f4fb1ba0b562eaa2bae013ce"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add clear-all board overlay control"
-  prNumber: "502"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/502"
-  commit: "ff3e876c"
+  prTitle: "Build professional frame-acknowledged loading"
+  prNumber: "503"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/503"
+  commit: "4c3773a9"
 
 name: chess-tactics
 namespace: chess-tactics
