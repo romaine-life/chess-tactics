@@ -18,9 +18,11 @@ import {
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
 import {
   resolveFeatureOverlays,
+  resolveDecorativeWallOverlays,
   resolveFenceOverlays,
   resolveFencePosts,
   resolveWallOverlays,
+  parseEdgeKey,
   type ResolvedFenceOverlay,
   type ResolvedFencePost,
 } from '../core/featureAutotile';
@@ -48,6 +50,7 @@ import {
   type TerrainSideMaterials,
 } from './terrainSides';
 import { subterrainFaceKey, subterrainMaterialSrc } from '../core/subterrain';
+import { decorativeTerrainApronCoordinates, scenicTerrainValueAt } from '../core/scenicTerrain';
 import {
   mirrorGlassOpsForSurfaces,
   mirrorSurfacesForPlacements,
@@ -133,14 +136,83 @@ export type RenderBoard = EditorBoard;
 export interface BoardDrawOptions {
   coverSeed?: number;
   ambientCover?: boolean;
-  /** Generation-reference mode: retain terrain tops/features while omitting exposed skirts. */
+  /** Generation-reference mode: retain tops, features, and only explicitly authored Subterrain. */
   topSurfacesOnly?: boolean;
+}
+
+export interface BoardVisualTerrainCell {
+  key: string;
+  x: number;
+  y: number;
+  tileId?: string;
+  decorative: boolean;
 }
 
 const resolveTile = (id: string): StudioAsset | undefined =>
   studioFamilies.flatMap((family) => family.assets).find((asset) => asset.id === id);
 const resolveUnit = (id: string): UnitAsset | undefined => unitArtForId(id);
 const resolveDoodad = (id: string): DoodadAsset | undefined => doodadAsset(id);
+
+const EMPTY_SCENIC_EXTENTS = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+
+/**
+ * Resolve the complete authored visual terrain surface while keeping the playable grid as the
+ * projection origin. The sparse footprint owns scenic membership; retained material alone never
+ * activates a cell. Invalid or unavailable tile ids resolve as void, matching the live editor.
+ */
+export function boardVisualTerrainCells(board: RenderBoard): BoardVisualTerrainCell[] {
+  const validTileId = (id: string | undefined): string | undefined => id && resolveTile(id) ? id : undefined;
+  const cells: BoardVisualTerrainCell[] = [];
+  for (let y = 0; y < board.rows; y += 1) {
+    for (let x = 0; x < board.cols; x += 1) {
+      const key = `${x},${y}`;
+      cells.push({ key, x, y, tileId: validTileId(board.cells[key]), decorative: false });
+    }
+  }
+  for (const { x, y } of decorativeTerrainApronCoordinates(
+    board.cols,
+    board.rows,
+    board.decorativeApron ?? EMPTY_SCENIC_EXTENTS,
+    board.decorativeFootprint ?? [],
+  )) {
+    const key = `${x},${y}`;
+    const tileId = scenicTerrainValueAt(
+      x,
+      y,
+      board.cols,
+      board.rows,
+      (sourceX, sourceY) => validTileId(board.cells[`${sourceX},${sourceY}`]),
+      (authoredX, authoredY) => validTileId(board.decorativeCells?.[`${authoredX},${authoredY}`]),
+    );
+    cells.push({ key, x, y, tileId, decorative: true });
+  }
+  return cells;
+}
+
+/** Feature topology follows the same active visual surface as its terrain. */
+export function boardVisualFeatures(
+  board: RenderBoard,
+  terrainCells: readonly BoardVisualTerrainCell[] = boardVisualTerrainCells(board),
+): RenderBoard['features'] {
+  const visibleScenicTerrain = new Set(
+    terrainCells.filter((cell) => cell.decorative && cell.tileId).map((cell) => cell.key),
+  );
+  return {
+    ...board.features,
+    ...Object.fromEntries(
+      Object.entries(board.decorativeFeatures ?? {}).filter(([key]) => visibleScenicTerrain.has(key)),
+    ),
+  };
+}
+
+function wallLeavesPlayableBoard(edge: string, board: Pick<RenderBoard, 'cols' | 'rows'>): boolean {
+  const parsed = parseEdgeKey(edge);
+  if (!parsed) return false;
+  return [
+    [parsed.ax, parsed.ay],
+    [parsed.bx, parsed.by],
+  ].some(([x, y]) => x < 0 || x >= board.cols || y < 0 || y >= board.rows);
+}
 
 function staticUnitSubject(
   key: string,
@@ -282,6 +354,7 @@ function pushFencePostDrawOp(ops: BoardDrawOp[], post: ResolvedFencePost): void 
 
 export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {}): BoardDrawOp[] {
   const ops: BoardDrawOp[] = [];
+  const visualTerrainCells = boardVisualTerrainCells(board);
   const predrawn = board.surface?.kind === 'predrawn' ? board.surface : undefined;
   if (predrawn) {
     const gridCells = Array.from({ length: board.rows }, (_, y) =>
@@ -316,11 +389,26 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
 
   const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
   const isExit = (edge: string): boolean => board.featureExits[edge] === true;
-  const overlays = resolveFeatureOverlays(board.features, isSevered, isExit);
-  const fenceOverlays = predrawn ? new Map() : resolveFenceOverlays(board.fences ?? {});
-  const fencePosts = predrawn ? new Map() : resolveFencePosts(board.fences ?? {}, board.fencePosts ?? {});
+  const overlays = resolveFeatureOverlays(boardVisualFeatures(board, visualTerrainCells), isSevered, isExit);
+  const visualFences = { ...(board.decorativeFences ?? {}), ...(board.fences ?? {}) };
+  const visualFencePosts = { ...(board.decorativeFencePosts ?? {}), ...(board.fencePosts ?? {}) };
+  const fenceOverlays = predrawn ? new Map() : resolveFenceOverlays(visualFences);
+  const fencePosts = predrawn ? new Map() : resolveFencePosts(visualFences, visualFencePosts);
   const wallBounds = { cols: board.cols, rows: board.rows };
   const wallOverlays = predrawn ? new Map() : resolveWallOverlays(board.walls ?? {}, wallBounds);
+  if (!predrawn) {
+    const exteriorWalls = {
+      ...(board.decorativeWalls ?? {}),
+      ...Object.fromEntries(Object.entries(board.walls ?? {}).filter(([edge]) => wallLeavesPlayableBoard(edge, board))),
+    };
+    for (const [key, overlay] of resolveDecorativeWallOverlays(exteriorWalls)) {
+      const prior = wallOverlays.get(key);
+      wallOverlays.set(key, {
+        mask: (prior?.mask ?? 0) | overlay.mask,
+        material: prior?.material ?? overlay.material,
+      });
+    }
+  }
   const wallFaceStyles = predrawn ? new Map() : resolveWallArtFaces(board.wallArt, wallBounds);
   const hasWall = (edge: string): boolean => Boolean(board.walls?.[edge]);
   const mirrorSurfaces = (predrawn ? [] : mirrorSurfacesForPlacements(board.wallArt, wallBounds))
@@ -333,11 +421,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   ops.push(...mirrorGlassOpsForSurfaces(mirrorSurfaces));
   ops.push(...reflectedOpsForSubjects(mirrorSurfaces, [...staticUnitSubjects.values()]));
   ops.push(...wallArtFrameOpsForPlacements(board.wallArt, wallBounds, { hasWall }));
-  const occupiedTerrain = new Set(
-    Object.entries(board.cells)
-      .filter(([, id]) => !!resolveTile(id))
-      .map(([key]) => key),
-  );
+  const occupiedTerrain = new Set(visualTerrainCells.filter((cell) => cell.tileId).map((cell) => cell.key));
   const acceptedMacroTiles = resolveMacroTilePlacements({
     placements: board.macroTiles,
     columns: board.cols,
@@ -351,92 +435,88 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     }
   }
 
-  for (let y = 0; y < board.rows; y += 1) {
-    for (let x = 0; x < board.cols; x += 1) {
-      const key = `${x},${y}`;
-      const { left, top, zIndex } = boardLabCellPosition({ x, y });
-      const frameX = left - TILE_STEP_X;
-      const frameY = top - TILE_EQUATOR;
+  for (const visualCell of visualTerrainCells) {
+    const { x, y, key } = visualCell;
+    const { left, top, zIndex } = boardLabCellPosition({ x, y });
+    const frameX = left - TILE_STEP_X;
+    const frameY = top - TILE_EQUATOR;
 
-      const tile = board.cells[key] ? resolveTile(board.cells[key]) : undefined;
-      if (tile && !predrawn) {
-        if (!options.topSurfacesOnly) {
-          const sideFaces = resolveTerrainSideFaces(
-            resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupiedTerrain.has(`${nextX},${nextY}`)),
-            Object.fromEntries(TERRAIN_SIDE_FACES.flatMap((face) => {
-              const material = board.subterrain?.[subterrainFaceKey(x, y, face)];
-              return material ? [[face, subterrainMaterialSrc(material)]] : [];
-            })) as TerrainSideMaterials<string>,
-          );
-          for (const face of TERRAIN_SIDE_FACES) {
-            const { exposed, material } = sideFaces[face];
-            if (!exposed || !material) continue;
-            const faceX = TERRAIN_SIDE_FACE_COLUMN[face] * TILE_STEP_X;
-            ops.push({
-              layer: 'terrain',
-              src: material,
-              sx: faceX,
-              sy: 0,
-              sw: TILE_STEP_X,
-              sh: TILE_FRAME_H,
-              dx: frameX + faceX,
-              dy: frameY,
-              dw: TILE_STEP_X,
-              dh: TILE_FRAME_H,
-              z: zIndex,
-            });
-          }
-        }
-        const frameSrc = assetFrameSrc(tile, 0);
-        if (!macroOwnedTerrain.has(key)) {
-          ops.push({ layer: 'terrain', src: frameSrc, dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
-        }
-      }
-
-      const feature = overlays[key];
-      if (feature && !predrawn) {
+    const tile = visualCell.tileId ? resolveTile(visualCell.tileId) : undefined;
+    if (tile && !predrawn) {
+      const sideFaces = resolveTerrainSideFaces(
+        resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupiedTerrain.has(`${nextX},${nextY}`)),
+        Object.fromEntries(TERRAIN_SIDE_FACES.flatMap((face) => {
+          const material = board.subterrain?.[subterrainFaceKey(x, y, face)];
+          return material ? [[face, subterrainMaterialSrc(material)]] : [];
+        })) as TerrainSideMaterials<string>,
+      );
+      for (const face of TERRAIN_SIDE_FACES) {
+        const { exposed, material } = sideFaces[face];
+        if (!exposed || !material) continue;
+        const faceX = TERRAIN_SIDE_FACE_COLUMN[face] * TILE_STEP_X;
         ops.push({
-          layer: 'linear-feature',
-          src: featureFrameSrc(feature.kind, feature.material, feature.mask),
-          dx: frameX,
+          layer: 'terrain',
+          src: material,
+          sx: faceX,
+          sy: 0,
+          sw: TILE_STEP_X,
+          sh: TILE_FRAME_H,
+          dx: frameX + faceX,
           dy: frameY,
-          dw: TILE_FRAME_W,
+          dw: TILE_STEP_X,
           dh: TILE_FRAME_H,
-          z: TERRAIN_FEATURE_DEPTH_OFFSET + zIndex,
+          z: zIndex,
         });
       }
+      const frameSrc = assetFrameSrc(tile, 0);
+      if (!macroOwnedTerrain.has(key)) {
+        ops.push({ layer: 'terrain', src: frameSrc, dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: TERRAIN_TOP_DEPTH_OFFSET + zIndex });
+      }
+    }
 
-      const wall = wallOverlays.get(key);
-      if (wall) {
-        const wallZ = wallOverlayZIndex({ x, y });
-        ops.push({
-          layer: 'scene',
-          src: wallFrameSrc(wall.material, wall.mask),
-          dx: left - WALL_ANCHOR_X,
-          dy: top - WALL_ANCHOR_Y,
-          dw: WALL_FRAME_W,
-          dh: WALL_FRAME_H,
-          z: wallZ,
-        });
-        const faceStyles = wallFaceStyles.get(key);
-        for (const face of ['west', 'north'] as const) {
-          const maskBit = face === 'west' ? 8 : 1;
-          if (!(wall.mask & maskBit)) continue;
-          for (const slot of wallArtSlotsForFace(faceStyles?.[face], face)) {
-            const source = slotSource(slot);
-            if (!source) continue;
-            if (source.kind === 'mirror') continue;
-            const faceAsset = source.faces[face];
-            ops.push({
-              layer: 'scene',
-              src: faceAsset.src,
-              dx: left - WALL_ANCHOR_X + slot.x - faceAsset.mountX * slot.scale,
-              dy: top - WALL_ANCHOR_Y + slot.y - faceAsset.mountY * slot.scale,
-              dw: faceAsset.width * slot.scale,
-              dh: faceAsset.height * slot.scale,
-              z: wallArtOverlayZIndex({ x, y }),
-            });
-          }
+    const feature = overlays[key];
+    if (feature && !predrawn) {
+      ops.push({
+        layer: 'linear-feature',
+        src: featureFrameSrc(feature.kind, feature.material, feature.mask),
+        dx: frameX,
+        dy: frameY,
+        dw: TILE_FRAME_W,
+        dh: TILE_FRAME_H,
+        z: TERRAIN_FEATURE_DEPTH_OFFSET + zIndex,
+      });
+    }
+
+    const wall = wallOverlays.get(key);
+    if (wall) {
+      const wallZ = wallOverlayZIndex({ x, y });
+      ops.push({
+        layer: 'scene',
+        src: wallFrameSrc(wall.material, wall.mask),
+        dx: left - WALL_ANCHOR_X,
+        dy: top - WALL_ANCHOR_Y,
+        dw: WALL_FRAME_W,
+        dh: WALL_FRAME_H,
+        z: wallZ,
+      });
+      const faceStyles = wallFaceStyles.get(key);
+      for (const face of ['west', 'north'] as const) {
+        const maskBit = face === 'west' ? 8 : 1;
+        if (!(wall.mask & maskBit)) continue;
+        for (const slot of wallArtSlotsForFace(faceStyles?.[face], face)) {
+          const source = slotSource(slot);
+          if (!source) continue;
+          if (source.kind === 'mirror') continue;
+          const faceAsset = source.faces[face];
+          ops.push({
+            layer: 'scene',
+            src: faceAsset.src,
+            dx: left - WALL_ANCHOR_X + slot.x - faceAsset.mountX * slot.scale,
+            dy: top - WALL_ANCHOR_Y + slot.y - faceAsset.mountY * slot.scale,
+            dw: faceAsset.width * slot.scale,
+            dh: faceAsset.height * slot.scale,
+            z: wallArtOverlayZIndex({ x, y }),
+          });
         }
       }
     }
@@ -598,6 +678,13 @@ export function boardContentHash(board: RenderBoard): string {
     `c${board.cols}`,
     `r${board.rows}`,
     `pd:${JSON.stringify(board.surface ?? null)}`,
+    `da:${JSON.stringify(board.decorativeApron ?? null)}`,
+    `df:${JSON.stringify([...(board.decorativeFootprint ?? [])].sort())}`,
+    `dt:${sortedEntries(board.decorativeCells ?? {})}`,
+    `dr:${sortedEntries(board.decorativeFeatures ?? {})}`,
+    `dfe:${sortedEntries(board.decorativeFences ?? {})}`,
+    `dfp:${sortedEntries(board.decorativeFencePosts ?? {})}`,
+    `dwl:${sortedEntries(board.decorativeWalls ?? {})}`,
     `t:${sortedEntries(board.cells)}`,
     `mt:${JSON.stringify(macroTiles)}`,
     `u:${sortedEntries(board.units)}`,
@@ -650,9 +737,8 @@ export function boardSocialFramingBounds(board: RenderBoard): BakeBounds {
   // cards must fit that transformed full frame rather than applying the ordinary tile-relief crop.
   if (board.surface?.kind === 'predrawn') return drawBounds;
   let surfaceMaxY = -Infinity;
-  for (const key of Object.keys(board.cells)) {
-    const [x, y] = key.split(',').map(Number);
-    if (!Number.isInteger(x) || !Number.isInteger(y)) continue;
+  for (const { x, y, tileId } of boardVisualTerrainCells(board)) {
+    if (!tileId) continue;
     const { top } = boardLabCellPosition({ x, y });
     surfaceMaxY = Math.max(surfaceMaxY, top + TILE_STEP_Y);
   }

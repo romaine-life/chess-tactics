@@ -32,6 +32,8 @@ export function BoardSceneLayer({
   maskTint,
   className,
   predrawnOcclusion = true,
+  onFirstFrame,
+  onFrameError,
 }: {
   board: EditorBoard;
   hidden?: { tile: boolean; unit: boolean; doodad: boolean };
@@ -45,6 +47,9 @@ export function BoardSceneLayer({
   className?: string;
   /** Owner proof can suppress clipping; gameplay and ordinary viewers keep it enabled. */
   predrawnOcclusion?: boolean;
+  /** Acknowledge only after this compositor has painted its first complete frame. */
+  onFirstFrame?: () => void;
+  onFrameError?: (error: unknown) => void;
 }): ReactElement | null {
   const sourceBoard = useMemo(() => visualBoard(board, hidden), [board, hidden]);
   const contentHash = useMemo(() => `${boardContentHash(sourceBoard)}|cover:${coverSeed}|ambient:${ambientCover ? 1 : 0}`, [ambientCover, coverSeed, sourceBoard]);
@@ -72,6 +77,8 @@ export function BoardSceneLayer({
       maskTint={maskTint}
       className={className}
       occlusionMasks={occlusionMasks}
+      onFirstFrame={onFirstFrame}
+      onFrameError={onFrameError}
     />
   );
 }

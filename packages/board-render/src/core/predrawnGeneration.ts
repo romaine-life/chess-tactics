@@ -3,6 +3,7 @@ import type { Level, TerrainCell } from './level';
 import { familyOfTile, levelToEditorBoard } from './levelBoard';
 import { propCells, propDef, type PropDef } from './props';
 import { boardLabCellPosition } from '../render/boardProjection';
+import { validatePredrawnGenerationFrame } from '../render/predrawnGenerationFrame';
 import { decodeBoard, type EditorBoard, type FeatureCell } from '../ui/boardCode';
 
 export type PredrawnGenerationCoordinate = readonly [x: number, y: number];
@@ -56,11 +57,23 @@ export interface PredrawnImpassableTransition {
   b: PredrawnGenerationCoordinate;
 }
 
+export interface PredrawnGenerationViewport {
+  version: 1;
+  coordinateSpace: 'canonical-board-render-px-1x';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface PredrawnGenerationDefinition {
-  schemaVersion: 2;
+  schemaVersion: 3;
   runId: string;
   levelId: string;
-  reference: { sourceSlot: string };
+  reference: {
+    sourceSlot: string;
+    viewport: PredrawnGenerationViewport;
+  };
   request: {
     provider: string;
     model: string;
@@ -105,6 +118,25 @@ export interface PredrawnGenerationDefinitionOptions {
   provider: string;
   model: string;
   resolveProp?: (propId: string) => PropDef | undefined;
+}
+
+function generationViewport(board: EditorBoard): PredrawnGenerationViewport {
+  if (!board.predrawnGenerationFrame) {
+    throw new Error('predrawn definition: canonical level is missing its saved generation frame');
+  }
+  const validation = validatePredrawnGenerationFrame(board, board.predrawnGenerationFrame);
+  if (!validation.ok) {
+    throw new Error(`predrawn definition: saved generation frame is invalid: ${validation.errors.join('; ')}`);
+  }
+  const frame = validation.frame;
+  return {
+    version: 1,
+    coordinateSpace: 'canonical-board-render-px-1x',
+    x: frame.x,
+    y: frame.y,
+    width: frame.width,
+    height: frame.height,
+  };
 }
 
 const coordinateKey = ([x, y]: PredrawnGenerationCoordinate): string => `${x},${y}`;
@@ -175,6 +207,10 @@ function assertCanonicalAgreement(level: Level, board: EditorBoard, terrain: Rea
   }
 
   const visualProps = Object.entries(board.props ?? {})
+    .filter(([key]) => {
+      const [x, y] = key.split(',').map(Number);
+      return inBoard([x, y], board.cols, board.rows);
+    })
     .map(([key, placement]) => `${key}=${placement.propId}`)
     .sort();
   const durableProps = (level.layers.props ?? [])
@@ -252,9 +288,13 @@ function linearFeatures(board: EditorBoard): PredrawnLinearFeatureDefinition[] {
     (edge) => board.featureCuts[edge] === true,
     (edge) => board.featureExits[edge] === true,
   );
-  const kinds = [...new Set(Object.values(board.features).map((feature) => feature.kind))].sort();
+  const playableFeatures = Object.entries(board.features).filter(([key]) => {
+    const [x, y] = key.split(',').map(Number);
+    return inBoard([x, y], board.cols, board.rows);
+  });
+  const kinds = [...new Set(playableFeatures.map(([, feature]) => feature.kind))].sort();
   return kinds.map((kind) => {
-    const cells = Object.entries(board.features)
+    const cells = playableFeatures
       .filter(([, feature]) => feature.kind === kind)
       .map(([key]) => key.split(',').map(Number) as [number, number])
       .sort(compareCoordinates);
@@ -266,7 +306,7 @@ function linearFeatures(board: EditorBoard): PredrawnLinearFeatureDefinition[] {
       for (const direction of FEATURE_DIRS) {
         if ((overlay.mask & direction.bit) === 0) continue;
         const neighbor: PredrawnGenerationCoordinate = [cell[0] + direction.dx, cell[1] + direction.dy];
-        if (board.features[coordinateKey(neighbor)]?.kind === kind) {
+        if (inBoard(neighbor, board.cols, board.rows) && board.features[coordinateKey(neighbor)]?.kind === kind) {
           const edge = canonicalEdge(cell, neighbor);
           connections.set(canonicalEdgeKey(edge[0], edge[1]), edge);
         } else {
@@ -321,6 +361,7 @@ function footprints(
   const definitions: PredrawnFootprintDefinition[] = [];
   for (const [key, placement] of Object.entries(board.props ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
     const [x, y] = key.split(',').map(Number);
+    if (!inBoard([x, y], board.cols, board.rows)) continue;
     const definition = resolveProp(placement.propId);
     if (!definition) throw new Error(`predrawn definition: unknown canonical prop ${placement.propId}`);
     const cells = propCells(x, y, definition).map(({ x: cellX, y: cellY }) => [cellX, cellY] as const);
@@ -338,9 +379,7 @@ function footprints(
   for (const [key, placement] of Object.entries(board.doodads).sort(([a], [b]) => a.localeCompare(b))) {
     const [x, y] = key.split(',').map(Number);
     const cell: PredrawnGenerationCoordinate = [x, y];
-    if (!inBoard(cell, board.cols, board.rows)) {
-      throw new Error(`predrawn definition: doodad ${placement.doodadId} leaves the board`);
-    }
+    if (!inBoard(cell, board.cols, board.rows)) continue;
     definitions.push({
       id: `footprint-${definitions.length + 1}`,
       kind: 'doodad',
@@ -389,7 +428,8 @@ function impassableTransitions(cells: readonly (readonly PredrawnGenerationCell[
 
 /**
  * Serialize one canonical Level into the complete deterministic geometry/semantics packet used
- * by whole-board image generation. The clean top-only image remains the sole appearance authority.
+ * by whole-board image generation. The clean authored-surface image remains the sole appearance
+ * authority: terrain tops plus only explicitly persisted, exposed Subterrain faces.
  */
 export function buildPredrawnGenerationDefinition(
   level: Level,
@@ -401,6 +441,7 @@ export function buildPredrawnGenerationDefinition(
     throw new Error('predrawn definition: canonical boardCode is invalid');
   }
   const board = levelToEditorBoard(level);
+  const viewport = generationViewport(board);
   const terrain = exactTerrain(level);
   assertCanonicalAgreement(level, board, terrain);
   const serializedCells = boardCells(board, terrain);
@@ -415,10 +456,10 @@ export function buildPredrawnGenerationDefinition(
     .map(([cell, neighbor]) => ({ cell, neighbor }))
     .sort((a, b) => canonicalEdgeKey(a.cell, a.neighbor).localeCompare(canonicalEdgeKey(b.cell, b.neighbor)));
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     runId: options.runId,
     levelId: level.id,
-    reference: { sourceSlot: options.referenceSourceSlot },
+    reference: { sourceSlot: options.referenceSourceSlot, viewport },
     request: {
       provider: options.provider,
       model: options.model,

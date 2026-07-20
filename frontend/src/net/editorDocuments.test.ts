@@ -2,17 +2,35 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Level } from '../core/level';
 import {
   EditorDocumentConflictError,
+  EditorDocumentEditSessionError,
+  appendDisplacedEditorDocumentRecovery,
   autosaveEditorDocument,
   autosaveEditorDocumentOnPageHide,
+  closeEditorDocumentEditSession,
   createEditorDocument,
+  deleteEditorDocumentRecovery,
   deleteNeverSavedEditorDocument,
   discardEditorDocumentChanges,
+  editorDocumentEditFence,
+  heartbeatEditorDocumentEditSession,
   isEditorDocumentConflict,
+  isEditorDocumentEditSessionError,
+  listEditorDocumentRevisions,
   listEditorDocuments,
+  listEditorDocumentRecoveries,
   loadEditorDocument,
+  loadEditorDocumentEditPresence,
+  openEditorDocumentEditSession,
   resolveEditorDocument,
+  restoreEditorDocumentRevision,
+  restoreEditorDocumentRecovery,
   saveEditorDocument,
+  takeOverEditorDocumentEditSession,
   type EditorDocument,
+  type EditorDocumentEditFence,
+  type EditorDocumentEditPresence,
+  type EditorDocumentEditSession,
+  type EditorDocumentRecovery,
 } from './editorDocuments';
 import { HttpError } from './http';
 
@@ -38,6 +56,65 @@ const document: EditorDocument = {
   baseline_conflict: false,
   created_at: '2026-07-10T01:00:00.000Z',
   updated_at: '2026-07-10T01:01:00.000Z',
+};
+
+const editFence: EditorDocumentEditFence = {
+  edit_session_id: 'session-tab-a',
+  edit_session_key: 'a'.repeat(64),
+  edit_generation: 12,
+};
+
+const editSession: EditorDocumentEditSession = {
+  session_id: 'session-tab-a',
+  document_id: 'doc-7f3c',
+  state: 'active',
+  edit_generation: 12,
+  name: 'Nelson',
+  email: 'nelson@example.com',
+  client_label: 'Chrome · bridge worktree',
+  opened_at: '2026-07-20T01:00:00.000Z',
+  last_seen_at: '2026-07-20T01:01:00.000Z',
+  last_edit_at: null,
+  lease_expires_at: '2026-07-20T01:02:00.000Z',
+};
+
+const editPresence: EditorDocumentEditPresence = {
+  document_id: 'doc-7f3c',
+  edit_generation: 12,
+  active_editor: {
+    session_id: 'session-tab-a',
+    name: 'Nelson',
+    email: 'nelson@example.com',
+    client_label: 'Chrome · bridge worktree',
+    opened_at: '2026-07-20T01:00:00.000Z',
+    last_seen_at: '2026-07-20T01:01:00.000Z',
+    last_edit_at: null,
+    relationship: 'this_tab',
+  },
+  last_editor: null,
+  can_take_over: false,
+  server_time: '2026-07-20T01:01:00.000Z',
+};
+
+const recovery: EditorDocumentRecovery = {
+  recovery_id: 'recovery-1',
+  document_id: document.document_id,
+  source_session_id: editSession.session_id,
+  displaced_by_session_id: 'session-tab-b',
+  source_editor: {
+    session_id: editSession.session_id,
+    name: editSession.name,
+    email: editSession.email,
+    client_label: editSession.client_label ?? '',
+  },
+  level,
+  document_revision: 4,
+  edit_generation: 12,
+  capture_source: 'server-acknowledged',
+  body_checkpoint_at: '2026-07-20T01:01:30.000Z',
+  reason: 'takeover',
+  created_at: '2026-07-20T01:02:00.000Z',
+  resolved_at: null,
 };
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -87,6 +164,162 @@ describe('editor document resolution', () => {
   });
 });
 
+describe('editor document edit sessions', () => {
+  it('projects the mutation-fence fields from the acknowledged session', () => {
+    expect(editorDocumentEditFence(editSession, editFence.edit_session_key)).toEqual(editFence);
+  });
+
+  it('opens an idempotent client-named session with device attribution', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(201, { session: editSession, presence: editPresence }));
+
+    await expect(openEditorDocumentEditSession('doc/a b', {
+      session_id: 'session-tab-a',
+      session_key: editFence.edit_session_key,
+      device_id: 'device-browser-a',
+      client_label: 'Chrome · bridge worktree',
+    })).resolves.toEqual({ session: editSession, presence: editPresence });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc%2Fa%20b/edit-sessions');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual({
+      session_id: 'session-tab-a',
+      session_key: editFence.edit_session_key,
+      device_id: 'device-browser-a',
+      client_label: 'Chrome · bridge worktree',
+    });
+  });
+
+  it('heartbeats the addressed session without inventing another identity', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { session: editSession, presence: editPresence }));
+
+    await heartbeatEditorDocumentEditSession('doc-7f3c', 'session/tab a', editFence.edit_session_key);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc-7f3c/edit-sessions/session%2Ftab%20a/heartbeat');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual({ session_key: editFence.edit_session_key });
+  });
+
+  it('closes only the addressed session with its page-held credential', async () => {
+    const closedSession = { ...editSession, state: 'closed', lease_expires_at: null };
+    const releasedPresence = { ...editPresence, active_editor: null, can_take_over: false };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, {
+      session: closedSession,
+      presence: releasedPresence,
+      recovery,
+    }));
+
+    await expect(closeEditorDocumentEditSession('doc/a b', 'session/tab a', editFence.edit_session_key)).resolves.toEqual({
+      session: closedSession,
+      presence: releasedPresence,
+      recovery,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc%2Fa%20b/edit-sessions/session%2Ftab%20a');
+    expect(init).toMatchObject({ method: 'DELETE', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual({ session_key: editFence.edit_session_key });
+  });
+
+  it('reads attributed presence for this session and device without acquiring authority', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { session: editSession, presence: editPresence }));
+
+    await expect(loadEditorDocumentEditPresence('doc-7f3c', {
+      session_id: 'session/tab a',
+      session_key: editFence.edit_session_key,
+      device_id: 'device browser a',
+    })).resolves.toEqual({ session: editSession, presence: editPresence });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc-7f3c/edit-presence');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'include', cache: 'no-cache' });
+    expect(JSON.parse(init.body)).toEqual({
+      session_id: 'session/tab a',
+      session_key: editFence.edit_session_key,
+      device_id: 'device browser a',
+    });
+  });
+
+  it('takes over only the observed writer generation', async () => {
+    const takenOver = { ...editSession, edit_generation: 13 };
+    const presence = { ...editPresence, edit_generation: 13 };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { session: takenOver, presence }));
+
+    await expect(takeOverEditorDocumentEditSession('doc-7f3c', 'session-tab-b', editFence.edit_session_key, 12))
+      .resolves.toEqual({ session: takenOver, presence });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc-7f3c/edit-sessions/session-tab-b/takeover');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual({ session_key: editFence.edit_session_key, expected_generation: 12 });
+  });
+
+  it('lists attributed owner recoveries without changing edit authority', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { recoveries: [recovery] }));
+
+    await expect(listEditorDocumentRecoveries('doc/a b')).resolves.toEqual({ recoveries: [recovery] });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc%2Fa%20b/recoveries');
+    expect(init).toMatchObject({ method: 'GET', credentials: 'include', cache: 'no-cache' });
+  });
+
+  it('uploads a displaced in-memory candidate without acquiring authority', async () => {
+    const uploaded = { ...recovery, capture_source: 'displaced-client-upload' as const, reason: 'displaced-upload' as const };
+    fetchMock.mockResolvedValueOnce(jsonResponse(201, {
+      session: { ...editSession, state: 'displaced' },
+      presence: editPresence,
+      recovery: uploaded,
+    }));
+
+    await expect(appendDisplacedEditorDocumentRecovery('doc-7f3c', 'session/tab a', editFence.edit_session_key, level, 4, 12))
+      .resolves.toMatchObject({ recovery: uploaded });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc-7f3c/edit-sessions/session%2Ftab%20a/recoveries');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual({ revision: 4, edit_generation: 12, session_key: editFence.edit_session_key, level });
+  });
+
+  it('restores through the current writer fence and returns the preserved current checkpoint', async () => {
+    const resolvedRecovery = { ...recovery, resolved_at: '2026-07-20T01:03:00.000Z' };
+    const preservedCurrent = {
+      ...recovery,
+      recovery_id: 'recovery-before-restore',
+      reason: 'pre-restore' as const,
+    };
+    const restoredDocument = { ...document, revision: 5 };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, {
+      document: restoredDocument,
+      recovery: resolvedRecovery,
+      preserved_current_recovery: preservedCurrent,
+    }));
+
+    await expect(restoreEditorDocumentRecovery('doc/a b', 'recovery/one', 4, editFence)).resolves.toEqual({
+      document: restoredDocument,
+      recovery: resolvedRecovery,
+      preserved_current_recovery: preservedCurrent,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc%2Fa%20b/recoveries/recovery%2Fone/restore');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual({ revision: 4, ...editFence });
+  });
+
+  it('deletes exactly one owner recovery only through the current writer fence', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { recovery }));
+
+    await expect(deleteEditorDocumentRecovery('doc/a b', 'recovery/one', editFence)).resolves.toEqual({ recovery });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc%2Fa%20b/recoveries/recovery%2Fone');
+    expect(init).toMatchObject({ method: 'DELETE', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual(editFence);
+  });
+});
+
 describe('editor document persistence', () => {
   it('lists private recent working-copy summaries without loading their level bodies', async () => {
     const summary = {
@@ -126,6 +359,41 @@ describe('editor document persistence', () => {
     expect(init).toMatchObject({ method: 'GET', credentials: 'include', cache: 'no-cache' });
   });
 
+  it('lists body-free working-copy revision checkpoints', async () => {
+    const revision = {
+      revision: 4,
+      saved_revision: 2,
+      name: 'Level A',
+      reason: 'autosave' as const,
+      restored_from_revision: null,
+      body_hash: 'abc123',
+      body_bytes: 1234,
+      created_at: '2026-07-10T01:01:00.000Z',
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { revisions: [revision], next_before: 4 }));
+
+    await expect(listEditorDocumentRevisions('doc/a b', { limit: 20, before: 9 })).resolves.toEqual({
+      revisions: [revision],
+      next_before: 4,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc%2Fa%20b/revisions?limit=20&before=9');
+    expect(init).toMatchObject({ method: 'GET', credentials: 'include', cache: 'no-cache' });
+    expect(revision).not.toHaveProperty('level');
+  });
+
+  it('restores historical content as a new CAS-protected working revision', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { document: { ...document, revision: 5 } }));
+
+    await expect(restoreEditorDocumentRevision('doc-7f3c', 4, 2, editFence)).resolves.toMatchObject({ revision: 5 });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc-7f3c/revisions/restore');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual({ revision: 4, target_revision: 2, ...editFence });
+  });
+
   it('CAS-autosaves the complete level against the observed revision', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { document: { ...document, revision: 5 } }));
 
@@ -139,6 +407,33 @@ describe('editor document persistence', () => {
     expect(JSON.parse(init.body)).toEqual({
       revision: 4,
       level,
+    });
+  });
+
+  it('includes the edit-session fence on every working-copy mutation', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { document }))
+      .mockResolvedValueOnce(jsonResponse(200, { document }))
+      .mockResolvedValueOnce(jsonResponse(200, { document }))
+      .mockResolvedValueOnce(jsonResponse(200, { document }))
+      .mockResolvedValueOnce(jsonResponse(200, { document }))
+      .mockResolvedValueOnce(jsonResponse(200, { document, workspace_revision: 9 }));
+
+    await autosaveEditorDocument('doc-7f3c', level, 4, editFence);
+    autosaveEditorDocumentOnPageHide('doc-7f3c', level, 4, editFence);
+    await discardEditorDocumentChanges('doc-7f3c', 4, editFence);
+    await deleteNeverSavedEditorDocument('doc-7f3c', 4, editFence);
+    await restoreEditorDocumentRevision('doc-7f3c', 4, 2, editFence);
+    await saveEditorDocument('doc-7f3c', 4, level, null, editFence);
+
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(JSON.parse(init.body)).toMatchObject(editFence);
+    }
+    expect(JSON.parse(fetchMock.mock.calls[5][1].body)).toEqual({
+      revision: 4,
+      level,
+      campaign_id: null,
+      ...editFence,
     });
   });
 
@@ -221,6 +516,54 @@ describe('editor document persistence', () => {
 });
 
 describe('editor document conflicts', () => {
+  it('keeps a displaced writer-fence rejection distinct from content CAS', async () => {
+    const displacedSession = { ...editSession, state: 'displaced' };
+    const displacedPresence = {
+      ...editPresence,
+      can_take_over: true,
+      active_editor: { ...editPresence.active_editor!, session_id: 'session-tab-b', relationship: 'other_device' },
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(409, {
+      error: 'editor_document_session_displaced',
+      document,
+      session: displacedSession,
+      presence: displacedPresence,
+      recovery,
+    }));
+
+    const error = await autosaveEditorDocument('doc-7f3c', level, 4, editFence)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(EditorDocumentEditSessionError);
+    expect(error).toBeInstanceOf(HttpError);
+    expect(isEditorDocumentEditSessionError(error)).toBe(true);
+    expect(isEditorDocumentConflict(error)).toBe(false);
+    expect(error).toMatchObject({
+      status: 409,
+      code: 'editor_document_session_displaced',
+      document,
+      session: displacedSession,
+      presence: displacedPresence,
+      recovery,
+    });
+  });
+
+  it.each([
+    'editor_document_session_expired',
+    'editor_document_session_not_active',
+    'editor_document_edit_session_required',
+    'editor_document_takeover_conflict',
+    'editor_document_session_not_displaced',
+  ] as const)('types the %s edit-authority error', async (code) => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(409, { error: code, presence: editPresence }));
+
+    const error = await discardEditorDocumentChanges('doc-7f3c', 4, editFence)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(EditorDocumentEditSessionError);
+    expect(error).toMatchObject({ code, presence: editPresence });
+  });
+
   it('carries the current server document on a 409 so callers cannot overwrite it', async () => {
     const current = { ...document, revision: 9 };
     fetchMock.mockResolvedValueOnce(jsonResponse(409, {

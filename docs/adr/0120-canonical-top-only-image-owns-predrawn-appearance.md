@@ -1,8 +1,9 @@
 ---
-status: "accepted"
+status: "accepted; top-surfaces-only exclusion partially superseded by ADR-0141"
 date: 2026-07-14
 deciders: Nelson, Codex
 supersedes: "[ADR-0119](0119-predrawn-generation-is-tested-without-prior-candidates.md)"
+partially_superseded_by: "[ADR-0141](0141-predrawn-generation-references-preserve-explicit-subterrain.md)"
 ---
 
 # ADR-0120: The canonical top-only image owns pre-drawn appearance

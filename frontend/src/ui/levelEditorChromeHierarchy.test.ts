@@ -54,7 +54,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain('eventsEditor: routeState.eventsEditor');
     expect(levelEditor).toContain("levelEditorEventsEntry: true");
     expect(levelEditor).toContain("levelEditorEventsBaseHref: baseHref");
-    expect(levelEditor).toContain("if (eventsOpenRef.current) {\n      selectEventsTab(tab);\n      return;\n    }");
+    expect(levelEditor).toMatch(/if \(eventsOpenRef\.current\) \{\s*selectEventsTab\(tab\);\s*return;\s*\}/);
     expect(levelEditor).toMatch(/disabled=\{eventsOpen\}[\s\S]{0,120}?onClick=\{\(\) => openEventsEditor\('victory'\)\}/);
     expect(levelEditor).not.toContain('window.history.state?.levelEditorRules');
     expect(eventsWorkspace).toContain('<section className="le-events-workspace" data-testid="level-events-workspace" aria-labelledby="level-events-workspace-title">');

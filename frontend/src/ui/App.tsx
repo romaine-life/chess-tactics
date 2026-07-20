@@ -19,6 +19,7 @@ import {
 import { isBoardArtRoute, isHeavyRoute, isLightArtRoute, routeScreenKey } from './routeSurfaces';
 import { SCREEN_EXIT_MS, setScreenExiting } from './shell/screenExit';
 import { RouteLoadBoundary } from './shell/RouteLoadBoundary';
+import { levelEditorRouteIdentity } from './levelEditorRouteIdentity';
 import {
   importCampaignEditor,
   importLevelEditor,
@@ -330,7 +331,7 @@ export function App(): ReactElement {
           yet. Heavy entrances additionally ride the veil below. */}
       <TitleBarPortalContext.Provider value={titleBarPortals}>
         <RouteLoadBoundary resetKey={`${path}${search}`}>
-          <Suspense fallback={fallback}>{renderRoute(path)}</Suspense>
+          <Suspense fallback={fallback}>{renderRoute(path, search)}</Suspense>
         </RouteLoadBoundary>
       </TitleBarPortalContext.Provider>
       <div
@@ -360,7 +361,7 @@ export function App(): ReactElement {
   );
 }
 
-function renderRoute(path: string): ReactElement {
+function renderRoute(path: string, search: string): ReactElement {
   if (path === '/play') return <Skirmish />;
   if (path === '/predrawn-reference') return <PredrawnReference />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
@@ -391,7 +392,9 @@ function renderRoute(path: string): ReactElement {
   // The board editor keeps its own heavy full screen (canonical /editor/level; legacy /edit,
   // /level-editor). Existing levels drill in from the Editor; its pinned New Level action opens
   // a blank standalone board directly.
-  if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return <LevelEditor />;
+  if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
+    return <LevelEditor key={levelEditorRouteIdentity(search)} />;
+  }
   // /play/select/*, /settings, AND the Editor (canonical /editor; legacy /campaigns-next,
   // /campaigns) all render INSIDE the persistent menu shell — they fall through to the MainMenu
   // default below, sharing the 'menu' screen key so the button column stays mounted. MainMenu fills

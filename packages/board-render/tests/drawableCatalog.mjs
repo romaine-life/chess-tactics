@@ -36,7 +36,13 @@ function terrainSurface(id, family, variant, sortOrder) {
 }
 
 function material(id, kind, value, roles, sortOrder) {
-  const prefix = kind === 'fence-material' ? `fence-${value}` : `wall-${value}`;
+  const prefix = kind === 'fence-material'
+    ? `fence-${value}`
+    : kind === 'wall-material'
+      ? `wall-${value}`
+      : kind === 'road-material'
+        ? `road-${value}`
+        : `river-${value}`;
   return {
     id,
     kind,
@@ -50,6 +56,20 @@ function material(id, kind, value, roles, sortOrder) {
       const suffix = role.startsWith('frame-') ? role.slice('frame-'.length) : role;
       return [role, mediaRole(`tiles/feature/${prefix}-${suffix}.png`)];
     })),
+  };
+}
+
+function subterrain(id, sortOrder) {
+  return {
+    id,
+    kind: 'subterrain',
+    label: `${id} test subterrain`,
+    sortOrder,
+    lifecycleState: 'active',
+    behavior: { default: sortOrder === 0 },
+    metadata: {},
+    rowRevision: 1,
+    media: { surface: mediaRole(`tiles/subterrain/${id}.png`) },
   };
 }
 
@@ -67,6 +87,12 @@ export function installTestDrawableCatalog() {
       terrainSurface('grass-surf-0', 'grass', 0, 1),
       terrainSurface('sand-surf-5', 'sand', 5, 2),
       terrainSurface('stone-surf-0', 'stone', 0, 3),
+      subterrain('earth', 0),
+      subterrain('bedrock', 1),
+      subterrain('sand', 2),
+      subterrain('roots', 3),
+      material('road-dirt', 'road-material', 'dirt', Array.from({ length: 16 }, (_, index) => `frame-${index}`), 2),
+      material('river-water', 'river-material', 'water', Array.from({ length: 16 }, (_, index) => `frame-${index}`), 3),
       material('fence-wood', 'fence-material', 'wood', ['frame-2', 'frame-4', 'frame-6', 'post'], 4),
       material('fence-stone', 'fence-material', 'stone', ['frame-2', 'frame-4', 'frame-6', 'post'], 5),
       material('wall-stone', 'wall-material', 'stone', ['frame-1', 'frame-8', 'frame-9'], 6),
