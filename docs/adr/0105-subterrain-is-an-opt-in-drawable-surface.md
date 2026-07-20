@@ -1,5 +1,6 @@
 ---
-status: accepted
+status: "accepted; playable-occupancy eligibility partially superseded by ADR-0137"
+partially_superseded_by: "[ADR-0137](0137-subterrain-follows-the-visual-terrain-surface.md)"
 date: 2026-07-18
 deciders: Nelson, Codex
 supersedes:

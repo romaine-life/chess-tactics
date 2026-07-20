@@ -1,4 +1,5 @@
 node_modules/
+.codex-session/
 frontend/dist/
 packages/board-render/dist/
 backend/generated/
