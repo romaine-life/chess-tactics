@@ -241,6 +241,14 @@ const RETIRED_CUTOVER_SOURCE_MARKERS = [
     detail: 'compiled ground-cover/wall-decoration/prop inventory remains after drawable-catalog cutover',
   },
   {
+    pattern: /\b(?:DEFAULT_WALL_ART_REFLECTION|DEFAULT_DOODAD_SPRITE)\b|\bconst\s+COUNT\s*:\s*Record<GroundCoverDensity|wallArtItems\(\)\[0\]|\b(?:PROP_DEFS|DOODAD_ASSETS|GROUND_COVER_ASSETS|WALL_DECOR_ASSETS|SURFACE_ASSETS|SLIDER_ASSETS|TILE_SIDE_ITEMS)\[0\]|\?\?\s*(?:assets|sources)\[0\]/,
+    detail: 'compiled installed-content default or first-row fallback remains after drawable-catalog cutover',
+  },
+  {
+    pattern: /\bblocking\s*:\s*[^,\n]*(?:!==\s*false|\?\?\s*true)|\bscale\s*:\s*[^,\n]*\?\?\s*1|\bsplitMode\s*:\s*[^,\n]*\?\?\s*["']authored["']/,
+    detail: 'compiled structure behavior fallback remains after drawable-catalog cutover',
+  },
+  {
     pattern: /\b(?:LE_SCATTER_FAMILIES|STONE_SURFACES|MENU_MODES\s*:\s*[^=\n]+\s*=\s*\[|PAGE_ENTRIES\s*:\s*[^=\n]+\s*=\s*\[|SCENE_SLOT|SCENE_W|SCENE_H|SCENE_ANIM_SCENES\s*:\s*[^=\n]+\s*=\s*\[|SCENE_ANIMS\s*:\s*[^=\n]+\s*=\s*\[)\b/,
     detail: 'compiled terrain/editor/scene presentation inventory remains after drawable-catalog cutover',
   },

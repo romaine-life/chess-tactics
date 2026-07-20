@@ -64,6 +64,12 @@ describe('availability-critical server renderer snapshot', () => {
         anchorX: 1,
         anchorY: 1,
         scale: 1,
+        label: 'Invalid live source',
+        kind: 'house',
+        w: 1,
+        h: 1,
+        blocking: false,
+        terrains: ['grass'],
       },
     } satisfies PropSeatMap;
     expect(() => applyServerRenderSnapshot(snapshot)).toThrow(/source "missing-source" is unavailable/);

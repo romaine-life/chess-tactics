@@ -3,7 +3,7 @@
 // page = one entry here. Functional viewers mount the real component with in-place tweak
 // controls (Main Menu = live sizing; Settings = the dressing room); the rest are stubs that
 // iframe the live route until their controls land.
-import { drawableAssets } from '@chess-tactics/board-render';
+import { drawableAssets, requiredDrawableDefault } from '@chess-tactics/board-render';
 
 export interface PageEntry {
   name: string; // stable selection id
@@ -23,3 +23,10 @@ const currentPages = (): PageEntry[] => drawableAssets('studio-page').map((asset
   return { name, label: asset.label, route, status, blurb: String(asset.metadata.blurb ?? ''), thumb };
 });
 export const PAGE_ENTRIES: PageEntry[] = new Proxy([], { get: (_target, property) => { const values = currentPages(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
+export function defaultPageEntry(): PageEntry {
+  const record = requiredDrawableDefault('studio-page');
+  const value = record.behavior.value;
+  const page = typeof value === 'string' ? currentPages().find((entry) => entry.name === value) : undefined;
+  if (!page) throw new Error(`Studio page default ${record.id} is unavailable`);
+  return page;
+}

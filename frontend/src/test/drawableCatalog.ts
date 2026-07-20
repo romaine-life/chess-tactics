@@ -86,9 +86,9 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     ['flower', 'Flower', 'doodad', ['grass'], 48, 69, 1, 96, 180, 'doodads/flower'],
   ].map(([value, label, structureKind, terrains, anchorX, anchorY, scale, width, height, prefix], sortOrder) => ({
     id: `structure-${value}`, kind: 'structure', label: label as string, sortOrder, lifecycleState: 'active' as const,
-    behavior: { value, structureKind, terrains, anchorX, anchorY, scale,
+    behavior: { value, structureKind, terrains, anchorX, anchorY, scale, default: value === 'boulder',
+      blocking: structureKind !== 'doodad', splitMode: ['cottage', 'cabin', 'lodge', 'rock', 'fieldstone'].includes(value as string) ? 'flat-contact' : 'authored',
       ...(['oak', 'cottage', 'lodge'].includes(value as string) ? { footprint: { w: 2, h: 2 } } : ['cabin', 'rock', 'fieldstone'].includes(value as string) ? { footprint: { w: 1, h: 1 } } : {}),
-      ...(['cottage', 'cabin', 'lodge', 'rock', 'fieldstone'].includes(value as string) ? { splitMode: 'flat-contact' } : {}),
       ...(['boulder'].includes(value as string) ? { propKind: 'rock' } : ['stump', 'fern', 'flower'].includes(value as string) ? { propKind: 'tree' } : {}) }, metadata: {}, rowRevision: 1,
     media: { back: descriptor(`${prefix}/back.png`, width as number, height as number), front: descriptor(`${prefix}/front.png`, width as number, height as number) },
   }));
@@ -102,7 +102,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       baseX: terrain === 'water' && id === 0 ? 19 : (id === 3 || id === 15 ? 19 : id === 13 ? 21 : 20),
       baseY: terrain === 'water' ? 31 : id < 4 ? 28 : 27, contentWidth }));
     return { id: `ground-cover-${terrain}`, kind: 'ground-cover', label: terrain, sortOrder, lifecycleState: 'active' as const,
-      behavior: { terrain, variants, ...(terrain === 'water' ? { edgeOnly: true, count: { sparse: 2, filled: 3 } } : terrain === 'sand' ? { count: { sparse: 2, filled: 4 } } : {}) },
+      behavior: { terrain, variants, edgeOnly: terrain === 'water', count: terrain === 'water' ? { sparse: 2, filled: 3 } : terrain === 'sand' ? { sparse: 2, filled: 4 } : { sparse: 3, filled: 7 } },
       metadata: {}, rowRevision: 1,
       media: Object.fromEntries(variants.map(({ role, id }) => [role, descriptor(`test/groundcover/${terrain}/v${id}.png`, 240, 37)])) };
   });
@@ -129,7 +129,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     ['lantern-brass', 'Brass Lantern', 'lantern', 28, 8, { west: { mountX: 8, mountY: 4, previewX: 42, previewY: 28 }, north: { mountX: 8, mountY: 5, previewX: 84, previewY: 28 } }, 'Lanterns'],
   ].map(([id, label, decorKind, mountX, mountY, faces, kindLabel], sortOrder) => ({
     id: id as string, kind: 'wall-decor', label: label as string, sortOrder: 100 + sortOrder, lifecycleState: 'active' as const,
-    behavior: { decorKind, mountX, mountY, faces }, metadata: { kindLabel }, rowRevision: 1,
+    behavior: { decorKind, mountX, mountY, faces, default: id === 'banner-tattered' }, metadata: { kindLabel }, rowRevision: 1,
     media: Object.fromEntries(['base', 'west', 'north'].map((role) => [role, descriptor(`test/wall-decor/${id}-${role}.png`, role === 'base' ? 72 : 26, role === 'base' ? 96 : 84)])),
   }));
   const wallArtEntries = [
@@ -150,7 +150,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
   ];
   const wallArtSpecs = wallArtEntries.map(({ id, label, span, slots, reflection }, sortOrder) => ({
     id, kind: 'wall-art', label, sortOrder, lifecycleState: 'active' as const,
-    behavior: { span, slots, ...(reflection ? { reflection } : {}) }, metadata: {}, rowRevision: 1, media: {},
+    behavior: { span, slots, default: id === 'test-banner-pair', ...(reflection ? { reflection } : {}) }, metadata: {}, rowRevision: 1, media: {},
   }));
   const presentationSpecs: DrawableCatalog['assets'] = [
     {
@@ -175,7 +175,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       lifecycleState: 'active' as const, behavior: { roles: ['homepage-scene'], width: 320, height: 180 }, metadata: {}, rowRevision: 1,
       media: { background: descriptor('test/scene/background.png', 320, 180) } },
     { id: 'test-waterfall', kind: 'scene-animation', label: 'Test waterfall', sortOrder: 0,
-      lifecycleState: 'active' as const, behavior: { sceneRole: 'homepage-scene', x: 10, y: 20, width: 40, height: 50, frames: 12, frameMs: 140 }, metadata: {}, rowRevision: 1,
+      lifecycleState: 'active' as const, behavior: { default: true, sceneRole: 'homepage-scene', x: 10, y: 20, width: 40, height: 50, frames: 12, frameMs: 140 }, metadata: {}, rowRevision: 1,
       media: { sheet: descriptor('test/scene/waterfall.png', 480, 50) } },
   ];
   const terrainReviewSpecs: DrawableCatalog['assets'] = [
@@ -268,11 +268,11 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
   const nineSliceSpecs: DrawableCatalog['assets'] = [
     ...['panel', 'mode-button'].map((id, sortOrder) => ({
       id, kind: 'nine-slice', label: `Test ${id}`, sortOrder, lifecycleState: 'active' as const,
-      behavior: { kind: 'frame', roles: id === 'mode-button' ? ['frame-editor-default', 'settings-tab'] : ['settings-panel'], frame: { w: 96, h: 96 }, geometry: testNineSliceGeometry }, metadata: {}, rowRevision: 1,
+      behavior: { kind: 'frame', carve: false, flipSides: false, roles: id === 'mode-button' ? ['frame-editor-default', 'settings-tab'] : ['settings-panel'], frame: { w: 96, h: 96 }, geometry: testNineSliceGeometry }, metadata: {}, rowRevision: 1,
       media: { corner: descriptor(`test/nine-slice/${id}-corner.png`, 24, 24), edge: descriptor(`test/nine-slice/${id}-edge.png`, 24, 8), fill: descriptor(`test/nine-slice/${id}-fill.png`, 8, 8), target: descriptor(`test/nine-slice/${id}.png`, 96, 96) },
     })),
     { id: 'panel-divider', kind: 'nine-slice', label: 'Test divider', sortOrder: 2, lifecycleState: 'active' as const,
-      behavior: { kind: 'bar', roles: ['divider-editor-default'], frame: { w: 96, h: 24 }, railSource: 'edge', railFit: 'tile', geometry: { frameWidth: 16, reach: 14, dividerH: 34, scale: 1, count: 3, backing: 'fill', jx: 0, jy: 0 } }, metadata: {}, rowRevision: 1,
+      behavior: { kind: 'bar', carve: false, flipSides: false, roles: ['divider-editor-default'], frame: { w: 96, h: 24 }, railSource: 'edge', railFit: 'tile', geometry: { frameWidth: 16, reach: 14, dividerH: 34, scale: 1, count: 3, backing: 'fill', jx: 0, jy: 0 } }, metadata: {}, rowRevision: 1,
       media: { edge: descriptor('test/nine-slice/divider-edge.png', 24, 8), tee: descriptor('test/nine-slice/divider-tee.png', 24, 24), 'panel-line': descriptor('test/nine-slice/panel-line.png', 96, 96), 'host-frame': descriptor('test/nine-slice/panel.png', 96, 96), 'host-line': descriptor('test/nine-slice/panel-line.png', 96, 96) } },
   ];
   const scrollbarSpecs: DrawableCatalog['assets'] = [
@@ -290,7 +290,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     ['pixel-model-stone-blue', 'Pixel-model · Stone Blue', 'pixel-model', 'stone-blue'], ['baseline-stone-blue', 'Baseline · Stone Blue', 'baseline', 'stone-blue'],
     ['baseline-wood-oak', 'Baseline · Oak', 'baseline', 'wood-oak'], ['pixellab-stone-blue', 'PixelLab · Stone Blue', 'pixellab', 'stone-blue'],
   ].map(([value, label, approach, material], sortOrder) => ({ id: `ui-surface-${value}`, kind: 'ui-surface', label, sortOrder, lifecycleState: 'active' as const,
-    behavior: { value, approach, material, tilePx: 1024 }, metadata: {}, rowRevision: 1,
+    behavior: { value, approach, material, tilePx: 1024, default: value === 'hybrid-stone-blue' }, metadata: {}, rowRevision: 1,
     media: { surface: descriptor(`ui/surfaces/${value}.png`, 1024, 1024) } }));
   const sliderSpecs = [{ id: 'ui-slider-bronze-stone', kind: 'ui-slider', label: 'Bronze · Stone', sortOrder: 0, lifecycleState: 'active' as const,
     behavior: { value: 'bronze-stone', approach: 'css', material: 'bronze / stone', fill: '#c79b55', channel: '#26231e', edge: '#5a5248', handle: '#b88a45', handleLight: '#f0dba8', handleDark: '#5b4124', preferred: true },
@@ -307,7 +307,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     ['main-menu', 'Main Menu', '/', 'functional'], ['settings', 'Settings', '/settings', 'functional'], ['skirmish', 'Skirmish', '/play', 'stub'],
     ['campaign-editor', 'Editor', '/editor', 'functional'], ['level-editor', 'Level Editor', '/editor/level', 'stub'], ['lobbies', 'Lobbies', '/lobbies', 'stub'],
   ].map(([value, label, route, viewerStatus], sortOrder) => ({ id: `studio-page-${value}`, kind: 'studio-page', label, sortOrder, lifecycleState: 'active',
-    behavior: { value, route, viewerStatus, ...(value === 'level-editor' ? { roles: ['chrome-lab-page'], chromeLabRoute: '/editor/level?chromeLab=1' } : {}) },
+    behavior: { value, route, viewerStatus, default: value === 'main-menu', ...(value === 'level-editor' ? { roles: ['chrome-lab-page'], chromeLabRoute: '/editor/level?chromeLab=1' } : {}) },
     metadata: { blurb: `Test ${label}`, ...(value === 'level-editor' ? { chromeLabBadge: 'outer + inner chrome' } : {}) }, rowRevision: 1, media: { thumbnail: descriptor(`test/pages/${value}.webp`, 640, 400) } }));
   const menuModeSpecs: DrawableCatalog['assets'] = [
     ['play', 'Play', '/play', 'ui-main-menu-icons-carved-solo-skirmish-png'], ['campaign-editor', 'Editor', '/editor', 'ui-main-menu-icons-carved-campaign-editor-png'],
@@ -324,7 +324,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       label: `Test ${id}`,
       sortOrder: index,
       lifecycleState: 'active' as const,
-      behavior: {},
+      behavior: { default: id === ids[0] },
       metadata: {},
       rowRevision: 1,
       media: {

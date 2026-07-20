@@ -1,5 +1,5 @@
 import type { TerrainSideFace } from '../render/terrainSides';
-import { drawableAssets, requiredDrawableAsset, type DrawableAsset } from '../art/drawableCatalog';
+import { drawableAssets, requiredDrawableAsset, requiredDrawableDefault, type DrawableAsset } from '../art/drawableCatalog';
 
 export type SubterrainMaterial = string;
 
@@ -28,6 +28,10 @@ export function isSubterrainMaterial(value: unknown): value is SubterrainMateria
 
 export function subterrainMaterials(): DrawableAsset[] {
   return drawableAssets('subterrain');
+}
+
+export function defaultSubterrainMaterial(): SubterrainMaterial {
+  return requiredDrawableDefault('subterrain').id;
 }
 
 export function cleanSubterrainPlacements(

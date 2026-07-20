@@ -28,7 +28,9 @@ export function nineSliceCatalogAssets(): NineSliceCatalogAsset[] {
     const frame = behavior.frame;
     if (!frame || typeof frame !== 'object' || Array.isArray(frame)) throw new Error(`nine-slice ${record.id} has no frame geometry`);
     const rawKind = behavior.kind;
-    const kind = rawKind === 'bar' || rawKind === 'junction' ? rawKind : 'frame';
+    if (rawKind !== 'frame' && rawKind !== 'bar' && rawKind !== 'junction') throw new Error(`nine-slice ${record.id} has invalid kind`);
+    if (typeof behavior.carve !== 'boolean' || typeof behavior.flipSides !== 'boolean') throw new Error(`nine-slice ${record.id} lacks boolean configuration`);
+    const kind = rawKind;
     const media = Object.fromEntries(Object.entries(record.media).map(([role, binding]) => [role, binding.media.immutableUrl]));
     if (kind === 'frame' && ['corner', 'edge', 'fill', 'target'].some((role) => !media[role])) throw new Error(`nine-slice ${record.id} is missing frame media`);
     if (kind === 'bar' && (!media.edge || !media.tee)) throw new Error(`nine-slice ${record.id} is missing bar media`);
@@ -39,8 +41,8 @@ export function nineSliceCatalogAssets(): NineSliceCatalogAsset[] {
       kind,
       theme: typeof behavior.theme === 'string' ? behavior.theme : undefined,
       frame: { w: positive((frame as Record<string, unknown>).w, 'frame width', record.id), h: positive((frame as Record<string, unknown>).h, 'frame height', record.id) },
-      carve: behavior.carve === true,
-      flipSides: behavior.flipSides === true,
+      carve: behavior.carve,
+      flipSides: behavior.flipSides,
       railSource: behavior.railSource === 'edge' ? 'edge' : behavior.railSource === 'panel-line' ? 'panel-line' : undefined,
       railFit: behavior.railFit === 'tile' ? 'tile' : behavior.railFit === 'stretch' ? 'stretch' : undefined,
       junctionStyle: behavior.junctionStyle === 'natural' ? 'natural' : behavior.junctionStyle === 'gold' ? 'gold' : undefined,

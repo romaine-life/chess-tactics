@@ -374,7 +374,7 @@ export function mirrorSurfacesForArt(art: WallArt, target: MirrorSurfaceTarget):
         dh: face.height * slot.scale,
       },
       segments: surfaceSegments(art, target, aperture),
-      reflection,
+      reflection: reflection!,
     });
   }
   return surfaces;

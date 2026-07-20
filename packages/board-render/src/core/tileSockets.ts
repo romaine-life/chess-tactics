@@ -104,7 +104,9 @@ export function defaultTerrainFamily(): TerrainFamilyRecord {
 
 export const terrainLabels: Record<TileFamilyId, string> = new Proxy({}, {
   get: (_target, family) => {
-    return terrainFamilyRecords().find((record) => record.id === family)?.label ?? String(family);
+    const record = terrainFamilyRecords().find((candidate) => candidate.id === family);
+    if (!record) throw new Error(`drawable catalog has no terrain family ${String(family)}`);
+    return record.label;
   },
 });
 
@@ -165,9 +167,9 @@ export function familyIdForAsset<TAsset extends TileSocketAsset>(
   familyAssets: Record<TileFamilyId, readonly TAsset[]>,
 ): TileFamilyId {
   const owningFamily = Object.entries(familyAssets).find(([, assets]) => assets.some((item) => item.id === asset.id))?.[0] as TileFamilyId | undefined;
-  const fallback = Object.keys(familyAssets)[0];
-  if (!owningFamily && !asset.terrains?.[0] && !fallback) throw new Error(`tile asset ${asset.id} has no family`);
-  return owningFamily ?? asset.terrains?.[0] ?? fallback;
+  const declaredFamily = asset.terrains?.[0];
+  if (!owningFamily && !declaredFamily) throw new Error(`tile asset ${asset.id} has no family`);
+  return owningFamily ?? declaredFamily!;
 }
 
 export function tileSocketsForAsset<TAsset extends TileSocketAsset>(

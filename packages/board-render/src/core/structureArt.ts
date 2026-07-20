@@ -25,17 +25,26 @@ export type StructureArtDefinition = Omit<StructureArtAsset, 'sprite'> & {
 
 const definitions = (): StructureArtDefinition[] => drawableAssets('structure').map((asset) => {
   const { value, structureKind, propKind, terrains, blocking, anchorX, anchorY, scale, footprint, splitMode } = asset.behavior;
-  if (typeof structureKind !== 'string' || !Array.isArray(terrains) || typeof anchorX !== 'number' || typeof anchorY !== 'number') {
+  if ((structureKind !== 'tree' && structureKind !== 'house' && structureKind !== 'rock' && structureKind !== 'doodad')
+    || !Array.isArray(terrains) || terrains.length === 0 || terrains.some((terrain) => typeof terrain !== 'string' || !terrain)
+    || typeof blocking !== 'boolean' || !Number.isFinite(anchorX) || !Number.isFinite(anchorY)
+    || !(typeof scale === 'number' && Number.isFinite(scale) && scale > 0)
+    || (splitMode !== 'authored' && splitMode !== 'flat-contact')) {
     throw new Error(`structure ${asset.id} lacks placement behavior`);
+  }
+  if (structureKind !== 'doodad' && (!footprint || typeof footprint !== 'object'
+    || !Number.isSafeInteger((footprint as { w?: unknown }).w) || Number((footprint as { w: number }).w) < 1
+    || !Number.isSafeInteger((footprint as { h?: unknown }).h) || Number((footprint as { h: number }).h) < 1)) {
+    throw new Error(`structure ${asset.id} lacks an explicit footprint`);
   }
   return {
     id: typeof value === 'string' ? value : asset.id, label: asset.label, kind: structureKind as StructureArtKind,
     ...(typeof propKind === 'string' ? { propKind: propKind as StructureArtDefinition['propKind'] } : {}),
-    terrains: terrains.filter((value): value is string => typeof value === 'string'),
-    blocking: blocking !== false,
-    sprite: { anchorX, anchorY, scale: typeof scale === 'number' ? scale : 1 },
+    terrains: terrains as string[],
+    blocking,
+    sprite: { anchorX: Number(anchorX), anchorY: Number(anchorY), scale },
     ...(footprint && typeof footprint === 'object' ? { footprint: footprint as { w: number; h: number } } : {}),
-    ...(splitMode === 'authored' || splitMode === 'flat-contact' ? { splitMode } : {}),
+    splitMode,
   };
 });
 

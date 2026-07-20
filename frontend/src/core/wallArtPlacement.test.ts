@@ -64,9 +64,9 @@ describe('wall art placement spans', () => {
     )).toBeNull();
   });
 
-  it('uses the same catalog fallback for a missing or invalid routed brush', () => {
+  it('uses the DB default only when no brush was requested and rejects an invalid identity', () => {
     expect(wallArtIdOrDefault(undefined)).toBe('test-banner-pair');
-    expect(wallArtIdOrDefault('not-real-wall-art')).toBe('test-banner-pair');
+    expect(() => wallArtIdOrDefault('not-real-wall-art')).toThrow(/is unavailable/);
     expect(wallArtIdOrDefault('test-art-mirror-grand-gallery')).toBe('test-art-mirror-grand-gallery');
   });
 });

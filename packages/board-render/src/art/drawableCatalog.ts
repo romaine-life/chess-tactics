@@ -116,3 +116,9 @@ export function requiredDrawableRole(kind: string, role: string): DrawableAsset 
   if (matches.length !== 1) throw failure(`required ${kind} role ${role} has ${matches.length} installed records`);
   return matches[0];
 }
+
+export function requiredDrawableDefault(kind: string): DrawableAsset {
+  const matches = drawableAssets(kind).filter((asset) => asset.behavior.default === true);
+  if (matches.length !== 1) throw failure(`required ${kind} default has ${matches.length} installed records`);
+  return matches[0];
+}

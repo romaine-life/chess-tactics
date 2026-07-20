@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
-import { PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
+import { defaultPageEntry, PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
 import { SurfaceDressingRoom } from './SurfaceDressingRoom';
-import { SURFACE_ASSETS } from './surfaceCatalog';
+import { defaultSurfaceAsset, SURFACE_ASSETS } from './surfaceCatalog';
 import { useWindowScaledPreview } from './useWindowScaledPreview';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { ElementSelect, type ElementOption } from './dressing/ElementSelect';
@@ -395,7 +395,7 @@ const groupDefault = (g: CeGroup): CeGroupTune => ({
   fill: 'none',
   color: '#0b2236',
   opacity: 1,
-  surface: SURFACE_ASSETS[0]?.name ?? '',
+  surface: defaultSurfaceAsset().name,
 });
 
 const ceAllDefaults = (): Record<string, CeGroupTune> =>
@@ -410,7 +410,8 @@ const hexToRgba = (hex: string, alpha: number): string => {
 
 const ceFillValue = (t: CeGroupTune): string => {
   if (t.fill === 'color') return hexToRgba(t.color, t.opacity);
-  const asset = SURFACE_ASSETS.find((s) => s.name === t.surface) ?? SURFACE_ASSETS[0];
+  const asset = SURFACE_ASSETS.find((s) => s.name === t.surface);
+  if (!asset) throw new Error(`Selected UI surface "${t.surface}" is unavailable`);
   // 256px is an AUDITIONING scale — surfaces are 1024px native (the dressing room ships them at
   // 1024), but the campaign editor's chrome is small, so a denser tile reads as material here.
   return `url("${asset.file}") 0 0 / 256px repeat`;
@@ -627,7 +628,8 @@ function PageStubViewer({ page, header }: { page: PageEntry; header?: ReactNode 
 // is the dressing room (assign surfaces to each region of the live /settings page); the rest are
 // live stubs. One arm in the TilePreview viewer ladder calls this.
 export function PagesViewer({ name, header, zoom = 1 }: { name?: string; header?: ReactNode; zoom?: number }): ReactElement {
-  const page = PAGE_ENTRIES.find((p) => p.name === name) ?? PAGE_ENTRIES[0];
+  const page = name ? PAGE_ENTRIES.find((p) => p.name === name) : defaultPageEntry();
+  if (!page) throw new Error(`Selected Studio page "${name}" is unavailable`);
   if (page.name === 'main-menu') return <MainMenuViewer page={page} header={header} zoom={zoom} />;
   if (page.name === 'settings') return <SurfaceDressingRoom header={header} zoom={zoom} />;
   if (page.name === 'campaign-editor') return <CampaignEditorViewer page={page} header={header} zoom={zoom} />;

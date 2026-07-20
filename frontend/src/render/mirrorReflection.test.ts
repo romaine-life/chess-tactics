@@ -105,7 +105,7 @@ describe('mirror metadata and normalized optics', () => {
       expect(art.reflection?.opacity).toBeGreaterThan(0);
       expect(Object.keys(art.reflection ?? {})).toEqual(['opacity']);
     }
-    expect(normalizeWallArtReflection({ opacity: 2 })).toEqual({ opacity: 1 });
+    expect(normalizeWallArtReflection({ opacity: 2 })).toBeNull();
   });
 
   it('preloads both the foreground frame and generated glass backing', () => {

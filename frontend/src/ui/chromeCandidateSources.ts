@@ -156,20 +156,21 @@ function installedSource(slot: ChromeLiveSlot): ChromeCandidateSource {
   const binding = Object.values(installedChrome().media).find((entry) => entry.slot === slot);
   if (!binding) throw new Error(`installed Chrome slot ${slot} is unavailable`);
   const active = binding.media;
+  if (!active.width || !active.height) throw new Error(`installed Chrome slot ${slot} has no raster dimensions`);
   return {
     id: slot,
     label: spec.label,
     role: spec.role,
     kind: spec.kind,
     src: active.immutableUrl,
-    width: active.width ?? 1,
-    height: active.height ?? 1,
+    width: active.width,
+    height: active.height,
     sourceSheetId: slot,
     sourceSheetLabel: 'Installed backend slot',
     sourceSheetPath: slot,
     componentIndex: 0,
     componentCount: 1,
-    crop: { x: 0, y: 0, w: active.width ?? 1, h: active.height ?? 1 },
+    crop: { x: 0, y: 0, w: active.width, h: active.height },
     recommended: true,
     authority: 'installed-slot',
     provenance: {},

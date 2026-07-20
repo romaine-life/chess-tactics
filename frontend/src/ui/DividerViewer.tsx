@@ -17,7 +17,7 @@
 //     construction — it can't "break" when made small like a big ornament scaled down does.
 //   • codex — the standalone codex-forged ornament (cand3-codex.png), free-scaled by Junction size.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { SURFACE_ASSETS } from './surfaceCatalog';
+import { defaultSurfaceAsset } from './surfaceCatalog';
 import { ViewPane } from './shared/ViewPane';
 import { nineSliceCatalogAssets, requiredNineSliceRole } from './nineSliceCatalog';
 
@@ -177,7 +177,11 @@ export function DividerLab({ assetId, onAssetId, header }: { assetId?: string; o
   const initialAssetId = BAR_ASSETS.some((asset) => asset.id === assetId) ? assetId! : DEFAULT_DIVIDER_ASSET;
   const [ownAssetId, setOwnAssetId] = useState(initialAssetId);
   const selectedAssetId = BAR_ASSETS.some((asset) => asset.id === assetId) ? assetId! : ownAssetId;
-  const asset = useMemo(() => BAR_ASSETS.find((entry) => entry.id === selectedAssetId) ?? BAR_ASSETS[0], [selectedAssetId]);
+  const asset = useMemo(() => {
+    const selected = BAR_ASSETS.find((entry) => entry.id === selectedAssetId);
+    if (!selected) throw new Error(`Selected divider asset "${selectedAssetId}" is unavailable`);
+    return selected;
+  }, [selectedAssetId]);
   const defaultForSelected = useMemo(() => defaultCfg(selectedAssetId), [selectedAssetId]);
   const [cfg, setCfg] = useState<Cfg>(() => defaultCfg(initialAssetId));
   const [barImages, setBarImages] = useState<BarImages | null>(null);
@@ -199,7 +203,7 @@ export function DividerLab({ assetId, onAssetId, header }: { assetId?: string; o
     if (onAssetId) onAssetId(id);
     else setOwnAssetId(id);
   };
-  const surface = SURFACE_ASSETS[0]?.file;
+  const surface = defaultSurfaceAsset().file;
   const panelW = asset.host?.previewWidth ?? PANEL_W;
   const innerW = panelW - 2 * cfg.frameWidth;
   const exportPayload = { asset: selectedAssetId, ...cfg };

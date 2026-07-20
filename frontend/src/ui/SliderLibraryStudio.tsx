@@ -1,5 +1,5 @@
 import { useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
-import { SLIDER_ASSETS, type SliderAsset } from './sliderCatalog';
+import { SLIDER_ASSETS, defaultSliderAsset, type SliderAsset } from './sliderCatalog';
 
 // Build the ::-webkit / ::-moz slider skin for one entry, scoped to a class. The filled
 // portion follows --val (a percentage) so the bar fills as the value changes — exactly the
@@ -83,7 +83,8 @@ export function SliderLibraryStudio({
 // the entry, so you drag it and watch the bronze fill follow — never a dead still image
 // (ADR-0029: read-only = not editable, not lifeless). Custom skins render in Chrome (the target).
 export function SliderViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
-  const s = SLIDER_ASSETS.find((x) => x.name === name) ?? SLIDER_ASSETS[0];
+  const s = name ? SLIDER_ASSETS.find((x) => x.name === name) : defaultSliderAsset();
+  if (!s) throw new Error(`Selected UI slider "${name}" is unavailable`);
   const [value, setValue] = useState(64);
   return (
     <>

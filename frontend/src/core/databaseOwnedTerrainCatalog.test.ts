@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyDrawableCatalog } from '@chess-tactics/board-render';
+import { applyDrawableCatalog, applyGroundCoverCatalog, defaultSubterrainMaterial, structureArtAsset } from '@chess-tactics/board-render';
 import { testDrawableCatalog } from '../test/drawableCatalog';
 import { defaultTerrainFamily, familyForGameplayTerrain, gameplayTerrainForFamily, terrainFamiliesForRole, transitionPairs } from './tileSockets';
 
@@ -38,5 +38,39 @@ describe('database-owned terrain identities', () => {
     applyDrawableCatalog({ ...catalog, revision: catalog.revision + 1 });
     expect(gameplayTerrainForFamily('grass')).toBe('dirt');
     expect(familyForGameplayTerrain('grass')).toBe('dirt');
+  });
+
+  it('projects an opaque structure identity and its required configuration from the database alone', () => {
+    const catalog = testDrawableCatalog();
+    const source = catalog.assets.find((asset) => asset.id === 'structure-oak')!;
+    catalog.assets.push({
+      ...structuredClone(source), id: 'opaque-structure-7f2', label: 'Opaque structure', sortOrder: 999,
+      behavior: { ...structuredClone(source.behavior), value: 'opaque-structure-value-7f2' },
+    });
+    applyDrawableCatalog({ ...catalog, revision: catalog.revision + 1 });
+    expect(structureArtAsset('opaque-structure-value-7f2')).toMatchObject({
+      id: 'opaque-structure-value-7f2', label: 'Opaque structure', blocking: true, splitMode: 'authored',
+    });
+  });
+
+  it('fails closed for missing structure and ground-cover behavior instead of filling code defaults', () => {
+    const catalog = testDrawableCatalog();
+    const structure = catalog.assets.find((asset) => asset.id === 'structure-oak')!;
+    delete structure.behavior.blocking;
+    applyDrawableCatalog({ ...catalog, revision: catalog.revision + 1 });
+    expect(() => structureArtAsset('oak')).toThrow(/lacks placement behavior/);
+
+    const second = testDrawableCatalog();
+    const cover = second.assets.find((asset) => asset.id === 'ground-cover-grass')!;
+    delete cover.behavior.count;
+    applyDrawableCatalog({ ...second, revision: second.revision + 2 });
+    expect(() => applyGroundCoverCatalog()).toThrow(/lacks terrain, variants, edgeOnly, or count/);
+  });
+
+  it('uses the database-marked Subterrain default', () => {
+    const catalog = testDrawableCatalog();
+    for (const asset of catalog.assets) if (asset.kind === 'subterrain') asset.behavior.default = asset.id === 'roots';
+    applyDrawableCatalog({ ...catalog, revision: catalog.revision + 1 });
+    expect(defaultSubterrainMaterial()).toBe('roots');
   });
 });

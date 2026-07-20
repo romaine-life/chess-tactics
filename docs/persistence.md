@@ -176,6 +176,14 @@ owns the installed logical inventory and `drawable_asset_media` assigns its name
 roles to live-media slots. Concrete editor/catalog entries are database records,
 not compiled TypeScript members.
 
+Defaults are installed configuration too. A drawable domain that needs a
+default marks exactly one database row (or uses an equally explicit unique
+role); consumers never substitute array position zero for a missing or unknown
+id. Required behavior fields such as structure blocking/split/scale,
+ground-cover density counts, surface probability/role, wall-art span/reflection,
+and nine-slice flags are validated as present. An omitted field or an unknown
+requested id fails closed instead of manufacturing a code default.
+
 Terrain-family rows declare both their serialized gameplay terrain and the
 gameplay terrain values they render. Editor conversion, free-skirmish assembly,
 and gameplay rendering use that projection; they do not keep family maps or a

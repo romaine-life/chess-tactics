@@ -43,10 +43,9 @@ export interface CoverSet {
   frameCount: number;
   variants: CoverVariantMeta[];
   /** Only place on a tile that borders a DIFFERENT terrain (e.g. reeds at the water's edge). */
-  edgeOnly?: boolean;
-  /** Instances per tile by density. Defaults to grass's {sparse:3, filled:7}; pebble/reed
-   *  CLUSTERS each already hold several rocks/stalks, so they need far fewer than grass blades. */
-  count?: Record<GroundCoverDensity, number>;
+  edgeOnly: boolean;
+  /** Database-owned instances per tile by density. */
+  count: Record<GroundCoverDensity, number>;
 }
 
 export type GroundCoverTerrain = TileFamilyId;
@@ -104,8 +103,15 @@ function runtimeGroundCover(raw: unknown, assetId: string): GroundCoverRuntimeMe
 export function applyGroundCoverCatalog(): void {
   const next: Partial<Record<TileFamilyId, CoverSet>> = {};
   for (const asset of drawableAssets('ground-cover')) {
-    const terrain = typeof asset.behavior.terrain === 'string' ? asset.behavior.terrain : asset.id;
-    const rawVariants = Array.isArray(asset.behavior.variants) ? asset.behavior.variants : [];
+    const terrain = asset.behavior.terrain;
+    const rawVariants = asset.behavior.variants;
+    const rawCount = asset.behavior.count;
+    if (typeof terrain !== 'string' || !terrain || !Array.isArray(rawVariants)
+      || typeof asset.behavior.edgeOnly !== 'boolean' || !isRecord(rawCount)
+      || boundedInteger(rawCount.sparse, 0, 32768) === null
+      || boundedInteger(rawCount.filled, 0, 32768) === null) {
+      throw groundCoverCatalogFailure(`${asset.id} lacks terrain, variants, edgeOnly, or count configuration`);
+    }
     const variants = rawVariants.map((raw) => {
       const metadata = runtimeGroundCover(raw, asset.id);
       if (metadata.terrain !== terrain) throw groundCoverCatalogFailure(`${asset.id} variant terrain mismatch`);
@@ -122,8 +128,8 @@ export function applyGroundCoverCatalog(): void {
       terrain,
       frameCount,
       variants,
-      ...(asset.behavior.edgeOnly === true ? { edgeOnly: true } : {}),
-      ...(isRecord(asset.behavior.count) ? { count: asset.behavior.count as Record<GroundCoverDensity, number> } : {}),
+      edgeOnly: asset.behavior.edgeOnly,
+      count: { sparse: Number(rawCount.sparse), filled: Number(rawCount.filled) },
     };
   }
   if (!Object.keys(next).length) throw groundCoverCatalogFailure('no installed sets');
@@ -161,7 +167,6 @@ function mulberry(seed: number): () => number {
   };
 }
 
-const COUNT: Record<GroundCoverDensity, number> = { sparse: 3, filled: 7 };
 const MIN_DIST: Record<GroundCoverDensity, number> = { sparse: 17, filled: 11 };
 
 /** Roll the tufts for one cell. Deterministic from (terrain, x, y, seed, density). */
@@ -175,7 +180,7 @@ export function rollGroundCover(
   const set = SETS[terrain];
   if (!set || set.variants.length === 0) return [];
   const rnd = mulberry((Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(seed, 83492791)) >>> 0);
-  const target = (set.count ?? COUNT)[density];
+  const target = set.count[density];
   const minD = MIN_DIST[density];
   const tufts: TuftInstance[] = [];
   for (let tries = 0; tufts.length < target && tries < target * 14; tries += 1) {

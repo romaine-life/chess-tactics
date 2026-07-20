@@ -914,6 +914,28 @@ describe('no-committed-media guard', () => {
     }
   });
 
+  it.each([
+    'const DEFAULT_WALL_ART_REFLECTION = { opacity: 0.72 };',
+    'const selected = wallArtItems()[0];',
+    'const selected = PROP_DEFS[0];',
+    'const selected = DOODAD_ASSETS[0];',
+    'const selected = GROUND_COVER_ASSETS[0];',
+    'const selected = assets.find((asset) => asset.id === id) ?? assets[0];',
+  ])('rejects compiled installed defaults and first-row fallbacks: %s', (source) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-installed-default-test-'));
+    const relativePath = 'frontend/src/ui/legacyInstalledDefault.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${source}\n`, 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ detail: 'compiled installed-content default or first-row fallback remains after drawable-catalog cutover' }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it('rejects compiled editor terrain and animated-scene inventories after the drawable cutover', () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-editor-scene-inventory-test-'));
     const relativePath = 'frontend/src/ui/legacyScene.ts';

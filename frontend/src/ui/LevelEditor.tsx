@@ -4,11 +4,11 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { resolveDecorativeWallOverlays, resolveTerrainSideExposure, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, withPredrawnBoardSurface, type SubterrainMaterial, type SubterrainPlacementMap } from '@chess-tactics/board-render';
+import { defaultSubterrainMaterial, resolveDecorativeWallOverlays, resolveTerrainSideExposure, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, withPredrawnBoardSurface, type SubterrainMaterial, type SubterrainPlacementMap } from '@chess-tactics/board-render';
 import { boardLabCellPosition, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
-import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
+import { PROP_DEFS, defaultPropDef, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
 import { BoardBarrierSceneLayer } from '../render/BoardBarrierSceneLayer';
 import { PredrawnOcclusionSeedLayer } from '../render/PredrawnOcclusion';
@@ -58,8 +58,8 @@ import {
 import { APP_NAVIGATION_EVENT, navigateApp, registerAppNavigationBlocker } from './navigation';
 import { levelEditorWallFaceGeometry } from './levelEditorWallFace';
 import { levelEditorExitAction } from './levelEditorExit';
-import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
-import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
+import { currentDoodadAssets, defaultDoodadAsset, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
+import { defaultGroundCoverAsset, GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { WallArtPreview } from './WallArtLab';
 import { readBoardParam, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell, type PredrawnBoardSurface } from './boardCode';
 import { paintTerrainArea } from './levelEditorTerrainEditing';
@@ -2565,7 +2565,7 @@ export function LevelEditor(): ReactElement {
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(initialBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
   const [boardProps, setBoardProps] = useState<Record<string, { propId: string }>>(initialBoard?.props ?? {});
-  const [propBrushId, setPropBrushId] = useState<string>(PROP_DEFS[0].id);
+  const [propBrushId, setPropBrushId] = useState<string>(() => defaultPropDef().id);
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
   // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
   const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(initialBoard?.cover ?? {});
@@ -2573,8 +2573,9 @@ export function LevelEditor(): ReactElement {
   // absent here uses its own tile terrain's cover.
   const [boardCoverTypes, setBoardCoverTypes] = useState<Record<string, TileFamilyId>>(initialBoard?.coverTypes ?? {});
   const [coverBrushDensity, setCoverBrushDensity] = useState<GroundCoverDensity>('sparse');
-  const [coverBrushType, setCoverBrushType] = useState<GroundCoverId>(() =>
-    groundCoverAsset(studioArm.kind === 'cover' ? studioArm.brush : undefined).id);
+  const [coverBrushType, setCoverBrushType] = useState<GroundCoverId>(() => studioArm.kind === 'cover'
+    ? groundCoverAsset(studioArm.brush).id
+    : defaultGroundCoverAsset().id);
   const [coverSeed, setCoverSeed] = useState(1234);
   // Roads and rivers are LINEAR features (ribbons you draw), not per-cell terrain materials:
   // store each painted cell's {kind, material}, then derive its connection mask from its
@@ -2629,14 +2630,15 @@ export function LevelEditor(): ReactElement {
   });
   const [boardSubterrain, setBoardSubterrain] = useState<SubterrainPlacementMap>(() => initialBoard?.subterrain ?? {});
   const subterrainCatalog = subterrainMaterials();
-  const [subterrainBrushMaterial, setSubterrainBrushMaterial] = useState<SubterrainMaterial>(() => subterrainCatalog[0]?.id ?? '');
+  const [subterrainBrushMaterial, setSubterrainBrushMaterial] = useState<SubterrainMaterial>(() => defaultSubterrainMaterial());
   const subterrainBrushAsset = subterrainCatalog.find((asset) => asset.id === subterrainBrushMaterial);
   const [boardWallArt, setBoardWallArt] = useState<Record<string, WallArtId>>(() =>
     perimeterWallArt(initialBoard?.wallArt, initialBoard?.cols ?? LE_COLS, initialBoard?.rows ?? LE_ROWS));
   const [wallArtBrushId, setWallArtBrushId] = useState<WallArtId>(() =>
     wallArtIdOrDefault(studioArm.kind === 'wallart' ? studioArm.brush : undefined));
   const [wallArtPlacementFeedback, setWallArtPlacementFeedback] = useState<{ tone: 'ready' | 'blocked'; message: string } | null>(null);
-  const wallArtBrush = wallArt(wallArtBrushId) ?? wallArtItems()[0];
+  const wallArtBrush = wallArt(wallArtBrushId);
+  if (!wallArtBrush) throw new Error(`Selected wall art "${wallArtBrushId}" is unavailable`);
   // The remembered brush material PER kind, so switching Road↔River keeps each picker's choice.
   const [featureBrushMaterial, setFeatureBrushMaterial] = useState<Record<FeatureKind, FeatureMaterial>>({
     road: defaultFeatureMaterial('road'),
@@ -2656,8 +2658,8 @@ export function LevelEditor(): ReactElement {
   const wallTool = brushKind === 'wall';
   const subterrainTool = brushKind === 'subterrain';
   const wallArtTool = brushKind === 'wallart';
-  const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : leUnitAssets[0].id);
-  const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
+  const [unitBrushId, setUnitBrushId] = useState<string>(() => studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : 'pawn');
+  const [doodadBrushId, setDoodadBrushId] = useState<string>(() => studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : defaultDoodadAsset().id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>(() => factionDefaultDirection('navy-blue', initialFactionDirections));
   const [unitFaction, setUnitFactionState] = useState<UnitPalette>('navy-blue');
   const [undoStack, setUndoStack] = useState<EditorBoard[]>([]);
@@ -3110,10 +3112,12 @@ export function LevelEditor(): ReactElement {
     next.playerFaction = faction;
     commitEditorBoard(next);
   };
-  const brushAsset = resolveAsset(brushId) ?? leDefaultTile();
+  const brushAsset = resolveAsset(brushId);
+  if (!brushAsset) throw new Error(`Selected terrain surface "${brushId}" is unavailable`);
   const macroTileBrushAsset = macroTileBrushId ? macroTileAsset(macroTileBrushId) : undefined;
   const resolveUnitAsset = (id: string): UnitAsset | undefined => unitArtForId(id);
-  const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? leUnitAssets[0];
+  const unitBrushAsset = resolveUnitAsset(unitBrushId);
+  if (!unitBrushAsset) throw new Error(`Selected unit art "${unitBrushId}" is unavailable`);
   const directionForFaction = (faction: UnitPalette): Direction => factionDefaultDirection(faction, boardFactionDirections);
   const setUnitFaction = (faction: UnitPalette): void => {
     setUnitFactionState(faction);
@@ -3149,7 +3153,8 @@ export function LevelEditor(): ReactElement {
   };
   const doodadAssets = currentDoodadAssets();
   const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAssets.find((doodad) => doodad.id === id) ?? doodadAsset(id);
-  const doodadBrushAsset = resolveDoodadAsset(doodadBrushId) ?? doodadAssets[0] ?? DOODAD_ASSETS[0];
+  const doodadBrushAsset = resolveDoodadAsset(doodadBrushId);
+  if (!doodadBrushAsset) throw new Error(`Selected doodad "${doodadBrushId}" is unavailable`);
   const coverBrushAsset = groundCoverAsset(coverBrushType);
   // HARD terrain gate (mirrors the Studio): a doodad only lands on a tile of its home terrain.
   const doodadFitsTile = (doodad: DoodadAsset, tileId: string | undefined): boolean => {
@@ -3157,7 +3162,8 @@ export function LevelEditor(): ReactElement {
     return terrain !== undefined && doodad.terrains.includes(terrain);
   };
   const resolvePropDef = (id: string): PropDef | undefined => propDef(id);
-  const propBrushDef = resolvePropDef(propBrushId) ?? PROP_DEFS[0];
+  const propBrushDef = resolvePropDef(propBrushId);
+  if (!propBrushDef) throw new Error(`Selected prop "${propBrushId}" is unavailable`);
   const authoredCellTileId = (x: number, y: number): string | undefined => {
     const key = `${x},${y}`;
     if (!cellWithinScenicSurface(key)) return undefined;

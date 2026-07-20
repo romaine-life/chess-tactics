@@ -91,7 +91,8 @@ function CompareStage({ opt, css, reloadKey }: { opt: Opt; css: string; reloadKe
     if (src.kind === 'live') inject(iframe.current, css);
   }, [css, src.kind, reloadKey]);
 
-  const art = src.kind === 'art' ? (ART.find((a) => a.id === src.id) ?? ART[0]) : null;
+  const art = src.kind === 'art' ? ART.find((candidate) => candidate.id === src.id) : null;
+  if (src.kind === 'art' && !art) throw new Error(`artwork reference ${src.id} is unavailable`);
 
   return (
     <div className="ac-stage" ref={stage}>

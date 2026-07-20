@@ -22,7 +22,7 @@
 // files; it never writes media or promotion state to Git.
 // Routing follows repo convention (lazy in App.tsx).
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { SURFACE_ASSETS } from './surfaceCatalog';
+import { defaultSurfaceAsset, SURFACE_ASSETS } from './surfaceCatalog';
 import { nineSliceCatalogAssets, requiredNineSliceRole } from './nineSliceCatalog';
 import { saveDrawableAssetBatch } from '../net/drawableCatalogAdmin';
 
@@ -441,7 +441,11 @@ export const DEFAULT_NINE_SLICE_ASSET = requiredNineSliceRole('frame-editor-defa
 // (assetId/onAssetId ride its URL), so there is NO own route, NO page chrome, and
 // NO "Back" link — the Catalog tab is back (docs/studio-control-architecture.md).
 export function NineSliceLab({ assetId, onAssetId, header, zoom = 1 }: { assetId: string; onAssetId: (id: string) => void; header?: ReactNode; zoom?: number }): ReactElement {
-  const asset = useMemo(() => ASSETS.find((a) => a.id === assetId) ?? ASSETS[0], [assetId]);
+  const asset = useMemo(() => {
+    const selected = ASSETS.find((a) => a.id === assetId);
+    if (!selected) throw new Error(`Selected nine-slice asset "${assetId}" is unavailable`);
+    return selected;
+  }, [assetId]);
   const aid = asset.id;
   // The frames that share this asset's shape (same theme). Editing Shape edits the
   // whole family; only content/fill are per-member.
@@ -471,7 +475,7 @@ export function NineSliceLab({ assetId, onAssetId, header, zoom = 1 }: { assetId
   // stray fill-coloured pixel in the art can't hide against it); 'fill' = the asset's baked body;
   // 'surface' = a real surface clipped to the fill box (audits the fill boundary).
   const [backing, setBacking] = useState<'none' | 'fill' | 'surface'>('none');
-  const [previewSurfaceName, setPreviewSurfaceName] = useState(SURFACE_ASSETS[0]?.name ?? '');
+  const [previewSurfaceName, setPreviewSurfaceName] = useState(() => defaultSurfaceAsset().name);
   const [surfaceImg, setSurfaceImg] = useState<HTMLImageElement | null>(null);
   // gap from each outer-box edge to the art's outermost opaque pixel. + = gap inside; − = beyond (overflow).
   const [status, setStatus] = useState<{ top: number; right: number; bottom: number; left: number } | null>(null);

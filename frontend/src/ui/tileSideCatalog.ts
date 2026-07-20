@@ -1,4 +1,4 @@
-import { drawableAssets } from '@chess-tactics/board-render';
+import { drawableAssets, requiredDrawableDefault } from '@chess-tactics/board-render';
 
 export interface TileSideItem {
   id: string;
@@ -24,3 +24,10 @@ export const TILE_SIDE_ITEMS: TileSideItem[] = new Proxy([] as TileSideItem[], {
 
 export const tileSideItemById = (id: string | undefined): TileSideItem | undefined =>
   TILE_SIDE_ITEMS.find((item) => item.id === id);
+
+export const defaultTileSideItem = (): TileSideItem => {
+  const id = requiredDrawableDefault('subterrain').id;
+  const item = tileSideItemById(id);
+  if (!item) throw new Error(`Subterrain default ${id} is unavailable`);
+  return item;
+};

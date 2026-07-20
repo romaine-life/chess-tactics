@@ -74,6 +74,10 @@ The logical drawable catalog above those media slots is the authority for instal
 content membership, labels, ordering, behavior configuration, and named media roles.
 Runtime and editor consumers query that projection; a stable semantic slot is no
 longer sufficient authority for code to declare that an installed asset exists.
+Selection defaults and every appearance-affecting behavior value are part of
+that projection. Positional first-row selection and code-filled partial records
+are prohibited: zero or multiple database defaults, an unknown requested id, or
+an incomplete row is an availability failure.
 
 - Unit Art: family, palette, direction, anchor, and native footprint.
 - Terrain: top, side, animation, alpha ownership, projection, face semantics.

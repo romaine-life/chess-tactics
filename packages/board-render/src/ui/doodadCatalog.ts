@@ -4,6 +4,7 @@
 
 import { currentSeats, propDef, structurePartsFromSeat, type StructurePart, type StructureSourceRef } from '../core/props';
 import { STRUCTURE_ART_ASSETS, structureArtAsset, structureArtHalfSrc } from '../core/structureArt';
+import { drawableAssets } from '../art/drawableCatalog';
 
 export interface DoodadAsset {
   id: string;
@@ -17,7 +18,7 @@ export interface DoodadAsset {
   back: string;
   front: string;
   /** Optional frame geometry for authored doodads that share non-doodad source art. */
-  sprite?: { w: number; h: number; anchorX: number; anchorY: number; scale?: number };
+  sprite?: { w: number; h: number; anchorX: number; anchorY: number; scale: number };
   source?: StructureSourceRef;
   parts?: StructurePart[];
 }
@@ -47,7 +48,7 @@ const doodadFromArt = (id: string, label: string): DoodadAsset => {
     front: sourceSpritePath(source, 'front'),
     sprite: spriteFrame,
     source,
-    parts: [{ source, anchorX: spriteFrame.anchorX, anchorY: spriteFrame.anchorY, scale: spriteFrame.scale ?? 1 }],
+    parts: [{ source, anchorX: spriteFrame.anchorX, anchorY: spriteFrame.anchorY, scale: spriteFrame.scale }],
   };
 };
 
@@ -99,5 +100,15 @@ export function currentDoodadAssets(): DoodadAsset[] {
 
 export const doodadAsset = (id: string): DoodadAsset => {
   const assets = currentDoodadAssets();
-  return assets.find((d) => d.id === id) ?? assets[0];
+  const asset = assets.find((candidate) => candidate.id === id);
+  if (!asset) throw new Error(`drawable catalog has no doodad ${id}`);
+  return asset;
 };
+
+export function defaultDoodadAsset(): DoodadAsset {
+  const defaults = drawableAssets('structure').filter((asset) => asset.behavior.structureKind === 'doodad' && asset.behavior.default === true);
+  if (defaults.length !== 1) throw new Error(`doodad catalog expected one default, found ${defaults.length}`);
+  const id = defaults[0].behavior.value;
+  if (typeof id !== 'string' || !id) throw new Error(`doodad default ${defaults[0].id} has no identity`);
+  return doodadAsset(id);
+}

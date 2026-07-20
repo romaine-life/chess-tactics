@@ -44,7 +44,6 @@ const COLS = 9;
 const ROWS = 7;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const DEFAULT_DOODAD_SPRITE = { w: 96, h: 180, anchorX: 48, anchorY: 69, scale: 1 };
 const slugify = (value: string): string => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 80);
 const draftIdInput = (value: string): string => value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-{2,}/g, '-').slice(0, 80);
 const parseTerrains = (value: string): string[] => value.split(',').map((part) => part.trim()).filter(Boolean);
@@ -76,13 +75,15 @@ function DirArrow({ deg }: { deg: number }): ReactElement {
 export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: {
   propId: string; onPropId: (id: string) => void; header?: ReactNode; draft?: StructureEditorDraft | null; onDraftChange?: (draft: StructureEditorDraft | null) => void;
 }): ReactElement {
-  const activeId = PROP_DEFS.some((d) => d.id === propId) ? propId : PROP_DEFS[0].id;
-  const selectedPropDef = PROP_DEFS.find((d) => d.id === activeId) as PropDef;
+  const selectedPropDef = PROP_DEFS.find((candidate) => candidate.id === propId);
+  if (!selectedPropDef) throw new Error(`prop seat catalog has no prop ${propId}`);
+  const activeId = selectedPropDef.id;
   const doodadSources = currentDoodadAssets();
   const sourceAsArt = (source: StructureSourceRef): StructureSourceRef => (
     source.kind === 'asset' || !structureArtAsset(source.id) ? source : { kind: 'asset', id: source.id }
   );
-  const fallbackSource: StructureSourceRef = sourceAsArt(selectedPropDef.spriteParts?.[0]?.source ?? selectedPropDef.spriteSource ?? { kind: 'asset', id: STRUCTURE_ART_ASSETS[0].id });
+  const fallbackSource: StructureSourceRef = sourceAsArt(selectedPropDef.spriteParts?.[0]?.source ?? selectedPropDef.spriteSource
+    ?? (() => { throw new Error(`prop ${selectedPropDef.id} has no installed source`); })());
   const sourceInfo = (source: StructureSourceRef): {
     label: string;
     terrains: string[];
@@ -93,23 +94,26 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
     doodad?: DoodadAsset;
   } => {
     if (source.kind === 'asset') {
-      const art = structureArtAsset(source.id) ?? structureArtAsset(STRUCTURE_ART_ASSETS[0].id)!;
+      const art = structureArtAsset(source.id);
+      if (!art) throw new Error(`structure source ${source.id} is unavailable`);
       const kind: PropKind = art.propKind ?? (art.kind === 'tree' || art.kind === 'rock' ? art.kind : 'house');
       return { label: art.label, terrains: art.terrains, kind, sprite: art.sprite, art };
     }
     if (source.kind === 'prop') {
-      const prop = PROP_DEFS.find((d) => d.id === source.id) ?? PROP_DEFS[0];
+      const prop = PROP_DEFS.find((candidate) => candidate.id === source.id);
+      if (!prop) throw new Error(`prop source ${source.id} is unavailable`);
       return { label: prop.label, terrains: prop.terrains, kind: prop.kind, sprite: prop.sprite, prop };
     }
-    const doodad = doodadSources.find((d) => d.id === source.id) ?? doodadSources[0];
-    return { label: doodad.label, terrains: doodad.terrains, kind: 'house', sprite: doodad.sprite ?? DEFAULT_DOODAD_SPRITE, doodad };
+    const doodad = doodadSources.find((candidate) => candidate.id === source.id);
+    if (!doodad?.sprite) throw new Error(`doodad source ${source.id} is unavailable`);
+    return { label: doodad.label, terrains: doodad.terrains, kind: 'house', sprite: doodad.sprite, doodad };
   };
   const seatFromSource = (source: StructureSourceRef): Seat => {
     const info = sourceInfo(source);
     return {
       anchorX: info.sprite.anchorX,
       anchorY: info.sprite.anchorY,
-      scale: info.sprite.scale ?? 1,
+      scale: info.sprite.scale ?? (() => { throw new Error(`structure source ${source.id} has no scale`); })(),
       w: info.prop?.w ?? info.art?.footprint?.w ?? 1,
       h: info.prop?.h ?? info.art?.footprint?.h ?? 1,
     };
@@ -143,18 +147,22 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
   } => {
     if (draft?.editId) {
       if (draft.target === 'doodad') {
-        const asset = doodadSources.find((d) => d.id === draft.editId) ?? doodadSources[0];
+        const asset = doodadSources.find((candidate) => candidate.id === draft.editId);
+        if (!asset) throw new Error(`doodad ${draft.editId} is unavailable`);
         return { target: 'doodad', slots: partsFromDoodad(asset), footprint: { w: 1, h: 1 }, name: asset.label, id: asset.id, terrains: asset.terrains.join(', ') };
       }
-      const def = PROP_DEFS.find((d) => d.id === draft.editId) ?? selectedPropDef;
+      const def = PROP_DEFS.find((candidate) => candidate.id === draft.editId);
+      if (!def) throw new Error(`prop ${draft.editId} is unavailable`);
       return { target: 'prop', slots: partsFromProp(def), footprint: { w: def.w, h: def.h }, name: def.label, id: def.id, terrains: def.terrains.join(', ') };
     }
     if (draft?.copyFrom) {
       if (draft.copyFrom.target === 'doodad') {
-        const asset = doodadSources.find((d) => d.id === draft.copyFrom?.id) ?? doodadSources[0];
+        const asset = doodadSources.find((candidate) => candidate.id === draft.copyFrom?.id);
+        if (!asset) throw new Error(`doodad ${draft.copyFrom.id} is unavailable`);
         return { target: draft.target, slots: partsFromDoodad(asset), footprint: { w: 1, h: 1 }, name: `${asset.label} copy`, id: '', terrains: asset.terrains.join(', ') };
       }
-      const def = PROP_DEFS.find((d) => d.id === draft.copyFrom?.id) ?? selectedPropDef;
+      const def = PROP_DEFS.find((candidate) => candidate.id === draft.copyFrom?.id);
+      if (!def) throw new Error(`prop ${draft.copyFrom.id} is unavailable`);
       return { target: draft.target, slots: partsFromProp(def), footprint: { w: def.w, h: def.h }, name: `${def.label} copy`, id: '', terrains: def.terrains.join(', ') };
     }
     const source = sourceAsArt(draft?.source ?? fallbackSource);

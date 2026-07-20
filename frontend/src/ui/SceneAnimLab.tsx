@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { liveMediaForSlot } from '@chess-tactics/board-render';
+import { liveMediaForSlot, requiredDrawableDefault } from '@chess-tactics/board-render';
 import { animatedScenes, sceneAnimations, SCENE_ANIMS, SceneBackdrop } from './SceneBackdrop';
 import {
   fetchAdminLiveMediaCatalog,
@@ -16,6 +16,12 @@ import {
 
 export type SceneRegion = (typeof SCENE_ANIMS)[number];
 export const SCENE_ANIM_REGIONS = SCENE_ANIMS;
+export function defaultSceneAnimation(): SceneRegion {
+  const record = requiredDrawableDefault('scene-animation');
+  const region = SCENE_ANIMS.find((candidate) => candidate.id === record.id);
+  if (!region) throw new Error(`Scene animation default ${record.id} is unavailable`);
+  return region;
+}
 
 // The Animated Scenes catalog: whole backdrops, each owning a set of animated regions. Today
 // only the main-menu backdrop, but modelled as a list so a second scene is one more entry
@@ -81,7 +87,7 @@ export function SceneRegionThumb({ region }: { region: SceneRegion }): ReactElem
 export function SceneRegionPicker({ sceneId, onSceneId, onPickRegion, header }: {
   sceneId: string; onSceneId: (id: string) => void; onPickRegion: (regionId: string) => void; header?: ReactNode;
 }): ReactElement {
-  const scene = SCENE_ANIM_SCENES.find((s) => s.id === sceneId) ?? SCENE_ANIM_SCENES[0];
+  const scene = SCENE_ANIM_SCENES.find((s) => s.id === sceneId);
   if (!scene) throw new Error('drawable catalog has no animated scenes');
   const regions = SCENE_ANIMS.filter((r) => scene.regionIds.includes(r.id));
   return (
@@ -152,7 +158,7 @@ export function SceneRegionPicker({ sceneId, onSceneId, onPickRegion, header }: 
 export function SceneAnimLab({ regionId, onRegionId, header }: {
   regionId: string; onRegionId: (id: string) => void; header?: ReactNode;
 }): ReactElement {
-  const region = SCENE_ANIMS.find((r) => r.id === regionId) ?? SCENE_ANIMS[0];
+  const region = SCENE_ANIMS.find((r) => r.id === regionId);
   if (!region) throw new Error('drawable catalog has no scene animations');
   const regionScene = currentScenes().find((scene) => scene.role === region.sceneRole);
   if (!regionScene) throw new Error(`drawable catalog has no scene for animation ${region.id}`);

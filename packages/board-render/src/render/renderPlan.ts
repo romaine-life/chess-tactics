@@ -484,12 +484,15 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     const doodad = doodadPlacement ? resolveDoodad(doodadPlacement.doodadId) : undefined;
     if (doodad) {
       const sprite = doodad.sprite ?? { w: DOODAD_FRAME_W, h: DOODAD_FRAME_H, anchorX: TILE_STEP_X, anchorY: DOODAD_ANCHOR_Y };
+      const spriteScale = 'scale' in sprite && typeof sprite.scale === 'number' ? sprite.scale : undefined;
       const parts = doodad.parts?.length
         ? doodad.parts
-        : [{ source: doodad.source ?? { kind: 'doodad' as const, id: doodad.id }, anchorX: sprite.anchorX, anchorY: sprite.anchorY, scale: sprite.scale ?? 1 }];
+        : spriteScale
+          ? [{ source: doodad.source ?? { kind: 'doodad' as const, id: doodad.id }, anchorX: sprite.anchorX, anchorY: sprite.anchorY, scale: spriteScale }]
+          : (() => { throw new Error(`doodad "${doodad.id}" has no DB-owned scale`); })();
       for (const part of parts) {
         const sourceSprite = structureSourceSprite(part.source);
-        const scale = part.scale ?? 1;
+        const scale = part.scale;
         pushStructureDrawOps(
           ops,
           part.source,
@@ -516,10 +519,10 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     const { back, front } = propZBracket(ax, ay, def.w, def.h);
     const parts = def.spriteParts?.length
       ? def.spriteParts
-      : [{ source: def.spriteSource ?? { kind: 'prop' as const, id: def.spriteId }, anchorX: def.sprite.anchorX, anchorY: def.sprite.anchorY, scale: def.sprite.scale ?? 1 }];
+      : [{ source: def.spriteSource ?? { kind: 'prop' as const, id: def.spriteId }, anchorX: def.sprite.anchorX, anchorY: def.sprite.anchorY, scale: def.sprite.scale }];
     for (const part of parts) {
       const sourceSprite = structureSourceSprite(part.source);
-      const s = part.scale ?? 1;
+      const s = part.scale;
       const dx = left - part.anchorX * s;
       const dy = top - part.anchorY * s;
       pushStructureDrawOps(ops, part.source, sourceSprite, part.anchorY, s, dx, dy, back, front);

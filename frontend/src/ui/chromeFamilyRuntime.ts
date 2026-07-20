@@ -507,7 +507,9 @@ function renderCornerAtomDataUrl(atom: HTMLCanvasElement, atomSize: number, flip
 
 export function dividerJointSourceById(id: string): DividerJointSource {
   const sources = dividerJointSources();
-  return sources.find((source) => source.id === id) ?? sources[0];
+  const source = sources.find((candidate) => candidate.id === id);
+  if (!source) throw new Error(`drawable catalog has no divider joint source ${id}`);
+  return source;
 }
 
 function renderFrameBaseCanvas(tune: RoleTune, rail: HTMLCanvasElement): { canvas: HTMLCanvasElement; slice: number; frameSize: number } {
@@ -719,7 +721,9 @@ export function chromeFillTintById(id: ChromeFillTintId): (typeof CHROME_FILL_TI
 }
 
 export function chromeFillSurfaceById(id: ChromeFillSurfaceId): (typeof CHROME_FILL_SURFACES)[number] {
-  return CHROME_FILL_SURFACES.find((surface) => surface.id === id) ?? CHROME_FILL_SURFACES[0];
+  const surface = CHROME_FILL_SURFACES.find((candidate) => candidate.id === id);
+  if (!surface) throw new Error(`drawable catalog has no chrome fill surface ${id}`);
+  return surface;
 }
 
 function chromeFillColor(tune: RoleTune): string {

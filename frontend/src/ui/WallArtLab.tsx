@@ -6,12 +6,13 @@ import {
   normalizeWallArtReflection,
   slotSource,
   wallArt,
+  wallArtItems,
   type WallArt,
   type WallArtMap,
   type WallArtReflectionConfig,
   type WallArtSlot,
 } from '../core/wallArt';
-import { WALL_DECOR_ASSETS, wallDecorAsset, type WallDecorFaceId } from '../core/wallDecor';
+import { WALL_DECOR_ASSETS, defaultWallDecorAsset, wallDecorAsset, type WallDecorFaceId } from '../core/wallDecor';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { BoardCanvasLayer, boundsForOps, loadCanvasImage } from '../render/BoardCanvasLayer';
@@ -105,12 +106,13 @@ function entryAsWallArt(id: string, entry: WallArtMap[string]): WallArt {
   const span = Number.isFinite(entry?.span) ? Math.max(1, Math.min(16, Math.round(Number(entry.span)))) : 1;
   const slots = Array.isArray(entry?.slots) ? entry.slots : [];
   const hasMirror = slots.some((slot) => wallDecorAsset(slot.sourceId)?.kind === 'mirror');
+  const reflection = normalizeWallArtReflection(entry.reflection);
   return {
     id,
     label: typeof entry?.label === 'string' && entry.label.trim() ? entry.label.trim() : id,
     span,
     slots,
-    ...((hasMirror || entry.reflection) ? { reflection: normalizeWallArtReflection(entry.reflection) } : {}),
+    ...((hasMirror || entry.reflection) && reflection ? { reflection } : {}),
   };
 }
 
@@ -122,6 +124,14 @@ function uniqueWallArtId(map: WallArtMap, base: string): string {
     if (!map[candidate]) return candidate;
   }
   return `${clean}-${Date.now().toString(36)}`;
+}
+
+function reflectionTemplateForSource(sourceId: string): WallArtReflectionConfig | undefined {
+  const values = wallArtItems()
+    .filter((entry) => entry.slots.some((slot) => slot.sourceId === sourceId) && entry.reflection)
+    .map((entry) => entry.reflection!.opacity);
+  const unique = [...new Set(values)];
+  return unique.length === 1 ? { opacity: unique[0] } : undefined;
 }
 
 function uniqueSlotId(slots: readonly WallArtSlot[], base: string): string {
@@ -705,7 +715,8 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
 
   const addSlot = (): void => {
     const face = activeSlot?.face ?? 'west';
-    const sourceId = wallDecorAsset(activeSlot?.sourceId)?.id ?? WALL_DECOR_ASSETS[0]?.id;
+    const sourceId = activeSlot?.sourceId ? wallDecorAsset(activeSlot.sourceId)?.id : defaultWallDecorAsset().id;
+    if (!sourceId) throw new Error(`Selected wall-decoration source "${activeSlot?.sourceId}" is unavailable`);
     if (!sourceId) {
       setStatus('no complete live wall-decoration source is available');
       return;
@@ -731,13 +742,15 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
     const label = newArtName.trim() || id;
     const slot = defaultSlot(source.id, 'west', []);
     if (!slot) return;
+    const reflection = source.kind === 'mirror' ? reflectionTemplateForSource(source.id) : undefined;
+    if (source.kind === 'mirror' && !reflection) { setStatus(`mirror source "${source.id}" has no unambiguous DB-owned reflection template`); return; }
     setDraftMap((cur) => ({
       ...cur,
       [id]: {
         label,
         span: 1,
         slots: [slot],
-        ...(source.kind === 'mirror' ? { reflection: normalizeWallArtReflection(undefined) } : {}),
+        ...(reflection ? { reflection } : {}),
       },
     }));
     onArtId(id);
@@ -759,13 +772,15 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
     const id = uniqueWallArtId(draftMap, label);
     const slot = defaultSlot(source.id, 'west', []);
     if (!slot) return;
+    const reflection = source.kind === 'mirror' ? reflectionTemplateForSource(source.id) : undefined;
+    if (source.kind === 'mirror' && !reflection) { setStatus(`mirror source "${source.id}" has no unambiguous DB-owned reflection template`); return; }
     setDraftMap((cur) => ({
       ...cur,
       [id]: {
         label,
         span: 1,
         slots: [slot],
-        ...(source.kind === 'mirror' ? { reflection: normalizeWallArtReflection(undefined) } : {}),
+        ...(reflection ? { reflection } : {}),
       },
     }));
     onArtId(id);
@@ -996,7 +1011,7 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
             {art.reflection ? (
               <div className="ps-variant mirror-optics-controls">
                 <span className="ps-ctl-label">Exact live mirror <em>1:1 always on</em></span>
-                <SliderRow label={`Reflection opacity - ${Math.round(art.reflection.opacity * 100)}%`} value={art.reflection.opacity} set={(value) => setReflection({ opacity: round2(value) })} min={0.05} max={1} step={0.01} nudge={0.05} dflt={committedArt.reflection?.opacity ?? normalizeWallArtReflection(undefined).opacity} />
+                <SliderRow label={`Reflection opacity - ${Math.round(art.reflection.opacity * 100)}%`} value={art.reflection.opacity} set={(value) => setReflection({ opacity: round2(value) })} min={0.05} max={1} step={0.01} nudge={0.05} dflt={committedArt.reflection?.opacity ?? art.reflection.opacity} />
                 <button type="button" className={`ps-toggle ${showAperture ? 'is-on' : ''}`} onClick={() => setShowAperture((value) => !value)} title="Show the frame-owned clipping aperture over the live preview">Aperture outline</button>
                 <button
                   type="button"
