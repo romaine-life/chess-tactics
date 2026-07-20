@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
+import { homepageSceneMedia } from './homepageSceneMedia';
 
 // The main-menu background scene as REAL elements instead of a `::after`
 // background — so animated regions can anchor to scene coordinates.
@@ -73,15 +74,6 @@ export const sceneAnimations = (): SceneAnim[] => drawableAssets('scene-animatio
     frames: positive(asset.behavior.frames, 'frames', asset.id), frameMs: positive(asset.behavior.frameMs, 'frameMs', asset.id) };
 });
 export const SCENE_ANIMS: SceneAnim[] = new Proxy([] as SceneAnim[], { get: (_target, property) => { const values = sceneAnimations(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
-
-/** The exact installed media consumed by the homepage DOM. Startup priority and
- * readiness must use this binding too; a parallel app-ui rendition is not proof
- * that the animated-scene consumer can paint. */
-export function homepageSceneMedia() {
-  const binding = requiredDrawableRole('animated-scene', 'homepage-scene').media.background?.media;
-  if (!binding) throw new Error('installed homepage scene has no background media');
-  return binding;
-}
 
 // Build the scene backdrop as a detached DOM subtree — the plain-DOM twin of the
 // old JSX (identical class names, so the existing style.css rules apply

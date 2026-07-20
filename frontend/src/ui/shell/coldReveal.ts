@@ -19,7 +19,7 @@
 // the store stays in its default fully-revealed state, so nothing ever hides or blinks.
 
 export type RevealLayer = 'bg' | 'title' | 'buttons' | 'rain';
-import { homepageSceneMedia } from '../SceneBackdrop';
+import { homepageSceneMedia } from '../homepageSceneMedia';
 
 const LADDER: RevealLayer[] = ['bg', 'title', 'buttons', 'rain'];
 const LAST = LADDER.length - 1;

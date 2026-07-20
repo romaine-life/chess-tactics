@@ -14,6 +14,8 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(mainMenu).not.toContain("href: '/campaign'");
     expect(mainMenu).not.toContain("'solo-skirmish': '/skirmish'");
     expect(mainMenu).not.toContain("ShellDest = 'settings' | 'campaign'");
+    expect(readFileSync(new URL('../test/drawableCatalog.ts', import.meta.url), 'utf8'))
+      .toContain("['play', 'Play', '/play/select/skirmish'");
   });
 
   it('pins Skirmish and Levels above one drawn-scroll Campaign collection', () => {

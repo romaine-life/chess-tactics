@@ -12,6 +12,7 @@
 //     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold] [--assert-menu-atomic]
 //     [--assert-board-atomic] [--assert-shell-font-atomic] [--assert-surface-atomic <name>]
 //     [--abort-request <url-substring>]
+//     [--click <selector>] [--click-ready <jsExpr>] [--assert-backdrop-continuity]
 //     [--full] [--show-scrollbars]
 //
 // Examples:
@@ -41,6 +42,9 @@ const assertBoardAtomic = has('assert-board-atomic');
 const assertShellFontAtomic = has('assert-shell-font-atomic');
 const assertSurfaceAtomic = flag('assert-surface-atomic');
 const abortRequest = flag('abort-request');
+const click = flag('click');
+const clickReady = flag('click-ready');
+const assertBackdropContinuity = has('assert-backdrop-continuity');
 const fullPage = has('full');
 const showScrollbars = has('show-scrollbars');
 
@@ -87,13 +91,33 @@ try {
           if (count > 0 && count < 3) window.__ctMenuAtomicViolations.push(state);
           if (count === 3) {
             const criticalImages = [
-              ...menu.querySelectorAll('.main-menu-twin-screen img'),
+              ...menu.querySelectorAll('.settings-rail-frame img'),
               ...(title?.querySelectorAll('img') || []),
             ];
             const imagesComplete = criticalImages.length > 0
               && criticalImages.every((img) => img.complete && img.naturalWidth > 0);
             if (!imagesComplete) window.__ctMenuAtomicViolations.push({ ...state, imagesComplete });
           }
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+  }
+  if (assertBackdropContinuity) {
+    await page.evaluateOnNewDocument(() => {
+      window.__ctBackdropVisibleSeen = false;
+      window.__ctBackdropViolations = [];
+      const sample = () => {
+        const menu = document.querySelector('.main-menu-layer');
+        const scene = menu?.querySelector('.scene-backdrop');
+        const canvas = scene?.querySelector('.scene-backdrop-canvas');
+        const visible = Boolean(scene && canvas
+          && Number.parseFloat(getComputedStyle(scene).opacity) > 0.001
+          && getComputedStyle(canvas).backgroundImage !== 'none');
+        if (visible) window.__ctBackdropVisibleSeen = true;
+        else if (window.__ctBackdropVisibleSeen) {
+          window.__ctBackdropViolations.push({ menu: Boolean(menu), scene: Boolean(scene), canvas: Boolean(canvas) });
         }
         requestAnimationFrame(sample);
       };
@@ -197,6 +221,12 @@ try {
   // Determinism: kill animations/transitions so a live screen captures identically every run.
   await page.addStyleTag({ content: `*,*::before,*::after{animation:none!important;transition:none!important;animation-duration:0s!important;caret-color:transparent!important;scroll-behavior:auto!important}` });
 
+  if (click) {
+    if (clickReady) await page.waitForFunction(clickReady, { timeout });
+    await page.waitForSelector(String(click), { visible: true, timeout });
+    await page.click(String(click));
+  }
+
   // Readiness: explicit gate if given, else a quick best-effort wait on window.__ready (fixtures set it).
   if (readyExpr) {
     // An explicit readiness contract is an assertion, not a best-effort delay. Swallowing
@@ -214,6 +244,17 @@ try {
       console.error(`menu exposed a partial frame: ${JSON.stringify(violations[0])}`);
       process.exitCode = 4;
       throw new Error('atomic menu assertion failed');
+    }
+  }
+  if (assertBackdropContinuity) {
+    const result = await page.evaluate(() => ({
+      seen: window.__ctBackdropVisibleSeen || false,
+      violations: window.__ctBackdropViolations || [],
+    }));
+    if (!result.seen || result.violations.length) {
+      console.error(`homepage backdrop continuity failed: ${JSON.stringify(result)}`);
+      process.exitCode = 8;
+      throw new Error('homepage backdrop continuity assertion failed');
     }
   }
   if (assertBoardAtomic) {

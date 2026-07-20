@@ -50,11 +50,16 @@ describe('professional loading architecture guards', () => {
     const entry = read('./main.tsx');
     const reveal = read('./ui/shell/coldReveal.ts');
     const scene = read('./ui/SceneBackdrop.tsx');
+    const sceneMedia = read('./ui/homepageSceneMedia.ts');
     expect(entry).toContain('homepageSceneMedia()');
     expect(reveal).toContain('homepageSceneMedia().immutableUrl');
     expect(scene).toContain('canvas.style.backgroundImage = `url("${homepageSceneMedia().immutableUrl}")`');
+    expect(sceneMedia).toContain("requiredDrawableRole('animated-scene', 'homepage-scene')");
+    expect(entry).toContain("from './ui/homepageSceneMedia'");
+    expect(entry).not.toContain("from './ui/SceneBackdrop'");
     expect(reveal).not.toContain('ui-main-menu-background-scene-v1-avif');
     expect(read('../scripts/shot.mjs')).toContain('criticalImages.every((img) => img.complete && img.naturalWidth > 0)');
+    expect(read('../scripts/shot.mjs')).toContain('homepage backdrop continuity failed');
   });
 
   it('owns the complete Play destination behind a painted DOM surface boundary', () => {
