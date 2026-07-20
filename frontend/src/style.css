@@ -6715,6 +6715,43 @@ body.loading-bootstrap .app-startup-status {
 .le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
 .le-status-current.is-ready { border-image-source: var(--skirmish-chrome-inner-line-success-image); }
 .le-status-current.is-blocked { border-image-source: var(--skirmish-chrome-inner-line-warning-image); }
+.le-revision-history {
+  background: rgba(3, 12, 19, .48);
+  background-clip: border-box;
+  background-origin: border-box;
+  border: var(--le-chrome-inner-rail-w, 12px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-line-image) 24 / var(--le-chrome-inner-rail-w, 12px) round;
+  display: grid;
+  gap: var(--ds-stack);
+  image-rendering: pixelated;
+  padding: var(--ds-inset);
+}
+.le-revision-history-head { align-items: start; display: flex; gap: var(--ds-inline); justify-content: space-between; }
+.le-revision-history-head > div { display: grid; gap: var(--ds-inline-tight); min-width: 0; }
+.le-revision-history-head h3 { color: #fff5df; font-size: var(--ds-text-sm); margin: 0; text-transform: uppercase; }
+.le-revision-history-head span { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.25; }
+.le-revision-history .le-board-note { margin: 0; }
+.le-revision-history .le-board-note.is-error { color: #ffc2c7; }
+.le-revision-history-list { display: grid; gap: var(--ds-inline-tight); list-style: none; margin: 0; padding: 0; }
+.le-revision-history-list li {
+  align-items: center;
+  background: rgba(6, 19, 29, .72);
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: minmax(118px, .75fr) minmax(170px, 1fr) auto;
+  padding: 8px;
+}
+.le-revision-history-list li > div { display: grid; gap: 2px; min-width: 0; }
+.le-revision-history-list strong { color: #f3ead8; font-size: var(--ds-text-sm); line-height: 1.2; }
+.le-revision-history-list span,
+.le-revision-history-list time { color: var(--skirmish-muted); font-size: var(--ds-text-2xs); line-height: 1.25; }
+.le-revision-history-meta span,
+.le-revision-history-meta time { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) {
+  .le-revision-history-list li { align-items: stretch; grid-template-columns: minmax(0, 1fr) auto; }
+  .le-revision-history-meta { grid-column: 1; }
+  .le-revision-history-list li > button { grid-column: 2; grid-row: 1 / span 2; }
+}
 /* Drawn text box → kit line frame (panel-line over its own navy surface, ADR-0032/0034) +
    role-token inset + ladder gaps (ADR-0055/0056). */
 .le-material-values {
@@ -17251,6 +17288,65 @@ button.tileset-relationship-cell {
 .le-fence-review-banner span {
   color: #8faac7;
   font-size: 10px;
+}
+
+.le-persistence-emergency {
+  align-items: center;
+  background: rgba(42, 13, 18, 0.97);
+  border: 2px solid rgba(255, 105, 120, 0.9);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.62);
+  color: #ffe8ea;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  left: 50%;
+  max-width: calc(100% - 24px);
+  padding: 10px 12px;
+  position: absolute;
+  top: 12px;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 100;
+}
+
+.le-persistence-emergency > div:first-child {
+  display: grid;
+  gap: 3px;
+  max-width: 620px;
+}
+
+.le-persistence-emergency strong {
+  color: #fff4f5;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.le-persistence-emergency span {
+  color: #ffcbd0;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.le-persistence-emergency-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 760px) {
+  .le-persistence-emergency {
+    align-items: stretch;
+    display: grid;
+    width: calc(100% - 24px);
+  }
+
+  .le-persistence-emergency-actions {
+    flex-wrap: wrap;
+  }
 }
 
 .le-fence-artwork-cycle {

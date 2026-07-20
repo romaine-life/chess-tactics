@@ -16,6 +16,7 @@ Durable document and live-content tables are created by the inline migrations in
 | `levels` | per signed-in owner (`PK (owner_email, id)`) | `/api/levels`, `/api/levels/:id` | sign-in required |
 | `campaign_workspaces` | one row per signed-in owner | `/api/campaign-workspace` | sign-in required |
 | `level_working_copies` | one durable working copy per signed-in owner + workspace + level | `/api/editor-documents` | sign-in required; official workspaces also require admin |
+| `level_working_copy_revisions` | retained checkpoints for each durable working copy | `/api/editor-documents/:id/revisions` | owner only; restore requires current CAS revision |
 | `campaigns` | per signed-in owner (`PK (owner_email, id)`) | `/api/campaigns`, `/api/campaigns/:id`, `/api/campaigns/:id/levels` | sign-in required |
 | `design_portfolios` | global, by id | `/api/design-portfolios/:id` | GET public, PUT requires sign-in (designer) |
 | `prop_seats` | one complete global prop geometry/tuning document (`default`) | `/api/prop-seats/default` | GET public, PUT requires admin |
@@ -97,14 +98,34 @@ overwriting the external canonical change. Discard deliberately adopts the
 current canonical Level and resets the baseline. Autosave changes only the
 working body and revision, never its canonical baseline (and keeps the document
 clean when the submitted body exactly matches that baseline).
+The client compares cloud content through the editor's canonical projection before deciding an
+autosave is needed. Merely opening a valid stored Level whose serialization normalizes differently
+must not dirty the working copy or create a new revision.
 
 Browser storage is only a crash/offline fallback. Signed-in entries are keyed and
 payload-validated by account plus opaque document id and remember the cloud revision
 they observed, so switching accounts or replaying an old Test-return URL cannot upload
 one document's recovery into another. Test-return board parameters are removed from the
 address after that exact snapshot is acknowledged; they are not a second document store.
+An autosave error or conflict interrupts every Level Editor layer. When an older browser
+recovery is preserved, **Keep recovered work** clears the recovery marker only if that scoped
+entry still matches the exact cloud revision and signature on screen, then resumes the ordinary
+compare-and-swap autosave. A concurrent newer server write conflicts again rather than being
+overwritten; choosing the recovery does not Save or publish it.
+
+Each acknowledged working-copy update also records the resulting complete Level in
+`level_working_copy_revisions` inside the same transaction. Retention keeps the newest 200
+revisions, one newest checkpoint per UTC day, and every explicit lifecycle boundary. The owner-only
+history endpoint returns body-free summaries. Restore requires both the current document revision
+and a retained target revision; it applies that body as a new working-copy revision, preserving the
+version it replaced and leaving the canonical saved Level unchanged. ADR-0132 direct-review admins
+cannot list or restore another owner's history. The editor can download its exact scoped browser
+recovery and current cloud working copy as JSON without mutating either side.
 
 - `PUT /api/editor-documents/:documentId` updates only the working copy.
+- `GET /api/editor-documents/:documentId/revisions` lists retained body-free checkpoints.
+- `POST /api/editor-documents/:documentId/revisions/restore` CAS-restores a retained body as a new
+  private working-copy revision; it never promotes that body to the canonical workspace.
 - `POST /api/editor-documents/:documentId/save` transactionally promotes the
   working copy (or the exact Level supplied with the Save click) into the
   account campaign workspace; admins may explicitly target an official

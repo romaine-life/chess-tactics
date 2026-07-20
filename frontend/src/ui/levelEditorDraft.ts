@@ -47,6 +47,11 @@ export interface ScopedLevelEditorDraftRebase {
   levelName: string;
 }
 
+export interface ScopedLevelEditorRecoveryConflictAcknowledgement {
+  expectedDocumentRevision: number;
+  expectedCloudSignature: string;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -275,5 +280,29 @@ export function rebaseScopedLevelEditorDraft(
     documentRevision: rebase.nextDocumentRevision,
     cloudSignature: rebase.nextCloudSignature,
     levelName: rebase.levelName,
+  });
+}
+
+/**
+ * Clear a preserved recovery conflict only after the owner explicitly chooses the browser copy
+ * and that copy proves it is already bound to the cloud document revision currently on screen.
+ * The next normal autosave may then compare-and-swap this exact recovery over that revision.
+ */
+export function acknowledgeScopedLevelEditorRecoveryConflict(
+  identity: ScopedLevelEditorDraftIdentity,
+  acknowledgement: ScopedLevelEditorRecoveryConflictAcknowledgement,
+): boolean {
+  const draft = readScopedLevelEditorDraft(identity);
+  if (
+    !draft
+    || draft.recoveryConflict !== true
+    || draft.documentRevision !== acknowledgement.expectedDocumentRevision
+    || draft.cloudSignature !== acknowledgement.expectedCloudSignature
+  ) return false;
+
+  return writeScopedLevelEditorDraft(identity, {
+    ...draft,
+    savedAt: Date.now(),
+    recoveryConflict: undefined,
   });
 }

@@ -95,10 +95,12 @@ import {
   readVictoryRulesParam,
 } from './playtestRoute';
 import {
+  acknowledgeScopedLevelEditorRecoveryConflict,
   clearLevelEditorDraft,
   levelEditorDraftKey,
   readLevelEditorDraft,
   readScopedLevelEditorDraft,
+  serializeLevelEditorDraft,
   scopedLevelEditorDraftKey,
   writeLevelEditorDraft,
   writeScopedLevelEditorDraft,
@@ -181,10 +183,13 @@ import {
   discardEditorDocumentChanges,
   isEditorDocumentBaselineConflict,
   isEditorDocumentConflict,
+  listEditorDocumentRevisions,
   loadEditorDocument,
   resolveEditorDocument,
+  restoreEditorDocumentRevision,
   saveEditorDocument,
   type EditorDocument,
+  type EditorDocumentRevisionSummary,
 } from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
 import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
@@ -1479,6 +1484,35 @@ const levelFromDraft = (draft: LevelEditorDraft, base: Level): Level => editorBo
   previousTerrain: base.layers.terrain,
 });
 
+const EDITOR_REVISION_REASON_LABELS: Record<EditorDocumentRevisionSummary['reason'], string> = {
+  migration: 'History enabled',
+  resolve: 'Working copy created',
+  create: 'New level created',
+  autosave: 'Autosave',
+  save: 'Saved position',
+  discard: 'Discarded to saved position',
+  restore: 'Restored revision',
+  'canonical-refresh': 'Updated from saved position',
+};
+
+function downloadJsonArtifact(fileName: string, value: unknown): void {
+  const blob = new Blob([`${JSON.stringify(value, null, 2)}\n`], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function editorRecoveryFileStem(levelName: string, documentId: string): string {
+  const safeName = levelName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'level';
+  const safeDocument = documentId.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return `${safeName}-${safeDocument}`;
+}
+
 // The undo/redo history signature of an editor board (boardCode is deterministic + lossless, so two
 // boards encode identically iff equal); plus a deep clone + the history-stack depth cap.
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
@@ -2398,6 +2432,10 @@ export function LevelEditor(): ReactElement {
   const [cloudSaveState, setCloudSaveState] = useState<'loading' | 'local' | 'pending' | 'saving' | 'saved' | 'error' | 'conflict'>('loading');
   const [cloudSaveDetail, setCloudSaveDetail] = useState<string | null>(null);
   const [localBackupAvailable, setLocalBackupAvailable] = useState<boolean | null>(null);
+  const [revisionHistory, setRevisionHistory] = useState<EditorDocumentRevisionSummary[]>([]);
+  const [revisionHistoryState, setRevisionHistoryState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [revisionHistoryDetail, setRevisionHistoryDetail] = useState<string | null>(null);
+  const [revisionHistoryRefresh, setRevisionHistoryRefresh] = useState(0);
   const [authReachable, setAuthReachable] = useState<boolean | null>(null);
   const [documentLoadAttempt, setDocumentLoadAttempt] = useState(0);
   const [userWorkspaceHydration, setUserWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
@@ -2876,48 +2914,6 @@ export function LevelEditor(): ReactElement {
     seedSkewRef.current = mode === 'seed' && guarded.skippedAuthored ? seed : null;
   };
 
-  const applyLevelDocument = (level: Level, options: { editingId?: string; clean?: boolean; seed?: boolean } = {}): void => {
-    const board = levelToEditorBoard(level);
-    setBoardCols(board.cols);
-    setBoardRows(board.rows);
-    setDecorativeApron(board.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 });
-    setDecorativeCells(board.decorativeCells ?? {});
-    setDecorativeFootprint(board.decorativeFootprint ?? []);
-    setDecorativeFeatures(board.decorativeFeatures ?? {});
-    setDecorativeFences(board.decorativeFences ?? {});
-    setDecorativeFencePosts(board.decorativeFencePosts ?? {});
-    setDecorativeWalls(board.decorativeWalls ?? {});
-    setBoardCells(board.cells);
-    setBoardSurface(board.surface);
-    setBoardMacroTiles(validMacroTilesForBoard(board));
-    setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
-    setBoardDoodads(board.doodads);
-    setBoardProps(board.props);
-    setBoardCover(board.cover);
-    setBoardCoverTypes(board.coverTypes ?? {});
-    setBoardFeatures(board.features);
-    setBoardFences(board.fences ?? {});
-    setBoardFencePosts(board.fencePosts ?? {});
-    setBoardWalls(perimeterWalls(board.walls, board.cols, board.rows));
-    setBoardWallArt(perimeterWallArt(board.wallArt, board.cols, board.rows));
-    setFeatureCuts(board.featureCuts);
-    setFeatureExits(board.featureExits);
-    setBoardZoneEntries(zoneEntriesForBoard(board));
-    setGeneratedRegions(board.generatedRegions ?? []);
-    setActiveGeneratedRegionId(null);
-    setRegionSelection(new Set());
-    setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
-    setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
-    setUndoStack([]);
-    setRedoStack([]);
-    applyLevelRules(level, options.seed ? 'seed' : 'load');
-    setEditingId(options.editingId);
-    if (options.clean !== false) {
-      setSavedSig(normalizedLevelEditorSignature(level));
-      needsBaselineRef.current = true;
-    }
-  };
-
   useEffect(() => {
     if (quietDraftRestore) return;
     if (!localDraft || (routeParams.levelId && !loadedBoard)) return;
@@ -2977,6 +2973,22 @@ export function LevelEditor(): ReactElement {
     }
     setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
     setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
+  };
+  // A Level load and an undo/import restore must hydrate the exact same complete EditorBoard.
+  // Keeping a second list of board setters previously omitted subterrain and turned opening a
+  // document into a destructive autosave. The one primitive above is the hydration authority.
+  const applyLevelDocument = (level: Level, options: { editingId?: string; clean?: boolean; seed?: boolean } = {}): void => {
+    applyEditorBoard(levelToEditorBoard(level));
+    setActiveGeneratedRegionId(null);
+    setRegionSelection(new Set());
+    setUndoStack([]);
+    setRedoStack([]);
+    applyLevelRules(level, options.seed ? 'seed' : 'load');
+    setEditingId(options.editingId);
+    if (options.clean !== false) {
+      setSavedSig(normalizedLevelEditorSignature(level));
+      needsBaselineRef.current = true;
+    }
   };
   const commitEditorBoard = (next: EditorBoard, selection?: { x: number; y: number } | null): boolean => {
     const current = currentEditorBoardRef.current;
@@ -4092,7 +4104,7 @@ export function LevelEditor(): ReactElement {
     : savedSig !== null
     ? currentSig !== savedSig
     : editorDocument
-    ? editorDocument.dirty || currentSig !== levelEditorLevelSignature(editorDocument.level)
+    ? editorDocument.dirty || currentSig !== normalizedLevelEditorSignature(editorDocument.level)
     : currentSig !== (standaloneBaselineSigRef.current ?? currentSig);
   const campaignAssignmentDirty = campaignAssignmentHydrated && campaignAssignmentId !== savedCampaignAssignmentId;
   const dirty = levelDirty || campaignAssignmentDirty;
@@ -4381,7 +4393,11 @@ export function LevelEditor(): ReactElement {
           recoveredCampaignAssignmentRef.current = true;
           setCampaignAssignmentId(recoveryDraft.campaignId ?? '');
         }
-        const documentSig = levelEditorLevelSignature(doc.level);
+        // The editor works on a projected Level. Compare cloud content through that same
+        // projection so merely opening a legacy or non-normalized saved Level cannot manufacture
+        // a different working-copy revision.
+        const documentSourceSig = levelEditorLevelSignature(doc.level);
+        const documentSig = normalizedLevelEditorSignature(doc.level);
         const localLevel = recoveryDraft
           ? levelFromDraft(recoveryDraft, doc.level)
           : sessionRecoveryLevel
@@ -4412,6 +4428,7 @@ export function LevelEditor(): ReactElement {
           localDocumentRevision: scopedDraft.documentRevision,
           documentRevision: doc.revision,
           localCloudSignature: scopedDraft.cloudSignature,
+          documentSourceSignature: documentSourceSig,
           localRecoveryConflict: scopedDraft.recoveryConflict,
         }));
         const localDiverged = Boolean(localLevel && localSig !== documentSig);
@@ -4486,7 +4503,7 @@ export function LevelEditor(): ReactElement {
         setCloudSaveDetail(recoveryConflict
           ? doc.baseline_conflict
             ? 'The saved level changed after this working copy branched. Your progress is preserved; autosave is paused until you discard or resolve it.'
-            : 'This browser recovery was based on an older cloud revision. It is preserved here, and autosave is paused.'
+            : 'This browser recovery was based on an older cloud revision. Both versions are preserved; choose which one to keep.'
           : null);
         setEditorReady(true);
         reportStatus(
@@ -4569,6 +4586,26 @@ export function LevelEditor(): ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentLoadAttempt]);
 
+  useEffect(() => {
+    if (layer !== 'status' || !editorDocument || !me?.signed_in) return undefined;
+    let active = true;
+    setRevisionHistoryState('loading');
+    setRevisionHistoryDetail(null);
+    void listEditorDocumentRevisions(editorDocument.document_id, { limit: 50 })
+      .then((result) => {
+        if (!active) return;
+        setRevisionHistory(result.revisions);
+        setRevisionHistoryState('ready');
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setRevisionHistory([]);
+        setRevisionHistoryState('error');
+        setRevisionHistoryDetail(error instanceof Error ? error.message : String(error));
+      });
+    return () => { active = false; };
+  }, [editorDocument?.document_id, editorDocument?.revision, layer, me?.signed_in, revisionHistoryRefresh]);
+
   const retryCloudDocument = (): void => {
     if (editorDocument) {
       setCloudSaveState((state) => state === 'error' ? 'pending' : state);
@@ -4584,6 +4621,159 @@ export function LevelEditor(): ReactElement {
     setCloudSaveState('loading');
     setCloudSaveDetail(null);
     setDocumentLoadAttempt((attempt) => attempt + 1);
+  };
+
+  const keepRecoveredWorkingCopy = (): void => {
+    if (!editorDocument || documentConflictKindRef.current !== 'recovery') return;
+    const ownerEmail = me?.email?.trim().toLowerCase() ?? '';
+    const documentRevision = documentRevisionRef.current;
+    const cloudSignature = lastCloudSyncedSigRef.current;
+    if (!ownerEmail || documentRevision === null || !cloudSignature) {
+      reportStatus('Recovery could not resume autosave.', 'error', 'The cloud document identity is incomplete; the recovered editor remains open.');
+      return;
+    }
+    const acknowledged = acknowledgeScopedLevelEditorRecoveryConflict({
+      documentId: editorDocument.document_id,
+      ownerEmail,
+    }, {
+      expectedDocumentRevision: documentRevision,
+      expectedCloudSignature: cloudSignature,
+    });
+    if (!acknowledged) {
+      reportStatus('Recovery could not resume autosave.', 'error', 'The browser copy no longer matches the cloud revision on screen. Nothing was overwritten.');
+      return;
+    }
+    documentConflictRef.current = false;
+    documentConflictKindRef.current = null;
+    setLocalBackupAvailable(true);
+    setCloudSaveDetail('Writing the recovered version to your cloud working copy…');
+    setCloudSaveState('pending');
+    reportStatus('Recovered work selected.', 'success', 'Autosave is resuming; the saved campaign position is unchanged until you choose Save.');
+  };
+
+  const downloadBrowserRecovery = (): void => {
+    if (!editorDocument) {
+      reportStatus('Browser recovery export is unavailable.', 'warning', 'The cloud document identity has not loaded yet.');
+      return;
+    }
+    const ownerEmail = me?.email?.trim().toLowerCase() ?? '';
+    const draft = readScopedLevelEditorDraft({ documentId: editorDocument.document_id, ownerEmail });
+    if (!draft) {
+      reportStatus('Browser recovery export is unavailable.', 'warning', 'No valid browser recovery exists for this account and document.');
+      return;
+    }
+    const storedDraft = JSON.parse(serializeLevelEditorDraft(draft)) as unknown;
+    const stem = editorRecoveryFileStem(draft.levelName, editorDocument.document_id);
+    downloadJsonArtifact(`${stem}-browser-recovery.json`, {
+      schema_version: 1,
+      kind: 'level-editor-browser-recovery',
+      exported_at: new Date().toISOString(),
+      origin: window.location.origin,
+      draft: storedDraft,
+    });
+    reportStatus('Browser recovery downloaded.', 'success', 'The file contains the exact browser board and its cloud revision binding.');
+  };
+
+  const downloadCloudWorkingCopy = (): void => {
+    if (!editorDocument) {
+      reportStatus('Cloud working-copy export is unavailable.', 'warning', 'Reconnect and load the document first.');
+      return;
+    }
+    const stem = editorRecoveryFileStem(editorDocument.level.name, editorDocument.document_id);
+    downloadJsonArtifact(`${stem}-cloud-revision-${editorDocument.revision}.json`, {
+      schema_version: 1,
+      kind: 'level-editor-cloud-working-copy',
+      exported_at: new Date().toISOString(),
+      document: editorDocument,
+    });
+    reportStatus('Cloud working copy downloaded.', 'success', `Revision ${editorDocument.revision} was exported without publishing it.`);
+  };
+
+  const restoreWorkingCopyRevision = async (target: EditorDocumentRevisionSummary): Promise<void> => {
+    if (!editorDocument || !me?.signed_in || saving) return;
+    if (documentConflictRef.current || cloudSaveState === 'error') {
+      reportStatus(
+        'Revision restore is paused.',
+        'warning',
+        'Resolve the current persistence interruption first. Download the browser and cloud copies before choosing either side.',
+      );
+      return;
+    }
+    if (!(await ask({
+      title: `Restore revision ${target.revision}?`,
+      message: `Restore ${target.name || 'this level'} from ${target.created_at ? new Date(target.created_at).toLocaleString() : 'the selected checkpoint'} as a new cloud working-copy revision? The current cloud version remains in history.`,
+      confirmLabel: 'Restore revision',
+      cancelLabel: 'Keep current',
+    }))) return;
+
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    setSaving(true);
+    try {
+      if (autosavePromiseRef.current) await autosavePromiseRef.current;
+      if (documentConflictRef.current) throw new Error('The working copy changed before the restore began.');
+      let revision = documentRevisionRef.current;
+      if (revision === null) throw new Error('working copy revision unavailable');
+
+      // Preserve any edit still inside the former debounce window as its own server
+      // revision before applying history. The restore can therefore never erase the
+      // current editor merely because the user clicked during an autosave delay.
+      if (lastCloudSyncedSigRef.current !== currentSigRef.current) {
+        const synced = await autosaveEditorDocument(
+          editorDocument.document_id,
+          currentCandidateRef.current,
+          revision,
+        );
+        revision = synced.revision;
+        documentRevisionRef.current = revision;
+        lastCloudSyncedSigRef.current = currentSigRef.current;
+        setEditorDocument(synced);
+        if (synced.baseline_conflict) {
+          documentConflictRef.current = true;
+          documentConflictKindRef.current = 'baseline';
+          setCloudSaveState('conflict');
+          setCloudSaveDetail('The saved level changed outside this working copy. Revision restore remains paused.');
+          return;
+        }
+      }
+
+      const doc = await restoreEditorDocumentRevision(
+        editorDocument.document_id,
+        revision,
+        target.revision,
+      );
+      documentRevisionRef.current = doc.revision;
+      documentConflictRef.current = false;
+      documentConflictKindRef.current = null;
+      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(doc.level);
+      setEditorDocument(doc);
+      setCloudSaveState('saved');
+      setCloudSaveDetail(null);
+      const canonical = useCampaigns.getState().levels[doc.level_id];
+      if (canonical) setSavedSig(normalizedLevelEditorSignature(canonical));
+      else if (!doc.dirty && doc.has_saved_baseline) setSavedSig(normalizedLevelEditorSignature(doc.level));
+      applyLevelDocument(doc.level, { editingId: doc.level_id, clean: false, seed: true });
+      setRevisionHistoryRefresh((value) => value + 1);
+      reportStatus(
+        `Restored revision ${target.revision}.`,
+        'success',
+        `It is now cloud working-copy revision ${doc.revision}. The canonical saved position was not changed.`,
+      );
+    } catch (error) {
+      if (isEditorDocumentConflict(error)) {
+        documentRevisionRef.current = error.document.revision;
+        documentConflictRef.current = true;
+        documentConflictKindRef.current = isEditorDocumentBaselineConflict(error) ? 'baseline' : 'revision';
+        setEditorDocument(error.document);
+        setCloudSaveState('conflict');
+        setCloudSaveDetail('The cloud working copy advanced before the revision restore. Nothing was overwritten.');
+      }
+      reportStatus('Revision restore failed.', 'error', error instanceof Error ? error.message : String(error));
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Debounced, serialized compare-and-swap autosave. A conflict never overwrites either side:
@@ -4737,7 +4927,7 @@ export function LevelEditor(): ReactElement {
       departureFlushSigRef.current = null;
       void loadEditorDocument(doc.document_id)
         .then((serverDocument) => {
-          const serverSignature = levelEditorLevelSignature(serverDocument.level);
+          const serverSignature = normalizedLevelEditorSignature(serverDocument.level);
           const liveSignature = currentSigRef.current;
           documentRevisionRef.current = serverDocument.revision;
           lastCloudSyncedSigRef.current = serverSignature;
@@ -4949,9 +5139,9 @@ export function LevelEditor(): ReactElement {
       documentRevisionRef.current = doc.revision;
       documentConflictRef.current = false;
       documentConflictKindRef.current = null;
-      lastCloudSyncedSigRef.current = levelEditorLevelSignature(doc.level);
+      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(doc.level);
       setEditorDocument(doc);
-      const acknowledgedSig = levelEditorLevelSignature(doc.level);
+      const acknowledgedSig = normalizedLevelEditorSignature(doc.level);
       const stillMatchesAcknowledgement = currentSigRef.current === acknowledgedSig;
       setCloudSaveState(stillMatchesAcknowledgement ? 'saved' : 'pending');
       setCloudSaveDetail(null);
@@ -5072,7 +5262,7 @@ export function LevelEditor(): ReactElement {
       documentRevisionRef.current = doc.revision;
       documentConflictRef.current = false;
       documentConflictKindRef.current = null;
-      lastCloudSyncedSigRef.current = levelEditorLevelSignature(doc.level);
+      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(doc.level);
       setEditorDocument(doc);
       setCloudSaveState('saved');
       setCloudSaveDetail(null);
@@ -5142,7 +5332,7 @@ export function LevelEditor(): ReactElement {
       documentRevisionRef.current = doc.revision;
       documentConflictRef.current = false;
       documentConflictKindRef.current = null;
-      lastCloudSyncedSigRef.current = levelEditorLevelSignature(doc.level);
+      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(doc.level);
       setEditorDocument(doc);
       setCloudSaveState('saved');
       setCloudSaveDetail(null);
@@ -5666,6 +5856,8 @@ export function LevelEditor(): ReactElement {
     : cloudSaveState === 'conflict'
     ? 'Autosave paused'
     : 'Cloud autosave interrupted';
+  const recoveryConflictVisible = cloudSaveState === 'conflict' && documentConflictKindRef.current === 'recovery';
+  const persistenceEmergencyVisible = cloudSaveState === 'conflict' || cloudSaveState === 'error';
   const hasDiscardableChanges = Boolean(
     editorDocument?.has_saved_baseline
     && (dirty || documentConflictRef.current),
@@ -5769,6 +5961,54 @@ export function LevelEditor(): ReactElement {
         /> : null}
 
         <div className="skirmish-field" inert={!editorReady || saving ? true : undefined} aria-busy={!editorReady || saving || undefined}>
+          {persistenceEmergencyVisible ? (
+            <section className="le-persistence-emergency" data-testid="le-persistence-emergency" role="alert">
+              <div>
+                <strong>{recoveryConflictVisible ? 'Recovered work needs your decision' : cloudSaveState === 'error' ? 'Autosave is interrupted' : 'Autosave is paused'}</strong>
+                <span>{cloudSaveDetail ?? 'Your current editor remains open, but progress is not being written to the cloud.'}</span>
+              </div>
+              <div className="le-persistence-emergency-actions">
+                {recoveryConflictVisible ? (
+                  <button
+                    type="button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
+                    data-testid="le-keep-recovered-work"
+                    onClick={keepRecoveredWorkingCopy}
+                  >Keep recovered work</button>
+                ) : null}
+                {cloudSaveState === 'error' ? (
+                  <button
+                    type="button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
+                    data-testid="le-retry-cloud-sync-banner"
+                    onClick={retryCloudDocument}
+                  >Retry autosave</button>
+                ) : null}
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  data-testid="le-download-browser-recovery-banner"
+                  onClick={downloadBrowserRecovery}
+                >Download browser copy</button>
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  data-testid="le-download-cloud-copy-banner"
+                  onClick={downloadCloudWorkingCopy}
+                >Download cloud copy</button>
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={() => selectLayer('status')}
+                >Review status</button>
+              </div>
+            </section>
+          ) : null}
           <div className="skirmish-board-frame">
             {activeFenceArtwork ? (
               <div className="le-fence-review-banner" data-testid="fence-candidate-editor-review">
@@ -6086,6 +6326,36 @@ export function LevelEditor(): ReactElement {
                   onClick={retryCloudDocument}
                 >Retry cloud sync</button>
               ) : null}
+              {recoveryConflictVisible ? (
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
+                  data-testid="le-keep-recovered-work-status"
+                  disabled={saving}
+                  onClick={keepRecoveredWorkingCopy}
+                >Keep recovered work</button>
+              ) : null}
+              {editorDocument ? (
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  data-testid="le-download-browser-recovery"
+                  disabled={saving}
+                  onClick={downloadBrowserRecovery}
+                >Download browser copy</button>
+              ) : null}
+              {editorDocument ? (
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  data-testid="le-download-cloud-copy"
+                  disabled={saving}
+                  onClick={downloadCloudWorkingCopy}
+                >Download cloud copy</button>
+              ) : null}
               {editorDocument?.has_saved_baseline ? (
                 <button
                   type="button"
@@ -6107,6 +6377,67 @@ export function LevelEditor(): ReactElement {
                 onClick={() => { if (canSave || !me?.signed_in) void saveLevel(); else explainBlockedSave(); }}
               >{saveButtonLabel}</button>
             </div>
+            {editorDocument ? (
+              <section className="le-revision-history" aria-labelledby="le-revision-history-title">
+                <div className="le-revision-history-head">
+                  <div>
+                    <h3 id="le-revision-history-title">Working-copy history</h3>
+                    <span>Restore creates a new private working revision. It never publishes.</span>
+                  </div>
+                  <button
+                    type="button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                    disabled={revisionHistoryState === 'loading' || saving}
+                    onClick={() => setRevisionHistoryRefresh((value) => value + 1)}
+                  >Refresh</button>
+                </div>
+                {revisionHistoryState === 'loading' || revisionHistoryState === 'idle' ? (
+                  <p className="le-board-note">Loading retained revisions…</p>
+                ) : revisionHistoryState === 'error' ? (
+                  <p className="le-board-note is-error">History is unavailable. {revisionHistoryDetail}</p>
+                ) : revisionHistory.length ? (
+                  <ol className="le-revision-history-list">
+                    {revisionHistory.map((entry) => {
+                      const isCurrentRevision = entry.revision === editorDocument.revision;
+                      const restoreBlocked = saving || isCurrentRevision || documentConflictRef.current || cloudSaveState === 'error';
+                      return (
+                        <li key={entry.revision} data-testid={`le-revision-${entry.revision}`}>
+                          <div>
+                            <strong>Revision {entry.revision}</strong>
+                            <span>{EDITOR_REVISION_REASON_LABELS[entry.reason]}</span>
+                            {entry.restored_from_revision !== null ? <span>from revision {entry.restored_from_revision}</span> : null}
+                          </div>
+                          <div className="le-revision-history-meta">
+                            <span>{entry.name || 'Untitled level'}</span>
+                            <time dateTime={entry.created_at ?? undefined}>
+                              {entry.created_at ? new Date(entry.created_at).toLocaleString() : 'Time unavailable'}
+                            </time>
+                            <span>{Math.max(1, Math.ceil(entry.body_bytes / 1024))} KB</span>
+                          </div>
+                          <button
+                            type="button"
+                            data-chrome-unit="inner-text-button"
+                            className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                            disabled={restoreBlocked}
+                            title={
+                              isCurrentRevision
+                                ? 'This is the current cloud working revision.'
+                                : documentConflictRef.current || cloudSaveState === 'error'
+                                ? 'Resolve the persistence interruption before restoring history.'
+                                : `Restore revision ${entry.revision} as a new working copy revision.`
+                            }
+                            onClick={() => void restoreWorkingCopyRevision(entry)}
+                          >{isCurrentRevision ? 'Current' : 'Restore'}</button>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : (
+                  <p className="le-board-note">No retained revisions are available yet.</p>
+                )}
+              </section>
+            ) : null}
             <div className="le-material-values" aria-label="Team material point values">
               <div className="le-material-values-head">
                 <strong>Material</strong>

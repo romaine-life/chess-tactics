@@ -9,7 +9,6 @@ export interface SurfaceAcceptanceGroup {
   groupId: string;
   requiredSlots: string[];
 }
-
 export interface SurfaceReviewBatch {
   versions: AdminLiveMediaVersion[];
   groups: SurfaceAcceptanceGroup[];
@@ -214,4 +213,3 @@ export function surfaceReviewProofEvidence({
     })),
   };
 }
-

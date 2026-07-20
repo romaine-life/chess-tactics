@@ -54,6 +54,32 @@ export interface EditorDocumentListResult {
   next_offset: number | null;
 }
 
+export type EditorDocumentRevisionReason =
+  | 'migration'
+  | 'resolve'
+  | 'create'
+  | 'autosave'
+  | 'save'
+  | 'discard'
+  | 'restore'
+  | 'canonical-refresh';
+
+export interface EditorDocumentRevisionSummary {
+  revision: number;
+  saved_revision: number;
+  name: string;
+  reason: EditorDocumentRevisionReason;
+  restored_from_revision: number | null;
+  body_hash: string;
+  body_bytes: number;
+  created_at: string | null;
+}
+
+export interface EditorDocumentRevisionListResult {
+  revisions: EditorDocumentRevisionSummary[];
+  next_before: number | null;
+}
+
 interface EditorDocumentResponse {
   document: EditorDocument;
   workspace_revision?: unknown;
@@ -226,6 +252,43 @@ export async function listEditorDocuments(options: {
       ? body.next_offset
       : null,
   };
+}
+
+/** List bounded, body-free checkpoints for one owner-scoped working copy. */
+export async function listEditorDocumentRevisions(
+  documentId: string,
+  options: { limit?: number; before?: number } = {},
+): Promise<EditorDocumentRevisionListResult> {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) params.set('limit', String(options.limit));
+  if (options.before !== undefined) params.set('before', String(options.before));
+  const query = params.toString();
+  const response = await editorDocumentFetch(`${documentUrl(documentId)}/revisions${query ? `?${query}` : ''}`, {
+    method: 'GET',
+    credentials: 'include',
+    cache: 'no-cache',
+  });
+  if (!response.ok) throw await HttpError.fromResponse('list-editor-document-revisions', response);
+  const body = await response.json() as Partial<EditorDocumentRevisionListResult>;
+  return {
+    revisions: Array.isArray(body.revisions) ? body.revisions : [],
+    next_before: typeof body.next_before === 'number' && Number.isSafeInteger(body.next_before)
+      ? body.next_before
+      : null,
+  };
+}
+
+/** Restore historical content as a new CAS-protected working-copy revision. */
+export function restoreEditorDocumentRevision(
+  documentId: string,
+  expectedRevision: number,
+  targetRevision: number,
+): Promise<EditorDocument> {
+  return postDocument(
+    'restore-editor-document-revision',
+    `${documentUrl(documentId)}/revisions/restore`,
+    { revision: expectedRevision, target_revision: targetRevision },
+  );
 }
 
 /** Persist a document using compare-and-swap against the observed revision. */
