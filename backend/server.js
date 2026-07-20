@@ -1016,6 +1016,9 @@ let dbReady = false;
 let schemaReadinessPromise = null;
 const REQUIRED_SCHEMA_MIGRATION_VERSIONS = MIGRATIONS.map((migration) => migration.version);
 const REQUIRED_SCHEMA_RELATIONS = ['level_thumbnail_derivatives'];
+const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
+  ['level_thumbnail_derivatives', 22],
+]);
 
 function buildPool() {
   if (databaseUrl) {
@@ -1082,6 +1085,7 @@ async function runMigrations() {
           throw error;
         }
       }
+      await repairRequiredSchemaRelations(client);
       await checkRequiredSchemaRelations(client);
     } finally {
       await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_ADVISORY_LOCK_KEY]).catch(() => {});
@@ -1100,14 +1104,31 @@ class SchemaMigrationRequiredError extends Error {
   }
 }
 
-async function checkRequiredSchemaRelations(client) {
+async function missingRequiredSchemaRelations(client) {
   const { rows } = await client.query(
     `SELECT relation
        FROM unnest($1::text[]) AS required(relation)
       WHERE to_regclass('public.' || relation) IS NULL`,
     [REQUIRED_SCHEMA_RELATIONS],
   );
-  const missing = rows.map((row) => row.relation);
+  return rows.map((row) => row.relation);
+}
+
+async function repairRequiredSchemaRelations(client) {
+  const missing = await missingRequiredSchemaRelations(client);
+  for (const relation of missing) {
+    const migrationVersion = REQUIRED_SCHEMA_REPAIR_MIGRATIONS.get(relation);
+    const migration = MIGRATIONS.find((candidate) => candidate.version === migrationVersion);
+    if (!migration) throw new Error(`required schema repair migration is unavailable for ${relation}`);
+    // Numeric migration history can outlive an earlier definition of the same
+    // version. Required runtime state is therefore repaired from its immutable,
+    // idempotent DDL while the migration advisory lock is held.
+    await client.query(migration.sql);
+  }
+}
+
+async function checkRequiredSchemaRelations(client) {
+  const missing = await missingRequiredSchemaRelations(client);
   if (missing.length) {
     throw new SchemaMigrationRequiredError(`required schema relations missing: ${missing.join(', ')}`, {
       missing_relations: missing,
