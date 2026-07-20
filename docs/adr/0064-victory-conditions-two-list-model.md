@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: "accepted; Events presentation clause superseded by ADR-0144"
 date: 2026-07-03
 deciders: Nelson, Claude
+partially_superseded_by: "[ADR-0144](0144-level-editor-events-use-the-shell-workspace.md)"
 ---
 
 # ADR-0064: Victory conditions are an if-then rule model

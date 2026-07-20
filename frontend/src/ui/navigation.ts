@@ -99,8 +99,8 @@ export function navigateApp(href: string, options: { replace?: boolean; scroll?:
     })) return false;
 
     const method = options.replace ? 'replaceState' : 'pushState';
-    // Query-only editor rewrites must preserve same-document history sentinels (for example the
-    // open Rules surface). A real pushed destination starts with fresh state.
+    // Query-only editor rewrites must preserve same-document history provenance (for example an
+    // app-created Events entry). A real pushed destination starts with fresh state.
     const state = options.replace && window.history.state && typeof window.history.state === 'object'
       ? window.history.state
       : {};

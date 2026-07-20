@@ -7,9 +7,33 @@ import { ChromeDivider, InnerChromeBox } from './ChromeBox';
 export type HouseSelectOption<TValue extends string = string> = {
   value: TValue;
   label: ReactNode;
+  /** Optional semantic menu group. Contiguous options with the same group share one heading. */
+  group?: string;
   disabled?: boolean;
   title?: string;
 };
+
+type IndexedHouseSelectOption<TValue extends string> = {
+  index: number;
+  option: HouseSelectOption<TValue>;
+};
+
+type HouseSelectOptionSection<TValue extends string> = {
+  group?: string;
+  options: IndexedHouseSelectOption<TValue>[];
+};
+
+function sectionOptions<TValue extends string>(options: readonly HouseSelectOption<TValue>[]): HouseSelectOptionSection<TValue>[] {
+  return options.reduce<HouseSelectOptionSection<TValue>[]>((sections, option, index) => {
+    const current = sections.at(-1);
+    if (!current || current.group !== option.group) {
+      sections.push({ group: option.group, options: [{ option, index }] });
+    } else {
+      current.options.push({ option, index });
+    }
+    return sections;
+  }, []);
+}
 
 type MenuBox = {
   left: number;
@@ -32,6 +56,7 @@ export function HouseSelect<TValue extends string>({
   className = '',
   disabled = false,
   title,
+  testId,
 }: {
   value: TValue;
   options: readonly HouseSelectOption<TValue>[];
@@ -40,6 +65,7 @@ export function HouseSelect<TValue extends string>({
   className?: string;
   disabled?: boolean;
   title?: string;
+  testId?: string;
 }): ReactElement {
   const id = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -58,6 +84,7 @@ export function HouseSelect<TValue extends string>({
   const selectedEnabledIndex = selectedIndex >= 0 && !options[selectedIndex]?.disabled
     ? selectedIndex
     : enabledIndexes[0] ?? -1;
+  const optionSections = useMemo(() => sectionOptions(options), [options]);
 
   const updateMenuBox = useCallback((): void => {
     const root = rootRef.current;
@@ -207,24 +234,38 @@ export function HouseSelect<TValue extends string>({
         >
           <KitScroll className="house-select-menu-scroll">
             <div className="house-select-menu-options">
-              {options.map((option, index) => (
-                <Fragment key={option.value}>
-                  {index > 0 ? <ChromeDivider role="inner" /> : null}
-                  <button
-                    type="button"
-                    id={`${id}-option-${option.value}`}
-                    className={`house-select-option ${index === activeIndex ? 'is-active' : ''}`.trim()}
-                    role="option"
-                    aria-selected={option.value === value}
-                    disabled={option.disabled}
-                    title={option.title}
-                    onMouseEnter={() => { if (!option.disabled) setActiveIndex(index); }}
-                    onClick={() => chooseIndex(index)}
-                  >
-                    {option.label}
-                  </button>
-                </Fragment>
-              ))}
+              {optionSections.map((section, sectionIndex) => {
+                const groupLabelId = `${id}-group-${sectionIndex}`;
+                const optionRows = section.options.map(({ option, index }, optionIndex) => (
+                  <Fragment key={option.value}>
+                    {optionIndex > 0 ? <ChromeDivider role="inner" /> : null}
+                    <button
+                      type="button"
+                      id={`${id}-option-${option.value}`}
+                      className={`house-select-option ${index === activeIndex ? 'is-active' : ''}`.trim()}
+                      role="option"
+                      aria-selected={option.value === value}
+                      disabled={option.disabled}
+                      title={option.title}
+                      onMouseEnter={() => { if (!option.disabled) setActiveIndex(index); }}
+                      onClick={() => chooseIndex(index)}
+                    >
+                      {option.label}
+                    </button>
+                  </Fragment>
+                ));
+                return (
+                  <Fragment key={`${section.group ?? 'ungrouped'}-${sectionIndex}`}>
+                    {sectionIndex > 0 ? <ChromeDivider role="inner" /> : null}
+                    {section.group ? (
+                      <div className="house-select-option-group" role="group" aria-labelledby={groupLabelId}>
+                        <div id={groupLabelId} className="house-select-option-group-label">{section.group}</div>
+                        <div className="house-select-option-group-items">{optionRows}</div>
+                      </div>
+                    ) : optionRows}
+                  </Fragment>
+                );
+              })}
             </div>
           </KitScroll>
         </InnerChromeBox>
@@ -239,6 +280,7 @@ export function HouseSelect<TValue extends string>({
         ref={buttonRef}
         type="button"
         className="house-select-trigger"
+        data-testid={testId}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -248,7 +290,7 @@ export function HouseSelect<TValue extends string>({
         onClick={() => { if (open) closeMenu(); else openMenu(); }}
         onKeyDown={handleKeyDown}
       >
-        {selectedOption?.label ?? options[0]?.label ?? ''}
+        {selectedOption?.label ?? ''}
       </button>
       {menu}
     </div>

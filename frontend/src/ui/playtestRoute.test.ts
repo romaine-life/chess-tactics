@@ -115,6 +115,22 @@ describe('playtest route helpers', () => {
     expect(back.searchParams.get('predrawnCorners')).toBe('1628,966,1092,13,1553,242,553,758,82,535');
   });
 
+  it('returns a play test to the exact open Events tab', () => {
+    const href = currentBoardTestHref({
+      boardCode: 'events-board',
+      levelName: 'Events board',
+      objective: 'rival-kings',
+      surviveTurns: 10,
+      editorSearch: '?document=doc-events&layer=rules&eventsEditor=1&eventsTab=other',
+      layer: 'rules',
+    });
+    const play = new URL(href, 'https://chess.test');
+    const back = new URL(play.searchParams.get('returnTo')!, 'https://chess.test');
+    expect(back.searchParams.get('eventsEditor')).toBe('1');
+    expect(back.searchParams.get('eventsTab')).toBe('other');
+    expect(back.searchParams.get('layer')).toBe('rules');
+  });
+
   it('prefers the explicit editor return over the board-only fallback', () => {
     expect(resolvePlayReturnHref({
       explicitReturnHref: '/editor/level?campaignId=c1&levelId=l1&board=current',

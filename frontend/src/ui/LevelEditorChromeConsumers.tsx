@@ -1,8 +1,8 @@
-import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { KitScroll } from './KitScroll';
 import { NavButton } from './shared/NavButton';
 import { HouseSelect } from './shared/HouseSelect';
-import { ChromeDivider, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { ChromeDivider, ChromeSurfaceFill, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import type { LevelEditorLayerKey } from './levelEditorRoute';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 
@@ -169,36 +169,41 @@ export function LevelEditorControlsPanel({
   );
 }
 
-export function LevelEditorEventsOverlay({
+export function LevelEditorEventsWorkspace({
   tab,
   onTabChange,
   onDone,
   victoryContent,
   otherContent,
-  className = '',
-  style,
 }: {
   tab: 'victory' | 'other';
   onTabChange: (tab: 'victory' | 'other') => void;
   onDone: () => void;
   victoryContent: ReactNode;
   otherContent: ReactNode;
-  className?: string;
-  style?: CSSProperties;
 }): ReactElement {
+  const initialFocusRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    initialFocusRef.current?.focus();
+  }, []);
+
   return (
-    <OuterChromeBox as="div" chromeConsumer="events-overlay" className={`le-events-overlay ${className}`.trim()} style={style} role="dialog" aria-label="Level events editor">
+    <section className="le-events-workspace" data-testid="level-events-workspace" aria-labelledby="level-events-workspace-title">
+      <ChromeSurfaceFill role="outer" className="le-events-workspace-fill" />
+      <div className="le-events-workspace-content">
         <div className="le-events-head">
-          <h2>Events</h2>
+          <h2 id="level-events-workspace-title">Events</h2>
           <div className="le-events-head-actions">
             <div className="le-seg le-events-tabs" role="tablist" aria-label="Event editor sections">
-              <button type="button" data-chrome-unit="inner-text-button" role="tab" aria-selected={tab === 'victory'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'victory' && 'active')} onClick={() => onTabChange('victory')}>Victory rules</button>
-              <button type="button" data-chrome-unit="inner-text-button" role="tab" aria-selected={tab === 'other'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'other' && 'active')} onClick={() => onTabChange('other')}>Other events</button>
+              <button ref={tab === 'victory' ? initialFocusRef : undefined} type="button" data-chrome-unit="inner-text-button" role="tab" aria-selected={tab === 'victory'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'victory' && 'active')} onClick={() => onTabChange('victory')}>Victory rules</button>
+              <button ref={tab === 'other' ? initialFocusRef : undefined} type="button" data-chrome-unit="inner-text-button" role="tab" aria-selected={tab === 'other'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'other' && 'active')} onClick={() => onTabChange('other')}>Other events</button>
             </div>
             <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-done')} onClick={onDone}>Done</button>
           </div>
         </div>
         {tab === 'victory' ? victoryContent : otherContent}
-    </OuterChromeBox>
+      </div>
+    </section>
   );
 }

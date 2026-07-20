@@ -1,8 +1,10 @@
 ---
-status: "accepted; divider ownership clause superseded by ADR-0092"
+status: "accepted; divider ownership clause superseded by ADR-0092; Events outer-panel clause superseded by ADR-0144"
 date: 2026-07-06
 deciders: Nelson, Codex
-partially_superseded_by: "[ADR-0092](0092-dividers-inherit-their-host-chrome-role.md)"
+partially_superseded_by:
+  - "[ADR-0092](0092-dividers-inherit-their-host-chrome-role.md)"
+  - "[ADR-0144](0144-level-editor-events-use-the-shell-workspace.md)"
 ---
 
 # ADR-0082: Control-panel chrome has outer and inner roles

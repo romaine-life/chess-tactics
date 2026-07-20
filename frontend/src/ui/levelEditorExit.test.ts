@@ -26,12 +26,27 @@ describe('level editor exit policy', () => {
     })).toBe('allow');
   });
 
-  it('closes rules before a same-editor history traversal', () => {
+  it('allows same-editor history to restore the URL-addressed Events state', () => {
     expect(action({
       destinationHref: '/editor/level?levelId=l1&layer=board',
       rulesEditorOpen: true,
       source: 'history',
-    })).toBe('close-rules-editor');
+    })).toBe('allow');
+  });
+
+  it('allows one-click Play Test while Events is open', () => {
+    expect(action({
+      destinationHref: '/play?mode=test&board=abc&returnTo=%2Feditor%2Flevel%3Flayer%3Drules%26eventsEditor%3D1',
+      rulesEditorOpen: true,
+    })).toBe('allow');
+  });
+
+  it('allows history to leave a directly opened Events deep link', () => {
+    expect(action({
+      destinationHref: '/editor',
+      rulesEditorOpen: true,
+      source: 'history',
+    })).toBe('allow');
   });
 
   it('allows every departure once the nested editor is closed', () => {

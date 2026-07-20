@@ -133,6 +133,17 @@ Any title-bar control change must verify the rendered lane on a real route with
 `npm run verify:titlebar -- <live-url> --size <width>x<height>` in addition to the
 static contract checks.
 
+Under [ADR-0144](adr/0144-level-editor-events-use-the-shell-workspace.md), the
+Level Editor Events instrument is content in the shell-owned board workspace,
+not an `outer-panel` consumer or dialog. It fills that workspace while the title
+bar and right controls remain fixed, and it inherits responsive bounds from the
+shell rather than duplicating viewport measurements. Events may consume the
+installed outer role's generated material through the shared fill-only primitive,
+but it paints no second frame, rails, or corner atoms; its controls continue to
+use registered inner chrome. Its open state is part of the canonical Level Editor
+address (`eventsEditor=1`, with optional `eventsTab=other`) so a review link opens
+the exact workspace state without requiring follow-up clicks.
+
 Under [ADR-0102](adr/0102-runtime-buttons-use-registered-inner-chrome.md), that
 ownership rule applies to runtime controls throughout the application. The old
 `mode-button` images have no runtime consumers; `.app-header-button` is
