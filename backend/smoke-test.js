@@ -1862,7 +1862,8 @@ async function main() {
       behavior: {
         terrain,
         variants: [{ role: 'v0', terrain, id: 0, frameWidth: 40, frameHeight: 37, frameCount: 6, baseX: 20, baseY: 28, contentWidth: 18 }],
-        ...(terrain === 'water' ? { edgeOnly: true, count: { sparse: 2, filled: 3 } } : {}),
+        edgeOnly: terrain === 'water',
+        count: { sparse: 2, filled: 3 },
       },
       media: { v0: `groundcover/${terrain}/v0.png` },
     });
