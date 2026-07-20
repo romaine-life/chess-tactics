@@ -46,8 +46,11 @@ The required representative traces are cold and warm versions of:
 
 ## Implemented baseline
 
-- Shell startup hydrates its required live authorities, layout font, and installed chrome
-  before App's first commit. Critical failure stays on one explicit retry surface.
+- Shell startup begins its layout-font request from the initial HTML and hydrates its
+  required live authorities and installed chrome before App's first commit. Visible
+  startup copy remains hidden until that final face is verified, so fallback-font text
+  is never an intermediate loading frame. Critical failure stays on one explicit retry
+  surface.
 - Canonical level summaries project immutable Blob-backed list-thumbnail URLs. Missing or
   stale derivatives are generated server-side and published content-addressably; ordinary
   player lists never reconstruct boards in the browser. Derivative freshness is a pure

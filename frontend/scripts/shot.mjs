@@ -10,7 +10,7 @@
 // Usage:
 //   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>]
 //     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold] [--assert-menu-atomic]
-//     [--assert-board-atomic]
+//     [--assert-board-atomic] [--assert-shell-font-atomic]
 //     [--full] [--show-scrollbars]
 //
 // Examples:
@@ -37,6 +37,7 @@ const throttle = flag('throttle');
 const cold = has('cold');
 const assertMenuAtomic = has('assert-menu-atomic');
 const assertBoardAtomic = has('assert-board-atomic');
+const assertShellFontAtomic = has('assert-shell-font-atomic');
 const fullPage = has('full');
 const showScrollbars = has('show-scrollbars');
 
@@ -102,6 +103,27 @@ try {
       requestAnimationFrame(sample);
     });
   }
+  if (assertShellFontAtomic) {
+    await page.evaluateOnNewDocument(() => {
+      window.__ctShellFontSamples = 0;
+      window.__ctShellFontViolations = [];
+      const sample = () => {
+        const status = document.querySelector('.app-startup-status');
+        if (status) {
+          window.__ctShellFontSamples += 1;
+          const style = getComputedStyle(status);
+          const visible = style.visibility !== 'hidden' && style.display !== 'none' && Number(style.opacity) > 0.001;
+          const finalFace = style.fontFamily.includes('Advance Wars 2 GBA')
+            && document.fonts.check('19px "Advance Wars 2 GBA"', status.textContent || 'Loading live assets');
+          if (visible && !finalFace) {
+            window.__ctShellFontViolations.push({ fontFamily: style.fontFamily, visibility: style.visibility });
+          }
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+  }
   const throttleProfiles = {
     // DevTools-style profiles. Throughput values are bytes/second.
     'slow-4g': { latency: 150, downloadThroughput: 1_600_000 / 8, uploadThroughput: 750_000 / 8 },
@@ -158,6 +180,22 @@ try {
       console.error(`board exposed a partial or interactive frame: ${JSON.stringify(violations[0])}`);
       process.exitCode = 5;
       throw new Error('atomic board assertion failed');
+    }
+  }
+  if (assertShellFontAtomic) {
+    const result = await page.evaluate(() => ({
+      violations: window.__ctShellFontViolations || [],
+      samples: window.__ctShellFontSamples || 0,
+    }));
+    if (!result.samples) {
+      console.error('atomic shell-font assertion observed no startup status');
+      process.exitCode = 6;
+      throw new Error('atomic shell-font assertion had no target');
+    }
+    if (result.violations.length) {
+      console.error(`startup status exposed a fallback-font frame: ${JSON.stringify(result.violations[0])}`);
+      process.exitCode = 6;
+      throw new Error('atomic shell-font assertion failed');
     }
   }
 

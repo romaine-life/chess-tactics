@@ -4432,11 +4432,15 @@ h1 {
   opacity: 0;
 }
 
-/* Before the live catalog/backend is ready, do not trigger stable-slot font requests.
-   main.tsx explicitly loads the layout face and removes this class before App mounts. */
+/* Before the shell font is ready, the startup copy remains part of the accessible
+   status surface but contributes no fallback-font frame. main.tsx reveals it only
+   after the layout face is verified, and App still cannot mount before that gate. */
 body.loading-bootstrap,
 body.loading-bootstrap .app-startup-status {
   font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.app-startup-status.is-font-pending {
+  visibility: hidden;
 }
 .menu-load-error {
   position: fixed;

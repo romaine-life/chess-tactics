@@ -32,4 +32,16 @@ describe('professional loading architecture guards', () => {
     expect(read('./ui/PlayMenu.tsx')).toContain('inert={!complete || failure ? true : undefined}');
     expect(read('./style.css')).not.toContain('A failsafe in the hook');
   });
+
+  it('never paints startup copy in a fallback font before the shell font is ready', () => {
+    const entry = read('./main.tsx');
+    const style = read('./style.css');
+    const html = read('../index.html');
+    expect(html).toContain('rel="preload"');
+    expect(html).toContain('/assets/fonts/advance-wars-2-gba/advance-wars-2-gba.otf');
+    expect(entry).toContain('app-startup-status is-font-pending');
+    expect(entry).toContain("querySelector('.app-startup-status.is-font-pending')?.classList.remove('is-font-pending')");
+    expect(style).toMatch(/\.app-startup-status\.is-font-pending\s*\{[^}]*visibility:\s*hidden/);
+    expect(read('../scripts/shot.mjs')).toContain('startup status exposed a fallback-font frame');
+  });
 });

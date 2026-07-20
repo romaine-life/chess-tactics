@@ -86,8 +86,17 @@ const root = document.getElementById('root');
 if (root) {
   const startupAt = performance.now();
   const reactRoot = createRoot(root);
-  reactRoot.render(<main className="app-startup-status" role="status">Loading live assets...</main>);
-  loadingMark('app', 'startup-placeholder-painted');
+  reactRoot.render(<main className="app-startup-status is-font-pending" role="status">Loading live assets...</main>);
+
+  // Start the shell font at entry, in parallel with the live authorities. The
+  // status remains unpainted until this resolves: rendering it first in a
+  // fallback face and swapping later is itself a broken loading frame.
+  const criticalFonts = retryStartup('critical-fonts', loadCriticalFonts).then(() => {
+    document.body.classList.remove('loading-bootstrap');
+    document.querySelector('.app-startup-status.is-font-pending')?.classList.remove('is-font-pending');
+    loadingMeasure('app', 'critical-fonts-ready', startupAt);
+    requestAnimationFrame(() => loadingMark('app', 'startup-placeholder-painted'));
+  });
 
   void retryStartup('critical-catalogs', () => Promise.all([loadLiveMediaCatalog(), loadDrawableCatalog(), loadLiveUnitCatalog()]))
     .then(async () => {
@@ -110,9 +119,7 @@ if (root) {
       // a packaged fallback.
       await retryStartup('prop-seats', loadLiveSeats);
       loadingMeasure('app', 'critical-seats-ready', startupAt);
-      await retryStartup('critical-fonts', loadCriticalFonts);
-      document.body.classList.remove('loading-bootstrap');
-      loadingMeasure('app', 'critical-fonts-ready', startupAt);
+      await criticalFonts;
       await retryStartup('installed-chrome', composeInstalledChromeCss);
       loadingMeasure('app', 'critical-chrome-ready', startupAt);
       // The real menu has not mounted yet, so arming here still precedes its first
