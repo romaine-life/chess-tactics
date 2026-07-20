@@ -2,9 +2,9 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { approvalInstructions, openBrowser } from './codex-auth-browser.mjs';
 
 const AUTH_ORIGIN = 'https://auth.romaine.life';
 const repoDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -21,12 +21,6 @@ const postJson = async (pathname, body) => {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`${pathname} failed (${response.status}): ${payload.error || 'unknown error'}`);
   return payload;
-};
-
-const openBrowser = (url) => {
-  const command = process.platform === 'win32' ? 'explorer.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
-  const child = spawn(command, [url], { detached: true, stdio: 'ignore', windowsHide: false });
-  child.unref();
 };
 
 const guidanceResponse = await fetch(`${AUTH_ORIGIN}/api/cli/requester-guidance`, {
@@ -47,9 +41,7 @@ const request = await postJson('/api/cli/device', {
   misc_identifier: previous.has(chosenNoun) ? `session-${randomBytes(4).toString('hex')}` : chosenNoun,
 });
 
-console.log('Opening auth.romaine.life for this environment grant.');
-console.log(`If the browser does not open, visit: ${request.verification_uri_complete}`);
-console.log(`Approval code: ${request.user_code}`);
+approvalInstructions(request).forEach((line) => console.log(line));
 openBrowser(request.verification_uri_complete);
 
 const deadline = Date.now() + Number(request.expires_in || 600) * 1000;
