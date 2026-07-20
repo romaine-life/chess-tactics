@@ -35,8 +35,10 @@ export const DEFAULT_MACRO_TILE_BREAKUP = 0.15;
 const currentMacroTileAssets = (): MacroTileAsset[] => drawableAssets('terrain-composite').map((asset) => {
   const { family, columns, rows, weight, variantId } = asset.behavior;
   const media = asset.media.surface?.media;
-  if (typeof family !== 'string' || !Number.isInteger(columns) || !Number.isInteger(rows) || !media) {
-    throw new Error(`terrain composite ${asset.id} lacks family, footprint, or surface media`);
+  if (typeof family !== 'string' || !Number.isInteger(columns) || Number(columns) < 1
+    || !Number.isInteger(rows) || Number(rows) < 1
+    || !(typeof weight === 'number' && Number.isFinite(weight) && weight > 0) || !media) {
+    throw new Error(`terrain composite ${asset.id} lacks family, footprint, weight, or surface media`);
   }
   return {
     id: asset.id,
@@ -45,7 +47,7 @@ const currentMacroTileAssets = (): MacroTileAsset[] => drawableAssets('terrain-c
     columns: Number(columns),
     rows: Number(rows),
     src: media.immutableUrl,
-    weight: typeof weight === 'number' ? weight : 1,
+    weight,
     ...(typeof variantId === 'string' ? { variantId } : {}),
   };
 });

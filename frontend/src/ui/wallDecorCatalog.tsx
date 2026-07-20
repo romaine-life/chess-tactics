@@ -3,16 +3,24 @@ import {
   WALL_DECOR_ASSETS,
   WALL_DECOR_KIND_LABELS,
   WALL_DECOR_KINDS,
+  defaultWallDecorAsset,
   wallDecorAsset,
   type WallDecorAsset,
   type WallDecorFace,
   type WallDecorKind,
 } from '../core/wallDecor';
+import { defaultWallMaterial } from '../core/featureAutotile';
+import { wallFrameSrc } from '../art/tileset';
+
+const previewWallSrc = (): string => {
+  return wallFrameSrc(defaultWallMaterial(), 9);
+};
 
 export {
   WALL_DECOR_ASSETS,
   WALL_DECOR_KIND_LABELS,
   WALL_DECOR_KINDS,
+  defaultWallDecorAsset,
   wallDecorAsset,
   type WallDecorAsset,
   type WallDecorKind,
@@ -35,7 +43,7 @@ export function WallDecorPreview({ asset, zoom = 1 }: { asset: WallDecorAsset; z
   const wallTop = 10;
   return (
     <span className="wall-decor-preview" aria-hidden="true">
-      <img className="wall-decor-preview-wall" src="/assets/tiles/feature/wall-stone-9.png" alt="" draggable={false} style={{ left: wallLeft, top: wallTop, width: wallW, height: wallH }} />
+      <img className="wall-decor-preview-wall" src={previewWallSrc()} alt="" draggable={false} style={{ left: wallLeft, top: wallTop, width: wallW, height: wallH }} />
       <img className="wall-decor-preview-sprite" src={asset.faces.west.src} alt="" draggable={false} style={wallDecorFaceStyle(asset.faces.west, scale, wallLeft, wallTop)} />
       <img className="wall-decor-preview-sprite" src={asset.faces.north.src} alt="" draggable={false} style={wallDecorFaceStyle(asset.faces.north, scale, wallLeft, wallTop)} />
     </span>
@@ -62,7 +70,7 @@ export function WallDecorLab({ assetId, header }: { assetId: string | undefined;
         <div className="wall-decor-lab-stage">
           <figure className="al-stage">
             <span className="wall-decor-large-preview">
-              <img className="wall-decor-large-wall" src="/assets/tiles/feature/wall-stone-9.png" alt="" draggable={false} />
+              <img className="wall-decor-large-wall" src={previewWallSrc()} alt="" draggable={false} />
               <img
                 className="wall-decor-large-sprite"
                 src={asset.faces.west.src}

@@ -1,7 +1,8 @@
 ---
-status: "accepted; repo-write and asset-storage clauses superseded by ADR-0085"
+status: "accepted; repo-write and asset-storage clauses superseded by ADR-0085 and ADR-0106"
 date: 2026-07-02
 deciders: Nelson, Claude
+partially_superseded_by: "[ADR-0106](0106-installed-content-is-database-owned.md)"
 ---
 
 # ADR-0054: The 9-slice editor is the dev's calibration bench — agents build the tool, the dev tunes the pixels

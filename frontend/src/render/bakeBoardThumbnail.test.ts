@@ -39,8 +39,8 @@ import { macroTileAsset } from '../core/macroTiles';
 beforeAll(() => {
   applyLiveUnitCatalog(testLiveUnitCatalog());
   applyLiveMediaCatalog(testGroundCoverCatalog([...testStructureMediaSlots(), ...testWallDecorMediaSlots()]));
-  applyTestPropSeats();
   applyTestDrawableCatalog();
+  applyTestPropSeats();
 });
 afterAll(() => {
   resetPropSeats();
@@ -816,7 +816,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const board: EditorBoard = {
       ...blank(3, 3),
       walls: { [edge]: 'stone', [secondEdge]: 'stone' },
-      wallArt: { [edge]: 'banner-stone-wall' },
+      wallArt: { [edge]: 'test-banner-pair' },
       props: { '0,0': { propId: 'fieldstone' } },
     };
     const ops = boardDrawOps(board);

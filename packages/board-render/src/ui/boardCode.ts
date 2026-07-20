@@ -282,6 +282,29 @@ function cleanDecorativeFootprint(value: unknown, cols: number, rows: number): s
   return sortCellKeys([...keys]);
 }
 
+/** Coordinates that may own visual terrain faces; gameplay membership is deliberately irrelevant. */
+function visualTerrainSurfaceKeys(
+  cells: Readonly<Record<string, unknown>>,
+  cols: number,
+  rows: number,
+  apron: { top: number; right: number; bottom: number; left: number } | undefined,
+  footprint: readonly string[],
+): Set<string> {
+  const keys = new Set(Object.keys(cells));
+  const top = apron?.top ?? 0;
+  const right = apron?.right ?? 0;
+  const bottom = apron?.bottom ?? 0;
+  const left = apron?.left ?? 0;
+  for (let y = -top; y < rows + bottom; y += 1) {
+    for (let x = -left; x < cols + right; x += 1) {
+      if (x >= 0 && x < cols && y >= 0 && y < rows) continue;
+      keys.add(`${x},${y}`);
+    }
+  }
+  for (const key of footprint) keys.add(key);
+  return keys;
+}
+
 function normalizeZoneEntries(entries: readonly EditorZoneEntry[] | undefined, cols: number, rows: number): EditorZoneEntry[] {
   const out: EditorZoneEntry[] = [];
   for (const [index, entry] of (entries ?? []).entries()) {
@@ -568,7 +591,10 @@ export function encodeBoard(b: EditorBoard): string {
   // same edge when the board is projected to a Level.
   if (b.walls && nonEmpty(b.walls)) wire.wl = b.walls;
   if (b.wallArt && nonEmpty(b.wallArt)) wire.wa = b.wallArt;
-  const subterrain = cleanSubterrainPlacements(b.subterrain, new Set(Object.keys(b.cells)));
+  const subterrain = cleanSubterrainPlacements(
+    b.subterrain,
+    visualTerrainSurfaceKeys(b.cells, b.cols, b.rows, b.decorativeApron, decorativeFootprint),
+  );
   if (nonEmpty(subterrain)) wire.st = subterrain;
   if (nonEmpty(b.featureCuts)) wire.rc = Object.keys(b.featureCuts);
   if (nonEmpty(b.featureExits)) wire.rx = Object.keys(b.featureExits);
@@ -681,10 +707,14 @@ export function decodeBoard(code: string): EditorBoard | null {
           : undefined,
       })
       : undefined;
-    const subterrain = cleanSubterrainPlacements(w.st, new Set(Object.keys(cells)));
+    const decodedDecorativeFootprint = cleanDecorativeFootprint(w.df, cols, rows);
+    const subterrain = cleanSubterrainPlacements(
+      w.st,
+      visualTerrainSurfaceKeys(cells, cols, rows, decorativeApron, decodedDecorativeFootprint),
+    );
     return {
       cols, rows, decorativeApron, surface,
-      decorativeFootprint: cleanDecorativeFootprint(w.df, cols, rows),
+      decorativeFootprint: decodedDecorativeFootprint,
       decorativeCells: (w.dt && typeof w.dt === 'object' && !Array.isArray(w.dt) ? w.dt : {}) as Record<string, string>,
       decorativeFeatures: (w.dr && typeof w.dr === 'object' && !Array.isArray(w.dr) ? w.dr : {}) as Record<string, FeatureCell>,
       decorativeFences: (w.dfe && typeof w.dfe === 'object' && !Array.isArray(w.dfe) ? w.dfe : {}) as Record<string, FenceMaterial>,

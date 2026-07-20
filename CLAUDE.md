@@ -2,6 +2,12 @@
 
 ## Agent backend rule
 
+Codex environment setup obtains a browser-approved `auth.romaine.life` device grant and stores it
+in ignored worktree-local state. The full local dev backend consumes that verified grant for
+loopback browser requests, so authenticated application and screenshot verification must use the
+owner identity established at setup; do not fall back to a signed-out editor or ask the owner to
+repair authentication during handoff.
+
 `DEV_NO_BACKEND=1` and `DEV_OFFLINE=1` are owner-only escape hatches. Agents must
 not set them, suggest them, or use them to keep working after the backend fails to
 start. If the Vite-spawned backend fails, fix the backend startup issue (for

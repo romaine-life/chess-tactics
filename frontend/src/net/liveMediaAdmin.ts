@@ -60,7 +60,8 @@ export interface AcceptLiveMediaVersionInput {
 }
 
 export interface CreateLiveMediaVersionInput {
-  slot: string;
+  slot?: string;
+  allocateSlot?: 'predrawn-board';
   domain: string;
   role: string;
   label: string;

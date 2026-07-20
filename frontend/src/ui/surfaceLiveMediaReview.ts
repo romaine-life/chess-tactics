@@ -1,19 +1,14 @@
-import { liveMediaSlotUrl } from '@chess-tactics/board-render';
-import { baseSocketsForFamily } from '../core/tileSockets';
-import type { SocketBoardResult } from '../core/tileBoardGenerator';
 import type {
   AcceptLiveMediaVersionInput,
   AdminLiveMediaCatalog,
   AdminLiveMediaSlot,
   AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
-import type { TileAsset } from '../art/tileset';
 
 export interface SurfaceAcceptanceGroup {
   groupId: string;
   requiredSlots: string[];
 }
-
 export interface SurfaceReviewBatch {
   versions: AdminLiveMediaVersion[];
   groups: SurfaceAcceptanceGroup[];
@@ -119,7 +114,6 @@ export function surfaceReviewBatch(
     missingSlots: [...missing].sort(),
   };
 }
-
 export function selectedSurfaceOverrides(
   catalog: AdminLiveMediaCatalog | null,
   selectedVersionBySlot: Readonly<Record<string, string>>,
@@ -129,7 +123,8 @@ export function selectedSurfaceOverrides(
   const overrides = new Map<string, string>();
   for (const [slot, id] of Object.entries(selectedVersionBySlot)) {
     const version = versionById.get(id);
-    if (version?.slot === slot && version.media?.url) overrides.set(liveMediaSlotUrl(slot), version.media.url);
+    const active = catalog.slots.find((candidate) => candidate.slot === slot)?.media;
+    if (version?.slot === slot && version.media?.url && active?.immutableUrl) overrides.set(active.immutableUrl, version.media.url);
   }
   return overrides;
 }
@@ -193,7 +188,7 @@ export function surfaceReviewProofEvidence({
     versionId: version.id,
     sha256: version.media?.sha256,
     rowRevision: version.rowRevision,
-    faces: ['south', 'east'],
+    role: 'top',
   }));
   return {
     schema: 'terrain-surface-canonical-board-proof-v1',
@@ -204,8 +199,7 @@ export function surfaceReviewProofEvidence({
     assetLocalScale: 1,
     spatialResampling: false,
     deterministicProof: true,
-    abruptExposedEdge: true,
-    exposedFaces: ['south', 'east'],
+    surfaceOnly: true,
     selectedCandidates,
     slotSnapshots: slots.map((slot) => ({
       slot: slot.slot,
@@ -217,33 +211,5 @@ export function surfaceReviewProofEvidence({
       groupId: group.groupId,
       requiredSlots: group.requiredSlots,
     })),
-  };
-}
-
-/**
- * Real-renderer proof fixture: an 8x8 Water field with every side variant on
- * both straight, abruptly exposed faces. No generated solver choice can omit
- * or duplicate a member of the eight-slot acceptance group.
- */
-export function waterSideCanonicalProofBoard(variants: readonly TileAsset[]): SocketBoardResult<TileAsset> {
-  if (variants.length < 8) throw new Error('Canonical Water side proof requires eight tile variants.');
-  const columns = 8;
-  const rows = 8;
-  const cells = Array.from({ length: columns * rows }, (_, index) => {
-    const x = index % columns;
-    const y = Math.floor(index / columns);
-    const asset = variants[(x + y) % 8];
-    return {
-      x,
-      y,
-      asset,
-      sockets: baseSocketsForFamily('water'),
-      terrain: 'water' as const,
-    };
-  });
-  return {
-    cells,
-    fallbacks: [],
-    stats: { placed: cells.length, missingPlacements: 0, illegalEdges: 0, candidateAssets: 8 },
   };
 }

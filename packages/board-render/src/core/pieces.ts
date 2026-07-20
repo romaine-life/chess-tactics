@@ -1,5 +1,6 @@
 import type { PieceType, Side, UnitFacing } from './types';
 import { resolvedUnitSpritePath } from './unitSpriteRegistry';
+import { drawableAssets } from '../art/drawableCatalog';
 
 export const PLAYABLE_PIECE_TYPES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const satisfies readonly PieceType[];
 export type PlayablePieceType = typeof PLAYABLE_PIECE_TYPES[number];
@@ -81,4 +82,5 @@ export const paletteForSide = (side: Side, palette?: string | null): UnitPalette
 // Piece portraits: a dedicated eye-level perspective bust (separate contract from the
 // true-iso board sprite), one per palette. See docs/portrait-contract.md.
 export const portraitPath = (type: PlayablePieceType, palette: UnitPalette = DEFAULT_PALETTE) =>
-  `/assets/units/${type}/portrait/${palette}.png`;
+  drawableAssets('unit-portrait').find((asset) => asset.behavior.piece === type)?.media[palette]?.media.immutableUrl
+  ?? (() => { throw new Error(`drawable catalog has no ${type}/${palette} portrait`); })();

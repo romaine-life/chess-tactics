@@ -1,5 +1,6 @@
 import { type ReactElement } from 'react';
 import { NavButton } from './NavButton';
+import { installedUiMedia } from '../installedUiMedia';
 
 // The single brand lockup in the top-left of every screen. The game wordmark is the
 // persistent header — it's the dominant line on every page — with the screen name as
@@ -12,7 +13,7 @@ import { NavButton } from './NavButton';
 export function BrandLockup({ screenName }: { screenName: string }): ReactElement {
   return (
     <NavButton className="brand-lockup" to="/" aria-label={`${screenName} — Chess Tactics home`}>
-      <img className="brand-lockup-mark" src="/assets/ui/kit/icons/brand-shield.png" alt="" aria-hidden="true" />
+      <img className="brand-lockup-mark" src={installedUiMedia('ui-kit-icons-brand-shield-png')} alt="" aria-hidden="true" />
       <span className="brand-lockup-copy">
         <em>Chess Tactics</em>
         <strong>{screenName}</strong>

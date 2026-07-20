@@ -6,8 +6,9 @@ batch forges and nine-slice bake scripts are retired: they read committed
 reference images, wrote PNGs into `frontend/public`, and generated a Git-owned
 catalog. They must not be restored.
 
-Git may still own the UI kit's deterministic nine-slice geometry, semantic slot
-ids, palette transforms, prompts, and text provenance. Source images, atoms,
+Git may still own the UI kit's geometry algorithms, palette transforms, prompts,
+and text provenance. Installed nine-slice geometry, identities, ordering, labels,
+media-role assignments, and defaults are drawable-catalog data. Source images, atoms,
 candidate frames, contact sheets, and accepted frames belong to private object
 storage, with their lifecycle and active pointers in Postgres.
 
@@ -42,7 +43,7 @@ can atomically change an accepted pointer.
    backend transaction.
 6. Delete the temporary workspace.
 
-The nine-slice editor may save or export code-owned geometry. Its dev endpoint
-writes only `config/nine-slice` JSON; it does not bake frame pixels or change
-promotion state. A future media publish control must use the same candidate,
-review, and acceptance API.
+The nine-slice editor saves geometry and media-role assignments through the
+drawable-catalog admin transaction. It has no filesystem-writing dev endpoint
+or committed registry. Media promotion continues to use the candidate, review,
+and acceptance API.

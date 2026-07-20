@@ -59,8 +59,6 @@ interface FenceKitAccumulator {
   components: Partial<Record<FenceMediaComponent, FenceVersionComponent>>;
 }
 
-const COMPONENT_SUFFIX = /^(.*)-(rail-e|rail-s|post)\.[A-Za-z0-9]+$/;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
@@ -76,23 +74,10 @@ function fenceComponent(value: unknown): FenceMediaComponent | null {
   return normalized === 'post' ? 'post' : null;
 }
 
-function fenceMaterial(value: unknown, identity: string): FenceMaterial | null {
+function fenceMaterial(value: unknown): FenceMaterial | null {
   const explicit = nonemptyString(value)?.toLowerCase();
   if (explicit === 'wood' || explicit === 'stone') return explicit;
-  const tokens = identity.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-  if (tokens.includes('stone')) return 'stone';
-  if (tokens.includes('wood')) return 'wood';
   return null;
-}
-
-function titleFromId(id: string): string {
-  return id
-    .split(/[-_.]+/)
-    .filter(Boolean)
-    .map((part) => part.length <= 2 && /^r\d$/i.test(part)
-      ? part.toUpperCase()
-      : `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-    .join(' ');
 }
 
 function explicitAcceptance(slot: AdminLiveMediaSlot | null): boolean {
@@ -106,10 +91,8 @@ function isCurrentActiveVersion(version: AdminLiveMediaVersion, slot: AdminLiveM
 }
 
 /**
- * Interpret backend version metadata first, then fall back to deterministic
- * semantic-slot suffix taxonomy. Repository/source paths are deliberately not
- * consulted: a private archive becomes review media only when its backend
- * metadata explicitly says so.
+ * Interpret explicit backend review membership. Semantic-slot names are opaque:
+ * neither a filename nor a path may manufacture kit identity or grouping.
  */
 function fenceVersionComponent(
   version: AdminLiveMediaVersion,
@@ -117,31 +100,25 @@ function fenceVersionComponent(
 ): FenceVersionComponent | null {
   if (version.domain !== 'terrain') return null;
   if (!version.media || !version.media.mediaType.startsWith('image/')) return null;
-  const review = isRecord(version.metadata.fenceReview) ? version.metadata.fenceReview : {};
-  const runtime = isRecord(version.metadata.runtime) ? version.metadata.runtime : {};
-  const slotLeaf = version.slot?.split('/').at(-1) ?? '';
-  const suffix = slotLeaf.match(COMPONENT_SUFFIX);
-  const component = fenceComponent(review.component ?? runtime.component ?? suffix?.[2]);
+  const review = isRecord(version.metadata.fenceReview) ? version.metadata.fenceReview : null;
+  if (!review) return null;
+  const component = fenceComponent(review.component);
   if (!component) return null;
 
-  const inferredKitId = suffix?.[1] ?? '';
-  const kitId = nonemptyString(review.kitId ?? review.kit_id ?? runtime.variant) ?? inferredKitId;
-  if (!kitId) return null;
-  const inferredBase = version.slot && suffix
-    ? `${version.slot.slice(0, version.slot.length - slotLeaf.length)}${inferredKitId}`
-    : '';
-  const groupId = nonemptyString(review.groupId ?? review.group_id) ?? inferredBase;
-  if (!groupId) return null;
-  const material = fenceMaterial(review.material, `${kitId}/${groupId}`);
-  if (!material) return null;
+  const kitId = nonemptyString(review.kitId ?? review.kit_id);
+  const groupId = nonemptyString(review.groupId ?? review.group_id);
+  const label = nonemptyString(review.label);
+  const batchId = nonemptyString(review.batchId ?? review.batch_id);
+  const material = fenceMaterial(review.material);
+  if (!kitId || !groupId || !label || !batchId || !material) return null;
 
   return {
     component,
     groupId,
     kitId,
-    label: nonemptyString(review.label) ?? titleFromId(kitId),
+    label,
     material,
-    batchId: nonemptyString(review.batchId ?? review.batch_id) ?? version.status,
+    batchId,
     version,
     slot,
   };

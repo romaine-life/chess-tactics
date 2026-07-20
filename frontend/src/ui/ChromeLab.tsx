@@ -10,6 +10,8 @@ import {
   type ChromeRole,
 } from './chromeCandidateSources';
 import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
+import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
+import { saveDrawableAsset } from '../net/drawableCatalogAdmin';
 import {
   ChromeUnitAuditViewer,
   ChromeUnitSpecimen,
@@ -128,17 +130,17 @@ type StoredChromeLabTuneState = ChromeLabTuneState & {
   target: string;
 };
 
-const CHROME_LAB_SHARED_TUNING_TARGET_ID = 'level-editor';
-
-export const CHROME_LAB_TARGETS: ChromeLabTarget[] = [
-  {
-    id: 'level-editor',
-    label: 'Level Editor',
-    kind: 'page',
-    route: '/editor/level?chromeLab=1',
-    thumb: '/assets/ui/pages/level-editor.webp',
-    badge: 'outer + inner chrome',
-  },
+const chromeLabPageTargets = (): ChromeLabPageTarget[] => drawableAssets('studio-page')
+  .filter((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('chrome-lab-page'))
+  .map((asset) => {
+    const id = String(asset.behavior.value ?? '');
+    const route = String(asset.behavior.chromeLabRoute ?? '');
+    const thumb = asset.media.thumbnail?.media.immutableUrl;
+    if (!id || !route || !thumb) throw new Error(`Chrome Lab page ${asset.id} is incomplete`);
+    return { id, label: asset.label, kind: 'page', route, thumb, badge: String(asset.metadata.chromeLabBadge ?? '') };
+  });
+const currentChromeLabTargets = (): ChromeLabTarget[] => [
+  ...chromeLabPageTargets(),
   ...chromeUnitsInHierarchyOrder().map((unit): ChromeLabUnitTarget => ({
     id: `unit-${unit.id}`,
     label: unit.label,
@@ -147,6 +149,9 @@ export const CHROME_LAB_TARGETS: ChromeLabTarget[] = [
     badge: unit.badge,
   })),
 ];
+export const CHROME_LAB_TARGETS: ChromeLabTarget[] = new Proxy([], { get: (_target, property) => { const values = currentChromeLabTargets(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
+const chromeLabSharedTuningTargetId = (): string => String(requiredDrawableRole('studio-page', 'chrome-lab-page').behavior.value ?? '');
+export const defaultChromeLabTargetId = (): string => chromeLabSharedTuningTargetId();
 
 
 function chromeLabDefaultState(): ChromeLabTuneState {
@@ -379,15 +384,20 @@ function saveChromeLabState(targetId: string, state: ChromeLabTuneState): void {
   }
 }
 
-async function saveChromeLabDefaultsToDisk(payload: { target: string; outer: RoleTune; inner: RoleTune; dividers: DividerTunes }): Promise<string> {
-  const response = await fetch('/__chrome-lab/defaults', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
+async function saveChromeLabDefaults(payload: { target: string; outer: RoleTune; inner: RoleTune; dividers: DividerTunes }): Promise<string> {
+  const installed = requiredDrawableRole('chrome-family', 'installed-chrome');
+  await saveDrawableAsset({
+    id: installed.id,
+    kind: installed.kind,
+    label: installed.label,
+    sortOrder: installed.sortOrder,
+    lifecycleState: installed.lifecycleState,
+    behavior: payload,
+    metadata: installed.metadata,
+    media: Object.fromEntries(Object.entries(installed.media).map(([role, binding]) => [role, binding.slot])),
+    expectedRevision: installed.rowRevision,
   });
-  const body = await response.json().catch(() => null) as { ok?: boolean; path?: string; error?: string } | null;
-  if (!response.ok || !body?.ok) throw new Error(body?.error || `save failed (${response.status})`);
-  return body.path || 'config/chrome-lab-defaults.json';
+  return 'database installed Chrome role';
 }
 
 
@@ -1423,7 +1433,9 @@ function ChromeLabReadyViewer({
   zoomControl?: ReactNode;
   zoom?: number;
 }): ReactElement {
-  const target = CHROME_LAB_TARGETS.find((entry) => entry.id === targetId) ?? CHROME_LAB_TARGETS[0];
+  const requested = targetId ?? defaultChromeLabTargetId();
+  const target = CHROME_LAB_TARGETS.find((entry) => entry.id === requested);
+  if (!target) throw new Error(`Chrome Lab target ${requested} is unavailable`);
   if (target.kind === 'unit') {
     return <ChromeLabUnitViewer target={target} onTargetId={onTargetId} header={header} zoomControl={zoomControl} zoom={zoom} />;
   }
@@ -1443,7 +1455,7 @@ function ChromeLabUnitViewer({
   zoomControl?: ReactNode;
   zoom?: number;
 }): ReactElement {
-  const [initialLabState] = useState<ChromeLabTuneState>(() => chromeLabStateFromStorage(CHROME_LAB_SHARED_TUNING_TARGET_ID));
+  const [initialLabState] = useState<ChromeLabTuneState>(() => chromeLabStateFromStorage(chromeLabSharedTuningTargetId()));
   const [outerRoleTab, setOuterRoleTabState] = useState<RoleControlTab>(() => chromeLabRouteTab('chromeOuterTab', ROLE_CONTROL_TAB_IDS, initialLabState.outerRoleTab));
   const [innerRoleTab, setInnerRoleTabState] = useState<RoleControlTab>(() => chromeLabRouteTab('chromeInnerTab', ROLE_CONTROL_TAB_IDS, initialLabState.innerRoleTab));
   const [outerPreviewId, setOuterPreviewIdState] = useState(() => chromeLabRouteParam('chromePreview') ?? 'template');
@@ -1473,7 +1485,7 @@ function ChromeLabUnitViewer({
   };
 
   useEffect(() => {
-    saveChromeLabState(CHROME_LAB_SHARED_TUNING_TARGET_ID, {
+    saveChromeLabState(chromeLabSharedTuningTargetId(), {
       previewMode: initialLabState.previewMode,
       previewFocus: initialLabState.previewFocus,
       controlTab: initialLabState.controlTab,
@@ -1515,7 +1527,7 @@ function ChromeLabUnitViewer({
 
   const css = frameCss(outer, inner, outerFrame, innerFrame, dividerRenders);
   const copyJson = async (): Promise<void> => {
-    const payload = JSON.stringify(installedChromeTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, dividers), null, 2);
+    const payload = JSON.stringify(installedChromeTuningPayload(chromeLabSharedTuningTargetId(), outer, inner, dividers), null, 2);
     setExportText(payload);
     try {
       await navigator.clipboard.writeText(payload);
@@ -1528,7 +1540,7 @@ function ChromeLabUnitViewer({
   const saveDefaults = async (): Promise<void> => {
     setSaveMsg('saving...');
     try {
-      const path = await saveChromeLabDefaultsToDisk(installedChromeTuningPayload(CHROME_LAB_SHARED_TUNING_TARGET_ID, outer, inner, dividers));
+      const path = await saveChromeLabDefaults(installedChromeTuningPayload(chromeLabSharedTuningTargetId(), outer, inner, dividers));
       setSaveMsg(`saved ${path}`);
     } catch (error) {
       setSaveMsg(`error: ${error instanceof Error ? error.message : String(error)}`);
@@ -1798,7 +1810,7 @@ function ChromeLabPageViewer({
   const saveDefaults = async (): Promise<void> => {
     setSaveMsg('saving...');
     try {
-      const path = await saveChromeLabDefaultsToDisk(installedChromeTuningPayload(target.id, outer, inner, dividers));
+      const path = await saveChromeLabDefaults(installedChromeTuningPayload(target.id, outer, inner, dividers));
       setSaveMsg(`saved ${path}`);
     } catch (error) {
       setSaveMsg(`error: ${error instanceof Error ? error.message : String(error)}`);

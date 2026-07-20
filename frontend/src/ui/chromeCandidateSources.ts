@@ -1,9 +1,4 @@
-import {
-  assertInstalledChromeLiveMediaAvailable,
-  INSTALLED_CHROME_LIVE_SLOTS,
-  liveMediaForSlot,
-  resolvedLiveMediaUrl,
-} from '@chess-tactics/board-render';
+import { requiredDrawableRole } from '@chess-tactics/board-render';
 import type {
   AdminLiveMediaCatalog,
   AdminLiveMediaVersion,
@@ -14,13 +9,31 @@ export type ChromeCandidateRole = ChromeRole | 'divider';
 export type ChromeCandidateKind = 'atom' | 'rail-repeat' | 'rail-long' | 'rail-sheet';
 export type ImageSize = { w: number; h: number };
 
-export const CHROME_LIVE_SLOTS = INSTALLED_CHROME_LIVE_SLOTS;
+const installedChrome = () => requiredDrawableRole('chrome-family', 'installed-chrome');
+const installedChromeSlot = (role: string): string => {
+  const slot = installedChrome().media[role]?.slot;
+  if (!slot) throw new Error(`installed Chrome role ${role} is unavailable`);
+  return slot;
+};
+export const CHROME_LIVE_SLOTS = {
+  get outerAtom() { return installedChromeSlot('outer-atom'); },
+  get outerRail() { return installedChromeSlot('outer-rail'); },
+  get innerAtom() { return installedChromeSlot('inner-atom'); },
+  get innerRail() { return installedChromeSlot('inner-rail'); },
+  get dividerJoint() { return installedChromeSlot('divider-joint'); },
+};
 
-export type ChromeLiveSlot = (typeof CHROME_LIVE_SLOTS)[keyof typeof CHROME_LIVE_SLOTS];
+export type ChromeLiveSlot = string;
 
 /** Fail startup instead of silently falling back to source-owned Chrome pixels. */
 export function assertInstalledChromeSlots(): void {
-  assertInstalledChromeLiveMediaAvailable();
+  const asset = installedChrome();
+  for (const role of ['outer-atom', 'outer-rail', 'inner-atom', 'inner-rail', 'divider-joint']) {
+    const media = asset.media[role]?.media;
+    if (!media?.mediaType.startsWith('image/') || !media.width || !media.height) {
+      throw new Error(`installed Chrome role ${role} is not a dimensioned backend image`);
+    }
+  }
 }
 
 export type ChromeCandidateSource = {
@@ -62,16 +75,17 @@ type ChromeCandidateMetadata = {
   recommended: boolean;
 };
 
-const CHROME_SLOT_SPEC: Record<ChromeLiveSlot, {
+const chromeSlotSpec = (slot: ChromeLiveSlot): {
   label: string;
   role: ChromeCandidateRole;
   kind: ChromeCandidateKind;
-}> = {
-  [CHROME_LIVE_SLOTS.outerAtom]: { label: 'Installed outer atom', role: 'outer', kind: 'atom' },
-  [CHROME_LIVE_SLOTS.outerRail]: { label: 'Installed outer rail', role: 'outer', kind: 'rail-sheet' },
-  [CHROME_LIVE_SLOTS.innerAtom]: { label: 'Installed inner atom', role: 'inner', kind: 'atom' },
-  [CHROME_LIVE_SLOTS.innerRail]: { label: 'Installed inner rail', role: 'inner', kind: 'rail-repeat' },
-  [CHROME_LIVE_SLOTS.dividerJoint]: { label: 'Installed divider joint', role: 'divider', kind: 'atom' },
+} => {
+  if (slot === CHROME_LIVE_SLOTS.outerAtom) return { label: 'Installed outer atom', role: 'outer', kind: 'atom' };
+  if (slot === CHROME_LIVE_SLOTS.outerRail) return { label: 'Installed outer rail', role: 'outer', kind: 'rail-sheet' };
+  if (slot === CHROME_LIVE_SLOTS.innerAtom) return { label: 'Installed inner atom', role: 'inner', kind: 'atom' };
+  if (slot === CHROME_LIVE_SLOTS.innerRail) return { label: 'Installed inner rail', role: 'inner', kind: 'rail-repeat' };
+  if (slot === CHROME_LIVE_SLOTS.dividerJoint) return { label: 'Installed divider joint', role: 'divider', kind: 'atom' };
+  throw new Error(`installed Chrome slot ${slot} has no behavior`);
 };
 
 const candidateSources = new Map<string, ChromeCandidateSource>();
@@ -138,34 +152,28 @@ function chromeCandidateMetadata(version: AdminLiveMediaVersion): ChromeCandidat
 }
 
 function installedSource(slot: ChromeLiveSlot): ChromeCandidateSource {
-  const spec = CHROME_SLOT_SPEC[slot];
-  const active = liveMediaForSlot(slot);
-  const enriched = active.versionMetadata.chromeCandidate;
-  const metadata = isRecord(enriched) ? enriched : null;
-  const kind = metadata && ['atom', 'rail-repeat', 'rail-long', 'rail-sheet'].includes(String(metadata.kind))
-    ? metadata.kind as ChromeCandidateKind
-    : spec.kind;
-  const componentIndex = metadata ? nonnegativeInteger(metadata.componentIndex) ?? 0 : 0;
-  const componentCount = metadata ? positiveInteger(metadata.componentCount) ?? 1 : 1;
+  const spec = chromeSlotSpec(slot);
+  const binding = Object.values(installedChrome().media).find((entry) => entry.slot === slot);
+  if (!binding) throw new Error(`installed Chrome slot ${slot} is unavailable`);
+  const active = binding.media;
+  if (!active.width || !active.height) throw new Error(`installed Chrome slot ${slot} has no raster dimensions`);
   return {
     id: slot,
-    label: typeof metadata?.label === 'string' ? metadata.label : spec.label,
+    label: spec.label,
     role: spec.role,
-    kind,
-    src: resolvedLiveMediaUrl(slot),
-    width: active.media.width ?? 1,
-    height: active.media.height ?? 1,
-    sourceSheetId: typeof metadata?.sourceSheetId === 'string' ? metadata.sourceSheetId : slot,
-    sourceSheetLabel: typeof metadata?.sourceSheetLabel === 'string' ? metadata.sourceSheetLabel : 'Installed backend slot',
-    sourceSheetPath: typeof metadata?.sourceSheetPath === 'string' ? metadata.sourceSheetPath : slot,
-    componentIndex,
-    componentCount,
-    crop: { x: 0, y: 0, w: active.media.width ?? 1, h: active.media.height ?? 1 },
+    kind: spec.kind,
+    src: active.immutableUrl,
+    width: active.width,
+    height: active.height,
+    sourceSheetId: slot,
+    sourceSheetLabel: 'Installed backend slot',
+    sourceSheetPath: slot,
+    componentIndex: 0,
+    componentCount: 1,
+    crop: { x: 0, y: 0, w: active.width, h: active.height },
     recommended: true,
     authority: 'installed-slot',
-    versionId: active.activeVersionId,
-    versionStatus: active.versionStatus,
-    provenance: active.provenance,
+    provenance: {},
   };
 }
 
@@ -205,7 +213,7 @@ export function clearChromeAdminCatalog(): void {
 }
 
 export function chromeSourceById(id: string): ChromeCandidateSource {
-  if (id in CHROME_SLOT_SPEC) return installedSource(id as ChromeLiveSlot);
+  if (Object.values(CHROME_LIVE_SLOTS).includes(id)) return installedSource(id);
   const candidate = candidateSources.get(id);
   if (candidate) return candidate;
   throw new Error(`Chrome source ${id} is absent from the live backend catalog`);

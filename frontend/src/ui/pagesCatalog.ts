@@ -3,6 +3,7 @@
 // page = one entry here. Functional viewers mount the real component with in-place tweak
 // controls (Main Menu = live sizing; Settings = the dressing room); the rest are stubs that
 // iframe the live route until their controls land.
+import { drawableAssets, requiredDrawableDefault } from '@chess-tactics/board-render';
 
 export interface PageEntry {
   name: string; // stable selection id
@@ -13,11 +14,19 @@ export interface PageEntry {
   thumb: string; // card thumbnail — a hero shot of the live route (scripts/shot-page-thumbs.mjs)
 }
 
-export const PAGE_ENTRIES: PageEntry[] = [
-  { name: 'main-menu', label: 'Main Menu', route: '/', status: 'functional', blurb: 'The "Wet Stone & Cold Iron" home screen — tune button + icon sizing live.', thumb: '/assets/ui/pages/main-menu.webp' },
-  { name: 'settings', label: 'Settings', route: '/settings', status: 'functional', blurb: 'The settings screen — the live dressing room: assign a surface to each region.', thumb: '/assets/ui/pages/settings.webp' },
-  { name: 'skirmish', label: 'Skirmish', route: '/play', status: 'stub', blurb: 'A live skirmish match screen.', thumb: '/assets/ui/pages/skirmish.webp' },
-  { name: 'campaign-editor', label: 'Editor', route: '/editor', status: 'functional', blurb: 'The campaign authoring screen — tune the action buttons (size, frame, fill) live.', thumb: '/assets/ui/pages/campaign-editor.webp' },
-  { name: 'level-editor', label: 'Level Editor', route: '/editor/level', status: 'stub', blurb: 'The level / terrain editor.', thumb: '/assets/ui/pages/level-editor.webp' },
-  { name: 'lobbies', label: 'Lobbies', route: '/lobbies', status: 'stub', blurb: 'Multiplayer lobbies.', thumb: '/assets/ui/pages/lobbies.webp' },
-];
+const currentPages = (): PageEntry[] => drawableAssets('studio-page').map((asset) => {
+  const name = String(asset.behavior.value ?? '');
+  const route = String(asset.behavior.route ?? '');
+  const status = asset.behavior.viewerStatus;
+  const thumb = asset.media.thumbnail?.media.immutableUrl;
+  if (!name || !route || (status !== 'functional' && status !== 'stub') || !thumb) throw new Error(`studio page ${asset.id} is incomplete`);
+  return { name, label: asset.label, route, status, blurb: String(asset.metadata.blurb ?? ''), thumb };
+});
+export const PAGE_ENTRIES: PageEntry[] = new Proxy([], { get: (_target, property) => { const values = currentPages(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
+export function defaultPageEntry(): PageEntry {
+  const record = requiredDrawableDefault('studio-page');
+  const value = record.behavior.value;
+  const page = typeof value === 'string' ? currentPages().find((entry) => entry.name === value) : undefined;
+  if (!page) throw new Error(`Studio page default ${record.id} is unavailable`);
+  return page;
+}

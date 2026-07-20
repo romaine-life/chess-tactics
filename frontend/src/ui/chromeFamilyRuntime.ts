@@ -10,7 +10,8 @@ import {
   chromeUnitScopedSelectors,
   chromeUnitSelectors,
 } from './chromeUnitRegistry';
-import committedChromeLabDefaults from '../../config/chrome-lab-defaults.json';
+import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
+import { SURFACE_ASSETS } from './surfaceCatalog';
 
 export type RailFit = 'stretch' | 'tile';
 export type AtomAlignmentMode = 'manual' | 'rail-center' | 'anchor' | 'edge-cover';
@@ -18,14 +19,8 @@ export type AtomPreviewMode = 'live' | 'baked' | 'debug';
 export type ChromeFillMode = 'none' | 'tint' | 'surface';
 export type TitleVerticalAlign = 'manual' | 'center';
 export type TitleHorizontalAlign = 'manual' | 'content-inset';
-export type ChromeFillTintId = 'night' | 'blue' | 'steel' | 'oak' | 'ember';
-export type ChromeFillSurfaceId =
-  | 'hybrid-stone-blue'
-  | 'hybrid-wood-oak'
-  | 'baseline-stone-blue'
-  | 'baseline-wood-oak'
-  | 'stone-slate-blue'
-  | 'stone-grey';
+export type ChromeFillTintId = string;
+export type ChromeFillSurfaceId = string;
 
 export const NO_ATOM_SOURCE_ID = 'none';
 export const DIVIDER_H = 34;
@@ -43,21 +38,32 @@ export const CHROME_FILL_MODE_OPTIONS = [
   { id: 'tint', label: 'Tint' },
   { id: 'surface', label: 'Surface' },
 ] satisfies Array<{ id: ChromeFillMode; label: string }>;
-export const CHROME_FILL_TINTS = [
-  { id: 'night', label: 'Night', rgb: [4, 13, 20] },
-  { id: 'blue', label: 'Deep blue', rgb: [5, 24, 42] },
-  { id: 'steel', label: 'Steel', rgb: [28, 42, 58] },
-  { id: 'oak', label: 'Oak shadow', rgb: [44, 24, 10] },
-  { id: 'ember', label: 'Ember', rgb: [50, 11, 13] },
-] satisfies Array<{ id: ChromeFillTintId; label: string; rgb: [number, number, number] }>;
-export const CHROME_FILL_SURFACES = [
-  { id: 'hybrid-stone-blue', label: 'Hybrid stone blue', src: '/assets/ui/surfaces/hybrid-stone-blue.png' },
-  { id: 'hybrid-wood-oak', label: 'Hybrid wood oak', src: '/assets/ui/surfaces/hybrid-wood-oak.png' },
-  { id: 'baseline-stone-blue', label: 'Baseline stone blue', src: '/assets/ui/surfaces/baseline-stone-blue.png' },
-  { id: 'baseline-wood-oak', label: 'Baseline wood oak', src: '/assets/ui/surfaces/baseline-wood-oak.png' },
-  { id: 'stone-slate-blue', label: 'Slate stone blue', src: '/assets/ui/surfaces/stone-slate-blue.png' },
-  { id: 'stone-grey', label: 'Grey stone', src: '/assets/ui/surfaces/stone-grey.png' },
-] satisfies Array<{ id: ChromeFillSurfaceId; label: string; src: string }>;
+type ChromeFillTint = { id: ChromeFillTintId; label: string; rgb: [number, number, number] };
+function currentChromeFillTints(): ChromeFillTint[] {
+  return drawableAssets('chrome-fill-tint').map((asset) => {
+    const id = asset.behavior.value;
+    const rgb = asset.behavior.rgb;
+    if (typeof id !== 'string' || !Array.isArray(rgb) || rgb.length !== 3
+      || rgb.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)) {
+      throw new Error(`chrome fill tint ${asset.id} is incomplete`);
+    }
+    return { id, label: asset.label, rgb: rgb as [number, number, number] };
+  });
+}
+export const CHROME_FILL_TINTS: ChromeFillTint[] = new Proxy([] as ChromeFillTint[], {
+  get: (_target, property) => {
+    const values = currentChromeFillTints();
+    const value = Reflect.get(values, property);
+    return typeof value === 'function' ? value.bind(values) : value;
+  },
+});
+export const CHROME_FILL_SURFACES: Array<{ id: ChromeFillSurfaceId; label: string; src: string }> = new Proxy([], {
+  get: (_target, property) => {
+    const values = SURFACE_ASSETS.map((asset) => ({ id: asset.name, label: asset.label, src: asset.file }));
+    const value = Reflect.get(values, property);
+    return typeof value === 'function' ? value.bind(values) : value;
+  },
+});
 
 export type DividerJointSource = Pick<ChromeCandidateSource, 'id' | 'label' | 'src' | 'width' | 'height'>;
 export type SourcePreviewBox = { width: number; height: number };
@@ -220,13 +226,17 @@ export type DividerRender = {
 
 export type DividerRenders = Record<ChromeRole, DividerRender>;
 
-type CommittedChromeLabDefaults = {
+type InstalledChromeDefaults = {
   outer: RoleTune;
   inner: RoleTune;
   dividers: DividerTunes;
 };
 
-const COMMITTED_CHROME_LAB_DEFAULTS = committedChromeLabDefaults as unknown as CommittedChromeLabDefaults;
+function installedChromeDefaults(): InstalledChromeDefaults {
+  const behavior = requiredDrawableRole('chrome-family', 'installed-chrome').behavior;
+  if (!behavior.outer || !behavior.inner || !behavior.dividers) throw new Error('installed Chrome geometry is unavailable');
+  return behavior as unknown as InstalledChromeDefaults;
+}
 
 export type DividerAtomOverlay = {
   left: string;
@@ -253,11 +263,12 @@ export type AtomAlignmentReadout = {
   finalBottomY: number;
 };
 export function roleDefault(role: ChromeRole): RoleTune {
-  return { ...(role === 'outer' ? COMMITTED_CHROME_LAB_DEFAULTS.outer : COMMITTED_CHROME_LAB_DEFAULTS.inner) };
+  const defaults = installedChromeDefaults();
+  return { ...(role === 'outer' ? defaults.outer : defaults.inner) };
 }
 
 export function dividerDefault(role: ChromeRole = 'outer'): DividerTune {
-  return { ...COMMITTED_CHROME_LAB_DEFAULTS.dividers[role] };
+  return { ...installedChromeDefaults().dividers[role] };
 }
 export function defaultRailFitForSource(sourceId: string, fallback: RailFit = 'stretch'): RailFit {
   const source = chromeSourceById(sourceId);
@@ -496,7 +507,9 @@ function renderCornerAtomDataUrl(atom: HTMLCanvasElement, atomSize: number, flip
 
 export function dividerJointSourceById(id: string): DividerJointSource {
   const sources = dividerJointSources();
-  return sources.find((source) => source.id === id) ?? sources[0];
+  const source = sources.find((candidate) => candidate.id === id);
+  if (!source) throw new Error(`drawable catalog has no divider joint source ${id}`);
+  return source;
 }
 
 function renderFrameBaseCanvas(tune: RoleTune, rail: HTMLCanvasElement): { canvas: HTMLCanvasElement; slice: number; frameSize: number } {
@@ -702,11 +715,15 @@ function cssPx(value: number): string {
 }
 
 export function chromeFillTintById(id: ChromeFillTintId): (typeof CHROME_FILL_TINTS)[number] {
-  return CHROME_FILL_TINTS.find((tint) => tint.id === id) ?? CHROME_FILL_TINTS[0];
+  const tint = CHROME_FILL_TINTS.find((candidate) => candidate.id === id);
+  if (!tint) throw new Error(`drawable catalog has no chrome fill tint ${id}`);
+  return tint;
 }
 
 export function chromeFillSurfaceById(id: ChromeFillSurfaceId): (typeof CHROME_FILL_SURFACES)[number] {
-  return CHROME_FILL_SURFACES.find((surface) => surface.id === id) ?? CHROME_FILL_SURFACES[0];
+  const surface = CHROME_FILL_SURFACES.find((candidate) => candidate.id === id);
+  if (!surface) throw new Error(`drawable catalog has no chrome fill surface ${id}`);
+  return surface;
 }
 
 function chromeFillColor(tune: RoleTune): string {

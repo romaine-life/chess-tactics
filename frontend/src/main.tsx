@@ -3,9 +3,6 @@
 // music, and mounts the React router. (Account/auth chrome lives in the React
 // app-shell title bar now — src/ui/shared/HeaderAccountCluster.)
 import './style.css';
-// Generated from code-owned nine-slice geometry — carries each frame's content
-// and fill boxes as CSS variables without baking or promoting media.
-import './generated/nine-slice.css';
 import { createRoot } from 'react-dom/client';
 import { armForColdHome, isMainMenuPath } from './ui/shell/coldReveal';
 // @ts-ignore — bgm.js is untyped legacy JS, imported for its side-effecting init.
@@ -13,14 +10,14 @@ import { initBgm } from './bgm.js';
 import { primeSfx } from './sfx';
 import { initProgressSync } from './campaign/progressSync';
 import { loadLiveSeats } from './net/propSeats';
-import { loadLiveWallArt } from './net/wallArt';
 import { loadLiveUnitCatalog } from './net/unitAssets';
 import { loadLiveMediaCatalog } from './net/liveMedia';
 import { loadDrawableCatalog } from './net/drawableCatalog';
 import { loadLiveSfxProfile } from './net/sfxProfile';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
-import { applyGroundCoverCatalog, applyWallDecorCatalog, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { installNineSliceCssVariables, installUiFonts, installUiMediaCssVariables, installedUiMedia } from './ui/installedUiMedia';
+import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, assertInstalledPresentationCatalog } from '@chess-tactics/board-render';
 import { installLoadingResourceObserver, loadingError, loadingMark, loadingMeasure } from './diagnostics/loadingTimeline';
 import { composeInstalledChromeCss } from './ui/useInstalledChromeCss';
 
@@ -77,7 +74,6 @@ if (shell instanceof HTMLElement) shell.style.visibility = 'visible';
 // soft navigations. The route-scoped background preload moves the scene — first in the
 // order — to the front of the network queue without taxing other routes (the global
 // preload was deliberately removed; see index.html).
-try { initBgm(); } catch { /* background music is decorative */ }
 // Arm authored terrain SFX on the first user gesture (mirrors initBgm). Only
 // attaches listeners — no AudioContext until a gesture, so it's cheap + autoplay-safe.
 try { primeSfx(); } catch { /* sound effects are decorative */ }
@@ -93,13 +89,19 @@ if (root) {
     .then(async () => {
       applyGroundCoverCatalog();
       applyWallDecorCatalog();
+      applyWallArtCatalog();
+      assertInstalledPresentationCatalog();
+      installUiMediaCssVariables();
+      installUiFonts();
+      installNineSliceCssVariables();
+      try { initBgm(installedUiMedia('ui-kit-icons-music-png')); } catch { /* background music is decorative */ }
       loadingMeasure('app', 'critical-catalogs-ready', startupAt);
       if (isMainMenuPath(window.location.pathname)) {
         const bgPreload = document.createElement('link');
         bgPreload.rel = 'preload';
         bgPreload.as = 'image';
         bgPreload.type = 'image/avif';
-        bgPreload.href = resolvedLiveMediaUrl('ui/main-menu/background-scene-v1.avif');
+        bgPreload.href = installedUiMedia('ui-main-menu-background-scene-v1-avif');
         bgPreload.setAttribute('fetchpriority', 'high');
         document.head.appendChild(bgPreload);
       }
@@ -127,11 +129,6 @@ if (root) {
       const { App } = await import('./ui/App');
       reactRoot.render(<App />);
       requestAnimationFrame(() => loadingMeasure('app', 'first-app-frame', startupAt));
-      // Wall art is explicitly decorative. Media, Unit Art, and prop seats are
-      // absent from this fail-soft group: the app does not render without them.
-      void loadLiveWallArt()
-        .then((changed) => { if (changed) reactRoot.render(<App />); })
-        .catch(() => { /* wall art is decorative */ });
     })
     .catch((error) => {
       loadingError('app', 'critical-startup-failed', error);

@@ -43,6 +43,11 @@ const featureMaterialKind = (kind: FeatureKind): string => `${kind}-material`;
 const materialValue = (asset: { id: string; behavior: Record<string, unknown> }): string =>
   typeof asset.behavior.value === 'string' ? asset.behavior.value : asset.id;
 const materialAsset = (kind: string, value: string) => drawableAssets(kind).find((asset) => materialValue(asset) === value);
+const defaultMaterialValue = (kind: string, label: string): string => {
+  const selected = drawableAssets(kind).filter((asset) => asset.behavior.default === true);
+  if (selected.length !== 1) throw new Error(`drawable catalog must have exactly one default ${label}; found ${selected.length}`);
+  return materialValue(selected[0]);
+};
 
 export const featureMaterialLabel = (material: FeatureMaterial, kind?: FeatureKind): string => {
   if (kind) {
@@ -62,12 +67,7 @@ export const featureMaterials = (kind: FeatureKind): readonly FeatureMaterial[] 
 
 /** The default brush material for a feature kind. */
 export const defaultFeatureMaterial = (kind: FeatureKind): FeatureMaterial =>
-  (() => {
-    const assets = drawableAssets(featureMaterialKind(kind));
-    const selected = assets.find((asset) => asset.behavior.default === true) ?? assets[0];
-    if (!selected) throw new Error(`drawable catalog has no ${kind} materials`);
-    return materialValue(selected);
-  })();
+  defaultMaterialValue(featureMaterialKind(kind), `${kind} material`);
 
 export type FeatureEdge = 'N' | 'E' | 'S' | 'W';
 
@@ -245,10 +245,7 @@ export function featurePiece(mask: number): FeaturePiece {
 export type FenceMaterial = string;
 export const fenceMaterials = (): readonly FenceMaterial[] => drawableAssets('fence-material').map(materialValue);
 export const defaultFenceMaterial = (): FenceMaterial => {
-  const assets = drawableAssets('fence-material');
-  const selected = assets.find((asset) => asset.behavior.default === true) ?? assets[0];
-  if (!selected) throw new Error('drawable catalog has no fence materials');
-  return materialValue(selected);
+  return defaultMaterialValue('fence-material', 'fence material');
 };
 export const fenceMaterialLabel = (material: FenceMaterial): string => {
   const asset = materialAsset('fence-material', material);
@@ -267,10 +264,7 @@ export const FENCE_RENDER_MASKS = [2, 4, 6] as const;
 export type WallMaterial = string;
 export const wallMaterials = (): readonly WallMaterial[] => drawableAssets('wall-material').map(materialValue);
 export const defaultWallMaterial = (): WallMaterial => {
-  const assets = drawableAssets('wall-material');
-  const selected = assets.find((asset) => asset.behavior.default === true) ?? assets[0];
-  if (!selected) throw new Error('drawable catalog has no wall materials');
-  return materialValue(selected);
+  return defaultMaterialValue('wall-material', 'wall material');
 };
 export const wallMaterialLabel = (material: WallMaterial): string => {
   const asset = materialAsset('wall-material', material);

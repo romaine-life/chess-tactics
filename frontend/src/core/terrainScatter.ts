@@ -18,6 +18,7 @@
 // columns*rows) — feed it straight to solveSocketBoard() to autotile.
 
 import { createRng, type Rng } from './rng';
+import { defaultTerrainFamily } from './tileSockets';
 import type { TileFamilyId } from './tileSockets';
 
 export interface ScatterSection {
@@ -228,7 +229,7 @@ function growRegions(
 export function scatterTerrainDetailed(opts: ScatterTerrainOptions): { terrain: TileFamilyId[]; sectionOf: Int32Array } {
   const { columns, rows, sections, randomnessBuffer, wiggle, seed, region, baseMap } = opts;
   const n = columns * rows;
-  const fallback: TileFamilyId = sections[0]?.terrain ?? 'grass';
+  const fallback: TileFamilyId = sections[0]?.terrain ?? defaultTerrainFamily().id;
   const terrain: TileFamilyId[] = new Array(n);
   const sectionOf = new Int32Array(n).fill(-1);
   for (let i = 0; i < n; i += 1) terrain[i] = baseMap?.[i] ?? fallback;

@@ -641,7 +641,9 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
 ];
 
 export function chromeUnitById(id: string | undefined): ChromeUnitSpec {
-  return CHROME_UNIT_REGISTRY.find((entry) => entry.id === id) ?? CHROME_UNIT_REGISTRY[0];
+  const unit = CHROME_UNIT_REGISTRY.find((entry) => entry.id === id);
+  if (!unit) throw new Error(`Unknown executable Chrome unit "${id ?? '(missing)'}"`);
+  return unit;
 }
 
 export function chromeUnitAncestorChain(unit: ChromeUnitSpec): ChromeUnitSpec[] {

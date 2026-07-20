@@ -1,4 +1,4 @@
-import wallArtJson from './wallArt.json';
+import { drawableAssets } from '../art/drawableCatalog';
 import {
   parseEdgeKey,
   isOrthogonalPair,
@@ -31,10 +31,6 @@ export interface WallArtReflectionConfig {
   opacity: number;
 }
 
-export const DEFAULT_WALL_ART_REFLECTION: Readonly<WallArtReflectionConfig> = {
-  opacity: 0.72,
-};
-
 export interface WallArt {
   id: string;
   label: string;
@@ -49,9 +45,6 @@ export type WallArtEntry = Omit<WallArt, 'id' | 'span'> & { span?: number };
 export type WallArtMap = Record<string, WallArtEntry>;
 export type WallArtPlacementMap = Record<string, WallArtId>;
 export type WallArtFaceMap = Partial<Record<WallDecorFaceId, WallArtId>>;
-
-const BASELINE_WALL_ART = wallArtJson as WallArtMap;
-let WALL_ART_MAP: WallArtMap = BASELINE_WALL_ART;
 
 const WALL_ART_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
@@ -69,27 +62,25 @@ function coerceSlot(slot: WallArtSlot): WallArtSlot | null {
   };
 }
 
-const clamp = (value: unknown, fallback: number, min: number, max: number): number =>
-  typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
-
 /** Normalize persisted/editor optics into the one live contract. Geometry and sprite scale are
  * intentionally not configurable: every mirror is an exact board-grid, 1:1 reflection. */
-export function normalizeWallArtReflection(value: unknown): WallArtReflectionConfig {
-  const record = value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Partial<Record<keyof WallArtReflectionConfig, unknown>>
-    : {};
-  return {
-    opacity: clamp(record.opacity, DEFAULT_WALL_ART_REFLECTION.opacity, 0.05, 1),
-  };
+export function normalizeWallArtReflection(value: unknown): WallArtReflectionConfig | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const opacity = (value as { opacity?: unknown }).opacity;
+  if (!(typeof opacity === 'number' && Number.isFinite(opacity) && opacity >= 0.05 && opacity <= 1)) return null;
+  return { opacity };
 }
 
 function normalizeWallArt(id: string, entry: WallArtEntry): WallArt | null {
   if (!WALL_ART_ID_PATTERN.test(id)) return null;
   if (!entry || !Array.isArray(entry.slots)) return null;
   const slots = entry.slots.map((slot) => coerceSlot(slot as WallArtSlot)).filter((slot): slot is WallArtSlot => !!slot);
-  const span = Number.isFinite(entry.span) ? Math.max(1, Math.min(16, Math.round(Number(entry.span)))) : 1;
+  if (slots.length !== entry.slots.length || slots.some((slot) => !wallDecorAsset(slot.sourceId))) return null;
+  if (!Number.isSafeInteger(entry.span) || Number(entry.span) < 1 || Number(entry.span) > 16) return null;
+  const span = Number(entry.span);
   const hasMirrorSlot = slots.some((slot) => wallDecorAsset(slot.sourceId)?.kind === 'mirror');
-  const reflection = hasMirrorSlot || entry.reflection ? normalizeWallArtReflection(entry.reflection) : undefined;
+  const reflection = entry.reflection === undefined ? undefined : normalizeWallArtReflection(entry.reflection);
+  if ((hasMirrorSlot && !reflection) || (!hasMirrorSlot && entry.reflection !== undefined)) return null;
   return {
     id,
     label: typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : id,
@@ -100,35 +91,51 @@ function normalizeWallArt(id: string, entry: WallArtEntry): WallArt | null {
 }
 
 export function currentWallArt(): WallArtMap {
-  return WALL_ART_MAP;
+  return wallArtMapFromItems(wallArtItems());
 }
 
-export function applyLiveWallArt(overrides: WallArtMap | null | undefined): boolean {
-  if (!overrides || Object.keys(overrides).length === 0) return false;
-  const merged = { ...BASELINE_WALL_ART, ...overrides };
-  const normalized = Object.entries(merged).map(([id, entry]) => normalizeWallArt(id, entry));
-  if (normalized.some((entry) => !entry)) return false;
-  // Persist only the current contract shape in memory. This retires stale mode/FOV/scale keys
-  // from older live rows instead of carrying them back through Studio on the next save.
-  WALL_ART_MAP = wallArtMapFromItems(normalized as WallArt[]);
-  return true;
+function projectedWallArt(): Array<WallArt | null> {
+  return drawableAssets('wall-art').map((asset) => normalizeWallArt(asset.id, {
+    label: asset.label,
+    span: asset.behavior.span as number | undefined,
+    slots: asset.behavior.slots as WallArtSlot[],
+    reflection: asset.behavior.reflection as WallArtReflectionConfig | undefined,
+  }));
+}
+
+/** Validate the complete DB-owned wall-art projection. Missing or malformed
+ * installed content is an availability failure, never a packaged fallback. */
+export function applyWallArtCatalog(): void {
+  const projected = projectedWallArt();
+  if (projected.length === 0) throw new Error('invalid wall-art drawable catalog: no installed wall art');
+  const invalidIndex = projected.findIndex((entry) => !entry);
+  if (invalidIndex >= 0) {
+    const asset = drawableAssets('wall-art')[invalidIndex];
+    throw new Error(`invalid wall-art drawable catalog: ${asset?.id ?? `entry ${invalidIndex}`} is invalid`);
+  }
+  const defaults = drawableAssets('wall-art').filter((asset) => asset.behavior.default === true);
+  if (defaults.length !== 1) throw new Error(`invalid wall-art drawable catalog: expected one default, found ${defaults.length}`);
 }
 
 export function wallArtItems(): WallArt[] {
-  return Object.entries(WALL_ART_MAP)
-    .map(([id, entry]) => normalizeWallArt(id, entry))
-    .filter((asset): asset is WallArt => !!asset);
+  return projectedWallArt().filter((asset): asset is WallArt => !!asset);
 }
 
 export function wallArt(id: string | undefined): WallArt | undefined {
   if (!id) return undefined;
-  const entry = WALL_ART_MAP[id];
-  return entry ? normalizeWallArt(id, entry) ?? undefined : undefined;
+  return wallArtItems().find((entry) => entry.id === id);
 }
 
-/** The stable catalog fallback shared by editor mount and later route synchronization. */
+/** The explicit database-owned default shared by editor mount and route synchronization. */
 export function wallArtIdOrDefault(id: string | undefined): WallArtId {
-  return wallArt(id)?.id ?? wallArtItems()[0]?.id ?? 'banner-stone-wall';
+  if (id) {
+    const selected = wallArt(id);
+    if (!selected) throw new Error(`invalid wall-art drawable catalog: ${id} is unavailable`);
+    return selected.id;
+  }
+  const defaults = drawableAssets('wall-art').filter((asset) => asset.behavior.default === true);
+  if (defaults.length !== 1 || !wallArt(defaults[0].id)) throw new Error('invalid wall-art drawable catalog: default is unavailable');
+  return defaults[0].id;
 }
 
 export function wallArtLabel(artId: string | undefined): string {
@@ -157,7 +164,9 @@ export function wallFaceTarget(
 }
 
 export function wallArtSpanForId(artId: string | undefined): number {
-  return wallArt(artId)?.span ?? 1;
+  const art = wallArt(artId);
+  if (!art) throw new Error(`invalid wall-art drawable catalog: ${artId ?? '(missing)'} is unavailable`);
+  return art.span;
 }
 
 export function wallArtSpanEdges(

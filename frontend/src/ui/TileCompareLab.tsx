@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { drawableAssets, requiredDrawableDefault } from '@chess-tactics/board-render';
 
 // Before/after inspector for the PixelLab tile pipeline, as an embedded Studio Viewer kind
 // (ADR-0058): board/panes in `.al-lab-main`, controls in the one `.tileset-view-controls`
@@ -7,24 +8,30 @@ import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 // right = what correct-iso-tile-angle.py produces (snapped to our ~29° grid). Pure inspector
 // (no committed baseline is edited — ADR-0057 does not apply).
 
-const FAMILIES = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'] as const;
-const VARIANTS = [0, 1, 2, 3, 4, 5] as const;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export type CompareTile = { id: string; family: string; variant: number; label: string; raw: string; proc: string; rawH: number };
-export const COMPARE_TILES: CompareTile[] = FAMILIES.flatMap((f) =>
-  VARIANTS.map((n) => ({
-    id: `${f}-${n}`,
-    family: f,
-    variant: n,
-    label: `${cap(f)} ${n + 1}`,
-    raw: `/assets/tiles/pixel-raw/${f}-${n}.png`,
-    proc: `/assets/tiles/pixel/${f}-px-${n}.png`,
-    rawH: 175,
-  })),
-);
-export const COMPARE_TILE_FAMILIES = FAMILIES;
+const currentCompareTiles = (): CompareTile[] => drawableAssets('terrain-comparison').map((asset) => {
+  const family = asset.behavior.family;
+  const variant = asset.behavior.variant;
+  const raw = asset.media.raw?.media.immutableUrl;
+  const proc = asset.media.processed?.media.immutableUrl;
+  if (typeof family !== 'string' || typeof variant !== 'number' || !raw || !proc) throw new Error(`terrain comparison ${asset.id} is incomplete`);
+  return { id: asset.id, family, variant, label: asset.label, raw, proc, rawH: asset.media.raw.media.height ?? 175 };
+});
+export const COMPARE_TILES: CompareTile[] = new Proxy([] as CompareTile[], {
+  get: (_target, property) => { const values = currentCompareTiles(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; },
+});
+export const COMPARE_TILE_FAMILIES: readonly string[] = new Proxy([] as string[], {
+  get: (_target, property) => { const values = [...new Set(currentCompareTiles().map((tile) => tile.family))]; const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; },
+});
 export const compareTileCap = cap;
+export function defaultCompareTile(): CompareTile {
+  const record = requiredDrawableDefault('terrain-comparison');
+  const selected = currentCompareTiles().find((tile) => tile.id === record.id);
+  if (!selected) throw new Error(`terrain comparison default ${record.id} is unavailable`);
+  return selected;
+}
 
 // Canonical block wireframe (our grid) in 96×180 tile coords.
 const APEX = '48,41', RT = '96,68', LT = '0,68', FT = '48,95', RB = '96,153', LB = '0,153', FB = '48,180';
@@ -54,7 +61,8 @@ export function TileCompareLab({ tileId, onTileId, header }: {
   tileId: string; onTileId: (id: string) => void; header?: ReactNode;
 }): ReactElement {
   const [grid, setGrid] = useState(false);
-  const idx = Math.max(0, COMPARE_TILES.findIndex((t) => t.id === tileId));
+  const idx = COMPARE_TILES.findIndex((t) => t.id === tileId);
+  if (idx < 0) throw new Error(`terrain comparison ${tileId} is unavailable`);
   const tile = COMPARE_TILES[idx];
 
   // ← → flips through the set (VIEW state; guarded against form fields).
@@ -87,7 +95,7 @@ export function TileCompareLab({ tileId, onTileId, header }: {
             <label className="tileset-category-select" title="Which pipeline tile you're comparing.">
               <span>Tile</span>
               <select value={tile.id} onChange={(e) => onTileId(e.target.value)} aria-label="Tile">
-                {FAMILIES.map((f) => (
+                {COMPARE_TILE_FAMILIES.map((f) => (
                   <optgroup key={f} label={cap(f)}>
                     {COMPARE_TILES.map((t) => (t.family === f ? <option key={t.id} value={t.id}>{t.label}</option> : null))}
                   </optgroup>

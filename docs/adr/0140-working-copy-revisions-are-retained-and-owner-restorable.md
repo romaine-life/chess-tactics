@@ -4,7 +4,7 @@ date: 2026-07-19
 deciders: Nelson, Codex
 ---
 
-# ADR-0138: Working-copy revisions are retained and owner-restorable
+# ADR-0140: Working-copy revisions are retained and owner-restorable
 
 ## Context
 
@@ -48,5 +48,5 @@ no direct export of either copy.
 ## More Information
 
 - [Persistence](../persistence.md#level-editor-working-copies)
-- [ADR-0137](0137-persistence-failures-interrupt-editing-and-recovery-conflicts-resolve.md)
+- [ADR-0139](0139-persistence-failures-interrupt-editing-and-recovery-conflicts-resolve.md)
 - [ADR-0132](0132-admins-may-direct-read-editor-documents.md)

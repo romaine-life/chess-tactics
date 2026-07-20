@@ -3,6 +3,8 @@ import {
   TILE_STEP_Y,
 } from '../art/projectionContract';
 import type { PredrawnBoardSurface } from '../ui/boardCode';
+
+type PredrawnBoardProjection = Omit<PredrawnBoardSurface, 'slot'>;
 import { boardLabCellPosition, boardLabMetrics } from './boardProjection';
 import {
   PREDRAWN_GUIDE_EPSILON,
@@ -78,7 +80,7 @@ const UNIT_CORNERS: readonly PredrawnPoint[] = [[0, 0], [1, 0], [1, 1], [0, 1]];
  * board. Unregistered plates retain this whole-image scale-and-translation behavior.
  */
 export function predrawnBoardPlacement(
-  surface: PredrawnBoardSurface,
+  surface: PredrawnBoardProjection,
   cells: readonly { x: number; y: number }[],
 ): PredrawnBoardPlacement {
   const metrics = boardLabMetrics(cells);
@@ -226,7 +228,7 @@ export function predrawnSourceGridCoordinate(
 }
 
 function registrationGeometry(
-  surface: PredrawnBoardSurface,
+  surface: PredrawnBoardProjection,
   cells: readonly { x: number; y: number }[],
   registration: PredrawnBoardCornerRegistration,
 ): {
@@ -251,7 +253,7 @@ function registrationGeometry(
 
 /** Exact four-point projective registration. Every source corner is a hard constraint. */
 export function predrawnBoardHomography(
-  surface: PredrawnBoardSurface,
+  surface: PredrawnBoardProjection,
   cells: readonly { x: number; y: number }[],
   registration: PredrawnBoardCornerRegistration,
 ): PredrawnBoardHomography | undefined {
@@ -334,7 +336,7 @@ export function predrawnRectifiedSourcePoint(
 }
 
 export function predrawnBoardRasterTransform(
-  surface: PredrawnBoardSurface,
+  surface: PredrawnBoardProjection,
   cells: readonly { x: number; y: number }[],
   registration: PredrawnBoardCornerRegistration,
 ): PredrawnBoardRasterTransform | undefined {

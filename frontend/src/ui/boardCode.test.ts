@@ -133,7 +133,7 @@ describe('boardCode round-trip', () => {
   it('preserves wall art independently from wall materials', () => {
     const board = emptyBoard({
       walls: { '0,0|0,-1': 'stone', '0,1|-1,1': 'stone' },
-      wallArt: { '0,0|-1,0': 'banner-stone-wall' },
+      wallArt: { '0,0|-1,0': 'test-banner-pair' },
     });
     const decoded = decodeBoard(encodeBoard(board));
     expect(decoded).not.toBeNull();
@@ -201,21 +201,26 @@ describe('boardCode round-trip', () => {
     expect(decodeBoard(encodeBoard(emptyBoard()))!.wallArt).toEqual({});
   });
 
-  it('round-trips explicit Subterrain and drops interior or unsupported faces', () => {
+  it('round-trips Subterrain on playable and scenic terrain and drops interior or unsupported faces', () => {
     const board = emptyBoard({
       cols: 2,
       rows: 1,
       cells: { '0,0': 'grass-surf-0', '1,0': 'grass-surf-0' },
+      decorativeApron: { top: 0, right: 1, bottom: 0, left: 0 },
+      decorativeFootprint: ['-1,0'],
       subterrain: {
         '0,0:east': 'earth',
         '0,0:south': 'roots',
         '1,0:east': 'bedrock',
         '4,4:south': 'sand',
+        '2,0:south': 'sand',
+        '-1,0:south': 'earth',
       },
     });
     expect(decodeBoard(encodeBoard(board))!.subterrain).toEqual({
       '0,0:south': 'roots',
-      '1,0:east': 'bedrock',
+      '2,0:south': 'sand',
+      '-1,0:south': 'earth',
     });
   });
 

@@ -15,58 +15,37 @@ import { loadDecodedImage } from '../render/imageResources';
 // destination opens, inside a LOCAL Suspense so the fallback shows in the destination column
 // (not the whole menu). Settings, Play, and Lobbies are light enough to import directly.
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
-import { MENU_MODES } from './design/catalogData';
+import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
 import { getSnapshot, markFailed, markReady, subscribe } from './shell/coldReveal';
+import { installedUiMedia } from './installedUiMedia';
 
-const ICONS = '/assets/ui/main-menu/icons-carved';
-const BRAND_SHIELD = '/assets/ui/kit/icons/brand-shield.png';
+const BRAND_SHIELD = () => installedUiMedia('ui-kit-icons-brand-shield-png');
 // The heaviest button asset — the carved-stone surface behind every rail tab. The
 // buttons layer only counts as "ready" once this (plus the icons) has decoded, so the
 // rail never reveals as bare panels with the stone snapping in underneath later.
-const STONE_SURFACE = '/assets/ui/surfaces/baseline-stone-blue.avif';
+const STONE_SURFACE = () => installedUiMedia('ui-surfaces-baseline-stone-blue-avif');
 // The title bar's wooden surface — gate the title layer on it (plus the brand shield)
 // so the bar reveals whole, not wordmark-first then wood.
-const TITLE_SURFACE = '/assets/ui/surfaces/hybrid-wood-oak.png';
+const TITLE_SURFACE = () => installedUiMedia('ui-surfaces-hybrid-wood-oak-png');
 
-const MODE_HREFS: Record<string, string> = {
-  'campaign-editor': '/editor',
-  lobbies: '/lobbies',
-  settings: '/settings',
-};
-
-interface MenuTab { slug: string; label: string; href: string; iconSlug: string }
-
-// Product-menu relabels applied over MENU_MODES (which stays the untouched design-catalog
-// source of truth — its widget assets keep their 'campaign-editor'/'level-editor' names).
-// "Editor" remains the campaign/workspace organizer; its pinned actions include the
-// no-decisions shortcut into a blank standalone board.
-const MENU_TAB_LABELS: Record<string, string> = {
-  'campaign-editor': 'Editor',
-};
-
-const MENU_HIDDEN_SLUGS = new Set(['solo-skirmish', 'level-editor']);
+interface MenuTab { slug: string; label: string; href: string; icon: string }
 
 // The main-menu rail. Play is the one player-facing entry for Skirmish, standalone
-// Levels, and Campaigns (ADR-0074). It is menu-only rather than a design-catalog
-// widget, so MENU_MODES stays the untouched catalog source of truth. The existing
-// sword carving is the semantic Play mark; the retired separate Campaign and Solo
-// Skirmish entries do not remain as hidden navigation parallels.
-const MENU_TABS: MenuTab[] = [
-  { slug: 'play', label: 'Play', href: PLAY_SKIRMISH_SELECTOR_HREF, iconSlug: 'solo-skirmish' },
-  ...MENU_MODES
-    .filter((mode) => !MENU_HIDDEN_SLUGS.has(mode.slug))
-    .map((mode) => ({
-      slug: mode.slug,
-      label: MENU_TAB_LABELS[mode.slug] ?? mode.label,
-      href: MODE_HREFS[mode.slug] || '/',
-      iconSlug: mode.slug,
-    })),
-];
+// Levels, and Campaigns (ADR-0074). The database-owned menu-mode inventory supplies
+// the visible entries, their ordering, routes, labels, and icon assignments.
+const currentMenuTabs = (): MenuTab[] => drawableAssets('menu-mode').map((asset) => {
+  const slug = String(asset.behavior.value ?? '');
+  const href = String(asset.behavior.route ?? '');
+  const icon = asset.media.icon?.media.immutableUrl;
+  if (!slug || !href || !icon) throw new Error(`menu mode ${asset.id} is incomplete`);
+  return { slug, label: asset.label, href, icon };
+});
+const MENU_TABS: MenuTab[] = new Proxy([], { get: (_target, property) => { const values = currentMenuTabs(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
 
 // The trailing-edge Settings control (carved gear) — moved out of the rail into the
 // account cluster (ADR-0036). Lives next to the avatar so the top-right reads as one
 // "settings + user" unit.
-const SETTINGS_ICON = `${ICONS}/settings.png`;
+const SETTINGS_ICON = () => requiredDrawableRole('menu-mode', 'settings').media.icon.media.immutableUrl;
 
 // A mode entry rendered as a settings-style rail tab (shared baked-skin frame —
 // line frame over the stone surface — carved icon + label). The same chrome the
@@ -90,7 +69,7 @@ function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?:
       style={{ ['--tab-index' as string]: index }}
     >
       <span className="settings-tab-icon" aria-hidden="true">
-        <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
+        <img src={tab.icon} alt="" />
       </span>
       <FittedTabLabel>{tab.label}</FittedTabLabel>
     </NavButton>
@@ -169,12 +148,12 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
     const startedAt = performance.now();
     loadingMark('menu', 'critical-art-decode-start');
     // Title: the brand shield + the wooden bar surface, so the bar reveals whole.
-    void Promise.all([BRAND_SHIELD, TITLE_SURFACE].map(loadDecodedImage)).then(() => {
+    void Promise.all([BRAND_SHIELD(), TITLE_SURFACE()].map(loadDecodedImage)).then(() => {
       markReady('title');
       loadingMeasure('menu', 'title-art-decoded', startedAt);
     }).catch(markFailed);
     // Buttons: the carved icons + the heaviest stone rail surface.
-    const buttonArt = [SETTINGS_ICON, STONE_SURFACE, ...MENU_TABS.map((tab) => `${ICONS}/${tab.iconSlug}.png`)];
+    const buttonArt = [SETTINGS_ICON(), STONE_SURFACE(), ...MENU_TABS.map((tab) => tab.icon)];
     void Promise.all(buttonArt.map(loadDecodedImage)).then(() => {
       markReady('buttons');
       requestAnimationFrame(() => loadingMeasure('menu', 'button-art-first-painted-frame', startedAt, { assetCount: buttonArt.length }));

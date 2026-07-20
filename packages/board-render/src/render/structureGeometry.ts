@@ -42,12 +42,22 @@ export function structureSeatPoint(anchor: { x: number; y: number }, w: number, 
 }
 
 export function propHalfSrc(propId: string, half: 'back' | 'front'): string {
-  return `/assets/props/${propId}/${half}.png`;
+  const def = propDef(propId);
+  if (def?.spriteParts?.length) return structureSourceHalfSrc(def.spriteParts[0].source, half);
+  if (def?.spriteSource && (def.spriteSource.kind !== 'prop' || def.spriteSource.id !== propId)) {
+    return structureSourceHalfSrc(def.spriteSource, half);
+  }
+  const art = structureArtAsset(def?.spriteId ?? propId);
+  if (!art) throw new Error(`prop source "${propId}" has no DB-owned drawable media`);
+  return structureArtHalfSrc(art.id, half);
 }
 
 export function structureSourceHalfSrc(source: StructureSourceRef, half: 'back' | 'front'): string {
   if (source.kind === 'asset') return structureArtHalfSrc(source.id, half);
-  if (source.kind === 'doodad') return `/assets/doodads/${source.id}/${half}.png`;
+  if (source.kind === 'doodad') {
+    const doodad = doodadAsset(source.id);
+    return half === 'back' ? doodad.back : doodad.front;
+  }
   const def = propDef(source.id);
   if (def?.spriteParts?.length) return structureSourceHalfSrc(def.spriteParts[0].source, half);
   if (def?.spriteSource && (def.spriteSource.kind !== 'prop' || def.spriteSource.id !== source.id)) {

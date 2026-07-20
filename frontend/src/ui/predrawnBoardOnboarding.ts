@@ -45,12 +45,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-export function predrawnBoardSlotForLevel(levelId: string): string {
-  const slug = normalizedLevelSlug(levelId);
-  if (!slug) throw new Error('The level id cannot produce a board-media slot.');
-  return `boards/${slug}/plate.png`;
-}
-
 /** Text provenance for the current isolated Fortress Gate generation run. */
 export function predrawnBoardGenerationProvenance(
   levelId: string,
@@ -163,7 +157,6 @@ export function predrawnBoardReviewProof(input: {
 export async function installPredrawnBoardMedia(
   install: PredrawnBoardMediaInstallInput,
 ): Promise<PredrawnBoardMediaInstallResult> {
-  const slot = predrawnBoardSlotForLevel(install.levelId);
   const response = await fetch(install.previewSrc, { cache: 'no-store', credentials: 'same-origin' });
   if (!response.ok) throw new Error(`The reviewed board image could not be read (${response.status}).`);
   const bytes = await response.blob();
@@ -172,6 +165,32 @@ export async function installPredrawnBoardMedia(
   const alignmentSha256 = await sha256Hex(install.alignment);
 
   let catalog = await fetchAdminLiveMediaCatalog();
+  let allocatedVersion: AdminLiveMediaVersion | undefined;
+  let slot = catalog.versions.find((candidate) => (
+    candidate.slot
+    && candidate.provenance.levelId === install.levelId
+    && isRecord(candidate.metadata.runtime)
+    && candidate.metadata.runtime.component === PREDRAWN_BOARD_MEDIA_COMPONENT
+  ))?.slot ?? null;
+  if (!slot) {
+    const allocated = await createLiveMediaVersion({
+      allocateSlot: 'predrawn-board',
+      domain: 'background',
+      role: 'media',
+      label: `${install.levelName} board background`,
+      availabilityPolicy: 'critical',
+      slotMetadata: { acceptance: { mode: 'standalone' } },
+      metadata: { runtime: { component: PREDRAWN_BOARD_MEDIA_COMPONENT, variant: normalizedLevelSlug(install.levelId),
+        frameWidth: install.frameWidth, frameHeight: install.frameHeight, frameCount: 1, altText: '' } },
+      provenance: { ...install.provenance, reviewedPreview: install.previewSrc, reviewedPreviewSha256: sha256, alignmentSha256 },
+      nativeEvidence: { native1x: true, spatialResampling: false, sourceWidth: install.frameWidth,
+        sourceHeight: install.frameHeight, sourceSha256: sha256 },
+    }, `predrawn-slot-${install.levelId}`);
+    if (!allocated.slot) throw new Error('The backend did not assign a board-media slot.');
+    allocatedVersion = allocated;
+    slot = allocated.slot;
+    catalog = await fetchAdminLiveMediaCatalog();
+  }
   let mediaSlot = slotFor(catalog, slot);
   const active = mediaSlot?.activeVersionId
     ? catalog.versions.find((version) => version.id === mediaSlot?.activeVersionId)
@@ -180,7 +199,7 @@ export async function installPredrawnBoardMedia(
     return { slot, sha256, version: active, catalog, alreadyAccepted: true };
   }
 
-  let version = versionForHash(catalog, slot, sha256, 'candidate', alignmentSha256);
+  let version = versionForHash(catalog, slot, sha256, 'candidate', alignmentSha256) ?? allocatedVersion;
   if (!version) {
     version = await createLiveMediaVersion({
       slot,

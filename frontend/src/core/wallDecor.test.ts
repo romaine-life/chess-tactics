@@ -1,28 +1,27 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import {
-  applyLiveMediaCatalog,
-  resetLiveMediaCatalog,
-  WALL_DECOR_ASSETS,
-  WALL_DECOR_KIND_LABELS,
-  WALL_DECOR_KINDS,
-} from '@chess-tactics/board-render';
-import { testGroundCoverCatalog, testWallDecorMediaSlots } from '../test/liveMediaCatalog';
+import { WALL_DECOR_ASSETS, WALL_DECOR_KIND_LABELS, WALL_DECOR_KINDS } from '@chess-tactics/board-render';
+import { applyTestDrawableCatalog } from '../test/drawableCatalog';
 
 const MIRROR_IDS = [
-  'mirror-keep',
-  'mirror-court-oval',
-  'mirror-chapel-glass',
-  'mirror-witch-eye',
-  'mirror-grand-gallery',
+  'test-mirror-keep',
+  'test-mirror-court-oval',
+  'test-mirror-chapel-glass',
+  'test-mirror-witch-eye',
+  'test-mirror-grand-gallery',
 ] as const;
 
-beforeAll(() => applyLiveMediaCatalog(testGroundCoverCatalog(testWallDecorMediaSlots())));
-afterAll(() => resetLiveMediaCatalog());
+beforeAll(() => applyTestDrawableCatalog());
+afterAll(() => applyTestDrawableCatalog());
 
 describe('wall decor catalog', () => {
   it('exposes mirrors as a labeled catalog kind', () => {
     expect(WALL_DECOR_KINDS).toContain('mirror');
     expect(WALL_DECOR_KIND_LABELS.mirror).toBe('Mirrors');
+  });
+
+  it('allows framework introspection without treating object properties as catalog identities', () => {
+    expect(WALL_DECOR_KIND_LABELS.constructor).toBe(Object);
+    expect(WALL_DECOR_KIND_LABELS[Symbol.toStringTag as unknown as string]).toBeUndefined();
   });
 
   it('catalogs the anchor mirror set under the mirror kind', () => {

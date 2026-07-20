@@ -7,8 +7,6 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { nineSliceGeometrySave } from './scripts/vite-nine-slice-geometry-plugin.mjs';
-import { chromeLabDefaultsSave } from './scripts/vite-chrome-lab-defaults-plugin.mjs';
 
 // Stamp build/server provenance into the bundle so Settings → About can always
 // say exactly what's serving this page. Every build carries the app's semver
@@ -371,6 +369,7 @@ function prodBackend(port) {
             DEV_AUTH: '1',
             DEV_AUTH_EMAIL: process.env.DEV_AUTH_EMAIL || 'nelson@romaine.life',
             DEV_AUTH_NAME: process.env.DEV_AUTH_NAME || 'Nelson',
+            DEV_AUTH_TOKEN_FILE: process.env.DEV_AUTH_TOKEN_FILE || join(backendDir, '..', '.codex-session', 'auth.json'),
             ADMIN_EMAILS: process.env.ADMIN_EMAILS || 'nelson@romaine.life',
             UNIT_ASSET_CONTAINER_URL: process.env.UNIT_ASSET_CONTAINER_URL || 'https://chesstacticsmedia.blob.core.windows.net/unit-assets',
             // Local developers may opt into an isolated directory + disposable
@@ -433,17 +432,17 @@ export default defineConfig(async ({ command }) => {
     ? (noBackend ? [bgmDevMock(), officialCampaignsDevProxy(), devAuthMock()] : [prodBackend(backendPort)])
     : [];
   return {
-    plugins: [react(), buildInfo(), nineSliceGeometrySave(), chromeLabDefaultsSave(), ...devApiPlugins],
+    plugins: [react(), buildInfo(), ...devApiPlugins],
     test: { setupFiles: ['./src/test/setupDrawableCatalog.ts'] },
     // `/assets/*` belongs exclusively to backend-resolved live media. Keep
     // executable Vite chunks in a disjoint namespace so production code can
     // never be mistaken for a semantic media slot.
     build: { assetsDir: 'app-code' },
     ...(useBackend ? { server: { proxy: {
-      '/api': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, ws: true },
+      '/api': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, ws: true, xfwd: true },
       // `/assets/*` is a stable semantic-slot route owned by the backend's live
       // media catalog. Never let Vite's public directory mask a missing DB slot.
-      '/assets': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false },
+      '/assets': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, xfwd: true },
     } } } : {}),
   };
 });

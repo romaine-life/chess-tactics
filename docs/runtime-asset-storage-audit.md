@@ -86,7 +86,7 @@ were retired after this audit completed; ADR-0094 restores ordinary merged-main
 build and digest-pinned deployment.
 
 This completes the storage/runtime cutover, not every domain's owner-operated
-acceptance instrument. Unit Art and the atomic Water side projection are
+acceptance instrument. Unit Art and database-declared terrain surface groups are
 contract-complete for promotion. Other migrated domains are live-backed and can
 receive candidates, but acceptance remains fail-closed until each domain adds
 the typed validator, exact-byte review surface, backend proof validation, and

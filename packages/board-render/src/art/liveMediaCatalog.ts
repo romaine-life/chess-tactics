@@ -124,17 +124,6 @@ export function assertLiveMediaCatalog(value: unknown): asserts value is LiveMed
 let liveMediaCatalog: LiveMediaCatalog | null = null;
 let liveMediaBySlot = new Map<string, LiveMediaSlot>();
 
-// These five semantic roles are a browser-startup contract, not a Studio
-// preference. Keep the identities in the shared renderer so the browser and
-// backend readiness probe cannot drift into validating different Chrome sets.
-export const INSTALLED_CHROME_LIVE_SLOTS = {
-  outerAtom: 'ui/chrome/outer/atom.png',
-  outerRail: 'ui/chrome/outer/rail.png',
-  innerAtom: 'ui/chrome/inner/atom.png',
-  innerRail: 'ui/chrome/inner/rail.png',
-  dividerJoint: 'ui/chrome/divider/joint.png',
-} as const;
-
 /** Apply one complete backend snapshot as the renderer's only media authority. */
 export function applyLiveMediaCatalog(value: unknown): boolean {
   assertLiveMediaCatalog(value);
@@ -183,15 +172,5 @@ export function assertCriticalLiveMediaAvailable(): void {
   if (!liveMediaCatalog) throw catalogFailure('catalog is not hydrated');
   if (!liveMediaCatalog.slots.some((slot) => slot.availabilityPolicy === 'critical')) {
     throw catalogFailure('catalog contains no availability-critical slots');
-  }
-}
-
-/** Fail startup/readiness unless every installed Chrome role is a real live raster. */
-export function assertInstalledChromeLiveMediaAvailable(): void {
-  for (const slot of Object.values(INSTALLED_CHROME_LIVE_SLOTS)) {
-    const active = liveMediaForSlot(slot);
-    if (!active.media.mediaType.startsWith('image/') || !active.media.width || !active.media.height) {
-      throw catalogFailure(`installed Chrome slot ${slot} is not a dimensioned backend image`);
-    }
   }
 }

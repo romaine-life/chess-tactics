@@ -4,7 +4,7 @@ date: 2026-07-19
 deciders: Nelson, Codex
 ---
 
-# ADR-0137: Persistence failures interrupt editing and recovery conflicts resolve
+# ADR-0139: Persistence failures interrupt editing and recovery conflicts resolve
 
 ## Context
 

@@ -1,5 +1,5 @@
 import { useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
-import { SURFACE_ASSETS } from './surfaceCatalog';
+import { SURFACE_ASSETS, defaultSurfaceAsset } from './surfaceCatalog';
 
 // Read-only catalog grid for background surfaces. Each card shows the texture *tiled* (the
 // way it renders behind panels) rather than the raw single tile, so you read it as a surface.
@@ -50,7 +50,8 @@ export function SurfaceLibraryStudio({
 // The read-only Viewer for a single surface — shown big, both in a framed panel (the way it
 // renders behind chrome) and as a bare tiled field, with a Details readout. Mirrors AssetLab.
 export function SurfaceViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
-  const s = SURFACE_ASSETS.find((x) => x.name === name) ?? SURFACE_ASSETS[0];
+  const s = name ? SURFACE_ASSETS.find((x) => x.name === name) : defaultSurfaceAsset();
+  if (!s) throw new Error(`Selected UI surface "${name}" is unavailable`);
   // Zoom scales the displayed tile size. The surface repeats, so zoom alone is enough to
   // inspect it — no panning needed; you always see filled content. Low zoom = many tiles
   // (read it as a surface), high zoom = big pixels (inspect the pixel art / seams).

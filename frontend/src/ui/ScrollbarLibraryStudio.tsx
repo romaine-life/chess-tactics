@@ -1,5 +1,6 @@
 import { type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { liveScrollbarAssets } from './scrollbarCatalog';
+import { requiredDrawableRole } from '@chess-tactics/board-render';
 
 // Read-only live catalog grid for scrollbar grips. Each card shows the sprite centered
 // (a scrollbar grip is a single element, not a tiled surface). Reuses the shared studio card +
@@ -60,7 +61,8 @@ export function ScrollbarLibraryStudio({
 // editable, not lifeless). Custom ::-webkit-scrollbar skins render in Chrome (the app's target).
 export function ScrollbarViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
   const assets = liveScrollbarAssets();
-  const s = assets.find((x) => x.name === name) ?? assets[0];
+  const requested = name ?? requiredDrawableRole('ui-scrollbar', 'installed-scrollbar').id;
+  const s = assets.find((x) => x.name === requested);
   if (!s) {
     return (
       <>
