@@ -1852,7 +1852,10 @@ async function main() {
   for (const [index, [id, structureKind, terrains, anchorX, anchorY, scale, footprint]] of readinessStructures.entries()) {
     await seedSyntheticDrawable({
       id: `structure-${id}`, kind: 'structure', label: `Synthetic ${id}`, sortOrder: index,
-      behavior: { value: id, structureKind, terrains, anchorX, anchorY, scale, footprint, blocking: true },
+      behavior: {
+        value: id, structureKind, terrains, anchorX, anchorY, scale, footprint, blocking: true,
+        splitMode: id === 'oak' ? 'authored' : 'flat-contact',
+      },
       media: { back: `props/${id}/back.png`, front: `props/${id}/front.png` },
     });
   }
