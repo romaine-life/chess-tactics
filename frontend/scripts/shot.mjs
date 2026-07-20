@@ -10,7 +10,7 @@
 // Usage:
 //   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>]
 //     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold] [--assert-menu-atomic]
-//     [--assert-board-atomic] [--assert-shell-font-atomic]
+//     [--assert-board-atomic] [--assert-shell-font-atomic] [--assert-surface-atomic <name>]
 //     [--full] [--show-scrollbars]
 //
 // Examples:
@@ -38,6 +38,7 @@ const cold = has('cold');
 const assertMenuAtomic = has('assert-menu-atomic');
 const assertBoardAtomic = has('assert-board-atomic');
 const assertShellFontAtomic = has('assert-shell-font-atomic');
+const assertSurfaceAtomic = flag('assert-surface-atomic');
 const fullPage = has('full');
 const showScrollbars = has('show-scrollbars');
 
@@ -124,6 +125,32 @@ try {
       requestAnimationFrame(sample);
     });
   }
+  if (assertSurfaceAtomic) {
+    await page.evaluateOnNewDocument((surfaceName) => {
+      window.__ctSurfaceAtomicSeen = 0;
+      window.__ctSurfaceAtomicViolations = [];
+      const sample = () => {
+        const surface = document.querySelector(`[data-loading-surface="${CSS.escape(surfaceName)}"]`);
+        if (surface) {
+          window.__ctSurfaceAtomicSeen += 1;
+          const content = surface.querySelector('.painted-surface-content');
+          const loading = surface.classList.contains('is-loading');
+          const failed = surface.classList.contains('is-error');
+          const childrenVisible = content
+            ? [...content.children].some((child) => getComputedStyle(child).visibility !== 'hidden')
+            : false;
+          const imagesComplete = content
+            ? [...content.querySelectorAll('img')].every((img) => img.complete && img.naturalWidth > 0)
+            : false;
+          if (!failed && ((loading && (childrenVisible || !content?.inert)) || (!loading && !imagesComplete))) {
+            window.__ctSurfaceAtomicViolations.push({ loading, failed, childrenVisible, inert: content?.inert, imagesComplete });
+          }
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    }, String(assertSurfaceAtomic));
+  }
   const throttleProfiles = {
     // DevTools-style profiles. Throughput values are bytes/second.
     'slow-4g': { latency: 150, downloadThroughput: 1_600_000 / 8, uploadThroughput: 750_000 / 8 },
@@ -153,7 +180,13 @@ try {
   await page.addStyleTag({ content: `*,*::before,*::after{animation:none!important;transition:none!important;animation-duration:0s!important;caret-color:transparent!important;scroll-behavior:auto!important}` });
 
   // Readiness: explicit gate if given, else a quick best-effort wait on window.__ready (fixtures set it).
-  await page.waitForFunction(readyExpr || 'window.__ready===true', { timeout: readyExpr ? timeout : 1200 }).catch(() => {});
+  if (readyExpr) {
+    // An explicit readiness contract is an assertion, not a best-effort delay. Swallowing
+    // its timeout produced screenshots of blank/partial surfaces that looked like passes.
+    await page.waitForFunction(readyExpr, { timeout });
+  } else {
+    await page.waitForFunction('window.__ready===true', { timeout: 1200 }).catch(() => {});
+  }
   await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
   await new Promise((r) => setTimeout(r, 200));
 
@@ -196,6 +229,22 @@ try {
       console.error(`startup status exposed a fallback-font frame: ${JSON.stringify(result.violations[0])}`);
       process.exitCode = 6;
       throw new Error('atomic shell-font assertion failed');
+    }
+  }
+  if (assertSurfaceAtomic) {
+    const result = await page.evaluate(() => ({
+      violations: window.__ctSurfaceAtomicViolations || [],
+      seen: window.__ctSurfaceAtomicSeen || 0,
+    }));
+    if (!result.seen) {
+      console.error(`atomic surface assertion observed no ${assertSurfaceAtomic} surface`);
+      process.exitCode = 7;
+      throw new Error('atomic surface assertion had no target');
+    }
+    if (result.violations.length) {
+      console.error(`surface exposed a partial or interactive frame: ${JSON.stringify(result.violations[0])}`);
+      process.exitCode = 7;
+      throw new Error('atomic surface assertion failed');
     }
   }
 

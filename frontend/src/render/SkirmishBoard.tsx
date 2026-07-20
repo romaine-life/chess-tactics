@@ -847,12 +847,18 @@ function SkirmishSceneLayer({
 export function SkirmishBoard({
   interactive = true,
   predrawnReview,
+  onSurfaceReady,
+  onSurfaceError,
+  reveal = true,
 }: {
   interactive?: boolean;
   predrawnReview?: {
     src: string;
     registration?: PredrawnBoardCornerRegistration;
   };
+  onSurfaceReady?: (ready: boolean) => void;
+  onSurfaceError?: (error: Error | null) => void;
+  reveal?: boolean;
 } = {}) {
   // Board-view state lives in the shared view store so the HUD's "View" tab owns
   // the controls and the playfield stays clean of floating buttons.
@@ -1019,6 +1025,15 @@ export function SkirmishBoard({
   );
   const boardFrame = useBoardFrameReveal(boardArt.signature);
   const boardReady = boardFrame.ready;
+  const boardVisible = boardReady && reveal;
+  useEffect(() => {
+    onSurfaceReady?.(boardReady);
+    return () => onSurfaceReady?.(false);
+  }, [boardReady, onSurfaceReady]);
+  useEffect(() => {
+    onSurfaceError?.(boardFrame.error);
+    return () => onSurfaceError?.(null);
+  }, [boardFrame.error, onSurfaceError]);
   const acknowledgeTerrain = useCallback(() => boardFrame.acknowledge('terrain'), [boardFrame.acknowledge]);
   const acknowledgeBarriers = useCallback(() => boardFrame.acknowledge('barriers'), [boardFrame.acknowledge]);
   const acknowledgeScene = useCallback(() => boardFrame.acknowledge('scene'), [boardFrame.acknowledge]);
@@ -1387,9 +1402,9 @@ export function SkirmishBoard({
       data-testid="skirmish-board"
       data-interactive={interactive ? 'true' : 'false'}
       data-painted-layers={boardFrame.paintedLayers.join(',')}
-      aria-busy={!boardReady && !boardFrame.error ? true : undefined}
-      inert={!boardReady && !boardFrame.error ? true : undefined}
-      className={`skirmish-board-lab ${boardReady ? '' : 'is-board-loading'} ${boardFrame.error ? 'is-board-error' : ''} ${drag ? 'is-dragging' : ''} ${interactive ? '' : 'is-read-only'}`.trim()}
+      aria-busy={!boardVisible && !boardFrame.error ? true : undefined}
+      inert={!boardVisible && !boardFrame.error ? true : undefined}
+      className={`skirmish-board-lab ${boardVisible ? '' : 'is-board-loading'} ${boardFrame.error ? 'is-board-error' : ''} ${drag ? 'is-dragging' : ''} ${interactive ? '' : 'is-read-only'}`.trim()}
     >
       {boardFrame.error ? (
         <div className="board-load-error" role="alert">

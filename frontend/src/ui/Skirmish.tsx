@@ -1,6 +1,7 @@
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
+import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
@@ -176,8 +177,14 @@ export function Skirmish() {
   // the second time at the new positions. Gating the mount on this lets the board mount once,
   // fresh, for the game we actually play.
   const [boardSettled, setBoardSettled] = useState(false);
+  const [boardSurfaceReady, setBoardSurfaceReady] = useState(false);
+  const [boardSurfaceError, setBoardSurfaceError] = useState<Error | null>(null);
+  const [hudSurfaceReady, setHudSurfaceReady] = useState(false);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const resumeMatch = useSkirmish((s) => s.resumeMatch);
+  const activateClock = useSkirmish((s) => s.activateClock);
+  const storeSessionEpoch = useSkirmish((s) => s.sessionEpoch);
+  const playableSurfaceReady = boardSurfaceReady && hudSurfaceReady;
   const game = useSkirmish((s) => s.game);
   // Subscribed (not getState) so the victory "Continue" button knows, reactively, whether
   // a next level exists once the workspace hydrates.
@@ -307,7 +314,8 @@ export function Skirmish() {
     // rebuilds byte-identical. Setup spawn events instead re-roll, since reshuffling the deal is
     // the point of event-driven deployment and reads better as a fresh deploy.
     const seed = spawnEventsForLevel(level).length ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
-    newSkirmish({ seed, level });
+    setBoardSurfaceReady(false);
+    newSkirmish({ seed, level, deferClockStart: true });
   };
 
   // The title-bar ornament diamond doubles as a Retry control in single-player (see the
@@ -350,7 +358,8 @@ export function Skirmish() {
     );
     useCampaigns.getState().selectLevel(nextLevel.id);
     setRouteLevel(nextLevel);
-    newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: nextLevel });
+    setBoardSurfaceReady(false);
+    newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: nextLevel, deferClockStart: true });
   };
 
   useEffect(() => {
@@ -418,7 +427,7 @@ export function Skirmish() {
       if (!isTestPlay) {
         const saved = loadMatch();
         if (saved && saved.levelId === levelId && saved.game.winner === null) {
-          resumeMatch(saved);
+          resumeMatch(saved, { deferClockStart: true });
           return;
         }
       }
@@ -426,6 +435,7 @@ export function Skirmish() {
         seed: freshSeed(),
         level: levelDoc,
         ai,
+        deferClockStart: true,
       });
     };
 
@@ -439,7 +449,7 @@ export function Skirmish() {
         setBoardSettled(true);
         return;
       }
-      if (shouldStartFresh(routeBoardLevel.id)) newSkirmish({ seed: freshSeed(), level: routeBoardLevel, ai });
+      if (shouldStartFresh(routeBoardLevel.id)) newSkirmish({ seed: freshSeed(), level: routeBoardLevel, ai, deferClockStart: true });
       setBoardSettled(true);
       return;
     }
@@ -449,7 +459,7 @@ export function Skirmish() {
     // re-affirms the game on the effect's re-run (guarded so it never re-fetches in a loop).
     if (routeMap) {
       if (routeLevel) {
-        if (shouldStartFresh(routeLevel.id)) newSkirmish({ seed: freshSeed(), level: routeLevel, ai });
+        if (shouldStartFresh(routeLevel.id)) newSkirmish({ seed: freshSeed(), level: routeLevel, ai, deferClockStart: true });
         setBoardSettled(true);
         return undefined;
       }
@@ -458,7 +468,7 @@ export function Skirmish() {
         .then((level) => {
           if (!active) return;
           setMapError(null);
-          if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level, ai });
+          if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level, ai, deferClockStart: true });
           setRouteLevel(level);
           setBoardSettled(true);
         })
@@ -505,6 +515,10 @@ export function Skirmish() {
       });
     return () => { active = false; };
   }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby]);
+
+  useEffect(() => {
+    if (playableSurfaceReady) activateClock();
+  }, [activateClock, playableSurfaceReady]);
 
   // Multiplayer entry: `/play?lobby=<id>` enters a lobby's shared board. Both clients
   // build the SAME (level, seed) game; each side's moves relay through the lobby channel
@@ -940,7 +954,7 @@ export function Skirmish() {
       {/* Title bar lives in the app shell now; the in-game live status portals into its
           center section (turn/objective read from the game store, in scope here). The
           brand + account cluster are rendered by the shell bar itself. */}
-      <TitleBarSlot region="center">
+      {playableSurfaceReady ? <TitleBarSlot region="center">
         {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
             counts down and an authored untimed level reads "∞ / No limit". Keeping the
             centre chip present means
@@ -972,7 +986,7 @@ export function Skirmish() {
             </span>
           </TitleBarStatus>
         </div>
-      </TitleBarSlot>
+      </TitleBarSlot> : null}
 
       {/* Test play is an authoring loop, so its return is a persistent title-bar action rather
           than an easy-to-miss floating chip. The target still comes from the validated exact
@@ -995,7 +1009,7 @@ export function Skirmish() {
       {/* The bottom-centre ornament diamond becomes a Retry button in single-player: one
           click restarts the current battle. Portals into the shell bar's stud slot (ADR-0042)
           so it sits exactly on the decorative nailhead without disturbing any other bar track. */}
-      {showRetryStud ? (
+      {showRetryStud && playableSurfaceReady ? (
         <TitleBarSlot region="stud">
           <button
             type="button"
@@ -1021,13 +1035,24 @@ export function Skirmish() {
                 </NavButton>
               </InnerChromeBox>
             ) : boardSettled ? (
-              <SkirmishBoard
-                interactive={!net || (netSeatInteractive && !netRelayFrozen)}
-                predrawnReview={predrawnPreview ? {
-                  src: predrawnPreview,
-                  registration: predrawnRegistration,
-                } : undefined}
-              />
+              <>
+                <SkirmishBoard
+                  interactive={!net || (netSeatInteractive && !netRelayFrozen)}
+                  onSurfaceReady={setBoardSurfaceReady}
+                  onSurfaceError={setBoardSurfaceError}
+                  reveal={playableSurfaceReady}
+                  predrawnReview={predrawnPreview ? {
+                    src: predrawnPreview,
+                    registration: predrawnRegistration,
+                  } : undefined}
+                />
+                {!playableSurfaceReady && !boardSurfaceError ? (
+                  <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate skirmish-surface-loading" role="status">
+                    <strong>Preparing battlefield…</strong>
+                    <small>Composing terrain, units, and controls</small>
+                  </InnerChromeBox>
+                ) : null}
+              </>
             ) : routeLobby ? (
               <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="status">
                 <strong>{netError ?? 'Connecting…'}</strong>
@@ -1051,20 +1076,32 @@ export function Skirmish() {
           </InnerChromeBox>
         ) : null}
       </section>
-      <SkirmishHud
-        canStartNewSkirmish={Boolean(activeLevel) && !isCampaignPlay}
-        onRestart={showRetryStud ? retrySkirmish : null}
-        restartLabel={activeLevel ? (isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish'}
-        onNewSkirmish={startNewScenario}
-        newSkirmishLabel={newScenarioLabel}
-        showClockControl={!isCampaignPlay}
-        clockControlValue={activeLevel ? scenarioTimeControl : undefined}
-        onClockControlChange={activeLevel ? setScenarioTimeControl : undefined}
-        returnHref={returnHref}
-        returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
-        netInteractive={netSeatInteractive}
-        onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
-      />
+      {boardSettled && !boardSurfaceError ? (
+        <PaintedSurfaceBoundary
+          surface="gameplay-hud"
+          signature={String(storeSessionEpoch)}
+          readyToCompose={boardSurfaceReady}
+          loadingLabel="Preparing controls…"
+          onRetry={() => setHudSurfaceReady(false)}
+          onPaintedChange={setHudSurfaceReady}
+          showStatus={false}
+        >
+          <SkirmishHud
+            canStartNewSkirmish={Boolean(activeLevel) && !isCampaignPlay}
+            onRestart={showRetryStud ? retrySkirmish : null}
+            restartLabel={activeLevel ? (isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish'}
+            onNewSkirmish={startNewScenario}
+            newSkirmishLabel={newScenarioLabel}
+            showClockControl={!isCampaignPlay}
+            clockControlValue={activeLevel ? scenarioTimeControl : undefined}
+            onClockControlChange={activeLevel ? setScenarioTimeControl : undefined}
+            returnHref={returnHref}
+            returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
+            netInteractive={netSeatInteractive}
+            onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
+          />
+        </PaintedSurfaceBoundary>
+      ) : null}
 
       {predrawnPickerOpen && predrawnPreview ? (
         <PredrawnCornerPicker

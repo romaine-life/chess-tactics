@@ -28,7 +28,7 @@ describe('professional loading architecture guards', () => {
   });
 
   it('makes incomplete player surfaces inert as well as visually hidden', () => {
-    expect(read('./render/SkirmishBoard.tsx')).toContain('inert={!boardReady && !boardFrame.error ? true : undefined}');
+    expect(read('./render/SkirmishBoard.tsx')).toContain('inert={!boardVisible && !boardFrame.error ? true : undefined}');
     expect(read('./ui/PlayMenu.tsx')).toContain('inert={!complete || failure ? true : undefined}');
     expect(read('./style.css')).not.toContain('A failsafe in the hook');
   });
@@ -43,5 +43,29 @@ describe('professional loading architecture guards', () => {
     expect(entry).toContain("querySelector('.app-startup-status.is-font-pending')?.classList.remove('is-font-pending')");
     expect(style).toMatch(/\.app-startup-status\.is-font-pending\s*\{[^}]*visibility:\s*hidden/);
     expect(read('../scripts/shot.mjs')).toContain('startup status exposed a fallback-font frame');
+  });
+
+  it('owns the complete Play destination behind a painted DOM surface boundary', () => {
+    const play = read('./ui/PlayMenu.tsx');
+    const boundary = read('./ui/shell/PaintedSurfaceBoundary.tsx');
+    expect(play).toContain('<PaintedSurfaceBoundary');
+    expect(play).toContain('surface="play-selector"');
+    expect(boundary).toContain("querySelectorAll('img')");
+    expect(boundary).toContain('afterTwoPaintOpportunities');
+    expect(boundary).toContain('renderedCssImageUrls');
+    expect(boundary).toContain("inert={phase !== 'painted' ? true : undefined}");
+    expect(read('../scripts/shot.mjs')).toContain('surface exposed a partial or interactive frame');
+  });
+
+  it('does not expose gameplay HUD chrome before the board surface is ready', () => {
+    const skirmish = read('./ui/Skirmish.tsx');
+    const board = read('./render/SkirmishBoard.tsx');
+    expect(board).toContain('onSurfaceReady?.(boardReady)');
+    expect(skirmish).toContain('playableSurfaceReady ? <TitleBarSlot');
+    expect(skirmish).toContain('surface="gameplay-hud"');
+    expect(skirmish).toContain('Preparing battlefield…');
+    expect(read('../scripts/shot.mjs')).toContain('An explicit readiness contract is an assertion');
+    expect(skirmish).toContain('if (playableSurfaceReady) activateClock()');
+    expect(read('./game/store.ts')).toContain('if (!opts.deferClockStart) startClock()');
   });
 });

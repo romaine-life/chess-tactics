@@ -487,6 +487,18 @@ describe('skirmish store: battle clock', () => {
     expect(clock()).toEqual({ remainingMs: 60_000, running: true, incrementMs: 5_000 });
   });
 
+  it('does not charge loading time when the playable surface owns clock activation', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(60, 5), deferClockStart: true });
+    expect(clock()).toEqual({ remainingMs: 60_000, running: false, incrementMs: 5_000 });
+    vi.advanceTimersByTime(120_000);
+    expect(clock()).toEqual({ remainingMs: 60_000, running: false, incrementMs: 5_000 });
+
+    useSkirmish.getState().activateClock();
+    expect(clock()!.running).toBe(true);
+    vi.advanceTimersByTime(3_000);
+    expect(clock()!.remainingMs).toBe(57_000);
+  });
+
   it('counts down on the player turn and freezes for the whole enemy reply', () => {
     useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(60) });
     vi.advanceTimersByTime(3_000);

@@ -58,9 +58,14 @@ The required representative traces are cold and warm versions of:
   authority revisions; it never depends on mutable renderer-process state.
 - Initially presented level cards are one surface: the list remains hidden and inert until
   every expected thumbnail has painted, or it presents one retryable error.
+- The complete Play selector is one DOM surface: canonical hydration, rendered image
+  consumers, and computed CSS image consumers settle before its columns reveal together.
 - Terrain and scene canvases share decoded image records and acknowledge their actual first
   composition to the board boundary. The board reveals only after terrain, barrier, and
   scene acknowledgements and a browser paint opportunity.
+- A playable board includes its first-frame HUD and title controls. The battle clock remains
+  paused until board compositors and HUD resources have painted and the complete surface is
+  revealed; network or asset latency is never charged as player thinking time.
 - Readiness timeouts were removed from menu, route, screen, and board boundaries. A failed
   critical resource is an error, never synthetic readiness.
 

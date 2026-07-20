@@ -30,6 +30,7 @@ import { NavButton } from './shared/NavButton';
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 import { skirmishProfileLevels } from './skirmishProfiles';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
 const CAMPAIGN_ICON = `${ICONS}/campaign-editor.png`;
@@ -411,6 +412,7 @@ export function PlayMenu(): ReactElement {
   const [loading, setLoading] = useState(true);
   const [officialAvailable, setOfficialAvailable] = useState(false);
   const [userWorkspaceAvailable, setUserWorkspaceAvailable] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -430,7 +432,7 @@ export function PlayMenu(): ReactElement {
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [loadAttempt]);
 
   useEffect(() => {
     const sync = () => {
@@ -505,8 +507,27 @@ export function PlayMenu(): ReactElement {
     ? `/play?campaignId=${encodeURIComponent(activeCampaign.id)}&levelId=${encodeURIComponent(selectedLevelId)}`
     : '/play';
 
+  const surfaceSignature = [
+    selection.mode,
+    selection.mode === 'campaign' ? selection.campaignId : '',
+    ...profileLevels.map((level) => level.id),
+    ...standaloneLevels.map((level) => level.id),
+    ...activeRefs.map((ref) => ref.levelId),
+  ].join(':');
+  const loadError = !loading && (!officialAvailable || !userWorkspaceAvailable)
+    ? new Error('Canonical Play content is unavailable.')
+    : null;
+
   return (
-    <>
+    <PaintedSurfaceBoundary
+      surface="play-selector"
+      signature={surfaceSignature}
+      readyToCompose={!loading && !loadError}
+      error={loadError}
+      loadingLabel="Preparing Play…"
+      onRetry={() => setLoadAttempt((value) => value + 1)}
+      className="play-surface"
+    >
       <aside className="menu-dest-col menu-dest-tabs play-source-rail" aria-label="Play">
         <div className="play-source-fixed">
           <PlayRailTab
@@ -602,6 +623,6 @@ export function PlayMenu(): ReactElement {
           }
         />
       ) : null}
-    </>
+    </PaintedSurfaceBoundary>
   );
 }

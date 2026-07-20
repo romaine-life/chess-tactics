@@ -57,6 +57,9 @@ export interface SkirmishOptions {
    * lets the store fall back to the level's authored control, or — for a free
    * skirmish with no level — the 5:00 default (DEFAULT_TIME_CONTROL). */
   timeControl?: TimeControl | null;
+  /** UI-owned loading boundaries defer the first clock tick until the complete
+   * playable surface has painted. Headless callers omit this and start immediately. */
+  deferClockStart?: boolean;
 }
 
 function pawnForwardFields(type: PieceType, facing: Piece['facing']): Pick<Piece, 'pawnForward'> {
