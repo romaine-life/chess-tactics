@@ -3019,7 +3019,7 @@ export function LevelEditor(): ReactElement {
   // Every route that hydrates an EditorBoard must use this complete field mapping. Keeping the
   // document-load and undo/redo paths on one primitive prevents newly persisted visual channels
   // (such as explicit Subterrain or generation framing) from being silently reset and autosaved.
-  const applyEditorBoardState = (board: EditorBoard): void => {
+  const applyEditorBoard = (board: EditorBoard): void => {
     setBoardCols(board.cols);
     setBoardRows(board.rows);
     setDecorativeApron(board.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 });
@@ -3075,8 +3075,8 @@ export function LevelEditor(): ReactElement {
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
-  const applyEditorBoard = (board: EditorBoard): void => {
-    applyEditorBoardState(board);
+  const applyEditorBoardWithSelectionSafety = (board: EditorBoard): void => {
+    applyEditorBoard(board);
     const nextGeneratedRegions = board.generatedRegions ?? [];
     if (activeGeneratedRegionId && !nextGeneratedRegions.some((region) => region.id === activeGeneratedRegionId)) {
       setActiveGeneratedRegionId(null);
@@ -3087,8 +3087,7 @@ export function LevelEditor(): ReactElement {
   // Keeping a second list of board setters previously omitted subterrain and turned opening a
   // document into a destructive autosave. The one primitive above is the hydration authority.
   const applyLevelDocument = (level: Level, options: { editingId?: string; clean?: boolean; seed?: boolean } = {}): void => {
-    const board = levelToEditorBoard(level);
-    applyEditorBoardState(board);
+    applyEditorBoard(levelToEditorBoard(level));
     setActiveGeneratedRegionId(null);
     setRegionSelection(new Set());
     setUndoStack([]);
@@ -3110,7 +3109,7 @@ export function LevelEditor(): ReactElement {
     setUndoStack((prev) => [...prev, cloneEditorBoard(current)].slice(-HISTORY_LIMIT));
     setRedoStack([]);
     currentEditorBoardRef.current = normalized;
-    applyEditorBoard(normalized);
+    applyEditorBoardWithSelectionSafety(normalized);
     if (selection !== undefined) setSelectedCell(selection);
     return true;
   };
@@ -3250,7 +3249,7 @@ export function LevelEditor(): ReactElement {
     setUndoStack((next) => next.slice(0, -1));
     const restored = cloneEditorBoard(prev);
     currentEditorBoardRef.current = restored;
-    applyEditorBoard(restored);
+    applyEditorBoardWithSelectionSafety(restored);
     setSelectedCell(null);
   };
   const redoBoard = (): void => {
@@ -3262,7 +3261,7 @@ export function LevelEditor(): ReactElement {
     setRedoStack((prev) => prev.slice(1));
     const restored = cloneEditorBoard(next);
     currentEditorBoardRef.current = restored;
-    applyEditorBoard(restored);
+    applyEditorBoardWithSelectionSafety(restored);
     setSelectedCell(null);
   };
   const setPlayerFactionWithHistory = (faction: UnitPalette | null): void => {
@@ -5752,7 +5751,7 @@ export function LevelEditor(): ReactElement {
       documentRevisionRef.current = doc.revision;
       documentConflictRef.current = false;
       documentConflictKindRef.current = null;
-      lastCloudSyncedSigRef.current = levelEditorLevelSignature(doc.level);
+      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(doc.level);
       setEditorDocument(doc);
       setCloudSaveState('saved');
       setCloudSaveDetail(null);
@@ -5919,7 +5918,7 @@ export function LevelEditor(): ReactElement {
         && authority.presence.active_editor?.session_id === authority.session.session_id;
       setEditAuthorityState(writerHere ? 'writer' : authority.session?.state === 'displaced' ? 'displaced' : 'follower');
       documentRevisionRef.current = latest.revision;
-      lastCloudSyncedSigRef.current = levelEditorLevelSignature(latest.level);
+      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(latest.level);
       setEditorDocument(latest);
       if (!writerHere) applyLevelDocument(latest.level, { editingId: latest.level_id, clean: false });
       setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'saved');
@@ -5991,7 +5990,7 @@ export function LevelEditor(): ReactElement {
       setEditSession(verifiedSession ?? taken.session);
       setEditPresence(verified.presence);
       documentRevisionRef.current = latest.revision;
-      lastCloudSyncedSigRef.current = levelEditorLevelSignature(latest.level);
+      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(latest.level);
       documentConflictRef.current = latest.baseline_conflict;
       documentConflictKindRef.current = latest.baseline_conflict ? 'baseline' : null;
       setEditorDocument(latest);
@@ -6065,7 +6064,7 @@ export function LevelEditor(): ReactElement {
       );
       const latest = restored.document;
       documentRevisionRef.current = latest.revision;
-      lastCloudSyncedSigRef.current = levelEditorLevelSignature(latest.level);
+      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(latest.level);
       documentConflictRef.current = latest.baseline_conflict;
       documentConflictKindRef.current = latest.baseline_conflict ? 'baseline' : null;
       setEditorDocument(latest);
@@ -6314,7 +6313,7 @@ export function LevelEditor(): ReactElement {
               },
             );
             documentRevisionRef.current = acknowledged.revision;
-            lastCloudSyncedSigRef.current = levelEditorLevelSignature(acknowledged.level);
+            lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(acknowledged.level);
             editorDocumentRef.current = acknowledged;
           } catch {
             // The synchronous session-scoped browser draft remains the recovery if final CAS fails.

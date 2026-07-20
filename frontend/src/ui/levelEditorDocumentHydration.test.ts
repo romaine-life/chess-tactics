@@ -7,19 +7,18 @@ const levelEditor = readFileSync(new URL('./LevelEditor.tsx', import.meta.url), 
 describe('Level Editor document hydration', () => {
   it('restores explicit Subterrain before the working copy can autosave', () => {
     const sharedHydration = levelEditor.match(
-      /const applyEditorBoardState = \(board: EditorBoard\): void => \{[\s\S]*?\n  \};/,
+      /const applyEditorBoard = \(board: EditorBoard\): void => \{[\s\S]*?\n  \};/,
     )?.[0] ?? '';
     const hydration = levelEditor.match(
       /const applyLevelDocument = \(level: Level,[\s\S]*?\n  \};/,
     )?.[0] ?? '';
     const historyHydration = levelEditor.match(
-      /const applyEditorBoard = \(board: EditorBoard\): void => \{[\s\S]*?\n  \};/,
+      /const applyEditorBoardWithSelectionSafety = \(board: EditorBoard\): void => \{[\s\S]*?\n  \};/,
     )?.[0] ?? '';
 
     expect(sharedHydration).toContain('setBoardSubterrain(board.subterrain ?? {});');
-    expect(hydration).toContain('const board = levelToEditorBoard(level);');
-    expect(hydration).toContain('applyEditorBoardState(board);');
-    expect(historyHydration).toContain('applyEditorBoardState(board);');
+    expect(hydration).toContain('applyEditorBoard(levelToEditorBoard(level));');
+    expect(historyHydration).toContain('applyEditorBoard(board);');
   });
 
   it('synchronously hands a reconnect-only RAM candidate across document canonicalization', () => {
