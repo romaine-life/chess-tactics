@@ -8,9 +8,11 @@ import {
   deleteNeverSavedEditorDocument,
   discardEditorDocumentChanges,
   isEditorDocumentConflict,
+  listEditorDocumentRevisions,
   listEditorDocuments,
   loadEditorDocument,
   resolveEditorDocument,
+  restoreEditorDocumentRevision,
   saveEditorDocument,
   type EditorDocument,
 } from './editorDocuments';
@@ -124,6 +126,41 @@ describe('editor document persistence', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/editor-documents/doc%2Fa%20b');
     expect(init).toMatchObject({ method: 'GET', credentials: 'include', cache: 'no-cache' });
+  });
+
+  it('lists body-free working-copy revision checkpoints', async () => {
+    const revision = {
+      revision: 4,
+      saved_revision: 2,
+      name: 'Level A',
+      reason: 'autosave' as const,
+      restored_from_revision: null,
+      body_hash: 'abc123',
+      body_bytes: 1234,
+      created_at: '2026-07-10T01:01:00.000Z',
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { revisions: [revision], next_before: 4 }));
+
+    await expect(listEditorDocumentRevisions('doc/a b', { limit: 20, before: 9 })).resolves.toEqual({
+      revisions: [revision],
+      next_before: 4,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc%2Fa%20b/revisions?limit=20&before=9');
+    expect(init).toMatchObject({ method: 'GET', credentials: 'include', cache: 'no-cache' });
+    expect(revision).not.toHaveProperty('level');
+  });
+
+  it('restores historical content as a new CAS-protected working revision', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { document: { ...document, revision: 5 } }));
+
+    await expect(restoreEditorDocumentRevision('doc-7f3c', 4, 2)).resolves.toMatchObject({ revision: 5 });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc-7f3c/revisions/restore');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual({ revision: 4, target_revision: 2 });
   });
 
   it('CAS-autosaves the complete level against the observed revision', async () => {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeBoard, encodeBoard, type EditorBoard } from './boardCode';
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 import {
+  acknowledgeScopedLevelEditorRecoveryConflict,
   clearScopedLevelEditorDraft,
   hashDraftSeed,
   levelEditorDraftKey,
@@ -290,5 +291,40 @@ describe('scoped level editor recovery', () => {
 
     clearScopedLevelEditorDraft(identity);
     expect(values.has(key)).toBe(false);
+  });
+
+  it('acknowledges only the exact conflicted recovery bound to the cloud revision on screen', () => {
+    const { values } = stubLocalStorage();
+    const localBoard = baseBoard({ cells: { '4,2': 'sand-surf-0' } });
+    writeScopedLevelEditorDraft(identity, baseDraft({
+      board: localBoard,
+      documentRevision: 42,
+      cloudSignature: 'cloud-revision-42',
+      recoveryConflict: true,
+    }));
+    const key = scopedLevelEditorDraftKey(identity)!;
+    const conflicted = values.get(key);
+
+    expect(acknowledgeScopedLevelEditorRecoveryConflict(identity, {
+      expectedDocumentRevision: 41,
+      expectedCloudSignature: 'cloud-revision-41',
+    })).toBe(false);
+    expect(values.get(key)).toBe(conflicted);
+
+    expect(acknowledgeScopedLevelEditorRecoveryConflict(identity, {
+      expectedDocumentRevision: 42,
+      expectedCloudSignature: 'other-cloud-content',
+    })).toBe(false);
+    expect(values.get(key)).toBe(conflicted);
+
+    expect(acknowledgeScopedLevelEditorRecoveryConflict(identity, {
+      expectedDocumentRevision: 42,
+      expectedCloudSignature: 'cloud-revision-42',
+    })).toBe(true);
+    const acknowledged = readScopedLevelEditorDraft(identity)!;
+    expect(acknowledged.recoveryConflict).toBeUndefined();
+    expect(acknowledged.documentRevision).toBe(42);
+    expect(acknowledged.cloudSignature).toBe('cloud-revision-42');
+    expect(encodeBoard(acknowledged.board)).toBe(encodeBoard(localBoard));
   });
 });

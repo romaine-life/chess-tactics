@@ -24,6 +24,15 @@ editing** card list at `/editor`: it may read an existing private document to id
 the work being resumed, without saving or publishing it (ADR-0090). Browser storage
 is a crash/offline fallback. Do not introduce another editor identity or a
 link-triggered persistence path.
+Cloud autosave errors and conflicts interrupt every editor layer. An older browser recovery
+may resume autosave only after the owner explicitly chooses **Keep recovered work** and its
+scoped revision plus cloud signature still match the document on screen; a newer server write
+must conflict again instead of being overwritten.
+Every acknowledged cloud working-copy mutation retains a restorable server revision. Restore is an
+owner-only compare-and-swap that creates a new working revision and never publishes; the current
+browser and cloud copies must remain directly downloadable from the persistence interruption.
+An untouched document load is read-only: compare the stored Level through the editor's canonical
+projection before deciding to autosave, because serialization normalization is not a user edit.
 
 ## Generated-art handoff rule
 

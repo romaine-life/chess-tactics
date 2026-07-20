@@ -1009,15 +1009,48 @@ const MIGRATIONS = [
         ON level_thumbnail_derivatives (blob_sha256);
     `,
   },
+  {
+    version: 23,
+    name: 'durable level working copy revision history',
+    // The working-copy row remains the latest value and CAS authority. This table
+    // preserves prior acknowledged values so recovery is a normal owner operation,
+    // not browser-database forensics. Keep the newest 200 revisions, one daily
+    // checkpoint, and every explicit lifecycle boundary (Save/Discard/Restore).
+    sql: `
+      CREATE TABLE IF NOT EXISTS level_working_copy_revisions (
+        document_id           text        NOT NULL REFERENCES level_working_copies(document_id) ON DELETE CASCADE,
+        revision              bigint      NOT NULL CHECK (revision >= 1),
+        body                  jsonb       NOT NULL,
+        saved_revision        bigint      NOT NULL CHECK (saved_revision >= 0 AND saved_revision <= revision),
+        baseline_hash         text,
+        reason                text        NOT NULL CHECK (reason IN (
+          'migration', 'resolve', 'create', 'autosave', 'save', 'discard',
+          'restore', 'canonical-refresh'
+        )),
+        restored_from_revision bigint     CHECK (restored_from_revision IS NULL OR restored_from_revision >= 1),
+        created_at            timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (document_id, revision)
+      );
+      CREATE INDEX IF NOT EXISTS level_working_copy_revisions_document_created_idx
+        ON level_working_copy_revisions (document_id, created_at DESC, revision DESC);
+
+      INSERT INTO level_working_copy_revisions
+        (document_id, revision, body, saved_revision, baseline_hash, reason, created_at)
+      SELECT document_id, revision, body, saved_revision, baseline_hash, 'migration', updated_at
+        FROM level_working_copies
+      ON CONFLICT (document_id, revision) DO NOTHING;
+    `,
+  },
 ];
 
 let pool = null;
 let dbReady = false;
 let schemaReadinessPromise = null;
 const REQUIRED_SCHEMA_MIGRATION_VERSIONS = MIGRATIONS.map((migration) => migration.version);
-const REQUIRED_SCHEMA_RELATIONS = ['level_thumbnail_derivatives'];
+const REQUIRED_SCHEMA_RELATIONS = ['level_thumbnail_derivatives', 'level_working_copy_revisions'];
 const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['level_thumbnail_derivatives', 22],
+  ['level_working_copy_revisions', 23],
 ]);
 
 function buildPool() {
@@ -3649,6 +3682,8 @@ app.put('/api/levels/:id', async (req, res) => {
 const USER_EDITOR_WORKSPACE_ID = 'campaign';
 const EDITOR_DOCUMENT_ID_PATTERN = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|legacy-[abcdefghijkmnpqrstuvwxyz23456789]{8,24})$/i;
 const EDITOR_DOCUMENT_COLUMNS = 'document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash, created_at, updated_at';
+const EDITOR_DOCUMENT_HISTORY_RECENT_LIMIT = 200;
+const EDITOR_DOCUMENT_HISTORY_PAGE_LIMIT = 100;
 
 function editorDocumentId(raw) {
   const id = String(raw || '').trim();
@@ -3720,6 +3755,21 @@ function publicEditorDocumentSummary(row) {
   };
 }
 
+function publicEditorDocumentRevision(row) {
+  return {
+    revision: Number(row && row.revision) || 0,
+    saved_revision: Number(row && row.saved_revision) || 0,
+    name: typeof row.name === 'string' ? row.name : '',
+    reason: typeof row.reason === 'string' ? row.reason : 'autosave',
+    restored_from_revision: row && row.restored_from_revision !== null
+      ? Number(row.restored_from_revision)
+      : null,
+    body_hash: typeof row.body_hash === 'string' ? row.body_hash : '',
+    body_bytes: Number(row && row.body_bytes) || 0,
+    created_at: row && row.created_at ? row.created_at : null,
+  };
+}
+
 function editorDocumentError(statusCode, code, row = null, details = null) {
   const error = new Error(code);
   error.statusCode = statusCode;
@@ -3755,6 +3805,121 @@ async function withEditorDocumentTransaction(fn) {
   } finally {
     client.release();
   }
+}
+
+async function dbRecordEditorDocumentRevision(
+  client,
+  row,
+  reason,
+  { restoredFromRevision = null } = {},
+) {
+  await client.query(
+    `INSERT INTO level_working_copy_revisions
+       (document_id, revision, body, saved_revision, baseline_hash, reason, restored_from_revision)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)
+     ON CONFLICT (document_id, revision) DO NOTHING`,
+    [
+      row.document_id,
+      Number(row.revision),
+      JSON.stringify(row.body),
+      Number(row.saved_revision),
+      row.baseline_hash ?? null,
+      reason,
+      restoredFromRevision,
+    ],
+  );
+
+  // Keep granular recent recovery plus one checkpoint per UTC day forever.
+  // Explicit lifecycle boundaries remain even after they age out of both sets.
+  await client.query(
+    `WITH ranked AS (
+       SELECT revision,
+              reason,
+              row_number() OVER (ORDER BY revision DESC) AS recent_rank,
+              row_number() OVER (
+                PARTITION BY (created_at AT TIME ZONE 'UTC')::date
+                ORDER BY revision DESC
+              ) AS daily_rank
+         FROM level_working_copy_revisions
+        WHERE document_id = $1
+     )
+     DELETE FROM level_working_copy_revisions AS history
+      USING ranked
+      WHERE history.document_id = $1
+        AND history.revision = ranked.revision
+        AND ranked.recent_rank > $2
+        AND ranked.daily_rank > 1
+        AND ranked.reason NOT IN (
+          'migration', 'resolve', 'create', 'save', 'discard', 'restore', 'canonical-refresh'
+        )`,
+    [row.document_id, EDITOR_DOCUMENT_HISTORY_RECENT_LIMIT],
+  );
+}
+
+async function dbListEditorDocumentRevisions(ownerEmail, documentId, {
+  limit = EDITOR_DOCUMENT_HISTORY_PAGE_LIMIT,
+  beforeRevision = null,
+} = {}) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT history.revision,
+            history.saved_revision,
+            history.body->>'name' AS name,
+            history.reason,
+            history.restored_from_revision,
+            md5(history.body::text) AS body_hash,
+            octet_length(history.body::text) AS body_bytes,
+            history.created_at
+       FROM level_working_copy_revisions AS history
+       JOIN level_working_copies AS document
+         ON document.document_id = history.document_id
+      WHERE document.owner_email = $1
+        AND history.document_id = $2
+        AND ($3::bigint IS NULL OR history.revision < $3)
+      ORDER BY history.revision DESC
+      LIMIT $4`,
+    [ownerEmail, documentId, beforeRevision, limit + 1],
+  );
+  return rows;
+}
+
+async function dbRestoreEditorDocumentRevision(
+  ownerEmail,
+  documentId,
+  expectedRevision,
+  targetRevision,
+) {
+  return withEditorDocumentTransaction(async (client) => {
+    const current = await dbLockEditorDocument(client, ownerEmail, documentId);
+    assertEditorDocumentRevision(current, expectedRevision);
+    const targetResult = await client.query(
+      `SELECT body
+         FROM level_working_copy_revisions
+        WHERE document_id = $1 AND revision = $2`,
+      [documentId, targetRevision],
+    );
+    const target = targetResult.rows[0];
+    if (!target) throw editorDocumentError(404, 'editor_document_revision_not_found');
+    const parsed = editorDocumentLevel(target.body, current.level_id);
+    if (parsed.error) throw editorDocumentError(409, 'editor_document_revision_invalid', current, parsed.details);
+    const { rows } = await client.query(
+      `UPDATE level_working_copies
+          SET body = $3::jsonb,
+              revision = revision + 1,
+              saved_revision = CASE
+                WHEN md5(($3::jsonb)::text) = baseline_hash THEN revision + 1
+                ELSE saved_revision
+              END,
+              updated_at = now()
+        WHERE owner_email = $1 AND document_id = $2
+        RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [ownerEmail, documentId, JSON.stringify(parsed.level)],
+    );
+    await dbRecordEditorDocumentRevision(client, rows[0], 'restore', {
+      restoredFromRevision: targetRevision,
+    });
+    return dbAnnotateEditorDocumentBaseline(rows[0], client);
+  });
 }
 
 async function dbGetEditorDocument(ownerEmail, documentId, client = pool) {
@@ -3907,6 +4072,7 @@ async function dbReconcileEditorDocument(client, row, { lockCanonical = true } =
       RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
     [row.owner_email, row.document_id, JSON.stringify(parsed.level), canonical.hash],
   );
+  await dbRecordEditorDocumentRevision(client, rows[0], 'canonical-refresh');
   return { ...rows[0], baseline_conflict: false };
 }
 
@@ -3927,6 +4093,7 @@ async function dbResolveEditorDocument(ownerEmail, workspace, levelId) {
       [crypto.randomUUID(), ownerEmail, workspace.kind, workspace.id, levelId, JSON.stringify(parsed.level), canonical.hash],
     );
     row = inserted.rows[0] || await dbGetEditorDocumentByLevel(ownerEmail, workspace, levelId, client, { lock: true });
+    if (inserted.rows[0]) await dbRecordEditorDocumentRevision(client, inserted.rows[0], 'resolve');
     return {
       row: inserted.rows[0] ? { ...inserted.rows[0], baseline_conflict: false } : await dbReconcileEditorDocument(client, row),
       created: Boolean(inserted.rows[0]),
@@ -3996,6 +4163,7 @@ async function dbCreateEditorDocument(ownerEmail, initialLevel) {
        RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
       [crypto.randomUUID(), ownerEmail, levelId, JSON.stringify(parsed.level)],
     );
+    await dbRecordEditorDocumentRevision(client, rows[0], 'create');
     return rows[0];
   });
 }
@@ -4016,24 +4184,28 @@ async function dbAnnotateEditorDocumentBaseline(row, client = pool) {
 }
 
 async function dbAutosaveEditorDocument(ownerEmail, documentId, expectedRevision, level) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    `UPDATE level_working_copies
-        SET body = $4::jsonb,
-            revision = revision + 1,
-            saved_revision = CASE
-              WHEN md5(($4::jsonb)::text) = baseline_hash THEN revision + 1
-              ELSE saved_revision
-            END,
-            updated_at = now()
-      WHERE owner_email = $1 AND document_id = $2 AND revision = $3
-      RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
-    [ownerEmail, documentId, expectedRevision, JSON.stringify(level)],
-  );
-  if (rows[0]) return dbAnnotateEditorDocumentBaseline(rows[0]);
-  const current = await dbGetEditorDocument(ownerEmail, documentId);
-  if (!current) throw editorDocumentError(404, 'editor_document_not_found');
-  throw editorDocumentError(409, 'editor_document_revision_conflict', await dbAnnotateEditorDocumentBaseline(current));
+  return withEditorDocumentTransaction(async (client) => {
+    const { rows } = await client.query(
+      `UPDATE level_working_copies
+          SET body = $4::jsonb,
+              revision = revision + 1,
+              saved_revision = CASE
+                WHEN md5(($4::jsonb)::text) = baseline_hash THEN revision + 1
+                ELSE saved_revision
+              END,
+              updated_at = now()
+        WHERE owner_email = $1 AND document_id = $2 AND revision = $3
+        RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [ownerEmail, documentId, expectedRevision, JSON.stringify(level)],
+    );
+    if (rows[0]) {
+      await dbRecordEditorDocumentRevision(client, rows[0], 'autosave');
+      return dbAnnotateEditorDocumentBaseline(rows[0], client);
+    }
+    const current = await dbGetEditorDocument(ownerEmail, documentId, client);
+    if (!current) throw editorDocumentError(404, 'editor_document_not_found');
+    throw editorDocumentError(409, 'editor_document_revision_conflict', await dbAnnotateEditorDocumentBaseline(current, client));
+  });
 }
 
 function editorDocumentCampaignsWithAssignment(campaigns, levelId, level, campaignId) {
@@ -4159,6 +4331,7 @@ async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, re
         RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
       [ownerEmail, documentId, JSON.stringify(level), baselineHash],
     );
+    await dbRecordEditorDocumentRevision(client, rows[0], 'save');
     return { row: rows[0], workspaceRevision };
   });
 }
@@ -4184,6 +4357,7 @@ async function dbDiscardEditorDocument(ownerEmail, documentId, expectedRevision)
         RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
       [ownerEmail, documentId, JSON.stringify(parsed.level), canonical.hash],
     );
+    await dbRecordEditorDocumentRevision(client, rows[0], 'discard');
     return rows[0];
   });
 }
@@ -4267,6 +4441,26 @@ function editorDocumentListRequest(req, res) {
   return { status, limit, offset };
 }
 
+function editorDocumentHistoryRequest(req, res) {
+  const parseInteger = (raw, fallback) => {
+    if (raw === undefined) return fallback;
+    const text = String(raw);
+    if (!/^\d+$/.test(text)) return null;
+    const value = Number(text);
+    return Number.isSafeInteger(value) ? value : null;
+  };
+  const limit = parseInteger(req.query.limit, EDITOR_DOCUMENT_HISTORY_PAGE_LIMIT);
+  const beforeRevision = parseInteger(req.query.before, null);
+  if (
+    limit === null || limit < 1 || limit > EDITOR_DOCUMENT_HISTORY_PAGE_LIMIT
+    || (beforeRevision !== null && beforeRevision < 1)
+  ) {
+    res.status(400).json({ error: 'invalid_editor_document_history_page' });
+    return null;
+  }
+  return { limit, beforeRevision };
+}
+
 async function requireEditorDocumentUser(req, res, workspace) {
   const user = await requireUser(req, res);
   if (!user) return null;
@@ -4323,6 +4517,56 @@ app.get('/api/editor-documents', async (req, res) => {
     });
   } catch (error) {
     respondEditorDocumentError(res, error, 'list');
+  }
+});
+
+app.get('/api/editor-documents/:documentId/revisions', async (req, res) => {
+  const input = editorDocumentOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const page = editorDocumentHistoryRequest(req, res);
+  if (!page) return;
+  try {
+    // Revision discovery and restore are owner operations. ADR-0132's exact-link
+    // admin exception remains limited to the current-document GET.
+    const current = await dbGetEditorDocument(user.email, input.documentId);
+    if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    const rows = await dbListEditorDocumentRevisions(user.email, input.documentId, page);
+    const hasMore = rows.length > page.limit;
+    const revisions = rows.slice(0, page.limit).map(publicEditorDocumentRevision);
+    res.status(200).json({
+      revisions,
+      next_before: hasMore && revisions.length ? revisions[revisions.length - 1].revision : null,
+    });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'history list');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/revisions/restore', async (req, res) => {
+  const input = editorDocumentOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const revision = editorDocumentRevision(input.raw.revision);
+  const targetRevision = editorDocumentRevision(input.raw.target_revision);
+  if (revision === null) { res.status(400).json({ error: 'revision_required' }); return; }
+  if (targetRevision === null) { res.status(400).json({ error: 'target_revision_required' }); return; }
+  try {
+    const current = await dbGetEditorDocument(user.email, input.documentId);
+    if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    const row = await dbRestoreEditorDocumentRevision(
+      user.email,
+      input.documentId,
+      revision,
+      targetRevision,
+    );
+    res.status(200).json({ document: publicEditorDocument(row) });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'history restore');
   }
 });
 

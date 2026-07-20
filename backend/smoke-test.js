@@ -666,6 +666,7 @@ async function main() {
   const editorSchema = await queryDb(
      `SELECT
        to_regclass('public.level_working_copies') AS working_copies,
+       to_regclass('public.level_working_copy_revisions') AS working_copy_revisions,
        to_regclass('public.editor_maps') AS retired_editor_maps,
        to_regclass('public.editor_map_audit_events') AS retired_editor_map_events,
        to_regclass('public.public_maps') AS public_play_maps,
@@ -685,6 +686,7 @@ async function main() {
   const editorSchemaRow = editorSchema.rows[0];
   if (
     !editorSchemaRow.working_copies ||
+    !editorSchemaRow.working_copy_revisions ||
     editorSchemaRow.retired_editor_maps ||
     editorSchemaRow.retired_editor_map_events ||
     !editorSchemaRow.public_play_maps ||
@@ -2760,6 +2762,13 @@ async function main() {
   ) {
     throw new Error(`Admin document discovery leaked another owner's work: ${adminDocumentListAfterRivalResolve.statusCode} ${adminDocumentListAfterRivalResolve.body}`);
   }
+  const adminReadsRivalHistory = await get(
+    `/api/editor-documents/${rivalDocumentId}/revisions`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  if (adminReadsRivalHistory.statusCode !== 404) {
+    throw new Error(`Admin review access leaked another owner's revision history: ${adminReadsRivalHistory.statusCode} ${adminReadsRivalHistory.body}`);
+  }
   const adminMutationRequests = [
     await request(
       'PUT', `/api/editor-documents/${rivalDocumentId}`,
@@ -2775,6 +2784,11 @@ async function main() {
       'POST', `/api/editor-documents/${rivalDocumentId}/discard`,
       { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
       JSON.stringify({ revision: 1 }),
+    ),
+    await request(
+      'POST', `/api/editor-documents/${rivalDocumentId}/revisions/restore`,
+      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      JSON.stringify({ revision: 1, target_revision: 1 }),
     ),
     await deleteEditorDocumentRequest(rivalDocumentId, 1, 'better-auth.session=abc'),
   ];
@@ -2847,6 +2861,101 @@ async function main() {
     staleWholeWorkspaceSaveBody.workspace.levels['smoke-1'].name !== 'Exact Save Click'
   ) {
     throw new Error(`Stale whole-workspace Save could revert the canonical Level: ${staleWholeWorkspaceSave.statusCode} ${staleWholeWorkspaceSave.body}`);
+  }
+
+  const firstHistoryPage = await get(
+    `/api/editor-documents/${smokeDocumentId}/revisions?limit=2`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const firstHistoryPageBody = JSON.parse(firstHistoryPage.body);
+  if (
+    firstHistoryPage.statusCode !== 200 ||
+    firstHistoryPageBody.revisions.length !== 2 ||
+    firstHistoryPageBody.revisions[0].revision !== 5 ||
+    firstHistoryPageBody.revisions[0].reason !== 'save' ||
+    firstHistoryPageBody.revisions[1].revision !== 4 ||
+    firstHistoryPageBody.next_before !== 4 ||
+    Object.hasOwn(firstHistoryPageBody.revisions[0], 'level') ||
+    typeof firstHistoryPageBody.revisions[0].body_hash !== 'string' ||
+    firstHistoryPageBody.revisions[0].body_bytes < 1
+  ) {
+    throw new Error(`Working-copy history did not return bounded body-free summaries: ${firstHistoryPage.statusCode} ${firstHistoryPage.body}`);
+  }
+  const secondHistoryPage = await get(
+    `/api/editor-documents/${smokeDocumentId}/revisions?limit=2&before=4`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const secondHistoryPageBody = JSON.parse(secondHistoryPage.body);
+  if (
+    secondHistoryPage.statusCode !== 200 ||
+    secondHistoryPageBody.revisions.map((entry) => entry.revision).join(',') !== '3,2'
+  ) {
+    throw new Error(`Working-copy history pagination skipped revisions: ${secondHistoryPage.statusCode} ${secondHistoryPage.body}`);
+  }
+  const rivalHistoryRead = await get(
+    `/api/editor-documents/${smokeDocumentId}/revisions`,
+    { cookie: 'better-auth.session=rival' },
+  );
+  if (rivalHistoryRead.statusCode !== 404) {
+    throw new Error(`Working-copy history must remain owner-scoped: ${rivalHistoryRead.statusCode} ${rivalHistoryRead.body}`);
+  }
+
+  const restoredAutosave = await request(
+    'POST', `/api/editor-documents/${smokeDocumentId}/revisions/restore`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 5, target_revision: 2 }),
+  );
+  const restoredAutosaveBody = JSON.parse(restoredAutosave.body);
+  if (
+    restoredAutosave.statusCode !== 200 ||
+    restoredAutosaveBody.document.revision !== 6 ||
+    restoredAutosaveBody.document.saved_revision !== 5 ||
+    restoredAutosaveBody.document.dirty !== true ||
+    restoredAutosaveBody.document.level.name !== 'Autosaved Draft'
+  ) {
+    throw new Error(`Historical restore did not create a new dirty working revision: ${restoredAutosave.statusCode} ${restoredAutosave.body}`);
+  }
+  const staleHistoricalRestore = await request(
+    'POST', `/api/editor-documents/${smokeDocumentId}/revisions/restore`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 5, target_revision: 1 }),
+  );
+  const staleHistoricalRestoreBody = JSON.parse(staleHistoricalRestore.body);
+  if (
+    staleHistoricalRestore.statusCode !== 409 ||
+    staleHistoricalRestoreBody.error !== 'editor_document_revision_conflict' ||
+    staleHistoricalRestoreBody.document.revision !== 6
+  ) {
+    throw new Error(`Stale historical restore should preserve the newer working copy: ${staleHistoricalRestore.statusCode} ${staleHistoricalRestore.body}`);
+  }
+  const restoredSavedRevision = await request(
+    'POST', `/api/editor-documents/${smokeDocumentId}/revisions/restore`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 6, target_revision: 5 }),
+  );
+  const restoredSavedRevisionBody = JSON.parse(restoredSavedRevision.body);
+  if (
+    restoredSavedRevision.statusCode !== 200 ||
+    restoredSavedRevisionBody.document.revision !== 7 ||
+    restoredSavedRevisionBody.document.saved_revision !== 7 ||
+    restoredSavedRevisionBody.document.dirty !== false ||
+    restoredSavedRevisionBody.document.level.name !== 'Exact Save Click'
+  ) {
+    throw new Error(`Restoring saved content should create a new clean working revision: ${restoredSavedRevision.statusCode} ${restoredSavedRevision.body}`);
+  }
+  const restoredHistory = await get(
+    `/api/editor-documents/${smokeDocumentId}/revisions?limit=2`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const restoredHistoryBody = JSON.parse(restoredHistory.body);
+  if (
+    restoredHistory.statusCode !== 200 ||
+    restoredHistoryBody.revisions[0].revision !== 7 ||
+    restoredHistoryBody.revisions[0].reason !== 'restore' ||
+    restoredHistoryBody.revisions[0].restored_from_revision !== 5 ||
+    restoredHistoryBody.revisions[1].restored_from_revision !== 2
+  ) {
+    throw new Error(`Historical restore provenance was not retained: ${restoredHistory.statusCode} ${restoredHistory.body}`);
   }
 
   // Canonical workspaces still have other legitimate writers. A clean editor
