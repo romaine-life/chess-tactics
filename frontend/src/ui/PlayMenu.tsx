@@ -121,7 +121,7 @@ function GatedLevelThumbnail(props: ComponentProps<typeof LevelThumbnail>): Reac
 
 function ThumbnailSurface({ levels, children }: { levels: readonly Level[]; children: ReactNode }): ReactElement {
   const levelIds = levels.map((level) => level.id);
-  const signature = levels.map((level) => `${level.id}:${levelThumbnailUrl(level.id) ?? 'read-through'}`).join('|');
+  const signature = levels.map((level) => `${level.id}:${levelThumbnailUrl(level.id) ?? 'missing'}`).join('|');
   const [painted, setPainted] = useState<ReadonlySet<string>>(() => new Set());
   const [failure, setFailure] = useState<Error | null>(null);
   const [attempt, setAttempt] = useState(0);

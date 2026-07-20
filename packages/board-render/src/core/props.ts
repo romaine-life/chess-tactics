@@ -65,8 +65,6 @@ export type PropSeatEntry = {
 };
 export type PropSeatMap = Record<string, PropSeatEntry>;
 
-const DEFAULT_FOOTPRINT = 2;
-
 // There is intentionally no packaged seed or last-good fallback. Application
 // startup and server thumbnails hydrate this before importing/rendering a board.
 let SEATS: PropSeatMap | null = null;
@@ -98,6 +96,9 @@ export function assertPropSeatMap(value: unknown): asserts value is PropSeatMap 
   for (const [id, raw] of Object.entries(value)) {
     if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new Error(`invalid prop seats: prop id "${id}" is not a lowercase slug`);
     if (!isRecord(raw)) throw new Error(`invalid prop seats: seat "${id}" must be an object`);
+    if (baseIds.includes(id) && (!(Number.isInteger(raw.w) && Number(raw.w) >= 1) || !(Number.isInteger(raw.h) && Number(raw.h) >= 1))) {
+      throw new Error(`invalid prop seats: required prop "${id}" needs an explicit footprint`);
+    }
     if (!Number.isFinite(raw.anchorX) || !Number.isFinite(raw.anchorY)) {
       throw new Error(`invalid prop seats: seat "${id}" needs numeric anchorX/anchorY`);
     }
@@ -160,9 +161,6 @@ function seat(seats: PropSeatMap, id: string): { anchorX: number; anchorY: numbe
   if (!s) throw new Error(`prop seats document has no seat for prop "${id}"`);
   return { anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale };
 }
-const footW = (seats: PropSeatMap, id: string): number => seats[id]?.w ?? DEFAULT_FOOTPRINT;
-const footH = (seats: PropSeatMap, id: string): number => seats[id]?.h ?? DEFAULT_FOOTPRINT;
-
 export interface PropDef {
   id: string;
   label: string;
@@ -205,8 +203,8 @@ function baseDefs(seats: PropSeatMap): PropDef[] {
     id: asset.id,
     label: asset.label,
     kind: asset.propKind ?? (asset.kind === 'tree' || asset.kind === 'rock' ? asset.kind : 'house'),
-    w: seats[asset.id]?.w ?? asset.footprint?.w ?? DEFAULT_FOOTPRINT,
-    h: seats[asset.id]?.h ?? asset.footprint?.h ?? DEFAULT_FOOTPRINT,
+    w: seats[asset.id].w!,
+    h: seats[asset.id].h!,
     blocking: asset.blocking,
     terrains: asset.terrains,
     spriteId: asset.id,

@@ -187,6 +187,18 @@ accepted geometry through the admin drawable transaction; gameplay, roster,
 and catalog rendering read the database projection and fail closed when a crop
 is absent or invalid.
 
+Studio Assets and Artwork membership is projected from `studio-catalog-item`
+drawable rows. Each row owns its label, grouping, presentation metadata, and
+explicit media roles; semantic-slot filenames are opaque join keys and are not
+parsed into a roster. Configuration-only `chrome-fill-tint` rows likewise own
+the installed Chrome tint names and RGB values.
+
+New pre-drawn board media slots are allocated by the authenticated backend
+media transaction and returned with the candidate version. Clients never form
+a slot from a level id. Canonical level-list thumbnails are used only when the
+backend's level projection supplies an immutable derivative URL; a missing
+derivative has no constructed stable-path or read-through fallback.
+
 The SFX runtime profile is a separate typed document projection over live-media
 recording slots. It owns labels/descriptions, sound-set gains, terrain
 assignments, and arrival behavior, with a compare-and-swap revision on admin

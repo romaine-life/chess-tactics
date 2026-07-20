@@ -1170,6 +1170,22 @@ async function main() {
   // One complete pre-drawn board plate: candidate-declared native dimensions,
   // exact owner v4 alignment proof, slot/version/hash snapshots, transactional
   // CAS rollback, and stable runtime publication all use the shared lifecycle.
+  const allocatedPredrawnPayload = {
+    allocateSlot: 'predrawn-board', domain: 'background', role: 'media', label: 'Allocated board plate',
+    availabilityPolicy: 'critical', provenance: { levelId: 'off-l-allocated-board' },
+  };
+  const allocatedHeaders = { ...adminJson, 'idempotency-key': 'allocated-predrawn-board-smoke' };
+  const allocatedFirst = await request('POST', '/api/admin/media-versions', allocatedHeaders, JSON.stringify(allocatedPredrawnPayload), 5000);
+  const allocatedReplay = await request('POST', '/api/admin/media-versions', allocatedHeaders, JSON.stringify(allocatedPredrawnPayload), 5000);
+  const allocatedFirstBody = JSON.parse(allocatedFirst.body);
+  const allocatedReplayBody = JSON.parse(allocatedReplay.body);
+  if (
+    allocatedFirst.statusCode !== 201 || allocatedReplay.statusCode !== 200
+    || !/^boards\/[0-9a-f-]{36}\/plate\.png$/.test(allocatedFirstBody.version.slot)
+    || allocatedReplayBody.version.id !== allocatedFirstBody.version.id
+    || allocatedReplayBody.version.slot !== allocatedFirstBody.version.slot
+    || allocatedReplayBody.idempotentReplay !== true
+  ) throw new Error(`Backend-assigned pre-drawn slot is not stable/idempotent: ${allocatedFirst.body} ${allocatedReplay.body}`);
   const predrawnSlot = 'boards/fortress-gate/plate.png';
   const predrawnBytes = syntheticPng(1672, 941, '#263648', '#d7b878');
   const predrawnSha = crypto.createHash('sha256').update(predrawnBytes).digest('hex');

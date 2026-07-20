@@ -12,18 +12,12 @@ import {
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
   predrawnBoardReviewProof,
-  predrawnBoardSlotForLevel,
   sha256Hex,
 } from './predrawnBoardOnboarding';
 
 const alignment = 'v4;1672,941,1034.223,96.015,1375.402,300.134,611.986,723.847,281.123,532.992;5,11;0,0.2,0.4,0.6,0.8,1;0,0.090909,0.181818,0.272727,0.363636,0.454545,0.545455,0.636364,0.727273,0.818182,0.909091,1;1020.229,112.223,1346.622,295.818,628.558,699.729,302.166,516.133';
 
 describe('pre-drawn board onboarding', () => {
-  it('derives one stable whole-board image slot from official and private level ids', () => {
-    expect(predrawnBoardSlotForLevel('off-l-fortress-gate')).toBe('boards/fortress-gate/plate.png');
-    expect(predrawnBoardSlotForLevel('usr-l-my map')).toBe('boards/my-map/plate.png');
-  });
-
   it('hashes exact text and bytes deterministically', async () => {
     expect(await sha256Hex('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
     expect(await sha256Hex(new Blob(['abc']))).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');

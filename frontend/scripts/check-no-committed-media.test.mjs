@@ -769,6 +769,96 @@ describe('no-committed-media guard', () => {
     }
   });
 
+  it('rejects filename-derived review membership', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'filename-review-membership-test-'));
+    const relativePath = 'frontend/src/ui/renamedReviewCatalog.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, 'const inferredKitId = slotLeaf.match(/rail-e/);\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'review membership must come from explicit backend metadata, not semantic-slot filenames',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects filename-derived Studio catalog taxonomy', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'filename-studio-taxonomy-test-'));
+    const relativePath = 'frontend/src/ui/renamedStudioCatalog.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, 'const ARTWORK_TAXONOMY = [{ classify: (slot) => slot.match(/backgrounds/) }];\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'Studio catalog membership and grouping must come from drawable records, not semantic-slot filename taxonomy',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects compiled installed Chrome tint configuration', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'compiled-chrome-tint-test-'));
+    const relativePath = 'frontend/src/ui/renamedChrome.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "const CHROME_FILL_TINTS = [{ id: 'night', rgb: [4, 13, 20] }];\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'installed Chrome tint identities and RGB configuration must come from drawable records',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects restoration of the obsolete installed design-catalog tree', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'compiled-design-tree-test-'));
+    const relativePath = 'frontend/src/ui/design/renamedCatalog.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "export const ASSET_TREE_PROTOTYPE = [{ label: 'Main Menu' }];\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'obsolete Git-owned installed design-catalog taxonomy must not be restored',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects board media identities constructed from level ids', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'constructed-board-media-test-'));
+    const relativePath = 'frontend/src/ui/renamedOnboarding.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, 'const predrawnBoardSlotForLevel = (id) => `/assets/level-list-thumb/${id}`;\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'board media and thumbnail identities must be assigned or projected by the backend, not constructed from level ids',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it.each([
     'const SAMPLE_GAINS = { grass: 0.5 };',
     "const TERRAIN_SAMPLE = { grass: 'grass' };",

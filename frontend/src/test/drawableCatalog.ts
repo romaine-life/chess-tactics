@@ -295,6 +295,10 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
   const sliderSpecs = [{ id: 'ui-slider-bronze-stone', kind: 'ui-slider', label: 'Bronze · Stone', sortOrder: 0, lifecycleState: 'active' as const,
     behavior: { value: 'bronze-stone', approach: 'css', material: 'bronze / stone', fill: '#c79b55', channel: '#26231e', edge: '#5a5248', handle: '#b88a45', handleLight: '#f0dba8', handleDark: '#5b4124', preferred: true },
     metadata: { description: 'Natural bronze and stone palette.' }, rowRevision: 1, media: {} }];
+  const chromeFillTintSpecs: DrawableCatalog['assets'] = [
+    ['night', 'Night', [4, 13, 20]], ['blue', 'Deep blue', [5, 24, 42]],
+  ].map(([value, label, rgb], sortOrder) => ({ id: `chrome-fill-${value}`, kind: 'chrome-fill-tint', label: String(label), sortOrder,
+    lifecycleState: 'active' as const, behavior: { value, rgb }, metadata: {}, rowRevision: 1, media: {} }));
   const uiKitFrameSpecs: DrawableCatalog['assets'] = ['primary', 'neutral', 'danger', 'panel', 'row', 'field-input'].map((value, sortOrder) => ({
     id: `ui-kit-frame-${value}`, kind: 'ui-kit-frame', label: value, sortOrder, lifecycleState: 'active', behavior: { value }, metadata: {}, rowRevision: 1,
     media: { frame: descriptor(`test/ui-kit/${value}.png`, 72, 72) },
@@ -326,7 +330,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       media: {
         surface: descriptor(`test/subterrain/${id}.png`),
       },
-    })), ...terrainFamilySpecs, ...terrainSpecs, ...terrainReviewSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...wallArtSpecs, ...presentationSpecs, ...portraitTreatmentSpecs, ...appUiSpecs, ...nineSliceSpecs, ...scrollbarSpecs, ...surfaceSpecs, ...sliderSpecs, ...uiKitFrameSpecs, ...studioPageSpecs, ...menuModeSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
+    })), ...terrainFamilySpecs, ...terrainSpecs, ...terrainReviewSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...wallArtSpecs, ...presentationSpecs, ...portraitTreatmentSpecs, ...appUiSpecs, ...nineSliceSpecs, ...scrollbarSpecs, ...surfaceSpecs, ...sliderSpecs, ...chromeFillTintSpecs, ...uiKitFrameSpecs, ...studioPageSpecs, ...menuModeSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
       id, kind, label, sortOrder: index, lifecycleState: 'active' as const,
       behavior: { value, ...(isDefault ? { default: true } : {}) }, metadata: {}, rowRevision: 1,
       media: Object.fromEntries(roles.map((role) => [role, descriptor(`test/${id}-${role}.png`)])),

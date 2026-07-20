@@ -7579,13 +7579,22 @@ app.post(/^\/api\/admin\/media-slots\/(.+)\/retire$/, async (req, res) => {
 app.post('/api/admin/media-versions', async (req, res) => {
   const user = await requireAdmin(req, res);
   if (!user) return;
-  const validated = validateMediaVersionInput(req.body);
+  const idempotencyKey = mediaIdempotencyKey(req);
+  const allocation = req.body?.allocateSlot;
+  if (allocation !== undefined && allocation !== 'predrawn-board') {
+    res.status(400).json({ error: 'invalid_media_version', details: 'allocateSlot is invalid' }); return;
+  }
+  if (allocation && !idempotencyKey) {
+    res.status(400).json({ error: 'invalid_media_version', details: 'allocated slots require an idempotency key' }); return;
+  }
+  const createInput = allocation ? { ...req.body, slot: `boards/${crypto.randomUUID()}/plate.png` } : req.body;
+  const validated = validateMediaVersionInput(createInput);
   if (validated.error) { res.status(400).json({ error: 'invalid_media_version', details: validated.error }); return; }
   const value = validated.value;
   try {
-    const idempotencyKey = mediaIdempotencyKey(req);
     const idempotencyActor = String(user.email).trim().toLowerCase();
-    const requestFingerprint = crypto.createHash('sha256').update(canonicalJson(value)).digest('hex');
+    const fingerprintValue = allocation ? { ...value, slot: null, allocateSlot: allocation } : value;
+    const requestFingerprint = crypto.createHash('sha256').update(canonicalJson(fingerprintValue)).digest('hex');
     const requestedId = crypto.randomUUID();
     const result = await withMediaCatalogTransaction(async (client) => {
       if (idempotencyKey) {
@@ -10011,27 +10020,10 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
   }
 });
 
-// Runtime list thumbnail. Canonical saves prebuild the same immutable derivative; this
-// read-through generation exists for levels created before migration 21.
-app.get(/^\/assets\/level-list-thumb\/(.+)\.png$/, async (req, res) => {
-  const id = String(req.params[0] || '');
-  try {
-    const target = await resolveListThumbnailTarget(req, res, id);
-    if (target === false) return;
-    if (!target) { res.status(404).send('not found'); return; }
-    const derivative = await ensureLevelThumbnailDerivative(target.authorityKey, target.level);
-    res.setHeader('Cache-Control', 'no-cache');
-    res.redirect(302, `/api/media/${derivative.blob_sha256}`);
-  } catch (error) {
-    console.error('level list thumbnail failed:', error && error.message);
-    res.status(503).json({ error: 'thumbnail_derivative_unavailable' });
-  }
-});
-
 // Stable semantic asset resolution. This is deliberately before every static
 // middleware so an absent DB slot can never fall through to a packaged file.
-// The level-thumbnail route above is the sole dynamic /assets namespace carveout.
-app.get(/^\/assets\/(?!level-thumb\/|level-list-thumb\/)(.+)$/, async (req, res) => {
+// The server-rendered level-thumbnail route above is the sole dynamic /assets namespace carveout.
+app.get(/^\/assets\/(?!level-thumb\/)(.+)$/, async (req, res) => {
   let slot = null;
   try {
     const encoded = req.path.slice('/assets/'.length);

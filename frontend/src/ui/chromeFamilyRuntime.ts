@@ -10,7 +10,7 @@ import {
   chromeUnitScopedSelectors,
   chromeUnitSelectors,
 } from './chromeUnitRegistry';
-import { requiredDrawableRole } from '@chess-tactics/board-render';
+import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
 import { SURFACE_ASSETS } from './surfaceCatalog';
 
 export type RailFit = 'stretch' | 'tile';
@@ -19,7 +19,7 @@ export type AtomPreviewMode = 'live' | 'baked' | 'debug';
 export type ChromeFillMode = 'none' | 'tint' | 'surface';
 export type TitleVerticalAlign = 'manual' | 'center';
 export type TitleHorizontalAlign = 'manual' | 'content-inset';
-export type ChromeFillTintId = 'night' | 'blue' | 'steel' | 'oak' | 'ember';
+export type ChromeFillTintId = string;
 export type ChromeFillSurfaceId = string;
 
 export const NO_ATOM_SOURCE_ID = 'none';
@@ -38,13 +38,25 @@ export const CHROME_FILL_MODE_OPTIONS = [
   { id: 'tint', label: 'Tint' },
   { id: 'surface', label: 'Surface' },
 ] satisfies Array<{ id: ChromeFillMode; label: string }>;
-export const CHROME_FILL_TINTS = [
-  { id: 'night', label: 'Night', rgb: [4, 13, 20] },
-  { id: 'blue', label: 'Deep blue', rgb: [5, 24, 42] },
-  { id: 'steel', label: 'Steel', rgb: [28, 42, 58] },
-  { id: 'oak', label: 'Oak shadow', rgb: [44, 24, 10] },
-  { id: 'ember', label: 'Ember', rgb: [50, 11, 13] },
-] satisfies Array<{ id: ChromeFillTintId; label: string; rgb: [number, number, number] }>;
+type ChromeFillTint = { id: ChromeFillTintId; label: string; rgb: [number, number, number] };
+function currentChromeFillTints(): ChromeFillTint[] {
+  return drawableAssets('chrome-fill-tint').map((asset) => {
+    const id = asset.behavior.value;
+    const rgb = asset.behavior.rgb;
+    if (typeof id !== 'string' || !Array.isArray(rgb) || rgb.length !== 3
+      || rgb.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)) {
+      throw new Error(`chrome fill tint ${asset.id} is incomplete`);
+    }
+    return { id, label: asset.label, rgb: rgb as [number, number, number] };
+  });
+}
+export const CHROME_FILL_TINTS: ChromeFillTint[] = new Proxy([] as ChromeFillTint[], {
+  get: (_target, property) => {
+    const values = currentChromeFillTints();
+    const value = Reflect.get(values, property);
+    return typeof value === 'function' ? value.bind(values) : value;
+  },
+});
 export const CHROME_FILL_SURFACES: Array<{ id: ChromeFillSurfaceId; label: string; src: string }> = new Proxy([], {
   get: (_target, property) => {
     const values = SURFACE_ASSETS.map((asset) => ({ id: asset.name, label: asset.label, src: asset.file }));
@@ -701,7 +713,9 @@ function cssPx(value: number): string {
 }
 
 export function chromeFillTintById(id: ChromeFillTintId): (typeof CHROME_FILL_TINTS)[number] {
-  return CHROME_FILL_TINTS.find((tint) => tint.id === id) ?? CHROME_FILL_TINTS[0];
+  const tint = CHROME_FILL_TINTS.find((candidate) => candidate.id === id);
+  if (!tint) throw new Error(`drawable catalog has no chrome fill tint ${id}`);
+  return tint;
 }
 
 export function chromeFillSurfaceById(id: ChromeFillSurfaceId): (typeof CHROME_FILL_SURFACES)[number] {

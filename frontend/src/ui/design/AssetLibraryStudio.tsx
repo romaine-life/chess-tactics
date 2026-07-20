@@ -1,6 +1,6 @@
 // The Studio's Assets catalog. Media membership, active pointers, dimensions,
-// status, and runtime metadata come from one hydrated backend catalog snapshot.
-// Git contributes only taxonomy and editable nine-slice/structure geometry.
+// status, identity, grouping, and runtime metadata come from hydrated backend
+// catalogs. Git contributes only presentation and executable editor behavior.
 import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { structureArtAsset } from '../../core/structureArt';
 import { nineSliceCatalogAssets } from '../nineSliceCatalog';

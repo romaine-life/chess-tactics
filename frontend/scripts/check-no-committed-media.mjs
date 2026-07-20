@@ -158,6 +158,26 @@ const RETIRED_CUTOVER_SOURCE_MARKERS = [
     detail: 'retired tile-coupled side proof, fabricated review slot, or filename-derived terrain media remains',
   },
   {
+    pattern: /COMPONENT_SUFFIX|inferredKitId|slotLeaf\.match\(/,
+    detail: 'review membership must come from explicit backend metadata, not semantic-slot filenames',
+  },
+  {
+    pattern: /classifyUiKitAsset|ARTWORK_TAXONOMY|interface ArtworkTaxonomy/,
+    detail: 'Studio catalog membership and grouping must come from drawable records, not semantic-slot filename taxonomy',
+  },
+  {
+    pattern: /CHROME_FILL_TINTS\s*=\s*\[|ChromeFillTintId\s*=\s*["']night["']/,
+    detail: 'installed Chrome tint identities and RGB configuration must come from drawable records',
+  },
+  {
+    pattern: /ASSET_TREE_PROTOTYPE|KIT_TREE\s*:/,
+    detail: 'obsolete Git-owned installed design-catalog taxonomy must not be restored',
+  },
+  {
+    pattern: /predrawnBoardSlotForLevel|\/assets\/level-list-thumb\//,
+    detail: 'board media and thumbnail identities must be assigned or projected by the backend, not constructed from level ids',
+  },
+  {
     pattern: /chrome-lab-defaults\.json|nine-slice-registry\.json|config\/nine-slice|DEFAULT_OG_IMAGE|PREVIEW_KIND_BY_STABLE_SLOT|SCROLLBAR_SLOT_PREFIX|DEFAULT_(?:DIVIDER|NINE_SLICE)_ASSET[^\n]{0,160}["'](?:panel|mode-button)|requiredNineSliceAsset\(["'](?:panel|mode-button|panel-divider)["']\)/,
     detail: 'compiled installed presentation identity/default/configuration remains after drawable-catalog cutover',
   },
