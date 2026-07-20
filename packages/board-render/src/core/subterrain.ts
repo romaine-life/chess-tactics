@@ -32,15 +32,15 @@ export function subterrainMaterials(): DrawableAsset[] {
 
 export function cleanSubterrainPlacements(
   value: unknown,
-  occupied: ReadonlySet<string>,
+  terrainSurface: ReadonlySet<string>,
 ): SubterrainPlacementMap {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const out: SubterrainPlacementMap = {};
   for (const [key, material] of Object.entries(value as Record<string, unknown>)) {
     const parsed = parseSubterrainFaceKey(key);
-    if (!parsed || !isSubterrainMaterial(material) || !occupied.has(`${parsed.x},${parsed.y}`)) continue;
+    if (!parsed || !isSubterrainMaterial(material) || !terrainSurface.has(`${parsed.x},${parsed.y}`)) continue;
     const neighbor = parsed.face === 'south' ? `${parsed.x},${parsed.y + 1}` : `${parsed.x + 1},${parsed.y}`;
-    if (occupied.has(neighbor)) continue;
+    if (terrainSurface.has(neighbor)) continue;
     out[key] = material;
   }
   return out;
