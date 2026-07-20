@@ -150,6 +150,38 @@ if (!process.env.DATABASE_URL) {
 }
 assertSafeSmokeTarget();
 
+function seedRecordedMissingThumbnailSchema() {
+  const script = `
+    const { Client } = require('pg');
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    client.connect()
+      .then(() => client.query(` + "`" + `
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          version integer PRIMARY KEY,
+          applied_at timestamptz NOT NULL DEFAULT now()
+        );
+        INSERT INTO schema_migrations (version) VALUES (21), (22)
+          ON CONFLICT (version) DO NOTHING;
+        DROP TABLE IF EXISTS level_thumbnail_derivatives;
+      ` + "`" + `))
+      .then(() => client.end())
+      .catch((error) => { console.error(error); process.exit(1); });
+  `;
+  const seeded = spawnSync(process.execPath, ['-e', script], {
+    cwd: __dirname,
+    env: process.env,
+    encoding: 'utf8',
+  });
+  if (seeded.status !== 0) {
+    throw new Error(`Could not seed the recorded-migration/missing-relation smoke state: ${seeded.stderr || seeded.stdout}`);
+  }
+}
+
+// Reproduce the production failure before the application starts: numeric
+// migrations 21 and 22 are recorded, but their required runtime relation is
+// absent. Auto mode must repair actual schema state rather than trust the rows.
+seedRecordedMissingThumbnailSchema();
+
 const child = spawn(process.execPath, ['supervisor.js'], {
   cwd: __dirname,
   env: {
