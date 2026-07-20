@@ -27,6 +27,14 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('index={index + 2}');
   });
 
+  it('resolves Play rail icons from installed drawable membership, not retired path-shaped app-ui roles', () => {
+    expect(playMenu).toContain("drawableAssets('menu-mode')");
+    expect(playMenu).toContain("installedUiMedia('ui-kit-icons-design-index-png')");
+    expect(playMenu).not.toContain('ui-main-menu-icons-carved-solo-skirmish-png');
+    expect(playMenu).not.toContain('ui-main-menu-icons-carved-level-editor-png');
+    expect(playMenu).not.toContain('ui-main-menu-icons-carved-lobbies-png');
+  });
+
   it('deletes the split picker implementations instead of retaining parallels', () => {
     expect(existsSync(new URL('./Campaign.tsx', import.meta.url))).toBe(false);
     expect(existsSync(new URL('./SkirmishMapPicker.tsx', import.meta.url))).toBe(false);

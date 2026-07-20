@@ -19,7 +19,7 @@
 // the store stays in its default fully-revealed state, so nothing ever hides or blinks.
 
 export type RevealLayer = 'bg' | 'title' | 'buttons' | 'rain';
-import { installedUiMedia } from '../installedUiMedia';
+import { homepageSceneMedia } from '../SceneBackdrop';
 
 const LADDER: RevealLayer[] = ['bg', 'title', 'buttons', 'rain'];
 const LAST = LADDER.length - 1;
@@ -114,7 +114,7 @@ export function armForColdHome(): void {
   // paint before the background pixels are on screen. This probe shares the preloaded,
   // high-priority request from main.tsx (same URL -> one fetch).
   const img = new Image();
-  const backgroundUrl = installedUiMedia('ui-main-menu-background-scene-v1-avif');
+  const backgroundUrl = homepageSceneMedia().immutableUrl;
   img.decoding = 'async';
   try {
     (img as unknown as { fetchPriority?: string }).fetchPriority = 'high';

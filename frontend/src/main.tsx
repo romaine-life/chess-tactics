@@ -17,6 +17,7 @@ import { loadLiveSfxProfile } from './net/sfxProfile';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
 import { installNineSliceCssVariables, installUiFonts, installUiMediaCssVariables, installedUiMedia } from './ui/installedUiMedia';
+import { homepageSceneMedia } from './ui/SceneBackdrop';
 import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, assertInstalledPresentationCatalog } from '@chess-tactics/board-render';
 import { installLoadingResourceObserver, loadingError, loadingMark, loadingMeasure } from './diagnostics/loadingTimeline';
 import { composeInstalledChromeCss } from './ui/useInstalledChromeCss';
@@ -109,8 +110,9 @@ if (root) {
         const bgPreload = document.createElement('link');
         bgPreload.rel = 'preload';
         bgPreload.as = 'image';
-        bgPreload.type = 'image/avif';
-        bgPreload.href = installedUiMedia('ui-main-menu-background-scene-v1-avif');
+        const background = homepageSceneMedia();
+        bgPreload.type = background.mediaType;
+        bgPreload.href = background.immutableUrl;
         bgPreload.setAttribute('fetchpriority', 'high');
         document.head.appendChild(bgPreload);
       }

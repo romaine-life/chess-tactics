@@ -74,6 +74,15 @@ export const sceneAnimations = (): SceneAnim[] => drawableAssets('scene-animatio
 });
 export const SCENE_ANIMS: SceneAnim[] = new Proxy([] as SceneAnim[], { get: (_target, property) => { const values = sceneAnimations(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
 
+/** The exact installed media consumed by the homepage DOM. Startup priority and
+ * readiness must use this binding too; a parallel app-ui rendition is not proof
+ * that the animated-scene consumer can paint. */
+export function homepageSceneMedia() {
+  const binding = requiredDrawableRole('animated-scene', 'homepage-scene').media.background?.media;
+  if (!binding) throw new Error('installed homepage scene has no background media');
+  return binding;
+}
+
 // Build the scene backdrop as a detached DOM subtree — the plain-DOM twin of the
 // old JSX (identical class names, so the existing style.css rules apply
 // unchanged). Created ONCE by HomepageBackdrop and re-parented across screens; a
@@ -89,7 +98,7 @@ export function buildSceneBackdropNode(): HTMLDivElement {
 
   const canvas = document.createElement('div');
   canvas.className = 'scene-backdrop-canvas';
-  canvas.style.backgroundImage = `url("${scene.background}")`;
+  canvas.style.backgroundImage = `url("${homepageSceneMedia().immutableUrl}")`;
 
   for (const a of sceneAnimations().filter((candidate) => candidate.sceneRole === scene.role)) {
     const span = document.createElement('span');

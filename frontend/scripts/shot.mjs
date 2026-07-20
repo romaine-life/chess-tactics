@@ -76,6 +76,15 @@ try {
           };
           const count = Number(state.bg) + Number(state.buttons) + Number(state.title);
           if (count > 0 && count < 3) window.__ctMenuAtomicViolations.push(state);
+          if (count === 3) {
+            const criticalImages = [
+              ...menu.querySelectorAll('.main-menu-twin-screen img'),
+              ...(title?.querySelectorAll('img') || []),
+            ];
+            const imagesComplete = criticalImages.length > 0
+              && criticalImages.every((img) => img.complete && img.naturalWidth > 0);
+            if (!imagesComplete) window.__ctMenuAtomicViolations.push({ ...state, imagesComplete });
+          }
         }
         requestAnimationFrame(sample);
       };

@@ -46,6 +46,17 @@ describe('professional loading architecture guards', () => {
     expect(read('../scripts/shot.mjs')).toContain('startup status exposed a fallback-font frame');
   });
 
+  it('gates and prioritizes the exact homepage scene consumed by the DOM', () => {
+    const entry = read('./main.tsx');
+    const reveal = read('./ui/shell/coldReveal.ts');
+    const scene = read('./ui/SceneBackdrop.tsx');
+    expect(entry).toContain('homepageSceneMedia()');
+    expect(reveal).toContain('homepageSceneMedia().immutableUrl');
+    expect(scene).toContain('canvas.style.backgroundImage = `url("${homepageSceneMedia().immutableUrl}")`');
+    expect(reveal).not.toContain('ui-main-menu-background-scene-v1-avif');
+    expect(read('../scripts/shot.mjs')).toContain('criticalImages.every((img) => img.complete && img.naturalWidth > 0)');
+  });
+
   it('owns the complete Play destination behind a painted DOM surface boundary', () => {
     const play = read('./ui/PlayMenu.tsx');
     const boundary = read('./ui/shell/PaintedSurfaceBoundary.tsx');
