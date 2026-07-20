@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { defaultSubterrainMaterial, resolveDecorativeWallOverlays, resolveTerrainSideExposure, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, withPredrawnBoardSurface, type SubterrainMaterial, type SubterrainPlacementMap } from '@chess-tactics/board-render';
+import { defaultSubterrainMaterial, resolveDecorativeWallOverlays, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, withPredrawnBoardSurface, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials } from '@chess-tactics/board-render';
 import { boardLabCellPosition, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
@@ -775,11 +775,25 @@ function StudioEditableBoard({
       animate: false,
     });
   }
-  const apronTerrainCells = withDecorativeTerrainFeatures(
+  const apronTerrainCellsWithoutSides = withDecorativeTerrainFeatures(
     decorativeTerrainApronCells(terrainCells, cols, rows, decorativeApron, authoredApron, decorativeFootprint),
     placedFeatures,
     (feature) => featureFrameSrc(feature.kind, feature.material, feature.mask),
   );
+  const renderedTerrainKeys = new Set([
+    ...terrainCells.filter((cell) => cell.topSrc).map((cell) => `${cell.x},${cell.y}`),
+    ...apronTerrainCellsWithoutSides.filter((cell) => cell.topSrc).map((cell) => `${cell.x},${cell.y}`),
+  ]);
+  const apronTerrainCells = apronTerrainCellsWithoutSides.map((cell) => ({
+    ...cell,
+    sideFaces: resolveTerrainSideFaces(
+      resolveTerrainSideExposure(cell, (nextX, nextY) => renderedTerrainKeys.has(`${nextX},${nextY}`)),
+      Object.fromEntries((['south', 'east'] as const).flatMap((face) => {
+        const material = placedSubterrain[subterrainFaceKey(cell.x, cell.y, face)];
+        return material ? [[face, subterrainMaterialSrc(material)]] : [];
+      })) as TerrainSideMaterials<string>,
+    ),
+  }));
   const scenicTerrainCells = scenicTerrainRenderCells(terrainCells, apronTerrainCells);
   for (const coordinate of scenicCoordinates) {
     const key = `${coordinate.x},${coordinate.y}`;
@@ -3484,11 +3498,18 @@ export function LevelEditor(): ReactElement {
   };
   const paintSubterrainFace = (x: number, y: number, face: 'south' | 'east'): void => {
     if (!subterrainBrushAsset) return;
-    const cells = currentEditorBoardRef.current.cells;
-    if (!cells[`${x},${y}`]) return;
+    const board = currentEditorBoardRef.current;
+    const terrainSurface = new Set(Object.keys(board.cells));
+    for (const coordinate of decorativeTerrainApronCoordinates(
+      board.cols,
+      board.rows,
+      board.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 },
+      board.decorativeFootprint,
+    )) terrainSurface.add(`${coordinate.x},${coordinate.y}`);
+    if (!terrainSurface.has(`${x},${y}`)) return;
     const neighbor = face === 'south' ? `${x},${y + 1}` : `${x + 1},${y}`;
-    if (cells[neighbor]) return;
-    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    if (terrainSurface.has(neighbor)) return;
+    const next = cloneEditorBoard(board);
     next.subterrain = { ...(next.subterrain ?? {}), [subterrainFaceKey(x, y, face)]: subterrainBrushAsset.id };
     commitEditorBoard(next);
   };

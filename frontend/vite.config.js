@@ -369,6 +369,7 @@ function prodBackend(port) {
             DEV_AUTH: '1',
             DEV_AUTH_EMAIL: process.env.DEV_AUTH_EMAIL || 'nelson@romaine.life',
             DEV_AUTH_NAME: process.env.DEV_AUTH_NAME || 'Nelson',
+            DEV_AUTH_TOKEN_FILE: process.env.DEV_AUTH_TOKEN_FILE || join(backendDir, '..', '.codex-session', 'auth.json'),
             ADMIN_EMAILS: process.env.ADMIN_EMAILS || 'nelson@romaine.life',
             UNIT_ASSET_CONTAINER_URL: process.env.UNIT_ASSET_CONTAINER_URL || 'https://chesstacticsmedia.blob.core.windows.net/unit-assets',
             // Local developers may opt into an isolated directory + disposable
@@ -438,10 +439,10 @@ export default defineConfig(async ({ command }) => {
     // never be mistaken for a semantic media slot.
     build: { assetsDir: 'app-code' },
     ...(useBackend ? { server: { proxy: {
-      '/api': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, ws: true },
+      '/api': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, ws: true, xfwd: true },
       // `/assets/*` is a stable semantic-slot route owned by the backend's live
       // media catalog. Never let Vite's public directory mask a missing DB slot.
-      '/assets': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false },
+      '/assets': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, xfwd: true },
     } } } : {}),
   };
 });

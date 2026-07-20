@@ -8,6 +8,7 @@ const { Pool } = require('pg');
 // from a temp dir by supervisor.js, so sibling backend assets must resolve from
 // the baked backend dir instead of this process' __dirname.
 const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
+const { createDevGrantSessionReader } = require(path.join(bakedBackendDir, 'devAuthGrant'));
 const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
 const {
@@ -1835,6 +1836,18 @@ function isDevAuthHost(req) {
   return false;
 }
 
+function isLoopbackRequest(req) {
+  const forwarded = (req.get('x-forwarded-for') || '').split(',')[0].trim();
+  const address = forwarded || req.socket.remoteAddress || '';
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+}
+
+const verifiedDevGrantSession = createDevGrantSessionReader({
+  authBaseUrl,
+  credentialPath: process.env.DEV_AUTH_TOKEN_FILE,
+  enabled: process.env.DEV_AUTH === '1',
+});
+
 async function readSession(req) {
   if (isDevAuthHost(req)) {
     const cookie = req.get('cookie') || '';
@@ -1850,6 +1863,8 @@ async function readSession(req) {
         }
       };
     }
+    const granted = isLoopbackRequest(req) ? await verifiedDevGrantSession() : null;
+    if (granted) return granted;
   }
   const cookie = req.get('cookie');
   if (!cookie) return null;
