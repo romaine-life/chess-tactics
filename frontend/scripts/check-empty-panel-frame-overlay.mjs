@@ -33,6 +33,25 @@ function blockFor(selector) {
   return match?.[1] ?? '';
 }
 
+function blocksTargeting(selector) {
+  const targets = [];
+  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selectorList = match[1].replace(/\/\*[\s\S]*?\*\//g, '').trim();
+    if (selectorList.split(',').some((entry) => entry.trim().endsWith(selector))) {
+      targets.push(match[2]);
+    }
+  }
+  return targets;
+}
+
+function exportedFunctionSource(source, functionName) {
+  const marker = `export function ${functionName}`;
+  const start = source.indexOf(marker);
+  if (start < 0) return '';
+  const nextExport = source.indexOf('\nexport function ', start + marker.length);
+  return source.slice(start, nextExport >= 0 ? nextExport : undefined);
+}
+
 function ruleContains(selector, token) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -48,6 +67,12 @@ const screen = blockFor('.level-editor-screen');
 if (!screen) failures.push('missing .level-editor-screen chrome role host');
 const skirmishScreen = blockFor('.skirmish-screen');
 if (!skirmishScreen) failures.push('missing .skirmish-screen chrome role host');
+const levelEditorScreen = blockFor('.skirmish-screen.level-editor-screen');
+if (!levelEditorScreen
+  || !/column-gap\s*:\s*0\s*;/.test(levelEditorScreen)
+  || !/row-gap\s*:\s*0\s*;/.test(levelEditorScreen)) {
+  failures.push('level editor workspace and controls must meet without exposing the scenic backdrop gap');
+}
 for (const token of [
   '--skirmish-chrome-outer-rail-w',
   '--skirmish-chrome-inner-rail-w',
@@ -512,18 +537,15 @@ for (const selector of [
   '[data-chrome-unit="outer-panel"]',
   '.level-editor-screen .le-outer-panel',
   '[data-chrome-consumer="level-editor-controls"]',
-  '[data-chrome-consumer="events-overlay"]',
   '[data-chrome-consumer="skirmish-hud"]',
   '.le-icon-btn',
   '.le-action-toolbar .le-seg-btn',
   '.le-seg-icons .le-seg-btn',
   '.settings-stepper .settings-chrome-button',
   '.le-seg-btn',
-  '.le-faction-select',
+  '.le-direction-trigger',
   '.le-board-link-input',
   '.le-select-wrap',
-  '.le-layer-select-wrap',
-  '.le-event-select-wrap',
 ]) {
   if (!chromeUnitRegistry.includes(selector)) {
     failures.push(`house chrome selector must be represented in the chrome unit registry: ${selector}`);
@@ -532,8 +554,8 @@ for (const selector of [
 if (!chromeRuntime.includes("calc(-1 * var(--ds-space-3))")) {
   failures.push('content-aligned panel titles must align to the rail-owned contents boundary without atom compensation');
 }
-if (/id:\s*'inner-dropdown'[\s\S]*?selectors:\s*\[[\s\S]*?'\.le-layer-select'/.test(chromeUnitRegistry)) {
-  failures.push('inner dropdown registry must frame the wrapper, not its native .le-layer-select child');
+if (/id:\s*'inner-dropdown'[\s\S]*?selectors:\s*\[[\s\S]*?'\.le-(?:layer|event)-select(?:-wrap)?'/.test(chromeUnitRegistry)) {
+  failures.push('inner dropdown registry must not retain retired native-select selectors');
 }
 const houseSelectMenuBlock = blockFor('.house-select-menu');
 const houseSelectScrollBlock = blockFor('.house-select-menu-scroll');
@@ -569,14 +591,16 @@ if (!/data-chrome-unit="inner-box"/.test(chromeBox)
 if (!/data-chrome-unit="outer-panel"/.test(chromeBox)
   || !/data-chrome-consumer=\{chromeConsumer\}/.test(chromeBox)
   || !/chromeUnitClassNames\('outer-panel',\s*'le-outer-panel',\s*className\)/.test(chromeBox)
-  || !/className="le-outer-panel-fill"/.test(chromeBox)
+  || !/export\s+function\s+ChromeSurfaceFill/.test(chromeBox)
+  || !/data-chrome-fill-role=\{role\}/.test(chromeBox)
+  || !/<ChromeSurfaceFill role="outer" className="le-outer-panel-fill"\s*\/>/.test(chromeBox)
   || !/titled \? 'le-outer-panel-content--titled' : ''/.test(chromeBox)
   || !/className=\{`skirmish-card outer-chrome-header/.test(chromeBox)
   || !/<OuterChromeTitle>\{title\}<\/OuterChromeTitle>/.test(chromeBox)) {
   failures.push('shared ChromeBox primitives must own the complete outer-panel fill/content/header composition');
 }
-if ((levelEditor.match(/<select\b[^>]*>/g) ?? []).some((opening) => /data-chrome-unit="inner-dropdown"|chromeUnitClassNames\('inner-dropdown'/.test(opening))) {
-  failures.push('Level Editor native selects must sit inside shared dropdown wrappers instead of wearing inner-dropdown chrome directly');
+if (/<select\b/.test(levelEditor)) {
+  failures.push('Level Editor native selects are retired; every dropdown must use HouseSelect');
 }
 if (!/<HouseSelect<string>[\s\S]*?ariaLabel="Saved generated region"/.test(levelEditor)
   || !/<HouseSelect<TileFamilyId>[\s\S]*?className="le-gen-region-select"[\s\S]*?ariaLabel=\{`Region \$\{sectionIndex \+ 1\} terrain`\}/.test(levelEditor)
@@ -645,7 +669,8 @@ if (!/export\s+const\s+CHROME_FILL_MODE_OPTIONS/.test(chromeRuntime)
 }
 if (!/function\s+chromeFillCss/.test(chromeRuntime)
   || !/background-image:\s*\$\{hasTint/.test(chromeRuntime)
-  || !/\$\{familySurface\} \.le-outer-panel > \.le-outer-panel-fill \{[\s\S]*?\$\{chromeFillCss\(outer\)\}/.test(chromeRuntime)
+  || !/\$\{familySurface\} \[data-chrome-fill-role="outer"\] \{[\s\S]*?\$\{chromeFillCss\(outer\)\}/.test(chromeRuntime)
+  || !/\$\{familySurface\} \[data-chrome-fill-role="inner"\] \{[\s\S]*?\$\{chromeFillCss\(inner\)\}/.test(chromeRuntime)
   || !/\$\{chromeFillCss\(inner\)\}/.test(chromeRuntime)) {
   failures.push('Chrome Lab must apply role fill as explicit CSS background declarations on outer/inner roles');
 }
@@ -679,8 +704,7 @@ if (/margin\s*:[^;]*var\(--le-control-(?:frame|rail)-w/.test(title)) {
 
 const innerRoleSelectors = [
   '.le-seg-btn',
-  '.le-faction-select',
-  '.le-layer-select',
+  '.le-direction-trigger',
   '.le-board-link-input',
   '.le-violations',
   '.le-status-current',
@@ -696,8 +720,7 @@ for (const selector of innerRoleSelectors) {
 }
 for (const [selector, token] of [
   ['.le-seg-btn', '--skirmish-chrome-inner-control-image'],
-  ['.le-faction-select', '--skirmish-chrome-inner-control-image'],
-  ['.le-layer-select', '--skirmish-chrome-inner-control-image'],
+  ['.le-direction-trigger', '--skirmish-chrome-inner-control-image'],
   ['.le-board-link-input', '--skirmish-chrome-inner-line-image'],
   ['.le-violations', '--skirmish-chrome-inner-line-warm-image'],
   ['.le-status-current', '--skirmish-chrome-inner-line-image'],
@@ -711,11 +734,10 @@ for (const [selector, token] of [
 }
 for (const [selector, token] of [
   ['.le-seg-btn', '--le-inner-control-h'],
-  ['.le-faction-select', '--le-inner-control-h'],
+  ['.le-direction-trigger', '--le-inner-square'],
   ['.le-action-toolbar-divider', '--le-inner-control-h'],
   ['.le-icon-btn', '--le-inner-square'],
-  ['.le-select-wrap,\n.le-layer-select-wrap,\n.le-event-select-wrap', '--le-inner-field-h'],
-  ['.le-layer-select', '--le-inner-field-h'],
+  ['.le-select-wrap', '--le-inner-field-h'],
   ['.le-zone-stepper-button.settings-chrome-button', '--le-inner-square'],
   ['.le-seg-icons .le-seg-btn', '--le-inner-square'],
   ['.le-action-toolbar .le-seg-btn', '--le-inner-square'],
@@ -730,24 +752,28 @@ for (const [selector, token] of [
 if (!/\.level-editor-screen \.settings-chrome-button,\s*\.level-editor-screen \.settings-toggle,\s*\.level-editor-screen \.settings-stepper \.settings-chrome-button\s*\{[\s\S]*?border-width\s*:\s*var\(--le-chrome-inner-rail-w\)\s*;[\s\S]*?border-image-source\s*:\s*var\(--skirmish-chrome-inner-control-image\)\s*;[\s\S]*?border-image-width\s*:\s*var\(--le-chrome-inner-rail-w\)\s*;/.test(css)) {
   failures.push('shared settings controls inside the level editor must consume the inner chrome role');
 }
-const eventsOverlay = blockFor('.le-events-overlay');
-if (eventsOverlay && /border(?:-image)?\s*:/.test(eventsOverlay)) {
-  failures.push('level editor events overlay must not draw local outer chrome; it must inherit .le-outer-panel');
+const eventsWorkspaceRules = blocksTargeting('.le-events-workspace');
+const eventsWorkspace = eventsWorkspaceRules.find((block) => /position\s*:\s*absolute\s*;/.test(block)) ?? '';
+if (!eventsWorkspace) {
+  failures.push('level editor events must expose a shell-owned .le-events-workspace surface');
+} else {
+  if (!/position\s*:\s*absolute\s*;/.test(eventsWorkspace)
+    || !/inset\s*:\s*0\s*;/.test(eventsWorkspace)
+    || !/min-height\s*:\s*0\s*;/.test(eventsWorkspace)
+    || !/min-width\s*:\s*0\s*;/.test(eventsWorkspace)
+    || !/overflow\s*:\s*hidden\s*;/.test(eventsWorkspace)) {
+    failures.push('level editor events workspace must fill and clip to its positioned board-workspace parent');
+  }
+  if (eventsWorkspaceRules.some((block) => /position\s*:\s*fixed|\b(?:100)?v[wh]\b|--app-header-h|--skirmish-rail-w|--skirmish-grid-gap|--le-outer-atom-outset/.test(block))) {
+    failures.push('level editor events workspace must not duplicate viewport, rail, or outer-atom geometry');
+  }
+  if (eventsWorkspaceRules.some((block) => /border(?:-image)?\s*:/.test(block))) {
+    failures.push('level editor events workspace must not draw a second outer frame');
+  }
 }
-if (eventsOverlay && !/padding\s*:\s*0\s*;/.test(eventsOverlay)) {
-  failures.push('level editor events overlay root must leave inset ownership to the shared outer-panel contents box');
-}
-if (eventsOverlay && !/left\s*:\s*var\(--le-outer-atom-outset,\s*0px\)/.test(eventsOverlay)) {
-  failures.push('level editor fixed events overlay must reserve left viewport space for the outer corner atom');
-}
-if (eventsOverlay && !/bottom\s*:\s*var\(--le-outer-atom-outset,\s*0px\)/.test(eventsOverlay)) {
-  failures.push('level editor fixed events overlay must reserve bottom viewport space for the outer corner atom');
-}
-if (eventsOverlay && !/right\s*:\s*calc\([^;]*--le-outer-atom-outset/.test(eventsOverlay)) {
-  failures.push('level editor fixed events overlay must reserve right viewport space for the outer corner atom');
-}
-if (eventsOverlay && !/top\s*:\s*calc\([^;]*--le-outer-atom-outset/.test(eventsOverlay)) {
-  failures.push('level editor fixed events overlay must reserve top viewport space for the outer corner atom');
+const boardWorkspace = blockFor('.skirmish-field');
+if (!boardWorkspace || !/position\s*:\s*relative\s*;/.test(boardWorkspace)) {
+  failures.push('the board workspace must remain the positioned parent for the Events fill surface');
 }
 if (!chromeRuntime.includes('const outerAtomOutset = cssPx(outerFrame.atomOverlay?.outset ?? 0);')) {
   failures.push('generated chrome runtime must derive the outer atom outset from the rendered atom overlay');
@@ -765,43 +791,50 @@ if (!/function\s+selectorListParts/.test(chromeRuntime)
   || !/parenDepth === 0 && bracketDepth === 0/.test(chromeRuntime)) {
   failures.push('generated atom pseudos must split only top-level selector-list commas, preserving :is() surface selectors');
 }
-if (/\.level-editor-screen \.le-events-overlay\s*\{[\s\S]*?border-image-source/.test(chromeRuntime)) {
-  failures.push('generated chrome runtime must not keep a special events-overlay outer chrome branch');
+if (/events-overlay/.test(chromeRuntime) || /events-overlay/.test(chromeUnitRegistry)) {
+  failures.push('retired events-overlay outer-panel registration must not return');
 }
 
 // The audit specimen is not the product integration. The normal, ready Level Editor
-// controls branch and events overlay must render the same shared consumers that Chrome
-// Audit renders, and the controls consumer itself must own the complete outer-panel
-// composition. Keep these checks scoped to the component/function that owns each
-// responsibility so a fixture or sibling cannot accidentally satisfy the live contract.
+// controls branch must render the same shared consumer that Chrome Audit renders. Events
+// instead occupies the shell-owned board workspace and must never rejoin the outer-panel
+// inventory. Keep checks scoped to the component/function that owns each responsibility.
 const levelEditorChromeImports = [
   ...levelEditor.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]\.\/LevelEditorChromeConsumers['"]/g),
 ];
 if (!levelEditorChromeImports.some((match) => /\bLevelEditorControlsPanel\b/.test(match[1]))) {
   failures.push('live Level Editor must import LevelEditorControlsPanel from LevelEditorChromeConsumers');
 }
-if (!levelEditorChromeImports.some((match) => /\bLevelEditorEventsOverlay\b/.test(match[1]))) {
-  failures.push('live Level Editor must import LevelEditorEventsOverlay from LevelEditorChromeConsumers');
+if (!levelEditorChromeImports.some((match) => /\bLevelEditorEventsWorkspace\b/.test(match[1]))) {
+  failures.push('live Level Editor must import LevelEditorEventsWorkspace from LevelEditorChromeConsumers');
 }
 if (!/\{editorLoadError\s*\?[\s\S]*?\)\s*:\s*\(\s*(?:\/\*[\s\S]*?\*\/\s*)*<LevelEditorControlsPanel\b/.test(levelEditor)) {
   failures.push('live Level Editor normal controls path must render the shared LevelEditorControlsPanel consumer');
 }
-if (!/\{eventsOpen\s*\?\s*\(\s*(?:\/\*[\s\S]*?\*\/\s*)*<LevelEditorEventsOverlay\b/.test(levelEditor)) {
-  failures.push('live Level Editor open-events path must render the shared LevelEditorEventsOverlay consumer');
+if (!/\{eventsOpen\s*\?\s*\(\s*(?:\/\*[\s\S]*?\*\/\s*)*<LevelEditorEventsWorkspace\b/.test(levelEditor)) {
+  failures.push('live Level Editor open-events path must render the shared LevelEditorEventsWorkspace');
 }
 const rawLevelEditorControlAside = [...levelEditor.matchAll(/<aside\b[^>]*>/g)]
   .some((match) => /\bskirmish-hud\b/.test(match[0]) && /aria-label\s*=\s*['"]Editor controls['"]/.test(match[0]));
 if (rawLevelEditorControlAside) {
   failures.push('live Level Editor must not restore a raw parallel skirmish-hud controls aside; render LevelEditorControlsPanel');
 }
-const rawLevelEditorEventsOverlay = [...levelEditor.matchAll(/<div\b[^>]*>/g)]
-  .some((match) => /\ble-events-overlay\b/.test(match[0]) && /role\s*=\s*['"]dialog['"]/.test(match[0]));
-if (rawLevelEditorEventsOverlay) {
-  failures.push('live Level Editor must not restore a raw parallel le-events-overlay dialog; render LevelEditorEventsOverlay');
+if (!/className=\{`skirmish-board-frame\$\{eventsOpen \? ' is-events-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| undefined\}/.test(levelEditor)) {
+  failures.push('open Events workspace must keep the board mounted but visually and interactively covered');
+}
+if (!/eventsEditor:\s*routeState\.eventsEditor/.test(levelEditor)
+  || !/levelEditorEventsEntry:\s*true/.test(levelEditor)
+  || !/levelEditorEventsBaseHref:\s*baseHref/.test(levelEditor)
+  || /window\.history\.state\?\.levelEditorRules/.test(levelEditor)) {
+  failures.push('Events visibility must be URL-addressed; history state may mark only app-created return provenance');
+}
+const coveredBoard = blockFor('.level-editor-screen .skirmish-board-frame.is-events-covered');
+if (!coveredBoard || !/visibility\s*:\s*hidden\s*;/.test(coveredBoard)) {
+  failures.push('open Events workspace must visually suppress the covered board');
 }
 
 const levelEditorControlsPanelStart = levelEditorChromeConsumers.indexOf('export function LevelEditorControlsPanel');
-const levelEditorControlsPanelEnd = levelEditorChromeConsumers.indexOf('export function LevelEditorEventsOverlay', levelEditorControlsPanelStart);
+const levelEditorControlsPanelEnd = levelEditorChromeConsumers.indexOf('export function LevelEditorEventsWorkspace', levelEditorControlsPanelStart);
 const levelEditorControlsPanel = levelEditorControlsPanelStart >= 0 && levelEditorControlsPanelEnd > levelEditorControlsPanelStart
   ? levelEditorChromeConsumers.slice(levelEditorControlsPanelStart, levelEditorControlsPanelEnd)
   : '';
@@ -812,8 +845,15 @@ if (!levelEditorControlsPanel) {
   failures.push('LevelEditorControlsPanel must compose the shared titled OuterChromeBox and Controls header');
 }
 
-if (!/<OuterChromeBox as="div" chromeConsumer="events-overlay"/.test(levelEditorChromeConsumers)) {
-  failures.push('events overlay must reuse OuterChromeBox while preserving its dialog div semantics');
+const levelEditorEventsWorkspace = exportedFunctionSource(levelEditorChromeConsumers, 'LevelEditorEventsWorkspace');
+if (!levelEditorEventsWorkspace
+  || !/<section className="le-events-workspace"[\s\S]*?aria-labelledby="level-events-workspace-title"/.test(levelEditorEventsWorkspace)
+  || !/<ChromeSurfaceFill role="outer" className="le-events-workspace-fill"\s*\/>/.test(levelEditorEventsWorkspace)
+  || !/className="le-events-workspace-content"/.test(levelEditorEventsWorkspace)
+  || !/initialFocusRef\.current\?\.focus\(\)/.test(levelEditorEventsWorkspace)) {
+  failures.push('events workspace must use the shared fill-only role inside a plain shell-owned section');
+} else if (/<OuterChromeBox\b|chromeConsumer="events-overlay"|role="dialog"/.test(levelEditorEventsWorkspace)) {
+  failures.push('events workspace must not restore outer-panel or dialog semantics');
 }
 if (!/<OuterChromeBox[\s\S]*?chromeConsumer="skirmish-hud"[\s\S]*?titled[\s\S]*?className=\{`skirmish-hud \$\{className\}`\.trim\(\)\}/.test(skirmishHud)
   || !/<OuterChromeHeader title="Controls">/.test(skirmishHud)

@@ -2,6 +2,22 @@ import type { ComponentPropsWithoutRef, HTMLAttributes, ReactElement, ReactNode 
 import type { ChromeRole } from '../chromeCandidateSources';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 
+export function ChromeSurfaceFill({
+  role,
+  className = '',
+}: {
+  role: ChromeRole;
+  className?: string;
+}): ReactElement {
+  return (
+    <span
+      data-chrome-fill-role={role}
+      className={`chrome-surface-fill ${className}`.trim()}
+      aria-hidden="true"
+    />
+  );
+}
+
 export function OuterChromeBox({
   as: Element = 'aside',
   chromeConsumer,
@@ -29,7 +45,7 @@ export function OuterChromeBox({
       data-chrome-consumer={chromeConsumer}
       className={chromeUnitClassNames('outer-panel', 'le-outer-panel', className)}
     >
-      <span className="le-outer-panel-fill" aria-hidden="true" />
+      <ChromeSurfaceFill role="outer" className="le-outer-panel-fill" />
       <div className={contentClasses}>{children}</div>
     </Element>
   );

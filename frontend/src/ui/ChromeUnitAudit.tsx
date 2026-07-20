@@ -12,10 +12,8 @@ import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { HouseSelect } from './shared/HouseSelect';
 import { ChromeDivider, InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { Toggle } from './shared/Toggle';
-import { LevelEditorControlsPanel, LevelEditorEventsOverlay, type LevelEditorLayerOption } from './LevelEditorChromeConsumers';
+import { LevelEditorControlsPanel, type LevelEditorLayerOption } from './LevelEditorChromeConsumers';
 import { SkirmishHud } from './SkirmishHud';
-import { VictoryConditionsEditor, type FactionOption } from './VictoryConditionsEditor';
-import type { VictoryRules } from '../core/level';
 
 export type ChromeUnitAuditDims = {
   width: number;
@@ -63,26 +61,7 @@ const CHROME_AUDIT_LAYER_OPTIONS: readonly LevelEditorLayerOption[] = [
   { id: 'rules', label: 'Rules' },
   { id: 'status', label: 'Status' },
 ];
-const CHROME_AUDIT_FACTIONS: FactionOption[] = [
-  { side: 'player', label: 'Navy' },
-  { side: 'enemy', label: 'Crimson' },
-];
-const CHROME_AUDIT_VICTORY: VictoryRules = [
-  {
-    id: 'audit-capture-all',
-    name: 'Capture all',
-    if: [{ kind: 'eliminate', side: 'enemy' }],
-    do: [{ kind: 'win', side: 'player' }],
-  },
-  {
-    id: 'audit-king-falls',
-    name: 'King falls',
-    if: [{ kind: 'eliminate', side: 'player', filter: { type: 'king' } }],
-    do: [{ kind: 'lose', side: 'player' }],
-  },
-];
-
-type OuterPanelConsumerKind = 'level-editor-controls' | 'events-overlay' | 'skirmish-hud';
+type OuterPanelConsumerKind = 'level-editor-controls' | 'skirmish-hud';
 type OuterPanelPreviewOption = {
   id: string;
   label: string;
@@ -92,14 +71,12 @@ type OuterPanelPreviewOption = {
 
 function outerPanelConsumerKind(selector: string): OuterPanelConsumerKind | null {
   if (selector.includes('data-chrome-consumer="level-editor-controls"')) return 'level-editor-controls';
-  if (selector.includes('data-chrome-consumer="events-overlay"')) return 'events-overlay';
   if (selector.includes('data-chrome-consumer="skirmish-hud"')) return 'skirmish-hud';
   return null;
 }
 
 function outerPanelConsumerLabel(kind: OuterPanelConsumerKind, selector: string): string {
   if (kind === 'level-editor-controls') return 'Level Editor controls';
-  if (kind === 'events-overlay') return 'Rules/events overlay';
   if (kind === 'skirmish-hud') return 'Skirmish HUD';
   return selector;
 }
@@ -131,7 +108,6 @@ function chromeUnitPreviewBaselineDims(unit: ChromeUnitSpec, preview: OuterPanel
   const consumerBaseline = preview.kind ? chromeUnitBaselineDims(chromeUnitById('outer-panel')) : chromeUnitBaselineDims(unit);
   const baseline = unit.id === 'inner-box' ? consumerBaseline : chromeUnitBaselineDims(unit);
   if (preview.kind === 'level-editor-controls') return { ...baseline, height: 620 };
-  if (preview.kind === 'events-overlay') return { ...baseline, height: 460 };
   if (preview.kind === 'skirmish-hud') return { ...baseline, height: 540 };
   return baseline;
 }
@@ -235,87 +211,13 @@ function LevelEditorControlsConsumer({ dims }: { dims: ChromeUnitAuditDims }): R
                   ]}
                   onChange={chromeAuditNoop}
                 />
-                <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-faction-select', 'le-direction-trigger')} aria-label="Specimen direction">N</button>
+                <button type="button" data-chrome-unit="inner-tool-square" className={chromeUnitClassNames('inner-tool-square', 'le-direction-trigger')} aria-label="Specimen direction">N</button>
               </span>
             </div>
           </div>
         </div>
       </section>
     </LevelEditorControlsPanel>
-  );
-}
-
-function EventsOverlayConsumer({ dims }: { dims: ChromeUnitAuditDims }): ReactElement {
-  const [tab, setTab] = useState<'victory' | 'other'>('victory');
-  const [victory, setVictory] = useState<VictoryRules>(CHROME_AUDIT_VICTORY);
-  return (
-    <LevelEditorEventsOverlay
-      className="chrome-unit-events-overlay"
-      style={{ width: `${dims.width}px`, minHeight: `${dims.height}px` }}
-      tab={tab}
-      onTabChange={setTab}
-      onDone={chromeAuditNoop}
-      victoryContent={(
-        <VictoryConditionsEditor
-          value={victory}
-          factions={CHROME_AUDIT_FACTIONS}
-          onChange={setVictory}
-          templates={(
-            <div className="le-events-templates">
-              <h3 className="le-victory-head">Template</h3>
-              <p className="le-board-note">Audit fixture using the same victory editor component as the level editor.</p>
-              <div className="le-template-apply">
-                <HouseSelect
-                  className="le-template-select-wrap"
-                  ariaLabel="Victory template"
-                  value="capture"
-                  options={[
-                    { value: 'capture', label: 'Capture all' },
-                    { value: 'survive', label: 'Survive' },
-                  ]}
-                  onChange={chromeAuditNoop}
-                />
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}>Add template</button>
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}>Clear rules</button>
-              </div>
-            </div>
-          )}
-        />
-      )}
-      otherContent={(
-        <div className="le-md le-events-other chrome-unit-events-body">
-          <div className="le-md-list">
-            <div className="le-events-templates">
-              <h3 className="le-victory-head">Template</h3>
-              <p className="le-board-note">Other-event fixture inside the shared overlay shell.</p>
-            </div>
-            <h3 className="le-victory-head">Events</h3>
-            <div className="le-md-rules">
-              <button type="button" data-chrome-unit="inner-list-row" className={chromeUnitClassNames('inner-list-row', 'le-md-item', 'active')}>
-                <span className="le-md-item-name">Setup spawn</span>
-                <span className="le-md-item-out">spawn</span>
-              </button>
-            </div>
-          </div>
-          <div className="le-md-detail">
-            <div className="le-rule">
-              <div className="le-ctrlrow">
-                <span className="le-ctrllabel">Faction</span>
-                <HouseSelect
-                  ariaLabel="Specimen event faction"
-                  value="player"
-                  options={[
-                    { value: 'player', label: 'Player' },
-                    { value: 'enemy', label: 'Enemy' },
-                  ]}
-                  onChange={chromeAuditNoop}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    />
   );
 }
 
@@ -333,7 +235,6 @@ function SkirmishHudConsumer({ dims }: { dims: ChromeUnitAuditDims }): ReactElem
 
 function OuterPanelSpecimen({ dims, preview }: { dims: ChromeUnitAuditDims; preview: OuterPanelPreviewOption }): ReactElement {
   if (preview.kind === 'level-editor-controls') return <LevelEditorControlsConsumer dims={dims} />;
-  if (preview.kind === 'events-overlay') return <EventsOverlayConsumer dims={dims} />;
   if (preview.kind === 'skirmish-hud') return <SkirmishHudConsumer dims={dims} />;
   const dividerCount = Math.max(0, Math.round(dims.dividers));
   return (
@@ -597,7 +498,6 @@ export function ChromeUnitSpecimen({
 }): ReactElement {
   if (unit.id === 'outer-panel') return <OuterPanelSpecimen dims={dims} preview={outerPreview ?? { id: 'template', label: 'Empty template' }} />;
   if (unit.id === 'inner-box' && outerPreview?.kind === 'level-editor-controls') return <LevelEditorControlsConsumer dims={dims} />;
-  if (unit.id === 'inner-box' && outerPreview?.kind === 'events-overlay') return <EventsOverlayConsumer dims={dims} />;
   if (unit.id === 'inner-box' && outerPreview?.kind === 'skirmish-hud') return <SkirmishHudConsumer dims={dims} />;
   if (unit.id === 'inner-box') return <FreeBoxSpecimen dims={dims} />;
   if (unit.id === 'inner-asset-swatch') return <AssetSwatchSpecimen interactive={interactive} />;

@@ -18,6 +18,8 @@ describe('level editor route helpers', () => {
       layer: 'unit',
       brushKind: 'unit',
       brush: 'rook',
+      eventsEditor: false,
+      eventsTab: undefined,
     });
     expect(readLevelEditorRouteState('?kind=river')).toMatchObject({
       layer: 'paths',
@@ -80,6 +82,63 @@ describe('level editor route helpers', () => {
       layer: 'wallart',
       brushKind: 'wallart',
       brush: 'test-art-mirror-grand-gallery',
+      eventsEditor: false,
+      eventsTab: undefined,
+    });
+  });
+
+  it('round-trips the addressable Events workspace and its non-default tab', () => {
+    const victoryHref = levelEditorHrefWithRouteState('/editor/level?document=doc-18&layer=rules', {
+      layer: 'rules',
+      eventsEditor: true,
+      eventsTab: 'victory',
+    });
+    expect(victoryHref).toBe('/editor/level?document=doc-18&layer=rules&eventsEditor=1');
+    expect(readLevelEditorRouteState(new URL(victoryHref, 'https://example.test').search)).toMatchObject({
+      layer: 'rules',
+      eventsEditor: true,
+      eventsTab: undefined,
+    });
+
+    const otherHref = levelEditorHrefWithRouteState(victoryHref, {
+      layer: 'rules',
+      eventsEditor: true,
+      eventsTab: 'other',
+    });
+    expect(otherHref).toBe('/editor/level?document=doc-18&layer=rules&eventsEditor=1&eventsTab=other');
+    expect(readLevelEditorRouteState(new URL(otherHref, 'https://example.test').search)).toMatchObject({
+      layer: 'rules',
+      eventsEditor: true,
+      eventsTab: 'other',
+    });
+  });
+
+  it('forces Events onto Rules and strips it when another layer is serialized', () => {
+    expect(readLevelEditorRouteState('?layer=status&eventsEditor=1&eventsTab=other')).toMatchObject({
+      layer: 'rules',
+      eventsEditor: true,
+      eventsTab: 'other',
+    });
+    expect(readLevelEditorRouteState('?layer=rules&eventsEditor=no&eventsTab=other')).toMatchObject({
+      layer: 'rules',
+      eventsEditor: false,
+      eventsTab: undefined,
+    });
+    expect(levelEditorHrefWithRouteState('/editor/level?layer=rules&eventsEditor=1&eventsTab=other', {
+      layer: 'status',
+    })).toBe('/editor/level?layer=status');
+  });
+
+  it('does not confuse the Events workspace flag with serialized gameplay events', () => {
+    const href = levelEditorHrefWithRouteState('/editor/level?layer=rules&events=encoded-level-events', {
+      layer: 'rules',
+      eventsEditor: true,
+      eventsTab: 'victory',
+    });
+    expect(href).toBe('/editor/level?layer=rules&events=encoded-level-events&eventsEditor=1');
+    expect(readLevelEditorRouteState(new URL(href, 'https://example.test').search)).toMatchObject({
+      layer: 'rules',
+      eventsEditor: true,
     });
   });
 

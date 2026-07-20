@@ -4088,6 +4088,10 @@ h1 {
    z5 — drop it to z3 so the overlay clears it; two classes out-rank the base rule. /play keeps
    z5 (it has no rain). */
 .skirmish-screen.level-editor-screen {
+  /* The editor's workspace and controls are adjoining shell surfaces. Gameplay's
+     scenic gutter would expose the backdrop between their two chrome edges. */
+  column-gap: 0;
+  row-gap: 0;
   z-index: 3;
 }
 .level-editor-screen::before {
@@ -5362,7 +5366,7 @@ body.loading-bootstrap .app-startup-status {
    .skirmish-field / .skirmish-board-frame / .skirmish-hud / .skirmish-card
    chrome (so it IS the same game). Most .le-* classes add editor-specific
    controls; the named .le-outer-panel contract below is intentionally shared
-   by the live Level Editor, Rules/events overlay, and Skirmish HUD.
+   by the live Level Editor controls and Skirmish HUD.
    ============================================================ */
 /* Full-bleed title row across the top (ADR-0004), board + rail below it. The editor is
    NOT the battle HUD, so it takes the standard full-width title bar rather than Skirmish's
@@ -5426,6 +5430,13 @@ body.loading-bootstrap .app-startup-status {
   z-index: 3;
 }
 
+.chrome-surface-fill {
+  image-rendering: pixelated;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
 :is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-fill {
   image-rendering: pixelated;
   inset:
@@ -5433,9 +5444,6 @@ body.loading-bootstrap .app-startup-status {
     var(--le-outer-fill-box-right, 0px)
     var(--le-outer-fill-box-bottom, 0px)
     var(--le-outer-fill-box-left, 0px);
-  pointer-events: none;
-  position: absolute;
-  z-index: 0;
 }
 
 :is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-content {
@@ -5717,9 +5725,7 @@ body.loading-bootstrap .app-startup-status {
 .le-faction-assignments { display: grid; gap: 6px; }
 .le-faction-assignment { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, .95fr); min-width: 0; }
 .le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
-.le-faction-fields .le-select-wrap,
-.le-faction-fields .le-layer-select,
-.le-faction-fields .le-faction-select { min-width: 0; }
+.le-faction-fields .le-select-wrap { min-width: 0; }
 .le-faction-name { align-items: center; color: #f3ead8; display: grid; font-size: var(--ds-text-sm); gap: 6px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; }
 .le-faction-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .le-faction-name b { color: #9fe0ff; font-size: var(--ds-text-xs); font-weight: 700; }
@@ -5845,7 +5851,7 @@ body.loading-bootstrap .app-startup-status {
   flex: 0 1 170px;
   min-width: 140px;
 }
-.le-faction-select {
+.le-direction-trigger {
   appearance: none;
   -webkit-appearance: none;
   border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
@@ -5863,13 +5869,7 @@ body.loading-bootstrap .app-startup-status {
   text-transform: uppercase;
   width: 100%;
 }
-.le-faction-select:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
-.le-faction-select option {
-  background: #f3f7fb;
-  color: #142536;
-  text-shadow: none;
-  text-transform: none;
-}
+.le-direction-trigger:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
 .le-direction-popover { inline-size: var(--le-inner-square); min-width: 0; position: relative; width: var(--le-inner-square); }
 .le-direction-trigger { align-items: center; block-size: var(--le-inner-square); display: flex; inline-size: var(--le-inner-square); justify-content: center; min-block-size: var(--le-inner-square); min-inline-size: var(--le-inner-square); min-width: var(--le-inner-square); padding: 0; text-align: center; width: var(--le-inner-square); }
 .le-faction-fields .le-direction-popover,
@@ -5904,11 +5904,8 @@ body.loading-bootstrap .app-startup-status {
 }
 .le-board-warning { color: #f0bd55; font-size: var(--ds-text-sm); line-height: 1.3; margin: 0; text-shadow: 0 0 8px rgba(240, 189, 85, .22); }
 
-/* Canonical Level Editor select: the wrapper wears the kit frame and owns the
-   chevron because native selects cannot reliably host chrome pseudos. */
-.le-select-wrap,
-.le-layer-select-wrap,
-.le-event-select-wrap {
+/* Canonical Level Editor dropdown: HouseSelect owns the shared frame and chevron. */
+.le-select-wrap {
   border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
   border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
   box-sizing: border-box;
@@ -6007,9 +6004,25 @@ body.loading-bootstrap .app-startup-status {
   min-width: 0;
   padding: 0;
 }
-.house-select-menu-options > .chrome-divider[data-chrome-divider-role="inner"] {
+.house-select-menu-options > .chrome-divider[data-chrome-divider-role="inner"],
+.house-select-option-group-items > .chrome-divider[data-chrome-divider-role="inner"] {
   --kit-divider-gap: 0px;
   --kit-divider-reach: var(--le-chrome-inner-rail-w, 7px);
+}
+.house-select-option-group,
+.house-select-option-group-items {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.house-select-option-group-label {
+  background: rgba(4, 15, 24, .78);
+  color: #8fbdeb;
+  font: 800 var(--ds-text-2xs)/1 var(--ds-font-sans, system-ui, sans-serif);
+  letter-spacing: .06em;
+  padding: 7px 9px 6px;
+  text-shadow: 0 2px 0 #010407;
+  text-transform: uppercase;
 }
 .house-select-option {
   appearance: none;
@@ -6045,9 +6058,7 @@ body.loading-bootstrap .app-startup-status {
   color: rgba(180, 200, 214, .44);
   cursor: default;
 }
-.le-select-wrap::after,
-.le-layer-select-wrap::after,
-.le-event-select-wrap::after {
+.le-select-wrap::after {
   border: solid #cfe6f1;
   border-width: 0 2px 2px 0;
   box-sizing: border-box;
@@ -6061,54 +6072,6 @@ body.loading-bootstrap .app-startup-status {
   pointer-events: none;
   z-index: 6;
 }
-.le-select-wrap .le-layer-select,
-.le-layer-select-wrap .le-layer-select,
-.le-event-select-wrap .le-layer-select {
-  background: transparent;
-  border: 0;
-  border-image: none;
-  min-height: calc(var(--le-inner-field-h) - (var(--le-chrome-inner-rail-w, 10px) * 2));
-  overflow: hidden;
-  padding-left: 10px;
-  padding-right: 34px;
-  text-align: left;
-  text-align-last: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.le-layer-select {
-  appearance: none;
-  -webkit-appearance: none;
-  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
-  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
-  box-sizing: border-box;
-  color: #eff9ff;
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--ds-text-xs);
-  min-height: var(--le-inner-field-h);
-  outline: none;
-  padding: 0 34px 0 10px;
-  text-shadow: 0 2px 0 #010407;
-  text-transform: uppercase;
-  width: 100%;
-}
-.le-layer-select:focus-visible {
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
-}
-.le-layer-select option {
-  background: #f3f7fb;
-  color: #142536;
-  text-shadow: none;
-  text-transform: none;
-}
-.le-faction-select option:checked,
-.le-layer-select option:checked {
-  background: #8fbdeb;
-  color: #082033;
-}
-.le-layer-select option:disabled { color: rgba(20, 37, 54, .45); }
 .le-zone-select-controls {
   align-items: center;
   display: grid;
@@ -6149,12 +6112,31 @@ body.loading-bootstrap .app-startup-status {
 }
 .le-zone-panel .le-zone-select-controls {
   gap: 6px;
-  grid-template-columns: var(--le-zone-button-w) minmax(0, 1fr) var(--le-zone-button-w) var(--le-zone-button-w) var(--le-zone-button-w);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: var(--le-zone-row-h) var(--le-zone-row-h);
+  height: auto;
+}
+.le-zone-panel .le-zone-select-controls > .le-select-wrap {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.le-zone-panel .le-zone-select-controls > .le-zone-stepper-button.settings-chrome-button {
+  grid-row: 2;
+  min-width: 0;
+  width: 100%;
+}
+.le-zone-panel .le-zone-selection-row {
+  align-items: start;
+}
+.le-zone-panel .le-zone-selection-row > .le-ctrllabel {
+  align-items: center;
+  align-self: start;
+  display: flex;
   height: var(--le-zone-row-h);
+  justify-content: center;
+  text-align: center;
 }
 .le-zone-panel .le-select-wrap,
-.le-zone-panel .le-layer-select-wrap,
-.le-zone-panel .le-layer-select,
 .le-zone-panel .le-zone-name-input,
 .le-zone-panel .le-zone-stepper-button.settings-chrome-button {
   height: var(--le-zone-row-h);
@@ -6653,7 +6635,7 @@ body.loading-bootstrap .app-startup-status {
 .le-predrawn-lock strong { color: var(--skirmish-ink); }
 
 /* Victory-conditions editor (ADR-0064) — layout only; every control is a kit atom (le-seg-btn /
-   Toggle / Stepper / the styled le-layer-select). Each RULE is a faint grouping block; its
+   Toggle / Stepper / HouseSelect). Each RULE is a faint grouping block; its
    conditions stack with an IF/and prefix, then a THEN row. */
 .le-victory-presets { margin: 6px 0 2px; }
 .le-rules { margin-top: 12px; }
@@ -6665,7 +6647,6 @@ body.loading-bootstrap .app-startup-status {
 .le-cond-summary b { color: var(--skirmish-cyan, #7fd7ff); font-weight: 700; margin-right: 3px; }
 .le-cond-remove { min-height: 26px; min-width: 0; padding: 0 10px; }
 .le-cond-params { margin-top: 2px; }
-.le-faction-select { min-width: 120px; }
 .le-cond-add { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .le-cond-add .le-seg-btn { min-height: var(--le-inner-control-compact-h); min-width: 0; padding: 0 10px; }
 .le-rule-and { opacity: .7; }
@@ -6675,23 +6656,42 @@ body.loading-bootstrap .app-startup-status {
 .le-rule-add { margin-top: 12px; }
 .le-seg-compact .le-seg-btn { min-width: 0; padding: 0 12px; }
 
-/* Victory events editor opens as a pop-out over the left editor area, leaving the right
-   control panel untouched. It is fixed to the editor viewport instead of absolute inside
-   .skirmish-field because the board column can collapse before the rail at narrow widths. */
+/* Victory events are alternate content for the shell-owned board workspace (ADR-0144).
+   The workspace parent already owns the exact title/control boundaries, so this layer fills
+   that parent without recreating viewport or rail measurements. */
 .le-events-open { width: 100%; }
-.le-events-overlay {
+.level-editor-screen .skirmish-board-frame.is-events-covered {
+  visibility: hidden;
+}
+.le-events-workspace {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  /* Outer corner atoms draw outside the border box; fixed panels need viewport
-     breathing room equal to the generated atom overlay's bleed. */
-  bottom: var(--le-outer-atom-outset, 0px);
-  left: var(--le-outer-atom-outset, 0px);
+  inset: 0;
+  isolation: isolate;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   padding: 0;
-  position: fixed;
-  right: calc(var(--skirmish-rail-w) + var(--skirmish-grid-gap) + var(--le-outer-atom-outset, 0px));
+  position: absolute;
   text-align: left;
-  top: calc(var(--app-header-h) + var(--skirmish-grid-gap) + var(--le-outer-atom-outset, 0px));
-  z-index: 30;
+  z-index: 2;
+}
+.le-events-workspace-fill {
+  inset: 0;
+}
+.le-events-workspace-content {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--ds-gutter);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--le-outer-content-padding, 0px);
+  position: relative;
+  z-index: 1;
 }
 .le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; gap: 12px; justify-content: space-between; padding: 0 2px 8px; }
 .le-events-head h2 { color: #eafaff; margin: 0; }
@@ -6760,8 +6760,7 @@ body.loading-bootstrap .app-startup-status {
   justify-content: start;
 }
 .le-events-other .le-rule > .le-ctrlrow .le-text-input,
-.le-events-other .le-rule > .le-ctrlrow .le-select-wrap,
-.le-events-other .le-rule > .le-ctrlrow .le-event-select-wrap {
+.le-events-other .le-rule > .le-ctrlrow .le-select-wrap {
   justify-self: stretch;
   min-width: 0;
   width: 100%;
@@ -6809,6 +6808,27 @@ body.loading-bootstrap .app-startup-status {
 .le-text-input:focus-visible { border-color: var(--skirmish-cyan, #7fd7ff); outline: none; }
 .le-zone-name-input { box-sizing: border-box; flex: 1; max-width: 220px; text-align: left; width: 100%; }
 .le-events-placeholder { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 2px; }
+
+@media (max-width: 560px) {
+  .le-events-workspace-content { gap: 8px; overflow-x: hidden; overflow-y: auto; }
+  .le-events-head { align-items: stretch; flex-direction: column; gap: 8px; }
+  .le-events-head-actions { justify-content: stretch; }
+  .le-events-tabs { flex: 1 1 auto; max-width: none; }
+  .le-md {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 8px;
+  }
+  .le-md-list { flex: none; }
+  .le-md-rules { flex: none; max-height: 180px; }
+  .le-md-detail { overflow: visible; }
+  .le-events-other .le-rule > .le-ctrlrow,
+  .le-events-other .le-rule > .le-roster-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 
 /* A LIVE flex column (ADR-0056): the gap actually applies — it was declared on a block
    container for this card's whole life and silently did nothing (children sat flush).
@@ -11003,10 +11023,6 @@ body { font-size: 17px; }
   max-width: 100%;
 }
 
-.chrome-unit-card-stage .le-layer-select {
-  font-size: .68rem;
-}
-
 .chrome-unit-inert-select {
   align-items: center;
   cursor: default;
@@ -11087,20 +11103,6 @@ body { font-size: 17px; }
   overflow: auto;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
-}
-
-.chrome-unit-audit-stage .chrome-unit-events-overlay {
-  bottom: auto;
-  left: auto;
-  max-height: none;
-  overflow: visible;
-  position: relative;
-  right: auto;
-  top: auto;
-}
-
-.chrome-unit-audit-stage .chrome-unit-events-body {
-  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
 }
 
 .chrome-unit-audit-stage .skirmish-card {
@@ -17490,12 +17492,6 @@ button.tileset-relationship-cell {
   display: grid;
   gap: 6px;
   grid-template-columns: 28px minmax(0, 1fr) 28px;
-}
-
-.le-fence-artwork-cycle .settings-select-frame,
-.le-fence-artwork-cycle .le-layer-select {
-  min-width: 0;
-  width: 100%;
 }
 
 .le-fence-artwork-preview {

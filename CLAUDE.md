@@ -123,6 +123,10 @@ or verify an owned app surface, build the direct URL from the route contract
 instead of giving only click-by-click instructions. Click paths are fine as
 extra context, but they are not a substitute for the link.
 
+For the Level Editor's full Events workspace, append `eventsEditor=1` to the
+canonical `layer=rules` URL. Append `eventsTab=other` only for the non-default
+Other Events tab; Victory Rules is the default and omits that parameter.
+
 The Studio encodes its state in the URL, so deep-link instead of clicking:
 - `mode=catalog|lab|viewer`
 - `cat=<category>` (for example `gym`, `gamelab`, `assets`, `props`)

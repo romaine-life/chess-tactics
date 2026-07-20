@@ -43,7 +43,7 @@ import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/T
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { PaletteSelect } from './shared/PaletteSelect';
-import { HouseSelect } from './shared/HouseSelect';
+import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 import { BoardSizePanel, type BoardResizeSide } from './shared/BoardSizePanel';
 import { DEFAULT_LEVEL_NAME, LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 import {
@@ -52,6 +52,7 @@ import {
   levelEditorRouteBrushKind,
   readLevelEditorRouteState,
   type LevelEditorBrushKind,
+  type LevelEditorEventsTab,
   type LevelEditorLayerKey,
 } from './levelEditorRoute';
 import { APP_NAVIGATION_EVENT, navigateApp, registerAppNavigationBlocker } from './navigation';
@@ -135,7 +136,7 @@ import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { loadingMark } from '../diagnostics/loadingTimeline';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
-import { LevelEditorControlsPanel, LevelEditorEventsOverlay } from './LevelEditorChromeConsumers';
+import { LevelEditorControlsPanel, LevelEditorEventsWorkspace } from './LevelEditorChromeConsumers';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import {
@@ -1669,10 +1670,6 @@ function uniqueEventName(base: string, events: readonly LevelEvent[]): string {
   }
 }
 
-function SelectFrame({ children, className = '' }: { children: ReactNode; className?: string }): ReactElement {
-  return <div data-chrome-unit="inner-dropdown" className={chromeUnitClassNames('inner-dropdown', 'le-select-wrap', className)}>{children}</div>;
-}
-
 function LevelEventsEditor({ value, zones, onChange, templates }: {
   value: LevelEvents;
   zones: EventZoneOption[];
@@ -1688,6 +1685,9 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
   const promotionTrigger = event?.trigger.kind === 'unit-enters-zone' ? event.trigger : null;
   const promotesTriggeringUnit = Boolean(event?.do.some((action) => action.kind === 'promote' && action.target.kind === 'triggering-unit'));
   const firstZone = zones[0]?.id ?? '';
+  const zoneSelectOptions: HouseSelectOption<string>[] = zones.length > 0
+    ? zones.map((zone) => ({ value: zone.id, label: zone.label }))
+    : [{ value: '', label: 'No zones painted' }];
   const defaultZoneIds = (): string[] => firstZone ? [firstZone] : [];
   const setEvent = (index: number, next: LevelEvent): void => onChange(value.map((item, i) => (i === index ? next : item)));
   const addSpawn = (): void => {
@@ -1756,27 +1756,28 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Faction</span>
-              <SelectFrame>
-                <select className="le-layer-select le-faction-select" value={spawnAction.side} aria-label="Spawn faction"
-                  onChange={(e) => {
-                    const side = e.target.value as 'player' | 'enemy';
-                    const nextAction = { ...spawnAction, side, zoneIds: spawnAction.zoneIds.length ? spawnAction.zoneIds : defaultZoneIds() };
-                    setEvent(selected, replaceEventAction(event, nextAction));
-                  }}>
-                  <option value="player">Player</option>
-                  <option value="enemy">Enemy</option>
-                </select>
-              </SelectFrame>
+              <HouseSelect<'player' | 'enemy'>
+                value={spawnAction.side}
+                options={[
+                  { value: 'player', label: 'Player' },
+                  { value: 'enemy', label: 'Enemy' },
+                ]}
+                ariaLabel="Spawn faction"
+                onChange={(side) => {
+                  const nextAction = { ...spawnAction, side, zoneIds: spawnAction.zoneIds.length ? spawnAction.zoneIds : defaultZoneIds() };
+                  setEvent(selected, replaceEventAction(event, nextAction));
+                }}
+              />
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
-              <SelectFrame>
-                <select className="le-layer-select" value={spawnAction.zoneIds[0] ?? ''} aria-label="Spawn zone"
-                  onChange={(e) => setEvent(selected, replaceEventAction(event, { ...spawnAction, zoneIds: e.target.value ? [e.target.value] : [] }))}>
-                  {zones.length === 0 ? <option value="">No zones painted</option> : null}
-                  {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}
-                </select>
-              </SelectFrame>
+              <HouseSelect<string>
+                value={spawnAction.zoneIds[0] ?? ''}
+                options={zoneSelectOptions}
+                ariaLabel="Spawn zone"
+                disabled={zones.length === 0}
+                onChange={(zoneId) => setEvent(selected, replaceEventAction(event, { ...spawnAction, zoneIds: zoneId ? [zoneId] : [] }))}
+              />
             </div>
             <h3 className="le-victory-head">Roster</h3>
             {PLAYABLE_PIECE_TYPES.map((type) => (
@@ -1806,27 +1807,29 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Unit</span>
-              <SelectFrame>
-                <select className="le-layer-select le-faction-select" value={promotionTrigger.unit.side ?? 'any'} aria-label="Promotion faction"
-                  onChange={(e) => {
-                    const side = e.target.value === 'any' ? undefined : e.target.value as 'player' | 'enemy';
-                    setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side }, zoneId: promotionTrigger.zoneId } });
-                  }}>
-                  <option value="player">Player pawn</option>
-                  <option value="enemy">Enemy pawn</option>
-                  <option value="any">Any pawn</option>
-                </select>
-              </SelectFrame>
+              <HouseSelect<'player' | 'enemy' | 'any'>
+                value={promotionTrigger.unit.side ?? 'any'}
+                options={[
+                  { value: 'player', label: 'Player pawn' },
+                  { value: 'enemy', label: 'Enemy pawn' },
+                  { value: 'any', label: 'Any pawn' },
+                ]}
+                ariaLabel="Promotion faction"
+                onChange={(choice) => {
+                  const side = choice === 'any' ? undefined : choice;
+                  setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn', side }, zoneId: promotionTrigger.zoneId } });
+                }}
+              />
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Zone</span>
-              <SelectFrame>
-                <select className="le-layer-select" value={promotionTrigger.zoneId} aria-label="Promotion zone"
-                  onChange={(e) => setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: promotionTrigger.unit, zoneId: e.target.value } })}>
-                  {zones.length === 0 ? <option value="">No zones painted</option> : null}
-                  {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}
-                </select>
-              </SelectFrame>
+              <HouseSelect<string>
+                value={promotionTrigger.zoneId}
+                options={zoneSelectOptions}
+                ariaLabel="Promotion zone"
+                disabled={zones.length === 0}
+                onChange={(zoneId) => setEvent(selected, { ...event, trigger: { kind: 'unit-enters-zone', unit: promotionTrigger.unit, zoneId } })}
+              />
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Target</span>
@@ -1926,7 +1929,7 @@ function DirectionPopover({ value, label, onChange }: {
       <button
         type="button"
         data-chrome-unit="inner-tool-square"
-        className={chromeUnitClassNames('inner-tool-square', 'le-faction-select', 'le-direction-trigger')}
+        className={chromeUnitClassNames('inner-tool-square', 'le-direction-trigger')}
         aria-label={label}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -2372,7 +2375,9 @@ export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
   // The Studio routes here with ?from=studio (show a "back to catalog" link), ?kind=<brush-kind>,
   // and optionally ?brush=<id> to pre-arm the brush you clicked in the catalog. A general
-  // ?layer=<id> deep-link opens straight on any panel (rules, status, zone, ...) — validated
+  // ?layer=<id> deep-link opens straight on any panel (rules, status, zone, ...), while
+  // ?eventsEditor=1 opens the full Events workspace on Rules (and ?eventsTab=other selects its
+  // non-default tab). All are validated by the canonical route-state parser.
   // against the real layer list, ignoring unknown/disabled ids. Read once at mount; reached from
   // the main menu these are all absent and we open on the first layer.
   const studioArm = useMemo(() => {
@@ -2387,12 +2392,16 @@ export function LevelEditor(): ReactElement {
       kind: routeState.brushKind,
       layer,
       brush: routeState.brush,
+      eventsEditor: routeState.eventsEditor,
+      eventsTab: routeState.eventsTab,
     };
   }, []);
   const cameFromStudio = studioArm.fromStudio;
   // An explicit ?layer= wins over ?kind= (which is really brush-arming), then the default.
   const initialLayer: LayerKey = studioArm.layer ?? defaultLevelEditorLayer();
   const initialBrushKind = brushKindForRouteState(initialLayer, studioArm.kind);
+  const initialEventsOpen = initialLayer === 'rules' && studioArm.eventsEditor;
+  const initialEventsTab: LevelEditorEventsTab = studioArm.eventsTab ?? 'victory';
   // The campaign path deep-links here with ?campaignId&levelId (&returnTo): which level to
   // edit, and where "Back" returns after a save. Read once at mount; absent ⇒ a standalone
   // (board-link / blank) board with no campaign target.
@@ -2856,14 +2865,14 @@ export function LevelEditor(): ReactElement {
   const [events, setEventsState] = useState<LevelEvents>(() =>
     normalizeLevelEvents(localDraft?.events ?? (initialCampaignLevel ? effectiveLevelEvents(initialCampaignLevel) : urlEvents ?? [])),
   );
-  // The victory-events editor opens as a full-size overlay over the board — the narrow control
-  // panel can't give rule authoring room to breathe. The panel stays put; a button opens this.
-  const [eventsOpen, setEventsOpen] = useState(() => Boolean(window.history.state?.levelEditorRules));
+  // The victory-events editor replaces the board inside the shell-owned workspace. The title bar
+  // and right controls stay put; the workspace supplies the room the rules instrument needs.
+  const [eventsOpen, setEventsOpen] = useState(initialEventsOpen);
   // The template dropdown choices append event rows; Clear is the explicit page-local reset.
   const [templateChoice, setTemplateChoiceState] = useState<ObjectiveType>(objective);
   const [otherTemplateChoice, setOtherTemplateChoice] = useState<OtherEventTemplateId>('pawn-promotion');
-  // The events overlay's tab: victory rules (win/lose events) vs other events (spawn/promotion).
-  const [eventsTab, setEventsTab] = useState<'victory' | 'other'>('victory');
+  // The Events workspace's tab: victory rules (win/lose events) vs other events (spawn/promotion).
+  const [eventsTab, setEventsTab] = useState<LevelEditorEventsTab>(initialEventsTab);
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name is edited in
@@ -2915,9 +2924,10 @@ export function LevelEditor(): ReactElement {
   const preserveUnscopedRecoveryIntentRef = useRef(false);
   const offlineRecoveryLevelRef = useRef<Level | null>(null);
   const offlineRecoverySavedSigRef = useRef<string | null>(null);
-  const rulesHistorySentinelRef = useRef(Boolean(window.history.state?.levelEditorRules));
   const eventsOpenRef = useRef(eventsOpen);
   eventsOpenRef.current = eventsOpen;
+  const eventsOpenButtonRef = useRef<HTMLButtonElement>(null);
+  const pendingRulesExitActionRef = useRef<(() => void) | null>(null);
   const departureFlushSigRef = useRef<string | null>(null);
   const signInHandoffPendingRef = useRef(false);
   const navigationReleaseInFlightRef = useRef(false);
@@ -2954,6 +2964,19 @@ export function LevelEditor(): ReactElement {
       setBrushKind(brushKindForRouteState(nextLayer, routeState.brushKind));
       if (routeState.brushKind === 'wallart') {
         setWallArtBrushId(wallArtIdOrDefault(routeState.brush));
+      }
+      const nextEventsOpen = nextLayer === 'rules' && routeState.eventsEditor;
+      const nextEventsTab: LevelEditorEventsTab = routeState.eventsTab ?? 'victory';
+      const wasEventsOpen = eventsOpenRef.current;
+      eventsOpenRef.current = nextEventsOpen;
+      setEventsOpen(nextEventsOpen);
+      setEventsTab(nextEventsTab);
+      const pendingExitAction = pendingRulesExitActionRef.current;
+      if (!nextEventsOpen && pendingExitAction) {
+        pendingRulesExitActionRef.current = null;
+        pendingExitAction();
+      } else if (wasEventsOpen && !nextEventsOpen) {
+        window.requestAnimationFrame(() => eventsOpenButtonRef.current?.focus());
       }
       const params = new URLSearchParams(window.location.search);
       if (params.get('artReview') === FENCE_ART_REVIEW_ID) {
@@ -4228,6 +4251,19 @@ export function LevelEditor(): ReactElement {
   );
   const officialCampaignOptions = eligibleCampaigns.filter((campaign) => campaign.origin === 'official');
   const privateCampaignOptions = eligibleCampaigns.filter((campaign) => campaign.origin !== 'official');
+  const campaignSelectOptions: HouseSelectOption<string>[] = [
+    { value: '', label: 'Unassigned' },
+    ...officialCampaignOptions.map((campaign) => ({
+      value: campaign.id,
+      label: campaign.name,
+      group: 'Official campaigns',
+    })),
+    ...privateCampaignOptions.map((campaign) => ({
+      value: campaign.id,
+      label: campaign.name,
+      group: 'Your campaigns',
+    })),
+  ];
   // Real dirty flag: the working draft differs when its signature or staged campaign assignment
   // no longer matches the last canonical Save.
   // captured at the last save. The signature folds in rules/settings/events through the candidate
@@ -4502,38 +4538,64 @@ export function LevelEditor(): ReactElement {
     }
   }, [campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
 
-  const closeEventsEditor = (): void => {
-    eventsOpenRef.current = false;
-    setEventsOpen(false);
-    if (rulesHistorySentinelRef.current) {
-      rulesHistorySentinelRef.current = false;
-      window.history.back();
-    }
+  const eventsEditorHref = (open: boolean, tab: LevelEditorEventsTab = eventsTab): string => (
+    levelEditorHrefWithRouteState(window.location.href, {
+      layer: 'rules',
+      eventsEditor: open,
+      eventsTab: open ? tab : null,
+    })
+  );
+
+  const selectEventsTab = (tab: LevelEditorEventsTab): void => {
+    if (!eventsOpenRef.current) return;
+    const nextHref = eventsEditorHref(true, tab);
+    if (!navigateApp(nextHref, { replace: true, scroll: false })) return;
+    setEventsTab(tab);
   };
 
-  // Give the nested Rules editor one same-document history entry. That makes native/hardware
-  // Back collapse Rules even after a cold editor load; the following Back can then leave.
-  useLayoutEffect(() => {
-    if (!eventsOpen || rulesHistorySentinelRef.current) return;
+  const openEventsEditor = (tab: LevelEditorEventsTab = 'victory'): void => {
+    if (eventsOpenRef.current) {
+      selectEventsTab(tab);
+      return;
+    }
+    const baseHref = eventsEditorHref(false, tab);
+    const openHref = levelEditorHrefWithRouteState(baseHref, {
+      layer: 'rules',
+      eventsEditor: true,
+      eventsTab: tab,
+    });
+    if (!navigateApp(openHref, { scroll: false })) return;
+    const state = window.history.state && typeof window.history.state === 'object'
+      ? window.history.state as Record<string, unknown>
+      : {};
+    window.history.replaceState({
+      ...state,
+      levelEditorEventsEntry: true,
+      levelEditorEventsBaseHref: baseHref,
+    }, '', openHref);
     eventsOpenRef.current = true;
-    const state = window.history.state;
-    window.history.pushState({
-      ...(state && typeof state === 'object' ? state as Record<string, unknown> : {}),
-      levelEditorRules: true,
-    }, '', window.location.href);
-    rulesHistorySentinelRef.current = true;
-  }, [eventsOpen]);
+    setEventsTab(tab);
+    setEventsOpen(true);
+  };
 
-  useEffect(() => {
-    const collapseRulesFromHistory = (): void => {
-      if (!rulesHistorySentinelRef.current) return;
-      rulesHistorySentinelRef.current = false;
-      eventsOpenRef.current = false;
-      setEventsOpen(false);
-    };
-    window.addEventListener('popstate', collapseRulesFromHistory);
-    return () => window.removeEventListener('popstate', collapseRulesFromHistory);
-  }, []);
+  const closeEventsEditor = (restoreTriggerFocus = true): void => {
+    const closedHref = eventsEditorHref(false);
+    const state = window.history.state && typeof window.history.state === 'object'
+      ? window.history.state as Record<string, unknown>
+      : {};
+    const canReturnToBase = state.levelEditorEventsEntry === true
+      && state.levelEditorEventsBaseHref === closedHref;
+    eventsOpenRef.current = false;
+    setEventsOpen(false);
+    if (canReturnToBase) {
+      window.history.back();
+    } else {
+      navigateApp(closedHref, { replace: true, scroll: false });
+    }
+    if (restoreTriggerFocus) {
+      window.requestAnimationFrame(() => eventsOpenButtonRef.current?.focus());
+    }
+  };
 
   useLayoutEffect(() => {
     if (!eventsOpen) return undefined;
@@ -6908,8 +6970,7 @@ export function LevelEditor(): ReactElement {
     }
   };
 
-  const selectLayer = (nextLayer: LayerKey): void => {
-    if (isLayerOptionDisabled(nextLayer) || (isPredrawnBoard && isPredrawnLockedLayer(nextLayer))) return;
+  const applyLayerSelection = (nextLayer: LayerKey): void => {
     setLayer(nextLayer);
     setTool(toolForLayer(nextLayer));
     if (nextLayer === 'paths') {
@@ -6918,6 +6979,15 @@ export function LevelEditor(): ReactElement {
       return;
     }
     if (nextLayer !== 'board' && nextLayer !== 'status' && nextLayer !== 'rules' && nextLayer !== 'generate') setBrushKind(nextLayer);
+  };
+  const selectLayer = (nextLayer: LayerKey): void => {
+    if (isLayerOptionDisabled(nextLayer) || (isPredrawnBoard && isPredrawnLockedLayer(nextLayer))) return;
+    if (eventsOpenRef.current) {
+      pendingRulesExitActionRef.current = () => applyLayerSelection(nextLayer);
+      closeEventsEditor(false);
+      return;
+    }
+    applyLayerSelection(nextLayer);
   };
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
   const eventZoneOptions = useMemo<EventZoneOption[]>(
@@ -7456,6 +7526,13 @@ export function LevelEditor(): ReactElement {
   // durable level target while carrying this exact in-progress snapshot back to the editor.
   const testHref = useMemo(() => {
     if (!playability.ok) return undefined;
+    const canonicalEditorHref = levelEditorHrefWithRouteState(window.location.href, {
+      layer,
+      brushKind: levelEditorRouteBrushKind(layer, brushKind),
+      brush: brushKind === 'wallart' ? wallArtBrushId : null,
+      eventsEditor: eventsOpen,
+      eventsTab: eventsOpen ? eventsTab : null,
+    });
     return currentBoardTestHref({
       boardCode: encodeBoard(currentEditorBoard),
       levelName: levelNameForSave,
@@ -7464,14 +7541,14 @@ export function LevelEditor(): ReactElement {
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
       events: eventsForSave,
       victory: victoryForSave,
-      editorSearch: window.location.search,
+      editorSearch: new URL(canonicalEditorHref, window.location.origin).search,
       campaignId: routeParams.campaignId,
       levelId: targetLevelId,
       documentRevision: editorDocument?.revision,
       editorReturnTo: routeParams.returnTo,
       layer,
     });
-  }, [clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, editorDocument?.revision, eventsForSave, layer, levelNameForSave, objective, playability.ok, routeParams.campaignId, routeParams.returnTo, surviveTurns, targetLevelId, victoryForSave]);
+  }, [brushKind, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, editorDocument?.revision, eventsForSave, eventsOpen, eventsTab, layer, levelNameForSave, objective, playability.ok, routeParams.campaignId, routeParams.returnTo, surviveTurns, targetLevelId, victoryForSave, wallArtBrushId]);
   const canUndoBoard = undoStack.length > 0 && (
     !isPredrawnBoard || preservesPredrawnBakedArt(currentEditorBoard, undoStack[undoStack.length - 1])
   );
@@ -7586,7 +7663,11 @@ export function LevelEditor(): ReactElement {
               </div>
             </section>
           ) : null}
-          <div className="skirmish-board-frame">
+          <div
+            className={`skirmish-board-frame${eventsOpen ? ' is-events-covered' : ''}`}
+            inert={eventsOpen ? true : undefined}
+            aria-hidden={eventsOpen || undefined}
+          >
             {activeFenceArtwork ? (
               <div className="le-fence-review-banner" data-testid="fence-candidate-editor-review">
                 <strong>Fence artwork drawing · {activeFenceArtwork.label}</strong>
@@ -7700,9 +7781,9 @@ export function LevelEditor(): ReactElement {
             </ViewPane>
           </div>
           {eventsOpen ? (
-            <LevelEditorEventsOverlay
+            <LevelEditorEventsWorkspace
               tab={eventsTab}
-              onTabChange={setEventsTab}
+              onTabChange={selectEventsTab}
               onDone={closeEventsEditor}
               victoryContent={(
                 <VictoryConditionsEditor
@@ -7714,12 +7795,14 @@ export function LevelEditor(): ReactElement {
                       <h3 className="le-victory-head">Template</h3>
                       <p className="le-board-note">Add a victory template. Existing events stay in place; use Clear first when you want a clean replacement.</p>
                       <div className="le-template-apply">
-                        <SelectFrame className="le-template-select-wrap">
-                          <select className="le-layer-select" aria-label="Victory template" title={MODE_DESCRIPTION[templateChoice]}
-                            value={templateChoice} onChange={(e) => setTemplateChoice(e.target.value as ObjectiveType)}>
-                            {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
-                          </select>
-                        </SelectFrame>
+                        <HouseSelect<ObjectiveType>
+                          className="le-template-select-wrap"
+                          ariaLabel="Victory template"
+                          title={MODE_DESCRIPTION[templateChoice]}
+                          value={templateChoice}
+                          options={OBJECTIVE_TYPES.map((mode) => ({ value: mode, label: MODE_NAME[mode] }))}
+                          onChange={setTemplateChoice}
+                        />
                         <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => {
                           const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
                           const templateRules = victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) });
@@ -7742,12 +7825,13 @@ export function LevelEditor(): ReactElement {
                       <h3 className="le-victory-head">Template</h3>
                       <p className="le-board-note">Add a non-victory event template. Existing events stay in place; use Clear first when you want a clean replacement.</p>
                       <div className="le-template-apply">
-                        <SelectFrame className="le-template-select-wrap">
-                          <select className="le-layer-select" aria-label="Other event template"
-                            value={otherTemplateChoice} onChange={(e) => setOtherTemplateChoice(e.target.value as OtherEventTemplateId)}>
-                            {OTHER_EVENT_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}
-                          </select>
-                        </SelectFrame>
+                        <HouseSelect<OtherEventTemplateId>
+                          className="le-template-select-wrap"
+                          ariaLabel="Other event template"
+                          value={otherTemplateChoice}
+                          options={OTHER_EVENT_TEMPLATES.map((template) => ({ value: template.id, label: template.label }))}
+                          onChange={setOtherTemplateChoice}
+                        />
                         <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={addOtherEventTemplate}>Add template</button>
                         <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} disabled={events.length === 0} onClick={clearOtherEvents}>Clear events</button>
                       </div>
@@ -7928,28 +8012,14 @@ export function LevelEditor(): ReactElement {
             {isAdmin ? (
               <div className="le-status-name-field le-status-campaign-field">
                 <span className="le-settings-label">Campaign</span>
-                <SelectFrame>
-                  <select
-                    className="le-layer-select"
-                    data-testid="le-campaign-select"
-                    value={campaignAssignmentId}
-                    aria-label="Campaign"
-                    disabled={!campaignAssignmentHydrated || saving}
-                    onChange={(event) => setCampaignAssignmentId(event.currentTarget.value)}
-                  >
-                    <option value="">Unassigned</option>
-                    {officialCampaignOptions.length ? (
-                      <optgroup label="Official campaigns">
-                        {officialCampaignOptions.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
-                      </optgroup>
-                    ) : null}
-                    {privateCampaignOptions.length ? (
-                      <optgroup label="Your campaigns">
-                        {privateCampaignOptions.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
-                      </optgroup>
-                    ) : null}
-                  </select>
-                </SelectFrame>
+                <HouseSelect<string>
+                  value={campaignAssignmentId}
+                  options={campaignSelectOptions}
+                  ariaLabel="Campaign"
+                  disabled={!campaignAssignmentHydrated || saving}
+                  testId="le-campaign-select"
+                  onChange={setCampaignAssignmentId}
+                />
                 <span className="le-board-note">Admin only · Save or publish to apply this assignment.</span>
               </div>
             ) : null}
@@ -8423,10 +8493,10 @@ export function LevelEditor(): ReactElement {
         </>) : layer === 'rules' ? (<>
           <section className="skirmish-card">
             <h2>Victory events</h2>
-            {/* ADR-0064: the rule authoring lives in a full-size overlay over the board (this panel is
-                too narrow) — see the .le-events-overlay below. This card is just the entry point. */}
+            {/* ADR-0144: the right rail is only the entry point. Rule authoring occupies the
+                shell-owned board workspace while this control rail stays in place. */}
             <p className="le-board-note">How this level is won, lost, deployed, and promoted. {victory.length} victory event{victory.length === 1 ? '' : 's'} and {events.length} other event{events.length === 1 ? '' : 's'} set.</p>
-            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-open')} onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
+            <button ref={eventsOpenButtonRef} type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-open')} disabled={eventsOpen} onClick={() => openEventsEditor('victory')}>Open events editor</button>
           </section>
 
           <section className="skirmish-card">
@@ -8557,26 +8627,22 @@ export function LevelEditor(): ReactElement {
         {brushKind === 'zone' ? (
           <section className="skirmish-card le-brush-panel le-zone-panel">
             <h2>Zone</h2>
-            <div className="le-ctrlrow">
+            <div className="le-ctrlrow le-zone-selection-row">
               <span className="le-ctrllabel">Zone</span>
               <div className="le-zone-select-controls">
                 <button type="button" data-chrome-unit="inner-chevron-key" className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Previous zone" title="Previous zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(-1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
                 </button>
-                <SelectFrame>
-                  <select
-                    className="le-layer-select"
-                    value={activeZone?.id ?? ''}
-                    disabled={!activeZone}
-                    onChange={(event) => selectZoneEntry(event.target.value)}
-                    aria-label="Selected zone"
-                  >
-                    {activeZone ? null : <option value="">None</option>}
-                    {boardZoneEntries.map((zone, index) => (
-                      <option key={zone.id} value={zone.id}>{zoneDisplayName(zone, index)}</option>
-                    ))}
-                  </select>
-                </SelectFrame>
+                <HouseSelect<string>
+                  value={activeZone?.id ?? ''}
+                  options={[
+                    ...(activeZone ? [] : [{ value: '', label: 'None' }]),
+                    ...boardZoneEntries.map((zone, index) => ({ value: zone.id, label: zoneDisplayName(zone, index) })),
+                  ]}
+                  disabled={!activeZone}
+                  ariaLabel="Selected zone"
+                  onChange={selectZoneEntry}
+                />
                 <button type="button" data-chrome-unit="inner-chevron-key" className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Next zone" title="Next zone" disabled={boardZoneEntries.length <= 1} onClick={() => stepZoneEntry(1)}>
                   <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
                 </button>
@@ -8811,11 +8877,12 @@ export function LevelEditor(): ReactElement {
                   <button type="button" data-chrome-unit="inner-chevron-key" className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Previous fence artwork" title="Previous fence artwork" onClick={() => stepFenceArtwork(-1)}>
                     <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
                   </button>
-                  <SelectFrame>
-                    <select className="le-layer-select" value={activeFenceArtwork.id} onChange={(event) => selectFenceArtwork(event.target.value)} aria-label="Fence artwork">
-                      {fenceArtCatalog.map((artwork) => <option key={artwork.id} value={artwork.id}>{artwork.label}</option>)}
-                    </select>
-                  </SelectFrame>
+                  <HouseSelect<string>
+                    value={activeFenceArtwork.id}
+                    options={fenceArtCatalog.map((artwork) => ({ value: artwork.id, label: artwork.label }))}
+                    ariaLabel="Fence artwork"
+                    onChange={selectFenceArtwork}
+                  />
                   <button type="button" data-chrome-unit="inner-chevron-key" className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Next fence artwork" title="Next fence artwork" onClick={() => stepFenceArtwork(1)}>
                     <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
                   </button>
@@ -8940,19 +9007,15 @@ export function LevelEditor(): ReactElement {
         ) : brushKind === 'tile' ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Composite terrain</h2>
-            <SelectFrame>
-              <select
-                className="le-layer-select"
-                aria-label="Composite terrain footprint"
-                value={macroTileFootprint}
-                onChange={(event) => {
-                  setMacroTileFootprint(event.target.value);
-                  setMacroTileBrushId(null);
-                }}
-              >
-                {leMacroTileFootprints().map((footprint) => <option key={footprint} value={footprint}>{footprint}</option>)}
-              </select>
-            </SelectFrame>
+            <HouseSelect<string>
+              ariaLabel="Composite terrain footprint"
+              value={macroTileFootprint}
+              options={leMacroTileFootprints().map((footprint) => ({ value: footprint, label: footprint }))}
+              onChange={(footprint) => {
+                setMacroTileFootprint(footprint);
+                setMacroTileBrushId(null);
+              }}
+            />
             {studioFamilies.map((family) => {
               const assets = leMacroTilesFor(family.id, macroTileFootprint);
               if (!assets.length) return null;

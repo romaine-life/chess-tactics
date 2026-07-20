@@ -222,6 +222,8 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
     expect(css).toContain('border-image-source: var(--skirmish-chrome-inner-control-active-image) !important;');
     expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} .inner-box.danger`);
     expect(css).toContain('border-image-source: var(--skirmish-chrome-inner-control-danger-image) !important;');
+    expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-fill-role="outer"]`);
+    expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-fill-role="inner"]`);
     expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="outer"]`);
     expect(css).toContain(`${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="inner"]`);
     expect(css).toContain('.app-titlebar.chrome-family-surface::before');
