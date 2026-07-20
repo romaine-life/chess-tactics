@@ -2,18 +2,18 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   applyLiveMediaCatalog,
   boardDrawOps,
-  boardLabMetrics,
   resetLiveMediaCatalog,
   subterrainMaterialSrc,
 } from '@chess-tactics/board-render';
 import { roadEdgeKey } from '../core/featureAutotile';
 import { testGroundCoverCatalog } from '../test/liveMediaCatalog';
 import type { EditorBoard } from '../ui/boardCode';
+import { scenicTerrainTargetsForViewport } from '../ui/levelEditorViewportTerrain';
 import {
   boardForTopSurfaceArtExport,
   deriveFeatureOverlays,
   studioCoverCells,
-  topSurfaceArtExportFrame,
+  studioVisualTerrainPlan,
 } from './StudioReadOnlyBoard';
 
 beforeAll(() => applyLiveMediaCatalog(testGroundCoverCatalog()));
@@ -28,6 +28,7 @@ describe('boardForTopSurfaceArtExport', () => {
       coverTypes: { '1,2': 'grass' },
       fences: { '1,2|1,3': 'stone' },
       props: { '2,3': 'fieldstone' },
+      subterrain: { '0,0:south': 'earth' },
     } as unknown as Parameters<typeof boardForTopSurfaceArtExport>[0];
     const exported = boardForTopSurfaceArtExport(board);
     expect(exported.surface).toBeUndefined();
@@ -36,52 +37,10 @@ describe('boardForTopSurfaceArtExport', () => {
     expect(exported.coverTypes).toEqual({});
     expect(exported.fences).toBe(board.fences);
     expect(exported.props).toBe(board.props);
+    expect(exported.subterrain).toBe(board.subterrain);
   });
 
-  it('derives the capture frame from a rectangular board instead of a fixed viewport', () => {
-    const filled = (cols: number, rows: number): EditorBoard => {
-      const cells: Record<string, string> = {};
-      for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) cells[`${x},${y}`] = 'grass-surf-0';
-      return {
-        cols,
-        rows,
-        cells,
-        units: {},
-        doodads: {},
-        props: {},
-        cover: {},
-        features: {},
-        fences: {},
-        fencePosts: {},
-        walls: {},
-        wallArt: {},
-        featureCuts: {},
-        featureExits: {},
-      };
-    };
-    const small = topSurfaceArtExportFrame(filled(3, 2), 37);
-    const holdBridgeShape = filled(12, 8);
-    const frame = topSurfaceArtExportFrame(holdBridgeShape, 37);
-    const cells = Array.from({ length: holdBridgeShape.rows }, (_, y) => (
-      Array.from({ length: holdBridgeShape.cols }, (__, x) => ({ x, y }))
-    )).flat();
-    const metrics = boardLabMetrics(cells);
-    const renderedLeft = frame.width / 2 + frame.boardPan.x + metrics.originLeft + frame.paintBounds.minX;
-    const renderedTop = frame.height / 2 + frame.boardPan.y + metrics.originTop + frame.paintBounds.minY;
-    const renderedRight = renderedLeft + frame.paintBounds.width;
-    const renderedBottom = renderedTop + frame.paintBounds.height;
-
-    expect(frame.width).toBe(frame.paintBounds.width + 74);
-    expect(frame.height).toBe(frame.paintBounds.height + 74);
-    expect(frame.width).toBeGreaterThan(small.width);
-    expect(frame.height).toBeGreaterThan(small.height);
-    expect(renderedLeft).toBe(37);
-    expect(renderedTop).toBe(37);
-    expect(renderedRight).toBe(frame.width - 37);
-    expect(renderedBottom).toBe(frame.height - 37);
-  });
-
-  it('omits terrain side-face draw operations from the measured top-only source', () => {
+  it('retains explicitly authored Subterrain but does not synthesize unauthored skirts', () => {
     const board = {
       cols: 1,
       rows: 1,
@@ -105,7 +64,64 @@ describe('boardForTopSurfaceArtExport', () => {
     ]);
 
     expect(boardDrawOps(board).filter((op) => sideSources.has(op.src))).toHaveLength(2);
-    expect(boardDrawOps(board, { topSurfacesOnly: true }).some((op) => sideSources.has(op.src))).toBe(false);
+    expect(boardDrawOps(board, { topSurfacesOnly: true }).filter((op) => sideSources.has(op.src))).toHaveLength(2);
+    expect(studioVisualTerrainPlan({ board, topSurfacesOnly: true }).terrainCells[0].sideFaces).toEqual({
+      south: { exposed: true, material: subterrainMaterialSrc('earth') },
+      east: { exposed: true, material: subterrainMaterialSrc('bedrock') },
+    });
+
+    expect(boardDrawOps(
+      { ...board, subterrain: {} },
+      { topSurfacesOnly: true },
+    ).filter((op) => sideSources.has(op.src))).toHaveLength(0);
+  });
+
+  it('keeps the exact Hold Bridge scenic footprint in the frozen combined terrain pass', () => {
+    const cells = Object.fromEntries(
+      Array.from({ length: 8 }, (_, y) => (
+        Array.from({ length: 12 }, (__, x) => [`${x},${y}`, 'grass-surf-0'])
+      )).flat(),
+    );
+    const scenic = scenicTerrainTargetsForViewport({
+      cols: 12,
+      rows: 8,
+      viewport: { width: 672, height: 400 },
+      zoom: 0.4,
+      pan: { x: 0, y: 0 },
+      maxTargets: 10_000,
+    });
+    const decorativeFootprint = scenic.targets.map(({ x, y }) => `${x},${y}`);
+    const board = {
+      cols: 12,
+      rows: 8,
+      decorativeApron: { top: 0, right: 0, bottom: 0, left: 0 },
+      decorativeFootprint,
+      decorativeCells: Object.fromEntries(decorativeFootprint.map((key) => [key, 'grass-surf-0'])),
+      cells,
+      units: {},
+      doodads: {},
+      props: {},
+      cover: {},
+      features: {},
+      fences: {},
+      fencePosts: {},
+      walls: {},
+      wallArt: {},
+      featureCuts: {},
+      featureExits: {},
+    } satisfies EditorBoard;
+
+    expect(scenic.status).toBe('complete');
+    expect(scenic.targets).toHaveLength(625);
+    expect(Math.min(...scenic.targets.map(({ x }) => x))).toBe(-12);
+    expect(Math.max(...scenic.targets.map(({ x }) => x))).toBe(24);
+    expect(Math.min(...scenic.targets.map(({ y }) => y))).toBe(-14);
+    expect(Math.max(...scenic.targets.map(({ y }) => y))).toBe(22);
+
+    const plan = studioVisualTerrainPlan({ board, animationFrame: 7, topSurfacesOnly: true });
+    expect(plan.playableGridCells).toHaveLength(96);
+    expect(plan.gridCells).toHaveLength(721);
+    expect(plan.terrainCells.every((cell) => cell.animate === false)).toBe(true);
   });
 });
 

@@ -3,8 +3,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
+import { PNG } from 'pngjs';
 
-export const PREDRAWN_GENERATION_SCHEMA_VERSION = 2;
+export const PREDRAWN_GENERATION_SCHEMA_VERSION = 3;
 const NORMALIZED_DEFINITION = Symbol('normalized-predrawn-generation-definition');
 
 function fail(message) {
@@ -46,8 +47,29 @@ const json = (value) => `${JSON.stringify(stable(value), null, 2)}\n`;
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 export function pngSize(bytes) {
-  if (bytes.length < 24 || bytes.toString('ascii', 1, 4) !== 'PNG') fail('reference is not a PNG');
-  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  const signature = Buffer.from('89504e470d0a1a0a', 'hex');
+  if (!Buffer.isBuffer(bytes) || bytes.length < 24 || !bytes.subarray(0, 8).equals(signature)) {
+    fail('reference is not a PNG');
+  }
+  const header = { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  if (
+    header.width < 1
+    || header.height < 1
+    || header.width > 8192
+    || header.height > 8192
+  ) {
+    fail('reference PNG dimensions must be integers from 1 through 8192');
+  }
+  let decoded;
+  try {
+    decoded = PNG.sync.read(bytes, { checkCRC: true });
+  } catch (error) {
+    fail(`reference PNG could not be decoded: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (decoded.width !== header.width || decoded.height !== header.height) {
+    fail('reference PNG decoded dimensions disagree with its IHDR');
+  }
+  return header;
 }
 
 function gcd(a, b) {
@@ -58,26 +80,38 @@ function gcd(a, b) {
 }
 
 function aspectRatio(request) {
-  let ratio = request?.aspectRatio;
-  const hasWidth = request?.width !== undefined;
-  const hasHeight = request?.height !== undefined;
-  if (hasWidth !== hasHeight) fail('legacy request width and height must be supplied together');
-  if (hasWidth) {
-    if (!Number.isInteger(request.width) || request.width <= 0 || !Number.isInteger(request.height) || request.height <= 0) {
-      fail('legacy request width and height must be positive integers');
-    }
-    const divisor = gcd(request.width, request.height);
-    const legacyRatio = `${request.width / divisor}:${request.height / divisor}`;
-    if (ratio && ratio !== legacyRatio) fail(`request aspectRatio ${ratio} disagrees with legacy dimensions ${legacyRatio}`);
-    ratio = legacyRatio;
-  }
-  ratio ??= '16:9';
+  let ratio = nonEmptyText(request?.aspectRatio, 'request.aspectRatio');
   if (!/^\d+:[1-9]\d*$/.test(ratio)) fail('request aspectRatio must use positive W:H integers');
   const [width, height] = ratio.split(':').map(Number);
   const divisor = gcd(width, height);
   ratio = `${width / divisor}:${height / divisor}`;
   if (ratio !== '16:9') fail('pre-drawn full-scene requests use the canonical 16:9 frame');
   return ratio;
+}
+
+function normalizedReferenceViewport(value) {
+  if (!isRecord(value)) fail('reference.viewport is required');
+  if (value.version !== 1) fail('reference.viewport.version must be 1');
+  if (value.coordinateSpace !== 'canonical-board-render-px-1x') {
+    fail('reference.viewport.coordinateSpace must be canonical-board-render-px-1x');
+  }
+  for (const field of ['x', 'y', 'width', 'height']) {
+    if (!Number.isSafeInteger(value[field])) fail(`reference.viewport.${field} must be a safe integer`);
+  }
+  if (value.width < 1 || value.height < 1 || value.width > 8192 || value.height > 8192) {
+    fail('reference.viewport width and height must be integers from 1 through 8192');
+  }
+  if (value.width * 9 !== value.height * 16) {
+    fail('reference.viewport must use the exact 16:9 aspect ratio');
+  }
+  return {
+    version: 1,
+    coordinateSpace: 'canonical-board-render-px-1x',
+    x: value.x,
+    y: value.y,
+    width: value.width,
+    height: value.height,
+  };
 }
 
 function coordinate(value, label) {
@@ -125,94 +159,42 @@ function normalizedProjection(board) {
   };
 }
 
-function normalizedCoordinateConvention(board, columns, rows) {
-  const source = isRecord(board.coordinateConvention) ? board.coordinateConvention : {};
-  if (source.order !== undefined && source.order !== '(x,y)') fail('board.coordinateConvention.order must be (x,y)');
+function normalizedCoordinateConvention(board) {
+  const source = board.coordinateConvention;
+  if (source.order !== '(x,y)') fail('board.coordinateConvention.order must be (x,y)');
   return {
     order: '(x,y)',
-    xAxis: typeof source.xAxis === 'string' && source.xAxis.trim()
-      ? source.xAxis.trim()
-      : `x increases from 0 to ${columns - 1} along the x+ direction in Image 1`,
-    yAxis: typeof source.yAxis === 'string' && source.yAxis.trim()
-      ? source.yAxis.trim()
-      : `y increases from 0 to ${rows - 1} along the y+ direction in Image 1`,
+    xAxis: nonEmptyText(source.xAxis, 'board.coordinateConvention.xAxis'),
+    yAxis: nonEmptyText(source.yAxis, 'board.coordinateConvention.yAxis'),
   };
 }
 
 function normalizeCells(board, columns, rows) {
-  if (Array.isArray(board.cells)) {
-    if (board.cells.length !== rows) fail(`board.cells has ${board.cells.length} rows, expected ${rows}`);
-    const surfaces = new Set();
-    const cells = board.cells.map((row, y) => {
-      if (!Array.isArray(row) || row.length !== columns) {
-        fail(`board.cells row ${y} has ${Array.isArray(row) ? row.length : 0} cells, expected ${columns}`);
-      }
-      return row.map((raw, x) => {
-        if (!isRecord(raw)) fail(`board.cells[${y}][${x}] must be an object`);
-        const surface = nonEmptyText(raw.surface, `board.cells[${y}][${x}].surface`);
-        if (!Number.isInteger(raw.elevation) || raw.elevation < 0) {
-          fail(`board.cells[${y}][${x}].elevation must be a non-negative integer`);
-        }
-        if (typeof raw.playable !== 'boolean') fail(`board.cells[${y}][${x}].playable must be boolean`);
-        surfaces.add(surface);
-        return { surface, elevation: raw.elevation, playable: raw.playable };
-      });
-    });
-    const definitions = {};
-    if (board.surfaceDefinitions !== undefined) {
-      if (!isRecord(board.surfaceDefinitions)) fail('board.surfaceDefinitions must be an object');
-      for (const [surface, meaning] of Object.entries(board.surfaceDefinitions)) {
-        definitions[nonEmptyText(surface, 'surface id')] = nonEmptyText(meaning, `surface definition ${surface}`);
-      }
-      for (const surface of surfaces) {
-        if (!(surface in definitions)) fail(`surface ${surface} has no board.surfaceDefinitions entry`);
-      }
-    }
-    return { cells, surfaceDefinitions: definitions, source: 'cells' };
-  }
-
-  if (!Array.isArray(board.matrix)) fail('board.cells is required (legacy board.matrix is also accepted)');
-  if (!isRecord(board.tokens)) fail('legacy board.tokens is required with board.matrix');
-  if (board.matrix.length !== rows) fail(`board.matrix has ${board.matrix.length} rows, expected ${rows}`);
-  const tokenDefinitions = {};
-  for (const [token, meaning] of Object.entries(board.tokens)) {
-    if (!token || token.includes('+')) fail(`legacy token ${token || '<empty>'} is invalid`);
-    tokenDefinitions[token] = nonEmptyText(meaning, `token definition ${token}`);
-  }
-  const nonPlayableTokens = new Set(board.nonPlayableTokens ?? []);
-  for (const token of nonPlayableTokens) {
-    if (!(token in tokenDefinitions)) fail(`non-playable token ${token} has no definition`);
-  }
-  const elevations = board.elevations;
-  if (elevations !== undefined && (!Array.isArray(elevations) || elevations.length !== rows)) {
-    fail(`legacy board.elevations must have ${rows} rows`);
-  }
-  const cells = board.matrix.map((row, y) => {
+  if (board.cells.length !== rows) fail(`board.cells has ${board.cells.length} rows, expected ${rows}`);
+  const surfaces = new Set();
+  const cells = board.cells.map((row, y) => {
     if (!Array.isArray(row) || row.length !== columns) {
-      fail(`board.matrix row ${y} has ${Array.isArray(row) ? row.length : 0} cells, expected ${columns}`);
-    }
-    if (elevations !== undefined && (!Array.isArray(elevations[y]) || elevations[y].length !== columns)) {
-      fail(`board.elevations row ${y} must have ${columns} cells`);
+      fail(`board.cells row ${y} has ${Array.isArray(row) ? row.length : 0} cells, expected ${columns}`);
     }
     return row.map((raw, x) => {
-      const tokens = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split('+') : [];
-      if (tokens.length === 0) fail(`board.matrix[${y}][${x}] must contain at least one token`);
-      for (const token of tokens) {
-        if (!(token in tokenDefinitions)) fail(`board.matrix[${y}][${x}] uses undefined token ${token}`);
+      if (!isRecord(raw)) fail(`board.cells[${y}][${x}] must be an object`);
+      const surface = nonEmptyText(raw.surface, `board.cells[${y}][${x}].surface`);
+      if (!Number.isInteger(raw.elevation) || raw.elevation < 0) {
+        fail(`board.cells[${y}][${x}].elevation must be a non-negative integer`);
       }
-      const elevation = elevations === undefined ? null : elevations[y][x];
-      if (elevation !== null && (!Number.isInteger(elevation) || elevation < 0)) {
-        fail(`board.elevations[${y}][${x}] must be a non-negative integer`);
-      }
-      return {
-        surface: tokens.join('+'),
-        elevation,
-        playable: !tokens.some((token) => nonPlayableTokens.has(token)),
-        semanticTokens: tokens,
-      };
+      if (typeof raw.playable !== 'boolean') fail(`board.cells[${y}][${x}].playable must be boolean`);
+      surfaces.add(surface);
+      return { surface, elevation: raw.elevation, playable: raw.playable };
     });
   });
-  return { cells, surfaceDefinitions: tokenDefinitions, source: 'legacy-matrix' };
+  const definitions = {};
+  for (const [surface, meaning] of Object.entries(board.surfaceDefinitions)) {
+    definitions[nonEmptyText(surface, 'surface id')] = nonEmptyText(meaning, `surface definition ${surface}`);
+  }
+  for (const surface of surfaces) {
+    if (!(surface in definitions)) fail(`surface ${surface} has no board.surfaceDefinitions entry`);
+  }
+  return { cells, surfaceDefinitions: definitions };
 }
 
 function inBoard([x, y], columns, rows) {
@@ -305,23 +287,19 @@ function normalizeImpassableTransitions(raw, cells, columns, rows) {
   });
 }
 
-function normalizeLinearFeatures(definition, cells, columns, rows) {
-  if (definition.linearFeatures !== undefined && definition.roads !== undefined) {
-    fail('use linearFeatures or legacy roads, not both');
-  }
-  const source = definition.linearFeatures ?? definition.roads ?? [];
+function normalizeLinearFeatures(definition, columns, rows) {
+  const source = definition.linearFeatures;
   if (!Array.isArray(source)) fail('linearFeatures must be an array');
   const ids = new Set();
-  const isV2 = definition.schemaVersion === PREDRAWN_GENERATION_SCHEMA_VERSION;
-  const normalized = source.map((raw, index) => {
+  return source.map((raw, index) => {
     if (!isRecord(raw)) fail(`linearFeatures[${index}] must be an object`);
     const id = nonEmptyText(raw.id, `linearFeatures[${index}].id`);
     if (ids.has(id)) fail(`linear feature id ${id} occurs more than once`);
     ids.add(id);
-    const kind = nonEmptyText(raw.kind ?? (definition.roads ? 'road' : undefined), `linearFeatures[${index}].kind`);
+    const kind = nonEmptyText(raw.kind, `linearFeatures[${index}].kind`);
     if (!Array.isArray(raw.cells) || raw.cells.length === 0) fail(`linear feature ${id} has no cells`);
-    if (isV2 && !Array.isArray(raw.connections)) fail(`linear feature ${id} must serialize exact connections`);
-    if (isV2 && !Array.isArray(raw.exits)) fail(`linear feature ${id} must serialize exact exits`);
+    if (!Array.isArray(raw.connections)) fail(`linear feature ${id} must serialize exact connections`);
+    if (!Array.isArray(raw.exits)) fail(`linear feature ${id} must serialize exact exits`);
     const cellSet = new Set();
     const featureCells = raw.cells.map((value, cellIndex) => {
       const cell = coordinate(value, `linear feature ${id} cell ${cellIndex}`);
@@ -331,16 +309,6 @@ function normalizeLinearFeatures(definition, cells, columns, rows) {
       cellSet.add(key);
       return cell;
     });
-    const cuts = new Set();
-    for (const [cutIndex, rawCut] of (raw.cuts ?? []).entries()) {
-      const parsed = edge(rawCut, `linear feature ${id} cut ${cutIndex}`);
-      if (!adjacent(parsed.a, parsed.b) || !cellSet.has(coordinateKey(parsed.a)) || !cellSet.has(coordinateKey(parsed.b))) {
-        fail(`linear feature ${id} cut ${edgeKey(parsed.a, parsed.b)} must join two of its adjacent cells`);
-      }
-      const key = edgeKey(parsed.a, parsed.b);
-      if (cuts.has(key)) fail(`linear feature ${id} repeats cut ${key}`);
-      cuts.add(key);
-    }
     const connections = [];
     const connectionKeys = new Set();
     const addConnection = (a, b, label) => {
@@ -352,26 +320,13 @@ function normalizeLinearFeatures(definition, cells, columns, rows) {
       connectionKeys.add(key);
       connections.push({ a, b });
     };
-    if (raw.connections !== undefined) {
-      if (!Array.isArray(raw.connections)) fail(`linear feature ${id} connections must be an array`);
-      raw.connections.forEach((value, connectionIndex) => {
-        const parsed = edge(value, `linear feature ${id} connection ${connectionIndex}`);
-        addConnection(parsed.a, parsed.b, `linear feature ${id} connection ${connectionIndex}`);
-      });
-      for (const cut of cuts) {
-        if (connectionKeys.has(cut)) fail(`linear feature ${id} connection ${cut} is also declared cut`);
-      }
-    } else {
-      for (const [x, y] of featureCells) {
-        for (const neighbor of [[x + 1, y], [x, y + 1]]) {
-          const key = edgeKey([x, y], neighbor);
-          if (cellSet.has(coordinateKey(neighbor)) && !cuts.has(key)) addConnection([x, y], neighbor, `derived connection ${key}`);
-        }
-      }
-    }
+    raw.connections.forEach((value, connectionIndex) => {
+      const parsed = edge(value, `linear feature ${id} connection ${connectionIndex}`);
+      addConnection(parsed.a, parsed.b, `linear feature ${id} connection ${connectionIndex}`);
+    });
     const exits = [];
     const exitKeys = new Set();
-    for (const [exitIndex, rawExit] of (Array.isArray(raw.exits) ? raw.exits : []).entries()) {
+    for (const [exitIndex, rawExit] of raw.exits.entries()) {
       const parsed = edge(rawExit, `linear feature ${id} exit ${exitIndex}`);
       if (!adjacent(parsed.a, parsed.b)) fail(`linear feature ${id} exit endpoints are not adjacent`);
       const aPresent = cellSet.has(coordinateKey(parsed.a));
@@ -384,50 +339,16 @@ function normalizeLinearFeatures(definition, cells, columns, rows) {
       exitKeys.add(key);
       exits.push({ cell, neighbor });
     }
-    const token = raw.token ?? raw.featureToken;
-    if (token !== undefined) {
-      nonEmptyText(token, `linear feature ${id} token`);
-      for (const [x, y] of featureCells) {
-        const semanticTokens = cells[y][x].semanticTokens;
-        if (!semanticTokens?.includes(token)) fail(`linear feature ${id} token ${token} is absent at (${x},${y})`);
-      }
-    }
-    const note = typeof raw.note === 'string' && raw.note.trim()
-      ? raw.note.trim()
-      : typeof raw.exit === 'string' && raw.exit.trim() ? `Legacy threshold description: ${raw.exit.trim()}` : undefined;
-    return { id, kind, cells: featureCells, connections, exits, ...(note ? { note } : {}) };
+    return { id, kind, cells: featureCells, connections, exits };
   });
-
-  const declaredTokens = new Map();
-  source.forEach((raw, index) => {
-    const token = raw.token ?? raw.featureToken;
-    if (!token) return;
-    const present = declaredTokens.get(token) ?? new Set();
-    normalized[index].cells.forEach((cell) => present.add(coordinateKey(cell)));
-    declaredTokens.set(token, present);
-  });
-  for (const [token, present] of declaredTokens) {
-    const matrixCells = new Set();
-    cells.forEach((row, y) => row.forEach((cell, x) => {
-      if (cell.semanticTokens?.includes(token)) matrixCells.add(`${x},${y}`);
-    }));
-    if ([...matrixCells].sort().join('|') !== [...present].sort().join('|')) {
-      fail(`linear feature cells disagree with ${token} tokens in the tile matrix`);
-    }
-  }
-  return normalized;
 }
 
 function normalizeBarriers(definition, columns, rows) {
-  if (definition.barriers !== undefined && definition.blockingEdges !== undefined) {
-    fail('use barriers or legacy blockingEdges, not both');
-  }
-  const source = definition.barriers ?? definition.blockingEdges ?? [];
+  const source = definition.barriers;
   if (!Array.isArray(source)) fail('barriers must be an array');
-  const isV2 = definition.schemaVersion === PREDRAWN_GENERATION_SCHEMA_VERSION;
   const seen = new Set();
   return source.map((raw, index) => {
-    const legacy = Array.isArray(raw);
+    if (!isRecord(raw)) fail(`barriers[${index}] must be an object`);
     const parsed = edge(raw, `barrier ${index}`);
     if (!adjacent(parsed.a, parsed.b)) fail(`barrier ${edgeKey(parsed.a, parsed.b)} endpoints are not adjacent`);
     if (!inBoard(parsed.a, columns, rows) && !inBoard(parsed.b, columns, rows)) {
@@ -436,16 +357,12 @@ function normalizeBarriers(definition, columns, rows) {
     const key = edgeKey(parsed.a, parsed.b);
     if (seen.has(key)) fail(`barrier ${key} occurs more than once`);
     seen.add(key);
-    const object = legacy ? {} : raw;
-    if (isV2) {
-      nonEmptyText(object.id, `barriers[${index}].id`);
-      nonEmptyText(object.kind, `barriers[${index}].kind`);
-      if (object.blocksCrossing !== true) fail(`barriers[${index}].blocksCrossing must be true`);
-    }
-    if (object.blocksCrossing === false) fail(`barrier ${key} is listed as non-blocking`);
+    const id = nonEmptyText(raw.id, `barriers[${index}].id`);
+    const kind = nonEmptyText(raw.kind, `barriers[${index}].kind`);
+    if (raw.blocksCrossing !== true) fail(`barriers[${index}].blocksCrossing must be true`);
     return {
-      id: typeof object.id === 'string' && object.id.trim() ? object.id.trim() : `barrier-${index + 1}`,
-      kind: typeof object.kind === 'string' && object.kind.trim() ? object.kind.trim() : 'edge barrier shown by Image 1',
+      id,
+      kind,
       a: parsed.a,
       b: parsed.b,
       blocksCrossing: true,
@@ -453,13 +370,9 @@ function normalizeBarriers(definition, columns, rows) {
   });
 }
 
-function normalizeFootprints(definition, cells, columns, rows) {
-  if (definition.footprints !== undefined && definition.props !== undefined) {
-    fail('use footprints or legacy props, not both');
-  }
-  const source = definition.footprints ?? definition.props ?? [];
+function normalizeFootprints(definition, columns, rows) {
+  const source = definition.footprints;
   if (!Array.isArray(source)) fail('footprints must be an array');
-  const isV2 = definition.schemaVersion === PREDRAWN_GENERATION_SCHEMA_VERSION;
   const ids = new Set();
   const occupied = new Set();
   return source.map((raw, index) => {
@@ -467,12 +380,10 @@ function normalizeFootprints(definition, cells, columns, rows) {
     const id = nonEmptyText(raw.id, `footprints[${index}].id`);
     if (ids.has(id)) fail(`footprint id ${id} occurs more than once`);
     ids.add(id);
-    if (isV2) {
-      nonEmptyText(raw.kind, `footprints[${index}].kind`);
-      nonEmptyText(raw.sourceId, `footprints[${index}].sourceId`);
-      nonEmptyText(raw.traversal, `footprints[${index}].traversal`);
-    }
-    const rawCells = raw.cells ?? (raw.cell ? [raw.cell] : undefined);
+    const kind = nonEmptyText(raw.kind, `footprints[${index}].kind`);
+    const sourceId = nonEmptyText(raw.sourceId, `footprints[${index}].sourceId`);
+    const traversal = nonEmptyText(raw.traversal, `footprints[${index}].traversal`);
+    const rawCells = raw.cells;
     if (!Array.isArray(rawCells) || rawCells.length === 0) fail(`footprint ${id} has no cells`);
     const footprintCells = rawCells.map((value, cellIndex) => {
       const cell = coordinate(value, `footprint ${id} cell ${cellIndex}`);
@@ -480,29 +391,23 @@ function normalizeFootprints(definition, cells, columns, rows) {
       const key = coordinateKey(cell);
       if (occupied.has(key)) fail(`footprints overlap at ${key}`);
       occupied.add(key);
-      if (raw.token && !cells[cell[1]][cell[0]].semanticTokens?.includes(raw.token)) {
-        fail(`footprint ${id} token ${raw.token} is absent at ${key}`);
-      }
       return cell;
     });
     return {
       id,
-      kind: typeof raw.kind === 'string' && raw.kind.trim() ? raw.kind.trim() : 'fixed footprint shown by Image 1',
-      sourceId: typeof raw.sourceId === 'string' && raw.sourceId.trim() ? raw.sourceId.trim() : id,
+      kind,
+      sourceId,
       cells: footprintCells,
-      traversal: typeof raw.traversal === 'string' && raw.traversal.trim()
-        ? raw.traversal.trim()
-        : raw.cell ? 'impassable' : 'preserve the gameplay behavior declared by the canonical level',
+      traversal,
     };
   });
 }
 
 export function normalizePredrawnGenerationDefinition(definition) {
   if (!isRecord(definition)) fail('definition must be a JSON object');
-  if (definition.schemaVersion !== undefined && definition.schemaVersion !== PREDRAWN_GENERATION_SCHEMA_VERSION) {
-    fail(`unsupported definition schemaVersion ${definition.schemaVersion}`);
+  if (definition.schemaVersion !== PREDRAWN_GENERATION_SCHEMA_VERSION) {
+    fail(`unsupported definition schemaVersion ${definition.schemaVersion ?? '<missing>'}`);
   }
-  const isV2 = definition.schemaVersion === PREDRAWN_GENERATION_SCHEMA_VERSION;
   for (const prohibited of ['art', 'artDirection', 'biome', 'environment', 'palette', 'lighting', 'style', 'theme', 'atmosphere', 'finish']) {
     if (prohibited in definition) fail(`appearance must come from Image 1; top-level ${prohibited} is prohibited`);
   }
@@ -510,9 +415,10 @@ export function normalizePredrawnGenerationDefinition(definition) {
   const levelId = nonEmptyText(definition.levelId, 'levelId');
   if (!isRecord(definition.reference)) fail('reference is required');
   const sourceSlot = nonEmptyText(definition.reference.sourceSlot, 'reference.sourceSlot');
+  const viewport = normalizedReferenceViewport(definition.reference.viewport);
   if (!isRecord(definition.request)) fail('request is required');
-  if (isV2 && (definition.request.width !== undefined || definition.request.height !== undefined)) {
-    fail('schema v2 uses model-native sizing and must not specify fixed output width or height');
+  if (definition.request.width !== undefined || definition.request.height !== undefined) {
+    fail('schema v3 uses model-native sizing and must not specify fixed output width or height');
   }
   const provider = nonEmptyText(definition.request.provider, 'request.provider');
   const model = nonEmptyText(definition.request.model, 'request.model');
@@ -520,19 +426,17 @@ export function normalizePredrawnGenerationDefinition(definition) {
   if (definition.request.mode !== 'isolated-top-only') fail('request mode must be isolated-top-only');
   const outputAspectRatio = aspectRatio(definition.request);
   if (!isRecord(definition.board)) fail('board is required');
-  if (isV2) {
-    if (!Array.isArray(definition.board.cells)) fail('schema v2 requires board.cells');
-    if (!isRecord(definition.board.projection)) fail('schema v2 requires board.projection');
-    if (definition.board.projection.axisX === undefined || definition.board.projection.axisY === undefined) {
-      fail('schema v2 requires both projected axis vectors');
-    }
-    nonEmptyText(definition.board.projection.kind, 'board.projection.kind');
-    nonEmptyText(definition.board.projection.stepLengthRule, 'board.projection.stepLengthRule');
-    if (!isRecord(definition.board.coordinateConvention)) fail('schema v2 requires board.coordinateConvention');
-    if (!isRecord(definition.board.surfaceDefinitions)) fail('schema v2 requires board.surfaceDefinitions');
-    for (const collection of ['linearFeatures', 'barriers', 'footprints']) {
-      if (!Array.isArray(definition[collection])) fail(`schema v2 requires ${collection}`);
-    }
+  if (!Array.isArray(definition.board.cells)) fail('schema v3 requires board.cells');
+  if (!isRecord(definition.board.projection)) fail('schema v3 requires board.projection');
+  if (definition.board.projection.axisX === undefined || definition.board.projection.axisY === undefined) {
+    fail('schema v3 requires both projected axis vectors');
+  }
+  nonEmptyText(definition.board.projection.kind, 'board.projection.kind');
+  nonEmptyText(definition.board.projection.stepLengthRule, 'board.projection.stepLengthRule');
+  if (!isRecord(definition.board.coordinateConvention)) fail('schema v3 requires board.coordinateConvention');
+  if (!isRecord(definition.board.surfaceDefinitions)) fail('schema v3 requires board.surfaceDefinitions');
+  for (const collection of ['linearFeatures', 'barriers', 'footprints']) {
+    if (!Array.isArray(definition[collection])) fail(`schema v3 requires ${collection}`);
   }
   const columns = definition.board.columns;
   const rows = definition.board.rows;
@@ -544,17 +448,15 @@ export function normalizePredrawnGenerationDefinition(definition) {
     columns,
     rows,
     projection: normalizedProjection(definition.board),
-    coordinateConvention: normalizedCoordinateConvention(definition.board, columns, rows),
+    coordinateConvention: normalizedCoordinateConvention(definition.board),
     surfaceDefinitions: normalizedCells.surfaceDefinitions,
     cells: normalizedCells.cells,
   };
-  if (isV2) {
-    if (!isRecord(definition.outerPerimeter) || !Array.isArray(definition.outerPerimeter.edges)) {
-      fail('schema v2 requires outerPerimeter.edges');
-    }
-    if (!Array.isArray(definition.outerPerimeter.openings)) fail('schema v2 requires outerPerimeter.openings');
-    if (!Array.isArray(definition.impassableTransitions)) fail('schema v2 requires impassableTransitions');
+  if (!isRecord(definition.outerPerimeter) || !Array.isArray(definition.outerPerimeter.edges)) {
+    fail('schema v3 requires outerPerimeter.edges');
   }
+  if (!Array.isArray(definition.outerPerimeter.openings)) fail('schema v3 requires outerPerimeter.openings');
+  if (!Array.isArray(definition.impassableTransitions)) fail('schema v3 requires impassableTransitions');
   const outerPerimeter = normalizeOuterPerimeter(definition.outerPerimeter, columns, rows);
   const impassableTransitions = normalizeImpassableTransitions(
     definition.impassableTransitions,
@@ -562,14 +464,14 @@ export function normalizePredrawnGenerationDefinition(definition) {
     columns,
     rows,
   );
-  const linearFeatures = normalizeLinearFeatures(definition, board.cells, columns, rows);
+  const linearFeatures = normalizeLinearFeatures(definition, columns, rows);
   const barriers = normalizeBarriers(definition, columns, rows);
-  const footprints = normalizeFootprints(definition, board.cells, columns, rows);
+  const footprints = normalizeFootprints(definition, columns, rows);
   const normalized = {
     schemaVersion: PREDRAWN_GENERATION_SCHEMA_VERSION,
     runId,
     levelId,
-    reference: { sourceSlot },
+    reference: { sourceSlot, viewport },
     request: {
       provider,
       model,
@@ -691,7 +593,7 @@ CAMERA-ROOM FRAME
 Use the model's native ${request.aspectRatio} output dimensions. Do not resize or upscale solely to reach a fixed pixel count. Keep the complete grid envelope and immediate boundary near the center with generous continuous, meaningful scenery on every edge for camera roaming. This is composition guidance, not permission to change the grid and not a numeric acceptance threshold. The surrounding scene is not padding or crop allowance. Do not enlarge, compact, distort, or redesign the grid to fill the frame.
 
 REFERENCE ROLES — STRICT AUTHORITY ORDER
-Image 1 is the only image input. It is the canonical unit-free, ground-cover-free, top-surfaces-only render of this exact level. Its complete ${board.columns}x${board.rows} grid, projection, cell count, linear features, barriers, footprints, materials, elevations, and landmark positions are authoritative. Remove visible address seams from continuous regions in the final painting. Do not invent a vertical board skirt, attached side strip, extra row, or extra column.
+Image 1 is the only image input. It is the canonical unit-free, ground-cover-free authored-surface render of this exact level, clipped to the owner's saved 16:9 generation frame: terrain tops plus only the explicitly authored Subterrain faces visible on exposed edges inside that frame. Its complete ${board.columns}x${board.rows} grid, projection, cell count, required linear features, barriers, footprints, materials, elevations, authored Subterrain, and landmark positions are authoritative. Scenic-only art outside this deliberate source crop is not an input. The rectangular Image 1 edge is not the gameplay perimeter and must not become a frame, cliff, void, or boundary in the output. Do not zoom outward merely to reconstruct omitted scenic margins. Remove visible address seams from continuous regions in the final painting. Preserve the local authored Subterrain faces exactly where Image 1 shows them, but do not extrapolate them into a vertical board skirt, attached side strip, extra row, or extra column.
 No prior generated candidate, accepted whole-level plate, beauty render, or unrelated board image is supplied. The semantic packet below resolves exact gameplay meaning; Image 1 supplies appearance and finish.
 
 PROJECTION CONTRACT
@@ -742,7 +644,7 @@ These internal edges are separate from the outer grid envelope. They preserve no
 ${formatEdges(definition.impassableTransitions)}
 
 BOUNDARY APPEARANCE
-Outer-envelope LOCATION is fixed; its APPEARANCE is creative and must be derived from Image 1. Carry one coherent in-world treatment around the exact envelope while preserving declared openings and feature crossings. The outside world remains continuous yet clearly outside the grid. The boundary is a top-surface transition, not a vertical side wall, second strip of cells, extra row, or extra column. Internal playable/non-playable transitions remain distinct semantic features and do not replace the outer envelope.
+Outer-envelope LOCATION is fixed; its APPEARANCE is creative and must be derived from Image 1. Carry one coherent in-world treatment around the exact envelope while preserving declared openings and feature crossings. The outside world remains continuous yet clearly outside the grid. Do not infer, move, or reshape the outer envelope from the rectangular source-crop edge. The boundary is not a new vertical side wall, second strip of cells, extra row, or extra column; any local exposed face visible in Image 1 is explicitly authored Subterrain and must remain local to that exact edge. Internal playable/non-playable transitions remain distinct semantic features and do not replace the outer envelope.
 
 SCENE AND STYLE
 Extend only the visual language already present in Image 1 into a seamless full-screen scene. Do not substitute a separately named biome, palette, lighting scheme, material vocabulary, or style. Preserve every declared cell elevation. Seam surfaces, linear features, footprints, edge objects, the envelope, and surrounding environment into one professional continuous painting.
@@ -750,8 +652,9 @@ Extend only the visual language already present in Image 1 into a seamless full-
 CONSTRAINTS
 No units, chess pieces, people, creatures, UI, coordinate labels, text, watermark, or baked grid lines.
 No black box, black void around the scene, floating board, vignette frame, or hard crop.
+Do not reproduce the rectangular Image 1 crop edge as an environmental boundary or output frame.
 No unstated ramps, cliffs, elevation tiers, pits, buildings, blockers, barriers, or feature branches.
-No vertical board skirt, attached side strip, extra row, extra column, or grid continuation in surrounding scenery.
+No synthesized or extended vertical board skirt, attached side strip, extra row, extra column, or grid continuation in surrounding scenery. Preserve only the explicit local Subterrain faces visible in Image 1.
 No checkerboard, patchwork quilt, square terrain swatches, cell-by-cell tinting, or terrain seams that reveal hidden address boundaries.
 Geometry and semantics above override all artistic discretion.
 `;
@@ -760,6 +663,12 @@ Geometry and semantics above override all artistic discretion.
 export function buildPredrawnGenerationArtifacts(inputDefinition, referenceBytes) {
   const definition = normalizePredrawnGenerationDefinition(inputDefinition);
   const dimensions = pngSize(referenceBytes);
+  const viewport = definition.reference.viewport;
+  if (dimensions.width !== viewport.width || dimensions.height !== viewport.height) {
+    fail(
+      `reference PNG is ${dimensions.width}x${dimensions.height}, expected the saved generation frame ${viewport.width}x${viewport.height}`,
+    );
+  }
   const prompt = buildPredrawnGenerationPrompt(definition);
   if (/\{\{[^}]+\}\}/.test(prompt)) fail('prompt contains an unresolved placeholder');
   for (const required of [
@@ -787,15 +696,17 @@ export function buildPredrawnGenerationArtifacts(inputDefinition, referenceBytes
     runId: definition.runId,
     references: [{
       index: 1,
-      role: 'canonical-unit-free-ground-cover-free-top-surfaces-only-art-authority',
+      role: 'canonical-unit-free-ground-cover-free-authored-surface-art-authority',
       sourceSlot: definition.reference.sourceSlot,
       sha256: sha256(referenceBytes),
+      viewport,
       ...dimensions,
     }],
   };
   const manifest = {
     schemaVersion: PREDRAWN_GENERATION_SCHEMA_VERSION,
     runId: definition.runId,
+    levelId: definition.levelId,
     status: 'ready-for-generation',
     provider: definition.request.provider,
     model: definition.request.model,
@@ -808,6 +719,7 @@ export function buildPredrawnGenerationArtifacts(inputDefinition, referenceBytes
     promptSha256: sha256(Buffer.from(prompt)),
     packetSha256: sha256(Buffer.from(json(packet))),
     referencesSha256: sha256(Buffer.from(json(references))),
+    referenceViewportSha256: sha256(Buffer.from(JSON.stringify(stable(viewport)))),
   };
   return { definition, prompt, packet, references, manifest };
 }

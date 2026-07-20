@@ -13,6 +13,7 @@
 //   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
 //   gr?:generatedRegionUnits,
 //   pd?:[semanticMediaSlot,referenceFrameWidth,referenceFrameHeight,registration?],
+//   pgf?:[version,x,y,width,height],
 //   da?:[top,right,bottom,left], df?:[cell], dt?:{cell:tileId}, dr?:{cell:feature},
 //   dfe?:{edgeKey:fenceMaterial}, dfp?:{vertexKey:fenceMaterial}, dwl?:{edgeKey:wallMaterial} }.
 // `pd[3]` is the stable compact legacy/v2/v3/v4 registration string. Three-field `pd` records
@@ -29,7 +30,7 @@
 // for old links/clients. `gr` stores editor-only generated-region units: saved cell selections
 // plus the Generate panel settings needed to rerun them. base64url of the JSON (no padding, +/ -> -_).
 //
-// FORWARD/BACK-COMPAT: `z`/`p`/`fe`/`fp`/`wl`/`wa`/`df` are emitted only when non-empty, so a board without them
+// FORWARD/BACK-COMPAT: `z`/`p`/`fe`/`fp`/`wl`/`wa`/`df`/`pgf` are emitted only when non-empty, so a board without them
 // encodes byte-identically to a code that predates them, and an OLD code decodes them to empty.
 
 import type { GroundCoverDensity } from '../core/groundCover';
@@ -41,6 +42,10 @@ import type { TileFamilyId } from '../core/tileSockets';
 import { UNIT_FACINGS, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
 import type { UnitFacing } from '../core/types';
 import { cleanSubterrainPlacements, type SubterrainPlacementMap } from '../core/subterrain';
+import {
+  normalizePredrawnGenerationFrame,
+  type PredrawnGenerationFrame,
+} from '../core/predrawnGenerationFrame';
 import {
   normalizePredrawnBoardRegistration,
   parsePredrawnBoardRegistration,
@@ -134,6 +139,8 @@ export interface EditorBoard {
   cells: Record<string, string>;
   /** Absent means ordinary composed terrain tiles; present replaces baked board art with one plate. */
   surface?: PredrawnBoardSurface;
+  /** Owner-authored native-1x 16:9 crop for the canonical pre-drawn generation reference. */
+  predrawnGenerationFrame?: PredrawnGenerationFrame;
   /** Opaque multi-cell terrain tops that replace the covered 1x1 top sprites. */
   macroTiles?: MacroTilePlacement[];
   units: Record<string, { unitId: string; direction: string; faction: string }>;
@@ -544,6 +551,14 @@ export function encodeBoard(b: EditorBoard): string {
       ? [serializePredrawnBoardPreviewRegistration(surface.registration)]
       : []),
   ];
+  const predrawnGenerationFrame = normalizePredrawnGenerationFrame(b.predrawnGenerationFrame);
+  if (predrawnGenerationFrame) wire.pgf = [
+    predrawnGenerationFrame.version,
+    predrawnGenerationFrame.x,
+    predrawnGenerationFrame.y,
+    predrawnGenerationFrame.width,
+    predrawnGenerationFrame.height,
+  ];
   if (b.decorativeApron && Object.values(b.decorativeApron).some((value) => value > 0)) {
     wire.da = [b.decorativeApron.top, b.decorativeApron.right, b.decorativeApron.bottom, b.decorativeApron.left];
   }
@@ -707,13 +722,22 @@ export function decodeBoard(code: string): EditorBoard | null {
           : undefined,
       })
       : undefined;
+    const predrawnGenerationFrame = Array.isArray(w.pgf) && w.pgf.length === 5
+      ? normalizePredrawnGenerationFrame({
+        version: w.pgf[0],
+        x: w.pgf[1],
+        y: w.pgf[2],
+        width: w.pgf[3],
+        height: w.pgf[4],
+      })
+      : undefined;
     const decodedDecorativeFootprint = cleanDecorativeFootprint(w.df, cols, rows);
     const subterrain = cleanSubterrainPlacements(
       w.st,
       visualTerrainSurfaceKeys(cells, cols, rows, decorativeApron, decodedDecorativeFootprint),
     );
     return {
-      cols, rows, decorativeApron, surface,
+      cols, rows, decorativeApron, surface, predrawnGenerationFrame,
       decorativeFootprint: decodedDecorativeFootprint,
       decorativeCells: (w.dt && typeof w.dt === 'object' && !Array.isArray(w.dt) ? w.dt : {}) as Record<string, string>,
       decorativeFeatures: (w.dr && typeof w.dr === 'object' && !Array.isArray(w.dr) ? w.dr : {}) as Record<string, FeatureCell>,

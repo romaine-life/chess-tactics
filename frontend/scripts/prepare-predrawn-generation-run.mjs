@@ -22,7 +22,7 @@ const USAGE = `Usage:
     [--out <preparation-directory>] \\
     [--run-id <id>]
 
-This prepares the canonical top-only reference and exact generation request,
+This prepares the saved owner-framed canonical generation reference and exact generation request,
 self-validates them, and finishes at ready-for-generation. It never calls an
 image model; owner judgment begins after a generated candidate exists.
 `;
@@ -112,7 +112,7 @@ export function buildPreparationPlan(options, dependencies = {}) {
   const requestDir = path.join(runRoot, 'generation-request');
   const definitionPath = path.join(runRoot, 'definition.json');
   const provenancePath = path.join(runRoot, 'definition.provenance.json');
-  const referencePath = path.join(runRoot, 'canonical-top-only.png');
+  const referencePath = path.join(runRoot, 'canonical-generation-reference.png');
   const manifestPath = path.join(requestDir, 'request-manifest.json');
   const referenceUrl = new URL('/predrawn-reference', options.baseUrl);
   referenceUrl.searchParams.set('levelId', options.levelId);
@@ -130,7 +130,7 @@ export function buildPreparationPlan(options, dependencies = {}) {
       '--out', runRoot,
       '--run-id', options.runId,
     ], frontendRoot),
-    commandStep('Capture the canonical top-only reference', npmCommand, [
+    commandStep('Capture the canonical generation reference', npmCommand, [
       ...npmPrefixArgs, 'run', 'shot', '--', referenceUrl.href,
       '--select', REFERENCE_SELECTOR,
       '--out', referencePath,
@@ -197,8 +197,14 @@ export async function executePreparationPlan(plan, dependencies = {}) {
   if (manifest?.runId !== plan.runId) {
     fail(`request manifest run id does not match ${plan.runId}`);
   }
+  if (manifest.levelId !== plan.levelId) {
+    fail(`request manifest level id does not match ${plan.levelId}`);
+  }
   if (manifest.status !== 'ready-for-generation') {
     fail(`request manifest must be ready-for-generation, received ${String(manifest.status)}`);
+  }
+  if (typeof manifest.referenceViewportSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(manifest.referenceViewportSha256)) {
+    fail('request manifest is missing the validated generation-frame hash');
   }
   return { plan, manifest };
 }
@@ -208,7 +214,7 @@ export function formatPreparationResult({ plan, manifest }) {
     '',
     `Prepared ${plan.levelId}. No image-generation call was made.`,
     `Status: ${manifest.status}`,
-    `Top-only reference: ${plan.paths.reference}`,
+    `Generation reference: ${plan.paths.reference}`,
     `Exact prompt: ${plan.paths.prompt}`,
     `Exact level data: ${plan.paths.packet}`,
     `Request manifest: ${plan.paths.manifest}`,

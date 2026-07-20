@@ -294,6 +294,37 @@ The Level Editor anchors its `TileGrid` origin to the playable cells. Adding or 
 or sparse scenic terrain therefore does not recenter the projected board or move the camera; the
 canonical board-space projection itself remains unchanged.
 
+### Pre-drawn generation frame
+
+Per
+[ADR-0142](adr/0142-owner-authored-frame-defines-predrawn-generation-reference.md),
+board data persists one versioned, screen-aligned 16:9 generation frame in
+canonical projected-board coordinates relative to the stable playable origin.
+The Level Editor presents that frame over the shared `ViewPane`: the owner may
+pan and zoom the scene beneath it and explicitly save the resulting rectangle.
+The persisted value is the projected rectangle, not CSS pixels, device-pixel
+ratio, browser dimensions, or transient ViewPane pan and zoom. Ordinary camera
+movement therefore cannot silently change a prepared reference.
+
+The generation-reference compositor renders the canonical unit-free,
+ground-cover-free authored visual surface through exactly that saved frame. The
+complete playable outer envelope and every draw whose position or footprint is
+gameplay-authoritative in the semantic packet must lie fully inside. Scenic-only
+terrain, props, and Subterrain may cross the frame edge or remain wholly outside
+it; clipping changes neither their board data nor active
+visual-surface membership. A decorative alpha pixel touching a source edge is
+valid and must not trigger a full-paint-bounds refit. The frame rectangle never
+becomes a playable boundary, visual-terrain boundary, void, collision edge, or
+runtime camera constraint.
+
+Preparation loads only the frame in the canonical saved level and fails closed
+when it is missing, malformed, non-16:9, or fails required-geometry containment.
+The normalized frame and resulting reference bytes participate in request
+hashing. This source-reference crop is independent of the accepted plate's
+owner-fitted registration and whole-image runtime transform described below;
+generated output remains one continuous full scene and may not reproduce the
+source rectangle as a hard crop or floating-board edge.
+
 ## Composed terrain and macrotiles
 
 The runtime board is one composed terrain canvas, but its source data remains layered:

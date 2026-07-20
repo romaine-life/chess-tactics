@@ -156,17 +156,48 @@ beauty render alone. Every request uses an authored-level packet containing:
 - a canonical coordinate-by-coordinate terrain and footprint dump;
 - exact road connectivity, blocking shared edges, exits, and outer boundary
   edges;
-- the canonical top-only image as the authority for environment, materials,
-  palette, lighting, texture language, and finish, with no named biome supplied
-  by text and no prior whole-level image reference in the default isolated test;
-  and
+- a saved owner-authored 16:9 generation frame in canonical projected-board
+  coordinates that fully contains the required gameplay-authoritative reference
+  geometry;
+- the canonical generation-reference image clipped to that frame, containing
+  terrain tops plus only explicitly persisted and exposed Subterrain visible
+  inside it, as the authority for environment, materials, palette, lighting,
+  texture language, and finish, with no named biome supplied by text and no prior
+  whole-level image reference in the default isolated test; and
 - explicit prohibitions against baked units, invented gameplay height, expanded
   footprints, extra roads, and a model-invented perimeter.
 
-The top-only art authority also suppresses additive ground cover, including
-grass. Cover creates avoidable occlusion around geometry and may be composed from
-its accepted generated runtime layer later; terrain, roads, barriers, and props
-remain visible in the export.
+The generation-reference art authority also suppresses additive ground cover,
+including grass. Cover creates avoidable occlusion around geometry and may be
+composed from its accepted generated runtime layer later. Required
+gameplay-authoritative terrain, roads, barriers, and props remain fully visible
+in the export; ADR-0142 separately permits scenic-only art to meet or cross the
+saved crop edge.
+
+Per
+[ADR-0141](adr/0141-predrawn-generation-references-preserve-explicit-subterrain.md),
+the reference preserves every explicitly persisted Subterrain placement visible
+inside the saved generation frame that the canonical shared topology resolves
+onto an exposed face of the active visual terrain surface. Absence remains empty:
+tiles, families, adjacency, exposure, generation, and scenic fallback never
+synthesize a vertical material. These authored pixels carry appearance only and
+do not declare gameplay height, additional board addresses, or a larger envelope.
+The generation prompt must preserve those visible explicit faces while
+prohibiting every additional skirt, cliff, attached side strip, row, column, or
+implied elevation.
+
+Per
+[ADR-0142](adr/0142-owner-authored-frame-defines-predrawn-generation-reference.md),
+the saved generation frame is a presentation crop rather than a second visual
+surface. The Level Editor exposes a 16:9 owner framing instrument and persists
+its result in canonical projected-board coordinates, independent of browser
+dimensions, device-pixel ratio, and transient ViewPane state. The complete
+playable envelope and every gameplay-authoritative reference draw represented in
+the semantic packet must fit fully inside. Scenic-only terrain, props, and
+Subterrain may clip or be excluded without being deleted from board data.
+Decorative pixels may touch a source edge; that rectangle never
+becomes gameplay perimeter evidence or permission for a hard-cropped generated
+result. Missing, malformed, or under-inclusive frame data fails preparation.
 
 Per
 [ADR-0122](adr/0122-predrawn-occlusion-derives-from-canonical-raised-geometry.md),
@@ -195,8 +226,10 @@ ordered reference manifest with content hashes, and request manifest. Per
 [ADR-0125](adr/0125-predrawn-preparation-self-validates-before-generation.md),
 successful deterministic preflight reports `ready-for-generation` without an
 owner checkpoint. Any subsequent prompt, model, parameter, semantic, or
-reference change creates a new preflighted run. Mandatory owner judgment begins
-with the generated candidate mounted on the game-owned review surface.
+reference change creates a new preflighted run. The normalized saved generation
+frame and its hash are part of that provenance, so a frame change also creates a
+new run. Mandatory owner judgment begins with the generated candidate mounted on
+the game-owned review surface.
 
 Per [ADR-0110](adr/0110-owner-fitted-grid-defines-predrawn-review-rectification.md),
 candidate review exposes the complete authored grid over the untouched source.

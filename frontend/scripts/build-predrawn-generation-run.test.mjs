@@ -1,27 +1,59 @@
 import { describe, expect, it } from 'vitest';
+import { PNG } from 'pngjs';
 import {
   buildPredrawnGenerationArtifacts,
   buildPredrawnGenerationPrompt,
   normalizePredrawnGenerationDefinition,
 } from './build-predrawn-generation-run.mjs';
 
-function syntheticPng(width = 1600, height = 900) {
-  const bytes = Buffer.alloc(24);
-  Buffer.from('89504e470d0a1a0a', 'hex').copy(bytes, 0);
-  bytes.writeUInt32BE(width, 16);
-  bytes.writeUInt32BE(height, 20);
-  return bytes;
+function syntheticPng(width = 160, height = 90) {
+  const png = new PNG({ width, height });
+  png.data.fill(255);
+  return PNG.sync.write(png);
 }
 
+const referenceViewport = {
+  version: 1,
+  coordinateSpace: 'canonical-board-render-px-1x',
+  x: -80,
+  y: -45,
+  width: 160,
+  height: 90,
+};
+
+const fortressGateSurfaceRows = [
+  ['S', 'S', 'S', 'S', 'S'],
+  ['S', 'S', 'S', 'S', 'S'],
+  ['S', 'S', 'S', 'S', 'S'],
+  ['S', 'S', 'S', 'S', 'S'],
+  ['S', 'S', 'S', 'S', 'S'],
+  ['T', 'T', 'T', 'T', 'T'],
+  ['S', 'S', 'S', 'S', 'S'],
+  ['S', 'S', 'S', 'S', 'S'],
+  ['S', 'S', 'S', 'S', 'S'],
+  ['S', 'S', 'S', 'S', 'S'],
+  ['S', 'S', 'S', 'S', 'S'],
+];
+const fortressGateRoads = [
+  { id: 'A', cells: [[1, 5], [1, 4], [1, 3], [2, 3], [3, 3], [4, 3]], exit: [[4, 3], [5, 3]] },
+  { id: 'B', cells: [[3, 5], [3, 6], [3, 7], [3, 8], [4, 8], [4, 9], [4, 10]], exit: [[4, 10], [4, 11]] },
+];
+const fortressGateBarrierEdges = [
+  [[0, 5], [0, 6]], [[1, 5], [1, 6]], [[1, 5], [2, 5]], [[0, 4], [0, 5]],
+  [[4, 5], [4, 6]], [[4, 4], [4, 5]], [[3, 4], [3, 5]], [[2, 5], [3, 5]],
+];
+
 const fortressGate = {
+  schemaVersion: 3,
   runId: 'fortress-gate-generic-builder-test',
   levelId: 'off-l-fortress-gate',
-  reference: { sourceSlot: 'canonical-level-export/off-l-fortress-gate/top-only-no-cover' },
+  reference: {
+    sourceSlot: 'canonical-level-export/off-l-fortress-gate/authored-surface-no-cover',
+    viewport: referenceViewport,
+  },
   request: {
     provider: 'openai', model: 'imagegen-current', mode: 'isolated-top-only', referenceCount: 1,
-    // Legacy dimensions are accepted only to recover their aspect ratio. They must
-    // never become a fixed-size request in the prompt or output manifest.
-    width: 3840, height: 2160,
+    aspectRatio: '16:9',
   },
   board: {
     columns: 5,
@@ -32,39 +64,41 @@ const fortressGate = {
       axisY: 'down-left following the canonical y axis',
       stepLengthRule: 'preserve the exact canonical x and y step vectors',
     },
-    tokens: {
+    coordinateConvention: {
+      order: '(x,y)',
+      xAxis: 'x follows the down-right screen axis',
+      yAxis: 'y follows the down-left screen axis',
+    },
+    surfaceDefinitions: {
       S: 'flat passable ordinary terrain whose appearance comes from Image 1',
       T: 'flat passable fortified surface at the authored elevation',
-      R: 'road overlay with no elevation change',
-      B: 'fixed boulder footprint',
-      H: 'fixed cottage footprint',
     },
-    matrix: [
-      ['S', 'S', 'S', 'S', 'S'],
-      ['S', 'S', 'S', 'S', 'S'],
-      ['S', 'S', 'S', 'S', 'S'],
-      ['S', 'S+R', 'S+R', 'S+R', 'S+R'],
-      ['S', 'S+R', 'S', 'S', 'S'],
-      ['T+B', 'T+R', 'T', 'T+R', 'T+H'],
-      ['S', 'S', 'S', 'S+R', 'S'],
-      ['S', 'S', 'S', 'S+R', 'S'],
-      ['S', 'S', 'S', 'S+R', 'S+R'],
-      ['S', 'S', 'S', 'S', 'S+R'],
-      ['S', 'S', 'S', 'S', 'S+R'],
-    ],
+    cells: fortressGateSurfaceRows.map((row) => row.map((surface) => ({
+      surface,
+      elevation: 0,
+      playable: true,
+    }))),
   },
-  roads: [
-    { id: 'A', token: 'R', cells: [[1, 5], [1, 4], [1, 3], [2, 3], [3, 3], [4, 3]], exit: 'east threshold' },
-    { id: 'B', token: 'R', cells: [[3, 5], [3, 6], [3, 7], [3, 8], [4, 8], [4, 9], [4, 10]], exit: 'south-east threshold' },
+  linearFeatures: fortressGateRoads.map((road) => ({
+    id: road.id,
+    kind: 'road',
+    cells: road.cells,
+    connections: road.cells.slice(1).map((cell, index) => [road.cells[index], cell]),
+    exits: [road.exit],
+  })),
+  barriers: fortressGateBarrierEdges.map(([a, b], index) => ({
+    id: `fence-${index + 1}`,
+    kind: 'fence',
+    a,
+    b,
+    blocksCrossing: true,
+  })),
+  footprints: [
+    { id: 'fieldstone', kind: 'prop', sourceId: 'fieldstone', cells: [[0, 5]], traversal: 'impassable' },
+    { id: 'cottage-small', kind: 'prop', sourceId: 'cottage-small', cells: [[4, 5]], traversal: 'impassable' },
   ],
-  blockingEdges: [
-    [[0, 5], [0, 6]], [[1, 5], [1, 6]], [[1, 5], [2, 5]], [[0, 4], [0, 5]],
-    [[4, 5], [4, 6]], [[4, 4], [4, 5]], [[3, 4], [3, 5]], [[2, 5], [3, 5]],
-  ],
-  props: [
-    { id: 'fieldstone', token: 'B', label: 'Compact boulder', cell: [0, 5] },
-    { id: 'cottage-small', token: 'H', label: 'Compact cottage', cell: [4, 5] },
-  ],
+  outerPerimeter: { edges: rectangularEnvelope(5, 11), openings: [] },
+  impassableTransitions: [],
 };
 
 const holdBridgeSurfaceRows = [
@@ -128,10 +162,13 @@ function playableVoidTransitions(rows) {
 
 function holdBridgeDefinition() {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     runId: 'hold-bridge-generic-builder-test',
     levelId: 'off-l-hold-bridge',
-    reference: { sourceSlot: 'canonical-level-export/off-l-hold-bridge/top-only-no-cover' },
+    reference: {
+      sourceSlot: 'canonical-level-export/off-l-hold-bridge/authored-surface-no-cover',
+      viewport: referenceViewport,
+    },
     request: {
       provider: 'openai', model: 'imagegen-current', mode: 'isolated-top-only', referenceCount: 1,
       aspectRatio: '16:9',
@@ -185,7 +222,7 @@ function holdBridgeDefinition() {
 
 describe('pre-drawn generation run builder', () => {
   it('builds Fortress Gate from its definition without Fortress-specific prose or fixed output pixels', () => {
-    const artifacts = buildPredrawnGenerationArtifacts(fortressGate, syntheticPng(1672, 941));
+    const artifacts = buildPredrawnGenerationArtifacts(fortressGate, syntheticPng());
 
     expect(artifacts.prompt).toContain('exact authored 5-column by 11-row battlefield');
     expect(artifacts.prompt).toContain('exactly 5 columns (4 center-to-center x+ steps) and exactly 11 rows (10 center-to-center y+ steps)');
@@ -196,7 +233,16 @@ describe('pre-drawn generation run builder', () => {
       sizing: 'model-native', aspectRatio: '16:9', mimeType: 'image/png',
     });
     expect(artifacts.manifest.status).toBe('ready-for-generation');
-    expect(artifacts.references.references[0]).toMatchObject({ width: 1672, height: 941 });
+    expect(artifacts.manifest.levelId).toBe('off-l-fortress-gate');
+    expect(artifacts.manifest.referenceViewportSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(artifacts.references.references[0]).toMatchObject({
+      width: 160,
+      height: 90,
+      viewport: referenceViewport,
+    });
+    expect(artifacts.references.references[0].role).toBe(
+      'canonical-unit-free-ground-cover-free-authored-surface-art-authority',
+    );
   });
 
   it('uses Hold Bridge canonical dimensions, voids, graph edges, exits, and the complete envelope', () => {
@@ -220,6 +266,11 @@ describe('pre-drawn generation run builder', () => {
     expect(prompt).toContain('Grid x+: screen vector (48,27) per grid step');
     expect(prompt).toContain('Grid y+: screen vector (-48,27) per grid step');
     expect(prompt).toContain('the x+ and y+ projected step vectors have equal screen length');
+    expect(prompt).toContain('terrain tops plus only the explicitly authored Subterrain faces');
+    expect(prompt).toContain('do not extrapolate them into a vertical board skirt');
+    expect(prompt).toContain("clipped to the owner's saved 16:9 generation frame");
+    expect(prompt).toContain('The rectangular Image 1 edge is not the gameplay perimeter');
+    expect(prompt).toContain('Do not zoom outward merely to reconstruct omitted scenic margins');
     expect(prompt).not.toMatch(/5-column by 11-row|sixth column|stone-fence|fortified crossing|3840|2160/i);
   });
 
@@ -249,5 +300,43 @@ describe('pre-drawn generation run builder', () => {
     inventedConnection.linearFeatures[0].connections.push([[0, 0], [0, 1]]);
     expect(() => normalizePredrawnGenerationDefinition(inventedConnection))
       .toThrow(/repeats connection|must join two adjacent cells/);
+  });
+
+  it('fails closed when the canonical saved viewport is missing, malformed, or not 16:9', () => {
+    const missing = holdBridgeDefinition();
+    delete missing.reference.viewport;
+    expect(() => normalizePredrawnGenerationDefinition(missing))
+      .toThrow(/reference\.viewport is required/);
+
+    const fractional = holdBridgeDefinition();
+    fractional.reference.viewport = { ...referenceViewport, x: 0.5 };
+    expect(() => normalizePredrawnGenerationDefinition(fractional))
+      .toThrow(/reference\.viewport\.x must be a safe integer/);
+
+    const wrongRatio = holdBridgeDefinition();
+    wrongRatio.reference.viewport = { ...referenceViewport, width: 161 };
+    expect(() => normalizePredrawnGenerationDefinition(wrongRatio))
+      .toThrow(/exact 16:9 aspect ratio/);
+  });
+
+  it('fails closed when captured PNG bytes do not exactly match the saved viewport', () => {
+    expect(() => buildPredrawnGenerationArtifacts(holdBridgeDefinition(), syntheticPng(320, 180)))
+      .toThrow(/reference PNG is 320x180, expected the saved generation frame 160x90/);
+    expect(() => buildPredrawnGenerationArtifacts(holdBridgeDefinition(), syntheticPng().subarray(0, 32)))
+      .toThrow(/reference PNG could not be decoded/);
+  });
+
+  it('rejects the retired schema-v2 request path', () => {
+    const retired = holdBridgeDefinition();
+    retired.schemaVersion = 2;
+    expect(() => normalizePredrawnGenerationDefinition(retired))
+      .toThrow(/unsupported definition schemaVersion 2/);
+  });
+
+  it('rejects an unversioned legacy definition', () => {
+    const retired = holdBridgeDefinition();
+    delete retired.schemaVersion;
+    expect(() => normalizePredrawnGenerationDefinition(retired))
+      .toThrow(/unsupported definition schemaVersion <missing>/);
   });
 });
