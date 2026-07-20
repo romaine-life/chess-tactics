@@ -353,7 +353,7 @@ async function resetDb() {
 // Explicit synthetic live content for this transient smoke database. Production
 // seat data is never imported from a repository fixture.
 const SYNTHETIC_PROP_SEATS = Object.freeze({
-  oak: { anchorX: 96, anchorY: 255, scale: 1, w: 2, h: 2 },
+  oak: { anchorX: 96, anchorY: 255, scale: 1, w: 2, h: 2, default: true },
   cottage: { anchorX: 91, anchorY: 110, scale: 0.62, w: 2, h: 2 },
   cabin: { anchorX: 118, anchorY: 107, scale: 0.35, w: 1, h: 1 },
   lodge: { anchorX: 103, anchorY: 126, scale: 1, w: 2, h: 2 },
@@ -1876,7 +1876,7 @@ async function main() {
   await seedSyntheticDrawable({
     id: 'test-banner-source', kind: 'wall-decor', label: 'Synthetic banner source',
     behavior: {
-      decorKind: 'banner', mountX: 36, mountY: 10,
+      decorKind: 'banner', mountX: 36, mountY: 10, default: true,
       faces: {
         west: { mountX: 13, mountY: 10, previewX: 42, previewY: 24 },
         north: { mountX: 13, mountY: 11, previewX: 84, previewY: 24 },
@@ -1891,7 +1891,7 @@ async function main() {
   await seedSyntheticDrawable({
     id: 'test-wall-art', kind: 'wall-art', label: 'Synthetic wall art',
     behavior: {
-      span: 1,
+      span: 1, default: true,
       slots: [{ id: 'test-west', sourceId: 'test-banner-source', face: 'west', x: 42, y: 24, scale: 1 }],
     },
     media: {},
@@ -1942,7 +1942,7 @@ async function main() {
   });
   await seedSyntheticDrawable({
     id: 'test-waterfall', kind: 'scene-animation', label: 'Synthetic waterfall',
-    behavior: { sceneRole: 'homepage-scene', x: 10, y: 20, width: 40, height: 50, frames: 12, frameMs: 140 },
+    behavior: { default: true, sceneRole: 'homepage-scene', x: 10, y: 20, width: 40, height: 50, frames: 12, frameMs: 140 },
     media: { sheet: sharedPresentationSlot },
   });
   for (const [sortOrder, piece] of ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'].entries()) {
@@ -2006,7 +2006,7 @@ async function main() {
     ['campaign-editor', 'Editor', '/editor', 'functional'], ['level-editor', 'Level Editor', '/editor/level', 'stub'], ['lobbies', 'Lobbies', '/lobbies', 'stub'],
   ].entries()) {
     await seedSyntheticDrawable({ id: `studio-page-${value}`, kind: 'studio-page', label, sortOrder,
-      behavior: { value, route, viewerStatus, ...(value === 'level-editor' ? { roles: ['chrome-lab-page'], chromeLabRoute: '/editor/level?chromeLab=1' } : {}) },
+      behavior: { value, route, viewerStatus, default: value === 'main-menu', ...(value === 'level-editor' ? { roles: ['chrome-lab-page'], chromeLabRoute: '/editor/level?chromeLab=1' } : {}) },
       metadata: { blurb: `Synthetic ${label}`, ...(value === 'level-editor' ? { chromeLabBadge: 'outer + inner chrome' } : {}) }, media: { thumbnail: sharedPresentationSlot } });
   }
   for (const [sortOrder, [value, label, route]] of [
