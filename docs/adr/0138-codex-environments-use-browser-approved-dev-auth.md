@@ -4,7 +4,7 @@ date: 2026-07-19
 deciders: Nelson, Codex
 ---
 
-# ADR-0137: Codex environments use browser-approved development authentication
+# ADR-0138: Codex environments use browser-approved development authentication
 
 ## Context
 

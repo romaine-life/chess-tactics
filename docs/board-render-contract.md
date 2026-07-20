@@ -265,7 +265,7 @@ removes its footprint membership, so retained material outside the rectangle doe
 itself.
 
 This same resolved topology governs rendering, region-family selection, and scoped Generate input.
-Per [ADR-0136](adr/0136-subterrain-follows-the-visual-terrain-surface.md), explicit Subterrain may
+Per [ADR-0137](adr/0137-subterrain-follows-the-visual-terrain-surface.md), explicit Subterrain may
 occupy an exposed south or east face on any coordinate in this active visual terrain surface.
 Playable and scenic coordinates have identical visual-face authoring rights; Subterrain remains
 visual-only and never enters gameplay projection.

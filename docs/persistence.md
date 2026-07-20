@@ -227,8 +227,8 @@ controlled separately by `SCHEMA_MIGRATIONS`:
 
 | Value | Behavior | Intended use |
 | --- | --- | --- |
-| `check` | Default. Read-only verification that `schema_migrations` exists and contains every migration version in `backend/server.js`; missing schema returns `503 schema_migration_required` on persistence endpoints. | Local backend runs against an already-prepared DB without applying DDL by surprise. |
-| `auto` | Applies any missing inline migrations under the Postgres advisory lock, then serves persistence endpoints. | Kubernetes prod/test-slot backends and smoke tests, where the environment intentionally owns schema rollout. |
+| `check` | Default. Read-only verification that `schema_migrations` contains every migration version and that required runtime relations actually exist; missing schema returns `503 schema_migration_required` on persistence endpoints. | Local backend runs against an already-prepared DB without applying DDL by surprise. |
+| `auto` | Applies missing inline migrations under the Postgres advisory lock, idempotently repairs required runtime relations from their governing migration when numeric history and actual schema disagree, then verifies them before serving persistence endpoints. | Kubernetes prod/test-slot backends and smoke tests, where the environment intentionally owns schema rollout. |
 | `off` | Skips schema readiness entirely; queries run against whatever schema exists and fail naturally if it is incompatible. | Debugging unusual DB states. |
 
 The Helm deployment sets `SCHEMA_MIGRATIONS=auto` explicitly. Local backend

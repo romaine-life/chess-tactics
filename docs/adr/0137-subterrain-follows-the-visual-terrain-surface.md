@@ -5,7 +5,7 @@ deciders: Nelson, Codex
 partially_supersedes: ADR-0105 playable-occupancy face eligibility
 ---
 
-# ADR-0136: Subterrain follows the visual terrain surface
+# ADR-0137: Subterrain follows the visual terrain surface
 
 ## Context
 
