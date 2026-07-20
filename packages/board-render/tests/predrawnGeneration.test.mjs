@@ -6,6 +6,7 @@ import { installTestDrawableCatalog, resetTestDrawableCatalog } from './drawable
 const require = createRequire(import.meta.url);
 const {
   buildPredrawnGenerationDefinition,
+  decodeBoard,
   encodeBoard,
 } = require('../dist/index.cjs');
 
@@ -52,13 +53,20 @@ function holdBridgeLevel() {
       elevation: 0,
     });
   }));
+  // The river continues visibly into scenic terrain, but only its playable endpoint is semantic.
+  features['-1,0'] = { kind: 'road', material: 'dirt' };
+  features['-2,0'] = { kind: 'river', material: 'water' };
   const board = {
     cols: 12,
     rows: 8,
     cells,
+    decorativeApron: { top: 1, right: 1, bottom: 1, left: 1 },
+    decorativeFootprint: ['-2,0', '12,0'],
+    decorativeCells: { '-2,0': 'grass-surf-0', '12,0': 'stone-surf-0' },
+    predrawnGenerationFrame: { version: 1, x: -500, y: -200, width: 1536, height: 864 },
     units: {},
-    doodads: {},
-    props: {},
+    doodads: { '12,0': { doodadId: 'scenic-rock' } },
+    props: { '-2,0': { propId: 'scenic-tree' } },
     cover: {
       '8,1': 'sparse',
       '2,5': 'sparse',
@@ -104,7 +112,7 @@ function holdBridgeLevel() {
 function definitionFor(level) {
   return buildPredrawnGenerationDefinition(level, {
     runId: 'hold-bridge-isolated-test',
-    referenceSourceSlot: 'canonical-level-export/off-l-hold-bridge/top-only-no-cover',
+    referenceSourceSlot: 'canonical-level-export/off-l-hold-bridge/authored-surface-no-cover',
     provider: 'test-provider',
     model: 'test-model',
     resolveProp: () => undefined,
@@ -115,26 +123,49 @@ test('Hold Bridge definition is derived as a 12x8 irregular board with exact int
   const definition = definitionFor(holdBridgeLevel());
   const road = definition.linearFeatures.find((feature) => feature.kind === 'road');
 
-  assert.equal(definition.schemaVersion, 2);
+  assert.equal(definition.schemaVersion, 3);
+  assert.deepEqual(definition.reference.viewport, {
+    version: 1,
+    coordinateSpace: 'canonical-board-render-px-1x',
+    x: -500,
+    y: -200,
+    width: 1536,
+    height: 864,
+  });
   assert.equal(definition.board.columns, 12);
   assert.equal(definition.board.rows, 8);
   assert.equal(definition.board.cells.flat().filter((cell) => !cell.playable).length, 10);
   assert.equal(road.cells.length, 38);
   assert.deepEqual(road.exits, [
+    [[0, 0], [-1, 0]],
     [[4, 3], [5, 3]],
     [[4, 4], [5, 4]],
     [[7, 3], [6, 3]],
     [[7, 4], [6, 4]],
   ]);
   assert.equal(definition.outerPerimeter.edges.length, 40);
-  assert.deepEqual(definition.outerPerimeter.openings, []);
+  assert.deepEqual(definition.outerPerimeter.openings, [{ cell: [0, 0], neighbor: [-1, 0] }]);
+  assert.equal(definition.linearFeatures.some((feature) => feature.kind === 'river'), false);
   assert.equal(definition.impassableTransitions.length, 20);
   assert.deepEqual(definition.barriers, []);
+  // Scenic objects are appearance owned by Image 1, never gameplay footprints.
   assert.deepEqual(definition.footprints, []);
   assert.deepEqual(definition.board.projection.axisX, { screenDx: 48, screenDy: 27 });
   assert.deepEqual(definition.board.projection.axisY, { screenDx: -48, screenDy: 27 });
   assert.equal(JSON.stringify(definition).includes('riverlands'), false);
   assert.equal(JSON.stringify(definition).includes('story copy'), false);
+});
+
+test('definition generation fails closed without a saved canonical generation frame', () => {
+  const level = holdBridgeLevel();
+  const board = decodeBoard(level.boardCode);
+  delete board.predrawnGenerationFrame;
+  level.boardCode = encodeBoard(board);
+
+  assert.throws(
+    () => definitionFor(level),
+    /canonical level is missing its saved generation frame/,
+  );
 });
 
 test('definition generation fails closed when durable terrain and boardCode disagree', () => {

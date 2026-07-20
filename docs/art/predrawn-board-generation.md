@@ -17,23 +17,25 @@ npm run predrawn:prepare -- --base-url <running-vite-url> --level-id <official-l
 ```
 
 It builds the shared renderer, loads the exact saved official level, derives the
-board dimensions and semantic geometry, captures the measured top-only reference
-through Chrome, and writes the complete request under
-`tmp-shots/predrawn-preparation/<run-id>/`. It self-validates and finishes with
+board dimensions and semantic geometry, captures the saved owner-framed 16:9
+generation reference—terrain tops plus explicitly persisted and exposed
+Subterrain visible inside that frame—through Chrome, and writes the complete
+request under `tmp-shots/predrawn-preparation/<run-id>/`. It self-validates and finishes with
 `status: ready-for-generation`; it never calls an image model. Open the
 click-reachable **Pre-drawn art → Reference** tool in the Level Editor to inspect
-or download the same level-driven reference without the command.
+or download the same level-driven reference without the command. Preparation
+fails closed until the canonical saved level contains a valid generation frame.
 
 The lower-level request builder remains available for replaying an already
 materialized definition/reference pair:
 
 ```text
-npm run predrawn:build-run -- --definition <definition.json> --reference <top-only.png> --out <run-directory>
+npm run predrawn:build-run -- --definition <definition.json> --reference <generation-reference.png> --out <run-directory>
 ```
 
 The shared preflight writes the fully expanded `prompt.txt`, canonical
 `packet.json`, ordered and content-hashed `references.json`, and hashed
-`request-manifest.json`. Per ADR-0120, deterministic preparation reports
+`request-manifest.json`. Per ADR-0125, deterministic preparation reports
 `ready-for-generation` without an owner checkpoint. The artifacts remain
 inspectable for audit; mandatory owner judgment begins with the generated
 candidate on the game-owned review surface. Template prose and amendment
@@ -47,11 +49,16 @@ The first worked example is
 Every input must have one named role. Never give several references without
 stating which questions each is allowed to answer.
 
-1. **Canonical top-only image:** exact unit-free, ground-cover-free projected
-   top-surface render. It owns visible geometry and all appearance: environment,
-   materials, palette, lighting, texture language, boundary vocabulary, and
-   finish. Omit decorative vertical board skirts and cliff faces unless authored
-   gameplay height explicitly requires them.
+1. **Canonical generation-reference image:** exact unit-free, ground-cover-free
+   authored surface inside the saved owner-authored 16:9 frame, including only
+   explicitly persisted Subterrain that the canonical topology resolves onto
+   exposed active visual-terrain faces within that frame. It owns visible
+   geometry and all appearance shown by the crop: environment, materials,
+   palette, lighting, texture language, boundary vocabulary, and finish. An
+   absent face remains empty; never derive or synthesize a skirt, cliff, lip,
+   cap, or attached side strip. Authored Subterrain is appearance, not gameplay
+   height. Scenic-only art outside the saved frame has no authority in that
+   request, and the crop edge is never the gameplay perimeter.
 2. **Semantic packet:** canonical dimensions, coordinate convention, projection,
    per-address contents, linear-feature graphs, blocking edges, footprints,
    exits, the full outer grid envelope, and internal playable/non-playable
@@ -69,21 +76,37 @@ topology and gameplay meaning. State this split inside the prompt.
 
 Before generation:
 
-1. Open the generic `/predrawn-reference?levelId=<id>` owner tool or let
+1. In the Level Editor, position and zoom the authored scene beneath the visible
+   16:9 **Generation frame**, then choose **Apply to working copy**. The exact
+   preview stays open and identifies whether the crop is still preview-only,
+   saving, acknowledged by the durable working copy, or already canonical. A
+   persistent Board-panel readout repeats the frame dimensions, origin, and
+   persistence state after the picker closes. For an official level, use
+   **Review & publish** to enter the existing Status/Publish workflow; applying
+   the frame never promotes it by itself. Wait for the working-copy
+   acknowledgement, then publish before preparing the level. **Published
+   reference** deliberately reads only that canonical result. The saved value is a
+   screen-aligned rectangle in canonical projected-board coordinates, never raw
+   browser pan, zoom, CSS pixels, viewport dimensions, or device-pixel ratio.
+   Open the generic `/predrawn-reference?levelId=<id>` owner tool or let
    `predrawn:prepare` capture its explicit `capture=1` transaction. It loads the
-   canonical saved level rather than a board-specific fixture. Export a unit-free,
-   ground-cover-free, top-surfaces-only guide from that level. Preserve authored
-   terrain, linear features, barriers, and props, but
-   suppress grass tufts and other additive ground cover: those pixels create avoidable
-   occlusion and runtime may add accepted generated cover independently. Do not
-   let pieces, selection overlays, UI, decorative board skirts, or vertical
-   cliff faces enter the geometry input. A vertical side can be mistaken for an
-   extra row or column even when it is only presentation art.
-   Capture framing is derived from the renderer's complete non-background paint
-   bounds plus explicit padding, never from a hand-positioned board inside a
-   guessed viewport. Reject the export if any non-background pixel touches the
-   capture edge; all four sides must have visible clearance before the image may
-   enter a generation packet.
+   canonical saved level rather than a board-specific fixture and must fail when
+   the frame is missing, invalid, or does not fully contain the complete playable
+   outer envelope and every gameplay-authoritative reference draw represented by
+   the semantic packet. Export the exact saved crop without units or additive
+   ground cover. Inside it, preserve authored terrain tops, linear features,
+   barriers, props, and explicitly persisted Subterrain on canonically exposed
+   active visual-terrain faces. Suppress grass tufts and other additive ground
+   cover: those pixels create avoidable occlusion and runtime may add accepted
+   generated cover independently. Do not let pieces, selection overlays, UI,
+   un-authored board skirts, or invented cliff faces enter the geometry input.
+   Explicit Subterrain is authoritative appearance without gameplay height;
+   every other vertical side can be mistaken for an extra row or column even
+   when it is only presentation art. Scenic-only terrain, props, and Subterrain
+   may be clipped or excluded by the saved frame without being deleted from the
+   level. Decorative pixels may touch the crop edge; do not restore the retired
+   global all-alpha clearance rule. The crop edge is presentation only and never
+   supplies perimeter evidence.
 2. Record `columns`, `rows`, the `(x,y)` convention, and which screen-space axis
    each coordinate follows.
 3. Record the two projected grid directions as angles or vectors. Keep the
@@ -147,11 +170,17 @@ Do not use a vignette, frame, repeated texture, empty field, or low-detail borde
 
 REFERENCE ROLES — STRICT AUTHORITY ORDER
 Image 1: THE ONLY IMAGE INPUT. It is the canonical unit-free, ground-cover-free,
-TOP-SURFACES-ONLY render of this exact level. Its complete
-{{COLUMNS}}x{{ROWS}} board, projection, cell count, roads, barriers, props,
-materials, and landmark positions are authoritative. Remove visible tile seams
-from ordinary terrain in the final continuous painting. Do not invent a vertical
-board skirt, cliff face, attached side strip, extra row, or extra column.
+TERRAIN-TOPS-PLUS-EXPLICIT-SUBTERRAIN render of this exact level, clipped to the
+owner's saved 16:9 generation frame. Its complete {{COLUMNS}}x{{ROWS}} board,
+projection, cell count, required roads, barriers, props, materials, and landmark
+positions are authoritative. Scenic-only art outside this deliberate source crop
+is not an input. The rectangular Image 1 edge is not the gameplay perimeter and
+must not become a frame, cliff, void, or boundary in the output. Remove visible
+tile seams from ordinary terrain in the final continuous painting. Every visible vertical
+terrain face in Image 1 is an explicitly persisted Subterrain placement. Preserve
+those authored exposed faces as appearance without turning them into gameplay
+height. Do not invent any other vertical board skirt, cliff face, attached side
+strip, extra row, or extra column.
 
 No prior generated candidate, accepted whole-level plate, beauty render, or
 unrelated style image is supplied. The semantic packet below resolves exact
@@ -220,8 +249,11 @@ Outer-envelope LOCATION is fixed; its APPEARANCE comes from Image 1. Carry one
 coherent in-world treatment derived from Image 1 around the exact envelope.
 {{EXIT_THRESHOLD_RULES}} The outside world remains artistically
 continuous yet clearly non-playable through material, density, roughness, or
-another consistent visual distinction. The boundary is a top-surface transition,
-not a vertical side wall or a second strip of grid-aligned terrain.
+another consistent visual distinction. Do not infer, move, or reshape the outer
+envelope from the rectangular source-crop edge. The boundary does not imply a
+vertical side wall: preserve only the explicit Subterrain faces visible in Image
+1, and otherwise use a top-surface transition rather than a second strip of
+grid-aligned terrain.
 
 SCENE AND STYLE
 Extend the visual language of Image 1 into a seamless full-screen scene. Do not
@@ -236,8 +268,10 @@ watermark, or baked grid lines.
 No black box, black void, floating board, vignette frame, or hard crop.
 No unstated ramps, cliffs within the playable area, height tiers, pits, tactical
 elevation, buildings, blockers, fences, or road branches.
-No vertical board skirt, cliff face, attached side strip, extra row, or extra
-column around the playable surface.
+No un-authored vertical board skirt, cliff face, attached side strip, extra row,
+or extra column around the playable surface. Preserve explicitly authored
+Subterrain from Image 1 only on its shown exposed faces; do not spread it or
+reinterpret it as gameplay height.
 No checkerboard, patchwork quilt, square terrain swatches, cell-by-cell tinting, or
 terrain seams that reveal ordinary tile boundaries.
 Do not expand any fixed footprint beyond its declared coordinates.
@@ -301,14 +335,26 @@ output size.
 
 ## Amendment log
 
-- **2026-07-14 — self-validating preparation:** ADR-0120 removes the deterministic
+- **2026-07-19 — saved owner-authored generation frame:** ADR-0142 replaces the
+  complete-paint-bounds capture with a canonical saved 16:9 crop chosen through
+  the Level Editor instrument. Required gameplay-authoritative reference geometry
+  must remain fully inside; scenic-only art may clip or be excluded. The crop
+  edge is not the gameplay perimeter, and generated output remains a continuous
+  full scene rather than a hard-cropped board.
+- **2026-07-19 — explicit Subterrain in the generation reference:** ADR-0141
+  partially supersedes the blanket top-surfaces-only exclusion. The canonical
+  image preserves only explicitly persisted Subterrain resolved onto exposed
+  active visual-terrain faces inside the ADR-0142 frame. An absent face remains
+  empty, and prompts prohibit spreading that art into a generic skirt, cliff,
+  attached strip, or gameplay height.
+- **2026-07-14 — self-validating preparation:** ADR-0125 removes the deterministic
   owner checkpoint. A fail-closed pass reports `ready-for-generation`; mandatory
   owner judgment begins after an actual candidate exists.
 - **2026-07-14 — board-driven preparation instrument:** added one-command
   preparation from a canonical official level id, a click-reachable generic
-  top-only reference/download tool, exact graph/envelope derivation, measured
-  Chrome capture, and a fail-closed request manifest. No grid or art dimensions
-  are supplied by the operator or hard-coded per level.
+  generation-reference/download tool, exact graph/envelope derivation, measured
+  Chrome capture, and a fail-closed request manifest. No grid dimensions or
+  capture coordinates are supplied on the command line or hard-coded per level.
 - **2026-07-14 — actual image size and saved production alignment:** ADR-0118
   removes the fixed 3840x2160 acceptance gate. Promotion keeps the exact approved
   bytes and stores actual dimensions plus the exact approved whole-image
@@ -316,14 +362,16 @@ output size.
   preview identity and browser state remain outside canonical content.
 - **2026-07-14 — isolated pipeline test:** removed prior candidates, beauty
   renders, accepted plates, and unrelated style images from the default input.
-  One canonical top-only art export plus serialized semantics and text direction
-  must be sufficient.
-- **2026-07-14 — ground-cover-free art authority:** top-only exports suppress
-  grass and other additive cover while preserving terrain, roads, barriers, and
-  props. Runtime-generated cover remains an independent optional layer.
-- **2026-07-14 — measured export bounds:** top-only art exports must frame the
-  complete rendered paint bounds with padding and fail when artwork touches a
-  capture edge. Fixed viewport positioning is not a valid export method.
+  One canonical generation-reference art export plus serialized semantics and
+  text direction must be sufficient.
+- **2026-07-14 — ground-cover-free art authority:** generation-reference exports
+  suppress grass and other additive cover while preserving terrain, roads,
+  barriers, and props. Runtime-generated cover remains an independent optional
+  layer.
+- **2026-07-14 — measured export bounds (superseded by ADR-0142):** the initial
+  export framed the complete rendered paint bounds with padding and failed when
+  artwork touched a capture edge. The current path instead uses the saved
+  canonical generation frame and permits scenic-only pixels to clip.
 - **2026-07-14 — camera overscan:** separated pixel resolution from camera room.
   ADR-0118 later removed this amendment's exact 3840x2160 and centered-60%
   acceptance gates; the current recipe retains a centered safe area as prompt

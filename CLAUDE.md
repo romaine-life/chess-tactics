@@ -19,8 +19,19 @@ backend failure as the blocker.
 The stable `/editor/level?document=<opaque-id>&levelId=<id>` URL identifies its private editor document; `levelId` alone is account-local and is never the URL authority.
 Its owner, or an authenticated allowlisted administrator given that exact opaque URL, may read the
 existing document. Admin review does not grant cross-owner listing or mutation access, and a
-missing ID remains not found; hand off only a URL whose document was acknowledged by the backend.
-Authenticated edits autosave to a durable server-side working copy. **Save** promotes
+missing ID remains not found; it is presence-free and must not create an editor session, acquire or
+block a lease, heartbeat, take over, or access recovery. Hand off only a URL whose document was
+acknowledged by the backend. Authenticated owner edits occur through the attributable, single-writer
+sessions governed by [ADR-0143](docs/adr/0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md):
+the UI identifies the lease holder by authenticated name/email, tab/device relationship, and
+opened/last-seen times, while PostgreSQL owns the lease and fencing authority. An agent must not
+mistake a displayed session id or device relation for authority; page sessions use a separate
+unexposed credential whose hash is server-held and required by all session and fenced mutations.
+An agent must not silently take over the owner's editor session merely to continue work or
+verification. Only the
+owner's explicit **Take over editing** action may transfer a live or stale lease, and the displaced
+branch must be durably preserved and reachable before the new writer is reported. Authenticated
+edits autosave to a durable server-side working copy. **Save** promotes
 that copy to the canonical level, and **Discard changes** restores the working copy
 from canonical. Copying the browser URL must remain side-effect free: it does not
 save, publish, create another document, change permissions, rewrite the URL, or

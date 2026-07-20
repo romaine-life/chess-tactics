@@ -1076,16 +1076,139 @@ const MIGRATIONS = [
       ON CONFLICT (document_id, revision) DO NOTHING;
     `,
   },
+  {
+    version: 25,
+    name: 'attributed fenced level editor sessions',
+    // Content revision protects the working body from stale writes. edit_generation is
+    // deliberately separate: it is a fencing token for the one tab/device currently
+    // authorized to write, and takeover advances it without pretending the Level changed.
+    // Every displaced server-acknowledged branch is retained independently so acquiring
+    // the edit lease never destroys the prior editor's recoverable state.
+    sql: `
+      ALTER TABLE level_working_copies
+        ADD COLUMN IF NOT EXISTS edit_generation bigint NOT NULL DEFAULT 0
+        CHECK (edit_generation >= 0);
+
+      CREATE TABLE IF NOT EXISTS editor_document_edit_sessions (
+        session_id              uuid        PRIMARY KEY,
+        document_id             text        NOT NULL REFERENCES level_working_copies(document_id) ON DELETE CASCADE,
+        owner_email             text        NOT NULL,
+        actor_name              text        NOT NULL,
+        device_hash             text        NOT NULL,
+        session_key_hash        text        NOT NULL,
+        client_label            text        NOT NULL DEFAULT '',
+        state                   text        NOT NULL CHECK (state IN ('active', 'waiting', 'displaced', 'expired', 'closed')),
+        edit_generation         bigint      NOT NULL CHECK (edit_generation >= 0),
+        draft_body              jsonb       NOT NULL,
+        document_revision       bigint      NOT NULL CHECK (document_revision >= 1),
+        opened_at               timestamptz NOT NULL DEFAULT now(),
+        last_seen_at            timestamptz NOT NULL DEFAULT now(),
+        last_edit_at            timestamptz,
+        body_checkpoint_at      timestamptz NOT NULL DEFAULT now(),
+        lease_expires_at        timestamptz,
+        displaced_at            timestamptz,
+        displaced_by_session_id uuid,
+        CHECK (char_length(device_hash) = 64),
+        CONSTRAINT editor_document_edit_sessions_session_key_hash_check
+          CHECK (char_length(session_key_hash) = 64),
+        CHECK (char_length(client_label) <= 120),
+        CHECK (
+          (state = 'active' AND lease_expires_at IS NOT NULL) OR
+          state <> 'active'
+        )
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS editor_document_one_active_session_idx
+        ON editor_document_edit_sessions (document_id) WHERE state = 'active';
+      CREATE INDEX IF NOT EXISTS editor_document_sessions_document_seen_idx
+        ON editor_document_edit_sessions (document_id, last_seen_at DESC);
+
+      CREATE TABLE IF NOT EXISTS editor_document_recoveries (
+        recovery_id             uuid        PRIMARY KEY,
+        document_id             text        NOT NULL REFERENCES level_working_copies(document_id) ON DELETE CASCADE,
+        source_session_id       uuid        NOT NULL,
+        displaced_by_session_id uuid,
+        owner_email             text        NOT NULL,
+        actor_name              text        NOT NULL,
+        source_client_label     text        NOT NULL DEFAULT '',
+        body                    jsonb       NOT NULL,
+        document_revision       bigint      NOT NULL CHECK (document_revision >= 1),
+        edit_generation         bigint      NOT NULL CHECK (edit_generation >= 0),
+        capture_source          text        NOT NULL CHECK (capture_source IN ('server-acknowledged', 'displaced-client-upload')),
+        body_checkpoint_at      timestamptz NOT NULL,
+        reason                  text        NOT NULL CHECK (reason IN ('takeover', 'lease-expired', 'displaced-upload', 'pre-restore')),
+        created_at              timestamptz NOT NULL DEFAULT now(),
+        resolved_at             timestamptz
+      );
+      CREATE INDEX IF NOT EXISTS editor_document_recoveries_document_created_idx
+        ON editor_document_recoveries (document_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS editor_document_recoveries_session_created_idx
+        ON editor_document_recoveries (source_session_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS editor_document_edit_events (
+        id                      bigserial   PRIMARY KEY,
+        document_id             text        NOT NULL,
+        session_id              uuid,
+        action                  text        NOT NULL,
+        actor_email             text        NOT NULL,
+        actor_name              text        NOT NULL,
+        details                 jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        created_at              timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS editor_document_edit_events_document_idx
+        ON editor_document_edit_events (document_id, created_at DESC, id DESC);
+    `,
+  },
+  {
+    version: 26,
+    name: 'record resolved editor recovery checkpoints',
+    // Restoring a recovery does not delete or rewrite its captured branch. The
+    // nullable timestamp only records that the owner has applied it, while the
+    // immutable source body and provenance remain available until explicit delete.
+    sql: `
+      ALTER TABLE editor_document_recoveries
+        ADD COLUMN IF NOT EXISTS resolved_at timestamptz;
+    `,
+  },
+  {
+    version: 27,
+    name: 'bind editor sessions to private page keys',
+    // Any sessions created before the private bearer key existed are deliberately
+    // made unusable. Their opaque ids remain attribution, while no raw key is
+    // recoverable from the sentinel hash and their short leases expire normally.
+    sql: `
+      ALTER TABLE editor_document_edit_sessions
+        ADD COLUMN IF NOT EXISTS session_key_hash text;
+      UPDATE editor_document_edit_sessions
+         SET session_key_hash = repeat('0', 64)
+       WHERE session_key_hash IS NULL;
+      ALTER TABLE editor_document_edit_sessions
+        ALTER COLUMN session_key_hash SET NOT NULL;
+      ALTER TABLE editor_document_edit_sessions
+        DROP CONSTRAINT IF EXISTS editor_document_edit_sessions_session_key_hash_check;
+      ALTER TABLE editor_document_edit_sessions
+        ADD CONSTRAINT editor_document_edit_sessions_session_key_hash_check
+        CHECK (char_length(session_key_hash) = 64);
+    `,
+  },
 ];
 
 let pool = null;
 let dbReady = false;
 let schemaReadinessPromise = null;
 const REQUIRED_SCHEMA_MIGRATION_VERSIONS = MIGRATIONS.map((migration) => migration.version);
-const REQUIRED_SCHEMA_RELATIONS = ['level_thumbnail_derivatives', 'level_working_copy_revisions'];
+const REQUIRED_SCHEMA_RELATIONS = [
+  'level_thumbnail_derivatives',
+  'level_working_copy_revisions',
+  'editor_document_edit_sessions',
+  'editor_document_recoveries',
+  'editor_document_edit_events',
+];
 const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['level_thumbnail_derivatives', 22],
   ['level_working_copy_revisions', 24],
+  ['editor_document_edit_sessions', 25],
+  ['editor_document_recoveries', 25],
+  ['editor_document_edit_events', 25],
 ]);
 
 function buildPool() {
@@ -3730,9 +3853,20 @@ app.put('/api/levels/:id', async (req, res) => {
 // effect; only these explicit editor persistence calls mutate state (ADR-0068).
 const USER_EDITOR_WORKSPACE_ID = 'campaign';
 const EDITOR_DOCUMENT_ID_PATTERN = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|legacy-[abcdefghijkmnpqrstuvwxyz23456789]{8,24})$/i;
-const EDITOR_DOCUMENT_COLUMNS = 'document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash, created_at, updated_at';
+const EDITOR_EDIT_SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EDITOR_DEVICE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const EDITOR_SESSION_KEY_PATTERN = /^[0-9a-f]{64}$/i;
+const EDITOR_SESSION_LEASE_SECONDS = 60;
+const EDITOR_DOCUMENT_COLUMNS = 'document_id, owner_email, workspace_kind, workspace_id, level_id, body, revision, saved_revision, baseline_hash, edit_generation, created_at, updated_at';
 const EDITOR_DOCUMENT_HISTORY_RECENT_LIMIT = 200;
 const EDITOR_DOCUMENT_HISTORY_PAGE_LIMIT = 100;
+const EDITOR_EDIT_SESSION_COLUMNS = `session_id, document_id, owner_email, actor_name, device_hash, session_key_hash,
+  client_label, state, edit_generation, draft_body, document_revision, opened_at,
+  last_seen_at, last_edit_at, body_checkpoint_at, lease_expires_at, displaced_at,
+  displaced_by_session_id`;
+const EDITOR_RECOVERY_COLUMNS = `recovery_id, document_id, source_session_id,
+  displaced_by_session_id, owner_email, actor_name, source_client_label, body, document_revision,
+  edit_generation, capture_source, body_checkpoint_at, reason, created_at, resolved_at`;
 
 function editorDocumentId(raw) {
   const id = String(raw || '').trim();
@@ -3751,6 +3885,33 @@ function editorDocumentWorkspace(raw) {
 
 function editorDocumentRevision(raw) {
   return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 1 ? raw : null;
+}
+
+function editorEditGeneration(raw) {
+  return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 ? raw : null;
+}
+
+function editorEditSessionId(raw) {
+  const id = String(raw || '').trim();
+  return EDITOR_EDIT_SESSION_ID_PATTERN.test(id) ? id.toLowerCase() : '';
+}
+
+function editorDeviceId(raw) {
+  const id = String(raw || '').trim();
+  return EDITOR_DEVICE_ID_PATTERN.test(id) ? id : '';
+}
+
+function editorDeviceHash(deviceId) {
+  return crypto.createHash('sha256').update(`level-editor-device\0${deviceId}`).digest('hex');
+}
+
+function editorSessionKey(raw) {
+  const key = String(raw || '').trim();
+  return EDITOR_SESSION_KEY_PATTERN.test(key) ? key : '';
+}
+
+function editorSessionKeyHash(sessionKey) {
+  return crypto.createHash('sha256').update(`level-editor-session\0${sessionKey}`).digest('hex');
 }
 
 function editorDocumentLevel(raw, levelId, { rewriteId = false } = {}) {
@@ -3779,6 +3940,7 @@ function publicEditorDocument(row) {
     has_saved_baseline: hasSavedBaseline,
     never_saved: !hasSavedBaseline,
     baseline_conflict: Boolean(row && row.baseline_conflict),
+    edit_generation: Number(row && row.edit_generation) || 0,
     created_at: row.created_at ?? null,
     updated_at: row.updated_at ?? null,
   };
@@ -3799,6 +3961,7 @@ function publicEditorDocumentSummary(row) {
     dirty: revision !== savedRevision,
     has_saved_baseline: hasSavedBaseline,
     never_saved: !hasSavedBaseline,
+    edit_generation: Number(row && row.edit_generation) || 0,
     created_at: row.created_at ?? null,
     updated_at: row.updated_at ?? null,
   };
@@ -3819,12 +3982,104 @@ function publicEditorDocumentRevision(row) {
   };
 }
 
-function editorDocumentError(statusCode, code, row = null, details = null) {
+function publicEditorEditSession(row) {
+  if (!row) return null;
+  return {
+    session_id: row.session_id,
+    document_id: row.document_id,
+    state: row.state,
+    edit_generation: Number(row.edit_generation) || 0,
+    name: row.actor_name,
+    email: row.owner_email,
+    client_label: row.client_label || '',
+    opened_at: row.opened_at ?? null,
+    last_seen_at: row.last_seen_at ?? null,
+    last_edit_at: row.last_edit_at ?? null,
+    lease_expires_at: row.lease_expires_at ?? null,
+  };
+}
+
+function publicEditorRecovery(row) {
+  if (!row) return null;
+  return {
+    recovery_id: row.recovery_id,
+    document_id: row.document_id,
+    source_session_id: row.source_session_id,
+    displaced_by_session_id: row.displaced_by_session_id ?? null,
+    source_editor: {
+      session_id: row.source_session_id,
+      name: row.actor_name,
+      email: row.owner_email,
+      client_label: row.source_client_label || '',
+    },
+    level: isObjectRecord(row.body) ? row.body : {},
+    document_revision: Number(row.document_revision) || 0,
+    edit_generation: Number(row.edit_generation) || 0,
+    capture_source: row.capture_source,
+    body_checkpoint_at: row.body_checkpoint_at ?? null,
+    reason: row.reason,
+    created_at: row.created_at ?? null,
+    resolved_at: row.resolved_at ?? null,
+  };
+}
+
+function publicEditorAttribution(session, requesterSession, requesterDeviceHash) {
+  return {
+    session_id: session.session_id,
+    name: session.actor_name,
+    email: session.owner_email,
+    client_label: session.client_label || '',
+    opened_at: session.opened_at ?? null,
+    last_seen_at: session.last_seen_at ?? null,
+    last_edit_at: session.last_edit_at ?? null,
+    relationship: session.session_id === requesterSession?.session_id
+      ? 'this_tab'
+      : requesterDeviceHash && session.device_hash === requesterDeviceHash
+        ? 'same_device'
+        : 'other_device',
+  };
+}
+
+function publicEditorPresence(documentRow, activeSession, requesterSession, requesterDeviceHash, lastEditorSession = null) {
+  const active = activeSession
+    ? publicEditorAttribution(activeSession, requesterSession, requesterDeviceHash)
+    : null;
+  const lastEditor = !activeSession && lastEditorSession ? {
+    ...publicEditorAttribution(lastEditorSession, requesterSession, requesterDeviceHash),
+    state: lastEditorSession.state,
+    live: false,
+  } : null;
+  return {
+    document_id: documentRow.document_id,
+    edit_generation: Number(documentRow.edit_generation) || 0,
+    active_editor: active,
+    // This is durable attribution for the most recent session that actually held
+    // authority, not a presence or lease claim. Keep it structurally separate so
+    // clients cannot accidentally present a terminal session as a live writer.
+    last_editor: lastEditor,
+    can_take_over: Boolean(
+      requesterSession
+      && requesterSession.state !== 'closed'
+      && (!activeSession || activeSession.session_id !== requesterSession.session_id)
+    ),
+    // Session-bearing callers lock the document through dbLockEditorDocument,
+    // which captures this timestamp from PostgreSQL's authority clock. Keep the
+    // defensive fallback for error serialization of any legacy/non-transaction row.
+    server_time: documentRow.editor_server_time instanceof Date
+      ? documentRow.editor_server_time.toISOString()
+      : documentRow.editor_server_time || new Date().toISOString(),
+  };
+}
+
+function editorDocumentError(statusCode, code, row = null, details = null, context = {}) {
   const error = new Error(code);
   error.statusCode = statusCode;
   error.responseCode = code;
   error.row = row;
   error.details = details;
+  error.session = context.session || null;
+  error.presence = context.presence || null;
+  error.recovery = context.recovery || null;
   return error;
 }
 
@@ -3834,6 +4089,9 @@ function respondEditorDocumentError(res, error, operation) {
       error: error.responseCode,
       ...(error.details ? { details: error.details } : {}),
       ...(error.row ? { document: publicEditorDocument(error.row) } : {}),
+      ...(error.session ? { session: publicEditorEditSession(error.session) } : {}),
+      ...(error.presence ? { presence: error.presence } : {}),
+      ...(error.recovery ? { recovery: publicEditorRecovery(error.recovery) } : {}),
     });
     return;
   }
@@ -3849,6 +4107,15 @@ async function withEditorDocumentTransaction(fn) {
     await client.query('COMMIT');
     return value;
   } catch (error) {
+    if (error?.commitEditorSessionExpiry) {
+      try {
+        await client.query('COMMIT');
+      } catch (commitError) {
+        try { await client.query('ROLLBACK'); } catch { /* preserve commit error */ }
+        throw commitError;
+      }
+      throw error;
+    }
     try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
     throw error;
   } finally {
@@ -3937,10 +4204,21 @@ async function dbRestoreEditorDocumentRevision(
   documentId,
   expectedRevision,
   targetRevision,
+  sessionId,
+  editGeneration,
+  sessionKeyHash,
 ) {
   return withEditorDocumentTransaction(async (client) => {
     const current = await dbLockEditorDocument(client, ownerEmail, documentId);
-    assertEditorDocumentRevision(current, expectedRevision);
+    if (!current) throw editorDocumentError(404, 'editor_document_not_found');
+    const session = await assertActiveEditorEditSession(
+      client,
+      current,
+      sessionId,
+      editGeneration,
+      sessionKeyHash,
+    );
+    assertEditorDocumentRevision(current, expectedRevision, currentEditorSessionContext(current, session));
     const targetResult = await client.query(
       `SELECT body
          FROM level_working_copy_revisions
@@ -3964,10 +4242,19 @@ async function dbRestoreEditorDocumentRevision(
         RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
       [ownerEmail, documentId, JSON.stringify(parsed.level)],
     );
-    await dbRecordEditorDocumentRevision(client, rows[0], 'restore', {
+    const restored = await dbAnnotateEditorDocumentBaseline(rows[0], client);
+    await dbRecordEditorDocumentRevision(client, restored, 'restore', {
       restoredFromRevision: targetRevision,
     });
-    return dbAnnotateEditorDocumentBaseline(rows[0], client);
+    await dbTouchEditorSessionAfterWrite(
+      client,
+      session,
+      restored,
+      'document_history_restored',
+      current.revision,
+      { restored_from_revision: targetRevision },
+    );
+    return restored;
   });
 }
 
@@ -4005,7 +4292,7 @@ async function dbListEditorDocuments(ownerEmail, {
   await ensureDbReady();
   const { rows } = await pool.query(
     `SELECT document_id, workspace_kind, workspace_id, level_id,
-            body->>'name' AS name, revision, saved_revision, baseline_hash, created_at, updated_at
+            body->>'name' AS name, revision, saved_revision, baseline_hash, edit_generation, created_at, updated_at
        FROM level_working_copies
       WHERE owner_email = $1
         AND ($2::boolean OR workspace_kind = 'user')
@@ -4041,14 +4328,834 @@ async function dbLockEditorDocument(client, ownerEmail, documentId) {
       FOR UPDATE`,
     [ownerEmail, documentId],
   );
+  if (!rows[0]) return null;
+  const serverClock = await client.query('SELECT clock_timestamp() AS editor_server_time');
+  return { ...rows[0], editor_server_time: serverClock.rows[0].editor_server_time };
+}
+
+function assertEditorDocumentRevision(row, expectedRevision, context = {}) {
+  if (!row) throw editorDocumentError(404, 'editor_document_not_found');
+  if (Number(row.revision) !== expectedRevision) {
+    throw editorDocumentError(409, 'editor_document_revision_conflict', row, null, context);
+  }
+}
+
+function currentEditorSessionContext(documentRow, session) {
+  return {
+    session,
+    presence: publicEditorPresence(documentRow, session, session, session.device_hash),
+  };
+}
+
+async function dbGetEditorEditSession(client, ownerEmail, documentId, sessionId, { lock = false } = {}) {
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_EDIT_SESSION_COLUMNS}
+       FROM editor_document_edit_sessions
+      WHERE owner_email = $1 AND document_id = $2 AND session_id = $3
+      ${lock ? 'FOR UPDATE' : ''}`,
+    [ownerEmail, documentId, sessionId],
+  );
   return rows[0] || null;
 }
 
-function assertEditorDocumentRevision(row, expectedRevision) {
-  if (!row) throw editorDocumentError(404, 'editor_document_not_found');
-  if (Number(row.revision) !== expectedRevision) {
-    throw editorDocumentError(409, 'editor_document_revision_conflict', row);
+async function dbGetActiveEditorSession(client, documentId, { lock = false } = {}) {
+  // Callers first resolve expiry while holding the document row. Do not apply a
+  // second wall-clock predicate here: a lease crossing its deadline between the
+  // two statements must remain active for this transaction's decision, or the
+  // partial unique index would still see the old `state = 'active'` row while
+  // acquisition incorrectly tries to insert another one.
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_EDIT_SESSION_COLUMNS}
+       FROM editor_document_edit_sessions
+      WHERE document_id = $1 AND state = 'active'
+      ${lock ? 'FOR UPDATE' : ''}`,
+    [documentId],
+  );
+  return rows[0] || null;
+}
+
+async function dbGetLastAuthoritativeEditorSession(client, documentId) {
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_EDIT_SESSION_COLUMNS}
+       FROM editor_document_edit_sessions AS candidate
+      WHERE candidate.document_id = $1
+        AND candidate.state IN ('expired', 'displaced', 'closed')
+        AND EXISTS (
+          SELECT 1
+            FROM editor_document_edit_events AS authority_event
+           WHERE authority_event.document_id = candidate.document_id
+             AND authority_event.session_id = candidate.session_id
+             AND (
+               authority_event.action IN ('session_acquired', 'session_takeover')
+               OR (
+                 authority_event.action = 'session_opened'
+                 AND authority_event.details->>'state' = 'active'
+               )
+             )
+        )
+      ORDER BY candidate.edit_generation DESC, candidate.session_id DESC
+      LIMIT 1`,
+    [documentId],
+  );
+  return rows[0] || null;
+}
+
+async function dbPublicEditorPresence(
+  client,
+  documentRow,
+  activeSession,
+  requesterSession,
+  requesterDeviceHash,
+  knownLastEditorSession,
+) {
+  const lastEditorSession = activeSession
+    ? null
+    : knownLastEditorSession === undefined
+      ? await dbGetLastAuthoritativeEditorSession(client, documentRow.document_id)
+      : knownLastEditorSession;
+  return publicEditorPresence(
+    documentRow,
+    activeSession,
+    requesterSession,
+    requesterDeviceHash,
+    lastEditorSession,
+  );
+}
+
+async function dbGetLatestEditorRecovery(client, documentId, sourceSessionId) {
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_RECOVERY_COLUMNS}
+       FROM editor_document_recoveries
+      WHERE document_id = $1 AND source_session_id = $2
+      ORDER BY created_at DESC, recovery_id DESC
+      LIMIT 1`,
+    [documentId, sourceSessionId],
+  );
+  return rows[0] || null;
+}
+
+async function dbRecordEditorEditEvent(client, session, action, details = {}) {
+  await client.query(
+    `INSERT INTO editor_document_edit_events
+       (document_id, session_id, action, actor_email, actor_name, details, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, clock_timestamp())`,
+    [session.document_id, session.session_id, action, session.owner_email, session.actor_name, JSON.stringify(details)],
+  );
+}
+
+async function dbPreserveEditorSessionRecovery(client, session, displacedBySessionId, reason) {
+  const { rows } = await client.query(
+    `INSERT INTO editor_document_recoveries
+       (recovery_id, document_id, source_session_id, displaced_by_session_id,
+        owner_email, actor_name, source_client_label, body, document_revision, edit_generation,
+        capture_source, body_checkpoint_at, reason, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10,
+             'server-acknowledged', $11, $12, clock_timestamp())
+     RETURNING ${EDITOR_RECOVERY_COLUMNS}`,
+    [
+      crypto.randomUUID(),
+      session.document_id,
+      session.session_id,
+      displacedBySessionId || null,
+      session.owner_email,
+      session.actor_name,
+      session.client_label || '',
+      JSON.stringify(session.draft_body),
+      Number(session.document_revision),
+      Number(session.edit_generation),
+      session.body_checkpoint_at,
+      reason,
+    ],
+  );
+  return rows[0];
+}
+
+async function dbExpireEditorSession(client, documentRow) {
+  const { rows } = await client.query(
+    `SELECT ${EDITOR_EDIT_SESSION_COLUMNS}
+       FROM editor_document_edit_sessions
+      WHERE document_id = $1 AND state = 'active' AND lease_expires_at <= clock_timestamp()
+      FOR UPDATE`,
+    [documentRow.document_id],
+  );
+  const expired = rows[0];
+  if (!expired) return null;
+  const recovery = await dbPreserveEditorSessionRecovery(client, expired, null, 'lease-expired');
+  const updated = await client.query(
+    `UPDATE editor_document_edit_sessions
+        SET state = 'expired', displaced_at = clock_timestamp(), lease_expires_at = NULL
+      WHERE session_id = $1
+      RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+    [expired.session_id],
+  );
+  await dbRecordEditorEditEvent(client, updated.rows[0], 'session_expired', {
+    edit_generation: Number(expired.edit_generation),
+    recovery_id: recovery.recovery_id,
+  });
+  return { session: updated.rows[0], recovery };
+}
+
+async function dbEditorSessionState(client, documentRow, requesterSessionId, requesterDeviceHash, { lock = false } = {}) {
+  const expiredAuthority = await dbExpireEditorSession(client, documentRow);
+  const requesterSession = requesterSessionId
+    ? await dbGetEditorEditSession(client, documentRow.owner_email, documentRow.document_id, requesterSessionId, { lock })
+    : null;
+  const activeSession = await dbGetActiveEditorSession(client, documentRow.document_id, { lock });
+  const lastEditorSession = activeSession
+    ? null
+    : expiredAuthority?.session || await dbGetLastAuthoritativeEditorSession(client, documentRow.document_id);
+  const requesterRecovery = requesterSession
+    ? await dbGetLatestEditorRecovery(client, documentRow.document_id, requesterSession.session_id)
+    : null;
+  const recovery = expiredAuthority?.recovery
+    || requesterRecovery
+    || (lastEditorSession && lastEditorSession.session_id !== requesterSession?.session_id
+      ? await dbGetLatestEditorRecovery(client, documentRow.document_id, lastEditorSession.session_id)
+      : null);
+  return {
+    requesterSession,
+    activeSession,
+    lastEditorSession,
+    recovery,
+    presence: publicEditorPresence(
+      documentRow,
+      activeSession,
+      requesterSession,
+      requesterDeviceHash,
+      lastEditorSession,
+    ),
+  };
+}
+
+async function dbAdvanceEditorGeneration(client, documentRow) {
+  const { rows } = await client.query(
+    `UPDATE level_working_copies
+        SET edit_generation = edit_generation + 1
+      WHERE owner_email = $1 AND document_id = $2
+      RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+    [documentRow.owner_email, documentRow.document_id],
+  );
+  return { ...rows[0], editor_server_time: documentRow.editor_server_time };
+}
+
+function editorSessionKeyMatches(session, sessionKeyHash) {
+  const stored = typeof session?.session_key_hash === 'string' ? Buffer.from(session.session_key_hash, 'hex') : null;
+  const supplied = typeof sessionKeyHash === 'string' ? Buffer.from(sessionKeyHash, 'hex') : null;
+  return Boolean(stored && supplied && stored.length === supplied.length && crypto.timingSafeEqual(stored, supplied));
+}
+
+function assertEditorSessionKey(session, sessionKeyHash, documentRow = null) {
+  if (!editorSessionKeyMatches(session, sessionKeyHash)) {
+    throw editorDocumentError(403, 'editor_document_edit_session_key_invalid', documentRow);
   }
+}
+
+async function dbOpenEditorEditSession(owner, documentId, input) {
+  return withEditorDocumentTransaction(async (client) => {
+    let documentRow = await dbLockEditorDocument(client, owner.email, documentId);
+    if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
+    const expiredAuthority = await dbExpireEditorSession(client, documentRow);
+
+    const existingResult = await client.query(
+      `SELECT ${EDITOR_EDIT_SESSION_COLUMNS}
+         FROM editor_document_edit_sessions
+        WHERE session_id = $1
+        FOR UPDATE`,
+      [input.sessionId],
+    );
+    let session = existingResult.rows[0] || null;
+    if (session && (
+      session.owner_email !== owner.email
+      || session.document_id !== documentId
+      || session.device_hash !== input.deviceHash
+      || !editorSessionKeyMatches(session, input.sessionKeyHash)
+    )) {
+      throw editorDocumentError(409, 'editor_document_edit_session_id_conflict');
+    }
+    let active = await dbGetActiveEditorSession(client, documentId, { lock: true });
+    if (session?.state === 'closed') {
+      const recovery = expiredAuthority?.recovery
+        || await dbGetLatestEditorRecovery(client, documentId, session.session_id);
+      throw editorDocumentError(409, 'editor_document_session_not_active', documentRow, 'closed session ids cannot be reopened', {
+        session,
+        presence: await dbPublicEditorPresence(client, documentRow, active, session, input.deviceHash),
+        recovery,
+      });
+    }
+    const priorSessionState = session?.state || null;
+    const priorSessionGeneration = session ? Number(session.edit_generation) : null;
+    const canClaim = !active || active.session_id === input.sessionId;
+    let opened = false;
+
+    if (!session) {
+      opened = true;
+      if (canClaim) documentRow = await dbAdvanceEditorGeneration(client, documentRow);
+      const state = canClaim ? 'active' : 'waiting';
+      const { rows } = await client.query(
+        `INSERT INTO editor_document_edit_sessions
+           (session_id, document_id, owner_email, actor_name, device_hash, session_key_hash,
+            client_label, state, edit_generation, draft_body, document_revision,
+            opened_at, last_seen_at, body_checkpoint_at, lease_expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11,
+                 clock_timestamp(), clock_timestamp(), clock_timestamp(),
+                 CASE WHEN $8 = 'active' THEN clock_timestamp() + ($12::text || ' seconds')::interval ELSE NULL END)
+         RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+        [
+          input.sessionId,
+          documentId,
+          owner.email,
+          owner.name || owner.email,
+          input.deviceHash,
+          input.sessionKeyHash,
+          input.clientLabel,
+          state,
+          Number(documentRow.edit_generation),
+          JSON.stringify(documentRow.body),
+          Number(documentRow.revision),
+          EDITOR_SESSION_LEASE_SECONDS,
+        ],
+      );
+      session = rows[0];
+    } else if (canClaim && session.state !== 'active') {
+      documentRow = await dbAdvanceEditorGeneration(client, documentRow);
+      const { rows } = await client.query(
+        `UPDATE editor_document_edit_sessions
+            SET actor_name = $2,
+                client_label = $3,
+                state = 'active',
+                edit_generation = $4,
+                draft_body = $5::jsonb,
+                document_revision = $6,
+                last_seen_at = clock_timestamp(),
+                body_checkpoint_at = clock_timestamp(),
+                lease_expires_at = clock_timestamp() + ($7::text || ' seconds')::interval,
+                displaced_at = NULL,
+                displaced_by_session_id = NULL
+          WHERE session_id = $1
+          RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+        [session.session_id, owner.name || owner.email, input.clientLabel, Number(documentRow.edit_generation), JSON.stringify(documentRow.body), Number(documentRow.revision), EDITOR_SESSION_LEASE_SECONDS],
+      );
+      session = rows[0];
+    } else {
+      const { rows } = await client.query(
+        `UPDATE editor_document_edit_sessions
+            SET actor_name = $2,
+                client_label = $3,
+                last_seen_at = clock_timestamp(),
+                lease_expires_at = CASE
+                  WHEN state = 'active' THEN clock_timestamp() + ($4::text || ' seconds')::interval
+                  ELSE lease_expires_at
+                END
+          WHERE session_id = $1
+          RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+        [session.session_id, owner.name || owner.email, input.clientLabel, EDITOR_SESSION_LEASE_SECONDS],
+      );
+      session = rows[0];
+    }
+
+    if (opened) {
+      await dbRecordEditorEditEvent(client, session, 'session_opened', {
+        state: session.state,
+        edit_generation: Number(session.edit_generation),
+        client_label: session.client_label,
+      });
+    } else if (session.state === 'active' && (!active || active.session_id !== session.session_id)) {
+      await dbRecordEditorEditEvent(client, session, 'session_acquired', {
+        edit_generation: Number(session.edit_generation),
+      });
+    }
+    active = await dbGetActiveEditorSession(client, documentId);
+    let recovery = expiredAuthority?.recovery || null;
+    if (!recovery && session.state === 'active') {
+      const lastEditorSession = await dbGetLastAuthoritativeEditorSession(client, documentId);
+      if (
+        lastEditorSession?.state === 'expired'
+        && Number(lastEditorSession.edit_generation) === Number(session.edit_generation) - 1
+      ) {
+        recovery = await dbGetLatestEditorRecovery(client, documentId, lastEditorSession.session_id);
+      }
+      if (
+        !recovery
+        && priorSessionState === 'expired'
+        && priorSessionGeneration === Number(session.edit_generation) - 1
+      ) {
+        recovery = await dbGetLatestEditorRecovery(client, documentId, session.session_id);
+      }
+    }
+    recovery ||= await dbGetLatestEditorRecovery(client, documentId, session.session_id);
+    return {
+      session,
+      presence: publicEditorPresence(documentRow, active, session, input.deviceHash),
+      recovery,
+    };
+  });
+}
+
+async function dbHeartbeatEditorEditSession(owner, documentId, sessionId, sessionKeyHash) {
+  const outcome = await withEditorDocumentTransaction(async (client) => {
+    const documentRow = await dbLockEditorDocument(client, owner.email, documentId);
+    if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
+    const expiredAuthority = await dbExpireEditorSession(client, documentRow);
+    let session = await dbGetEditorEditSession(client, owner.email, documentId, sessionId, { lock: true });
+    if (!session) throw editorDocumentError(404, 'editor_document_edit_session_not_found');
+    assertEditorSessionKey(session, sessionKeyHash, documentRow);
+
+    if (session.state === 'active' && Number(session.edit_generation) === Number(documentRow.edit_generation)) {
+      const { rows } = await client.query(
+        `UPDATE editor_document_edit_sessions
+            SET actor_name = $2,
+                last_seen_at = clock_timestamp(),
+                lease_expires_at = clock_timestamp() + ($3::text || ' seconds')::interval
+          WHERE session_id = $1
+          RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+        [session.session_id, owner.name || owner.email, EDITOR_SESSION_LEASE_SECONDS],
+      );
+      session = rows[0];
+    } else if (session.state === 'waiting') {
+      const { rows } = await client.query(
+        `UPDATE editor_document_edit_sessions
+            SET actor_name = $2, last_seen_at = clock_timestamp()
+          WHERE session_id = $1
+          RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+        [session.session_id, owner.name || owner.email],
+      );
+      session = rows[0];
+    }
+
+    const active = await dbGetActiveEditorSession(client, documentId);
+    const lastEditorSession = active
+      ? null
+      : expiredAuthority?.session || await dbGetLastAuthoritativeEditorSession(client, documentId);
+    const sessionRecovery = await dbGetLatestEditorRecovery(client, documentId, session.session_id);
+    const recovery = expiredAuthority?.recovery
+      || sessionRecovery
+      || (lastEditorSession && lastEditorSession.session_id !== session.session_id
+        ? await dbGetLatestEditorRecovery(client, documentId, lastEditorSession.session_id)
+        : null);
+    const presence = publicEditorPresence(
+      documentRow,
+      active,
+      session,
+      session.device_hash,
+      lastEditorSession,
+    );
+    const errorCode = session.state === 'displaced'
+      ? 'editor_document_session_displaced'
+      : session.state === 'expired'
+        ? 'editor_document_session_expired'
+        : session.state !== 'active' && session.state !== 'waiting'
+          ? 'editor_document_session_not_active'
+          : null;
+    return { session, presence, recovery, errorCode, documentRow };
+  });
+  if (outcome.errorCode) {
+    throw editorDocumentError(409, outcome.errorCode, outcome.documentRow, null, outcome);
+  }
+  return {
+    session: outcome.session,
+    presence: outcome.presence,
+    recovery: outcome.recovery,
+  };
+}
+
+async function dbCloseEditorEditSession(ownerEmail, documentId, sessionId, sessionKeyHash) {
+  return withEditorDocumentTransaction(async (client) => {
+    const documentRow = await dbLockEditorDocument(client, ownerEmail, documentId);
+    if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
+    const expiredAuthority = await dbExpireEditorSession(client, documentRow);
+    let session = await dbGetEditorEditSession(client, ownerEmail, documentId, sessionId, { lock: true });
+    if (!session) throw editorDocumentError(404, 'editor_document_edit_session_not_found');
+    assertEditorSessionKey(session, sessionKeyHash, documentRow);
+
+    const priorState = session.state;
+    if (priorState !== 'closed') {
+      const { rows } = await client.query(
+        `UPDATE editor_document_edit_sessions
+            SET state = 'closed',
+                last_seen_at = clock_timestamp(),
+                lease_expires_at = NULL
+          WHERE session_id = $1
+          RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+        [session.session_id],
+      );
+      session = rows[0];
+      await dbRecordEditorEditEvent(client, session, 'session_closed', {
+        prior_state: priorState,
+        edit_generation: Number(session.edit_generation),
+      });
+    }
+
+    const active = await dbGetActiveEditorSession(client, documentId);
+    const recovery = expiredAuthority?.session.session_id === session.session_id
+      ? expiredAuthority.recovery
+      : await dbGetLatestEditorRecovery(client, documentId, session.session_id);
+    return {
+      session,
+      presence: {
+        ...await dbPublicEditorPresence(client, documentRow, active, session, session.device_hash),
+        can_take_over: false,
+      },
+      recovery,
+    };
+  });
+}
+
+async function dbGetEditorPresence(ownerEmail, documentId, sessionId, deviceHash, sessionKeyHash) {
+  return withEditorDocumentTransaction(async (client) => {
+    const documentRow = await dbLockEditorDocument(client, ownerEmail, documentId);
+    if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
+    const state = await dbEditorSessionState(client, documentRow, sessionId, deviceHash);
+    if (!state.requesterSession) throw editorDocumentError(404, 'editor_document_edit_session_not_found');
+    assertEditorSessionKey(state.requesterSession, sessionKeyHash, documentRow);
+    if (state.requesterSession.device_hash !== deviceHash) {
+      throw editorDocumentError(409, 'editor_document_edit_session_id_conflict', documentRow);
+    }
+    return {
+      ...state,
+      presence: state.presence,
+    };
+  });
+}
+
+async function dbTakeOverEditorSession(owner, documentId, sessionId, expectedGeneration, sessionKeyHash) {
+  return withEditorDocumentTransaction(async (client) => {
+    let documentRow = await dbLockEditorDocument(client, owner.email, documentId);
+    if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
+    const expiredAuthority = await dbExpireEditorSession(client, documentRow);
+    let requester = await dbGetEditorEditSession(client, owner.email, documentId, sessionId, { lock: true });
+    if (!requester) throw editorDocumentError(404, 'editor_document_edit_session_not_found');
+    assertEditorSessionKey(requester, sessionKeyHash, documentRow);
+    let active = await dbGetActiveEditorSession(client, documentId, { lock: true });
+    const previousTerminalAuthority = active
+      ? null
+      : expiredAuthority?.session || await dbGetLastAuthoritativeEditorSession(client, documentId);
+
+    if (requester.state === 'closed') {
+      const recovery = expiredAuthority?.recovery
+        || await dbGetLatestEditorRecovery(client, documentId, requester.session_id);
+      throw editorDocumentError(409, 'editor_document_session_not_active', documentRow, 'closed sessions cannot take over editing', {
+        session: requester,
+        presence: await dbPublicEditorPresence(client, documentRow, active, requester, requester.device_hash),
+        recovery,
+      });
+    }
+
+    if (Number(documentRow.edit_generation) !== expectedGeneration) {
+      const recovery = expiredAuthority?.recovery
+        || await dbGetLatestEditorRecovery(client, documentId, requester.session_id);
+      const presence = await dbPublicEditorPresence(client, documentRow, active, requester, requester.device_hash);
+      throw editorDocumentError(409, 'editor_document_takeover_conflict', documentRow, 'the active editor changed before takeover', { session: requester, presence, recovery });
+    }
+
+    if (active && active.session_id === requester.session_id) {
+      const { rows } = await client.query(
+        `UPDATE editor_document_edit_sessions
+            SET last_seen_at = clock_timestamp(), lease_expires_at = clock_timestamp() + ($2::text || ' seconds')::interval
+          WHERE session_id = $1
+          RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+        [requester.session_id, EDITOR_SESSION_LEASE_SECONDS],
+      );
+      requester = rows[0];
+      return {
+        session: requester,
+        presence: publicEditorPresence(documentRow, requester, requester, requester.device_hash),
+        recovery: await dbGetLatestEditorRecovery(client, documentId, requester.session_id),
+      };
+    }
+
+    let displacedRecovery = expiredAuthority?.recovery || null;
+    if (
+      !displacedRecovery
+      && !active
+      && previousTerminalAuthority?.state === 'expired'
+      && Number(previousTerminalAuthority.edit_generation) === expectedGeneration
+    ) {
+      displacedRecovery = await dbGetLatestEditorRecovery(
+        client,
+        documentId,
+        previousTerminalAuthority.session_id,
+      );
+    }
+    if (active) {
+      displacedRecovery = await dbPreserveEditorSessionRecovery(client, active, requester.session_id, 'takeover');
+      const displaced = await client.query(
+        `UPDATE editor_document_edit_sessions
+            SET state = 'displaced',
+                displaced_at = clock_timestamp(),
+                displaced_by_session_id = $2,
+                lease_expires_at = NULL
+          WHERE session_id = $1
+          RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+        [active.session_id, requester.session_id],
+      );
+      await dbRecordEditorEditEvent(client, displaced.rows[0], 'session_displaced', {
+        displaced_by_session_id: requester.session_id,
+        recovery_id: displacedRecovery.recovery_id,
+      });
+    }
+
+    documentRow = await dbAdvanceEditorGeneration(client, documentRow);
+    const activated = await client.query(
+      `UPDATE editor_document_edit_sessions
+          SET actor_name = $2,
+              state = 'active',
+              edit_generation = $3,
+              draft_body = $4::jsonb,
+              document_revision = $5,
+              last_seen_at = clock_timestamp(),
+              body_checkpoint_at = clock_timestamp(),
+              lease_expires_at = clock_timestamp() + ($6::text || ' seconds')::interval,
+              displaced_at = NULL,
+              displaced_by_session_id = NULL
+        WHERE session_id = $1
+        RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+      [requester.session_id, owner.name || owner.email, Number(documentRow.edit_generation), JSON.stringify(documentRow.body), Number(documentRow.revision), EDITOR_SESSION_LEASE_SECONDS],
+    );
+    requester = activated.rows[0];
+    await dbRecordEditorEditEvent(client, requester, 'session_takeover', {
+      prior_session_id: active?.session_id || null,
+      prior_edit_generation: expectedGeneration,
+      edit_generation: Number(documentRow.edit_generation),
+      recovery_id: displacedRecovery?.recovery_id || null,
+    });
+    return {
+      session: requester,
+      presence: publicEditorPresence(documentRow, requester, requester, requester.device_hash),
+      recovery: displacedRecovery,
+    };
+  });
+}
+
+async function assertActiveEditorEditSession(client, documentRow, sessionId, editGeneration, sessionKeyHash) {
+  const expiredAuthority = await dbExpireEditorSession(client, documentRow);
+  const session = await dbGetEditorEditSession(client, documentRow.owner_email, documentRow.document_id, sessionId, { lock: true });
+  if (session) {
+    try {
+      assertEditorSessionKey(session, sessionKeyHash, documentRow);
+    } catch (error) {
+      if (expiredAuthority) error.commitEditorSessionExpiry = true;
+      throw error;
+    }
+  }
+  const active = await dbGetActiveEditorSession(client, documentRow.document_id, { lock: true });
+  const sessionRecovery = session
+    ? await dbGetLatestEditorRecovery(client, documentRow.document_id, session.session_id)
+    : null;
+  const recovery = expiredAuthority?.recovery || sessionRecovery;
+  const presence = await dbPublicEditorPresence(
+    client,
+    documentRow,
+    active,
+    session,
+    session?.device_hash || '',
+    active ? null : expiredAuthority?.session,
+  );
+  const valid = session
+    && session.state === 'active'
+    && active?.session_id === session.session_id
+    && Number(session.edit_generation) === editGeneration
+    && Number(documentRow.edit_generation) === editGeneration;
+  if (valid) return session;
+
+  const code = session?.state === 'displaced' || (session?.state === 'active' && Number(session.edit_generation) !== Number(documentRow.edit_generation))
+    ? 'editor_document_session_displaced'
+    : session?.state === 'expired'
+      ? 'editor_document_session_expired'
+      : session?.state === 'active' && Number(session.edit_generation) !== editGeneration
+        ? 'editor_document_edit_generation_conflict'
+      : 'editor_document_session_not_active';
+  const error = editorDocumentError(409, code, documentRow, null, { session, presence, recovery });
+  // Fenced writes call this guard before making any content change. If the guard
+  // itself discovers a deadline crossing, commit only that expiry + immutable
+  // recovery before returning the rejection; otherwise the response would point
+  // at a recovery row rolled back with the failed mutation.
+  if (expiredAuthority) error.commitEditorSessionExpiry = true;
+  throw error;
+}
+
+async function dbTouchEditorSessionAfterWrite(client, session, documentRow, action, priorRevision, eventDetails = {}) {
+  const { rows } = await client.query(
+    `UPDATE editor_document_edit_sessions
+        SET draft_body = $2::jsonb,
+            document_revision = $3,
+            last_seen_at = clock_timestamp(),
+            last_edit_at = clock_timestamp(),
+            body_checkpoint_at = clock_timestamp(),
+            lease_expires_at = clock_timestamp() + ($4::text || ' seconds')::interval
+      WHERE session_id = $1 AND state = 'active'
+      RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+    [session.session_id, JSON.stringify(documentRow.body), Number(documentRow.revision), EDITOR_SESSION_LEASE_SECONDS],
+  );
+  const touched = rows[0] || session;
+  await dbRecordEditorEditEvent(client, touched, action, {
+    from_revision: Number(priorRevision),
+    to_revision: Number(documentRow.revision),
+    edit_generation: Number(documentRow.edit_generation),
+    ...eventDetails,
+  });
+  return touched;
+}
+
+async function dbListEditorRecoveries(ownerEmail, documentId) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT ${EDITOR_RECOVERY_COLUMNS}
+       FROM editor_document_recoveries
+      WHERE owner_email = $1 AND document_id = $2
+      ORDER BY created_at DESC, recovery_id DESC`,
+    [ownerEmail, documentId],
+  );
+  return rows;
+}
+
+async function dbAppendDisplacedEditorRecovery(owner, documentId, sessionId, observedRevision, observedGeneration, sessionKeyHash, level) {
+  return withEditorDocumentTransaction(async (client) => {
+    const documentRow = await dbLockEditorDocument(client, owner.email, documentId);
+    if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
+    await dbExpireEditorSession(client, documentRow);
+    const session = await dbGetEditorEditSession(client, owner.email, documentId, sessionId, { lock: true });
+    if (!session) throw editorDocumentError(404, 'editor_document_edit_session_not_found');
+    assertEditorSessionKey(session, sessionKeyHash, documentRow);
+    const state = await dbEditorSessionState(client, documentRow, sessionId, session.device_hash);
+    if (
+      !(
+        ['displaced', 'expired'].includes(session.state)
+        || (session.state === 'closed' && session.displaced_at)
+      )
+      || Number(session.edit_generation) !== observedGeneration
+    ) {
+      throw editorDocumentError(409, 'editor_document_session_not_displaced', documentRow, null, {
+        session,
+        presence: state.presence,
+        recovery: state.recovery,
+      });
+    }
+    const { rows } = await client.query(
+      `INSERT INTO editor_document_recoveries
+         (recovery_id, document_id, source_session_id, displaced_by_session_id,
+          owner_email, actor_name, source_client_label, body, document_revision,
+          edit_generation, capture_source, body_checkpoint_at, reason, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10,
+               'displaced-client-upload', clock_timestamp(), 'displaced-upload', clock_timestamp())
+       RETURNING ${EDITOR_RECOVERY_COLUMNS}`,
+      [
+        crypto.randomUUID(),
+        documentId,
+        session.session_id,
+        session.displaced_by_session_id || null,
+        session.owner_email,
+        session.actor_name,
+        session.client_label || '',
+        JSON.stringify(level),
+        observedRevision,
+        observedGeneration,
+      ],
+    );
+    await dbRecordEditorEditEvent(client, session, 'recovery_uploaded', {
+      recovery_id: rows[0].recovery_id,
+      document_revision: observedRevision,
+      edit_generation: observedGeneration,
+      capture_source: 'displaced-client-upload',
+    });
+    return {
+      recovery: rows[0],
+      session,
+      presence: state.presence,
+    };
+  });
+}
+
+async function dbDeleteEditorRecovery(
+  ownerEmail,
+  documentId,
+  recoveryId,
+  sessionId,
+  editGeneration,
+  sessionKeyHash,
+) {
+  return withEditorDocumentTransaction(async (client) => {
+    const documentRow = await dbLockEditorDocument(client, ownerEmail, documentId);
+    if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
+    const session = await assertActiveEditorEditSession(
+      client,
+      documentRow,
+      sessionId,
+      editGeneration,
+      sessionKeyHash,
+    );
+    const { rows } = await client.query(
+      `DELETE FROM editor_document_recoveries
+        WHERE recovery_id = $1 AND document_id = $2 AND owner_email = $3
+      RETURNING ${EDITOR_RECOVERY_COLUMNS}`,
+      [recoveryId, documentId, ownerEmail],
+    );
+    if (!rows[0]) throw editorDocumentError(404, 'editor_document_recovery_not_found');
+    await dbRecordEditorEditEvent(client, session, 'recovery_deleted', {
+      recovery_id: recoveryId,
+      edit_generation: editGeneration,
+    });
+    return rows[0];
+  });
+}
+
+async function dbRestoreEditorRecovery(ownerEmail, documentId, recoveryId, expectedRevision, sessionId, editGeneration, sessionKeyHash) {
+  return withEditorDocumentTransaction(async (client) => {
+    const current = await dbLockEditorDocument(client, ownerEmail, documentId);
+    if (!current) throw editorDocumentError(404, 'editor_document_not_found');
+    const session = await assertActiveEditorEditSession(client, current, sessionId, editGeneration, sessionKeyHash);
+    assertEditorDocumentRevision(current, expectedRevision, currentEditorSessionContext(current, session));
+    const recoveryResult = await client.query(
+      `SELECT ${EDITOR_RECOVERY_COLUMNS}
+         FROM editor_document_recoveries
+        WHERE recovery_id = $1 AND document_id = $2 AND owner_email = $3
+        FOR UPDATE`,
+      [recoveryId, documentId, ownerEmail],
+    );
+    const recovery = recoveryResult.rows[0];
+    if (!recovery) throw editorDocumentError(404, 'editor_document_recovery_not_found');
+    const canonical = await dbCanonicalLevel(
+      client,
+      ownerEmail,
+      { kind: current.workspace_kind, id: current.workspace_id },
+      current.level_id,
+      { lock: true },
+    );
+
+    const currentCheckpoint = {
+      ...session,
+      draft_body: current.body,
+      document_revision: current.revision,
+      body_checkpoint_at: current.updated_at,
+    };
+    const preservedCurrent = await dbPreserveEditorSessionRecovery(client, currentCheckpoint, session.session_id, 'pre-restore');
+    const { rows } = await client.query(
+      `UPDATE level_working_copies
+          SET body = $3::jsonb,
+              revision = revision + 1,
+              saved_revision = CASE
+                WHEN md5(($3::jsonb)::text) = baseline_hash AND baseline_hash = $4 THEN revision + 1
+                ELSE saved_revision
+              END,
+              updated_at = clock_timestamp()
+        WHERE owner_email = $1 AND document_id = $2
+        RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+      [ownerEmail, documentId, JSON.stringify(recovery.body), canonical.hash],
+    );
+    const restored = await dbAnnotateEditorDocumentBaseline(rows[0], client);
+    await dbRecordEditorDocumentRevision(client, restored, 'restore');
+    await dbTouchEditorSessionAfterWrite(client, session, restored, 'recovery_restored', current.revision, {
+      recovery_id: recoveryId,
+      preserved_current_recovery_id: preservedCurrent.recovery_id,
+    });
+    const resolvedRecovery = await client.query(
+      `UPDATE editor_document_recoveries
+          SET resolved_at = COALESCE(resolved_at, clock_timestamp())
+        WHERE recovery_id = $1 AND document_id = $2 AND owner_email = $3
+        RETURNING ${EDITOR_RECOVERY_COLUMNS}`,
+      [recoveryId, documentId, ownerEmail],
+    );
+    return { row: restored, recovery: resolvedRecovery.rows[0], preservedCurrent };
+  });
 }
 
 async function dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock = false } = {}) {
@@ -4083,10 +5190,6 @@ async function dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock =
   };
 }
 
-function editorDocumentIsDirty(row) {
-  return Number(row && row.revision) !== Number(row && row.saved_revision);
-}
-
 function editorDocumentBaselineChanged(row, canonical) {
   return (row && row.baseline_hash ? row.baseline_hash : null) !== (canonical && canonical.hash ? canonical.hash : null);
 }
@@ -4102,27 +5205,11 @@ async function dbReconcileEditorDocument(client, row, { lockCanonical = true } =
   const canonical = await dbCanonicalLevel(client, row.owner_email, workspace, row.level_id, { lock: lockCanonical });
   if (!editorDocumentBaselineChanged(row, canonical)) return { ...row, baseline_conflict: false };
 
-  // A clean document has no work to preserve, so follow the newer canonical
-  // Level automatically. A dirty document keeps its body and reports the
-  // divergence; only Discard may deliberately replace it.
-  if (editorDocumentIsDirty(row) || !canonical.level) {
-    return { ...row, baseline_conflict: true };
-  }
-  const parsed = editorDocumentLevel(canonical.level, row.level_id);
-  if (parsed.error) throw editorDocumentError(409, 'saved_level_invalid', row, parsed.details);
-  const { rows } = await client.query(
-    `UPDATE level_working_copies
-        SET body = $3::jsonb,
-            revision = revision + 1,
-            saved_revision = revision + 1,
-            baseline_hash = $4,
-            updated_at = now()
-      WHERE owner_email = $1 AND document_id = $2
-      RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
-    [row.owner_email, row.document_id, JSON.stringify(parsed.level), canonical.hash],
-  );
-  await dbRecordEditorDocumentRevision(client, rows[0], 'canonical-refresh');
-  return { ...rows[0], baseline_conflict: false };
+  // Loading or resolving an existing document is read-only. Even when the
+  // working copy is clean, adopting a changed canonical body would replace
+  // editor content without a session fence. Report the independent baseline
+  // conflict and leave explicit, fenced Discard as the sole adoption path.
+  return { ...row, baseline_conflict: true };
 }
 
 async function dbResolveEditorDocument(ownerEmail, workspace, levelId) {
@@ -4218,11 +5305,9 @@ async function dbCreateEditorDocument(ownerEmail, initialLevel) {
 }
 
 async function dbLoadEditorDocument(ownerEmail, documentId) {
-  return withEditorDocumentTransaction(async (client) => {
-    const row = await dbLockEditorDocument(client, ownerEmail, documentId);
-    if (!row) return null;
-    return dbReconcileEditorDocument(client, row);
-  });
+  const row = await dbGetEditorDocument(ownerEmail, documentId);
+  if (!row) return null;
+  return dbReconcileEditorDocument(pool, row, { lockCanonical: false });
 }
 
 async function dbAnnotateEditorDocumentBaseline(row, client = pool) {
@@ -4232,28 +5317,36 @@ async function dbAnnotateEditorDocumentBaseline(row, client = pool) {
   return { ...row, baseline_conflict: editorDocumentBaselineChanged(row, canonical) };
 }
 
-async function dbAutosaveEditorDocument(ownerEmail, documentId, expectedRevision, level) {
+async function dbAutosaveEditorDocument(ownerEmail, documentId, expectedRevision, level, sessionId, editGeneration, sessionKeyHash) {
   return withEditorDocumentTransaction(async (client) => {
+    const current = await dbLockEditorDocument(client, ownerEmail, documentId);
+    if (!current) throw editorDocumentError(404, 'editor_document_not_found');
+    const session = await assertActiveEditorEditSession(client, current, sessionId, editGeneration, sessionKeyHash);
+    assertEditorDocumentRevision(current, expectedRevision, currentEditorSessionContext(current, session));
+    const canonical = await dbCanonicalLevel(
+      client,
+      ownerEmail,
+      { kind: current.workspace_kind, id: current.workspace_id },
+      current.level_id,
+      { lock: true },
+    );
     const { rows } = await client.query(
       `UPDATE level_working_copies
-          SET body = $4::jsonb,
+          SET body = $3::jsonb,
               revision = revision + 1,
               saved_revision = CASE
-                WHEN md5(($4::jsonb)::text) = baseline_hash THEN revision + 1
+                WHEN md5(($3::jsonb)::text) = baseline_hash AND baseline_hash = $4 THEN revision + 1
                 ELSE saved_revision
               END,
-              updated_at = now()
-        WHERE owner_email = $1 AND document_id = $2 AND revision = $3
+              updated_at = clock_timestamp()
+        WHERE owner_email = $1 AND document_id = $2
         RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
-      [ownerEmail, documentId, expectedRevision, JSON.stringify(level)],
+      [ownerEmail, documentId, JSON.stringify(level), canonical.hash],
     );
-    if (rows[0]) {
-      await dbRecordEditorDocumentRevision(client, rows[0], 'autosave');
-      return dbAnnotateEditorDocumentBaseline(rows[0], client);
-    }
-    const current = await dbGetEditorDocument(ownerEmail, documentId, client);
-    if (!current) throw editorDocumentError(404, 'editor_document_not_found');
-    throw editorDocumentError(409, 'editor_document_revision_conflict', await dbAnnotateEditorDocumentBaseline(current, client));
+    const row = await dbAnnotateEditorDocumentBaseline(rows[0], client);
+    await dbRecordEditorDocumentRevision(client, row, 'autosave');
+    await dbTouchEditorSessionAfterWrite(client, session, row, 'document_autosaved', current.revision);
+    return row;
   });
 }
 
@@ -4339,10 +5432,12 @@ async function dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, l
   return Number(rows[0].revision);
 }
 
-async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, requestedLevel, campaignId) {
+async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, requestedLevel, campaignId, sessionId, editGeneration, sessionKeyHash) {
   return withEditorDocumentTransaction(async (client) => {
     const current = await dbLockEditorDocument(client, ownerEmail, documentId);
-    assertEditorDocumentRevision(current, expectedRevision);
+    if (!current) throw editorDocumentError(404, 'editor_document_not_found');
+    const session = await assertActiveEditorEditSession(client, current, sessionId, editGeneration, sessionKeyHash);
+    assertEditorDocumentRevision(current, expectedRevision, currentEditorSessionContext(current, session));
     const workspace = { kind: current.workspace_kind, id: current.workspace_id };
     const levelId = current.level_id;
     const level = requestedLevel || current.body;
@@ -4375,20 +5470,23 @@ async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, re
               revision = revision + 1,
               saved_revision = revision + 1,
               baseline_hash = $4,
-              updated_at = now()
+              updated_at = clock_timestamp()
         WHERE owner_email = $1 AND document_id = $2
         RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
       [ownerEmail, documentId, JSON.stringify(level), baselineHash],
     );
     await dbRecordEditorDocumentRevision(client, rows[0], 'save');
+    await dbTouchEditorSessionAfterWrite(client, session, rows[0], 'document_saved', current.revision);
     return { row: rows[0], workspaceRevision };
   });
 }
 
-async function dbDiscardEditorDocument(ownerEmail, documentId, expectedRevision) {
+async function dbDiscardEditorDocument(ownerEmail, documentId, expectedRevision, sessionId, editGeneration, sessionKeyHash) {
   return withEditorDocumentTransaction(async (client) => {
     const current = await dbLockEditorDocument(client, ownerEmail, documentId);
-    assertEditorDocumentRevision(current, expectedRevision);
+    if (!current) throw editorDocumentError(404, 'editor_document_not_found');
+    const session = await assertActiveEditorEditSession(client, current, sessionId, editGeneration, sessionKeyHash);
+    assertEditorDocumentRevision(current, expectedRevision, currentEditorSessionContext(current, session));
     const workspace = { kind: current.workspace_kind, id: current.workspace_id };
     const levelId = current.level_id;
     const canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
@@ -4401,24 +5499,26 @@ async function dbDiscardEditorDocument(ownerEmail, documentId, expectedRevision)
               revision = revision + 1,
               saved_revision = revision + 1,
               baseline_hash = $4,
-              updated_at = now()
+              updated_at = clock_timestamp()
         WHERE owner_email = $1 AND document_id = $2
         RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
       [ownerEmail, documentId, JSON.stringify(parsed.level), canonical.hash],
     );
     await dbRecordEditorDocumentRevision(client, rows[0], 'discard');
+    await dbTouchEditorSessionAfterWrite(client, session, rows[0], 'document_discarded', current.revision);
     return rows[0];
   });
 }
 
-async function dbDeleteNeverSavedEditorDocument(ownerEmail, documentId, expectedRevision, { allowOfficial = false } = {}) {
+async function dbDeleteNeverSavedEditorDocument(ownerEmail, documentId, expectedRevision, sessionId, editGeneration, sessionKeyHash, { allowOfficial = false } = {}) {
   return withEditorDocumentTransaction(async (client) => {
     const current = await dbLockEditorDocument(client, ownerEmail, documentId);
     if (!current) throw editorDocumentError(404, 'editor_document_not_found');
     if (current.workspace_kind === 'official' && !allowOfficial) {
       throw editorDocumentError(403, 'admin_required');
     }
-    assertEditorDocumentRevision(current, expectedRevision);
+    const session = await assertActiveEditorEditSession(client, current, sessionId, editGeneration, sessionKeyHash);
+    assertEditorDocumentRevision(current, expectedRevision, currentEditorSessionContext(current, session));
     // Deleting a saved-baseline document would discard its stable editor address and
     // blur the boundary between private working-copy cleanup and canonical Level deletion.
     // This operation is intentionally limited to documents that have never crossed Save.
@@ -4448,6 +5548,10 @@ async function dbDeleteNeverSavedEditorDocument(ownerEmail, documentId, expected
         'only a never-saved working copy can be deleted',
       );
     }
+    await dbRecordEditorEditEvent(client, session, 'document_deleted', {
+      revision: expectedRevision,
+      edit_generation: editGeneration,
+    });
     return rows[0];
   });
 }
@@ -4466,6 +5570,80 @@ function editorDocumentOperationRequest(req, res) {
   const documentId = editorDocumentId(req.params.documentId);
   if (!documentId) { res.status(400).json({ error: 'invalid_editor_document_id' }); return null; }
   return { documentId, raw: isObjectRecord(req.body) ? req.body : {} };
+}
+
+function editorEditSessionOpenRequest(req, res) {
+  const operation = editorDocumentOperationRequest(req, res);
+  if (!operation) return null;
+  const sessionId = editorEditSessionId(operation.raw.session_id);
+  const deviceId = editorDeviceId(operation.raw.device_id);
+  const sessionKey = editorSessionKey(operation.raw.session_key);
+  if (!sessionId || !deviceId || !sessionKey) {
+    res.status(400).json({ error: 'invalid_editor_document_edit_session' });
+    return null;
+  }
+  return {
+    ...operation,
+    sessionId,
+    deviceHash: editorDeviceHash(deviceId),
+    sessionKeyHash: editorSessionKeyHash(sessionKey),
+    clientLabel: clampText(operation.raw.client_label, '', 120),
+  };
+}
+
+function editorEditSessionOperationRequest(req, res) {
+  const operation = editorDocumentOperationRequest(req, res);
+  if (!operation) return null;
+  const sessionId = editorEditSessionId(req.params.sessionId);
+  const sessionKey = editorSessionKey(operation.raw.session_key);
+  if (!sessionId || !sessionKey) { res.status(400).json({ error: 'invalid_editor_document_edit_session' }); return null; }
+  return { ...operation, sessionId, sessionKeyHash: editorSessionKeyHash(sessionKey) };
+}
+
+function editorEditPresenceRequest(req, res) {
+  const documentId = editorDocumentId(req.params.documentId);
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  const sessionId = editorEditSessionId(raw.session_id);
+  const deviceId = editorDeviceId(raw.device_id);
+  const sessionKey = editorSessionKey(raw.session_key);
+  if (!documentId) { res.status(400).json({ error: 'invalid_editor_document_id' }); return null; }
+  if (!sessionId || !deviceId || !sessionKey) {
+    res.status(400).json({ error: 'invalid_editor_document_edit_session' });
+    return null;
+  }
+  return {
+    documentId,
+    sessionId,
+    deviceHash: editorDeviceHash(deviceId),
+    sessionKeyHash: editorSessionKeyHash(sessionKey),
+  };
+}
+
+function editorDocumentMutationAuthority(raw, res) {
+  const sessionId = editorEditSessionId(raw.edit_session_id);
+  const editGeneration = editorEditGeneration(raw.edit_generation);
+  const sessionKey = editorSessionKey(raw.edit_session_key);
+  if (!sessionId || editGeneration === null || !sessionKey) {
+    res.status(400).json({ error: 'editor_document_edit_session_required' });
+    return null;
+  }
+  return { sessionId, editGeneration, sessionKeyHash: editorSessionKeyHash(sessionKey) };
+}
+
+function editorRecoveryOperationRequest(req, res) {
+  const documentId = editorDocumentId(req.params.documentId);
+  const recoveryId = editorEditSessionId(req.params.recoveryId);
+  if (!documentId) { res.status(400).json({ error: 'invalid_editor_document_id' }); return null; }
+  if (!recoveryId) { res.status(400).json({ error: 'invalid_editor_document_recovery_id' }); return null; }
+  return { documentId, recoveryId, raw: isObjectRecord(req.body) ? req.body : {} };
+}
+
+function editorSessionResponse(result) {
+  return {
+    session: publicEditorEditSession(result.session),
+    presence: result.presence,
+    ...(result.recovery ? { recovery: publicEditorRecovery(result.recovery) } : {}),
+  };
 }
 
 function editorDocumentListRequest(req, res) {
@@ -4607,11 +5785,16 @@ app.post('/api/editor-documents/:documentId/revisions/restore', async (req, res)
     const current = await dbGetEditorDocument(user.email, input.documentId);
     if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
     if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    const authority = editorDocumentMutationAuthority(input.raw, res);
+    if (!authority) return;
     const row = await dbRestoreEditorDocumentRevision(
       user.email,
       input.documentId,
       revision,
       targetRevision,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
     );
     res.status(200).json({ document: publicEditorDocument(row) });
   } catch (error) {
@@ -4638,6 +5821,213 @@ app.get('/api/editor-documents/:documentId', async (req, res) => {
   }
 });
 
+app.post('/api/editor-documents/:documentId/edit-sessions', async (req, res) => {
+  const input = editorEditSessionOpenRequest(req, res);
+  if (!input) return;
+  const authenticated = await requireUser(req, res);
+  if (!authenticated) return;
+  try {
+    const stored = await dbGetEditorDocument(authenticated.email, input.documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, authenticated, res)) return;
+    const owner = await withDisplayName(authenticated);
+    const result = await dbOpenEditorEditSession(owner, input.documentId, input);
+    res.status(200).json(editorSessionResponse(result));
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'open edit session');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/edit-sessions/:sessionId/heartbeat', async (req, res) => {
+  const input = editorEditSessionOperationRequest(req, res);
+  if (!input) return;
+  const authenticated = await requireUser(req, res);
+  if (!authenticated) return;
+  try {
+    const stored = await dbGetEditorDocument(authenticated.email, input.documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, authenticated, res)) return;
+    const owner = await withDisplayName(authenticated);
+    const result = await dbHeartbeatEditorEditSession(owner, input.documentId, input.sessionId, input.sessionKeyHash);
+    res.status(200).json(editorSessionResponse(result));
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'heartbeat edit session');
+  }
+});
+
+app.delete('/api/editor-documents/:documentId/edit-sessions/:sessionId', async (req, res) => {
+  const input = editorEditSessionOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const stored = await dbGetEditorDocument(user.email, input.documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, user, res)) return;
+    const result = await dbCloseEditorEditSession(user.email, input.documentId, input.sessionId, input.sessionKeyHash);
+    res.status(200).json(editorSessionResponse(result));
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'close edit session');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/edit-presence', async (req, res) => {
+  const input = editorEditPresenceRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const stored = await dbGetEditorDocument(user.email, input.documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, user, res)) return;
+    const result = await dbGetEditorPresence(
+      user.email,
+      input.documentId,
+      input.sessionId,
+      input.deviceHash,
+      input.sessionKeyHash,
+    );
+    res.status(200).json(editorSessionResponse({
+      session: result.requesterSession,
+      presence: result.presence,
+      recovery: result.recovery,
+    }));
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'read edit presence');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/edit-sessions/:sessionId/takeover', async (req, res) => {
+  const input = editorEditSessionOperationRequest(req, res);
+  if (!input) return;
+  const expectedGeneration = editorEditGeneration(input.raw.expected_generation);
+  if (expectedGeneration === null) { res.status(400).json({ error: 'expected_generation_required' }); return; }
+  const authenticated = await requireUser(req, res);
+  if (!authenticated) return;
+  try {
+    const stored = await dbGetEditorDocument(authenticated.email, input.documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, authenticated, res)) return;
+    const owner = await withDisplayName(authenticated);
+    const result = await dbTakeOverEditorSession(
+      owner,
+      input.documentId,
+      input.sessionId,
+      expectedGeneration,
+      input.sessionKeyHash,
+    );
+    res.status(200).json(editorSessionResponse(result));
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'take over edit session');
+  }
+});
+
+app.get('/api/editor-documents/:documentId/recoveries', async (req, res) => {
+  const documentId = editorDocumentId(req.params.documentId);
+  if (!documentId) { res.status(400).json({ error: 'invalid_editor_document_id' }); return; }
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const stored = await dbGetEditorDocument(user.email, documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, user, res)) return;
+    const recoveries = await dbListEditorRecoveries(user.email, documentId);
+    res.status(200).json({ recoveries: recoveries.map(publicEditorRecovery) });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'list recoveries');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/edit-sessions/:sessionId/recoveries', async (req, res) => {
+  const input = editorEditSessionOperationRequest(req, res);
+  if (!input) return;
+  const revision = editorDocumentRevision(input.raw.revision);
+  const editGeneration = editorEditGeneration(input.raw.edit_generation);
+  if (revision === null || editGeneration === null) {
+    res.status(400).json({ error: 'recovery_checkpoint_required' });
+    return;
+  }
+  const authenticated = await requireUser(req, res);
+  if (!authenticated) return;
+  try {
+    const stored = await dbGetEditorDocument(authenticated.email, input.documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, authenticated, res)) return;
+    const parsed = editorDocumentLevel(input.raw.level, stored.level_id);
+    if (parsed.error) { res.status(400).json({ error: parsed.error, ...(parsed.details ? { details: parsed.details } : {}) }); return; }
+    const owner = await withDisplayName(authenticated);
+    const result = await dbAppendDisplacedEditorRecovery(
+      owner,
+      input.documentId,
+      input.sessionId,
+      revision,
+      editGeneration,
+      input.sessionKeyHash,
+      parsed.level,
+    );
+    res.status(201).json(editorSessionResponse(result));
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'append displaced recovery');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/recoveries/:recoveryId/restore', async (req, res) => {
+  const input = editorRecoveryOperationRequest(req, res);
+  if (!input) return;
+  const revision = editorDocumentRevision(input.raw.revision);
+  if (revision === null) { res.status(400).json({ error: 'revision_required' }); return; }
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const stored = await dbGetEditorDocument(user.email, input.documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, user, res)) return;
+    const authority = editorDocumentMutationAuthority(input.raw, res);
+    if (!authority) return;
+    const result = await dbRestoreEditorRecovery(
+      user.email,
+      input.documentId,
+      input.recoveryId,
+      revision,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+    res.status(200).json({
+      document: publicEditorDocument(result.row),
+      recovery: publicEditorRecovery(result.recovery),
+      preserved_current_recovery: publicEditorRecovery(result.preservedCurrent),
+    });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'restore recovery');
+  }
+});
+
+app.delete('/api/editor-documents/:documentId/recoveries/:recoveryId', async (req, res) => {
+  const input = editorRecoveryOperationRequest(req, res);
+  if (!input) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const stored = await dbGetEditorDocument(user.email, input.documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, user, res)) return;
+    const authority = editorDocumentMutationAuthority(input.raw, res);
+    if (!authority) return;
+    const recovery = await dbDeleteEditorRecovery(
+      user.email,
+      input.documentId,
+      input.recoveryId,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+    res.status(200).json({ recovery: publicEditorRecovery(recovery) });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'delete recovery');
+  }
+});
+
 app.put('/api/editor-documents/:documentId', async (req, res) => {
   const input = editorDocumentOperationRequest(req, res);
   if (!input) return;
@@ -4649,9 +6039,19 @@ app.put('/api/editor-documents/:documentId', async (req, res) => {
     const current = await dbGetEditorDocument(user.email, input.documentId);
     if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
     if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    const authority = editorDocumentMutationAuthority(input.raw, res);
+    if (!authority) return;
     const parsed = editorDocumentLevel(input.raw.level, current.level_id);
     if (parsed.error) { res.status(400).json({ error: parsed.error, ...(parsed.details ? { details: parsed.details } : {}) }); return; }
-    const row = await dbAutosaveEditorDocument(user.email, input.documentId, revision, parsed.level);
+    const row = await dbAutosaveEditorDocument(
+      user.email,
+      input.documentId,
+      revision,
+      parsed.level,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
     res.status(200).json({ document: publicEditorDocument(row) });
   } catch (error) {
     respondEditorDocumentError(res, error, 'autosave');
@@ -4666,10 +6066,18 @@ app.delete('/api/editor-documents/:documentId', async (req, res) => {
   const revision = editorDocumentRevision(input.raw.revision);
   if (revision === null) { res.status(400).json({ error: 'revision_required' }); return; }
   try {
+    const current = await dbGetEditorDocument(user.email, input.documentId);
+    if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    const authority = editorDocumentMutationAuthority(input.raw, res);
+    if (!authority) return;
     const row = await dbDeleteNeverSavedEditorDocument(
       user.email,
       input.documentId,
       revision,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
       { allowOfficial: isAdminEmail(user.email) },
     );
     res.status(200).json({ document: publicEditorDocument(row) });
@@ -4689,6 +6097,8 @@ app.post('/api/editor-documents/:documentId/save', async (req, res) => {
     const current = await dbGetEditorDocument(user.email, input.documentId);
     if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
     if (!editorDocumentRowIsAuthorized(current, user, res)) return;
+    const authority = editorDocumentMutationAuthority(input.raw, res);
+    if (!authority) return;
     let level = null;
     if (Object.hasOwn(input.raw, 'level')) {
       const parsed = editorDocumentLevel(input.raw.level, current.level_id);
@@ -4706,7 +6116,16 @@ app.post('/api/editor-documents/:documentId/save', async (req, res) => {
         return;
       }
     }
-    const saved = await dbSaveEditorDocument(user.email, input.documentId, revision, level, campaignId);
+    const saved = await dbSaveEditorDocument(
+      user.email,
+      input.documentId,
+      revision,
+      level,
+      campaignId,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
     const thumbnailAuthority = current.workspace_kind === 'official'
       ? `official:${current.workspace_id}:${current.level_id}`
       : `user:${user.email}:${current.level_id}`;
@@ -4741,7 +6160,16 @@ app.post('/api/editor-documents/:documentId/discard', async (req, res) => {
     const current = await dbGetEditorDocument(user.email, input.documentId);
     if (!current) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
     if (!editorDocumentRowIsAuthorized(current, user, res)) return;
-    const row = await dbDiscardEditorDocument(user.email, input.documentId, revision);
+    const authority = editorDocumentMutationAuthority(input.raw, res);
+    if (!authority) return;
+    const row = await dbDiscardEditorDocument(
+      user.email,
+      input.documentId,
+      revision,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
     res.status(200).json({ document: publicEditorDocument(row) });
   } catch (error) {
     respondEditorDocumentError(res, error, 'discard');

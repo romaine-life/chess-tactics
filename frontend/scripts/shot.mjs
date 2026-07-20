@@ -130,8 +130,10 @@ try {
   // Determinism: kill animations/transitions so a live screen captures identically every run.
   await page.addStyleTag({ content: `*,*::before,*::after{animation:none!important;transition:none!important;animation-duration:0s!important;caret-color:transparent!important;scroll-behavior:auto!important}` });
 
-  // Readiness: explicit gate if given, else a quick best-effort wait on window.__ready (fixtures set it).
-  await page.waitForFunction(readyExpr || 'window.__ready===true', { timeout: readyExpr ? timeout : 1200 }).catch(() => {});
+  // Readiness: an explicit gate is a fail-closed capture contract. The implicit fixture gate stays
+  // best-effort so this generic tool can still capture ordinary live routes without `window.__ready`.
+  if (readyExpr) await page.waitForFunction(readyExpr, { timeout });
+  else await page.waitForFunction('window.__ready===true', { timeout: 1200 }).catch(() => {});
   await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
   await new Promise((r) => setTimeout(r, 200));
 
@@ -179,6 +181,7 @@ try {
       await page.evaluate(() => new Promise((resolveFrame) => {
         window.requestAnimationFrame(() => window.requestAnimationFrame(resolveFrame));
       }));
+      if (readyExpr) await page.waitForFunction(readyExpr, { timeout });
       el = await page.$(select);
       if (!el) { console.error(`selector disappeared after measured viewport resize: ${select}`); process.exit(3); }
     }

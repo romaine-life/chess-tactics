@@ -17,6 +17,8 @@ Durable document and live-content tables are created by the inline migrations in
 | `campaign_workspaces` | one row per signed-in owner | `/api/campaign-workspace` | sign-in required |
 | `level_working_copies` | one durable working copy per signed-in owner + workspace + level | `/api/editor-documents` | sign-in required; official workspaces also require admin |
 | `level_working_copy_revisions` | retained checkpoints for each durable working copy | `/api/editor-documents/:id/revisions` | owner only; restore requires current CAS revision |
+| `editor_document_edit_sessions` | attributable owner page sessions plus the document's current lease and fencing epoch | `/api/editor-documents/:documentId/...` | document owner only; cross-owner admin review is excluded |
+| `editor_document_recoveries` | immutable, owner-reachable displaced and recovery snapshots | `/api/editor-documents/:documentId/...` | document owner only |
 | `campaigns` | per signed-in owner (`PK (owner_email, id)`) | `/api/campaigns`, `/api/campaigns/:id`, `/api/campaigns/:id/levels` | sign-in required |
 | `design_portfolios` | global, by id | `/api/design-portfolios/:id` | GET public, PUT requires sign-in (designer) |
 | `prop_seats` | one complete global prop geometry/tuning document (`default`) | `/api/prop-seats/default` | GET public, PUT requires admin |
@@ -49,7 +51,7 @@ plate-specific paint/erase artifact is not authorized to enter `boardCode`, a
 working-copy-only field, or browser-local runtime state without a separate
 persistence decision.
 
-## Level editor working copies
+## Level editor working copies and sessions
 
 The Level Editor uses a normal private document model, not a public-link map
 store. `level_working_copies` holds the user's latest acknowledged editing
@@ -65,7 +67,9 @@ this is editor initialization, never an effect of copying. A direct
 `document_id` for an ordinary account. An authenticated allowlisted administrator may instead
 read an existing row by that exact opaque ID for review (ADR-0132). This exception does not apply
 to the owner-scoped document list, resolve/create, autosave, Save, Discard, or Delete, and an
-unknown or deleted ID still returns not found.
+unknown or deleted ID still returns not found. It also does not create an editor session or
+presence, acquire or block a writer lease, take over, enumerate recovery, or restore a branch
+(ADR-0143).
 
 `GET /api/editor-documents` is the private, authenticated recent-document
 index. Dirty work is ordered before clean documents, and `status=dirty` or
@@ -84,60 +88,150 @@ displayed summaries through the existing owner-scoped full-document GET and rend
 the working Level as a private resume preview. The summary index remains body-free.
 This preview does not make autosaved work canonical, playable, shared, or public.
 
-Each autosave is a compare-and-swap write. The client sends the last server
-`revision` it observed; a stale tab receives `409
-editor_document_revision_conflict` plus the current server document instead of
-silently overwriting newer work. `saved_revision` records the working-copy
-revision known to match the canonical workspace Level. `baseline_hash` records
-the deterministic PostgreSQL `md5(level_jsonb::text)` identity of the canonical
-Level that working copy was based on. On load/resolve, a clean working copy
-automatically follows a newer canonical Level. A dirty working copy is preserved
-and returns `baseline_conflict: true`; Save then returns `409
-editor_document_baseline_conflict` with that intact document instead of blindly
-overwriting the external canonical change. Discard deliberately adopts the
-current canonical Level and resets the baseline. Autosave changes only the
-working body and revision, never its canonical baseline (and keeps the document
-clean when the submitted body exactly matches that baseline).
+Per [ADR-0143](adr/0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md),
+every owner-opened editor page registers an attributable session. Its identity comes from the
+authenticated display name and email, not client-supplied text. The server also records an opaque
+page-session id, a one-way browser-profile/device relationship, best-effort presentation metadata,
+`opened_at`, and server-observed `last_seen_at`. The presentation label includes the editor surface,
+origin host/port, and recognizable browser/OS or embedding shell when the user agent exposes it,
+so `localhost:5180` in Chrome and the same route in an Electron/Codex window are not collapsed into
+an anonymous claim. A matching relation supports "another tab in this browser profile"; a
+non-match is conservatively "another browser profile or device", not a claimed machine name,
+fingerprint, or authorization token.
+The public page-session id is attribution, not a bearer token. Each page separately creates a
+high-entropy session credential, sends it only in request bodies, and the server stores only its
+cryptographic hash. Opening/retrying, heartbeat, presence binding, close, takeover, displaced
+recovery upload, and every mutation fence must prove that credential; knowing a displayed session
+id or device relation cannot close or impersonate its editor.
+The editor's persistent session status presents that attribution and those times whenever another
+session holds or most recently held authority. A browser draft or a revision number alone never
+creates a person or live-presence claim. Relative opened/last-seen labels are calculated from the
+presence response's server clock rather than trusting a potentially skewed browser clock. When no
+lease is live, `last_editor` carries the most recent real authority holder separately from
+`active_editor`, with `live: false` and its terminal state; the UI must say "most recently" and
+"no live heartbeat" rather than implying that historical attribution still has the level open.
+
+Exactly one session may hold a document's writer lease. The lease and monotonically increasing
+fencing epoch are PostgreSQL-authoritative, so heartbeats and takeovers remain coherent across
+different backend pods and local development servers. SSE, polling, process memory,
+`BroadcastChannel`, and browser storage may notify or refresh the UI but cannot grant or extend
+authority. A non-holder follows the acknowledged working copy read-only.
+
+Closed sessions are terminal: their displayed id and credential cannot be reopened. An acknowledged
+same-tab SPA handoff final-autosaves, closes the lease, and rotates the page credential before the
+destination mounts; a query navigation to a different document remounts the document-owning editor
+lifecycle. Browser/process termination that cannot finish that handshake is handled only by lease
+expiry. A duplicated browser tab must first prove exclusive ownership of its copied page identity
+(Web Locks where available, with collision notification as a fallback) or rotate to a fresh id and
+credential before opening a server session; the notification primitive never grants authority.
+
+Every operation that can replace, rename, promote, discard, or delete working content must prove
+the current session and fencing epoch in addition to its compare-and-swap revision. An expired,
+displaced, or already in-flight old session is rejected even when its submitted document revision
+matches. Owner management outside an open editor must acquire the same authority or fail closed
+while another writer is live; rename, Save, Discard, or Delete cannot bypass the fence.
+
+The owner may transfer a live lease only through an explicit, attributable **Take over editing**
+action. Its transaction locks the authority, writes an immutable recovery snapshot of the
+displaced session's latest server-known branch, advances the fencing epoch, and assigns the new
+holder. Success returns both the new authority and the recovery identity. The displaced client
+becomes read-only. If still alive with a newer local candidate, it may upload that body only as a
+new immutable snapshot in its recovery branch; that upload cannot alter the working copy,
+canonical Level, lease, or epoch. Claiming an expired lease similarly preserves the preceding
+server-known branch before granting new authority.
+
+Recovery snapshots remain owner-scoped and reachable from the document's Status/recovery UI until
+the owner explicitly removes them. Each records the source session, source kind, body checkpoint
+time, observed revision, and fencing epoch. Restoring requires the current lease, first snapshots
+the current working branch, then writes the chosen body as a new fenced working-copy revision.
+Deleting a recovery is irreversible and therefore also rechecks the current lease and fencing epoch
+after confirmation; a tab displaced while its confirmation is open cannot remove the snapshot.
+Recovery never creates a second working document or canonical Level and never rewrites historical
+snapshots.
+
+Each autosave remains a compare-and-swap write. The client sends the last server `revision` it
+observed along with its current session authority; a stale or unfenced write receives a conflict
+plus the current server authority/document instead of silently overwriting newer work.
+`saved_revision` records the working-copy revision known to match the canonical workspace Level.
+`baseline_hash` records the deterministic PostgreSQL `md5(level_jsonb::text)` identity of the
+canonical Level that working copy was based on. Loading or resolving an existing working copy never
+changes its body or revision. When its canonical Level has changed, the working copy is preserved
+and returns `baseline_conflict: true` whether that copy is clean or dirty; Save then returns
+`409 editor_document_baseline_conflict` with that intact document instead of blindly overwriting
+the external canonical change. A current, fenced writer may deliberately Discard to adopt the
+current canonical Level and reset the baseline. Autosave changes only the working body and revision,
+never its canonical baseline (and keeps the document clean when the submitted body exactly matches
+that baseline). A newly created working copy is initialized from the current canonical Level.
 The client compares cloud content through the editor's canonical projection before deciding an
 autosave is needed. Merely opening a valid stored Level whose serialization normalizes differently
 must not dirty the working copy or create a new revision.
 
+Live authority, browser recovery, canonical baseline conflict, and an unexpected document revision
+are separate conditions. A baseline conflict offers compare/rebase/discard, not takeover. A browser
+recovery offers review/preserve/keep-cloud choices and is not automatically applied after takeover.
+An unexpected revision preserves the local candidate and reloads authority; it does not invent a
+live session identity when the server has none.
+
 Browser storage is only a crash/offline fallback. Signed-in entries are keyed and
-payload-validated by account plus opaque document id and remember the cloud revision
-they observed, so switching accounts or replaying an old Test-return URL cannot upload
-one document's recovery into another. Test-return board parameters are removed from the
-address after that exact snapshot is acknowledged; they are not a second document store.
-An autosave error or conflict interrupts every Level Editor layer. When an older browser
-recovery is preserved, **Keep recovered work** clears the recovery marker only if that scoped
-entry still matches the exact cloud revision and signature on screen, then resumes the ordinary
-compare-and-swap autosave. A concurrent newer server write conflicts again rather than being
-overwritten; choosing the recovery does not Save or publish it.
+payload-validated by account, opaque document id, and page-session id and remember the server
+revision and fencing epoch they observed plus their local write time. Two tabs therefore cannot
+overwrite each other's recovery, and no local entry grants a lease. The retired singleton
+account-plus-document key may be consumed once into a session-scoped recovery and is then deleted;
+there is no continuing compatibility reader, writer, or fallback. Switching accounts or replaying
+an old Test-return URL cannot upload one document's recovery into another. Test-return board
+parameters are removed from the address after that exact snapshot is acknowledged; they are not a
+second document store.
 
-Each acknowledged working-copy update also records the resulting complete Level in
+An autosave error or conflict interrupts every Level Editor layer. Accepting an older browser
+recovery clears its conflict marker only when that exact session-scoped entry still matches the
+cloud revision and signature on screen, then resumes the ordinary fenced compare-and-swap autosave.
+A concurrent newer server write conflicts again rather than being overwritten; choosing the
+recovery does not Save or publish it. The editor can download the exact browser recovery and current
+cloud working copy as JSON without mutating either side.
+
+A session-scoped browser draft may mount automatically only while the page still holds the same
+server fencing epoch. A candidate from an older/displaced epoch stays in the recovery UI while the
+acknowledged cloud body remains visible. A Test/route snapshot may auto-mount only for the current
+writer and only when its exact document revision still matches; a follower or mismatched revision
+archives it separately and does not cover the cloud board. The one-shot route envelope remains in
+the URL until that loaded snapshot is acknowledged, so a crash cannot destroy its last copy.
+
+`last_seen_at` proves only that the server heard a heartbeat; it does not prove that the session's
+latest RAM state was captured. Recovery reports the separate body-checkpoint time and whether the
+source was an acknowledged server body or a later displaced-client upload. Edits that existed only
+in a dead tab's RAM and reached neither server nor session-scoped browser storage are unrecoverable,
+and no status may claim otherwise.
+
+Each acknowledged working-copy mutation also records the resulting complete Level in
 `level_working_copy_revisions` inside the same transaction. Retention keeps the newest 200
-revisions, one newest checkpoint per UTC day, and every explicit lifecycle boundary. The owner-only
-history endpoint returns body-free summaries. Restore requires both the current document revision
-and a retained target revision; it applies that body as a new working-copy revision, preserving the
-version it replaced and leaving the canonical saved Level unchanged. ADR-0132 direct-review admins
-cannot list or restore another owner's history. The editor can download its exact scoped browser
-recovery and current cloud working copy as JSON without mutating either side.
+revisions, the newest checkpoint from each UTC day, and every explicit lifecycle boundary. The
+owner-only history endpoint returns body-free summaries. Restore requires the current document
+revision, a retained target revision, and the current writer session and fencing epoch; it applies
+that body as a new working-copy revision, preserving the version it replaced and leaving the
+canonical saved Level unchanged. ADR-0132 direct-review admins cannot list or restore another
+owner's history.
 
-- `PUT /api/editor-documents/:documentId` updates only the working copy.
-- `GET /api/editor-documents/:documentId/revisions` lists retained body-free checkpoints.
-- `POST /api/editor-documents/:documentId/revisions/restore` CAS-restores a retained body as a new
-  private working-copy revision; it never promotes that body to the canonical workspace.
+- `PUT /api/editor-documents/:documentId` updates only the working copy and requires the current
+  owner session, fencing epoch, and document revision.
+- `GET /api/editor-documents/:documentId/revisions` lists retained body-free checkpoints for the
+  owner.
+- `POST /api/editor-documents/:documentId/revisions/restore` restores a retained body as a new
+  private working-copy revision and requires the current owner session, fencing epoch, and document
+  revision; it never promotes that body to the canonical workspace.
 - `POST /api/editor-documents/:documentId/save` transactionally promotes the
   working copy (or the exact Level supplied with the Save click) into the
   account campaign workspace; admins may explicitly target an official
   workspace. It then advances both revision values together and returns the
   canonical `workspace_revision` from that same transaction, so the caller's
-  next whole-workspace CAS does not conflict with its own Level Editor Save.
+  next whole-workspace CAS does not conflict with its own Level Editor Save. The owning editor
+  session and fence remain required; ADR-0132 review access does not authorize this operation.
 - `POST /api/editor-documents/:documentId/discard` transactionally replaces the
   working copy with the current canonical saved Level and advances both
-  revision values together.
+  revision values together. It requires the owning editor session and fence.
 - `DELETE /api/editor-documents/:documentId` compare-and-swap deletes only a
   never-saved working copy. It rejects saved-baseline documents and never deletes
-  a canonical Level; saved-backed cleanup uses Discard instead.
+  a canonical Level; saved-backed cleanup uses Discard instead. It must also honor the writer
+  lease rather than deleting beneath a live editor.
 
 Whole-workspace writers use their own compare-and-swap token as well. `GET
 /api/campaign-workspace` returns `revision`; its PUT must send that revision

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -8,6 +9,7 @@ import {
 } from './prepare-predrawn-generation-run.mjs';
 
 const frontendRoot = path.resolve('C:/work/chess-tactics/frontend');
+const shotSource = readFileSync(new URL('./shot.mjs', import.meta.url), 'utf8');
 
 function holdBridgeOptions(overrides = {}) {
   return {
@@ -42,7 +44,7 @@ describe('single-command pre-drawn preparation', () => {
     expect(plan.steps.map((step) => step.name)).toEqual([
       'Build the shared board renderer',
       'Export the canonical level definition',
-      'Capture the canonical top-only reference',
+      'Capture the canonical generation reference',
       'Build and validate the generation request',
     ]);
     expect(plan.referenceUrl).toBe(
@@ -115,7 +117,9 @@ describe('single-command pre-drawn preparation', () => {
     const runCommand = vi.fn(async (step) => executed.push(step.name));
     const readFile = vi.fn(async () => JSON.stringify({
       runId: plan.runId,
+      levelId: plan.levelId,
       status: 'ready-for-generation',
+      referenceViewportSha256: 'a'.repeat(64),
     }));
 
     const result = await executePreparationPlan(plan, { runCommand, readFile });
@@ -135,7 +139,50 @@ describe('single-command pre-drawn preparation', () => {
     });
     await expect(executePreparationPlan(plan, {
       runCommand: async () => {},
-      readFile: async () => JSON.stringify({ runId: plan.runId, status: 'generated' }),
+      readFile: async () => JSON.stringify({
+        runId: plan.runId,
+        levelId: plan.levelId,
+        status: 'generated',
+        referenceViewportSha256: 'a'.repeat(64),
+      }),
     })).rejects.toThrow(/must be ready-for-generation/);
+  });
+
+  it('fails closed when capture and definition resolve different canonical levels', async () => {
+    const plan = buildPreparationPlan(holdBridgeOptions(), {
+      frontendRoot,
+      npmCommand: 'npm-test',
+      nodeCommand: 'node-test',
+    });
+    await expect(executePreparationPlan(plan, {
+      runCommand: async () => {},
+      readFile: async () => JSON.stringify({
+        runId: plan.runId,
+        levelId: 'off-l-fortress-gate',
+        status: 'ready-for-generation',
+        referenceViewportSha256: 'a'.repeat(64),
+      }),
+    })).rejects.toThrow(/level id does not match/);
+  });
+
+  it('fails closed when the built request omits generation-frame provenance', async () => {
+    const plan = buildPreparationPlan(holdBridgeOptions(), {
+      frontendRoot,
+      npmCommand: 'npm-test',
+      nodeCommand: 'node-test',
+    });
+    await expect(executePreparationPlan(plan, {
+      runCommand: async () => {},
+      readFile: async () => JSON.stringify({
+        runId: plan.runId,
+        levelId: plan.levelId,
+        status: 'ready-for-generation',
+      }),
+    })).rejects.toThrow(/missing the validated generation-frame hash/);
+  });
+
+  it('makes an explicit screenshot readiness gate fatal', () => {
+    expect(shotSource).toContain('if (readyExpr) await page.waitForFunction(readyExpr, { timeout });');
+    expect(shotSource).not.toMatch(/waitForFunction\(readyExpr[^\n]*\.catch/);
   });
 });

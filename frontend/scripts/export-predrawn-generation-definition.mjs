@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const OFFICIAL_WORKSPACE_PATH = '/api/official-campaigns/default';
+const DRAWABLE_CATALOG_PATH = '/api/drawable-catalog';
 const LEVEL_ID_PATTERN = /^off-l-[a-z]+(?:-[a-z]+)*$/;
 const ARGUMENTS = new Set([
   'base-url',
@@ -117,7 +118,7 @@ export function parseArgs(argv) {
     runId,
     referenceSourceSlot: requiredString(
       raw['reference-source-slot']
-        ?? `canonical-level-export/${levelId}/top-only-no-cover`,
+        ?? `canonical-level-export/${levelId}/authored-surface-no-cover`,
       '--reference-source-slot',
     ),
     provider: requiredString(raw.provider ?? 'openai', '--provider'),
@@ -182,7 +183,42 @@ export async function fetchCanonicalOfficialLevel({ baseUrl, levelId, fetchImpl 
   };
 }
 
-function loadDefinitionBuilder() {
+export async function fetchLiveDrawableCatalog({ baseUrl, fetchImpl = fetch }) {
+  const endpoint = new URL(DRAWABLE_CATALOG_PATH, parseBaseUrl(baseUrl)).href;
+  let response;
+  try {
+    response = await fetchImpl(endpoint, {
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
+  } catch (error) {
+    fail(`could not fetch ${endpoint}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!response || typeof response.ok !== 'boolean') fail('fetch returned an invalid response');
+  if (!response.ok) {
+    const detail = await responseText(response);
+    fail(`${endpoint} returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
+  }
+
+  let catalog;
+  try {
+    catalog = await response.json();
+  } catch {
+    fail(`${endpoint} did not return valid JSON`);
+  }
+  if (!isRecord(catalog)
+    || catalog.schemaVersion !== 1
+    || !Number.isSafeInteger(catalog.revision)
+    || catalog.revision < 0
+    || (catalog.updatedAt !== null && typeof catalog.updatedAt !== 'string')
+    || !Array.isArray(catalog.assets)) {
+    fail(`${endpoint} returned an invalid drawable catalog header`);
+  }
+
+  return { endpoint, catalog };
+}
+
+function loadBoardRender() {
   let boardRender;
   try {
     boardRender = require('@chess-tactics/board-render');
@@ -194,30 +230,59 @@ function loadDefinitionBuilder() {
   if (typeof boardRender.buildPredrawnGenerationDefinition !== 'function') {
     fail('the built board-render package does not export buildPredrawnGenerationDefinition; rebuild it');
   }
-  return boardRender.buildPredrawnGenerationDefinition;
+  if (typeof boardRender.applyDrawableCatalog !== 'function') {
+    fail('the built board-render package does not export applyDrawableCatalog; rebuild it');
+  }
+  return boardRender;
 }
 
 export async function exportPredrawnGenerationDefinition(options, dependencies = {}) {
+  const fetchImpl = dependencies.fetchImpl ?? fetch;
   const canonical = await fetchCanonicalOfficialLevel({
     baseUrl: options.baseUrl,
     levelId: options.levelId,
-    fetchImpl: dependencies.fetchImpl ?? fetch,
+    fetchImpl,
   });
-  const buildDefinition = dependencies.buildDefinition ?? loadDefinitionBuilder();
+  const drawableCatalog = await fetchLiveDrawableCatalog({
+    baseUrl: options.baseUrl,
+    fetchImpl,
+  });
+  let loadedBoardRender;
+  const boardRender = () => {
+    loadedBoardRender ??= loadBoardRender();
+    return loadedBoardRender;
+  };
+  const applyDrawableCatalog = dependencies.applyDrawableCatalog ?? boardRender().applyDrawableCatalog;
+  const buildDefinition = dependencies.buildDefinition ?? boardRender().buildPredrawnGenerationDefinition;
+  try {
+    applyDrawableCatalog(drawableCatalog.catalog);
+  } catch (error) {
+    fail(
+      `could not apply live drawable catalog from ${drawableCatalog.endpoint}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   const definition = buildDefinition(canonical.level, {
     runId: options.runId,
     referenceSourceSlot: options.referenceSourceSlot,
     provider: options.provider,
     model: options.model,
   });
-  if (!isRecord(definition) || definition.levelId !== options.levelId) {
+  if (
+    !isRecord(definition)
+    || definition.schemaVersion !== 3
+    || definition.levelId !== options.levelId
+    || !isRecord(definition.reference)
+    || !isRecord(definition.reference.viewport)
+  ) {
     fail('board-render returned an invalid or mismatched definition');
   }
 
   const definitionJson = stableJson(definition, true);
   const levelCanonicalJson = stableJson(canonical.level);
+  const drawableCatalogCanonicalJson = stableJson(drawableCatalog.catalog);
+  const viewportCanonicalJson = stableJson(definition.reference.viewport);
   const provenance = {
-    schemaVersion: 1,
+    schemaVersion: 3,
     kind: 'predrawn-generation-definition-provenance',
     source: {
       kind: 'canonical-official-campaign-workspace',
@@ -228,9 +293,25 @@ export async function exportPredrawnGenerationDefinition(options, dependencies =
       storeSchemaVersion: canonical.workspace.storeSchemaVersion,
       updatedAt: canonical.workspace.updatedAt,
     },
+    drawableCatalog: {
+      kind: 'live-drawable-catalog',
+      endpoint: drawableCatalog.endpoint,
+      schemaVersion: drawableCatalog.catalog.schemaVersion,
+      revision: drawableCatalog.catalog.revision,
+      updatedAt: drawableCatalog.catalog.updatedAt,
+      sha256: sha256(Buffer.from(drawableCatalogCanonicalJson, 'utf8')),
+      hashEncoding: 'json-object-keys-sorted-recursively-v1',
+    },
     level: {
       id: options.levelId,
       sha256: sha256(Buffer.from(levelCanonicalJson, 'utf8')),
+      hashEncoding: 'json-object-keys-sorted-recursively-v1',
+    },
+    referenceViewport: {
+      kind: 'canonical-level-predrawn-generation-frame',
+      source: 'level.boardCode.predrawnGenerationFrame',
+      ...definition.reference.viewport,
+      sha256: sha256(Buffer.from(viewportCanonicalJson, 'utf8')),
       hashEncoding: 'json-object-keys-sorted-recursively-v1',
     },
     definition: {
