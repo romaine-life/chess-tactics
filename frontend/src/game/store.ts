@@ -309,6 +309,8 @@ export interface SkirmishState {
    *  input is gated to `net.localSide` instead of 'player'. */
   net: NetState | null;
   newSkirmish: (opts: SkirmishOptions) => void;
+  /** Begin a deferred player's clock once the playable surface has painted. */
+  activateClock: () => void;
   /** Start a multiplayer match: build the shared (level, seed) board, record which
    *  side this client controls, disable the local AI + clock, and route local moves
    *  to the relay sink. Both clients call this with the SAME level + seed. */
@@ -340,7 +342,7 @@ export interface SkirmishState {
   concludeNet: (winner: Winner, reason: 'resign' | NetGameResultReason) => void;
   /** Rehydrate a match saved to disk (see matchPersistence) — used to resume the
    * live board after a page reload instead of starting a fresh game. */
-  resumeMatch: (match: PersistedMatch) => void;
+  resumeMatch: (match: PersistedMatch, options?: { deferClockStart?: boolean }) => void;
   select: (id: string | null) => void;
   focus: (id: string | null) => void;
   movesForSelected: () => Move[];
@@ -928,7 +930,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail, selectedId, focusedId: selectedId, log, objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, pendingPromotion: null, sessionEpoch: epoch, net: null, premoves: [], premoveInputOpen: false });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
-    startClock();
+    if (!opts.deferClockStart) startClock();
     // "Units come onto the board": a soft staggered roll-call as the player's force
     // deploys. Each unit sounds the terrain it lands on (softer, gain 0.7) layered
     // with the authored "arrival" thump (playArrival) — the landing.mp3 that plays
@@ -1156,7 +1158,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     });
   },
 
-  resumeMatch: (match) => {
+  activateClock: () => startClock(),
+
+  resumeMatch: (match, options) => {
     const epoch = beginSession();
     const env = envFor(match.game);
     const victoryOverride = match.victoryOverride ?? null;
@@ -1204,7 +1208,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       testMode: false,
       testMinCpuDelayMs: 0,
     });
-    startClock();
+    if (!options?.deferClockStart) startClock();
     // If the reload caught the game mid enemy-reply (the player had just moved, the
     // turn was handed to 'enemy', but the staged setTimeout died with the old page),
     // re-stage it — otherwise the board soft-locks: player input is locked on the

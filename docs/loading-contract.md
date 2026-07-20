@@ -46,8 +46,11 @@ The required representative traces are cold and warm versions of:
 
 ## Implemented baseline
 
-- Shell startup hydrates its required live authorities, layout font, and installed chrome
-  before App's first commit. Critical failure stays on one explicit retry surface.
+- Shell startup begins its layout-font request from the initial HTML and hydrates its
+  required live authorities and installed chrome before App's first commit. Visible
+  startup copy remains hidden until that final face is verified, so fallback-font text
+  is never an intermediate loading frame. Critical failure stays on one explicit retry
+  surface.
 - Canonical level summaries project immutable Blob-backed list-thumbnail URLs. Missing or
   stale derivatives are generated server-side and published content-addressably; ordinary
   player lists never reconstruct boards in the browser. Derivative freshness is a pure
@@ -55,9 +58,17 @@ The required representative traces are cold and warm versions of:
   authority revisions; it never depends on mutable renderer-process state.
 - Initially presented level cards are one surface: the list remains hidden and inert until
   every expected thumbnail has painted, or it presents one retryable error.
+- The complete Play selector is one DOM surface: canonical hydration, rendered image
+  consumers, and computed CSS image consumers settle before its columns reveal together.
+- The top-level installed Play destination is `/play/select/skirmish`. Opening it from
+  the main menu preserves the already-painted homepage scene; it does not unmount the
+  menu family or route through the bare `/play` battlefield while the selector loads.
 - Terrain and scene canvases share decoded image records and acknowledge their actual first
   composition to the board boundary. The board reveals only after terrain, barrier, and
   scene acknowledgements and a browser paint opportunity.
+- A playable board includes its first-frame HUD and title controls. The battle clock remains
+  paused until board compositors and HUD resources have painted and the complete surface is
+  revealed; network or asset latency is never charged as player thinking time.
 - Readiness timeouts were removed from menu, route, screen, and board boundaries. A failed
   critical resource is an error, never synthetic readiness.
 

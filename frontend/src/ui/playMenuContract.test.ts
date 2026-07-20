@@ -14,6 +14,8 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(mainMenu).not.toContain("href: '/campaign'");
     expect(mainMenu).not.toContain("'solo-skirmish': '/skirmish'");
     expect(mainMenu).not.toContain("ShellDest = 'settings' | 'campaign'");
+    expect(readFileSync(new URL('../test/drawableCatalog.ts', import.meta.url), 'utf8'))
+      .toContain("['play', 'Play', '/play/select/skirmish'");
   });
 
   it('pins Skirmish and Levels above one drawn-scroll Campaign collection', () => {
@@ -25,6 +27,14 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('index={0}');
     expect(playMenu).toContain('index={1}');
     expect(playMenu).toContain('index={index + 2}');
+  });
+
+  it('resolves Play rail icons from installed drawable membership, not retired path-shaped app-ui roles', () => {
+    expect(playMenu).toContain("drawableAssets('menu-mode')");
+    expect(playMenu).toContain("installedUiMedia('ui-kit-icons-design-index-png')");
+    expect(playMenu).not.toContain('ui-main-menu-icons-carved-solo-skirmish-png');
+    expect(playMenu).not.toContain('ui-main-menu-icons-carved-level-editor-png');
+    expect(playMenu).not.toContain('ui-main-menu-icons-carved-lobbies-png');
   });
 
   it('deletes the split picker implementations instead of retaining parallels', () => {

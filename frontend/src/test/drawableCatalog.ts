@@ -310,7 +310,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     behavior: { value, route, viewerStatus, default: value === 'main-menu', ...(value === 'level-editor' ? { roles: ['chrome-lab-page'], chromeLabRoute: '/editor/level?chromeLab=1' } : {}) },
     metadata: { blurb: `Test ${label}`, ...(value === 'level-editor' ? { chromeLabBadge: 'outer + inner chrome' } : {}) }, rowRevision: 1, media: { thumbnail: descriptor(`test/pages/${value}.webp`, 640, 400) } }));
   const menuModeSpecs: DrawableCatalog['assets'] = [
-    ['play', 'Play', '/play', 'ui-main-menu-icons-carved-solo-skirmish-png'], ['campaign-editor', 'Editor', '/editor', 'ui-main-menu-icons-carved-campaign-editor-png'],
+    ['play', 'Play', '/play/select/skirmish', 'ui-main-menu-icons-carved-solo-skirmish-png'], ['campaign-editor', 'Editor', '/editor', 'ui-main-menu-icons-carved-campaign-editor-png'],
     ['lobbies', 'Lobbies', '/lobbies', 'ui-main-menu-icons-carved-lobbies-png'], ['settings', 'Settings', '/settings', 'ui-main-menu-icons-carved-settings-png'],
   ].map(([value, label, route, iconRole], sortOrder) => ({ id: `menu-mode-${value}`, kind: 'menu-mode', label, sortOrder, lifecycleState: 'active',
     behavior: { value, route, ...(value === 'settings' ? { roles: ['settings'] } : {}) }, metadata: {}, rowRevision: 1, media: { icon: descriptor(`test/menu/${iconRole}.png`, 64, 64) } }));

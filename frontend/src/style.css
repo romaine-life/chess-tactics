@@ -4253,11 +4253,15 @@ h1 {
   opacity: 0;
 }
 
-/* Before the live catalog/backend is ready, do not trigger stable-slot font requests.
-   main.tsx explicitly loads the layout face and removes this class before App mounts. */
+/* Before the shell font is ready, the startup copy remains part of the accessible
+   status surface but contributes no fallback-font frame. main.tsx reveals it only
+   after the layout face is verified, and App still cannot mount before that gate. */
 body.loading-bootstrap,
 body.loading-bootstrap .app-startup-status {
   font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.app-startup-status.is-font-pending {
+  visibility: hidden;
 }
 .menu-load-error {
   position: fixed;
@@ -8008,6 +8012,57 @@ body { font-size: 17px; }
   min-height: 120px;
   color: var(--ds-color-text, #f4ead7);
   text-align: center;
+}
+
+/* Shared DOM surface gate: content is fully mounted so its real image consumers can
+   load/decode, but the visual unit remains hidden and inert until the boundary records
+   a complete painted frame. The status is the sole visible state during that interval. */
+.painted-surface {
+  display: contents;
+}
+.painted-surface-content {
+  display: contents;
+}
+.painted-surface.is-loading .painted-surface-content > *,
+.painted-surface.is-error .painted-surface-content > * {
+  visibility: hidden;
+}
+.painted-surface-status {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: var(--ds-color-text, #f4ead7);
+  text-align: center;
+}
+.painted-surface-status small {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  line-height: 1.5;
+  max-width: 440px;
+}
+.painted-surface-status strong {
+  font-size: var(--ds-text-md);
+}
+.painted-surface-status button {
+  background: transparent;
+  border: 12px solid transparent;
+  border-image: var(--media-ui-kit-button-primary-png) 24 fill / 12px round;
+  color: var(--ds-color-text, #f4ead7);
+  cursor: pointer;
+  font: inherit;
+  min-height: 44px;
+  min-width: 128px;
+  padding: 0 10px;
+}
+.painted-surface.is-ready .painted-surface-content > * {
+  animation: surface-complete-reveal var(--ds-duration-fade) var(--ds-ease-standard) both;
+}
+@keyframes surface-complete-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .ce-row-actions {
@@ -15391,6 +15446,7 @@ button.tileset-relationship-cell {
 }
 .menu-dest {
   display: flex;
+  position: relative;
   gap: 0;
   align-items: stretch;
   min-inline-size: 0;

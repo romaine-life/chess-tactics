@@ -31,15 +31,27 @@ import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 import { skirmishProfileLevels } from './skirmishProfiles';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
+import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
+import { drawableAssets } from '@chess-tactics/board-render';
 
-const PLAY_ICON_ROLES = {
-  'solo-skirmish': 'ui-main-menu-icons-carved-solo-skirmish-png',
-  'campaign-editor': 'ui-main-menu-icons-carved-campaign-editor-png',
-  'level-editor': 'ui-main-menu-icons-carved-level-editor-png',
-  lobbies: 'ui-main-menu-icons-carved-lobbies-png',
-} as const;
-type PlayIcon = keyof typeof PLAY_ICON_ROLES;
-const carvedIcon = (name: PlayIcon) => installedUiMedia(PLAY_ICON_ROLES[name]);
+type PlayIcon = 'solo-skirmish' | 'campaign-editor' | 'level-editor' | 'lobbies';
+
+/** Installed menu-mode records own their icons. Play must not independently ask
+ * app-ui for duplicate legacy path roles that are not members of that projection. */
+function menuModeIcon(value: 'play' | 'campaign-editor' | 'lobbies'): string {
+  const asset = drawableAssets('menu-mode').find((candidate) => candidate.behavior.value === value);
+  const icon = asset?.media.icon?.media.immutableUrl;
+  if (!icon) throw new Error(`menu mode ${value} has no installed icon`);
+  return icon;
+}
+
+function carvedIcon(name: PlayIcon): string {
+  if (name === 'solo-skirmish') return menuModeIcon('play');
+  if (name === 'campaign-editor') return menuModeIcon('campaign-editor');
+  if (name === 'lobbies') return menuModeIcon('lobbies');
+  return installedUiMedia('ui-kit-icons-design-index-png');
+}
+
 const CAMPAIGN_ICON = carvedIcon('campaign-editor');
 
 function PlayRailTab({
@@ -419,6 +431,7 @@ export function PlayMenu(): ReactElement {
   const [loading, setLoading] = useState(true);
   const [officialAvailable, setOfficialAvailable] = useState(false);
   const [userWorkspaceAvailable, setUserWorkspaceAvailable] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -438,7 +451,7 @@ export function PlayMenu(): ReactElement {
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [loadAttempt]);
 
   useEffect(() => {
     const sync = () => {
@@ -513,8 +526,27 @@ export function PlayMenu(): ReactElement {
     ? `/play?campaignId=${encodeURIComponent(activeCampaign.id)}&levelId=${encodeURIComponent(selectedLevelId)}`
     : '/play';
 
+  const surfaceSignature = [
+    selection.mode,
+    selection.mode === 'campaign' ? selection.campaignId : '',
+    ...profileLevels.map((level) => level.id),
+    ...standaloneLevels.map((level) => level.id),
+    ...activeRefs.map((ref) => ref.levelId),
+  ].join(':');
+  const loadError = !loading && (!officialAvailable || !userWorkspaceAvailable)
+    ? new Error('Canonical Play content is unavailable.')
+    : null;
+
   return (
-    <>
+    <PaintedSurfaceBoundary
+      surface="play-selector"
+      signature={surfaceSignature}
+      readyToCompose={!loading && !loadError}
+      error={loadError}
+      loadingLabel="Preparing Play…"
+      onRetry={() => setLoadAttempt((value) => value + 1)}
+      className="play-surface"
+    >
       <aside className="menu-dest-col menu-dest-tabs play-source-rail" aria-label="Play">
         <div className="play-source-fixed">
           <PlayRailTab
@@ -610,6 +642,6 @@ export function PlayMenu(): ReactElement {
           }
         />
       ) : null}
-    </>
+    </PaintedSurfaceBoundary>
   );
 }

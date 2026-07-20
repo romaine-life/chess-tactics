@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
+import { homepageSceneMedia } from './homepageSceneMedia';
 
 // The main-menu background scene as REAL elements instead of a `::after`
 // background — so animated regions can anchor to scene coordinates.
@@ -89,7 +90,7 @@ export function buildSceneBackdropNode(): HTMLDivElement {
 
   const canvas = document.createElement('div');
   canvas.className = 'scene-backdrop-canvas';
-  canvas.style.backgroundImage = `url("${scene.background}")`;
+  canvas.style.backgroundImage = `url("${homepageSceneMedia().immutableUrl}")`;
 
   for (const a of sceneAnimations().filter((candidate) => candidate.sceneRole === scene.role)) {
     const span = document.createElement('span');
