@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import { fetchAdminDrawableCatalog, saveDrawableAsset, type AdminDrawableAsset } from '../net/drawableCatalogAdmin';
+import { fetchAdminDrawableCatalog, saveDrawableAsset, saveDrawableAssetBatch, type AdminDrawableAsset } from '../net/drawableCatalogAdmin';
 
 const emptyDraft = { id: '', kind: 'subterrain', label: '', role: 'surface', slot: '', sortOrder: 0 };
 
@@ -52,10 +52,10 @@ export function DrawableCatalogLab(): ReactElement {
     try {
       const records = JSON.parse(batch) as Array<Omit<Parameters<typeof saveDrawableAsset>[0], 'expectedRevision'>>;
       if (!Array.isArray(records) || records.length === 0) throw new Error('Batch must be a non-empty JSON array.');
-      for (const record of records) {
+      await saveDrawableAssetBatch(records.map((record) => {
         const current = assets.find((asset) => asset.id === record.id);
-        await saveDrawableAsset({ ...record, expectedRevision: current?.rowRevision ?? 0 });
-      }
+        return { ...record, expectedRevision: current?.rowRevision ?? 0 };
+      }));
       setBatch('');
       await refresh();
     } catch (error) {

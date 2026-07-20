@@ -1,8 +1,8 @@
 ---
-status: "accepted; outer-only divider clauses superseded by ADR-0092"
+status: "accepted; outer-only divider clauses superseded by ADR-0092; Git-owned persistence clauses superseded by ADR-0106"
 date: 2026-07-10
 deciders: Nelson, Codex
-partially_superseded_by: "[ADR-0092](0092-dividers-inherit-their-host-chrome-role.md)"
+partially_superseded_by: "[ADR-0092](0092-dividers-inherit-their-host-chrome-role.md), [ADR-0106](0106-installed-content-is-database-owned.md)"
 ---
 
 # ADR-0083: Chrome frame geometry is derived, not authored state

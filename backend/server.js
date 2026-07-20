@@ -8,6 +8,7 @@ const { Pool } = require('pg');
 // from a temp dir by supervisor.js, so sibling backend assets must resolve from
 // the baked backend dir instead of this process' __dirname.
 const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
+const { createDevGrantSessionReader } = require(path.join(bakedBackendDir, 'devAuthGrant'));
 const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
 const {
@@ -482,9 +483,8 @@ const MIGRATIONS = [
   {
     version: 12,
     name: 'wall art global tier',
-    // Global wall art definitions: one row per id holding a map of wallArtId →
-    // {label,span,slots[]}. Public GET / admin PUT mirrors prop_seats, with
-    // committed wallArt.json as the always-render baseline.
+    // Historical intermediate store. Migration 23 projects its live document
+    // into drawable_assets and drops this table.
     sql: `
       CREATE TABLE IF NOT EXISTS wall_art (
         id                    text        PRIMARY KEY,
@@ -1007,6 +1007,41 @@ const MIGRATIONS = [
       );
       CREATE INDEX IF NOT EXISTS level_thumbnail_derivatives_blob_idx
         ON level_thumbnail_derivatives (blob_sha256);
+    `,
+  },
+  {
+    version: 23,
+    name: 'wall art joins the drawable catalog',
+    // Preserve the live owner-authored document by projecting each member into
+    // the canonical installed-content catalog, then retire the parallel store.
+    // No concrete wall-art identity or fallback is introduced by this migration.
+    sql: `
+      CREATE TABLE IF NOT EXISTS wall_art (
+        id text PRIMARY KEY, data jsonb NOT NULL, client_schema_version integer,
+        revision integer NOT NULL DEFAULT 0, created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(), updated_by text
+      );
+      WITH source AS (
+        SELECT entry.key AS id, entry.value AS definition,
+               row_number() OVER (ORDER BY entry.key) - 1 AS sort_order
+          FROM wall_art document
+          CROSS JOIN LATERAL jsonb_each(document.data) entry
+         WHERE document.id = 'default'
+      ), migrated AS (
+        INSERT INTO drawable_assets
+          (id, kind, label, sort_order, lifecycle_state, behavior, metadata, row_revision, updated_by)
+        SELECT id, 'wall-art', definition->>'label', sort_order, 'active',
+               definition - 'label', '{}'::jsonb, 1, 'wall-art-store-migration'
+          FROM source
+         WHERE definition ? 'label' AND definition ? 'slots'
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id
+      )
+      UPDATE drawable_catalog_state
+         SET revision = revision + (SELECT count(*) FROM migrated), updated_at = now()
+       WHERE singleton = true AND EXISTS (SELECT 1 FROM migrated);
+
+      DROP TABLE wall_art;
     `,
   },
 ];
@@ -1801,6 +1836,18 @@ function isDevAuthHost(req) {
   return false;
 }
 
+function isLoopbackRequest(req) {
+  const forwarded = (req.get('x-forwarded-for') || '').split(',')[0].trim();
+  const address = forwarded || req.socket.remoteAddress || '';
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+}
+
+const verifiedDevGrantSession = createDevGrantSessionReader({
+  authBaseUrl,
+  credentialPath: process.env.DEV_AUTH_TOKEN_FILE,
+  enabled: process.env.DEV_AUTH === '1',
+});
+
 async function readSession(req) {
   if (isDevAuthHost(req)) {
     const cookie = req.get('cookie') || '';
@@ -1816,6 +1863,8 @@ async function readSession(req) {
         }
       };
     }
+    const granted = isLoopbackRequest(req) ? await verifiedDevGrantSession() : null;
+    if (granted) return granted;
   }
   const cookie = req.get('cookie');
   if (!cookie) return null;
@@ -5462,128 +5511,6 @@ app.put('/api/prop-seats/:id', async (req, res) => {
   }
 });
 
-// --- Wall-art tuning (global) tier ----------------------------------------
-// Placeable wall art: N face artwork slots mounted on existing walls.
-// Public GET / requireAdmin PUT, parallel to prop_seats. The committed
-// wallArt.json is the baseline; this row is an optional live overlay.
-const WALL_ART_STORE_SCHEMA_VERSION = 1;
-const WALL_ART_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
-const WALL_ART_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
-const WALL_ART_FACES = new Set(['west', 'north']);
-
-function wallArtRowId(raw) {
-  const id = String(raw || '').trim();
-  return WALL_ART_ROW_ID_PATTERN.test(id) ? id : null;
-}
-
-function validateWallArtData(data) {
-  if (!isObjectRecord(data)) return 'wall art must be an object map of wallArtId → definition';
-  for (const [id, asset] of Object.entries(data)) {
-    if (!WALL_ART_ID_PATTERN.test(id)) return `wall art id "${id}" must be a lowercase slug`;
-    if (!isObjectRecord(asset)) return `wall art "${id}" must be an object`;
-    if (typeof asset.label !== 'string' || !asset.label.trim()) return `wall art "${id}" needs a label`;
-    if (Object.hasOwn(asset, 'span') && !(Number.isInteger(asset.span) && asset.span >= 1 && asset.span <= 16)) return `wall art "${id}" span must be an integer from 1 to 16`;
-    if (!Array.isArray(asset.slots)) return `wall art "${id}" slots must be an array`;
-    for (const [index, slot] of asset.slots.entries()) {
-      if (!isObjectRecord(slot)) return `wall art "${id}" slot ${index + 1} must be an object`;
-      if (typeof slot.id !== 'string' || !WALL_ART_ID_PATTERN.test(slot.id)) return `wall art "${id}" slot ${index + 1} needs a lowercase slug id`;
-      if (typeof slot.sourceId !== 'string' || !WALL_ART_ID_PATTERN.test(slot.sourceId)) return `wall art "${id}" slot ${index + 1} needs a sourceId`;
-      if (typeof slot.face !== 'string' || !WALL_ART_FACES.has(slot.face)) return `wall art "${id}" slot ${index + 1} face must be west or north`;
-      if (!Number.isFinite(slot.x) || !Number.isFinite(slot.y)) return `wall art "${id}" slot ${index + 1} needs numeric x/y`;
-      if (!(Number.isFinite(slot.scale) && slot.scale > 0)) return `wall art "${id}" slot ${index + 1} needs a positive scale`;
-    }
-  }
-  return null;
-}
-
-async function dbGetWallArt(id) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    'SELECT data, client_schema_version, revision, created_at, updated_at, updated_by FROM wall_art WHERE id = $1',
-    [id],
-  );
-  return rows[0] || null;
-}
-
-async function dbUpsertWallArt(id, input) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    `INSERT INTO wall_art (id, data, client_schema_version, revision, updated_by)
-       VALUES ($1, $2::jsonb, $3, 1, $4)
-     ON CONFLICT (id) DO UPDATE SET
-       data = EXCLUDED.data,
-       client_schema_version = EXCLUDED.client_schema_version,
-       revision = wall_art.revision + 1,
-       updated_at = now(),
-       updated_by = EXCLUDED.updated_by
-     RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
-    [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
-  );
-  return rows[0];
-}
-
-function publicWallArtDocument(id, document) {
-  return {
-    id,
-    data: isObjectRecord(document && document.data) ? document.data : {},
-    client_schema_version: document && Object.hasOwn(document, 'client_schema_version') ? document.client_schema_version : null,
-    revision: Number.isInteger(document && document.revision) ? document.revision : 0,
-    created_at: document && document.created_at ? document.created_at : null,
-    updated_at: document && document.updated_at ? document.updated_at : null,
-    updated_by: document && document.updated_by ? document.updated_by : null,
-  };
-}
-
-app.get('/api/wall-art/:id', async (req, res) => {
-  const id = wallArtRowId(req.params.id);
-  if (!id) {
-    res.status(400).json({ error: 'invalid_wall_art_id' });
-    return;
-  }
-  try {
-    const document = await dbGetWallArt(id);
-    res.status(200).json({
-      portfolio: publicWallArtDocument(id, document),
-      store_schema_version: WALL_ART_STORE_SCHEMA_VERSION,
-    });
-  } catch (error) {
-    dbUnavailable(res, 'wall art read failed', error, 'wall_art_store_unavailable');
-  }
-});
-
-app.put('/api/wall-art/:id', async (req, res) => {
-  const user = await requireAdmin(req, res);
-  if (!user) return;
-  const id = wallArtRowId(req.params.id);
-  if (!id) {
-    res.status(400).json({ error: 'invalid_wall_art_id' });
-    return;
-  }
-  const raw = req.body && typeof req.body === 'object' ? req.body : {};
-  if (!isObjectRecord(raw.data)) {
-    res.status(400).json({ error: 'wall_art_data_object_required' });
-    return;
-  }
-  const validationError = validateWallArtData(raw.data);
-  if (validationError) {
-    res.status(400).json({ error: 'invalid_wall_art', details: validationError });
-    return;
-  }
-  try {
-    const document = await dbUpsertWallArt(id, {
-      data: raw.data,
-      client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
-      updated_by: user.email,
-    });
-    res.status(200).json({
-      portfolio: publicWallArtDocument(id, document),
-      store_schema_version: WALL_ART_STORE_SCHEMA_VERSION,
-    });
-  } catch (error) {
-    dbUnavailable(res, 'wall art write failed', error, 'wall_art_store_unavailable');
-  }
-});
-
 // --- Global SFX profile ----------------------------------------------------
 // Recording bytes are live-media slots; this complete JSON document owns the
 // semantic sound-set metadata/mix and gameplay assignments. It is deliberately
@@ -5875,42 +5802,44 @@ async function dbReadDrawableCatalog({ includeRetired = false } = {}) {
   }
 }
 
-async function dbUpsertDrawable(input, expectedRevision, actorEmail) {
+async function dbUpsertDrawableBatch(changes, actorEmail) {
   await ensureDbReady();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const currentResult = await client.query('SELECT * FROM drawable_assets WHERE id = $1 FOR UPDATE', [input.id]);
-    const current = currentResult.rows[0] || null;
-    if (current && Number(current.row_revision) !== expectedRevision) {
-      throw mediaMutationError('drawable_asset_conflict', 409, { currentRevision: Number(current.row_revision) });
-    }
-    if (!current && expectedRevision !== 0) throw mediaMutationError('drawable_asset_not_found', 404);
-    const slots = input.roles.map(({ slot }) => slot);
-    const slotResult = await client.query('SELECT slot FROM media_slots WHERE slot = ANY($1::text[])', [slots]);
-    const found = new Set(slotResult.rows.map((row) => row.slot));
-    const missing = slots.filter((slot) => !found.has(slot));
-    if (missing.length) throw mediaMutationError('drawable_media_slot_not_found', 400, { slots: missing });
-    await client.query(
-      `INSERT INTO drawable_assets (id, kind, label, sort_order, lifecycle_state, behavior, metadata, row_revision, updated_by)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 1, $8)
-       ON CONFLICT (id) DO UPDATE SET kind = EXCLUDED.kind, label = EXCLUDED.label,
-         sort_order = EXCLUDED.sort_order, lifecycle_state = EXCLUDED.lifecycle_state,
-         behavior = EXCLUDED.behavior, metadata = EXCLUDED.metadata,
-         row_revision = drawable_assets.row_revision + 1, updated_at = now(), updated_by = EXCLUDED.updated_by`,
-      [input.id, input.kind, input.label, input.sortOrder, input.lifecycleState,
-        JSON.stringify(input.behavior), JSON.stringify(input.metadata), actorEmail],
-    );
-    await client.query('DELETE FROM drawable_asset_media WHERE asset_id = $1', [input.id]);
-    for (const role of input.roles) {
-      await client.query('INSERT INTO drawable_asset_media (asset_id, role, slot) VALUES ($1, $2, $3)', [input.id, role.role, role.slot]);
+    for (const { input, expectedRevision } of changes) {
+      const currentResult = await client.query('SELECT * FROM drawable_assets WHERE id = $1 FOR UPDATE', [input.id]);
+      const current = currentResult.rows[0] || null;
+      if (current && Number(current.row_revision) !== expectedRevision) {
+        throw mediaMutationError('drawable_asset_conflict', 409, { assetId: input.id, currentRevision: Number(current.row_revision) });
+      }
+      if (!current && expectedRevision !== 0) throw mediaMutationError('drawable_asset_not_found', 404, { assetId: input.id });
+      const slots = input.roles.map(({ slot }) => slot);
+      const slotResult = await client.query('SELECT slot FROM media_slots WHERE slot = ANY($1::text[])', [slots]);
+      const found = new Set(slotResult.rows.map((row) => row.slot));
+      const missing = slots.filter((slot) => !found.has(slot));
+      if (missing.length) throw mediaMutationError('drawable_media_slot_not_found', 400, { assetId: input.id, slots: missing });
+      await client.query(
+        `INSERT INTO drawable_assets (id, kind, label, sort_order, lifecycle_state, behavior, metadata, row_revision, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 1, $8)
+         ON CONFLICT (id) DO UPDATE SET kind = EXCLUDED.kind, label = EXCLUDED.label,
+           sort_order = EXCLUDED.sort_order, lifecycle_state = EXCLUDED.lifecycle_state,
+           behavior = EXCLUDED.behavior, metadata = EXCLUDED.metadata,
+           row_revision = drawable_assets.row_revision + 1, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+        [input.id, input.kind, input.label, input.sortOrder, input.lifecycleState,
+          JSON.stringify(input.behavior), JSON.stringify(input.metadata), actorEmail],
+      );
+      await client.query('DELETE FROM drawable_asset_media WHERE asset_id = $1', [input.id]);
+      for (const role of input.roles) {
+        await client.query('INSERT INTO drawable_asset_media (asset_id, role, slot) VALUES ($1, $2, $3)', [input.id, role.role, role.slot]);
+      }
+      await client.query(
+        'INSERT INTO drawable_asset_events (asset_id, action, actor_email, details) VALUES ($1, $2, $3, $4::jsonb)',
+        [input.id, current ? 'updated' : 'created', actorEmail, JSON.stringify({ kind: input.kind, roles: input.roles })],
+      );
     }
     const nextRevision = await client.query(
       'UPDATE drawable_catalog_state SET revision = revision + 1, updated_at = now() WHERE singleton = true RETURNING revision',
-    );
-    await client.query(
-      'INSERT INTO drawable_asset_events (asset_id, action, actor_email, details) VALUES ($1, $2, $3, $4::jsonb)',
-      [input.id, current ? 'updated' : 'created', actorEmail, JSON.stringify({ kind: input.kind, roles: input.roles })],
     );
     await client.query('COMMIT');
     return Number(nextRevision.rows[0].revision);
@@ -5920,6 +5849,10 @@ async function dbUpsertDrawable(input, expectedRevision, actorEmail) {
   } finally {
     client.release();
   }
+}
+
+async function dbUpsertDrawable(input, expectedRevision, actorEmail) {
+  return dbUpsertDrawableBatch([{ input, expectedRevision }], actorEmail);
 }
 
 // --- Shared live-media catalog ---------------------------------------------
@@ -6770,7 +6703,7 @@ async function verifyLiveMediaStoreReadiness(record) {
 async function liveMediaReadiness() {
   await ensureDbReady();
 
-  // Read all three DB authorities afresh. Public endpoints may use short-lived
+  // Read all four DB authorities afresh. Public endpoints may use short-lived
   // caches, but a Kubernetes probe must observe current catalog state and run
   // the exact typed renderer projections that browser boot/thumbnails require.
   const [catalog, drawableCatalog, propSeatsRow, unitCatalog] = await Promise.all([
@@ -6782,6 +6715,7 @@ async function liveMediaReadiness() {
   const propSeats = requirePropSeatsDocument('default', propSeatsRow);
   const propSeatsRevision = Number(propSeats.revision);
   const unitCatalogRevision = Number(unitCatalog.revision);
+  const drawableCatalogRevision = Number(drawableCatalog.revision);
   const catalogIssue = liveCatalogReadinessIssue(catalog, { requireCritical: true });
   if (catalogIssue) throw new Error(catalogIssue);
   const catalogRevision = Number(catalog.revision);
@@ -6805,7 +6739,7 @@ async function liveMediaReadiness() {
   ))[0];
   const sample = sampleSlot ? await mediaBlobRecord(sampleSlot.media.sha256, { publicOnly: true }) : null;
   await verifyLiveMediaStoreReadiness(sample);
-  return { catalogRevision, propSeatsRevision, unitCatalogRevision };
+  return { catalogRevision, drawableCatalogRevision, propSeatsRevision, unitCatalogRevision };
 }
 
 async function publicMediaSlotById(slot) {
@@ -7043,10 +6977,6 @@ const VISUAL_MEDIA_DOMAINS = new Set([
   'background', 'portrait', 'prop', 'review-media', 'social-card', 'sprite-atlas',
   'terrain', 'ui-kit', 'unit-art', 'wall-decor',
 ]);
-const WATER_SIDE_REQUIRED_SLOTS = Object.freeze(
-  Array.from({ length: 8 }, (_, index) => `tiles/surface/water-${index}-side.png`),
-);
-const GROUND_COVER_SLOT_PATTERN = /^groundcover\/(grass|water|sand)\/v(0|[1-9][0-9]*)\.png$/;
 const GROUND_COVER_RUNTIME_KEYS = Object.freeze([
   'terrain', 'id', 'frameWidth', 'frameHeight', 'frameCount', 'baseX', 'baseY', 'contentWidth',
 ]);
@@ -7064,11 +6994,8 @@ function runtimeSemanticText(value, max = 160) {
 function runtimeMetadataProjection(row) {
   const metadata = isObjectRecord(row.version_metadata) ? row.version_metadata
     : isObjectRecord(row.metadata) ? row.metadata : {};
-  const groundCoverSlot = GROUND_COVER_SLOT_PATTERN.exec(String(row.slot || ''));
   if (metadata.runtime === undefined) {
-    return groundCoverSlot
-      ? { error: 'ground-cover slots require metadata.runtime.groundCover' }
-      : { value: {} };
+    return { value: {} };
   }
   if (!isObjectRecord(metadata.runtime)) return { error: 'metadata.runtime must be an object' };
   const raw = metadata.runtime;
@@ -7114,9 +7041,9 @@ function runtimeMetadataProjection(row) {
     if (typeof raw.loop !== 'boolean') return { error: 'metadata.runtime.loop must be boolean' };
     value.loop = raw.loop;
   }
-  if (raw.groundCover !== undefined || groundCoverSlot) {
-    if (!groundCoverSlot || row.domain !== 'terrain') {
-      return { error: 'metadata.runtime.groundCover is allowed only on a registered ground-cover terrain slot' };
+  if (raw.groundCover !== undefined) {
+    if (row.domain !== 'terrain') {
+      return { error: 'metadata.runtime.groundCover is allowed only on terrain media' };
     }
     if (!isObjectRecord(raw.groundCover)) return { error: 'metadata.runtime.groundCover must be an object' };
     const unsupportedRuntime = Object.keys(raw).filter((key) => key !== 'groundCover');
@@ -7129,13 +7056,12 @@ function runtimeMetadataProjection(row) {
       return { error: `metadata.runtime.groundCover contains unsupported keys: ${unsupportedGroundCover.sort().join(', ')}` };
     }
     const terrain = mediaName(raw.groundCover.terrain);
-    const slotTerrain = groundCoverSlot[1];
-    if (!terrain || terrain !== slotTerrain) {
-      return { error: 'metadata.runtime.groundCover.terrain must match the semantic slot' };
+    if (!terrain) {
+      return { error: 'metadata.runtime.groundCover.terrain must be a semantic terrain name' };
     }
     const id = runtimeInteger(raw.groundCover.id, { min: 0, max: 32768 });
-    if (id === null || id !== Number(groundCoverSlot[2])) {
-      return { error: 'metadata.runtime.groundCover.id must match the semantic slot' };
+    if (id === null) {
+      return { error: 'metadata.runtime.groundCover.id must be a bounded integer' };
     }
     const frameWidth = runtimeInteger(raw.groundCover.frameWidth, { min: 1, max: 32768 });
     const frameHeight = runtimeInteger(raw.groundCover.frameHeight, { min: 1, max: 32768 });
@@ -7242,8 +7168,7 @@ function mediaDomainProjectionIssue(row) {
   }
   if (row.domain !== 'terrain') return null;
 
-  const groundCoverSlot = GROUND_COVER_SLOT_PATTERN.exec(String(row.slot || ''));
-  if (groundCoverSlot) {
+  if (runtime.value.groundCover) {
     if (row.role !== 'media') return 'ground-cover slots require the terrain media role';
     if (row.media_type !== 'image/png') return 'ground-cover sheets require image/png';
     const projection = runtime.value.groundCover;
@@ -7255,31 +7180,23 @@ function mediaDomainProjectionIssue(row) {
     return 'ground-cover candidates remain bridge-only until their game-owned exact-byte review instrument exists';
   }
 
-  const suffixRole = row.slot?.endsWith('-top-anim.png') ? 'animation'
-    : row.slot?.endsWith('-top.png') ? 'top'
-      : row.slot?.endsWith('-side.png') ? 'side' : null;
-  if (suffixRole && row.role !== suffixRole) return `terrain slot suffix requires role ${suffixRole}`;
-  if (['top', 'side', 'animation'].includes(row.role) && !suffixRole) {
-    return `terrain ${row.role} role requires a matching semantic slot suffix`;
-  }
-  if (!WATER_SIDE_REQUIRED_SLOTS.includes(row.slot)) {
-    return 'terrain acceptance is currently registered only for the atomic Water side projection';
-  }
-  if (suffixRole && row.media_type !== 'image/png') return 'projected terrain faces require image/png';
-  if (suffixRole === 'top' || suffixRole === 'side') {
+  const terrainRole = ['top', 'side', 'animation'].includes(row.role) ? row.role : null;
+  if (!terrainRole) return `terrain role ${row.role} has no typed runtime projection`;
+  if (row.media_type !== 'image/png') return 'projected terrain surfaces require image/png';
+  if (terrainRole === 'top' || terrainRole === 'side') {
     if (Number(row.width) !== 96 || Number(row.height) !== 180) return 'terrain top/side frames must be native 96x180';
   }
-  if (suffixRole === 'animation') {
+  if (terrainRole === 'animation') {
     if (Number(row.height) !== 180 || Number(row.width) < 96 || Number(row.width) % 96 !== 0) {
       return 'terrain animation sheets must contain horizontal 96x180 frames';
     }
   }
-  if (runtime.value.face !== undefined && runtime.value.face !== suffixRole) return 'terrain runtime face must match the slot role';
+  if (runtime.value.face !== undefined && runtime.value.face !== terrainRole) return 'terrain runtime face must match the slot role';
   if (runtime.value.projection !== undefined && runtime.value.projection !== 'iso-96x180-v1') {
     return 'terrain runtime projection does not match the canonical board projection';
   }
-  const expectedFrameCount = suffixRole === 'animation' ? Number(row.width) / 96 : suffixRole ? 1 : null;
-  if (runtime.value.frameWidth !== undefined && runtime.value.frameWidth !== (suffixRole ? 96 : Number(row.width))) {
+  const expectedFrameCount = terrainRole === 'animation' ? Number(row.width) / 96 : 1;
+  if (runtime.value.frameWidth !== undefined && runtime.value.frameWidth !== 96) {
     return 'terrain runtime frameWidth does not match uploaded geometry';
   }
   if (runtime.value.frameHeight !== undefined && runtime.value.frameHeight !== Number(row.height)) {
@@ -7442,6 +7359,37 @@ app.get('/api/admin/drawable-assets', async (req, res) => {
   } catch (error) {
     if (error && error.mediaCode) { sendMediaMutationError(res, error, 'drawable_catalog_unavailable'); return; }
     dbUnavailable(res, 'drawable admin catalog read failed', error, 'drawable_catalog_unavailable');
+  }
+});
+
+app.put('/api/admin/drawable-assets', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const records = Array.isArray(req.body?.assets) ? req.body.assets : null;
+  if (!records || records.length < 1 || records.length > 200) {
+    res.status(400).json({ error: 'invalid_drawable_asset_batch', details: 'assets must contain 1-200 records' });
+    return;
+  }
+  const ids = new Set();
+  const changes = [];
+  for (const raw of records) {
+    const normalized = normalizeDrawableInput(raw);
+    if (normalized.error) { res.status(400).json({ error: 'invalid_drawable_asset', details: normalized.error }); return; }
+    if (ids.has(normalized.value.id)) { res.status(400).json({ error: 'invalid_drawable_asset_batch', details: `duplicate id ${normalized.value.id}` }); return; }
+    ids.add(normalized.value.id);
+    const expectedRevision = Number(raw?.expectedRevision);
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+      res.status(400).json({ error: 'invalid_drawable_asset_batch', details: `${normalized.value.id} expectedRevision is required` });
+      return;
+    }
+    changes.push({ input: normalized.value, expectedRevision });
+  }
+  try {
+    const catalogRevision = await dbUpsertDrawableBatch(changes, user.email);
+    res.status(200).json({ catalogRevision });
+  } catch (error) {
+    if (error && error.mediaCode) { sendMediaMutationError(res, error, 'drawable_asset_write_failed'); return; }
+    dbUnavailable(res, 'drawable asset batch write failed', error, 'drawable_catalog_unavailable');
   }
 });
 
@@ -7702,13 +7650,22 @@ app.post(/^\/api\/admin\/media-slots\/(.+)\/retire$/, async (req, res) => {
 app.post('/api/admin/media-versions', async (req, res) => {
   const user = await requireAdmin(req, res);
   if (!user) return;
-  const validated = validateMediaVersionInput(req.body);
+  const idempotencyKey = mediaIdempotencyKey(req);
+  const allocation = req.body?.allocateSlot;
+  if (allocation !== undefined && allocation !== 'predrawn-board') {
+    res.status(400).json({ error: 'invalid_media_version', details: 'allocateSlot is invalid' }); return;
+  }
+  if (allocation && !idempotencyKey) {
+    res.status(400).json({ error: 'invalid_media_version', details: 'allocated slots require an idempotency key' }); return;
+  }
+  const createInput = allocation ? { ...req.body, slot: `boards/${crypto.randomUUID()}/plate.png` } : req.body;
+  const validated = validateMediaVersionInput(createInput);
   if (validated.error) { res.status(400).json({ error: 'invalid_media_version', details: validated.error }); return; }
   const value = validated.value;
   try {
-    const idempotencyKey = mediaIdempotencyKey(req);
     const idempotencyActor = String(user.email).trim().toLowerCase();
-    const requestFingerprint = crypto.createHash('sha256').update(canonicalJson(value)).digest('hex');
+    const fingerprintValue = allocation ? { ...value, slot: null, allocateSlot: allocation } : value;
+    const requestFingerprint = crypto.createHash('sha256').update(canonicalJson(fingerprintValue)).digest('hex');
     const requestedId = crypto.randomUUID();
     const result = await withMediaCatalogTransaction(async (client) => {
       if (idempotencyKey) {
@@ -8040,7 +7997,6 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
   ) throw mediaMutationError('invalid_media_review_proof', 409, 'canonical terrain proof fields are incomplete');
 
   const contract = mediaAcceptanceContract(current);
-  assertRequiredMediaAcceptanceContract(current, contract);
   const requiredSlots = contract.mode === 'group' ? contract.requiredSlots : [current.slot];
   const selected = evidence.selectedCandidates.filter(isObjectRecord);
   const selectedBySlot = new Map(selected.map((item) => [item.slot, item]));
@@ -8050,13 +8006,10 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     if (
       selected.length !== requiredSlots.length || selectedBySlot.size !== requiredSlots.length
       || snapshots.length !== requiredSlots.length || snapshotBySlot.size !== requiredSlots.length
-      || evidence.abruptExposedEdge !== true
-      || canonicalJson(evidence.exposedFaces) !== canonicalJson(['south', 'east'])
-      || requiredSlots.some((slot) => (
-        canonicalJson(selectedBySlot.get(slot)?.faces) !== canonicalJson(['south', 'east'])
-      ))
+      || evidence.surfaceOnly !== true
+      || requiredSlots.some((slot) => selectedBySlot.get(slot)?.role !== 'top')
       || !Array.isArray(evidence.acceptanceGroups)
-    ) throw mediaMutationError('invalid_media_review_proof', 409, 'group terrain proof must cover every required face exactly once');
+    ) throw mediaMutationError('invalid_media_review_proof', 409, 'group terrain proof must cover every required surface exactly once');
     const group = evidence.acceptanceGroups.find((item) => (
       isObjectRecord(item) && item.groupId === contract.groupId
       && canonicalJson(item.requiredSlots) === canonicalJson(requiredSlots)
@@ -8227,29 +8180,6 @@ function mediaAcceptanceContract(row) {
   return { mode: 'group', groupId, requiredSlots };
 }
 
-function requiredMediaAcceptanceContract(row) {
-  if (!WATER_SIDE_REQUIRED_SLOTS.includes(row.slot)) return null;
-  return {
-    mode: 'group',
-    groupId: 'terrain/water/side-v1',
-    requiredSlots: [...WATER_SIDE_REQUIRED_SLOTS],
-  };
-}
-
-function assertRequiredMediaAcceptanceContract(row, actual) {
-  const required = requiredMediaAcceptanceContract(row);
-  if (!required) return;
-  if (
-    actual.mode !== required.mode || actual.groupId !== required.groupId
-    || canonicalJson(actual.requiredSlots) !== canonicalJson(required.requiredSlots)
-  ) {
-    throw mediaMutationError('media_required_group_contract_missing', 409, {
-      slot: row.slot,
-      required,
-    });
-  }
-}
-
 function assertPredrawnBoardAcceptanceProof(row, slot) {
   if (!predrawnBoardSlotSlug(row.slot)) return;
   if (mediaAcceptanceContract(row).mode !== 'standalone') {
@@ -8288,8 +8218,7 @@ function assertTerrainAcceptanceProof(rows, slotById, contract = null) {
     if (
       !isObjectRecord(ownProof) || ownProof.versionId !== row.id || ownProof.sha256 !== row.blob_sha256
       || Number(ownProof.rowRevision) + 1 !== Number(row.row_revision)
-      || (contract?.mode === 'group'
-        && canonicalJson(ownProof.faces) !== canonicalJson(['south', 'east']))
+      || (contract?.mode === 'group' && ownProof.role !== row.role)
     ) throw mediaMutationError('media_review_candidate_snapshot_stale', 409, { slot: row.slot });
     if (contract?.mode === 'group') {
       const canonical = canonicalJson(proof);
@@ -8457,7 +8386,6 @@ async function acceptMediaVersionBatch(items, actorEmail) {
     const grouped = new Map();
     for (const row of rows) {
       const contract = mediaAcceptanceContract(row);
-      assertRequiredMediaAcceptanceContract(row, contract);
       if (contract.mode !== 'group') continue;
       if (!grouped.has(contract.groupId)) grouped.set(contract.groupId, { required: contract.requiredSlots, rows: [] });
       const group = grouped.get(contract.groupId);
@@ -9790,7 +9718,6 @@ function makeStaticCacheHeaders(rootDir) {
 // and renderer/catalog/media failures are explicit 503s.
 const OG_SITE_NAME = 'Chess Tactics';
 const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
-const DEFAULT_OG_IMAGE = '/assets/og/default.png';
 // Owner-facing objective labels — mirrors frontend core/objectives.ts MODE_NAME (5 stable entries).
 const OG_MODE_NAME = {
   'capture-all': 'Last Man Standing', 'capture-king': 'King Assault',
@@ -10127,6 +10054,15 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
       return _thumbCache.getOrCreate(cacheKey, async () => {
         const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
         const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
+        const appUi = renderInputs.drawableCatalog.assets.find((asset) => asset.kind === 'app-ui' && asset.behavior?.roles?.includes('application-ui'));
+        const thumbnailFont = renderInputs.drawableCatalog.assets.find((asset) => asset.kind === 'app-font' && asset.behavior?.thumbnail === true);
+        const requiredUiMedia = (role) => {
+          const src = appUi?.media?.[role]?.media?.immutableUrl;
+          if (!src) throw new Error(`thumbnail UI media role is unavailable: ${role}`);
+          return src;
+        };
+        const fontSrc = thumbnailFont?.media?.font?.media?.immutableUrl;
+        if (!fontSrc) throw new Error('thumbnail font record is unavailable');
         return renderLevelCard({
           plan,
           title: target.title,
@@ -10136,6 +10072,13 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
           loadDynamicSprite: (src) => thumbnailDynamicSprite(src, renderInputs.mediaCatalog),
           mediaCatalogRevision: renderInputs.mediaCatalogRevision,
           sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
+          fontSrc,
+          uiMedia: {
+            wood: requiredUiMedia('ui-surfaces-hybrid-wood-oak-png'),
+            band: requiredUiMedia('ui-titlebar-band-forged-png'),
+            diamond: requiredUiMedia('ui-titlebar-joint-diamond-forged-png'),
+            shield: requiredUiMedia('ui-kit-icons-brand-shield-png'),
+          },
         });
       });
     });
@@ -10148,27 +10091,10 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
   }
 });
 
-// Runtime list thumbnail. Canonical saves prebuild the same immutable derivative; this
-// read-through generation exists for levels created before migration 21.
-app.get(/^\/assets\/level-list-thumb\/(.+)\.png$/, async (req, res) => {
-  const id = String(req.params[0] || '');
-  try {
-    const target = await resolveListThumbnailTarget(req, res, id);
-    if (target === false) return;
-    if (!target) { res.status(404).send('not found'); return; }
-    const derivative = await ensureLevelThumbnailDerivative(target.authorityKey, target.level);
-    res.setHeader('Cache-Control', 'no-cache');
-    res.redirect(302, `/api/media/${derivative.blob_sha256}`);
-  } catch (error) {
-    console.error('level list thumbnail failed:', error && error.message);
-    res.status(503).json({ error: 'thumbnail_derivative_unavailable' });
-  }
-});
-
 // Stable semantic asset resolution. This is deliberately before every static
 // middleware so an absent DB slot can never fall through to a packaged file.
-// The level-thumbnail route above is the sole dynamic /assets namespace carveout.
-app.get(/^\/assets\/(?!level-thumb\/|level-list-thumb\/)(.+)$/, async (req, res) => {
+// The server-rendered level-thumbnail route above is the sole dynamic /assets namespace carveout.
+app.get(/^\/assets\/(?!level-thumb\/)(.+)$/, async (req, res) => {
   let slot = null;
   try {
     const encoded = req.path.slice('/assets/'.length);
@@ -10195,7 +10121,11 @@ async function ogTagsFor(req) {
 
   let title = OG_SITE_NAME;
   let description = OG_DEFAULT_DESC;
-  let image = `${origin}${DEFAULT_OG_IMAGE}`;
+  const drawableCatalog = await dbReadDrawableCatalog();
+  const appUi = drawableCatalog.assets.find((asset) => asset.kind === 'app-ui' && asset.behavior?.roles?.includes('application-ui'));
+  const defaultOgPath = appUi?.media?.['og-default']?.media?.immutableUrl;
+  if (!defaultOgPath) throw new Error('application UI role og-default is unavailable');
+  let image = `${origin}${defaultOgPath}`;
   if (target) {
     title = target.title || OG_SITE_NAME;
     description = target.description || target.subtitle || OG_DEFAULT_DESC;

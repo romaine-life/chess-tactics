@@ -265,6 +265,10 @@ removes its footprint membership, so retained material outside the rectangle doe
 itself.
 
 This same resolved topology governs rendering, region-family selection, and scoped Generate input.
+Per [ADR-0137](adr/0137-subterrain-follows-the-visual-terrain-surface.md), explicit Subterrain may
+occupy an exposed south or east face on any coordinate in this active visual terrain surface.
+Playable and scenic coordinates have identical visual-face authoring rights; Subterrain remains
+visual-only and never enters gameplay projection.
 The Tile layer uses that same connected-area selection without creating a saved Generate region.
 Its Fill selected area action atomically writes the exact selected single tile to playable and scenic
 destinations, breaking overlapping composite terrain placements only where it writes and changing

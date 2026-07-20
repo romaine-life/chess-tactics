@@ -353,7 +353,7 @@ async function resetDb() {
 // Explicit synthetic live content for this transient smoke database. Production
 // seat data is never imported from a repository fixture.
 const SYNTHETIC_PROP_SEATS = Object.freeze({
-  oak: { anchorX: 96, anchorY: 255, scale: 1, w: 2, h: 2 },
+  oak: { anchorX: 96, anchorY: 255, scale: 1, w: 2, h: 2, default: true },
   cottage: { anchorX: 91, anchorY: 110, scale: 0.62, w: 2, h: 2 },
   cabin: { anchorX: 118, anchorY: 107, scale: 0.35, w: 1, h: 1 },
   lodge: { anchorX: 103, anchorY: 126, scale: 1, w: 2, h: 2 },
@@ -376,7 +376,14 @@ async function seedSyntheticDrawable({ id, kind, label, sortOrder = 0, behavior,
      VALUES ($1, $2, $3, $4, 'active', $5::jsonb, $6::jsonb, 1, 'smoke-fixture')`,
     [id, kind, label, sortOrder, JSON.stringify(behavior), JSON.stringify(metadata)],
   );
-  for (const [role, slot] of Object.entries(media)) {
+  const usedSlots = new Set();
+  for (const [role, requestedSlot] of Object.entries(media)) {
+    let slot = requestedSlot;
+    if (usedSlots.has(slot)) {
+      slot = `smoke/drawables/${id}/${role}.png`;
+      await seedSyntheticReadinessMedia({ slot, domain: 'smoke-fixture', role, width: 32, height: 32 });
+    }
+    usedSlots.add(slot);
     await queryDb(
       'INSERT INTO drawable_asset_media (asset_id, role, slot) VALUES ($1, $2, $3)',
       [id, role, slot],
@@ -835,20 +842,20 @@ async function main() {
   if (emptyMediaCatalog.statusCode !== 200 || emptyMediaBody.schemaVersion !== 1 || emptyMediaBody.slots.length !== 0) {
     throw new Error(`Unexpected empty media catalog: ${emptyMediaCatalog.statusCode} ${emptyMediaCatalog.body}`);
   }
-  const waterSideSlots = Array.from({ length: 8 }, (_, index) => `tiles/surface/water-${index}-side.png`);
+  const surfaceTopSlots = Array.from({ length: 8 }, (_, index) => `smoke/terrain/surface-${index}`);
   const candidateBytes = syntheticPng(96, 180, '#16324a', '#4f8fb2');
   const candidateSha = crypto.createHash('sha256').update(candidateBytes).digest('hex');
   const candidateCreateBody = {
-    slot: waterSideSlots[0],
-    sourcePath: 'smoke/private-water-0-side.png',
+    slot: surfaceTopSlots[0],
+    sourcePath: 'smoke/private-surface-0.png',
     domain: 'terrain',
-    role: 'side',
+    role: 'top',
     label: 'Private smoke candidate',
     availabilityPolicy: 'critical',
     slotMetadata: {
       fixture: true,
       privatePrompt: 'must never leak publicly',
-      acceptance: { mode: 'group', groupId: 'terrain/water/side-v1', requiredSlots: waterSideSlots },
+      acceptance: { mode: 'group', groupId: 'smoke/terrain/surface-v1', requiredSlots: surfaceTopSlots },
     },
     metadata: { generation: 0 },
     provenance: { generator: 'synthetic-private-smoke' },
@@ -863,7 +870,7 @@ async function main() {
   const stagedMediaCatalog = await get('/api/asset-catalog');
   if (
     stagedMediaCatalog.statusCode !== 200
-    || JSON.parse(stagedMediaCatalog.body).slots.some((slot) => slot.slot === waterSideSlots[0])
+    || JSON.parse(stagedMediaCatalog.body).slots.some((slot) => slot.slot === surfaceTopSlots[0])
   ) throw new Error(`Unactivated critical staging slot leaked publicly: ${stagedMediaCatalog.statusCode} ${stagedMediaCatalog.body}`);
   const missingMediaRevision = await request(
     'PUT', `/api/admin/media-versions/${candidateVersion.id}/content`,
@@ -899,12 +906,12 @@ async function main() {
   const stagedAdminCatalog = JSON.parse((await get(
     '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
   )).body);
-  const stagedSlot = stagedAdminCatalog.slots.find((slot) => slot.slot === waterSideSlots[0]);
+  const stagedSlot = stagedAdminCatalog.slots.find((slot) => slot.slot === surfaceTopSlots[0]);
   if (
     stagedSlot.activeVersionId !== null || stagedSlot.versionStatus !== null
     || stagedSlot.lifecycleState !== 'staging' || stagedSlot.metadata.privatePrompt !== 'must never leak publicly'
   ) throw new Error(`Admin staging projection is wrong: ${JSON.stringify(stagedSlot)}`);
-  const stagedStableRoute = await get(`/assets/${waterSideSlots[0]}`);
+  const stagedStableRoute = await get(`/assets/${surfaceTopSlots[0]}`);
   if (stagedStableRoute.statusCode !== 404) {
     throw new Error(`Staging stable route should fail closed, not fall back: ${stagedStableRoute.statusCode}`);
   }
@@ -915,7 +922,7 @@ async function main() {
   // compatibility without reopening the retired mutation route. First patch the
   // staging contract through the API to invalidate the earlier empty-catalog cache.
   const stagingPatch = await request(
-    'PATCH', `/api/admin/media-slots/${waterSideSlots[0]}`, adminJson,
+    'PATCH', `/api/admin/media-slots/${surfaceTopSlots[0]}`, adminJson,
     JSON.stringify({ expectedRevision: stagedSlot.rowRevision, metadata: stagedSlot.metadata }), 5000,
   );
   const stagingPatchBody = JSON.parse(stagingPatch.body);
@@ -948,7 +955,7 @@ async function main() {
      UPDATE media_catalog_state SET revision = revision + 1, updated_at = now()
       WHERE singleton = true AND EXISTS (SELECT 1 FROM slot_update)
       RETURNING revision`,
-    [candidateVersion.id, candidateSha, waterSideSlots[0]],
+    [candidateVersion.id, candidateSha, surfaceTopSlots[0]],
   );
   if (Number(importedBridge.rows[0]?.revision) !== 1) {
     throw new Error(`Direct imported-bridge fixture failed: ${JSON.stringify(importedBridge.rows)}`);
@@ -961,12 +968,12 @@ async function main() {
   const bridgedAdminCatalog = JSON.parse((await get(
     '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
   )).body);
-  const bridgedSlot = bridgedAdminCatalog.slots.find((slot) => slot.slot === waterSideSlots[0]);
+  const bridgedSlot = bridgedAdminCatalog.slots.find((slot) => slot.slot === surfaceTopSlots[0]);
   if (
     bridgedSlot.activeVersionId !== candidateVersion.id || bridgedSlot.versionStatus !== 'legacy-bridge'
     || bridgedSlot.productionEligible !== false || bridgedSlot.metadata.privatePrompt !== 'must never leak publicly'
   ) throw new Error(`Admin imported-bridge projection is wrong: ${JSON.stringify(bridgedSlot)}`);
-  const partialStableBridge = await get(`/assets/${waterSideSlots[0]}`);
+  const partialStableBridge = await get(`/assets/${surfaceTopSlots[0]}`);
   if (partialStableBridge.statusCode !== 503) {
     throw new Error(`Incomplete group stable route should fail, not fall back: ${partialStableBridge.statusCode}`);
   }
@@ -983,9 +990,9 @@ async function main() {
   const acceptedBytes = syntheticPng(96, 180, '#102838', '#7bdcf4');
   const acceptedSha = crypto.createHash('sha256').update(acceptedBytes).digest('hex');
   const nativeCreate = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
-    slot: waterSideSlots[0],
+    slot: surfaceTopSlots[0],
     domain: 'terrain',
-    role: 'side',
+    role: 'top',
     label: 'Native reviewed smoke asset',
     availabilityPolicy: 'critical',
     nativeEvidence: {
@@ -1071,8 +1078,8 @@ async function main() {
     throw new Error(`Private archived media verification failed: ${privateAdminRead.statusCode} ${privateAdminRead.body}`);
   }
 
-  const groupSlots = waterSideSlots;
-  const groupBytes = waterSideSlots.map((_, index) => syntheticPng(
+  const groupSlots = surfaceTopSlots;
+  const groupBytes = surfaceTopSlots.map((_, index) => syntheticPng(
     96, 180, `#${(0x102030 + index * 0x010305).toString(16).padStart(6, '0')}`, '#7bdcf4',
   ));
   groupBytes[0] = acceptedBytes;
@@ -1081,15 +1088,15 @@ async function main() {
     const sha = crypto.createHash('sha256').update(groupBytes[index]).digest('hex');
     const create = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
       slot: groupSlots[index],
-      sourcePath: `smoke/generated-water-${index}-side.png`,
+      sourcePath: `smoke/generated-surface-${index}.png`,
       domain: 'terrain',
-      role: 'side',
+      role: 'top',
       label: `Grouped smoke ${index + 1}`,
       availabilityPolicy: 'critical',
       slotMetadata: {
         acceptance: {
           mode: 'group',
-          groupId: 'terrain/water/side-v1',
+          groupId: 'smoke/terrain/surface-v1',
           requiredSlots: index === 1 ? [...groupSlots].reverse() : groupSlots,
         },
       },
@@ -1131,14 +1138,13 @@ async function main() {
     assetLocalScale: 1,
     spatialResampling: false,
     deterministicProof: true,
-    abruptExposedEdge: true,
-    exposedFaces: ['south', 'east'],
+    surfaceOnly: true,
     selectedCandidates: preparedGroupVersions.map((version) => ({
       slot: version.slot,
       versionId: version.id,
       sha256: version.sha256,
       rowRevision: version.rowRevision,
-      faces: ['south', 'east'],
+      role: 'top',
     })),
     slotSnapshots: groupSlotSnapshotsBeforeReview.map((slot) => ({
       slot: slot.slot,
@@ -1146,14 +1152,14 @@ async function main() {
       activeVersionId: slot.activeVersionId,
       lifecycleState: slot.lifecycleState,
     })),
-    acceptanceGroups: [{ groupId: 'terrain/water/side-v1', requiredSlots: groupSlots }],
+    acceptanceGroups: [{ groupId: 'smoke/terrain/surface-v1', requiredSlots: groupSlots }],
   };
   const groupReview = await request(
     'POST', '/api/admin/media-versions/review-batch', adminJson,
     JSON.stringify({
       items: preparedGroupVersions.map((version) => ({ id: version.id, expectedRevision: version.rowRevision })),
       approved: true,
-      notes: 'All eight Water side faces reviewed together at canonical 1x',
+      notes: 'All eight synthetic surface tops reviewed together at canonical 1x',
       surfaceUrl: groupSurfaceUrl,
       evidence: groupProof,
     }), 5000,
@@ -1202,9 +1208,9 @@ async function main() {
   if (
     acceptedFirstSlot.activeVersionId !== nativeVersion.id || acceptedFirstSlot.media.sha256 !== acceptedSha
     || acceptedFirstSlot.productionEligible !== true || acceptedFirstSlot.metadata.privatePrompt !== undefined
-    || acceptedFirstSlot.metadata.acceptance.groupId !== 'terrain/water/side-v1'
+    || acceptedFirstSlot.metadata.acceptance.groupId !== 'smoke/terrain/surface-v1'
   ) throw new Error(`Accepted Water pointer mismatch: ${JSON.stringify(acceptedFirstSlot)}`);
-  const stableAccepted = await get(`/assets/${waterSideSlots[0]}`);
+  const stableAccepted = await get(`/assets/${surfaceTopSlots[0]}`);
   if (stableAccepted.statusCode !== 302 || stableAccepted.headers.location !== `/api/media/${acceptedSha}`) {
     throw new Error(`Stable accepted Water slot did not resolve through backend: ${stableAccepted.statusCode}`);
   }
@@ -1226,6 +1232,22 @@ async function main() {
   // One complete pre-drawn board plate: candidate-declared native dimensions,
   // exact owner v4 alignment proof, slot/version/hash snapshots, transactional
   // CAS rollback, and stable runtime publication all use the shared lifecycle.
+  const allocatedPredrawnPayload = {
+    allocateSlot: 'predrawn-board', domain: 'background', role: 'media', label: 'Allocated board plate',
+    availabilityPolicy: 'critical', provenance: { levelId: 'off-l-allocated-board' },
+  };
+  const allocatedHeaders = { ...adminJson, 'idempotency-key': 'allocated-predrawn-board-smoke' };
+  const allocatedFirst = await request('POST', '/api/admin/media-versions', allocatedHeaders, JSON.stringify(allocatedPredrawnPayload), 5000);
+  const allocatedReplay = await request('POST', '/api/admin/media-versions', allocatedHeaders, JSON.stringify(allocatedPredrawnPayload), 5000);
+  const allocatedFirstBody = JSON.parse(allocatedFirst.body);
+  const allocatedReplayBody = JSON.parse(allocatedReplay.body);
+  if (
+    allocatedFirst.statusCode !== 201 || allocatedReplay.statusCode !== 200
+    || !/^boards\/[0-9a-f-]{36}\/plate\.png$/.test(allocatedFirstBody.version.slot)
+    || allocatedReplayBody.version.id !== allocatedFirstBody.version.id
+    || allocatedReplayBody.version.slot !== allocatedFirstBody.version.slot
+    || allocatedReplayBody.idempotentReplay !== true
+  ) throw new Error(`Backend-assigned pre-drawn slot is not stable/idempotent: ${allocatedFirst.body} ${allocatedReplay.body}`);
   const predrawnSlot = 'boards/fortress-gate/plate.png';
   const predrawnBytes = syntheticPng(1672, 941, '#263648', '#d7b878');
   const predrawnSha = crypto.createHash('sha256').update(predrawnBytes).digest('hex');
@@ -1365,7 +1387,7 @@ async function main() {
 
   const groupedSlotRows = groupSlots.map((slot) => groupedAdminCatalog.slots.find((item) => item.slot === slot));
   const slotContractUpdate = await request(
-    'PATCH', `/api/admin/media-slots/${waterSideSlots[0]}`, adminJson,
+    'PATCH', `/api/admin/media-slots/${surfaceTopSlots[0]}`, adminJson,
     JSON.stringify({
       expectedRevision: groupedSlotRows[0].rowRevision,
       metadata: { fixture: true, acceptance: { mode: 'standalone' } },
@@ -1394,7 +1416,7 @@ async function main() {
     JSON.stringify({
       items: groupedSlotRows.map((slot) => ({ slot: slot.slot, expectedRevision: slot.rowRevision })),
       reason: 'Retire the complete disposable smoke group',
-      evidence: { ownerConfirmed: true, fixture: 'live-media-smoke', groupId: 'terrain/water/side-v1' },
+      evidence: { ownerConfirmed: true, fixture: 'live-media-smoke', groupId: 'smoke/terrain/surface-v1' },
       confirmCriticalRetirement: true,
     }), 5000,
   );
@@ -1424,7 +1446,10 @@ async function main() {
   const groundCoverFixtures = [];
   for (let index = 0; index < groundCoverTerrains.length; index += 1) {
     const terrain = groundCoverTerrains[index];
-    const slot = `groundcover/${terrain}/v0.png`;
+    // Deliberately opaque: neither the installed terrain identity nor variant id
+    // can be inferred from this slot. Typed version metadata and the later
+    // drawable media-role assignment are the only authorities.
+    const slot = `opaque/ground-cover-smoke/${index}.sheet`;
     const bytes = syntheticPng(240, 37, `#${(0x31512f + index * 0x191109).toString(16).padStart(6, '0')}`, '#b9d982');
     const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
     const metadata = {
@@ -1830,7 +1855,10 @@ async function main() {
   for (const [index, [id, structureKind, terrains, anchorX, anchorY, scale, footprint]] of readinessStructures.entries()) {
     await seedSyntheticDrawable({
       id: `structure-${id}`, kind: 'structure', label: `Synthetic ${id}`, sortOrder: index,
-      behavior: { value: id, structureKind, terrains, anchorX, anchorY, scale, footprint, blocking: true },
+      behavior: {
+        value: id, structureKind, terrains, anchorX, anchorY, scale, footprint, blocking: true,
+        splitMode: id === 'oak' ? 'authored' : 'flat-contact',
+      },
       media: { back: `props/${id}/back.png`, front: `props/${id}/front.png` },
     });
   }
@@ -1840,10 +1868,221 @@ async function main() {
       behavior: {
         terrain,
         variants: [{ role: 'v0', terrain, id: 0, frameWidth: 40, frameHeight: 37, frameCount: 6, baseX: 20, baseY: 28, contentWidth: 18 }],
-        ...(terrain === 'water' ? { edgeOnly: true, count: { sparse: 2, filled: 3 } } : {}),
+        edgeOnly: terrain === 'water',
+        count: { sparse: 2, filled: 3 },
       },
-      media: { v0: `groundcover/${terrain}/v0.png` },
+      media: { v0: groundCoverFixtures.find((fixture) => fixture.metadata.runtime.groundCover.terrain === terrain).slot },
     });
+  }
+  for (const [role, [width, height]] of Object.entries({ base: [72, 96], west: [26, 84], north: [26, 84] })) {
+    await seedSyntheticReadinessMedia({
+      slot: `wall-decor/test-banner-${role}.png`, domain: 'wall-decor', role, width, height,
+    });
+  }
+  await seedSyntheticDrawable({
+    id: 'test-banner-source', kind: 'wall-decor', label: 'Synthetic banner source',
+    behavior: {
+      decorKind: 'banner', mountX: 36, mountY: 10, default: true,
+      faces: {
+        west: { mountX: 13, mountY: 10, previewX: 42, previewY: 24 },
+        north: { mountX: 13, mountY: 11, previewX: 84, previewY: 24 },
+      },
+    },
+    media: {
+      base: 'wall-decor/test-banner-base.png',
+      west: 'wall-decor/test-banner-west.png',
+      north: 'wall-decor/test-banner-north.png',
+    },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-wall-art', kind: 'wall-art', label: 'Synthetic wall art',
+    behavior: {
+      span: 1, default: true,
+      slots: [{ id: 'test-west', sourceId: 'test-banner-source', face: 'west', x: 42, y: 24, scale: 1 }],
+    },
+    media: {},
+  });
+  const sharedPresentationSlot = 'wall-decor/test-banner-base.png';
+  await seedSyntheticDrawable({
+    id: 'test-subterrain-opaque', kind: 'subterrain', label: 'Synthetic Subterrain',
+    behavior: { default: true }, media: { surface: sharedPresentationSlot },
+  });
+  for (const [sortOrder, [kind, id, value, roles]] of [
+    ['road-material', 'test-road-material', 'test-road', [...Array.from({ length: 16 }, (_, index) => `frame-${index}`), 'thumb']],
+    ['river-material', 'test-river-material', 'test-river', [...Array.from({ length: 16 }, (_, index) => `frame-${index}`), 'thumb']],
+    ['fence-material', 'test-fence-material', 'test-fence', ['frame-2', 'frame-4', 'frame-6', 'thumb', 'post', 'post-thumb']],
+    ['wall-material', 'test-wall-material', 'test-wall', ['frame-1', 'frame-8', 'frame-9', 'thumb']],
+  ].entries()) {
+    await seedSyntheticDrawable({
+      id, kind, label: `Synthetic ${value}`, sortOrder,
+      behavior: { value, default: true },
+      media: Object.fromEntries(roles.map((role) => [role, sharedPresentationSlot])),
+    });
+  }
+  await seedSyntheticDrawable({
+    id: 'structure-test-doodad', kind: 'structure', label: 'Synthetic doodad', sortOrder: readinessStructures.length,
+    behavior: {
+      value: 'test-doodad', structureKind: 'doodad', propKind: 'rock', terrains: ['grass'],
+      anchorX: 36, anchorY: 80, scale: 1, blocking: false, splitMode: 'authored', default: true,
+    },
+    media: { back: sharedPresentationSlot, front: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-ui-surface', kind: 'ui-surface', label: 'Synthetic UI surface',
+    behavior: { value: 'test-surface', approach: 'synthetic', material: 'stone', tilePx: 96, default: true },
+    media: { surface: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-ui-slider', kind: 'ui-slider', label: 'Synthetic UI slider',
+    behavior: {
+      value: 'test-slider', approach: 'css', material: 'stone', fill: '#aaa', channel: '#222',
+      edge: '#444', handle: '#888', handleLight: '#ccc', handleDark: '#111', preferred: true,
+    },
+    metadata: { description: 'Synthetic smoke slider' }, media: {},
+  });
+  for (const [sortOrder, family] of ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'].entries()) {
+    await seedSyntheticDrawable({
+      id: `terrain-family-${family}`, kind: 'terrain-family', label: `Synthetic ${family}`, sortOrder,
+      behavior: {
+        value: family,
+        gameplayTerrain: family,
+        rendersGameplayTerrains: family === 'stone' ? ['stone', 'road', 'bridge', 'cliff', 'rock'] : [family],
+        roles: ['level-editor-scatter',
+          ...(['grass', 'dirt', 'stone'].includes(family) ? ['prop-seat-preview', 'wall-art-preview'] : []),
+          ...(['grass', 'stone', 'water'].includes(family) ? ['unit-art-preview'] : []),
+          ...(family === 'grass' ? ['prop-seat-preview-default', 'unit-art-preview-default'] : []),
+          ...(family === 'stone' ? ['wall-art-preview-default'] : [])],
+        ...(family === 'grass' ? { default: true, scatterDefaultShare: 60, defaultGroundCoverId: 'grass' } : {}),
+        ...(family === 'stone' ? { scatterDefaultShare: 40 } : {}),
+        ...(['sand', 'water'].includes(family) ? { defaultGroundCoverId: family } : {}),
+      }, media: {},
+    });
+  }
+  for (const [sortOrder, family] of ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'].entries()) {
+    await seedSyntheticDrawable({
+      id: `test-surface-${family}`, kind: 'terrain-surface', label: `Synthetic ${family} surface`, sortOrder,
+      behavior: { family, role: 'base', probability: 1 }, metadata: { familyLabel: family },
+      media: { top: sharedPresentationSlot, source: sharedPresentationSlot },
+    });
+  }
+  await seedSyntheticDrawable({
+    id: 'test-terrain-review', kind: 'terrain-review', label: 'Synthetic terrain review',
+    behavior: { family: 'grass', role: 'variant' }, media: { preview: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-terrain-comparison', kind: 'terrain-comparison', label: 'Synthetic terrain comparison',
+    behavior: { family: 'grass', variant: 0, default: true }, media: { raw: sharedPresentationSlot, processed: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-background-set', kind: 'background-set', label: 'Synthetic background set',
+    behavior: { default: true },
+    media: Object.fromEntries(['world', ...['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'].map((piece) => `portrait-${piece}`)]
+      .map((role) => [role, sharedPresentationSlot])),
+  });
+  await seedSyntheticDrawable({
+    id: 'test-homepage-scene', kind: 'animated-scene', label: 'Synthetic homepage scene',
+    behavior: { roles: ['homepage-scene'], width: 320, height: 180 }, media: { background: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-waterfall', kind: 'scene-animation', label: 'Synthetic waterfall',
+    behavior: { default: true, sceneRole: 'homepage-scene', x: 10, y: 20, width: 40, height: 50, frames: 12, frameMs: 140 },
+    media: { sheet: sharedPresentationSlot },
+  });
+  for (const [sortOrder, piece] of ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'].entries()) {
+    await seedSyntheticDrawable({
+      id: `test-portrait-${piece}`, kind: 'unit-portrait', label: `Synthetic ${piece} portraits`, sortOrder,
+      behavior: { piece },
+      media: Object.fromEntries(['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white']
+        .map((palette) => [palette, sharedPresentationSlot])),
+    });
+    await seedSyntheticDrawable({
+      id: `test-portrait-treatment-${piece}`, kind: 'portrait-treatment', label: `Synthetic ${piece} treatment`, sortOrder,
+      behavior: { piece, method: 'test-treatment', defaultPalette: 'navy-blue', default: true },
+      metadata: { methodLabel: 'Test treatment', methodDescription: 'Synthetic portrait treatment' },
+      media: Object.fromEntries(['navy-blue', 'crimson', 'golden', 'emerald', 'black', 'white']
+        .map((palette) => [palette, sharedPresentationSlot])),
+    });
+  }
+  for (const [sortOrder, id] of ['test-neutral-stone-a', 'test-neutral-stone-b'].entries()) {
+    await seedSyntheticDrawable({
+      id, kind: 'neutral-unit-art', label: `Synthetic neutral stone ${sortOrder + 1}`, sortOrder,
+      behavior: {},
+      media: Object.fromEntries(['south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east']
+        .map((direction) => [direction, sharedPresentationSlot])),
+    });
+  }
+  const appUiRoles = [
+    'og-default',
+    'ui-main-menu-background-scene-v1-avif',
+    'ui-kit-icons-brand-shield-png',
+    'ui-surfaces-baseline-stone-blue-avif',
+    'ui-surfaces-hybrid-wood-oak-png',
+    'ui-main-menu-icons-carved-settings-png',
+    'ui-main-menu-icons-carved-solo-skirmish-png',
+    'ui-main-menu-icons-carved-campaign-editor-png',
+    'ui-main-menu-icons-carved-lobbies-png',
+    'ui-kit-icons-gear-png',
+    'ui-kit-icons-speaker-png',
+    'ui-kit-icons-knight-png',
+    'ui-kit-icons-wrench-png',
+  ];
+  await seedSyntheticDrawable({
+    id: 'app-ui', kind: 'app-ui', label: 'Synthetic application UI',
+    behavior: { roles: ['application-ui'], requiredRoles: appUiRoles },
+    media: Object.fromEntries(appUiRoles.map((role) => [role, sharedPresentationSlot])),
+  });
+  await seedSyntheticDrawable({
+    id: 'test-app-font', kind: 'app-font', label: 'Synthetic application font',
+    behavior: { family: 'Synthetic UI', style: 'normal', weight: 400, display: 'swap', format: 'woff2' },
+    media: { font: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-ui-scrollbar', kind: 'ui-scrollbar', label: 'Synthetic UI scrollbar',
+    behavior: { previewKind: 'sprite', roles: ['installed-scrollbar'] }, media: { preview: sharedPresentationSlot },
+  });
+  for (const [sortOrder, value] of ['primary', 'neutral', 'danger', 'panel', 'row', 'field-input'].entries()) {
+    await seedSyntheticDrawable({ id: `ui-kit-frame-${value}`, kind: 'ui-kit-frame', label: `Synthetic ${value}`, sortOrder,
+      behavior: { value }, media: { frame: sharedPresentationSlot } });
+  }
+  for (const [sortOrder, [value, label, route, viewerStatus]] of [
+    ['main-menu', 'Main Menu', '/', 'functional'], ['settings', 'Settings', '/settings', 'functional'], ['skirmish', 'Skirmish', '/play', 'stub'],
+    ['campaign-editor', 'Editor', '/editor', 'functional'], ['level-editor', 'Level Editor', '/editor/level', 'stub'], ['lobbies', 'Lobbies', '/lobbies', 'stub'],
+  ].entries()) {
+    await seedSyntheticDrawable({ id: `studio-page-${value}`, kind: 'studio-page', label, sortOrder,
+      behavior: { value, route, viewerStatus, default: value === 'main-menu', ...(value === 'level-editor' ? { roles: ['chrome-lab-page'], chromeLabRoute: '/editor/level?chromeLab=1' } : {}) },
+      metadata: { blurb: `Synthetic ${label}`, ...(value === 'level-editor' ? { chromeLabBadge: 'outer + inner chrome' } : {}) }, media: { thumbnail: sharedPresentationSlot } });
+  }
+  for (const [sortOrder, [value, label, route]] of [
+    ['play', 'Play', '/play'], ['campaign-editor', 'Editor', '/editor'], ['lobbies', 'Lobbies', '/lobbies'], ['settings', 'Settings', '/settings'],
+  ].entries()) {
+    await seedSyntheticDrawable({ id: `menu-mode-${value}`, kind: 'menu-mode', label, sortOrder,
+      behavior: { value, route, ...(value === 'settings' ? { roles: ['settings'] } : {}) }, media: { icon: sharedPresentationSlot } });
+  }
+  const wallArtBatchRollback = await request(
+    'PUT', '/api/admin/drawable-assets', adminJson,
+    JSON.stringify({ assets: [
+      {
+        id: 'test-wall-art', kind: 'wall-art', label: 'Must roll back', sortOrder: 0,
+        lifecycleState: 'active', behavior: {
+          span: 1,
+          slots: [{ id: 'test-west', sourceId: 'test-banner-source', face: 'west', x: 42, y: 24, scale: 1 }],
+        }, metadata: {}, media: {}, expectedRevision: 1,
+      },
+      {
+        id: 'test-missing-wall-art', kind: 'wall-art', label: 'Missing conflict row', sortOrder: 1,
+        lifecycleState: 'active', behavior: { span: 1, slots: [] }, metadata: {}, media: {}, expectedRevision: 1,
+      },
+    ] }), 5000,
+  );
+  if (
+    wallArtBatchRollback.statusCode !== 404
+    || JSON.parse(wallArtBatchRollback.body).error !== 'drawable_asset_not_found'
+  ) throw new Error(`Drawable batch conflict should fail atomically: ${wallArtBatchRollback.statusCode} ${wallArtBatchRollback.body}`);
+  const drawableAfterRollback = JSON.parse((await get(
+    '/api/admin/drawable-assets', { cookie: 'better-auth.session=abc' }, 5000,
+  )).body).assets.find((asset) => asset.id === 'test-wall-art');
+  if (drawableAfterRollback?.label !== 'Synthetic wall art' || drawableAfterRollback?.rowRevision !== 1) {
+    throw new Error(`Drawable batch conflict did not roll back: ${JSON.stringify(drawableAfterRollback)}`);
   }
   for (const [index, slot] of [
     'ui/chrome/outer/atom.png',
@@ -1856,12 +2095,40 @@ async function main() {
       slot, domain: 'ui-kit', role: 'media', width: 32 + index, height: 32 + index,
     });
   }
+  await seedSyntheticDrawable({
+    id: 'installed-chrome', kind: 'chrome-family', label: 'Synthetic installed Chrome',
+    behavior: { roles: ['installed-chrome'],
+      outer: { atomSourceId: 'ui/chrome/outer/atom.png', railSourceId: 'ui/chrome/outer/rail.png', atomTurns: 0, atomSize: 41, railThickness: 24, atomX: 0, atomY: 0, atomLeftX: 0, atomRightX: 0, atomTopY: 0, atomBottomY: 0, railUnderlap: 14, railFit: 'stretch', fillMode: 'surface', fillTintId: 'blue', fillSurfaceId: 'baseline-stone-blue', fillSurfaceScale: 768, fillBoxLeft: 0, fillBoxRight: 0, fillBoxTop: 0, fillBoxBottom: 0, contentPadding: 31, fillAlpha: 0 },
+      inner: { atomSourceId: 'ui/chrome/inner/atom.png', railSourceId: 'ui/chrome/inner/rail.png', atomTurns: 1, atomSize: 11, railThickness: 7, atomX: 0, atomY: 0, atomLeftX: 0, atomRightX: 0, atomTopY: 0, atomBottomY: 0, railUnderlap: 8, railFit: 'tile', fillMode: 'tint', fillTintId: 'night', fillSurfaceId: 'hybrid-stone-blue', fillSurfaceScale: 384, fillBoxLeft: 0, fillBoxRight: 0, fillBoxTop: 0, fillBoxBottom: 0, contentPadding: 0, fillAlpha: 0.82 },
+      dividers: {
+        outer: { atomSourceId: 'ui/chrome/divider/joint.png', atomTurns: 0, atomSize: 32, bandHeight: 34, atomX: 0, atomY: 0, atomLeftX: 0, atomRightX: 0, atomLeftY: 0, atomRightY: 0 },
+        inner: { atomSourceId: 'ui/chrome/divider/joint.png', atomTurns: 0, atomSize: 11, bandHeight: 7, atomX: 0, atomY: 0, atomLeftX: 0, atomRightX: 0, atomLeftY: 0, atomRightY: 0 },
+      },
+    },
+    media: { 'outer-atom': 'ui/chrome/outer/atom.png', 'outer-rail': 'ui/chrome/outer/rail.png', 'inner-atom': 'ui/chrome/inner/atom.png', 'inner-rail': 'ui/chrome/inner/rail.png', 'divider-joint': 'ui/chrome/divider/joint.png' },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-artwork-reference', kind: 'artwork-reference', label: 'Synthetic artwork reference',
+    behavior: { route: '/' }, media: { concept: sharedPresentationSlot },
+  });
+  const testNineSliceGeometry = { coolCorners: { tl: { dx: 0, dy: 0 }, tr: { dx: 0, dy: 0 }, bl: { dx: 0, dy: 0 }, br: { dx: 0, dy: 0 } }, pipes: { top: 0, bottom: 0, left: 0, right: 0 }, frameScale: 1, brackets: { tl: { dx: 0, dy: 0 }, tr: { dx: 0, dy: 0 }, bl: { dx: 0, dy: 0 }, br: { dx: 0, dy: 0 } }, bracketScale: 1, content: 8, fill: 4 };
+  for (const [sortOrder, id] of ['panel', 'mode-button'].entries()) await seedSyntheticDrawable({
+    id, kind: 'nine-slice', label: `Synthetic ${id}`, sortOrder,
+    behavior: { kind: 'frame', roles: id === 'mode-button' ? ['frame-editor-default', 'settings-tab'] : ['settings-panel'], frame: { w: 96, h: 96 }, geometry: testNineSliceGeometry },
+    media: { corner: sharedPresentationSlot, edge: sharedPresentationSlot, fill: sharedPresentationSlot, target: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'panel-divider', kind: 'nine-slice', label: 'Synthetic divider', sortOrder: 2,
+    behavior: { kind: 'bar', roles: ['divider-editor-default'], frame: { w: 96, h: 24 }, railSource: 'edge', railFit: 'tile', geometry: { frameWidth: 16, reach: 14, dividerH: 34, scale: 1, count: 3, backing: 'fill', jx: 0, jy: 0 } },
+    media: { edge: sharedPresentationSlot, tee: sharedPresentationSlot, 'panel-line': sharedPresentationSlot, 'host-frame': sharedPresentationSlot, 'host-line': sharedPresentationSlot },
+  });
 
   const completeReadiness = await get('/ready', {}, 5000);
   const completeReadinessBody = JSON.parse(completeReadiness.body);
   if (
     completeReadiness.statusCode !== 200 || completeReadinessBody.status !== 'ready'
     || !Number.isInteger(completeReadinessBody.catalogRevision)
+    || !Number.isInteger(completeReadinessBody.drawableCatalogRevision)
     || completeReadinessBody.propSeatsRevision !== 1
     || !Number.isInteger(completeReadinessBody.unitCatalogRevision)
   ) throw new Error(
@@ -2132,7 +2399,7 @@ async function main() {
     officialPlay.statusCode !== 200 ||
     !officialPlay.body.includes('Test Level') ||
     !officialPlay.body.includes('/assets/level-thumb/off-l-test.png') ||
-    officialPlay.body.includes('/assets/og/default.png')
+    officialPlay.body.includes('/api/media/')
   ) {
     throw new Error(`Official play page should advertise the level thumbnail: ${officialPlay.statusCode}`);
   }

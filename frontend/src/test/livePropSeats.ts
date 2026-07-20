@@ -6,7 +6,7 @@ import {
 // Explicit synthetic renderer initialization. These values exercise the seat
 // schema and code-owned base identities; they are not imported production data.
 export const TEST_PROP_SEATS: PropSeatMap = {
-  oak: { anchorX: 96, anchorY: 255, scale: 1, w: 2, h: 2 },
+  oak: { anchorX: 96, anchorY: 255, scale: 1, w: 2, h: 2, default: true },
   cottage: { anchorX: 91, anchorY: 110, scale: 0.62, w: 2, h: 2 },
   cabin: { anchorX: 118, anchorY: 107, scale: 0.35, w: 1, h: 1 },
   lodge: { anchorX: 103, anchorY: 126, scale: 1, w: 2, h: 2 },

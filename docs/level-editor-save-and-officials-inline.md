@@ -159,10 +159,9 @@ green with rewritten store tests. No remaining `officialMode` references.
   (`decodeBoard`); else derive an `EditorBoard` from `layers` (terrain type → a
   default Studio tile per family; units → placements w/ facing).
 - `editorBoardToLevel(board, meta): Level` — build a valid `Level`:
-  - `layers.terrain`: one `TerrainCell` per cell; `terrain` via a
-    **family→TerrainType** map (`FAMILY_TO_TERRAIN`, mirroring `game/setup.ts`),
-    `elevation: 0`, `cover` from `board.cover`. Decorative families fall back to
-    `grass`.
+  - `layers.terrain`: one `TerrainCell` per cell; `terrain` comes from the
+    database-owned terrain-family behavior projection, with `elevation: 0` and
+    `cover` from `board.cover`. Missing family behavior fails closed.
   - `layers.units`: `{x,y,type,side}` (faction→side) + `facing` (8-dir direction).
   - `layers.decals`: `[]` (doodads ride in `boardCode`; decals mapping is Phase 4).
   - `layers.zones`: **real zones** as of ADR-0050 — `editorBoardToLevel` now

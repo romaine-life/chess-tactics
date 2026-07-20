@@ -43,7 +43,7 @@ function expectRegisteredFamily(source: string, legacyClass: string, unit: strin
 
 describe('Level Editor chrome hierarchy', () => {
   it('labels scenic terrain extents with the board cardinal edges', () => {
-    expect(levelEditor).toContain("import { socketEdges, type EdgeName, type TileFamilyId } from '../core/tileSockets';");
+    expect(levelEditor).toMatch(/import \{[^}]*\bsocketEdges\b[^}]*\btype EdgeName\b[^}]*\btype TileFamilyId\b[^}]*\} from '\.\.\/core\/tileSockets';/s);
     expect(levelEditor).toMatch(/SCENIC_TERRAIN_EXTENT_BY_BOARD_EDGE[\s\S]*?north: 'top',[\s\S]*?east: 'right',[\s\S]*?south: 'bottom',[\s\S]*?west: 'left'/);
     expect(levelEditor).toContain('{socketEdges.map((edge) => {');
     expect(levelEditor).toContain('const cardinalLabel = edge[0].toUpperCase() + edge.slice(1);');

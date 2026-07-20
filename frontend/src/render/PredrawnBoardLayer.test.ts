@@ -171,7 +171,6 @@ describe('pre-drawn board surface', () => {
     )).toEqual({
       surface: {
         kind: 'predrawn',
-        slot: 'boards/review/uncommitted/plate.png',
         frameWidth: 1672,
         frameHeight: 940,
       },

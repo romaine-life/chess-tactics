@@ -4,6 +4,8 @@ set -eu
 repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
 printf 'chess-tactics Codex worktree setup: %s\n' "$repo_dir"
+printf 'requesting authenticated Codex session grant\n'
+node "$repo_dir/bin/codex-auth-grant.mjs"
 printf 'installing frontend dependencies\n'
 npm --prefix "$repo_dir/frontend" ci
 

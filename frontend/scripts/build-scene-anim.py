@@ -30,7 +30,8 @@ columns is more robust than chasing per-region thresholds.
 <runDir> holds PixelLab v3 frames as v0/<i>.png (i=0..frames-1 used).
 Output: an explicit temporary candidate directory; upload the exact sheet through
 the live-media admin workflow.
-Region + frame data must match SCENE_ANIMS in src/ui/sceneBackdrop.tsx.
+After upload, record the region, frame count, and timing in the database-owned
+``scene-animation`` drawable row; the application contains no compiled scene inventory.
 """
 
 import argparse

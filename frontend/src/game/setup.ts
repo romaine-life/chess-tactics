@@ -8,7 +8,7 @@ import { createRng, type Rng } from '../core/rng';
 import { isPassableTerrain } from '../core/terrain';
 import { tileAssets, tileFamilies } from '../art/tileset';
 import { generateSocketBoard } from '../core/tileBoardGenerator';
-import type { TileFamilyId } from '../core/tileSockets';
+import { gameplayTerrainForFamily } from '../core/tileSockets';
 import { PLAYABLE_PIECE_TYPES, defaultFacingForSide } from '../core/pieces';
 import { propCells, propDef } from '../core/props';
 import { castleRulesForLevel, drawRulesForLevel, promotionRulesForLevel, spawnEventsForLevel, zoneCellsByIds } from '../core/levelEvents';
@@ -16,15 +16,6 @@ import { recordPosition } from '../core/rules';
 
 const DEFAULT_SIZE: BoardSize = { cols: 8, rows: 12 };
 const ENEMY_CHOICES: readonly PieceType[] = ['knight', 'bishop', 'rook', 'queen'];
-
-const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
-  grass: 'grass',
-  stone: 'stone',
-  water: 'water',
-  dirt: 'dirt',
-  pebble: 'pebble',
-  sand: 'sand',
-};
 
 function buildTerrain(size: BoardSize, seed: number): TerrainCell[] {
   const board = generateSocketBoard({
@@ -37,7 +28,7 @@ function buildTerrain(size: BoardSize, seed: number): TerrainCell[] {
   return board.cells.map((cell) => ({
     x: cell.x,
     y: cell.y,
-    terrain: FAMILY_TO_TERRAIN[cell.terrain],
+    terrain: gameplayTerrainForFamily(cell.terrain),
     elevation: 0,
   }));
 }

@@ -112,8 +112,18 @@ function suffixKitCatalog({
   const components = post ? ['rail-e', 'rail-s', 'post'] : ['rail-e', 'rail-s'];
   const versions = components.map((component) => version({
     id: `${id}-${component}-version`,
-    slot: `review/fences/${id}-${component}.png`,
+    slot: `opaque/review/${component}/${id}`,
     status: lifecycle,
+    metadata: {
+      fenceReview: {
+        groupId: `review/${id}`,
+        batchId: 'synthetic-batch',
+        kitId: id,
+        label: id.split('-').map((part) => `${part[0].toUpperCase()}${part.slice(1)}`).join(' '),
+        material: id.includes('stone') ? 'stone' : 'wood',
+        component,
+      },
+    },
   }));
   const active = lifecycle === 'accepted' || lifecycle === 'legacy-bridge';
   const slots = versions.map((item) => slot(
@@ -199,7 +209,7 @@ describe('fence art review', () => {
     );
   });
 
-  it('derives complete review membership and bridge lifecycle from active backend versions', () => {
+  it('derives complete review membership and bridge lifecycle from explicit backend metadata', () => {
     const kits = fenceArtKits(suffixKitCatalog());
 
     expect(kits).toHaveLength(1);
@@ -232,6 +242,12 @@ describe('fence art review', () => {
     expect(kits[0].post).toBeUndefined();
     expect(kits[0].railE).toMatch(/^\/api\/admin\/media\//);
     expect(fenceArtworkBackendReview(kits[0]).statusLabel).toBe('Backend candidate · bridge-only');
+  });
+
+  it('does not manufacture review kits from semantic-slot filenames', () => {
+    const filenameOnly = suffixKitCatalog();
+    filenameOnly.versions = filenameOnly.versions.map((item) => ({ ...item, metadata: {} }));
+    expect(fenceArtKits(filenameOnly)).toEqual([]);
   });
 
   it('derives archived and accepted lifecycle from backend records and exposes missing acceptance registration', () => {

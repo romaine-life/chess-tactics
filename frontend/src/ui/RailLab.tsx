@@ -219,7 +219,10 @@ function selectedMember(
 ): NativeRailCandidateSource {
   const sources = family[orientation];
   const selectedId = selections[family.id]?.[orientation];
-  return sources.find((source) => source.id === selectedId) ?? sources[0];
+  if (!selectedId) return sources[0];
+  const selected = sources.find((source) => source.id === selectedId);
+  if (!selected) throw new Error(`Selected ${orientation} rail source "${selectedId}" is unavailable`);
+  return selected;
 }
 
 export function RailLab({

@@ -9,7 +9,8 @@ const livePlay = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8'
 
 describe('unified Play menu contract (ADR-0074)', () => {
   it('has one top-level Play entry and no retired picker destinations', () => {
-    expect(mainMenu).toContain("{ slug: 'play', label: 'Play'");
+    expect(mainMenu).toContain("drawableAssets('menu-mode')");
+    expect(mainMenu).not.toMatch(/MENU_TABS[^=]*=\s*\[/);
     expect(mainMenu).not.toContain("href: '/campaign'");
     expect(mainMenu).not.toContain("'solo-skirmish': '/skirmish'");
     expect(mainMenu).not.toContain("ShellDest = 'settings' | 'campaign'");

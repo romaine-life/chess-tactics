@@ -1,5 +1,4 @@
 import {
-  INSTALLED_CHROME_LIVE_SLOTS,
   type GroundCoverTerrain,
   type LiveMediaCatalog,
   type LiveMediaSlot,
@@ -121,7 +120,7 @@ export function testStructureMediaSlots(): LiveMediaSlot[] {
 
 /** Generated installed-Chrome records for startup/readiness tests. */
 export function testInstalledChromeMediaSlots(): LiveMediaSlot[] {
-  return Object.values(INSTALLED_CHROME_LIVE_SLOTS).map((slot, index) => {
+  return ['test/chrome/outer-atom.png', 'test/chrome/outer-rail.png', 'test/chrome/inner-atom.png', 'test/chrome/inner-rail.png', 'test/chrome/divider-joint.png'].map((slot, index) => {
     const sha256 = (index + 8192).toString(16).padStart(64, '0');
     return {
       slot,

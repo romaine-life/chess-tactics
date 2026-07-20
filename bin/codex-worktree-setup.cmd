@@ -5,6 +5,9 @@ for %%I in ("%~dp0..") do set "REPO_DIR=%%~fI"
 
 echo chess-tactics Codex worktree setup: %REPO_DIR%
 
+echo requesting authenticated Codex session grant
+node "%REPO_DIR%\bin\codex-auth-grant.mjs" || exit /b !ERRORLEVEL!
+
 rem Codex-managed worktrees start at a detached HEAD by default. Give every
 rem environment a durable, unique branch before an agent can modify files.
 set "CURRENT_BRANCH="

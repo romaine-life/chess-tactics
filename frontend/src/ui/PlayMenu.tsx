@@ -30,10 +30,18 @@ import { NavButton } from './shared/NavButton';
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 import { skirmishProfileLevels } from './skirmishProfiles';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { installedUiMedia } from './installedUiMedia';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 
-const ICONS = '/assets/ui/main-menu/icons-carved';
-const CAMPAIGN_ICON = `${ICONS}/campaign-editor.png`;
+const PLAY_ICON_ROLES = {
+  'solo-skirmish': 'ui-main-menu-icons-carved-solo-skirmish-png',
+  'campaign-editor': 'ui-main-menu-icons-carved-campaign-editor-png',
+  'level-editor': 'ui-main-menu-icons-carved-level-editor-png',
+  lobbies: 'ui-main-menu-icons-carved-lobbies-png',
+} as const;
+type PlayIcon = keyof typeof PLAY_ICON_ROLES;
+const carvedIcon = (name: PlayIcon) => installedUiMedia(PLAY_ICON_ROLES[name]);
+const CAMPAIGN_ICON = carvedIcon('campaign-editor');
 
 function PlayRailTab({
   label,
@@ -44,7 +52,7 @@ function PlayRailTab({
 }: {
   label: string;
   href: string;
-  icon: string;
+  icon: PlayIcon;
   active: boolean;
   index: number;
 }): ReactElement {
@@ -57,7 +65,7 @@ function PlayRailTab({
       aria-current={active ? 'page' : undefined}
     >
       <span className="settings-tab-icon" aria-hidden="true">
-        <img src={`${ICONS}/${icon}.png`} alt="" />
+        <img src={carvedIcon(icon)} alt="" />
       </span>
       <FittedTabLabel>{label}</FittedTabLabel>
     </NavButton>
@@ -114,7 +122,7 @@ function GatedLevelThumbnail(props: ComponentProps<typeof LevelThumbnail>): Reac
 
 function ThumbnailSurface({ levels, children }: { levels: readonly Level[]; children: ReactNode }): ReactElement {
   const levelIds = levels.map((level) => level.id);
-  const signature = levels.map((level) => `${level.id}:${levelThumbnailUrl(level.id) ?? 'read-through'}`).join('|');
+  const signature = levels.map((level) => `${level.id}:${levelThumbnailUrl(level.id) ?? 'missing'}`).join('|');
   const [painted, setPainted] = useState<ReadonlySet<string>>(() => new Set());
   const [failure, setFailure] = useState<Error | null>(null);
   const [attempt, setAttempt] = useState(0);

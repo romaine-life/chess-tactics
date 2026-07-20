@@ -1,5 +1,3 @@
-import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
-
 // Cold-load reveal director.
 //
 // On a FRESH load of the main menu (route "/"), background, title bar, and buttons
@@ -21,11 +19,10 @@ import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 // the store stays in its default fully-revealed state, so nothing ever hides or blinks.
 
 export type RevealLayer = 'bg' | 'title' | 'buttons' | 'rain';
+import { installedUiMedia } from '../installedUiMedia';
 
 const LADDER: RevealLayer[] = ['bg', 'title', 'buttons', 'rain'];
 const LAST = LADDER.length - 1;
-
-const BACKGROUND_SLOT = 'ui/main-menu/background-scene-v1.avif';
 
 // stageIndex = the highest ladder layer currently allowed to be visible. Default is
 // LAST (everything revealed) so any route that never arms shows instantly.
@@ -117,7 +114,7 @@ export function armForColdHome(): void {
   // paint before the background pixels are on screen. This probe shares the preloaded,
   // high-priority request from main.tsx (same URL -> one fetch).
   const img = new Image();
-  const backgroundUrl = resolvedLiveMediaUrl(BACKGROUND_SLOT);
+  const backgroundUrl = installedUiMedia('ui-main-menu-background-scene-v1-avif');
   img.decoding = 'async';
   try {
     (img as unknown as { fetchPriority?: string }).fetchPriority = 'high';

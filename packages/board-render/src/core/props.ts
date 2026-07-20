@@ -62,10 +62,9 @@ export type PropSeatEntry = {
   kind?: PropKind;
   terrains?: string[];
   blocking?: boolean;
+  default?: boolean;
 };
 export type PropSeatMap = Record<string, PropSeatEntry>;
-
-const DEFAULT_FOOTPRINT = 2;
 
 // There is intentionally no packaged seed or last-good fallback. Application
 // startup and server thumbnails hydrate this before importing/rendering a board.
@@ -98,6 +97,9 @@ export function assertPropSeatMap(value: unknown): asserts value is PropSeatMap 
   for (const [id, raw] of Object.entries(value)) {
     if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new Error(`invalid prop seats: prop id "${id}" is not a lowercase slug`);
     if (!isRecord(raw)) throw new Error(`invalid prop seats: seat "${id}" must be an object`);
+    if (baseIds.includes(id) && (!(Number.isInteger(raw.w) && Number(raw.w) >= 1) || !(Number.isInteger(raw.h) && Number(raw.h) >= 1))) {
+      throw new Error(`invalid prop seats: required prop "${id}" needs an explicit footprint`);
+    }
     if (!Number.isFinite(raw.anchorX) || !Number.isFinite(raw.anchorY)) {
       throw new Error(`invalid prop seats: seat "${id}" needs numeric anchorX/anchorY`);
     }
@@ -152,7 +154,26 @@ export function assertPropSeatMap(value: unknown): asserts value is PropSeatMap 
     if (Object.hasOwn(raw, 'label') && typeof raw.label !== 'string') {
       throw new Error(`invalid prop seats: seat "${id}" label must be a string`);
     }
+    if (Object.hasOwn(raw, 'default') && typeof raw.default !== 'boolean') {
+      throw new Error(`invalid prop seats: seat "${id}" default must be boolean`);
+    }
+    if (raw.base && (typeof raw.label !== 'string' || !raw.label.trim())) {
+      throw new Error(`invalid prop seats: variant "${id}" needs an explicit label`);
+    }
+    if (raw.placement) {
+      if (typeof raw.label !== 'string' || !raw.label.trim()
+        || (raw.kind !== 'tree' && raw.kind !== 'house' && raw.kind !== 'rock')
+        || !Number.isInteger(raw.w) || Number(raw.w) < 1
+        || !Number.isInteger(raw.h) || Number(raw.h) < 1
+        || typeof raw.blocking !== 'boolean'
+        || !Array.isArray(raw.terrains) || raw.terrains.length === 0
+        || raw.terrains.some((terrain) => typeof terrain !== 'string' || !terrain)) {
+        throw new Error(`invalid prop seats: authored ${raw.placement} "${id}" needs explicit installed configuration`);
+      }
+    }
   }
+  const defaults = Object.entries(value).filter(([, raw]) => isRecord(raw) && raw.default === true);
+  if (defaults.length !== 1) throw new Error(`invalid prop seats: expected one default prop, found ${defaults.length}`);
 }
 
 function seat(seats: PropSeatMap, id: string): { anchorX: number; anchorY: number; scale: number } {
@@ -160,9 +181,6 @@ function seat(seats: PropSeatMap, id: string): { anchorX: number; anchorY: numbe
   if (!s) throw new Error(`prop seats document has no seat for prop "${id}"`);
   return { anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale };
 }
-const footW = (seats: PropSeatMap, id: string): number => seats[id]?.w ?? DEFAULT_FOOTPRINT;
-const footH = (seats: PropSeatMap, id: string): number => seats[id]?.h ?? DEFAULT_FOOTPRINT;
-
 export interface PropDef {
   id: string;
   label: string;
@@ -205,8 +223,8 @@ function baseDefs(seats: PropSeatMap): PropDef[] {
     id: asset.id,
     label: asset.label,
     kind: asset.propKind ?? (asset.kind === 'tree' || asset.kind === 'rock' ? asset.kind : 'house'),
-    w: seats[asset.id]?.w ?? asset.footprint?.w ?? DEFAULT_FOOTPRINT,
-    h: seats[asset.id]?.h ?? asset.footprint?.h ?? DEFAULT_FOOTPRINT,
+    w: seats[asset.id].w!,
+    h: seats[asset.id].h!,
     blocking: asset.blocking,
     terrains: asset.terrains,
     spriteId: asset.id,
@@ -230,7 +248,7 @@ function variantDefs(seats: PropSeatMap, bases: readonly PropDef[]): PropDef[] {
     out.push({
       ...base, // inherit kind/blocking/terrains/spriteId/family from the base
       id,
-      label: s.label ?? `${base.label} (${id})`,
+      label: s.label!,
       // Footprint: a variant inherits the base's cells unless its entry overrides w/h.
       w: s.w ?? base.w,
       h: s.h ?? base.h,
@@ -284,18 +302,18 @@ function authoredPropDefs(seats: PropSeatMap, sourceProps: readonly PropDef[]): 
       ? sourceArt?.sprite
       : source.kind === 'prop'
         ? sourceProp?.sprite
-        : { ...structureRasterDimensions(`/assets/doodads/${source.id}`), anchorX: s.anchorX, anchorY: s.anchorY };
+        : structureArtAsset(source.id)?.sprite;
     if (!sourceSprite) throw new Error(`authored prop "${id}" source "${source.id}" is unavailable`);
-    const sourceTerrains = sourceArt?.terrains ?? sourceProp?.terrains ?? ['grass', 'dirt', 'stone'];
-    const sourceKind = sourceProp?.kind ?? sourceArt?.propKind ?? (sourceArt?.kind === 'tree' || sourceArt?.kind === 'rock' ? sourceArt.kind : 'house');
+    const sourceTerrains = sourceArt?.terrains ?? sourceProp?.terrains;
+    if (!sourceTerrains?.length) throw new Error(`authored prop "${id}" source "${source.id}" has no installed terrain membership`);
     out.push({
       id,
-      label: s.label ?? id,
-      kind: s.kind ?? sourceKind,
-      w: s.w ?? sourceProp?.w ?? 1,
-      h: s.h ?? sourceProp?.h ?? 1,
-      blocking: s.blocking ?? true,
-      terrains: s.terrains ?? sourceTerrains,
+      label: s.label!,
+      kind: s.kind!,
+      w: s.w!,
+      h: s.h!,
+      blocking: s.blocking!,
+      terrains: s.terrains!,
       spriteId: source.kind === 'prop' ? (sourceProp?.spriteId ?? source.id) : source.id,
       spriteSource: source,
       spriteParts: parts,
@@ -341,6 +359,16 @@ export function resetPropSeats(): boolean {
 export function propDef(id: string): PropDef | undefined {
   if (!SEATS) throw new Error('prop seats are not hydrated');
   return PROP_DEFS.find((def) => def.id === id);
+}
+
+/** The explicit default selected by the database-owned prop document. */
+export function defaultPropDef(): PropDef {
+  const seats = currentSeats();
+  const ids = Object.entries(seats).filter(([, entry]) => entry.default === true).map(([id]) => id);
+  if (ids.length !== 1) throw new Error(`invalid prop seats: expected one default prop, found ${ids.length}`);
+  const selected = propDef(ids[0]);
+  if (!selected) throw new Error(`invalid prop seats: default prop "${ids[0]}" is unavailable`);
+  return selected;
 }
 
 /**

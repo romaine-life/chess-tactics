@@ -55,11 +55,9 @@ describe('BoardLabBoard terrain review source', () => {
       .toBe(asset.src);
   });
 
-  it('pins production faces to the immutable URL from the hydrated catalog revision', () => {
-    hydrateSlot('tiles/surface/water-0-side.png', 'b'.repeat(64));
-
-    expect(immutableBoardLabTerrainSrc('/assets/tiles/surface/water-0-side.png'))
-      .toBe(`/api/media/${'b'.repeat(64)}`);
+  it('accepts only the immutable URL already projected with the drawable row', () => {
+    expect(immutableBoardLabTerrainSrc(`/api/media/${'b'.repeat(64)}`)).toBe(`/api/media/${'b'.repeat(64)}`);
+    expect(() => immutableBoardLabTerrainSrc('/assets/tiles/surface/water-0-side.png')).toThrow(/not immutable/);
   });
 
   it('keeps unpainted faces empty and explicit subterrain clipped by exposure', () => {

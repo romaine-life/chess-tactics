@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+// Invoked through Node by the repository scripts; keeping this importable lets
+// the same implementation be exercised by Vitest on every supported platform.
 
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -21,13 +22,13 @@ const ARGUMENTS = new Set([
 ]);
 
 const USAGE = `Usage:
-  node scripts/export-predrawn-generation-definition.mjs \\
-    --base-url <running-app-url> \\
-    --level-id <official-level-id> \\
-    --out <run-directory> \\
-    [--run-id <id>] \\
-    [--reference-source-slot <slot>] \\
-    [--provider <provider>] \\
+  node scripts/export-predrawn-generation-definition.mjs \
+    --base-url <running-app-url> \
+    --level-id <official-level-id> \
+    --out <run-directory> \
+    [--run-id <id>] \
+    [--reference-source-slot <slot>] \
+    [--provider <provider>] \
     [--model <model>]
 
 The running app's public /api/official-campaigns/default response is the only

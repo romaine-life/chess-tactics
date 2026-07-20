@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
-import { SCENE_ANIMS, SceneBackdrop } from './SceneBackdrop';
+import { liveMediaForSlot, requiredDrawableDefault } from '@chess-tactics/board-render';
+import { animatedScenes, sceneAnimations, SCENE_ANIMS, SceneBackdrop } from './SceneBackdrop';
 import {
   fetchAdminLiveMediaCatalog,
   type AdminLiveMediaCatalog,
@@ -14,20 +14,27 @@ import {
 // `.al-lab-main`, every control in the one `.tileset-view-controls` panel, reached from the Scene
 // Animations catalog. Pure inspector — nothing committed is edited (ADR-0057 N/A).
 
-const SCENE_SLOT = 'ui/main-menu/background-scene-v1.png';
-const SCENE_W = 1586;
-const SCENE_H = 991;
-
 export type SceneRegion = (typeof SCENE_ANIMS)[number];
 export const SCENE_ANIM_REGIONS = SCENE_ANIMS;
+export function defaultSceneAnimation(): SceneRegion {
+  const record = requiredDrawableDefault('scene-animation');
+  const region = SCENE_ANIMS.find((candidate) => candidate.id === record.id);
+  if (!region) throw new Error(`Scene animation default ${record.id} is unavailable`);
+  return region;
+}
 
 // The Animated Scenes catalog: whole backdrops, each owning a set of animated regions. Today
 // only the main-menu backdrop, but modelled as a list so a second scene is one more entry
 // (ADR-0059) rather than a fork. regionIds index into SCENE_ANIMS.
-export interface SceneAnimScene { id: string; label: string; slot: string; w: number; h: number; regionIds: string[] }
-export const SCENE_ANIM_SCENES: SceneAnimScene[] = [
-  { id: 'main-menu', label: 'Main Menu', slot: SCENE_SLOT, w: SCENE_W, h: SCENE_H, regionIds: SCENE_ANIMS.map((r) => r.id) },
-];
+export interface SceneAnimScene { id: string; label: string; role: string; background: string; w: number; h: number; regionIds: string[] }
+const currentScenes = (): SceneAnimScene[] => animatedScenes().map((scene) => ({ ...scene, regionIds: sceneAnimations().filter((region) => region.sceneRole === scene.role).map((region) => region.id) }));
+export const SCENE_ANIM_SCENES: SceneAnimScene[] = new Proxy([] as SceneAnimScene[], { get: (_target, property) => { const values = currentScenes(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
+export function defaultSceneAnimationScene(): SceneAnimScene {
+  const role = defaultSceneAnimation().sceneRole;
+  const matches = currentScenes().filter((scene) => scene.role === role);
+  if (matches.length !== 1) throw new Error(`scene animation default role ${role} has ${matches.length} scenes`);
+  return matches[0];
+}
 
 const shortRegionName = (id: string): string => id.replace(/^waterfall-/, '');
 
@@ -64,12 +71,14 @@ export function sceneAnimationVariants(region: SceneRegion, adminCatalog: AdminL
 
 // A static (frame-0) crop of a region, for the catalog card.
 export function SceneRegionThumb({ region }: { region: SceneRegion }): ReactElement {
+  const scene = currentScenes().find((candidate) => candidate.role === region.sceneRole);
+  if (!scene) throw new Error(`drawable catalog has no scene for animation ${region.id}`);
   const max = 140;
   const scale = Math.min(max / region.w, max / region.h);
   return (
     <span style={{
       display: 'block', width: region.w * scale, height: region.h * scale,
-      backgroundImage: `url("${resolvedLiveMediaUrl(SCENE_SLOT)}")`, backgroundSize: `${SCENE_W * scale}px auto`,
+      backgroundImage: `url("${scene.background}")`, backgroundSize: `${scene.w * scale}px auto`,
       backgroundPosition: `${-region.x * scale}px ${-region.y * scale}px`, imageRendering: 'pixelated', borderRadius: 4,
     }} />
   );
@@ -84,7 +93,8 @@ export function SceneRegionThumb({ region }: { region: SceneRegion }): ReactElem
 export function SceneRegionPicker({ sceneId, onSceneId, onPickRegion, header }: {
   sceneId: string; onSceneId: (id: string) => void; onPickRegion: (regionId: string) => void; header?: ReactNode;
 }): ReactElement {
-  const scene = SCENE_ANIM_SCENES.find((s) => s.id === sceneId) ?? SCENE_ANIM_SCENES[0];
+  const scene = SCENE_ANIM_SCENES.find((s) => s.id === sceneId);
+  if (!scene) throw new Error('drawable catalog has no animated scenes');
   const regions = SCENE_ANIMS.filter((r) => scene.regionIds.includes(r.id));
   return (
     <>
@@ -154,7 +164,10 @@ export function SceneRegionPicker({ sceneId, onSceneId, onPickRegion, header }: 
 export function SceneAnimLab({ regionId, onRegionId, header }: {
   regionId: string; onRegionId: (id: string) => void; header?: ReactNode;
 }): ReactElement {
-  const region = SCENE_ANIMS.find((r) => r.id === regionId) ?? SCENE_ANIMS[0];
+  const region = SCENE_ANIMS.find((r) => r.id === regionId);
+  if (!region) throw new Error('drawable catalog has no scene animations');
+  const regionScene = currentScenes().find((scene) => scene.role === region.sceneRole);
+  if (!regionScene) throw new Error(`drawable catalog has no scene for animation ${region.id}`);
   const [adminCatalog, setAdminCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   useEffect(() => {
     let active = true;
@@ -216,8 +229,8 @@ export function SceneAnimLab({ regionId, onRegionId, header }: {
     const px = (v: number): string => `${v * zoom}px`;
     const scene: CSSProperties = {
       width: px(w), height: px(h),
-      backgroundImage: `url("${resolvedLiveMediaUrl(SCENE_SLOT)}")`,
-      backgroundSize: `${SCENE_W * zoom}px auto`,
+      backgroundImage: `url("${regionScene.background}")`,
+      backgroundSize: `${regionScene.w * zoom}px auto`,
       backgroundPosition: `${-x * zoom}px ${-y * zoom}px`,
       imageRendering: 'pixelated', position: 'relative',
     };
@@ -229,7 +242,7 @@ export function SceneAnimLab({ regionId, onRegionId, header }: {
       imageRendering: 'pixelated',
     };
     return { scene, overlay };
-  }, [zoom, frame, n, variant.sheet, x, y, w, h]);
+  }, [zoom, frame, n, variant.sheet, x, y, w, h, regionScene.background, regionScene.w]);
 
   return (
     <>

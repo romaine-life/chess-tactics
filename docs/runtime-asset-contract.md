@@ -74,14 +74,21 @@ The logical drawable catalog above those media slots is the authority for instal
 content membership, labels, ordering, behavior configuration, and named media roles.
 Runtime and editor consumers query that projection; a stable semantic slot is no
 longer sufficient authority for code to declare that an installed asset exists.
+Selection defaults and every appearance-affecting behavior value are part of
+that projection. Positional first-row selection and code-filled partial records
+are prohibited: zero or multiple database defaults, an unknown requested id, or
+an incomplete row is an availability failure.
 
 - Unit Art: family, palette, direction, anchor, and native footprint.
 - Terrain: top, side, animation, alpha ownership, projection, face semantics.
-- Ground cover: every `groundcover/<terrain>/v<id>.png` version declares its
+- Ground cover: every ground-cover media version declares its
   terrain/id, frame dimensions/count, base anchor, and content width in
   `versionMetadata.runtime.groundCover`. Browser boards and server thumbnails
   hydrate the same shared renderer projection from the applied catalog; frame
-  geometry is not duplicated in a generated source module.
+  geometry is not duplicated in a generated source module. The slot name is
+  opaque to runtime semantics: neither terrain nor variant identity is inferred
+  from its path. Installed identity and media membership come only from the
+  drawable row and its named role assignment.
 - UI kit: state/slice geometry and native roles.
 - Props, walls, backgrounds, portraits, fonts, and OG media: their declared
   component and availability contracts.
@@ -122,7 +129,7 @@ exact-byte review instrument exist:
 | Projection | Runtime authority | Candidate ingress | Review and promotion |
 | --- | --- | --- | --- |
 | Board Unit Art | Unit Art Postgres catalog + private Blob | Unit Art APIs | Complete; atomic family acceptance after palette, direction, geometry, and native-pixel checks |
-| Water side faces | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; all eight faces are reviewed on the canonical board and accepted atomically |
+| Terrain surface tops | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; database-declared groups are reviewed on the canonical board and accepted atomically |
 | Other terrain and generic media domains | Shared live-media catalog + private Blob | Shared single/batch APIs | Deliberately blocked until that projection has a typed completeness validator, domain-owned exact-byte review instrument, backend proof validation, and atomic acceptance/rollback tests |
 | BGM | Backend-listed private Blob container | Blob administration | Existing range-streaming projection; intentionally not the generic candidate lifecycle |
 

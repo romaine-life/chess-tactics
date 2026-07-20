@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { TitleBarButtonPrimitive } from '../shell/TitleBarControls';
+import { installedUiMedia } from '../installedUiMedia';
 
 // The signed-in account control for the trailing edge of the app chrome: an
 // icon-only avatar button (Gravatar) that opens a small kit-framed menu. The menu
@@ -109,7 +110,7 @@ export function AccountMenu({ name, email, avatarUrl, onRename, onSignOut, defau
                   title="Save"
                   disabled={saving}
                 >
-                  <img className="account-menu-glyph-sm" src="/assets/ui/kit/icons/save.png" alt="" aria-hidden="true" />
+                  <img className="account-menu-glyph-sm" src={installedUiMedia('ui-kit-icons-save-png')} alt="" aria-hidden="true" />
                 </button>
               </form>
             ) : (
@@ -132,7 +133,7 @@ export function AccountMenu({ name, email, avatarUrl, onRename, onSignOut, defau
             title="Sign out"
             onClick={onSignOut}
           >
-            <img className="account-menu-glyph" src="/assets/ui/kit/icons/sign-out.png" alt="" aria-hidden="true" />
+            <img className="account-menu-glyph" src={installedUiMedia('ui-kit-icons-sign-out-png')} alt="" aria-hidden="true" />
           </button>
         </div>
       )}

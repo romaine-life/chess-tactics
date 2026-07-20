@@ -650,6 +650,81 @@ describe('no-committed-media guard', () => {
     }
   });
 
+  it('permanently rejects recreation or renamed imports of the retired portrait crop table', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-portrait-crops-test-'));
+    const tablePath = 'frontend/src/art/portraitCrops.json';
+    const importPath = 'frontend/src/ui/LegacyPortraits.ts';
+    for (const relativePath of [tablePath, importPath]) {
+      const target = path.join(repoRoot, relativePath);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, relativePath === tablePath ? '{}\n' : 'const COMMITTED_CROPS = {};\n', 'utf8');
+    }
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [tablePath, importPath] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'retired-git-media-path', path: tablePath }),
+        expect.objectContaining({ kind: 'retired-portrait-crop-authority', path: importPath }),
+      ]));
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects recreation of a compiled terrain-family gameplay map', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-terrain-map-test-'));
+    const relativePath = 'frontend/src/core/legacyTerrainMap.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "const FAMILY_TO_TERRAIN = { grass: 'grass' };\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ kind: 'retired-terrain-gameplay-map', path: relativePath }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    'frontend/config/chrome-lab-defaults.json',
+    'frontend/config/nine-slice-registry.json',
+    'frontend/config/nine-slice/panel.json',
+    'frontend/src/generated/nine-slice.css',
+    'frontend/scripts/nine-slice-kit.mjs',
+    'frontend/scripts/vite-chrome-lab-defaults-plugin.mjs',
+    'frontend/scripts/vite-nine-slice-geometry-plugin.mjs',
+  ])('permanently rejects recreation of retired presentation authority %s', (relativePath) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-presentation-path-test-'));
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, '{}\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'retired-git-media-path' }),
+      ]));
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    "const DEFAULT_OG_IMAGE = '/assets/og/default.png';",
+    "const PREVIEW_KIND_BY_STABLE_SLOT = { 'ui/scrollbars/oak.png': 'sprite' };",
+    "import registry from '../../config/nine-slice-registry.json';",
+  ])('rejects renamed compiled presentation authority: %s', (source) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-presentation-source-test-'));
+    const relativePath = 'frontend/src/ui/renamedPresentationAuthority.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${source}\n`, 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ detail: 'compiled installed presentation identity/default/configuration remains after drawable-catalog cutover' }),
+      ]));
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it('rejects recreation of a compiled Subterrain inventory', () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-subterrain-catalog-test-'));
     const relativePath = 'packages/board-render/src/core/subterrainLegacy.ts';
@@ -662,6 +737,121 @@ describe('no-committed-media guard', () => {
           kind: 'temporary-cutover-scaffold',
           path: relativePath,
           detail: 'compiled Subterrain inventory remains after drawable-catalog cutover',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    'export function waterSideCanonicalProofBoard() {}',
+    "const groupId = 'terrain/water/side-v1';",
+    "const TEMPORARY_PREDRAWN_REVIEW_SLOT = 'boards/review/uncommitted/plate.png';",
+    'const abruptExposedEdge = true;',
+    "const exposedFaces = ['south', 'east'];",
+    "const top = frameSrc.replace(/\\.png$/, '-top.png');",
+  ])('rejects retired tile-side and filename-derived media paths: %s', (source) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-tile-side-test-'));
+    const relativePath = 'frontend/src/render/renamedTerrainPath.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${source}\n`, 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'retired tile-coupled side proof, fabricated review slot, or filename-derived terrain media remains',
+        }),
+      ]));
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects filename-derived review membership', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'filename-review-membership-test-'));
+    const relativePath = 'frontend/src/ui/renamedReviewCatalog.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, 'const inferredKitId = slotLeaf.match(/rail-e/);\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'review membership must come from explicit backend metadata, not semantic-slot filenames',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects filename-derived Studio catalog taxonomy', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'filename-studio-taxonomy-test-'));
+    const relativePath = 'frontend/src/ui/renamedStudioCatalog.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, 'const ARTWORK_TAXONOMY = [{ classify: (slot) => slot.match(/backgrounds/) }];\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'Studio catalog membership and grouping must come from drawable records, not semantic-slot filename taxonomy',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects compiled installed Chrome tint configuration', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'compiled-chrome-tint-test-'));
+    const relativePath = 'frontend/src/ui/renamedChrome.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "const CHROME_FILL_TINTS = [{ id: 'night', rgb: [4, 13, 20] }];\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'installed Chrome tint identities and RGB configuration must come from drawable records',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects restoration of the obsolete installed design-catalog tree', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'compiled-design-tree-test-'));
+    const relativePath = 'frontend/src/ui/design/renamedCatalog.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "export const ASSET_TREE_PROTOTYPE = [{ label: 'Main Menu' }];\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'obsolete Git-owned installed design-catalog taxonomy must not be restored',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects board media identities constructed from level ids', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'constructed-board-media-test-'));
+    const relativePath = 'frontend/src/ui/renamedOnboarding.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, 'const predrawnBoardSlotForLevel = (id) => `/assets/level-list-thumb/${id}`;\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'board media and thumbnail identities must be assigned or projected by the backend, not constructed from level ids',
         }),
       ]);
     } finally {
@@ -718,6 +908,60 @@ describe('no-committed-media guard', () => {
     try {
       expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
         expect.objectContaining({ detail: 'compiled ground-cover/wall-decoration/prop inventory remains after drawable-catalog cutover' }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    'const DEFAULT_WALL_ART_REFLECTION = { opacity: 0.72 };',
+    'const selected = wallArtItems()[0];',
+    'const selected = PROP_DEFS[0];',
+    'const selected = DOODAD_ASSETS[0];',
+    'const selected = GROUND_COVER_ASSETS[0];',
+    'const selected = assets.find((asset) => asset.id === id) ?? assets[0];',
+    'const selected = COMPARE_TILES[0];',
+    'const selected = wallMaterials()[0];',
+  ])('rejects compiled installed defaults and first-row fallbacks: %s', (source) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-installed-default-test-'));
+    const relativePath = 'frontend/src/ui/legacyInstalledDefault.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${source}\n`, 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ detail: 'compiled installed-content default or first-row fallback remains after drawable-catalog cutover' }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects filename-derived ground-cover rosters', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-ground-cover-path-roster-test-'));
+    const relativePath = 'backend/server.js';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, 'const GROUND_COVER_SLOT_PATTERN = /^groundcover\\/(grass|water|sand)\\/v0\\.png$/;\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ detail: 'filename-derived ground-cover roster remains after drawable-catalog cutover' }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects compiled editor terrain and animated-scene inventories after the drawable cutover', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-editor-scene-inventory-test-'));
+    const relativePath = 'frontend/src/ui/legacyScene.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "const LE_SCATTER_FAMILIES = ['grass']; const SCENE_SLOT = 'ui/main.png';\n", 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ detail: 'compiled terrain/editor/scene presentation inventory remains after drawable-catalog cutover' }),
       ]);
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });

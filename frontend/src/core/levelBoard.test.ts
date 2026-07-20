@@ -9,7 +9,7 @@ import { roadEdgeKey } from './featureAutotile';
 const emptyBoard = (cols: number, rows: number): EditorBoard => ({
   cols, rows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {},
 });
-const filledBoard = (cols: number, rows: number, tileId = 'grass-a'): EditorBoard => {
+const filledBoard = (cols: number, rows: number, tileId = 'grass-surf-0'): EditorBoard => {
   const board = emptyBoard(cols, rows);
   for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) board.cells[`${x},${y}`] = tileId;
   return board;

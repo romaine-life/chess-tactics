@@ -176,6 +176,42 @@ owns the installed logical inventory and `drawable_asset_media` assigns its name
 roles to live-media slots. Concrete editor/catalog entries are database records,
 not compiled TypeScript members.
 
+Defaults are installed configuration too. A drawable domain that needs a
+default marks exactly one database row (or uses an equally explicit unique
+role); consumers never substitute array position zero for a missing or unknown
+id. Required behavior fields such as structure blocking/split/scale,
+ground-cover density counts, surface probability/role, wall-art span/reflection,
+and nine-slice flags are validated as present. An omitted field or an unknown
+requested id fails closed instead of manufacturing a code default.
+
+`/ready` validates a fresh media catalog, drawable catalog, prop-seat document,
+and Unit Art catalog through the shared renderer projection and reports all four
+revisions. A filename-shaped media slot is never accepted as evidence that a
+logical drawable exists.
+
+Terrain-family rows declare both their serialized gameplay terrain and the
+gameplay terrain values they render. Editor conversion, free-skirmish assembly,
+and gameplay rendering use that projection; they do not keep family maps or a
+compiled `grass` fallback.
+
+Installed unit-portrait rows also own their crop geometry in `behavior.crop`.
+The Portrait Editor keeps browser state only as an unsaved draft and persists
+accepted geometry through the admin drawable transaction; gameplay, roster,
+and catalog rendering read the database projection and fail closed when a crop
+is absent or invalid.
+
+Studio Assets and Artwork membership is projected from `studio-catalog-item`
+drawable rows. Each row owns its label, grouping, presentation metadata, and
+explicit media roles; semantic-slot filenames are opaque join keys and are not
+parsed into a roster. Configuration-only `chrome-fill-tint` rows likewise own
+the installed Chrome tint names and RGB values.
+
+New pre-drawn board media slots are allocated by the authenticated backend
+media transaction and returned with the candidate version. Clients never form
+a slot from a level id. Canonical level-list thumbnails are used only when the
+backend's level projection supplies an immutable derivative URL; a missing
+derivative has no constructed stable-path or read-through fallback.
+
 The SFX runtime profile is a separate typed document projection over live-media
 recording slots. It owns labels/descriptions, sound-set gains, terrain
 assignments, and arrival behavior, with a compare-and-swap revision on admin

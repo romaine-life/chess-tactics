@@ -20,7 +20,14 @@ export const WALL_DECOR_KINDS: readonly WallDecorKind[] = new Proxy([] as WallDe
   get(_target, property) { const values = [...new Set(wallDecorAssets.map((asset) => asset.kind))]; const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; },
 });
 export const WALL_DECOR_KIND_LABELS: Record<string, string> = new Proxy({}, {
-  get(_target, property) { const asset = drawableAssets('wall-decor').find((entry) => entry.behavior.decorKind === property); return asset?.metadata.kindLabel ?? String(property); },
+  get(target, property) {
+    if (typeof property !== 'string' || property in target) return Reflect.get(target, property);
+    const asset = drawableAssets('wall-decor').find((entry) => entry.behavior.decorKind === property);
+    if (!asset || typeof asset.metadata.kindLabel !== 'string' || !asset.metadata.kindLabel) {
+      throw new Error(`invalid wall-decor catalog: kind ${String(property)} has no label`);
+    }
+    return asset.metadata.kindLabel;
+  },
 }) as Record<string, string>;
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -56,9 +63,20 @@ export function applyWallDecorCatalog(): void {
     return { ...common, kind: 'mirror', mirrorCoverage: coverage, faces: { west: mirrorFace('west'), north: mirrorFace('north') } };
   });
   wallDecorAssets.splice(0, wallDecorAssets.length, ...next);
+  const defaults = drawableAssets('wall-decor').filter((asset) => asset.behavior.default === true);
+  if (defaults.length !== 1 || !wallDecorAsset(defaults[0].id)) throw new Error(`invalid wall-decor catalog: expected one available default, found ${defaults.length}`);
 }
 export function resetWallDecorCatalog(): void { wallDecorAssets.splice(0, wallDecorAssets.length); }
-export const wallDecorAsset = (id: string | undefined): WallDecorAsset | undefined => id ? wallDecorAssets.find((asset) => asset.id === id) : wallDecorAssets[0];
+export const wallDecorAsset = (id: string | undefined): WallDecorAsset | undefined => id
+  ? wallDecorAssets.find((asset) => asset.id === id)
+  : undefined;
+export function defaultWallDecorAsset(): WallDecorAsset {
+  const defaults = drawableAssets('wall-decor').filter((asset) => asset.behavior.default === true);
+  if (defaults.length !== 1) throw new Error(`invalid wall-decor catalog: expected one default, found ${defaults.length}`);
+  const selected = wallDecorAsset(defaults[0].id);
+  if (!selected) throw new Error(`invalid wall-decor catalog: default ${defaults[0].id} is unavailable`);
+  return selected;
+}
 export function wallDecorMirrorAperture(asset: WallDecorAsset | undefined, face: WallDecorFaceId): NormalizedAperturePolygon | null {
   if (!asset || asset.kind !== 'mirror') return null;
   const aperture = asset.faces[face].aperture;

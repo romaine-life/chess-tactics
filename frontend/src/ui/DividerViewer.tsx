@@ -17,12 +17,10 @@
 //     construction — it can't "break" when made small like a big ornament scaled down does.
 //   • codex — the standalone codex-forged ornament (cand3-codex.png), free-scaled by Junction size.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import nineSliceRegistry from '../../config/nine-slice-registry.json';
-import { SURFACE_ASSETS } from './surfaceCatalog';
+import { defaultSurfaceAsset } from './surfaceCatalog';
 import { ViewPane } from './shared/ViewPane';
+import { nineSliceCatalogAssets, requiredNineSliceRole } from './nineSliceCatalog';
 
-const PANEL = '/assets/ui/kit/panel.png';
-const PANEL_LINE = '/assets/ui/explore/frames/panel-line.png';
 const PANEL_W = 420;
 const MAXREACH = 56;       // how far a strip may extend past the panel content on each side (canvas room)
 const TUNE_APRON = 40;      // transparent preview room so jx can overhang the rail without clipping
@@ -36,19 +34,23 @@ type BarAsset = {
   railSource?: 'panel-line' | 'edge';
   railFit?: 'tile' | 'stretch';
   junctionStyle?: 'gold' | 'natural';
-  atoms: { edge: string; tee?: string; corner?: string };
+  edge: string;
+  tee: string;
+  panelLine?: string;
   host?: { frame?: string; line?: string; slice?: number; previewWidth?: number };
+  geometry: Record<string, unknown>;
 };
-type RegistryBarAsset = Omit<BarAsset, 'id'> & { kind?: string };
-const REGISTRY = (nineSliceRegistry as unknown as { assets: Record<string, RegistryBarAsset> }).assets;
-const BAR_ASSETS: BarAsset[] = Object.entries(REGISTRY)
-  .filter(([, asset]) => asset.kind === 'bar')
-  .map(([id, asset]) => ({ ...asset, id }));
-export const DEFAULT_DIVIDER_ASSET = BAR_ASSETS.find((asset) => asset.id === 'panel-divider')?.id ?? BAR_ASSETS[0]?.id ?? 'panel-divider';
-const CONFIG_MODULES = import.meta.glob('../../config/nine-slice/*.json', { eager: true }) as Record<string, { default: unknown }>;
+const BAR_ASSETS: BarAsset[] = nineSliceCatalogAssets().filter((asset) => asset.kind === 'bar').map((asset) => ({
+  id: asset.id, label: asset.label, railSource: asset.railSource, railFit: asset.railFit,
+  junctionStyle: asset.junctionStyle, edge: asset.media.edge, tee: asset.media.tee,
+  panelLine: asset.media['panel-line'],
+  host: { ...asset.host, frame: asset.media['host-frame'], line: asset.media['host-line'] },
+  geometry: asset.geometry,
+}));
+export const DEFAULT_DIVIDER_ASSET = requiredNineSliceRole('divider-editor-default').id;
 
 function savedCfg(assetId: string): Partial<Cfg> {
-  return (CONFIG_MODULES[`../../config/nine-slice/${assetId}.json`]?.default ?? {}) as Partial<Cfg>;
+  return (BAR_ASSETS.find((asset) => asset.id === assetId)?.geometry ?? {}) as Partial<Cfg>;
 }
 
 function defaultCfg(assetId: string): Cfg {
@@ -89,10 +91,9 @@ function buildTeeLayer(img: HTMLImageElement): Layer {
 }
 
 async function loadBarImages(asset: BarAsset): Promise<BarImages> {
-  const tee = asset.atoms.tee ?? asset.atoms.corner;
-  if (!tee) throw new Error(`Divider asset "${asset.id}" is missing a tee atom`);
-  const railUrl = asset.railSource === 'edge' ? `/assets/ui/kit/atoms/${asset.atoms.edge}.png` : PANEL_LINE;
-  const [teeImg, railImg] = await Promise.all([loadImg(`/assets/ui/kit/atoms/${tee}.png`), loadImg(railUrl)]);
+  const railUrl = asset.railSource === 'edge' ? asset.edge : asset.panelLine;
+  if (!railUrl) throw new Error(`Divider asset "${asset.id}" is missing rail media`);
+  const [teeImg, railImg] = await Promise.all([loadImg(asset.tee), loadImg(railUrl)]);
   return { teeImg, railImg, layer: buildTeeLayer(teeImg) };
 }
 
@@ -176,7 +177,11 @@ export function DividerLab({ assetId, onAssetId, header }: { assetId?: string; o
   const initialAssetId = BAR_ASSETS.some((asset) => asset.id === assetId) ? assetId! : DEFAULT_DIVIDER_ASSET;
   const [ownAssetId, setOwnAssetId] = useState(initialAssetId);
   const selectedAssetId = BAR_ASSETS.some((asset) => asset.id === assetId) ? assetId! : ownAssetId;
-  const asset = useMemo(() => BAR_ASSETS.find((entry) => entry.id === selectedAssetId) ?? BAR_ASSETS[0], [selectedAssetId]);
+  const asset = useMemo(() => {
+    const selected = BAR_ASSETS.find((entry) => entry.id === selectedAssetId);
+    if (!selected) throw new Error(`Selected divider asset "${selectedAssetId}" is unavailable`);
+    return selected;
+  }, [selectedAssetId]);
   const defaultForSelected = useMemo(() => defaultCfg(selectedAssetId), [selectedAssetId]);
   const [cfg, setCfg] = useState<Cfg>(() => defaultCfg(initialAssetId));
   const [barImages, setBarImages] = useState<BarImages | null>(null);
@@ -198,7 +203,7 @@ export function DividerLab({ assetId, onAssetId, header }: { assetId?: string; o
     if (onAssetId) onAssetId(id);
     else setOwnAssetId(id);
   };
-  const surface = SURFACE_ASSETS[0]?.file;
+  const surface = defaultSurfaceAsset().file;
   const panelW = asset.host?.previewWidth ?? PANEL_W;
   const innerW = panelW - 2 * cfg.frameWidth;
   const exportPayload = { asset: selectedAssetId, ...cfg };
@@ -208,8 +213,9 @@ export function DividerLab({ assetId, onAssetId, header }: { assetId?: string; o
   // frame, then seat that cap by reach/jx/jy. Transparent atom padding participates, like corners.
   const scale = cfg.scale;
   const layer: Layer | null = barImages?.layer ?? null;
-  const hostFrame = asset.host?.frame ? `/assets/ui/kit/${asset.host.frame}` : PANEL;
-  const hostLine = asset.host?.line ? `/assets/ui/kit/${asset.host.line}` : PANEL_LINE;
+  const hostFrame = asset.host?.frame;
+  const hostLine = asset.host?.line ?? asset.panelLine;
+  if (!hostFrame || !hostLine) throw new Error(`Divider asset "${asset.id}" is missing host media`);
   const hostSlice = asset.host?.slice ?? 24;
   const hostImage = cfg.backing === 'fill' || !asset.host?.line ? hostFrame : hostLine;
 

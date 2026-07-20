@@ -51,7 +51,22 @@ const RETIRED_GIT_MEDIA_PATHS = [
   'frontend/src/ui/design/wallDecorManifest.json',
   'packages/board-render/src/ui/design/wallDecorManifest.json',
   'packages/board-render/src/art/macroTiles.json',
+  'frontend/src/core/wallArt.json',
+  'packages/board-render/src/core/wallArt.json',
+  'frontend/config/chrome-lab-defaults.json',
+  'frontend/config/nine-slice-registry.json',
+  'frontend/config/nine-slice',
+  'frontend/src/generated/nine-slice.css',
+  'frontend/scripts/nine-slice-kit.mjs',
+  'frontend/scripts/vite-chrome-lab-defaults-plugin.mjs',
+  'frontend/scripts/vite-nine-slice-geometry-plugin.mjs',
+  'frontend/config/native-rail-generation.json',
+  'frontend/config/chrome-family-extraction',
+  'frontend/src/art/portraitCrops.json',
 ];
+const RETIRED_PORTRAIT_CROP_AUTHORITY = /\bCOMMITTED_?CROPS\b|portraitCrops\.json/;
+const RETIRED_TERRAIN_GAMEPLAY_MAP = /\b(?:FAMILY_TO_TERRAIN|TERRAIN_TO_FAMILY)\b|(?:\?\?|\|\|)\s*['"]grass['"]/;
+const INSTALLED_CONTENT_RUNTIME_SOURCE = /^(?:frontend|packages\/board-render)\/src\//;
 const PUBLIC_ROOT_PREFIX = 'frontend/public/';
 const PUBLIC_ASSET_PREFIX = 'frontend/public/assets/';
 const ALLOWED_PUBLIC_EXECUTABLE_FILES = new Set([
@@ -118,6 +133,7 @@ const STATIC_SCROLLBAR_MEDIA_ROW = /\{[^{}]{0,600}\b(?:file|src|url)\s*:\s*["'`]
 const OLD_PUBLIC_ASSET_FILESYSTEM = /(?:frontend\/)?public\/assets(?:\/|\b)/i;
 const OLD_DEDICATED_SOURCE_FILESYSTEM = /frontend\/scripts\/groundcover\/src(?:\/|\b)/i;
 const BACKEND_SOURCE_PATH_IDENTIFIER = /(?:["']sourcePath["']|\bsourcePath)\s*:/;
+const RETIRED_WALL_ART_AUTHORITY = /\b(?:applyLiveWallArt|loadLiveWallArt|BASELINE_WALL_ART|wallArtJson)\b|\/api\/wall-art\//;
 const MEDIA_GUARD_INSPECTORS = new Set([
   'frontend/scripts/check-empty-panel-frame-overlay.mjs',
   'frontend/scripts/check-no-committed-media.mjs',
@@ -137,6 +153,34 @@ const STATIC_AUTHORITY_CONFIG_EXTENSION = /\.(?:jsonl|toml|ya?ml)$/;
 const RUNTIME_MEDIA_POINTER_SOURCE_PATH = /^(?:backend\/|frontend\/(?:config|src)\/|packages\/)/;
 const HARDCODED_IMMUTABLE_MEDIA_URL = /\/api\/media\/[0-9a-f]{64}\b/i;
 const RETIRED_CUTOVER_SOURCE_MARKERS = [
+  {
+    pattern: /waterSideCanonicalProofBoard|terrain\/water\/side-v1|TEMPORARY_PREDRAWN_REVIEW_SLOT|abruptExposedEdge|exposedFaces|\.replace\([^\n]{0,160}["'`]-top(?:-anim)?\.png["'`]/,
+    detail: 'retired tile-coupled side proof, fabricated review slot, or filename-derived terrain media remains',
+  },
+  {
+    pattern: /COMPONENT_SUFFIX|inferredKitId|slotLeaf\.match\(/,
+    detail: 'review membership must come from explicit backend metadata, not semantic-slot filenames',
+  },
+  {
+    pattern: /classifyUiKitAsset|ARTWORK_TAXONOMY|interface ArtworkTaxonomy/,
+    detail: 'Studio catalog membership and grouping must come from drawable records, not semantic-slot filename taxonomy',
+  },
+  {
+    pattern: /CHROME_FILL_TINTS\s*=\s*\[|ChromeFillTintId\s*=\s*["']night["']/,
+    detail: 'installed Chrome tint identities and RGB configuration must come from drawable records',
+  },
+  {
+    pattern: /ASSET_TREE_PROTOTYPE|KIT_TREE\s*:/,
+    detail: 'obsolete Git-owned installed design-catalog taxonomy must not be restored',
+  },
+  {
+    pattern: /predrawnBoardSlotForLevel|\/assets\/level-list-thumb\//,
+    detail: 'board media and thumbnail identities must be assigned or projected by the backend, not constructed from level ids',
+  },
+  {
+    pattern: /chrome-lab-defaults\.json|nine-slice-registry\.json|config\/nine-slice|DEFAULT_OG_IMAGE|PREVIEW_KIND_BY_STABLE_SLOT|SCROLLBAR_SLOT_PREFIX|DEFAULT_(?:DIVIDER|NINE_SLICE)_ASSET[^\n]{0,160}["'](?:panel|mode-button)|requiredNineSliceAsset\(["'](?:panel|mode-button|panel-divider)["']\)/,
+    detail: 'compiled installed presentation identity/default/configuration remains after drawable-catalog cutover',
+  },
   {
     pattern: /LIVE_MEDIA_(?:SERVING|IMPORT)_ENABLED|liveMedia(?:Serving|Import)Enabled/,
     detail: 'temporary live-media serving/import switch remains after final cutover',
@@ -195,6 +239,22 @@ const RETIRED_CUTOVER_SOURCE_MARKERS = [
   {
     pattern: /\b(?:GROUND_COVER_TERRAINS|GROUND_COVER_IDS|GROUND_COVER_META|PLACEMENT_POLICY|WALL_DECOR_DEFINITIONS|REQUIRED_PROP_SEAT_IDS)\b/,
     detail: 'compiled ground-cover/wall-decoration/prop inventory remains after drawable-catalog cutover',
+  },
+  {
+    pattern: /\bGROUND_COVER_SLOT_PATTERN\b|groundcover\\\/\(grass\|water\|sand\)/,
+    detail: 'filename-derived ground-cover roster remains after drawable-catalog cutover',
+  },
+  {
+    pattern: /\b(?:DEFAULT_WALL_ART_REFLECTION|DEFAULT_DOODAD_SPRITE)\b|\bconst\s+COUNT\s*:\s*Record<GroundCoverDensity|(?:wallArtItems|wallMaterials|wallCatalogAssets)\(\)\[0\]|\b(?:PROP_DEFS|DOODAD_ASSETS|GROUND_COVER_ASSETS|WALL_DECOR_ASSETS|SURFACE_ASSETS|SLIDER_ASSETS|TILE_SIDE_ITEMS|COMPARE_TILES|CHROME_LAB_TARGETS|SURFACE_TILE_FAMILIES|SCENE_ANIM_SCENES)\[0\]|\?\?\s*(?:assets|sources)\[0\]/,
+    detail: 'compiled installed-content default or first-row fallback remains after drawable-catalog cutover',
+  },
+  {
+    pattern: /\bblocking\s*:\s*[^,\n]*(?:!==\s*false|\?\?\s*true)|\bscale\s*:\s*[^,\n]*\?\?\s*1|\bsplitMode\s*:\s*[^,\n]*\?\?\s*["']authored["']/,
+    detail: 'compiled structure behavior fallback remains after drawable-catalog cutover',
+  },
+  {
+    pattern: /\b(?:LE_SCATTER_FAMILIES|STONE_SURFACES|MENU_MODES\s*:\s*[^=\n]+\s*=\s*\[|PAGE_ENTRIES\s*:\s*[^=\n]+\s*=\s*\[|SCENE_SLOT|SCENE_W|SCENE_H|SCENE_ANIM_SCENES\s*:\s*[^=\n]+\s*=\s*\[|SCENE_ANIMS\s*:\s*[^=\n]+\s*=\s*\[)\b/,
+    detail: 'compiled terrain/editor/scene presentation inventory remains after drawable-catalog cutover',
   },
   {
     pattern: /\b(?:SAMPLE_GAINS|TERRAIN_SAMPLE|ARRIVAL_BAKED|SFX_ASSETS)\b|Copy for Claude|(?:bake[^\n]{0,80}(?:SFX|sound)|(?:SFX|sound)[^\n]{0,80}bake)/i,
@@ -807,6 +867,33 @@ export function collectNoCommittedMediaViolations({
             kind: 'embedded-media',
             path: relativePath,
             detail: embeddedReason,
+          });
+        }
+        if (relativePath !== 'frontend/scripts/check-no-committed-media.mjs'
+          && !TEST_SOURCE_PATH.test(relativePath) && RETIRED_WALL_ART_AUTHORITY.test(source)) {
+          violations.push({
+            kind: 'retired-wall-art-authority',
+            path: relativePath,
+            detail: 'wall art must project from DB-owned drawable records without a compiled baseline or parallel API',
+          });
+        }
+        if (relativePath !== 'frontend/scripts/check-no-committed-media.mjs'
+          && STATIC_AUTHORITY_CODE_EXTENSION.test(relativePath)
+          && !TEST_SOURCE_PATH.test(relativePath) && RETIRED_PORTRAIT_CROP_AUTHORITY.test(source)) {
+          violations.push({
+            kind: 'retired-portrait-crop-authority',
+            path: relativePath,
+            detail: 'installed portrait crops must come from DB-owned unit-portrait drawable behavior',
+          });
+        }
+        if (relativePath !== 'frontend/scripts/check-no-committed-media.mjs'
+          && STATIC_AUTHORITY_CODE_EXTENSION.test(relativePath)
+          && INSTALLED_CONTENT_RUNTIME_SOURCE.test(relativePath)
+          && !TEST_SOURCE_PATH.test(relativePath) && RETIRED_TERRAIN_GAMEPLAY_MAP.test(source)) {
+          violations.push({
+            kind: 'retired-terrain-gameplay-map',
+            path: relativePath,
+            detail: 'terrain family/gameplay mapping must come from DB-owned terrain-family behavior',
           });
         }
       }
