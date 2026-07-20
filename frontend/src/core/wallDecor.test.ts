@@ -19,6 +19,11 @@ describe('wall decor catalog', () => {
     expect(WALL_DECOR_KIND_LABELS.mirror).toBe('Mirrors');
   });
 
+  it('allows framework introspection without treating object properties as catalog identities', () => {
+    expect(WALL_DECOR_KIND_LABELS.constructor).toBe(Object);
+    expect(WALL_DECOR_KIND_LABELS[Symbol.toStringTag as unknown as string]).toBeUndefined();
+  });
+
   it('catalogs the anchor mirror set under the mirror kind', () => {
     const assetsById = new Map(WALL_DECOR_ASSETS.map((asset) => [asset.id, asset]));
 

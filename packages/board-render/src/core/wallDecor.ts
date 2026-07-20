@@ -21,7 +21,7 @@ export const WALL_DECOR_KINDS: readonly WallDecorKind[] = new Proxy([] as WallDe
 });
 export const WALL_DECOR_KIND_LABELS: Record<string, string> = new Proxy({}, {
   get(target, property) {
-    if (typeof property !== 'string') return Reflect.get(target, property);
+    if (typeof property !== 'string' || property in target) return Reflect.get(target, property);
     const asset = drawableAssets('wall-decor').find((entry) => entry.behavior.decorKind === property);
     if (!asset || typeof asset.metadata.kindLabel !== 'string' || !asset.metadata.kindLabel) {
       throw new Error(`invalid wall-decor catalog: kind ${String(property)} has no label`);
