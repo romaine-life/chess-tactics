@@ -65,8 +65,11 @@ describe('professional loading architecture guards', () => {
     expect(boundary).toContain("querySelectorAll('img')");
     expect(boundary).toContain('afterTwoPaintOpportunities');
     expect(boundary).toContain('renderedCssImageUrls');
+    expect(boundary).toContain('Required artwork could not be reached. Check your connection and try again.');
+    expect(boundary).not.toContain('<small>{paintError?.message}</small>');
     expect(boundary).toContain("inert={phase !== 'painted' ? true : undefined}");
     expect(read('../scripts/shot.mjs')).toContain('surface exposed a partial or interactive frame');
+    expect(read('../scripts/shot.mjs')).toContain("request.url().includes(String(abortRequest))");
   });
 
   it('does not expose gameplay HUD chrome before the board surface is ready', () => {

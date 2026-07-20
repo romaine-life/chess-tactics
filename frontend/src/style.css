@@ -8040,6 +8040,22 @@ body { font-size: 17px; }
 }
 .painted-surface-status small {
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  line-height: 1.5;
+  max-width: 440px;
+}
+.painted-surface-status strong {
+  font-size: var(--ds-text-md);
+}
+.painted-surface-status button {
+  background: transparent;
+  border: 12px solid transparent;
+  border-image: var(--media-ui-kit-button-primary-png) 24 fill / 12px round;
+  color: var(--ds-color-text, #f4ead7);
+  cursor: pointer;
+  font: inherit;
+  min-height: 44px;
+  min-width: 128px;
+  padding: 0 10px;
 }
 .painted-surface.is-ready .painted-surface-content > * {
   animation: surface-complete-reveal var(--ds-duration-fade) var(--ds-ease-standard) both;

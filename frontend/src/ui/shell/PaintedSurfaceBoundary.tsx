@@ -4,6 +4,13 @@ import { loadDecodedImage } from '../../render/imageResources';
 
 type SurfacePhase = 'loading' | 'painted' | 'error';
 
+function userFacingError(error: Error | null): string {
+  if (error?.message.includes('Canonical Play content')) {
+    return 'Play content could not be reached. Check your connection and try again.';
+  }
+  return 'Required artwork could not be reached. Check your connection and try again.';
+}
+
 function waitForRenderedImage(image: HTMLImageElement): Promise<void> {
   const loaded = image.complete
     ? image.naturalWidth > 0
@@ -139,7 +146,7 @@ export function PaintedSurfaceBoundary({
       {showStatus && phase === 'error' ? (
         <div className="painted-surface-status" role="alert">
           <strong>This surface could not be loaded.</strong>
-          <small>{paintError?.message}</small>
+          <small>{userFacingError(paintError)}</small>
           <button type="button" onClick={retry}>Retry</button>
         </div>
       ) : null}

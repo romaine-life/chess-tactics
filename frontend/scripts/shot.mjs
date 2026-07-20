@@ -11,6 +11,7 @@
 //   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>]
 //     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold] [--assert-menu-atomic]
 //     [--assert-board-atomic] [--assert-shell-font-atomic] [--assert-surface-atomic <name>]
+//     [--abort-request <url-substring>]
 //     [--full] [--show-scrollbars]
 //
 // Examples:
@@ -39,6 +40,7 @@ const assertMenuAtomic = has('assert-menu-atomic');
 const assertBoardAtomic = has('assert-board-atomic');
 const assertShellFontAtomic = has('assert-shell-font-atomic');
 const assertSurfaceAtomic = flag('assert-surface-atomic');
+const abortRequest = flag('abort-request');
 const fullPage = has('full');
 const showScrollbars = has('show-scrollbars');
 
@@ -62,6 +64,13 @@ const browser = await puppeteer.launch({
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: w, height: h, deviceScaleFactor: scale });
+  if (abortRequest) {
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      if (request.url().includes(String(abortRequest))) void request.abort('failed');
+      else void request.continue();
+    });
+  }
   if (assertMenuAtomic) {
     await page.evaluateOnNewDocument(() => {
       window.__ctMenuAtomicViolations = [];
