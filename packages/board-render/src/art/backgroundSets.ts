@@ -1,5 +1,5 @@
 import type { PlayablePieceType } from '../core/pieces';
-import { drawableAssets } from './drawableCatalog';
+import { drawableAssets, requiredDrawableDefault, requiredDrawableRole } from './drawableCatalog';
 
 export interface BackgroundSet {
   id: string;
@@ -55,8 +55,9 @@ export function assertInstalledPresentationCatalog(): void {
     throw new Error('drawable catalog scatter defaults must total 100');
   }
   for (const piece of PIECES) {
-    const portrait = drawableAssets('unit-portrait').find((asset) => asset.behavior.piece === piece);
-    if (!portrait || PALETTES.some((palette) => !portrait.media[palette])) {
+    const portraits = drawableAssets('unit-portrait').filter((asset) => asset.behavior.piece === piece);
+    const portrait = portraits[0];
+    if (portraits.length !== 1 || !portrait || PALETTES.some((palette) => !portrait.media[palette])) {
       throw new Error(`drawable catalog has no complete ${piece} portrait set`);
     }
   }
@@ -71,8 +72,9 @@ export function assertInstalledPresentationCatalog(): void {
   }
   if (!drawableAssets('terrain-review').length) throw new Error('drawable catalog has no terrain review inventory');
   if (!drawableAssets('terrain-comparison').length) throw new Error('drawable catalog has no terrain comparison inventory');
+  requiredDrawableDefault('terrain-comparison');
   if (!drawableAssets('portrait-treatment').length) throw new Error('drawable catalog has no portrait treatment inventory');
-  const appUi = drawableAssets('app-ui').find((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('application-ui'));
+  const appUi = requiredDrawableRole('app-ui', 'application-ui');
   const requiredRoles = appUi?.behavior.requiredRoles;
   if (!appUi || !Array.isArray(requiredRoles) || requiredRoles.some((role) => typeof role !== 'string' || !appUi.media[role])) {
     throw new Error('drawable catalog has incomplete application UI media');
@@ -84,6 +86,7 @@ export function assertInstalledPresentationCatalog(): void {
   if (!drawableAssets('studio-page').length || drawableAssets('studio-page').some((asset) => !asset.media.thumbnail)) {
     throw new Error('drawable catalog has incomplete Studio page inventory');
   }
+  requiredDrawableDefault('studio-page');
   const chromeLabPages = drawableAssets('studio-page').filter((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('chrome-lab-page'));
   if (chromeLabPages.length !== 1 || typeof chromeLabPages[0].behavior.chromeLabRoute !== 'string') {
     throw new Error('drawable catalog must have one Chrome Lab page');
@@ -93,7 +96,7 @@ export function assertInstalledPresentationCatalog(): void {
     || menuModes.filter((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('settings')).length !== 1) {
     throw new Error('drawable catalog has incomplete menu mode inventory');
   }
-  const chrome = drawableAssets('chrome-family').find((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('installed-chrome'));
+  const chrome = requiredDrawableRole('chrome-family', 'installed-chrome');
   if (!chrome || ['outer-atom', 'outer-rail', 'inner-atom', 'inner-rail', 'divider-joint'].some((role) => !chrome.media[role])) {
     throw new Error('drawable catalog has incomplete installed Chrome');
   }
@@ -106,16 +109,22 @@ export function assertInstalledPresentationCatalog(): void {
   if (!animations.length || animations.some((asset) => !asset.media.sheet || !sceneRoles.has(String(asset.behavior.sceneRole ?? '')))) {
     throw new Error('drawable catalog has incomplete scene animations');
   }
+  requiredDrawableDefault('scene-animation');
   const nineSlices = drawableAssets('nine-slice');
   if (!nineSlices.length) throw new Error('drawable catalog has no nine-slice inventory');
   for (const role of ['frame-editor-default', 'divider-editor-default', 'settings-panel', 'settings-tab']) {
-    if (!nineSlices.some((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes(role))) {
-      throw new Error(`drawable catalog has no nine-slice role ${role}`);
-    }
+    requiredDrawableRole('nine-slice', role);
   }
   const scrollbars = drawableAssets('ui-scrollbar');
   if (!scrollbars.length) throw new Error('drawable catalog has no UI scrollbar inventory');
-  if (!scrollbars.some((asset) => Array.isArray(asset.behavior.roles) && asset.behavior.roles.includes('installed-scrollbar'))) {
-    throw new Error('drawable catalog has no installed UI scrollbar');
+  requiredDrawableRole('ui-scrollbar', 'installed-scrollbar');
+  for (const kind of ['road-material', 'river-material', 'fence-material', 'wall-material', 'subterrain', 'ui-surface']) {
+    requiredDrawableDefault(kind);
   }
+  const sliders = drawableAssets('ui-slider');
+  if (sliders.length < 1 || sliders.filter((asset) => asset.behavior.preferred === true).length !== 1) {
+    throw new Error('drawable catalog must have exactly one preferred UI slider');
+  }
+  const doodadDefaults = drawableAssets('structure').filter((asset) => asset.behavior.structureKind === 'doodad' && asset.behavior.default === true);
+  if (doodadDefaults.length !== 1) throw new Error(`drawable catalog must have exactly one default doodad; found ${doodadDefaults.length}`);
 }

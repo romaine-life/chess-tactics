@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   applyServerRenderSnapshot,
+  defaultWallMaterial,
+  groundCoverSet,
+  wallFrameSrc,
   resetLiveMediaCatalog,
   resetDrawableCatalog,
   resetLiveUnitCatalog,
@@ -43,8 +46,30 @@ describe('availability-critical server renderer snapshot', () => {
 
   it('accepts a DB-defined ground-cover inventory without requiring a compiled member roster', () => {
     const snapshot = completeSnapshot();
+    const source = snapshot.drawableCatalog.assets.find((asset) => asset.id === 'ground-cover-water')!;
+    const opaque = structuredClone(source);
+    opaque.id = 'opaque-cover-83f';
+    opaque.label = 'Opaque cover';
+    opaque.behavior.terrain = 'opaque-terrain-83f';
+    opaque.behavior.variants = (opaque.behavior.variants as Array<Record<string, unknown>>).map((variant) => ({
+      ...variant, terrain: 'opaque-terrain-83f', role: 'opaque-sheet-role-83f',
+    }));
+    opaque.media = { 'opaque-sheet-role-83f': source.media.v0 };
     snapshot.drawableCatalog.assets = snapshot.drawableCatalog.assets.filter((asset) => asset.id !== 'ground-cover-water');
+    snapshot.drawableCatalog.assets.push(opaque);
     expect(() => applyServerRenderSnapshot(snapshot)).not.toThrow();
+    expect(groundCoverSet('opaque-terrain-83f')).toMatchObject({ terrain: 'opaque-terrain-83f' });
+  });
+
+  it('renders an opaque DB-defined wall material without a source-code identity', () => {
+    const snapshot = completeSnapshot();
+    const wall = snapshot.drawableCatalog.assets.find((asset) => asset.id === 'wall-stone')!;
+    wall.id = 'opaque-wall-row-4d1';
+    wall.label = 'Opaque wall';
+    wall.behavior.value = 'opaque-wall-value-4d1';
+    expect(() => applyServerRenderSnapshot(snapshot)).not.toThrow();
+    expect(defaultWallMaterial()).toBe('opaque-wall-value-4d1');
+    expect(wallFrameSrc('opaque-wall-value-4d1', 9)).toBe(wall.media['frame-9'].media.immutableUrl);
   });
 
   it('rejects a missing installed Chrome role', () => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { drawableAsset, drawableAssets } from '@chess-tactics/board-render';
+import { defaultTerrainFamily } from '../core/tileSockets';
 import { tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
@@ -61,7 +62,9 @@ function Card({ asset, n }: { asset: TileAsset; n: number }): ReactElement | nul
 export function SurfaceTilesLab({ family, onFamily, header }: {
   family: string; onFamily: (f: string) => void; header?: ReactNode;
 }): ReactElement {
-  const fam: Family = isFamily(family) ? family : SURFACE_TILE_FAMILIES[0] as Family;
+  const requestedFamily = family || defaultTerrainFamily().id;
+  if (!isFamily(requestedFamily)) throw new Error(`terrain surface family ${requestedFamily} is unavailable`);
+  const fam: Family = requestedFamily;
   const [view, setView] = useState<'board' | 'tiles'>('board');
   const [seed, setSeed] = useState(7);
   const [zoom, setZoom] = useState(1.1);

@@ -6,6 +6,7 @@
 // TYPE, not a fake meta-asset inside an asset category.
 import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react';
 import { drawableAssets, pieceSpritePath } from '@chess-tactics/board-render';
+import { defaultTerrainFamily } from '../../core/tileSockets';
 import { GLOSSARY } from './catalogData';
 
 // Stop a card-action icon's click from also triggering the card's select.
@@ -28,7 +29,10 @@ const LiveKnightSprite = (): ReactElement => (
 );
 
 function SplitLayerExample({ front = false }: { front?: boolean }): ReactElement {
-  const terrain = drawableAssets('terrain-surface')[0]?.media.top?.media.immutableUrl;
+  const defaultFamily = defaultTerrainFamily().id;
+  const baseSurfaces = drawableAssets('terrain-surface').filter((asset) => asset.behavior.family === defaultFamily && asset.behavior.role === 'base');
+  if (baseSurfaces.length !== 1) throw new Error(`default terrain family ${defaultFamily} has ${baseSurfaces.length} base surfaces`);
+  const terrain = baseSurfaces[0].media.top?.media.immutableUrl;
   const structure = drawableAssets('structure').find((asset) => asset.media.back && asset.media.front);
   if (!terrain || !structure) throw new Error('split-layer glossary media is unavailable');
   return (

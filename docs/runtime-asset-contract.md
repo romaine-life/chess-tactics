@@ -81,11 +81,14 @@ an incomplete row is an availability failure.
 
 - Unit Art: family, palette, direction, anchor, and native footprint.
 - Terrain: top, side, animation, alpha ownership, projection, face semantics.
-- Ground cover: every `groundcover/<terrain>/v<id>.png` version declares its
+- Ground cover: every ground-cover media version declares its
   terrain/id, frame dimensions/count, base anchor, and content width in
   `versionMetadata.runtime.groundCover`. Browser boards and server thumbnails
   hydrate the same shared renderer projection from the applied catalog; frame
-  geometry is not duplicated in a generated source module.
+  geometry is not duplicated in a generated source module. The slot name is
+  opaque to runtime semantics: neither terrain nor variant identity is inferred
+  from its path. Installed identity and media membership come only from the
+  drawable row and its named role assignment.
 - UI kit: state/slice geometry and native roles.
 - Props, walls, backgrounds, portraits, fonts, and OG media: their declared
   component and availability contracts.

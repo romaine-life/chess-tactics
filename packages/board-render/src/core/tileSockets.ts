@@ -94,6 +94,12 @@ export function terrainFamiliesForRole(role: string): TerrainFamilyRecord[] {
   return terrainFamilyRecords().filter((family) => family.roles.includes(role));
 }
 
+export function requiredTerrainFamilyForRole(role: string): TerrainFamilyRecord {
+  const matches = terrainFamiliesForRole(role);
+  if (matches.length !== 1) throw new Error(`drawable catalog requires exactly one terrain family for role ${role}; found ${matches.length}`);
+  return matches[0];
+}
+
 export function defaultTerrainFamily(): TerrainFamilyRecord {
   const records = drawableAssets('terrain-family').filter((asset) => asset.behavior.default === true);
   if (records.length !== 1) throw new Error(`drawable catalog requires exactly one default terrain family; found ${records.length}`);

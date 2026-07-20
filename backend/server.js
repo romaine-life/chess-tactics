@@ -6688,7 +6688,7 @@ async function verifyLiveMediaStoreReadiness(record) {
 async function liveMediaReadiness() {
   await ensureDbReady();
 
-  // Read all three DB authorities afresh. Public endpoints may use short-lived
+  // Read all four DB authorities afresh. Public endpoints may use short-lived
   // caches, but a Kubernetes probe must observe current catalog state and run
   // the exact typed renderer projections that browser boot/thumbnails require.
   const [catalog, drawableCatalog, propSeatsRow, unitCatalog] = await Promise.all([
@@ -6700,6 +6700,7 @@ async function liveMediaReadiness() {
   const propSeats = requirePropSeatsDocument('default', propSeatsRow);
   const propSeatsRevision = Number(propSeats.revision);
   const unitCatalogRevision = Number(unitCatalog.revision);
+  const drawableCatalogRevision = Number(drawableCatalog.revision);
   const catalogIssue = liveCatalogReadinessIssue(catalog, { requireCritical: true });
   if (catalogIssue) throw new Error(catalogIssue);
   const catalogRevision = Number(catalog.revision);
@@ -6723,7 +6724,7 @@ async function liveMediaReadiness() {
   ))[0];
   const sample = sampleSlot ? await mediaBlobRecord(sampleSlot.media.sha256, { publicOnly: true }) : null;
   await verifyLiveMediaStoreReadiness(sample);
-  return { catalogRevision, propSeatsRevision, unitCatalogRevision };
+  return { catalogRevision, drawableCatalogRevision, propSeatsRevision, unitCatalogRevision };
 }
 
 async function publicMediaSlotById(slot) {
@@ -6961,7 +6962,6 @@ const VISUAL_MEDIA_DOMAINS = new Set([
   'background', 'portrait', 'prop', 'review-media', 'social-card', 'sprite-atlas',
   'terrain', 'ui-kit', 'unit-art', 'wall-decor',
 ]);
-const GROUND_COVER_SLOT_PATTERN = /^groundcover\/(grass|water|sand)\/v(0|[1-9][0-9]*)\.png$/;
 const GROUND_COVER_RUNTIME_KEYS = Object.freeze([
   'terrain', 'id', 'frameWidth', 'frameHeight', 'frameCount', 'baseX', 'baseY', 'contentWidth',
 ]);
@@ -6979,11 +6979,8 @@ function runtimeSemanticText(value, max = 160) {
 function runtimeMetadataProjection(row) {
   const metadata = isObjectRecord(row.version_metadata) ? row.version_metadata
     : isObjectRecord(row.metadata) ? row.metadata : {};
-  const groundCoverSlot = GROUND_COVER_SLOT_PATTERN.exec(String(row.slot || ''));
   if (metadata.runtime === undefined) {
-    return groundCoverSlot
-      ? { error: 'ground-cover slots require metadata.runtime.groundCover' }
-      : { value: {} };
+    return { value: {} };
   }
   if (!isObjectRecord(metadata.runtime)) return { error: 'metadata.runtime must be an object' };
   const raw = metadata.runtime;
@@ -7029,9 +7026,9 @@ function runtimeMetadataProjection(row) {
     if (typeof raw.loop !== 'boolean') return { error: 'metadata.runtime.loop must be boolean' };
     value.loop = raw.loop;
   }
-  if (raw.groundCover !== undefined || groundCoverSlot) {
-    if (!groundCoverSlot || row.domain !== 'terrain') {
-      return { error: 'metadata.runtime.groundCover is allowed only on a registered ground-cover terrain slot' };
+  if (raw.groundCover !== undefined) {
+    if (row.domain !== 'terrain') {
+      return { error: 'metadata.runtime.groundCover is allowed only on terrain media' };
     }
     if (!isObjectRecord(raw.groundCover)) return { error: 'metadata.runtime.groundCover must be an object' };
     const unsupportedRuntime = Object.keys(raw).filter((key) => key !== 'groundCover');
@@ -7044,13 +7041,12 @@ function runtimeMetadataProjection(row) {
       return { error: `metadata.runtime.groundCover contains unsupported keys: ${unsupportedGroundCover.sort().join(', ')}` };
     }
     const terrain = mediaName(raw.groundCover.terrain);
-    const slotTerrain = groundCoverSlot[1];
-    if (!terrain || terrain !== slotTerrain) {
-      return { error: 'metadata.runtime.groundCover.terrain must match the semantic slot' };
+    if (!terrain) {
+      return { error: 'metadata.runtime.groundCover.terrain must be a semantic terrain name' };
     }
     const id = runtimeInteger(raw.groundCover.id, { min: 0, max: 32768 });
-    if (id === null || id !== Number(groundCoverSlot[2])) {
-      return { error: 'metadata.runtime.groundCover.id must match the semantic slot' };
+    if (id === null) {
+      return { error: 'metadata.runtime.groundCover.id must be a bounded integer' };
     }
     const frameWidth = runtimeInteger(raw.groundCover.frameWidth, { min: 1, max: 32768 });
     const frameHeight = runtimeInteger(raw.groundCover.frameHeight, { min: 1, max: 32768 });
@@ -7157,8 +7153,7 @@ function mediaDomainProjectionIssue(row) {
   }
   if (row.domain !== 'terrain') return null;
 
-  const groundCoverSlot = GROUND_COVER_SLOT_PATTERN.exec(String(row.slot || ''));
-  if (groundCoverSlot) {
+  if (runtime.value.groundCover) {
     if (row.role !== 'media') return 'ground-cover slots require the terrain media role';
     if (row.media_type !== 'image/png') return 'ground-cover sheets require image/png';
     const projection = runtime.value.groundCover;

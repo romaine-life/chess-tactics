@@ -48,7 +48,7 @@ import { saveLiveWallArt } from '../net/wallArt';
 import { mapSaveError } from '../campaign/save';
 import { SliderRow } from './dressing/SliderRow';
 import { ViewPane } from './shared/ViewPane';
-import { terrainFamiliesForRole } from '../core/tileSockets';
+import { requiredTerrainFamilyForRole, terrainFamiliesForRole } from '../core/tileSockets';
 
 const WALL_FRAME_W = WALL_FRAME_GEOMETRY.width;
 const WALL_FRAME_H = WALL_FRAME_GEOMETRY.height;
@@ -63,9 +63,7 @@ const LAB_NORTH_X = 1;
 type Family = string;
 const previewFamilies = () => terrainFamiliesForRole('wall-art-preview');
 const defaultPreviewFamily = (): Family => {
-  const family = terrainFamiliesForRole('wall-art-preview-default')[0];
-  if (!family) throw new Error('drawable catalog has no default wall-art preview terrain');
-  return family.id;
+  return requiredTerrainFamilyForRole('wall-art-preview-default').id;
 };
 type TestPiece = {
   id: string;

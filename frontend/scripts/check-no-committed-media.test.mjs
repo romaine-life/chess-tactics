@@ -921,6 +921,8 @@ describe('no-committed-media guard', () => {
     'const selected = DOODAD_ASSETS[0];',
     'const selected = GROUND_COVER_ASSETS[0];',
     'const selected = assets.find((asset) => asset.id === id) ?? assets[0];',
+    'const selected = COMPARE_TILES[0];',
+    'const selected = wallMaterials()[0];',
   ])('rejects compiled installed defaults and first-row fallbacks: %s', (source) => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-installed-default-test-'));
     const relativePath = 'frontend/src/ui/legacyInstalledDefault.ts';
@@ -930,6 +932,21 @@ describe('no-committed-media guard', () => {
     try {
       expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
         expect.objectContaining({ detail: 'compiled installed-content default or first-row fallback remains after drawable-catalog cutover' }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects filename-derived ground-cover rosters', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-ground-cover-path-roster-test-'));
+    const relativePath = 'backend/server.js';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, 'const GROUND_COVER_SLOT_PATTERN = /^groundcover\\/(grass|water|sand)\\/v0\\.png$/;\n', 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({ detail: 'filename-derived ground-cover roster remains after drawable-catalog cutover' }),
       ]);
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });

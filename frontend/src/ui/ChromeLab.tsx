@@ -151,6 +151,7 @@ const currentChromeLabTargets = (): ChromeLabTarget[] => [
 ];
 export const CHROME_LAB_TARGETS: ChromeLabTarget[] = new Proxy([], { get: (_target, property) => { const values = currentChromeLabTargets(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
 const chromeLabSharedTuningTargetId = (): string => String(requiredDrawableRole('studio-page', 'chrome-lab-page').behavior.value ?? '');
+export const defaultChromeLabTargetId = (): string => chromeLabSharedTuningTargetId();
 
 
 function chromeLabDefaultState(): ChromeLabTuneState {
@@ -1432,7 +1433,9 @@ function ChromeLabReadyViewer({
   zoomControl?: ReactNode;
   zoom?: number;
 }): ReactElement {
-  const target = CHROME_LAB_TARGETS.find((entry) => entry.id === targetId) ?? CHROME_LAB_TARGETS[0];
+  const requested = targetId ?? defaultChromeLabTargetId();
+  const target = CHROME_LAB_TARGETS.find((entry) => entry.id === requested);
+  if (!target) throw new Error(`Chrome Lab target ${requested} is unavailable`);
   if (target.kind === 'unit') {
     return <ChromeLabUnitViewer target={target} onTargetId={onTargetId} header={header} zoomControl={zoomControl} zoom={zoom} />;
   }

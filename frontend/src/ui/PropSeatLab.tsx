@@ -13,7 +13,7 @@ import { saveLiveSeats } from '../net/propSeats';
 import { mapSaveError } from '../campaign/save';
 import { currentDoodadAssets, type DoodadAsset } from './doodadCatalog';
 import { STRUCTURE_ART_ASSETS, structureArtAsset, type StructureArtAsset } from '../core/structureArt';
-import { terrainFamiliesForRole } from '../core/tileSockets';
+import { requiredTerrainFamilyForRole, terrainFamiliesForRole } from '../core/tileSockets';
 
 // The prop-seat editor as an embedded Studio Viewer kind (docs/studio-control-architecture.md,
 // ADR-0058): it renders into the shared studio shell — the board in `.al-lab-main`, EVERY
@@ -36,9 +36,7 @@ export interface StructureEditorDraft {
 type Family = string;
 const previewFamilies = () => terrainFamiliesForRole('prop-seat-preview');
 const defaultPreviewFamily = (): Family => {
-  const family = terrainFamiliesForRole('prop-seat-preview-default')[0];
-  if (!family) throw new Error('drawable catalog has no default prop-seat preview terrain');
-  return family.id;
+  return requiredTerrainFamilyForRole('prop-seat-preview-default').id;
 };
 const COLS = 9;
 const ROWS = 7;

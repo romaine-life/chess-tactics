@@ -183,7 +183,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       behavior: { family: 'grass', role: 'variant' }, metadata: { method: 'Synthetic', status: 'Test-only' }, rowRevision: 1,
       media: { preview: descriptor('test/terrain/review.png') } },
     { id: 'test-terrain-comparison', kind: 'terrain-comparison', label: 'Test terrain comparison', sortOrder: 0, lifecycleState: 'active' as const,
-      behavior: { family: 'grass', variant: 0 }, metadata: {}, rowRevision: 1,
+      behavior: { family: 'grass', variant: 0, default: true }, metadata: {}, rowRevision: 1,
       media: { raw: descriptor('test/terrain/raw.png'), processed: descriptor('test/terrain/processed.png') } },
   ];
   const portraitTreatmentSpecs = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'].map((piece, sortOrder) => ({

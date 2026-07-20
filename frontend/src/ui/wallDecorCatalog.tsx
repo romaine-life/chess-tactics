@@ -3,24 +3,24 @@ import {
   WALL_DECOR_ASSETS,
   WALL_DECOR_KIND_LABELS,
   WALL_DECOR_KINDS,
+  defaultWallDecorAsset,
   wallDecorAsset,
   type WallDecorAsset,
   type WallDecorFace,
   type WallDecorKind,
 } from '../core/wallDecor';
-import { wallMaterials } from '../core/featureAutotile';
+import { defaultWallMaterial } from '../core/featureAutotile';
 import { wallFrameSrc } from '../art/tileset';
 
 const previewWallSrc = (): string => {
-  const material = wallMaterials()[0];
-  if (!material) throw new Error('drawable catalog has no wall material for decoration preview');
-  return wallFrameSrc(material, 9);
+  return wallFrameSrc(defaultWallMaterial(), 9);
 };
 
 export {
   WALL_DECOR_ASSETS,
   WALL_DECOR_KIND_LABELS,
   WALL_DECOR_KINDS,
+  defaultWallDecorAsset,
   wallDecorAsset,
   type WallDecorAsset,
   type WallDecorKind,

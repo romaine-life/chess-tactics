@@ -20,7 +20,8 @@ export const WALL_DECOR_KINDS: readonly WallDecorKind[] = new Proxy([] as WallDe
   get(_target, property) { const values = [...new Set(wallDecorAssets.map((asset) => asset.kind))]; const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; },
 });
 export const WALL_DECOR_KIND_LABELS: Record<string, string> = new Proxy({}, {
-  get(_target, property) {
+  get(target, property) {
+    if (typeof property !== 'string') return Reflect.get(target, property);
     const asset = drawableAssets('wall-decor').find((entry) => entry.behavior.decorKind === property);
     if (!asset || typeof asset.metadata.kindLabel !== 'string' || !asset.metadata.kindLabel) {
       throw new Error(`invalid wall-decor catalog: kind ${String(property)} has no label`);

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
-import { drawableAssets } from '@chess-tactics/board-render';
+import { drawableAssets, requiredDrawableDefault } from '@chess-tactics/board-render';
 
 // Before/after inspector for the PixelLab tile pipeline, as an embedded Studio Viewer kind
 // (ADR-0058): board/panes in `.al-lab-main`, controls in the one `.tileset-view-controls`
@@ -26,6 +26,12 @@ export const COMPARE_TILE_FAMILIES: readonly string[] = new Proxy([] as string[]
   get: (_target, property) => { const values = [...new Set(currentCompareTiles().map((tile) => tile.family))]; const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; },
 });
 export const compareTileCap = cap;
+export function defaultCompareTile(): CompareTile {
+  const record = requiredDrawableDefault('terrain-comparison');
+  const selected = currentCompareTiles().find((tile) => tile.id === record.id);
+  if (!selected) throw new Error(`terrain comparison default ${record.id} is unavailable`);
+  return selected;
+}
 
 // Canonical block wireframe (our grid) in 96×180 tile coords.
 const APEX = '48,41', RT = '96,68', LT = '0,68', FT = '48,95', RB = '96,153', LB = '0,153', FB = '48,180';
@@ -55,7 +61,8 @@ export function TileCompareLab({ tileId, onTileId, header }: {
   tileId: string; onTileId: (id: string) => void; header?: ReactNode;
 }): ReactElement {
   const [grid, setGrid] = useState(false);
-  const idx = Math.max(0, COMPARE_TILES.findIndex((t) => t.id === tileId));
+  const idx = COMPARE_TILES.findIndex((t) => t.id === tileId);
+  if (idx < 0) throw new Error(`terrain comparison ${tileId} is unavailable`);
   const tile = COMPARE_TILES[idx];
 
   // ← → flips through the set (VIEW state; guarded against form fields).

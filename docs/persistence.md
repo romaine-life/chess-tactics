@@ -184,6 +184,11 @@ ground-cover density counts, surface probability/role, wall-art span/reflection,
 and nine-slice flags are validated as present. An omitted field or an unknown
 requested id fails closed instead of manufacturing a code default.
 
+`/ready` validates a fresh media catalog, drawable catalog, prop-seat document,
+and Unit Art catalog through the shared renderer projection and reports all four
+revisions. A filename-shaped media slot is never accepted as evidence that a
+logical drawable exists.
+
 Terrain-family rows declare both their serialized gameplay terrain and the
 gameplay terrain values they render. Editor conversion, free-skirmish assembly,
 and gameplay rendering use that projection; they do not keep family maps or a

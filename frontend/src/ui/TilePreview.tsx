@@ -35,7 +35,7 @@ import { TileSidesViewer } from './TileSidesViewer';
 import { TILE_SIDE_ITEMS, type TileSideItem } from './tileSideCatalog';
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
-import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS } from './ChromeLab';
+import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS, defaultChromeLabTargetId } from './ChromeLab';
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
 import { LoadingLab } from './LoadingLab';
@@ -51,13 +51,13 @@ import { PortraitLab } from './PortraitEditor';
 import { NineSliceLab, DEFAULT_NINE_SLICE_ASSET } from './NineSliceEditor';
 import { PropSeatLab, type StructureEditorDraft } from './PropSeatLab';
 import { PROP_DEFS, defaultPropDef, type PropDef, type PropKind } from '../core/props';
-import { TileCompareLab, COMPARE_TILES, COMPARE_TILE_FAMILIES, compareTileCap, type CompareTile } from './TileCompareLab';
+import { TileCompareLab, COMPARE_TILES, COMPARE_TILE_FAMILIES, compareTileCap, defaultCompareTile, type CompareTile } from './TileCompareLab';
 import { SurfaceTilesLab, SURFACE_TILE_FAMILIES, surfaceTileCap } from './SurfaceTilesLab';
 import { defaultGroundCoverAsset, GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverCatalogAsset, type GroundCoverId } from './groundCoverCatalog';
-import { WALL_DECOR_ASSETS, WALL_DECOR_KIND_LABELS, WALL_DECOR_KINDS, WallDecorLab, WallDecorPreview, wallDecorAsset, type WallDecorAsset, type WallDecorKind } from './wallDecorCatalog';
+import { WALL_DECOR_ASSETS, WALL_DECOR_KIND_LABELS, WALL_DECOR_KINDS, WallDecorLab, WallDecorPreview, defaultWallDecorAsset, wallDecorAsset, type WallDecorAsset, type WallDecorKind } from './wallDecorCatalog';
 import { wallArt, wallArtBadge, wallArtIdOrDefault, wallArtItems, type WallArt } from '../core/wallArt';
 import { WallArtLab, WallArtPreview } from './WallArtLab';
-import { defaultSceneAnimation, SceneAnimLab, SceneRegionPicker, SCENE_ANIM_REGIONS, SCENE_ANIM_SCENES, SceneRegionThumb, type SceneRegion, type SceneAnimScene } from './SceneAnimLab';
+import { defaultSceneAnimation, defaultSceneAnimationScene, SceneAnimLab, SceneRegionPicker, SCENE_ANIM_REGIONS, SCENE_ANIM_SCENES, SceneRegionThumb, type SceneRegion, type SceneAnimScene } from './SceneAnimLab';
 import { ArtworkCompareLab } from './ArtworkCompareLab';
 import {
   fenceArtKit,
@@ -150,6 +150,12 @@ const wallCatalogAssets = (): WallCatalogAsset[] => drawableAssets('wall-materia
   method: typeof asset.metadata.method === 'string' ? asset.metadata.method : '',
   notes: typeof asset.metadata.notes === 'string' ? asset.metadata.notes : '',
 }));
+const defaultWallCatalogAsset = (): WallCatalogAsset => {
+  const material = defaultWallMaterial();
+  const matches = wallCatalogAssets().filter((asset) => asset.material === material);
+  if (matches.length !== 1) throw new Error(`wall material default ${material} has ${matches.length} catalog rows`);
+  return matches[0];
+};
 type TileFilter = 'base' | 'board';
 type LabMode = 'board' | 'tile' | 'unit' | 'doodad';
 type CollectionFilter = Exclude<TileFilter, 'board'>;
@@ -335,7 +341,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedArtworkName: art || undefined,
     selectedGlossaryName: gloss || undefined,
     selectedPageName: page || undefined,
-    selectedChromeLabTargetId: CHROME_LAB_TARGETS.some((target) => target.id === chrome) ? chrome ?? undefined : undefined,
+    selectedChromeLabTargetId: chrome || undefined,
     selectedGameLabLevelId: glvl || undefined,
     selectedGymLevelId: gymlvl || undefined,
     selectedSolverLevelId: slvl || undefined,
@@ -348,9 +354,9 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedRailFamilyId: rail || undefined,
     selectedPropName: prop || undefined,
     selectedTileCompareId: tile || undefined,
-    selectedGroundCoverId: GROUND_COVER_ASSETS.some((asset) => asset.id === cover) ? cover ?? undefined : undefined,
-    selectedWallDecorId: WALL_DECOR_ASSETS.some((asset) => asset.id === wdecor) ? wdecor ?? undefined : undefined,
-    selectedWallArtId: wallArt(wart ?? undefined)?.id,
+    selectedGroundCoverId: cover || undefined,
+    selectedWallDecorId: wdecor || undefined,
+    selectedWallArtId: wart || undefined,
     selectedFenceArtworkId: fenceArt || undefined,
     selectedSurfaceFamily: sfamily || undefined,
     selectedRegionId: regionParam || undefined,
@@ -534,7 +540,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [pageSearch, setPageSearch] = useState('');
   const [selectedPageName, setSelectedPageName] = useState<string | undefined>(initialRoute.selectedPageName);
   const [chromeLabSearch, setChromeLabSearch] = useState('');
-  const [selectedChromeLabTargetId, setSelectedChromeLabTargetId] = useState<string>(initialRoute.selectedChromeLabTargetId ?? CHROME_LAB_TARGETS[0].id);
+  const [selectedChromeLabTargetId, setSelectedChromeLabTargetId] = useState<string>(initialRoute.selectedChromeLabTargetId ?? defaultChromeLabTargetId());
   // Viewer-wide zoom — a meta-control (in the shared Viewer header) that scales the WHOLE preview.
   // 1 = full size (roam it with the panel scrollbars); the dressing-room (iframe) viewers consume it.
   const [viewerZoom, setViewerZoom] = useState(1);
@@ -571,11 +577,13 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Which prop the embedded prop-seat editor (Viewer 'propseat' kind) is tuning.
   const [selectedPropName, setSelectedPropName] = useState(() => initialRoute.selectedPropName ?? defaultPropDef().id);
   // Which pipeline tile the embedded Tile Pipeline compare (Viewer 'tilecompare' kind) shows.
-  const [selectedTileCompareId, setSelectedTileCompareId] = useState(initialRoute.selectedTileCompareId ?? COMPARE_TILES[0].id);
+  const [selectedTileCompareId, setSelectedTileCompareId] = useState(initialRoute.selectedTileCompareId ?? defaultCompareTile().id);
   const [selectedGroundCoverId, setSelectedGroundCoverId] = useState<GroundCoverId>(() => initialRoute.selectedGroundCoverId
     ? groundCoverAsset(initialRoute.selectedGroundCoverId).id
     : defaultGroundCoverAsset().id);
-  const [selectedWallDecorId, setSelectedWallDecorId] = useState<string>(wallDecorAsset(initialRoute.selectedWallDecorId)?.id ?? '');
+  const [selectedWallDecorId, setSelectedWallDecorId] = useState<string>(() => initialRoute.selectedWallDecorId
+    ? (wallDecorAsset(initialRoute.selectedWallDecorId)?.id ?? (() => { throw new Error(`wall decoration ${initialRoute.selectedWallDecorId} is unavailable`); })())
+    : defaultWallDecorAsset().id);
   const [selectedWallArtId, setSelectedWallArtId] = useState<string>(() => wallArtIdOrDefault(initialRoute.selectedWallArtId));
   const [fenceAdminCatalog, setFenceAdminCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [fenceCatalogError, setFenceCatalogError] = useState<string | null>(null);
@@ -583,12 +591,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedFenceArtworkId, setSelectedFenceArtworkId] = useState<string>(initialRoute.selectedFenceArtworkId ?? '');
   const [fenceEditorLaunchError, setFenceEditorLaunchError] = useState<string | null>(null);
   const [wallArtDraftSourceId, setWallArtDraftSourceId] = useState<string | null>(null);
-  const [selectedWallId, setSelectedWallId] = useState<string>(() => wallCatalogAssets()[0]?.id ?? '');
+  const [selectedWallId, setSelectedWallId] = useState<string>(() => defaultWallCatalogAsset().id);
   // Which family the embedded Tileset Surfaces inspector (Viewer 'surfacetiles' kind) opens on.
-  const [selectedSurfaceFamily, setSelectedSurfaceFamily] = useState(initialRoute.selectedSurfaceFamily ?? SURFACE_TILE_FAMILIES[0]);
+  const [selectedSurfaceFamily, setSelectedSurfaceFamily] = useState(initialRoute.selectedSurfaceFamily ?? defaultTerrainFamily().id);
   // Which menu region the embedded Scene Animations inspector (Viewer 'sceneanim' kind) shows.
   const [selectedRegionId, setSelectedRegionId] = useState(() => initialRoute.selectedRegionId ?? defaultSceneAnimation().id);
-  const [selectedSceneId, setSelectedSceneId] = useState(SCENE_ANIM_SCENES[0].id);
+  const [selectedSceneId, setSelectedSceneId] = useState(() => defaultSceneAnimationScene().id);
   const [structureDraft, setStructureDraft] = useState<StructureEditorDraft | null>(window.location.pathname === '/doodad-editor' ? { target: 'doodad' } : null);
   // Which item the Viewer is showing (independent of the catalog category).
   const [viewerKind, setViewerKind] = useState<ViewerKind>(initialRoute.viewerKind ?? 'artwork');

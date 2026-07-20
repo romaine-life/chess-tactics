@@ -16,14 +16,12 @@ import {
 import { UnitStudioControls } from './UnitStudioControls';
 import type { UnitArtPreview } from './UnitRecaptureEditor';
 import { unitDeliveryRasterForAsset, useUnitSizeDraft } from './unitSizeTuning';
-import { terrainFamiliesForRole } from '../core/tileSockets';
+import { requiredTerrainFamilyForRole, terrainFamiliesForRole } from '../core/tileSockets';
 
 type UnitArtGround = string;
 const unitArtGrounds = () => terrainFamiliesForRole('unit-art-preview');
 const defaultUnitArtGround = (): UnitArtGround => {
-  const family = terrainFamiliesForRole('unit-art-preview-default')[0];
-  if (!family) throw new Error('drawable catalog has no default Unit Art preview terrain');
-  return family.id;
+  return requiredTerrainFamilyForRole('unit-art-preview-default').id;
 };
 
 const FORMATION: Array<{ x: number; y: number; palette: UnitPalette }> = [

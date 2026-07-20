@@ -29,6 +29,12 @@ export function defaultSceneAnimation(): SceneRegion {
 export interface SceneAnimScene { id: string; label: string; role: string; background: string; w: number; h: number; regionIds: string[] }
 const currentScenes = (): SceneAnimScene[] => animatedScenes().map((scene) => ({ ...scene, regionIds: sceneAnimations().filter((region) => region.sceneRole === scene.role).map((region) => region.id) }));
 export const SCENE_ANIM_SCENES: SceneAnimScene[] = new Proxy([] as SceneAnimScene[], { get: (_target, property) => { const values = currentScenes(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
+export function defaultSceneAnimationScene(): SceneAnimScene {
+  const role = defaultSceneAnimation().sceneRole;
+  const matches = currentScenes().filter((scene) => scene.role === role);
+  if (matches.length !== 1) throw new Error(`scene animation default role ${role} has ${matches.length} scenes`);
+  return matches[0];
+}
 
 const shortRegionName = (id: string): string => id.replace(/^waterfall-/, '');
 

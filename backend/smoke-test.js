@@ -1446,7 +1446,10 @@ async function main() {
   const groundCoverFixtures = [];
   for (let index = 0; index < groundCoverTerrains.length; index += 1) {
     const terrain = groundCoverTerrains[index];
-    const slot = `groundcover/${terrain}/v0.png`;
+    // Deliberately opaque: neither the installed terrain identity nor variant id
+    // can be inferred from this slot. Typed version metadata and the later
+    // drawable media-role assignment are the only authorities.
+    const slot = `opaque/ground-cover-smoke/${index}.sheet`;
     const bytes = syntheticPng(240, 37, `#${(0x31512f + index * 0x191109).toString(16).padStart(6, '0')}`, '#b9d982');
     const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
     const metadata = {
@@ -1868,7 +1871,7 @@ async function main() {
         edgeOnly: terrain === 'water',
         count: { sparse: 2, filled: 3 },
       },
-      media: { v0: `groundcover/${terrain}/v0.png` },
+      media: { v0: groundCoverFixtures.find((fixture) => fixture.metadata.runtime.groundCover.terrain === terrain).slot },
     });
   }
   for (const [role, [width, height]] of Object.entries({ base: [72, 96], west: [26, 84], north: [26, 84] })) {
@@ -1900,6 +1903,43 @@ async function main() {
     media: {},
   });
   const sharedPresentationSlot = 'wall-decor/test-banner-base.png';
+  await seedSyntheticDrawable({
+    id: 'test-subterrain-opaque', kind: 'subterrain', label: 'Synthetic Subterrain',
+    behavior: { default: true }, media: { surface: sharedPresentationSlot },
+  });
+  for (const [sortOrder, [kind, id, value, roles]] of [
+    ['road-material', 'test-road-material', 'test-road', [...Array.from({ length: 16 }, (_, index) => `frame-${index}`), 'thumb']],
+    ['river-material', 'test-river-material', 'test-river', [...Array.from({ length: 16 }, (_, index) => `frame-${index}`), 'thumb']],
+    ['fence-material', 'test-fence-material', 'test-fence', ['frame-2', 'frame-4', 'frame-6', 'thumb', 'post', 'post-thumb']],
+    ['wall-material', 'test-wall-material', 'test-wall', ['frame-1', 'frame-8', 'frame-9', 'thumb']],
+  ].entries()) {
+    await seedSyntheticDrawable({
+      id, kind, label: `Synthetic ${value}`, sortOrder,
+      behavior: { value, default: true },
+      media: Object.fromEntries(roles.map((role) => [role, sharedPresentationSlot])),
+    });
+  }
+  await seedSyntheticDrawable({
+    id: 'structure-test-doodad', kind: 'structure', label: 'Synthetic doodad', sortOrder: readinessStructures.length,
+    behavior: {
+      value: 'test-doodad', structureKind: 'doodad', propKind: 'rock', terrains: ['grass'],
+      anchorX: 36, anchorY: 80, scale: 1, blocking: false, splitMode: 'authored', default: true,
+    },
+    media: { back: sharedPresentationSlot, front: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-ui-surface', kind: 'ui-surface', label: 'Synthetic UI surface',
+    behavior: { value: 'test-surface', approach: 'synthetic', material: 'stone', tilePx: 96, default: true },
+    media: { surface: sharedPresentationSlot },
+  });
+  await seedSyntheticDrawable({
+    id: 'test-ui-slider', kind: 'ui-slider', label: 'Synthetic UI slider',
+    behavior: {
+      value: 'test-slider', approach: 'css', material: 'stone', fill: '#aaa', channel: '#222',
+      edge: '#444', handle: '#888', handleLight: '#ccc', handleDark: '#111', preferred: true,
+    },
+    metadata: { description: 'Synthetic smoke slider' }, media: {},
+  });
   for (const [sortOrder, family] of ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'].entries()) {
     await seedSyntheticDrawable({
       id: `terrain-family-${family}`, kind: 'terrain-family', label: `Synthetic ${family}`, sortOrder,
@@ -1931,7 +1971,7 @@ async function main() {
   });
   await seedSyntheticDrawable({
     id: 'test-terrain-comparison', kind: 'terrain-comparison', label: 'Synthetic terrain comparison',
-    behavior: { family: 'grass', variant: 0 }, media: { raw: sharedPresentationSlot, processed: sharedPresentationSlot },
+    behavior: { family: 'grass', variant: 0, default: true }, media: { raw: sharedPresentationSlot, processed: sharedPresentationSlot },
   });
   await seedSyntheticDrawable({
     id: 'test-background-set', kind: 'background-set', label: 'Synthetic background set',
@@ -2088,6 +2128,7 @@ async function main() {
   if (
     completeReadiness.statusCode !== 200 || completeReadinessBody.status !== 'ready'
     || !Number.isInteger(completeReadinessBody.catalogRevision)
+    || !Number.isInteger(completeReadinessBody.drawableCatalogRevision)
     || completeReadinessBody.propSeatsRevision !== 1
     || !Number.isInteger(completeReadinessBody.unitCatalogRevision)
   ) throw new Error(

@@ -241,7 +241,11 @@ const RETIRED_CUTOVER_SOURCE_MARKERS = [
     detail: 'compiled ground-cover/wall-decoration/prop inventory remains after drawable-catalog cutover',
   },
   {
-    pattern: /\b(?:DEFAULT_WALL_ART_REFLECTION|DEFAULT_DOODAD_SPRITE)\b|\bconst\s+COUNT\s*:\s*Record<GroundCoverDensity|wallArtItems\(\)\[0\]|\b(?:PROP_DEFS|DOODAD_ASSETS|GROUND_COVER_ASSETS|WALL_DECOR_ASSETS|SURFACE_ASSETS|SLIDER_ASSETS|TILE_SIDE_ITEMS)\[0\]|\?\?\s*(?:assets|sources)\[0\]/,
+    pattern: /\bGROUND_COVER_SLOT_PATTERN\b|groundcover\\\/\(grass\|water\|sand\)/,
+    detail: 'filename-derived ground-cover roster remains after drawable-catalog cutover',
+  },
+  {
+    pattern: /\b(?:DEFAULT_WALL_ART_REFLECTION|DEFAULT_DOODAD_SPRITE)\b|\bconst\s+COUNT\s*:\s*Record<GroundCoverDensity|(?:wallArtItems|wallMaterials|wallCatalogAssets)\(\)\[0\]|\b(?:PROP_DEFS|DOODAD_ASSETS|GROUND_COVER_ASSETS|WALL_DECOR_ASSETS|SURFACE_ASSETS|SLIDER_ASSETS|TILE_SIDE_ITEMS|COMPARE_TILES|CHROME_LAB_TARGETS|SURFACE_TILE_FAMILIES|SCENE_ANIM_SCENES)\[0\]|\?\?\s*(?:assets|sources)\[0\]/,
     detail: 'compiled installed-content default or first-row fallback remains after drawable-catalog cutover',
   },
   {
