@@ -1,6 +1,6 @@
 import { tileFamilies } from '../art/tileset';
-import { drawableAssets } from '../art/drawableCatalog';
 import {
+  terrainFamilyRecords,
   type TileAssetKind,
   type TileFamilyId,
   type TileSocketAsset,
@@ -40,15 +40,17 @@ export interface StudioFamily {
 export const assetFrameSrc = (asset: StudioAsset, animationFrame: number): string =>
   asset.animation ? asset.animation.frames[animationFrame % asset.animation.frames.length] ?? asset.src : asset.src;
 
-const currentStudioFamilies = (): StudioFamily[] => (Object.keys(tileFamilies) as TileFamilyId[]).map((id) => {
-  const record = drawableAssets('terrain-surface').find((asset) => asset.behavior.family === id);
+const currentStudioFamilies = (): StudioFamily[] => terrainFamilyRecords().map((record) => {
+  const id = record.id;
+  const assets = tileFamilies[id];
+  if (!assets?.length) throw new Error(`terrain family ${id} has no installed surfaces`);
   return {
     id,
-    label: typeof record?.metadata.familyLabel === 'string' ? record.metadata.familyLabel : id,
-    purpose: typeof record?.metadata.purpose === 'string' ? record.metadata.purpose : '',
-    status: typeof record?.metadata.status === 'string' ? record.metadata.status : '',
-    review: typeof record?.metadata.review === 'string' ? record.metadata.review : '',
-    assets: tileFamilies[id].map((asset): StudioAsset => ({ ...asset })),
+    label: record.label,
+    purpose: record.purpose,
+    status: record.status,
+    review: record.review,
+    assets: assets.map((asset): StudioAsset => ({ ...asset })),
   };
 });
 

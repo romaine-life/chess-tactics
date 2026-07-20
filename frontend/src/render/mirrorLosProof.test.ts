@@ -29,9 +29,9 @@ function subject(): MirrorReflectionSubject {
 function surface(face: 'west' | 'north' = 'west', aperture: readonly number[] = RECTANGLE): MirrorSurface {
   return {
     id: `surface-${face}`,
-    artId: 'mirror-grand-gallery-wall',
+    artId: 'test-art-mirror-grand-gallery',
     slotId: `gallery-${face}`,
-    sourceId: 'mirror-grand-gallery',
+    sourceId: 'test-mirror-grand-gallery',
     face,
     anchor: face === 'west' ? { x: 0, y: 1 } : { x: 1, y: 0 },
     span: 3,

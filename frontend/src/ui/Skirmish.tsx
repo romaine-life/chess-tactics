@@ -42,7 +42,7 @@ import { fetchPublicMap } from '../net/maps';
 import { HttpError } from '../net/http';
 import { OBJECTIVE_TYPES, type ObjectiveType } from '../core/level';
 import { spawnEventsForLevel } from '../core/levelEvents';
-import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
+import { defaultBackgroundSet } from '../art/backgroundSets';
 import { isPlayablePieceType, paletteForSide } from '../core/pieces';
 import { type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
 import { runtimePortraitMasterSrc } from './portraitCandidates';
@@ -372,7 +372,7 @@ export function Skirmish() {
         piece.type as PortraitPiece,
         paletteForSide(piece.side, piece.palette) as PortraitPalette,
       ));
-      urls.push(DEFAULT_BACKGROUND_SET.portraits[piece.type]);
+      urls.push(defaultBackgroundSet().portraits[piece.type]);
     }
     preloadImages(urls);
   }, [game.pieces]);
@@ -931,7 +931,7 @@ export function Skirmish() {
   }, [routeLobby]);
 
   const screenStyle = {
-    '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")`,
+    '--skirmish-world-bg': `url("${defaultBackgroundSet().world}")`,
   } as CSSProperties;
 
   return (

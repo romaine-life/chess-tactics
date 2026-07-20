@@ -57,3 +57,13 @@ export async function saveDrawableAsset(input: SaveDrawableAssetInput): Promise<
   });
   return jsonResponse('save-drawable-asset', response);
 }
+
+export async function saveDrawableAssetBatch(assets: SaveDrawableAssetInput[]): Promise<{ catalogRevision: number }> {
+  const response = await fetch('/api/admin/drawable-assets', {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assets }),
+  });
+  return jsonResponse('save-drawable-asset-batch', response);
+}

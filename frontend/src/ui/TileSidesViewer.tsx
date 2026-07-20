@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { TILE_SIDE_ITEMS, tileSideItemById } from './tileSideCatalog';
+import { defaultTileSideItem, tileSideItemById } from './tileSideCatalog';
 
 // Read-only Viewer for a single tile's SIDE faces — the tile shown big on an inspection
 // backdrop with a zoom up to 8× so you can scrutinise the cliff cross-section pixel-by-pixel.
@@ -11,7 +11,8 @@ const STAGE_BG: Record<'void' | 'sky', string> = {
 };
 
 export function TileSidesViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
-  const item = tileSideItemById(name) ?? TILE_SIDE_ITEMS[0];
+  const item = name ? tileSideItemById(name) : defaultTileSideItem();
+  if (!item) throw new Error(`Selected subterrain "${name}" is unavailable`);
   const [zoom, setZoom] = useState(3);
   const [backdrop, setBackdrop] = useState<'void' | 'sky'>('void');
   const width = Math.round(96 * zoom);

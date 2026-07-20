@@ -1,7 +1,8 @@
 ---
-status: "accepted; repo-write and asset-storage clauses superseded by ADR-0085"
+status: "accepted; repo-write and asset-storage clauses superseded by ADR-0085 and ADR-0106"
 date: 2026-06-27
 deciders: Nelson, Claude
+partially_superseded_by: "[ADR-0106](0106-installed-content-is-database-owned.md)"
 ---
 
 # ADR-0019: Dev-only in-app 9-slice editor that saves to disk through the shared bake

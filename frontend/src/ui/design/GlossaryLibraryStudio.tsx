@@ -5,7 +5,8 @@
 // the reviewable in-app home for "how our chrome actually renders" — a glossary
 // TYPE, not a fake meta-asset inside an asset category.
 import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react';
-import { pieceSpritePath } from '../../core/pieces';
+import { drawableAssets, pieceSpritePath } from '@chess-tactics/board-render';
+import { defaultTerrainFamily } from '../../core/tileSockets';
 import { GLOSSARY } from './catalogData';
 
 // Stop a card-action icon's click from also triggering the card's select.
@@ -26,6 +27,23 @@ const ViewIcon = (): ReactElement => (
 const LiveKnightSprite = (): ReactElement => (
   <img src={pieceSpritePath('knight')} alt="" aria-hidden="true" />
 );
+
+function SplitLayerExample({ front = false }: { front?: boolean }): ReactElement {
+  const defaultFamily = defaultTerrainFamily().id;
+  const baseSurfaces = drawableAssets('terrain-surface').filter((asset) => asset.behavior.family === defaultFamily && asset.behavior.role === 'base');
+  if (baseSurfaces.length !== 1) throw new Error(`default terrain family ${defaultFamily} has ${baseSurfaces.length} base surfaces`);
+  const terrain = baseSurfaces[0].media.top?.media.immutableUrl;
+  const structure = drawableAssets('structure').find((asset) => asset.media.back && asset.media.front);
+  if (!terrain || !structure) throw new Error('split-layer glossary media is unavailable');
+  return (
+    <>
+      <span className="doodad-layer-half"><img src={terrain} alt="" aria-hidden="true" /></span>
+      <span className="doodad-layer-half"><img src={structure.media.back.media.immutableUrl} alt="" aria-hidden="true" /></span>
+      <span className="board-unit-seat is-knight" style={{ left: 0, top: 0 }}><LiveKnightSprite /></span>
+      {front ? <span className="doodad-layer-half"><img src={structure.media.front.media.immutableUrl} alt="" aria-hidden="true" /></span> : null}
+    </>
+  );
+}
 
 // Long-form docs keyed by glossary term. Terse `def` lives in catalogData; the
 // deeper "why/how" lives here so the term row stays scannable but the Viewer can
@@ -63,9 +81,7 @@ const GLOSSARY_DETAILS: Record<string, ReactNode> = {
         <span className="doodad-layer-cell">
           <span className="doodad-layer-scene">
             <span className="doodad-layer-stage">
-              <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
-              <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
-              <span className="board-unit-seat is-knight" style={{ left: 0, top: 0 }}><LiveKnightSprite /></span>
+              <SplitLayerExample />
             </span>
           </span>
           <figcaption className="doodad-layer-cap"><strong>Back layer only.</strong> The whole tuft is behind the unit — it just stands in front of it.</figcaption>
@@ -73,10 +89,7 @@ const GLOSSARY_DETAILS: Record<string, ReactNode> = {
         <span className="doodad-layer-cell">
           <span className="doodad-layer-scene">
             <span className="doodad-layer-stage">
-              <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
-              <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
-              <span className="board-unit-seat is-knight" style={{ left: 0, top: 0 }}><LiveKnightSprite /></span>
-              <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/front.png" alt="" aria-hidden="true" /></span>
+              <SplitLayerExample front />
             </span>
           </span>
           <figcaption className="doodad-layer-cap"><strong>Back + front.</strong> The front blades cross over the shins — now the unit stands <em>inside</em> the tuft.</figcaption>

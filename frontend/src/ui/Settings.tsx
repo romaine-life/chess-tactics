@@ -12,11 +12,11 @@ import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { TitleBarControlContribution } from './shell/TitleBarControls';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { installedUiMedia } from './installedUiMedia';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
 const SETTINGS_KEY = 'chess-tactics-settings-v1';
-const ASSET_BASE = '/assets/ui/settings';
 // How long the panel body fades out before swapping in the next menu's controls,
 // then fades back in. MUST match --ds-duration-fade on .settings-panel-content in style.css
 // (the ONE shared fade duration, ADR-0046 — same speed as the screen entrance).
@@ -72,10 +72,10 @@ const DEFAULT_SETTINGS: LocalSettings = {
 };
 
 const tabs: TabDefinition[] = [
-  { id: 'general', label: 'General', icon: 'icon-gear-generated.png' },
-  { id: 'audio', label: 'Audio', icon: 'icon-speaker-generated.png' },
-  { id: 'gameplay', label: 'Gameplay', icon: 'icon-knight-generated.png' },
-  { id: 'creator-tools', label: 'Creator Tools', icon: 'icon-wrench-generated.png' },
+  { id: 'general', label: 'General', icon: 'ui-kit-icons-gear-png' },
+  { id: 'audio', label: 'Audio', icon: 'ui-kit-icons-speaker-png' },
+  { id: 'gameplay', label: 'Gameplay', icon: 'ui-kit-icons-knight-png' },
+  { id: 'creator-tools', label: 'Creator Tools', icon: 'ui-kit-icons-wrench-png' },
 ];
 
 // Each settings section is its own route (/settings/<tab>) so it can be linked,
@@ -114,8 +114,7 @@ const creatorTools: CreatorTool[] = [
 ];
 
 function asset(file: string): string {
-  // Use the shared UI kit's generated glyphs: icon-gear-generated.png -> kit/icons/gear.png
-  return `/assets/ui/kit/icons/${file.replace(/^icon-/, '').replace(/-generated/, '')}`;
+  return installedUiMedia(file);
 }
 
 // Build / server provenance, stamped by vite.config buildInfo, surfaced in About so

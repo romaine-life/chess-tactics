@@ -1,7 +1,8 @@
 import type { CSSProperties, ReactElement } from 'react';
 import { groundCoverSet, type CoverSet, type CoverVariantMeta } from '../core/groundCover';
-import { terrainLabels, type TileFamilyId } from '../core/tileSockets';
+import { defaultTerrainFamily, terrainLabels, type TileFamilyId } from '../core/tileSockets';
 import { drawableAssets } from '@chess-tactics/board-render';
+import { tileFamilies } from '../art/tileset';
 
 export type GroundCoverId = TileFamilyId;
 
@@ -15,7 +16,8 @@ export interface GroundCoverCatalogAsset {
 }
 
 const currentGroundCoverAssets = (): GroundCoverCatalogAsset[] => drawableAssets('ground-cover').map((record) => {
-  const id = typeof record.behavior.terrain === 'string' ? record.behavior.terrain : record.id;
+  const id = record.behavior.terrain;
+  if (typeof id !== 'string' || !id) throw new Error(`Ground-cover ${record.id} has no terrain identity`);
   const set = groundCoverSet(id);
   if (!set) throw new Error(`Missing live ground-cover set: ${id}`);
   return { id, label: record.label, terrainLabel: terrainLabels[id],
@@ -31,8 +33,16 @@ export const GROUND_COVER_ASSETS: readonly GroundCoverCatalogAsset[] = new Proxy
   },
 });
 
-export const groundCoverAsset = (id: string | undefined): GroundCoverCatalogAsset =>
-  GROUND_COVER_ASSETS.find((asset) => asset.id === id) ?? GROUND_COVER_ASSETS[0];
+export const groundCoverAsset = (id: string | undefined): GroundCoverCatalogAsset => {
+  const asset = GROUND_COVER_ASSETS.find((candidate) => candidate.id === id);
+  if (!asset) throw new Error(`Ground-cover ${id ?? '(missing)'} is unavailable`);
+  return asset;
+};
+export const defaultGroundCoverAsset = (): GroundCoverCatalogAsset => {
+  const id = defaultTerrainFamily().defaultGroundCoverId;
+  if (!id) throw new Error('Default terrain family has no DB-owned ground-cover default');
+  return groundCoverAsset(id);
+};
 
 function tuftStyle(asset: GroundCoverCatalogAsset, meta: CoverVariantMeta, x: number, y: number): CSSProperties {
   const sheetW = meta.frameWidth * asset.set.frameCount;
@@ -60,7 +70,7 @@ export function GroundCoverPreview({ asset, zoom = 1 }: { asset: GroundCoverCata
   ];
   return (
     <span className="ground-cover-preview" style={{ '--tile-zoom': zoom } as CSSProperties} aria-hidden="true">
-      <img className="ground-cover-preview-tile" src={`/assets/tiles/surface/${asset.id}-0-top.png`} alt="" draggable={false} />
+      <img className="ground-cover-preview-tile" src={tileFamilies[asset.id]?.[0]?.src ?? (() => { throw new Error(`Terrain ${asset.id} has no preview surface`); })()} alt="" draggable={false} />
       {variants.map((meta, index) => {
         const [x, y] = positions[index] ?? [50, 54];
         return <span key={meta.id} className="ground-cover-preview-tuft gc-tuft" style={tuftStyle(asset, meta, x, y)} />;

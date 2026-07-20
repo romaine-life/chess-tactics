@@ -1,4 +1,4 @@
-import type { BoardDrawOp } from '@chess-tactics/board-render';
+import { drawableAssets, type BoardDrawOp } from '@chess-tactics/board-render';
 import { TILE_FRAME_EQUATOR_Y, TILE_FRAME_HEIGHT, TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
 import { resolveFenceOverlays, resolveFencePosts } from '../core/featureAutotile';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
@@ -11,7 +11,6 @@ export const FENCE_ART_REVIEW_ID = 'fence-native-candidates-2026-07-10';
 export const FENCE_ART_REVIEW_LEVEL_NAME = 'Fence candidate live-board review';
 
 const FRAME_WIDTH = TILE_STEP_X * 2;
-const CANONICAL_FENCE_PREFIX = '/assets/tiles/feature/fence-';
 
 /** Locate the account-private, pre-seeded review document without creating content on click. */
 export function findFenceArtReviewDocument(
@@ -50,7 +49,10 @@ export function transformFenceArtReviewOps(
   board: EditorBoard,
   kit: FenceArtKit,
 ): BoardDrawOp[] {
-  const transformed = ops.filter((op) => !op.src.startsWith(CANONICAL_FENCE_PREFIX));
+  const installedFenceSources = new Set(drawableAssets('fence-material').flatMap((asset) => (
+    Object.values(asset.media).map((binding) => binding.media.immutableUrl)
+  )));
+  const transformed = ops.filter((op) => !installedFenceSources.has(op.src));
 
   // Posts cap their incident rails at a positive half-depth bias. Inserting them first is only a
   // deterministic tie breaker; fencePostZIndex owns the visible ordering.

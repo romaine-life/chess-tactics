@@ -1,4 +1,10 @@
-import type { LiveMediaCatalog, LiveMediaSlot } from '@chess-tactics/board-render';
+import {
+  currentDrawableCatalog,
+  type DrawableAsset,
+  type DrawableCatalog,
+  type LiveMediaCatalog,
+  type LiveMediaSlot,
+} from '@chess-tactics/board-render';
 
 export type StudioProductionStatus = 'accepted' | 'legacy-bridge' | 'mixed';
 export type StudioAssetType = 'settings' | 'game' | 'shields' | 'frames' | 'structure';
@@ -25,63 +31,24 @@ export interface StudioAssetRecord extends StudioLiveMediaRecord {
   structureId?: string;
 }
 
-export interface StudioAssetLibrary {
-  revision: number;
-  items: StudioAssetRecord[];
-}
+export interface StudioAssetLibrary { revision: number; items: StudioAssetRecord[] }
 
-export interface StudioArtworkRecord extends StudioLiveMediaRecord {
-  groupId: string;
-  sub: string;
-}
-
-export interface StudioArtworkGroup {
-  id: string;
-  label: string;
-  items: StudioArtworkRecord[];
-}
-
-export interface StudioArtworkLibrary {
-  revision: number;
-  groups: StudioArtworkGroup[];
-  items: StudioArtworkRecord[];
-}
-
-interface ArtworkTaxonomy {
-  id: string;
-  label: string;
-  classify: (slot: string) => { label: string; sub: string } | null;
-}
-
-const PIECES = new Set(['bishop', 'king', 'knight', 'pawn', 'queen', 'rook']);
+export interface StudioArtworkRecord extends StudioLiveMediaRecord { groupId: string; sub: string }
+export interface StudioArtworkGroup { id: string; label: string; items: StudioArtworkRecord[] }
+export interface StudioArtworkLibrary { revision: number; groups: StudioArtworkGroup[]; items: StudioArtworkRecord[] }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function stringField(source: Record<string, unknown>, field: string): string | null {
+  const value = source[field];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 function runtimeOf(slot: LiveMediaSlot): Readonly<Record<string, unknown>> {
   const runtime = slot.versionMetadata.runtime;
   return isRecord(runtime) ? runtime : {};
-}
-
-function stripRasterExtension(value: string): string {
-  return value.replace(/\.(?:avif|gif|jpe?g|png|webp)$/i, '');
-}
-
-function titleCase(value: string): string {
-  const normalized = stripRasterExtension(value)
-    .replace(/(?:^|\/)generated\//g, '')
-    .replace(/@\d+x$/i, '')
-    .replace(/[-_]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function runtimeLabel(slot: LiveMediaSlot, fallback: string): string {
-  const runtime = runtimeOf(slot);
-  const altText = typeof runtime.altText === 'string' ? runtime.altText.trim() : '';
-  return altText || fallback;
 }
 
 function productionStatus(slots: readonly LiveMediaSlot[]): StudioProductionStatus {
@@ -91,19 +58,13 @@ function productionStatus(slots: readonly LiveMediaSlot[]): StudioProductionStat
 }
 
 function byLabelThenId<T extends { label: string; id: string }>(left: T, right: T): number {
-  return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })
-    || left.id.localeCompare(right.id);
+  return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' }) || left.id.localeCompare(right.id);
 }
 
-function liveRecord(
-  id: string,
-  label: string,
-  primary: LiveMediaSlot,
-  slots: readonly LiveMediaSlot[],
-): StudioLiveMediaRecord {
+function liveRecord(asset: DrawableAsset, primary: LiveMediaSlot, slots: readonly LiveMediaSlot[]): StudioLiveMediaRecord {
   return {
-    id,
-    label: runtimeLabel(primary, label),
+    id: asset.id,
+    label: asset.label,
     primary,
     slots,
     immutableUrl: primary.media.immutableUrl,
@@ -115,149 +76,84 @@ function liveRecord(
   };
 }
 
-function classifyUiKitAsset(slot: LiveMediaSlot): Omit<StudioAssetRecord, keyof StudioLiveMediaRecord> | null {
-  if (!slot.media.mediaType.startsWith('image/')) return null;
-  let match = slot.slot.match(/^ui\/kit\/icons\/game\/([^/]+\.(?:avif|gif|jpe?g|png|webp))$/i);
-  if (match) return { type: 'game', kind: 'glyph', name: stripRasterExtension(match[1]) };
-  match = slot.slot.match(/^ui\/kit\/icons\/shields\/([^/]+\.(?:avif|gif|jpe?g|png|webp))$/i);
-  if (match) return { type: 'shields', kind: 'glyph', name: stripRasterExtension(match[1]) };
-  match = slot.slot.match(/^ui\/kit\/icons\/([^/]+\.(?:avif|gif|jpe?g|png|webp))$/i);
-  if (match) return { type: 'settings', kind: 'glyph', name: stripRasterExtension(match[1]) };
-  match = slot.slot.match(/^ui\/kit\/(?!_refs\/)(.+\.(?:avif|gif|jpe?g|png|webp))$/i);
-  if (match) return { type: 'frames', kind: 'frame', name: stripRasterExtension(match[1]) };
-  return null;
+function catalogItems(drawables: DrawableCatalog): DrawableAsset[] {
+  return drawables.assets.filter((asset) => asset.kind === 'studio-catalog-item');
+}
+
+function joinedSlots(asset: DrawableAsset, liveBySlot: ReadonlyMap<string, LiveMediaSlot>): Map<string, LiveMediaSlot> | null {
+  const joined = new Map<string, LiveMediaSlot>();
+  for (const [role, media] of Object.entries(asset.media)) {
+    const slot = liveBySlot.get(media.slot);
+    if (!slot || !slot.media.mediaType.startsWith('image/')) return null;
+    joined.set(role, slot);
+  }
+  return joined;
 }
 
 /**
- * Project the Studio's asset roster from one complete backend catalog snapshot.
- * Path rules classify live semantic slots; they do not enumerate media or carry
- * active pointers. Structure entities are paired only after their active halves
- * are present in this snapshot.
+ * Project Studio assets from explicit database-owned catalog records. Semantic
+ * media-slot strings are opaque join keys and never determine membership.
  */
-export function buildStudioAssetLibrary(catalog: LiveMediaCatalog): StudioAssetLibrary {
+export function buildStudioAssetLibrary(
+  catalog: LiveMediaCatalog,
+  drawables: DrawableCatalog = currentDrawableCatalog(),
+): StudioAssetLibrary {
+  const liveBySlot = new Map(catalog.slots.map((slot) => [slot.slot, slot]));
   const items: StudioAssetRecord[] = [];
-  for (const slot of catalog.slots) {
-    const classification = classifyUiKitAsset(slot);
-    if (!classification) continue;
-    const record = liveRecord(slot.slot, titleCase(classification.name.split('/').at(-1) || classification.name), slot, [slot]);
-    items.push({ ...record, ...classification });
-  }
-
-  const structureHalves = new Map<string, { root: string; structureId: string; front?: LiveMediaSlot; back?: LiveMediaSlot }>();
-  for (const slot of catalog.slots) {
-    if (!slot.media.mediaType.startsWith('image/')) continue;
-    const match = slot.slot.match(/^(props|doodads)\/([^/]+)\/(front|back)\.(?:avif|gif|jpe?g|png|webp)$/i);
-    if (!match) continue;
-    const key = `${match[1]}/${match[2]}`;
-    const halves = structureHalves.get(key) ?? { root: match[1], structureId: match[2] };
-    halves[match[3].toLowerCase() as 'front' | 'back'] = slot;
-    structureHalves.set(key, halves);
-  }
-  for (const [id, halves] of structureHalves) {
-    const primary = halves.front ?? halves.back;
-    if (!primary) continue;
-    const slots = [halves.back, halves.front].filter((slot): slot is LiveMediaSlot => !!slot);
-    const record = liveRecord(id, titleCase(halves.structureId), primary, slots);
+  for (const asset of catalogItems(drawables)) {
+    if (asset.behavior.library !== 'asset') continue;
+    const type = stringField(asset.behavior, 'type');
+    const kind = stringField(asset.behavior, 'kind');
+    const name = stringField(asset.behavior, 'name');
+    if (!type || !['settings', 'game', 'shields', 'frames', 'structure'].includes(type)
+      || !kind || !['glyph', 'frame', 'structure'].includes(kind) || !name) continue;
+    const joined = joinedSlots(asset, liveBySlot);
+    const primaryRole = stringField(asset.behavior, 'primaryRole') ?? 'primary';
+    const primary = joined?.get(primaryRole);
+    if (!joined || !primary) continue;
+    const slots = [...joined.values()];
     items.push({
-      ...record,
-      type: 'structure',
-      kind: 'structure',
-      name: halves.structureId,
-      structureId: halves.structureId,
-      front: halves.front,
-      back: halves.back,
+      ...liveRecord(asset, primary, slots),
+      type: type as StudioAssetType,
+      kind: kind as StudioAssetRecord['kind'],
+      name,
+      front: joined.get('front'),
+      back: joined.get('back'),
+      structureId: stringField(asset.behavior, 'structureId') ?? undefined,
     });
   }
-
   items.sort(byLabelThenId);
   return { revision: catalog.revision, items };
 }
 
-function setLabel(setId: string): string {
-  return titleCase(setId.replace(/-set-\d+$/i, ''));
-}
-
-function pieceLabel(piece: string, palette?: string): string {
-  return palette ? `${titleCase(piece)} · ${titleCase(palette)}` : titleCase(piece);
-}
-
-const ARTWORK_TAXONOMY: readonly ArtworkTaxonomy[] = [
-  {
-    id: 'world-scenes', label: 'World scenes',
-    classify: (slot) => {
-      const world = slot.match(/^backgrounds\/([^/]+)\/world\.png$/i);
-      if (world) return { label: setLabel(world[1]), sub: 'world scene' };
-      if (/^ui\/main-menu\/background-scene-v\d+\.png$/i.test(slot)) return { label: 'Main menu scene', sub: 'main menu' };
-      return null;
-    },
-  },
-  {
-    id: 'portrait-backgrounds', label: 'Portrait backgrounds',
-    classify: (slot) => {
-      const match = slot.match(/^backgrounds\/([^/]+)\/portraits\/([^/]+)\.png$/i);
-      return match ? { label: pieceLabel(match[2]), sub: setLabel(match[1]) } : null;
-    },
-  },
-  {
-    id: 'unit-portraits', label: 'Unit portraits',
-    classify: (slot) => {
-      const match = slot.match(/^units\/([^/]+)\/portrait\/([^/]+)\.png$/i);
-      if (!match || !PIECES.has(match[1].toLowerCase())) return null;
-      return { label: pieceLabel(match[1], match[2]), sub: 'team palette' };
-    },
-  },
-  {
-    id: 'portrait-editor', label: 'Portrait-editor sources',
-    classify: (slot) => {
-      const match = slot.match(/^portrait-editor\/([^/]+)\/([^/]+)\.png$/i);
-      if (!match || !PIECES.has(match[1].toLowerCase())) return null;
-      return { label: pieceLabel(match[1], match[2]), sub: 'portrait source' };
-    },
-  },
-  {
-    id: 'brand-key-art', label: 'Brand & key art',
-    classify: (slot) => (
-      /^ui\/main-menu-(?:aspirational|brand-[^/]+|button-art-[^/]+)\.png$/i.test(slot)
-        ? { label: titleCase(slot.split('/').at(-1) || slot), sub: 'brand / key art' }
-        : null
-    ),
-  },
-  {
-    id: 'concept-art', label: 'Concept art',
-    classify: (slot) => {
-      if (/^art\/[^/]+\.png$/i.test(slot) || /^ui\/[^/]+-concept(?:-v\d+)?\.png$/i.test(slot)) {
-        return { label: titleCase(slot.split('/').at(-1) || slot), sub: 'concept' };
-      }
-      return null;
-    },
-  },
-  {
-    id: 'inspiration', label: 'Inspiration',
-    classify: (slot) => {
-      const match = slot.match(/^artwork\/inspiration\/(.+)\/([^/]+)\.png$/i);
-      return match ? { label: titleCase(match[2]), sub: match[1].split('/').filter((part) => part !== 'generated').join(' / ') } : null;
-    },
-  },
-];
-
-/** Project the Artwork library from the same immutable-pointer snapshot as Assets. */
-export function buildStudioArtworkLibrary(catalog: LiveMediaCatalog): StudioArtworkLibrary {
-  const grouped = new Map(ARTWORK_TAXONOMY.map((group) => [group.id, { ...group, items: [] as StudioArtworkRecord[] }]));
-  for (const slot of catalog.slots) {
-    if (!slot.media.mediaType.startsWith('image/')) continue;
-    for (const taxonomy of ARTWORK_TAXONOMY) {
-      const classified = taxonomy.classify(slot.slot);
-      if (!classified) continue;
-      const record = liveRecord(stripRasterExtension(slot.slot), classified.label, slot, [slot]);
-      grouped.get(taxonomy.id)?.items.push({ ...record, groupId: taxonomy.id, sub: classified.sub });
-      break;
-    }
+/** Project the Artwork library from explicit database-owned catalog records. */
+export function buildStudioArtworkLibrary(
+  catalog: LiveMediaCatalog,
+  drawables: DrawableCatalog = currentDrawableCatalog(),
+): StudioArtworkLibrary {
+  const liveBySlot = new Map(catalog.slots.map((slot) => [slot.slot, slot]));
+  const groupLabels = new Map<string, string>();
+  const items: StudioArtworkRecord[] = [];
+  for (const asset of catalogItems(drawables)) {
+    if (asset.behavior.library !== 'artwork') continue;
+    const groupId = stringField(asset.behavior, 'groupId');
+    const groupLabel = stringField(asset.behavior, 'groupLabel');
+    const sub = stringField(asset.behavior, 'sub');
+    if (!groupId || !groupLabel || !sub) continue;
+    const joined = joinedSlots(asset, liveBySlot);
+    const primary = joined?.get('primary');
+    if (!joined || !primary) continue;
+    const priorLabel = groupLabels.get(groupId);
+    if (priorLabel && priorLabel !== groupLabel) continue;
+    groupLabels.set(groupId, groupLabel);
+    items.push({ ...liveRecord(asset, primary, [...joined.values()]), groupId, sub });
   }
-  const groups = ARTWORK_TAXONOMY.map((taxonomy) => {
-    const items = grouped.get(taxonomy.id)?.items ?? [];
-    items.sort(byLabelThenId);
-    return { id: taxonomy.id, label: taxonomy.label, items };
-  }).filter((group) => group.items.length);
+  items.sort(byLabelThenId);
+  const groups = [...groupLabels].map(([id, label]) => ({
+    id,
+    label,
+    items: items.filter((item) => item.groupId === id),
+  })).filter((group) => group.items.length).sort(byLabelThenId);
   return { revision: catalog.revision, groups, items: groups.flatMap((group) => group.items) };
 }
 

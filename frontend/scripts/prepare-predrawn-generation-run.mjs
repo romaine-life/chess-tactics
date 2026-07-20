@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+// Invoked through Node by the repository scripts; keeping this importable lets
+// the same implementation be exercised by Vitest on every supported platform.
 
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';

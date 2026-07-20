@@ -1,7 +1,8 @@
 ---
-status: "accepted; asset-storage clauses superseded by ADR-0085"
+status: "accepted; asset-storage clauses superseded by ADR-0085; Git-owned installed-registry clauses superseded by ADR-0106"
 date: 2026-06-27
 deciders: Nelson, Claude
+partially_superseded_by: "[ADR-0106](0106-installed-content-is-database-owned.md)"
 ---
 
 # ADR-0016: Single-source nine-slice registry — one declaration; bake, editor, catalog read it

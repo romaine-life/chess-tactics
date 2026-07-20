@@ -99,7 +99,7 @@ export function LevelThumbnail({
 
   const canonicalLevel = /^(?:off-[a-z]+(?:-[a-z]+)*|l\d+)$/.test(level.id);
   const canonicalDerivative = !authoringPreview && canonicalLevel
-    ? levelThumbnailUrl(level.id) ?? `/assets/level-list-thumb/${encodeURIComponent(level.id)}.png`
+    ? levelThumbnailUrl(level.id)
     : null;
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Canonical derivatives are already compact delivery rasters: request them with the

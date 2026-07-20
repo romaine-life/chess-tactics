@@ -16,9 +16,13 @@ import {
 import { UnitStudioControls } from './UnitStudioControls';
 import type { UnitArtPreview } from './UnitRecaptureEditor';
 import { unitDeliveryRasterForAsset, useUnitSizeDraft } from './unitSizeTuning';
+import { requiredTerrainFamilyForRole, terrainFamiliesForRole } from '../core/tileSockets';
 
-const UNIT_ART_GROUNDS = ['grass', 'stone', 'water'] as const;
-type UnitArtGround = (typeof UNIT_ART_GROUNDS)[number];
+type UnitArtGround = string;
+const unitArtGrounds = () => terrainFamiliesForRole('unit-art-preview');
+const defaultUnitArtGround = (): UnitArtGround => {
+  return requiredTerrainFamilyForRole('unit-art-preview-default').id;
+};
 
 const FORMATION: Array<{ x: number; y: number; palette: UnitPalette }> = [
   { x: 2, y: 1, palette: 'navy-blue' },
@@ -61,7 +65,7 @@ export function UnitArtLab({
   onCatalogChanged: () => void;
   header?: ReactNode;
 }): ReactElement {
-  const [ground, setGround] = useState<UnitArtGround>('grass');
+  const [ground, setGround] = useState<UnitArtGround>(defaultUnitArtGround);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [artPreview, setArtPreview] = useState<UnitArtPreview | null>(null);
   const sizes = useUnitSizeDraft();
@@ -195,7 +199,7 @@ export function UnitArtLab({
             <label className="tileset-category-select" title="Board surface behind the unit preview.">
               <span>Ground</span>
               <select value={ground} onChange={(event) => setGround(event.target.value as UnitArtGround)} aria-label="Preview ground">
-                {UNIT_ART_GROUNDS.map((value) => <option key={value} value={value}>{cap(value)}</option>)}
+                {unitArtGrounds().map((family) => <option key={family.id} value={family.id}>{family.label}</option>)}
               </select>
             </label>
             <div className="tileset-catalog-facing">

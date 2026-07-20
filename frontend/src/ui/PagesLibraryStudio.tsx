@@ -1,13 +1,14 @@
 import { useRef, useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
-import { PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
+import { defaultPageEntry, PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
 import { SurfaceDressingRoom } from './SurfaceDressingRoom';
-import { SURFACE_ASSETS } from './surfaceCatalog';
+import { defaultSurfaceAsset, SURFACE_ASSETS } from './surfaceCatalog';
 import { useWindowScaledPreview } from './useWindowScaledPreview';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { ElementSelect, type ElementOption } from './dressing/ElementSelect';
 import { useInjectedStyle } from './dressing/useInjectedStyle';
 import { ICON_TREATS, iconTreatFilter, type IconTreat } from './dressing/iconTreat';
 import { MM_LIVE } from './dressing/mmLive';
+import { drawableAssets } from '@chess-tactics/board-render';
 
 // Read-only "Pages" catalog (ADR-0029): each app screen is a card; "View Selected" opens a
 // live Viewer. Selection is owned by the host (TilePreview). Cards reuse the shared studio
@@ -52,13 +53,6 @@ export function PagesLibraryStudio({
 
 
 // The live-media surface slots the menu slab can wear.
-const STONE_SURFACES = [
-  { name: 'stone-slate-blue', label: 'Slate blue' },
-  { name: 'stone-cobble-blue', label: 'Cobble blue' },
-  { name: 'stone-grey', label: 'Grey' },
-  { name: 'stone-sandstone', label: 'Sandstone' },
-  { name: 'wood-oak', label: 'Oak' },
-];
 
 // Icon-contrast treatments live in ./dressing/iconTreat (shared with the Settings tuner).
 
@@ -118,7 +112,7 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
 
   const iconFilter = iconTreatFilter(iconTreat, iconLighten);
   const slide = hoverSlide === '6' ? 6 : hoverSlide === '10' ? 10 : 0;
-  const surfaceUrl = surface ? `/assets/ui/surfaces/${surface}.png` : '';
+  const surfaceUrl = SURFACE_ASSETS.find((asset) => asset.name === surface)?.file ?? '';
   // Slider bounds that reach the screen edges so buttons can be sized to / moved across the FULL
   // window. window.innerWidth/Height is the preview's own viewport (useWindowScaledPreview re-renders
   // this component on resize, so the bounds track the window). Floored so they never undershoot.
@@ -267,7 +261,7 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
                   <div className="pages-ctl-row">
                     <select value={surface} onChange={(e) => setSurface(e.target.value)} aria-label="Stone surface">
                       <option value="">Default · live stone</option>
-                      {STONE_SURFACES.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
+                      {SURFACE_ASSETS.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
                     </select>
                     {ctlReset(() => setSurface(''))}
                   </div>
@@ -347,14 +341,11 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
 
 // Kit frames an element can be forced to wear (backend `ui/kit/*` slots). 'shipped' leaves the element's
 // own frame — and its hover/selected/danger variants — untouched.
-const CE_KIT_FRAMES = [
-  { id: 'primary', label: 'Button · primary', file: '/assets/ui/kit/button-primary.png' },
-  { id: 'neutral', label: 'Button · neutral', file: '/assets/ui/kit/button-neutral.png' },
-  { id: 'danger', label: 'Button · danger', file: '/assets/ui/kit/button-danger.png' },
-  { id: 'panel', label: 'Panel', file: '/assets/ui/kit/panel.png' },
-  { id: 'row', label: 'Row', file: '/assets/ui/kit/row.png' },
-  { id: 'field-input', label: 'Field', file: '/assets/ui/kit/field-input.png' },
-] as const;
+const currentCeKitFrames = (): { id: string; label: string; file: string }[] => drawableAssets('ui-kit-frame').map((asset) => {
+  if (!asset.media.frame) throw new Error(`UI kit frame ${asset.id} has no frame media`);
+  return { id: String(asset.behavior.value ?? asset.id), label: asset.label, file: asset.media.frame.media.immutableUrl };
+});
+const CE_KIT_FRAMES: { id: string; label: string; file: string }[] = new Proxy([], { get: (_target, property) => { const values = currentCeKitFrames(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
 const CE_FRAME_FILE: Record<string, string> = Object.fromEntries(CE_KIT_FRAMES.map((f) => [f.id, f.file]));
 
 type CeFill = 'none' | 'color' | 'surface';
@@ -404,7 +395,7 @@ const groupDefault = (g: CeGroup): CeGroupTune => ({
   fill: 'none',
   color: '#0b2236',
   opacity: 1,
-  surface: SURFACE_ASSETS[0]?.name ?? '',
+  surface: defaultSurfaceAsset().name,
 });
 
 const ceAllDefaults = (): Record<string, CeGroupTune> =>
@@ -419,7 +410,8 @@ const hexToRgba = (hex: string, alpha: number): string => {
 
 const ceFillValue = (t: CeGroupTune): string => {
   if (t.fill === 'color') return hexToRgba(t.color, t.opacity);
-  const asset = SURFACE_ASSETS.find((s) => s.name === t.surface) ?? SURFACE_ASSETS[0];
+  const asset = SURFACE_ASSETS.find((s) => s.name === t.surface);
+  if (!asset) throw new Error(`Selected UI surface "${t.surface}" is unavailable`);
   // 256px is an AUDITIONING scale — surfaces are 1024px native (the dressing room ships them at
   // 1024), but the campaign editor's chrome is small, so a denser tile reads as material here.
   return `url("${asset.file}") 0 0 / 256px repeat`;
@@ -636,7 +628,8 @@ function PageStubViewer({ page, header }: { page: PageEntry; header?: ReactNode 
 // is the dressing room (assign surfaces to each region of the live /settings page); the rest are
 // live stubs. One arm in the TilePreview viewer ladder calls this.
 export function PagesViewer({ name, header, zoom = 1 }: { name?: string; header?: ReactNode; zoom?: number }): ReactElement {
-  const page = PAGE_ENTRIES.find((p) => p.name === name) ?? PAGE_ENTRIES[0];
+  const page = name ? PAGE_ENTRIES.find((p) => p.name === name) : defaultPageEntry();
+  if (!page) throw new Error(`Selected Studio page "${name}" is unavailable`);
   if (page.name === 'main-menu') return <MainMenuViewer page={page} header={header} zoom={zoom} />;
   if (page.name === 'settings') return <SurfaceDressingRoom header={header} zoom={zoom} />;
   if (page.name === 'campaign-editor') return <CampaignEditorViewer page={page} header={header} zoom={zoom} />;

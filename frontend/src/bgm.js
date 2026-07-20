@@ -117,7 +117,7 @@ export function planShuffleCycle(length, lastIndex) {
   return order;
 }
 
-export function initBgm() {
+export function initBgm(iconUrl) {
   const audio = new Audio();
   audio.preload = 'none';
   audio.loop = false;
@@ -493,7 +493,7 @@ export function initBgm() {
     el.className = 'inner-box titlebar-control titlebar-control--icon bgm-control';
     const icon = document.createElement('img');
     icon.className = 'titlebar-control-glyph bgm-control-icon';
-    icon.src = '/assets/ui/kit/icons/music.png';
+    icon.src = iconUrl;
     icon.alt = '';
     icon.setAttribute('aria-hidden', 'true');
     el.appendChild(icon);

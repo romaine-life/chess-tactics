@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { roadEdgeKey } from './featureAutotile';
 import { wallArtIdOrDefault, wallArtPlacementSpanAtEdge } from './wallArt';
+import { applyTestDrawableCatalog } from '../test/drawableCatalog';
+
+beforeAll(() => applyTestDrawableCatalog());
 
 describe('wall art placement spans', () => {
   const bounds = { cols: 6, rows: 6 };
@@ -12,7 +15,7 @@ describe('wall art placement spans', () => {
     for (const clicked of run) {
       expect(wallArtPlacementSpanAtEdge(
         clicked,
-        'mirror-grand-gallery-wall',
+        'test-art-mirror-grand-gallery',
         bounds,
         (edge) => walls.has(edge),
       )).toEqual({ anchorEdge: run[0], edges: run });
@@ -26,7 +29,7 @@ describe('wall art placement spans', () => {
     for (const clicked of run) {
       expect(wallArtPlacementSpanAtEdge(
         clicked,
-        'mirror-grand-gallery-wall',
+        'test-art-mirror-grand-gallery',
         bounds,
         (edge) => walls.has(edge),
       )).toEqual({ anchorEdge: run[0], edges: run });
@@ -39,7 +42,7 @@ describe('wall art placement spans', () => {
 
     expect(wallArtPlacementSpanAtEdge(
       clicked,
-      'mirror-grand-gallery-wall',
+      'test-art-mirror-grand-gallery',
       bounds,
       (edge) => walls.has(edge),
     )).toEqual({
@@ -55,15 +58,15 @@ describe('wall art placement spans', () => {
 
     expect(wallArtPlacementSpanAtEdge(
       first,
-      'mirror-grand-gallery-wall',
+      'test-art-mirror-grand-gallery',
       bounds,
       (edge) => walls.has(edge),
     )).toBeNull();
   });
 
-  it('uses the same catalog fallback for a missing or invalid routed brush', () => {
-    expect(wallArtIdOrDefault(undefined)).toBe('banner-stone-wall');
-    expect(wallArtIdOrDefault('not-real-wall-art')).toBe('banner-stone-wall');
-    expect(wallArtIdOrDefault('mirror-grand-gallery-wall')).toBe('mirror-grand-gallery-wall');
+  it('uses the DB default only when no brush was requested and rejects an invalid identity', () => {
+    expect(wallArtIdOrDefault(undefined)).toBe('test-banner-pair');
+    expect(() => wallArtIdOrDefault('not-real-wall-art')).toThrow(/is unavailable/);
+    expect(wallArtIdOrDefault('test-art-mirror-grand-gallery')).toBe('test-art-mirror-grand-gallery');
   });
 });

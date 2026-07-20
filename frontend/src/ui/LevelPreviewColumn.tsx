@@ -9,6 +9,7 @@ import { ViewPane } from './shared/ViewPane';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import type { Level } from '../core/level';
+import { installedUiMedia } from './installedUiMedia';
 
 export function LevelPreviewColumn({
   level,
@@ -41,8 +42,8 @@ export function LevelPreviewColumn({
       <div className="ce-selected-head">
         <h2>{title}</h2>
         <div className="ce-force-readout" aria-label="Level forces">
-          <span className="ce-force ce-force-ally"><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{allyCount}</strong></span>
-          <span className="ce-force ce-force-enemy"><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{enemyCount}</strong></span>
+          <span className="ce-force ce-force-ally"><img src={installedUiMedia('ui-main-menu-profile-rook-blue-png')} alt="" />Allies <strong>{allyCount}</strong></span>
+          <span className="ce-force ce-force-enemy"><img src={installedUiMedia('ui-main-menu-profile-rook-red-png')} alt="" />Enemies <strong>{enemyCount}</strong></span>
         </div>
       </div>
       {/* Map preview: the live board in a kit box, floating on the level's world (night-sky)

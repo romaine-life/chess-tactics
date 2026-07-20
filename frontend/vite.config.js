@@ -7,8 +7,6 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { nineSliceGeometrySave } from './scripts/vite-nine-slice-geometry-plugin.mjs';
-import { chromeLabDefaultsSave } from './scripts/vite-chrome-lab-defaults-plugin.mjs';
 
 // Stamp build/server provenance into the bundle so Settings → About can always
 // say exactly what's serving this page. Every build carries the app's semver
@@ -434,7 +432,7 @@ export default defineConfig(async ({ command }) => {
     ? (noBackend ? [bgmDevMock(), officialCampaignsDevProxy(), devAuthMock()] : [prodBackend(backendPort)])
     : [];
   return {
-    plugins: [react(), buildInfo(), nineSliceGeometrySave(), chromeLabDefaultsSave(), ...devApiPlugins],
+    plugins: [react(), buildInfo(), ...devApiPlugins],
     test: { setupFiles: ['./src/test/setupDrawableCatalog.ts'] },
     // `/assets/*` belongs exclusively to backend-resolved live media. Keep
     // executable Vite chunks in a disjoint namespace so production code can

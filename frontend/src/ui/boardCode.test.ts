@@ -133,7 +133,7 @@ describe('boardCode round-trip', () => {
   it('preserves wall art independently from wall materials', () => {
     const board = emptyBoard({
       walls: { '0,0|0,-1': 'stone', '0,1|-1,1': 'stone' },
-      wallArt: { '0,0|-1,0': 'banner-stone-wall' },
+      wallArt: { '0,0|-1,0': 'test-banner-pair' },
     });
     const decoded = decodeBoard(encodeBoard(board));
     expect(decoded).not.toBeNull();

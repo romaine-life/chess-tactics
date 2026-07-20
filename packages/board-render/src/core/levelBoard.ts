@@ -14,23 +14,12 @@ import type { Level, LevelEconomy, LevelEvents, LevelUnit, ObjectiveType, Roster
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
 import type { PlacedProp } from './props';
 import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
-import type { TileFamilyId } from './tileSockets';
+import { defaultTerrainFamily, familyForGameplayTerrain, gameplayTerrainForFamily, terrainFamilyRecords, type TileFamilyId } from './tileSockets';
 import { decodeBoard, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type EditorBoard, type EditorZoneEntry } from '../ui/boardCode';
 import { parseEdgeKey, isOrthogonalPair, isNorthWestBoundaryWallEdge, defaultFenceMaterial } from './featureAutotile';
 import { studioFamilies } from '../ui/studioBoard';
 import { isUnitPalette } from './pieces';
 import { unitFamilyForId, type Faction } from '../ui/unitCatalog';
-
-// Family → terrain material, mirroring game/setup.ts. The six tile families map 1:1 onto
-// the playable terrain materials; any unmapped (decorative) family falls back to grass.
-const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
-  grass: 'grass',
-  stone: 'stone',
-  water: 'water',
-  dirt: 'dirt',
-  pebble: 'pebble',
-  sand: 'sand',
-};
 
 // Terrain the editor can REPRESENT (and thus round-trip), so the save-time guard need not
 // preserve it from the pre-save level: the six tile families above, PLUS `road` — which the
@@ -39,7 +28,9 @@ const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
 // tile. Terrain with neither a tile family nor a feature — bridge, cliff, rock — stays outside
 // this set: it renders as a grass placeholder and is preserved on save rather than flattened
 // (an INV7 data-loss on legacy officials that predate boardCode).
-const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>([...Object.values(FAMILY_TO_TERRAIN), 'road', 'void']);
+const editorExpressibleTerrain = (): Set<TerrainType> => new Set<TerrainType>([
+  ...terrainFamilyRecords().map((family) => family.gameplayTerrain), 'road', 'void',
+]);
 
 function pointInBoard(x: number, y: number, cols: number, rows: number): boolean {
   return x >= 0 && y >= 0 && x < cols && y < rows;
@@ -127,14 +118,9 @@ const defaultTileOfFamily = (family: TileFamilyId): string | undefined => {
 
 // Terrain material → a representative tile id, via its family. Unknown materials (none of
 // the playable set maps to a decorative-only family) fall back to grass.
-const TERRAIN_TO_FAMILY = (Object.entries(FAMILY_TO_TERRAIN) as Array<[TileFamilyId, TerrainType]>).reduce(
-  (acc, [family, terrain]) => { acc[terrain] = family; return acc; },
-  {} as Partial<Record<TerrainType, TileFamilyId>>,
-);
 const tileIdForTerrain = (terrain: TerrainType): string | undefined => {
   if (terrain === 'void') return undefined;
-  const family = TERRAIN_TO_FAMILY[terrain] ?? 'grass';
-  return defaultTileOfFamily(family);
+  return defaultTileOfFamily(familyForGameplayTerrain(terrain)!);
 };
 
 // Board data stores the stable family id; art records never enter gameplay data.
@@ -211,7 +197,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
   const cover: EditorBoard['cover'] = {};
   const features: EditorBoard['features'] = {};
   const voidCells = new Set<string>();
-  const fallbackTile = defaultTileOfFamily('grass');
+  const fallbackTile = defaultTileOfFamily(defaultTerrainFamily().id);
   for (const cell of level.layers.terrain) {
     if (cell.x < 0 || cell.x >= cols || cell.y < 0 || cell.y >= rows) continue;
     const key = `${cell.x},${cell.y}`;
@@ -302,21 +288,23 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
 
   const terrain: TerrainCell[] = [];
   let maxElevation = 0;
+  const defaultFamilyId = defaultTerrainFamily().id;
+  const expressibleTerrain = editorExpressibleTerrain();
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < cols; x += 1) {
       const key = `${x},${y}`;
       const prev = prevCell.get(key);
       const tileId = board.cells[key];
       const family = tileId ? familyOfTile(tileId) : undefined;
-      // Decorative / unknown families fall back to grass (a playable material).
-      let cellTerrain: TerrainType = tileId ? (family ? FAMILY_TO_TERRAIN[family] ?? 'grass' : 'grass') : 'void';
+      if (tileId && !family) throw new Error(`drawable catalog has no terrain family for tile ${tileId}`);
+      let cellTerrain: TerrainType = tileId ? gameplayTerrainForFamily(family!) : 'void';
       // A road feature overlay IS the cell's terrain in the game's schema — project it back to
       // `road` so roads painted (or loaded) in the editor reach layers.terrain, which the game
       // reads. Erasing the overlay leaves no road feature, so the cell reverts to its tile
       // (grass) — i.e. an admin can actually remove a road.
       if (tileId && board.features[key]?.kind === 'road') {
         cellTerrain = 'road';
-      } else if (tileId && cellTerrain === 'grass' && prev && !EDITOR_EXPRESSIBLE_TERRAIN.has(prev.terrain)) {
+      } else if (tileId && family === defaultFamilyId && prev && !expressibleTerrain.has(prev.terrain)) {
         // Preserve terrain the editor can neither paint nor feature-map (bridge/cliff/rock) so a
         // republished legacy official keeps those surfaces instead of flattening them to grass.
         cellTerrain = prev.terrain;

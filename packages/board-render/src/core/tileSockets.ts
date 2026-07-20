@@ -1,4 +1,5 @@
 import { drawableAssets } from '../art/drawableCatalog';
+import type { TerrainType } from './types';
 
 export type TileFamilyId = string;
 export type TerrainPairId = string;
@@ -22,12 +23,7 @@ export interface TileSocketAsset {
   terrains?: TileFamilyId[];
   pairId?: TerrainPairId;
   socketMask?: number;
-  /**
-   * Animated walkable surface: alongside the static `-top` half, the tile ships an
-   * N-frame horizontal sheet (`<src base>-top-anim.png`, frames left-to-right, each at
-   * the same 96x180 tile frame). The board renders the top layer from the sheet via a
-   * steps() background animation. Absent = static top.
-   */
+  /** Number of frames in the database-assigned animated top descriptor. Absent = static top. */
   topAnimFrames?: number;
 }
 
@@ -41,17 +37,96 @@ export interface TransitionSlot<TAsset extends TileSocketAsset = TileSocketAsset
 
 export const socketEdges: EdgeName[] = ['north', 'east', 'south', 'west'];
 
+export interface TerrainFamilyRecord {
+  id: TileFamilyId;
+  label: string;
+  purpose: string;
+  status: string;
+  review: string;
+  roles: string[];
+  defaultGroundCoverId?: string;
+  scatterDefaultShare?: number;
+  gameplayTerrain: TerrainType;
+  rendersGameplayTerrains: TerrainType[];
+}
+
+const GAMEPLAY_TERRAINS = new Set<TerrainType>(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'dirt', 'pebble', 'sand', 'void']);
+const isGameplayTerrain = (value: unknown): value is TerrainType => typeof value === 'string' && GAMEPLAY_TERRAINS.has(value as TerrainType);
+
+export function terrainFamilyRecords(): TerrainFamilyRecord[] {
+  return drawableAssets('terrain-family').map((asset) => {
+    const id = typeof asset.behavior.value === 'string' ? asset.behavior.value : asset.id;
+    const gameplayTerrain = asset.behavior.gameplayTerrain;
+    const rendersGameplayTerrains = asset.behavior.rendersGameplayTerrains;
+    if (!isGameplayTerrain(gameplayTerrain) || gameplayTerrain === 'void'
+      || !Array.isArray(rendersGameplayTerrains) || !rendersGameplayTerrains.length || !rendersGameplayTerrains.every(isGameplayTerrain)) {
+      throw new Error(`terrain family ${asset.id} has invalid database-owned gameplay terrain behavior`);
+    }
+    return {
+      id,
+      label: asset.label,
+      purpose: typeof asset.metadata.purpose === 'string' ? asset.metadata.purpose : '',
+      status: typeof asset.metadata.status === 'string' ? asset.metadata.status : '',
+      review: typeof asset.metadata.review === 'string' ? asset.metadata.review : '',
+      roles: Array.isArray(asset.behavior.roles) ? asset.behavior.roles.filter((role): role is string => typeof role === 'string') : [],
+      defaultGroundCoverId: typeof asset.behavior.defaultGroundCoverId === 'string' ? asset.behavior.defaultGroundCoverId : undefined,
+      scatterDefaultShare: typeof asset.behavior.scatterDefaultShare === 'number' ? asset.behavior.scatterDefaultShare : undefined,
+      gameplayTerrain,
+      rendersGameplayTerrains,
+    };
+  });
+}
+
+export function gameplayTerrainForFamily(familyId: TileFamilyId): TerrainType {
+  const family = terrainFamilyRecords().find((record) => record.id === familyId);
+  if (!family) throw new Error(`drawable catalog has no terrain family ${familyId}`);
+  return family.gameplayTerrain;
+}
+
+export function familyForGameplayTerrain(terrain: TerrainType): TileFamilyId | undefined {
+  if (terrain === 'void') return undefined;
+  const matches = terrainFamilyRecords().filter((family) => family.rendersGameplayTerrains.includes(terrain));
+  if (matches.length !== 1) throw new Error(`drawable catalog requires exactly one render family for gameplay terrain ${terrain}; found ${matches.length}`);
+  return matches[0].id;
+}
+
+export function terrainFamiliesForRole(role: string): TerrainFamilyRecord[] {
+  return terrainFamilyRecords().filter((family) => family.roles.includes(role));
+}
+
+export function requiredTerrainFamilyForRole(role: string): TerrainFamilyRecord {
+  const matches = terrainFamiliesForRole(role);
+  if (matches.length !== 1) throw new Error(`drawable catalog requires exactly one terrain family for role ${role}; found ${matches.length}`);
+  return matches[0];
+}
+
+export function defaultTerrainFamily(): TerrainFamilyRecord {
+  const records = drawableAssets('terrain-family').filter((asset) => asset.behavior.default === true);
+  if (records.length !== 1) throw new Error(`drawable catalog requires exactly one default terrain family; found ${records.length}`);
+  const family = terrainFamilyRecords().find((candidate) => candidate.id === (records[0].behavior.value ?? records[0].id));
+  if (!family) throw new Error('drawable catalog default terrain family is unavailable');
+  return family;
+}
+
 export const terrainLabels: Record<TileFamilyId, string> = new Proxy({}, {
   get: (_target, family) => {
-    const record = drawableAssets('terrain-surface').find((asset) => asset.behavior.family === family);
-    return typeof record?.metadata.familyLabel === 'string' ? record.metadata.familyLabel : String(family);
+    const record = terrainFamilyRecords().find((candidate) => candidate.id === family);
+    if (!record) throw new Error(`drawable catalog has no terrain family ${String(family)}`);
+    return record.label;
   },
 });
 
 // The transition socket model is retained for the tile studio, but the shipped tileset
 // has no transition tiles — so on the board every boundary is a HARD EDGE (the solver
 // falls back to each cell's own family base; see solveSocketBoard).
-export const transitionPairs: TransitionPair[] = [];
+const currentTransitionPairs = (): TransitionPair[] => drawableAssets('terrain-transition').map((asset) => {
+  const terrains = asset.behavior.terrains;
+  if (!Array.isArray(terrains) || terrains.length !== 2 || terrains.some((family) => typeof family !== 'string')) {
+    throw new Error(`terrain transition ${asset.id} must identify exactly two families`);
+  }
+  return { id: typeof asset.behavior.value === 'string' ? asset.behavior.value : asset.id, label: asset.label, terrains: [terrains[0], terrains[1]] };
+});
+export const transitionPairs: TransitionPair[] = new Proxy([], { get: (_target, property) => { const values = currentTransitionPairs(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
 
 export function transitionPairById(pairId: TerrainPairId): TransitionPair {
   const pair = transitionPairs.find((candidate) => candidate.id === pairId);
@@ -98,9 +173,9 @@ export function familyIdForAsset<TAsset extends TileSocketAsset>(
   familyAssets: Record<TileFamilyId, readonly TAsset[]>,
 ): TileFamilyId {
   const owningFamily = Object.entries(familyAssets).find(([, assets]) => assets.some((item) => item.id === asset.id))?.[0] as TileFamilyId | undefined;
-  const fallback = Object.keys(familyAssets)[0];
-  if (!owningFamily && !asset.terrains?.[0] && !fallback) throw new Error(`tile asset ${asset.id} has no family`);
-  return owningFamily ?? asset.terrains?.[0] ?? fallback;
+  const declaredFamily = asset.terrains?.[0];
+  if (!owningFamily && !declaredFamily) throw new Error(`tile asset ${asset.id} has no family`);
+  return owningFamily ?? declaredFamily!;
 }
 
 export function tileSocketsForAsset<TAsset extends TileSocketAsset>(

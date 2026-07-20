@@ -3,8 +3,12 @@ status: accepted
 date: 2026-07-19
 deciders: Nelson, Codex
 partially_supersedes:
+  - ADR-0016 Git-owned nine-slice registry
+  - ADR-0019 filesystem persistence for nine-slice editor state
   - ADR-0039 code-owned tile catalogs
+  - ADR-0054 Git-owned nine-slice family and calibration configuration
   - ADR-0061 code-owned base prop identities
+  - ADR-0083 Git-owned Chrome art-direction state
   - ADR-0085 stable-slot references from code
 ---
 

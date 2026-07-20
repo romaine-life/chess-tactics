@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
-import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
 
 // The main-menu background scene as REAL elements instead of a `::after`
 // background — so animated regions can anchor to scene coordinates.
@@ -16,7 +16,7 @@ import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 // The overlays are BAKED frame sheets (scripts/build-scene-anim.py — the menu
 // twin of ADR-0048's water ripple): only water pixels are opaque, frame 0 is
 // bit-identical to the shipped scene, and CSS steps() just advances the frame.
-// Region + frame data here must match the sheet the script baked.
+// Region, timing, scene, and sheet bindings are installed drawable-catalog data.
 //
 // This module exposes the scene as DATA (SCENE_ANIMS) + a plain-DOM builder
 // (buildSceneBackdropNode). Homepage SCREENS never render the scene from here: the
@@ -27,9 +27,6 @@ import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 // only (SceneAnimLab's Animated Scenes picker); it builds the same DOM via the
 // builder so there is one structure. See ui/HomepageBackdrop.tsx.
 
-const SCENE_W = 1586;
-const SCENE_H = 991;
-
 export interface SceneAnim {
   id: string;
   /** Region rect in scene pixels (the --rect the sheet was baked with). */
@@ -39,86 +36,43 @@ export interface SceneAnim {
   h: number;
   frames: number;
   frameMs: number;
-  /** Backend-owned semantic slot; resolve it from one hydrated catalog snapshot at render time. */
+  sceneRole: string;
   slot: string;
+  sheet: string;
 }
 
 // Every animated region of the menu scene — six waterfalls, scroll-baked
 // (build-scene-anim.py --scroll, from the static art alone; no run dir). Per the
 // color-cycling canon (Mark Ferrari), each region runs its OWN loop tempo
 // (1.44s / 1.56s / 1.68s / 1.80s / 1.92s / 2.16s) so the scene never pulses in
-// unison. Git owns this deterministic placement/timing geometry; generated sheet
-// pixels and their active pointers are backend-owned live-media versions.
-export const SCENE_ANIMS: SceneAnim[] = [
-  {
-    id: 'waterfall-right',
-    x: 1290,
-    y: 400,
-    w: 170,
-    h: 256,
-    frames: 12,
-    frameMs: 140,
-    slot: 'ui/main-menu/scene-anim/waterfall-right.png',
-  },
-  {
-    id: 'waterfall-right-lower',
-    x: 1240,
-    y: 600,
-    w: 110,
-    h: 130,
-    frames: 12,
-    frameMs: 120,
-    slot: 'ui/main-menu/scene-anim/waterfall-right-lower.png',
-  },
-  {
-    id: 'waterfall-right-mid',
-    x: 1180,
-    y: 500,
-    w: 60,
-    h: 120,
-    frames: 12,
-    frameMs: 150,
-    slot: 'ui/main-menu/scene-anim/waterfall-right-mid.png',
-  },
-  {
-    id: 'waterfall-left',
-    x: 170,
-    y: 485,
-    w: 90,
-    h: 195,
-    frames: 12,
-    frameMs: 160,
-    slot: 'ui/main-menu/scene-anim/waterfall-left.png',
-  },
-  {
-    // The thin cliff fall right of waterfall-left — its water column is dimmer
-    // than the bright main fall, so it's zoned + baked at a lower brightness gate
-    // (--bright 46 --scroll 2 --zones 12,5,32,98) to catch it without the lake
-    // behind it. Was un-animated until now (only five regions existed).
-    id: 'waterfall-upperright',
-    x: 325,
-    y: 495,
-    w: 75,
-    h: 115,
-    frames: 12,
-    frameMs: 130,
-    slot: 'ui/main-menu/scene-anim/waterfall-upperright.png',
-  },
-  {
-    // Two lower falls + the cascade into the lake. The dim moonlit water sat
-    // below the default brightness gate, so the first bake caught almost no
-    // pixels and looked frozen; re-baked at --bright 44 --scroll 4 (these falls
-    // are bluish, near-zero vegetation, so no zones are needed).
-    id: 'waterfall-lowerleft',
-    x: 110,
-    y: 770,
-    w: 220,
-    h: 170,
-    frames: 12,
-    frameMs: 180,
-    slot: 'ui/main-menu/scene-anim/waterfall-lowerleft.png',
-  },
-];
+// unison. The database owns the installed placement/timing records and active media.
+const positive = (value: unknown, field: string, id: string): number => {
+  const result = Number(value);
+  if (!Number.isFinite(result) || result <= 0) throw new Error(`scene animation ${id} has invalid ${field}`);
+  return result;
+};
+const nonnegative = (value: unknown, field: string, id: string): number => {
+  const result = Number(value);
+  if (!Number.isFinite(result) || result < 0) throw new Error(`scene animation ${id} has invalid ${field}`);
+  return result;
+};
+
+export interface AnimatedScene { id: string; label: string; role: string; w: number; h: number; background: string }
+export const animatedScenes = (): AnimatedScene[] => drawableAssets('animated-scene').map((asset) => {
+  const roles = Array.isArray(asset.behavior.roles) ? asset.behavior.roles.filter((role): role is string => typeof role === 'string') : [];
+  if (roles.length !== 1 || !asset.media.background) throw new Error(`animated scene ${asset.id} is incomplete`);
+  return { id: asset.id, label: asset.label, role: roles[0], w: positive(asset.behavior.width, 'width', asset.id), h: positive(asset.behavior.height, 'height', asset.id), background: asset.media.background.media.immutableUrl };
+});
+export const sceneAnimations = (): SceneAnim[] => drawableAssets('scene-animation').map((asset) => {
+  const sheet = asset.media.sheet;
+  const sceneRole = String(asset.behavior.sceneRole ?? '');
+  if (!sheet || !sceneRole) throw new Error(`scene animation ${asset.id} is incomplete`);
+  return { id: asset.id, sceneRole, slot: sheet.slot, sheet: sheet.media.immutableUrl,
+    x: nonnegative(asset.behavior.x, 'x', asset.id), y: nonnegative(asset.behavior.y, 'y', asset.id),
+    w: positive(asset.behavior.width, 'width', asset.id), h: positive(asset.behavior.height, 'height', asset.id),
+    frames: positive(asset.behavior.frames, 'frames', asset.id), frameMs: positive(asset.behavior.frameMs, 'frameMs', asset.id) };
+});
+export const SCENE_ANIMS: SceneAnim[] = new Proxy([] as SceneAnim[], { get: (_target, property) => { const values = sceneAnimations(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
 
 // Build the scene backdrop as a detached DOM subtree — the plain-DOM twin of the
 // old JSX (identical class names, so the existing style.css rules apply
@@ -126,24 +80,27 @@ export const SCENE_ANIMS: SceneAnim[] = [
 // moved node keeps its computed cover-crop and animation state, so the scene
 // never re-adjusts on navigation. aria-hidden: it is pure decoration.
 export function buildSceneBackdropNode(): HTMLDivElement {
+  const sceneAsset = requiredDrawableRole('animated-scene', 'homepage-scene');
+  const scene = animatedScenes().find((candidate) => candidate.id === sceneAsset.id);
+  if (!scene) throw new Error('drawable catalog has no complete homepage scene');
   const root = document.createElement('div');
   root.className = 'scene-backdrop';
   root.setAttribute('aria-hidden', 'true');
 
   const canvas = document.createElement('div');
   canvas.className = 'scene-backdrop-canvas';
-  canvas.style.backgroundImage = `url("${resolvedLiveMediaUrl('ui/main-menu/background-scene-v1.avif')}")`;
+  canvas.style.backgroundImage = `url("${scene.background}")`;
 
-  for (const a of SCENE_ANIMS) {
+  for (const a of sceneAnimations().filter((candidate) => candidate.sceneRole === scene.role)) {
     const span = document.createElement('span');
     span.className = 'scene-backdrop-anim';
     span.dataset.sceneAnim = a.id;
     const s = span.style;
-    s.left = `${(a.x / SCENE_W) * 100}%`;
-    s.top = `${(a.y / SCENE_H) * 100}%`;
-    s.width = `${(a.w / SCENE_W) * 100}%`;
-    s.height = `${(a.h / SCENE_H) * 100}%`;
-    s.backgroundImage = `url("${resolvedLiveMediaUrl(a.slot)}")`;
+    s.left = `${(a.x / scene.w) * 100}%`;
+    s.top = `${(a.y / scene.h) * 100}%`;
+    s.width = `${(a.w / scene.w) * 100}%`;
+    s.height = `${(a.h / scene.h) * 100}%`;
+    s.backgroundImage = `url("${a.sheet}")`;
     s.setProperty('--scene-anim-frames', `${a.frames}`);
     // steps(N) over [0, N/(N-1) * 100%] lands step k on frame k of an N-frame
     // sheet sized in percent (bg-pos % maps k/(N-1) -> -k*boxW).

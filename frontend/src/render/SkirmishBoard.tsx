@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { drawableAssets } from '@chess-tactics/board-render';
 import { tileFrameSrc, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { GameState, Move, Piece, Side, TerrainType, UnitFacing, Vec } from '../core/types';
 import { attackedSquares, blockedCandidateSquares, enemyThreats, legalMoves, livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
-import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
+import { defaultTerrainFamily, familyForGameplayTerrain, familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
@@ -46,22 +47,9 @@ import {
   withoutBoardDrawLayers,
 } from '@chess-tactics/board-render';
 
-const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
-  grass: 'grass',
-  road: 'stone',
-  stone: 'stone',
-  bridge: 'stone',
-  cliff: 'stone',
-  rock: 'stone',
-  water: 'water',
-  dirt: 'dirt',
-  pebble: 'pebble',
-  sand: 'sand',
-};
-
 function terrainFamilyForGame(terrain: TerrainType | undefined): TileFamilyId | null {
   if (!terrain || terrain === 'void') return null;
-  return TERRAIN_TO_FAMILY[terrain];
+  return familyForGameplayTerrain(terrain) ?? null;
 }
 
 const tileAssetById = (): Map<string, TileAsset> => new Map(tileAssets.map((asset) => [asset.id, asset]));
@@ -103,7 +91,6 @@ export function mirrorSpriteSourcesForPiece(
 // Neutral rocks: two boulder variants x 8 rotations. Pick deterministically from the
 // piece id so each rock on the board looks distinct (no repeated-blob feel) yet stays
 // stable across re-renders.
-const ROCK_VARIANTS = ['boulder', 'granite'] as const;
 const ROCK_DIRECTIONS = ['south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east'] as const;
 function hashId(id: string): number {
   let h = 2166136261;
@@ -115,9 +102,13 @@ function hashId(id: string): number {
 }
 function rockSpritePath(piece: Piece): string {
   const h = hashId(piece.id);
-  const variant = ROCK_VARIANTS[h % ROCK_VARIANTS.length];
+  const variants = drawableAssets('neutral-unit-art');
+  if (!variants.length) throw new Error('drawable catalog has no neutral unit art');
+  const variant = variants[h % variants.length];
   const dir = ROCK_DIRECTIONS[(h >>> 5) % ROCK_DIRECTIONS.length];
-  return `/assets/units/rock/${variant}/${dir}.png`;
+  const src = variant.media[dir]?.media.immutableUrl;
+  if (!src) throw new Error(`neutral unit art ${variant.id} has no ${dir} media`);
+  return src;
 }
 
 // Prop colliders are neutral `rock` pieces stamped under a multi-cell prop (id `prop-…`); their
@@ -173,9 +164,10 @@ export function skirmishArmyOverlaySet(
 function terrainMapForGame(game: GameState): TileFamilyId[] {
   const byKey = new Map((game.terrain ?? []).map((cell) => [`${cell.x},${cell.y}`, terrainFamilyForGame(cell.terrain)]));
   const map: TileFamilyId[] = [];
+  const defaultFamilyId = defaultTerrainFamily().id;
   for (let y = 0; y < game.size.rows; y += 1) {
     for (let x = 0; x < game.size.cols; x += 1) {
-      map.push(byKey.get(`${x},${y}`) ?? 'grass');
+      map.push(byKey.get(`${x},${y}`) ?? defaultFamilyId);
     }
   }
   return map;

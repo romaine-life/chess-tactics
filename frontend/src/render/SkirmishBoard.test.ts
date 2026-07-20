@@ -84,7 +84,7 @@ describe('pieceOp', () => {
     const rock: Piece = { id: `${type}-1`, side: 'neutral', type, x: 0, y: 0, startY: 0, alive: true };
     const op = pieceOp(rock, { left: 36, top: 86 * 0.78 });
 
-    expect(op?.src).toContain('/assets/units/rock/');
+    expect(op?.src).toMatch(/^\/api\/media\/[0-9a-f]{64}$/);
     expect(op?.layer).toBe('scene');
     expect(op?.dx).toBe(0);
     expect(op?.dy).toBe(0);
