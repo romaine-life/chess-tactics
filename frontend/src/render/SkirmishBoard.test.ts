@@ -6,7 +6,14 @@ import { tileFamilies } from '../art/tileset';
 import { createSkirmish } from '../game/setup';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
-import { buildSkirmishBoard, pieceOp, skirmishArmyOverlaySet, skirmishTileClickIntent } from './SkirmishBoard';
+import type { PredrawnOcclusionDepthMap } from '@chess-tactics/board-render';
+import {
+  buildSkirmishBoard,
+  commitSkirmishSceneFirstFrame,
+  pieceOp,
+  skirmishArmyOverlaySet,
+  skirmishTileClickIntent,
+} from './SkirmishBoard';
 
 afterEach(() => resetLiveUnitCatalog());
 
@@ -76,6 +83,49 @@ describe('buildSkirmishBoard', () => {
     expect(boardA.cells.find((cell) => cell.x === 1 && cell.y === 0)?.feature?.mask).toBe(4);
     expect(boardA.cells.find((cell) => cell.x === 1 && cell.y === 1)?.feature?.mask).toBe(1);
     expect(boardA.cells.every((cell) => !cell.groundCover)).toBe(true);
+  });
+});
+
+describe('Skirmish scene immutable depth guard', () => {
+  const depthMap: PredrawnOcclusionDepthMap = {
+    src: '/api/background-versions/depth-v1/content',
+    frameWidth: 320,
+    frameHeight: 180,
+    worldBounds: { minX: -40, minY: -20, width: 320, height: 180 },
+  };
+
+  it('rejects a mismatched persisted mask before compositing or acknowledging the scene', () => {
+    let composites = 0;
+    let acknowledgements = 0;
+    const images = new Map([
+      [depthMap.src, { naturalWidth: 320, naturalHeight: 179 }],
+    ]);
+
+    expect(() => commitSkirmishSceneFirstFrame(
+      depthMap,
+      images,
+      () => { composites += 1; },
+      () => { acknowledgements += 1; },
+    )).toThrow(/expected 320×180, decoded 320×179/);
+    expect(composites).toBe(0);
+    expect(acknowledgements).toBe(0);
+  });
+
+  it('composites and acknowledges a persisted mask with the exact selected surface dimensions', () => {
+    let composites = 0;
+    let acknowledgements = 0;
+    const images = new Map([
+      [depthMap.src, { naturalWidth: 320, naturalHeight: 180 }],
+    ]);
+
+    expect(() => commitSkirmishSceneFirstFrame(
+      depthMap,
+      images,
+      () => { composites += 1; },
+      () => { acknowledgements += 1; },
+    )).not.toThrow();
+    expect(composites).toBe(1);
+    expect(acknowledgements).toBe(1);
   });
 });
 

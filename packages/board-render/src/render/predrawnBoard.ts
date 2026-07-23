@@ -2,9 +2,7 @@ import {
   TILE_STEP_X,
   TILE_STEP_Y,
 } from '../art/projectionContract';
-import type { PredrawnBoardSurface } from '../ui/boardCode';
-
-type PredrawnBoardProjection = Omit<PredrawnBoardSurface, 'slot'>;
+type PredrawnBoardProjection = { frameWidth: number; frameHeight: number };
 import { boardLabCellPosition, boardLabMetrics } from './boardProjection';
 import {
   PREDRAWN_GUIDE_EPSILON,

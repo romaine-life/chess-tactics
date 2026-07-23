@@ -29,17 +29,18 @@ const board = (): EditorBoard => ({
 });
 
 describe('pre-drawn editor policy', () => {
-  it('locks every authoring layer whose pixels are baked into the continuous plate', () => {
-    expect(['tile', 'generate', 'paths', 'fence', 'wall', 'wallart', 'prop'].every((layer) => (
+  it('locks baked-art layers while retaining live cover authoring', () => {
+    expect(['tile', 'generate', 'paths', 'fence', 'wall', 'wallart', 'prop', 'doodad', 'subterrain'].every((layer) => (
       isPredrawnLockedLayer(layer as Parameters<typeof isPredrawnLockedLayer>[0])
     ))).toBe(true);
-    expect(['board', 'unit', 'doodad', 'cover', 'zone', 'rules', 'status'].every((layer) => (
+    expect(['board', 'unit', 'cover', 'zone', 'rules', 'status'].every((layer) => (
       !isPredrawnLockedLayer(layer as Parameters<typeof isPredrawnLockedLayer>[0])
     ))).toBe(true);
   });
 
-  it('rejects baked geometry changes while permitting additive live overlays', () => {
+  it('rejects baked environment changes while permitting live cover, units, and tactical zones', () => {
     const current = board();
+    expect(preservesPredrawnBakedArt(current, { ...current, surface: undefined })).toBe(true);
     expect(preservesPredrawnBakedArt(current, { ...current, cols: 6 })).toBe(false);
     expect(preservesPredrawnBakedArt(current, { ...current, cells: { '0,0': 'stone-surf-1' } })).toBe(false);
     expect(preservesPredrawnBakedArt(current, {
@@ -48,8 +49,20 @@ describe('pre-drawn editor policy', () => {
     })).toBe(false);
     expect(preservesPredrawnBakedArt(current, {
       ...current,
-      units: { '0,0': { unitId: 'rook', direction: 's', faction: 'navy-blue' } },
       cover: { '0,0': 'sparse' },
+      coverTypes: { '0,0': 'grass' },
+    })).toBe(true);
+    expect(preservesPredrawnBakedArt(current, {
+      ...current,
+      doodads: { '0,0': { doodadId: 'grass-tuft' } },
+    })).toBe(false);
+    expect(preservesPredrawnBakedArt(current, {
+      ...current,
+      subterrain: { '0,0': 'stone-subterrain-1' },
+    })).toBe(false);
+    expect(preservesPredrawnBakedArt(current, {
+      ...current,
+      units: { '0,0': { unitId: 'rook', direction: 's', faction: 'navy-blue' } },
       zones: { '0,0': 'region' },
     })).toBe(true);
   });

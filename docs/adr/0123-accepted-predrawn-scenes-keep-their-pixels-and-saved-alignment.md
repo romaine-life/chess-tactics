@@ -1,9 +1,10 @@
 ---
-status: "accepted"
+status: "superseded by ADR-0147"
 date: 2026-07-14
 deciders: Nelson, Codex
 supersedes: "[ADR-0118](0118-predrawn-scenes-generate-a-camera-overscan-frame.md)"
 partially_supersedes: "[ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md), [ADR-0134](0134-predrawn-candidate-review-uses-exact-board-plane-registration.md), [ADR-0135](0135-predrawn-registration-is-owner-picked-source-geometry.md), [ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md), and [ADR-0111](0111-predrawn-refit-target-dimensions-are-owner-configurable.md)"
+superseded_by: "[ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 ---
 
 # ADR-0123: Accepted pre-drawn scenes keep their pixels and saved alignment

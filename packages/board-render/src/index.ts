@@ -14,12 +14,22 @@ import { applyWallDecorCatalog } from './core/wallDecor';
 import { applyWallArtCatalog } from './core/wallArt';
 import { boardBounds, boardContentHash, boardDrawOps, boardSocialFramingBounds, type BakeBounds, type BoardDrawOp } from './render/renderPlan';
 import { predrawnOcclusionMaskOps } from './render/predrawnOcclusion';
+import { predrawnOcclusionDepthMapForSurface, type PredrawnOcclusionDepthMap } from './render/predrawnOcclusionDepth';
+import { isVersionedPredrawnBoardSurface } from './ui/boardCode';
 
 export type ServerDrawOp = BoardDrawOp;
+
+export interface PredrawnBackgroundRasterRequirement {
+  src: string;
+  frameWidth: number;
+  frameHeight: number;
+}
 
 export interface ServerRenderPlan {
   ops: ServerDrawOp[];
   occlusionMasks: ServerDrawOp[];
+  predrawnBackgroundRaster?: PredrawnBackgroundRasterRequirement;
+  occlusionDepthMap?: PredrawnOcclusionDepthMap;
   bounds: BakeBounds;
   framingBounds: BakeBounds;
   contentHash: string;
@@ -28,9 +38,24 @@ export interface ServerRenderPlan {
 export function levelRenderPlan(level: Level): ServerRenderPlan {
   currentSeats();
   const board = levelToEditorBoard(level);
+  const versionedSurface = board.surface?.kind === 'predrawn'
+    && isVersionedPredrawnBoardSurface(board.surface)
+    ? board.surface
+    : undefined;
   return {
     ops: boardDrawOps(board),
-    occlusionMasks: board.surface?.kind === 'predrawn' ? predrawnOcclusionMaskOps(board) : [],
+    occlusionMasks: board.surface?.kind === 'predrawn'
+      && !isVersionedPredrawnBoardSurface(board.surface)
+      ? predrawnOcclusionMaskOps(board)
+      : [],
+    ...(versionedSurface ? {
+      predrawnBackgroundRaster: {
+        src: `/api/background-versions/${encodeURIComponent(versionedSurface.backgroundVersionId)}/content`,
+        frameWidth: versionedSurface.frameWidth,
+        frameHeight: versionedSurface.frameHeight,
+      },
+    } : {}),
+    occlusionDepthMap: predrawnOcclusionDepthMapForSurface(board.surface),
     bounds: boardBounds(board),
     framingBounds: boardSocialFramingBounds(board),
     contentHash: boardContentHash(board),
@@ -126,6 +151,7 @@ export * from './render/mirrorReflection';
 export * from './render/predrawnBoard';
 export * from './render/predrawnGenerationFrame';
 export * from './render/predrawnOcclusion';
+export * from './render/predrawnOcclusionDepth';
 export * from './render/predrawnRegistration';
 export * from './render/renderPlan';
 export * from './render/sceneDepth';

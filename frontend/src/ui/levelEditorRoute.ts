@@ -1,5 +1,6 @@
 export const LEVEL_EDITOR_ROUTE_LAYERS = [
   'board',
+  'artwork',
   'tile',
   'generate',
   'paths',

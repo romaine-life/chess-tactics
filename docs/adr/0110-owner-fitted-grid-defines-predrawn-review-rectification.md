@@ -1,9 +1,9 @@
 ---
-status: "accepted; fixed authored-dimension target superseded by ADR-0111; regeneration-only production clause superseded by ADR-0123"
+status: "accepted; fixed authored-dimension target superseded by ADR-0111; production emits an immutable raster child under ADR-0147"
 date: 2026-07-13
 deciders: Nelson, Codex
 partially_supersedes: "[ADR-0134](0134-predrawn-candidate-review-uses-exact-board-plane-registration.md) and [ADR-0135](0135-predrawn-registration-is-owner-picked-source-geometry.md)"
-partially_superseded_by: "[ADR-0111](0111-predrawn-refit-target-dimensions-are-owner-configurable.md) and [ADR-0123](0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md)"
+partially_superseded_by: "[ADR-0111](0111-predrawn-refit-target-dimensions-are-owner-configurable.md) and [ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 ---
 
 # ADR-0110: Owner-fitted grid defines pre-drawn review rectification

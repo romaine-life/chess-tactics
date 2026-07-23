@@ -26,7 +26,7 @@ describe('Level Editor pre-drawn generation frame handoff', () => {
     expect(closing).toContain("url.searchParams.delete('generationFrame')");
     expect(closing).toContain('setPredrawnGenerationFrameOpen(false)');
     expect(control).toContain('onClick={openPredrawnGenerationFrame}');
-    expect(control).toContain("currentEditorBoard.predrawnGenerationFrame ? 'Edit frame' : 'Choose frame'");
+    expect(control).toContain("currentEditorBoard.predrawnGenerationFrame ? 'Edit viewing pane' : 'Choose viewing pane'");
   });
 
   it('applies the selected frame to the working editor while leaving canonical promotion explicit', () => {
@@ -62,7 +62,7 @@ describe('Level Editor pre-drawn generation frame handoff', () => {
     expect(review).toContain("setTool('select')");
     expect(review).not.toContain('saveLevel');
     expect(levelEditor).toContain('data-testid="predrawn-generation-frame-status"');
-    expect(levelEditor).toContain('>Published reference</NavButton>');
+    expect(levelEditor).toContain('>Preview pipeline input</NavButton>');
   });
 
   it('waits for both canonical canvas layers to paint before enabling either handoff path', () => {

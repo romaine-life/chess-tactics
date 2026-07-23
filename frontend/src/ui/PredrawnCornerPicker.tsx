@@ -286,6 +286,9 @@ export function PredrawnCornerPicker({
   rows,
   onChange,
   onClose,
+  onSaveRegistration,
+  saveLabel = 'SAVE REGISTRATION',
+  showCodexHandoff = true,
 }: {
   src: string;
   initialRegistration?: PredrawnBoardCornerRegistration;
@@ -293,13 +296,17 @@ export function PredrawnCornerPicker({
   rows: number;
   onChange: (registration: PredrawnBoardCornerRegistration) => void;
   onClose: () => void;
+  /** Version-pipeline mode keeps pending calibration in the instrument until it emits a child. */
+  onSaveRegistration?: (registration: PredrawnBoardCornerRegistration) => void;
+  saveLabel?: string;
+  showCodexHandoff?: boolean;
 }): ReactElement {
   const panelRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const normalizedForImage = useRef(false);
-  const storedOpeningRegistration = useRef(storedPredrawnBoardRegistration(src));
-  const openingRegistration = useRef(storedOpeningRegistration.current ?? initialRegistration);
+  const storedOpeningRegistration = useRef(onSaveRegistration ? undefined : storedPredrawnBoardRegistration(src));
+  const openingRegistration = useRef(initialRegistration ?? storedOpeningRegistration.current);
   const openingGrid = useRef(predrawnRegistrationGridSize(openingRegistration.current, columns, rows));
   const openingGuides = useRef(predrawnGuidesForBoard(openingRegistration.current, columns, rows));
   const openingBoundaryPoints = useRef(boundaryPointsFromRegistration(openingRegistration.current));
@@ -406,6 +413,13 @@ export function PredrawnCornerPicker({
     );
     if (!pending) {
       setSaveState('error');
+      return;
+    }
+    if (onSaveRegistration) {
+      onSaveRegistration(pending);
+      onChange(pending);
+      setSaveState('saved');
+      setHandoffCopyState('idle');
       return;
     }
     const readBack = savePredrawnBoardRegistrationLocally(src, pending);
@@ -1024,9 +1038,13 @@ export function PredrawnCornerPicker({
             {placingCorner
               ? `${CORNER_LABEL[placingCorner]} placement armed — click its destination on the image.`
               : saveState === 'pending'
-                ? 'CALIBRATION CHANGED — click SAVE REGISTRATION to apply the inverse warp.'
+                ? onSaveRegistration
+                  ? `CALIBRATION CHANGED — click ${saveLabel} to stage it for a new warped version.`
+                  : 'CALIBRATION CHANGED — click SAVE REGISTRATION to apply the inverse warp.'
                 : saveState === 'saved'
-                  ? 'SAVED LOCALLY — the exact grid registration was read back and applied.'
+                  ? onSaveRegistration
+                    ? 'GRID STAGED — generate a warped version to create new art.'
+                    : 'SAVED LOCALLY — the exact grid registration was read back and applied.'
                   : saveState === 'error'
                     ? 'LOCAL SAVE FAILED — registration was not saved.'
                     : 'Drag a handle to begin.'}
@@ -1045,20 +1063,25 @@ export function PredrawnCornerPicker({
               data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
               disabled={!complete || loadError}
+              title={onSaveRegistration
+                ? 'Stage this grid calibration. No pixels change until you generate a warped version.'
+                : 'Save this exact grid registration.'}
               onClick={saveRegistration}
-            >SAVE REGISTRATION</button>
-            <button
-              type="button"
-              data-testid="predrawn-registration-copy-handoff"
-              data-chrome-unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-              disabled={saveState !== 'saved'}
-              onClick={() => { void copyCodexHandoff(); }}
-            >{handoffCopyState === 'copied'
-                ? 'COPIED — PASTE IN CODEX'
-                : handoffCopyState === 'error'
-                  ? 'COPY FAILED'
-                  : 'COPY CODEX HANDOFF'}</button>
+            >{saveLabel}</button>
+            {showCodexHandoff ? (
+              <button
+                type="button"
+                data-testid="predrawn-registration-copy-handoff"
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                disabled={saveState !== 'saved'}
+                onClick={() => { void copyCodexHandoff(); }}
+              >{handoffCopyState === 'copied'
+                  ? 'COPIED — PASTE IN CODEX'
+                  : handoffCopyState === 'error'
+                    ? 'COPY FAILED'
+                    : 'COPY CODEX HANDOFF'}</button>
+            ) : null}
             <button
               type="button"
               data-chrome-unit="inner-text-button"

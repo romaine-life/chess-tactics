@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { defaultSubterrainMaterial, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, withPredrawnBoardSurface, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials } from '@chess-tactics/board-render';
+import { defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
@@ -80,15 +80,11 @@ import {
   type PredrawnBoardPlate,
 } from '../render/PredrawnBoardLayer';
 import { PredrawnCornerPicker } from './PredrawnCornerPicker';
+import { PredrawnBackgroundVersionsPanel } from './PredrawnBackgroundVersionsPanel';
 import { PredrawnGenerationFramePicker } from './PredrawnGenerationFramePicker';
 import { predrawnGenerationFrameStatus } from './predrawnGenerationFrameStatus';
 import { isPredrawnLockedLayer, predrawnEditorHrefAfterPicker, preservesPredrawnBakedArt } from './predrawnEditorPolicy';
-import {
-  installPredrawnBoardMedia,
-  predrawnBoardGenerationProvenance,
-} from './predrawnBoardOnboarding';
 import { predrawnReferenceHref } from './PredrawnReference';
-import { loadLiveMediaCatalog } from '../net/liveMedia';
 import { removeZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
 import {
   currentBoardTestHref,
@@ -125,6 +121,12 @@ import {
   levelEditorSessionPresenceDetail,
   levelEditorSessionServerNow,
 } from './levelEditorSessionPresentation';
+import {
+  serverRecoveryCursorAfterRemoval,
+  serverRecoveryCursorIndex,
+  serverRecoveryReasonLabel,
+  stepServerRecoveryCursor,
+} from './levelEditorRecoveryBrowser';
 import { levelEditorLevelSignature, normalizedLevelEditorSignature } from './levelEditorSignature';
 import { levelEditorRouteIdentity } from './levelEditorRouteIdentity';
 import {
@@ -136,7 +138,11 @@ import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { loadingMark } from '../diagnostics/loadingTimeline';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
-import { LevelEditorControlsPanel, LevelEditorEventsWorkspace } from './LevelEditorChromeConsumers';
+import {
+  LevelEditorControlsPanel,
+  LevelEditorEventsWorkspace,
+  LevelEditorShellWorkspace,
+} from './LevelEditorChromeConsumers';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import {
@@ -202,6 +208,7 @@ import {
   appendDisplacedEditorDocumentRecovery,
   closeEditorDocumentEditSession,
   createEditorDocument,
+  deleteEditorDocumentRecoveries,
   deleteEditorDocumentRecovery,
   discardEditorDocumentChanges,
   heartbeatEditorDocumentEditSession,
@@ -1162,7 +1169,7 @@ function StudioEditableBoard({
     decorativeFencePosts,
     decorativeWalls,
     cells: placed,
-    surface: predrawnPlate?.surface && 'slot' in predrawnPlate.surface
+    surface: predrawnPlate?.surface && ('slot' in predrawnPlate.surface || 'schemaVersion' in predrawnPlate.surface)
       ? predrawnPlate.surface as PredrawnBoardSurface
       : undefined,
     macroTiles: [...placedMacroTiles],
@@ -1210,6 +1217,7 @@ function StudioEditableBoard({
             coverSeed={coverSeed}
             ambientCover={false}
             omitTerrain
+            predrawnBackgroundActive={Boolean(predrawnPlate)}
             predrawnOcclusion={predrawnOcclusionEnabled}
             transformOps={fenceArtwork ? ((ops, board) => transformFenceArtReviewOps(ops, board, fenceArtwork)) : undefined}
           />
@@ -2284,6 +2292,7 @@ type LayerKey = LevelEditorLayerKey;
 type BrushKind = LevelEditorBrushKind;
 const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }> = [
   { id: 'board', label: 'Board' },
+  { id: 'artwork', label: 'AI Artwork' },
   { id: 'tile', label: 'Tile' },
   { id: 'generate', label: 'Generate' },
   { id: 'paths', label: 'Paths' },
@@ -2325,11 +2334,11 @@ function perimeterWallArt(placements: Record<string, WallArtId> | undefined, col
   }
   return next;
 }
-// `rules` (events/settings) and `board`/`status` are non-painting layers → select tool.
-const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (layer === 'board' || layer === 'status' || layer === 'rules' || layer === 'generate') ? 'select' : 'brush';
+// Workspace/rules/status pages and Generate are non-painting layers → select tool.
+const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (layer === 'board' || layer === 'artwork' || layer === 'status' || layer === 'rules' || layer === 'generate') ? 'select' : 'brush';
 const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'paths') return 'road';
-  if (layer === 'board' || layer === 'status' || layer === 'rules' || layer === 'generate') return 'tile';
+  if (layer === 'board' || layer === 'artwork' || layer === 'status' || layer === 'rules' || layer === 'generate') return 'tile';
   return layer;
 };
 const brushKindForRouteState = (layer: LayerKey, kind: BrushKind | undefined): BrushKind => {
@@ -2503,7 +2512,10 @@ export function LevelEditor(): ReactElement {
   const [editSession, setEditSession] = useState<EditorDocumentEditSession | null>(null);
   const [editPresence, setEditPresence] = useState<EditorDocumentEditPresence | null>(null);
   const [serverRecoveries, setServerRecoveries] = useState<EditorDocumentRecovery[]>([]);
+  const [serverRecoveryPanelSeen, setServerRecoveryPanelSeen] = useState(false);
+  const [selectedServerRecoveryId, setSelectedServerRecoveryId] = useState<string | null>(null);
   const [serverRecoveryBusyId, setServerRecoveryBusyId] = useState<string | null>(null);
+  const [serverRecoveryCleanupCount, setServerRecoveryCleanupCount] = useState<number | null>(null);
   const displacedRecoveryUploadRef = useRef(new Set<string>());
   const frozenAuthorityLossRef = useRef(new Set<string>());
   const frozenAuthorityLossCandidatesRef = useRef(new Map<string, {
@@ -2909,7 +2921,6 @@ export function LevelEditor(): ReactElement {
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
   const [saving, setSaving] = useState(false);
-  const [predrawnInstallState, setPredrawnInstallState] = useState<'idle' | 'working' | 'installed' | 'error'>('idle');
   const [me, setMe] = useState<AuthUser | null>(null);
   const isAdmin = Boolean(me?.is_admin);
   const { ask, dialog: confirmDialog } = useConfirm();
@@ -3096,6 +3107,15 @@ export function LevelEditor(): ReactElement {
     () => ({ cols: boardCols, rows: boardRows, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
     [boardCols, boardRows, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
+  const predrawnVersionCells = useMemo(
+    () => Array.from({ length: boardRows }, (_, y) => (
+      Array.from({ length: boardCols }, (__, x) => ({ x, y }))
+    )).flat(),
+    [boardCols, boardRows],
+  );
+  const currentVersionedPredrawnSurface = boardSurface && isVersionedPredrawnBoardSurface(boardSurface)
+    ? boardSurface
+    : undefined;
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
   const applyEditorBoardWithSelectionSafety = (board: EditorBoard): void => {
@@ -3135,6 +3155,15 @@ export function LevelEditor(): ReactElement {
     applyEditorBoardWithSelectionSafety(normalized);
     if (selection !== undefined) setSelectedCell(selection);
     return true;
+  };
+  const setPredrawnVersionSurface = (surface: VersionedPredrawnBoardSurface): void => {
+    const current = currentEditorBoardRef.current;
+    const next = { ...cloneEditorBoard(current), surface };
+    if (boardSignature(next) === boardSignature(current)) return;
+    setUndoStack((previous) => [...previous, cloneEditorBoard(current)].slice(-HISTORY_LIMIT));
+    setRedoStack([]);
+    currentEditorBoardRef.current = next;
+    applyEditorBoardWithSelectionSafety(next);
   };
   const applyPredrawnGenerationFrame = (frame: PredrawnGenerationFrame): void => {
     const changed = commitEditorBoard({
@@ -4235,6 +4264,10 @@ export function LevelEditor(): ReactElement {
   const canonicalPredrawnGenerationFrame = targetLevel
     ? levelToEditorBoard(targetLevel).predrawnGenerationFrame
     : undefined;
+  const canonicalBoardSurface = targetLevel ? levelToEditorBoard(targetLevel).surface : undefined;
+  const canonicalVersionedPredrawnSurface = canonicalBoardSurface && isVersionedPredrawnBoardSurface(canonicalBoardSurface)
+    ? canonicalBoardSurface
+    : undefined;
   useEffect(() => {
     if (campaignAssignmentHydrated || !targetLevelId || !targetLevel) return;
     const resolvedCampaignId = campaigns.find((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId))?.id ?? '';
@@ -4440,6 +4473,27 @@ export function LevelEditor(): ReactElement {
     applyLevelDocumentRef.current(latest.level, { editingId: latest.level_id, clean: false });
     setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'saved');
   }, []);
+  const handlePredrawnVersionMutationError = useCallback((error: unknown): boolean => {
+    if (!isEditorDocumentEditSessionError(error)) return false;
+    preserveAuthorityLoss(error.session ?? editSessionRef.current, error.recovery);
+    if (error.document) mountAcknowledgedWorkingCopy(error.document);
+    if (error.session) {
+      editSessionRef.current = error.session;
+      setEditSession(error.session);
+    }
+    if (error.presence) {
+      editPresenceRef.current = error.presence;
+      setEditPresence(error.presence);
+    }
+    setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
+    setCloudSaveDetail('Background-version editing stopped because this tab no longer owns the writer lease. The named active editor is shown in Editing session.');
+    reportStatusRef.current(
+      'Background-version editing stopped.',
+      'warning',
+      'This tab is now read-only; its recoverable branch was preserved before the acknowledged cloud working copy was mounted.',
+    );
+    return true;
+  }, [mountAcknowledgedWorkingCopy, preserveAuthorityLoss]);
   // Establish the clean baseline signature. Two ways in: a standalone board (no campaign level)
   // seeds from its first-render signature; a campaign level seeds it AFTER hydrate has settled the
   // board state (needsBaselineRef, captured from the live currentSig so it always matches). Depends
@@ -5472,7 +5526,7 @@ export function LevelEditor(): ReactElement {
   // inspect the latest acknowledged working body without ever becoming writers themselves.
   useEffect(() => {
     if (!editorDocument || !me?.signed_in || !editSession || !editorClientIdentity) return undefined;
-    if (editAuthorityState === 'reviewer' || editAuthorityState === 'error') return undefined;
+    if (editAuthorityState === 'reviewer' || editAuthorityState === 'error' || editSession.state === 'observing') return undefined;
     const documentId = editorDocument.document_id;
     const sessionId = editSession.session_id;
     const sessionKey = editorClientIdentity.sessionKey;
@@ -5583,9 +5637,18 @@ export function LevelEditor(): ReactElement {
     };
   }, [editAuthorityState, editSession, editorDocument, layer, me?.signed_in]);
 
+  useEffect(() => {
+    if (serverRecoveries.length) setServerRecoveryPanelSeen(true);
+  }, [serverRecoveries.length]);
+
   const editorSessionCanWrite = !me?.signed_in
     || !editorDocument
     || editAuthorityState === 'writer';
+  const selectedServerRecoveryIndex = serverRecoveryCursorIndex(serverRecoveries, selectedServerRecoveryId);
+  const selectedServerRecovery = selectedServerRecoveryIndex >= 0
+    ? serverRecoveries[selectedServerRecoveryIndex]
+    : null;
+  const serverRecoveryActionBusy = serverRecoveryBusyId !== null || serverRecoveryCleanupCount !== null;
 
   const revalidateRecoveryDialogWriter = async (
     expectedRecovery: LevelEditorBrowserRecoveryConflict,
@@ -6105,7 +6168,7 @@ export function LevelEditor(): ReactElement {
     const doc = editorDocumentRef.current;
     const revision = documentRevisionRef.current;
     const fence = currentEditFence();
-    if (!doc || revision === null || !fence || serverRecoveryBusyId) {
+    if (!doc || revision === null || !fence || serverRecoveryActionBusy) {
       reportStatus('Recovery restore is read-only in this tab.', 'warning', 'Take over editing before restoring a server recovery.');
       return;
     }
@@ -6134,6 +6197,7 @@ export function LevelEditor(): ReactElement {
       setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'saved');
       setCloudSaveDetail('A recovery was restored as a new working-copy revision. The prior working branch was preserved separately.');
       const refreshed = await listEditorDocumentRecoveries(doc.document_id);
+      setSelectedServerRecoveryId(recovery.recovery_id);
       setServerRecoveries(refreshed.recoveries);
       reportStatus('Recovery restored.', 'success', `Cloud working revision ${latest.revision}; the canonical saved level is unchanged.`);
     } catch (error) {
@@ -6154,7 +6218,7 @@ export function LevelEditor(): ReactElement {
 
   const removeServerRecovery = async (recovery: EditorDocumentRecovery): Promise<void> => {
     const doc = editorDocumentRef.current;
-    if (!doc || serverRecoveryBusyId) return;
+    if (!doc || serverRecoveryActionBusy) return;
     const actor = levelEditorSessionActorLabel(recovery.source_editor);
     if (!(await ask({
       title: 'Delete this recovery?',
@@ -6173,6 +6237,11 @@ export function LevelEditor(): ReactElement {
     setServerRecoveryBusyId(recovery.recovery_id);
     try {
       await deleteEditorDocumentRecovery(doc.document_id, recovery.recovery_id, fence);
+      setSelectedServerRecoveryId((selectedId) => serverRecoveryCursorAfterRemoval(
+        serverRecoveries,
+        selectedId,
+        recovery.recovery_id,
+      ));
       setServerRecoveries((recoveries) => recoveries.filter((entry) => entry.recovery_id !== recovery.recovery_id));
       reportStatus('Recovery deleted.', 'success', 'The current working copy and canonical saved level were unchanged.');
     } catch (error) {
@@ -6188,6 +6257,68 @@ export function LevelEditor(): ReactElement {
       reportStatus('Recovery could not be deleted.', 'error', error instanceof Error ? error.message : String(error));
     } finally {
       setServerRecoveryBusyId(null);
+    }
+  };
+
+  const removeAllServerRecoveries = async (): Promise<void> => {
+    const doc = editorDocumentRef.current;
+    const recoveryIds = serverRecoveries.map((recovery) => recovery.recovery_id);
+    if (!doc || !recoveryIds.length || serverRecoveryActionBusy) return;
+    if (!editorSessionCanWrite) {
+      reportStatus('Recovery cleanup is read-only in this tab.', 'warning', 'Take over editing before deleting recovery copies.');
+      return;
+    }
+    const countLabel = `${recoveryIds.length} recovery ${recoveryIds.length === 1 ? 'copy' : 'copies'}`;
+    if (!(await ask({
+      title: `Delete all ${countLabel}?`,
+      message: `This permanently removes the ${countLabel} currently listed for ${levelNameForSave}. Your current working copy, saved level, working-copy history, and browser backup will not change. Any new recovery created after this confirmation remains available. This cannot be undone.`,
+      confirmLabel: `Delete all ${recoveryIds.length}`,
+      cancelLabel: 'Keep copies',
+      tone: 'danger',
+    }))) return;
+    const fence = currentEditFence();
+    if (!fence) {
+      preserveAuthorityLoss(editSessionRef.current);
+      setEditAuthorityState('follower');
+      reportStatus('Recovery cleanup did not run.', 'warning', 'Editing control changed while the confirmation was open. Every recovery remains intact.');
+      return;
+    }
+    setServerRecoveryCleanupCount(recoveryIds.length);
+    try {
+      const deleted = await deleteEditorDocumentRecoveries(doc.document_id, recoveryIds, fence);
+      const deletedIds = new Set(deleted.recovery_ids);
+      setServerRecoveries((recoveries) => recoveries.filter((recovery) => !deletedIds.has(recovery.recovery_id)));
+      setSelectedServerRecoveryId(null);
+      try {
+        const refreshed = await listEditorDocumentRecoveries(doc.document_id);
+        setServerRecoveries(refreshed.recoveries);
+      } catch { /* The acknowledged ids stay removed locally; the next poll retries the index. */ }
+      reportStatus(
+        `${deleted.deleted_count} recovery ${deleted.deleted_count === 1 ? 'copy' : 'copies'} deleted.`,
+        'success',
+        'Your current working copy, saved level, working-copy history, and browser backup were unchanged.',
+      );
+    } catch (error) {
+      if (isEditorDocumentEditSessionError(error)) {
+        preserveAuthorityLoss(error.session ?? editSessionRef.current, error.recovery);
+        if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
+        if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
+        setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
+        try {
+          mountAcknowledgedWorkingCopy(error.document ?? await loadEditorDocument(doc.document_id));
+        } catch { /* Recovery deletion failed atomically; the frozen branch stays available. */ }
+      }
+      try {
+        const refreshed = await listEditorDocumentRecoveries(doc.document_id);
+        setServerRecoveries(refreshed.recoveries);
+      } catch { /* Keep the last known list visible so the owner can retry. */ }
+      reportStatus(
+        'Recovery cleanup could not be confirmed.',
+        'error',
+        `The recovery list was refreshed when possible. ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setServerRecoveryCleanupCount(null);
     }
   };
 
@@ -6757,145 +6888,6 @@ export function LevelEditor(): ReactElement {
     }
   };
 
-  const installPredrawnLevelArt = async (): Promise<void> => {
-    if (saving || predrawnInstallState === 'working') return;
-    if (
-      !import.meta.env.DEV
-      || !isAdmin
-      || !predrawnPreview
-      || !predrawnRegistration
-      || !targetLevelId
-      || !targetLevel
-      || !editorDocument
-      || documentRevisionRef.current === null
-    ) {
-      reportStatus('The level art cannot be installed from this view.', 'warning', 'Use the signed-in admin Level Editor with a saved alignment.');
-      return;
-    }
-    if (documentConflictRef.current) {
-      reportStatus('Install stopped by a revision conflict.', 'warning', 'Nothing was published. Resolve the working-copy conflict first.');
-      return;
-    }
-    if (
-      dirty
-      || campaignAssignmentDirty
-    ) {
-      reportStatus(
-        'Install stopped because the level has other changes.',
-        'warning',
-        'Save or discard those changes first. Installing art never folds unrelated edits into the level.',
-      );
-      return;
-    }
-    const alignment = serializePredrawnBoardPreviewRegistration(predrawnRegistration);
-    if (!alignment.startsWith('v4;')) {
-      reportStatus('Install needs the complete saved alignment.', 'warning', 'Save all four art corners, grid guides, and boundary handles first.');
-      return;
-    }
-    if (!(await ask({
-      title: `Install this art for ${targetLevel.name}?`,
-      message: 'This publishes the exact image and alignment you reviewed. Unit placement, terrain logic, fences, rules, and campaign position stay unchanged.',
-      confirmLabel: 'Install art',
-      cancelLabel: 'Cancel',
-    }))) return;
-
-    if (autosaveTimerRef.current !== null) {
-      window.clearTimeout(autosaveTimerRef.current);
-      autosaveTimerRef.current = null;
-    }
-    setSaving(true);
-    setPredrawnInstallState('working');
-    let mediaAccepted = false;
-    try {
-      if (autosavePromiseRef.current) await autosavePromiseRef.current;
-      if (documentConflictRef.current) throw new Error('The working copy changed while the image was being prepared.');
-      const revision = documentRevisionRef.current;
-      if (revision === null) throw new Error('The working-copy revision is unavailable.');
-      const fence = currentEditFence();
-      if (!fence) {
-        preserveAuthorityLoss(editSessionRef.current);
-        setEditAuthorityState('follower');
-        throw new Error('This tab does not own the current editor session.');
-      }
-
-      const installed = await installPredrawnBoardMedia({
-        levelId: targetLevelId,
-        levelName: targetLevel.name,
-        previewSrc: predrawnPreview,
-        surfaceUrl: window.location.href,
-        alignment,
-        frameWidth: predrawnRegistration.sourceWidth,
-        frameHeight: predrawnRegistration.sourceHeight,
-        provenance: predrawnBoardGenerationProvenance(targetLevelId, predrawnPreview),
-      });
-      mediaAccepted = true;
-      await loadLiveMediaCatalog();
-      const patchedLevel = withPredrawnBoardSurface(targetLevel, {
-        kind: 'predrawn',
-        slot: installed.slot,
-        frameWidth: predrawnRegistration.sourceWidth,
-        frameHeight: predrawnRegistration.sourceHeight,
-        registration: predrawnRegistration,
-      });
-      const saved = await saveEditorDocument(editorDocument.document_id, revision, patchedLevel, undefined, fence);
-      const doc = saved.document;
-      if (saved.workspace_revision !== null) {
-        if (doc.workspace_kind === 'official') useCampaigns.getState().setOfficialWorkspaceRevision(saved.workspace_revision);
-        else useCampaigns.getState().setUserWorkspaceRevision(saved.workspace_revision);
-      }
-      documentRevisionRef.current = doc.revision;
-      documentConflictRef.current = false;
-      documentConflictKindRef.current = null;
-      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(doc.level);
-      setEditorDocument(doc);
-      setCloudSaveState('saved');
-      setCloudSaveDetail(null);
-      useCampaigns.getState().replaceLevel(doc.level);
-      applyLevelDocument(doc.level, { editingId: doc.level_id, clean: true });
-      setSavedSig(normalizedLevelEditorSignature(doc.level));
-      setTargetBaselineResolved(true);
-      setCampaignAssignmentId(savedCampaignAssignmentId);
-      clearLevelEditorDraft(draftKey);
-      setGridScope('off');
-      setShowPredrawnOcclusionSeed(false);
-      setPredrawnInstallState('installed');
-
-      const url = new URL(window.location.href);
-      for (const parameter of ['predrawnPreview', 'predrawnCorners', 'predrawnPicker', 'predrawnOcclusionSeed', 'predrawnOcclusion']) {
-        url.searchParams.delete(parameter);
-      }
-      setPredrawnReviewSearch(url.search);
-      navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
-      reportStatus('Level art installed.', 'success', 'The original units and gameplay data were preserved; campaign play now uses this image and alignment.');
-    } catch (error) {
-      setPredrawnInstallState('error');
-      if (isEditorDocumentEditSessionError(error)) {
-        preserveAuthorityLoss(error.session ?? editSessionRef.current, error.recovery);
-        if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
-        if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
-        setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
-        try {
-          mountAcknowledgedWorkingCopy(error.document ?? await loadEditorDocument(editorDocument.document_id));
-        } catch { /* The frozen branch stays available while cloud reload retries. */ }
-      } else if (isEditorDocumentConflict(error)) {
-        documentRevisionRef.current = error.document.revision;
-        documentConflictRef.current = true;
-        documentConflictKindRef.current = isEditorDocumentBaselineConflict(error) ? 'baseline' : 'revision';
-        setEditorDocument(error.document);
-        setCloudSaveState('conflict');
-      }
-      reportStatus(
-        'Level art was not installed.',
-        'error',
-        mediaAccepted
-          ? `The exact image is safely stored, but the level remained unchanged. Resolve the save conflict and retry. ${error instanceof Error ? error.message : String(error)}`
-          : error instanceof Error ? error.message : String(error),
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const discardChanges = async (): Promise<void> => {
     if (!editorDocument || !targetLevelId || !editorDocument.has_saved_baseline) return;
     if (!me?.signed_in || documentRevisionRef.current === null) {
@@ -6978,7 +6970,7 @@ export function LevelEditor(): ReactElement {
       setBrushKind((kind) => (kind === 'road' || kind === 'river' ? kind : 'road'));
       return;
     }
-    if (nextLayer !== 'board' && nextLayer !== 'status' && nextLayer !== 'rules' && nextLayer !== 'generate') setBrushKind(nextLayer);
+    if (nextLayer !== 'board' && nextLayer !== 'artwork' && nextLayer !== 'status' && nextLayer !== 'rules' && nextLayer !== 'generate') setBrushKind(nextLayer);
   };
   const selectLayer = (nextLayer: LayerKey): void => {
     if (isLayerOptionDisabled(nextLayer) || (isPredrawnBoard && isPredrawnLockedLayer(nextLayer))) return;
@@ -7568,14 +7560,16 @@ export function LevelEditor(): ReactElement {
       <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" ready={editorReady}>
         {installedChromeCss ? <style data-level-editor-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
         {confirmDialog}
-        {predrawnPickerOpen && predrawnPreview && editorSessionCanWrite ? (
+        {predrawnPickerOpen && predrawnPreview && editorReady ? (
           <PredrawnCornerPicker
+            key={`${predrawnPreview}:${boardCols}x${boardRows}`}
             src={predrawnPreview}
             initialRegistration={predrawnRegistration}
             columns={boardCols}
             rows={boardRows}
             onChange={savePredrawnRegistration}
             onClose={closePredrawnPicker}
+            showCodexHandoff={false}
           />
         ) : null}
         {predrawnGenerationFrameOpen && editorReady && editorSessionCanWrite ? (
@@ -7664,9 +7658,9 @@ export function LevelEditor(): ReactElement {
             </section>
           ) : null}
           <div
-            className={`skirmish-board-frame${eventsOpen ? ' is-events-covered' : ''}`}
-            inert={eventsOpen ? true : undefined}
-            aria-hidden={eventsOpen || undefined}
+            className={`skirmish-board-frame${eventsOpen || layer === 'artwork' ? ' is-workspace-covered' : ''}`}
+            inert={eventsOpen || layer === 'artwork' ? true : undefined}
+            aria-hidden={eventsOpen || layer === 'artwork' ? true : undefined}
           >
             {activeFenceArtwork ? (
               <div className="le-fence-review-banner" data-testid="fence-candidate-editor-review">
@@ -7780,6 +7774,105 @@ export function LevelEditor(): ReactElement {
               </div>
             </ViewPane>
           </div>
+          {layer === 'artwork' && !eventsOpen ? (
+            <LevelEditorShellWorkspace
+              className="le-artwork-workspace"
+              contentClassName="le-artwork-workspace-content"
+              data-testid="level-artwork-workspace"
+              aria-labelledby="level-artwork-workspace-title"
+            >
+              <header className="le-artwork-workspace-head">
+                <div>
+                  <span className="skirmish-eyebrow">AI art pipeline</span>
+                  <h2 id="level-artwork-workspace-title">Board artwork</h2>
+                  <p>Start with generated art, then keep each transformation as its own selectable board version.</p>
+                </div>
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={() => selectLayer('board')}
+                >Done</button>
+              </header>
+              {targetLevelId && editorDocument ? (
+                <div className="le-artwork-workspace-scroll">
+                  <section className="le-artwork-frame-card" aria-labelledby="level-artwork-frame-title">
+                    <div className="le-artwork-frame-copy">
+                      <span className="skirmish-eyebrow">Generation input</span>
+                      <h3 id="level-artwork-frame-title">Viewing pane</h3>
+                      <p>This 16:9 frame is the exact scene crop handed to AI generation.</p>
+                    </div>
+                    <div className="le-artwork-frame-actions">
+                      <button
+                        type="button"
+                        data-chrome-unit="inner-text-button"
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', currentEditorBoard.predrawnGenerationFrame && 'active')}
+                        data-testid="open-predrawn-generation-frame"
+                        aria-pressed={currentEditorBoard.predrawnGenerationFrame !== undefined}
+                        title="Choose the exact 16:9 scene crop sent to AI generation"
+                        onClick={openPredrawnGenerationFrame}
+                      >{currentEditorBoard.predrawnGenerationFrame ? 'Edit viewing pane' : 'Choose viewing pane'}</button>
+                      <NavButton
+                        to={() => predrawnReferenceHref(
+                          targetLevelId,
+                          levelEditorHrefForDocument(window.location.href, {
+                            levelId: editorDocument.level_id,
+                            documentId: editorDocument.document_id,
+                          }),
+                        )}
+                        data-chrome-unit="inner-text-button"
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                        data-testid="open-predrawn-reference"
+                      >Preview pipeline input</NavButton>
+                      {currentEditorBoard.predrawnGenerationFrame && generationFrameStatus.kind !== 'canonical' ? (
+                        <button
+                          type="button"
+                          data-testid="review-predrawn-generation-frame-save"
+                          data-chrome-unit="inner-text-button"
+                          className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                          onClick={reviewPredrawnGenerationFrameSave}
+                        >{isOfficialTarget ? 'Review & publish pane' : 'Review & save pane'}</button>
+                      ) : null}
+                    </div>
+                    <div
+                      className={`le-status-current${generationFrameStatus.tone === 'ready' ? ' is-ready' : generationFrameStatus.tone === 'blocked' ? ' is-blocked' : ''}`}
+                      data-testid="predrawn-generation-frame-status"
+                      data-state={generationFrameStatus.kind}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <strong>{generationFrameStatus.title}</strong>
+                      <span>{generationFrameStatus.detail}</span>
+                    </div>
+                  </section>
+                  <PredrawnBackgroundVersionsPanel
+                    documentId={editorDocument.document_id}
+                    levelId={editorDocument.level_id}
+                    board={currentEditorBoard}
+                    cells={predrawnVersionCells}
+                    generationFrame={currentEditorBoard.predrawnGenerationFrame}
+                    initialSourceSrc={predrawnPreview ?? (currentVersionedPredrawnSurface ? undefined : editorPredrawnPlate?.src)}
+                    initialRegistration={predrawnRegistration}
+                    currentSurface={currentVersionedPredrawnSurface}
+                    canonicalSurface={canonicalVersionedPredrawnSurface}
+                    canonicalActionLabel={isOfficialTarget ? 'Publish' : 'Save'}
+                    workingCopySyncState={cloudSaveState}
+                    canWrite={editorSessionCanWrite && !saving}
+                    getEditFence={currentEditFence}
+                    onSetSurface={setPredrawnVersionSurface}
+                    onOpenCanonicalAction={() => selectLayer('status')}
+                    onMutationError={handlePredrawnVersionMutationError}
+                    onStatus={reportStatus}
+                  />
+                </div>
+              ) : (
+                <div className="le-predrawn-artifact-empty" role="status">
+                  <strong>Save this level before creating artwork versions</strong>
+                  <span>The artwork pipeline needs the level’s durable editor document.</span>
+                </div>
+              )}
+            </LevelEditorShellWorkspace>
+          ) : null}
           {eventsOpen ? (
             <LevelEditorEventsWorkspace
               tab={eventsTab}
@@ -7868,23 +7961,13 @@ export function LevelEditor(): ReactElement {
         layer={layer}
         layerOptions={layerSelectOptions}
         onLayerChange={selectLayer}
-        tool={tool === 'region' ? null : tool}
+        tool={tool === 'region' || layer === 'artwork' || eventsOpen ? null : tool}
         onToolChange={setTool}
         canUndo={editorSessionCanWrite && canUndoBoard}
         canRedo={editorSessionCanWrite && canRedoBoard}
         onUndo={() => { if (editorSessionCanWrite) undoBoard(); }}
         onRedo={() => { if (editorSessionCanWrite) redoBoard(); }}
         playBoardHref={testHref}
-        extraActions={isAdmin && predrawnPreview ? (
-          <button
-            type="button"
-            data-chrome-unit="inner-text-button"
-            className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-play-board', predrawnInstallState === 'installed' && 'active')}
-            data-testid="install-predrawn-level-art"
-            disabled={saving || !editorSessionCanWrite || !predrawnRegistration}
-            onClick={() => { void installPredrawnLevelArt(); }}
-          >{predrawnInstallState === 'working' ? 'Installing…' : predrawnInstallState === 'installed' ? 'Installed' : 'Install level art'}</button>
-        ) : undefined}
         inert={!editorReady || saving}
         ariaBusy={!editorReady || saving}
       >
@@ -7964,6 +8047,114 @@ export function LevelEditor(): ReactElement {
             </div>
           </section>
         ) : null}
+        {layer === 'status' && (selectedServerRecovery || serverRecoveryPanelSeen) ? (
+          <section className="skirmish-card le-status-card le-server-recovery-card" aria-labelledby="le-server-recoveries-title">
+            <h2 id="le-server-recoveries-title">Recovery copies</h2>
+            <div
+              className="le-status-current le-server-recoveries"
+              data-testid="le-server-recoveries"
+              aria-busy={serverRecoveryActionBusy || undefined}
+            >
+              {selectedServerRecovery ? (
+              <>
+              <span>Newest first. These safety copies do not affect the level unless you restore one.</span>
+              <div className="le-recovery-browser-nav" role="group" aria-label="Browse recovery copies">
+                <button
+                  type="button"
+                  data-chrome-unit="inner-chevron-key"
+                  className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-recovery-stepper-button')}
+                  data-testid="le-newer-server-recovery"
+                  aria-label="Newer recovery copy"
+                  title="Newer recovery copy"
+                  disabled={serverRecoveryActionBusy || selectedServerRecoveryIndex <= 0}
+                  onClick={() => setSelectedServerRecoveryId(stepServerRecoveryCursor(serverRecoveries, selectedServerRecoveryId, -1))}
+                >
+                  <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
+                </button>
+                <strong data-testid="le-server-recovery-position" aria-live="polite" aria-atomic="true">
+                  Recovery {selectedServerRecoveryIndex + 1} of {serverRecoveries.length}
+                </strong>
+                <button
+                  type="button"
+                  data-chrome-unit="inner-chevron-key"
+                  className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-recovery-stepper-button')}
+                  data-testid="le-older-server-recovery"
+                  aria-label="Older recovery copy"
+                  title="Older recovery copy"
+                  disabled={serverRecoveryActionBusy || selectedServerRecoveryIndex >= serverRecoveries.length - 1}
+                  onClick={() => setSelectedServerRecoveryId(stepServerRecoveryCursor(serverRecoveries, selectedServerRecoveryId, 1))}
+                >
+                  <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
+                </button>
+              </div>
+              <article
+                className="le-recovery-entry"
+                key={selectedServerRecovery.recovery_id}
+                data-testid="le-server-recovery-entry"
+                data-resolved={selectedServerRecovery.resolved_at ? 'true' : 'false'}
+              >
+                <div>
+                  <b>{levelEditorSessionActorLabel(selectedServerRecovery.source_editor)}</b>
+                  <span>{selectedServerRecovery.source_editor.client_label || 'Browser/device label unavailable'}</span>
+                  <span>
+                    {serverRecoveryReasonLabel(selectedServerRecovery)} · saved{' '}
+                    {selectedServerRecovery.body_checkpoint_at
+                      ? new Date(selectedServerRecovery.body_checkpoint_at).toLocaleString()
+                      : 'at an unavailable time'}
+                  </span>
+                  <span>
+                    Working revision {selectedServerRecovery.document_revision}
+                    {selectedServerRecovery.resolved_at
+                      ? ` · restored ${new Date(selectedServerRecovery.resolved_at).toLocaleString()}`
+                      : ' · not restored'}
+                  </span>
+                </div>
+                <div className="le-board-actions le-recovery-actions">
+                  <button
+                    type="button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                    disabled={!editorSessionCanWrite || serverRecoveryActionBusy}
+                    title={!editorSessionCanWrite
+                      ? 'Take over editing before restoring a recovery copy.'
+                      : 'Preserve the current working branch, then restore this copy as a new unpublished working revision.'}
+                    onClick={() => { void restoreServerRecovery(selectedServerRecovery); }}
+                  >{serverRecoveryBusyId === selectedServerRecovery.recovery_id ? 'Working…' : 'Restore this copy'}</button>
+                  <button
+                    type="button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}
+                    disabled={!editorSessionCanWrite || serverRecoveryActionBusy}
+                    title={!editorSessionCanWrite
+                      ? 'Take over editing before deleting a recovery copy.'
+                      : 'Permanently remove only this recovery copy.'}
+                    onClick={() => { void removeServerRecovery(selectedServerRecovery); }}
+                  >Delete this copy</button>
+                </div>
+              </article>
+              <div className="le-recovery-cleanup">
+                <span>Finished reviewing? Delete all {serverRecoveries.length} copies at once.</span>
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}
+                  data-testid="le-delete-all-server-recoveries"
+                  disabled={!editorSessionCanWrite || serverRecoveryActionBusy}
+                  title={!editorSessionCanWrite
+                    ? 'Take over editing before deleting recovery copies.'
+                    : `Permanently delete the ${serverRecoveries.length} recovery copies currently listed. Your level does not change.`}
+                  onClick={() => { void removeAllServerRecoveries(); }}
+                >{serverRecoveryCleanupCount === null
+                    ? `Delete all ${serverRecoveries.length} ${serverRecoveries.length === 1 ? 'copy' : 'copies'}…`
+                    : `Deleting ${serverRecoveryCleanupCount} ${serverRecoveryCleanupCount === 1 ? 'copy' : 'copies'}…`}</button>
+              </div>
+              </>
+              ) : (
+                <span className="le-recovery-empty" role="status">No recovery copies to review. Your working copy and saved level are unchanged.</span>
+              )}
+            </div>
+          </section>
+        ) : null}
         <div className="le-editor-authoring-controls" inert={!editorSessionCanWrite ? true : undefined}>
         {layer === 'status' ? (
           <>
@@ -8021,46 +8212,6 @@ export function LevelEditor(): ReactElement {
                   onChange={setCampaignAssignmentId}
                 />
                 <span className="le-board-note">Admin only · Save or publish to apply this assignment.</span>
-              </div>
-            ) : null}
-            {serverRecoveries.length ? (
-              <div className="le-status-current le-server-recoveries" data-testid="le-server-recoveries">
-                <strong>Preserved editor-session recoveries</strong>
-                <span>These are server-side body checkpoints, separate from heartbeat time. They remain available after takeover or restore until you delete them.</span>
-                <div className="le-recovery-list">
-                  {serverRecoveries.map((recovery) => (
-                    <article className="le-recovery-entry" key={recovery.recovery_id} data-resolved={recovery.resolved_at ? 'true' : 'false'}>
-                      <div>
-                        <b>{levelEditorSessionActorLabel(recovery.source_editor)}</b>
-                        <span>{recovery.source_editor.client_label || 'Browser/device label unavailable'}</span>
-                        <span>
-                          {recovery.capture_source === 'displaced-client-upload' ? 'Uploaded by displaced tab · non-live checkpoint' : 'Server-acknowledged body · non-live checkpoint'} ·{' '}
-                          checkpoint {recovery.body_checkpoint_at ? new Date(recovery.body_checkpoint_at).toLocaleString() : 'time unavailable'} ·{' '}
-                          working revision {recovery.document_revision}
-                          {recovery.resolved_at ? ` · restored ${new Date(recovery.resolved_at).toLocaleString()}` : ''}
-                        </span>
-                      </div>
-                      <div className="le-board-actions le-recovery-actions">
-                        <button
-                          type="button"
-                          data-chrome-unit="inner-text-button"
-                          className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                          disabled={!editorSessionCanWrite || serverRecoveryBusyId !== null}
-                          title="Preserve the current working branch, then restore this checkpoint as a new unpublished working revision."
-                          onClick={() => { void restoreServerRecovery(recovery); }}
-                        >{serverRecoveryBusyId === recovery.recovery_id ? 'Working…' : 'Restore'}</button>
-                        <button
-                          type="button"
-                          data-chrome-unit="inner-text-button"
-                          className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}
-                          disabled={!editorSessionCanWrite || serverRecoveryBusyId !== null}
-                          title="Permanently remove only this recovery checkpoint."
-                          onClick={() => { void removeServerRecovery(recovery); }}
-                        >Delete</button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
               </div>
             ) : null}
             {browserRecoveryConflict ? (
@@ -8271,6 +8422,11 @@ export function LevelEditor(): ReactElement {
             </div>
           </section>
           </>
+        ) : layer === 'artwork' ? (
+          <section className="skirmish-card le-artwork-rail-summary">
+            <h2>AI Artwork</h2>
+            <p className="le-board-note">The full workflow is open in the center workspace. Generated, warped, and occlusion-ready boards stay separate so you can select the exact version you want.</p>
+          </section>
         ) : layer === 'board' ? (
           <>
           <section className="skirmish-card">
@@ -8278,7 +8434,7 @@ export function LevelEditor(): ReactElement {
             {isPredrawnBoard ? (
               <div className="le-predrawn-lock" role="status" data-testid="predrawn-board-lock">
                 <strong>{isPredrawnReviewOnly ? 'Registered pre-drawn review' : 'Pre-drawn board'} · {boardCols}×{boardRows}</strong>
-                <span>The continuous plate owns terrain, paths, props, fences, and walls. Those layers and the board dimensions are locked; units, zones, doodads, and animated cover remain editable.</span>
+                <span>The continuous plate owns baked environment pixels. Terrain, Subterrain, paths, props, fences, walls, doodads, lighting, and particles are suppressed; authored ground cover, units, and tactical overlays remain live.</span>
                 {isPredrawnReviewOnly ? <span>The candidate is mounted for this development review only; it is not an accepted runtime media pointer.</span> : null}
               </div>
             ) : (
@@ -9166,7 +9322,27 @@ export function LevelEditor(): ReactElement {
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showBlocked && 'active')} onClick={() => setShowBlocked((value) => !value)} aria-pressed={showBlocked}>Blocks</button>
               <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showPromotionZones && 'active')} onClick={() => setShowPromotionZones((value) => !value)} aria-pressed={showPromotionZones}>Promotion</button>
               {isPredrawnBoard ? (
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', gridScope !== 'off' && 'active')} onClick={toggleRegisteredGrid} aria-pressed={gridScope !== 'off'}>Registered grid</button>
+                <>
+                  <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', gridScope !== 'off' && 'active')} onClick={toggleRegisteredGrid} aria-pressed={gridScope !== 'off'}>Registered grid</button>
+                  {currentVersionedPredrawnSurface?.occlusionVersionId ? (
+                    <button
+                      type="button"
+                      data-chrome-unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', predrawnOcclusionEnabled && 'active')}
+                      onClick={togglePredrawnOcclusion}
+                      aria-pressed={predrawnOcclusionEnabled}
+                      title="Toggle the selected persisted depth mask against the live units on this board."
+                    >Unit occlusion</button>
+                  ) : null}
+                  <button
+                    type="button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showPredrawnOcclusionSeed && 'active')}
+                    onClick={togglePredrawnOcclusionSeed}
+                    aria-pressed={showPredrawnOcclusionSeed}
+                    title="Overlay the canonical raised geometry used to generate an occlusion candidate."
+                  >Occlusion source</button>
+                </>
               ) : (
                 <>
                   <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', gridScope === 'playable' && 'active')} onClick={() => setGridScope((value) => value === 'playable' ? 'off' : 'playable')} aria-pressed={gridScope === 'playable'}>Playable grid</button>
@@ -9175,82 +9351,6 @@ export function LevelEditor(): ReactElement {
               )}
             </div>
           </div>
-          {isAdmin && targetLevelId ? (
-            <div className="skirmish-view-group">
-              <span className="skirmish-eyebrow">Pre-drawn art</span>
-              <div className="skirmish-view-row">
-                <button
-                  type="button"
-                  data-chrome-unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', currentEditorBoard.predrawnGenerationFrame && 'active')}
-                  data-testid="open-predrawn-generation-frame"
-                  aria-pressed={currentEditorBoard.predrawnGenerationFrame !== undefined}
-                  title="Choose the working-copy 16:9 Image 1 crop"
-                  onClick={openPredrawnGenerationFrame}
-                >{currentEditorBoard.predrawnGenerationFrame ? 'Edit frame' : 'Choose frame'}</button>
-                <NavButton
-                  to={() => predrawnReferenceHref(
-                    targetLevelId,
-                    editorDocument
-                      ? levelEditorHrefForDocument(window.location.href, {
-                          levelId: editorDocument.level_id,
-                          documentId: editorDocument.document_id,
-                        })
-                      : `${window.location.pathname}${window.location.search}${window.location.hash}`,
-                  )}
-                  data-chrome-unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  data-testid="open-predrawn-reference"
-                >Published reference</NavButton>
-                {currentEditorBoard.predrawnGenerationFrame && generationFrameStatus.kind !== 'canonical' ? (
-                  <button
-                    type="button"
-                    data-testid="review-predrawn-generation-frame-save"
-                    data-chrome-unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                    onClick={reviewPredrawnGenerationFrameSave}
-                  >{isOfficialTarget ? 'Review & publish' : 'Review & save'}</button>
-                ) : null}
-                {isPredrawnBoard && predrawnPreview ? (
-                  <>
-                    <button
-                      type="button"
-                      data-chrome-unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
-                      data-testid="open-predrawn-registration"
-                      onClick={() => setPredrawnPickerOpen(true)}
-                    >Pick corners</button>
-                    <button
-                      type="button"
-                      data-chrome-unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', predrawnOcclusionEnabled && 'active')}
-                      data-testid="toggle-predrawn-occlusion"
-                      aria-pressed={predrawnOcclusionEnabled}
-                      onClick={togglePredrawnOcclusion}
-                    >Occlusion</button>
-                    <button
-                      type="button"
-                      data-chrome-unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', showPredrawnOcclusionSeed && 'active')}
-                      data-testid="toggle-predrawn-occlusion-seed"
-                      aria-pressed={showPredrawnOcclusionSeed}
-                      onClick={togglePredrawnOcclusionSeed}
-                    >Seed mask</button>
-                  </>
-                ) : null}
-              </div>
-              <div
-                className={`le-status-current${generationFrameStatus.tone === 'ready' ? ' is-ready' : generationFrameStatus.tone === 'blocked' ? ' is-blocked' : ''}`}
-                data-testid="predrawn-generation-frame-status"
-                data-state={generationFrameStatus.kind}
-                role="status"
-                aria-live="polite"
-              >
-                <strong>{generationFrameStatus.title}</strong>
-                <span>{generationFrameStatus.detail}</span>
-              </div>
-            </div>
-          ) : null}
         </section>
         ) : null}
 

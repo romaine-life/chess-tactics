@@ -3,6 +3,9 @@ import {
   boardBounds,
   boardContentHash,
   boardDrawOps,
+  isVersionedPredrawnBoardSurface,
+  isPredrawnBackgroundActive,
+  predrawnOcclusionDepthMapForSurface,
   predrawnOcclusionMaskOps,
   withoutBoardDrawLayers,
   type BoardDrawOp,
@@ -11,6 +14,27 @@ import type { EditorBoard } from '../ui/boardCode';
 import { BoardCanvasLayer } from './BoardCanvasLayer';
 
 export type BoardSceneOpsTransform = (ops: readonly BoardDrawOp[], board: EditorBoard) => BoardDrawOp[];
+
+export function boardSceneOcclusionMasks(
+  board: EditorBoard,
+  {
+    predrawnBackgroundActive = false,
+    predrawnOcclusion = true,
+    tileHidden = false,
+  }: {
+    predrawnBackgroundActive?: boolean;
+    predrawnOcclusion?: boolean;
+    tileHidden?: boolean;
+  } = {},
+): BoardDrawOp[] {
+  if (
+    !predrawnOcclusion
+    || tileHidden
+    || !isPredrawnBackgroundActive(board, { predrawnBackgroundActive })
+    || (board.surface && isVersionedPredrawnBoardSurface(board.surface))
+  ) return [];
+  return predrawnOcclusionMaskOps(board);
+}
 
 function visualBoard(board: EditorBoard, hidden?: { unit: boolean; doodad: boolean }): EditorBoard {
   if (!hidden?.unit && !hidden?.doodad) return board;
@@ -31,6 +55,7 @@ export function BoardSceneLayer({
   transformOps,
   maskTint,
   className,
+  predrawnBackgroundActive = false,
   predrawnOcclusion = true,
   onFirstFrame,
   onFrameError,
@@ -45,6 +70,8 @@ export function BoardSceneLayer({
   transformOps?: BoardSceneOpsTransform;
   maskTint?: string;
   className?: string;
+  /** A complete temporary candidate is mounted outside the board data. */
+  predrawnBackgroundActive?: boolean;
   /** Owner proof can suppress clipping; gameplay and ordinary viewers keep it enabled. */
   predrawnOcclusion?: boolean;
   /** Acknowledge only after this compositor has painted its first complete frame. */
@@ -52,22 +79,36 @@ export function BoardSceneLayer({
   onFrameError?: (error: unknown) => void;
 }): ReactElement | null {
   const sourceBoard = useMemo(() => visualBoard(board, hidden), [board, hidden]);
-  const contentHash = useMemo(() => `${boardContentHash(sourceBoard)}|cover:${coverSeed}|ambient:${ambientCover ? 1 : 0}`, [ambientCover, coverSeed, sourceBoard]);
-  const bounds = useMemo(() => boardBounds(sourceBoard, { ambientCover, coverSeed }), [ambientCover, contentHash, coverSeed, sourceBoard]);
+  const contentHash = useMemo(
+    () => `${boardContentHash(sourceBoard)}|cover:${coverSeed}|ambient:${ambientCover ? 1 : 0}|predrawn:${predrawnBackgroundActive ? 1 : 0}`,
+    [ambientCover, coverSeed, predrawnBackgroundActive, sourceBoard],
+  );
+  const bounds = useMemo(
+    () => boardBounds(sourceBoard, { ambientCover, coverSeed, predrawnBackgroundActive }),
+    [ambientCover, contentHash, coverSeed, predrawnBackgroundActive, sourceBoard],
+  );
   const ops = useMemo(() => {
-    const all = boardDrawOps(sourceBoard, { ambientCover, coverSeed });
+    const all = boardDrawOps(sourceBoard, { ambientCover, coverSeed, predrawnBackgroundActive });
     const transformed = transformOps ? transformOps(all, sourceBoard) : all;
     return omitTerrain
       ? withoutBoardDrawLayers(transformed, 'terrain', 'linear-feature')
       : hidden?.tile
         ? withoutBoardDrawLayers(transformed, 'terrain')
         : transformed;
-  }, [ambientCover, contentHash, coverSeed, hidden?.tile, omitTerrain, sourceBoard, transformOps]);
+  }, [ambientCover, contentHash, coverSeed, hidden?.tile, omitTerrain, predrawnBackgroundActive, sourceBoard, transformOps]);
   const occlusionMasks = useMemo(
-    () => predrawnOcclusion && board.surface?.kind === 'predrawn' && !hidden?.tile
-      ? predrawnOcclusionMaskOps(board)
-      : [],
-    [board, hidden?.tile, predrawnOcclusion],
+    () => boardSceneOcclusionMasks(board, {
+      predrawnBackgroundActive,
+      predrawnOcclusion,
+      tileHidden: hidden?.tile,
+    }),
+    [board, hidden?.tile, predrawnBackgroundActive, predrawnOcclusion],
+  );
+  const occlusionDepthMap = useMemo(
+    () => predrawnOcclusion && !hidden?.tile
+      ? predrawnOcclusionDepthMapForSurface(board.surface)
+      : undefined,
+    [board.surface, hidden?.tile, predrawnOcclusion],
   );
 
   return (
@@ -77,6 +118,7 @@ export function BoardSceneLayer({
       maskTint={maskTint}
       className={className}
       occlusionMasks={occlusionMasks}
+      occlusionDepthMap={occlusionDepthMap}
       onFirstFrame={onFirstFrame}
       onFrameError={onFrameError}
     />

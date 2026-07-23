@@ -13,6 +13,16 @@ describe('level editor route helpers', () => {
     });
   });
 
+  it('round-trips the dedicated AI artwork workspace without a brush kind', () => {
+    const href = levelEditorHrefWithRouteState('/editor/level?levelId=l1&document=doc-1&kind=cover', {
+      layer: 'artwork',
+      brushKind: levelEditorRouteBrushKind('artwork', 'cover'),
+      brush: null,
+    });
+    expect(href).toBe('/editor/level?levelId=l1&document=doc-1&layer=artwork');
+    expect(readLevelEditorRouteState(new URL(href, 'https://example.test').search).layer).toBe('artwork');
+  });
+
   it('infers the editor layer from a brush kind when layer is absent', () => {
     expect(readLevelEditorRouteState('?from=studio&kind=unit&brush=rook')).toEqual({
       layer: 'unit',

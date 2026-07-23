@@ -72,19 +72,45 @@ export interface EditorZoneEntry {
 
 export type BoardFactionDirections = Partial<Record<UnitPalette, UnitFacing>>;
 
-/**
- * One continuous board illustration registered against the canonical centred board viewport.
- * The media id is a stable live-media slot, never a candidate URL or repository filename.
- * `frameWidth`/`frameHeight` are the canonical 1x review-frame dimensions the generated image
- * is scaled into; they do not claim that imagegen preserved the grid proportions internally.
- */
-export interface PredrawnBoardSurface {
+/** Retired runtime-registration declaration retained only until installed plates are migrated. */
+export interface LegacyPredrawnBoardSurface {
   kind: 'predrawn';
   slot: string;
   frameWidth: number;
   frameHeight: number;
   /** Optional whole-plate alignment consumed by saved editor, viewer, and gameplay surfaces. */
   registration?: PredrawnBoardCornerRegistration;
+}
+
+export interface PredrawnBoardWorldBounds {
+  minX: number;
+  minY: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * One exact immutable background-version selection in canonical projected board space.
+ * Pixels have already passed through any approved raster transform; renderers place them at
+ * `worldBounds` without another hidden warp. An optional occlusion version is derived from and
+ * validated against this exact background version.
+ */
+export interface VersionedPredrawnBoardSurface {
+  kind: 'predrawn';
+  schemaVersion: 2;
+  backgroundVersionId: string;
+  occlusionVersionId?: string;
+  frameWidth: number;
+  frameHeight: number;
+  worldBounds: PredrawnBoardWorldBounds;
+}
+
+export type PredrawnBoardSurface = LegacyPredrawnBoardSurface | VersionedPredrawnBoardSurface;
+
+export function isVersionedPredrawnBoardSurface(
+  surface: PredrawnBoardSurface,
+): surface is VersionedPredrawnBoardSurface {
+  return 'schemaVersion' in surface && surface.schemaVersion === 2;
 }
 
 export type BoardGeneratedRegionCover = {
@@ -196,22 +222,37 @@ const validZoneColors = new Set<string>(ZONE_COLORS);
 const validWallMaterial = (value: string): boolean => wallMaterials().includes(value);
 const validFenceMaterial = (value: string): boolean => fenceMaterials().includes(value);
 const mediaSlotSegmentPattern = /^[A-Za-z0-9_][A-Za-z0-9._@+-]*$/;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_PREDRAWN_FRAME_DIMENSION = 8192;
+const MAX_PREDRAWN_WORLD_COORDINATE = 1_000_000;
+
+function normalizePredrawnWorldBounds(value: unknown): PredrawnBoardWorldBounds | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const minX = Number(record.minX);
+  const minY = Number(record.minY);
+  const width = Number(record.width);
+  const height = Number(record.height);
+  if (
+    !Number.isFinite(minX)
+    || !Number.isFinite(minY)
+    || !Number.isFinite(width)
+    || !Number.isFinite(height)
+    || Math.abs(minX) > MAX_PREDRAWN_WORLD_COORDINATE
+    || Math.abs(minY) > MAX_PREDRAWN_WORLD_COORDINATE
+    || width <= 0
+    || height <= 0
+    || width > MAX_PREDRAWN_WORLD_COORDINATE
+    || height > MAX_PREDRAWN_WORLD_COORDINATE
+  ) return undefined;
+  return { minX, minY, width, height };
+}
 
 /** Validate the persisted half of a pre-drawn surface without resolving its live media. */
 export function normalizePredrawnBoardSurface(value: unknown): PredrawnBoardSurface | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
-  if (record.kind !== 'predrawn' || typeof record.slot !== 'string') return undefined;
-  const slot = record.slot.trim();
-  const segments = slot.split('/');
-  if (
-    !slot
-    || slot.length > 512
-    || slot.includes('//')
-    || slot.endsWith('/')
-    || segments.some((segment) => segment === '.' || segment === '..' || !mediaSlotSegmentPattern.test(segment))
-  ) return undefined;
+  if (record.kind !== 'predrawn') return undefined;
   const frameWidth = Number(record.frameWidth);
   const frameHeight = Number(record.frameHeight);
   if (
@@ -221,6 +262,39 @@ export function normalizePredrawnBoardSurface(value: unknown): PredrawnBoardSurf
     || frameHeight < 1
     || frameWidth > MAX_PREDRAWN_FRAME_DIMENSION
     || frameHeight > MAX_PREDRAWN_FRAME_DIMENSION
+  ) return undefined;
+  if (record.schemaVersion === 2) {
+    const backgroundVersionId = typeof record.backgroundVersionId === 'string'
+      ? record.backgroundVersionId.trim().toLowerCase()
+      : '';
+    const occlusionVersionId = typeof record.occlusionVersionId === 'string'
+      ? record.occlusionVersionId.trim().toLowerCase()
+      : undefined;
+    const worldBounds = normalizePredrawnWorldBounds(record.worldBounds);
+    if (
+      !uuidPattern.test(backgroundVersionId)
+      || (occlusionVersionId !== undefined && !uuidPattern.test(occlusionVersionId))
+      || !worldBounds
+    ) return undefined;
+    return {
+      kind: 'predrawn',
+      schemaVersion: 2,
+      backgroundVersionId,
+      ...(occlusionVersionId ? { occlusionVersionId } : {}),
+      frameWidth,
+      frameHeight,
+      worldBounds,
+    };
+  }
+  if (typeof record.slot !== 'string') return undefined;
+  const slot = record.slot.trim();
+  const segments = slot.split('/');
+  if (
+    !slot
+    || slot.length > 512
+    || slot.includes('//')
+    || slot.endsWith('/')
+    || segments.some((segment) => segment === '.' || segment === '..' || !mediaSlotSegmentPattern.test(segment))
   ) return undefined;
   const registration = normalizePredrawnBoardRegistration(record.registration);
   return {
@@ -543,14 +617,28 @@ export function encodeBoard(b: EditorBoard): string {
   }
   const wire: Record<string, unknown> = { c: b.cols, r: b.rows };
   const surface = normalizePredrawnBoardSurface(b.surface);
-  if (surface) wire.pd = [
-    surface.slot,
-    surface.frameWidth,
-    surface.frameHeight,
-    ...(surface.registration
-      ? [serializePredrawnBoardPreviewRegistration(surface.registration)]
-      : []),
-  ];
+  if (surface) {
+    wire.pd = isVersionedPredrawnBoardSurface(surface)
+      ? [
+          2,
+          surface.backgroundVersionId,
+          surface.occlusionVersionId ?? null,
+          surface.frameWidth,
+          surface.frameHeight,
+          surface.worldBounds.minX,
+          surface.worldBounds.minY,
+          surface.worldBounds.width,
+          surface.worldBounds.height,
+        ]
+      : [
+          surface.slot,
+          surface.frameWidth,
+          surface.frameHeight,
+          ...(surface.registration
+            ? [serializePredrawnBoardPreviewRegistration(surface.registration)]
+            : []),
+        ];
+  }
   const predrawnGenerationFrame = normalizePredrawnGenerationFrame(b.predrawnGenerationFrame);
   if (predrawnGenerationFrame) wire.pgf = [
     predrawnGenerationFrame.version,
@@ -712,15 +800,30 @@ export function decodeBoard(code: string): EditorBoard | null {
     };
     const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows, decorativeApron);
     const surface = Array.isArray(w.pd)
-      ? normalizePredrawnBoardSurface({
-        kind: 'predrawn',
-        slot: w.pd[0],
-        frameWidth: w.pd[1],
-        frameHeight: w.pd[2],
-        registration: typeof w.pd[3] === 'string'
-          ? parsePredrawnBoardRegistration(w.pd[3])
-          : undefined,
-      })
+      ? w.pd[0] === 2
+        ? normalizePredrawnBoardSurface({
+            kind: 'predrawn',
+            schemaVersion: 2,
+            backgroundVersionId: w.pd[1],
+            occlusionVersionId: w.pd[2],
+            frameWidth: w.pd[3],
+            frameHeight: w.pd[4],
+            worldBounds: {
+              minX: w.pd[5],
+              minY: w.pd[6],
+              width: w.pd[7],
+              height: w.pd[8],
+            },
+          })
+        : normalizePredrawnBoardSurface({
+            kind: 'predrawn',
+            slot: w.pd[0],
+            frameWidth: w.pd[1],
+            frameHeight: w.pd[2],
+            registration: typeof w.pd[3] === 'string'
+              ? parsePredrawnBoardRegistration(w.pd[3])
+              : undefined,
+          })
       : undefined;
     const predrawnGenerationFrame = Array.isArray(w.pgf) && w.pgf.length === 5
       ? normalizePredrawnGenerationFrame({

@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: "superseded by ADR-0147"
 date: 2026-07-14
 deciders: Nelson, Codex
+superseded_by: "[ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 ---
 
 # ADR-0122: Pre-drawn occlusion derives from canonical raised geometry

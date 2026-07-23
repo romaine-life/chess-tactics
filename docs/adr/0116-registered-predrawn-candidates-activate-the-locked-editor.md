@@ -2,6 +2,7 @@
 status: "accepted"
 date: 2026-07-14
 deciders: Nelson, Codex
+partially_superseded_by: "[ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 ---
 
 # ADR-0116: Registered pre-drawn candidates activate the locked editor

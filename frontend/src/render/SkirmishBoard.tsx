@@ -14,7 +14,14 @@ import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type Pr
 import { clientSide, opponentSide } from '../game/clientPerspective';
 import { BoardLabBoard, boardLabCellPosition, immutableBoardLabTerrainSrc } from './BoardLabBoard';
 import { terrainTopSrc } from './BoardTerrainLayer';
-import { boundsForOps, drawBoardOps, isAnimatedGroundCoverOp, loadCanvasImage } from './BoardCanvasLayer';
+import {
+  boundsForOps,
+  drawBoardOps,
+  isAnimatedGroundCoverOp,
+  loadCanvasImage,
+  predrawnOcclusionDepthImageDimensionIssue,
+} from './BoardCanvasLayer';
+import { createRenderEffectGeneration, settleRenderEffectGeneration } from './renderEffectGeneration';
 import { objectBaseZIndex } from './sceneDepth';
 import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardFrameReveal } from './boardArtReady';
@@ -38,12 +45,15 @@ import {
   boardDrawOps,
   mirrorFacingPlan,
   mirrorSurfacesForPlacements,
+  isVersionedPredrawnBoardSurface,
+  predrawnOcclusionDepthMapForSurface,
   predrawnOcclusionMaskOps,
   reflectedOpsForSubjects,
   unprojectBoardPoint,
   type BakeBounds,
   type BoardDrawOp,
   type MirrorReflectionSubject,
+  type PredrawnOcclusionDepthMap,
   withoutBoardDrawLayers,
 } from '@chess-tactics/board-render';
 
@@ -647,6 +657,26 @@ function targetPieceOps(livePieces: readonly Piece[], afterGhosts: ReturnType<ty
   return ops;
 }
 
+/**
+ * Keep Skirmish's animated scene compositor behind the same immutable-depth validation as the
+ * shared canvas layer. The callbacks make the ordering explicit: invalid persisted bytes can
+ * neither reach the compositor nor acknowledge the scene as ready.
+ */
+export function commitSkirmishSceneFirstFrame(
+  occlusionDepthMap: PredrawnOcclusionDepthMap | undefined,
+  images: ReadonlyMap<string, Pick<HTMLImageElement, 'naturalWidth' | 'naturalHeight'>>,
+  composite: () => void,
+  acknowledge: () => void,
+): void {
+  const dimensionIssue = predrawnOcclusionDepthImageDimensionIssue(
+    occlusionDepthMap,
+    occlusionDepthMap ? images.get(occlusionDepthMap.src) : undefined,
+  );
+  if (dimensionIssue) throw new Error(dimensionIssue);
+  composite();
+  acknowledge();
+}
+
 function SkirmishSceneLayer({
   sceneBoard,
   seed,
@@ -659,6 +689,7 @@ function SkirmishSceneLayer({
   premovedIds,
   afterGhosts,
   occlusionMasks,
+  occlusionDepthMap,
   onFirstFrame,
   onFrameError,
 }: {
@@ -673,6 +704,7 @@ function SkirmishSceneLayer({
   premovedIds: ReadonlySet<string>;
   afterGhosts: ReturnType<typeof premoveGhosts>;
   occlusionMasks: readonly BoardDrawOp[];
+  occlusionDepthMap?: PredrawnOcclusionDepthMap;
   onFirstFrame: () => void;
   onFrameError: (error: unknown) => void;
 }) {
@@ -736,9 +768,9 @@ function SkirmishSceneLayer({
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return undefined;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    let cancelled = false;
-    let raf = 0;
+    const generation = createRenderEffectGeneration();
     const unitSources = [
       ...livePieces.map(pieceImageSrc),
       ...afterGhosts.flatMap((group) => group.pieces.map(pieceImageSrc)),
@@ -748,6 +780,7 @@ function SkirmishSceneLayer({
     const sources = [...new Set([
       ...staticOps.map((op) => op.src),
       ...occlusionMasks.map((op) => op.src),
+      ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
       ...unitSources,
       ...reflectedUnitSources,
     ])];
@@ -805,24 +838,29 @@ function SkirmishSceneLayer({
       return false;
     };
 
-    void Promise.all(sources.map(async (src): Promise<[string, HTMLImageElement]> => [src, await loadCanvasImage(src)])).then((entries) => {
-      const images = new Map(entries);
-      const tick = (timeMs: number): void => {
-        if (cancelled) return;
-        drawBoardOps(ctx, frameOps(timeMs), bounds, images, timeMs, undefined, occlusionMasks);
-        if (hasAnimatedGroundCover || arriving || hasActiveMotion(timeMs)) {
-          raf = window.requestAnimationFrame(tick);
-        }
-      };
-      tick(performance.now());
-      requestAnimationFrame(onFirstFrame);
-    }).catch(onFrameError);
+    settleRenderEffectGeneration(
+      generation,
+      Promise.all(sources.map(async (src): Promise<[string, HTMLImageElement]> => [src, await loadCanvasImage(src)])),
+      (entries) => {
+        const images = new Map(entries);
+        const tick = (timeMs: number): void => {
+          drawBoardOps(ctx, frameOps(timeMs), bounds, images, timeMs, undefined, occlusionMasks, undefined, occlusionDepthMap);
+          if (hasAnimatedGroundCover || arriving || hasActiveMotion(timeMs)) {
+            generation.requestFrame(tick);
+          }
+        };
+        commitSkirmishSceneFirstFrame(
+          occlusionDepthMap,
+          images,
+          () => tick(performance.now()),
+          () => generation.requestFrame(() => onFirstFrame()),
+        );
+      },
+      onFrameError,
+    );
 
-    return () => {
-      cancelled = true;
-      if (raf) window.cancelAnimationFrame(raf);
-    };
-  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, occlusionMasks, onFirstFrame, onFrameError, premovedIds, staticOps]);
+    return generation.cancel;
+  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, occlusionDepthMap, occlusionMasks, onFirstFrame, onFrameError, premovedIds, staticOps]);
 
   return (
     <canvas
@@ -953,9 +991,14 @@ export function SkirmishBoard({
   const exactBoard = useMemo(() => resolveBoardCode(game), [game.boardCode, game.size.cols, game.size.rows]);
   const predrawnOcclusionMasks = useMemo(
     () => exactBoard?.surface?.kind === 'predrawn'
+      && !isVersionedPredrawnBoardSurface(exactBoard.surface)
       ? predrawnOcclusionMaskOps(exactBoard)
       : [],
     [exactBoard],
+  );
+  const predrawnOcclusionDepthMap = useMemo(
+    () => predrawnOcclusionDepthMapForSurface(exactBoard?.surface),
+    [exactBoard?.surface],
   );
   const predrawnPlate = useMemo<PredrawnBoardPlate | undefined>(() => {
     const surface = exactBoard?.surface;
@@ -1004,10 +1047,13 @@ export function SkirmishBoard({
       wallOverlays,
       wallArtUrls,
       sceneUrls,
-      predrawnOcclusionMasks.map((op) => op.src),
+      [
+        ...predrawnOcclusionMasks.map((op) => op.src),
+        ...(predrawnOcclusionDepthMap ? [predrawnOcclusionDepthMap.src] : []),
+      ],
       predrawnPlate?.src,
     ),
-    [board, fenceOverlays, fencePosts, livePieces, predrawnOcclusionMasks, predrawnPlate?.src, sceneUrls, wallArtUrls, wallOverlays],
+    [board, fenceOverlays, fencePosts, livePieces, predrawnOcclusionDepthMap?.src, predrawnOcclusionMasks, predrawnPlate?.src, sceneUrls, wallArtUrls, wallOverlays],
   );
   const boardFrame = useBoardFrameReveal(boardArt.signature);
   const boardReady = boardFrame.ready;
@@ -1429,6 +1475,7 @@ export function SkirmishBoard({
               premovedIds={premovedIds}
               afterGhosts={afterGhosts}
               occlusionMasks={predrawnOcclusionMasks}
+              occlusionDepthMap={predrawnOcclusionDepthMap}
               onFirstFrame={acknowledgeScene}
               onFrameError={boardFrame.fail}
             />

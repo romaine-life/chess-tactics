@@ -8,6 +8,7 @@ import {
   autosaveEditorDocumentOnPageHide,
   closeEditorDocumentEditSession,
   createEditorDocument,
+  deleteEditorDocumentRecoveries,
   deleteEditorDocumentRecovery,
   deleteNeverSavedEditorDocument,
   discardEditorDocumentChanges,
@@ -317,6 +318,41 @@ describe('editor document edit sessions', () => {
     expect(url).toBe('/api/editor-documents/doc%2Fa%20b/recoveries/recovery%2Fone');
     expect(init).toMatchObject({ method: 'DELETE', credentials: 'include' });
     expect(JSON.parse(init.body)).toEqual(editFence);
+  });
+
+  it('can explicitly open an observation-only session', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, {
+      session: { ...editSession, state: 'observing' },
+      presence: { ...editPresence, active_editor: null, can_take_over: false },
+    }));
+
+    await openEditorDocumentEditSession('doc-7f3c', {
+      session_id: 'session-tab-a',
+      session_key: editFence.edit_session_key,
+      device_id: 'device-browser-a',
+      intent: 'observe',
+    });
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ intent: 'observe' });
+  });
+
+  it('atomically deletes an explicit recovery snapshot through the current writer fence', async () => {
+    const result = { recovery_ids: ['recovery/one', 'recovery/two'], deleted_count: 2 };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, result));
+
+    await expect(deleteEditorDocumentRecoveries(
+      'doc/a b',
+      ['recovery/one', 'recovery/two'],
+      editFence,
+    )).resolves.toEqual(result);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/editor-documents/doc%2Fa%20b/recoveries');
+    expect(init).toMatchObject({ method: 'DELETE', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual({
+      recovery_ids: ['recovery/one', 'recovery/two'],
+      ...editFence,
+    });
   });
 });
 

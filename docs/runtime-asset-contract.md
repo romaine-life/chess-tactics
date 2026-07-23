@@ -11,9 +11,12 @@ atlases, animation sheets, and other media consumed or judged by the application
   pointers, accepted status, provenance, revisions, native-size evidence, and
   audit events.
 - Private Blob Storage owns immutable content-addressed media bytes.
-- The backend owns public reads and admin-gated writes.
-- Git owns code, deterministic geometry/masks, schemas, prompts, and text
-  provenance. Git does not own media bytes or accepted pointers.
+- The backend owns access-controlled reads and domain-authorized writes.
+  Ordinary shared-catalog mutation remains admin-gated; pre-drawn lineage
+  authoring is owner-scoped under the current fenced Level Editor session.
+- Git owns code, deterministic geometry and mask-generation logic, schemas,
+  prompts, and text provenance. Git does not own media bytes, persisted raster
+  masks, or accepted pointers.
 
 The term **DB-backed asset** means the accepted pointer and lifecycle are
 database-authoritative while the bytes are in backend-owned object storage. It
@@ -21,37 +24,74 @@ does not mean storing large media values in Postgres `bytea`.
 
 ## Stable identity
 
-Game data and code refer to stable semantic slots such as a terrain layer role or
-UI-kit part. They never persist a candidate UUID, blob hash, generated filename,
-repository path, or currently accepted URL.
-
-A pre-drawn board persists its background's semantic slot, the accepted image's
-actual pixel width and height, and the versioned whole-image alignment geometry
-defined by
-[ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md).
-That payload contains the four owner-approved source-pixel board corners, refit
-row and column counts, monotonic normalized guides that the renderer uses, and
-the version-4 pinned boundary. It is canonical Level data because it preserves
-the exact approved registration; the pinned boundary remains display-only and
-does not affect rendering or gameplay. The accepted image has no required
-3840x2160 size and is not resized or regenerated solely to reach one.
-
-A same-origin temporary preview URL and a source-scoped browser-local record may
-substitute candidate bytes and hold pending alignment during development review.
-Promotion copies the exact approved versioned alignment into the pre-drawn
-background declaration. The preview URL, candidate id, blob hash, browser-local
-key, and picker state are never serialized into the Level. Accepted bytes still
-resolve through the live-media catalog's stable semantic slot.
+Game data and code refer to durable domain identities. Ordinary catalog media
+uses stable semantic slots such as a terrain layer role or UI-kit part. Neither
+ordinary nor pre-drawn content persists a candidate UUID, blob hash, generated
+filename, repository path, temporary URL, browser-local key, or picker state.
 
 Per
-[ADR-0122](adr/0122-predrawn-occlusion-derives-from-canonical-raised-geometry.md),
-the current automatic occlusion seed is not another runtime asset. Its alpha and
-depth are derived deterministically from the board's canonical raised geometry
-through the shared render planner. No mask bytes, candidate id, URL, occlusion
-slot, or depth value is added to level data or the live-media catalog.
-Any future owner-painted correction and accepted mask artifact requires a
-separate authoring and storage decision rather than a local or repository
-fallback.
+[ADR-0147](adr/0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
+a pre-drawn board is the narrow domain-version case. Its background declaration
+names an exact immutable background selection: one raw or registered raster
+version plus either one matching depth-aware occlusion-mask child or an explicit
+no-mask state. This durable version identity is Postgres-owned and resolves
+immutable Blob bytes; it is neither a transient candidate id nor a mutable
+semantic-slot pointer. The version owns its frame dimensions and world bounds;
+the Level projection may duplicate those immutable values only when the backend
+validates an exact match, never as independently mutable rendering state.
+
+Uploading a PNG creates a settable raw-raster root. Applying an owner-approved
+grid registration runs the versioned deterministic rasterizer once and creates
+a new full-scene raster child, preserving the raw parent and recording exact
+registration, dimensions, world bounds, coordinate basis, generator version,
+hashes, and lineage. The rasterizer owns both pixel sampling and a versioned,
+byte-stable PNG encoding; it does not delegate filtering or compression choices
+to the browser's canvas encoder. Runtime does not store or interpret the
+registration as a drawing instruction. Occlusion is likewise a persisted immutable mask child
+whose metadata binds its alpha/depth
+planes to the exact raster parent, dimensions, coordinate basis, canonical
+environment-geometry revision or hash, depth convention, generator version,
+and content hash. A mismatched mask is unavailable, never approximately reused.
+
+Creating or previewing a derivative does not move any canonical pointer. `Set`
+records the exact selection only in the current fenced editor working copy.
+Private Save or official Review and publish/Publish is the separate transaction
+that verifies the selected immutable Blob objects and hashes. Private Save
+atomically pins the exact selection in the private canonical Level while its
+ready versions remain owner/admin-readable, not public. Official Review and
+publish/Publish atomically marks those exact version rows published with the
+official Level reference. Explicit user-map Publish performs the same exact-
+selection publication with the owner-free public-map snapshot. Only those
+explicitly published selections become publicly readable. Blob bytes are never
+moved or rewritten by any of these transactions.
+Referenced versions and objects remain resolvable even when hidden from ordinary
+chooser views or archived. The owner-facing instrument exposes raw, derived,
+mask, lineage, working-copy, and canonical state without requiring an agent or
+copied handoff packet.
+
+Per [ADR-0148](adr/0148-predrawn-background-authoring-storage-is-bounded.md),
+this retained lineage is bounded by the backend: 256 permanent version rows per
+editor document, 1 GiB of distinct referenced background-version Blob bytes per
+owner, and one in-flight raw upload body per document. Every status counts;
+Archive organizes retained history and neither reclaims nor evades quota.
+Aggregate byte validation is serialized with the content-binding transaction.
+The browser is not quota authority.
+
+All consumers resolve the exact selected raster and mask state. Missing or
+mismatched bytes, metadata, format, dimensions, or lineage fail closed; there
+is no fallback to another slot version, a runtime warp, browser-local media,
+ordinary composed environment pixels, or a mask regenerated from canonical
+sprites.
+
+An exact pre-drawn version resolves through
+`/api/background-versions/<version-id>/content`, never through a mutable slot.
+Ready/private content requires authorized owner or admin access and carries
+private immutable caching. Only a version selected by an official publication
+or explicit owner user-map publication transaction is anonymously readable with
+public immutable caching. The response ETag/content hash is bound to that exact
+version's immutable Blob object; the route never redirects through or consults
+a mutable active pointer. The document-scoped content route exposes the same
+bytes under editor authorization.
 
 The stable route `/assets/<slot>` is a backend route, not a filesystem path. The
 backend resolves it through the current active pointer and redirects or serves

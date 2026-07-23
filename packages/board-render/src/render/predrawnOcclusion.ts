@@ -19,10 +19,103 @@ const FENCE_POST_OCCLUSION_DEPTH_DELTA =
   + CELL_DEPTH_STRIDE / 2
   - FENCE_POST_DEPTH_BIAS;
 
+function compareCanonicalText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function canonicalJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJsonValue);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => compareCanonicalText(left, right))
+      .map(([key, child]) => [key, canonicalJsonValue(child)]),
+  );
+}
+
+export const PREDRAWN_ENVIRONMENT_GEOMETRY_SCHEMA_V1 = 'predrawn-environment-geometry-v1';
+export const PREDRAWN_ENVIRONMENT_GEOMETRY_SCHEMA_V2 = 'predrawn-environment-geometry-v2';
+
+function predrawnEnvironmentGeometryFingerprintValue(
+  board: EditorBoard,
+  schema: typeof PREDRAWN_ENVIRONMENT_GEOMETRY_SCHEMA_V1
+    | typeof PREDRAWN_ENVIRONMENT_GEOMETRY_SCHEMA_V2,
+  includeLiveCover: boolean,
+): unknown {
+  const macroTiles = [...(board.macroTiles ?? [])]
+    .map(canonicalJsonValue)
+    .sort((left, right) => compareCanonicalText(JSON.stringify(left), JSON.stringify(right)));
+  return canonicalJsonValue({
+    schema,
+    cols: board.cols,
+    rows: board.rows,
+    decorativeApron: board.decorativeApron ?? null,
+    decorativeFootprint: [...(board.decorativeFootprint ?? [])].sort(),
+    decorativeCells: board.decorativeCells ?? {},
+    decorativeFeatures: board.decorativeFeatures ?? {},
+    decorativeFences: board.decorativeFences ?? {},
+    decorativeFencePosts: board.decorativeFencePosts ?? {},
+    decorativeWalls: board.decorativeWalls ?? {},
+    cells: board.cells,
+    macroTiles,
+    doodads: board.doodads,
+    props: board.props,
+    ...(includeLiveCover ? {
+      cover: board.cover,
+      coverTypes: board.coverTypes,
+    } : {}),
+    features: board.features,
+    fences: board.fences ?? {},
+    fencePosts: board.fencePosts ?? {},
+    walls: board.walls ?? {},
+    wallArt: board.wallArt ?? {},
+    subterrain: board.subterrain ?? {},
+    featureCuts: board.featureCuts,
+    featureExits: board.featureExits,
+  });
+}
+
+/**
+ * The exact legacy fingerprint input used by v1 immutable lineages. V1 included live cover.
+ * It remains exported only so a durable migration can prove that an existing immutable v1
+ * artifact was generated from the board currently being saved before binding that lineage to v2.
+ */
+export function predrawnEnvironmentGeometryFingerprintInputV1(board: EditorBoard): string {
+  return JSON.stringify(predrawnEnvironmentGeometryFingerprintValue(
+    board,
+    PREDRAWN_ENVIRONMENT_GEOMETRY_SCHEMA_V1,
+    true,
+  ));
+}
+
+/**
+ * Stable v2 bytes for baked pre-drawn environment geometry. Live ground cover is deliberately
+ * absent because it remains an independently editable and rendered layer over the immutable art.
+ */
+export function predrawnEnvironmentGeometryFingerprintInputV2(board: EditorBoard): string {
+  return JSON.stringify(predrawnEnvironmentGeometryFingerprintValue(
+    board,
+    PREDRAWN_ENVIRONMENT_GEOMETRY_SCHEMA_V2,
+    false,
+  ));
+}
+
+/**
+ * Stable bytes for the environment geometry represented by a complete-scene raster and its
+ * occlusion child. Live units, live ground cover, tactical zones, the selected raster itself, and
+ * editor-only generation controls are deliberately absent. Callers SHA-256 this string and
+ * persist the hash with derived versions so Save can reject a stale raster/mask after terrain or
+ * scenery changes without rejecting a cover-only edit.
+ */
+export function predrawnEnvironmentGeometryFingerprintInput(board: EditorBoard): string {
+  return predrawnEnvironmentGeometryFingerprintInputV2(board);
+}
+
 /**
  * Keep only authored raised geometry whose canonical sprite alpha can seed a pre-drawn plate
  * occlusion mask. The plate itself and every additive/live family are removed before asking the
- * shared render planner for draw ops, so the resulting alpha comes from props and barriers only.
+ * shared render planner for draw ops, so the resulting alpha comes from every raised authored
+ * structure: split doodads, props, Subterrain, walls, and barriers.
  */
 export function predrawnOcclusionSeedBoard(board: EditorBoard): EditorBoard {
   return {
@@ -30,7 +123,6 @@ export function predrawnOcclusionSeedBoard(board: EditorBoard): EditorBoard {
     surface: undefined,
     macroTiles: [],
     units: {},
-    doodads: {},
     cover: {},
     coverTypes: {},
     features: {},
@@ -59,12 +151,17 @@ export function predrawnOcclusionMaskOps(board: EditorBoard): BoardDrawOp[] {
     ...seed,
     fences: {},
     fencePosts: {},
+    decorativeFences: {},
+    decorativeFencePosts: {},
   });
   const fenceMasks = maskOps({
     ...seed,
+    doodads: {},
     props: {},
     walls: {},
     wallArt: {},
+    subterrain: {},
+    decorativeWalls: {},
   }).map((op) => ({
     ...op,
     // Rails occupy integer bands; canonical post ops occupy half bands via

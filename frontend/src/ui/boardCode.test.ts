@@ -300,6 +300,31 @@ describe('boardCode round-trip', () => {
     expect(decodeBoard(code)?.surface).toEqual(surface);
   });
 
+  it('round-trips an exact immutable background and optional occlusion version', () => {
+    const surface: NonNullable<EditorBoard['surface']> = {
+      kind: 'predrawn',
+      schemaVersion: 2,
+      backgroundVersionId: '11111111-1111-4111-8111-111111111111',
+      occlusionVersionId: '22222222-2222-4222-8222-222222222222',
+      frameWidth: 1240,
+      frameHeight: 700,
+      worldBounds: { minX: -620, minY: -350, width: 1240, height: 700 },
+    };
+    const code = encodeBoard(emptyBoard({ surface }));
+    expect(decodeWire(code).pd).toEqual([
+      2,
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+      1240,
+      700,
+      -620,
+      -350,
+      1240,
+      700,
+    ]);
+    expect(decodeBoard(code)?.surface).toEqual(surface);
+  });
+
   it('round-trips the persisted Fortress Gate v4 whole-plate registration', () => {
     const surface: NonNullable<EditorBoard['surface']> = {
       kind: 'predrawn',

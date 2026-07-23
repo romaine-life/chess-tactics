@@ -21,6 +21,7 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
+import { isLevelEditorUrl, observationOpenPostData } from './shot-editor-session.mjs';
 
 const argv = process.argv.slice(2);
 const url = argv[0];
@@ -123,18 +124,67 @@ try {
       });
     }
   }
-  // One navigation only: retrying a timed-out navigation silently doubles cold-load work.
+  // The isolated browser has no owner cookies. Acquire the backend's loopback-only dev session
+  // through its real sign-in endpoint before opening a private route. This remains available when
+  // the verified device grant's remote JWKS endpoint is temporarily unreachable; it never runs
+  // for a non-loopback target.
+  const target = new URL(url);
+  if (['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname)) {
+    const signIn = new URL('/api/auth/sign-in', target);
+    signIn.searchParams.set('returnTo', '/api/auth/me');
+    const authResponse = await page.goto(signIn.href, { waitUntil: 'domcontentloaded', timeout });
+    if (!authResponse?.ok()) throw new Error(`local screenshot sign-in failed (${authResponse?.status() ?? 'no response'})`);
+    const authState = await page.evaluate(() => {
+      try { return JSON.parse(document.body.textContent || '{}'); } catch { return {}; }
+    });
+    if (!authState?.signed_in) throw new Error('local screenshot sign-in did not establish the owner session');
+  }
+
+  // Visual verification is an authenticated observer, never a synthetic writer. Patch only the
+  // Level Editor's session-open request; all other requests and routes remain untouched.
+  const targetIsLevelEditor = isLevelEditorUrl(url);
+  if (targetIsLevelEditor) {
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const postData = observationOpenPostData({
+        targetIsLevelEditor,
+        method: request.method(),
+        requestUrl: request.url(),
+        postData: request.postData(),
+      });
+      if (!postData) { void request.continue(); return; }
+      const headers = { ...request.headers() };
+      delete headers['content-length'];
+      void request.continue({ headers, postData });
+    });
+  }
+
+  // One target navigation only: retrying a timed-out navigation silently doubles cold-load work.
   // Persistent ambience connections also make network-idle an invalid readiness signal.
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
-
-  // Determinism: kill animations/transitions so a live screen captures identically every run.
-  await page.addStyleTag({ content: `*,*::before,*::after{animation:none!important;transition:none!important;animation-duration:0s!important;caret-color:transparent!important;scroll-behavior:auto!important}` });
 
   // Readiness: an explicit gate is a fail-closed capture contract. The implicit fixture gate stays
   // best-effort so this generic tool can still capture ordinary live routes without `window.__ready`.
   if (readyExpr) await page.waitForFunction(readyExpr, { timeout });
   else await page.waitForFunction('window.__ready===true', { timeout: 1200 }).catch(() => {});
+
+  // Route chrome can remain deliberately invisible while content hydrates, then spend one fade
+  // settling after the content readiness gate opens. Freezing animation before that lifecycle
+  // completes strands ArtRouteChrome at its opacity-zero entrance state. An explicit capture gate
+  // therefore also makes entrance settlement fail closed; generic captures keep the bounded,
+  // best-effort behavior used by their implicit fixture gate.
+  const waitForSettledScreenEntrance = page.waitForFunction(
+    "!document.querySelector('.screen-enter-hold,.screen-enter-lock')",
+    { timeout: readyExpr ? timeout : 1200 },
+  );
+  if (readyExpr) await waitForSettledScreenEntrance;
+  else await waitForSettledScreenEntrance.catch(() => {});
+
   await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
+
+  // Determinism starts only after app readiness and screen entrance settlement, so disabling
+  // animation cannot change the visible lifecycle state that the capture is meant to prove.
+  await page.addStyleTag({ content: `*,*::before,*::after{animation:none!important;transition:none!important;animation-duration:0s!important;caret-color:transparent!important;scroll-behavior:auto!important}` });
   await new Promise((r) => setTimeout(r, 200));
 
   if (assertMenuAtomic) {
@@ -188,6 +238,34 @@ try {
     await el.screenshot({ path: out });
   } else {
     await page.screenshot({ path: out, fullPage });
+  }
+
+  // A headless Level Editor page can become the writer when no owner tab currently holds the
+  // lease. Closing Chrome directly then lets that synthetic lease expire, which manufactures a
+  // recovery copy and makes visual verification pollute the recovery UI it is inspecting. Leave
+  // through the app's normal navigation blocker so it closes even a waiting-only session (and
+  // final-autosaves a real writer) before this isolated browser exits.
+  // Events is a nested URL-addressed workspace: its first app departure closes Events and
+  // intentionally remains in the Level Editor. Repeat the same normal departure until the
+  // editor route is actually released. Ordinary editor routes leave on the first attempt.
+  for (let exitAttempt = 0; exitAttempt < 3 && isLevelEditorUrl(page.url()); exitAttempt += 1) {
+    const previousUrl = page.url();
+    await page.evaluate(() => {
+      const exit = document.createElement('a');
+      exit.href = '/editor';
+      exit.hidden = true;
+      document.body.append(exit);
+      exit.click();
+      exit.remove();
+    });
+    await page.waitForFunction(
+      (before) => location.href !== before,
+      { timeout: Math.min(timeout, 5_000) },
+      previousUrl,
+    ).catch(() => {});
+  }
+  if (isLevelEditorUrl(page.url())) {
+    throw new Error(`Level Editor observer session did not release after nested-workspace cleanup: ${page.url()}`);
   }
   const { size } = statSync(out);
   console.log(`wrote ${out} (${(size / 1024).toFixed(1)} KB)`);

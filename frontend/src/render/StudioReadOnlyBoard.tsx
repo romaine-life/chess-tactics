@@ -255,7 +255,11 @@ export function StudioReadOnlyBoard({
     rows: board.rows,
     familyAt: (x, y) => familyOfTile(board.cells[`${x},${y}`] ?? ''),
   });
-  const predrawnPlate = board.surface ? runtimePredrawnBoardPlate(board.surface) : undefined;
+  // A generation reference always comes from the authored guide geometry, never from a prior
+  // generated plate. Normal read-only views still render the exact installed immutable version.
+  const predrawnPlate = !topSurfacesOnly && board.surface
+    ? runtimePredrawnBoardPlate(board.surface)
+    : undefined;
   const sceneBoard = topSurfacesOnly ? boardForTopSurfaceArtExport(board) : board;
 
   return (
@@ -269,7 +273,12 @@ export function StudioReadOnlyBoard({
       backgroundLayer={(
         <>
           {predrawnPlate
-            ? <PredrawnBoardLayer plate={predrawnPlate} cells={playableGridCells} />
+            ? <PredrawnBoardLayer
+                plate={predrawnPlate}
+                cells={playableGridCells}
+                onFirstFrame={onTerrainFirstFrame}
+                onFrameError={onFrameError}
+              />
             : <BoardTerrainLayer
                 cells={terrainCells}
                 macroTiles={terrainCanvasMacroTiles(macroTiles)}

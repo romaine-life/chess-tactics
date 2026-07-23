@@ -11,6 +11,7 @@ const {
   initialPredrawnGenerationFrame,
   normalizePredrawnGenerationFrame,
   predrawnGenerationFrameBoardPan,
+  predrawnWorldBoundsBoardPan,
   predrawnGenerationRequiredBounds,
   subterrainMaterialSrc,
   TILE_STEP_X,
@@ -205,5 +206,19 @@ test('native frame maps directly into TileGrid boardPan at boardZoom 1', () => {
   assert.throws(
     () => predrawnGenerationFrameBoardPan(source, { ...frame, width: frame.width + 1 }),
     /invalid predrawnGenerationFrame/,
+  );
+});
+
+test('fractional warped world bounds map directly into TileGrid boardPan', () => {
+  const source = board();
+  const bounds = { minX: -72.25, minY: 14.125, width: 960.5, height: 540.25 };
+  const pan = predrawnWorldBoundsBoardPan(source, bounds);
+  const metrics = boardLabMetrics([{ x: 0, y: 0 }, { x: 1, y: 0 }]);
+
+  assert.equal(bounds.minX + metrics.originLeft + bounds.width / 2 + pan.x, 0);
+  assert.equal(bounds.minY + metrics.originTop + bounds.height / 2 + pan.y, 0);
+  assert.throws(
+    () => predrawnWorldBoundsBoardPan(source, { ...bounds, width: 0 }),
+    /invalid predrawn world bounds/,
   );
 });

@@ -19,6 +19,21 @@ const {
   predrawnBoardSlotSlug,
   preservesNativeEvidenceForUpload,
 } = require(path.join(bakedBackendDir, 'liveMediaPolicy'));
+const {
+  ENVIRONMENT_GEOMETRY_SCHEMA,
+  LEGACY_ENVIRONMENT_GEOMETRY_SCHEMA,
+  backgroundVersionEnvironmentGeometry,
+  backgroundVersionLineageIssue,
+  backgroundVersionStoredContractIssue,
+  backgroundVersionStoredOcclusionChain,
+  backgroundVersionV2GeometrySha256,
+  normalizeBackgroundVersionCreate,
+  normalizeBackgroundVersionIdempotencyKey,
+  normalizePredrawnVersionSurface,
+  normalizedUuid: backgroundVersionId,
+  parseBackgroundVersionUploadPath,
+  sameWorldBounds: sameBackgroundWorldBounds,
+} = require(path.join(bakedBackendDir, 'backgroundVersionPolicy'));
 let serverRender = null;
 try {
   serverRender = require('@chess-tactics/board-render');
@@ -26,6 +41,7 @@ try {
   console.error('board-render package unavailable; level thumbnails will return 503:', error && error.message);
 }
 const withServerRenderCriticalSection = createRenderCriticalSection();
+const backgroundVersionUploadsInFlight = new Set();
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -221,6 +237,81 @@ async function requireAdminBeforeRawUpload(req, res, next) {
   next();
 }
 
+async function requireBackgroundVersionOwnerBeforeRawUpload(req, res, next) {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    // Regex-mounted Express middleware rewrites req.path to "/" while it is
+    // handling the matched URL. Use originalUrl so the authorization guard
+    // validates the real collection owner instead of rejecting every valid
+    // raster upload before its body is consumed.
+    const upload = parseBackgroundVersionUploadPath(req.originalUrl);
+    if (!upload) {
+      res.status(400).json({ error: 'invalid_background_version_upload_path' });
+      return;
+    }
+    const documentId = editorDocumentId(upload.documentId);
+    const versionId = backgroundVersionId(upload.versionId);
+    if (!documentId || !versionId) {
+      res.status(400).json({ error: 'invalid_background_version_upload_path' });
+      return;
+    }
+    if (mediaType(req.headers['content-type']) !== 'image/png') {
+      res.status(415).json({ error: 'unsupported_media_type' });
+      return;
+    }
+    const document = await dbGetEditorDocument(user.email, documentId);
+    if (!document) {
+      res.status(404).json({ error: 'editor_document_not_found' });
+      return;
+    }
+    if (!editorDocumentRowIsAuthorized(document, user, res)) return;
+    const authority = backgroundVersionMutationAuthority(req, res);
+    if (!authority) return;
+    await dbAssertBackgroundVersionWriter(document, authority);
+    const version = await dbBackgroundVersionRow(documentId, versionId);
+    if (!version || version.owner_email !== document.owner_email || version.level_id !== document.level_id) {
+      res.status(404).json({ error: 'background_version_not_found' });
+      return;
+    }
+    const expectedHeader = String(req.headers['if-match'] || '').trim().replace(/^W\//, '').replace(/^"|"$/g, '');
+    if (!/^\d+$/.test(expectedHeader)) {
+      res.status(428).json({ error: 'background_version_expected_revision_required' });
+      return;
+    }
+    if (!version.blob_sha256 && Number(version.row_revision) !== Number(expectedHeader)) {
+      res.status(409).json({
+        error: 'background_version_conflict',
+        details: { current_revision: Number(version.row_revision) },
+      });
+      return;
+    }
+    if (!version.blob_sha256 && version.status !== 'ready') {
+      res.status(409).json({ error: 'background_version_locked', details: { status: version.status } });
+      return;
+    }
+    if (backgroundVersionUploadsInFlight.has(documentId)) {
+      res.status(409).json({ error: 'background_version_upload_busy' });
+      return;
+    }
+    backgroundVersionUploadsInFlight.add(documentId);
+    let released = false;
+    const releaseUploadSlot = () => {
+      if (released) return;
+      released = true;
+      backgroundVersionUploadsInFlight.delete(documentId);
+    };
+    res.once('finish', releaseUploadSlot);
+    res.once('close', releaseUploadSlot);
+    req.once('aborted', releaseUploadSlot);
+    req.rawUploadUser = user;
+    req.backgroundVersionAuthority = authority;
+    next();
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'upload authorization');
+  }
+}
+
 // Unit sprites are the only raw requests under the Unit Art API. Candidate
 // metadata remains JSON and therefore continues through to express.json below.
 app.use(
@@ -233,6 +324,14 @@ app.use(
 app.use(
   /^\/api\/admin\/media-versions\/[0-9a-f-]+\/content$/,
   requireAdminBeforeRawUpload,
+  express.raw({ type: () => true, limit: '32mb' }),
+);
+// Private pre-drawn background candidates use the shared content-addressed blob
+// store, but authoring authority comes from their owning editor document rather
+// than the global media-admin catalog.
+app.use(
+  /^\/api\/editor-documents\/[^/]+\/background-versions\/[0-9a-f-]+\/content$/,
+  requireBackgroundVersionOwnerBeforeRawUpload,
   express.raw({ type: () => true, limit: '32mb' }),
 );
 app.use(express.json({ limit: '256kb' }));
@@ -1190,6 +1289,139 @@ const MIGRATIONS = [
         CHECK (char_length(session_key_hash) = 64);
     `,
   },
+  {
+    version: 28,
+    name: 'immutable editor background versions',
+    // Raw generation results, deterministic warps, and derived occlusion masks
+    // are immutable document-owned artifacts. The Level stores only selected
+    // ids; official or public-map publication exposes exact referenced rows
+    // atomically, while private Save keeps them owner-scoped.
+    sql: `
+      CREATE UNIQUE INDEX IF NOT EXISTS level_working_copies_document_owner_level_idx
+        ON level_working_copies (document_id, owner_email, level_id);
+
+      CREATE TABLE IF NOT EXISTS predrawn_background_versions (
+        id                            uuid        PRIMARY KEY,
+        document_id                   text        NOT NULL,
+        owner_email                   text        NOT NULL,
+        level_id                      text        NOT NULL,
+        kind                          text        NOT NULL CHECK (kind IN ('raw', 'warped', 'occlusion')),
+        label                         text        NOT NULL CHECK (char_length(label) BETWEEN 1 AND 160),
+        parent_version_id             uuid,
+        source_background_version_id  uuid,
+        blob_sha256                   text        REFERENCES media_blobs(sha256) ON DELETE RESTRICT,
+        width                         integer     CHECK (width IS NULL OR (width > 0 AND width <= 32768)),
+        height                        integer     CHECK (height IS NULL OR (height > 0 AND height <= 32768)),
+        world_bounds                  jsonb       NOT NULL CHECK (jsonb_typeof(world_bounds) = 'object'),
+        operation                     jsonb       NOT NULL CHECK (jsonb_typeof(operation) = 'object' AND operation <> '{}'::jsonb),
+        provenance                    jsonb       NOT NULL CHECK (jsonb_typeof(provenance) = 'object' AND provenance <> '{}'::jsonb),
+        status                        text        NOT NULL DEFAULT 'ready'
+          CHECK (status IN ('ready', 'archived', 'published')),
+        idempotency_actor             text,
+        idempotency_key               text,
+        request_fingerprint           text,
+        row_revision                  bigint      NOT NULL DEFAULT 0 CHECK (row_revision >= 0),
+        created_by_email              text        NOT NULL,
+        created_by_name               text        NOT NULL,
+        created_at                    timestamptz NOT NULL DEFAULT now(),
+        updated_at                    timestamptz NOT NULL DEFAULT now(),
+        updated_by                    text        NOT NULL,
+        archived_at                   timestamptz,
+        archived_by                   text,
+        published_at                  timestamptz,
+        published_by                  text,
+        UNIQUE (id, document_id),
+        FOREIGN KEY (document_id, owner_email, level_id)
+          REFERENCES level_working_copies(document_id, owner_email, level_id) ON DELETE CASCADE,
+        FOREIGN KEY (parent_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE CASCADE,
+        FOREIGN KEY (source_background_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE CASCADE,
+        CHECK ((blob_sha256 IS NULL AND width IS NULL AND height IS NULL)
+          OR (blob_sha256 IS NOT NULL AND width IS NOT NULL AND height IS NOT NULL)),
+        CHECK (width IS NULL OR width::bigint * height::bigint <= 8388608),
+        CHECK (
+          (kind = 'raw' AND parent_version_id IS NULL AND source_background_version_id IS NULL) OR
+          (kind = 'warped' AND parent_version_id IS NOT NULL) OR
+          (kind = 'occlusion' AND source_background_version_id IS NOT NULL)
+        ),
+        CHECK (
+          (idempotency_actor IS NULL AND idempotency_key IS NULL AND request_fingerprint IS NULL) OR
+          (char_length(idempotency_actor) BETWEEN 1 AND 320
+            AND char_length(idempotency_key) BETWEEN 1 AND 200
+            AND request_fingerprint ~ '^[0-9a-f]{64}$')
+        ),
+        CHECK (
+          (status = 'ready' AND archived_at IS NULL AND archived_by IS NULL AND published_at IS NULL AND published_by IS NULL) OR
+          (status = 'archived' AND archived_at IS NOT NULL AND archived_by IS NOT NULL AND published_at IS NULL AND published_by IS NULL) OR
+          (status = 'published' AND blob_sha256 IS NOT NULL AND archived_at IS NULL AND archived_by IS NULL
+            AND published_at IS NOT NULL AND published_by IS NOT NULL)
+        )
+      );
+      CREATE INDEX IF NOT EXISTS predrawn_background_versions_document_created_idx
+        ON predrawn_background_versions (document_id, created_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS predrawn_background_versions_blob_idx
+        ON predrawn_background_versions (blob_sha256) WHERE blob_sha256 IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS predrawn_background_versions_idempotency_idx
+        ON predrawn_background_versions (idempotency_actor, idempotency_key)
+        WHERE idempotency_key IS NOT NULL;
+
+      CREATE TABLE IF NOT EXISTS predrawn_background_version_events (
+        id                  bigserial   PRIMARY KEY,
+        document_id         text        NOT NULL,
+        version_id          uuid        NOT NULL,
+        action              text        NOT NULL CHECK (action IN ('created', 'content-uploaded', 'archived', 'published')),
+        actor_email         text        NOT NULL,
+        actor_name          text        NOT NULL,
+        details             jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        created_at          timestamptz NOT NULL DEFAULT now(),
+        FOREIGN KEY (version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS predrawn_background_version_events_version_idx
+        ON predrawn_background_version_events (version_id, created_at DESC, id DESC);
+    `,
+  },
+  {
+    version: 29,
+    name: 'observation-only level editor sessions',
+    sql: `
+      ALTER TABLE editor_document_edit_sessions
+        DROP CONSTRAINT IF EXISTS editor_document_edit_sessions_state_check;
+      ALTER TABLE editor_document_edit_sessions
+        ADD CONSTRAINT editor_document_edit_sessions_state_check
+        CHECK (state IN ('active', 'waiting', 'observing', 'displaced', 'expired', 'closed'));
+    `,
+  },
+  {
+    version: 30,
+    name: 'bind legacy predrawn geometry fingerprints to cover-independent v2',
+    // Immutable v1 artifacts included live cover in their environment digest. A
+    // transaction may bind one only after reproducing that exact v1 digest from
+    // the server-held Level. The external binding preserves immutable version
+    // metadata while giving every later canonical boundary one stable v2 digest.
+    sql: `
+      CREATE TABLE IF NOT EXISTS predrawn_background_geometry_bindings (
+        version_id                           uuid        PRIMARY KEY,
+        document_id                          text        NOT NULL,
+        legacy_environment_geometry_schema   text        NOT NULL
+          CHECK (legacy_environment_geometry_schema = 'predrawn-environment-geometry-v1'),
+        legacy_environment_geometry_sha256   text        NOT NULL
+          CHECK (legacy_environment_geometry_sha256 ~ '^[0-9a-f]{64}$'),
+        environment_geometry_schema          text        NOT NULL
+          CHECK (environment_geometry_schema = 'predrawn-environment-geometry-v2'),
+        environment_geometry_sha256          text        NOT NULL
+          CHECK (environment_geometry_sha256 ~ '^[0-9a-f]{64}$'),
+        bound_by_email                        text        NOT NULL,
+        bound_by_name                         text        NOT NULL,
+        bound_at                              timestamptz NOT NULL DEFAULT now(),
+        FOREIGN KEY (version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS predrawn_background_geometry_bindings_document_idx
+        ON predrawn_background_geometry_bindings (document_id, version_id);
+    `,
+  },
 ];
 
 let pool = null;
@@ -1202,6 +1434,9 @@ const REQUIRED_SCHEMA_RELATIONS = [
   'editor_document_edit_sessions',
   'editor_document_recoveries',
   'editor_document_edit_events',
+  'predrawn_background_versions',
+  'predrawn_background_version_events',
+  'predrawn_background_geometry_bindings',
 ];
 const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['level_thumbnail_derivatives', 22],
@@ -1209,6 +1444,9 @@ const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['editor_document_edit_sessions', 25],
   ['editor_document_recoveries', 25],
   ['editor_document_edit_events', 25],
+  ['predrawn_background_versions', 28],
+  ['predrawn_background_version_events', 28],
+  ['predrawn_background_geometry_bindings', 30],
 ]);
 
 function buildPool() {
@@ -3867,6 +4105,23 @@ const EDITOR_EDIT_SESSION_COLUMNS = `session_id, document_id, owner_email, actor
 const EDITOR_RECOVERY_COLUMNS = `recovery_id, document_id, source_session_id,
   displaced_by_session_id, owner_email, actor_name, source_client_label, body, document_revision,
   edit_generation, capture_source, body_checkpoint_at, reason, created_at, resolved_at`;
+const BACKGROUND_VERSION_COLUMNS = `v.id, v.document_id, v.owner_email, v.level_id, v.kind, v.label,
+  v.parent_version_id, v.source_background_version_id, v.blob_sha256, v.width, v.height,
+  v.world_bounds, v.operation, v.provenance, v.status, v.row_revision,
+  v.created_by_email, v.created_by_name, v.created_at, v.updated_at, v.updated_by,
+  v.archived_at, v.archived_by, v.published_at, v.published_by,
+  b.blob_key, b.media_type, b.byte_length, b.published_at AS blob_published_at,
+  (SELECT jsonb_build_object(
+      'legacy_environment_geometry_schema', binding.legacy_environment_geometry_schema,
+      'legacy_environment_geometry_sha256', binding.legacy_environment_geometry_sha256,
+      'environment_geometry_schema', binding.environment_geometry_schema,
+      'environment_geometry_sha256', binding.environment_geometry_sha256,
+      'bound_at', binding.bound_at
+    )
+     FROM predrawn_background_geometry_bindings binding
+    WHERE binding.version_id = v.id) AS environment_geometry_binding`;
+const BACKGROUND_VERSION_DOCUMENT_ROW_LIMIT = 256;
+const BACKGROUND_VERSION_OWNER_BLOB_BYTE_LIMIT = 1024n * 1024n * 1024n;
 
 function editorDocumentId(raw) {
   const id = String(raw || '').trim();
@@ -4060,6 +4315,7 @@ function publicEditorPresence(documentRow, activeSession, requesterSession, requ
     can_take_over: Boolean(
       requesterSession
       && requesterSession.state !== 'closed'
+      && requesterSession.state !== 'observing'
       && (!activeSession || activeSession.session_id !== requesterSession.session_id)
     ),
     // Session-bearing callers lock the document through dbLockEditorDocument,
@@ -4496,10 +4752,23 @@ async function dbExpireEditorSession(client, documentRow) {
 }
 
 async function dbEditorSessionState(client, documentRow, requesterSessionId, requesterDeviceHash, { lock = false } = {}) {
-  const expiredAuthority = await dbExpireEditorSession(client, documentRow);
-  const requesterSession = requesterSessionId
+  let requesterSession = requesterSessionId
     ? await dbGetEditorEditSession(client, documentRow.owner_email, documentRow.document_id, requesterSessionId, { lock })
     : null;
+  // Read-only observation cannot perform authority maintenance. In particular,
+  // looking at presence must not expire another writer and create a recovery.
+  const expiredAuthority = requesterSession?.state === 'observing'
+    ? null
+    : await dbExpireEditorSession(client, documentRow);
+  if (expiredAuthority && requesterSession) {
+    requesterSession = await dbGetEditorEditSession(
+      client,
+      documentRow.owner_email,
+      documentRow.document_id,
+      requesterSessionId,
+      { lock },
+    );
+  }
   const activeSession = await dbGetActiveEditorSession(client, documentRow.document_id, { lock });
   const lastEditorSession = activeSession
     ? null
@@ -4550,11 +4819,28 @@ function assertEditorSessionKey(session, sessionKeyHash, documentRow = null) {
   }
 }
 
+async function editorObserverOnlyError(client, documentRow, session) {
+  const active = await dbGetActiveEditorSession(client, documentRow.document_id, { lock: true });
+  return editorDocumentError(
+    409,
+    'editor_document_session_observe_only',
+    documentRow,
+    'open this page session with write intent before requesting editing authority',
+    {
+      session,
+      presence: await dbPublicEditorPresence(client, documentRow, active, session, session.device_hash),
+      recovery: null,
+    },
+  );
+}
+
 async function dbOpenEditorEditSession(owner, documentId, input) {
   return withEditorDocumentTransaction(async (client) => {
     let documentRow = await dbLockEditorDocument(client, owner.email, documentId);
     if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
-    const expiredAuthority = await dbExpireEditorSession(client, documentRow);
+    const observeOnly = input.intent === 'observe';
+    // Observation must not turn a stale lease into a recovery as a side effect.
+    const expiredAuthority = observeOnly ? null : await dbExpireEditorSession(client, documentRow);
 
     const existingResult = await client.query(
       `SELECT ${EDITOR_EDIT_SESSION_COLUMNS}
@@ -4572,6 +4858,9 @@ async function dbOpenEditorEditSession(owner, documentId, input) {
     )) {
       throw editorDocumentError(409, 'editor_document_edit_session_id_conflict');
     }
+    if (observeOnly && session && session.state !== 'observing') {
+      throw editorDocumentError(409, 'editor_document_edit_session_intent_conflict', documentRow);
+    }
     let active = await dbGetActiveEditorSession(client, documentId, { lock: true });
     if (session?.state === 'closed') {
       const recovery = expiredAuthority?.recovery
@@ -4584,13 +4873,13 @@ async function dbOpenEditorEditSession(owner, documentId, input) {
     }
     const priorSessionState = session?.state || null;
     const priorSessionGeneration = session ? Number(session.edit_generation) : null;
-    const canClaim = !active || active.session_id === input.sessionId;
+    const canClaim = !observeOnly && (!active || active.session_id === input.sessionId);
     let opened = false;
 
     if (!session) {
       opened = true;
       if (canClaim) documentRow = await dbAdvanceEditorGeneration(client, documentRow);
-      const state = canClaim ? 'active' : 'waiting';
+      const state = canClaim ? 'active' : observeOnly ? 'observing' : 'waiting';
       const { rows } = await client.query(
         `INSERT INTO editor_document_edit_sessions
            (session_id, document_id, owner_email, actor_name, device_hash, session_key_hash,
@@ -4636,6 +4925,19 @@ async function dbOpenEditorEditSession(owner, documentId, input) {
         [session.session_id, owner.name || owner.email, input.clientLabel, Number(documentRow.edit_generation), JSON.stringify(documentRow.body), Number(documentRow.revision), EDITOR_SESSION_LEASE_SECONDS],
       );
       session = rows[0];
+    } else if (!observeOnly && session.state === 'observing') {
+      const { rows } = await client.query(
+        `UPDATE editor_document_edit_sessions
+            SET actor_name = $2,
+                client_label = $3,
+                state = 'waiting',
+                last_seen_at = clock_timestamp(),
+                lease_expires_at = NULL
+          WHERE session_id = $1
+          RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
+        [session.session_id, owner.name || owner.email, input.clientLabel],
+      );
+      session = rows[0];
     } else {
       const { rows } = await client.query(
         `UPDATE editor_document_edit_sessions
@@ -4656,6 +4958,7 @@ async function dbOpenEditorEditSession(owner, documentId, input) {
     if (opened) {
       await dbRecordEditorEditEvent(client, session, 'session_opened', {
         state: session.state,
+        intent: input.intent,
         edit_generation: Number(session.edit_generation),
         client_label: session.client_label,
       });
@@ -4695,10 +4998,14 @@ async function dbHeartbeatEditorEditSession(owner, documentId, sessionId, sessio
   const outcome = await withEditorDocumentTransaction(async (client) => {
     const documentRow = await dbLockEditorDocument(client, owner.email, documentId);
     if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
-    const expiredAuthority = await dbExpireEditorSession(client, documentRow);
     let session = await dbGetEditorEditSession(client, owner.email, documentId, sessionId, { lock: true });
     if (!session) throw editorDocumentError(404, 'editor_document_edit_session_not_found');
     assertEditorSessionKey(session, sessionKeyHash, documentRow);
+    if (session.state === 'observing') throw await editorObserverOnlyError(client, documentRow, session);
+    const expiredAuthority = await dbExpireEditorSession(client, documentRow);
+    if (expiredAuthority) {
+      session = await dbGetEditorEditSession(client, owner.email, documentId, sessionId, { lock: true });
+    }
 
     if (session.state === 'active' && Number(session.edit_generation) === Number(documentRow.edit_generation)) {
       const { rows } = await client.query(
@@ -4762,10 +5069,15 @@ async function dbCloseEditorEditSession(ownerEmail, documentId, sessionId, sessi
   return withEditorDocumentTransaction(async (client) => {
     const documentRow = await dbLockEditorDocument(client, ownerEmail, documentId);
     if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
-    const expiredAuthority = await dbExpireEditorSession(client, documentRow);
     let session = await dbGetEditorEditSession(client, ownerEmail, documentId, sessionId, { lock: true });
     if (!session) throw editorDocumentError(404, 'editor_document_edit_session_not_found');
     assertEditorSessionKey(session, sessionKeyHash, documentRow);
+    const expiredAuthority = session.state === 'observing'
+      ? null
+      : await dbExpireEditorSession(client, documentRow);
+    if (expiredAuthority) {
+      session = await dbGetEditorEditSession(client, ownerEmail, documentId, sessionId, { lock: true });
+    }
 
     const priorState = session.state;
     if (priorState !== 'closed') {
@@ -4821,10 +5133,14 @@ async function dbTakeOverEditorSession(owner, documentId, sessionId, expectedGen
   return withEditorDocumentTransaction(async (client) => {
     let documentRow = await dbLockEditorDocument(client, owner.email, documentId);
     if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
-    const expiredAuthority = await dbExpireEditorSession(client, documentRow);
     let requester = await dbGetEditorEditSession(client, owner.email, documentId, sessionId, { lock: true });
     if (!requester) throw editorDocumentError(404, 'editor_document_edit_session_not_found');
     assertEditorSessionKey(requester, sessionKeyHash, documentRow);
+    if (requester.state === 'observing') throw await editorObserverOnlyError(client, documentRow, requester);
+    const expiredAuthority = await dbExpireEditorSession(client, documentRow);
+    if (expiredAuthority) {
+      requester = await dbGetEditorEditSession(client, owner.email, documentId, sessionId, { lock: true });
+    }
     let active = await dbGetActiveEditorSession(client, documentId, { lock: true });
     const previousTerminalAuthority = active
       ? null
@@ -4927,15 +5243,14 @@ async function dbTakeOverEditorSession(owner, documentId, sessionId, expectedGen
 }
 
 async function assertActiveEditorEditSession(client, documentRow, sessionId, editGeneration, sessionKeyHash) {
-  const expiredAuthority = await dbExpireEditorSession(client, documentRow);
-  const session = await dbGetEditorEditSession(client, documentRow.owner_email, documentRow.document_id, sessionId, { lock: true });
+  let session = await dbGetEditorEditSession(client, documentRow.owner_email, documentRow.document_id, sessionId, { lock: true });
   if (session) {
-    try {
-      assertEditorSessionKey(session, sessionKeyHash, documentRow);
-    } catch (error) {
-      if (expiredAuthority) error.commitEditorSessionExpiry = true;
-      throw error;
-    }
+    assertEditorSessionKey(session, sessionKeyHash, documentRow);
+    if (session.state === 'observing') throw await editorObserverOnlyError(client, documentRow, session);
+  }
+  const expiredAuthority = await dbExpireEditorSession(client, documentRow);
+  if (expiredAuthority && session) {
+    session = await dbGetEditorEditSession(client, documentRow.owner_email, documentRow.document_id, sessionId, { lock: true });
   }
   const active = await dbGetActiveEditorSession(client, documentRow.document_id, { lock: true });
   const sessionRecovery = session
@@ -5012,10 +5327,14 @@ async function dbAppendDisplacedEditorRecovery(owner, documentId, sessionId, obs
   return withEditorDocumentTransaction(async (client) => {
     const documentRow = await dbLockEditorDocument(client, owner.email, documentId);
     if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
-    await dbExpireEditorSession(client, documentRow);
-    const session = await dbGetEditorEditSession(client, owner.email, documentId, sessionId, { lock: true });
+    let session = await dbGetEditorEditSession(client, owner.email, documentId, sessionId, { lock: true });
     if (!session) throw editorDocumentError(404, 'editor_document_edit_session_not_found');
     assertEditorSessionKey(session, sessionKeyHash, documentRow);
+    if (session.state === 'observing') throw await editorObserverOnlyError(client, documentRow, session);
+    const expiredAuthority = await dbExpireEditorSession(client, documentRow);
+    if (expiredAuthority) {
+      session = await dbGetEditorEditSession(client, owner.email, documentId, sessionId, { lock: true });
+    }
     const state = await dbEditorSessionState(client, documentRow, sessionId, session.device_hash);
     if (
       !(
@@ -5095,6 +5414,64 @@ async function dbDeleteEditorRecovery(
       edit_generation: editGeneration,
     });
     return rows[0];
+  });
+}
+
+async function dbDeleteEditorRecoveries(
+  ownerEmail,
+  documentId,
+  recoveryIds,
+  sessionId,
+  editGeneration,
+  sessionKeyHash,
+) {
+  return withEditorDocumentTransaction(async (client) => {
+    const documentRow = await dbLockEditorDocument(client, ownerEmail, documentId);
+    if (!documentRow) throw editorDocumentError(404, 'editor_document_not_found');
+    const session = await assertActiveEditorEditSession(
+      client,
+      documentRow,
+      sessionId,
+      editGeneration,
+      sessionKeyHash,
+    );
+    const locked = await client.query(
+      `SELECT recovery_id
+         FROM editor_document_recoveries
+        WHERE owner_email = $1 AND document_id = $2 AND recovery_id = ANY($3::uuid[])
+        FOR UPDATE`,
+      [ownerEmail, documentId, recoveryIds],
+    );
+    if (locked.rows.length !== recoveryIds.length) {
+      throw editorDocumentError(
+        409,
+        'editor_document_recovery_snapshot_conflict',
+        documentRow,
+        'one or more selected recoveries no longer belong to this document',
+        currentEditorSessionContext(documentRow, session),
+      );
+    }
+    const deleted = await client.query(
+      `DELETE FROM editor_document_recoveries
+        WHERE owner_email = $1 AND document_id = $2 AND recovery_id = ANY($3::uuid[])
+      RETURNING recovery_id`,
+      [ownerEmail, documentId, recoveryIds],
+    );
+    if (deleted.rows.length !== recoveryIds.length) {
+      throw editorDocumentError(
+        409,
+        'editor_document_recovery_snapshot_conflict',
+        documentRow,
+        'the recovery selection changed before deletion',
+        currentEditorSessionContext(documentRow, session),
+      );
+    }
+    await dbRecordEditorEditEvent(client, session, 'recoveries_deleted', {
+      recovery_ids: recoveryIds,
+      recovery_count: recoveryIds.length,
+      edit_generation: editGeneration,
+    });
+    return recoveryIds;
   });
 }
 
@@ -5323,6 +5700,16 @@ async function dbAutosaveEditorDocument(ownerEmail, documentId, expectedRevision
     if (!current) throw editorDocumentError(404, 'editor_document_not_found');
     const session = await assertActiveEditorEditSession(client, current, sessionId, editGeneration, sessionKeyHash);
     assertEditorDocumentRevision(current, expectedRevision, currentEditorSessionContext(current, session));
+    // Bind a legacy selected lineage before replacing the server-held body. V1
+    // included cover, so this is the last trustworthy moment to prove an exact
+    // old digest when the incoming first edit changes only live cover.
+    await dbTryBindStoredLevelLegacyBackgroundGeometry(
+      client,
+      current,
+      current.body,
+      ownerEmail,
+      session.actor_name,
+    );
     const canonical = await dbCanonicalLevel(
       client,
       ownerEmail,
@@ -5432,6 +5819,600 @@ async function dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, l
   return Number(rows[0].revision);
 }
 
+async function dbBackgroundVersionRow(documentId, versionId, queryable = pool, { lock = false } = {}) {
+  const { rows } = await queryable.query(
+    `SELECT ${BACKGROUND_VERSION_COLUMNS}
+       FROM predrawn_background_versions v
+       LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+      WHERE v.document_id = $1 AND v.id = $2${lock ? ' FOR UPDATE OF v' : ''}`,
+    [documentId, versionId],
+  );
+  return rows[0] || null;
+}
+
+async function dbAnyBackgroundVersionRow(versionId, queryable = pool) {
+  await ensureDbReady();
+  const { rows } = await queryable.query(
+    `SELECT ${BACKGROUND_VERSION_COLUMNS}
+       FROM predrawn_background_versions v
+       LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+      WHERE v.id = $1`,
+    [versionId],
+  );
+  return rows[0] || null;
+}
+
+async function dbRecordBackgroundVersionEvent(
+  client,
+  row,
+  action,
+  actorEmail,
+  actorName,
+  details = {},
+) {
+  await client.query(
+    `INSERT INTO predrawn_background_version_events
+       (document_id, version_id, action, actor_email, actor_name, details)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+    [row.document_id, row.id, action, actorEmail, actorName || actorEmail, JSON.stringify(details)],
+  );
+}
+
+function publicBackgroundVersion(row) {
+  const hasContent = Boolean(row.blob_sha256 && row.width && row.height);
+  const documentContentUrl = `/api/editor-documents/${encodeURIComponent(row.document_id)}`
+    + `/background-versions/${encodeURIComponent(String(row.id))}/content`;
+  return {
+    id: String(row.id),
+    document_id: row.document_id,
+    level_id: row.level_id,
+    kind: row.kind,
+    label: row.label,
+    parent_version_id: row.parent_version_id ? String(row.parent_version_id) : null,
+    source_background_version_id: row.source_background_version_id
+      ? String(row.source_background_version_id)
+      : null,
+    content_sha256: row.blob_sha256 || null,
+    frame_width: row.width === null ? null : Number(row.width),
+    frame_height: row.height === null ? null : Number(row.height),
+    byte_length: row.byte_length === null || row.byte_length === undefined ? null : Number(row.byte_length),
+    world_bounds: row.world_bounds,
+    operation: row.operation,
+    provenance: row.provenance,
+    // New versions already carry v2 in immutable metadata. A migrated v1 row
+    // exposes the separately persisted v2 binding without rewriting its bytes,
+    // operation, or provenance.
+    environment_geometry_sha256_v2: backgroundVersionV2GeometrySha256(row),
+    // Metadata creation and byte upload are separate HTTP operations. Keep the
+    // durable status vocabulary small, but identify that bounded transient to
+    // the UI instead of calling a row with no PNG "ready".
+    status: row.status === 'ready' && !hasContent ? 'draft' : row.status,
+    content_ready: hasContent,
+    content_url: hasContent ? `/api/background-versions/${encodeURIComponent(String(row.id))}/content` : null,
+    document_content_url: hasContent ? documentContentUrl : null,
+    public_content_url: hasContent && row.status === 'published'
+      ? `/api/background-versions/${encodeURIComponent(String(row.id))}/content`
+      : null,
+    row_revision: Number(row.row_revision),
+    created_by: row.created_by_name,
+    created_by_email: row.created_by_email,
+    created_at: nullableTimestampString(row.created_at),
+    updated_at: nullableTimestampString(row.updated_at),
+    archived_at: nullableTimestampString(row.archived_at),
+    archived_by: row.archived_by || null,
+    published_at: nullableTimestampString(row.published_at),
+    published_by: row.published_by || null,
+  };
+}
+
+function backgroundVersionError(statusCode, code, details = null) {
+  const error = new Error(code);
+  error.backgroundVersionStatus = statusCode;
+  error.backgroundVersionCode = code;
+  error.backgroundVersionDetails = details;
+  return error;
+}
+
+function respondBackgroundVersionError(res, error, operation) {
+  if (error?.statusCode && error?.responseCode) {
+    respondEditorDocumentError(res, error, operation);
+    return;
+  }
+  if (error?.backgroundVersionCode) {
+    res.status(error.backgroundVersionStatus || 400).json({
+      error: error.backgroundVersionCode,
+      ...(error.backgroundVersionDetails === null ? {} : { details: error.backgroundVersionDetails }),
+    });
+    return;
+  }
+  dbUnavailable(res, `background version ${operation} failed`, error, 'background_version_store_unavailable');
+}
+
+function decodedVersionedPredrawnSurface(level) {
+  if (!level?.boardCode || typeof level.boardCode !== 'string') return null;
+  if (!serverRender?.decodeBoard) {
+    throw editorDocumentError(503, 'board_renderer_unavailable');
+  }
+  const board = serverRender.decodeBoard(level.boardCode);
+  if (!board?.surface) return null;
+  const normalized = normalizePredrawnVersionSurface(board.surface);
+  if (!normalized) return null;
+  if (normalized.error) throw editorDocumentError(409, 'predrawn_background_surface_invalid', null, normalized.error);
+  return normalized.value;
+}
+
+function predrawnEnvironmentGeometryDigests(level) {
+  if (
+    !level?.boardCode || typeof level.boardCode !== 'string'
+    || !serverRender?.decodeBoard
+    || typeof serverRender.predrawnEnvironmentGeometryFingerprintInputV1 !== 'function'
+    || typeof serverRender.predrawnEnvironmentGeometryFingerprintInputV2 !== 'function'
+  ) {
+    throw editorDocumentError(503, 'board_renderer_unavailable');
+  }
+  const board = serverRender.decodeBoard(level.boardCode);
+  const sha256 = (fingerprint) => crypto.createHash('sha256').update(fingerprint, 'utf8').digest('hex');
+  return {
+    v1: sha256(serverRender.predrawnEnvironmentGeometryFingerprintInputV1(board)),
+    v2: sha256(serverRender.predrawnEnvironmentGeometryFingerprintInputV2(board)),
+  };
+}
+
+function backgroundVersionHasEnvironmentGeometry(row, expectedV2Sha256) {
+  return backgroundVersionV2GeometrySha256(row) === expectedV2Sha256;
+}
+
+function legacyBackgroundVersionNeedsGeometryBinding(row) {
+  const geometry = backgroundVersionEnvironmentGeometry(row);
+  return geometry?.schema === LEGACY_ENVIRONMENT_GEOMETRY_SCHEMA
+    && !row.environment_geometry_binding;
+}
+
+async function dbBindLegacyBackgroundVersionGeometry(
+  client,
+  rows,
+  geometryDigests,
+  actorEmail,
+  actorName,
+) {
+  const versions = [...new Map(rows.filter(Boolean).map((row) => [String(row.id), row])).values()];
+  const pending = [];
+  for (const row of versions) {
+    const geometry = backgroundVersionEnvironmentGeometry(row);
+    if (!geometry) return false;
+    if (geometry.schema === ENVIRONMENT_GEOMETRY_SCHEMA) {
+      if (geometry.sha256 !== geometryDigests.v2) return false;
+      continue;
+    }
+    if (geometry.schema !== LEGACY_ENVIRONMENT_GEOMETRY_SCHEMA) return false;
+    if (row.environment_geometry_binding) {
+      if (backgroundVersionV2GeometrySha256(row) !== geometryDigests.v2) return false;
+      continue;
+    }
+    // This is the one proof that authorizes migration. It is evaluated from the
+    // server-held pre-mutation Level, never from client-declared provenance.
+    if (geometry.sha256 !== geometryDigests.v1) return false;
+    pending.push({ row, geometry });
+  }
+
+  for (const { row, geometry } of pending) {
+    await client.query(
+      `INSERT INTO predrawn_background_geometry_bindings (
+         version_id, document_id,
+         legacy_environment_geometry_schema, legacy_environment_geometry_sha256,
+         environment_geometry_schema, environment_geometry_sha256,
+         bound_by_email, bound_by_name
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (version_id) DO NOTHING`,
+      [
+        row.id,
+        row.document_id,
+        LEGACY_ENVIRONMENT_GEOMETRY_SCHEMA,
+        geometry.sha256,
+        ENVIRONMENT_GEOMETRY_SCHEMA,
+        geometryDigests.v2,
+        actorEmail,
+        actorName || actorEmail,
+      ],
+    );
+  }
+  if (!pending.length) return true;
+
+  const bound = await client.query(
+    `SELECT version_id, legacy_environment_geometry_schema,
+            legacy_environment_geometry_sha256, environment_geometry_schema,
+            environment_geometry_sha256, bound_at
+       FROM predrawn_background_geometry_bindings
+      WHERE version_id = ANY($1::uuid[])`,
+    [pending.map(({ row }) => String(row.id))],
+  );
+  const bindingByVersion = new Map(bound.rows.map((binding) => [String(binding.version_id), binding]));
+  for (const { row, geometry } of pending) {
+    const binding = bindingByVersion.get(String(row.id));
+    if (
+      binding?.legacy_environment_geometry_schema !== LEGACY_ENVIRONMENT_GEOMETRY_SCHEMA
+      || binding?.legacy_environment_geometry_sha256 !== geometry.sha256
+      || binding?.environment_geometry_schema !== ENVIRONMENT_GEOMETRY_SCHEMA
+      || binding?.environment_geometry_sha256 !== geometryDigests.v2
+    ) {
+      throw editorDocumentError(
+        409,
+        'predrawn_background_geometry_binding_conflict',
+        null,
+        'the immutable background version already has a different geometry migration binding',
+      );
+    }
+    row.environment_geometry_binding = binding;
+  }
+  return true;
+}
+
+function backgroundVersionContentDigestMatches(row) {
+  const declared = row?.kind === 'raw'
+    ? row?.provenance?.sourceSha256
+    : row?.operation?.outputSha256;
+  return /^[0-9a-f]{64}$/.test(declared || '')
+    && declared === row?.blob_sha256
+    && (row?.kind === 'raw' || row?.provenance?.outputSha256 === declared);
+}
+
+async function dbBackgroundVersionLineageRows(client, requestedIds) {
+  const { rows } = await client.query(
+    // UNION (not UNION ALL) makes a corrupt cycle finite; the ordered policy
+    // walk still reports that cycle explicitly instead of accepting it.
+    `WITH RECURSIVE lineage_ids(id) AS (
+       SELECT unnest($1::uuid[])
+       UNION
+       SELECT version.parent_version_id
+         FROM predrawn_background_versions version
+         JOIN lineage_ids lineage ON lineage.id = version.id
+        WHERE version.parent_version_id IS NOT NULL
+     )
+     SELECT ${BACKGROUND_VERSION_COLUMNS},
+            source_document.workspace_kind AS source_workspace_kind,
+            source_document.workspace_id AS source_workspace_id,
+            source_document.level_id AS source_level_id
+       FROM predrawn_background_versions v
+       JOIN level_working_copies source_document
+         ON source_document.document_id = v.document_id
+       LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+      WHERE v.id IN (SELECT id FROM lineage_ids)
+      ORDER BY v.id
+      FOR UPDATE OF v`,
+    [requestedIds],
+  );
+  return rows;
+}
+
+async function dbTryBindStoredLevelLegacyBackgroundGeometry(
+  client,
+  documentRow,
+  level,
+  actorEmail,
+  actorName,
+) {
+  const surface = decodedVersionedPredrawnSurface(level);
+  if (!surface) return false;
+  const requestedIds = [surface.background_version_id, surface.occlusion_version_id].filter(Boolean);
+  const rows = await dbBackgroundVersionLineageRows(client, requestedIds);
+  const versions = new Map(rows.map((row) => [String(row.id), row]));
+  if (requestedIds.some((id) => !versions.has(id))) return false;
+
+  const background = versions.get(surface.background_version_id);
+  const rawParent = background?.kind === 'warped' && background.parent_version_id
+    ? versions.get(String(background.parent_version_id)) || null
+    : null;
+  const occlusion = surface.occlusion_version_id ? versions.get(surface.occlusion_version_id) : null;
+  const sourceDocumentId = background?.document_id;
+  const scoped = rows.every((row) => {
+    if (row.document_id !== sourceDocumentId) return false;
+    if (row.document_id === documentRow.document_id) {
+      return row.owner_email === documentRow.owner_email && row.level_id === documentRow.level_id;
+    }
+    return row.status === 'published'
+      && documentRow.workspace_kind === 'official'
+      && row.source_workspace_kind === 'official'
+      && row.source_workspace_id === documentRow.workspace_id
+      && row.source_level_id === documentRow.level_id;
+  });
+  if (!scoped) return false;
+
+  const backgroundIssue = background?.kind === 'warped'
+    ? (
+      rawParent
+        ? backgroundVersionStoredContractIssue(rawParent)
+          || backgroundVersionStoredContractIssue(background, rawParent, rawParent)
+        : 'missing raw parent'
+    )
+    : backgroundVersionStoredContractIssue(background);
+  if (backgroundIssue) return false;
+  let occlusionLineage = [];
+  if (occlusion) {
+    const resolved = backgroundVersionStoredOcclusionChain(occlusion, versions, background);
+    if (resolved.error) return false;
+    occlusionLineage = resolved.value;
+  }
+  const lineage = [background, rawParent, ...occlusionLineage].filter(Boolean);
+  if (!lineage.some(legacyBackgroundVersionNeedsGeometryBinding)) return true;
+  return dbBindLegacyBackgroundVersionGeometry(
+    client,
+    lineage,
+    predrawnEnvironmentGeometryDigests(level),
+    actorEmail,
+    actorName,
+  );
+}
+
+async function dbPublishLevelBackgroundVersions(
+  client,
+  documentRow,
+  level,
+  actorEmail,
+  actorName,
+  { makePublic = documentRow.workspace_kind === 'official' } = {},
+) {
+  const surface = decodedVersionedPredrawnSurface(level);
+  if (!surface) return [];
+  const requestedIds = [surface.background_version_id, surface.occlusion_version_id].filter(Boolean);
+  const rows = await dbBackgroundVersionLineageRows(client, requestedIds);
+  const versions = new Map(rows.map((row) => [String(row.id), row]));
+  if (requestedIds.some((id) => !versions.has(id))) {
+    throw editorDocumentError(
+      409,
+      'predrawn_background_version_not_found',
+      documentRow,
+      'the selected background versions do not belong to this editor document',
+    );
+  }
+  const background = versions.get(surface.background_version_id);
+  const occlusion = surface.occlusion_version_id ? versions.get(surface.occlusion_version_id) : null;
+  const rawParent = background?.kind === 'warped' && background.parent_version_id
+    ? versions.get(String(background.parent_version_id)) || null
+    : null;
+  const environmentGeometryDigests = predrawnEnvironmentGeometryDigests(level);
+  const selectable = (row) => row && ['ready', 'published'].includes(row.status) && row.blob_sha256;
+  const scopedToDocument = (row) => {
+    if (!row) return false;
+    if (row.document_id === documentRow.document_id) {
+      return row.owner_email === documentRow.owner_email && row.level_id === documentRow.level_id;
+    }
+    // Official publication is collaborative across administrators. A later
+    // admin may retain an already-public exact selection created from another
+    // admin's working copy for this same official Level. Ready/private rows
+    // never cross that document boundary.
+    return row.status === 'published'
+      && documentRow.workspace_kind === 'official'
+      && row.source_workspace_kind === 'official'
+      && row.source_workspace_id === documentRow.workspace_id
+      && row.source_level_id === documentRow.level_id;
+  };
+  if (
+    !selectable(background) || !['raw', 'warped'].includes(background.kind)
+    || background.operation?.kind !== (background.kind === 'raw' ? 'raw-generated-v2' : 'grid-warp-v1')
+    || !backgroundVersionContentDigestMatches(background)
+    || !scopedToDocument(background)
+  ) {
+    throw editorDocumentError(
+      409,
+      'predrawn_background_version_not_ready',
+      documentRow,
+      'the selected background is not a ready background version for this level',
+    );
+  }
+  const backgroundContractIssue = background.kind === 'warped'
+    ? (
+      rawParent
+        ? backgroundVersionStoredContractIssue(rawParent)
+          || (!backgroundVersionContentDigestMatches(rawParent)
+            ? 'warped raw parent content digest does not match its immutable bytes'
+            : null)
+          || backgroundVersionStoredContractIssue(background, rawParent, rawParent)
+        : 'warped source version was not found in its document'
+    )
+    : backgroundVersionStoredContractIssue(background);
+  if (backgroundContractIssue) {
+    throw editorDocumentError(
+      409,
+      'predrawn_background_contract_mismatch',
+      documentRow,
+      backgroundContractIssue,
+    );
+  }
+  if (
+    Number(background.width) !== surface.frame_width
+    || Number(background.height) !== surface.frame_height
+    || !sameBackgroundWorldBounds(background.world_bounds, surface.world_bounds)
+  ) {
+    throw editorDocumentError(
+      409,
+      'predrawn_background_surface_mismatch',
+      documentRow,
+      'the Level surface dimensions or world bounds do not match the selected background bytes',
+    );
+  }
+  let occlusionLineage = { value: [] };
+  if (occlusion) {
+    occlusionLineage = backgroundVersionStoredOcclusionChain(occlusion, versions, background);
+    const invalidDigest = occlusionLineage.value?.find((row) => (
+      !backgroundVersionContentDigestMatches(row)
+    ));
+    const occlusionContractIssue = occlusionLineage.error
+      || (invalidDigest ? 'occlusion lineage content digest does not match its immutable bytes' : null);
+    if (occlusionContractIssue) {
+      throw editorDocumentError(
+        409,
+        'predrawn_occlusion_contract_mismatch',
+        documentRow,
+        occlusionContractIssue,
+      );
+    }
+  }
+  if (occlusion && (
+    !selectable(occlusion) || occlusion.kind !== 'occlusion'
+    || !scopedToDocument(occlusion)
+    || String(occlusion.source_background_version_id) !== String(background.id)
+    || occlusion.operation?.kind !== 'occlusion-depth-v1'
+    || occlusion.operation?.encoding !== 'rgb24-signed-half-depth-alpha'
+    || backgroundVersionId(occlusion.operation?.sourceBackgroundVersionId) !== String(background.id)
+    || !backgroundVersionContentDigestMatches(occlusion)
+    || Number(occlusion.width) !== Number(background.width)
+    || Number(occlusion.height) !== Number(background.height)
+    || !sameBackgroundWorldBounds(occlusion.world_bounds, background.world_bounds)
+  )) {
+    throw editorDocumentError(
+      409,
+      'predrawn_occlusion_version_mismatch',
+      documentRow,
+      'the selected occlusion output is not a ready mask for the selected background',
+    );
+  }
+  const backgroundGeometryBound = await dbBindLegacyBackgroundVersionGeometry(
+    client,
+    [background, rawParent, ...(occlusionLineage.value || [])],
+    environmentGeometryDigests,
+    actorEmail,
+    actorName,
+  );
+  if (
+    !backgroundGeometryBound
+    || !backgroundVersionHasEnvironmentGeometry(background, environmentGeometryDigests.v2)
+    || (rawParent && !backgroundVersionHasEnvironmentGeometry(rawParent, environmentGeometryDigests.v2))
+  ) {
+    throw editorDocumentError(
+      409,
+      'predrawn_background_geometry_mismatch',
+      documentRow,
+      'the selected background was generated for different terrain or scenery geometry',
+    );
+  }
+  if (
+    occlusion
+    && (occlusionLineage.value || []).some((row) => (
+      !backgroundVersionHasEnvironmentGeometry(row, environmentGeometryDigests.v2)
+    ))
+  ) {
+    throw editorDocumentError(
+      409,
+      'predrawn_occlusion_geometry_mismatch',
+      documentRow,
+      'the selected occlusion output was generated for different terrain or scenery geometry',
+    );
+  }
+
+  // A private account Save has a canonical Level but is not a public
+  // publication. Its exact references are validated and committed while the
+  // bytes remain owner-scoped. Official publication and an explicit public-map
+  // snapshot are the only boundaries that make selected bytes anonymous.
+  if (!makePublic) return requestedIds;
+
+  const newlyPublished = [background, occlusion].filter((row) => row && row.status === 'ready');
+  if (newlyPublished.length) {
+    const ids = newlyPublished.map((row) => String(row.id));
+    await client.query(
+      `UPDATE predrawn_background_versions
+          SET status = 'published', published_at = now(), published_by = $2,
+              row_revision = row_revision + 1, updated_at = now(), updated_by = $2
+        WHERE id = ANY($1::uuid[])`,
+      [ids, actorEmail],
+    );
+    await client.query(
+      `UPDATE media_blobs SET published_at = COALESCE(published_at, now())
+        WHERE sha256 = ANY($1::text[])`,
+      [newlyPublished.map((row) => row.blob_sha256)],
+    );
+    for (const row of newlyPublished) {
+      await dbRecordBackgroundVersionEvent(client, row, 'published', actorEmail, actorName, {
+        content_sha256: row.blob_sha256,
+        publication_boundary: documentRow.workspace_kind === 'official' ? 'official' : 'public-map',
+      });
+    }
+  }
+  return requestedIds;
+}
+
+async function dbApplyWorkspaceBackgroundVersionBoundary(
+  client,
+  {
+    workspaceKind,
+    workspaceId,
+    ownerEmail,
+    levels,
+    actorEmail,
+    actorName,
+    makePublic,
+  },
+) {
+  for (const [levelId, level] of Object.entries(levels)) {
+    const surface = decodedVersionedPredrawnSurface(level);
+    if (!surface) continue;
+    const sourceDocumentResult = await client.query(
+      `SELECT source_document.document_id, source_document.owner_email,
+               source_document.workspace_kind, source_document.workspace_id,
+               source_document.level_id
+         FROM predrawn_background_versions v
+         JOIN level_working_copies source_document
+           ON source_document.document_id = v.document_id
+        WHERE v.id = $1`,
+      [surface.background_version_id],
+    );
+    const sourceDocument = sourceDocumentResult.rows[0];
+    const inWorkspace = sourceDocument
+      && sourceDocument.workspace_kind === workspaceKind
+      && sourceDocument.workspace_id === workspaceId
+      && sourceDocument.level_id === levelId
+      && (workspaceKind !== 'user' || sourceDocument.owner_email === ownerEmail);
+    if (!inWorkspace) {
+      throw editorDocumentError(
+        409,
+        'predrawn_background_version_not_found',
+        null,
+        'the selected background is not owned by this exact workspace Level',
+      );
+    }
+    const requestedIds = [surface.background_version_id, surface.occlusion_version_id].filter(Boolean);
+    const selectedVersions = await client.query(
+      `SELECT id, document_id, status
+         FROM predrawn_background_versions
+        WHERE id = ANY($1::uuid[])`,
+      [requestedIds],
+    );
+    const allFromSourceDocument = selectedVersions.rows.length === requestedIds.length
+      && selectedVersions.rows.every((row) => row.document_id === sourceDocument.document_id);
+    const mayUseForeignOfficialSelection = workspaceKind !== 'official'
+      || sourceDocument.owner_email === actorEmail
+      || (allFromSourceDocument && selectedVersions.rows.every((row) => row.status === 'published'));
+    if (!allFromSourceDocument || !mayUseForeignOfficialSelection) {
+      throw editorDocumentError(
+        409,
+        'predrawn_background_version_not_found',
+        null,
+        'the selected background is not owned by this actor or already published for this exact official Level',
+      );
+    }
+    try {
+      await dbPublishLevelBackgroundVersions(
+        client,
+        sourceDocument,
+        level,
+        actorEmail,
+        actorName,
+        { makePublic },
+      );
+    } catch (error) {
+      // Whole-workspace writers have no editor-document recovery contract. Do
+      // not project a different admin's private working copy through a crafted
+      // global payload when exact-version validation fails.
+      if (error?.statusCode && error?.responseCode) {
+        error.row = null;
+        error.session = null;
+        error.presence = null;
+        error.recovery = null;
+      }
+      throw error;
+    }
+  }
+}
+
 async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, requestedLevel, campaignId, sessionId, editGeneration, sessionKeyHash) {
   return withEditorDocumentTransaction(async (client) => {
     const current = await dbLockEditorDocument(client, ownerEmail, documentId);
@@ -5462,6 +6443,7 @@ async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, re
         'canonical Level changed after this working copy was based on it',
       );
     }
+    await dbPublishLevelBackgroundVersions(client, current, level, ownerEmail, session.actor_name);
     const workspaceRevision = await dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, level, campaignId);
     const baselineHash = await dbJsonbHash(client, level);
     const { rows } = await client.query(
@@ -5578,8 +6560,14 @@ function editorEditSessionOpenRequest(req, res) {
   const sessionId = editorEditSessionId(operation.raw.session_id);
   const deviceId = editorDeviceId(operation.raw.device_id);
   const sessionKey = editorSessionKey(operation.raw.session_key);
+  const rawIntent = operation.raw.intent ?? req.get('x-level-editor-session-intent') ?? 'write';
+  const intent = rawIntent === 'write' || rawIntent === 'observe' ? rawIntent : null;
   if (!sessionId || !deviceId || !sessionKey) {
     res.status(400).json({ error: 'invalid_editor_document_edit_session' });
+    return null;
+  }
+  if (!intent) {
+    res.status(400).json({ error: 'invalid_editor_document_edit_session_intent' });
     return null;
   }
   return {
@@ -5588,6 +6576,7 @@ function editorEditSessionOpenRequest(req, res) {
     deviceHash: editorDeviceHash(deviceId),
     sessionKeyHash: editorSessionKeyHash(sessionKey),
     clientLabel: clampText(operation.raw.client_label, '', 120),
+    intent,
   };
 }
 
@@ -5630,12 +6619,40 @@ function editorDocumentMutationAuthority(raw, res) {
   return { sessionId, editGeneration, sessionKeyHash: editorSessionKeyHash(sessionKey) };
 }
 
+function backgroundVersionMutationAuthority(req, res) {
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  const sessionId = editorEditSessionId(
+    raw.edit_session_id ?? req.get('x-editor-edit-session-id'),
+  );
+  const suppliedGeneration = raw.edit_generation ?? req.get('x-editor-edit-generation');
+  const parsedGeneration = typeof suppliedGeneration === 'string' && /^\d+$/.test(suppliedGeneration)
+    ? Number(suppliedGeneration)
+    : suppliedGeneration;
+  const editGeneration = editorEditGeneration(parsedGeneration);
+  const sessionKey = editorSessionKey(
+    raw.edit_session_key ?? req.get('x-editor-edit-session-key'),
+  );
+  if (!sessionId || editGeneration === null || !sessionKey) {
+    res.status(400).json({ error: 'editor_document_edit_session_required' });
+    return null;
+  }
+  return { sessionId, editGeneration, sessionKeyHash: editorSessionKeyHash(sessionKey) };
+}
+
 function editorRecoveryOperationRequest(req, res) {
   const documentId = editorDocumentId(req.params.documentId);
   const recoveryId = editorEditSessionId(req.params.recoveryId);
   if (!documentId) { res.status(400).json({ error: 'invalid_editor_document_id' }); return null; }
   if (!recoveryId) { res.status(400).json({ error: 'invalid_editor_document_recovery_id' }); return null; }
   return { documentId, recoveryId, raw: isObjectRecord(req.body) ? req.body : {} };
+}
+
+function editorRecoveryIds(raw) {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const recoveryIds = raw.map((value) => editorEditSessionId(value));
+  if (recoveryIds.some((recoveryId) => !recoveryId)) return null;
+  if (new Set(recoveryIds).size !== recoveryIds.length) return null;
+  return recoveryIds;
 }
 
 function editorSessionResponse(result) {
@@ -5938,6 +6955,37 @@ app.get('/api/editor-documents/:documentId/recoveries', async (req, res) => {
   }
 });
 
+app.delete('/api/editor-documents/:documentId/recoveries', async (req, res) => {
+  const documentId = editorDocumentId(req.params.documentId);
+  if (!documentId) { res.status(400).json({ error: 'invalid_editor_document_id' }); return; }
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  const recoveryIds = editorRecoveryIds(raw.recovery_ids);
+  if (!recoveryIds) { res.status(400).json({ error: 'invalid_editor_document_recovery_ids' }); return; }
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const stored = await dbGetEditorDocument(user.email, documentId);
+    if (!stored) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(stored, user, res)) return;
+    const authority = editorDocumentMutationAuthority(raw, res);
+    if (!authority) return;
+    const deletedRecoveryIds = await dbDeleteEditorRecoveries(
+      user.email,
+      documentId,
+      recoveryIds,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+    res.status(200).json({
+      recovery_ids: deletedRecoveryIds,
+      deleted_count: deletedRecoveryIds.length,
+    });
+  } catch (error) {
+    respondEditorDocumentError(res, error, 'delete recoveries');
+  }
+});
+
 app.post('/api/editor-documents/:documentId/edit-sessions/:sessionId/recoveries', async (req, res) => {
   const input = editorEditSessionOperationRequest(req, res);
   if (!input) return;
@@ -6176,6 +7224,640 @@ app.post('/api/editor-documents/:documentId/discard', async (req, res) => {
   }
 });
 
+function backgroundVersionIdempotencyKey(req, raw) {
+  const header = req.get('idempotency-key');
+  const body = isObjectRecord(raw) ? raw.idempotency_key ?? raw.idempotencyKey : undefined;
+  if (header !== undefined && body !== undefined && String(header).trim() !== String(body).trim()) {
+    throw backgroundVersionError(400, 'invalid_background_version_idempotency_key', 'header and body keys differ');
+  }
+  if (header === undefined && body === undefined) return null;
+  const value = normalizeBackgroundVersionIdempotencyKey(header ?? body);
+  if (!value) {
+    throw backgroundVersionError(400, 'invalid_background_version_idempotency_key');
+  }
+  return value;
+}
+
+function requireBackgroundVersionExpectedRevision(req) {
+  const expected = mediaExpectedRevision(req);
+  if (expected === null) throw backgroundVersionError(428, 'background_version_expected_revision_required');
+  return expected;
+}
+
+function assertBackgroundVersionRevision(row, expected) {
+  if (Number(row.row_revision) !== expected) {
+    throw backgroundVersionError(409, 'background_version_conflict', {
+      current_revision: Number(row.row_revision),
+    });
+  }
+}
+
+async function authorizedBackgroundVersionDocument(req, res, { mutate = false, authenticatedUser = null } = {}) {
+  const documentId = editorDocumentId(req.params.documentId);
+  if (!documentId) {
+    res.status(400).json({ error: 'invalid_editor_document_id' });
+    return null;
+  }
+  const user = authenticatedUser || await requireUser(req, res);
+  if (!user) return null;
+  const row = mutate
+    ? await dbGetEditorDocument(user.email, documentId)
+    : await dbGetEditorDocumentForViewer(user.email, documentId);
+  if (!row) {
+    res.status(404).json({ error: 'editor_document_not_found' });
+    return null;
+  }
+  if (!editorDocumentRowIsAuthorized(row, user, res)) return null;
+  const authority = mutate
+    ? req.backgroundVersionAuthority || backgroundVersionMutationAuthority(req, res)
+    : null;
+  if (mutate && !authority) return null;
+  return { documentId, row, user, authority };
+}
+
+async function dbAssertBackgroundVersionWriter(documentRow, authority) {
+  return withEditorDocumentTransaction(async (client) => {
+    const current = await dbLockEditorDocument(
+      client,
+      documentRow.owner_email,
+      documentRow.document_id,
+    );
+    if (!current) throw editorDocumentError(404, 'editor_document_not_found');
+    return assertActiveEditorEditSession(
+      client,
+      current,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+  });
+}
+
+async function dbListBackgroundVersions(documentRow, status = 'all') {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT ${BACKGROUND_VERSION_COLUMNS}
+       FROM predrawn_background_versions v
+       JOIN level_working_copies source_document
+         ON source_document.document_id = v.document_id
+       LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+      WHERE (
+          v.document_id = $1
+          OR (
+            $2::text = 'official'
+            AND v.status = 'published'
+            AND source_document.workspace_kind = 'official'
+            AND source_document.workspace_id = $3
+            AND source_document.level_id = $4
+          )
+        )
+        AND (
+          $5::text = 'all'
+          OR ($5::text = 'draft' AND v.status = 'ready' AND v.blob_sha256 IS NULL)
+          OR ($5::text = 'ready' AND v.status = 'ready' AND v.blob_sha256 IS NOT NULL)
+          OR ($5::text IN ('archived', 'published') AND v.status = $5)
+        )
+      ORDER BY v.created_at DESC, v.id DESC`,
+    [
+      documentRow.document_id,
+      documentRow.workspace_kind,
+      documentRow.workspace_id,
+      documentRow.level_id,
+      status,
+    ],
+  );
+  return rows;
+}
+
+async function dbCreateBackgroundVersion(documentRow, user, authority, value, idempotencyKey) {
+  const actor = String(user.email).trim().toLowerCase();
+  const fingerprint = crypto.createHash('sha256').update(canonicalJson({
+    document_id: documentRow.document_id,
+    ...value,
+  })).digest('hex');
+  return withEditorDocumentTransaction(async (client) => {
+    const currentDocument = await dbLockEditorDocument(
+      client,
+      documentRow.owner_email,
+      documentRow.document_id,
+    );
+    if (!currentDocument) throw editorDocumentError(404, 'editor_document_not_found');
+    const writerSession = await assertActiveEditorEditSession(
+      client,
+      currentDocument,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+    if (idempotencyKey) {
+      const replay = await client.query(
+        `SELECT document_id, id, request_fingerprint
+           FROM predrawn_background_versions
+          WHERE idempotency_actor = $1 AND idempotency_key = $2`,
+        [actor, idempotencyKey],
+      );
+      if (replay.rows[0]) {
+        if (
+          replay.rows[0].document_id !== documentRow.document_id
+          || replay.rows[0].request_fingerprint !== fingerprint
+        ) throw backgroundVersionError(409, 'background_version_idempotency_conflict');
+        return {
+          created: false,
+          row: await dbBackgroundVersionRow(documentRow.document_id, replay.rows[0].id, client),
+        };
+      }
+    }
+
+    const countResult = await client.query(
+      'SELECT count(*)::integer AS count FROM predrawn_background_versions WHERE document_id = $1',
+      [documentRow.document_id],
+    );
+    if (Number(countResult.rows[0]?.count || 0) >= BACKGROUND_VERSION_DOCUMENT_ROW_LIMIT) {
+      throw backgroundVersionError(409, 'background_version_document_quota_exceeded', {
+        limit: BACKGROUND_VERSION_DOCUMENT_ROW_LIMIT,
+      });
+    }
+
+    const lineageIds = [value.parent_version_id, value.source_background_version_id].filter(Boolean);
+    const lineage = lineageIds.length
+      ? await client.query(
+        `WITH RECURSIVE lineage_ids(id) AS (
+           SELECT id
+             FROM predrawn_background_versions
+            WHERE document_id = $1 AND id = ANY($2::uuid[])
+           UNION
+           SELECT version.parent_version_id
+             FROM predrawn_background_versions version
+             JOIN lineage_ids lineage_id ON lineage_id.id = version.id
+            WHERE version.document_id = $1 AND version.parent_version_id IS NOT NULL
+         )
+         SELECT v.*,
+                (SELECT jsonb_build_object(
+                    'legacy_environment_geometry_schema', binding.legacy_environment_geometry_schema,
+                    'legacy_environment_geometry_sha256', binding.legacy_environment_geometry_sha256,
+                    'environment_geometry_schema', binding.environment_geometry_schema,
+                    'environment_geometry_sha256', binding.environment_geometry_sha256,
+                    'bound_at', binding.bound_at
+                  )
+                   FROM predrawn_background_geometry_bindings binding
+                  WHERE binding.version_id = v.id) AS environment_geometry_binding
+           FROM predrawn_background_versions v
+          WHERE v.document_id = $1 AND v.id IN (SELECT id FROM lineage_ids)
+          FOR SHARE`,
+        [documentRow.document_id, lineageIds],
+      )
+      : { rows: [] };
+    const byId = new Map(lineage.rows.map((row) => [String(row.id), row]));
+    const parent = value.parent_version_id ? byId.get(value.parent_version_id) || null : null;
+    const source = value.source_background_version_id
+      ? byId.get(value.source_background_version_id) || null
+      : null;
+    const legacyLineage = [...new Map(
+      lineage.rows
+        .filter((row) => backgroundVersionEnvironmentGeometry(row)?.schema === LEGACY_ENVIRONMENT_GEOMETRY_SCHEMA)
+        .map((row) => [String(row.id), row]),
+    ).values()];
+    if (legacyLineage.length) {
+      await dbBindLegacyBackgroundVersionGeometry(
+        client,
+        legacyLineage,
+        predrawnEnvironmentGeometryDigests(currentDocument.body),
+        user.email,
+        writerSession.actor_name,
+      );
+    }
+    const lineageIssue = backgroundVersionLineageIssue(value, parent, source);
+    if (lineageIssue) throw backgroundVersionError(409, 'invalid_background_version_lineage', lineageIssue);
+
+    const requestedId = crypto.randomUUID();
+    const inserted = await client.query(
+      `INSERT INTO predrawn_background_versions (
+         id, document_id, owner_email, level_id, kind, label,
+         parent_version_id, source_background_version_id, world_bounds,
+         operation, provenance, idempotency_actor, idempotency_key, request_fingerprint,
+         created_by_email, created_by_name, updated_by
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb,
+         $12, $13, $14, $15, $16, $15)
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [
+        requestedId, documentRow.document_id, documentRow.owner_email, documentRow.level_id,
+        value.kind, value.label, value.parent_version_id, value.source_background_version_id,
+        JSON.stringify(value.world_bounds), JSON.stringify(value.operation), JSON.stringify(value.provenance),
+        idempotencyKey ? actor : null, idempotencyKey, idempotencyKey ? fingerprint : null,
+        user.email, user.name || user.email,
+      ],
+    );
+    if (inserted.rows[0]) {
+      const row = await dbBackgroundVersionRow(documentRow.document_id, requestedId, client);
+      await dbRecordBackgroundVersionEvent(client, row, 'created', user.email, user.name, {
+        kind: value.kind,
+        parent_version_id: value.parent_version_id,
+        source_background_version_id: value.source_background_version_id,
+        idempotency_key: idempotencyKey,
+        edit_session_id: writerSession.session_id,
+        edit_generation: Number(writerSession.edit_generation),
+      });
+      return {
+        created: true,
+        row,
+      };
+    }
+    if (!idempotencyKey) throw new Error('background version insert unexpectedly conflicted');
+    const replay = await client.query(
+      `SELECT document_id, id, request_fingerprint
+         FROM predrawn_background_versions
+        WHERE idempotency_actor = $1 AND idempotency_key = $2`,
+      [actor, idempotencyKey],
+    );
+    if (
+      !replay.rows[0] || replay.rows[0].document_id !== documentRow.document_id
+      || replay.rows[0].request_fingerprint !== fingerprint
+    ) throw backgroundVersionError(409, 'background_version_idempotency_conflict');
+    return {
+      created: false,
+      row: await dbBackgroundVersionRow(documentRow.document_id, replay.rows[0].id, client),
+    };
+  });
+}
+
+async function dbUploadBackgroundVersionContent(
+  documentRow,
+  versionId,
+  expectedRevision,
+  user,
+  authority,
+  body,
+  inspected,
+  sha256,
+) {
+  const blobKey = liveMediaBlobKey(sha256);
+  return withEditorDocumentTransaction(async (client) => {
+    // Serialize the exact unique-byte accounting across every document owned by
+    // this account. This lock is acquired before any row lock in the upload
+    // transaction, matching the owner-first order of whole-workspace writers.
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('predrawn-background-owner:' || $1, 0))",
+      [documentRow.owner_email],
+    );
+    const currentDocument = await dbLockEditorDocument(
+      client,
+      documentRow.owner_email,
+      documentRow.document_id,
+    );
+    if (!currentDocument) throw editorDocumentError(404, 'editor_document_not_found');
+    const writerSession = await assertActiveEditorEditSession(
+      client,
+      currentDocument,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+    const current = await dbBackgroundVersionRow(documentRow.document_id, versionId, client, { lock: true });
+    if (!current || current.owner_email !== documentRow.owner_email || current.level_id !== documentRow.level_id) {
+      throw backgroundVersionError(404, 'background_version_not_found');
+    }
+    if (current.blob_sha256) {
+      if (
+        current.blob_sha256 === sha256
+        && Number(current.width) === inspected.width && Number(current.height) === inspected.height
+      ) return { row: current, idempotentReplay: true };
+      throw backgroundVersionError(409, 'background_version_content_immutable');
+    }
+    const expectedContentSha256 = current.kind === 'raw'
+      ? current.provenance?.sourceSha256
+      : current.operation?.outputSha256;
+    if (expectedContentSha256 !== sha256) {
+      throw backgroundVersionError(
+        409,
+        'background_version_content_hash_mismatch',
+        'the uploaded PNG bytes do not match the immutable content digest declared at version creation',
+      );
+    }
+    assertBackgroundVersionRevision(current, expectedRevision);
+    if (current.status !== 'ready') {
+      throw backgroundVersionError(409, 'background_version_locked', { status: current.status });
+    }
+    const usageResult = await client.query(
+      `SELECT COALESCE(sum(usage.byte_length), 0)::text AS used_bytes,
+              COALESCE(bool_or(usage.blob_sha256 = $2), false) AS already_referenced
+         FROM (
+           SELECT DISTINCT v.blob_sha256, b.byte_length
+             FROM predrawn_background_versions v
+             JOIN media_blobs b ON b.sha256 = v.blob_sha256
+            WHERE v.owner_email = $1 AND v.blob_sha256 IS NOT NULL
+         ) usage`,
+      [documentRow.owner_email, sha256],
+    );
+    const usedBytes = BigInt(usageResult.rows[0]?.used_bytes || '0');
+    const additionalBytes = usageResult.rows[0]?.already_referenced ? 0n : BigInt(body.length);
+    if (usedBytes + additionalBytes > BACKGROUND_VERSION_OWNER_BLOB_BYTE_LIMIT) {
+      throw backgroundVersionError(413, 'background_version_owner_blob_quota_exceeded', {
+        limit_bytes: String(BACKGROUND_VERSION_OWNER_BLOB_BYTE_LIMIT),
+        used_bytes: String(usedBytes),
+        attempted_additional_bytes: String(additionalBytes),
+      });
+    }
+    if (current.kind === 'occlusion') {
+      const source = await dbBackgroundVersionRow(
+        documentRow.document_id,
+        current.source_background_version_id,
+        client,
+      );
+      if (
+        !source?.blob_sha256 || !['raw', 'warped'].includes(source.kind)
+        || Number(source.width) !== inspected.width || Number(source.height) !== inspected.height
+      ) {
+        throw backgroundVersionError(
+          409,
+          'background_version_content_mismatch',
+          'an occlusion PNG must have exactly the same dimensions as its source background',
+        );
+      }
+    }
+    await writeLiveMediaBlob(blobKey, body, sha256, 'image/png');
+    await client.query(
+      `INSERT INTO media_blobs (sha256, blob_key, media_type, byte_length, width, height)
+       VALUES ($1, $2, 'image/png', $3, $4, $5)
+       ON CONFLICT (sha256) DO NOTHING`,
+      [sha256, blobKey, body.length, inspected.width, inspected.height],
+    );
+    const stored = await mediaBlobRecord(sha256, { queryable: client });
+    if (
+      !stored || stored.blob_key !== blobKey || stored.media_type !== 'image/png'
+      || Number(stored.byte_length) !== body.length
+      || Number(stored.width) !== inspected.width || Number(stored.height) !== inspected.height
+    ) throw new Error('background version blob metadata conflicts with its content hash');
+    await client.query(
+      `UPDATE predrawn_background_versions
+          SET blob_sha256 = $2, width = $3, height = $4,
+              row_revision = row_revision + 1, updated_at = now(), updated_by = $5
+        WHERE document_id = $1 AND id = $6 AND blob_sha256 IS NULL`,
+      [documentRow.document_id, sha256, inspected.width, inspected.height, user.email, versionId],
+    );
+    const row = await dbBackgroundVersionRow(documentRow.document_id, versionId, client);
+    await dbRecordBackgroundVersionEvent(client, row, 'content-uploaded', user.email, user.name, {
+      content_sha256: sha256,
+      frame_width: inspected.width,
+      frame_height: inspected.height,
+      byte_length: body.length,
+      edit_session_id: writerSession.session_id,
+      edit_generation: Number(writerSession.edit_generation),
+    });
+    return {
+      row,
+      idempotentReplay: false,
+    };
+  });
+}
+
+async function dbArchiveBackgroundVersion(documentRow, versionId, expectedRevision, user, authority) {
+  return withEditorDocumentTransaction(async (client) => {
+    const freshDocument = await dbLockEditorDocument(
+      client,
+      documentRow.owner_email,
+      documentRow.document_id,
+    );
+    if (!freshDocument) throw editorDocumentError(404, 'editor_document_not_found');
+    const writerSession = await assertActiveEditorEditSession(
+      client,
+      freshDocument,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+    const canonical = await dbCanonicalLevel(
+      client,
+      freshDocument.owner_email,
+      { kind: freshDocument.workspace_kind, id: freshDocument.workspace_id },
+      freshDocument.level_id,
+      { lock: true },
+    );
+    for (const level of [freshDocument.body, canonical.level].filter(Boolean)) {
+      let selected;
+      try { selected = decodedVersionedPredrawnSurface(level); } catch (error) {
+        throw backgroundVersionError(409, 'background_version_reference_check_failed', error.message);
+      }
+      if (
+        selected
+        && (selected.background_version_id === versionId || selected.occlusion_version_id === versionId)
+      ) {
+        throw backgroundVersionError(
+          409,
+          'background_version_in_use',
+          'a working or canonical Level currently selects this version',
+        );
+      }
+    }
+    const current = await dbBackgroundVersionRow(documentRow.document_id, versionId, client, { lock: true });
+    if (!current || current.owner_email !== documentRow.owner_email || current.level_id !== documentRow.level_id) {
+      throw backgroundVersionError(404, 'background_version_not_found');
+    }
+    if (current.status === 'archived') return { row: current, idempotentReplay: true };
+    assertBackgroundVersionRevision(current, expectedRevision);
+    if (current.status === 'published') {
+      throw backgroundVersionError(409, 'background_version_published', 'published history cannot be archived');
+    }
+    await client.query(
+      `UPDATE predrawn_background_versions
+          SET status = 'archived', archived_at = now(), archived_by = $3,
+              row_revision = row_revision + 1, updated_at = now(), updated_by = $3
+        WHERE document_id = $1 AND id = $2`,
+      [documentRow.document_id, versionId, user.email],
+    );
+    const row = await dbBackgroundVersionRow(documentRow.document_id, versionId, client);
+    await dbRecordBackgroundVersionEvent(client, row, 'archived', user.email, user.name, {
+      edit_session_id: writerSession.session_id,
+      edit_generation: Number(writerSession.edit_generation),
+    });
+    return {
+      row,
+      idempotentReplay: false,
+    };
+  });
+}
+
+async function sendBackgroundVersionContent(res, row, { published = false } = {}) {
+  if (!row?.blob_sha256 || !row.blob_key) {
+    throw backgroundVersionError(409, 'background_version_content_not_ready');
+  }
+  if (!liveMediaStorageConfigured()) {
+    throw backgroundVersionError(503, 'live_media_storage_unavailable');
+  }
+  const record = { ...row, sha256: row.blob_sha256 };
+  const bytes = await mediaBytesBySha(row.blob_sha256, record, { publicOnly: published });
+  if (!bytes) throw backgroundVersionError(404, 'background_version_content_not_found');
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Content-Length', String(bytes.length));
+  res.setHeader('ETag', `"${row.blob_sha256}"`);
+  res.setHeader('Cache-Control', published
+    ? 'public, max-age=31536000, immutable'
+    : 'private, max-age=31536000, immutable');
+  res.status(200).send(bytes);
+}
+
+app.get('/api/editor-documents/:documentId/background-versions', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res);
+    if (!access) return;
+    const status = String(req.query.status || 'all').trim().toLowerCase();
+    if (!['all', 'draft', 'ready', 'archived', 'published'].includes(status)) {
+      res.status(400).json({ error: 'invalid_background_version_status' });
+      return;
+    }
+    const rows = await dbListBackgroundVersions(access.row, status);
+    res.status(200).json({ versions: rows.map(publicBackgroundVersion) });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'list');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/background-versions', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res, { mutate: true });
+    if (!access) return;
+    const normalized = normalizeBackgroundVersionCreate(req.body);
+    if (normalized.error) {
+      res.status(400).json({ error: 'invalid_background_version', details: normalized.error });
+      return;
+    }
+    const idempotencyKey = backgroundVersionIdempotencyKey(req, req.body);
+    const result = await dbCreateBackgroundVersion(
+      access.row,
+      access.user,
+      access.authority,
+      normalized.value,
+      idempotencyKey,
+    );
+    res.setHeader('Location', `/api/editor-documents/${encodeURIComponent(access.documentId)}/background-versions`);
+    res.status(result.created ? 201 : 200).json({
+      version: publicBackgroundVersion(result.row),
+      idempotent_replay: !result.created,
+    });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'create');
+  }
+});
+
+app.put('/api/editor-documents/:documentId/background-versions/:versionId/content', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res, {
+      mutate: true,
+      authenticatedUser: req.rawUploadUser,
+    });
+    if (!access) return;
+    const versionId = backgroundVersionId(req.params.versionId);
+    if (!versionId) {
+      res.status(400).json({ error: 'invalid_background_version_id' });
+      return;
+    }
+    if (mediaType(req.headers['content-type']) !== 'image/png') {
+      res.status(415).json({ error: 'unsupported_media_type' });
+      return;
+    }
+    const inspected = await inspectLiveMedia(req.body, 'image/png');
+    if (inspected.error) {
+      res.status(400).json({ error: 'invalid_background_version_content', details: inspected.error });
+      return;
+    }
+    if (!liveMediaStorageConfigured()) {
+      res.status(503).json({ error: 'live_media_storage_unavailable' });
+      return;
+    }
+    const expected = requireBackgroundVersionExpectedRevision(req);
+    const sha256 = crypto.createHash('sha256').update(req.body).digest('hex');
+    const result = await dbUploadBackgroundVersionContent(
+      access.row,
+      versionId,
+      expected,
+      access.user,
+      access.authority,
+      req.body,
+      inspected,
+      sha256,
+    );
+    res.status(200).json({
+      version: publicBackgroundVersion(result.row),
+      idempotent_replay: result.idempotentReplay,
+    });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'content upload');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/background-versions/:versionId/archive', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res, { mutate: true });
+    if (!access) return;
+    const versionId = backgroundVersionId(req.params.versionId);
+    if (!versionId) {
+      res.status(400).json({ error: 'invalid_background_version_id' });
+      return;
+    }
+    const expected = requireBackgroundVersionExpectedRevision(req);
+    const result = await dbArchiveBackgroundVersion(
+      access.row,
+      versionId,
+      expected,
+      access.user,
+      access.authority,
+    );
+    res.status(200).json({
+      version: publicBackgroundVersion(result.row),
+      idempotent_replay: result.idempotentReplay,
+    });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'archive');
+  }
+});
+
+app.get('/api/editor-documents/:documentId/background-versions/:versionId/content', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res);
+    if (!access) return;
+    const versionId = backgroundVersionId(req.params.versionId);
+    if (!versionId) {
+      res.status(400).json({ error: 'invalid_background_version_id' });
+      return;
+    }
+    const row = await dbBackgroundVersionRow(access.documentId, versionId);
+    if (!row) {
+      res.status(404).json({ error: 'background_version_not_found' });
+      return;
+    }
+    await sendBackgroundVersionContent(res, row, { published: row.status === 'published' });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'content read');
+  }
+});
+
+app.get('/api/background-versions/:versionId/content', async (req, res) => {
+  try {
+    const versionId = backgroundVersionId(req.params.versionId);
+    if (!versionId) {
+      res.status(404).json({ error: 'background_version_not_found' });
+      return;
+    }
+    const row = await dbAnyBackgroundVersionRow(versionId);
+    if (!row) {
+      res.status(404).json({ error: 'background_version_not_found' });
+      return;
+    }
+    if (row.status !== 'published') {
+      const user = await requireUser(req, res);
+      if (!user) return;
+      const document = await dbGetEditorDocumentForViewer(user.email, row.document_id);
+      if (!document || !editorDocumentRowIsAuthorized(document, user, res)) {
+        if (!res.headersSent) res.status(404).json({ error: 'background_version_not_found' });
+        return;
+      }
+    }
+    await sendBackgroundVersionContent(res, row, { published: row.status === 'published' });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'public content read');
+  }
+});
+
 // Campaign-editor workspace persistence (Phase 4 cont.): the whole campaign +
 // level set as one per-user document in the Postgres `campaign_workspaces`
 // table (one row per signed-in owner).
@@ -6202,7 +7884,7 @@ function publicCampaignWorkspace(row) {
   };
 }
 
-async function dbPutWorkspace(ownerEmail, body, expectedRevision) {
+async function dbPutWorkspace(ownerEmail, actorName, body, expectedRevision) {
   return withEditorDocumentTransaction(async (client) => {
     // Uses the same owner lock as new editor-document id allocation, so a whole
     // workspace write cannot race the scan and claim a newly allocated level id.
@@ -6232,6 +7914,16 @@ async function dbPutWorkspace(ownerEmail, body, expectedRevision) {
       );
       if (reserved.rows.length) return { conflict: 'reserved', row: current, reserved: reserved.rows };
     }
+
+    await dbApplyWorkspaceBackgroundVersionBoundary(client, {
+      workspaceKind: 'user',
+      workspaceId: USER_EDITOR_WORKSPACE_ID,
+      ownerEmail,
+      levels: body.levels,
+      actorEmail: ownerEmail,
+      actorName,
+      makePublic: false,
+    });
 
     if (!current) {
       const { rows } = await client.query(
@@ -6285,8 +7977,10 @@ app.put('/api/campaign-workspace', async (req, res) => {
     return;
   }
   try {
+    const owner = await withDisplayName(user);
     const result = await dbPutWorkspace(
       user.email,
+      owner.name,
       { campaigns: raw.campaigns, levels: raw.levels },
       expectedRevision,
     );
@@ -6305,6 +7999,10 @@ app.put('/api/campaign-workspace', async (req, res) => {
     const workspace = publicCampaignWorkspace(result.row);
     res.status(200).json({ ok: true, campaigns: workspace.campaigns.length, revision: workspace.revision, updated_at: workspace.updated_at });
   } catch (error) {
+    if (error?.statusCode && error?.responseCode) {
+      respondEditorDocumentError(res, error, 'campaign workspace write');
+      return;
+    }
     dbUnavailable(res, 'campaign workspace write failed', error, 'workspace_unavailable');
   }
 });
@@ -6808,6 +8506,15 @@ async function dbUpsertOfficialCampaigns(id, input, expectedRevision) {
     if ((Number(current && current.revision) || 0) !== expectedRevision) {
       return { conflict: 'revision', row: current };
     }
+    await dbApplyWorkspaceBackgroundVersionBoundary(client, {
+      workspaceKind: 'official',
+      workspaceId: id,
+      ownerEmail: null,
+      levels: input.data.levels,
+      actorEmail: input.updated_by,
+      actorName: input.updated_by_name,
+      makePublic: true,
+    });
     if (!current) {
       const { rows } = await client.query(
         `INSERT INTO official_campaigns (id, data, client_schema_version, revision, updated_by)
@@ -6899,6 +8606,7 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
       data: { campaigns: raw.data.campaigns, levels: raw.data.levels },
       client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
       updated_by: user.email,
+      updated_by_name: user.name || user.email,
     }, expectedRevision);
     if (result.conflict === 'revision') {
       res.status(409).json({
@@ -6923,6 +8631,10 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
       thumbnail_ready: thumbnailReady,
     });
   } catch (error) {
+    if (error?.statusCode && error?.responseCode) {
+      respondEditorDocumentError(res, error, 'official campaigns write');
+      return;
+    }
     dbUnavailable(res, 'official campaigns write failed', error, 'official_campaign_store_unavailable');
   }
 });
@@ -10263,6 +11975,51 @@ async function serveImmutableMedia(req, res, record, { privateRead = false } = {
   res.status(200).end(buffer);
 }
 
+// Private campaign list thumbnails may contain private pre-drawn scene pixels.
+// Keep their content-addressed bytes out of the anonymous /api/media namespace;
+// this route proves both current ownership and the exact current derivative.
+app.get(/^\/api\/campaign-workspace\/level-thumbnails\/(l\d+)\/([0-9a-f]{64})\.png$/, async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const levelId = String(req.params[0] || '');
+  const requestedSha256 = mediaSha(req.params[1]);
+  try {
+    const workspace = await dbGetWorkspace(user.email);
+    const levels = isObjectRecord(workspace?.body?.levels) ? workspace.body.levels : {};
+    const level = isObjectRecord(levels[levelId]) ? levels[levelId] : null;
+    if (!level || !requestedSha256) {
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.status(404).send('not found');
+      return;
+    }
+    const authorityKey = `user:${user.email}:${levelId}`;
+    const [thumbnail, expectedContentVersion] = await Promise.all([
+      storedLevelThumbnail(authorityKey),
+      currentThumbnailContentVersion(level),
+    ]);
+    if (
+      !thumbnail
+      || thumbnail.content_version !== expectedContentVersion
+      || thumbnail.blob_sha256 !== requestedSha256
+    ) {
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.status(404).send('not found');
+      return;
+    }
+    const record = await mediaBlobRecord(requestedSha256);
+    if (!record) {
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.status(404).send('not found');
+      return;
+    }
+    await serveImmutableMedia(req, res, record, { privateRead: true });
+  } catch (error) {
+    console.error('private level thumbnail read failed:', error && error.message);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(503).json({ error: 'thumbnail_unavailable' });
+  }
+});
+
 // Once an accepted or imported bridge hash has been published it remains
 // readable for honest immutable caching, historical pointers, and optional
 // read-only test-slot snapshots. Candidate and source hashes never become public.
@@ -10850,8 +12607,25 @@ async function unitSpriteBytes(sha256, record = null) {
   return png;
 }
 
-async function thumbnailDynamicSprite(src, mediaCatalog = null) {
+async function thumbnailDynamicSprite(src, mediaCatalog = null, privateBackgroundScope = null) {
   const value = String(src || '').split('?', 1)[0];
+  const backgroundMatch = /^\/api\/background-versions\/([0-9a-f-]{36})\/content$/i.exec(value);
+  if (backgroundMatch) {
+    const versionId = backgroundVersionId(backgroundMatch[1]);
+    const row = versionId ? await dbAnyBackgroundVersionRow(versionId) : null;
+    const publiclyReadable = row?.status === 'published';
+    const privatelyReadable = row?.status === 'ready'
+      && privateBackgroundScope
+      && row.owner_email === privateBackgroundScope.ownerEmail
+      && row.level_id === privateBackgroundScope.levelId
+      && privateBackgroundScope.allowedVersionIds.has(String(row.id));
+    if ((!publiclyReadable && !privatelyReadable) || !row.blob_sha256 || !row.blob_key) return null;
+    return mediaBytesBySha(
+      row.blob_sha256,
+      { ...row, sha256: row.blob_sha256 },
+      { publicOnly: publiclyReadable },
+    );
+  }
   const unitMatch = /^\/api\/unit-sprites\/([0-9a-f]{64})\.png$/.exec(value);
   if (unitMatch) return unitSpriteBytes(unitMatch[1]);
   const immutableMatch = /^\/api\/media\/([0-9a-f]{64})$/.exec(value);
@@ -11215,16 +12989,16 @@ function newPublicId() {
   for (const b of bytes) out += PUBLIC_ID_ALPHABET[b % 32];
   return out;
 }
-async function dbEnsurePublicId(ownerEmail, levelId, level, contentHash) {
+async function dbEnsurePublicId(ownerEmail, levelId, level, contentHash, queryable = pool) {
   await ensureDbReady();
   const name = level && typeof level.name === 'string' ? level.name : null;
   const bodyJson = JSON.stringify(level);
-  const existing = await pool.query(
+  const existing = await queryable.query(
     'SELECT public_id FROM public_maps WHERE owner_email = $1 AND level_id = $2', [ownerEmail, levelId],
   );
   if (existing.rows[0]) {
     const id = existing.rows[0].public_id;
-    await pool.query(
+    await queryable.query(
       'UPDATE public_maps SET name = $2, content_hash = $3, body = $4::jsonb, updated_at = now() WHERE public_id = $1',
       [id, name, contentHash, bodyJson],
     );
@@ -11233,7 +13007,7 @@ async function dbEnsurePublicId(ownerEmail, levelId, level, contentHash) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const id = newPublicId();
     try {
-      await pool.query(
+      await queryable.query(
         'INSERT INTO public_maps (public_id, owner_email, level_id, name, content_hash, body) VALUES ($1,$2,$3,$4,$5,$6::jsonb)',
         [id, ownerEmail, levelId, name, contentHash, bodyJson],
       );
@@ -11244,6 +13018,68 @@ async function dbEnsurePublicId(ownerEmail, levelId, level, contentHash) {
     }
   }
   throw new Error('public_id_allocation_failed');
+}
+
+async function dbPublishPublicMap(owner, levelId) {
+  return withEditorDocumentTransaction(async (client) => {
+    // Keep the same lock order as editor Save: working copy, canonical
+    // workspace, then selected immutable versions. That makes the snapshot and
+    // its public media transition one transaction without a Save/publish
+    // deadlock.
+    const document = await dbGetEditorDocumentByLevel(
+      owner.email,
+      { kind: 'user', id: 'campaign' },
+      levelId,
+      client,
+      { lock: true },
+    );
+    const workspaceResult = await client.query(
+      'SELECT body FROM campaign_workspaces WHERE owner_email = $1 FOR UPDATE',
+      [owner.email],
+    );
+    const workspaceBody = isObjectRecord(workspaceResult.rows[0]?.body)
+      ? workspaceResult.rows[0].body
+      : null;
+    const levels = workspaceBody && isObjectRecord(workspaceBody.levels)
+      ? workspaceBody.levels
+      : null;
+    const storedLevel = levels && isObjectRecord(levels[levelId]) ? levels[levelId] : null;
+    if (!storedLevel) throw editorDocumentError(404, 'level_not_found');
+    const level = { ...storedLevel, id: levelId };
+    const surface = decodedVersionedPredrawnSurface(level);
+    if (surface) {
+      if (!document) {
+        throw editorDocumentError(
+          409,
+          'predrawn_background_document_not_found',
+          null,
+          'the public map selection is not backed by an editor document',
+        );
+      }
+      await dbPublishLevelBackgroundVersions(
+        client,
+        document,
+        level,
+        owner.email,
+        owner.name,
+        { makePublic: true },
+      );
+    }
+    let contentHash = null;
+    try {
+      contentHash = serverRender && await withThumbnailRenderInputs((renderInputs) => (
+        thumbnailVersion(serverRender.boardHashForLevel(level), renderInputs)
+      ));
+    } catch { contentHash = null; }
+    const publicId = await dbEnsurePublicId(
+      owner.email,
+      levelId,
+      level,
+      contentHash,
+      client,
+    );
+    return { publicId, level };
+  });
 }
 async function dbGetPublicMap(publicId) {
   await ensureDbReady();
@@ -11263,19 +13099,17 @@ app.post('/api/maps/publish', async (req, res) => {
   const levelId = req.body && typeof req.body.levelId === 'string' ? req.body.levelId : '';
   if (!levelId) { res.status(400).json({ error: 'invalid_level_id' }); return; }
   try {
-    const row = await dbGetWorkspace(user.email);
-    const level = row && row.body && row.body.levels && typeof row.body.levels === 'object'
-      ? row.body.levels[levelId] : null;
-    if (!level || typeof level !== 'object') { res.status(404).json({ error: 'level_not_found' }); return; }
-    let contentHash = null;
-    try {
-      contentHash = serverRender && await withThumbnailRenderInputs((renderInputs) => (
-        thumbnailVersion(serverRender.boardHashForLevel(level), renderInputs)
-      ));
-    } catch { contentHash = null; }
-    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, contentHash);
-    res.status(200).json({ public_id: publicId, url: `${publicOrigin}/play?map=${publicId}` });
+    const owner = await withDisplayName(user);
+    const published = await dbPublishPublicMap(owner, levelId);
+    res.status(200).json({
+      public_id: published.publicId,
+      url: `${publicOrigin}/play?map=${published.publicId}`,
+    });
   } catch (error) {
+    if (error?.statusCode && error?.responseCode) {
+      respondEditorDocumentError(res, error, 'map publish');
+      return;
+    }
     dbUnavailable(res, 'map publish failed', error, 'map_store_unavailable');
   }
 });
@@ -11549,7 +13383,11 @@ async function storedLevelThumbnailUrls(authorityEntries) {
     const entry = entryByAuthority.get(row.authority_key);
     if (!entry) return [];
     const expected = thumbnailVersion(levelThumbnailSourceHash(entry.level), revisions);
-    return row.content_version === expected ? [[entry.levelId, `/api/media/${row.blob_sha256}`]] : [];
+    if (row.content_version !== expected) return [];
+    const url = row.authority_key.startsWith('user:')
+      ? `/api/campaign-workspace/level-thumbnails/${encodeURIComponent(entry.levelId)}/${row.blob_sha256}.png`
+      : `/api/media/${row.blob_sha256}`;
+    return [[entry.levelId, url]];
   }));
 }
 
@@ -11585,11 +13423,27 @@ async function createLevelThumbnailDerivative(authorityKey, level) {
   const rendered = await withThumbnailRenderInputs(async (renderInputs) => {
     const plan = serverRender.levelRenderPlan(level);
     const contentVersion = thumbnailVersion(levelThumbnailSourceHash(level), renderInputs);
+    const privateAuthority = /^user:(.+):([^:]+)$/.exec(authorityKey);
+    const selectedSurface = privateAuthority ? decodedVersionedPredrawnSurface(level) : null;
+    const privateBackgroundScope = privateAuthority
+      ? {
+          ownerEmail: privateAuthority[1],
+          levelId: privateAuthority[2],
+          allowedVersionIds: new Set([
+            selectedSurface?.background_version_id,
+            selectedSurface?.occlusion_version_id,
+          ].filter(Boolean)),
+        }
+      : null;
 
     const { renderBoardThumbnail, BOARD_THUMB_W, BOARD_THUMB_H } = require(path.join(bakedBackendDir, 'boardThumbnail'));
     const png = await renderBoardThumbnail({
       plan,
-      loadDynamicSprite: (src) => thumbnailDynamicSprite(src, renderInputs.mediaCatalog),
+      loadDynamicSprite: (src) => thumbnailDynamicSprite(
+        src,
+        renderInputs.mediaCatalog,
+        privateBackgroundScope,
+      ),
       mediaCatalogRevision: renderInputs.mediaCatalogRevision,
       sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
     });
@@ -11598,15 +13452,19 @@ async function createLevelThumbnailDerivative(authorityKey, level) {
   const { png, contentVersion, width, height } = rendered;
   const sha256 = crypto.createHash('sha256').update(png).digest('hex');
   const blobKey = liveMediaBlobKey(sha256);
+  const publishDerivative = authorityKey.startsWith('official:');
   await writeLiveMediaBlob(blobKey, png, sha256, 'image/png');
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query(
       `INSERT INTO media_blobs (sha256, blob_key, media_type, byte_length, width, height, published_at)
-       VALUES ($1, $2, 'image/png', $3, $4, $5, now())
-       ON CONFLICT (sha256) DO UPDATE SET published_at = COALESCE(media_blobs.published_at, now())`,
-      [sha256, blobKey, png.length, width, height],
+       VALUES ($1, $2, 'image/png', $3, $4, $5, CASE WHEN $6::boolean THEN now() ELSE NULL END)
+       ON CONFLICT (sha256) DO UPDATE SET published_at = CASE
+         WHEN $6::boolean THEN COALESCE(media_blobs.published_at, now())
+         ELSE media_blobs.published_at
+       END`,
+      [sha256, blobKey, png.length, width, height, publishDerivative],
     );
     const { rows } = await client.query(
       `INSERT INTO level_thumbnail_derivatives

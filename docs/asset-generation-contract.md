@@ -16,9 +16,10 @@ Production raster sizing is governed by
 [ADR-0076](adr/0076-scaling-is-calibration-production-art-is-native-1x.md):
 scaling may calibrate a candidate, but acceptance requires regenerated native
 pixels and a 1:1 canonical runtime path. The narrow whole-board exception is
-[ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md):
-an accepted pre-drawn scene keeps its exact bytes and the renderer applies its
-saved continuous whole-image alignment.
+[ADR-0147](adr/0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md):
+the uploaded pre-drawn scene keeps its exact bytes as an immutable raw root,
+while an approved grid adjustment creates a new deterministic raster child that
+runtime consumes directly rather than warping the raw image again.
 
 Storage and promotion are governed by
 [ADR-0085](adr/0085-runtime-assets-are-live-storage-backed.md): generated media
@@ -141,11 +142,16 @@ being produced.
 ### Pre-drawn Whole-Level Plates
 
 The pre-drawn board path is the deliberate complete-plate exception to the
-ordinary composited-tile direction above. Under ADR-0107 through ADR-0110 and ADR-0133 through ADR-0135, one
-continuous generated painting may replace the ordinary terrain, road, prop, and
-barrier pixels for a specific authored level while the canonical level remains
-the sole authority for gameplay geometry and live units, grid, selection, and
-tactical overlays.
+ordinary composited-tile direction above. Its current authorities are ADR-0108,
+ADR-0109, ADR-0110, ADR-0134, ADR-0135, ADR-0147, and ADR-0151. One continuous
+generated painting is the sole source of baked environment pixels for a
+specific authored level while the canonical level remains the sole authority
+for gameplay geometry. Runtime retains live units/pieces, explicitly authored
+ground cover, tactical overlays such as the optional grid, selection, movement,
+threat, zones, and objectives, and application/editor UI. It suppresses every
+ordinary terrain, Subterrain, feature, generated region, prop/scenery,
+fence/post, wall/wall-art, doodad, environmental shadow, lighting, non-cover
+animation, and particle draw.
 
 Per [ADR-0109](adr/0109-predrawn-generation-packets-preserve-authored-level-semantics.md),
 whole-level generation must not ask a model to infer the playable board from a
@@ -168,11 +174,14 @@ beauty render alone. Every request uses an authored-level packet containing:
   footprints, extra roads, and a model-invented perimeter.
 
 The generation-reference art authority also suppresses additive ground cover,
-including grass. Cover creates avoidable occlusion around geometry and may be
-composed from its accepted generated runtime layer later. Required
-gameplay-authoritative terrain, roads, barriers, and props remain fully visible
-in the export; ADR-0142 separately permits scenic-only art to meet or cross the
-saved crop edge.
+including grass, because cover creates avoidable occlusion around geometry in
+the reference. Per
+[ADR-0151](adr/0151-predrawn-backgrounds-retain-live-ground-cover.md), this clean
+generation input is independent of final composition: explicitly authored
+ground cover remains a live, animated runtime layer and need not be baked into
+the selected raster. Required gameplay-authoritative terrain, roads, barriers,
+and props remain fully visible in the export; ADR-0142 separately permits
+scenic-only art to meet or cross the saved crop edge.
 
 Per
 [ADR-0141](adr/0141-predrawn-generation-references-preserve-explicit-subterrain.md),
@@ -200,13 +209,16 @@ becomes gameplay perimeter evidence or permission for a hard-cropped generated
 result. Missing, malformed, or under-inclusive frame data fails preparation.
 
 Per
-[ADR-0122](adr/0122-predrawn-occlusion-derives-from-canonical-raised-geometry.md),
-candidate review does not ask a visual model to segment those barriers or props.
-The runtime derives a per-depth alpha seed from the canonical raised sprites and
-shows that exact seed in magenta over the registered plate. The owner compares
-the real `Occlusion` before/after pass and the `Seed mask`; a plate whose painted
-silhouettes do not agree closely enough with that deterministic proof is not
-made acceptable by an unreviewed inferred mask.
+[ADR-0147](adr/0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
+occlusion is a persisted immutable depth-aware mask child, not runtime inference
+from the plate or runtime reconstruction from ordinary raised sprites. The mask
+is bound to the exact raster parent, dimensions, coordinate basis, canonical
+environment-geometry revision or hash, depth convention, generator version,
+and content hash. The owner inspects the exact mask and real clipping result in
+the application. Per ADR-0151, it clips both live units and live ground cover by
+depth, while cover itself is excluded from the immutable environment-geometry
+fingerprint. A missing or mismatched selected mask fails closed; an explicit
+no-mask selection performs no environmental occlusion.
 
 Per [ADR-0120](adr/0120-canonical-top-only-image-owns-predrawn-appearance.md),
 the guide owns spatial geometry and appearance, while the semantic dump owns
@@ -218,6 +230,15 @@ mutable process and prompt wording live in
 [`art/predrawn-board-generation.md`](art/predrawn-board-generation.md); exact run
 prompts remain text provenance while candidate media follows the live-storage
 contract.
+
+An explicitly named comparative refinement follows
+[ADR-0145](adr/0145-named-predrawn-candidate-refinements-are-separate-non-isolated-branches.md)
+after owner review identifies a localized miss. It must use the same
+preflight and a separate review branch: canonical Image 1 and the byte-identical
+semantic packet retain authority, while Image 2 is only the subordinate edit
+target. The request manifest records parent lineage, both reference hashes, the
+fixed operation, and `isolatedPipelineEvidence: false`. It may not overwrite its
+parent, masquerade as an isolated result, or skip a fresh game-surface review.
 
 No pre-drawn generation call may be assembled only in chat or reconstructed
 from documentation amendments. Before generation, the shared preflight builder
@@ -235,28 +256,36 @@ Per [ADR-0110](adr/0110-owner-fitted-grid-defines-predrawn-review-rectification.
 candidate review exposes the complete authored grid over the untouched source.
 The owner may fit monotonic row and column guides and inspect their correction
 range. Large, non-separable, or semantic drift still rejects the generation;
-the whole-image alignment cannot hide an incorrect level.
+the whole-image alignment cannot hide an incorrect level. Applying an accepted
+fit creates a new immutable full-scene raster child through the versioned
+deterministic rasterizer. The fit is retained as lineage and audit data, not as
+a Level field that every renderer replays.
 
 Per [ADR-0111](adr/0111-predrawn-refit-target-dimensions-are-owner-configurable.md),
 the review instrument's target row and column counts are owner-configurable. If
 the candidate visibly contains an extra row or column, the owner sets the target
 to the painted count before fitting guides. That target controls the refit
-topology and the temporary post-picker review overlay. Per
+topology and the pending pre-derivation proof overlay. Per
 [ADR-0112](adr/0112-predrawn-review-overlay-uses-the-saved-refit-grid.md), this
-overlay retains the chosen count after `DONE`; canonical level dimensions,
-interactive cells, and gameplay remain unchanged, leaving the generated excess
-visible as evidence for the next generation pass.
+optional authoring overlay retains the chosen count after calibration closes.
+Once a raster child is created, that same count belongs to its immutable
+derivation provenance and may drive the derived-raster proof overlay; it is not
+a runtime warp instruction. Canonical level dimensions, interactive cells, and
+gameplay remain unchanged, leaving generated excess visible as evidence for the
+next generation pass.
 
-Per
-[ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md),
-an accepted whole-level plate keeps the exact approved bytes at their actual
-pixel dimensions. Promotion saves the stable media slot plus the
-exact approved versioned alignment payload in the Level. Its four corners,
-refit counts, and monotonic guides drive the renderer; its pinned boundary
-round-trips as display-only evidence. Promotion does not bake the transform,
-resize the image, or persist a preview URL or candidate id. One continuous
-whole-image transform is allowed, but independent object and layer warps remain
-forbidden.
+Per ADR-0147, uploading creates a directly settable immutable raw-raster root.
+A grid adjustment creates a separate immutable registered-raster child, and an
+occlusion build creates a separate matching depth-aware mask child. No operation
+mutates its parent. The Level Editor shows their lineage and exact state; it does
+not require `COPY CODEX HANDOFF` or any agent-run transform. `Set` records one
+exact raster plus matching mask or explicit no-mask state in the fenced working
+copy only. Private Save pins that exact selection in private canonical content
+without making its ready media public. Official Review and publish/Publish is
+the official public transaction; a separately labeled user-map Publish action
+may publish the private canonical snapshot and exactly its selected versions.
+Preview, Set, Save, link copy, and either Publish action must not be conflated in
+labels or success messages.
 
 Generation should reserve meaningful continuous scenery outside every playable
 edge for camera travel. A centered safe area is useful prompt guidance, not an

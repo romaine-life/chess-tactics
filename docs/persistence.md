@@ -19,6 +19,10 @@ Durable document and live-content tables are created by the inline migrations in
 | `level_working_copy_revisions` | retained checkpoints for each durable working copy | `/api/editor-documents/:id/revisions` | owner only; restore requires current CAS revision |
 | `editor_document_edit_sessions` | attributable owner page sessions plus the document's current lease and fencing epoch | `/api/editor-documents/:documentId/...` | document owner only; cross-owner admin review is excluded |
 | `editor_document_recoveries` | immutable, owner-reachable displaced and recovery snapshots | `/api/editor-documents/:documentId/...` | document owner only |
+| `predrawn_background_versions` | immutable raw-raster, registered-raster, and depth-mask lineage per editor document + level | `/api/editor-documents/:documentId/background-versions`, its `/:versionId/content` child, and `/api/background-versions/:versionId/content` | owner/current-writer mutations; owner/admin-scoped private reads; exact explicitly published content public |
+| `predrawn_background_version_events` | actor-attributed created, content-uploaded, archived, and published lifecycle events | internal | written atomically by authorized lineage mutations; idempotent retries do not duplicate events |
+| `predrawn_background_geometry_bindings` | immutable one-row-per-version normalization of an exact legacy v1 environment-geometry digest to cover-independent v2 | internal; effective v2 digest is projected with background-version reads | written only inside an authorized fenced autosave, derivative-create, Save, or Publish transaction after server-held Level proof; GET never writes |
+| `public_maps` | owner-free snapshot of an explicitly published user Level | `POST /api/maps/publish`, `GET /api/maps/:publicId` | publish requires the signed-in owner; snapshot reads are public |
 | `campaigns` | per signed-in owner (`PK (owner_email, id)`) | `/api/campaigns`, `/api/campaigns/:id`, `/api/campaigns/:id/levels` | sign-in required |
 | `design_portfolios` | global, by id | `/api/design-portfolios/:id` | GET public, PUT requires sign-in (designer) |
 | `prop_seats` | one complete global prop geometry/tuning document (`default`) | `/api/prop-seats/default` | GET public, PUT requires admin |
@@ -39,17 +43,68 @@ returns `409 prop_seats_revision_conflict` with `currentRevision`. PropSeatLab
 keeps the startup revision and advances it only from a successful save response,
 so sequential edits cannot silently overwrite a newer document.
 
-Pre-drawn automatic occlusion under ADR-0117 adds no stored document or media
-field. The runtime re-derives the seed alpha and depth from the same canonical
-board geometry already carried by the Level. Under ADR-0118, the pre-drawn
-background declaration persists its semantic surface slot, actual image
-dimensions, and exact approved versioned whole-image alignment. The pinned
-boundary may round-trip inside that alignment but remains display-only; the
-declaration does not persist a preview URL, candidate id, browser-local key, or
-picker state. A future
-plate-specific paint/erase artifact is not authorized to enter `boardCode`, a
-working-copy-only field, or browser-local runtime state without a separate
-persistence decision.
+Per
+[ADR-0147](adr/0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
+the pre-drawn background declaration persists one exact immutable raster-version
+identity and either one exact matching depth-aware occlusion-mask version or an
+explicit no-mask state. These are durable Postgres-owned domain identities, not
+candidate ids, blob hashes, mutable media-slot pointers, preview URLs,
+browser-local keys, generated filenames, or picker state. Registration,
+rasterizer parameters, parent hashes, geometry revision/hash, depth convention,
+and generator versions belong to the immutable artifact lineage; runtime does
+not replay them from Level data. The raster version also owns frame dimensions
+and world bounds. A Level projection may duplicate those values for self-contained
+rendering only when the backend validates that they exactly match the selected
+version; they are not independent authoring knobs.
+
+`Set` writes that exact selection only to the current fenced Level working copy
+through its ordinary compare-and-swap/autosave mutation. Private Save or official
+Review and publish/Publish is the separate canonical transaction. Deriving,
+previewing, or setting a version cannot mutate canonical content or a global
+accepted pointer. Canonical Save/Publish validates ready or published exact
+versions and verifies their already-immutable Blob objects and hashes. Private
+Save atomically pins the exact selection with the private canonical Level while
+keeping ready versions owner/admin-scoped. Official Review and publish/Publish
+atomically marks the exact selected rows published with the official Level
+change. Explicit user-map Publish performs the same exact-version publication in
+the transaction that writes the owner-free `public_maps` snapshot. Only those
+explicitly published selections become public. Failure changes neither database
+state, and no transaction moves or rewrites Blob bytes. Working, canonical, and
+lineage references pin version metadata and Blob objects against deletion.
+At Set, derivative, Save, and Publish boundaries, missing or mismatched version
+lineage is a validation failure, not permission to fall back to a runtime warp,
+derived sprite mask, mutable slot, or ordinary composed environment. A stale
+selection may remain in an owner working draft under ADR-0153, but it gains no
+canonical or derivation authority.
+
+Per
+[ADR-0152](adr/0152-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md),
+new background-version operations record only
+`predrawn-environment-geometry-v2`, whose canonical input excludes live ground
+cover. Migration 30 does not rewrite immutable v1 operation or provenance data.
+Instead, `predrawn_background_geometry_bindings` records one immutable mapping
+from a version's exact stored v1 schema and digest to its normalized v2 schema
+and digest, together with document and actor/time attribution. Every relevant
+legacy ancestor is bound atomically, and a v2 child cannot extend an unbound v1
+lineage.
+
+The backend may create that binding only while it already owns an authorized
+write transaction and can prove the stored v1 digest from a server-held Level:
+the pre-mutation Level on the first fenced autosave, the current Level during
+direct derivative creation, or a Save/Publish fallback. GET, list, content
+fetch, document load, and observer paths never insert bindings. V1 exists only
+to validate stored legacy rows; all new operation input must be v2.
+
+Per
+[ADR-0153](adr/0153-predrawn-geometry-staleness-does-not-block-draft-persistence.md),
+the pre-mutation proof establishes only the old v1-to-v2 normalization; it does
+not validate the incoming autosave body. Subject to ordinary document, fence,
+and compare-and-swap checks, autosave preserves that body even when changed
+baked geometry makes its selected art stale. Recovery upload and restore retain
+the same owner draft rather than discarding it for an art mismatch. The artwork
+workspace exposes the stale selection and disables Set and derivative actions.
+Save and Publish still compare the current Level with the selected lineage and
+fail closed without changing canonical content.
 
 ## Level editor working copies and sessions
 
@@ -117,6 +172,13 @@ different backend pods and local development servers. SSE, polling, process memo
 `BroadcastChannel`, and browser storage may notify or refresh the UI but cannot grant or extend
 authority. A non-holder follows the acknowledged working copy read-only.
 
+Per [ADR-0149](adr/0149-automated-editor-verification-is-observation-only.md), authenticated
+automated visual verification opens an attributable `observing` session. Observation never acquires
+or extends the lease, advances `edit_generation`, resolves another session's expiry, or creates
+recovery content. It may read the document, presence, and recovery index and close itself, but it
+cannot heartbeat, take over, upload recovery, or invoke a fenced mutation. Editing requires a
+separate write-intent session open.
+
 Closed sessions are terminal: their displayed id and credential cannot be reopened. An acknowledged
 same-tab SPA handoff final-autosaves, closes the lease, and rotates the page credential before the
 destination mounts; a query navigation to a different document remounts the document-owning editor
@@ -148,6 +210,18 @@ Deleting a recovery is irreversible and therefore also rechecks the current leas
 after confirmation; a tab displaced while its confirmation is open cannot remove the snapshot.
 Recovery never creates a second working document or canonical Level and never rewrites historical
 snapshots.
+
+Per [ADR-0146](adr/0146-recovery-snapshots-browse-one-at-a-time-and-clear-atomically.md), Status
+presents server recoveries one at a time in newest-first order, with an explicit position and
+bounded Previous/Next navigation rather than stacking every Restore/Delete pair. **Delete all
+recovery copies** confirms the exact number of currently listed snapshots with Cancel as the safe
+default, then submits those exact recovery ids as one owner-only database transaction. The
+transaction revalidates the current writer credential and fencing epoch and deletes all submitted
+snapshots or none; a recovery created after the confirmation snapshot is outside that set and
+survives. Individual and bulk recovery deletion affect only the named server snapshots. They do not
+change the live working copy, canonical saved Level, retained revision history, editor authority,
+or session-scoped browser backup, and they do not Save, Discard, restore, publish, or delete the
+editor document.
 
 Each autosave remains a compare-and-swap write. The client sends the last server `revision` it
 observed along with its current session authority; a stale or unfenced write receives a conflict
@@ -213,6 +287,10 @@ owner's history.
 
 - `PUT /api/editor-documents/:documentId` updates only the working copy and requires the current
   owner session, fencing epoch, and document revision.
+- `DELETE /api/editor-documents/:documentId/recoveries` accepts a nonempty unique `recovery_ids`
+  snapshot and deletes exactly that owner-document set in one transaction under the current writer
+  session and fencing epoch. A missing submitted id or stale authority rejects the whole operation;
+  recoveries absent from the request remain untouched.
 - `GET /api/editor-documents/:documentId/revisions` lists retained body-free checkpoints for the
   owner.
 - `POST /api/editor-documents/:documentId/revisions/restore` restores a retained body as a new
@@ -321,11 +399,28 @@ explicit media roles; semantic-slot filenames are opaque join keys and are not
 parsed into a roster. Configuration-only `chrome-fill-tint` rows likewise own
 the installed Chrome tint names and RGB values.
 
-New pre-drawn board media slots are allocated by the authenticated backend
-media transaction and returned with the candidate version. Clients never form
-a slot from a level id. Canonical level-list thumbnails are used only when the
-backend's level projection supplies an immutable derivative URL; a missing
-derivative has no constructed stable-path or read-through fallback.
+New pre-drawn raw-raster roots and every registered-raster or occlusion-mask
+child are allocated by authenticated backend transactions. Clients never form
+a version identity from a level id, hash, filename, or storage path. The backend
+records typed parentage and immutable provenance before returning the new
+version. Canonical level-list thumbnails are used only when the backend's level
+projection supplies an immutable derivative URL; a missing derivative has no
+constructed stable-path or read-through fallback.
+
+For a legacy v1 parent, that allocation transaction first establishes the exact
+ADR-0152 external v2 binding from the current server-held Level and binds every
+relevant legacy ancestor atomically. The newly allocated child records v2 in
+its own immutable operation and provenance; allocation never copies v1 forward
+or rewrites its ancestors.
+
+[ADR-0148](adr/0148-predrawn-background-authoring-storage-is-bounded.md)
+bounds that permanent allocation to 256 version rows per editor document and
+1 GiB of distinct retained background-version Blob bytes per owner. The byte
+check is serialized under owner-scoped database authority in the same
+transaction that binds a new distinct hash. Before raw parsing can allocate its
+bounded body, the server also admits only one in-flight upload per document.
+Archived and published history remains in both counts because those identities
+and bytes remain resolvable; client UI cannot bypass or reinterpret the limits.
 
 The SFX runtime profile is a separate typed document projection over live-media
 recording slots. It owns labels/descriptions, sound-set gains, terrain

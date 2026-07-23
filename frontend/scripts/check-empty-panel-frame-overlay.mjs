@@ -467,8 +467,8 @@ const chevronButtons = [
   ...[...levelEditor.matchAll(/<button\b[\s\S]*?<\/button>/g)].map((match) => match[0]),
   ...[...levelEditorChromeConsumers.matchAll(/<button\b[\s\S]*?<\/button>/g)].map((match) => match[0]),
 ].filter((block) => block.includes('stepper-chevron'));
-if (chevronButtons.length !== 6 || chevronButtons.some((block) => !block.includes('data-chrome-unit="inner-chevron-key"') || !/chromeUnitClassNames\(\s*'inner-chevron-key'/.test(block))) {
-  failures.push('all six previous/next Level Editor controls must use the concrete inner-chevron-key hierarchy leaf');
+if (chevronButtons.length !== 8 || chevronButtons.some((block) => !block.includes('data-chrome-unit="inner-chevron-key"') || !/chromeUnitClassNames\(\s*'inner-chevron-key'/.test(block))) {
+  failures.push('all eight previous/next Level Editor controls must use the concrete inner-chevron-key hierarchy leaf');
 }
 if (!/unit\.id === 'inner-chevron-key'[\s\S]*?stepper-glyph stepper-chevron/.test(chromeUnitAudit)) {
   failures.push('Chrome Lab must render the real previous/next chevron-key specimen instead of a generic tool-square fallback');
@@ -752,28 +752,47 @@ for (const [selector, token] of [
 if (!/\.level-editor-screen \.settings-chrome-button,\s*\.level-editor-screen \.settings-toggle,\s*\.level-editor-screen \.settings-stepper \.settings-chrome-button\s*\{[\s\S]*?border-width\s*:\s*var\(--le-chrome-inner-rail-w\)\s*;[\s\S]*?border-image-source\s*:\s*var\(--skirmish-chrome-inner-control-image\)\s*;[\s\S]*?border-image-width\s*:\s*var\(--le-chrome-inner-rail-w\)\s*;/.test(css)) {
   failures.push('shared settings controls inside the level editor must consume the inner chrome role');
 }
-const eventsWorkspaceRules = blocksTargeting('.le-events-workspace');
-const eventsWorkspace = eventsWorkspaceRules.find((block) => /position\s*:\s*absolute\s*;/.test(block)) ?? '';
-if (!eventsWorkspace) {
-  failures.push('level editor events must expose a shell-owned .le-events-workspace surface');
+const shellWorkspaceRules = blocksTargeting('.le-shell-workspace');
+const shellWorkspace = shellWorkspaceRules.find((block) => /position\s*:\s*absolute\s*;/.test(block)) ?? '';
+if (!shellWorkspace) {
+  failures.push('Level Editor must expose a reusable shell-owned center-workspace surface');
 } else {
-  if (!/position\s*:\s*absolute\s*;/.test(eventsWorkspace)
-    || !/inset\s*:\s*0\s*;/.test(eventsWorkspace)
-    || !/min-height\s*:\s*0\s*;/.test(eventsWorkspace)
-    || !/min-width\s*:\s*0\s*;/.test(eventsWorkspace)
-    || !/overflow\s*:\s*hidden\s*;/.test(eventsWorkspace)) {
-    failures.push('level editor events workspace must fill and clip to its positioned board-workspace parent');
+  if (!/position\s*:\s*absolute\s*;/.test(shellWorkspace)
+    || !/inset\s*:\s*0\s*;/.test(shellWorkspace)
+    || !/min-height\s*:\s*0\s*;/.test(shellWorkspace)
+    || !/min-width\s*:\s*0\s*;/.test(shellWorkspace)
+    || !/overflow\s*:\s*hidden\s*;/.test(shellWorkspace)) {
+    failures.push('Level Editor shell workspace must fill and clip to its positioned center-workspace parent');
   }
-  if (eventsWorkspaceRules.some((block) => /position\s*:\s*fixed|\b(?:100)?v[wh]\b|--app-header-h|--skirmish-rail-w|--skirmish-grid-gap|--le-outer-atom-outset/.test(block))) {
-    failures.push('level editor events workspace must not duplicate viewport, rail, or outer-atom geometry');
+  if (shellWorkspaceRules.some((block) => /position\s*:\s*fixed|\b(?:100)?v[wh]\b|--app-header-h|--skirmish-rail-w|--skirmish-grid-gap|--le-outer-atom-outset/.test(block))) {
+    failures.push('Level Editor shell workspace must not duplicate viewport, rail, or outer-atom geometry');
   }
-  if (eventsWorkspaceRules.some((block) => /border(?:-image)?\s*:/.test(block))) {
-    failures.push('level editor events workspace must not draw a second outer frame');
+  if (shellWorkspaceRules.some((block) => /border(?:-image)?\s*:/.test(block))) {
+    failures.push('Level Editor shell workspace must not draw a second outer frame');
   }
 }
 const boardWorkspace = blockFor('.skirmish-field');
 if (!boardWorkspace || !/position\s*:\s*relative\s*;/.test(boardWorkspace)) {
-  failures.push('the board workspace must remain the positioned parent for the Events fill surface');
+  failures.push('the board workspace must remain the positioned parent for shell-owned center workspaces');
+}
+const shellWorkspaceContent = blockFor('.le-shell-workspace-content');
+if (!shellWorkspaceContent
+  || !/display\s*:\s*flex\s*;/.test(shellWorkspaceContent)
+  || !/min-height\s*:\s*0\s*;/.test(shellWorkspaceContent)
+  || !/min-width\s*:\s*0\s*;/.test(shellWorkspaceContent)
+  || !/overflow\s*:\s*hidden\s*;/.test(shellWorkspaceContent)
+  || !/padding\s*:\s*var\(--le-outer-content-padding,\s*0px\)\s*;/.test(shellWorkspaceContent)) {
+  failures.push('Level Editor shell workspace must own one bounded, content-padded composition layer');
+}
+const shellWorkspaceFill = blockFor('.le-shell-workspace-fill');
+if (!shellWorkspaceFill || !/inset\s*:\s*0\s*;/.test(shellWorkspaceFill)) {
+  failures.push('Level Editor shell workspace must paint the shared outer-role fill edge-to-edge');
+}
+const levelEditorShellGrid = blockFor('.skirmish-screen.level-editor-screen');
+if (!levelEditorShellGrid
+  || !/column-gap\s*:\s*0\s*;/.test(levelEditorShellGrid)
+  || !/row-gap\s*:\s*0\s*;/.test(levelEditorShellGrid)) {
+  failures.push('Level Editor shell grid must not expose uncovered seams around center workspaces');
 }
 if (!chromeRuntime.includes('const outerAtomOutset = cssPx(outerFrame.atomOverlay?.outset ?? 0);')) {
   failures.push('generated chrome runtime must derive the outer atom outset from the rendered atom overlay');
@@ -792,13 +811,13 @@ if (!/function\s+selectorListParts/.test(chromeRuntime)
   failures.push('generated atom pseudos must split only top-level selector-list commas, preserving :is() surface selectors');
 }
 if (/events-overlay/.test(chromeRuntime) || /events-overlay/.test(chromeUnitRegistry)) {
-  failures.push('retired events-overlay outer-panel registration must not return');
+  failures.push('shell-owned Events must not remain in the generated outer-panel runtime or registry inventory');
 }
 
 // The audit specimen is not the product integration. The normal, ready Level Editor
 // controls branch must render the same shared consumer that Chrome Audit renders. Events
-// instead occupies the shell-owned board workspace and must never rejoin the outer-panel
-// inventory. Keep checks scoped to the component/function that owns each responsibility.
+// instead occupies the reusable shell-owned center workspace and must never rejoin the
+// outer-panel inventory. Keep checks scoped to the owning component/function.
 const levelEditorChromeImports = [
   ...levelEditor.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]\.\/LevelEditorChromeConsumers['"]/g),
 ];
@@ -819,8 +838,8 @@ const rawLevelEditorControlAside = [...levelEditor.matchAll(/<aside\b[^>]*>/g)]
 if (rawLevelEditorControlAside) {
   failures.push('live Level Editor must not restore a raw parallel skirmish-hud controls aside; render LevelEditorControlsPanel');
 }
-if (!/className=\{`skirmish-board-frame\$\{eventsOpen \? ' is-events-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| undefined\}/.test(levelEditor)) {
-  failures.push('open Events workspace must keep the board mounted but visually and interactively covered');
+if (!/className=\{`skirmish-board-frame\$\{eventsOpen \|\| layer === 'artwork' \? ' is-workspace-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \|\| layer === 'artwork' \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| layer === 'artwork' \? true : undefined\}/.test(levelEditor)) {
+  failures.push('open shell workspace must keep the board mounted but visually and interactively covered');
 }
 if (!/eventsEditor:\s*routeState\.eventsEditor/.test(levelEditor)
   || !/levelEditorEventsEntry:\s*true/.test(levelEditor)
@@ -828,13 +847,16 @@ if (!/eventsEditor:\s*routeState\.eventsEditor/.test(levelEditor)
   || /window\.history\.state\?\.levelEditorRules/.test(levelEditor)) {
   failures.push('Events visibility must be URL-addressed; history state may mark only app-created return provenance');
 }
-const coveredBoard = blockFor('.level-editor-screen .skirmish-board-frame.is-events-covered');
+const coveredBoard = blockFor('.level-editor-screen .skirmish-board-frame.is-workspace-covered');
 if (!coveredBoard || !/visibility\s*:\s*hidden\s*;/.test(coveredBoard)) {
-  failures.push('open Events workspace must visually suppress the covered board');
+  failures.push('open shell workspace must visually suppress the covered board');
+}
+if (/LevelEditorEventsOverlay|le-events-overlay|chromeConsumer="events-overlay"/.test(levelEditor)) {
+  failures.push('live Level Editor must not restore the retired fixed Events overlay path');
 }
 
 const levelEditorControlsPanelStart = levelEditorChromeConsumers.indexOf('export function LevelEditorControlsPanel');
-const levelEditorControlsPanelEnd = levelEditorChromeConsumers.indexOf('export function LevelEditorEventsWorkspace', levelEditorControlsPanelStart);
+const levelEditorControlsPanelEnd = levelEditorChromeConsumers.indexOf('export function LevelEditorShellWorkspace', levelEditorControlsPanelStart);
 const levelEditorControlsPanel = levelEditorControlsPanelStart >= 0 && levelEditorControlsPanelEnd > levelEditorControlsPanelStart
   ? levelEditorChromeConsumers.slice(levelEditorControlsPanelStart, levelEditorControlsPanelEnd)
   : '';
@@ -845,15 +867,25 @@ if (!levelEditorControlsPanel) {
   failures.push('LevelEditorControlsPanel must compose the shared titled OuterChromeBox and Controls header');
 }
 
+const levelEditorShellWorkspace = exportedFunctionSource(levelEditorChromeConsumers, 'LevelEditorShellWorkspace');
+if (!levelEditorShellWorkspace
+  || !/<section \{\.\.\.props\} className=\{`le-shell-workspace \$\{className\}`\.trim\(\)\}>/.test(levelEditorShellWorkspace)
+  || !/<ChromeSurfaceFill role="outer" className="le-shell-workspace-fill"\s*\/>/.test(levelEditorShellWorkspace)
+  || !/className=\{`le-shell-workspace-content \$\{contentClassName\}`\.trim\(\)\}/.test(levelEditorShellWorkspace)) {
+  failures.push('LevelEditorShellWorkspace must own the reusable fill-only center-workspace composition');
+} else if (/<OuterChromeBox\b|role="dialog"|events-overlay/.test(levelEditorShellWorkspace)) {
+  failures.push('LevelEditorShellWorkspace must remain workflow-neutral and free of outer-panel/dialog semantics');
+}
+
 const levelEditorEventsWorkspace = exportedFunctionSource(levelEditorChromeConsumers, 'LevelEditorEventsWorkspace');
 if (!levelEditorEventsWorkspace
-  || !/<section className="le-events-workspace"[\s\S]*?aria-labelledby="level-events-workspace-title"/.test(levelEditorEventsWorkspace)
-  || !/<ChromeSurfaceFill role="outer" className="le-events-workspace-fill"\s*\/>/.test(levelEditorEventsWorkspace)
-  || !/className="le-events-workspace-content"/.test(levelEditorEventsWorkspace)
+  || !/<LevelEditorShellWorkspace[\s\S]*?className="le-events-workspace"/.test(levelEditorEventsWorkspace)
+  || !/data-testid="level-events-workspace"/.test(levelEditorEventsWorkspace)
+  || !/aria-labelledby="level-events-workspace-title"/.test(levelEditorEventsWorkspace)
   || !/initialFocusRef\.current\?\.focus\(\)/.test(levelEditorEventsWorkspace)) {
-  failures.push('events workspace must use the shared fill-only role inside a plain shell-owned section');
-} else if (/<OuterChromeBox\b|chromeConsumer="events-overlay"|role="dialog"/.test(levelEditorEventsWorkspace)) {
-  failures.push('events workspace must not restore outer-panel or dialog semantics');
+  failures.push('Events workspace must wrap its workflow in LevelEditorShellWorkspace with a labelled, initially focused surface');
+} else if (/<OuterChromeBox\b|role="dialog"|events-overlay/.test(levelEditorEventsWorkspace)) {
+  failures.push('Events workspace must not restore outer-panel or dialog semantics');
 }
 if (!/<OuterChromeBox[\s\S]*?chromeConsumer="skirmish-hud"[\s\S]*?titled[\s\S]*?className=\{`skirmish-hud \$\{className\}`\.trim\(\)\}/.test(skirmishHud)
   || !/<OuterChromeHeader title="Controls">/.test(skirmishHud)

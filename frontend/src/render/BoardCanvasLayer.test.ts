@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { BoardDrawOp } from '@chess-tactics/board-render';
-import { boardCanvasScratchRegion, drawBoardOps, isAnimatedGroundCoverOp } from './BoardCanvasLayer';
+import { encodePredrawnOcclusionDepth, type BoardDrawOp } from '@chess-tactics/board-render';
+import {
+  boardCanvasScratchRegion,
+  drawBoardOps,
+  isAnimatedGroundCoverOp,
+  predrawnOcclusionDepthImageDimensionIssue,
+} from './BoardCanvasLayer';
 
 function drawOp(overrides: Partial<BoardDrawOp> = {}): BoardDrawOp {
   return {
@@ -35,6 +40,135 @@ describe('BoardCanvasLayer live ground-cover animation', () => {
 });
 
 describe('BoardCanvasLayer pre-drawn occlusion', () => {
+  it('fails closed when immutable depth bytes do not match persisted frame dimensions', () => {
+    const map = {
+      src: '/depth.png',
+      frameWidth: 100,
+      frameHeight: 80,
+      worldBounds: { minX: 0, minY: 0, width: 100, height: 80 },
+    };
+    expect(predrawnOcclusionDepthImageDimensionIssue(map, { naturalWidth: 100, naturalHeight: 80 })).toBeNull();
+    expect(predrawnOcclusionDepthImageDimensionIssue(map, { naturalWidth: 100, naturalHeight: 79 }))
+      .toMatch(/expected 100×80, decoded 100×79/);
+  });
+
+  it('turns the persisted depth raster into an op-specific erase mask', () => {
+    const [red, green, blue] = encodePredrawnOcclusionDepth(6);
+    let filteredAlpha = -1;
+    const mainContext = {
+      clearRect: () => {},
+      drawImage: () => {},
+      imageSmoothingEnabled: true,
+    } as unknown as CanvasRenderingContext2D;
+    const scratchContext = {
+      globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+      imageSmoothingEnabled: true,
+      clearRect: () => {},
+      save: () => {},
+      restore: () => {},
+      drawImage: () => {},
+    } as unknown as CanvasRenderingContext2D;
+    const depthContext = {
+      globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+      imageSmoothingEnabled: true,
+      clearRect: () => {},
+      drawImage: () => {},
+      getImageData: () => ({ data: new Uint8ClampedArray([red, green, blue, 255]) }),
+      putImageData: (data: ImageData) => { filteredAlpha = data.data[3]; },
+    } as unknown as CanvasRenderingContext2D;
+    const unitImage = { complete: true, naturalWidth: 1, naturalHeight: 1 } as HTMLImageElement;
+    const depthImage = { complete: true, naturalWidth: 1, naturalHeight: 1 } as HTMLImageElement;
+    const surfaces = [
+      { canvas: { width: 1, height: 1 } as HTMLCanvasElement, context: scratchContext },
+      { canvas: { width: 1, height: 1 } as HTMLCanvasElement, context: depthContext },
+    ];
+
+    drawBoardOps(
+      mainContext,
+      [drawOp({ src: 'unit', dw: 1, dh: 1, z: 5 })],
+      { minX: 0, minY: 0, width: 1, height: 1 },
+      new Map([['unit', unitImage], ['depth', depthImage]]),
+      0,
+      undefined,
+      [],
+      () => surfaces.shift(),
+      {
+        src: 'depth',
+        frameWidth: 1,
+        frameHeight: 1,
+        worldBounds: { minX: 0, minY: 0, width: 1, height: 1 },
+      },
+    );
+
+    expect(filteredAlpha).toBe(255);
+  });
+
+  it('source-crops a grow-only depth scratch when a smaller op follows a larger one', () => {
+    const depthCompositeDraws: unknown[][] = [];
+    const depthCanvas = { width: 10, height: 10 } as HTMLCanvasElement;
+    const scratchCanvas = { width: 10, height: 10 } as HTMLCanvasElement;
+    const mainContext = {
+      clearRect: () => {},
+      drawImage: () => {},
+      imageSmoothingEnabled: true,
+    } as unknown as CanvasRenderingContext2D;
+    const scratchContext = {
+      globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+      imageSmoothingEnabled: true,
+      clearRect: () => {},
+      save: () => {},
+      restore: () => {},
+      drawImage: (...args: unknown[]) => {
+        if (args[0] === depthCanvas) depthCompositeDraws.push(args);
+      },
+    } as unknown as CanvasRenderingContext2D;
+    const depthContext = {
+      globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+      imageSmoothingEnabled: true,
+      clearRect: () => {},
+      drawImage: () => {},
+      getImageData: (_x: number, _y: number, width: number, height: number) => ({
+        data: new Uint8ClampedArray(width * height * 4),
+      }),
+      putImageData: () => {},
+    } as unknown as CanvasRenderingContext2D;
+    const unitImage = { complete: true, naturalWidth: 10, naturalHeight: 10 } as HTMLImageElement;
+    const depthImage = { complete: true, naturalWidth: 10, naturalHeight: 10 } as HTMLImageElement;
+    const surfaces = [
+      { canvas: scratchCanvas, context: scratchContext },
+      { canvas: depthCanvas, context: depthContext },
+    ];
+
+    drawBoardOps(
+      mainContext,
+      [
+        drawOp({ src: 'unit', dw: 10, dh: 10 }),
+        drawOp({ src: 'unit', dx: 12, dy: 12, dw: 4, dh: 3 }),
+      ],
+      { minX: 0, minY: 0, width: 20, height: 20 },
+      new Map([['unit', unitImage], ['depth', depthImage]]),
+      0,
+      undefined,
+      [],
+      () => surfaces.shift(),
+      {
+        src: 'depth',
+        frameWidth: 20,
+        frameHeight: 20,
+        worldBounds: { minX: 0, minY: 0, width: 20, height: 20 },
+      },
+    );
+
+    expect(depthCompositeDraws).toEqual([
+      [depthCanvas, 0, 0, 10, 10, 0, 0, 10, 10],
+      [depthCanvas, 0, 0, 4, 3, 0, 0, 4, 3],
+    ]);
+  });
+
   it('erases lower-depth scene pixels with a front mask and keeps higher-depth pixels', () => {
     const draws: string[] = [];
     const recordingContext = (label: string): CanvasRenderingContext2D => {

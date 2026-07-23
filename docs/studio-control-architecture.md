@@ -155,6 +155,24 @@ and no movement threshold decides whether a navigation gesture becomes
 destructive. Secondary gestures delegate to the canonical shared `ViewPane` so
 playable and scenic content follow the same pan behavior.
 
+## Level Editor process workspaces
+
+Events and AI board-artwork authoring are process instruments rather than board
+brushes. Per [ADR-0144](adr/0144-level-editor-events-use-the-shell-workspace.md)
+and [ADR-0150](adr/0150-predrawn-artwork-is-a-linear-shell-workspace.md), each
+replaces the visible board inside the shell-owned center workspace while the
+title and one right-side Controls rail remain stable. The covered board stays
+mounted, inert, and inaccessible so its camera and authoring state return
+unchanged. These instruments share the shell fill primitive and never create a
+second outer panel, dialog, or viewport-offset layout.
+
+The AI Artwork workspace owns viewing-pane authoring and the complete immutable
+art workflow. Its owner-facing sequence is Codex-generated board → warped board
+→ occlusion-ready board. Every result is a separate selectable version; attached
+occlusion depth is internal diagnostic data on the final version rather than a
+second dropdown. The ordinary Board control page retains viewing controls and
+does not host or duplicate this pipeline.
+
 ## Terrain area authoring
 
 Per [ADR-0129](adr/0129-level-editor-terrain-authoring-is-explicit-and-area-scoped.md), Generate

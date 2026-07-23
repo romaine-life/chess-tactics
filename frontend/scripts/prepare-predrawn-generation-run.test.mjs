@@ -185,4 +185,43 @@ describe('single-command pre-drawn preparation', () => {
     expect(shotSource).toContain('if (readyExpr) await page.waitForFunction(readyExpr, { timeout });');
     expect(shotSource).not.toMatch(/waitForFunction\(readyExpr[^\n]*\.catch/);
   });
+
+  it('settles readiness-held screen entrances before freezing screenshot animation', () => {
+    const explicitReadiness = shotSource.indexOf(
+      'if (readyExpr) await page.waitForFunction(readyExpr, { timeout });',
+    );
+    const implicitReadiness = shotSource.indexOf(
+      "else await page.waitForFunction('window.__ready===true', { timeout: 1200 }).catch(() => {});",
+    );
+    const entranceSettlement = shotSource.indexOf(
+      'const waitForSettledScreenEntrance = page.waitForFunction(',
+    );
+    const entranceSettlementAwait = shotSource.indexOf(
+      'else await waitForSettledScreenEntrance.catch(() => {});',
+    );
+    const animationFreeze = shotSource.indexOf('await page.addStyleTag({ content:');
+
+    expect(explicitReadiness).toBeGreaterThan(-1);
+    expect(implicitReadiness).toBeGreaterThan(explicitReadiness);
+    expect(entranceSettlement).toBeGreaterThan(implicitReadiness);
+    expect(shotSource).toContain("!document.querySelector('.screen-enter-hold,.screen-enter-lock')");
+    expect(entranceSettlementAwait).toBeGreaterThan(entranceSettlement);
+    expect(animationFreeze).toBeGreaterThan(entranceSettlementAwait);
+  });
+
+  it('releases the observation-only Level Editor session after a headless capture', () => {
+    const screenshot = shotSource.indexOf('await el.screenshot({ path: out });');
+    const editorRelease = shotSource.indexOf(
+      'for (let exitAttempt = 0; exitAttempt < 3 && isLevelEditorUrl(page.url()); exitAttempt += 1)',
+    );
+    const releaseNavigation = shotSource.indexOf("exit.href = '/editor';", editorRelease);
+    const releaseAcknowledgement = shotSource.indexOf('await page.waitForFunction(', releaseNavigation);
+
+    expect(screenshot).toBeGreaterThan(-1);
+    expect(editorRelease).toBeGreaterThan(screenshot);
+    expect(releaseNavigation).toBeGreaterThan(editorRelease);
+    expect(releaseAcknowledgement).toBeGreaterThan(releaseNavigation);
+    expect(shotSource).toContain('for (let exitAttempt = 0; exitAttempt < 3 && isLevelEditorUrl(page.url()); exitAttempt += 1)');
+    expect(shotSource).toContain('Level Editor observer session did not release after nested-workspace cleanup');
+  });
 });

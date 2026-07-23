@@ -337,78 +337,88 @@ The runtime board is one composed terrain canvas, but its source data remains la
 
 ### Pre-drawn board surfaces
 
-Per [ADR-0134](adr/0134-predrawn-candidate-review-uses-exact-board-plane-registration.md),
-a board may replace the composed terrain, feature, prop, fence, wall, and wall-art
-pixels with one complete pre-drawn live-media plate. Its ordinary cell and object
-data remain present and gameplay-authoritative; this is a render mode, not a
-different coordinate system or a flattened rules document.
+Per
+[ADR-0147](adr/0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
+a board may select one exact immutable pre-drawn raster version plus either one
+matching depth-aware occlusion-mask child or an explicit no-mask state. Ordinary
+cell and object data remain present and gameplay-authoritative; this is a render
+mode, not a different coordinate system or flattened rules document.
 
-The plate is registered once to the canonical centered board reference frame.
-Development review uses four source corners for the board plane and, per
+The selected raster is the sole source of baked environment pixels. The planner
+suppresses terrain tops, Subterrain, roads, rivers and other linear features,
+macrotiles and generated regions, props and scenery, fences and posts, walls and
+wall art, doodads, environmental shadows, lighting effects, non-cover
+environment animation, and particles. Per
+[ADR-0151](adr/0151-predrawn-backgrounds-retain-live-ground-cover.md), explicitly
+authored ground cover remains a live additive layer with its canonical
+back/front unit depth and animation on both playable and scenic visual terrain.
+Exact Levels never synthesize ambient cover. Live units/pieces and their
+unit-owned presentation, ground cover, tactical overlays such as the optional
+grid, selection, movement, threat, zones, and objectives, and application/editor
+UI remain above the raster.
+
+Uploading a PNG creates an immutable raw-raster root that is directly settable.
+Per
 [ADR-0110](adr/0110-owner-fitted-grid-defines-predrawn-review-rectification.md),
-may record one strictly monotonic guide for each internal row and column. The
-complete owner-fitted grid is visible over the untouched source together with an
-equal-spacing reference and a numeric correction range. Saving applies the
-inverse row/column map to the one continuous painting before its exact
-four-corner homography. It never crops, masks, splits, or independently aligns
-landmarks. Per
+the owner may instead fit four source corners and strictly monotonic internal
+row/column guides over that complete untouched source, with an equal-spacing
+reference and numeric correction range. Per
 [ADR-0111](adr/0111-predrawn-refit-target-dimensions-are-owner-configurable.md),
-the owner sets the row and column count of that refit target itself. The authored
-level dimensions are only its initial default. The saved count controls the
-guide topology and homography. Per
-[ADR-0112](adr/0112-predrawn-review-overlay-uses-the-saved-refit-grid.md), it also
-controls the visible temporary review grid after the picker closes, so the
-chosen count does not appear to revert. Playable cells, hit targets, movement,
-and level dimensions remain authored-level data; the review grid is visual
-calibration evidence only. A generated extra row or column therefore remains
-visible instead of being compressed or hidden.
+the owner controls the refit row and column counts without changing playable
+cells, hit targets, movement, or authored level dimensions. Applying the fit
+runs one versioned deterministic rasterization and emits a new immutable
+full-scene raster child. It records its exact parent and transform provenance;
+runtime never repeats the guide map or homography.
+
+Occlusion generation emits an immutable depth-aware mask child bound to the
+exact raster version, dimensions, coordinate basis, canonical environment-
+geometry revision or hash, depth convention, generator version, and content
+hash. Its stored alpha and depth clip live-unit and live-ground-cover pixels
+where painted environment pixels are nearer. Ground cover is absent from the
+background environment-geometry fingerprint because it is neither baked into
+the selected raster nor used to derive the mask; cover-only edits do not stale
+either artifact. Tactical overlays and UI remain readable above the environment
+unless another named contract explicitly says otherwise. An explicit no-mask
+selection applies no clipping. Missing or mismatched selected art fails closed;
+no consumer may restore composed environment draws, repeat a runtime warp,
+choose a mutable slot's newest image, or derive a replacement mask from
+canonical sprites.
 
 Per
-[ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md),
-promotion keeps the approved image bytes untouched at their actual dimensions
-and copies the renderer-affecting alignment into the Level's pre-drawn
-background declaration. That declaration contains the semantic live-media slot,
-actual image width and height, and the exact approved versioned alignment: four
-source-pixel corners, refit counts, monotonic row and column guides, and the
-version-4 pinned boundary. Every renderer applies the renderer-affecting values
-to the one continuous image. The pinned boundary round-trips but remains
-display-only. The temporary source URL, candidate id, browser-local record, and
-picker state are not persisted in the Level. Units, selection and tactical
-state, doodads, and animated ground cover remain ordinary board-space overlays.
+[ADR-0152](adr/0152-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md),
+new artifacts use only the cover-independent
+`predrawn-environment-geometry-v2` fingerprint. The exact v1 algorithm,
+including its historical cover maps, is retained solely to prove an existing
+immutable v1 row against a server-held Level. Migration 30 records that proof as
+an external immutable v1-to-v2 binding; it never changes the artifact's
+operation or provenance. The binding may occur only at the first fenced
+pre-mutation autosave, direct derivative creation, or Save/Publish fallback.
+Reads never bind. Once proven, cover-only edits continue to match v2. Per
+[ADR-0153](adr/0153-predrawn-geometry-staleness-does-not-block-draft-persistence.md),
+a baked terrain or environment edit may still autosave or be recovered as an
+owner draft, but it makes the selected art explicitly stale. The artwork UI
+disables Set and derivation for that stale version. Save and Publish reject it
+until the owner restores matching geometry or selects a complete artifact for
+the current v2 digest.
 
-Per
-[ADR-0122](adr/0122-predrawn-occlusion-derives-from-canonical-raised-geometry.md),
-those additive overlays are occluded by deterministic canonical raised geometry,
-not by classifying plate pixels. The shared planner removes every non-occluder
-family and reuses canonical alpha. Props and walls retain their scene depth;
-fence rails and posts use the half-depth plane of their canonical board edge.
-A strictly nearer overlapping mask erases one isolated
-additive draw before composition, revealing the unchanged plate beneath; equal
-depth retains stable painter order. The plate and terrain are never erased,
-split, cropped, or independently aligned. Editor, viewer, gameplay, browser
-thumbnail, and server thumbnail use this same planner and preload its mask
-sources with visible art. The editor exposes both the real clipping pass and a
-magenta seed overlay as deep-linkable before/after owner proofs.
+Editor, read-only viewer, gameplay, browser thumbnail, and server thumbnail all
+resolve the same exact raster-plus-mask selection.
 
 Per [ADR-0135](adr/0135-predrawn-registration-is-owner-picked-source-geometry.md)
-and [ADR-0108](adr/0108-predrawn-registration-is-local-first-and-explicitly-saved.md),
-the four source corners and the full internal row/column fit are owner-authorable
-in the running app against the untouched candidate image. Automatic geometry may
-seed that instrument, but it does not outrank an owner-picked control. Guide
-movement is clamped between neighboring guides so the board cannot fold or
-reorder cells. Refit row/column count changes rebuild only the changed axis with
-equal spacing and never resize the level or select a playable subset. Clicks,
-drags, nudges, target-count changes, spacing reset, and restore change pending
-picker state. `SAVE REGISTRATION` synchronously writes a candidate-source-scoped
-browser-local record and must read back the exact serialized value before the UI
-reports success. Only then does it mirror the development review URL and enable
-grid-on comparison. The same browser's verified local record outranks that URL;
-different browser profiles do not share it.
+the four source corners and full internal row/column fit remain owner-authorable
+in the running app against the untouched raster. Automatic geometry may seed
+that instrument, but it never outranks an owner-picked control. Guide movement
+is clamped between neighboring guides so the board cannot fold or reorder cells.
+Refit count changes rebuild only the changed axis with equal spacing and never
+resize the Level or select a playable subset. Clicks, drags, nudges, count
+changes, spacing reset, and restore change pending authoring state. The explicit
+derive action submits the exact displayed state, persists the resulting raster
+child and lineage, reads it back, and only then reports success. Browser-local
+or URL state is never installation authority.
 
-After `DONE`, a registered candidate's visible grid continues to use the saved
-refit row/column count. The ordinary authored-cell grid returns when no temporary
-candidate registration is active. Review-grid cells must never become editor hit
-targets or gameplay cells.
+The derived raster's review grid continues to use its recorded refit row and
+column count. The ordinary authored-cell grid returns when no calibration proof
+is active. Review-grid cells never become editor hit targets or gameplay cells.
 
 Per [ADR-0113](adr/0113-predrawn-calibration-can-snap-to-the-canonical-grid-shape.md),
 `SNAP IDEAL GRID` converts the current refit count to the exact runtime projection
@@ -421,51 +431,60 @@ Per [ADR-0114](adr/0114-predrawn-calibration-keeps-an-independent-pinned-boundar
 the owner may pin the current four outer corners as a separate painted-boundary
 reference. Its contrasting four-line outline and independently draggable handles
 remain visible while the working grid is snapped or edited. Version-4
-registration preserves that reference across save and reopen, but the reference
-is display-only and never participates in the homography, rectification, review
-grid, hit targets, or gameplay. If that candidate is promoted, the exact
-version-4 payload, including this reference, round-trips in the pre-drawn
-background declaration without giving the reference runtime authority.
+registration preserves that reference with derivation provenance, but the
+reference is display-only and never participates in the emitted pixels, review
+grid, hit targets, gameplay, or runtime background declaration.
 
-Per [ADR-0115](adr/0115-predrawn-registration-handoff-is-a-compact-copy-packet.md),
-`COPY CODEX HANDOFF` is enabled only after `SAVE REGISTRATION` has read back and
-verified the exact source-scoped local record. It copies a compact JSON packet
-containing only the candidate source and serialized registration. The mirrored
-development URL remains useful for reopen and debugging, but copying an address
-bar is not the owner-to-agent handoff workflow.
+Per
+[ADR-0150](adr/0150-predrawn-artwork-is-a-linear-shell-workspace.md), the
+owner-facing lineage instrument occupies the Level Editor's shell-owned center
+workspace instead of the Board control rail. It presents each operation as a
+distinct selectable board artifact: Codex-generated board, warped board, then
+occlusion-ready board. The last artifact deterministically owns its exact raster
+and attached depth data; an owner never coordinates separate background and mask
+selectors. Depth inspection is diagnostic detail on that artifact. Invalid or
+incomplete lineage is unavailable rather than repaired by fallback.
 
-Per [ADR-0116](adr/0116-registered-predrawn-candidates-activate-the-locked-editor.md),
-that verified registration plus an allowed same-origin development candidate is
-also sufficient to activate pre-drawn mode in the real Level Editor before live
-media acceptance. Closing calibration keeps the complete candidate plate under
-the live grid and applies the same locked-layer and baked-signature guards as a
-persisted pre-drawn surface. Its temporary source and synthetic review surface
-exist only in memory and are never serialized into the working copy or level.
-`DONE` removes the picker-open route flag so a refresh stays in the editor.
+`Set this board version` applies the artifact's exact selection only to the
+current fenced editor working copy and must visibly identify what is now set. It
+does not Save, Review, Publish, move a global media pointer, or imply canonical
+success. Private Save or official Review and publish/Publish is the separate
+canonical transaction. Private Save keeps its pinned ready versions owner-
+scoped; only official publication or the separately labeled owner user-map
+Publish action makes its exact selected versions public.
+
+ADR-0147 partially supersedes ADR-0115's mandatory installation handoff. A
+compact source/registration copy may remain as optional diagnostic or provenance
+export, but deriving, setting, saving, and publishing cannot require Codex,
+clipboard transfer, an editor URL, shared browser state, or a filesystem step.
 
 Per [ADR-0121](adr/0121-predrawn-pan-stops-at-art-boundary.md),
-the transformed convex boundary of the complete source frame—not the playable
-grid diamond—defines a viewport-cover zoom floor while any pre-drawn plate is
-active. The shared `ViewPane` recomputes one centered floor from its live
+the selected raster version's persisted frame dimensions and world bounds—not
+the playable grid diamond or a runtime-transformed source polygon—define a
+viewport-cover zoom floor while any pre-drawn background is active. The shared
+`ViewPane` recomputes one centered floor from its live
 dimensions, rounds upward to the control precision, and reports it to editor and
 gameplay zoom controls. Pan never changes that floor: it proceeds until the
-viewport reaches the transformed art edge and then stops. Zoom and resize clamp
+viewport reaches the raster art edge and then stops. Zoom and resize clamp
 an existing pan back inside. Wheel, stepper, shortcut, and reset paths must not
 cross the floor. If it exceeds the ordinary gameplay cap, the cap rises to the
 floor; ordinary tiled boards retain their existing zoom range.
 
-Per [ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md),
+Per ADR-0147,
 the cover floor is a safety limit rather than a substitute for camera room. The
-accepted image keeps its actual dimensions; no fixed pixel dimensions or exact
-board-to-frame percentage are an acceptance gate. Continuous world art outside
-the playable boundary must supply owner-approved pan travel in the real shared
-viewer. Raising resolution without changing the composition does not create
-camera room.
+raw and derived versions keep their recorded actual dimensions; no fixed pixel
+dimensions or exact board-to-frame percentage are an acceptance gate.
+Continuous world art outside the playable boundary must supply owner-approved
+pan travel in the real shared viewer. Raising resolution without changing the
+composition does not create camera room.
 
 While this surface is active, the editor must reject changes to dimensions,
-cells, macrotiles, roads, props, fences, walls, wall art, generated regions, cuts,
-and exits. Units, rules, zones, doodads, and animated cover remain editable.
-Changing baked geometry requires a new plate.
+cells, terrain, Subterrain, macrotiles, roads, rivers, props and scenery, fences,
+walls, wall art, generated regions, cuts, exits, doodads, and other baked
+environment content. Ground cover remains normally editable across the complete
+authored visual-terrain surface alongside units, rules, zones, and tactical
+authoring. Changing baked environment geometry requires a new raster and
+matching mask; changing cover does not.
 
 A macrotile never changes movement, collision, terrain family, or cell addressing. Its catalog
 entry declares a rectangular footprint and one board-space PNG. A placement may also declare

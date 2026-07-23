@@ -39,7 +39,7 @@ export interface EditorDocumentEditFence {
   edit_generation: number;
 }
 
-export type EditorDocumentEditSessionState = 'active' | 'waiting' | 'displaced' | 'expired' | 'closed';
+export type EditorDocumentEditSessionState = 'active' | 'waiting' | 'observing' | 'displaced' | 'expired' | 'closed';
 export type EditorDocumentSessionRelationship = 'this_tab' | 'same_device' | 'other_device';
 
 /** One authenticated browser/page session observing or editing a document. */
@@ -70,7 +70,7 @@ export interface EditorDocumentActiveEditor {
 
 /** Durable attribution for the most recent authority holder; explicitly not live presence. */
 export interface EditorDocumentLastEditor extends EditorDocumentActiveEditor {
-  state: Exclude<EditorDocumentEditSessionState, 'active' | 'waiting'>;
+  state: Exclude<EditorDocumentEditSessionState, 'active' | 'waiting' | 'observing'>;
   live: false;
 }
 
@@ -144,10 +144,16 @@ export interface EditorDocumentRecoveryDeleteResult {
   recovery: EditorDocumentRecovery;
 }
 
+export interface EditorDocumentRecoveryBulkDeleteResult {
+  recovery_ids: string[];
+  deleted_count: number;
+}
+
 export type EditorDocumentEditSessionErrorCode =
   | 'editor_document_session_displaced'
   | 'editor_document_session_expired'
   | 'editor_document_session_not_active'
+  | 'editor_document_session_observe_only'
   | 'editor_document_edit_session_key_invalid'
   | 'editor_document_edit_generation_conflict'
   | 'editor_document_edit_session_required'
@@ -356,7 +362,7 @@ function editSessionErrorCode(raw: unknown): EditorDocumentEditSessionErrorCode 
     : null;
 }
 
-async function throwEditorDocumentResponseError(action: string, response: Response): Promise<never> {
+export async function throwEditorDocumentResponseError(action: string, response: Response): Promise<never> {
   try {
     const body = await response.clone().json() as Partial<EditorDocumentResponse> & {
       error?: unknown;
@@ -533,7 +539,13 @@ async function editSessionResultFromResponse(
  */
 export async function openEditorDocumentEditSession(
   documentId: string,
-  input: { session_id: string; session_key: string; device_id: string; client_label?: string },
+  input: {
+    session_id: string;
+    session_key: string;
+    device_id: string;
+    client_label?: string;
+    intent?: 'write' | 'observe';
+  },
 ): Promise<EditorDocumentEditSessionResult> {
   const response = await editorDocumentFetch(editSessionUrl(documentId), {
     method: 'POST',
@@ -692,6 +704,22 @@ export async function deleteEditorDocumentRecovery(
   });
   if (!response.ok) return throwEditorDocumentResponseError('delete-editor-document-recovery', response);
   return await response.json() as EditorDocumentRecoveryDeleteResult;
+}
+
+/** Atomically delete one explicit snapshot of owner recoveries through the current writer fence. */
+export async function deleteEditorDocumentRecoveries(
+  documentId: string,
+  recoveryIds: string[],
+  fence: EditorDocumentEditFence,
+): Promise<EditorDocumentRecoveryBulkDeleteResult> {
+  const response = await editorDocumentFetch(recoveryUrl(documentId), {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ recovery_ids: recoveryIds, ...editFenceFields(fence) }),
+  });
+  if (!response.ok) return throwEditorDocumentResponseError('delete-editor-document-recoveries', response);
+  return await response.json() as EditorDocumentRecoveryBulkDeleteResult;
 }
 
 /** Persist a document using compare-and-swap against the observed revision. */
