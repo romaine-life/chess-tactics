@@ -1,4 +1,5 @@
 import { drawableAssets } from '../art/drawableCatalog';
+import { rookDirections, type Direction } from '../ui/unitCatalog';
 
 export type StructureArtKind = 'tree' | 'house' | 'rock' | 'doodad';
 export type StructureSplitMode = 'authored' | 'flat-contact';
@@ -56,10 +57,24 @@ export const STRUCTURE_ART_ASSETS: StructureArtDefinition[] = new Proxy([] as St
   },
 });
 
-export function structureRasterDimensions(id: string): { w: number; h: number } {
-  const record = drawableAssets('structure').find((asset) => (asset.behavior.value ?? asset.id) === id);
-  const back = record?.media.back?.media;
-  const front = record?.media.front?.media;
+function structureRecord(id: string) {
+  return drawableAssets('structure').find((asset) => (asset.behavior.value ?? asset.id) === id);
+}
+
+function directionMediaRole(direction: Direction, half: 'back' | 'front'): string {
+  return `${direction}-${half}`;
+}
+
+function directionMedia(id: string, direction: Direction, half: 'back' | 'front') {
+  const record = structureRecord(id);
+  if (!record) return undefined;
+  const explicit = record.media[directionMediaRole(direction, half)]?.media;
+  return explicit ?? (direction === 'south' ? record.media[half]?.media : undefined);
+}
+
+export function structureRasterDimensions(id: string, direction: Direction = 'south'): { w: number; h: number } {
+  const back = directionMedia(id, direction, 'back');
+  const front = directionMedia(id, direction, 'front');
   if (!back || !front) throw new Error(`structure art media is missing for ${id}`);
   if (!back.width || !back.height || !front.width || !front.height) {
     throw new Error(`structure art raster dimensions are missing for ${id}`);
@@ -80,8 +95,60 @@ export function structureArtAsset(id: string): StructureArtAsset | undefined {
 }
 
 export function structureArtHalfSrc(id: string, half: 'back' | 'front'): string {
-  const record = drawableAssets('structure').find((asset) => (asset.behavior.value ?? asset.id) === id);
-  const media = record?.media[half]?.media;
+  const media = directionMedia(id, 'south', half);
   if (!media) throw new Error(`structure ${id} has no ${half} media`);
+  return media.immutableUrl;
+}
+
+/** Installed directional views with complete, same-size back/front media pairs. */
+export function structureArtDirections(id: string): Direction[] {
+  return rookDirections.filter((direction) => {
+    const back = directionMedia(id, direction, 'back');
+    const front = directionMedia(id, direction, 'front');
+    return !!back
+      && !!front
+      && !!back.width
+      && !!back.height
+      && back.width === front.width
+      && back.height === front.height;
+  });
+}
+
+/**
+ * Resolve the source geometry for one real rendered view. Direction metadata is optional; absent
+ * fields inherit the installed source's south/default contact calibration.
+ */
+export function structureArtDirectionSprite(
+  id: string,
+  direction: Direction,
+): StructureArtAsset['sprite'] | undefined {
+  if (!structureArtDirections(id).includes(direction)) return undefined;
+  const base = structureArtAsset(id);
+  const rawDirections = structureRecord(id)?.behavior.directions;
+  const override = rawDirections && typeof rawDirections === 'object' && !Array.isArray(rawDirections)
+    ? (rawDirections as Record<string, unknown>)[direction]
+    : undefined;
+  const record = override && typeof override === 'object' && !Array.isArray(override)
+    ? override as Record<string, unknown>
+    : {};
+  const anchorX = Number(record.anchorX);
+  const anchorY = Number(record.anchorY);
+  const scale = Number(record.scale);
+  if (!base) return undefined;
+  return {
+    ...structureRasterDimensions(id, direction),
+    anchorX: Number.isFinite(anchorX) ? anchorX : base.sprite.anchorX,
+    anchorY: Number.isFinite(anchorY) ? anchorY : base.sprite.anchorY,
+    scale: Number.isFinite(scale) && scale > 0 ? scale : base.sprite.scale,
+  };
+}
+
+export function structureArtDirectionHalfSrc(
+  id: string,
+  direction: Direction,
+  half: 'back' | 'front',
+): string {
+  const media = directionMedia(id, direction, half);
+  if (!media) throw new Error(`structure ${id} has no ${direction} ${half} media`);
   return media.immutableUrl;
 }

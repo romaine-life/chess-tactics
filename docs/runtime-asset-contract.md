@@ -25,6 +25,15 @@ Game data and code refer to stable semantic slots such as a terrain layer role o
 UI-kit part. They never persist a candidate UUID, blob hash, generated filename,
 repository path, or currently accepted URL.
 
+Floating artwork placements persist the installed structure drawable's
+stable logical id, never media bytes, a blob hash, repository filename, or
+candidate URL. Directional structure views are media roles on that DB-owned
+drawable (`back`/`front` for south/default and paired
+`<direction>-back`/`<direction>-front` roles for additional views). The
+placement's canonical projected-scene pixel center, rendered direction, and
+source-composition scale are level data; the selected media still resolves
+through the catalog.
+
 A pre-drawn board persists its background's semantic slot, the accepted image's
 actual pixel width and height, and the versioned whole-image alignment geometry
 defined by

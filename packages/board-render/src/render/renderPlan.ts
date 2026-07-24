@@ -30,6 +30,11 @@ import { resolveWallArtFaces, slotSource, wallArtSlotsForFace } from '../core/wa
 import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './structureGeometry';
 import { fenceOverlayZIndex, fencePostZIndex, groundCoverZIndex, objectBaseZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
 import { propDef, type StructureSourceRef } from '../core/props';
+import {
+  structureArtAsset,
+  structureArtDirectionHalfSrc,
+  structureArtDirectionSprite,
+} from '../core/structureArt';
 import { densityFieldAt, groundCoverSet, resolveGroundCover, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
@@ -307,6 +312,59 @@ function pushStructureDrawOps(
     ops.push({
       layer: 'scene',
       src: structureSourceHalfSrc(source, 'front'),
+      sx: clips.front.sx,
+      sy: clips.front.sy,
+      sw: clips.front.sw,
+      sh: clips.front.sh,
+      dx,
+      dy: dy + clips.front.sy * scale,
+      dw: fullW,
+      dh: clips.front.sh * scale,
+      z: frontZ,
+    });
+  }
+}
+
+function pushFloatingArtworkDrawOps(
+  ops: BoardDrawOp[],
+  sourceArtId: string,
+  direction: Direction,
+  sourceSprite: { w: number; h: number },
+  anchorY: number,
+  scale: number,
+  dx: number,
+  dy: number,
+  backZ: number,
+  frontZ: number,
+): void {
+  const fullW = sourceSprite.w * scale;
+  const fullH = sourceSprite.h * scale;
+  const srcFor = (half: 'back' | 'front') => structureArtDirectionHalfSrc(sourceArtId, direction, half);
+  if ((structureArtAsset(sourceArtId)?.splitMode ?? 'authored') !== 'flat-contact') {
+    ops.push({ layer: 'scene', src: srcFor('back'), dx, dy, dw: fullW, dh: fullH, z: backZ });
+    ops.push({ layer: 'scene', src: srcFor('front'), dx, dy, dw: fullW, dh: fullH, z: frontZ });
+    return;
+  }
+  const clips = flatContactClipRects({ w: sourceSprite.w, h: sourceSprite.h, anchorY });
+  if (clips.back.sh > 0) {
+    ops.push({
+      layer: 'scene',
+      src: srcFor('back'),
+      sx: clips.back.sx,
+      sy: clips.back.sy,
+      sw: clips.back.sw,
+      sh: clips.back.sh,
+      dx,
+      dy,
+      dw: fullW,
+      dh: clips.back.sh * scale,
+      z: backZ,
+    });
+  }
+  if (clips.front.sh > 0) {
+    ops.push({
+      layer: 'scene',
+      src: srcFor('front'),
       sx: clips.front.sx,
       sy: clips.front.sy,
       sw: clips.front.sw,
@@ -609,6 +667,29 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     }
   }
 
+  for (const [index, placement] of (predrawn ? [] : (board.floatingArtwork ?? [])).entries()) {
+    const sprite = structureArtDirectionSprite(placement.sourceArtId, placement.direction);
+    if (!sprite) continue;
+    const scale = sprite.scale * placement.scale;
+    const width = sprite.w * scale;
+    const height = sprite.h * scale;
+    // Floating source art is an ordered visual overlay. It never derives depth from a tile,
+    // contact point, or projected board coordinate.
+    const back = 1_000_000 + index * 2;
+    pushFloatingArtworkDrawOps(
+      ops,
+      placement.sourceArtId,
+      placement.direction,
+      sprite,
+      sprite.anchorY,
+      scale,
+      placement.pixelX - width / 2,
+      placement.pixelY - height / 2,
+      back,
+      back + 1,
+    );
+  }
+
   const COVER_SEED = options.coverSeed ?? 1234;
   const coverCells: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover?: GroundCover }> = [];
   for (let y = 0; y < board.rows; y += 1) {
@@ -690,6 +771,7 @@ export function boardContentHash(board: RenderBoard): string {
     `u:${sortedEntries(board.units)}`,
     `d:${sortedEntries(board.doodads)}`,
     `p:${sortedEntries(board.props ?? {})}`,
+    `fa:${JSON.stringify(board.floatingArtwork ?? [])}`,
     `v:${sortedEntries(board.cover)}`,
     `ct:${sortedEntries(board.coverTypes ?? {})}`,
     `f:${sortedEntries(board.features)}`,

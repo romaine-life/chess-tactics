@@ -14,6 +14,7 @@
 //   gr?:generatedRegionUnits,
 //   pd?:[semanticMediaSlot,referenceFrameWidth,referenceFrameHeight,registration?],
 //   pgf?:[version,x,y,width,height],
+//   fa?:[[instanceId,sourceArtId,pixelX,pixelY,direction,scale]],
 //   da?:[top,right,bottom,left], df?:[cell], dt?:{cell:tileId}, dr?:{cell:feature},
 //   dfe?:{edgeKey:fenceMaterial}, dfp?:{vertexKey:fenceMaterial}, dwl?:{edgeKey:wallMaterial} }.
 // `pd[3]` is the stable compact legacy/v2/v3/v4 registration string. Three-field `pd` records
@@ -30,7 +31,7 @@
 // for old links/clients. `gr` stores editor-only generated-region units: saved cell selections
 // plus the Generate panel settings needed to rerun them. base64url of the JSON (no padding, +/ -> -_).
 //
-// FORWARD/BACK-COMPAT: `z`/`p`/`fe`/`fp`/`wl`/`wa`/`df`/`pgf` are emitted only when non-empty, so a board without them
+// FORWARD/BACK-COMPAT: `z`/`p`/`fa`/`fe`/`fp`/`wl`/`wa`/`df`/`pgf` are emitted only when non-empty, so a board without them
 // encodes byte-identically to a code that predates them, and an OLD code decodes them to empty.
 
 import type { GroundCoverDensity } from '../core/groundCover';
@@ -41,6 +42,7 @@ import { ZONE_COLORS, ZONE_TYPES, type ZoneColor, type ZoneType } from '../core/
 import type { TileFamilyId } from '../core/tileSockets';
 import { UNIT_FACINGS, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
 import type { UnitFacing } from '../core/types';
+import { rookDirections, type Direction } from './unitCatalog';
 import { cleanSubterrainPlacements, type SubterrainPlacementMap } from '../core/subterrain';
 import {
   normalizePredrawnGenerationFrame,
@@ -118,6 +120,20 @@ export interface BoardGeneratedRegion {
   macroTileDensity?: number;
 }
 
+/**
+ * One raw installed structure source placed as visual-only pre-drawn generation input.
+ * Coordinates are unzoomed projected-scene pixels. The image is a floating overlay, not a tile,
+ * footprint, contact point, or depth-bearing board object.
+ */
+export interface FloatingArtworkPlacement {
+  id: string;
+  sourceArtId: string;
+  pixelX: number;
+  pixelY: number;
+  direction: Direction;
+  scale: number;
+}
+
 export interface EditorBoard {
   cols: number;
   rows: number;
@@ -147,6 +163,8 @@ export interface EditorBoard {
   doodads: Record<string, { doodadId: string }>;
   /** Multi-cell props (trees/houses), keyed by ANCHOR cell "x,y" -> {propId} (mirrors doodads). */
   props: Record<string, { propId: string }>;
+  /** Floating, gameplay-inert source artwork used by the pre-drawn generation reference. */
+  floatingArtwork?: FloatingArtworkPlacement[];
   cover: Record<string, GroundCoverDensity>;
   /** Per-cell cover-set OVERRIDE (cell "x,y" -> cover family), decoupling ground cover from the
    * tile's terrain (e.g. grass tufts on a stone region). A cell absent here falls back to its own
@@ -195,6 +213,9 @@ const validZoneTypes = new Set<string>(ZONE_TYPES);
 const validZoneColors = new Set<string>(ZONE_COLORS);
 const validWallMaterial = (value: string): boolean => wallMaterials().includes(value);
 const validFenceMaterial = (value: string): boolean => fenceMaterials().includes(value);
+const validArtworkDirections = new Set<string>(rookDirections);
+const floatingArtworkIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/;
+export const MAX_FLOATING_ARTWORK_PIXEL = 8192;
 const mediaSlotSegmentPattern = /^[A-Za-z0-9_][A-Za-z0-9._@+-]*$/;
 const MAX_PREDRAWN_FRAME_DIMENSION = 8192;
 
@@ -394,6 +415,49 @@ function isInScenicBoundsCellKey(key: string, cols: number, rows: number, apron:
     && y >= -extents.top && y < rows + extents.bottom;
 }
 
+function cleanFloatingArtwork(value: unknown): FloatingArtworkPlacement[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: FloatingArtworkPlacement[] = [];
+  for (const raw of value) {
+    const tuple = Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === 'object'
+        ? [
+            (raw as Record<string, unknown>).id,
+            (raw as Record<string, unknown>).sourceArtId,
+            (raw as Record<string, unknown>).pixelX,
+            (raw as Record<string, unknown>).pixelY,
+            (raw as Record<string, unknown>).direction,
+            (raw as Record<string, unknown>).scale,
+          ]
+        : null;
+    if (!tuple) continue;
+    const id = typeof tuple[0] === 'string' ? tuple[0].trim() : '';
+    const sourceArtId = typeof tuple[1] === 'string' ? tuple[1].trim() : '';
+    const pixelX = Number(tuple[2]);
+    const pixelY = Number(tuple[3]);
+    const direction = String(tuple[4] ?? '');
+    const scale = Number(tuple[5]);
+    if (
+      !floatingArtworkIdPattern.test(id)
+      || !floatingArtworkIdPattern.test(sourceArtId)
+      || seen.has(id)
+      || !Number.isSafeInteger(pixelX)
+      || !Number.isSafeInteger(pixelY)
+      || Math.abs(pixelX) > MAX_FLOATING_ARTWORK_PIXEL
+      || Math.abs(pixelY) > MAX_FLOATING_ARTWORK_PIXEL
+      || !validArtworkDirections.has(direction)
+      || !Number.isFinite(scale)
+      || scale < 0.1
+      || scale > 8
+    ) continue;
+    seen.add(id);
+    out.push({ id, sourceArtId, pixelX, pixelY, direction: direction as Direction, scale });
+  }
+  return out;
+}
+
 function cleanMacroTiles(value: unknown, cols: number, rows: number): MacroTilePlacement[] {
   if (!Array.isArray(value)) return [];
   const out: MacroTilePlacement[] = [];
@@ -580,6 +644,17 @@ export function encodeBoard(b: EditorBoard): string {
   // Props mirror doodads on the wire: anchor cell -> bare propId. Emitted only when nonEmpty so a
   // prop-free board encodes byte-identically to a pre-props board.
   if (b.props && nonEmpty(b.props)) wire.p = Object.fromEntries(Object.entries(b.props).map(([k, v]) => [k, v.propId]));
+  const floatingArtwork = cleanFloatingArtwork(b.floatingArtwork);
+  if (floatingArtwork.length) {
+    wire.fa = floatingArtwork.map((placement) => [
+      placement.id,
+      placement.sourceArtId,
+      placement.pixelX,
+      placement.pixelY,
+      placement.direction,
+      placement.scale,
+    ]);
+  }
   const macroTiles = encodeMacroTiles(b.macroTiles, b.cols, b.rows);
   if (macroTiles.length) wire.mt = macroTiles;
   if (nonEmpty(b.cover)) wire.v = b.cover;
@@ -710,6 +785,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       bottom: Math.max(0, Math.min(16, Math.round(Number(apronValues[2]) || 0))),
       left: Math.max(0, Math.min(16, Math.round(Number(apronValues[3]) || 0))),
     };
+    const floatingArtwork = cleanFloatingArtwork(w.fa);
     const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows, decorativeApron);
     const surface = Array.isArray(w.pd)
       ? normalizePredrawnBoardSurface({
@@ -744,7 +820,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       decorativeFences: (w.dfe && typeof w.dfe === 'object' && !Array.isArray(w.dfe) ? w.dfe : {}) as Record<string, FenceMaterial>,
       decorativeFencePosts: (w.dfp && typeof w.dfp === 'object' && !Array.isArray(w.dfp) ? w.dfp : {}) as Record<string, FenceMaterial>,
       decorativeWalls: (w.dwl && typeof w.dwl === 'object' && !Array.isArray(w.dwl) ? w.dwl : {}) as Record<string, WallMaterial>,
-      playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, macroTiles, units, doodads, props,
+      playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, macroTiles, units, doodads, props, floatingArtwork,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
       features,

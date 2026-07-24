@@ -32,6 +32,8 @@ export function LevelEditorControlsPanel({
   onLayerChange,
   tool,
   onToolChange,
+  eraseLabel = 'Erase',
+  eraseDisabled = false,
   canUndo,
   canRedo,
   onUndo,
@@ -51,6 +53,9 @@ export function LevelEditorControlsPanel({
   onLayerChange: (layer: LevelEditorLayerKey) => void;
   tool: LevelEditorToolKey | null;
   onToolChange: (tool: LevelEditorToolKey) => void;
+  /** Artwork uses this registered slot as an immediate delete-selected action, not an erase mode. */
+  eraseLabel?: string;
+  eraseDisabled?: boolean;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -133,7 +138,7 @@ export function LevelEditorControlsPanel({
           <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
             <button type="button" data-chrome-unit="inner-select-tool" className={chromeUnitClassNames('inner-select-tool', 'le-seg-btn', tool === 'select' && 'active')} onClick={() => onToolChange('select')} title="Select" aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></button>
             <button type="button" data-chrome-unit="inner-brush-tool" className={chromeUnitClassNames('inner-brush-tool', 'le-seg-btn', tool === 'brush' && 'active')} onClick={() => onToolChange('brush')} title="Brush" aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></button>
-            <button type="button" data-chrome-unit="inner-erase-tool" className={chromeUnitClassNames('inner-erase-tool', 'le-seg-btn', tool === 'erase' && 'active')} onClick={() => onToolChange('erase')} title="Erase" aria-label="Erase"><span className="le-ico ic-eraser" aria-hidden="true" /></button>
+            <button type="button" data-chrome-unit="inner-erase-tool" className={chromeUnitClassNames('inner-erase-tool', 'le-seg-btn', tool === 'erase' && 'active')} onClick={() => onToolChange('erase')} disabled={eraseDisabled} title={eraseLabel} aria-label={eraseLabel}><span className="le-ico ic-eraser" aria-hidden="true" /></button>
             <button type="button" data-chrome-unit="inner-move-tool" className={chromeUnitClassNames('inner-move-tool', 'le-seg-btn', tool === 'move' && 'active')} onClick={() => onToolChange('move')} title="Move - drag a placed unit or prop to a new cell." aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
             <span className="le-action-toolbar-divider" aria-hidden="true" />
             <button

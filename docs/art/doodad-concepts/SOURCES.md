@@ -60,9 +60,15 @@ House art is STYLIZED, never photoreal (he reads scanned-mesh renders as "too re
    # scales by horizontal FOOTPRINT (not largest-dim, which clipped boxy houses); handles
    # .blend (open it) / .fbx / .obj / .gltf; relinks + auto-wires textures from <texdir>:
    blender [scene.blend] -b -P docs/art/doodad-concepts/render_prop_mesh.py -- \
-     <out.png> <none|mesh.fbx|.obj|.gltf> <footprint~1.1> full <none|x90|autoz> <texdir> <FW> <FH> [TZ]
+     <out.png> <none|mesh.fbx|.obj|.gltf> <footprint~1.1> full <none|x90|autoz> <texdir> <FW> <FH> [TZ] [facing]
    # then: crop to alpha bbox + ~10px margin, anchor = (bbox center-x, bbox bottom). Set def.sprite.
    ```
+   `facing` is one of the canonical eight board directions (`south`, `south-west`, `west`,
+   `north-west`, `north`, `north-east`, `east`, `south-east`). Keep the camera fixed and invoke
+   the recipe once per facing. For authored split art, render both `back` and `front` for each
+   facing; for `flat-contact` source art, one `full` render may be assigned to both direction roles.
+   Runtime roles are `<facing>-back` and `<facing>-front`; legacy `back`/`front` remain the south
+   aliases. Directional rasters and their contact calibration stay live-storage-backed.
 2. **Photoreal mesh → gated Codex RESTYLE** (e.g. `cabin`, `lodge`). Keep the real shape/iso, re-skin
    to pixel-art. Render a Blender capture as above, then:
    ```
