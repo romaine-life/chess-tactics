@@ -95,14 +95,15 @@ Before generation:
    outer envelope and every gameplay-authoritative reference draw represented by
    the semantic packet. Export the exact saved crop without units or additive
    ground cover. Inside it, preserve authored terrain tops, linear features,
-   barriers, props, and explicitly persisted Subterrain on canonically exposed
+   barriers, props, floating visual-only source artwork, and explicitly persisted Subterrain on canonically exposed
    active visual-terrain faces. Suppress grass tufts and other additive ground
    cover: those pixels create avoidable occlusion and runtime may add accepted
    generated cover independently. Do not let pieces, selection overlays, UI,
    un-authored board skirts, or invented cliff faces enter the geometry input.
    Explicit Subterrain is authoritative appearance without gameplay height;
    every other vertical side can be mistaken for an extra row or column even
-   when it is only presentation art. Scenic-only terrain, props, and Subterrain
+   when it is only presentation art. Scenic-only terrain, props, floating source
+   artwork, and Subterrain
    may be clipped or excluded by the saved frame without being deleted from the
    level. Decorative pixels may touch the crop edge; do not restore the retired
    global all-alpha clearance rule. The crop edge is presentation only and never
@@ -125,9 +126,13 @@ Before generation:
    edges owned by non-playable addresses. Record intentional feature crossings as
    openings. Record passable-to-non-playable internal transitions separately;
    holes and gaps do not redefine the outer envelope.
-8. State which artistic decisions are free. Boundary material may be free;
+8. Enumerate direct source-art placements separately as visual-only landmarks:
+   preserve their visible contact position, rendered direction, and relative
+   scale from Image 1, but never infer a footprint, blocker, elevation, or other
+   gameplay authority from them.
+9. State which artistic decisions are free. Boundary material may be free;
    boundary location is not.
-9. Repeat the global invariants: one flat gameplay plane unless the level says
+10. Repeat the global invariants: one flat gameplay plane unless the level says
    otherwise, exact footprints, no units, no extra roads or blockers, one
    continuous painting, and a full environment outside the board.
 
@@ -366,7 +371,7 @@ output size.
   text direction must be sufficient.
 - **2026-07-14 — ground-cover-free art authority:** generation-reference exports
   suppress grass and other additive cover while preserving terrain, roads,
-  barriers, and props. Runtime-generated cover remains an independent optional
+  barriers, props, and floating visual-only source artwork. Runtime-generated cover remains an independent optional
   layer.
 - **2026-07-14 — measured export bounds (superseded by ADR-0142):** the initial
   export framed the complete rendered paint bounds with padding and failed when

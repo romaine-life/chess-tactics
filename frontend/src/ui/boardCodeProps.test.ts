@@ -63,3 +63,51 @@ describe('boardCode — props wire key (p)', () => {
     expect(decoded.cells['0,0']).toBe('grass-1');
   });
 });
+
+describe('boardCode — floating artwork wire key (fa)', () => {
+  it('round-trips projected-pixel visual-only transforms independently of props and doodads', () => {
+    const floatingArtwork = [{
+      id: 'art-windmill-1',
+      sourceArtId: 'windmill',
+      pixelX: 228,
+      pixelY: -120,
+      direction: 'north-east' as const,
+      scale: 1.65,
+    }];
+    const board = base({
+      decorativeApron: { top: 2, right: 1, bottom: 1, left: 1 },
+      floatingArtwork,
+      props: { '0,0': { propId: 'oak' } },
+      doodads: { '1,1': { doodadId: 'flower' } },
+    });
+    const decoded = decodeBoard(encodeBoard(board))!;
+    expect(decoded.floatingArtwork).toEqual(floatingArtwork);
+    expect(decoded.props).toEqual(board.props);
+    expect(decoded.doodads).toEqual(board.doodads);
+  });
+
+  it('omits an empty artwork channel, ignores the retired board-space field, and rejects invalid pixel transforms', () => {
+    const empty = base({ floatingArtwork: [] });
+    const absent = { ...empty } as Partial<EditorBoard>;
+    delete absent.floatingArtwork;
+    expect(encodeBoard(empty)).toBe(encodeBoard(absent as EditorBoard));
+
+    const retired = {
+      ...empty,
+      scenicArtwork: [{ id: 'old', sourceArtId: 'oak', x: 1.5, y: 1.5, direction: 'south', scale: 1 }],
+    } as unknown as EditorBoard;
+    expect(decodeBoard(encodeBoard(retired))?.floatingArtwork).toEqual([]);
+
+    const decoded = decodeBoard(encodeBoard(base({
+      floatingArtwork: [
+        { id: 'ok', sourceArtId: 'oak', pixelX: 144, pixelY: 96, direction: 'south', scale: 1 },
+        { id: 'outside', sourceArtId: 'oak', pixelX: 8193, pixelY: 1, direction: 'south', scale: 1 },
+        { id: 'fractional', sourceArtId: 'oak', pixelX: 1.5, pixelY: 1, direction: 'south', scale: 1 },
+        { id: 'flat-spin', sourceArtId: 'oak', pixelX: 1, pixelY: 1, direction: 'south' as const, scale: 0 },
+      ],
+    })))!;
+    expect(decoded.floatingArtwork).toEqual([
+      { id: 'ok', sourceArtId: 'oak', pixelX: 144, pixelY: 96, direction: 'south', scale: 1 },
+    ]);
+  });
+});

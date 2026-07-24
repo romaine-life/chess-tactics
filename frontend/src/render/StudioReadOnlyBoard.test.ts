@@ -28,6 +28,14 @@ describe('boardForTopSurfaceArtExport', () => {
       coverTypes: { '1,2': 'grass' },
       fences: { '1,2|1,3': 'stone' },
       props: { '2,3': 'fieldstone' },
+      floatingArtwork: [{
+        id: 'art-oak',
+        sourceArtId: 'oak',
+        pixelX: 168,
+        pixelY: 108,
+        direction: 'north-east',
+        scale: 1.4,
+      }],
       subterrain: { '0,0:south': 'earth' },
     } as unknown as Parameters<typeof boardForTopSurfaceArtExport>[0];
     const exported = boardForTopSurfaceArtExport(board);
@@ -37,6 +45,7 @@ describe('boardForTopSurfaceArtExport', () => {
     expect(exported.coverTypes).toEqual({});
     expect(exported.fences).toBe(board.fences);
     expect(exported.props).toBe(board.props);
+    expect(exported.floatingArtwork).toBe(board.floatingArtwork);
     expect(exported.subterrain).toBe(board.subterrain);
   });
 

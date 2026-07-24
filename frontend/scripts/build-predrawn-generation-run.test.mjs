@@ -97,6 +97,14 @@ const fortressGate = {
     { id: 'fieldstone', kind: 'prop', sourceId: 'fieldstone', cells: [[0, 5]], traversal: 'impassable' },
     { id: 'cottage-small', kind: 'prop', sourceId: 'cottage-small', cells: [[4, 5]], traversal: 'impassable' },
   ],
+  visualArtwork: [{
+    id: 'visual-art-1',
+    sourceId: 'oak',
+    positionPx: [240, 135],
+    direction: 'north-east',
+    scale: 1.4,
+    gameplay: 'none',
+  }],
   outerPerimeter: { edges: rectangularEnvelope(5, 11), openings: [] },
   impassableTransitions: [],
 };
@@ -243,6 +251,13 @@ describe('pre-drawn generation run builder', () => {
     expect(artifacts.references.references[0].role).toBe(
       'canonical-unit-free-ground-cover-free-authored-surface-art-authority',
     );
+    expect(artifacts.prompt).toContain('VISUAL-ONLY SOURCE ARTWORK (1)');
+    expect(artifacts.prompt).toContain('visual-art-1');
+    expect(artifacts.prompt).toContain('visible landmark centered at scene pixel (240,135)');
+    expect(artifacts.prompt).toContain('rendered view north-east');
+    expect(artifacts.prompt).toContain('source scale 1.4');
+    expect(artifacts.prompt).toContain('gameplay: none');
+    expect(artifacts.packet.visualArtwork).toEqual(fortressGate.visualArtwork);
   });
 
   it('uses Hold Bridge canonical dimensions, voids, graph edges, exits, and the complete envelope', () => {

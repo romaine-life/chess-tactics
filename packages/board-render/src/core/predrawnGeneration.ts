@@ -5,6 +5,7 @@ import { propCells, propDef, type PropDef } from './props';
 import { boardLabCellPosition } from '../render/boardProjection';
 import { validatePredrawnGenerationFrame } from '../render/predrawnGenerationFrame';
 import { decodeBoard, type EditorBoard, type FeatureCell } from '../ui/boardCode';
+import type { Direction } from '../ui/unitCatalog';
 
 export type PredrawnGenerationCoordinate = readonly [x: number, y: number];
 export type PredrawnGenerationEdge = readonly [
@@ -45,6 +46,17 @@ export interface PredrawnFootprintDefinition {
   sourceId: string;
   cells: PredrawnGenerationCoordinate[];
   traversal: 'passable' | 'impassable';
+}
+
+export interface PredrawnVisualArtworkDefinition {
+  id: string;
+  /** Stable installed source id retained in the packet as provenance, never gameplay authority. */
+  sourceId: string;
+  /** Center point in canonical unzoomed projected-scene pixels. */
+  positionPx: readonly [x: number, y: number];
+  direction: Direction;
+  scale: number;
+  gameplay: 'none';
 }
 
 export interface PredrawnOuterPerimeterEdge {
@@ -102,6 +114,8 @@ export interface PredrawnGenerationDefinition {
   linearFeatures: PredrawnLinearFeatureDefinition[];
   barriers: PredrawnBarrierDefinition[];
   footprints: PredrawnFootprintDefinition[];
+  /** Appearance landmarks already visible in Image 1; they carry no footprint or traversal. */
+  visualArtwork: PredrawnVisualArtworkDefinition[];
   /** The complete rectangular grid envelope, including envelope edges beside void coordinates. */
   outerPerimeter: {
     edges: PredrawnOuterPerimeterEdge[];
@@ -391,6 +405,17 @@ function footprints(
   return definitions;
 }
 
+function visualArtwork(board: EditorBoard): PredrawnVisualArtworkDefinition[] {
+  return (board.floatingArtwork ?? []).map((placement) => ({
+    id: placement.id,
+    sourceId: placement.sourceArtId,
+    positionPx: [placement.pixelX, placement.pixelY] as const,
+    direction: placement.direction,
+    scale: placement.scale,
+    gameplay: 'none' as const,
+  }));
+}
+
 function outerPerimeter(columns: number, rows: number): PredrawnOuterPerimeterEdge[] {
   const edges: PredrawnOuterPerimeterEdge[] = [];
   for (let x = 0; x < columns; x += 1) {
@@ -486,6 +511,7 @@ export function buildPredrawnGenerationDefinition(
     linearFeatures: serializedLinearFeatures,
     barriers: barriers(board),
     footprints: footprints(board, options.resolveProp ?? propDef),
+    visualArtwork: visualArtwork(board),
     outerPerimeter: {
       edges: outerPerimeter(board.cols, board.rows),
       openings: perimeterOpenings,

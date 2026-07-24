@@ -67,6 +67,14 @@ function holdBridgeLevel() {
     units: {},
     doodads: { '12,0': { doodadId: 'scenic-rock' } },
     props: { '-2,0': { propId: 'scenic-tree' } },
+    floatingArtwork: [{
+      id: 'art-scenic-oak',
+      sourceArtId: 'oak',
+      pixelX: -144,
+      pixelY: 96,
+      direction: 'north-east',
+      scale: 1.4,
+    }],
     cover: {
       '8,1': 'sparse',
       '2,5': 'sparse',
@@ -150,6 +158,14 @@ test('Hold Bridge definition is derived as a 12x8 irregular board with exact int
   assert.deepEqual(definition.barriers, []);
   // Scenic objects are appearance owned by Image 1, never gameplay footprints.
   assert.deepEqual(definition.footprints, []);
+  assert.deepEqual(definition.visualArtwork, [{
+    id: 'art-scenic-oak',
+    sourceId: 'oak',
+    positionPx: [-144, 96],
+    direction: 'north-east',
+    scale: 1.4,
+    gameplay: 'none',
+  }]);
   assert.deepEqual(definition.board.projection.axisX, { screenDx: 48, screenDy: 27 });
   assert.deepEqual(definition.board.projection.axisY, { screenDx: -48, screenDy: 27 });
   assert.equal(JSON.stringify(definition).includes('riverlands'), false);

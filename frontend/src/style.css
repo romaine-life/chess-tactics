@@ -6621,6 +6621,30 @@ body.loading-bootstrap .app-startup-status {
 .le-details div { align-items: center; display: grid; gap: 8px; grid-template-columns: 72px minmax(0, 1fr); }
 .le-details dt { color: #6edcff; font-size: var(--ds-text-xs); margin: 0; text-transform: uppercase; }
 .le-details dd { color: #f3ead8; font-size: var(--ds-text-sm); margin: 0; word-break: break-word; }
+.le-details .le-artwork-transform-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ds-inline-tight);
+  margin-top: var(--ds-stack);
+}
+.le-details .le-artwork-transform-grid label {
+  display: grid;
+  gap: 4px;
+  color: #6edcff;
+  font-size: var(--ds-text-xs);
+  text-transform: uppercase;
+}
+.le-details .le-artwork-transform-grid input[type="number"] { width: 100%; }
+.le-details .le-artwork-transform-grid .le-artwork-transform-row {
+  grid-template-columns: 56px minmax(80px, 1fr) 70px;
+  align-items: center;
+}
+.le-details .le-artwork-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: var(--ds-stack);
+}
 
 /* Display card controls: a label on the left, the shared kit control on the right. Footprint uses
    the shared <Toggle> and Zoom the shared <Stepper> (.settings-toggle / .settings-stepper) so
@@ -13447,6 +13471,33 @@ button.tileset-relationship-cell {
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   pointer-events: auto;
   z-index: 4;
+}
+
+.le-floating-artwork-ghost {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40000;
+}
+
+.le-artwork-free-placement-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.le-floating-artwork-hit.is-selectable {
+  outline: 2px dashed rgba(111, 210, 255, 0.94);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 1px rgba(3, 25, 38, 0.88), 0 0 10px rgba(68, 194, 255, 0.42);
+}
+
+.le-floating-artwork-hit.is-selected {
+  outline: 2px dotted rgba(255, 226, 126, 0.98);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 1px rgba(23, 13, 4, 0.82);
 }
 
 .tileset-placement-cell.is-empty::before {

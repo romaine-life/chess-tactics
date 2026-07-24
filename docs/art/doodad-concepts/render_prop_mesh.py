@@ -3,9 +3,13 @@ import numpy as np
 # Render an AUTHORED mesh (a sourced .blend/.fbx/.obj/.gltf house, NOT code-drawn geometry) into
 # the board's PropSprite frame: 192x300, contact GROUND-CENTRE at (96,255), same iso rig as the
 # tree. Two entry modes:
-#   blender -b -P render_prop_mesh.py -- OUT <mesh.fbx|.obj|.gltf|.glb> SCALE HALF [ROT]   (imports)
-#   blender <scene.blend> -b -P render_prop_mesh.py -- OUT none SCALE HALF [ROT]           (uses open scene)
+#   blender -b -P render_prop_mesh.py -- OUT <mesh.fbx|.obj|.gltf|.glb> SCALE HALF [ROT] \
+#     [TEXDIR] [FW] [FH] [TZ] [FACING]                                                    (imports)
+#   blender <scene.blend> -b -P render_prop_mesh.py -- OUT none SCALE HALF [ROT] \
+#     [TEXDIR] [FW] [FH] [TZ] [FACING]                                                    (open scene)
 # HALF in {full,front,back}. ROT in {none,x90,x-90,autoz}.
+# FACING uses the board's canonical eight direction names. The camera remains fixed and the
+# grounded object turns around +Z, exactly like production unit turntables.
 a = sys.argv[sys.argv.index("--") + 1:]
 OUT = a[0]
 IMPORT = a[1] if len(a) > 1 else "none"
@@ -15,6 +19,20 @@ ROT = a[4] if len(a) > 4 else "none"
 TEXDIR = a[5] if len(a) > 5 else ""  # folder to search for missing texture images (relink)
 FW = int(a[6]) if len(a) > 6 else 320   # frame width  (generous so the iso projection never clips)
 FH = int(a[7]) if len(a) > 7 else 420   # frame height
+TZ = float(a[8]) if len(a) > 8 else 0.5
+FACING = a[9] if len(a) > 9 else "south"
+DIRECTION_YAWS = {
+    "south": 0,
+    "south-west": -45,
+    "west": -90,
+    "north-west": -135,
+    "north": 180,
+    "north-east": 135,
+    "east": 90,
+    "south-east": 45,
+}
+if FACING not in DIRECTION_YAWS:
+    raise SystemExit("unsupported board facing: " + FACING)
 # SCALE now means the horizontal FOOTPRINT target in Blender units (max of x/y extent), so a boxy
 # house and a tall house both seat their BASE at the same on-board size — unlike largest-dim, which
 # over-scaled wide houses and clipped them.
@@ -126,6 +144,8 @@ s = FOOTPRINT / max(ext[0], ext[1]); g.scale = (s, s, s); bpy.ops.object.transfo
 c = np.array([v.co for v in g.data.vertices])
 g.location = (-(c[:, 0].min() + c[:, 0].max()) / 2, -(c[:, 1].min() + c[:, 1].max()) / 2, -c[:, 2].min())
 bpy.ops.object.transform_apply(location=True)
+g.data.transform(mathutils.Matrix.Rotation(math.radians(DIRECTION_YAWS[FACING]), 4, "Z"))
+g.data.update()
 
 if HALF in ("front", "back"):
     bpy.context.view_layer.objects.active = g
@@ -147,7 +167,6 @@ bpy.ops.object.light_add(type="AREA", location=(3.5, -3, 4)); bpy.context.object
 E = math.radians(35.264389682754654); D = 5.0; comp = math.cos(E) * D / math.sqrt(2)
 # Camera look-at height. Frame is rendered generously oversized and CROPPED to content in PIL
 # afterwards, so this just needs to keep the whole prop comfortably inside the frame (not precise).
-TZ = float(a[8]) if len(a) > 8 else 0.5
 bpy.ops.object.camera_add(); cam = bpy.context.object; sc.camera = cam
 cam.location = (comp, -comp, math.sin(E) * D + TZ)
 cam.rotation_euler = (mathutils.Vector((0, 0, TZ)) - cam.location).to_track_quat("-Z", "Y").to_euler()
@@ -157,4 +176,4 @@ sc.view_settings.view_transform = "Standard"
 sc.render.resolution_x = FW; sc.render.resolution_y = FH; sc.render.film_transparent = True
 sc.render.image_settings.file_format = "PNG"; sc.render.filepath = OUT
 bpy.ops.render.render(write_still=True)
-print("PROP_MESH_DONE", HALF, OUT)
+print("PROP_MESH_DONE", FACING, HALF, OUT)

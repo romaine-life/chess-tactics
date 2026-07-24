@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyDrawableCatalog, applyGroundCoverCatalog, defaultSubterrainMaterial, structureArtAsset } from '@chess-tactics/board-render';
+import {
+  applyDrawableCatalog,
+  applyGroundCoverCatalog,
+  defaultSubterrainMaterial,
+  structureArtAsset,
+  structureArtDirectionHalfSrc,
+  structureArtDirections,
+  structureArtDirectionSprite,
+} from '@chess-tactics/board-render';
 import { testDrawableCatalog } from '../test/drawableCatalog';
 import { defaultTerrainFamily, familyForGameplayTerrain, gameplayTerrainForFamily, terrainFamiliesForRole, transitionPairs } from './tileSockets';
 
@@ -51,6 +59,39 @@ describe('database-owned terrain identities', () => {
     expect(structureArtAsset('opaque-structure-value-7f2')).toMatchObject({
       id: 'opaque-structure-value-7f2', label: 'Opaque structure', blocking: true, splitMode: 'authored',
     });
+  });
+
+  it('offers only complete rendered direction pairs and consumes per-view contact calibration', () => {
+    const catalog = testDrawableCatalog();
+    const source = catalog.assets.find((asset) => asset.id === 'structure-oak')!;
+    const directionalRole = (half: 'back' | 'front', fill: string) => {
+      const role = structuredClone(source.media[half]);
+      role.slot = `props/oak/east-${half}.png`;
+      role.media.sha256 = fill.repeat(64);
+      role.media.immutableUrl = `/api/media/${role.media.sha256}`;
+      role.media.url = `/assets/props/oak/east-${half}.png`;
+      role.media.width = 210;
+      role.media.height = 280;
+      return role;
+    };
+    source.media['east-back'] = directionalRole('back', 'a');
+    source.media['east-front'] = directionalRole('front', 'b');
+    source.media['north-back'] = directionalRole('back', 'c');
+    source.behavior.directions = {
+      east: { anchorX: 88, anchorY: 244, scale: 0.75 },
+    };
+    applyDrawableCatalog({ ...catalog, revision: catalog.revision + 1 });
+
+    expect(structureArtDirections('oak')).toEqual(['east', 'south']);
+    expect(structureArtDirectionSprite('oak', 'east')).toEqual({
+      w: 210,
+      h: 280,
+      anchorX: 88,
+      anchorY: 244,
+      scale: 0.75,
+    });
+    expect(structureArtDirectionHalfSrc('oak', 'east', 'front')).toBe(`/api/media/${'b'.repeat(64)}`);
+    expect(structureArtDirectionSprite('oak', 'north')).toBeUndefined();
   });
 
   it('fails closed for missing structure and ground-cover behavior instead of filling code defaults', () => {

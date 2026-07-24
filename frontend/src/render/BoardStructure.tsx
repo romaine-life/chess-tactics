@@ -10,7 +10,13 @@ import {
   type StructureSplitMode,
 } from '@chess-tactics/board-render/render/structureGeometry';
 import { propDef, type PlacedProp, type PropDef, type StructurePart } from '../core/props';
+import {
+  structureArtAsset,
+  structureArtDirectionHalfSrc,
+  structureArtDirectionSprite,
+} from '../core/structureArt';
 import { doodadAsset } from '../ui/doodadCatalog';
+import type { FloatingArtworkPlacement } from '../ui/boardCode';
 
 export {
   flatContactClipRects,
@@ -158,5 +164,58 @@ export function DoodadSprite({ doodad }: { doodad: Doodad }) {
       splitMode={asset.source ? structureSourceSplitMode(asset.source) : 'authored'}
       attrsFor={(half) => ({ 'data-doodad': half })}
     />
+  );
+}
+
+/** DOM drag twin of the canvas render-plan path for floating direct source artwork. */
+export function FloatingArtworkSprite({
+  placement,
+  ghost = false,
+}: {
+  placement: FloatingArtworkPlacement;
+  ghost?: boolean;
+}) {
+  const sprite = structureArtDirectionSprite(placement.sourceArtId, placement.direction);
+  if (!sprite) return null;
+  const scale = sprite.scale * placement.scale;
+  const width = sprite.w * scale;
+  const height = sprite.h * scale;
+  const common = {
+    position: 'absolute' as const,
+    left: placement.pixelX - width / 2,
+    top: placement.pixelY - height / 2,
+    width,
+    height,
+    pointerEvents: 'none' as const,
+  };
+  const splitPercent = (structureArtAsset(placement.sourceArtId)?.splitMode ?? 'authored') === 'flat-contact'
+    ? flatContactSplitPercent(sprite)
+    : null;
+  const clipFor = (half: 'back' | 'front') => splitPercent == null
+    ? {}
+    : {
+        clipPath: half === 'back'
+          ? `inset(0 0 ${100 - splitPercent}% 0)`
+          : `inset(${splitPercent}% 0 0 0)`,
+      };
+  return (
+    <span
+      data-floating-artwork={placement.id}
+      data-direction={placement.direction}
+      style={{ opacity: ghost ? 0.58 : 1 }}
+    >
+      {(['back', 'front'] as const).map((half, index) => (
+        <img
+          key={half}
+          src={structureArtDirectionHalfSrc(placement.sourceArtId, placement.direction, half)}
+          alt=""
+          draggable={false}
+          data-floating-artwork={placement.id}
+          data-direction={placement.direction}
+          data-half={half}
+          style={{ ...common, ...clipFor(half), zIndex: 1_000_000 + index }}
+        />
+      ))}
+    </span>
   );
 }
