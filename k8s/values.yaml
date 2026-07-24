@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:b4da58df396c201b5e47640c65393617e9cfe4256670d458988501bfafeb8f2b"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:18d3985388f9b111f24fcf23a799ffd5ae9efa7486eeee542c3966b903663d9f"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix Codex auth approval browser launch"
-  prNumber: "512"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/512"
-  commit: "4fea35ad"
+  prTitle: "Add floating source artwork editing"
+  prNumber: "513"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/513"
+  commit: "1ff19c95"
 
 name: chess-tactics
 namespace: chess-tactics
