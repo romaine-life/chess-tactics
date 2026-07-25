@@ -456,10 +456,10 @@ async function paintTitleBar(
   sourceAvailability,
   uiMedia,
 ) {
-  const [wood, band, diamond, shield] = await mapWithConcurrency([
+  const [wood, band, joint, shield] = await mapWithConcurrency([
     uiMedia.wood,
     uiMedia.band,
-    uiMedia.diamond,
+    uiMedia.joint,
     uiMedia.shield,
   ], SPRITE_LOAD_CONCURRENCY, (src) => (
     loadSprite(
@@ -473,10 +473,10 @@ async function paintTitleBar(
   ctx.imageSmoothingEnabled = false;
   drawTiledImage(ctx, wood, 0, 0, CARD_W, TITLEBAR_H, 1024, 1024);
   drawTiledImage(ctx, band, 0, TITLEBAR_H - TITLEBAR_RULE_H, CARD_W, TITLEBAR_RULE_H, 16, TITLEBAR_RULE_H);
-  if (diamond) {
+  if (joint) {
     const dh = 26;
-    const dw = diamond.width * (dh / diamond.height);
-    ctx.drawImage(diamond, (CARD_W - dw) / 2, TITLEBAR_H - dh, dw, dh);
+    const dw = joint.width * (dh / joint.height);
+    ctx.drawImage(joint, (CARD_W - dw) / 2, TITLEBAR_H - dh, dw, dh);
   }
 
   const mark = 54;
@@ -724,7 +724,6 @@ async function renderLevelCard({
     loadDynamicSprite,
     renderRevision,
     sourceAvailability,
-    uiMedia,
   );
 
   const { ops, bounds } = plan;
@@ -799,6 +798,7 @@ async function renderLevelCard({
     renderRevision,
     fontFamily,
     sourceAvailability,
+    uiMedia,
   );
 
   ctx.textBaseline = 'alphabetic';

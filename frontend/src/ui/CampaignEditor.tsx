@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react';
+import { drawableAssets } from '@chess-tactics/board-render';
 import { useCampaigns } from '../campaign/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -59,7 +60,13 @@ const CE_ICONS = {
 
 // The carved rail-tab icon, shared with the play-side Campaign section (PlayMenu.tsx) so a
 // campaign looks identical whether you're picking one to play or one to edit.
-const CAMPAIGN_TAB_ICON = installedUiMedia('ui-main-menu-icons-carved-campaign-editor-png');
+const campaignMenuModes = drawableAssets('menu-mode')
+  .filter((asset) => asset.behavior.value === 'campaign-editor');
+if (campaignMenuModes.length !== 1) {
+  throw new Error(`campaign editor requires one installed campaign menu mode; found ${campaignMenuModes.length}`);
+}
+const CAMPAIGN_TAB_ICON = campaignMenuModes[0].media.icon?.media.immutableUrl;
+if (!CAMPAIGN_TAB_ICON) throw new Error('installed campaign menu mode has no icon');
 
 class RecentDraftEditingAuthorityError extends Error {
   constructor(message: string) {
