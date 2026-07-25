@@ -204,6 +204,19 @@ describe('Level Editor chrome hierarchy', () => {
     expectRegisteredFamily(studioBoard, 'unit-facing-cell', 'inner-tool-square');
   });
 
+  it('offers only complete eight-way artwork and keeps its facing control in the source brush panel', () => {
+    expect(levelEditor).toContain('STRUCTURE_ART_ASSETS.filter((asset) => structureArtHasCompleteTurntable(asset.id))');
+    expect(levelEditor).toContain("const [artworkBrushDirection, setArtworkBrushDirection] = useState<Direction>('south');");
+    expect(levelEditor).toContain('const direction = directions.includes(artworkBrushDirection)');
+    expect(levelEditor).toContain('setArtworkBrushDirection(placement.direction);');
+    expect(levelEditor).toContain('ariaLabel="Artwork facing"');
+    expect(levelEditor).toContain('onSelect={setArtworkFacing}');
+    expect(levelEditor).toContain('onRotate={rotateArtworkFacing}');
+    expect(levelEditor).not.toContain('ariaLabel="Artwork direction (8-way)"');
+    expect(levelEditor).not.toContain('<small>{asset.label} · {directions.length}-way</small>');
+    expect(levelEditor).not.toContain('source artwork · ${artworkBrushDirections.length}-way');
+  });
+
   it('registers dropdown triggers and frames each popup as one divided inner box', () => {
     expectRegisteredFamily(paletteSelect, 'palette-select-trigger', 'inner-dropdown');
     expect(houseSelect).toContain("chromeUnitClassNames('inner-dropdown', 'house-select', 'le-select-wrap', className)");
@@ -299,6 +312,13 @@ describe('Level Editor chrome hierarchy', () => {
   it('keeps portaled confirmation actions inside an explicit chrome-family surface', () => {
     expect(confirmDialog).toContain('className="confirm-scrim chrome-family-surface"');
     expectRegisteredFamily(confirmDialog, 'le-seg-btn', 'inner-text-button');
+  });
+
+  it('defaults destructive confirmations to cancel instead of treating Enter as approval', () => {
+    expect(confirmDialog).toContain("if (tone === 'danger') cancelButtonRef.current?.focus();");
+    expect(confirmDialog).toContain("event.key === 'Enter' && tone !== 'danger'");
+    expect(confirmDialog).toContain('data-testid="confirm-cancel"');
+    expect(confirmDialog).toContain("event.key === 'Tab'");
   });
 
   it('registers the canonical title-bar control as an inner box', () => {

@@ -90,7 +90,9 @@ function isSource(value: unknown): value is StructureSourceRef {
 /** Reject a partial or malformed DB snapshot before it can replace renderer state. */
 export function assertPropSeatMap(value: unknown): asserts value is PropSeatMap {
   if (!isRecord(value)) throw new Error('invalid prop seats: document must be an object map');
-  const baseIds = STRUCTURE_ART_ASSETS.filter((asset) => asset.kind !== 'doodad').map((asset) => asset.id);
+  const baseIds = STRUCTURE_ART_ASSETS
+    .filter((asset) => !asset.sourceOnly && asset.kind !== 'doodad')
+    .map((asset) => asset.id);
   for (const id of baseIds) {
     if (!Object.hasOwn(value, id)) throw new Error(`invalid prop seats: required prop "${id}" is missing`);
   }
@@ -219,7 +221,7 @@ function baseDefs(seats: PropSeatMap): PropDef[] {
     if (!art) throw new Error(`required structure art definition "${id}" is missing`);
     return { w: art.sprite.w, h: art.sprite.h, ...seat(seats, id) };
   };
-  return STRUCTURE_ART_ASSETS.filter((asset) => asset.kind !== 'doodad').map((asset) => ({
+  return STRUCTURE_ART_ASSETS.filter((asset) => !asset.sourceOnly && asset.kind !== 'doodad').map((asset) => ({
     id: asset.id,
     label: asset.label,
     kind: asset.propKind ?? (asset.kind === 'tree' || asset.kind === 'rock' ? asset.kind : 'house'),

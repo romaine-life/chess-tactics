@@ -32,6 +32,7 @@ import {
   listEditorDocuments,
   loadEditorDocument,
   openEditorDocumentEditSession,
+  takeOverEditorDocumentEditSession,
   type EditorDocument,
   type EditorDocumentSummary,
 } from '../net/editorDocuments';
@@ -79,17 +80,31 @@ async function withRecentDraftEditingAuthority<T>(
     device_id: identity.deviceId,
     client_label: `Campaign Editor · ${window.location.host} · ${levelEditorClientLabel(window.navigator.userAgent)}`,
   });
-  const activeHere = opened.session.state === 'active'
-    && opened.presence.active_editor?.session_id === opened.session.session_id;
+  let authority = opened;
+  if (opened.session.state !== 'active' && !opened.presence.active_editor) {
+    try {
+      authority = await takeOverEditorDocumentEditSession(
+        document.document_id,
+        opened.session.session_id,
+        identity.sessionKey,
+        opened.presence.edit_generation,
+      );
+    } catch (error) {
+      await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
+      throw error;
+    }
+  }
+  const activeHere = authority.session.state === 'active'
+    && authority.presence.active_editor?.session_id === authority.session.session_id;
   if (!activeHere) {
     await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
-    const active = opened.presence.active_editor;
+    const active = authority.presence.active_editor;
     throw new RecentDraftEditingAuthorityError(active
-      ? `${levelEditorSessionActorLabel(active)} currently has editing control. ${levelEditorSessionPresenceDetail(active, levelEditorSessionServerNow(opened.presence.server_time))}. Open the level and use Take over editing if you intend to move control.`
+      ? `${levelEditorSessionActorLabel(active)} currently has editing control. ${levelEditorSessionPresenceDetail(active, levelEditorSessionServerNow(authority.presence.server_time))}. Open the level and use Take over editing if you intend to move control.`
       : 'This working copy has no attributable active writer. Open the level to re-check authority before changing it.');
   }
   try {
-    return await action(editorDocumentEditFence(opened.session, identity.sessionKey));
+    return await action(editorDocumentEditFence(authority.session, identity.sessionKey));
   } finally {
     await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
   }

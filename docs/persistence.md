@@ -88,8 +88,10 @@ displayed summaries through the existing owner-scoped full-document GET and rend
 the working Level as a private resume preview. The summary index remains body-free.
 This preview does not make autosaved work canonical, playable, shared, or public.
 
-Per [ADR-0143](adr/0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md),
-every owner-opened editor page registers an attributable session. Its identity comes from the
+Per [ADR-0143](adr/0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md)
+and [ADR-0154](adr/0154-level-editor-viewing-does-not-acquire-the-writer-lease.md), every
+owner-opened editor page registers an attributable viewer session. Registration holds no writer
+lease, advances no fencing generation or document revision, and creates no recovery. Its identity comes from the
 authenticated display name and email, not client-supplied text. The server also records an opaque
 page-session id, a one-way browser-profile/device relationship, best-effort presentation metadata,
 `opened_at`, and server-observed `last_seen_at`. The presentation label includes the editor surface,
@@ -103,19 +105,30 @@ high-entropy session credential, sends it only in request bodies, and the server
 cryptographic hash. Opening/retrying, heartbeat, presence binding, close, takeover, displaced
 recovery upload, and every mutation fence must prove that credential; knowing a displayed session
 id or device relation cannot close or impersonate its editor.
-The editor's persistent session status presents that attribution and those times whenever another
-session holds or most recently held authority. A browser draft or a revision number alone never
+The editor presents that attribution and those times in Status whenever another session holds or
+most recently held authority. Per
+[ADR-0152](adr/0152-level-editor-session-attention-lives-in-title-bar-and-status.md), session and
+recovery details do not occupy every authoring layer: one conditional title-bar attention control
+opens Status and focuses the relevant information. A browser draft or a revision number alone never
 creates a person or live-presence claim. Relative opened/last-seen labels are calculated from the
 presence response's server clock rather than trusting a potentially skewed browser clock. When no
 lease is live, `last_editor` carries the most recent real authority holder separately from
 `active_editor`, with `live: false` and its terminal state; the UI must say "most recently" and
 "no live heartbeat" rather than implying that historical attribution still has the level open.
 
-Exactly one session may hold a document's writer lease. The lease and monotonically increasing
-fencing epoch are PostgreSQL-authoritative, so heartbeats and takeovers remain coherent across
-different backend pods and local development servers. SSE, polling, process memory,
-`BroadcastChannel`, and browser storage may notify or refresh the UI but cannot grant or extend
-authority. A non-holder follows the acknowledged working copy read-only.
+Exactly one session may hold a document's writer lease. A viewer acquires the free lease only when
+the owner makes the first persisted Level or staged campaign-assignment change, or explicitly
+chooses **Start editing here**. The first changed candidate is written synchronously to its
+session-scoped browser recovery before the generation-fenced acquisition request, and no cloud
+mutation is sent until acquisition is acknowledged. Two racing viewers therefore produce one
+writer; the loser cannot turn the stale acquisition into an implicit takeover and keeps its
+candidate separate. Non-persisted inspection, selection, layer/tool choice, pan, and zoom remain
+lease-free.
+
+The lease and monotonically increasing fencing epoch are PostgreSQL-authoritative, so heartbeats
+and takeovers remain coherent across different backend pods and local development servers. SSE,
+polling, process memory, `BroadcastChannel`, and browser storage may notify or refresh the UI but
+cannot grant or extend authority. A non-holder follows the acknowledged working copy read-only.
 
 Closed sessions are terminal: their displayed id and credential cannot be reopened. An acknowledged
 same-tab SPA handoff final-autosaves, closes the lease, and rotates the page credential before the
@@ -146,6 +159,9 @@ time, observed revision, and fencing epoch. Restoring requires the current lease
 the current working branch, then writes the chosen body as a new fenced working-copy revision.
 Deleting a recovery is irreversible and therefore also rechecks the current lease and fencing epoch
 after confirmation; a tab displaced while its confirmation is open cannot remove the snapshot.
+Bulk cleanup submits only the recovery ids listed when confirmation opened and deletes that exact
+set atomically; a missing or foreign id deletes none, while any recovery created afterward survives
+([ADR-0153](adr/0153-bulk-recovery-cleanup-is-snapshot-exact-and-atomic.md)).
 Recovery never creates a second working document or canonical Level and never rewrites historical
 snapshots.
 

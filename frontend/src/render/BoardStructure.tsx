@@ -11,8 +11,8 @@ import {
 } from '@chess-tactics/board-render/render/structureGeometry';
 import { propDef, type PlacedProp, type PropDef, type StructurePart } from '../core/props';
 import {
-  structureArtAsset,
   structureArtDirectionHalfSrc,
+  structureArtDirectionSplitMode,
   structureArtDirectionSprite,
 } from '../core/structureArt';
 import { doodadAsset } from '../ui/doodadCatalog';
@@ -188,7 +188,7 @@ export function FloatingArtworkSprite({
     height,
     pointerEvents: 'none' as const,
   };
-  const splitPercent = (structureArtAsset(placement.sourceArtId)?.splitMode ?? 'authored') === 'flat-contact'
+  const splitPercent = structureArtDirectionSplitMode(placement.sourceArtId, placement.direction) === 'flat-contact'
     ? flatContactSplitPercent(sprite)
     : null;
   const clipFor = (half: 'back' | 'front') => splitPercent == null

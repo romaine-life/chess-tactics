@@ -57,7 +57,9 @@ const doodadFromArt = (id: string, label: string): DoodadAsset => {
 // grass-tuft sprites only as a static figure illustrating the back/front split.
 export const DOODAD_ASSETS: Array<{ id: string; label: string }> = new Proxy([], {
   get: (_target, property) => {
-    const current = STRUCTURE_ART_ASSETS.filter((asset) => asset.kind === 'doodad').map(({ id, label }) => ({ id, label }));
+    const current = STRUCTURE_ART_ASSETS
+      .filter((asset) => !asset.sourceOnly && asset.kind === 'doodad')
+      .map(({ id, label }) => ({ id, label }));
     const value = Reflect.get(current, property);
     return typeof value === 'function' ? value.bind(current) : value;
   },

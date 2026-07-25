@@ -81,7 +81,6 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     ['rock', 'Rock art', 'rock', ['grass', 'dirt', 'stone', 'pebble', 'sand'], 20, 44, 1, 40, 45, 'props/rock'],
     ['fieldstone', 'Fieldstone art', 'rock', ['grass', 'dirt', 'stone', 'pebble', 'sand'], 25, 46, 1, 51, 47, 'props/fieldstone'],
     ['boulder', 'Boulder', 'doodad', ['stone'], 48, 69, 1, 96, 180, 'doodads/boulder'],
-    ['stump', 'Tree stump', 'doodad', ['dirt'], 48, 69, 1, 96, 180, 'doodads/stump'],
     ['fern', 'Fern', 'doodad', ['water'], 48, 69, 1, 96, 180, 'doodads/fern'],
     ['flower', 'Flower', 'doodad', ['grass'], 48, 69, 1, 96, 180, 'doodads/flower'],
   ].map(([value, label, structureKind, terrains, anchorX, anchorY, scale, width, height, prefix], sortOrder) => ({
@@ -89,7 +88,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     behavior: { value, structureKind, terrains, anchorX, anchorY, scale, default: value === 'boulder',
       blocking: structureKind !== 'doodad', splitMode: ['cottage', 'cabin', 'lodge', 'rock', 'fieldstone'].includes(value as string) ? 'flat-contact' : 'authored',
       ...(['oak', 'cottage', 'lodge'].includes(value as string) ? { footprint: { w: 2, h: 2 } } : ['cabin', 'rock', 'fieldstone'].includes(value as string) ? { footprint: { w: 1, h: 1 } } : {}),
-      ...(['boulder'].includes(value as string) ? { propKind: 'rock' } : ['stump', 'fern', 'flower'].includes(value as string) ? { propKind: 'tree' } : {}) }, metadata: {}, rowRevision: 1,
+      ...(['boulder'].includes(value as string) ? { propKind: 'rock' } : ['fern', 'flower'].includes(value as string) ? { propKind: 'tree' } : {}) }, metadata: {}, rowRevision: 1,
     media: { back: descriptor(`${prefix}/back.png`, width as number, height as number), front: descriptor(`${prefix}/front.png`, width as number, height as number) },
   }));
   const coverWidths: Record<string, number[]> = {

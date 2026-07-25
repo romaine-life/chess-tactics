@@ -1,13 +1,15 @@
 import { drawableAssets } from '../art/drawableCatalog';
 import { rookDirections, type Direction } from '../ui/unitCatalog';
 
-export type StructureArtKind = 'tree' | 'house' | 'rock' | 'doodad';
+export type StructureArtKind = 'tree' | 'house' | 'rock' | 'doodad' | 'landmark';
 export type StructureSplitMode = 'authored' | 'flat-contact';
 
 export interface StructureArtAsset {
   id: string;
   label: string;
   kind: StructureArtKind;
+  /** Visual-reference media that deliberately does not synthesize a prop or doodad definition. */
+  sourceOnly: boolean;
   propKind?: 'tree' | 'house' | 'rock';
   terrains: string[];
   blocking: boolean;
@@ -25,24 +27,33 @@ export type StructureArtDefinition = Omit<StructureArtAsset, 'sprite'> & {
 };
 
 const definitions = (): StructureArtDefinition[] => drawableAssets('structure').map((asset) => {
-  const { value, structureKind, propKind, terrains, blocking, anchorX, anchorY, scale, footprint, splitMode } = asset.behavior;
-  if ((structureKind !== 'tree' && structureKind !== 'house' && structureKind !== 'rock' && structureKind !== 'doodad')
-    || !Array.isArray(terrains) || terrains.length === 0 || terrains.some((terrain) => typeof terrain !== 'string' || !terrain)
-    || typeof blocking !== 'boolean' || !Number.isFinite(anchorX) || !Number.isFinite(anchorY)
+  const {
+    value, structureKind, sourceOnly: rawSourceOnly, propKind, terrains, blocking,
+    anchorX, anchorY, scale, footprint, splitMode,
+  } = asset.behavior;
+  const sourceOnly = rawSourceOnly === true;
+  if ((structureKind !== 'tree' && structureKind !== 'house' && structureKind !== 'rock'
+      && structureKind !== 'doodad' && structureKind !== 'landmark')
+    || (structureKind === 'landmark' && !sourceOnly)
+    || (!sourceOnly && (!Array.isArray(terrains) || terrains.length === 0
+      || terrains.some((terrain) => typeof terrain !== 'string' || !terrain)))
+    || (!sourceOnly && typeof blocking !== 'boolean')
+    || !Number.isFinite(anchorX) || !Number.isFinite(anchorY)
     || !(typeof scale === 'number' && Number.isFinite(scale) && scale > 0)
     || (splitMode !== 'authored' && splitMode !== 'flat-contact')) {
     throw new Error(`structure ${asset.id} lacks placement behavior`);
   }
-  if (structureKind !== 'doodad' && (!footprint || typeof footprint !== 'object'
+  if (!sourceOnly && structureKind !== 'doodad' && (!footprint || typeof footprint !== 'object'
     || !Number.isSafeInteger((footprint as { w?: unknown }).w) || Number((footprint as { w: number }).w) < 1
     || !Number.isSafeInteger((footprint as { h?: unknown }).h) || Number((footprint as { h: number }).h) < 1)) {
     throw new Error(`structure ${asset.id} lacks an explicit footprint`);
   }
   return {
     id: typeof value === 'string' ? value : asset.id, label: asset.label, kind: structureKind as StructureArtKind,
+    sourceOnly,
     ...(typeof propKind === 'string' ? { propKind: propKind as StructureArtDefinition['propKind'] } : {}),
-    terrains: terrains as string[],
-    blocking,
+    terrains: sourceOnly ? [] : terrains as string[],
+    blocking: sourceOnly ? false : blocking as boolean,
     sprite: { anchorX: Number(anchorX), anchorY: Number(anchorY), scale },
     ...(footprint && typeof footprint === 'object' ? { footprint: footprint as { w: number; h: number } } : {}),
     splitMode,
@@ -114,6 +125,12 @@ export function structureArtDirections(id: string): Direction[] {
   });
 }
 
+export function structureArtHasCompleteTurntable(id: string): boolean {
+  const installed = structureArtDirections(id);
+  return installed.length === rookDirections.length
+    && rookDirections.every((direction) => installed.includes(direction));
+}
+
 /**
  * Resolve the source geometry for one real rendered view. Direction metadata is optional; absent
  * fields inherit the installed source's south/default contact calibration.
@@ -141,6 +158,18 @@ export function structureArtDirectionSprite(
     anchorY: Number.isFinite(anchorY) ? anchorY : base.sprite.anchorY,
     scale: Number.isFinite(scale) && scale > 0 ? scale : base.sprite.scale,
   };
+}
+
+/** A directional source-art view may be a full flat render even when the legacy prop uses split halves. */
+export function structureArtDirectionSplitMode(id: string, direction: Direction): StructureSplitMode {
+  const base = structureArtAsset(id)?.splitMode ?? 'authored';
+  const rawDirections = structureRecord(id)?.behavior.directions;
+  const override = rawDirections && typeof rawDirections === 'object' && !Array.isArray(rawDirections)
+    ? (rawDirections as Record<string, unknown>)[direction]
+    : undefined;
+  if (!override || typeof override !== 'object' || Array.isArray(override)) return base;
+  const splitMode = (override as Record<string, unknown>).splitMode;
+  return splitMode === 'authored' || splitMode === 'flat-contact' ? splitMode : base;
 }
 
 export function structureArtDirectionHalfSrc(

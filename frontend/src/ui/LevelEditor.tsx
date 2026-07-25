@@ -15,6 +15,7 @@ import {
   structureArtDirectionHalfSrc,
   structureArtDirectionSprite,
   structureArtDirections,
+  structureArtHasCompleteTurntable,
 } from '../core/structureArt';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
 import { PredrawnOcclusionSeedLayer } from '../render/PredrawnOcclusion';
@@ -209,6 +210,7 @@ import {
   appendDisplacedEditorDocumentRecovery,
   closeEditorDocumentEditSession,
   createEditorDocument,
+  deleteEditorDocumentRecoveries,
   deleteEditorDocumentRecovery,
   discardEditorDocumentChanges,
   heartbeatEditorDocumentEditSession,
@@ -2643,6 +2645,8 @@ export function LevelEditor(): ReactElement {
   const [editPresence, setEditPresence] = useState<EditorDocumentEditPresence | null>(null);
   const [serverRecoveries, setServerRecoveries] = useState<EditorDocumentRecovery[]>([]);
   const [serverRecoveryBusyId, setServerRecoveryBusyId] = useState<string | null>(null);
+  const [serverRecoveryCleanupCount, setServerRecoveryCleanupCount] = useState<number | null>(null);
+  const [editorStatusFocusRequest, setEditorStatusFocusRequest] = useState(0);
   const displacedRecoveryUploadRef = useRef(new Set<string>());
   const frozenAuthorityLossRef = useRef(new Set<string>());
   const frozenAuthorityLossCandidatesRef = useRef(new Map<string, {
@@ -2872,12 +2876,15 @@ export function LevelEditor(): ReactElement {
   const [boardProps, setBoardProps] = useState<Record<string, { propId: string }>>(initialBoard?.props ?? {});
   const [propBrushId, setPropBrushId] = useState<string>(() => defaultPropDef().id);
   const [boardFloatingArtwork, setBoardFloatingArtwork] = useState<FloatingArtworkPlacement[]>(initialBoard?.floatingArtwork ?? []);
-  const artworkAssets = STRUCTURE_ART_ASSETS.filter((asset) => structureArtDirections(asset.id).length > 0);
+  const artworkAssets = STRUCTURE_ART_ASSETS.filter((asset) => structureArtHasCompleteTurntable(asset.id));
   const [artworkBrushId, setArtworkBrushId] = useState<string>(() => (
-    studioArm.kind === 'artwork' && studioArm.brush
+    studioArm.kind === 'artwork'
+      && studioArm.brush
+      && artworkAssets.some((asset) => asset.id === studioArm.brush)
       ? studioArm.brush
       : artworkAssets[0]?.id ?? ''
   ));
+  const [artworkBrushDirection, setArtworkBrushDirection] = useState<Direction>('south');
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
   // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
   const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(initialBoard?.cover ?? {});
@@ -3079,6 +3086,8 @@ export function LevelEditor(): ReactElement {
   const eventsOpenRef = useRef(eventsOpen);
   eventsOpenRef.current = eventsOpen;
   const eventsOpenButtonRef = useRef<HTMLButtonElement>(null);
+  const editorSessionStatusRef = useRef<HTMLElement>(null);
+  const editorRecoveriesStatusRef = useRef<HTMLDivElement>(null);
   const pendingRulesExitActionRef = useRef<(() => void) | null>(null);
   const departureFlushSigRef = useRef<string | null>(null);
   const signInHandoffPendingRef = useRef(false);
@@ -3503,9 +3512,6 @@ export function LevelEditor(): ReactElement {
   if (!propBrushDef) throw new Error(`Selected prop "${propBrushId}" is unavailable`);
   const artworkBrushAsset = artworkBrushId ? structureArtAsset(artworkBrushId) : undefined;
   const artworkBrushDirections = artworkBrushId ? structureArtDirections(artworkBrushId) : [];
-  const artworkBrushDirection = artworkBrushDirections.includes('south')
-    ? 'south'
-    : artworkBrushDirections[0];
   const authoredCellTileId = (x: number, y: number): string | undefined => {
     const key = `${x},${y}`;
     if (!cellWithinScenicSurface(key)) return undefined;
@@ -3621,7 +3627,11 @@ export function LevelEditor(): ReactElement {
 
   const placeFloatingArtwork = (point: { pixelX: number; pixelY: number }): void => {
     const directions = structureArtDirections(artworkBrushId);
-    const direction = directions.includes('south') ? 'south' : directions[0];
+    const direction = directions.includes(artworkBrushDirection)
+      ? artworkBrushDirection
+      : directions.includes('south')
+        ? 'south'
+        : directions[0];
     if (!artworkBrushId || !direction) return;
     const placement: FloatingArtworkPlacement = {
       id: `art-${crypto.randomUUID()}`,
@@ -4478,6 +4488,27 @@ export function LevelEditor(): ReactElement {
     : currentSig !== (standaloneBaselineSigRef.current ?? currentSig);
   const campaignAssignmentDirty = campaignAssignmentHydrated && campaignAssignmentId !== savedCampaignAssignmentId;
   const dirty = levelDirty || campaignAssignmentDirty;
+  const editorSessionCanBegin = Boolean(
+    me?.signed_in
+    && editorDocument
+    && editAuthorityState === 'follower'
+    && editSession?.state === 'waiting'
+    && editPresence
+    && !editPresence.active_editor
+    && editPresence.can_take_over
+    && !browserRecoveryConflict
+    && !editorDocument.baseline_conflict
+  );
+  const firstAuthoringMutationPending = Boolean(
+    editorSessionCanBegin
+    && (
+      campaignAssignmentDirty
+      || (
+        lastCloudSyncedSigRef.current !== null
+        && currentSig !== lastCloudSyncedSigRef.current
+      )
+    ),
+  );
   const currentSigRef = useRef(currentSig);
   currentSigRef.current = currentSig;
   const initialCandidateRef = useRef(candidateLevel);
@@ -4538,7 +4569,12 @@ export function LevelEditor(): ReactElement {
     const candidateSignature = currentSigRef.current;
     const authorityCandidateKey = `${authoritySession.session_id}:${authoritySession.edit_generation}`;
     const freezeKey = `${authoritySession.session_id}:${authoritySession.edit_generation}:${observedRevision}:${candidateSignature}`;
-    if (editAuthorityStateRef.current === 'writer' && !frozenAuthorityLossRef.current.has(freezeKey)) {
+    const shouldFreezeCandidate = editAuthorityStateRef.current === 'writer'
+      || (
+        editAuthorityStateRef.current === 'takeover-pending'
+        && lastCloudSyncedSigRef.current !== candidateSignature
+      );
+    if (shouldFreezeCandidate && !frozenAuthorityLossRef.current.has(freezeKey)) {
       frozenAuthorityLossRef.current.add(freezeKey);
       frozenAuthorityLossCandidatesRef.current.set(authorityCandidateKey, {
         level: frozenLevel,
@@ -4659,7 +4695,7 @@ export function LevelEditor(): ReactElement {
     // localStorage is a crash/offline fallback only. The status UI never calls this a cloud save;
     // durable progress is acknowledged solely by the revisioned editor-document endpoint below.
     if (!editorReady || editorLoadError) return;
-    if (editorDocument && editAuthorityState !== 'writer') return;
+    if (editorDocument && editAuthorityState !== 'writer' && !firstAuthoringMutationPending) return;
     // A stale browser candidate is a separately reviewable branch, not the mounted editor and
     // not evidence of a live competing writer. Do not overwrite that only copy merely because
     // the current server document is now visible; the explicit recovery actions below resolve it.
@@ -4732,7 +4768,7 @@ export function LevelEditor(): ReactElement {
         } satisfies EditorSignInRecoveryIntent));
       } catch { /* The browser copy still exists even if sessionStorage is unavailable. */ }
     }
-  }, [campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
+  }, [campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, firstAuthoringMutationPending, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
 
   const eventsEditorHref = (open: boolean, tab: LevelEditorEventsTab = eventsTab): string => (
     levelEditorHrefWithRouteState(window.location.href, {
@@ -5096,7 +5132,7 @@ export function LevelEditor(): ReactElement {
             session_id: documentClientIdentity.sessionId,
             session_key: documentClientIdentity.sessionKey,
             device_id: documentClientIdentity.deviceId,
-            client_label: `${editorClientLabel} · tab ${documentClientIdentity.sessionId.slice(0, 8)} · browser profile ${documentClientIdentity.deviceId.slice(0, 8)}`,
+            client_label: editorClientLabel,
           });
           editSessionOpenPromiseRef.current = openingSession;
           let opened;
@@ -5779,9 +5815,23 @@ export function LevelEditor(): ReactElement {
     };
   }, [editAuthorityState, editSession, editorDocument, layer, me?.signed_in]);
 
+  useEffect(() => {
+    if (layer !== 'status' || editorStatusFocusRequest === 0) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const target = editAuthorityState === 'writer' && serverRecoveries.length
+        ? editorRecoveriesStatusRef.current
+        : editorSessionStatusRef.current;
+      target?.scrollIntoView({ block: 'start' });
+      target?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editAuthorityState, editorStatusFocusRequest, layer, serverRecoveries.length]);
+
   const editorSessionCanWrite = !me?.signed_in
     || !editorDocument
     || editAuthorityState === 'writer';
+  const editorSessionCanAuthor = editorSessionCanWrite || editorSessionCanBegin;
+  const serverRecoveryActionBusy = serverRecoveryBusyId !== null || serverRecoveryCleanupCount !== null;
 
   const revalidateRecoveryDialogWriter = async (
     expectedRecovery: LevelEditorBrowserRecoveryConflict,
@@ -6187,18 +6237,22 @@ export function LevelEditor(): ReactElement {
     }
   };
 
-  const takeOverEditing = async (): Promise<void> => {
+  const takeOverEditing = async (
+    options: { firstAuthoringMutation?: boolean } = {},
+  ): Promise<void> => {
+    const firstAuthoringMutation = options.firstAuthoringMutation === true;
     const doc = editorDocumentRef.current;
     const session = editSessionRef.current;
     const presence = editPresenceRef.current;
-    if (!doc || !session || !presence || !editorClientIdentity || editAuthorityState === 'takeover-pending') return;
+    if (!doc || !session || !presence || !editorClientIdentity || editAuthorityStateRef.current === 'takeover-pending') return;
     const activeEditor = presence.active_editor;
+    if (firstAuthoringMutation && activeEditor) return;
     const attributedEditor = activeEditor ?? presence.last_editor;
     const actor = attributedEditor
       ? levelEditorSessionActorLabel(attributedEditor)
       : 'the previous editor session';
     const takeoverActionLabel = activeEditor ? 'Take over editing' : 'Start editing here';
-    if (!(await ask({
+    if (!firstAuthoringMutation && !(await ask({
       title: activeEditor ? `Take over from ${actor}?` : 'Start editing in this tab?',
       message: (
         <>
@@ -6207,12 +6261,15 @@ export function LevelEditor(): ReactElement {
             : presence.last_editor
               ? `No live heartbeat. Most recent authority: ${levelEditorSessionPresenceDetail({ ...presence.last_editor, relationship: presence.last_editor.relationship as 'this_tab' | 'same_device' | 'other_device' }, levelEditorSessionServerNow(presence.server_time))} · session ${presence.last_editor.state}.`
               : 'No live heartbeat or attributed prior authority is currently available.'}</p>
-          <p>The latest server-known copy from that session will be preserved before this tab gets autosave and Save control. That editor becomes read-only. Any browser recovery in this tab stays separate and is not applied automatically.</p>
+          <p>{activeEditor
+            ? 'The latest server-known copy from that session will be preserved before this tab gets autosave and Save control. That editor becomes read-only. Any browser recovery in this tab stays separate and is not applied automatically.'
+            : 'Viewing alone holds no writer lease. Starting now reserves autosave and Save control for this tab before the first level change. Any browser recovery stays separate and is not applied automatically.'}</p>
         </>
       ),
       confirmLabel: takeoverActionLabel,
       cancelLabel: 'Keep following',
     }))) return;
+    editAuthorityStateRef.current = 'takeover-pending';
     setEditAuthorityState('takeover-pending');
     try {
       const taken = await takeOverEditorDocumentEditSession(
@@ -6252,32 +6309,58 @@ export function LevelEditor(): ReactElement {
       documentConflictRef.current = latest.baseline_conflict;
       documentConflictKindRef.current = latest.baseline_conflict ? 'baseline' : null;
       setEditorDocument(latest);
-      applyLevelDocument(latest.level, { editingId: latest.level_id, clean: false });
       if (!stillWriter) {
+        if (firstAuthoringMutation) preserveAuthorityLoss(verifiedSession ?? taken.session, taken.recovery);
+        applyLevelDocument(latest.level, { editingId: latest.level_id, clean: false });
         setEditAuthorityState(verifiedSession?.state === 'displaced' ? 'displaced' : 'follower');
         setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'saved');
         setCloudSaveDetail('Editing control moved again before this tab finished re-checking it. The current editor is identified above; this tab remained read-only.');
-        reportStatus('Takeover did not remain active.', 'warning', 'The active editor changed during the handoff. Review the updated name, tab/device, and last-seen time before trying again.');
+        reportStatus(
+          firstAuthoringMutation ? 'Your first change was preserved separately.' : 'Takeover did not remain active.',
+          'warning',
+          firstAuthoringMutation
+            ? 'Another tab began editing first. This tab returned to the acknowledged cloud board without overwriting either version.'
+            : 'The active editor changed during the handoff. Review the updated name, tab/device, and last-seen time before trying again.',
+        );
         return;
       }
+      if (!firstAuthoringMutation) {
+        applyLevelDocument(latest.level, { editingId: latest.level_id, clean: false });
+      }
       setEditAuthorityState('writer');
-      setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'saved');
+      setCloudSaveState(latest.baseline_conflict ? 'conflict' : firstAuthoringMutation ? 'pending' : 'saved');
       setCloudSaveDetail(latest.baseline_conflict
         ? 'Editing control moved here. The separate saved-position conflict still needs review.'
-        : 'Editing control moved to this tab. Autosave and Save now belong here.');
+        : firstAuthoringMutation
+          ? 'Editing started with your first change. Autosave is writing it now.'
+          : 'Editing control moved to this tab. Autosave and Save now belong here.');
       reportStatus(
-        'Editing control moved to this tab.',
+        firstAuthoringMutation ? 'Editing started here.' : 'Editing control moved to this tab.',
         'success',
-        taken.recovery
+        firstAuthoringMutation
+          ? 'The viewer session became the writer before any cloud mutation was sent.'
+          : taken.recovery
           ? `The displaced server-known branch is preserved as recovery ${taken.recovery.recovery_id}.`
           : 'The displaced server-known branch was preserved before control moved.',
       );
     } catch (error) {
       if (isEditorDocumentEditSessionError(error)) {
+        if (firstAuthoringMutation) preserveAuthorityLoss(error.session ?? session, error.recovery);
         if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
         if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
-        setEditAuthorityState('follower');
-        reportStatus(`${takeoverActionLabel} did not happen.`, 'warning', 'The editing-session state changed while you were confirming. Review the updated identity and try again.');
+        setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
+        if (firstAuthoringMutation) {
+          try {
+            mountAcknowledgedWorkingCopy(error.document ?? await loadEditorDocument(doc.document_id));
+          } catch { /* The synchronous browser recovery remains available while cloud reload retries. */ }
+        }
+        reportStatus(
+          firstAuthoringMutation ? 'Your first change was preserved separately.' : `${takeoverActionLabel} did not happen.`,
+          'warning',
+          firstAuthoringMutation
+            ? 'Another tab began editing first. Nothing was overwritten; review the active editor in Status.'
+            : 'The editing-session state changed while you were confirming. Review the updated identity and try again.',
+        );
         return;
       }
       try {
@@ -6297,11 +6380,16 @@ export function LevelEditor(): ReactElement {
     }
   };
 
+  useEffect(() => {
+    if (!firstAuthoringMutationPending) return;
+    void takeOverEditing({ firstAuthoringMutation: true });
+  }, [firstAuthoringMutationPending]);
+
   const restoreServerRecovery = async (recovery: EditorDocumentRecovery): Promise<void> => {
     const doc = editorDocumentRef.current;
     const revision = documentRevisionRef.current;
     const fence = currentEditFence();
-    if (!doc || revision === null || !fence || serverRecoveryBusyId) {
+    if (!doc || revision === null || !fence || serverRecoveryActionBusy) {
       reportStatus('Recovery restore is read-only in this tab.', 'warning', 'Take over editing before restoring a server recovery.');
       return;
     }
@@ -6350,7 +6438,7 @@ export function LevelEditor(): ReactElement {
 
   const removeServerRecovery = async (recovery: EditorDocumentRecovery): Promise<void> => {
     const doc = editorDocumentRef.current;
-    if (!doc || serverRecoveryBusyId) return;
+    if (!doc || serverRecoveryActionBusy) return;
     const actor = levelEditorSessionActorLabel(recovery.source_editor);
     if (!(await ask({
       title: 'Delete this recovery?',
@@ -6384,6 +6472,67 @@ export function LevelEditor(): ReactElement {
       reportStatus('Recovery could not be deleted.', 'error', error instanceof Error ? error.message : String(error));
     } finally {
       setServerRecoveryBusyId(null);
+    }
+  };
+
+  const removeAllServerRecoveries = async (): Promise<void> => {
+    const doc = editorDocumentRef.current;
+    const recoveryIds = serverRecoveries.map((recovery) => recovery.recovery_id);
+    if (!doc || !recoveryIds.length || serverRecoveryActionBusy) return;
+    if (!editorSessionCanWrite) {
+      reportStatus('Recovery cleanup is read-only in this tab.', 'warning', 'Take over editing before deleting recovery copies.');
+      return;
+    }
+    const countLabel = `${recoveryIds.length} recovery ${recoveryIds.length === 1 ? 'copy' : 'copies'}`;
+    if (!(await ask({
+      title: `Delete all ${countLabel}?`,
+      message: `This permanently removes the ${countLabel} currently listed for ${levelNameForSave}. Your current working copy, saved level, working-copy history, and browser backup will not change. Any new recovery created after this confirmation remains available. This cannot be undone.`,
+      confirmLabel: `Delete all ${recoveryIds.length}`,
+      cancelLabel: 'Keep copies',
+      tone: 'danger',
+    }))) return;
+    const fence = currentEditFence();
+    if (!fence) {
+      preserveAuthorityLoss(editSessionRef.current);
+      setEditAuthorityState('follower');
+      reportStatus('Recovery cleanup did not run.', 'warning', 'Editing control changed while the confirmation was open. Every recovery remains intact.');
+      return;
+    }
+    setServerRecoveryCleanupCount(recoveryIds.length);
+    try {
+      const deleted = await deleteEditorDocumentRecoveries(doc.document_id, recoveryIds, fence);
+      const deletedIds = new Set(deleted.recovery_ids);
+      setServerRecoveries((recoveries) => recoveries.filter((recovery) => !deletedIds.has(recovery.recovery_id)));
+      try {
+        const refreshed = await listEditorDocumentRecoveries(doc.document_id);
+        setServerRecoveries(refreshed.recoveries);
+      } catch { /* The acknowledged ids stay removed locally; the next poll retries the index. */ }
+      reportStatus(
+        `${deleted.deleted_count} recovery ${deleted.deleted_count === 1 ? 'copy' : 'copies'} deleted.`,
+        'success',
+        'Your current working copy, saved level, working-copy history, and browser backup were unchanged.',
+      );
+    } catch (error) {
+      if (isEditorDocumentEditSessionError(error)) {
+        preserveAuthorityLoss(error.session ?? editSessionRef.current, error.recovery);
+        if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
+        if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
+        setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
+        try {
+          mountAcknowledgedWorkingCopy(error.document ?? await loadEditorDocument(doc.document_id));
+        } catch { /* Recovery deletion failed atomically; the frozen branch stays available. */ }
+      }
+      try {
+        const refreshed = await listEditorDocumentRecoveries(doc.document_id);
+        setServerRecoveries(refreshed.recoveries);
+      } catch { /* Keep the last known list visible so the owner can retry. */ }
+      reportStatus(
+        'Recovery cleanup could not be confirmed.',
+        'error',
+        `The recovery list was refreshed when possible. ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setServerRecoveryCleanupCount(null);
     }
   };
 
@@ -7194,9 +7343,11 @@ export function LevelEditor(): ReactElement {
     setSelectedCell({ x, y });
   };
   const selectArtwork = (id: string): void => {
-    if (!boardFloatingArtwork.some((placement) => placement.id === id)) return;
+    const placement = boardFloatingArtwork.find((candidate) => candidate.id === id);
+    if (!placement) return;
     setSelectedCell(null);
     setSelectedArtworkId(id);
+    setArtworkBrushDirection(placement.direction);
   };
   const updateArtwork = (
     id: string,
@@ -7616,6 +7767,8 @@ export function LevelEditor(): ReactElement {
   }, [boardFloatingArtwork]);
   const selectedArtworkAsset = selectedArtwork ? structureArtAsset(selectedArtwork.sourceArtId) : undefined;
   const selectedArtworkDirections = selectedArtwork ? structureArtDirections(selectedArtwork.sourceArtId) : [];
+  const artworkFacingDirections = selectedArtwork ? selectedArtworkDirections : artworkBrushDirections;
+  const artworkFacingDirection = selectedArtwork?.direction ?? artworkBrushDirection;
   const artworkSceneBounds = boardBounds({ ...currentEditorBoard, floatingArtwork: [] });
   const artworkXRange = {
     min: Math.max(
@@ -7637,11 +7790,17 @@ export function LevelEditor(): ReactElement {
       Math.ceil(Math.max(artworkSceneBounds.minY + artworkSceneBounds.height + 512, selectedArtwork?.pixelY ?? artworkSceneBounds.minY)),
     ),
   };
-  const rotateSelectedArtwork = (): void => {
-    if (!selectedArtwork || !selectedArtworkDirections.length) return;
-    const index = selectedArtworkDirections.indexOf(selectedArtwork.direction);
-    const direction = selectedArtworkDirections[(Math.max(index, 0) + 1) % selectedArtworkDirections.length];
-    updateArtwork(selectedArtwork.id, (placement) => ({ ...placement, direction }));
+  const setArtworkFacing = (direction: Direction): void => {
+    if (!artworkFacingDirections.includes(direction)) return;
+    setArtworkBrushDirection(direction);
+    if (selectedArtwork) {
+      updateArtwork(selectedArtwork.id, (placement) => ({ ...placement, direction }));
+    }
+  };
+  const rotateArtworkFacing = (): void => {
+    if (!artworkFacingDirections.length) return;
+    const index = artworkFacingDirections.indexOf(artworkFacingDirection);
+    setArtworkFacing(artworkFacingDirections[(Math.max(index, 0) + 1) % artworkFacingDirections.length]);
   };
   const coverCount = Object.keys(boardCover).length;
   const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
@@ -7732,6 +7891,8 @@ export function LevelEditor(): ReactElement {
     : me?.signed_in && editorDocument && !editorSessionCanWrite
     ? editAuthorityState === 'reviewer'
       ? 'This document is open for administrator review only.'
+      : editorSessionCanBegin
+        ? 'This page is viewing the level; editing starts with the first level change.'
       : 'This tab is read-only while the editor session identified above has control.'
     : !me?.signed_in && authReachable === false
     ? 'Reconnect to save this level.'
@@ -7759,6 +7920,8 @@ export function LevelEditor(): ReactElement {
     : me?.signed_in && editorDocument && !editorSessionCanWrite
     ? editAuthorityState === 'reviewer'
       ? 'Cross-owner review does not create presence or grant mutation authority.'
+      : editorSessionCanBegin
+        ? 'Make a level change to acquire the currently free writer lease. Merely opening this page does not hold it.'
       : 'Use Take over editing if you intend to move autosave and Save control to this tab.'
     : !me?.signed_in && authReachable === false
     ? browserRecoverySafetyDetail
@@ -7868,6 +8031,17 @@ export function LevelEditor(): ReactElement {
   const canRedoBoard = redoStack.length > 0 && (
     !isPredrawnBoard || preservesPredrawnBakedArt(currentEditorBoard, redoStack[0])
   );
+  const editorSessionAttentionLabel = me?.signed_in && editorDocument
+    ? editAuthorityState !== 'writer' && editPresence?.active_editor
+      ? 'Editor status'
+      : serverRecoveries.length
+        ? `${serverRecoveries.length} recover${serverRecoveries.length === 1 ? 'y' : 'ies'}`
+        : null
+    : null;
+  const openEditorSessionStatus = (): void => {
+    selectLayer('status');
+    setEditorStatusFocusRequest((request) => request + 1);
+  };
 
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
@@ -7902,10 +8076,8 @@ export function LevelEditor(): ReactElement {
             reviewSaveLabel={isOfficialTarget ? 'Review & publish' : 'Review & save'}
           />
         ) : null}
-        {/* The title bar carries NO editor status (no level name, no save-state chip) — the
-            owner removed the center cluster: that's ambient chrome noise while editing, and
-            everything it said lives in the Status layer for whoever goes looking. Only the
-            return nav rides the bar (below). */}
+        {/* Ordinary editor status stays in Status. The title bar contributes one control only
+            when session authority or preserved recovery needs the author's attention. */}
         {editorReady ? <TitleBarControlContribution
           ariaLabel="Editor navigation"
           controls={[
@@ -7924,10 +8096,19 @@ export function LevelEditor(): ReactElement {
               destination: routeParams.returnTo,
               title: 'Return to the campaign editor',
             }] : []),
+            ...(editorSessionAttentionLabel ? [{
+              id: 'level-editor-session-status',
+              kind: 'action' as const,
+              label: editorSessionAttentionLabel,
+              title: 'Open the relevant editing-session information in Status',
+              active: true,
+              testId: 'le-editor-session-attention',
+              onActivate: openEditorSessionStatus,
+            }] : []),
           ] satisfies TitleBarControlSpec[]}
         /> : null}
 
-        <div className="skirmish-field" inert={!editorReady || saving || !editorSessionCanWrite ? true : undefined} aria-busy={!editorReady || saving || undefined}>
+        <div className="skirmish-field" inert={!editorReady || saving || !editorSessionCanAuthor ? true : undefined} aria-busy={!editorReady || saving || undefined}>
           {persistenceEmergencyVisible ? (
             <section className="le-persistence-emergency" data-testid="le-persistence-emergency" role="alert">
               <div>
@@ -8230,10 +8411,17 @@ export function LevelEditor(): ReactElement {
         inert={!editorReady || saving}
         ariaBusy={!editorReady || saving}
       >
-        {me?.signed_in && editorDocument ? (
-          <section className="skirmish-card le-status-card le-session-rail" aria-live="polite" data-testid="le-editor-session-rail" data-state={editAuthorityState}>
+        {layer === 'status' && me?.signed_in && editorDocument ? (
+          <section
+            ref={editorSessionStatusRef}
+            tabIndex={-1}
+            className="skirmish-card le-status-card le-session-status"
+            aria-live="polite"
+            data-testid="le-editor-session-status"
+            data-state={editAuthorityState}
+          >
             <h2>Editing session</h2>
-            <div className={`le-status-current ${editAuthorityState === 'writer' ? 'is-ready' : 'is-blocked'}`}>
+            <div className={`le-status-current ${editAuthorityState === 'writer' || editorSessionCanBegin ? 'is-ready' : 'is-blocked'}`}>
               <strong>
                 {editAuthorityState === 'writer' && editSession
                   ? `Editing as ${levelEditorSessionActorLabel(editSession)}`
@@ -8243,6 +8431,8 @@ export function LevelEditor(): ReactElement {
                       ? 'Checking editing session…'
                       : editPresence?.active_editor
                         ? `${levelEditorSessionActorLabel(editPresence.active_editor)} has editing control`
+                        : editorSessionCanBegin
+                          ? 'Viewing — editing has not started'
                         : editPresence?.last_editor
                           ? `${levelEditorSessionActorLabel(editPresence.last_editor)} most recently had editing control`
                         : editAuthorityState === 'error'
@@ -8259,6 +8449,8 @@ export function LevelEditor(): ReactElement {
                           ...editPresence.active_editor,
                           relationship: editPresence.active_editor.relationship as 'this_tab' | 'same_device' | 'other_device',
                         }, levelEditorSessionServerNow(editPresence.server_time))
+                      : editorSessionCanBegin
+                        ? 'This page holds no writer lease. Your first level change will acquire editing control before autosave begins.'
                       : editPresence?.last_editor
                         ? `No live heartbeat · ${levelEditorSessionPresenceDetail({
                             ...editPresence.last_editor,
@@ -8270,17 +8462,19 @@ export function LevelEditor(): ReactElement {
               </span>
               {!editorSessionCanWrite && editAuthorityState !== 'reviewer' && editAuthorityState !== 'checking' ? (
                 <div className="le-board-actions le-session-actions">
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                    onClick={() => { void followLatestWorkingCopy(); }}
-                  >Follow latest</button>
+                  {editPresence?.active_editor ? (
+                    <button
+                      type="button"
+                      data-chrome-unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                      onClick={() => { void followLatestWorkingCopy(); }}
+                    >Follow latest</button>
+                  ) : null}
                   <button
                     type="button"
                     data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
-                    data-testid="le-take-over-editing-rail"
+                    data-testid="le-take-over-editing-status"
                     disabled={editAuthorityState === 'takeover-pending' || saving || editPresence?.can_take_over === false}
                     title={editPresence?.active_editor
                       ? `Take control after preserving ${levelEditorSessionActorLabel(editPresence.active_editor)}'s server-known branch.`
@@ -8293,20 +8487,10 @@ export function LevelEditor(): ReactElement {
                     : editPresence?.active_editor ? 'Take over editing' : 'Start editing here'}</button>
                 </div>
               ) : null}
-              {serverRecoveries.length ? (
-                <button
-                  type="button"
-                  data-chrome-unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  data-testid="le-review-session-recoveries"
-                  title="Open Status to inspect recovery source, checkpoint time, and restore/delete actions."
-                  onClick={() => { setLayer('status'); setTool('select'); }}
-                >Review {serverRecoveries.length} recover{serverRecoveries.length === 1 ? 'y' : 'ies'}</button>
-              ) : null}
             </div>
           </section>
         ) : null}
-        <div className="le-editor-authoring-controls" inert={!editorSessionCanWrite ? true : undefined}>
+        <div className="le-editor-authoring-controls" inert={!editorSessionCanAuthor ? true : undefined}>
         {layer === 'status' ? (
           <>
           {/* Playability list (ADR-0050): while any violation exists Save is disabled and the
@@ -8366,7 +8550,12 @@ export function LevelEditor(): ReactElement {
               </div>
             ) : null}
             {serverRecoveries.length ? (
-              <div className="le-status-current le-server-recoveries" data-testid="le-server-recoveries">
+              <div
+                ref={editorRecoveriesStatusRef}
+                tabIndex={-1}
+                className="le-status-current le-server-recoveries"
+                data-testid="le-server-recoveries"
+              >
                 <strong>Preserved editor-session recoveries</strong>
                 <span>These are server-side body checkpoints, separate from heartbeat time. They remain available after takeover or restore until you delete them.</span>
                 <div className="le-recovery-list">
@@ -8387,7 +8576,7 @@ export function LevelEditor(): ReactElement {
                           type="button"
                           data-chrome-unit="inner-text-button"
                           className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                          disabled={!editorSessionCanWrite || serverRecoveryBusyId !== null}
+                          disabled={!editorSessionCanWrite || serverRecoveryActionBusy}
                           title="Preserve the current working branch, then restore this checkpoint as a new unpublished working revision."
                           onClick={() => { void restoreServerRecovery(recovery); }}
                         >{serverRecoveryBusyId === recovery.recovery_id ? 'Working…' : 'Restore'}</button>
@@ -8395,13 +8584,29 @@ export function LevelEditor(): ReactElement {
                           type="button"
                           data-chrome-unit="inner-text-button"
                           className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}
-                          disabled={!editorSessionCanWrite || serverRecoveryBusyId !== null}
+                          disabled={!editorSessionCanWrite || serverRecoveryActionBusy}
                           title="Permanently remove only this recovery checkpoint."
                           onClick={() => { void removeServerRecovery(recovery); }}
                         >Delete</button>
                       </div>
                     </article>
                   ))}
+                </div>
+                <div className="le-recovery-cleanup">
+                  <span>Finished reviewing? Delete all {serverRecoveries.length} listed recovery copies at once.</span>
+                  <button
+                    type="button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}
+                    data-testid="le-delete-all-server-recoveries"
+                    disabled={!editorSessionCanWrite || serverRecoveryActionBusy}
+                    title={!editorSessionCanWrite
+                      ? 'Take over editing before deleting recovery copies.'
+                      : `Permanently delete the ${serverRecoveries.length} recovery copies currently listed. Your level does not change.`}
+                    onClick={() => { void removeAllServerRecoveries(); }}
+                  >{serverRecoveryCleanupCount === null
+                      ? `Delete all ${serverRecoveries.length} ${serverRecoveries.length === 1 ? 'copy' : 'copies'}…`
+                      : `Deleting ${serverRecoveryCleanupCount} ${serverRecoveryCleanupCount === 1 ? 'copy' : 'copies'}…`}</button>
                 </div>
               </div>
             ) : null}
@@ -8937,7 +9142,7 @@ export function LevelEditor(): ReactElement {
             </span>
             <span className="le-brush-meta">
               <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'artwork' ? (artworkBrushAsset?.label ?? 'No source artwork') : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : subterrainTool ? (subterrainBrushAsset?.label ?? 'No Subterrain assets') : wallTool ? `${wallMaterialLabel(wallBrushMaterial)} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${activeFenceArtwork?.label ?? fenceMaterialLabel(fenceBrushMaterial)} · ${fencePaintTarget}` : featureKind ? `${featureMaterialLabel(featureBrushMaterial[featureKind], featureKind)} ${featureKind}` : macroTileBrushAsset?.label ?? brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'artwork' ? `source artwork · ${artworkBrushDirections.length}-way` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : subterrainTool ? 'subterrain · exposed face' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? `fence · ${fencePaintTarget === 'post' ? 'vertex' : 'edge'}` : featureKind ? `feature · ${featureKind}` : macroTileBrushAsset ? `composite tile · ${macroTileBrushAsset.columns}×${macroTileBrushAsset.rows}` : 'tile'}</span>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'artwork' ? 'source artwork' : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : subterrainTool ? 'subterrain · exposed face' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? `fence · ${fencePaintTarget === 'post' ? 'vertex' : 'edge'}` : featureKind ? `feature · ${featureKind}` : macroTileBrushAsset ? `composite tile · ${macroTileBrushAsset.columns}×${macroTileBrushAsset.rows}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -9142,21 +9347,44 @@ export function LevelEditor(): ReactElement {
                 value={selectedArtworkId ?? ''}
                 options={artworkSelectionOptions}
                 onChange={(id) => {
-                  setSelectedCell(null);
-                  setSelectedArtworkId(id || null);
+                  if (id) selectArtwork(id);
+                  else {
+                    setSelectedCell(null);
+                    setSelectedArtworkId(null);
+                  }
                 }}
               />
             </div>
-            {(['tree', 'house', 'rock', 'doodad'] as const).map((kind) => {
+            <h2 className="le-card-subhead">Facing</h2>
+            <FacingCompass
+              direction={artworkFacingDirection}
+              onSelect={setArtworkFacing}
+              onRotate={rotateArtworkFacing}
+              available={(direction) => artworkFacingDirections.includes(direction)}
+              ariaLabel="Artwork facing"
+            />
+            {(['tree', 'house', 'rock', 'doodad', 'landmark'] as const).map((kind) => {
               const group = artworkAssets.filter((asset) => asset.kind === kind);
               if (!group.length) return null;
               return (
                 <div className="le-pal-group" key={`artwork-${kind}`}>
-                  <span className="le-pal-grouplabel">{kind === 'tree' ? 'Trees' : kind === 'house' ? 'Buildings' : kind === 'rock' ? 'Rocks' : 'Details'}</span>
+                  <span className="le-pal-grouplabel">{kind === 'tree'
+                    ? 'Trees'
+                    : kind === 'house'
+                      ? 'Buildings'
+                      : kind === 'rock'
+                        ? 'Rocks'
+                        : kind === 'landmark'
+                          ? 'Landmarks'
+                          : 'Details'}</span>
                   <div className="le-swatches">
                     {group.map((asset) => {
                       const directions = structureArtDirections(asset.id);
-                      const previewDirection = directions.includes('south') ? 'south' : directions[0];
+                      const previewDirection = directions.includes(artworkBrushDirection)
+                        ? artworkBrushDirection
+                        : directions.includes('south')
+                          ? 'south'
+                          : directions[0];
                       if (!previewDirection) return null;
                       return (
                         <button
@@ -9164,10 +9392,17 @@ export function LevelEditor(): ReactElement {
                           key={`artwork-${asset.id}`}
                           data-chrome-unit="inner-asset-swatch"
                           className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', artworkBrushId === asset.id && tool === 'brush' && 'active')}
-                          title={`${asset.label} · ${directions.length} installed view${directions.length === 1 ? '' : 's'} · visual only`}
+                          title={`${asset.label} · visual only`}
                           onClick={() => {
                             const disarming = artworkBrushId === asset.id && tool === 'brush';
                             setArtworkBrushId(asset.id);
+                            setArtworkBrushDirection((current) => (
+                              directions.includes(current)
+                                ? current
+                                : directions.includes('south')
+                                  ? 'south'
+                                  : directions[0]
+                            ));
                             setBrushKind('artwork');
                             setLayer('artwork');
                             setArtworkSelectionActive(false);
@@ -9175,7 +9410,7 @@ export function LevelEditor(): ReactElement {
                           }}
                         >
                           <img src={structureArtDirectionHalfSrc(asset.id, previewDirection, 'front')} alt="" draggable={false} />
-                          <small>{asset.label} · {directions.length}-way</small>
+                          <small>{asset.label}</small>
                         </button>
                       );
                     })}
@@ -9183,7 +9418,7 @@ export function LevelEditor(): ReactElement {
                 </div>
               );
             })}
-            <p className="le-board-note">Click a source once to arm its free-placement brush; click it again to disarm. Place it anywhere in the scene with no tile, contact point, footprint, terrain rule, or collision. Select toggles image-bounds highlights for every selectable artwork and changes the current artwork; click Select again to clear selection mode and its outlines. Move drags only the current artwork, and Details keeps its exact pixel X/Y, scale, and rendered direction controls.</p>
+            <p className="le-board-note">Click a source once to arm its free-placement brush; click it again to disarm. Facing controls the next placement and rotates the currently selected artwork. Place it anywhere in the scene with no tile, contact point, footprint, terrain rule, or collision. Select toggles image-bounds highlights for every selectable artwork and changes the current artwork; click Select again to clear selection mode and its outlines. Move drags only the current artwork, and Details keeps its exact pixel X/Y and scale controls.</p>
           </section>
         ) : subterrainTool ? (
           <section className="skirmish-card le-brush-panel">
@@ -9740,13 +9975,6 @@ export function LevelEditor(): ReactElement {
                   />
                 </label>
               </div>
-              <h2 className="le-card-subhead">Rendered direction</h2>
-              <FacingCompass
-                direction={selectedArtwork.direction}
-                onSelect={(direction) => updateArtwork(selectedArtwork.id, (placement) => ({ ...placement, direction }))}
-                onRotate={rotateSelectedArtwork}
-                available={(direction) => selectedArtworkDirections.includes(direction)}
-              />
               <div className="le-seg le-artwork-actions">
                 <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => duplicateArtwork(selectedArtwork.id)}>Duplicate</button>
                 <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={() => deleteArtwork(selectedArtwork.id)}>Delete</button>

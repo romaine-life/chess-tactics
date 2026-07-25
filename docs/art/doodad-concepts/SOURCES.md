@@ -36,7 +36,6 @@ prop inside the frame's ~69px of headroom above the foot.
 | doodad id  | terrain | source            | provider          | license | scale |
 |------------|---------|-------------------|-------------------|---------|-------|
 | boulder    | stone   | `boulder_01`      | Poly Haven        | CC0     | 0.46  |
-| stump      | dirt    | `tree_stump_01`   | Poly Haven        | CC0     | 0.46  |
 | fern       | water   | `fern_02`         | Poly Haven        | CC0     | 0.46  |
 | flower     | grass   | `flower_gazania`  | Poly Haven        | CC0     | 0.46  |
 
@@ -68,7 +67,12 @@ House art is STYLIZED, never photoreal (he reads scanned-mesh renders as "too re
    the recipe once per facing. For authored split art, render both `back` and `front` for each
    facing; for `flat-contact` source art, one `full` render may be assigned to both direction roles.
    Runtime roles are `<facing>-back` and `<facing>-front`; legacy `back`/`front` remain the south
-   aliases. Directional rasters and their contact calibration stay live-storage-backed.
+   aliases. Passing `all` renders the complete turntable to `<out-dir>/<direction>.png` in one
+   Blender process. `source` framing contains the whole model in a 512×512 transparent raster for
+   floating Artwork/img2img reference. Directional rasters and their calibration stay
+   live-storage-backed.
+   Blender 5.1 moved `.3ds` support into its official `autodesk_3ds_format` extension; install and
+   enable that extension before rendering a `.3ds` source.
 2. **Photoreal mesh → gated Codex RESTYLE** (e.g. `cabin`, `lodge`). Keep the real shape/iso, re-skin
    to pixel-art. Render a Blender capture as above, then:
    ```
@@ -101,6 +105,23 @@ That workflow is retired: any surviving staging archive must be uploaded as a pr
 version, hash-verified through the backend, and removed before use. 1×1 props must FIT WITHIN
 THEIR TILE (owner call, 2026-07-02):
 the base sits inside the 96px cell diamond with margin.
+
+## Eight-way floating Artwork sources
+
+Per [ADR-0150](../../adr/0150-structure-source-art-turntables-are-complete-source-only-live-groups.md),
+every source offered by the Level Editor Artwork shelf is upgraded or added as
+one atomic eight-slot turntable. The committed batch specification lives at
+`docs/art/source-art-turntables/manifest.json`; its renderer writes only to an
+explicit OS-temporary workspace and uploads private candidates. Existing
+prop/doodad `back`/`front` pixels are not replaced. New landmark records are
+`sourceOnly` and therefore require no invented seat, tile, footprint, terrain,
+or collision behavior.
+
+Per [ADR-0155](../../adr/0155-source-asset-packs-yield-isolated-provenance-linked-artwork.md),
+one owner archive may define multiple independently reviewed Artwork items by
+exact authored mesh-object allowlist. Those items share one archived source
+version, while optional source yaw or authored animation-frame selection and
+separate color/opacity maps are recorded in each render's provenance.
 
 Sizing baseline (owner call, 2026-07-03): a small 1×1 prop is baked at ~its on-board size so its
 NATURAL `scale: 1` IS the intended size — the scale slider then centers on 1× and you tune ± from a

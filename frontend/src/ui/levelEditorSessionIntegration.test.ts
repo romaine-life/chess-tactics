@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const editor = readFileSync(new URL('./LevelEditor.tsx', import.meta.url), 'utf8');
+const campaignEditor = readFileSync(new URL('./CampaignEditor.tsx', import.meta.url), 'utf8');
 
 describe('Level Editor attributed session integration', () => {
   it('claims the page identity before recovery access or document resolution', () => {
@@ -65,23 +66,61 @@ describe('Level Editor attributed session integration', () => {
     expect(editor).toContain('const openingSession = openEditorDocumentEditSession(doc.document_id');
     expect(editor).toContain('session_key: documentClientIdentity.sessionKey');
     expect(editor).toContain("setEditAuthorityState('checking')");
-    expect(editor).toContain('data-testid="le-editor-session-rail"');
+    expect(editor).toContain('data-testid="le-editor-session-status"');
+    expect(editor).toContain("testId: 'le-editor-session-attention'");
+    expect(editor).toContain("selectLayer('status')");
+    expect(editor).toContain("target?.scrollIntoView({ block: 'start' })");
+    expect(editor).not.toContain('data-testid="le-editor-session-rail"');
+    expect(editor).not.toContain('data-testid="le-review-session-recoveries"');
     expect(editor).toContain('levelEditorSessionActorLabel(editPresence.active_editor)');
     expect(editor).toContain('levelEditorSessionActorLabel(editPresence.last_editor)');
     expect(editor).toContain('most recently had editing control');
     expect(editor).toContain('No live heartbeat ·');
     expect(editor).toContain('levelEditorSessionPresenceDetail({');
-    expect(editor).toContain('data-testid="le-take-over-editing-rail"');
+    expect(editor).toContain('data-testid="le-take-over-editing-status"');
     expect(editor).toContain('await takeOverEditorDocumentEditSession(');
     expect(editor).toContain('The latest server-known copy from that session will be preserved');
     expect(editor).toContain('Level Editor · ${window.location.host}');
-    expect(editor).toContain('tab ${documentClientIdentity.sessionId.slice(0, 8)}');
-    expect(editor).toContain('browser profile ${documentClientIdentity.deviceId.slice(0, 8)}');
+    expect(editor).toContain('client_label: editorClientLabel');
+    expect(editor).not.toContain('tab ${documentClientIdentity.sessionId.slice(0, 8)}');
+    expect(editor).not.toContain('browser profile ${documentClientIdentity.deviceId.slice(0, 8)}');
     expect(editor).toContain("activeEditor ? 'Take over editing' : 'Start editing here'");
     expect(editor).toContain("editPresence?.active_editor ? 'Take over editing' : 'Start editing here'");
     expect(editor).toContain('Uploaded by displaced tab · non-live checkpoint');
     expect(editor).not.toContain('Live displaced-tab upload');
     expect(editor).toContain('levelEditorSessionServerNow(editPresence.server_time)');
+  });
+
+  it('opens as a viewer and acquires only after the first persisted authoring change', () => {
+    const takeoverStart = editor.indexOf('const takeOverEditing = async');
+    const takeoverEnd = editor.indexOf('const restoreServerRecovery = async', takeoverStart);
+    const takeover = editor.slice(takeoverStart, takeoverEnd);
+
+    expect(editor).toContain('const editorSessionCanBegin = Boolean(');
+    expect(editor).toContain("editSession?.state === 'waiting'");
+    expect(editor).toContain('!editPresence.active_editor');
+    expect(editor).toContain('const firstAuthoringMutationPending = Boolean(');
+    expect(editor).toContain('currentSig !== lastCloudSyncedSigRef.current');
+    expect(editor).toContain('const editorSessionCanAuthor = editorSessionCanWrite || editorSessionCanBegin;');
+    expect(takeover).toContain('if (!firstAuthoringMutation && !(await ask({');
+    expect(takeover).toContain('void takeOverEditing({ firstAuthoringMutation: true })');
+    expect(takeover).toContain('if (!firstAuthoringMutation) {');
+    expect(takeover).toContain('preserveAuthorityLoss(error.session ?? session, error.recovery)');
+    expect(editor).toContain('Viewing — editing has not started');
+    expect(editor).toContain('This page holds no writer lease.');
+  });
+
+  it('makes Campaign Editor management acquire a free lease explicitly', () => {
+    const authorityStart = campaignEditor.indexOf('async function withRecentDraftEditingAuthority');
+    const authorityEnd = campaignEditor.indexOf('export type CampaignCollection', authorityStart);
+    const authority = campaignEditor.slice(authorityStart, authorityEnd);
+
+    expect(authority).toContain('await openEditorDocumentEditSession(');
+    expect(authority).toContain("opened.session.state !== 'active' && !opened.presence.active_editor");
+    expect(authority).toContain('await takeOverEditorDocumentEditSession(');
+    expect(authority.indexOf('await takeOverEditorDocumentEditSession('))
+      .toBeLessThan(authority.indexOf('return await action(editorDocumentEditFence('));
+    expect(authority).toContain('await closeEditorDocumentEditSession(');
   });
 
   it('does not let an overlapping follower refresh publish stale attribution or board state', () => {
@@ -106,6 +145,20 @@ describe('Level Editor attributed session integration', () => {
     expect(manualRefresh).toContain('if (refreshSequence !== followerRefreshSequenceRef.current) return;');
   });
 
+  it('clears only the confirmed server-recovery snapshot through one fenced request', () => {
+    const bulkDeleteStart = editor.indexOf('const removeAllServerRecoveries = async');
+    const bulkDeleteEnd = editor.indexOf('// Debounced, serialized compare-and-swap autosave.', bulkDeleteStart);
+    const bulkDelete = editor.slice(bulkDeleteStart, bulkDeleteEnd);
+
+    expect(bulkDeleteStart).toBeGreaterThan(-1);
+    expect(bulkDelete).toContain('const recoveryIds = serverRecoveries.map((recovery) => recovery.recovery_id);');
+    expect(bulkDelete).toContain('deleteEditorDocumentRecoveries(doc.document_id, recoveryIds, fence)');
+    expect(bulkDelete).toContain('Any new recovery created after this confirmation remains available.');
+    expect(bulkDelete).toContain('working-copy history, and browser backup will not change');
+    expect(bulkDelete).toContain("tone: 'danger'");
+    expect(editor).toContain('data-testid="le-delete-all-server-recoveries"');
+  });
+
   it('fences every Level Editor mutation and makes displaced tabs read-only', () => {
     const fenceStart = editor.indexOf('const currentEditFence = (): EditorDocumentEditFence | null => {');
     const fenceEnd = editor.indexOf('\n  };', fenceStart);
@@ -125,8 +178,8 @@ describe('Level Editor attributed session integration', () => {
     expect(editor).toMatch(/autosaveEditorDocument\([\s\S]*?revision,[\s\S]*?fence,/);
     expect(editor).toMatch(/saveEditorDocument\([\s\S]*?campaignAssignmentId \|\| null,[\s\S]*?fence,/);
     expect(editor).toMatch(/discardEditorDocumentChanges\([\s\S]*?revision,[\s\S]*?fence,/);
-    expect(editor).toContain('inert={!editorReady || saving || !editorSessionCanWrite ? true : undefined}');
-    expect(editor).toContain('className="le-editor-authoring-controls" inert={!editorSessionCanWrite ? true : undefined}');
+    expect(editor).toContain('inert={!editorReady || saving || !editorSessionCanAuthor ? true : undefined}');
+    expect(editor).toContain('className="le-editor-authoring-controls" inert={!editorSessionCanAuthor ? true : undefined}');
     expect(editor).toContain('const scopedDraftMatchesGeneration = Boolean(');
     expect(editor).toContain('const restoreRouteSnapshot = openedAsWriter && routeSnapshotDiverged && routeSnapshotSafe;');
     expect(editor).toContain('preserveScopedLevelEditorRecovery(recoveryIdentity, frozenDraft)');
