@@ -76,24 +76,32 @@ function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps): ReactElement {
   const panelRef = useRef<HTMLDivElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    // Move focus INTO the dialog for a11y — but onto the panel, NOT the confirm button. Focusing a
-    // .le-seg-btn triggers its :focus-visible CSS outline, a hand-rolled boundary drawn over the kit
-    // chrome that's banned (ADR-0002/0032). Enter/Esc are handled by the window listener below, so
-    // the buttons never need focus for keyboard use.
+    // Destructive dialogs default to the safe choice. Constructive dialogs retain the panel-level
+    // Enter shortcut; a danger action requires the owner to move focus to its explicit button.
     const prevFocus = document.activeElement as HTMLElement | null;
-    panelRef.current?.focus();
+    if (tone === 'danger') cancelButtonRef.current?.focus();
+    else panelRef.current?.focus();
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') { event.preventDefault(); onCancel(); }
-      else if (event.key === 'Enter') { event.preventDefault(); onConfirm(); }
+      else if (event.key === 'Enter' && tone !== 'danger') { event.preventDefault(); onConfirm(); }
+      else if (event.key === 'Tab') {
+        const focusable = Array.from(panelRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []);
+        if (!focusable.length) { event.preventDefault(); panelRef.current?.focus(); return; }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
       prevFocus?.focus?.();
     };
-  }, [onConfirm, onCancel]);
+  }, [onConfirm, onCancel, tone]);
 
   return createPortal(
     <div
@@ -107,9 +115,11 @@ function ConfirmDialog({
         <div className="confirm-body">{message}</div>
         <div className="confirm-actions">
           <button
+            ref={cancelButtonRef}
             type="button"
             data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+            data-testid="confirm-cancel"
             onClick={onCancel}
           >{cancelLabel}</button>
           <button

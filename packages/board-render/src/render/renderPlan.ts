@@ -33,6 +33,7 @@ import { propDef, type StructureSourceRef } from '../core/props';
 import {
   structureArtAsset,
   structureArtDirectionHalfSrc,
+  structureArtDirectionSplitMode,
   structureArtDirectionSprite,
 } from '../core/structureArt';
 import { densityFieldAt, groundCoverSet, resolveGroundCover, type GroundCover } from '../core/groundCover';
@@ -340,7 +341,7 @@ function pushFloatingArtworkDrawOps(
   const fullW = sourceSprite.w * scale;
   const fullH = sourceSprite.h * scale;
   const srcFor = (half: 'back' | 'front') => structureArtDirectionHalfSrc(sourceArtId, direction, half);
-  if ((structureArtAsset(sourceArtId)?.splitMode ?? 'authored') !== 'flat-contact') {
+  if (structureArtDirectionSplitMode(sourceArtId, direction) !== 'flat-contact') {
     ops.push({ layer: 'scene', src: srcFor('back'), dx, dy, dw: fullW, dh: fullH, z: backZ });
     ops.push({ layer: 'scene', src: srcFor('front'), dx, dy, dw: fullW, dh: fullH, z: frontZ });
     return;

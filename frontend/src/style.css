@@ -6581,7 +6581,7 @@ body.loading-bootstrap .app-startup-status {
 .le-swatch img { height: 46px; image-rendering: pixelated; object-fit: contain; width: 46px; }
 .le-macro-swatch img { width: 100%; max-width: 58px; }
 .le-brush-thumb .le-thumb-macro { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
-.le-swatch small { font-size: var(--ds-text-2xs); line-height: 1; text-align: center; }
+.le-swatch small { font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace; font-size: var(--ds-text-2xs); line-height: 1; text-align: center; }
 .le-cover-swatches {
   grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
   margin-bottom: 8px;
@@ -6883,7 +6883,7 @@ body.loading-bootstrap .app-startup-status {
 }
 .le-status-current strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
-.le-session-rail strong { overflow-wrap: anywhere; }
+.le-session-status strong { overflow-wrap: anywhere; }
 .le-editor-authoring-controls { display: contents; }
 .le-session-actions,
 .le-recovery-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: var(--ds-inline-tight); }
@@ -6893,6 +6893,18 @@ body.loading-bootstrap .app-startup-status {
 .le-recovery-entry b { color: #f3ead8; font-size: var(--ds-text-sm); overflow-wrap: anywhere; }
 .le-recovery-entry span { font-size: var(--ds-text-2xs); }
 .le-recovery-entry[data-resolved="true"] { opacity: .78; }
+.le-recovery-cleanup {
+  align-items: center;
+  border-top: 1px solid rgba(127, 215, 255, .22);
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-top: var(--ds-stack);
+}
+.le-recovery-cleanup > span { font-size: var(--ds-text-2xs); }
+@media (max-width: 780px) {
+  .le-recovery-cleanup { align-items: stretch; grid-template-columns: minmax(0, 1fr); }
+}
 .le-status-current.is-ready { border-image-source: var(--skirmish-chrome-inner-line-success-image); }
 .le-status-current.is-blocked { border-image-source: var(--skirmish-chrome-inner-line-warning-image); }
 .le-revision-history {

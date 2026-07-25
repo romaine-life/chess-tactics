@@ -78,7 +78,6 @@ const STRUCTURE_RASTERS: Record<string, { width: number; height: number }> = {
   'props/rock': { width: 40, height: 45 },
   'props/fieldstone': { width: 51, height: 47 },
   'doodads/boulder': { width: 96, height: 180 },
-  'doodads/stump': { width: 96, height: 180 },
   'doodads/fern': { width: 96, height: 180 },
   'doodads/flower': { width: 96, height: 180 },
 };

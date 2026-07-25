@@ -18,6 +18,7 @@ import type { EditorBoard } from '../ui/boardCode';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 import {
+  applyDrawableCatalog,
   applyLiveMediaCatalog,
   groundCoverSet,
   resetDrawableCatalog,
@@ -29,7 +30,7 @@ import {
 } from '@chess-tactics/board-render';
 import { testGroundCoverCatalog, testStructureMediaSlots, testWallDecorMediaSlots } from '../test/liveMediaCatalog';
 import { applyTestPropSeats } from '../test/livePropSeats';
-import { applyTestDrawableCatalog } from '../test/drawableCatalog';
+import { applyTestDrawableCatalog, testDrawableCatalog } from '../test/drawableCatalog';
 import { featureFrameSrc, fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
 import { tileFamilies } from '../art/tileset';
 import { subterrainMaterialSrc } from '@chess-tactics/board-render';
@@ -459,6 +460,53 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
       structureArtHalfSrc('oak', 'front'),
     ]);
     expect(board.props).toEqual({});
+  });
+
+  it('uses the selected artwork direction raster without changing its free transform', () => {
+    const catalog = testDrawableCatalog();
+    const oak = catalog.assets.find((asset) => asset.id === 'structure-oak')!;
+    const directionalRole = (half: 'back' | 'front', fill: string) => {
+      const role = structuredClone(oak.media[half]);
+      role.slot = `source-art/oak/east-${half}.png`;
+      role.media.sha256 = fill.repeat(64);
+      role.media.immutableUrl = `/api/media/${role.media.sha256}`;
+      role.media.url = `/assets/source-art/oak/east-${half}.png`;
+      return role;
+    };
+    oak.media['east-back'] = directionalRole('back', 'd');
+    oak.media['east-front'] = directionalRole('front', 'e');
+    oak.behavior.directions = {
+      east: { anchorX: 96, anchorY: 255, scale: 1, splitMode: 'authored' },
+    };
+    applyDrawableCatalog({ ...catalog, revision: catalog.revision + 1 });
+
+    try {
+      const placement = {
+        id: 'art-1',
+        sourceArtId: 'oak',
+        pixelX: 321,
+        pixelY: 187,
+        direction: 'east' as const,
+        scale: 1.75,
+      };
+      const board: EditorBoard = { ...blank(8, 6), floatingArtwork: [placement] };
+      const ops = boardDrawOps(board);
+      const expectedBack = `/api/media/${'d'.repeat(64)}`;
+      const expectedFront = `/api/media/${'e'.repeat(64)}`;
+
+      expect(ops.map((op) => op.src)).toEqual([expectedBack, expectedFront]);
+      expect(ops[0]).toMatchObject({
+        dx: 153,
+        dy: -75.5,
+        dw: 336,
+        dh: 525,
+        z: 1_000_000,
+      });
+      expect(ops[1]).toMatchObject({ ...ops[0], src: expectedFront, z: 1_000_001 });
+      expect(board.floatingArtwork?.[0]).toEqual(placement);
+    } finally {
+      applyTestDrawableCatalog();
+    }
   });
 
   it('a macrotile contributes its board-space source and replaces covered top sources', () => {

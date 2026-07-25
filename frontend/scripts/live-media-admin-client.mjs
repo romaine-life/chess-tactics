@@ -23,6 +23,9 @@ const repoRoot = path.resolve(frontendRoot, '..');
 const CANDIDATE_BATCH_SCHEMA = 'live-media-candidate-batch-v1';
 const CANDIDATE_BATCH_RESULT_SCHEMA = 'live-media-candidate-batch-result-v1';
 const BATCH_PROVENANCE_SCHEMA = 'live-media-candidate-batch-provenance-v1';
+export const CHUNKED_SOURCE_SCHEMA = 'live-media-chunked-source-v1';
+export const SOURCE_ARCHIVE_CHUNK_BYTES = 30 * 1024 * 1024;
+const SOURCE_CHUNK_HEADER = Buffer.from('CHESS_TACTICS_SOURCE_CHUNK_V1\n', 'utf8');
 const BATCH_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,119}$/;
 
 const MEDIA_TYPES = new Map(Object.entries({
@@ -246,8 +249,7 @@ export async function uploadCandidateBytes({
   };
 }
 
-/** Source binaries are durable private archived versions, never loose local files. */
-export async function archiveSourceBytes({
+async function archiveDirectSourceBytes({
   client,
   payload,
   bytes,
@@ -281,6 +283,167 @@ export async function archiveSourceBytes({
   return { ...uploaded, archived: archived.row, revision: archived.revision };
 }
 
+/**
+ * Source binaries are durable private archived versions, never loose local files.
+ *
+ * The backend intentionally bounds one upload request at 32 MiB. Larger exact sources are stored
+ * as independently hash-verified opaque chunks plus a small archived manifest at the requested
+ * sourcePath. `fetch-source` reconstructs and verifies the original bytes transparently.
+ */
+export async function archiveSourceBytes({
+  client,
+  payload,
+  bytes,
+  mediaType,
+  idempotencyKey = '',
+  reason,
+  evidence,
+  chunkBytes = SOURCE_ARCHIVE_CHUNK_BYTES,
+}) {
+  if (payload?.slot) throw new Error('archiveSourceBytes accepts private source versions only');
+  if (!payload?.sourcePath || payload.role !== 'source') {
+    throw new Error('archiveSourceBytes requires sourcePath and role=source');
+  }
+  if (!Buffer.isBuffer(bytes) || !bytes.length) throw new Error('archiveSourceBytes requires non-empty Buffer bytes');
+  if (!Number.isSafeInteger(chunkBytes) || chunkBytes < 1 || chunkBytes > SOURCE_ARCHIVE_CHUNK_BYTES) {
+    throw new Error(`chunkBytes must be an integer from 1 through ${SOURCE_ARCHIVE_CHUNK_BYTES}`);
+  }
+  if (bytes.length <= chunkBytes) {
+    return archiveDirectSourceBytes({
+      client, payload, bytes, mediaType, idempotencyKey, reason, evidence,
+    });
+  }
+
+  const contentSha256 = sha256Bytes(bytes);
+  const count = Math.ceil(bytes.length / chunkBytes);
+  const chunks = [];
+  for (let index = 0; index < count; index += 1) {
+    const content = bytes.subarray(index * chunkBytes, Math.min(bytes.length, (index + 1) * chunkBytes));
+    const storedBytes = Buffer.concat([SOURCE_CHUNK_HEADER, content]);
+    const sourcePath = `${payload.sourcePath}.chunks/${String(index).padStart(4, '0')}.part`;
+    const contentChunkSha256 = sha256Bytes(content);
+    const stored = await archiveDirectSourceBytes({
+      client,
+      payload: {
+        ...payload,
+        sourcePath,
+        label: `${payload.label} · chunk ${index + 1}/${count}`,
+        metadata: {
+          ...(payload.metadata ?? {}),
+          chunkedSource: {
+            schema: CHUNKED_SOURCE_SCHEMA,
+            manifestSourcePath: payload.sourcePath,
+            index,
+            count,
+            contentSha256,
+            contentChunkSha256,
+            contentByteLength: content.length,
+          },
+        },
+        provenance: {
+          ...(payload.provenance ?? {}),
+          chunkedSource: {
+            schema: CHUNKED_SOURCE_SCHEMA,
+            manifestSourcePath: payload.sourcePath,
+            index,
+            count,
+          },
+        },
+      },
+      bytes: storedBytes,
+      mediaType: 'application/octet-stream',
+      idempotencyKey: deterministicIdempotencyKey('source-chunk', {
+        idempotencyKey,
+        sourcePath,
+        contentChunkSha256,
+      }),
+      reason,
+      evidence: {
+        ...evidence,
+        chunkedSource: {
+          schema: CHUNKED_SOURCE_SCHEMA,
+          manifestSourcePath: payload.sourcePath,
+          index,
+          count,
+          contentSha256,
+          contentChunkSha256,
+          contentByteLength: content.length,
+        },
+      },
+    });
+    chunks.push({
+      sourcePath,
+      contentSha256: contentChunkSha256,
+      byteLength: content.length,
+      storedSha256: stored.verification.sha256,
+      storedByteLength: stored.verification.byteLength,
+      versionId: stored.id,
+    });
+  }
+
+  const manifest = {
+    schema: CHUNKED_SOURCE_SCHEMA,
+    sourcePath: payload.sourcePath,
+    mediaType,
+    sha256: contentSha256,
+    byteLength: bytes.length,
+    chunkBytes,
+    chunks,
+  };
+  const manifestBytes = Buffer.from(`${canonicalJson(manifest)}\n`, 'utf8');
+  const archivedManifest = await archiveDirectSourceBytes({
+    client,
+    payload: {
+      ...payload,
+      metadata: {
+        ...(payload.metadata ?? {}),
+        chunkedSource: {
+          schema: CHUNKED_SOURCE_SCHEMA,
+          sha256: contentSha256,
+          byteLength: bytes.length,
+          mediaType,
+          chunks: count,
+        },
+      },
+      provenance: {
+        ...(payload.provenance ?? {}),
+        chunkedSource: {
+          schema: CHUNKED_SOURCE_SCHEMA,
+          sha256: contentSha256,
+          byteLength: bytes.length,
+          mediaType,
+          chunks: count,
+        },
+      },
+    },
+    bytes: manifestBytes,
+    mediaType: 'application/json',
+    idempotencyKey: deterministicIdempotencyKey('source-manifest', {
+      idempotencyKey,
+      sourcePath: payload.sourcePath,
+      contentSha256,
+    }),
+    reason,
+    evidence: {
+      ...evidence,
+      chunkedSource: {
+        schema: CHUNKED_SOURCE_SCHEMA,
+        sha256: contentSha256,
+        byteLength: bytes.length,
+        mediaType,
+        chunks: count,
+      },
+    },
+  });
+  return {
+    ...archivedManifest,
+    media: { sha256: contentSha256, byteLength: bytes.length, mediaType },
+    verification: { sha256: contentSha256, byteLength: bytes.length, mediaType, url: null },
+    chunked: true,
+    manifest,
+  };
+}
+
 export function latestArchivedSourceVersion(catalog, sourcePath, domain = '') {
   const candidates = catalog.versions.filter((version) => version.sourcePath === sourcePath
     && version.status === 'archived'
@@ -295,6 +458,74 @@ export function latestArchivedSourceVersion(catalog, sourcePath, domain = '') {
     throw new Error(`Latest archived source is ambiguous for sourcePath: ${sourcePath}`);
   }
   return ordered[0].version;
+}
+
+export async function downloadArchivedSourceBytes({ client, catalog, version, domain = '' }) {
+  if (!(client instanceof LiveMediaAdminClient)) throw new Error('downloadArchivedSourceBytes requires LiveMediaAdminClient');
+  const downloaded = await client.downloadVerifiedMedia({
+    url: version.media.url,
+    sha256: version.media.sha256,
+    byteLength: Number(version.media.byteLength),
+    mediaType: version.media.mediaType,
+  });
+  if (
+    version.metadata?.chunkedSource?.schema !== CHUNKED_SOURCE_SCHEMA
+    || typeof version.metadata.chunkedSource.sha256 !== 'string'
+  ) return downloaded;
+
+  let manifest;
+  try {
+    manifest = JSON.parse(downloaded.bytes.toString('utf8'));
+  } catch {
+    throw new Error(`Chunked source manifest is not valid JSON: ${version.sourcePath}`);
+  }
+  if (
+    manifest?.schema !== CHUNKED_SOURCE_SCHEMA
+    || manifest.sourcePath !== version.sourcePath
+    || !Array.isArray(manifest.chunks)
+    || !manifest.chunks.length
+    || typeof manifest.sha256 !== 'string'
+    || !Number.isSafeInteger(manifest.byteLength)
+    || typeof manifest.mediaType !== 'string'
+  ) throw new Error(`Chunked source manifest is invalid: ${version.sourcePath}`);
+
+  const contentChunks = [];
+  for (const [index, entry] of manifest.chunks.entries()) {
+    if (
+      !entry || typeof entry.sourcePath !== 'string' || typeof entry.contentSha256 !== 'string'
+      || !Number.isSafeInteger(entry.byteLength) || entry.byteLength < 1
+    ) throw new Error(`Chunked source entry ${index} is invalid: ${version.sourcePath}`);
+    const chunkVersion = latestArchivedSourceVersion(catalog, entry.sourcePath, domain || version.domain);
+    const chunk = await client.downloadVerifiedMedia({
+      url: chunkVersion.media.url,
+      sha256: chunkVersion.media.sha256,
+      byteLength: Number(chunkVersion.media.byteLength),
+      mediaType: chunkVersion.media.mediaType,
+    });
+    if (!chunk.bytes.subarray(0, SOURCE_CHUNK_HEADER.length).equals(SOURCE_CHUNK_HEADER)) {
+      throw new Error(`Chunked source entry ${index} has an invalid container header`);
+    }
+    const content = chunk.bytes.subarray(SOURCE_CHUNK_HEADER.length);
+    if (content.length !== entry.byteLength || sha256Bytes(content) !== entry.contentSha256) {
+      throw new Error(`Chunked source entry ${index} failed content verification`);
+    }
+    contentChunks.push(content);
+  }
+  const bytes = Buffer.concat(contentChunks);
+  if (bytes.length !== manifest.byteLength || sha256Bytes(bytes) !== manifest.sha256) {
+    throw new Error(`Reconstructed source failed verification: ${version.sourcePath}`);
+  }
+  return {
+    bytes,
+    verification: {
+      sha256: manifest.sha256,
+      byteLength: bytes.length,
+      mediaType: manifest.mediaType,
+      url: null,
+      chunked: true,
+      manifestVersionId: version.id,
+    },
+  };
 }
 
 function isWithin(parent, child) {
@@ -527,7 +758,7 @@ export async function uploadCandidateBatch({ client, manifest }) {
     if (candidate.availabilityPolicy) payload.availabilityPolicy = candidate.availabilityPolicy;
     if (candidate.slotMetadata) payload.slotMetadata = candidate.slotMetadata;
     const idempotencyKey = deterministicIdempotencyKey('livebatch-candidate', {
-      batchId: manifest.batchId, id: candidate.id,
+      batchId: manifest.batchId, id: candidate.id, contentSha256,
     });
     const uploaded = await uploadCandidateBytes({ client, payload, bytes, mediaType, idempotencyKey });
     candidateReports.push(batchMediaReport(candidate, uploaded, idempotencyKey, {
@@ -645,12 +876,7 @@ async function runCli() {
     if (fs.existsSync(options.out) && !options.force) throw new Error(`Output already exists; pass --force to replace it: ${options.out}`);
     const catalog = await client.adminCatalog();
     const version = latestArchivedSourceVersion(catalog, options.sourcePath, options.domain);
-    const downloaded = await client.downloadVerifiedMedia({
-      url: version.media.url,
-      sha256: version.media.sha256,
-      byteLength: Number(version.media.byteLength),
-      mediaType: version.media.mediaType,
-    });
+    const downloaded = await downloadArchivedSourceBytes({ client, catalog, version, domain: options.domain });
     fs.mkdirSync(path.dirname(options.out), { recursive: true });
     const temporary = `${options.out}.${process.pid}.tmp`;
     let temporaryCreated = false;
@@ -664,7 +890,10 @@ async function runCli() {
       if (temporaryCreated) fs.rmSync(temporary, { force: true });
     }
     const written = fs.readFileSync(options.out);
-    if (written.length !== Number(version.media.byteLength) || sha256Bytes(written) !== version.media.sha256) {
+    if (
+      written.length !== Number(downloaded.verification.byteLength)
+      || sha256Bytes(written) !== downloaded.verification.sha256
+    ) {
       throw new Error(`Written source failed verification: ${options.out}`);
     }
     console.log(JSON.stringify({

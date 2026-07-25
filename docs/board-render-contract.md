@@ -314,6 +314,18 @@ legacy `back`/`front` pair. Missing pairs are unavailable rather than flattened,
 planar-rotated, or silently substituted. Per-direction source calibration may
 override the drawable's default scale and split geometry.
 
+Per [ADR-0150](adr/0150-structure-source-art-turntables-are-complete-source-only-live-groups.md)
+and [ADR-0151](adr/0151-source-art-review-requires-interactive-board-placement.md),
+new or upgraded Artwork sources install as complete atomic eight-direction
+groups. A direction may point both named halves at one full `flat-contact`
+turntable raster without changing the legacy prop/doodad `back`/`front` split.
+`sourceOnly` structure rows, including landmarks, participate in this Artwork
+channel but never synthesize gameplay props, doodads, seats, footprints,
+terrain rules, or blocking. Before installation, the exact private candidates
+are reviewable through a transient `BoardLabBoard` placement proof with the
+same free pixel center, scale, drag, and shared eight-way direction controls;
+candidate media identities never enter persisted board content.
+
 The Level Editor Artwork layer lists the installed raw structure catalog.
 Clicking a source swatch toggles a viewport-sized free-placement brush that
 converts the primary pointer directly to projected-scene pixels; tile,

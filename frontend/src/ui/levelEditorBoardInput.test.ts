@@ -113,7 +113,7 @@ describe('Level Editor board pointer contract', () => {
     expect(levelEditor).toContain("{ value: '', label: 'None' }");
     expect(levelEditor).toContain('ariaLabel="Selected artwork"');
     expect(levelEditor).toContain("value={selectedArtworkId ?? ''}");
-    expect(levelEditor).toContain('setSelectedArtworkId(id || null);');
+    expect(levelEditor).toMatch(/onChange=\{\(id\) => \{\s+if \(id\) selectArtwork\(id\);\s+else \{\s+setSelectedCell\(null\);\s+setSelectedArtworkId\(null\);/);
     expect(editableBoard).toContain("const canSelect = artworkSelectionActive && tool === 'select';");
     expect(editableBoard).toContain("const canMove = tool === 'move' && selected;");
     expect(editableBoard).toContain("${canSelect ? ' is-selectable' : ''}");

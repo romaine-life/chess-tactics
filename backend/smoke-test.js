@@ -320,18 +320,42 @@ async function openEditorEditSession(documentId, {
   sessionKey = crypto.randomBytes(32).toString('hex'),
   deviceId = `smoke-device-${crypto.randomUUID()}`,
   clientLabel = 'Smoke browser',
+  activate = true,
   remember = true,
   targetPort = port,
 } = {}) {
-  const response = await requestOnPort(
+  let response = await requestOnPort(
     targetPort,
     'POST',
     `/api/editor-documents/${documentId}/edit-sessions`,
     { cookie, 'content-type': 'application/json' },
     JSON.stringify({ session_id: sessionId, session_key: sessionKey, device_id: deviceId, client_label: clientLabel }),
   );
-  const body = response.body ? JSON.parse(response.body) : {};
-  if (response.statusCode === 200 && remember) {
+  let body = response.body ? JSON.parse(response.body) : {};
+  if (
+    response.statusCode === 200
+    && activate
+    && body.session?.state !== 'active'
+    && !body.presence?.active_editor
+  ) {
+    response = await requestOnPort(
+      targetPort,
+      'POST',
+      `/api/editor-documents/${documentId}/edit-sessions/${sessionId}/takeover`,
+      { cookie, 'content-type': 'application/json' },
+      JSON.stringify({
+        session_key: sessionKey,
+        expected_generation: body.presence.edit_generation,
+      }),
+    );
+    body = response.body ? JSON.parse(response.body) : {};
+  }
+  if (
+    response.statusCode === 200
+    && remember
+    && body.session?.state === 'active'
+    && body.presence?.active_editor?.session_id === body.session.session_id
+  ) {
     editorAuthorities.set(editorAuthorityKey(documentId, cookie), {
       session_id: body.session.session_id,
       edit_session_key: sessionKey,
@@ -375,6 +399,20 @@ function deleteEditorRecoveryRequest(documentId, recoveryId, authorityBody, cook
   return request(
     'DELETE',
     `/api/editor-documents/${documentId}/recoveries/${recoveryId}`,
+    {
+      cookie,
+      'content-type': 'application/json',
+      'content-length': Buffer.byteLength(body),
+    },
+    body,
+  );
+}
+
+function deleteEditorRecoveriesRequest(documentId, recoveryIds, authorityBody, cookie = 'better-auth.session=abc') {
+  const body = JSON.stringify({ recovery_ids: recoveryIds, ...authorityBody });
+  return request(
+    'DELETE',
+    `/api/editor-documents/${documentId}/recoveries`,
     {
       cookie,
       'content-type': 'application/json',
@@ -1398,6 +1436,161 @@ async function main() {
     archivedBridge.status !== 'archived'
     || !groupedAdminCatalog.events.some((event) => event.action === 'accepted-batch' && event.versionId === nativeVersion.id)
   ) throw new Error(`Media replacement/audit is incomplete: ${JSON.stringify(groupedAdminCatalog)}`);
+
+  // Structure source artwork is the typed non-terrain exception to the
+  // bridge-only media rule: all eight native views, the exact interactive
+  // board-placement proof, and the slot pointers publish atomically.
+  const sourceArtDirections = [
+    'south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east',
+  ];
+  const sourceArtAssetId = 'smoke-tree';
+  const sourceArtSlots = sourceArtDirections
+    .map((direction) => `source-art/${sourceArtAssetId}/${direction}.png`)
+    .sort();
+  const sourceArtVersions = [];
+  for (const [index, direction] of sourceArtDirections.entries()) {
+    const bytes = syntheticPng(
+      512, 512, `#${(0x304050 + index * 0x020406).toString(16).padStart(6, '0')}`, '#8fd18a',
+    );
+    const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+    const sourceArtMetadata = {
+      schema: 'structure-source-art-turntable-v1',
+      assetId: sourceArtAssetId,
+      structureId: 'structure-smoke-tree',
+      label: 'Smoke tree art',
+      sortOrder: 900,
+      existing: false,
+      sourceOnly: true,
+      structureKind: 'landmark',
+      direction,
+      placementScale: 0.4,
+      license: 'CC0',
+      referenceOnly: true,
+    };
+    const create = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
+      slot: `source-art/${sourceArtAssetId}/${direction}.png`,
+      sourcePath: `smoke/source-art/${sourceArtAssetId}/${direction}.png`,
+      domain: 'prop',
+      role: 'source-art',
+      label: `Smoke tree art · ${direction}`,
+      availabilityPolicy: 'decorative',
+      metadata: { sourceArt: sourceArtMetadata },
+      slotMetadata: {
+        acceptance: {
+          mode: 'group',
+          groupId: `source-art-eight-way:${sourceArtAssetId}`,
+          requiredSlots: sourceArtSlots,
+        },
+        sourceArt: {
+          schema: 'structure-source-art-turntable-v1',
+          assetId: sourceArtAssetId,
+          direction,
+        },
+      },
+      nativeEvidence: {
+        native1x: true,
+        spatialResampling: false,
+        sourceWidth: 512,
+        sourceHeight: 512,
+        sourceSha256: sha256,
+      },
+      provenance: { generator: 'synthetic-source-art-smoke', direction },
+    }), 5000);
+    if (create.statusCode !== 201) {
+      throw new Error(`Source-art candidate create failed: ${create.statusCode} ${create.body}`);
+    }
+    const version = JSON.parse(create.body).version;
+    const upload = await request(
+      'PUT', `/api/admin/media-versions/${version.id}/content`,
+      { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, bytes, 5000,
+    );
+    if (upload.statusCode !== 200 || JSON.parse(upload.body).version.media.sha256 !== sha256) {
+      throw new Error(`Source-art candidate upload failed: ${upload.statusCode} ${upload.body}`);
+    }
+    sourceArtVersions.push({
+      id: version.id,
+      slot: `source-art/${sourceArtAssetId}/${direction}.png`,
+      sha256,
+      rowRevision: 1,
+    });
+  }
+  const sourceArtAdminBeforeReview = JSON.parse((await get(
+    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+  )).body);
+  const sourceArtSlotSnapshots = sourceArtSlots.map((slot) => {
+    const row = sourceArtAdminBeforeReview.slots.find((item) => item.slot === slot);
+    if (!row) throw new Error(`Source-art slot missing before review: ${slot}`);
+    return row;
+  });
+  const sourceArtSurfaceUrl = `http://127.0.0.1:${port}/studio?mode=viewer&cat=sourceart&sourceArt=${sourceArtAssetId}`;
+  const sourceArtProof = {
+    schema: 'live-media-owner-group-proof-v1',
+    canonicalScale: 1,
+    surfaceKind: 'Studio Source Art interactive board placement',
+    renderer: 'BoardLabBoard/SourceArtCandidateOverlay',
+    decodedNativeRaster: { width: 512, height: 512, scale: 1 },
+    mountedDirections: sourceArtDirections,
+    placement: {
+      pixelX: 400,
+      pixelY: 300,
+      scale: 1,
+      direction: 'south',
+      installedSourceScale: 0.4,
+    },
+    selectedCandidates: sourceArtVersions.map((version) => ({
+      slot: version.slot,
+      versionId: version.id,
+      sha256: version.sha256,
+      rowRevision: version.rowRevision,
+    })),
+    slotSnapshots: sourceArtSlotSnapshots.map((slot) => ({
+      slot: slot.slot,
+      rowRevision: slot.rowRevision,
+      activeVersionId: slot.activeVersionId,
+      lifecycleState: slot.lifecycleState,
+    })),
+    acceptanceGroup: {
+      groupId: `source-art-eight-way:${sourceArtAssetId}`,
+      requiredSlots: sourceArtSlots,
+    },
+  };
+  const sourceArtReview = await request(
+    'POST', '/api/admin/media-versions/review-batch', adminJson,
+    JSON.stringify({
+      items: sourceArtVersions.map((version) => ({ id: version.id, expectedRevision: version.rowRevision })),
+      approved: true,
+      notes: 'All eight source-art views mounted and rotated on the interactive Studio board',
+      surfaceUrl: sourceArtSurfaceUrl,
+      evidence: sourceArtProof,
+    }), 5000,
+  );
+  if (
+    sourceArtReview.statusCode !== 200
+    || JSON.parse(sourceArtReview.body).versions.some((version) => version.rowRevision !== 2)
+  ) throw new Error(`Source-art review failed atomically: ${sourceArtReview.statusCode} ${sourceArtReview.body}`);
+  const sourceArtAccept = await request(
+    'POST', '/api/admin/media-versions/accept-batch', adminJson,
+    JSON.stringify({
+      items: sourceArtVersions.map((version) => {
+        const slot = sourceArtSlotSnapshots.find((item) => item.slot === version.slot);
+        return {
+          id: version.id,
+          expectedRevision: 2,
+          expectedSlotRevision: slot.rowRevision,
+          expectedActiveVersionId: slot.activeVersionId,
+        };
+      }),
+    }), 5000,
+  );
+  const sourceArtAcceptBody = JSON.parse(sourceArtAccept.body);
+  if (
+    sourceArtAccept.statusCode !== 200 || sourceArtAcceptBody.versions.length !== 8
+    || sourceArtAcceptBody.versions.some((version) => version.status !== 'accepted')
+  ) throw new Error(`Source-art acceptance failed atomically: ${sourceArtAccept.statusCode} ${sourceArtAccept.body}`);
+  const sourceArtPublicCatalog = JSON.parse((await get('/api/asset-catalog')).body);
+  if (sourceArtSlots.some((slot) => (
+    sourceArtPublicCatalog.slots.find((item) => item.slot === slot)?.versionStatus !== 'accepted'
+  ))) throw new Error('Source-art slots did not publish atomically');
 
   // One complete pre-drawn board plate: candidate-declared native dimensions,
   // exact owner v4 alignment proof, slot/version/hash snapshots, transactional
@@ -3129,6 +3322,47 @@ async function main() {
     throw new Error(`Unexpected editor resolve: ${resolvedEditor.statusCode} ${resolvedEditor.body}`);
   }
 
+  const passiveViewer = await openEditorEditSession(smokeDocumentId, {
+    deviceId: 'smoke-passive-viewer-device',
+    clientLabel: 'Untouched Level Editor viewer',
+    activate: false,
+    remember: false,
+  });
+  const passiveViewerAuthority = await queryDb(
+    `SELECT
+       (SELECT count(*)::integer FROM editor_document_edit_sessions WHERE document_id = $1 AND state = 'active') AS active_count,
+       (SELECT count(*)::integer FROM editor_document_recoveries WHERE document_id = $1) AS recovery_count,
+       edit_generation,
+       revision
+     FROM level_working_copies
+     WHERE document_id = $1`,
+    [smokeDocumentId],
+  );
+  if (
+    passiveViewer.response.statusCode !== 200
+    || passiveViewer.body.session?.state !== 'waiting'
+    || passiveViewer.body.session?.lease_expires_at !== null
+    || passiveViewer.body.presence?.active_editor !== null
+    || passiveViewer.body.presence?.can_take_over !== true
+    || passiveViewerAuthority.rows[0]?.active_count !== 0
+    || passiveViewerAuthority.rows[0]?.recovery_count !== 0
+    || Number(passiveViewerAuthority.rows[0]?.edit_generation) !== resolvedEditorBody.document.edit_generation
+    || Number(passiveViewerAuthority.rows[0]?.revision) !== resolvedEditorBody.document.revision
+  ) {
+    throw new Error(`Untouched Level Editor viewer acquired or mutated authority: ${passiveViewer.response.statusCode} ${passiveViewer.response.body} / ${JSON.stringify(passiveViewerAuthority.rows[0])}`);
+  }
+  const closedPassiveViewer = await closeEditorEditSessionRequest(
+    smokeDocumentId,
+    passiveViewer.sessionId,
+    passiveViewer.sessionKey,
+  );
+  if (
+    closedPassiveViewer.statusCode !== 200
+    || JSON.parse(closedPassiveViewer.body).session?.state !== 'closed'
+  ) {
+    throw new Error(`Passive viewer session did not close cleanly: ${closedPassiveViewer.statusCode} ${closedPassiveViewer.body}`);
+  }
+
   const primaryOpen = await openEditorEditSession(smokeDocumentId, {
     deviceId: 'smoke-primary-device',
     clientLabel: 'Chrome on primary smoke device',
@@ -4301,17 +4535,149 @@ async function main() {
   ) {
     throw new Error(`Expired recovery-delete rejection rolled back or removed data: ${JSON.stringify(durableExpiredRecoveryDelete.rows[0])}`);
   }
+
+  const bulkRecoverySnapshot = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  const bulkRecoverySnapshotBody = JSON.parse(bulkRecoverySnapshot.body);
+  if (
+    bulkRecoverySnapshot.statusCode !== 200 ||
+    !Array.isArray(bulkRecoverySnapshotBody.recoveries) ||
+    bulkRecoverySnapshotBody.recoveries.length < 3
+  ) {
+    throw new Error(`Bulk recovery delete test needs at least three recoveries: ${bulkRecoverySnapshot.statusCode} ${bulkRecoverySnapshot.body}`);
+  }
+  const bulkRecoveryIds = bulkRecoverySnapshotBody.recoveries.slice(0, 2).map((entry) => entry.recovery_id);
+  const unsubmittedRecoveryId = bulkRecoverySnapshotBody.recoveries[2].recovery_id;
+
+  const unfencedBulkRecoveryDelete = await deleteEditorRecoveriesRequest(smokeDocumentId, bulkRecoveryIds, {});
+  if (
+    unfencedBulkRecoveryDelete.statusCode !== 400 ||
+    JSON.parse(unfencedBulkRecoveryDelete.body).error !== 'editor_document_edit_session_required'
+  ) {
+    throw new Error(`Bulk recovery delete bypassed writer authority: ${unfencedBulkRecoveryDelete.statusCode} ${unfencedBulkRecoveryDelete.body}`);
+  }
+  const expiredFenceBulkRecoveryDelete = await deleteEditorRecoveriesRequest(
+    smokeDocumentId,
+    bulkRecoveryIds,
+    editorMutationBody(
+      smokeDocumentId,
+      'better-auth.session=abc',
+      {},
+      recoveryDeleteNewAuthority,
+    ),
+  );
+  if (
+    expiredFenceBulkRecoveryDelete.statusCode !== 409 ||
+    JSON.parse(expiredFenceBulkRecoveryDelete.body).error !== 'editor_document_session_expired'
+  ) {
+    throw new Error(`Expired writer fence did not reject bulk recovery deletion: ${expiredFenceBulkRecoveryDelete.statusCode} ${expiredFenceBulkRecoveryDelete.body}`);
+  }
+
+  const bulkRecoveryDeleteSession = await openEditorEditSession(smokeDocumentId, {
+    deviceId: 'bulk-recovery-delete-device',
+    clientLabel: 'Bulk recovery delete tab',
+  });
+  if (
+    bulkRecoveryDeleteSession.response.statusCode !== 200 ||
+    bulkRecoveryDeleteSession.body.session?.state !== 'active'
+  ) {
+    throw new Error(`Could not acquire bulk recovery-delete authority: ${bulkRecoveryDeleteSession.response.statusCode} ${bulkRecoveryDeleteSession.response.body}`);
+  }
+  const activeBulkAuthority = editorAuthorities.get(editorAuthorityKey(smokeDocumentId, 'better-auth.session=abc'));
+  if (!activeBulkAuthority) throw new Error('Bulk recovery delete test lost active editor authority');
+
+  const missingRecoveryId = crypto.randomUUID();
+  const conflictingBulkRecoveryDelete = await deleteEditorRecoveriesRequest(
+    smokeDocumentId,
+    [bulkRecoveryIds[0], missingRecoveryId],
+    editorMutationBody(smokeDocumentId, 'better-auth.session=abc', {}, activeBulkAuthority),
+  );
+  const recoveriesAfterConflictingBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  if (
+    conflictingBulkRecoveryDelete.statusCode !== 409 ||
+    JSON.parse(conflictingBulkRecoveryDelete.body).error !== 'editor_document_recovery_snapshot_conflict' ||
+    !JSON.parse(recoveriesAfterConflictingBulkDelete.body).recoveries?.some((entry) => entry.recovery_id === bulkRecoveryIds[0])
+  ) {
+    throw new Error(`Changed bulk recovery snapshot was not rejected atomically: ${conflictingBulkRecoveryDelete.statusCode} ${conflictingBulkRecoveryDelete.body} / ${recoveriesAfterConflictingBulkDelete.body}`);
+  }
+
+  const wrongDocumentRecoverySnapshot = await get(`/api/editor-documents/${rivalDocumentId}/recoveries`, { cookie: 'better-auth.session=rival' });
+  const wrongDocumentRecoveryId = JSON.parse(wrongDocumentRecoverySnapshot.body).recoveries?.[0]?.recovery_id;
+  if (wrongDocumentRecoverySnapshot.statusCode !== 200 || !wrongDocumentRecoveryId) {
+    throw new Error(`Wrong-document bulk delete test needs a rival recovery: ${wrongDocumentRecoverySnapshot.statusCode} ${wrongDocumentRecoverySnapshot.body}`);
+  }
+  const wrongDocumentBulkRecoveryDelete = await deleteEditorRecoveriesRequest(
+    smokeDocumentId,
+    [bulkRecoveryIds[0], wrongDocumentRecoveryId],
+    editorMutationBody(smokeDocumentId, 'better-auth.session=abc', {}, activeBulkAuthority),
+  );
+  const recoveriesAfterWrongDocumentBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  if (
+    wrongDocumentBulkRecoveryDelete.statusCode !== 409 ||
+    JSON.parse(wrongDocumentBulkRecoveryDelete.body).error !== 'editor_document_recovery_snapshot_conflict' ||
+    !JSON.parse(recoveriesAfterWrongDocumentBulkDelete.body).recoveries?.some((entry) => entry.recovery_id === bulkRecoveryIds[0])
+  ) {
+    throw new Error(`Wrong-document recovery id was not rejected atomically: ${wrongDocumentBulkRecoveryDelete.statusCode} ${wrongDocumentBulkRecoveryDelete.body} / ${recoveriesAfterWrongDocumentBulkDelete.body}`);
+  }
+
+  const documentBeforeBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: 'better-auth.session=abc' });
+  const documentBeforeBulkRecoveryDeleteBody = JSON.parse(documentBeforeBulkRecoveryDelete.body);
+  const historyBeforeBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}/revisions?limit=100`, { cookie: 'better-auth.session=abc' });
+  const historyBeforeBulkRecoveryDeleteBody = JSON.parse(historyBeforeBulkRecoveryDelete.body);
+  const bulkRecoveryDelete = await deleteEditorRecoveriesRequest(
+    smokeDocumentId,
+    bulkRecoveryIds,
+    editorMutationBody(smokeDocumentId, 'better-auth.session=abc', {}, activeBulkAuthority),
+  );
+  const bulkRecoveryDeleteBody = JSON.parse(bulkRecoveryDelete.body);
+  const recoveriesAfterBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  const recoveriesAfterBulkDeleteBody = JSON.parse(recoveriesAfterBulkDelete.body);
+  const documentAfterBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: 'better-auth.session=abc' });
+  const documentAfterBulkRecoveryDeleteBody = JSON.parse(documentAfterBulkRecoveryDelete.body);
+  const historyAfterBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}/revisions?limit=100`, { cookie: 'better-auth.session=abc' });
+  const historyAfterBulkRecoveryDeleteBody = JSON.parse(historyAfterBulkRecoveryDelete.body);
+  const canonicalAfterBulkRecoveryDelete = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const canonicalAfterBulkRecoveryDeleteBody = JSON.parse(canonicalAfterBulkRecoveryDelete.body);
+  if (
+    bulkRecoveryDelete.statusCode !== 200 ||
+    bulkRecoveryDeleteBody.deleted_count !== bulkRecoveryIds.length ||
+    bulkRecoveryDeleteBody.recovery_ids?.join(',') !== bulkRecoveryIds.join(',') ||
+    recoveriesAfterBulkDeleteBody.recoveries?.some((entry) => bulkRecoveryIds.includes(entry.recovery_id)) ||
+    !recoveriesAfterBulkDeleteBody.recoveries?.some((entry) => entry.recovery_id === unsubmittedRecoveryId) ||
+    documentAfterBulkRecoveryDeleteBody.document?.revision !== documentBeforeBulkRecoveryDeleteBody.document?.revision ||
+    JSON.stringify(documentAfterBulkRecoveryDeleteBody.document?.level) !== JSON.stringify(documentBeforeBulkRecoveryDeleteBody.document?.level) ||
+    historyBeforeBulkRecoveryDelete.statusCode !== 200 ||
+    historyAfterBulkRecoveryDelete.statusCode !== 200 ||
+    JSON.stringify(historyAfterBulkRecoveryDeleteBody) !== JSON.stringify(historyBeforeBulkRecoveryDeleteBody) ||
+    canonicalAfterBulkRecoveryDeleteBody.levels['smoke-1'].name !== 'Exact Save Click'
+  ) {
+    throw new Error(`Atomic bulk recovery deletion changed unrelated state or missed its exact snapshot: ${bulkRecoveryDelete.statusCode} ${bulkRecoveryDelete.body} / ${recoveriesAfterBulkDelete.body} / ${documentAfterBulkRecoveryDelete.body}`);
+  }
+  const closedBulkRecoveryDeleteSession = await closeEditorEditSessionRequest(
+    smokeDocumentId,
+    bulkRecoveryDeleteSession.sessionId,
+    bulkRecoveryDeleteSession.sessionKey,
+  );
+  if (closedBulkRecoveryDeleteSession.statusCode !== 200) {
+    throw new Error(`Bulk recovery-delete session did not release cleanly: ${closedBulkRecoveryDeleteSession.statusCode} ${closedBulkRecoveryDeleteSession.body}`);
+  }
+
   const editorEvents = await queryDb(
-    `SELECT action, actor_email, actor_name
+    `SELECT action, actor_email, actor_name, details
        FROM editor_document_edit_events
       WHERE document_id = $1`,
     [smokeDocumentId],
   );
+  const aggregateBulkDeleteEvents = editorEvents.rows.filter((event) => event.action === 'recoveries_deleted');
   if (
     !editorEvents.rows.some((event) => event.action === 'document_autosaved' && event.actor_email === 'player@example.com' && event.actor_name === 'Tactics Player') ||
     !editorEvents.rows.some((event) => event.action === 'session_takeover' && event.actor_email === 'player@example.com' && event.actor_name === 'Tactics Player') ||
     !editorEvents.rows.some((event) => event.action === 'recovery_restored' && event.actor_email === 'player@example.com' && event.actor_name === 'Tactics Player') ||
-    !editorEvents.rows.some((event) => event.action === 'recovery_deleted' && event.actor_email === 'player@example.com' && event.actor_name === 'Tactics Player')
+    !editorEvents.rows.some((event) => event.action === 'recovery_deleted' && event.actor_email === 'player@example.com' && event.actor_name === 'Tactics Player') ||
+    aggregateBulkDeleteEvents.length !== 1 ||
+    aggregateBulkDeleteEvents[0].actor_email !== 'player@example.com' ||
+    aggregateBulkDeleteEvents[0].actor_name !== 'Tactics Player' ||
+    aggregateBulkDeleteEvents[0].details?.recovery_count !== bulkRecoveryIds.length ||
+    aggregateBulkDeleteEvents[0].details?.recovery_ids?.join(',') !== bulkRecoveryIds.join(',')
   ) {
     throw new Error(`Editor event attribution is incomplete: ${JSON.stringify(editorEvents.rows)}`);
   }
