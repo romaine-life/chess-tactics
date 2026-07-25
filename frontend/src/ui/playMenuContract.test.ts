@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const mainMenu = readFileSync(new URL('./MainMenu.tsx', import.meta.url), 'utf8');
 const playMenu = readFileSync(new URL('./PlayMenu.tsx', import.meta.url), 'utf8');
+const campaignEditor = readFileSync(new URL('./CampaignEditor.tsx', import.meta.url), 'utf8');
+const headerAccountCluster = readFileSync(new URL('./shared/HeaderAccountCluster.tsx', import.meta.url), 'utf8');
 const profiles = readFileSync(new URL('./skirmishProfiles.ts', import.meta.url), 'utf8');
 const livePlay = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 
@@ -25,6 +27,22 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('index={0}');
     expect(playMenu).toContain('index={1}');
     expect(playMenu).toContain('index={index + 2}');
+  });
+
+  it('resolves Play rail icons from installed drawable membership, not retired path-shaped app-ui roles', () => {
+    expect(playMenu).toContain("drawableAssets('menu-mode')");
+    expect(playMenu).toContain("installedUiMedia('ui-kit-icons-design-index-png')");
+    expect(playMenu).not.toContain('ui-main-menu-icons-carved-solo-skirmish-png');
+    expect(playMenu).not.toContain('ui-main-menu-icons-carved-level-editor-png');
+    expect(playMenu).not.toContain('ui-main-menu-icons-carved-lobbies-png');
+  });
+
+  it('resolves every shared carved navigation icon from its installed menu record', () => {
+    expect(campaignEditor).toContain("drawableAssets('menu-mode')");
+    expect(campaignEditor).toContain("asset.behavior.value === 'campaign-editor'");
+    expect(campaignEditor).not.toContain('ui-main-menu-icons-carved-campaign-editor-png');
+    expect(headerAccountCluster).toContain("requiredDrawableRole('menu-mode', 'settings')");
+    expect(headerAccountCluster).not.toContain('ui-main-menu-icons-carved-settings-png');
   });
 
   it('deletes the split picker implementations instead of retaining parallels', () => {

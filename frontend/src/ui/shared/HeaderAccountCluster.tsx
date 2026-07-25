@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react';
+import { requiredDrawableRole } from '@chess-tactics/board-render';
 import { fetchMe, goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
 import { normalizeRoutePath } from '../navigation';
 import { TitleBarIconButtonPrimitive } from '../shell/TitleBarControls';
@@ -12,7 +13,8 @@ import { installedUiMedia } from '../installedUiMedia';
 // hand-rolled copy. (Settings and Campaign keep their own bespoke account readout
 // for now; this is the canonical cluster for everything else.)
 
-const SETTINGS_ICON = installedUiMedia('ui-main-menu-icons-carved-settings-png');
+const SETTINGS_ICON = requiredDrawableRole('menu-mode', 'settings').media.icon?.media.immutableUrl;
+if (!SETTINGS_ICON) throw new Error('installed Settings menu mode has no icon');
 const SIGN_IN_ICON = installedUiMedia('ui-kit-icons-sign-in-png');
 
 // The gear's target: send the CURRENT location along as ?returnTo so Settings can
