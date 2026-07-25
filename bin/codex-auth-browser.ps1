@@ -36,6 +36,28 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
+
+[ComImport]
+[Guid("a5cd92ff-29be-454c-8d04-d82879fb3f1b")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IVirtualDesktopManager
+{
+    [PreserveSig]
+    int IsWindowOnCurrentVirtualDesktop(IntPtr topLevelWindow, out int onCurrentDesktop);
+
+    [PreserveSig]
+    int GetWindowDesktopId(IntPtr topLevelWindow, out Guid desktopId);
+
+    [PreserveSig]
+    int MoveWindowToDesktop(IntPtr topLevelWindow, ref Guid desktopId);
+}
+
+[ComImport]
+[Guid("aa509086-5ca9-4c25-8f95-589d3c07b48a")]
+internal class VirtualDesktopManager
+{
+}
 
 public static class CodexAuthBrowserWindow
 {
@@ -50,11 +72,52 @@ public static class CodexAuthBrowserWindow
     [DllImport("user32.dll")]
     private static extern bool IsWindowVisible(IntPtr window);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr window, System.Text.StringBuilder text, int maxCount);
+
+    [DllImport("user32.dll")]
+    private static extern int GetWindowTextLength(IntPtr window);
+
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr window);
 
     [DllImport("user32.dll")]
     private static extern bool ShowWindowAsync(IntPtr window, int command);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(
+        IntPtr window,
+        IntPtr insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
+
+    private static bool IsOnCurrentDesktop(IntPtr window)
+    {
+        IVirtualDesktopManager manager = null;
+        try
+        {
+            manager = (IVirtualDesktopManager)new VirtualDesktopManager();
+            int onCurrentDesktop;
+            int result = manager.IsWindowOnCurrentVirtualDesktop(window, out onCurrentDesktop);
+            return result >= 0 && onCurrentDesktop != 0;
+        }
+        catch
+        {
+            // Current supported Windows versions provide this API. Failing open preserves
+            // compatibility with stripped-down Windows images where COM is unavailable.
+            return true;
+        }
+        finally
+        {
+            if (manager != null && Marshal.IsComObject(manager))
+            {
+                Marshal.FinalReleaseComObject(manager);
+            }
+        }
+    }
 
     public static IntPtr[] VisibleHandles(string processName)
     {
@@ -70,7 +133,7 @@ public static class CodexAuthBrowserWindow
         {
             uint processId;
             GetWindowThreadProcessId(window, out processId);
-            if (processIds.Contains(processId) && IsWindowVisible(window))
+            if (processIds.Contains(processId) && IsWindowVisible(window) && IsOnCurrentDesktop(window))
             {
                 windows.Add(window);
             }
@@ -79,11 +142,30 @@ public static class CodexAuthBrowserWindow
         return windows.ToArray();
     }
 
-    public static bool BringToFront(IntPtr window)
+    public static string WindowTitle(IntPtr window)
+    {
+        int length = GetWindowTextLength(window);
+        var title = new System.Text.StringBuilder(length + 1);
+        GetWindowText(window, title, title.Capacity);
+        return title.ToString();
+    }
+
+    public static bool Surface(IntPtr window)
     {
         const int RestoreWindow = 9;
-        ShowWindowAsync(window, RestoreWindow);
-        return SetForegroundWindow(window);
+        const uint NoMove = 0x0002;
+        const uint NoSize = 0x0001;
+        const uint ShowWindow = 0x0040;
+        var topmost = new IntPtr(-1);
+        var notTopmost = new IntPtr(-2);
+        uint flags = NoMove | NoSize | ShowWindow;
+
+        bool restored = ShowWindowAsync(window, RestoreWindow);
+        bool raised = SetWindowPos(window, topmost, 0, 0, 0, 0, flags);
+        SetForegroundWindow(window);
+        Thread.Sleep(350);
+        bool normalized = SetWindowPos(window, notTopmost, 0, 0, 0, 0, flags);
+        return restored && raised && normalized && IsWindowVisible(window) && IsOnCurrentDesktop(window);
     }
 }
 '@
@@ -98,19 +180,24 @@ if ($browserFileName -in $newWindowBrowsers) {
 }
 
 $windowToActivate = $null
-for ($attempt = 0; $attempt -lt 50; $attempt += 1) {
+for ($attempt = 0; $attempt -lt 100; $attempt += 1) {
   Start-Sleep -Milliseconds 100
   $visibleHandles = @([CodexAuthBrowserWindow]::VisibleHandles($browserProcessName))
   $windowToActivate = $visibleHandles | Where-Object { $_.ToInt64() -notin $existingHandles } | Select-Object -First 1
+  if ($null -eq $windowToActivate) {
+    $windowToActivate = $visibleHandles |
+      Where-Object { [CodexAuthBrowserWindow]::WindowTitle($_) -like "*$($approvalUri.Host)*" } |
+      Select-Object -First 1
+  }
   if ($null -ne $windowToActivate) {
     break
   }
 }
 
 if ($null -eq $windowToActivate) {
-  $windowToActivate = [CodexAuthBrowserWindow]::VisibleHandles($browserProcessName) | Select-Object -First 1
+  throw "The browser command ran, but no new or auth-matching window appeared on the active desktop"
 }
 
-if ($null -ne $windowToActivate) {
-  [void][CodexAuthBrowserWindow]::BringToFront($windowToActivate)
+if (-not [CodexAuthBrowserWindow]::Surface($windowToActivate)) {
+  throw "The approval window appeared, but Windows could not surface it on the active desktop"
 }
