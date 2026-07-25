@@ -6,7 +6,15 @@ const {
   predrawnBoardRasterTransform,
 } = require('@chess-tactics/board-render');
 
-const { __testing, renderBoardThumbnail, BOARD_THUMB_W, BOARD_THUMB_H } = require('./boardThumbnail');
+const {
+  __testing,
+  renderBoardThumbnail,
+  renderLevelCard,
+  BOARD_THUMB_W,
+  BOARD_THUMB_H,
+  CARD_W,
+  CARD_H,
+} = require('./boardThumbnail');
 
 const {
   ThumbnailAssetStore,
@@ -53,6 +61,38 @@ test('runtime list derivative is a compact fixed-size PNG and needs no shell art
   });
   assert.deepEqual(pngHeaderDimensions(png), { width: BOARD_THUMB_W, height: BOARD_THUMB_H });
   assert.equal(unexpectedLoad, false);
+});
+
+test('share-card rendering consumes the complete database-resolved presentation', async () => {
+  const sprite = createCanvas(32, 32);
+  const spriteContext = sprite.getContext('2d');
+  spriteContext.fillStyle = '#56789a';
+  spriteContext.fillRect(0, 0, sprite.width, sprite.height);
+  const spriteBytes = sprite.toBuffer('image/png');
+  const fontSrc = '/assets/test/decorative-font.otf';
+  const png = await renderLevelCard({
+    plan: {
+      ops: [],
+      bounds: { minX: 0, minY: 0, width: 1, height: 1 },
+      framingBounds: { minX: 0, minY: 0, width: 1, height: 1 },
+    },
+    title: 'Database-owned presentation',
+    subtitle: 'Synthetic contract',
+    screenName: 'Play',
+    backgroundSrc: '/assets/test/background.png',
+    loadDynamicSprite: async (src) => (src === fontSrc ? null : spriteBytes),
+    mediaCatalogRevision: 1,
+    sourceAvailability: (src) => (src === fontSrc ? 'decorative' : 'critical'),
+    fontSrc,
+    uiMedia: {
+      wood: '/assets/test/wood.png',
+      band: '/assets/test/band.png',
+      joint: '/assets/test/joint.png',
+      shield: '/assets/test/shield.png',
+    },
+  });
+
+  assert.deepEqual(pngHeaderDimensions(png), { width: CARD_W, height: CARD_H });
 });
 
 test('production source loading and decoding serialize maximum-size assets', () => {

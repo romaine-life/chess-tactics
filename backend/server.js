@@ -12,6 +12,10 @@ const { createDevGrantSessionReader } = require(path.join(bakedBackendDir, 'devA
 const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
 const {
+  resolveDefaultOgImage,
+  resolveLevelCardPresentation,
+} = require(path.join(bakedBackendDir, 'thumbnailPresentation'));
+const {
   liveCatalogReadinessIssue,
   nativeMediaEvidenceIssue,
   predrawnBoardMediaIssue,
@@ -11533,7 +11537,7 @@ async function storedLevelThumbnail(authorityKey) {
   return rows[0] || null;
 }
 
-async function storedLevelThumbnailUrls(authorityEntries) {
+async function currentStoredLevelThumbnailUrls(authorityEntries) {
   if (!authorityEntries.length) return {};
   await ensureDbReady();
   const keys = authorityEntries.map(([authorityKey]) => authorityKey);
@@ -11551,6 +11555,22 @@ async function storedLevelThumbnailUrls(authorityEntries) {
     const expected = thumbnailVersion(levelThumbnailSourceHash(entry.level), revisions);
     return row.content_version === expected ? [[entry.levelId, `/api/media/${row.blob_sha256}`]] : [];
   }));
+}
+
+async function storedLevelThumbnailUrls(authorityEntries) {
+  const current = await currentStoredLevelThumbnailUrls(authorityEntries);
+  const missing = authorityEntries.filter(([_authorityKey, levelId]) => !Object.hasOwn(current, levelId));
+  if (!missing.length) return current;
+
+  const retries = await Promise.allSettled(missing.map(([authorityKey, _levelId, level]) => (
+    ensureLevelThumbnailDerivative(authorityKey, level)
+  )));
+  for (const retry of retries) {
+    if (retry.status === 'rejected') {
+      console.error('canonical level thumbnail read repair failed:', retry.reason && retry.reason.message);
+    }
+  }
+  return currentStoredLevelThumbnailUrls(authorityEntries);
 }
 
 async function currentThumbnailRevisions() {
@@ -11648,20 +11668,6 @@ async function ensureLevelThumbnailDerivative(authorityKey, level) {
   }
 }
 
-async function resolveListThumbnailTarget(req, res, id) {
-  if (OFFICIAL_WORKSPACE_ID_PATTERN.test(id)) {
-    const target = await resolveShareTarget({ levelId: id });
-    return target ? { authorityKey: `official:default:${id}`, level: target.level } : null;
-  }
-  if (!/^l\d+$/.test(id)) return null;
-  const user = await requireUser(req, res);
-  if (!user) return false;
-  const row = await dbGetWorkspace(user.email);
-  const level = row?.body?.levels?.[id];
-  return level && typeof level === 'object'
-    ? { authorityKey: `user:${user.email}:${id}`, level }
-    : null;
-}
 function playScreenName(input) {
   if (serverRender && typeof serverRender.playRouteScreenName === 'function') {
     try { return serverRender.playRouteScreenName({ path: '/play', ...input }); } catch { /* fall back below */ }
@@ -11726,15 +11732,7 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
       return _thumbCache.getOrCreate(cacheKey, async () => {
         const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
         const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
-        const appUi = renderInputs.drawableCatalog.assets.find((asset) => asset.kind === 'app-ui' && asset.behavior?.roles?.includes('application-ui'));
-        const thumbnailFont = renderInputs.drawableCatalog.assets.find((asset) => asset.kind === 'app-font' && asset.behavior?.thumbnail === true);
-        const requiredUiMedia = (role) => {
-          const src = appUi?.media?.[role]?.media?.immutableUrl;
-          if (!src) throw new Error(`thumbnail UI media role is unavailable: ${role}`);
-          return src;
-        };
-        const fontSrc = thumbnailFont?.media?.font?.media?.immutableUrl;
-        if (!fontSrc) throw new Error('thumbnail font record is unavailable');
+        const presentation = resolveLevelCardPresentation(renderInputs.drawableCatalog);
         return renderLevelCard({
           plan,
           title: target.title,
@@ -11744,13 +11742,8 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
           loadDynamicSprite: (src) => thumbnailDynamicSprite(src, renderInputs.mediaCatalog),
           mediaCatalogRevision: renderInputs.mediaCatalogRevision,
           sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
-          fontSrc,
-          uiMedia: {
-            wood: requiredUiMedia('ui-surfaces-hybrid-wood-oak-png'),
-            band: requiredUiMedia('ui-titlebar-band-forged-png'),
-            diamond: requiredUiMedia('ui-titlebar-joint-diamond-forged-png'),
-            shield: requiredUiMedia('ui-kit-icons-brand-shield-png'),
-          },
+          fontSrc: presentation.fontSrc,
+          uiMedia: presentation.uiMedia,
         });
       });
     });
@@ -11794,9 +11787,7 @@ async function ogTagsFor(req) {
   let title = OG_SITE_NAME;
   let description = OG_DEFAULT_DESC;
   const drawableCatalog = await dbReadDrawableCatalog();
-  const appUi = drawableCatalog.assets.find((asset) => asset.kind === 'app-ui' && asset.behavior?.roles?.includes('application-ui'));
-  const defaultOgPath = appUi?.media?.['og-default']?.media?.immutableUrl;
-  if (!defaultOgPath) throw new Error('application UI role og-default is unavailable');
+  const defaultOgPath = resolveDefaultOgImage(drawableCatalog);
   let image = `${origin}${defaultOgPath}`;
   if (target) {
     title = target.title || OG_SITE_NAME;
