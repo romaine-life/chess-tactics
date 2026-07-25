@@ -111,7 +111,7 @@ the base sits inside the 96px cell diamond with margin.
 Per [ADR-0150](../../adr/0150-structure-source-art-turntables-are-complete-source-only-live-groups.md),
 every source offered by the Level Editor Artwork shelf is upgraded or added as
 one atomic eight-slot turntable. The committed batch specification lives at
-`docs/art/source-art-turntables/manifest.json`; its renderer writes only to an
+`frontend/scripts/source-art-turntables.spec.json`; its renderer writes only to an
 explicit OS-temporary workspace and uploads private candidates. Existing
 prop/doodad `back`/`front` pixels are not replaced. New landmark records are
 `sourceOnly` and therefore require no invented seat, tile, footprint, terrain,

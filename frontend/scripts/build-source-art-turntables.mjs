@@ -20,7 +20,7 @@ import {
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(scriptDir, '..');
 const repoRoot = path.resolve(frontendRoot, '..');
-const specPath = path.join(repoRoot, 'docs', 'art', 'source-art-turntables', 'manifest.json');
+const specPath = path.join(scriptDir, 'source-art-turntables.spec.json');
 const renderScript = path.join(repoRoot, 'docs', 'art', 'doodad-concepts', 'render_prop_mesh.py');
 const SPEC_SCHEMA = 'structure-source-art-turntable-spec-v1';
 const BATCH_SCHEMA = 'live-media-candidate-batch-v1';
