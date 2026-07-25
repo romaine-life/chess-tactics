@@ -42,7 +42,7 @@ const request = await postJson('/api/cli/device', {
 });
 
 approvalInstructions(request).forEach((line) => console.log(line));
-openBrowser(request.verification_uri_complete);
+await openBrowser(request.verification_uri_complete);
 
 const deadline = Date.now() + Number(request.expires_in || 600) * 1000;
 const intervalMs = Math.max(1, Number(request.interval || 5)) * 1000;
